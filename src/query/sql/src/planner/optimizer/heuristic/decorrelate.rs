@@ -20,8 +20,6 @@ use common_datavalues::DataTypeImpl;
 use common_datavalues::NullableType;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planner::IndexType;
-use common_planner::MetadataRef;
 
 use crate::binder::wrap_cast;
 use crate::binder::JoinPredicate;
@@ -56,6 +54,8 @@ use crate::plans::ScalarItem;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
 use crate::ColumnBinding;
+use crate::IndexType;
+use crate::MetadataRef;
 use crate::ScalarExpr;
 
 /// Decorrelate subqueries inside `s_expr`.
@@ -665,7 +665,7 @@ impl SubqueryRewriter {
             | RelOperator::LogicalGet(_)
             | RelOperator::PhysicalScan(_)
             | RelOperator::DummyTableScan(_)
-            | RelOperator::PhysicalHashJoin(_) => Err(ErrorCode::LogicalError(
+            | RelOperator::PhysicalHashJoin(_) => Err(ErrorCode::Internal(
                 "Invalid plan type for flattening subquery",
             )),
         }
@@ -757,7 +757,7 @@ impl SubqueryRewriter {
                     target_type: cast_expr.target_type.clone(),
                 }))
             }
-            _ => Err(ErrorCode::LogicalError(
+            _ => Err(ErrorCode::Internal(
                 "Invalid scalar for flattening subquery",
             )),
         }

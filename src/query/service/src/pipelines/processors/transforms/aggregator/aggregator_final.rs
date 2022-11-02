@@ -38,7 +38,8 @@ use crate::pipelines::processors::transforms::group_by::AggregatorState;
 use crate::pipelines::processors::transforms::group_by::GroupColumnsBuilder;
 use crate::pipelines::processors::transforms::group_by::KeysColumnIter;
 use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
-use crate::pipelines::processors::transforms::group_by::StateEntity;
+use crate::pipelines::processors::transforms::group_by::StateEntityMutRef;
+use crate::pipelines::processors::transforms::group_by::StateEntityRef;
 use crate::pipelines::processors::transforms::transform_aggregator::Aggregator;
 use crate::pipelines::processors::AggregatorParams;
 use crate::sessions::QueryContext;
@@ -106,23 +107,24 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> FinalAggregator<
     fn lookup_state(
         params: &AggregatorParams,
         state: &mut Method::State,
-        keys: &[<Method::State as AggregatorState<Method>>::Key],
+        keys: &[<Method::State as AggregatorState<Method>>::KeyRef<'_>],
     ) -> StateAddrs {
         let mut places = Vec::with_capacity(keys.len());
 
         let mut inserted = true;
         for key in keys {
-            let entity = state.entity_by_key(key, &mut inserted);
+            let unsafe_state = state as *mut Method::State;
+            let mut entity = unsafe { (*unsafe_state).entity_by_key(*key, &mut inserted) };
 
             match inserted {
                 true => {
-                    if let Some(place) = state.alloc_layout(params) {
+                    if let Some(place) = unsafe { (*unsafe_state).alloc_layout(params) } {
                         places.push(place);
                         entity.set_state_value(place.addr());
                     }
                 }
                 false => {
-                    let place: StateAddr = (*entity.get_state_value()).into();
+                    let place: StateAddr = entity.get_state_value().into();
                     places.push(place);
                 }
             }
@@ -145,7 +147,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
         let group_by_two_level_threshold =
             self.ctx.get_settings().get_group_by_two_level_threshold()? as usize;
         if !self.state.is_two_level() && self.state.len() >= group_by_two_level_threshold {
-            self.state.convert_to_two_level();
+            self.state.convert_to_twolevel();
         }
 
         // first state places of current block
@@ -203,7 +205,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
                 };
 
                 for group_entity in self.state.iter() {
-                    let place: StateAddr = (*group_entity.get_state_value()).into();
+                    let place: StateAddr = group_entity.get_state_value().into();
 
                     for (idx, aggregate_function) in aggregate_functions.iter().enumerate() {
                         let arg_place = place.next(offsets_aggregate_states[idx]);
@@ -245,12 +247,12 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
         let group_by_two_level_threshold =
             self.ctx.get_settings().get_group_by_two_level_threshold()? as usize;
         if !self.state.is_two_level() && self.state.len() >= group_by_two_level_threshold {
-            self.state.convert_to_two_level();
+            self.state.convert_to_twolevel();
         }
 
         let mut inserted = true;
         for keys_ref in keys_iter.get_slice() {
-            self.state.entity_by_key(keys_ref, &mut inserted);
+            self.state.entity_by_key(*keys_ref, &mut inserted);
         }
 
         Ok(())
@@ -300,7 +302,7 @@ impl<const FINAL: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + Sen
                 .collect::<Vec<_>>();
 
             for group_entity in self.state.iter() {
-                let place: StateAddr = (*group_entity.get_state_value()).into();
+                let place: StateAddr = group_entity.get_state_value().into();
 
                 for (function, state_offset) in functions.iter().zip(state_offsets.iter()) {
                     unsafe { function.drop_state(place.next(*state_offset)) }

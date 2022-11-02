@@ -69,7 +69,7 @@ impl OneBlockProcedure for SearchTablesProcedure {
                 SelectInterpreterV2::try_create(ctx.clone(), *bind_context, *s_expr, metadata)?;
             interpreter.execute(ctx.clone()).await
         } else {
-            return Err(ErrorCode::LogicalError("search tables build query error"));
+            return Err(ErrorCode::Internal("search tables build query error"));
         }?;
         let result = stream.try_collect::<Vec<_>>().await?;
         if !result.is_empty() {

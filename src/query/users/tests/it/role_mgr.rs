@@ -42,10 +42,7 @@ async fn test_role_manager() -> Result<()> {
         let role_info = RoleInfo::new(&role_name);
         let res = role_mgr.add_role(tenant, role_info, false).await;
         assert!(res.is_err());
-        assert_eq!(
-            res.err().unwrap().code(),
-            ErrorCode::user_already_exists_code(),
-        );
+        assert_eq!(res.err().unwrap().code(), ErrorCode::USER_ALREADY_EXISTS,);
     }
 
     // add role

@@ -19,14 +19,15 @@ mod physical_plan_builder;
 mod physical_plan_display;
 mod physical_plan_visitor;
 mod physical_scalar;
+mod physical_scalar_visitor;
+pub mod table_read_plan;
 mod util;
 
-pub use expression_builder::ExpressionBuilder;
-pub use expression_builder::ExpressionBuilderWithRenaming;
-pub use expression_builder::ExpressionBuilderWithoutRenaming;
+pub use expression_builder::*;
 pub use physical_plan::*;
 pub use physical_plan_builder::PhysicalPlanBuilder;
 pub use physical_plan_builder::PhysicalScalarBuilder;
 pub use physical_plan_visitor::PhysicalPlanReplacer;
 pub use physical_scalar::*;
+pub use physical_scalar_visitor::*;
 pub use util::*;

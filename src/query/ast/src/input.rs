@@ -83,12 +83,14 @@ pub enum Dialect {
     #[default]
     PostgreSQL,
     MySQL,
+    Hive,
 }
 
 impl Dialect {
     pub fn is_ident_quote(&self, c: char) -> bool {
         match self {
             Dialect::MySQL => c == '`',
+            Dialect::Hive => c == '`',
             // TODO: remove '`' quote support once mysql handler correctly set mysql dialect.
             Dialect::PostgreSQL => c == '"' || c == '`',
         }
@@ -97,7 +99,24 @@ impl Dialect {
     pub fn is_string_quote(&self, c: char) -> bool {
         match self {
             Dialect::MySQL => c == '\'' || c == '"',
+            Dialect::Hive => c == '\'' || c == '"',
             Dialect::PostgreSQL => c == '\'',
+        }
+    }
+
+    pub fn is_null_biggest(&self) -> bool {
+        match self {
+            Dialect::MySQL => false,
+            Dialect::Hive => false,
+            Dialect::PostgreSQL => true,
+        }
+    }
+
+    pub fn substr_index_zero_literal_as_one(&self) -> bool {
+        match self {
+            Dialect::MySQL => false,
+            Dialect::Hive => true,
+            Dialect::PostgreSQL => false,
         }
     }
 }

@@ -1,0 +1,5 @@
+statement error 2506
+DROP STAGE ~
+
+statement error 2506
+CREATE STAGE ~

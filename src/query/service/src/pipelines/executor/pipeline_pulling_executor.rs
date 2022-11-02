@@ -81,7 +81,7 @@ impl State {
         let catch_error = self.catch_error.lock();
 
         match catch_error.as_ref() {
-            None => ErrorCode::LogicalError("It's a bug."),
+            None => ErrorCode::Internal("It's a bug."),
             Some(catch_error) => catch_error.clone(),
         }
     }
@@ -97,7 +97,7 @@ pub struct PipelinePullingExecutor {
 impl PipelinePullingExecutor {
     fn wrap_pipeline(pipeline: &mut Pipeline, tx: SyncSender<DataBlock>) -> Result<()> {
         if pipeline.is_pushing_pipeline()? || !pipeline.is_pulling_pipeline()? {
-            return Err(ErrorCode::LogicalError(
+            return Err(ErrorCode::Internal(
                 "Logical error, PipelinePullingExecutor can only work on pulling pipeline.",
             ));
         }
@@ -227,7 +227,7 @@ impl Sink for PullingSink {
     fn consume(&mut self, data_block: DataBlock) -> Result<()> {
         if let Some(sender) = &self.sender {
             if let Err(cause) = sender.send(data_block) {
-                return Err(ErrorCode::LogicalError(format!(
+                return Err(ErrorCode::Internal(format!(
                     "Logical error, cannot push data into SyncSender, cause {:?}",
                     cause
                 )));

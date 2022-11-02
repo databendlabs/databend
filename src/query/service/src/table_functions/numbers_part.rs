@@ -17,8 +17,8 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_legacy_planners::PartInfo;
-use common_legacy_planners::PartInfoPtr;
+use common_planner::PartInfo;
+use common_planner::PartInfoPtr;
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct NumbersPartInfo {
@@ -53,7 +53,7 @@ impl NumbersPartInfo {
     pub fn from_part(info: &PartInfoPtr) -> Result<&NumbersPartInfo> {
         match info.as_any().downcast_ref::<NumbersPartInfo>() {
             Some(part_ref) => Ok(part_ref),
-            None => Err(ErrorCode::LogicalError(
+            None => Err(ErrorCode::Internal(
                 "Cannot downcast from PartInfo to NumbersPartInfo.",
             )),
         }

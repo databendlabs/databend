@@ -25,6 +25,7 @@ use super::*;
 use crate::interpreters::access::Accessor;
 use crate::interpreters::interpreter_copy_v2::CopyInterpreterV2;
 use crate::interpreters::interpreter_presign::PresignInterpreter;
+use crate::interpreters::interpreter_role_show::ShowRolesInterpreter;
 use crate::interpreters::interpreter_table_create_v2::CreateTableInterpreterV2;
 use crate::interpreters::AlterUserInterpreter;
 use crate::interpreters::CreateShareInterpreter;
@@ -185,9 +186,9 @@ impl InterpreterFactory {
                 *delete.clone(),
             )?)),
 
-            Plan::Update(_update) => {
-                Err(ErrorCode::UnImplement("Unimplement for update".to_string()))
-            }
+            Plan::Update(_update) => Err(ErrorCode::Unimplemented(
+                "Unimplement for update".to_string(),
+            )),
 
             // Roles
             Plan::CreateRole(create_role) => Ok(Arc::new(CreateRoleInterpreter::try_create(
@@ -201,6 +202,10 @@ impl InterpreterFactory {
             Plan::SetRole(set_role) => Ok(Arc::new(SetRoleInterpreter::try_create(
                 ctx,
                 *set_role.clone(),
+            )?)),
+            Plan::ShowRoles(show_roles) => Ok(Arc::new(ShowRolesInterpreter::try_create(
+                ctx,
+                *show_roles.clone(),
             )?)),
 
             // Stages

@@ -16,7 +16,6 @@ use std::collections::HashMap;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planner::IndexType;
 
 use super::group::GroupState;
 use super::RelExpr;
@@ -25,6 +24,7 @@ use crate::optimizer::group::Group;
 use crate::optimizer::m_expr::MExpr;
 use crate::optimizer::s_expr::SExpr;
 use crate::plans::RelOperator;
+use crate::IndexType;
 
 /// `Memo` is a search space which memoize possible plans of a query.
 /// The plans inside `Memo` are organized with `Group`s.
@@ -57,9 +57,10 @@ impl Memo {
     }
 
     pub fn set_group_state(&mut self, group_index: IndexType, state: GroupState) -> Result<()> {
-        let group = self.groups.get_mut(group_index).ok_or_else(|| {
-            ErrorCode::LogicalError(format!("Group index {} not found", group_index))
-        })?;
+        let group = self
+            .groups
+            .get_mut(group_index)
+            .ok_or_else(|| ErrorCode::Internal(format!("Group index {} not found", group_index)))?;
         group.state = state;
         Ok(())
     }
@@ -117,7 +118,7 @@ impl Memo {
     pub fn group(&self, index: IndexType) -> Result<&Group> {
         self.groups
             .get(index)
-            .ok_or_else(|| ErrorCode::LogicalError(format!("Group index {} not found", index)))
+            .ok_or_else(|| ErrorCode::Internal(format!("Group index {} not found", index)))
     }
 
     pub fn insert_m_expr(&mut self, group_index: IndexType, m_expr: MExpr) -> Result<()> {
@@ -131,7 +132,7 @@ impl Memo {
     pub fn group_mut(&mut self, index: IndexType) -> Result<&mut Group> {
         self.groups
             .get_mut(index)
-            .ok_or_else(|| ErrorCode::LogicalError(format!("Group index {} not found", index)))
+            .ok_or_else(|| ErrorCode::Internal(format!("Group index {} not found", index)))
     }
 
     fn add_group(&mut self, relational_prop: RelationalProperty) -> IndexType {

@@ -365,7 +365,7 @@ async fn result_download_handler(
     let result_table = ResultTable::try_get(ctx.clone(), &query_id)
         .await
         .map_err(|e| {
-            if e.code() == ErrorCode::http_not_found_code() {
+            if e.code() == ErrorCode::HTTP_NOT_FOUND {
                 NotFound(e)
             } else {
                 InternalServerError(e)

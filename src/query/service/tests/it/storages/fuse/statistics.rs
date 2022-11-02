@@ -18,12 +18,16 @@ use common_base::base::tokio;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_functions::aggregates::eval_aggr;
+use common_functions::scalars::FunctionContext;
+use common_fuse_meta::meta::BlockMeta;
 use common_fuse_meta::meta::ClusterStatistics;
 use common_fuse_meta::meta::ColumnStatistics;
-use common_legacy_expression::add;
-use common_legacy_expression::col;
-use common_legacy_expression::lit;
-use common_pipeline_transforms::processors::ExpressionExecutor;
+use common_fuse_meta::meta::Statistics;
+use common_sql::evaluator::Evaluator;
+use common_sql::executor::add;
+use common_sql::executor::col;
+use common_sql::executor::lit;
+use common_storages_fuse::statistics::reducers::reduce_block_metas;
 use common_storages_fuse::statistics::Trim;
 use common_storages_fuse::statistics::STATS_REPLACEMENT_CHAR;
 use common_storages_fuse::statistics::STATS_STRING_PREFIX_LEN;
@@ -176,14 +180,14 @@ fn test_ft_stats_cluster_stats() -> common_exception::Result<()> {
     ]);
 
     let block_compactor = BlockCompactor::new(1_000_000, 800_000, 100 * 1024 * 1024);
-    let stats_gen = ClusterStatsGenerator::new(0, vec![0], None, 0, block_compactor.clone());
+    let stats_gen = ClusterStatsGenerator::new(0, vec![0], vec![], 0, block_compactor.clone());
     let (stats, _) = stats_gen.gen_stats_for_append(&blocks)?;
     assert!(stats.is_some());
     let stats = stats.unwrap();
     assert_eq!(vec![DataValue::Int64(1)], stats.min);
     assert_eq!(vec![DataValue::Int64(3)], stats.max);
 
-    let stats_gen = ClusterStatsGenerator::new(1, vec![1], None, 0, block_compactor);
+    let stats_gen = ClusterStatsGenerator::new(1, vec![1], vec![], 0, block_compactor);
     let (stats, _) = stats_gen.gen_stats_for_append(&blocks)?;
     assert!(stats.is_some());
     let stats = stats.unwrap();
@@ -205,7 +209,7 @@ async fn test_ft_cluster_stats_with_stats() -> common_exception::Result<()> {
     });
 
     let block_compactor = BlockCompactor::new(1_000_000, 800_000, 100 * 1024 * 1024);
-    let stats_gen = ClusterStatsGenerator::new(0, vec![0], None, 0, block_compactor.clone());
+    let stats_gen = ClusterStatsGenerator::new(0, vec![0], vec![], 0, block_compactor.clone());
     let stats = stats_gen.gen_with_origin_stats(&blocks, origin.clone())?;
     assert!(stats.is_some());
     let stats = stats.unwrap();
@@ -213,20 +217,15 @@ async fn test_ft_cluster_stats_with_stats() -> common_exception::Result<()> {
     assert_eq!(vec![DataValue::Int64(3)], stats.max);
 
     // add expression executor.
-    let fixture = TestFixture::new().await;
-    let ctx = fixture.ctx();
+    let expr = add(col("a", i32::to_data_type()), lit(1));
+    let eval_node = Evaluator::eval_expression(&expr, &schema)?;
+    let func_ctx = FunctionContext::default();
+    let result = eval_node.eval(&func_ctx, &blocks)?;
     let output_schema =
         DataSchemaRefExt::create(vec![DataField::new("(a + 1)", i64::to_data_type())]);
-    let executor = ExpressionExecutor::try_create(
-        ctx,
-        "expression executor for generator cluster statistics",
-        schema,
-        output_schema,
-        vec![add(col("a"), lit(1))],
-        true,
-    )?;
-    let stats_gen =
-        ClusterStatsGenerator::new(0, vec![0], Some(executor), 0, block_compactor.clone());
+    let blocks = DataBlock::create(output_schema, vec![result.vector]);
+
+    let stats_gen = ClusterStatsGenerator::new(0, vec![0], vec![], 0, block_compactor.clone());
     let stats = stats_gen.gen_with_origin_stats(&blocks, origin.clone())?;
     assert!(stats.is_some());
     let stats = stats.unwrap();
@@ -234,7 +233,7 @@ async fn test_ft_cluster_stats_with_stats() -> common_exception::Result<()> {
     assert_eq!(vec![DataValue::Int64(4)], stats.max);
 
     // different cluster_key_id.
-    let stats_gen = ClusterStatsGenerator::new(1, vec![0], None, 0, block_compactor);
+    let stats_gen = ClusterStatsGenerator::new(1, vec![0], vec![], 0, block_compactor);
     let stats = stats_gen.gen_with_origin_stats(&blocks, origin)?;
     assert!(stats.is_none());
 
@@ -286,7 +285,7 @@ fn test_ft_stats_block_stats_string_columns_trimming() -> common_exception::Resu
         Ok(())
     };
 
-    // let runs = 0..1000;  // use this at home
+    // let runs = 0..1000;  // use this setting at home
     let runs = 0..100;
     for _ in runs {
         suite()?
@@ -405,4 +404,54 @@ fn char_len(value: &[u8]) -> usize {
         .as_str()
         .chars()
         .count()
+}
+
+#[test]
+fn test_reduce_block_meta() -> common_exception::Result<()> {
+    // case 1: empty input should return the default statistics
+    let block_metas: Vec<BlockMeta> = vec![];
+    let reduced = reduce_block_metas(&block_metas)?;
+    assert_eq!(Statistics::default(), reduced);
+
+    // case 2: accumulated variants of size index should be as expected
+    // reduction of ColumnStatistics, ClusterStatistics already covered by other cases
+    let mut rng = rand::thread_rng();
+    let size = 100_u64;
+    let location = ("".to_owned(), 0);
+    let mut blocks = vec![];
+    let mut acc_row_count = 0;
+    let mut acc_block_size = 0;
+    let mut acc_file_size = 0;
+    let mut acc_bloom_filter_index_size = 0;
+    for _ in 0..size {
+        let row_count = rng.gen::<u64>() / size;
+        let block_size = rng.gen::<u64>() / size;
+        let file_size = rng.gen::<u64>() / size;
+        let bloom_filter_index_size = rng.gen::<u64>() / size;
+        acc_row_count += row_count;
+        acc_block_size += block_size;
+        acc_file_size += file_size;
+        acc_bloom_filter_index_size += bloom_filter_index_size;
+        let block_meta = BlockMeta::new(
+            row_count,
+            block_size,
+            file_size,
+            HashMap::new(),
+            HashMap::new(),
+            None,
+            location.clone(),
+            None,
+            bloom_filter_index_size,
+        );
+        blocks.push(block_meta);
+    }
+
+    let stats = reduce_block_metas(&blocks)?;
+
+    assert_eq!(acc_row_count, stats.row_count);
+    assert_eq!(acc_block_size, stats.uncompressed_byte_size);
+    assert_eq!(acc_file_size, stats.compressed_byte_size);
+    assert_eq!(acc_bloom_filter_index_size, stats.index_size);
+
+    Ok(())
 }

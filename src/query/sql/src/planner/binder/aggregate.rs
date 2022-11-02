@@ -22,7 +22,6 @@ use common_ast::DisplayError;
 use common_datavalues::DataTypeImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planner::MetadataRef;
 
 use crate::binder::scalar::ScalarBinder;
 use crate::binder::select::SelectList;
@@ -44,6 +43,7 @@ use crate::plans::Scalar;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::BindContext;
+use crate::MetadataRef;
 
 #[derive(Default, Clone, PartialEq, Eq, Debug)]
 pub struct AggregateInfo {
@@ -408,7 +408,7 @@ impl<'a> Binder {
         let item = select_list
             .items
             .get(index)
-            .ok_or_else(|| ErrorCode::LogicalError("Should not fail"))?;
+            .ok_or_else(|| ErrorCode::Internal("Should not fail"))?;
 
         let scalar = item.scalar.clone();
         let alias = item.alias.clone();

@@ -75,7 +75,7 @@ impl UserApiProvider {
             .await
             .map(Some)
             .or_else(|e| {
-                if e.code() == ErrorCode::unknown_user_code() && !client_ip.eq("%") {
+                if e.code() == ErrorCode::UNKNOWN_USER && !client_ip.eq("%") {
                     Ok(None)
                 } else {
                     Err(e)
@@ -125,7 +125,7 @@ impl UserApiProvider {
         match add_user.await {
             Ok(res) => Ok(res),
             Err(e) => {
-                if if_not_exists && e.code() == ErrorCode::user_already_exists_code() {
+                if if_not_exists && e.code() == ErrorCode::USER_ALREADY_EXISTS {
                     Ok(0)
                 } else {
                     Err(e.add_message_back("(while add user)"))
@@ -195,7 +195,7 @@ impl UserApiProvider {
         match drop_user.await {
             Ok(res) => Ok(res),
             Err(e) => {
-                if if_exists && e.code() == ErrorCode::unknown_user_code() {
+                if if_exists && e.code() == ErrorCode::UNKNOWN_USER {
                     Ok(())
                 } else {
                     Err(e.add_message_back("(while set drop user)"))

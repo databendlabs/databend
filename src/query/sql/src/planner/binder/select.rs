@@ -30,7 +30,6 @@ use common_datavalues::type_coercion::compare_coercion;
 use common_datavalues::DataTypeImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planner::IndexType;
 
 use crate::binder::join::JoinConditions;
 use crate::binder::scalar_common::split_conjunctions;
@@ -49,6 +48,7 @@ use crate::plans::Scalar;
 use crate::plans::ScalarItem;
 use crate::plans::UnionAll;
 use crate::ColumnBinding;
+use crate::IndexType;
 
 // A normalized IR for `SELECT` clause.
 #[derive(Debug, Default)]
@@ -329,7 +329,7 @@ impl<'a> Binder {
                 right_expr,
                 true,
             ),
-            _ => Err(ErrorCode::UnImplement(
+            _ => Err(ErrorCode::Unimplemented(
                 "Unsupported query type, currently, databend only support intersect distinct and except distinct",
             )),
         }

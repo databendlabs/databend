@@ -56,7 +56,7 @@ impl InputPlan {
     pub fn as_stream(&self) -> Result<&StreamPlan> {
         match self {
             InputPlan::StreamingLoad(p) => Ok(p),
-            _ => Err(ErrorCode::UnexpectedError("expect StreamingLoad")),
+            _ => Err(ErrorCode::Internal("expect StreamingLoad")),
         }
     }
 }
@@ -82,7 +82,7 @@ pub enum InputSource {
 impl InputSource {
     pub fn take_receiver(&self) -> Result<Receiver<Result<StreamingReadBatch>>> {
         match &self {
-            InputSource::Operator(_) => Err(ErrorCode::UnexpectedError(
+            InputSource::Operator(_) => Err(ErrorCode::Internal(
                 "should not happen: copy with streaming source",
             )),
             InputSource::Stream(i) => {
@@ -97,7 +97,7 @@ impl InputSource {
     pub fn get_operator(&self) -> Result<Operator> {
         match self {
             InputSource::Operator(op) => Ok(op.clone()),
-            InputSource::Stream(_) => Err(ErrorCode::UnexpectedError(
+            InputSource::Stream(_) => Err(ErrorCode::Internal(
                 "should not happen: copy with streaming source",
             )),
         }
@@ -162,7 +162,6 @@ impl InputContext {
     pub async fn try_create_from_copy(
         operator: Operator,
         settings: Arc<Settings>,
-        format_settings: FormatSettings,
         schema: DataSchemaRef,
         stage_info: UserStageInfo,
         files: Vec<String>,
@@ -186,6 +185,9 @@ impl InputContext {
                 RecordDelimiter::try_from(file_format_options.record_delimiter.as_str())?
             }
         };
+
+        let format_settings =
+            format.get_format_settings_from_options(&settings, file_format_options)?;
 
         let rows_to_skip = file_format_options.skip_header as usize;
         let field_delimiter = {
@@ -232,7 +234,7 @@ impl InputContext {
         let format_type =
             StageFileFormatType::from_str(format_name).map_err(ErrorCode::UnknownFormat)?;
         let format = Self::get_input_format(&format_type)?;
-        let format_settings = format.get_format_settings(&settings)?;
+        let format_settings = format.get_format_settings_from_settings(&settings)?;
         let read_batch_size = settings.get_input_read_buffer_size()? as usize;
         let rows_per_block = MIN_ROW_PER_BLOCK;
         let field_delimiter = settings.get_format_field_delimiter()?;
@@ -304,10 +306,12 @@ impl InputContext {
             StageFileCompression::RawDeflate => Some(CompressAlgorithm::Deflate),
             StageFileCompression::Xz => Some(CompressAlgorithm::Xz),
             StageFileCompression::Lzo => {
-                return Err(ErrorCode::UnImplement("compress type lzo is unimplemented"));
+                return Err(ErrorCode::Unimplemented(
+                    "compress type lzo is unimplemented",
+                ));
             }
             StageFileCompression::Snappy => {
-                return Err(ErrorCode::UnImplement(
+                return Err(ErrorCode::Unimplemented(
                     "compress type snappy is unimplemented",
                 ));
             }

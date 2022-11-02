@@ -17,7 +17,6 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_legacy_expression::*;
 use tokio_stream::StreamExt;
 
 use crate::storages::fuse::table_test_fixture::*;
@@ -33,8 +32,8 @@ async fn test_clustering_information_table_read() -> Result<()> {
     fixture.create_default_table().await?;
 
     // func args
-    let arg_db = LegacyExpression::create_literal(DataValue::String(db.as_bytes().to_vec()));
-    let arg_tbl = LegacyExpression::create_literal(DataValue::String(tbl.as_bytes().to_vec()));
+    let arg_db = DataValue::String(db.as_bytes().to_vec());
+    let arg_tbl = DataValue::String(tbl.as_bytes().to_vec());
 
     {
         let expected = vec![
@@ -88,9 +87,10 @@ async fn test_clustering_information_table_read() -> Result<()> {
             db, "in_mem"
         );
         let output_stream = execute_query(ctx.clone(), qry.as_str()).await?;
+        // TODO(xuanwo): assign a new error code
         expects_err(
             "unsupported_table_engine",
-            ErrorCode::logical_error_code(),
+            ErrorCode::INTERNAL,
             output_stream.collect::<Result<Vec<DataBlock>>>().await,
         );
     }

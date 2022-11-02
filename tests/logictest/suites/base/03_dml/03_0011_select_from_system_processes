@@ -1,5 +1,5 @@
 statement query TT
-select state, database from system.processes;
+select command, database from system.processes;
 
 ----
 Query default

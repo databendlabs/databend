@@ -12,7 +12,6 @@ test = false
 
 [dependencies] # In alphabetical order
 # Workspace dependencies
-common-arrow = { path = "../../common/arrow" }
 common-ast = { path = "../ast" }
 common-base = { path = "../../common/base" }
 common-catalog = { path = "../catalog" }
@@ -24,35 +23,25 @@ common-formats = { path = "../formats" }
 common-functions = { path = "../functions" }
 common-fuse-meta = { path = "../storages/fuse-meta" }
 common-grpc = { path = "../../common/grpc" }
-common-hashtable = { path = "../../common/hashtable" }
 common-hive-meta-store = { path = "../storages/hive-meta-store", optional = true }
 common-http = { path = "../../common/http" }
 common-io = { path = "../../common/io" }
-common-legacy-expression = { path = "../legacy-expression" }
-common-legacy-parser = { path = "../legacy-parser" }
-common-legacy-planners = { path = "../legacy-planners" }
 common-management = { path = "../management" }
 common-meta-api = { path = "../../meta/api" }
 common-meta-app = { path = "../../meta/app" }
-# common-meta-embedded = { path = "../../meta/embedded" }
 common-meta-store = { path = "../../meta/store" }
 common-meta-types = { path = "../../meta/types" }
 common-metrics = { path = "../../common/metrics" }
+
 common-pipeline-core = { path = "../pipeline/core" }
-common-pipeline-sinks = { path = "../pipeline/sinks" }
 common-pipeline-sources = { path = "../pipeline/sources" }
 common-pipeline-transforms = { path = "../pipeline/transforms" }
+
 common-planner = { path = "../planner" }
 common-settings = { path = "../settings" }
 common-storage = { path = "../../common/storage" }
 common-storages-constants = { path = "../storages/constants" }
-common-storages-factory = { path = "../storages/factory" }
-common-storages-fuse = { path = "../storages/fuse" }
-common-storages-hive = { path = "../storages/hive", optional = true }
-common-storages-index = { path = "../storages/index" }
 common-storages-preludes = { path = "../storages/preludes" }
-common-storages-share = { path = "../storages/share" }
-common-streams = { path = "../streams" }
 common-tracing = { path = "../../common/tracing" }
 common-users = { path = "../users" }
 

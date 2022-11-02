@@ -21,8 +21,6 @@ use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::StringType;
-use common_legacy_planners::DeletePlan;
-use common_legacy_planners::SettingPlan;
 use common_planner::plans::AlterTableClusterKeyPlan;
 use common_planner::plans::AlterUDFPlan;
 use common_planner::plans::AlterUserPlan;
@@ -34,6 +32,7 @@ use common_planner::plans::CreateStagePlan;
 use common_planner::plans::CreateUDFPlan;
 use common_planner::plans::CreateUserPlan;
 use common_planner::plans::CreateViewPlan;
+use common_planner::plans::DeletePlan;
 use common_planner::plans::DescribeTablePlan;
 use common_planner::plans::DropDatabasePlan;
 use common_planner::plans::DropRolePlan;
@@ -55,14 +54,15 @@ use common_planner::plans::RenameTablePlan;
 use common_planner::plans::RevokePrivilegePlan;
 use common_planner::plans::RevokeRolePlan;
 use common_planner::plans::SetRolePlan;
+use common_planner::plans::SettingPlan;
 use common_planner::plans::ShowCreateDatabasePlan;
 use common_planner::plans::ShowCreateTablePlan;
 use common_planner::plans::ShowGrantsPlan;
+use common_planner::plans::ShowRolesPlan;
 use common_planner::plans::TruncateTablePlan;
 use common_planner::plans::UndropDatabasePlan;
 use common_planner::plans::UndropTablePlan;
 use common_planner::plans::UseDatabasePlan;
-use common_planner::MetadataRef;
 
 use crate::optimizer::SExpr;
 use crate::plans::copy_v2::CopyPlanV2;
@@ -81,6 +81,7 @@ use crate::plans::share::ShowObjectGrantPrivilegesPlan;
 use crate::plans::share::ShowSharesPlan;
 use crate::plans::UpdatePlan;
 use crate::BindContext;
+use crate::MetadataRef;
 
 #[derive(Clone, Debug)]
 pub enum Plan {
@@ -153,6 +154,7 @@ pub enum Plan {
     DropUDF(Box<DropUDFPlan>),
 
     // Role
+    ShowRoles(Box<ShowRolesPlan>),
     CreateRole(Box<CreateRolePlan>),
     DropRole(Box<DropRolePlan>),
     GrantRole(Box<GrantRolePlan>),
@@ -245,6 +247,7 @@ impl Display for Plan {
             Plan::GrantRole(_) => write!(f, "GrantRole"),
             Plan::GrantPriv(_) => write!(f, "GrantPriv"),
             Plan::ShowGrants(_) => write!(f, "ShowGrants"),
+            Plan::ShowRoles(_) => write!(f, "ShowRoles"),
             Plan::RevokePriv(_) => write!(f, "RevokePriv"),
             Plan::RevokeRole(_) => write!(f, "RevokeRole"),
             Plan::CreateUDF(_) => write!(f, "CreateUDF"),
@@ -313,6 +316,7 @@ impl Plan {
             Plan::DropUser(plan) => plan.schema(),
             Plan::CreateRole(plan) => plan.schema(),
             Plan::DropRole(plan) => plan.schema(),
+            Plan::ShowRoles(plan) => plan.schema(),
             Plan::GrantRole(plan) => plan.schema(),
             Plan::GrantPriv(plan) => plan.schema(),
             Plan::ShowGrants(plan) => plan.schema(),

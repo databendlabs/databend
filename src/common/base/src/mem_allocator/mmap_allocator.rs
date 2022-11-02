@@ -16,332 +16,361 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-use std::alloc::Layout;
-use std::cell::Cell;
-use std::os::raw::c_int;
-use std::os::raw::c_long;
-use std::os::raw::c_void;
-use std::ptr;
-
-use libc::off_t;
-use libc::size_t;
-
-use super::JEAllocator;
-use crate::base::ThreadTracker;
-use crate::mem_allocator::Allocator as AllocatorTrait;
-
-const MMAP_THRESHOLD: size_t = 64 * (1usize << 20);
-const MALLOC_MIN_ALIGNMENT: size_t = 8;
-
-/// Implementation of std::alloc::AllocatorTrait whose backend is mmap(2)
 #[derive(Debug, Clone, Copy, Default)]
-pub struct MmapAllocator<const MMAP_POPULATE: bool> {
-    allocator: JEAllocator,
+pub struct MmapAllocator<T> {
+    allocator: T,
 }
 
-/// # Portability
-///
-/// allocx() calls mmap() with flag MAP_ANONYMOUS.
-/// Many systems support the flag, however, it is not specified in POSIX.
-///
-/// # Safety
-///
-/// All functions are thread safe.
-///
-/// # Error
-///
-/// Each function don't cause panic but set OS errno on error.
-///
-/// Note that it is not an error to deallocate pointer which is not allocated.
-/// This is the spec of munmap(2). See `man 2 munmap` for details.
-unsafe impl<const MMAP_POPULATE: bool> AllocatorTrait for MmapAllocator<MMAP_POPULATE> {
-    /// # Panics
-    ///
-    /// This method may panic if the align of `layout` is greater than the kernel page align.
-    /// (Basically, kernel page align is always greater than the align of `layout` that rust
-    /// generates unless the programer dares to build such a `layout` on purpose.)
-    #[inline]
-    unsafe fn allocx(&mut self, layout: Layout, clear_mem: bool) -> *mut u8 {
-        #[cfg(not(target_os = "linux"))]
-        let flags: c_int = libc::MAP_PRIVATE | libc::MAP_ANONYMOUS;
-        #[cfg(target_os = "linux")]
-        let flags: c_int = libc::MAP_PRIVATE
-            | libc::MAP_ANONYMOUS
-            | if MMAP_POPULATE { libc::MAP_POPULATE } else { 0 };
+impl<T> MmapAllocator<T> {
+    pub fn new(allocator: T) -> Self {
+        Self { allocator }
+    }
+}
 
-        const ADDR: *mut c_void = ptr::null_mut::<c_void>();
-        const PROT: c_int = libc::PROT_READ | libc::PROT_WRITE;
-        const FD: c_int = -1; // Should be -1 if flags includes MAP_ANONYMOUS. See `man 2 mmap`
-        const OFFSET: off_t = 0; // Should be 0 if flags includes MAP_ANONYMOUS. See `man 2 mmap`
-        let length = layout.size() as size_t;
+#[cfg(target_os = "linux")]
+pub mod linux {
+    use std::alloc::AllocError;
+    use std::alloc::Allocator;
+    use std::alloc::Layout;
+    use std::ptr::null_mut;
+    use std::ptr::NonNull;
 
-        if layout.size() >= MMAP_THRESHOLD {
-            if layout.align() > page_size() {
-                // too large alignment, fallback to use allocator
-                return self.allocator.allocx(layout, clear_mem);
-            }
+    use super::MmapAllocator;
 
-            ThreadTracker::alloc_memory(layout.size() as i64);
-            match mmap(ADDR, length, PROT, flags, FD, OFFSET) {
-                libc::MAP_FAILED => ptr::null_mut::<u8>(),
-                ret => {
-                    let ptr = ret as usize;
-                    debug_assert_eq!(0, ptr % layout.align());
-                    ret as *mut u8
-                }
-            }
-        } else {
-            self.allocator.allocx(layout, clear_mem)
-        }
+    // MADV_POPULATE_WRITE is supported since Linux 5.14.
+    const MADV_POPULATE_WRITE: i32 = 23;
+
+    const THRESHOLD: usize = 64 << 20;
+
+    impl<T> MmapAllocator<T> {
+        pub const FALLBACK: bool = false;
     }
 
-    #[inline]
-    unsafe fn deallocx(&mut self, ptr: *mut u8, layout: Layout) {
-        let addr = ptr as *mut c_void;
-        if layout.size() >= MMAP_THRESHOLD {
-            munmap(addr, layout.size());
-        } else {
-            self.allocator.deallocx(ptr, layout);
-        }
-    }
-
-    #[inline]
-    unsafe fn reallocx(
-        &mut self,
-        ptr: *mut u8,
-        layout: Layout,
-        new_size: usize,
-        clear_mem: bool,
-    ) -> *mut u8 {
-        use libc::PROT_READ;
-        use libc::PROT_WRITE;
-
-        if new_size == layout.size() {
-            return ptr;
-        }
-
-        if layout.size() < MMAP_THRESHOLD
-            && new_size < MMAP_THRESHOLD
-            && layout.align() <= MALLOC_MIN_ALIGNMENT
-        {
-            self.allocator.reallocx(ptr, layout, new_size, clear_mem)
-        } else if layout.size() >= MMAP_THRESHOLD && new_size >= MMAP_THRESHOLD {
-            if layout.align() > page_size() {
-                self.allocator.reallocx(ptr, layout, new_size, clear_mem)
-            } else {
-                mremapx(
-                    ptr as *mut c_void,
-                    layout.size(),
-                    new_size,
-                    0,
-                    PROT_READ | PROT_WRITE,
-                ) as *mut u8
+    impl<T: Allocator> MmapAllocator<T> {
+        #[inline(always)]
+        fn mmap_alloc(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
+            debug_assert!(layout.align() <= page_size());
+            const PROT: i32 = libc::PROT_READ | libc::PROT_WRITE;
+            const FLAGS: i32 = libc::MAP_PRIVATE | libc::MAP_ANONYMOUS | libc::MAP_POPULATE;
+            let addr = unsafe { libc::mmap(null_mut(), layout.size(), PROT, FLAGS, -1, 0) };
+            if addr == libc::MAP_FAILED {
+                return Err(AllocError);
             }
-        } else {
-            let new_buf = self.allocx(
-                Layout::from_size_align_unchecked(new_size, layout.align()),
-                clear_mem,
+            let addr = NonNull::new(addr as *mut ()).ok_or(AllocError)?;
+            Ok(NonNull::<[u8]>::from_raw_parts(addr, layout.size()))
+        }
+
+        #[inline(always)]
+        unsafe fn mmap_dealloc(&self, ptr: NonNull<u8>, layout: Layout) {
+            debug_assert!(layout.align() <= page_size());
+            let result = libc::munmap(ptr.cast().as_ptr(), layout.size());
+            assert_eq!(result, 0, "Failed to deallocate.");
+        }
+
+        #[inline(always)]
+        unsafe fn mmap_grow(
+            &self,
+            ptr: NonNull<u8>,
+            old_layout: Layout,
+            new_layout: Layout,
+        ) -> Result<NonNull<[u8]>, AllocError> {
+            debug_assert!(old_layout.align() <= page_size());
+            debug_assert!(old_layout.align() == new_layout.align());
+            const REMAP_FLAGS: i32 = libc::MREMAP_MAYMOVE;
+            let addr = libc::mremap(
+                ptr.cast().as_ptr(),
+                old_layout.size(),
+                new_layout.size(),
+                REMAP_FLAGS,
             );
-
-            if new_buf.is_null() {
-                return ptr::null_mut();
+            if addr == libc::MAP_FAILED {
+                return Err(AllocError);
             }
-            std::ptr::copy_nonoverlapping(ptr, new_buf, new_size.min(layout.size()));
-            self.deallocx(ptr, layout);
-            new_buf
+            let addr = NonNull::new(addr as *mut ()).ok_or(AllocError)?;
+            if linux_kernel_version() >= (5, 14, 0) {
+                libc::madvise(addr.cast().as_ptr(), new_layout.size(), MADV_POPULATE_WRITE);
+            }
+            Ok(NonNull::<[u8]>::from_raw_parts(addr, new_layout.size()))
+        }
+
+        #[inline(always)]
+        unsafe fn mmap_shrink(
+            &self,
+            ptr: NonNull<u8>,
+            old_layout: Layout,
+            new_layout: Layout,
+        ) -> Result<NonNull<[u8]>, AllocError> {
+            debug_assert!(old_layout.align() <= page_size());
+            debug_assert!(old_layout.align() == new_layout.align());
+            const REMAP_FLAGS: i32 = libc::MREMAP_MAYMOVE;
+            let addr = libc::mremap(
+                ptr.cast().as_ptr(),
+                old_layout.size(),
+                new_layout.size(),
+                REMAP_FLAGS,
+            );
+            if addr == libc::MAP_FAILED {
+                return Err(AllocError);
+            }
+            let addr = NonNull::new(addr as *mut ()).ok_or(AllocError)?;
+            Ok(NonNull::<[u8]>::from_raw_parts(addr, new_layout.size()))
         }
     }
-}
 
-#[inline]
-unsafe fn mremapx(
-    old_address: *mut c_void,
-    old_size: size_t,
-    new_size: size_t,
-    flags: c_int,
-    mmap_prot: c_int,
-) -> *mut c_void {
-    #[cfg(not(target_os = "linux"))]
-    {
-        const ADDR: *mut c_void = ptr::null_mut::<c_void>();
-        const FD: c_int = -1; // Should be -1 if flags includes MAP_ANONYMOUS. See `man 2 mmap`
-        const OFFSET: off_t = 0; // Should be 0 if flags includes MAP_ANONYMOUS. See `man 2 mmap`
+    unsafe impl<T: Allocator> Allocator for MmapAllocator<T> {
+        #[inline(always)]
+        fn allocate(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
+            if layout.align() > page_size() {
+                return self.allocator.allocate(layout);
+            }
+            if layout.size() >= THRESHOLD {
+                self.mmap_alloc(layout)
+            } else {
+                self.allocator.allocate(layout)
+            }
+        }
 
-        match mmap(ADDR, new_size, mmap_prot, flags, FD, OFFSET) {
-            libc::MAP_FAILED => ptr::null_mut::<c_void>(),
-            new_address => {
+        #[inline(always)]
+        unsafe fn deallocate(&self, ptr: NonNull<u8>, layout: Layout) {
+            if layout.align() > page_size() {
+                return self.allocator.deallocate(ptr, layout);
+            }
+            if layout.size() >= THRESHOLD {
+                self.mmap_dealloc(ptr, layout);
+            } else {
+                self.allocator.deallocate(ptr, layout);
+            }
+        }
+
+        #[inline(always)]
+        fn allocate_zeroed(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
+            if layout.align() > page_size() {
+                return self.allocator.allocate_zeroed(layout);
+            }
+            if layout.size() >= THRESHOLD {
+                self.mmap_alloc(layout)
+            } else {
+                self.allocator.allocate_zeroed(layout)
+            }
+        }
+
+        unsafe fn grow(
+            &self,
+            ptr: NonNull<u8>,
+            old_layout: Layout,
+            new_layout: Layout,
+        ) -> Result<NonNull<[u8]>, AllocError> {
+            if old_layout.align() > page_size() {
+                return self.allocator.grow(ptr, old_layout, new_layout);
+            }
+            if old_layout.size() >= THRESHOLD {
+                self.mmap_grow(ptr, old_layout, new_layout)
+            } else if new_layout.size() >= THRESHOLD {
+                let addr = self.mmap_alloc(new_layout)?;
                 std::ptr::copy_nonoverlapping(
-                    old_address as *const u8,
-                    new_address as *mut u8,
-                    old_size as usize,
+                    ptr.as_ptr(),
+                    addr.cast().as_ptr(),
+                    old_layout.size(),
                 );
-                new_address
+                self.allocator.deallocate(ptr, old_layout);
+                Ok(addr)
+            } else {
+                self.allocator.grow(ptr, old_layout, new_layout)
+            }
+        }
+
+        unsafe fn grow_zeroed(
+            &self,
+            ptr: NonNull<u8>,
+            old_layout: Layout,
+            new_layout: Layout,
+        ) -> Result<NonNull<[u8]>, AllocError> {
+            if old_layout.align() > page_size() {
+                return self.allocator.grow_zeroed(ptr, old_layout, new_layout);
+            }
+            if old_layout.size() >= THRESHOLD {
+                self.mmap_grow(ptr, old_layout, new_layout)
+            } else if new_layout.size() >= THRESHOLD {
+                let addr = self.mmap_alloc(new_layout)?;
+                std::ptr::copy_nonoverlapping(
+                    ptr.as_ptr(),
+                    addr.cast().as_ptr(),
+                    old_layout.size(),
+                );
+                self.allocator.deallocate(ptr, old_layout);
+                Ok(addr)
+            } else {
+                self.allocator.grow_zeroed(ptr, old_layout, new_layout)
+            }
+        }
+
+        unsafe fn shrink(
+            &self,
+            ptr: NonNull<u8>,
+            old_layout: Layout,
+            new_layout: Layout,
+        ) -> Result<NonNull<[u8]>, AllocError> {
+            if old_layout.align() > page_size() {
+                return self.allocator.shrink(ptr, old_layout, new_layout);
+            }
+            if new_layout.size() >= THRESHOLD {
+                self.mmap_shrink(ptr, old_layout, new_layout)
+            } else if old_layout.size() >= THRESHOLD {
+                let addr = self.allocator.allocate(new_layout)?;
+                std::ptr::copy_nonoverlapping(
+                    ptr.as_ptr(),
+                    addr.cast().as_ptr(),
+                    old_layout.size(),
+                );
+                self.mmap_dealloc(ptr, old_layout);
+                Ok(addr)
+            } else {
+                self.allocator.shrink(ptr, old_layout, new_layout)
             }
         }
     }
-    #[cfg(target_os = "linux")]
-    mremap(
-        old_address,
-        old_size,
-        new_size,
-        flags | libc::MREMAP_MAYMOVE,
-        mmap_prot,
-    )
+
+    #[inline(always)]
+    fn page_size() -> usize {
+        use std::sync::atomic::AtomicUsize;
+        use std::sync::atomic::Ordering;
+        const INVAILED: usize = 0;
+        static CACHE: AtomicUsize = AtomicUsize::new(INVAILED);
+        let fetch = CACHE.load(Ordering::Relaxed);
+        if fetch == INVAILED {
+            let result = unsafe { libc::sysconf(libc::_SC_PAGE_SIZE) as usize };
+            debug_assert_eq!(result.count_ones(), 1);
+            CACHE.store(result, Ordering::Relaxed);
+            result
+        } else {
+            fetch
+        }
+    }
+
+    #[inline(always)]
+    fn linux_kernel_version() -> (u16, u8, u8) {
+        use std::sync::atomic::AtomicU32;
+        use std::sync::atomic::Ordering;
+        const INVAILED: u32 = 0;
+        static CACHE: AtomicU32 = AtomicU32::new(INVAILED);
+        let fetch = CACHE.load(Ordering::Relaxed);
+        let code = if fetch == INVAILED {
+            let mut uname = unsafe { std::mem::zeroed::<libc::utsname>() };
+            assert_ne!(-1, unsafe { libc::uname(&mut uname) });
+            let mut length = 0usize;
+
+            // refer: https://semver.org/, here we stop at \0 and _
+            while length < uname.release.len()
+                && uname.release[length] != 0
+                && uname.release[length] != 95
+            {
+                length += 1;
+            }
+            // fallback to (5.13.0)
+            let fallback_version = 5u32 << 16 | 13u32 << 8;
+            let slice = unsafe { &*(&uname.release[..length] as *const _ as *const [u8]) };
+            let result = match std::str::from_utf8(slice) {
+                Ok(ver) => match semver::Version::parse(ver) {
+                    Ok(semver) => {
+                        (semver.major.min(65535) as u32) << 16
+                            | (semver.minor.min(255) as u32) << 8
+                            | (semver.patch.min(255) as u32)
+                    }
+                    Err(_) => fallback_version,
+                },
+                Err(_) => fallback_version,
+            };
+
+            CACHE.store(result, Ordering::Relaxed);
+            result
+        } else {
+            fetch
+        };
+        ((code >> 16) as u16, (code >> 8) as u8, code as u8)
+    }
 }
 
-extern "C" {
-    fn mmap(
-        addr: *mut c_void,
-        length: size_t,
-        prot: c_int,
-        flags: c_int,
-        fd: c_int,
-        offset: off_t,
-    ) -> *mut c_void;
+#[cfg(not(target_os = "linux"))]
+pub mod fallback {
+    use std::alloc::AllocError;
+    use std::alloc::Allocator;
+    use std::alloc::Layout;
+    use std::ptr::NonNull;
 
-    fn munmap(addr: *mut c_void, length: size_t);
+    use super::MmapAllocator;
 
-    #[cfg(target_os = "linux")]
-    fn mremap(
-        old_address: *mut c_void,
-        old_size: size_t,
-        new_size: size_t,
-        flags: c_int,
-        mmap_prot: c_int,
-    ) -> *mut c_void;
+    impl<T> MmapAllocator<T> {
+        pub const FALLBACK: bool = true;
+    }
+
+    unsafe impl<T: Allocator> Allocator for MmapAllocator<T> {
+        #[inline(always)]
+        fn allocate(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
+            self.allocator.allocate(layout)
+        }
+
+        #[inline(always)]
+        unsafe fn deallocate(&self, ptr: NonNull<u8>, layout: Layout) {
+            self.allocator.deallocate(ptr, layout)
+        }
+
+        #[inline(always)]
+        fn allocate_zeroed(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
+            self.allocator.allocate_zeroed(layout)
+        }
+
+        unsafe fn grow(
+            &self,
+            ptr: NonNull<u8>,
+            old_layout: Layout,
+            new_layout: Layout,
+        ) -> Result<NonNull<[u8]>, AllocError> {
+            self.allocator.grow(ptr, old_layout, new_layout)
+        }
+
+        unsafe fn grow_zeroed(
+            &self,
+            ptr: NonNull<u8>,
+            old_layout: Layout,
+            new_layout: Layout,
+        ) -> Result<NonNull<[u8]>, AllocError> {
+            self.allocator.grow_zeroed(ptr, old_layout, new_layout)
+        }
+
+        unsafe fn shrink(
+            &self,
+            ptr: NonNull<u8>,
+            old_layout: Layout,
+            new_layout: Layout,
+        ) -> Result<NonNull<[u8]>, AllocError> {
+            self.allocator.shrink(ptr, old_layout, new_layout)
+        }
+    }
 }
 
 #[cfg(test)]
-mod tests {
-    use std::mem;
-    use std::ptr;
-
-    use super::*;
-    use crate::mem_allocator::Allocator as AllocatorTrait;
-    type Aloc = MmapAllocator<true>;
-
-    fn clear_errno() {
-        #[cfg(target_os = "linux")]
-        unsafe {
-            *libc::__errno_location() = 0
-        }
-    }
+mod test {
 
     #[test]
-    fn default() {
-        let _alloc = Aloc::default();
-    }
-
-    #[test]
-    fn allocate() {
-        unsafe {
-            type T = i64;
-            let mut alloc = Aloc::default();
-
-            let layout = Layout::new::<i64>();
-            let ptr = alloc.allocx(layout, false) as *mut T;
-            assert_ne!(std::ptr::null(), ptr);
-
-            *ptr = 84;
-            assert_eq!(84, *ptr);
-
-            *ptr *= -2;
-            assert_eq!(-168, *ptr);
-
-            alloc.deallocx(ptr as *mut u8, layout)
+    fn test_semver() {
+        let uname_release: Vec<u8> =
+            "4.18.0-2.4.3.xyz.x86_64.fdsf.fdsfsdfsdf.fdsafdsf\0\0\0cxzcxzcxzc"
+                .as_bytes()
+                .to_vec();
+        let mut length = 0;
+        while length < uname_release.len()
+            && uname_release[length] != 0
+            && uname_release[length] != 95
+        {
+            length += 1;
         }
+        let slice = unsafe { &*(&uname_release[..length] as *const _ as *const [u8]) };
+        let ver = std::str::from_utf8(slice).unwrap();
+        let version = semver::Version::parse(ver);
+        assert!(version.is_ok());
+        let version = version.unwrap();
+        assert_eq!(version.major, 4);
+        assert_eq!(version.minor, 18);
+        assert_eq!(version.patch, 0);
     }
-
-    #[test]
-    fn allocate_too_large() {
-        unsafe {
-            clear_errno();
-
-            type T = String;
-            let mut alloc = Aloc::default();
-
-            let align = mem::align_of::<T>();
-            let size = std::usize::MAX - mem::size_of::<T>();
-            let layout = Layout::from_size_align_unchecked(size, align);
-
-            assert_eq!(ptr::null(), alloc.allocx(layout, false));
-        }
-    }
-
-    #[test]
-    fn alloc_zeroed() {
-        unsafe {
-            type T = [u8; 1025];
-            let mut alloc = Aloc::default();
-
-            let layout = Layout::new::<T>();
-            let ptr = alloc.allocx(layout, false) as *mut T;
-            let s: &[u8] = &*ptr;
-
-            for u in s {
-                assert_eq!(0, *u);
-            }
-
-            alloc.deallocx(ptr as *mut u8, layout);
-        }
-    }
-
-    #[test]
-    fn reallocx() {
-        unsafe {
-            type T = [u8; 1025];
-            let mut alloc = Aloc::default();
-
-            let layout = Layout::new::<T>();
-            let ptr = alloc.allocx(layout, false) as *mut T;
-
-            let ts = &mut *ptr;
-            for t in ts.iter_mut() {
-                *t = 1;
-            }
-
-            type U = (T, T);
-
-            let new_size = mem::size_of::<U>();
-            let ptr = alloc.reallocx(ptr as *mut u8, layout, new_size, false) as *mut T;
-            let layout = Layout::from_size_align(new_size, layout.align()).unwrap();
-
-            let ts = &mut *ptr;
-            for t in ts.iter_mut() {
-                assert_eq!(1, *t);
-                *t = 2;
-            }
-
-            let new_size = mem::size_of::<u8>();
-            let ptr = alloc.reallocx(ptr as *mut u8, layout, new_size, false);
-            let layout = Layout::from_size_align(new_size, layout.align()).unwrap();
-
-            assert_eq!(2, *ptr);
-
-            alloc.deallocx(ptr, layout);
-        }
-    }
-}
-
-thread_local! {
-    static PAGE_SIZE: Cell<usize> = Cell::new(0);
-}
-
-/// Returns OS Page Size.
-///
-/// See crate document for details.
-#[inline]
-pub fn page_size() -> usize {
-    PAGE_SIZE.with(|s| match s.get() {
-        0 => {
-            let ret = unsafe { sysconf(libc::_SC_PAGE_SIZE) as usize };
-            s.set(ret);
-            ret
-        }
-        ret => ret,
-    })
-}
-
-extern "C" {
-    fn sysconf(name: c_int) -> c_long;
 }

@@ -106,10 +106,6 @@ impl Catalog for DatabaseCatalog {
         self
     }
 
-    fn is_case_insensitive_db(&self, db: &str) -> bool {
-        db.to_uppercase() == "INFORMATION_SCHEMA"
-    }
-
     async fn get_database(&self, tenant: &str, db_name: &str) -> Result<Arc<dyn Database>> {
         if tenant.is_empty() {
             return Err(ErrorCode::TenantIsEmpty(
@@ -117,17 +113,11 @@ impl Catalog for DatabaseCatalog {
             ));
         }
 
-        let db_name = if self.is_case_insensitive_db(db_name) {
-            db_name.to_uppercase()
-        } else {
-            db_name.to_string()
-        };
-
-        let r = self.immutable_catalog.get_database(tenant, &db_name).await;
+        let r = self.immutable_catalog.get_database(tenant, db_name).await;
         match r {
             Err(e) => {
-                if e.code() == ErrorCode::unknown_database_code() {
-                    self.mutable_catalog.get_database(tenant, &db_name).await
+                if e.code() == ErrorCode::UNKNOWN_DATABASE {
+                    self.mutable_catalog.get_database(tenant, db_name).await
                 } else {
                     Err(e)
                 }
@@ -218,7 +208,7 @@ impl Catalog for DatabaseCatalog {
         match res {
             Ok(t) => Ok(t),
             Err(e) => {
-                if e.code() == ErrorCode::unknown_table_code() {
+                if e.code() == ErrorCode::UNKNOWN_TABLE {
                     self.mutable_catalog.get_table_by_info(table_info)
                 } else {
                     Err(e)
@@ -249,22 +239,16 @@ impl Catalog for DatabaseCatalog {
             ));
         }
 
-        let (db_name, table_name) = if self.is_case_insensitive_db(db_name) {
-            (db_name.to_uppercase(), table_name.to_uppercase())
-        } else {
-            (db_name.to_string(), table_name.to_string())
-        };
-
         let res = self
             .immutable_catalog
-            .get_table(tenant, &db_name, &table_name)
+            .get_table(tenant, db_name, table_name)
             .await;
         match res {
             Ok(v) => Ok(v),
             Err(e) => {
-                if e.code() == ErrorCode::UnknownDatabaseCode() {
+                if e.code() == ErrorCode::UNKNOWN_DATABASE {
                     self.mutable_catalog
-                        .get_table(tenant, &db_name, &table_name)
+                        .get_table(tenant, db_name, table_name)
                         .await
                 } else {
                     Err(e)
@@ -280,18 +264,12 @@ impl Catalog for DatabaseCatalog {
             ));
         }
 
-        let db_name = if self.is_case_insensitive_db(db_name) {
-            db_name.to_uppercase()
-        } else {
-            db_name.to_string()
-        };
-
-        let r = self.immutable_catalog.list_tables(tenant, &db_name).await;
+        let r = self.immutable_catalog.list_tables(tenant, db_name).await;
         match r {
             Ok(x) => Ok(x),
             Err(e) => {
-                if e.code() == ErrorCode::UnknownDatabaseCode() {
-                    self.mutable_catalog.list_tables(tenant, &db_name).await
+                if e.code() == ErrorCode::UNKNOWN_DATABASE {
+                    self.mutable_catalog.list_tables(tenant, db_name).await
                 } else {
                     Err(e)
                 }
@@ -310,22 +288,16 @@ impl Catalog for DatabaseCatalog {
             ));
         }
 
-        let db_name = if self.is_case_insensitive_db(db_name) {
-            db_name.to_uppercase()
-        } else {
-            db_name.to_string()
-        };
-
         let r = self
             .immutable_catalog
-            .list_tables_history(tenant, &db_name)
+            .list_tables_history(tenant, db_name)
             .await;
         match r {
             Ok(x) => Ok(x),
             Err(e) => {
-                if e.code() == ErrorCode::UnknownDatabaseCode() {
+                if e.code() == ErrorCode::UNKNOWN_DATABASE {
                     self.mutable_catalog
-                        .list_tables_history(tenant, &db_name)
+                        .list_tables_history(tenant, db_name)
                         .await
                 } else {
                     Err(e)
@@ -423,7 +395,7 @@ impl Catalog for DatabaseCatalog {
                 .exists_database(req.tenant(), &req.new_db_name)
                 .await?
         {
-            return Err(ErrorCode::UnImplement(
+            return Err(ErrorCode::Unimplemented(
                 "Cannot rename table from(to) system databases",
             ));
         }

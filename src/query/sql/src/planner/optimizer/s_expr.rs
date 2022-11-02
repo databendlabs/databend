@@ -14,7 +14,6 @@
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planner::IndexType;
 
 use super::RelationalProperty;
 use crate::optimizer::rule::AppliedRules;
@@ -23,6 +22,7 @@ use crate::plans::Operator;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 use crate::plans::RelOperator;
+use crate::IndexType;
 
 /// `SExpr` is abbreviation of single expression, which is a tree of relational operators.
 #[derive(Clone, Debug)]
@@ -90,7 +90,7 @@ impl SExpr {
     pub fn child(&self, n: usize) -> Result<&SExpr> {
         self.children
             .get(n)
-            .ok_or_else(|| ErrorCode::LogicalError(format!("Invalid children index: {}", n)))
+            .ok_or_else(|| ErrorCode::Internal(format!("Invalid children index: {}", n)))
     }
 
     pub fn arity(&self) -> usize {

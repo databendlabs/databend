@@ -32,8 +32,10 @@ use common_io::prelude::NestedCheckpointReader;
 use common_pipeline_sources::processors::sources::AsyncSource;
 use common_pipeline_sources::processors::sources::AsyncSourcer;
 use common_pipeline_transforms::processors::transforms::Transform;
-use common_planner::Metadata;
-use common_planner::MetadataRef;
+use common_sql::evaluator::ChunkOperator;
+use common_sql::evaluator::CompoundChunkOperator;
+use common_sql::Metadata;
+use common_sql::MetadataRef;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 
@@ -41,8 +43,6 @@ use super::interpreter_common::append2table;
 use super::plan_schedulers::build_schedule_pipeline;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
-use crate::pipelines::processors::transforms::ChunkOperator;
-use crate::pipelines::processors::transforms::CompoundChunkOperator;
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::PipelineBuilder;
 use crate::pipelines::SourcePipeBuilder;
@@ -530,14 +530,9 @@ async fn exprs_to_datavalue<'a>(
     metadata: MetadataRef,
 ) -> Result<Vec<DataValue>> {
     let schema_fields_len = schema.fields().len();
-    if exprs.len() > schema_fields_len {
-        return Err(ErrorCode::LogicalError(
-            "Column count shouldn't be more than the number of schema",
-        ));
-    }
-    if exprs.len() < schema_fields_len {
-        return Err(ErrorCode::LogicalError(
-            "Column count doesn't match value count",
+    if exprs.len() != schema_fields_len {
+        return Err(ErrorCode::TableSchemaMismatch(
+            "Table columns count is not match, expect {schema_fields_len}, input: {exprs.len()}",
         ));
     }
     let mut operators = Vec::with_capacity(schema_fields_len);

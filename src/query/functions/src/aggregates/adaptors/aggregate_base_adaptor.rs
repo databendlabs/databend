@@ -93,7 +93,7 @@ impl AggregateFunction for AggregateFunctionBasicAdaptor {
     }
 
     #[inline]
-    fn serialize(&self, place: StateAddr, writer: &mut bytes::BytesMut) -> Result<()> {
+    fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
         self.inner.serialize(place, writer)
     }
 

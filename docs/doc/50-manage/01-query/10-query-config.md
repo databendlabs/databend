@@ -11,17 +11,22 @@ You can explore more flags with `./databend-query -h`.
 
 ## 1. Logging Config
 
-### dir
+### log.file
 
-* Path to a directory for storing hourly-rolling debug log.
-* Default: `"./_logs"`
-* Env variable: `LOG_DIR`
+  * on: Enables or disables `file` logging. Defaults to `true`.
+  * dir: Path to store log files.
+  * level: Log level (DEBUG | INFO | ERROR). Defaults to `INFO`.
+  * format: Log format. Defaults to `json`.
+    - `json`: Databend outputs logs in JSON format.
+    - `text`: Databend outputs plain text logs.
 
-### level
+### log.stderr
 
-* Log level, one of `"DEBUG" | "INFO" | "ERROR"`.
-* Default: `"INFO"`
-* Env variable: `LOG_LEVEL`
+  * on: Enables or disables `stderr` logging. Defaults to `false`.
+  * level: Log level (DEBUG | INFO | ERROR). Defaults to `DEBUG`.
+  * format: Log format. Defaults to `text`.
+    - `text`: Databend outputs plain text logs.
+    - `json`: Databend outputs logs in JSON format.
 
 ## 2. Meta Service Config
 
@@ -221,9 +226,16 @@ For ease of experience, set all hosts to 0.0.0.0. Exercise caution when setting 
 
 ```toml title="databend-query.toml"
 # Logging
-[log]
+[log.file]
+on = true
+dir = "./.datanend/logs"
 level = "INFO"
-dir = "benddata/_logs"
+format = "json"
+
+[log.stderr]
+on = false
+level = "DEBUG"
+format = "text"
 
 # Meta Service
 [meta]

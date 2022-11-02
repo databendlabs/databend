@@ -1,7 +1,4 @@
 statement ok
-SET enable_planner_v2=1;
-
-statement ok
 DROP DATABASE IF EXISTS a;
 
 statement ok
@@ -45,7 +42,7 @@ SELECT DISTINCT(id) FROM a.t ORDER BY a.t.id;
 2
 
 statement error 1065
-SELECT DISTINCT(id) FROM a.t ORDER BY a.t.id2; 
+SELECT DISTINCT(id) FROM a.t ORDER BY a.t.id2;
 
 statement error
 SELECT SUM(id) as id2 FROM a.t ORDER BY a.t.id2;
@@ -65,7 +62,7 @@ SELECT * FROM a.t ORDER BY a.t.id ASC;
 2 2
 
 statement error 1065
-SELECT * FROM a.t ORDER BY B.T.id ASC;  
+SELECT * FROM a.t ORDER BY B.T.id ASC;
 
 statement query II
 SELECT * FROM a.t ORDER BY a.t.id DESC;
@@ -75,11 +72,7 @@ SELECT * FROM a.t ORDER BY a.t.id DESC;
 1 1
 
 statement error 1065
-SELECT * FROM a.t ORDER BY B.T.id DESC; 
+SELECT * FROM a.t ORDER BY B.T.id DESC;
 
 statement ok
 DROP DATABASE a;
-
-statement ok
-SET enable_planner_v2=0;
-

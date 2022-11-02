@@ -34,8 +34,8 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_fuse_meta::meta::BlockMeta;
 use common_fuse_meta::meta::Compression;
-use common_legacy_planners::PartInfoPtr;
-use common_legacy_planners::Projection;
+use common_planner::plans::Projection;
+use common_planner::PartInfoPtr;
 use futures::AsyncReadExt;
 use futures::StreamExt;
 use futures::TryStreamExt;
@@ -403,7 +403,9 @@ impl BlockReader {
 
     fn try_next_block(&self, deserializer: &mut RowGroupDeserializer) -> Result<DataBlock> {
         match deserializer.next() {
-            None => Err(ErrorCode::ParquetError("fail to get a chunk")),
+            None => Err(ErrorCode::Internal(
+                "deserializer from row group: fail to get a chunk",
+            )),
             Some(Err(cause)) => Err(ErrorCode::from(cause)),
             Some(Ok(chunk)) => DataBlock::from_chunk(&self.projected_schema, &chunk),
         }

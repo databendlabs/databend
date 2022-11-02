@@ -18,24 +18,22 @@ use std::sync::Arc;
 
 use common_catalog::catalog::CatalogManager;
 use common_catalog::catalog::CATALOG_DEFAULT;
+use common_catalog::table_context::TableContext;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_legacy_expression::LegacyExpression;
-use common_legacy_planners::Extras;
-use common_legacy_planners::PrewhereInfo;
-use common_legacy_planners::Projection;
-use common_legacy_planners::StageKind;
-use common_planner::IndexType;
-use common_planner::Metadata;
-use common_planner::MetadataRef;
-use common_planner::DUMMY_TABLE_INDEX;
-use common_storages_factory::ToReadDataSourcePlan;
-use common_storages_fuse::TableContext;
+use common_functions::scalars::FunctionFactory;
+use common_planner::extras::Extras;
+use common_planner::extras::PrewhereInfo;
+use common_planner::extras::StageKind;
+use common_planner::plans::Projection;
+use common_planner::Expression;
 use itertools::Itertools;
 
 use super::AggregateFinal;
+use super::AggregateFunctionDesc;
+use super::AggregateFunctionSignature;
 use super::AggregatePartial;
 use super::Exchange as PhysicalExchange;
 use super::Filter;
@@ -43,9 +41,8 @@ use super::HashJoin;
 use super::Limit;
 use super::Sort;
 use super::TableScan;
+use crate::executor::table_read_plan::ToReadDataSourcePlan;
 use crate::executor::util::check_physical;
-use crate::executor::AggregateFunctionDesc;
-use crate::executor::AggregateFunctionSignature;
 use crate::executor::ColumnID;
 use crate::executor::EvalScalar;
 use crate::executor::ExpressionBuilderWithoutRenaming;
@@ -56,11 +53,16 @@ use crate::executor::UnionAll;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::SExpr;
 use crate::plans::AggregateMode;
+use crate::plans::AndExpr;
 use crate::plans::Exchange;
 use crate::plans::PhysicalScan;
 use crate::plans::RelOperator;
 use crate::plans::Scalar;
+use crate::IndexType;
+use crate::Metadata;
+use crate::MetadataRef;
 use crate::ScalarExpr;
+use crate::DUMMY_TABLE_INDEX;
 
 pub struct PhysicalPlanBuilder {
     metadata: MetadataRef,
@@ -271,7 +273,7 @@ impl PhysicalPlanBuilder {
                                             if let Scalar::BoundColumnRef(col) = arg {
                                                 input_schema.index_of(&col.column.index.to_string())
                                             } else {
-                                                Err(ErrorCode::LogicalError(
+                                                Err(ErrorCode::Internal(
                                                     "Aggregate function argument must be a BoundColumnRef".to_string()
                                                 ))
                                             }
@@ -280,14 +282,14 @@ impl PhysicalPlanBuilder {
                                             if let Scalar::BoundColumnRef(col) = arg {
                                                 Ok(col.column.index)
                                             } else {
-                                                Err(ErrorCode::LogicalError(
+                                                Err(ErrorCode::Internal(
                                                     "Aggregate function argument must be a BoundColumnRef".to_string()
                                                 ))
                                             }
                                         }).collect::<Result<_>>()?,
                                     })
                                 } else {
-                                    Err(ErrorCode::LogicalError("Expected aggregate function".to_string()))
+                                    Err(ErrorCode::Internal("Expected aggregate function".to_string()))
                                 }
                             }).collect::<Result<_>>()?;
 
@@ -354,7 +356,7 @@ impl PhysicalPlanBuilder {
                                         if let Scalar::BoundColumnRef(col) = arg {
                                             input_schema.index_of(&col.column.index.to_string())
                                         } else {
-                                            Err(ErrorCode::LogicalError(
+                                            Err(ErrorCode::Internal(
                                                 "Aggregate function argument must be a BoundColumnRef".to_string()
                                             ))
                                         }
@@ -363,14 +365,14 @@ impl PhysicalPlanBuilder {
                                         if let Scalar::BoundColumnRef(col) = arg {
                                             Ok(col.column.index)
                                         } else {
-                                            Err(ErrorCode::LogicalError(
+                                            Err(ErrorCode::Internal(
                                                 "Aggregate function argument must be a BoundColumnRef".to_string()
                                             ))
                                         }
                                     }).collect::<Result<_>>()?,
                                 })
                             } else {
-                                Err(ErrorCode::LogicalError("Expected aggregate function".to_string()))
+                                Err(ErrorCode::Internal("Expected aggregate function".to_string()))
                             }
                         }).collect::<Result<_>>()?;
 
@@ -464,7 +466,7 @@ impl PhysicalPlanBuilder {
                     schema: DataSchemaRefExt::create(fields),
                 }))
             }
-            _ => Err(ErrorCode::LogicalError(format!(
+            _ => Err(ErrorCode::Internal(format!(
                 "Unsupported physical plan: {:?}",
                 s_expr.plan()
             ))),
@@ -481,6 +483,7 @@ impl PhysicalPlanBuilder {
 
         let projection =
             Self::build_projection(&metadata, table_schema, &scan.columns, has_inner_column);
+        let project_schema = projection.project_schema(table_schema);
 
         let push_down_filters = scan
             .push_down_predicates
@@ -489,7 +492,13 @@ impl PhysicalPlanBuilder {
                 let builder = ExpressionBuilderWithoutRenaming::create(self.metadata.clone());
                 predicates
                     .into_iter()
-                    .map(|scalar| builder.build(&scalar))
+                    .map(|scalar| {
+                        let expression = builder.build(&scalar)?;
+                        ExpressionBuilderWithoutRenaming::normalize_schema(
+                            &expression,
+                            &project_schema,
+                        )
+                    })
                     .collect::<Result<Vec<_>>>()
             })
             .transpose()?;
@@ -498,27 +507,40 @@ impl PhysicalPlanBuilder {
             .prewhere
             .as_ref()
             .map(|prewhere| {
-                let builder = ExpressionBuilderWithoutRenaming::create(self.metadata.clone());
-                let predicates = prewhere
-                    .predicates
-                    .iter()
-                    .map(|scalar| builder.build(scalar))
-                    .collect::<Result<Vec<_>>>()?;
+                let predicate =
+                    prewhere
+                        .predicates
+                        .iter()
+                        .fold(None, |acc: Option<Scalar>, x: &Scalar| match acc {
+                            Some(acc) => {
+                                let func = FunctionFactory::instance()
+                                    .get("and", &[&acc.data_type(), &x.data_type()])
+                                    .unwrap();
+                                Some(Scalar::AndExpr(AndExpr {
+                                    left: Box::new(acc),
+                                    right: Box::new(x.clone()),
+                                    return_type: Box::new(func.return_type()),
+                                }))
+                            }
+                            None => Some(x.clone()),
+                        });
 
                 assert!(
-                    !predicates.is_empty(),
+                    predicate.is_some(),
                     "There should be at least one predicate in prewhere"
                 );
-                let mut filter = predicates[0].clone();
-                for pred in predicates.iter().skip(1) {
-                    filter = filter.and(pred.clone());
-                }
+
+                let builder = ExpressionBuilderWithoutRenaming::create(self.metadata.clone());
+                let filter = builder.build(&predicate.unwrap())?;
+                let filter =
+                    ExpressionBuilderWithoutRenaming::normalize_schema(&filter, &project_schema)?;
 
                 let remain_columns = scan
                     .columns
                     .difference(&prewhere.prewhere_columns)
                     .copied()
                     .collect::<HashSet<usize>>();
+
                 let output_columns = Self::build_projection(
                     &metadata,
                     table_schema,
@@ -551,18 +573,20 @@ impl PhysicalPlanBuilder {
             .order_by
             .clone()
             .map(|items| {
-                let builder = ExpressionBuilderWithoutRenaming::create(self.metadata.clone());
                 items
                     .into_iter()
                     .map(|item| {
-                        builder
-                            .build_column_ref(item.index)
-                            .map(|c| LegacyExpression::Sort {
-                                expr: Box::new(c.clone()),
-                                asc: item.asc,
-                                nulls_first: item.nulls_first,
-                                origin_expr: Box::new(c),
-                            })
+                        let metadata = self.metadata.read();
+                        let ty = metadata.column(item.index).data_type();
+                        let name = metadata.column(item.index).name();
+
+                        // sort item is already a column
+                        let scalar = Expression::IndexedVariable {
+                            name: name.to_string(),
+                            data_type: ty.clone(),
+                        };
+
+                        Ok((scalar, item.asc, item.nulls_first))
                     })
                     .collect::<Result<Vec<_>>>()
             })
@@ -615,26 +639,17 @@ impl<'a> PhysicalScalarBuilder<'a> {
             }),
             Scalar::AndExpr(and) => Ok(PhysicalScalar::Function {
                 name: "and".to_string(),
-                args: vec![
-                    (self.build(&and.left)?, and.left.data_type()),
-                    (self.build(&and.right)?, and.right.data_type()),
-                ],
+                args: vec![self.build(&and.left)?, self.build(&and.right)?],
                 return_type: and.data_type(),
             }),
             Scalar::OrExpr(or) => Ok(PhysicalScalar::Function {
                 name: "or".to_string(),
-                args: vec![
-                    (self.build(&or.left)?, or.left.data_type()),
-                    (self.build(&or.right)?, or.right.data_type()),
-                ],
+                args: vec![self.build(&or.left)?, self.build(&or.right)?],
                 return_type: or.data_type(),
             }),
             Scalar::ComparisonExpr(comp) => Ok(PhysicalScalar::Function {
                 name: comp.op.to_func_name(),
-                args: vec![
-                    (self.build(&comp.left)?, comp.left.data_type()),
-                    (self.build(&comp.right)?, comp.right.data_type()),
-                ],
+                args: vec![self.build(&comp.left)?, self.build(&comp.right)?],
                 return_type: comp.data_type(),
             }),
             Scalar::FunctionCall(func) => Ok(PhysicalScalar::Function {
@@ -643,7 +658,7 @@ impl<'a> PhysicalScalarBuilder<'a> {
                     .arguments
                     .iter()
                     .zip(func.arg_types.iter())
-                    .map(|(arg, typ)| Ok((self.build(arg)?, typ.clone())))
+                    .map(|(arg, _)| self.build(arg))
                     .collect::<Result<_>>()?,
                 return_type: *func.return_type.clone(),
             }),
@@ -652,7 +667,7 @@ impl<'a> PhysicalScalarBuilder<'a> {
                 target: *cast.target_type.clone(),
             }),
 
-            _ => Err(ErrorCode::LogicalError(format!(
+            _ => Err(ErrorCode::Internal(format!(
                 "Unsupported physical scalar: {:?}",
                 scalar
             ))),

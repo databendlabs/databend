@@ -16,26 +16,26 @@ use std::any::Any;
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 
+use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_legacy_planners::Extras;
-use common_legacy_planners::Partitions;
-use common_legacy_planners::ReadDataSourcePlan;
-use common_legacy_planners::StageTableInfo;
-use common_legacy_planners::Statistics;
 use common_meta_app::schema::TableInfo;
 use common_meta_types::StageType;
 use common_meta_types::UserStageInfo;
 use common_pipeline_core::Pipeline;
 use common_pipeline_sources::processors::sources::input_formats::InputContext;
 use common_pipeline_transforms::processors::transforms::TransformLimit;
+use common_planner::extras::Extras;
+use common_planner::extras::Statistics;
+use common_planner::stage_table::StageTableInfo;
+use common_planner::Partitions;
+use common_planner::ReadDataSourcePlan;
 use common_storage::init_operator;
-use common_storages_fuse::TableContext;
 use opendal::layers::SubdirLayer;
 use opendal::Operator;
 use parking_lot::Mutex;
-use tracing::info;
+use tracing::debug;
 
 use super::stage_table_sink::StageTableSink;
 use crate::Table;
@@ -68,12 +68,11 @@ impl StageTable {
 
     /// Get operator with correctly prefix.
     pub fn get_op(ctx: &Arc<dyn TableContext>, stage: &UserStageInfo) -> Result<Operator> {
-        if stage.stage_type == StageType::Internal {
-            let prefix = format!("/stage/{}/", stage.stage_name);
-            let pop = ctx.get_data_operator()?.operator();
-            Ok(pop.layer(SubdirLayer::new(&prefix)))
-        } else {
+        if stage.stage_type == StageType::External {
             Ok(init_operator(&stage.stage_params.storage)?)
+        } else {
+            let pop = ctx.get_data_operator()?.operator();
+            Ok(pop.layer(SubdirLayer::new(&stage.stage_prefix())))
         }
     }
 }
@@ -99,7 +98,6 @@ impl Table for StageTable {
             InputContext::try_create_from_copy(
                 operator,
                 ctx.get_settings().clone(),
-                ctx.get_format_settings()?,
                 self.table_info.schema.clone(),
                 self.table_info.stage_info.clone(),
                 self.table_info.files.clone(),
@@ -107,7 +105,7 @@ impl Table for StageTable {
             )
             .await?,
         );
-        info!("copy into {:?}", input_ctx);
+        debug!("copy into {:?}", input_ctx);
         let mut guard = self.input_context.lock();
         *guard = Some(input_ctx);
         Ok((Statistics::default(), vec![]))
@@ -195,7 +193,7 @@ impl Table for StageTable {
 
     // Truncate the stage file.
     async fn truncate(&self, _ctx: Arc<dyn TableContext>, _: bool) -> Result<()> {
-        Err(ErrorCode::UnImplement(
+        Err(ErrorCode::Unimplemented(
             "S3 external table truncate() unimplemented yet!",
         ))
     }

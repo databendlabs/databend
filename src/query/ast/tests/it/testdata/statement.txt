@@ -5534,6 +5534,25 @@ Query(
 
 
 ---------- Input ----------
+CREATE STAGE ~
+---------- Output ---------
+CREATE STAGE ~
+---------- AST ------------
+CreateStage(
+    CreateStageStmt {
+        if_not_exists: false,
+        stage_name: "~",
+        location: None,
+        file_format_options: {},
+        on_error: "",
+        size_limit: 0,
+        validation_mode: "",
+        comments: "",
+    },
+)
+
+
+---------- Input ----------
 CREATE STAGE IF NOT EXISTS test_stage url='s3://load/files/' credentials=(aws_key_id='1a2b3c' aws_secret_key='4x5y6z') file_format=(FORMAT = CSV compression = GZIP record_delimiter=',')
 ---------- Output ---------
 CREATE STAGE IF NOT EXISTS test_stage URL = 's3://load/files/' CONNECTION = ( aws_key_id='1a2b3c' aws_secret_key='4x5y6z' ) FILE_FORMAT = ( compression = 'GZIP' format = 'CSV' record_delimiter = ',' )
@@ -5567,12 +5586,45 @@ CreateStage(
 
 
 ---------- Input ----------
+DROP STAGE abc
+---------- Output ---------
+DROP STAGES abc
+---------- AST ------------
+DropStage {
+    if_exists: false,
+    stage_name: "abc",
+}
+
+
+---------- Input ----------
+DROP STAGE ~
+---------- Output ---------
+DROP STAGES ~
+---------- AST ------------
+DropStage {
+    if_exists: false,
+    stage_name: "~",
+}
+
+
+---------- Input ----------
 list @stage_a;
 ---------- Output ---------
 LIST @stage_a
 ---------- AST ------------
 ListStage {
     location: "stage_a",
+    pattern: "",
+}
+
+
+---------- Input ----------
+list @~;
+---------- Output ---------
+LIST @~
+---------- AST ------------
+ListStage {
+    location: "~",
     pattern: "",
 }
 
@@ -6485,6 +6537,54 @@ Revoke(
                 hostname: "%",
             },
         ),
+    },
+)
+
+
+---------- Input ----------
+COPY INTO mytable
+                FROM @~/mybucket/data.csv
+                FILE_FORMAT = (
+                    type = 'CSV'
+                    field_delimiter = ','
+                    record_delimiter = '\n'
+                    skip_header = 1
+                )
+                size_limit=10;
+---------- Output ---------
+COPY INTO mytable FROM @~/mybucket/data.csv FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false
+---------- AST ------------
+Copy(
+    CopyStmt {
+        src: StageLocation {
+            name: "~",
+            path: "/mybucket/data.csv",
+        },
+        dst: Table {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                name: "mytable",
+                quote: None,
+                span: Ident(10..17),
+            },
+        },
+        files: [],
+        pattern: "",
+        file_format: {
+            "field_delimiter": ",",
+            "record_delimiter": "\n",
+            "skip_header": "1",
+            "type": "CSV",
+        },
+        validation_mode: "",
+        size_limit: 10,
+        max_file_size: 0,
+        split_size: 0,
+        single: false,
+        purge: false,
+        force: false,
     },
 )
 

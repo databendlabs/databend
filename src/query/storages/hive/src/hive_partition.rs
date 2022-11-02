@@ -19,8 +19,8 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_legacy_planners::PartInfo;
-use common_legacy_planners::PartInfoPtr;
+use common_planner::PartInfo;
+use common_planner::PartInfoPtr;
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Debug, Clone)]
 pub struct HivePartInfo {
@@ -72,7 +72,7 @@ impl HivePartInfo {
     pub fn from_part(info: &PartInfoPtr) -> Result<&HivePartInfo> {
         match info.as_any().downcast_ref::<HivePartInfo>() {
             Some(part_ref) => Ok(part_ref),
-            None => Err(ErrorCode::LogicalError(
+            None => Err(ErrorCode::Internal(
                 "Cannot downcast from PartInfo to HivePartInfo.",
             )),
         }

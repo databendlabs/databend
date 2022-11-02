@@ -17,12 +17,12 @@ use std::sync::Arc;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_legacy_planners::Extras;
-use common_legacy_planners::Partitions;
-use common_legacy_planners::Statistics;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
+use common_planner::extras::Extras;
+use common_planner::extras::Statistics;
+use common_planner::Partitions;
 
 use super::table::SystemTablePart;
 use crate::sessions::TableContext;

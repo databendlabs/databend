@@ -16,8 +16,8 @@ use common_ast::ast::Expr;
 use common_ast::ast::TableReference;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_legacy_planners::DeletePlan;
-use common_legacy_planners::Projection;
+use common_planner::plans::DeletePlan;
+use common_planner::plans::Projection;
 
 use crate::binder::Binder;
 use crate::binder::ScalarBinder;
@@ -50,7 +50,7 @@ impl<'a> Binder {
             )
         } else {
             // we do not support USING clause yet
-            return Err(ErrorCode::LogicalError(
+            return Err(ErrorCode::Internal(
                 "should not happen, parser should have report error already",
             ));
         };

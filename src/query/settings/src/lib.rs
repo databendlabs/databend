@@ -250,6 +250,16 @@ impl Settings {
                 possible_values: None,
             },
             SettingValue {
+                default_value: UserSettingValue::String("".to_owned()),
+                user_setting: UserSetting::create(
+                    "format_escape",
+                    UserSettingValue::String("".to_owned()),
+                ),
+                level: ScopeLevel::Session,
+                desc: "format escape char, default value: \"\", which means the format`s default setting.",
+                possible_values: None,
+            },
+            SettingValue {
                 default_value: UserSettingValue::String("\"".to_owned()),
                 user_setting: UserSetting::create(
                     "format_quote_char",
@@ -346,8 +356,8 @@ impl Settings {
                     UserSettingValue::String("PostgreSQL".to_owned()),
                 ),
                 level: ScopeLevel::Session,
-                desc: "SQL dialect, support \"PostgreSQL\" and \"MySQL\", default value: \"PostgreSQL\".",
-                possible_values: Some(vec!["PostgreSQL", "MySQL"]),
+                desc: "SQL dialect, support \"PostgreSQL\" \"MySQL\" and \"Hive\", default value: \"PostgreSQL\".",
+                possible_values: Some(vec!["PostgreSQL", "MySQL", "Hive"]),
             },
             SettingValue {
                 default_value: UserSettingValue::UInt64(1),
@@ -362,6 +372,17 @@ impl Settings {
                 user_setting: UserSetting::create("max_execute_time", UserSettingValue::UInt64(0)),
                 level: ScopeLevel::Session,
                 desc: "The maximum query execution time. it means no limit if the value is zero. default value: 0.",
+                possible_values: None,
+            },
+            #[cfg(feature = "hive")]
+            SettingValue {
+                default_value: UserSettingValue::UInt64(1),
+                user_setting: UserSetting::create(
+                    "enable_hive_parquet_predict_pushdown",
+                    UserSettingValue::UInt64(1),
+                ),
+                level: ScopeLevel::Session,
+                desc: "Enable hive parquet predict pushdown  by setting this variable to 1, default value: 1",
                 possible_values: None,
             },
             SettingValue {
@@ -489,6 +510,12 @@ impl Settings {
             .and_then(|v| v.user_setting.value.as_string())
     }
 
+    pub fn get_format_escape(&self) -> Result<String> {
+        let key = "format_escape";
+        self.check_and_get_setting_value(key)
+            .and_then(|v| v.user_setting.value.as_string())
+    }
+
     pub fn get_format_empty_as_default(&self) -> Result<u64> {
         let key = "format_empty_as_default";
         self.try_get_u64(key)
@@ -599,13 +626,16 @@ impl Settings {
         let key = "sql_dialect";
         self.check_and_get_setting_value(key)
             .and_then(|v| v.user_setting.value.as_string())
-            .map(|v| {
-                if v == "MySQL" {
-                    Dialect::MySQL
-                } else {
-                    Dialect::PostgreSQL
-                }
+            .map(|v| match &*v.to_lowercase() {
+                "mysql" => Dialect::MySQL,
+                "hive" => Dialect::Hive,
+                _ => Dialect::PostgreSQL,
             })
+    }
+
+    pub fn get_enable_hive_parquet_predict_pushdown(&self) -> Result<u64> {
+        static KEY: &str = "enable_hive_parquet_predict_pushdown";
+        self.try_get_u64(KEY)
     }
 
     pub fn has_setting(&self, key: &str) -> bool {

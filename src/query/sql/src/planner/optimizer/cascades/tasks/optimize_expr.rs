@@ -17,7 +17,6 @@ use std::rc::Rc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planner::IndexType;
 
 use super::optimize_group::OptimizeGroupTask;
 use super::Task;
@@ -26,6 +25,7 @@ use crate::optimizer::cascades::tasks::SharedCounter;
 use crate::optimizer::cascades::CascadesOptimizer;
 use crate::optimizer::cost::Cost;
 use crate::optimizer::cost::CostContext;
+use crate::IndexType;
 
 #[derive(Clone, Copy, Debug)]
 pub enum OptimizeExprState {
@@ -153,7 +153,7 @@ impl OptimizeExprTask {
         let mut cost = Cost::from(0);
         for child in m_expr.children.iter() {
             let cost_context = optimizer.best_cost_map.get(child).ok_or_else(|| {
-                ErrorCode::LogicalError(format!("Cannot find CostContext of group: {child}"))
+                ErrorCode::Internal(format!("Cannot find CostContext of group: {child}"))
             })?;
 
             cost = cost + cost_context.cost;

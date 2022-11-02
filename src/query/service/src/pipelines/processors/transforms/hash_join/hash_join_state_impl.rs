@@ -26,7 +26,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use super::ProbeState;
-use crate::pipelines::processors::transforms::group_by::keys_ref::KeysRef;
 use crate::pipelines::processors::transforms::hash_join::row::RowPtr;
 use crate::pipelines::processors::HashJoinState;
 use crate::pipelines::processors::HashTable;
@@ -99,7 +98,6 @@ impl HashJoinState for JoinHashTable {
                 let build_keys_iter = $method.build_keys_iter(&keys_state)?;
 
                 for (row_index, key) in build_keys_iter.enumerate().take($chunk.num_rows()) {
-                    let mut inserted = true;
                     let ptr = RowPtr {
                         chunk_index: $chunk_index,
                         row_index,
@@ -109,11 +107,13 @@ impl HashJoinState for JoinHashTable {
                         let mut self_row_ptrs = self.row_ptrs.write();
                         self_row_ptrs.push(ptr);
                     }
-                    let entity = $table.insert_key(&key, &mut inserted);
-                    if inserted {
-                        entity.set_value(vec![ptr]);
-                    } else {
-                        entity.get_mut_value().push(ptr);
+                    match unsafe { $table.insert(key) } {
+                        Ok(entity) => {
+                            entity.write(vec![ptr]);
+                        }
+                        Err(entity) => {
+                            entity.push(ptr);
+                        }
                     }
                 }
             }};
@@ -170,7 +170,6 @@ impl HashJoinState for JoinHashTable {
                         .hash_method
                         .build_keys_iter(chunk.keys_state.as_ref().unwrap())?;
                     for (row_index, key) in build_keys_iter.enumerate().take(chunk.num_rows()) {
-                        let mut inserted = true;
                         let ptr = RowPtr {
                             chunk_index,
                             row_index,
@@ -180,12 +179,13 @@ impl HashJoinState for JoinHashTable {
                             let mut self_row_ptrs = self.row_ptrs.write();
                             self_row_ptrs.push(ptr);
                         }
-                        let keys_ref = KeysRef::create(key.as_ptr() as usize, key.len());
-                        let entity = table.hash_table.insert_key(&keys_ref, &mut inserted);
-                        if inserted {
-                            entity.set_value(vec![ptr]);
-                        } else {
-                            entity.get_mut_value().push(ptr);
+                        match unsafe { table.hash_table.insert_borrowing(key) } {
+                            Ok(entity) => {
+                                entity.write(vec![ptr]);
+                            }
+                            Err(entity) => {
+                                entity.push(ptr);
+                            }
                         }
                     }
                 }
@@ -271,26 +271,31 @@ impl HashJoinState for JoinHashTable {
     fn right_join_blocks(&self, blocks: &[DataBlock]) -> Result<Vec<DataBlock>> {
         let mut row_state = self.row_state_for_right_join()?;
         let unmatched_build_indexes = self.find_unmatched_build_indexes(&row_state)?;
-        if unmatched_build_indexes.is_empty() && self.hash_join_desc.other_predicate.is_none() {
-            return Ok(blocks.to_vec());
-        }
-
-        if blocks.is_empty() && self.hash_join_desc.join_type != JoinType::Full {
-            return Ok(vec![]);
-        }
 
         // Don't need process non-equi conditions for full join in the method
         // Because non-equi conditions have been processed in left probe join
-        if self.hash_join_desc.other_predicate.is_none()
-            || self.hash_join_desc.join_type == JoinType::Full
-        {
+        if self.hash_join_desc.join_type == JoinType::Full {
             let null_block = self.null_blocks_for_right_join(&unmatched_build_indexes)?;
             return Ok(vec![DataBlock::concat_blocks(
                 &[blocks, &[null_block]].concat(),
             )?]);
         }
 
-        let input_block = DataBlock::concat_blocks(blocks)?;
+        let input_block = self.rest_block_for_right_join(blocks)?;
+
+        if unmatched_build_indexes.is_empty() && self.hash_join_desc.other_predicate.is_none() {
+            return Ok(vec![input_block]);
+        }
+
+        if self.hash_join_desc.other_predicate.is_none() {
+            let null_block = self.null_blocks_for_right_join(&unmatched_build_indexes)?;
+            return Ok(vec![DataBlock::concat_blocks(&[input_block, null_block])?]);
+        }
+
+        if input_block.is_empty() {
+            return Ok(vec![]);
+        }
+
         let (bm, all_true, all_false) = self.get_other_filters(
             &input_block,
             self.hash_join_desc.other_predicate.as_ref().unwrap(),
@@ -343,10 +348,13 @@ impl HashJoinState for JoinHashTable {
             let unmatched_build_block = self.row_space.gather(&unmatched_build_indexes)?;
             return Ok(vec![unmatched_build_block]);
         }
-        if blocks.is_empty() {
+
+        let input_block = self.rest_block_for_right_join(blocks)?;
+
+        if input_block.is_empty() {
             return Ok(vec![]);
         }
-        let input_block = DataBlock::concat_blocks(blocks)?;
+
         let probe_fields_len = self.probe_schema.fields().len();
         let build_columns = input_block.columns()[probe_fields_len..].to_vec();
         let build_block = DataBlock::create(self.row_space.data_schema.clone(), build_columns);

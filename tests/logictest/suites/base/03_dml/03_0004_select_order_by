@@ -40,6 +40,9 @@ SELECT number%3 as c1, number%2 as c2 FROM numbers_mt (10) order by c1, number d
 2 0
 
 statement ok
+DROP TABLE if EXISTS t1;
+
+statement ok
 create table t1(id int);
 
 statement ok

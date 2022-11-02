@@ -18,13 +18,13 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_planner::plans::ShowCreateTablePlan;
+use common_sql::executor::PhysicalScalar;
 use tracing::debug;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
-use crate::sql::executor::PhysicalScalar;
 use crate::sql::is_internal_opt_key;
 
 pub struct ShowCreateTableInterpreter {

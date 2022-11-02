@@ -16,19 +16,19 @@ use std::any::Any;
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use common_catalog::table_context::TableContext;
 use common_datablocks::serialize_data_blocks;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_fuse_meta::meta::SegmentInfo;
 use common_fuse_meta::meta::Statistics as FuseMetaStatistics;
-use common_legacy_planners::PartInfoPtr;
-use common_legacy_planners::Projection;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
-use common_storages_fuse::TableContext;
+use common_planner::plans::Projection;
+use common_planner::PartInfoPtr;
 use opendal::Operator;
 
 use crate::fuse::io::BlockReader;
@@ -203,9 +203,7 @@ impl Processor for ResultTableSink {
                 self.state = State::SerializedMeta { data, location };
             }
             _state => {
-                return Err(ErrorCode::LogicalError(
-                    "Unknown state for result table sink",
-                ));
+                return Err(ErrorCode::Internal("Unknown state for result table sink"));
             }
         }
 
@@ -227,9 +225,7 @@ impl Processor for ResultTableSink {
                 self.state = State::Finished;
             }
             _state => {
-                return Err(ErrorCode::LogicalError(
-                    "Unknown state for result table sink.",
-                ));
+                return Err(ErrorCode::Internal("Unknown state for result table sink."));
             }
         }
 

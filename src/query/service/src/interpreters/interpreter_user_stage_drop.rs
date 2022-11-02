@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::StageType;
 use common_planner::plans::DropStagePlan;
@@ -50,15 +51,22 @@ impl Interpreter for DropUserStageInterpreter {
         let tenant = self.ctx.get_tenant();
         let user_mgr = UserApiProvider::instance();
 
+        // Check user stage.
+        if plan.name == "~" {
+            return Err(ErrorCode::StagePermissionDenied(
+                "user stage is not allowed to be dropped",
+            ));
+        }
+
         let stage = user_mgr.get_stage(&tenant, &plan.name).await;
         user_mgr
             .drop_stage(&tenant, &plan.name, plan.if_exists)
             .await?;
 
         if let Ok(stage) = stage {
-            if matches!(&stage.stage_type, StageType::Internal) {
-                let rename_me_qry_ctx: Arc<dyn TableContext> = self.ctx.clone();
-                let op = StageTable::get_op(&rename_me_qry_ctx, &stage)?;
+            if !matches!(&stage.stage_type, StageType::External) {
+                let tctx: Arc<dyn TableContext> = self.ctx.clone();
+                let op = StageTable::get_op(&tctx, &stage)?;
                 op.batch().remove_all("/").await?;
                 info!(
                     "drop stage {:?} with all objects removed in stage",

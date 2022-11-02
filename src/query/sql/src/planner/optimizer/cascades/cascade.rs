@@ -18,7 +18,6 @@ use std::sync::Arc;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planner::IndexType;
 
 use crate::optimizer::cascades::explore_rules::get_explore_rule_set;
 use crate::optimizer::cascades::implement_rules::get_implement_rule_set;
@@ -33,6 +32,7 @@ use crate::optimizer::memo::Memo;
 use crate::optimizer::rule::RuleSet;
 use crate::optimizer::rule::TransformResult;
 use crate::optimizer::SExpr;
+use crate::IndexType;
 
 /// A cascades-style search engine to enumerate possible alternations of a relational expression and
 /// find the optimal one.
@@ -77,9 +77,7 @@ impl CascadesOptimizer {
         let root_index = self
             .memo
             .root()
-            .ok_or_else(|| {
-                ErrorCode::LogicalError("Root group cannot be None after initialization")
-            })?
+            .ok_or_else(|| ErrorCode::Internal("Root group cannot be None after initialization"))?
             .group_index;
 
         let root_task = OptimizeGroupTask::new(root_index);
@@ -113,11 +111,11 @@ impl CascadesOptimizer {
     fn find_optimal_plan(&self, group_index: IndexType) -> Result<SExpr> {
         let group = self.memo.group(group_index)?;
         let cost_context = self.best_cost_map.get(&group_index).ok_or_else(|| {
-            ErrorCode::LogicalError(format!("Cannot find CostContext of group: {group_index}"))
+            ErrorCode::Internal(format!("Cannot find CostContext of group: {group_index}"))
         })?;
 
         let m_expr = group.m_exprs.get(cost_context.expr_index).ok_or_else(|| {
-            ErrorCode::LogicalError(format!(
+            ErrorCode::Internal(format!(
                 "Cannot find best expression of group: {group_index}"
             ))
         })?;

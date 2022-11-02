@@ -19,12 +19,12 @@ use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planner::plans::DescribeTablePlan;
+use common_sql::executor::PhysicalScalar;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
-use crate::sql::executor::PhysicalScalar;
 use crate::sql::Planner;
 use crate::storages::view::view_table::QUERY;
 use crate::storages::view::view_table::VIEW_ENGINE;
@@ -63,7 +63,7 @@ impl Interpreter for DescribeTableInterpreter {
                 let (plan, _, _) = planner.plan_sql(query).await?;
                 plan.schema()
             } else {
-                return Err(ErrorCode::LogicalError(
+                return Err(ErrorCode::Internal(
                     "Logical error, View Table must have a SelectQuery inside.",
                 ));
             }

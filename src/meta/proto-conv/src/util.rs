@@ -67,6 +67,9 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
         17,
         "2022-10-22: Add: users.proto/FileFormatOptions::row_tag",
     ),
+    (18, "2022-10-28: Add: StageType::LegacyInternal"),
+    (19, "2022-10-28: Add: FILEFormatOptions::escape"),
+    (20, "2022-10-31: Add: StageType::UserStage"),
 ];
 
 pub const VER: u64 = META_CHANGE_LOG.last().unwrap().0;

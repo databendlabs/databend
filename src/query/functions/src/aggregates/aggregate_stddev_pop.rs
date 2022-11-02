@@ -157,7 +157,7 @@ where T: PrimitiveType + AsPrimitive<f64>
         Ok(())
     }
 
-    fn serialize(&self, place: StateAddr, writer: &mut BytesMut) -> Result<()> {
+    fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<AggregateStddevPopState>();
         serialize_into_buf(writer, state)
     }

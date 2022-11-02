@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use common_legacy_planners::StageKind;
+use common_planner::extras::StageKind;
 
 use super::FragmentType;
 use super::PlanFragment;

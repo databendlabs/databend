@@ -121,6 +121,7 @@ jobs:
       matrix:
         dirs:
           - "base"
+          - "query"
           - "ydb"
           - "crdb"
           - "duckdb"
@@ -131,7 +132,7 @@ jobs:
           dirs: ${{ matrix.dirs }}
 
   test_sqllogic_cluster_linux:
-    timeout-minutes: 30
+    timeout-minutes: 40
     name: test_sqllogic_${{ matrix.dirs }}_cluster_linux
     runs-on: [self-hosted, X64, Linux, development]
     needs: build_gnu
@@ -139,6 +140,7 @@ jobs:
       matrix:
         dirs:
           - "base"
+          - "query"
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_sqllogic_cluster_linux
@@ -163,7 +165,7 @@ jobs:
 
   test_stateful_standalone_linux:
     timeout-minutes: 20
-    runs-on: [ self-hosted, X64, Linux, development ]
+    runs-on: [self-hosted, X64, Linux, development]
     needs: build_gnu
     steps:
       - uses: actions/checkout@v3
@@ -171,7 +173,7 @@ jobs:
 
   test_stateful_cluster_linux:
     timeout-minutes: 20
-    runs-on: [ self-hosted, X64, Linux, development ]
+    runs-on: [self-hosted, X64, Linux, development]
     needs: build_gnu
     steps:
       - uses: actions/checkout@v3

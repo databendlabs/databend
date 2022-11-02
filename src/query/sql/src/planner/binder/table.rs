@@ -33,8 +33,6 @@ use common_catalog::table_function::TableFunction;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_legacy_expression::LegacyExpression;
-use common_planner::IndexType;
 use common_storages_preludes::view::view_table::QUERY;
 
 use crate::binder::scalar::ScalarBinder;
@@ -49,6 +47,7 @@ use crate::plans::ConstantExpr;
 use crate::plans::LogicalGet;
 use crate::plans::Scalar;
 use crate::BindContext;
+use crate::IndexType;
 
 impl<'a> Binder {
     pub(super) async fn bind_one_table(
@@ -135,14 +134,29 @@ impl<'a> Binder {
                         let query = table_meta
                             .options()
                             .get(QUERY)
-                            .ok_or_else(|| ErrorCode::LogicalError("Invalid VIEW object"))?;
+                            .ok_or_else(|| ErrorCode::Internal("Invalid VIEW object"))?;
                         let tokens = tokenize_sql(query.as_str())?;
                         let backtrace = Backtrace::new();
                         let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL, &backtrace)?;
+
                         if let Statement::Query(query) = &stmt {
-                            self.bind_query(bind_context, query).await
+                            let (s_expr, mut bind_context) =
+                                self.bind_query(bind_context, query).await?;
+                            if let Some(alias) = alias {
+                                // view maybe has alias, e.g. select v1.col1 from v as v1;
+                                bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
+                            } else {
+                                // e.g. select v0.c0 from v0;
+                                for column in bind_context.columns.iter_mut() {
+                                    column.database_name = None;
+                                    column.table_name = Some(
+                                        normalize_identifier(table, &self.name_resolution_ctx).name,
+                                    );
+                                }
+                            }
+                            Ok((s_expr, bind_context))
                         } else {
-                            Err(ErrorCode::LogicalError(format!(
+                            Err(ErrorCode::Internal(format!(
                                 "Invalid VIEW object: {}",
                                 table_meta.name()
                             )))
@@ -184,19 +198,13 @@ impl<'a> Binder {
                 let expressions = args
                     .into_iter()
                     .map(|(scalar, _)| match scalar {
-                        Scalar::ConstantExpr(ConstantExpr { value, data_type }) => {
-                            Ok(LegacyExpression::Literal {
-                                value,
-                                column_name: None,
-                                data_type: *data_type,
-                            })
-                        }
-                        _ => Err(ErrorCode::UnImplement(format!(
+                        Scalar::ConstantExpr(ConstantExpr { value, .. }) => Ok(value),
+                        _ => Err(ErrorCode::Unimplemented(format!(
                             "Unsupported table argument type: {:?}",
                             scalar
                         ))),
                     })
-                    .collect::<Result<Vec<LegacyExpression>>>()?;
+                    .collect::<Result<Vec<DataValue>>>()?;
 
                 let table_args = Some(expressions);
 

@@ -22,6 +22,7 @@ use common_exception::Result;
 use common_io::prelude::BufferReadExt;
 use common_io::prelude::FormatSettings;
 use common_io::prelude::NestedCheckpointReader;
+use common_meta_types::FileFormatOptions;
 use common_meta_types::StageFileFormatType;
 use common_settings::Settings;
 use csv_core::ReadRecordResult;
@@ -76,20 +77,36 @@ impl InputFormatTextBase for InputFormatCSV {
         StageFileFormatType::Csv
     }
 
-    fn get_format_settings(settings: &Arc<Settings>) -> Result<FormatSettings> {
+    fn get_format_settings_from_options(
+        settings: &Arc<Settings>,
+        options: &FileFormatOptions,
+    ) -> Result<FormatSettings> {
         let timezone = get_time_zone(settings)?;
-        let quote_char = settings.get_format_quote_char()?.into_bytes();
-        if quote_char.len() != 1 {
-            return Err(ErrorCode::InvalidArgument(
-                "quote_char can only contain one char",
-            ));
-        }
+        let escape = FormatSettings::parse_escape(&options.escape, None)?;
+
         Ok(FormatSettings {
             record_delimiter: settings.get_format_record_delimiter()?.into_bytes(),
             field_delimiter: settings.get_format_field_delimiter()?.into_bytes(),
             empty_as_default: settings.get_format_empty_as_default()? > 0,
-            quote_char: quote_char[0],
             null_bytes: vec![b'\\', b'N'],
+            quote_char: b'"',
+            escape,
+            timezone,
+            ..Default::default()
+        })
+    }
+
+    fn get_format_settings_from_settings(settings: &Arc<Settings>) -> Result<FormatSettings> {
+        let timezone = get_time_zone(settings)?;
+        let quote_char = FormatSettings::parse_quote(&settings.get_format_quote_char()?)?;
+        let escape = FormatSettings::parse_escape(&settings.get_format_escape()?, None)?;
+        Ok(FormatSettings {
+            record_delimiter: settings.get_format_record_delimiter()?.into_bytes(),
+            field_delimiter: settings.get_format_field_delimiter()?.into_bytes(),
+            empty_as_default: settings.get_format_empty_as_default()? > 0,
+            quote_char,
+            null_bytes: vec![b'\\', b'N'],
+            escape,
             timezone,
             ..Default::default()
         })
@@ -334,6 +351,7 @@ impl CsvReaderState {
         let reader = csv_core::ReaderBuilder::new()
             .delimiter(ctx.field_delimiter)
             .quote(ctx.format_settings.quote_char)
+            .escape(ctx.format_settings.escape)
             .terminator(match ctx.record_delimiter {
                 RecordDelimiter::Crlf => csv_core::Terminator::CRLF,
                 RecordDelimiter::Any(v) => csv_core::Terminator::Any(v),

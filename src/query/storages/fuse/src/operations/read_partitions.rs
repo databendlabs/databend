@@ -22,12 +22,12 @@ use common_exception::Result;
 use common_fuse_meta::meta::BlockMeta;
 use common_fuse_meta::meta::Location;
 use common_fuse_meta::meta::TableSnapshot;
-use common_legacy_planners::Extras;
-use common_legacy_planners::PartInfoPtr;
-use common_legacy_planners::Partitions;
-use common_legacy_planners::Projection;
-use common_legacy_planners::Statistics;
 use common_meta_app::schema::TableInfo;
+use common_planner::extras::Extras;
+use common_planner::extras::Statistics;
+use common_planner::plans::Projection;
+use common_planner::PartInfoPtr;
+use common_planner::Partitions;
 use opendal::Operator;
 use tracing::debug;
 use tracing::info;
@@ -134,7 +134,7 @@ impl FuseTable {
         _: Arc<dyn TableContext>,
         schema: DataSchemaRef,
         push_downs: Option<Extras>,
-        block_metas: Vec<BlockMeta>,
+        block_metas: Vec<Arc<BlockMeta>>,
         partitions_total: usize,
     ) -> Result<(Statistics, Partitions)> {
         let arrow_schema = schema.to_arrow();
@@ -158,7 +158,7 @@ impl FuseTable {
     }
 
     pub fn to_partitions(
-        blocks_metas: &[BlockMeta],
+        blocks_metas: &[Arc<BlockMeta>],
         column_leaves: &ColumnLeaves,
         push_down: Option<Extras>,
     ) -> (Statistics, Partitions) {
@@ -189,7 +189,10 @@ impl FuseTable {
         }
     }
 
-    pub fn all_columns_partitions(metas: &[BlockMeta], limit: usize) -> (Statistics, Partitions) {
+    pub fn all_columns_partitions(
+        metas: &[Arc<BlockMeta>],
+        limit: usize,
+    ) -> (Statistics, Partitions) {
         let mut statistics = Statistics::default_exact();
         let mut partitions = Partitions::default();
 
@@ -220,7 +223,7 @@ impl FuseTable {
     }
 
     fn projection_partitions(
-        metas: &[BlockMeta],
+        metas: &[Arc<BlockMeta>],
         column_leaves: &ColumnLeaves,
         projection: &Projection,
         limit: usize,

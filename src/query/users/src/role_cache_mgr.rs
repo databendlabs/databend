@@ -146,9 +146,12 @@ impl RoleCacheManager {
             match cached.get(tenant) {
                 None => true,
                 Some(cached_roles) => {
-                    // if the cache is too old, force reload the data (the background polling task
-                    // may got some network errors, leaves the cache outdated)
+                    // force reload the data when:
+                    // - if the cache is too old (the background polling task
+                    //   may got some network errors, leaves the cache outdated)
+                    // - if the cache is empty
                     cached_roles.cached_at.elapsed() >= self.polling_interval * 2
+                        || cached_roles.roles.is_empty()
                 }
             }
         };

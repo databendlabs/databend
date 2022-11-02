@@ -24,15 +24,15 @@ use common_datavalues::DataSchemaRef;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_legacy_expression::LegacyExpression;
-use common_legacy_planners::DeletePlan;
-use common_legacy_planners::Extras;
-use common_legacy_planners::Partitions;
-use common_legacy_planners::ReadDataSourcePlan;
-use common_legacy_planners::Statistics;
 use common_meta_app::schema::TableInfo;
 use common_meta_types::MetaId;
 use common_pipeline_core::Pipeline;
+use common_planner::extras::Extras;
+use common_planner::extras::Statistics;
+use common_planner::plans::DeletePlan;
+use common_planner::Expression;
+use common_planner::Partitions;
+use common_planner::ReadDataSourcePlan;
 use common_storage::StorageMetrics;
 
 use crate::table::column_stats_provider_impls::DummyColumnStatisticsProvider;
@@ -90,7 +90,7 @@ pub trait Table: Sync + Send {
         false
     }
 
-    fn cluster_keys(&self) -> Vec<LegacyExpression> {
+    fn cluster_keys(&self) -> Vec<Expression> {
         vec![]
     }
 
@@ -129,14 +129,14 @@ pub trait Table: Sync + Send {
         push_downs: Option<Extras>,
     ) -> Result<(Statistics, Partitions)> {
         let (_, _) = (ctx, push_downs);
-        Err(ErrorCode::UnImplement(format!(
+        Err(ErrorCode::Unimplemented(format!(
             "read_partitions operation for table {} is not implemented. table engine : {}",
             self.name(),
             self.get_table_info().meta.engine
         )))
     }
 
-    fn table_args(&self) -> Option<Vec<LegacyExpression>> {
+    fn table_args(&self) -> Option<Vec<DataValue>> {
         None
     }
 
@@ -149,7 +149,7 @@ pub trait Table: Sync + Send {
     ) -> Result<()> {
         let (_, _, _) = (ctx, plan, pipeline);
 
-        Err(ErrorCode::UnImplement(format!(
+        Err(ErrorCode::Unimplemented(format!(
             "read_data operation for table {} is not implemented. table engine : {}",
             self.name(),
             self.get_table_info().meta.engine
@@ -165,7 +165,7 @@ pub trait Table: Sync + Send {
     ) -> Result<()> {
         let (_, _, _) = (ctx, pipeline, need_output);
 
-        Err(ErrorCode::UnImplement(format!(
+        Err(ErrorCode::Unimplemented(format!(
             "append_data operation for table {} is not implemented. table engine : {}",
             self.name(),
             self.get_table_info().meta.engine
@@ -205,7 +205,7 @@ pub trait Table: Sync + Send {
     async fn navigate_to(&self, instant: &NavigationPoint) -> Result<Arc<dyn Table>> {
         let _ = instant;
 
-        Err(ErrorCode::UnImplement(format!(
+        Err(ErrorCode::Unimplemented(format!(
             "table {},  of engine type {}, does not support time travel",
             self.name(),
             self.get_table_info().engine(),
@@ -215,7 +215,7 @@ pub trait Table: Sync + Send {
     async fn delete(&self, ctx: Arc<dyn TableContext>, delete_plan: DeletePlan) -> Result<()> {
         let (_, _) = (ctx, delete_plan);
 
-        Err(ErrorCode::UnImplement(format!(
+        Err(ErrorCode::Unimplemented(format!(
             "table {},  of engine type {}, does not support DELETE FROM",
             self.name(),
             self.get_table_info().engine(),
@@ -231,7 +231,7 @@ pub trait Table: Sync + Send {
     ) -> Result<Option<Box<dyn TableMutator>>> {
         let (_, _, _, _) = (ctx, target, limit, pipeline);
 
-        Err(ErrorCode::UnImplement(format!(
+        Err(ErrorCode::Unimplemented(format!(
             "table {},  of engine type {}, does not support compact",
             self.name(),
             self.get_table_info().engine(),
@@ -246,7 +246,7 @@ pub trait Table: Sync + Send {
     ) -> Result<Option<Box<dyn TableMutator>>> {
         let (_, _, _) = (ctx, pipeline, push_downs);
 
-        Err(ErrorCode::UnImplement(format!(
+        Err(ErrorCode::Unimplemented(format!(
             "table {},  of engine type {}, does not support recluster",
             self.name(),
             self.get_table_info().engine(),

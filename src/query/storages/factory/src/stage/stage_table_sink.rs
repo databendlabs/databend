@@ -20,18 +20,18 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use backon::ExponentialBackoff;
 use backon::Retryable;
+use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_formats::output_format::OutputFormat;
 use common_formats::output_format::OutputFormatType;
-use common_legacy_planners::StageTableInfo;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
-use common_storages_fuse::TableContext;
+use common_planner::stage_table::StageTableInfo;
 use opendal::Operator;
 use tracing::warn;
 
@@ -252,9 +252,7 @@ impl Processor for StageTableSink {
                 }
             }
             _state => {
-                return Err(ErrorCode::LogicalError(
-                    "Unknown state for stage table sink.",
-                ));
+                return Err(ErrorCode::Internal("Unknown state for stage table sink."));
             }
         }
         Ok(())
@@ -291,9 +289,7 @@ impl Processor for StageTableSink {
                 Ok(())
             }
             _state => {
-                return Err(ErrorCode::LogicalError(
-                    "Unknown state for stage table sink.",
-                ));
+                return Err(ErrorCode::Internal("Unknown state for stage table sink."));
             }
         }
     }

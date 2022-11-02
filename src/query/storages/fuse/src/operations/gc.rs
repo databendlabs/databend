@@ -41,7 +41,7 @@ impl FuseTable {
     pub async fn do_gc(&self, ctx: &Arc<dyn TableContext>, keep_last_snapshot: bool) -> Result<()> {
         let r = self.read_table_snapshot().await;
         let snapshot_opt = match r {
-            Err(e) if e.code() == ErrorCode::storage_not_found_code() => {
+            Err(e) if e.code() == ErrorCode::STORAGE_NOT_FOUND => {
                 // concurrent gc: someone else has already collected this snapshot, ignore it
                 warn!(
                     "concurrent gc: snapshot {:?} already collected. table: {}, ident {}",
@@ -254,7 +254,7 @@ impl FuseTable {
         for (idx, segment) in segments.iter().enumerate() {
             let segment = segment.clone();
             let segment_info = match segment {
-                Err(e) if e.code() == ErrorCode::storage_not_found_code() => {
+                Err(e) if e.code() == ErrorCode::STORAGE_NOT_FOUND => {
                     let location = &segment_locations[idx];
                     // concurrent gc: someone else has already collected this segment, ignore it
                     warn!(

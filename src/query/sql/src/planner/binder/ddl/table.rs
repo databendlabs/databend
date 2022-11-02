@@ -48,8 +48,8 @@ use common_planner::plans::UndropTablePlan;
 use common_storage::parse_uri_location;
 use common_storage::DataOperator;
 use common_storage::UriLocation;
-use common_storages_fuse::is_reserved_opt_key;
-use common_storages_fuse::OPT_KEY_DATABASE_ID;
+use common_storages_constants::is_reserved_opt_key;
+use common_storages_constants::OPT_KEY_DATABASE_ID;
 use tracing::debug;
 
 use crate::binder::scalar::ScalarBinder;
@@ -146,18 +146,10 @@ impl<'a> Binder {
             with_history,
         } = stmt;
 
-        let mut database = database
+        let database = database
             .as_ref()
             .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
             .unwrap_or_else(|| self.ctx.get_current_database());
-
-        if self
-            .ctx
-            .get_catalog(&self.ctx.get_current_catalog())?
-            .is_case_insensitive_db(database.as_str())
-        {
-            database = database.to_uppercase();
-        }
 
         let mut select_builder = if stmt.with_history {
             SelectBuilder::from("system.tables_with_history")
@@ -591,7 +583,7 @@ impl<'a> Binder {
                 normalize_identifier(table, &self.name_resolution_ctx).name,
             )
         } else {
-            return Err(ErrorCode::LogicalError(
+            return Err(ErrorCode::Internal(
                 "should not happen, parser should have report error already",
             ));
         };
@@ -927,13 +919,12 @@ impl<'a> Binder {
         value: String,
     ) -> Result<()> {
         if is_reserved_opt_key(&key) {
-            Err(ErrorCode::BadOption(format!(
-                "the following table options are reserved, please do not specify them in the CREATE TABLE statement: {}",
-                key
+            Err(ErrorCode::TableOptionInvalid(format!(
+                "table option {key} reserved, please do not specify in the CREATE TABLE statement",
             )))
         } else if options.insert(key.clone(), value).is_some() {
-            Err(ErrorCode::BadOption(format!(
-                "Duplicated table option: {key}"
+            Err(ErrorCode::TableOptionInvalid(format!(
+                "table option {key} duplicated"
             )))
         } else {
             Ok(())

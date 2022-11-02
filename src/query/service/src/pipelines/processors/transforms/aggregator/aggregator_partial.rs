@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use bytes::BytesMut;
 use common_datablocks::DataBlock;
 use common_datablocks::HashMethod;
 use common_datablocks::HashMethodKeysU128;
@@ -36,7 +35,8 @@ use common_functions::aggregates::StateAddrs;
 use crate::pipelines::processors::transforms::group_by::AggregatorState;
 use crate::pipelines::processors::transforms::group_by::KeysColumnBuilder;
 use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
-use crate::pipelines::processors::transforms::group_by::StateEntity;
+use crate::pipelines::processors::transforms::group_by::StateEntityMutRef;
+use crate::pipelines::processors::transforms::group_by::StateEntityRef;
 use crate::pipelines::processors::transforms::transform_aggregator::Aggregator;
 use crate::pipelines::processors::AggregatorParams;
 use crate::sessions::QueryContext;
@@ -109,17 +109,18 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
 
         let mut inserted = true;
         for key in keys_iter {
-            let entity = state.entity(key, &mut inserted);
+            let unsafe_state = state as *mut Method::State;
+            let mut entity = state.entity(key, &mut inserted);
 
             match inserted {
                 true => {
-                    if let Some(place) = state.alloc_layout(params) {
+                    if let Some(place) = unsafe { (*unsafe_state).alloc_layout(params) } {
                         places.push(place);
                         entity.set_state_value(place.addr());
                     }
                 }
                 false => {
-                    let place: StateAddr = (*entity.get_state_value()).into();
+                    let place: StateAddr = entity.get_state_value().into();
                     places.push(place);
                 }
             }
@@ -202,16 +203,13 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
             .collect();
 
         let mut group_key_builder = self.method.keys_column_builder(state_groups_len);
-
-        let mut bytes = BytesMut::new();
         for group_entity in self.state.iter() {
-            let place: StateAddr = (*group_entity.get_state_value()).into();
+            let place: StateAddr = group_entity.get_state_value().into();
 
             for (idx, func) in funcs.iter().enumerate() {
                 let arg_place = place.next(offsets_aggregate_states[idx]);
-                func.serialize(arg_place, &mut bytes)?;
-                state_builders[idx].append_value(&bytes[..]);
-                bytes.clear();
+                func.serialize(arg_place, state_builders[idx].values_mut())?;
+                state_builders[idx].commit_row();
             }
 
             group_key_builder.append_value(group_entity.get_state_key());
@@ -245,7 +243,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
         let group_by_two_level_threshold =
             self.ctx.get_settings().get_group_by_two_level_threshold()? as usize;
         if !self.state.is_two_level() && self.state.len() >= group_by_two_level_threshold {
-            self.state.convert_to_two_level();
+            self.state.convert_to_twolevel();
         }
 
         let places = Self::lookup_state(&self.params, group_keys_iter, &mut self.state);
@@ -274,7 +272,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
         let group_by_two_level_threshold =
             self.ctx.get_settings().get_group_by_two_level_threshold()? as usize;
         if !self.state.is_two_level() && self.state.len() >= group_by_two_level_threshold {
-            self.state.convert_to_two_level();
+            self.state.convert_to_twolevel();
         }
 
         Self::lookup_key(group_keys_iter, &mut self.state);
@@ -326,7 +324,7 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method>>
                 .collect::<Vec<_>>();
 
             for group_entity in self.state.iter() {
-                let place: StateAddr = (*group_entity.get_state_value()).into();
+                let place: StateAddr = group_entity.get_state_value().into();
 
                 for (function, state_offset) in functions.iter().zip(states.iter()) {
                     unsafe { function.drop_state(place.next(*state_offset)) }

@@ -21,14 +21,18 @@
 //! After all the planners work, `Interpreter` will use `PhysicalPlan` to
 //! build pipelines, then our processes will produce result data blocks.
 
-mod metadata;
-pub use metadata::ColumnEntry;
-pub use metadata::ColumnSet;
-pub use metadata::IndexType;
-pub use metadata::Metadata;
-pub use metadata::MetadataRef;
-pub use metadata::TableEntry;
-pub use metadata::DUMMY_TABLE_INDEX;
+mod expression;
+mod partition;
+
+mod expression_visitor;
+pub mod extras;
+pub mod plan_read_datasource;
+pub mod stage_table;
+
+pub use expression::*;
+pub use expression_visitor::*;
+pub use partition::*;
+pub use plan_read_datasource::*;
 
 // Plan will be used publicly.
 pub mod plans;

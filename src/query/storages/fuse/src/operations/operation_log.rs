@@ -22,6 +22,7 @@ use common_datavalues::DataSchemaRef;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_fuse_meta::meta::SegmentInfo;
+use common_planner::extras::SINK_SCHEMA;
 
 // currently, only support append,
 pub type TableOperationLog = Vec<AppendOperationLogEntry>;
@@ -34,7 +35,7 @@ pub struct AppendOperationLogEntry {
 
 impl AppendOperationLogEntry {
     pub fn schema() -> DataSchemaRef {
-        common_legacy_planners::SINK_SCHEMA.clone()
+        SINK_SCHEMA.clone()
     }
 
     pub fn new(segment_location: String, segment_info: Arc<SegmentInfo>) -> Self {
@@ -60,7 +61,7 @@ impl TryFrom<&DataBlock> for AppendOperationLogEntry {
     fn try_from(block: &DataBlock) -> Result<Self, Self::Error> {
         // check schema
         if block.schema() != &AppendOperationLogEntry::schema() {
-            return Err(ErrorCode::LogicalError(format!(
+            return Err(ErrorCode::Internal(format!(
                 "invalid data block of AppendOperation log, {:?}",
                 block.schema()
             )));
@@ -82,7 +83,7 @@ impl AppendOperationLogEntry {
         if let DataValue::String(v) = col {
             Ok(String::from_utf8(v.clone())?)
         } else {
-            Err(ErrorCode::LogicalError(format!(
+            Err(ErrorCode::Internal(format!(
                 "can not extract string value from data block as \
                  a column of Append Operation log (col: {})",
                 idx

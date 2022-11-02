@@ -16,7 +16,6 @@ use std::rc::Rc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planner::IndexType;
 
 use super::explore_group::ExploreGroupTask;
 use super::implement_expr::ImplementExprTask;
@@ -25,6 +24,7 @@ use crate::optimizer::cascades::scheduler::Scheduler;
 use crate::optimizer::cascades::tasks::SharedCounter;
 use crate::optimizer::cascades::CascadesOptimizer;
 use crate::optimizer::group::GroupState;
+use crate::IndexType;
 
 #[derive(Clone, Copy, Debug)]
 pub enum ImplementGroupState {
@@ -105,7 +105,7 @@ impl ImplementGroupTask {
                 self.state = ImplementGroupState::Implemented
             }
             _ => {
-                return Err(ErrorCode::LogicalError(format!(
+                return Err(ErrorCode::Internal(format!(
                     "Cannot transition state {:?} with event {:?}",
                     &self.state, &event
                 )));

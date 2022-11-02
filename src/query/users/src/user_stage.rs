@@ -32,7 +32,7 @@ impl UserApiProvider {
         match add_stage.await {
             Ok(res) => Ok(res),
             Err(e) => {
-                if if_not_exists && e.code() == ErrorCode::stage_already_exists_code() {
+                if if_not_exists && e.code() == ErrorCode::STAGE_ALREADY_EXISTS {
                     Ok(u64::MIN)
                 } else {
                     Err(e)
@@ -66,7 +66,7 @@ impl UserApiProvider {
         match drop_stage.await {
             Ok(res) => Ok(res),
             Err(e) => {
-                if if_exists && e.code() == ErrorCode::unknown_stage_code() {
+                if if_exists && e.code() == ErrorCode::UNKNOWN_STAGE {
                     Ok(())
                 } else {
                     Err(e.add_message_back(" (while drop stage)"))

@@ -42,6 +42,7 @@ use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::FormatSettings;
+use common_meta_types::FileFormatOptions;
 use common_pipeline_core::Pipeline;
 use common_settings::Settings;
 use futures::AsyncRead;
@@ -76,7 +77,19 @@ fn col_offset(meta: &ColumnChunkMetaData) -> i64 {
 
 #[async_trait::async_trait]
 impl InputFormat for InputFormatParquet {
-    fn get_format_settings(&self, _settings: &Arc<Settings>) -> Result<FormatSettings> {
+    fn get_format_settings_from_options(
+        &self,
+        _settings: &Arc<Settings>,
+        _options: &FileFormatOptions,
+    ) -> Result<FormatSettings> {
+        // not used now
+        Ok(FormatSettings::default())
+    }
+
+    fn get_format_settings_from_settings(
+        &self,
+        _settings: &Arc<Settings>,
+    ) -> Result<FormatSettings> {
         // not used now
         Ok(FormatSettings::default())
     }
@@ -101,9 +114,7 @@ impl InputFormat for InputFormatParquet {
             let obj = op.object(path);
             let size = obj.metadata().await?.content_length() as usize;
             let mut reader = obj.seekable_reader(..(size as u64));
-            let mut file_meta = read_metadata_async(&mut reader)
-                .await
-                .map_err(|e| ErrorCode::ParquetError(e.to_string()))?;
+            let mut file_meta = read_metadata_async(&mut reader).await?;
             let row_groups = mem::take(&mut file_meta.row_groups);
             let fields = Arc::new(get_fields(&file_meta, schema)?);
             let read_file_meta = Arc::new(FileMeta { fields });
@@ -267,9 +278,11 @@ impl RowGroupInMemory {
             column_chunks.push(array_iters);
         }
         match RowGroupDeserializer::new(column_chunks, self.meta.num_rows(), None).next() {
-            None => Err(ErrorCode::ParquetError("fail to get a chunk")),
+            None => Err(ErrorCode::Internal(
+                "deserialize from raw group: fail to get a chunk",
+            )),
             Some(Ok(chunk)) => Ok(chunk),
-            Some(Err(e)) => Err(ErrorCode::ParquetError(e.to_string())),
+            Some(Err(e)) => Err(e.into()),
         }
     }
 }
@@ -356,8 +369,7 @@ impl AligningStateTrait for AligningState {
                 size,
             );
             let mut cursor = Cursor::new(file_in_memory);
-            let file_meta =
-                read_metadata(&mut cursor).map_err(|e| ErrorCode::ParquetError(e.to_string()))?;
+            let file_meta = read_metadata(&mut cursor)?;
             let read_fields = Arc::new(get_fields(&file_meta, &self.ctx.schema)?);
 
             let mut row_batches = Vec::with_capacity(file_meta.row_groups.len());
@@ -393,7 +405,8 @@ fn get_fields(file_meta: &FileMetaData, schema: &DataSchemaRef) -> Result<Vec<Fi
             if remove_nullable(tf.data_type()) != remove_nullable(f.data_type()) {
                 let pair = (f, m);
                 let diff = pair.make_diff("expected_field", "infer_field");
-                return Err(ErrorCode::ParquetError(format!(
+                // TODO(xuanwo): return a more accurate error code here.
+                return Err(ErrorCode::Internal(format!(
                     "parquet schema mismatch, differ: {}",
                     diff
                 )));
@@ -401,7 +414,8 @@ fn get_fields(file_meta: &FileMetaData, schema: &DataSchemaRef) -> Result<Vec<Fi
 
             read_fields.push(m.clone());
         } else {
-            return Err(ErrorCode::ParquetError(format!(
+            // TODO(xuanwo): return a more accurate error code here.
+            return Err(ErrorCode::Internal(format!(
                 "schema field size mismatch, expected to find column: {}",
                 f.name()
             )));

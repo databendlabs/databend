@@ -22,12 +22,12 @@ use common_exception::Result;
 use common_functions::scalars::Function;
 use common_functions::scalars::FunctionContext;
 use common_functions::scalars::FunctionFactory;
+use common_sql::executor::PhysicalScalar;
 
 use crate::api::rpc::flight_scatter::FlightScatter;
 use crate::sql::evaluator::EvalNode;
 use crate::sql::evaluator::Evaluator;
 use crate::sql::evaluator::TypedVector;
-use crate::sql::executor::PhysicalScalar;
 
 #[derive(Clone)]
 pub struct HashFlightScatterV2 {
@@ -69,7 +69,7 @@ impl HashFlightScatterV2 {
         num_rows: usize,
     ) -> Result<Vec<u64>> {
         if self.hash_functions.len() != hash_keys.len() {
-            return Err(ErrorCode::LogicalError(
+            return Err(ErrorCode::Internal(
                 "Hash keys and hash functions must be the same length.",
             ));
         }
@@ -108,7 +108,7 @@ impl HashFlightScatterV2 {
         } else if let Ok(column) = Series::check_get::<ConstColumn>(column) {
             Self::get_hash_values(&column.convert_full_column())
         } else {
-            Err(ErrorCode::LogicalError("Hash keys must be of type u64."))
+            Err(ErrorCode::Internal("Hash keys must be of type u64."))
         }
     }
 }
@@ -174,7 +174,7 @@ impl OneHashKeyFlightScatter {
         } else if let Ok(column) = Series::check_get::<ConstColumn>(column) {
             Self::get_hash_values(&column.convert_full_column())
         } else {
-            Err(ErrorCode::LogicalError("Hash keys must be of type u64."))
+            Err(ErrorCode::Internal("Hash keys must be of type u64."))
         }
     }
 }

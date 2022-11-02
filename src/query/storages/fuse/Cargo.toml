@@ -21,15 +21,14 @@ common-datavalues = { path = "../../datavalues" }
 common-exception = { path = "../../../common/exception" }
 common-functions = { path = "../../functions" }
 common-fuse-meta = { path = "../fuse-meta" }
-common-legacy-expression = { path = "../../legacy-expression" }
-common-legacy-parser = { path = "../../legacy-parser" }
-common-legacy-planners = { path = "../../legacy-planners" }
 common-meta-app = { path = "../../../meta/app" }
 common-meta-types = { path = "../../../meta/types" }
 common-pipeline-core = { path = "../../pipeline/core" }
 common-pipeline-sources = { path = "../../pipeline/sources" }
 common-pipeline-transforms = { path = "../../pipeline/transforms" }
+common-planner = { path = "../../planner" }
 common-sharing = { path = "../../sharing" }
+common-sql = { path = "../../../common/../query/sql" }
 common-storage = { path = "../../../common/storage" }
 common-storages-cache = { path = "../cache" }
 common-storages-constants = { path = "../constants" }
