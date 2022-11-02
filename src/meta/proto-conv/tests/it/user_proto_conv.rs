@@ -656,7 +656,7 @@ fn test_old_stage_file() -> anyhow::Result<()> {
     Ok(())
 }
 
-pub(crate) fn test_internal_stage_info_v18() -> mt::UserStageInfo {
+pub(crate) fn test_internal_stage_info_v17() -> mt::UserStageInfo {
     mt::UserStageInfo {
         stage_name: "fs://dir/to/files".to_string(),
         stage_type: mt::StageType::Internal,
