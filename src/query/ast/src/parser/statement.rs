@@ -182,25 +182,25 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     // catalogs
     let show_catalogs = map(
         rule! {
-            SHOW ~ ( CATALOGS ) ~ #show_limit?
+            SHOW ~ CATALOGS ~ #show_limit?
         },
         |(_, _, limit)| Statement::ShowCatalogs(ShowCatalogsStmt { limit }),
     );
     let show_create_catalog = map(
         rule! {
-            SHOW ~ CREATE ~ ( CATALOG ) ~ #ident
+            SHOW ~ CREATE ~ CATALOG ~ #ident
         },
         |(_, _, _, catalog)| Statement::ShowCreateCatalog(ShowCreateCatalogStmt { catalog }),
     );
     // TODO: support `COMMENT` in create catalog
     let create_catalog = map(
         rule! {
-            CREATE ~ ( CATALOG ) ~ ( IF ~ NOT ~ EXISTS )?
+            CREATE ~ CATALOG ~ ( IF ~ NOT ~ EXISTS )?
             ~ #ident
-            ~ ( TYPE ~ "=" ~ #catalog_type )
-            ~ ( CONNECTION ~ "=" ~ #options )
+            ~ TYPE ~ "=" ~ #catalog_type
+            ~ CONNECTION ~ "=" ~ #options
         },
-        |(_, _, opt_if_not_exists, catalog, (_, _, ty), (_, _, options))| {
+        |(_, _, opt_if_not_exists, catalog, _, _, ty, _, _, options)| {
             Statement::CreateCatalog(CreateCatalogStmt {
                 if_not_exists: opt_if_not_exists.is_some(),
                 catalog_name: catalog.to_string(),
@@ -211,7 +211,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let drop_catalog = map(
         rule! {
-            DROP ~ ( CATALOG ) ~ ( IF ~ EXISTS )? ~ #ident
+            DROP ~ CATALOG ~ ( IF ~ EXISTS )? ~ #ident
         },
         |(_, _, opt_if_exists, catalog)| {
             Statement::DropCatalog(DropCatalogStmt {

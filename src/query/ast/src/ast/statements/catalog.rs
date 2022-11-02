@@ -63,7 +63,12 @@ impl Display for CreateCatalogStmt {
             write!(f, " IF NOT EXISTS")?;
         }
         write!(f, " {}", self.catalog_name)?;
-        write!(f, " TYPE='{}'", self.catalog_type)
+        write!(f, " TYPE='{}'", self.catalog_type)?;
+        write!(f, " CONNECTION = (")?;
+        for (k, v) in self.options.iter() {
+            write!(f, " {}='{}'", k, v)?;
+        }
+        write!(f, " )")
     }
 }
 

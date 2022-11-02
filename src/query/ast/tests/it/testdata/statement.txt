@@ -746,7 +746,7 @@ UseDatabase {
 ---------- Input ----------
 create catalog ctl type=hive connection=(url='<hive-meta-store>' thrift_protocol='binary');
 ---------- Output ---------
-CREATE CATALOG ctl TYPE='HIVE'
+CREATE CATALOG ctl TYPE='HIVE' CONNECTION = ( thrift_protocol='binary' url='<hive-meta-store>' )
 ---------- AST ------------
 CreateCatalog(
     CreateCatalogStmt {
