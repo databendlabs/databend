@@ -40,11 +40,11 @@ pub struct Monotonicity {
     pub right: Option<ColumnWithField>,
 }
 
-impl Monotonicity {
-    /// Create a default Monotonicity for non-monotonic and non-constant expression/function.
-    /// The fields 'is_monotonic' and 'is_constant' are both false.
-    /// The fields 'left' and 'right' boundaries are both None.
-    pub fn default() -> Self {
+/// Create a default Monotonicity for non-monotonic and non-constant expression/function.
+/// The fields 'is_monotonic' and 'is_constant' are both false.
+/// The fields 'left' and 'right' boundaries are both None.
+impl Default for Monotonicity {
+    fn default() -> Self {
         Monotonicity {
             is_monotonic: false,
             is_positive: true,
@@ -53,7 +53,9 @@ impl Monotonicity {
             right: None,
         }
     }
+}
 
+impl Monotonicity {
     /// Create a Monotonicity, with input parameter field. The left and right field are None.
     pub fn create(is_monotonic: bool, is_positive: bool, is_constant: bool) -> Self {
         Monotonicity {
