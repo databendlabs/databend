@@ -25,7 +25,7 @@ use common_config::Config;
 use common_exception::Result;
 use common_storage::CacheOperator;
 use common_storage::DataOperator;
-use common_storages_fuse_meta::caches::CacheManager;
+use common_storages_table_meta::caches::CacheManager;
 use common_tracing::set_panic_hook;
 use common_tracing::QueryLogger;
 use common_users::RoleCacheManager;

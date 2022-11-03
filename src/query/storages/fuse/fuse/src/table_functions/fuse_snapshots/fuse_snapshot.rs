@@ -17,7 +17,7 @@ use std::sync::Arc;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_storages_fuse_meta::meta::TableSnapshotLite;
+use common_storages_table_meta::meta::TableSnapshotLite;
 
 use crate::io::SnapshotsIO;
 use crate::io::TableMetaLocationGenerator;

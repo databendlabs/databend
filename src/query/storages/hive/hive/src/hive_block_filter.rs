@@ -24,9 +24,9 @@ use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
-use common_storages_fuse_meta::meta::ColumnStatistics;
-use common_storages_fuse_meta::meta::StatisticsOfColumns;
 use common_storages_index::RangeFilter;
+use common_storages_table_meta::meta::ColumnStatistics;
+use common_storages_table_meta::meta::StatisticsOfColumns;
 
 use crate::hive_parquet_block_reader::HiveParquetBlockReader;
 

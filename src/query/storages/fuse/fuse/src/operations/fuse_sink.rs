@@ -26,11 +26,11 @@ use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_pipeline_core::processors::port::OutputPort;
-use common_storages_fuse_meta::caches::CacheManager;
-use common_storages_fuse_meta::meta::Location;
-use common_storages_fuse_meta::meta::SegmentInfo;
-use common_storages_fuse_meta::meta::Statistics;
 use common_storages_index::*;
+use common_storages_table_meta::caches::CacheManager;
+use common_storages_table_meta::meta::Location;
+use common_storages_table_meta::meta::SegmentInfo;
+use common_storages_table_meta::meta::Statistics;
 use opendal::Operator;
 
 use super::AppendOperationLogEntry;

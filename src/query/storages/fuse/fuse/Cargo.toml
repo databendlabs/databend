@@ -31,8 +31,8 @@ common-sql = { path = "../../../../common/../query/sql" }
 common-storage = { path = "../../../../common/storage" }
 common-storages-cache = { path = "../../cache" }
 common-storages-constants = { path = "../../constants" }
-common-storages-fuse-meta = { path = "../../fuse/fuse-meta" }
 common-storages-index = { path = "../../index" }
+common-storages-table-meta = { path = "../../table-meta" }
 
 async-trait = { version = "0.1.57", package = "async-trait-fn" }
 backoff = { version = "0.4.0", features = ["futures", "tokio"] }

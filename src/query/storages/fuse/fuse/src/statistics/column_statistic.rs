@@ -18,10 +18,10 @@ use common_datavalues::DataField;
 use common_datavalues::DataValue;
 use common_exception::Result;
 use common_functions::aggregates::eval_aggr;
-use common_storages_fuse_meta::meta::ColumnStatistics;
-use common_storages_fuse_meta::meta::StatisticsOfColumns;
 use common_storages_index::MinMaxIndex;
 use common_storages_index::SupportedType;
+use common_storages_table_meta::meta::ColumnStatistics;
+use common_storages_table_meta::meta::StatisticsOfColumns;
 
 pub fn gen_columns_statistics(data_block: &DataBlock) -> Result<StatisticsOfColumns> {
     let mut statistics = StatisticsOfColumns::new();
