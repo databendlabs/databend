@@ -255,6 +255,10 @@ async fn test_segment_accumulator() -> Result<()> {
             state.statistics.block_count as usize,
             num_block_of_segments.into_iter().sum::<usize>()
         );
+
+        // - verify general invariants
+        case.verify_block_order("greedy", &state, &segment_reader)
+            .await?;
     }
 
     {
@@ -285,7 +289,7 @@ async fn test_segment_accumulator() -> Result<()> {
 
         // - verify general invariants
         case_fixture
-            .verify_general_invariants("greedy", &compacted_state, &segment_reader)
+            .verify_block_order("greedy", &compacted_state, &segment_reader)
             .await?;
     }
 
@@ -302,17 +306,12 @@ async fn test_segment_accumulator() -> Result<()> {
         //   THE THIRD SEGMENT SHOULD NOT BE MERGED
         // - the last 2 segments should be merged
 
-        let expected_block_of_segments = vec![10, 9];
+        let expected_num_block_of_new_segments = vec![10, 9];
 
         // setup & run
         let mut case_fixture = CompactSegmentTestFixture::try_new(&ctx, block_per_seg)?;
         let seg_acc = case_fixture.run(&num_block_of_segments).await?;
         let r = seg_acc.finalize().await?;
-
-        for (idx, x) in r.new_segment_paths.iter().enumerate() {
-            let seg = segment_reader.read(x, None, SegmentInfo::VERSION).await?;
-            assert_eq!(seg.blocks.len(), expected_block_of_segments[idx]);
-        }
 
         // verify that:
         // - 2 newly generated segment;
@@ -326,9 +325,23 @@ async fn test_segment_accumulator() -> Result<()> {
             num_block_of_segments.into_iter().sum::<usize>()
         );
 
+        // verify that the new segment contains expected number of blocks
+        CompactSegmentTestFixture::verify_new_segments(
+            "",
+            &r.new_segment_paths,
+            &expected_num_block_of_new_segments,
+            &segment_reader,
+        )
+        .await?;
+
+        // - verify that the order of blocks not changed
+        case_fixture
+            .verify_block_order("greedy", &r, &segment_reader)
+            .await?;
+
         // - verify general invariants
         case_fixture
-            .verify_general_invariants("greedy", &r, &segment_reader)
+            .verify_block_order("greedy", &r, &segment_reader)
             .await?;
     }
 
@@ -351,27 +364,28 @@ async fn test_segment_accumulator() -> Result<()> {
         let seg_acc = case_fixture.run(&num_block_of_segments).await?;
         let r = seg_acc.finalize().await?;
 
-        // TODO refactor this
-        for (idx, x) in r.new_segment_paths.iter().enumerate() {
-            let seg = segment_reader.read(x, None, SegmentInfo::VERSION).await?;
-            assert_eq!(seg.blocks.len(), expected_num_block_of_new_segments[idx]);
-        }
-
-        // verify that:
-        // - 2 newly generated segment;
+        // - new segment created
         assert_eq!(r.new_segment_paths.len(), 2);
         // - totally two segments collected
         assert_eq!(r.segments_locations.len(), 2);
-
         // number of blocks should not change
         assert_eq!(
             r.statistics.block_count as usize,
             num_block_of_segments.into_iter().sum::<usize>()
         );
 
-        // - verify general invariants
+        // verify that the new segment contains expected number of blocks
+        CompactSegmentTestFixture::verify_new_segments(
+            "",
+            &r.new_segment_paths,
+            &expected_num_block_of_new_segments,
+            &segment_reader,
+        )
+        .await?;
+
+        // - verify that the order of blocks not changed
         case_fixture
-            .verify_general_invariants("greedy", &r, &segment_reader)
+            .verify_block_order("greedy", &r, &segment_reader)
             .await?;
     }
 
@@ -468,7 +482,7 @@ impl CompactSegmentTestFixture {
         Ok((segments, collected_blocks))
     }
 
-    pub async fn verify_general_invariants(
+    pub async fn verify_block_order(
         &self,
         case_name: &str,
         accumulated_state: &SegmentCompactionState,
@@ -484,6 +498,25 @@ impl CompactSegmentTestFixture {
                 assert_eq!(original_block_meta, x.as_ref(), "case : {}", case_name);
                 idx += 1;
             }
+        }
+        Ok(())
+    }
+
+    // verify that newly generated segments contain the proper number of blocks
+    pub async fn verify_new_segments(
+        case_name: &str,
+        new_segment_paths: &[String],
+        expected_num_blocks: &[usize],
+        segment_reader: &SegmentInfoReader,
+    ) -> Result<()> {
+        for (idx, x) in new_segment_paths.iter().enumerate() {
+            let seg = segment_reader.read(x, None, SegmentInfo::VERSION).await?;
+            assert_eq!(
+                seg.blocks.len(),
+                expected_num_blocks[idx],
+                "case name :{}",
+                case_name
+            );
         }
         Ok(())
     }
