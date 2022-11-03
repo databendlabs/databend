@@ -1792,6 +1792,10 @@ substr(String, Int64) :: String
 substr(String NULL, Int64 NULL) :: String NULL
 substr(String, Int64, UInt64) :: String
 substr(String NULL, Int64 NULL, UInt64 NULL) :: String NULL
+substr_utf8(String, Int64) :: String
+substr_utf8(String NULL, Int64 NULL) :: String NULL
+substr_utf8(String, Int64, UInt64) :: String
+substr_utf8(String NULL, Int64 NULL, UInt64 NULL) :: String NULL
 subtract_days(Timestamp, Int64) :: Timestamp
 subtract_days(Timestamp NULL, Int64 NULL) :: Timestamp NULL
 subtract_days(Date, Int64) :: Date
