@@ -31,11 +31,15 @@ SELECT COUNT(*) FROM (SELECT * FROM random_table LIMIT 8765);
 ----
 8765
 
+
+statement ok
+set max_block_size = 100;
+
 statement query I
-SELECT COUNT(*) FROM random_table;
+SELECT COUNT(*) FROM random_table ;
 
 ----
-10000
+100
 
 statement ok
 DROP TABLE random_table;
