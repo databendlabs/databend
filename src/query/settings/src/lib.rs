@@ -122,13 +122,13 @@ impl Settings {
         let values = vec![
             // max_block_size
             SettingValue {
-                default_value: UserSettingValue::UInt64(10000),
+                default_value: UserSettingValue::UInt64(65536),
                 user_setting: UserSetting::create(
                     "max_block_size",
-                    UserSettingValue::UInt64(10000),
+                    UserSettingValue::UInt64(65536),
                 ),
                 level: ScopeLevel::Session,
-                desc: "Maximum block size for reading, default value: 10000.",
+                desc: "Maximum block size for reading, default value: 65536.",
                 possible_values: None,
             },
             // max_threads
