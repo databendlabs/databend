@@ -18,14 +18,14 @@ use common_meta_app::schema::DatabaseIdent;
 use common_meta_app::schema::DatabaseInfo;
 use common_meta_app::schema::DatabaseMeta;
 use common_meta_app::schema::DatabaseNameIdent;
+use common_storages_information_schema::ColumnsTable;
+use common_storages_information_schema::KeywordsTable;
+use common_storages_information_schema::SchemataTable;
+use common_storages_information_schema::TablesTable;
+use common_storages_information_schema::ViewsTable;
 
 use crate::catalogs::InMemoryMetas;
 use crate::databases::Database;
-use crate::storages::information_schema::ColumnsTable;
-use crate::storages::information_schema::KeywordsTable;
-use crate::storages::information_schema::SchemataTable;
-use crate::storages::information_schema::TablesTable;
-use crate::storages::information_schema::ViewsTable;
 use crate::storages::Table;
 
 #[derive(Clone)]

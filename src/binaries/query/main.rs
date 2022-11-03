@@ -173,9 +173,10 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
     println!("Databend Query");
     println!();
     println!("Version: {}", *DATABEND_COMMIT_VERSION);
-    println!("Log:");
-    println!("    File: {}", conf.log.file);
-    println!("    Stderr: {}", conf.log.stderr);
+    println!();
+    println!("Logging:");
+    println!("    file: {}", conf.log.file);
+    println!("    stderr: {}", conf.log.stderr);
     println!(
         "Meta: {}",
         if conf.meta.is_embedded_meta()? {
@@ -187,6 +188,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
         }
     );
     println!("Storage: {}", conf.storage.params);
+    println!("Cache: {}", conf.cache.params);
     println!();
     println!("Admin");
     println!("    listened at {}", conf.query.admin_api_address);

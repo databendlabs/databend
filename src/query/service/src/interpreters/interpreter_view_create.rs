@@ -21,12 +21,12 @@ use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TableNameIdent;
 use common_planner::plans::CreateViewPlan;
+use common_storages_view::view_table::VIEW_ENGINE;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
-use crate::storages::view::view_table::VIEW_ENGINE;
 
 pub struct CreateViewInterpreter {
     ctx: Arc<QueryContext>,

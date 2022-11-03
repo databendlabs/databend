@@ -46,7 +46,7 @@ use common_planner::SourceInfo;
 use common_settings::Settings;
 use common_storage::DataOperator;
 use common_storage::StorageMetrics;
-use common_storages_preludes::stage::StageTable;
+use common_storages_stage::StageTable;
 use parking_lot::RwLock;
 use tracing::debug;
 
