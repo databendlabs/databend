@@ -23,7 +23,7 @@ use common_exception::Result;
 use common_hashtable::HashtableEntryRefLike;
 use common_hashtable::HashtableLike;
 
-use crate::pipelines::processors::transforms::hash_join::desc::MAX_BLOCK_SIZE;
+use crate::pipelines::processors::transforms::hash_join::desc::JOIN_MAX_BLOCK_SIZE;
 use crate::pipelines::processors::transforms::hash_join::row::RowPtr;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
 use crate::pipelines::processors::JoinHashTable;
@@ -43,8 +43,8 @@ impl JoinHashTable {
         let valids = &probe_state.valids;
         // The inner join will return multiple data blocks of similar size
         let mut probed_blocks = vec![];
-        let mut probe_indexes = Vec::with_capacity(MAX_BLOCK_SIZE);
-        let mut build_indexes = Vec::with_capacity(MAX_BLOCK_SIZE);
+        let mut probe_indexes = Vec::with_capacity(JOIN_MAX_BLOCK_SIZE);
+        let mut build_indexes = Vec::with_capacity(JOIN_MAX_BLOCK_SIZE);
 
         for (i, key) in keys_iter.enumerate() {
             // If the join is derived from correlated subquery, then null equality is safe.

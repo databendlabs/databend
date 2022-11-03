@@ -26,7 +26,7 @@ use crate::sql::evaluator::Evaluator;
 use crate::sql::executor::HashJoin;
 use crate::sql::plans::JoinType;
 
-pub const MAX_BLOCK_SIZE: usize = 65535;
+pub const JOIN_MAX_BLOCK_SIZE: usize = 65535;
 
 #[derive(Clone, Copy, Eq, PartialEq, Debug, Hash)]
 pub enum MarkerKind {
@@ -52,10 +52,10 @@ pub struct JoinState {
 impl JoinState {
     pub fn create() -> Result<Self> {
         Ok(JoinState {
-            build_indexes: RwLock::new(Vec::with_capacity(MAX_BLOCK_SIZE)),
-            rest_build_indexes: RwLock::new(Vec::with_capacity(MAX_BLOCK_SIZE)),
-            rest_probe_blocks: RwLock::new(Vec::with_capacity(MAX_BLOCK_SIZE)),
-            validity: RwLock::new(MutableBitmap::with_capacity(MAX_BLOCK_SIZE)),
+            build_indexes: RwLock::new(Vec::with_capacity(JOIN_MAX_BLOCK_SIZE)),
+            rest_build_indexes: RwLock::new(Vec::with_capacity(JOIN_MAX_BLOCK_SIZE)),
+            rest_probe_blocks: RwLock::new(Vec::with_capacity(JOIN_MAX_BLOCK_SIZE)),
+            validity: RwLock::new(MutableBitmap::with_capacity(JOIN_MAX_BLOCK_SIZE)),
         })
     }
 }
