@@ -53,7 +53,6 @@ members = [
     "src/query/storages/index",
     "src/query/storages/information-schema",
     "src/query/storages/memory",
-    "src/query/storages/preludes",
     "src/query/storages/factory",
     "src/query/storages/fuse-result",
     "src/query/storages/null",
