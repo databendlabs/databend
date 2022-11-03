@@ -14,13 +14,11 @@
 
 #![feature(type_alias_impl_trait)]
 
-pub mod information_schema;
 pub mod memory;
 pub mod null;
 pub mod random;
 pub mod stage;
 pub mod system;
-pub mod view;
 
 mod storages {
     pub use common_catalog::catalog::StorageDescription;
@@ -28,7 +26,6 @@ mod storages {
 
     pub use super::memory;
     pub use super::system;
-    pub use super::view;
 }
 
 mod catalogs {

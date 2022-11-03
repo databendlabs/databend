@@ -15,36 +15,49 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use common_catalog::table::Table;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
+use common_storages_view::view_table::ViewTable;
+use common_storages_view::view_table::QUERY;
 
-use crate::storages::view::view_table::QUERY;
-use crate::storages::view::ViewTable;
-use crate::storages::Table;
+pub struct ColumnsTable {}
 
-pub struct TablesTable {}
-
-impl TablesTable {
+impl ColumnsTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
         let query = "SELECT
             database AS table_catalog,
             database AS table_schema,
-            name AS table_name,
-            'BASE TABLE' AS table_type,
-            engine AS engine,
-            created_on AS create_time,
-            dropped_on AS drop_time,
-            data_size AS data_length,
-            index_size AS index_length,
-            '' AS table_comment
-        FROM system.tables;";
+            table AS table_name,
+            name AS column_name,
+            1 AS ordinal_position,
+            NULL AS column_default,
+            is_nullable AS is_nullable,
+            type AS data_type,
+            NULL AS character_maximum_length,
+            NULL AS character_octet_length,
+            NULL AS numeric_precision,
+            NULL AS numeric_precision_radix,
+            NULL AS numeric_scale,
+            NULL AS datetime_precision,
+            NULL AS character_set_catalog,
+            NULL AS character_set_schema,
+            NULL AS character_set_name,
+            NULL AS collation_catalog,
+            NULL AS collation_schema,
+            NULL AS collation_name,
+            NULL AS domain_catalog,
+            NULL AS domain_schema,
+            NULL AS domain_name,
+            NULL AS extra
+        FROM system.columns;";
 
         let mut options = BTreeMap::new();
         options.insert(QUERY.to_string(), query.to_string());
         let table_info = TableInfo {
-            desc: "'information_schema'.'tables'".to_string(),
-            name: "tables".to_string(),
+            desc: "'information_schema'.'columns'".to_string(),
+            name: "columns".to_string(),
             ident: TableIdent::new(table_id, 0),
             meta: TableMeta {
                 options,

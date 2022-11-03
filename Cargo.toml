@@ -51,9 +51,11 @@ members = [
     "src/query/storages/hive",
     "src/query/storages/hive-meta-store",
     "src/query/storages/index",
+    "src/query/storages/information-schema",
     "src/query/storages/preludes",
     "src/query/storages/factory",
     "src/query/storages/share",
+    "src/query/storages/view",
     "src/query/streams",
     "src/query/users",
     # databend-query

@@ -15,13 +15,12 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use common_catalog::table::Table;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
-
-use crate::storages::view::view_table::QUERY;
-use crate::storages::view::ViewTable;
-use crate::storages::Table;
+use common_storages_view::view_table::ViewTable;
+use common_storages_view::view_table::QUERY;
 
 pub struct SchemataTable {}
 

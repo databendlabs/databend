@@ -42,6 +42,7 @@ common-settings = { path = "../settings" }
 common-storage = { path = "../../common/storage" }
 common-storages-constants = { path = "../storages/constants" }
 common-storages-preludes = { path = "../storages/preludes" }
+common-storages-view = { path = "../storages/view" }
 common-tracing = { path = "../../common/tracing" }
 common-users = { path = "../users" }
 

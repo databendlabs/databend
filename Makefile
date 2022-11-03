@@ -16,6 +16,9 @@ setup:
 fmt:
 	cargo fmt --all
 
+machete:
+	cargo -Z sparse-registry machete
+
 lint:
 	cargo fmt --all
 	cargo clippy --workspace --all-targets -- -D warnings
