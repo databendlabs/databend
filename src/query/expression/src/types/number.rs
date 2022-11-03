@@ -549,6 +549,17 @@ impl NumberColumnBuilder {
             NumberColumnBuilder::NUM_TYPE(builder) => NumberScalar::NUM_TYPE(builder[0]),
         })
     }
+
+    pub fn pop(&mut self) -> Option<NumberScalar> {
+        crate::with_number_type!(|NUM_TYPE| match self {
+            NumberColumnBuilder::NUM_TYPE(builder) => {
+                match builder.pop() {
+                    Some(num) => Some(NumberScalar::NUM_TYPE(num)),
+                    None => None,
+                }
+            }
+        })
+    }
 }
 
 impl<T: Number> SimpleDomain<T> {

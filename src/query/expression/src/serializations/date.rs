@@ -17,7 +17,6 @@ use std::ops::AddAssign;
 use chrono::Duration;
 use chrono::NaiveDate;
 use common_arrow::arrow::buffer::Buffer;
-use common_exception::Result;
 use common_io::prelude::FormatSettings;
 
 use crate::Column;
