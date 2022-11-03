@@ -33,7 +33,7 @@ use common_catalog::table_function::TableFunction;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_storages_preludes::view::view_table::QUERY;
+use common_storages_view::view_table::QUERY;
 
 use crate::binder::scalar::ScalarBinder;
 use crate::binder::Binder;

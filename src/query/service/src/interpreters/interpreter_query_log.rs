@@ -20,9 +20,9 @@ use std::time::UNIX_EPOCH;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_storages_preludes::system::LogType;
-use common_storages_preludes::system::QueryLogElement;
-use common_storages_preludes::system::QueryLogQueue;
+use common_storages_system::LogType;
+use common_storages_system::QueryLogElement;
+use common_storages_system::QueryLogQueue;
 use common_tracing::QueryLogger;
 use serde_json;
 use tracing::error;

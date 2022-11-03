@@ -27,6 +27,11 @@ use common_base::base::TrySpawn;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_storages_fuse_result::BlockBuffer;
+use common_storages_fuse_result::BlockBufferWriterMemOnly;
+use common_storages_fuse_result::BlockBufferWriterWithResultTable;
+use common_storages_fuse_result::ResultQueryInfo;
+use common_storages_fuse_result::ResultTableSink;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use futures::StreamExt;
@@ -50,11 +55,6 @@ use crate::sessions::Session;
 use crate::sessions::TableContext;
 use crate::sql::plans::Plan;
 use crate::sql::Planner;
-use crate::storages::result::block_buffer::BlockBuffer;
-use crate::storages::result::block_buffer::BlockBufferWriterMemOnly;
-use crate::storages::result::block_buffer::BlockBufferWriterWithResultTable;
-use crate::storages::result::ResultQueryInfo;
-use crate::storages::result::ResultTableSink;
 
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Eq)]
 pub enum ExecuteStateKind {
