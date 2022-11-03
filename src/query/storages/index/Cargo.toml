@@ -20,7 +20,7 @@ common-datablocks = { path = "../../datablocks" }
 common-datavalues = { path = "../../datavalues" }
 common-exception = { path = "../../../common/exception" }
 common-functions = { path = "../../functions" }
-common-fuse-meta = { path = "../fuse-meta" }
+common-fuse-meta = { path = "../fuses/fuse-meta" }
 common-planner = { path = "../../planner" }
 common-sql = { path = "../../sql" }
 

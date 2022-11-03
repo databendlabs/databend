@@ -2153,7 +2153,6 @@ dependencies = [
  "backon",
  "chrono",
  "common-base",
- "common-building",
  "common-catalog",
  "common-datablocks",
  "common-datavalues",

@@ -18,7 +18,7 @@ common-catalog = { path = "../../catalog" }
 common-datablocks = { path = "../../datablocks" }
 common-datavalues = { path = "../../datavalues" }
 common-exception = { path = "../../../common/exception" }
-common-fuse-meta = { path = "../fuse-meta" }
+common-fuse-meta = { path = "../fuses/fuse-meta" }
 common-hive-meta-store = { path = "../hive-meta-store" }
 common-meta-app = { path = "../../../meta/app" }
 common-meta-types = { path = "../../../meta/types" }

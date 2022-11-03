@@ -21,7 +21,7 @@ common-datavalues = { path = "../datavalues" }
 common-exception = { path = "../../common/exception" }
 common-formats = { path = "../formats" }
 common-functions = { path = "../functions" }
-common-fuse-meta = { path = "../storages/fuse-meta" }
+common-fuse-meta = { path = "../storages/fuses/fuse-meta" }
 common-grpc = { path = "../../common/grpc" }
 common-hive-meta-store = { path = "../storages/hive-meta-store", optional = true }
 common-http = { path = "../../common/http" }
