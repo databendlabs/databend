@@ -42,11 +42,11 @@ use common_storage::DataOperator;
 use common_storage::ShareTableConfig;
 use common_storage::StorageMetrics;
 use common_storage::StorageMetricsLayer;
-use common_storages_fuse_meta::meta::ClusterKey;
-use common_storages_fuse_meta::meta::ColumnStatistics as FuseColumnStatistics;
-use common_storages_fuse_meta::meta::Statistics as FuseStatistics;
-use common_storages_fuse_meta::meta::TableSnapshot;
-use common_storages_fuse_meta::meta::Versioned;
+use common_storages_table_meta::meta::ClusterKey;
+use common_storages_table_meta::meta::ColumnStatistics as FuseColumnStatistics;
+use common_storages_table_meta::meta::Statistics as FuseStatistics;
+use common_storages_table_meta::meta::TableSnapshot;
+use common_storages_table_meta::meta::Versioned;
 use opendal::Operator;
 use uuid::Uuid;
 

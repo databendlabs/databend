@@ -26,8 +26,8 @@ common-pipeline-sources = { path = "../../../pipeline/sources" }
 common-planner = { path = "../../../planner" }
 common-storage = { path = "../../../../common/storage" }
 common-storages-cache = { path = "../../cache" }
-common-storages-fuse-meta = { path = "../../fuse/fuse-meta" }
 common-storages-index = { path = "../../index" }
+common-storages-table-meta = { path = "../../table-meta" }
 
 thrift = { git = "https://github.com/datafuse-extras/thrift", tag = "v0.17.0" }
 

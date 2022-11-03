@@ -20,9 +20,9 @@ use common_cache::Cache;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_storages_fuse_meta::caches::CacheManager;
-use common_storages_fuse_meta::meta::Location;
-use common_storages_fuse_meta::meta::SnapshotId;
+use common_storages_table_meta::caches::CacheManager;
+use common_storages_table_meta::meta::Location;
+use common_storages_table_meta::meta::SnapshotId;
 use tracing::info;
 use tracing::warn;
 

@@ -31,8 +31,8 @@ use common_storages_fuse::io::BlockReader;
 use common_storages_fuse::statistics::BlockStatistics;
 use common_storages_fuse::statistics::StatisticsAccumulator;
 use common_storages_fuse::FuseTable;
-use common_storages_fuse_meta::meta::SegmentInfo;
-use common_storages_fuse_meta::meta::Statistics as FuseMetaStatistics;
+use common_storages_table_meta::meta::SegmentInfo;
+use common_storages_table_meta::meta::Statistics as FuseMetaStatistics;
 use opendal::Operator;
 
 use crate::block_buffer::BlockBuffer;

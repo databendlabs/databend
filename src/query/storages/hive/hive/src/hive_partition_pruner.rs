@@ -23,9 +23,9 @@ use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planner::Expression;
-use common_storages_fuse_meta::meta::ColumnStatistics;
-use common_storages_fuse_meta::meta::StatisticsOfColumns;
 use common_storages_index::range_filter::RangeFilter;
+use common_storages_table_meta::meta::ColumnStatistics;
+use common_storages_table_meta::meta::StatisticsOfColumns;
 
 pub struct HivePartitionPruner {
     pub ctx: Arc<dyn TableContext>,

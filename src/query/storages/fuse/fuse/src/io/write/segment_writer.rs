@@ -16,10 +16,10 @@ use std::sync::Arc;
 
 use common_cache::Cache;
 use common_exception::Result;
-use common_storages_fuse_meta::caches::SegmentInfoCache;
-use common_storages_fuse_meta::meta::Location;
-use common_storages_fuse_meta::meta::SegmentInfo;
-use common_storages_fuse_meta::meta::Versioned;
+use common_storages_table_meta::caches::SegmentInfoCache;
+use common_storages_table_meta::meta::Location;
+use common_storages_table_meta::meta::SegmentInfo;
+use common_storages_table_meta::meta::Versioned;
 use opendal::Operator;
 
 use crate::io::write_meta;

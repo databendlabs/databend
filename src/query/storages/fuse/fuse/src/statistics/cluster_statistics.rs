@@ -15,7 +15,7 @@
 use common_datablocks::DataBlock;
 use common_datavalues::DataValue;
 use common_exception::Result;
-use common_storages_fuse_meta::meta::ClusterStatistics;
+use common_storages_table_meta::meta::ClusterStatistics;
 
 use crate::io::BlockCompactor;
 

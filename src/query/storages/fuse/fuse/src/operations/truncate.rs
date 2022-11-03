@@ -20,8 +20,8 @@ use common_meta_app::schema::TableStatistics;
 use common_meta_app::schema::TruncateTableReq;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_types::MatchSeq;
-use common_storages_fuse_meta::meta::TableSnapshot;
-use common_storages_fuse_meta::meta::Versioned;
+use common_storages_table_meta::meta::TableSnapshot;
+use common_storages_table_meta::meta::Versioned;
 use uuid::Uuid;
 
 use crate::FuseTable;

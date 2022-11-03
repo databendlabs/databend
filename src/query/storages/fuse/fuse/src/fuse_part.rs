@@ -24,7 +24,7 @@ use common_exception::Result;
 use common_planner::plans::Projection;
 use common_planner::PartInfo;
 use common_planner::PartInfoPtr;
-use common_storages_fuse_meta::meta::Compression;
+use common_storages_table_meta::meta::Compression;
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct ColumnMeta {

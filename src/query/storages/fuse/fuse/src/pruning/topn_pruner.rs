@@ -18,8 +18,8 @@ use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planner::Expression;
-use common_storages_fuse_meta::meta::BlockMeta;
-use common_storages_fuse_meta::meta::ColumnStatistics;
+use common_storages_table_meta::meta::BlockMeta;
+use common_storages_table_meta::meta::ColumnStatistics;
 
 pub(crate) struct TopNPrunner {
     schema: DataSchemaRef,
