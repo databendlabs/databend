@@ -18,7 +18,6 @@ use std::sync::atomic::Ordering;
 
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
-use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
 use common_datavalues::wrap_nullable;
 use common_datavalues::ColumnRef;

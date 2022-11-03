@@ -12,10 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use common_arrow::arrow::bitmap::MutableBitmap;
-use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
 use common_exception::Result;
 use common_functions::scalars::FunctionFactory;
@@ -24,7 +21,6 @@ use common_sql::IndexType;
 use parking_lot::RwLock;
 
 use crate::pipelines::processors::transforms::hash_join::row::RowPtr;
-use crate::sessions::QueryContext;
 use crate::sql::evaluator::EvalNode;
 use crate::sql::evaluator::Evaluator;
 use crate::sql::executor::HashJoin;
