@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-. "$CURDIR"/../../../shell_env.sh
+. "$CURDIR"/../../../../shell_env.sh
 
 echo "drop table if exists test_csv" | $MYSQL_CLIENT_CONNECT
 echo "drop table if exists test_csv2" | $MYSQL_CLIENT_CONNECT
