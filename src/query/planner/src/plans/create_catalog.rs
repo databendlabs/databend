@@ -17,6 +17,8 @@ use std::sync::Arc;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_meta_app::schema::CatalogMeta;
+use common_meta_app::schema::CatalogNameIdent;
+use common_meta_app::schema::CreateCatalogReq;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateCatalogPlan {
@@ -24,6 +26,32 @@ pub struct CreateCatalogPlan {
     pub tenant: String,
     pub catalog: String,
     pub meta: CatalogMeta,
+}
+
+impl From<CreateCatalogPlan> for CreateCatalogReq {
+    fn from(p: CreateCatalogPlan) -> Self {
+        CreateCatalogReq {
+            if_not_exists: p.if_not_exists,
+            name_ident: CatalogNameIdent {
+                tenant: p.tenant,
+                catalog_name: p.catalog,
+            },
+            meta: p.meta,
+        }
+    }
+}
+
+impl From<&CreateCatalogPlan> for CreateCatalogReq {
+    fn from(p: &CreateCatalogPlan) -> Self {
+        CreateCatalogReq {
+            if_not_exists: p.if_not_exists,
+            name_ident: CatalogNameIdent {
+                tenant: p.tenant.clone(),
+                catalog_name: p.catalog.clone(),
+            },
+            meta: p.meta.clone(),
+        }
+    }
 }
 
 impl CreateCatalogPlan {

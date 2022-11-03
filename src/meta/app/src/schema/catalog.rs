@@ -49,3 +49,32 @@ impl Display for CatalogMeta {
         )
     }
 }
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CatalogNameIdent {
+    pub tenant: String,
+    pub catalog_name: String,
+}
+
+impl Display for CatalogNameIdent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "'{}'/'{}'", self.tenant, self.catalog_name)
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CreateCatalogReq {
+    pub if_not_exists: bool,
+    pub name_ident: CatalogNameIdent,
+    pub meta: CatalogMeta,
+}
+
+impl Display for CreateCatalogReq {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "create_catalog(if_not_exists={}):{}/{}={:?}",
+            self.if_not_exists, self.name_ident.tenant, self.name_ident.catalog_name, self.meta
+        )
+    }
+}

@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[cfg(feature = "hive")]
-use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use common_base::base::Singleton;
@@ -21,8 +19,12 @@ use common_catalog::catalog::Catalog;
 pub use common_catalog::catalog::CatalogManager;
 use common_catalog::catalog::CATALOG_DEFAULT;
 use common_config::Config;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::CatalogType;
+use common_meta_app::schema::CreateCatalogReq;
+#[cfg(feature = "hive")]
+use common_storages_hive::HiveCatalog;
 #[cfg(feature = "hive")]
 use common_storages_hive::CATALOG_HIVE;
 use dashmap::DashMap;
@@ -40,13 +42,7 @@ pub trait CatalogManagerHelper {
     #[cfg(feature = "hive")]
     fn register_external_catalogs(&self, conf: &Config) -> Result<()>;
 
-    #[cfg(feature = "hive")]
-    fn create_user_defined_catalog(
-        &self,
-        catalog_name: &str,
-        catalog_type: CatalogType,
-        catalog_options: &BTreeMap<String, String>,
-    ) -> Result<()>;
+    fn create_user_defined_catalog(&self, req: CreateCatalogReq) -> Result<()>;
 }
 
 #[async_trait::async_trait]
@@ -92,13 +88,46 @@ impl CatalogManagerHelper for CatalogManager {
         Ok(())
     }
 
-    #[cfg(feature = "hive")]
-    fn create_user_defined_catalog(
-        &self,
-        _catalog_name: &str,
-        _catalog_type: CatalogType,
-        _catalog_options: &BTreeMap<String, String>,
-    ) -> Result<()> {
-        todo!();
+    fn create_user_defined_catalog(&self, req: CreateCatalogReq) -> Result<()> {
+        let catalog_type = req.meta.catalog_type;
+
+        // create catalog first
+        match catalog_type {
+            CatalogType::Default => Err(ErrorCode::CreateUnsupportedCatalog(
+                "Creating a DEFAULT catalog is not allowed",
+            )),
+            CatalogType::Hive => {
+                #[cfg(not(feature = "hive"))]
+                {
+                    Err(ErrorCode::CreateUnsupportedCatalog(
+                        "Hive catalog support is not enabled in your databend-query distribution.",
+                    ))
+                }
+                #[cfg(feature = "hive")]
+                {
+                    let catalog_options = req.meta.options;
+                    let hms_address = catalog_options
+                        .get("hms_address")
+                        .ok_or_else(|| ErrorCode::InvalidArgument("Expected HMS_ADDRESS"))?;
+                    let catalog: Arc<dyn Catalog> = Arc::new(HiveCatalog::try_create(hms_address)?);
+                    let ctl_name = req.name_ident.catalog_name.clone();
+                    match self.catalogs.entry(ctl_name.clone()) {
+                        dashmap::mapref::entry::Entry::Vacant(v) => {
+                            v.insert(catalog);
+                        }
+                        dashmap::mapref::entry::Entry::Occupied(_) => {
+                            if !req.if_not_exists {
+                                return Err(ErrorCode::CatalogAlreadyExists(format!(
+                                    "Catalog {} already exists",
+                                    ctl_name
+                                )));
+                            }
+                        }
+                    }
+
+                    Ok(())
+                }
+            }
+        }
     }
 }

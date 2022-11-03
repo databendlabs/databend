@@ -68,10 +68,8 @@ impl Interpreter for CreateCatalogInterpreter {
         }
         #[cfg(feature = "hive")]
         {
-            let catalog_name = &self.plan.catalog;
-            let options = &self.plan.meta.options;
             let catalog_manager = CatalogManager::instance();
-            catalog_manager.create_user_defined_catalog(catalog_name, catalog_type, options)?;
+            catalog_manager.create_user_defined_catalog(self.plan.clone().into())?;
         }
 
         Ok(PipelineBuildResult::create())

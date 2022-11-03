@@ -193,6 +193,7 @@ build_exceptions! {
     UndropDbWithNoDropTime(2316),
     TxnRetryMaxTimes(2317),
     CreateUnsupportedCatalog(2318),
+    CatalogAlreadyExists(2319),
 
     // Cluster error codes.
     ClusterUnknownNode(2401),
