@@ -206,8 +206,6 @@ impl<'a> SegmentCompactor<'a> {
         let fragments = std::mem::take(&mut self.fragmented_segments);
         self.accumulated_num_blocks = 0;
 
-        // 2. build and write down the compacted segment
-
         // check if only one fragment left
         if fragments.len() == 1 {
             // if only one segment there, spill it as it is
@@ -219,6 +217,7 @@ impl<'a> SegmentCompactor<'a> {
             return Ok(());
         }
 
+        // 2. build (and write down the compacted segment
         // 2.1 merge fragmented segments into new segment, and update the statistics
         let mut blocks = Vec::with_capacity(self.threshold as usize);
         let mut new_statistics = Statistics::default();
