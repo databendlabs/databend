@@ -584,6 +584,8 @@ get_ignore_case(Variant, String) :: Variant NULL
 get_ignore_case(Variant NULL, String NULL) :: Variant NULL
 get_path(Variant, String) :: Variant NULL
 get_path(Variant NULL, String NULL) :: Variant NULL
+great_circle_distance(Float64, Float64, Float64, Float64) :: Float32
+great_circle_distance(Float64 NULL, Float64 NULL, Float64 NULL, Float64 NULL) :: Float32 NULL
 gt(String, String) :: Boolean
 gt(String NULL, String NULL) :: Boolean NULL
 gt(Timestamp, Timestamp) :: Boolean
