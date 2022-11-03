@@ -46,7 +46,7 @@ impl RaftLog {
         info!(?config);
 
         let tree_name = config.tree_name(TREE_RAFT_LOG);
-        let inner = SledTree::open(db, &tree_name, config.is_sync())?;
+        let inner = SledTree::open(db, tree_name, config.is_sync())?;
         let rl = RaftLog { inner };
         Ok(rl)
     }
