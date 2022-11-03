@@ -52,56 +52,69 @@ pub fn register(registry: &mut FunctionRegistry) {
         "great_circle_distance",
         FunctionProperty::default(),
         |_,_,_,_|None,
-        |lon1:F64,lat1:F64,lon2:F64,lat2:F64,_| F32::from({
-            distance(lon1.0 as f32, lat1.0 as f32, lon2.0 as f32, lat2.0 as f32)
-        }),
+        |lon1:F64,lat1:F64,lon2:F64,lat2:F64,_| {
+            F32::from(distance(lon1.0 as f32, lat1.0 as f32, lon2.0 as f32, lat2.0 as f32))
+        },
     );
 }
 
 pub fn geo_dist_init() {
-    let cos_lut: [f32; COS_LUT_SIZE + 1] = (0..=COS_LUT_SIZE)
-        .map(|i| (((2f64 * PI * i as f64 / COS_LUT_SIZE as f64) as f64).cos()) as f32)
-        .collect::<Vec<f32>>()
-        .try_into()
-        .unwrap();
-    COS_LUT.set(cos_lut).unwrap(); // todo(ariesdevil): remove unwrap()
+    // Using `get_or_init` for unit tests cause each test will re-registry all functions.
+    COS_LUT.get_or_init(|| {
+        let cos_lut: [f32; COS_LUT_SIZE + 1] = (0..=COS_LUT_SIZE)
+            .map(|i| (((2f64 * PI * i as f64 / COS_LUT_SIZE as f64) as f64).cos()) as f32)
+            .collect::<Vec<f32>>()
+            .try_into()
+            .unwrap();
+        cos_lut
+    });
+    // let cos_lut: [f32; COS_LUT_SIZE + 1] = (0..=COS_LUT_SIZE)
+    //     .map(|i| (((2f64 * PI * i as f64 / COS_LUT_SIZE as f64) as f64).cos()) as f32)
+    //     .collect::<Vec<f32>>()
+    //     .try_into()
+    //     .unwrap();
+    // COS_LUT.set(cos_lut).unwrap(); // todo(ariesdevil): handle error
 
-    let asin_sqrt_lut: [f32; ASIN_SQRT_LUT_SIZE + 1] = (0..=ASIN_SQRT_LUT_SIZE)
-        .map(|i| {
-            ((i as f64 / ASIN_SQRT_LUT_SIZE as f64) as f64)
-                .sqrt()
-                .asin() as f32
-        })
-        .collect::<Vec<f32>>()
-        .try_into()
-        .unwrap();
-    ASIN_SQRT_LUT.set(asin_sqrt_lut).unwrap();
+    ASIN_SQRT_LUT.get_or_init(|| {
+        let asin_sqrt_lut: [f32; ASIN_SQRT_LUT_SIZE + 1] = (0..=ASIN_SQRT_LUT_SIZE)
+            .map(|i| {
+                ((i as f64 / ASIN_SQRT_LUT_SIZE as f64) as f64)
+                    .sqrt()
+                    .asin() as f32
+            })
+            .collect::<Vec<f32>>()
+            .try_into()
+            .unwrap();
 
-    let mut wgs84_metric_meters_lut: [MaybeUninit<f32>; 2 * (METRIC_LUT_SIZE + 1)] =
-        unsafe { MaybeUninit::uninit().assume_init() };
+        asin_sqrt_lut
+    });
 
-    for i in 0..=METRIC_LUT_SIZE {
-        let latitude: f64 = i as f64 * (PI / METRIC_LUT_SIZE as f64) - PI * 0.5f64;
+    WGS84_METRIC_METERS_LUT.get_or_init(|| {
+        let mut wgs84_metric_meters_lut: [MaybeUninit<f32>; 2 * (METRIC_LUT_SIZE + 1)] =
+            unsafe { MaybeUninit::uninit().assume_init() };
 
-        wgs84_metric_meters_lut[i].write(
-            (111132.09f64 - 566.05f64 * (2f64 * latitude).cos() + 1.20f64 * (4f64 * latitude).cos())
+        for i in 0..=METRIC_LUT_SIZE {
+            let latitude: f64 = i as f64 * (PI / METRIC_LUT_SIZE as f64) - PI * 0.5f64;
+
+            wgs84_metric_meters_lut[i].write(
+                (111132.09f64 - 566.05f64 * (2f64 * latitude).cos()
+                    + 1.20f64 * (4f64 * latitude).cos())
                 .sqrt() as f32,
-        );
-        wgs84_metric_meters_lut[i * 2 + 1].write(
-            (111415.13f64 * latitude.cos() - 94.55f64 * (3f64 * latitude).cos()
-                + 0.12f64 * (5f64 * latitude).cos())
-            .sqrt() as f32,
-        );
-    }
+            );
+            wgs84_metric_meters_lut[i * 2 + 1].write(
+                (111415.13f64 * latitude.cos() - 94.55f64 * (3f64 * latitude).cos()
+                    + 0.12f64 * (5f64 * latitude).cos())
+                .sqrt() as f32,
+            );
+        }
 
-    // Everything is initialized.
-    let wgs84_metric_meters_lut = unsafe {
-        std::mem::transmute::<_, [f32; 2 * (METRIC_LUT_SIZE + 1)]>(wgs84_metric_meters_lut)
-    };
+        // Everything is initialized.
+        let wgs84_metric_meters_lut = unsafe {
+            std::mem::transmute::<_, [f32; 2 * (METRIC_LUT_SIZE + 1)]>(wgs84_metric_meters_lut)
+        };
 
-    WGS84_METRIC_METERS_LUT
-        .set(wgs84_metric_meters_lut)
-        .unwrap();
+        wgs84_metric_meters_lut
+    });
 }
 
 #[inline(always)]
