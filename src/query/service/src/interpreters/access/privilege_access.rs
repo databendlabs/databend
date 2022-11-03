@@ -44,8 +44,8 @@ impl AccessChecker for PrivilegeAccess {
             Plan::Call(_) => {}
             // Catalog
             Plan::ShowCreateCatalog(_) => {}
-            Plan::CreateCatalog(_) => todo!(),
-            Plan::DropCatalog(_) => todo!(),
+            Plan::CreateCatalog(_) => {}
+            Plan::DropCatalog(_) => {}
 
             // Database.
             Plan::ShowCreateDatabase(_) => {}
