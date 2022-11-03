@@ -4,7 +4,7 @@
 # Spaces are considered part of a field and should not be ignored
 
 CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-. "$CURDIR"/../../../shell_env.sh
+. "$CURDIR"/../../../../shell_env.sh
 
 echo "drop table if exists test_csv" | $MYSQL_CLIENT_CONNECT
 echo "CREATE TABLE test_csv

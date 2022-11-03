@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-. "$CURDIR"/../../../shell_env.sh
+. "$CURDIR"/../../../../shell_env.sh
 
 cat << EOF > /tmp/databend_test_csv1.txt
 "2023-04-08 01:01:01","Hello",123
