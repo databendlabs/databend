@@ -1304,6 +1304,8 @@ dependencies = [
  "semver 1.0.14",
  "serde",
  "serfig",
+ "strum",
+ "strum_macros",
  "thrift 0.17.0",
 ]
 
@@ -1411,8 +1413,6 @@ dependencies = [
  "common-settings",
  "once_cell",
  "pretty_assertions",
- "strum",
- "strum_macros",
 ]
 
 [[package]]

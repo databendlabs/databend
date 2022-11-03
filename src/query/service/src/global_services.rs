@@ -23,6 +23,7 @@ use common_base::base::SingletonImpl;
 use common_catalog::catalog::CatalogManager;
 use common_config::Config;
 use common_exception::Result;
+use common_storage::CacheOperator;
 use common_storage::DataOperator;
 use common_storage::ShareTableConfig;
 use common_storages_fuse_meta::caches::CacheManager;
@@ -41,6 +42,7 @@ pub struct GlobalServices {
     query_logger: UnsafeCell<Option<Arc<QueryLogger>>>,
     cluster_discovery: UnsafeCell<Option<Arc<ClusterDiscovery>>>,
     storage_operator: UnsafeCell<Option<DataOperator>>,
+    cache_operator: UnsafeCell<Option<CacheOperator>>,
     cache_manager: UnsafeCell<Option<Arc<CacheManager>>>,
     catalog_manager: UnsafeCell<Option<Arc<CatalogManager>>>,
     http_query_manager: UnsafeCell<Option<Arc<HttpQueryManager>>>,
@@ -61,6 +63,7 @@ impl GlobalServices {
             query_logger: UnsafeCell::new(None),
             cluster_discovery: UnsafeCell::new(None),
             storage_operator: UnsafeCell::new(None),
+            cache_operator: UnsafeCell::new(None),
             cache_manager: UnsafeCell::new(None),
             catalog_manager: UnsafeCell::new(None),
             http_query_manager: UnsafeCell::new(None),
@@ -82,6 +85,7 @@ impl GlobalServices {
         ClusterDiscovery::init(config.clone(), global_services.clone()).await?;
 
         DataOperator::init(&config.storage, global_services.clone()).await?;
+        CacheOperator::init(&config.cache, global_services.clone()).await?;
 
         ShareTableConfig::init(
             &config.query.share_endpoint_address,
@@ -172,6 +176,24 @@ impl SingletonImpl<DataOperator> for GlobalServices {
     fn init(&self, value: DataOperator) -> Result<()> {
         unsafe {
             *(self.storage_operator.get() as *mut Option<DataOperator>) = Some(value);
+            Ok(())
+        }
+    }
+}
+
+impl SingletonImpl<CacheOperator> for GlobalServices {
+    fn get(&self) -> CacheOperator {
+        unsafe {
+            match &*self.cache_operator.get() {
+                None => panic!("CacheOperator is not init"),
+                Some(op) => op.clone(),
+            }
+        }
+    }
+
+    fn init(&self, value: CacheOperator) -> Result<()> {
+        unsafe {
+            *(self.cache_operator.get() as *mut Option<CacheOperator>) = Some(value);
             Ok(())
         }
     }
