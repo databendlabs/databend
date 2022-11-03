@@ -49,7 +49,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_function_factory("array", |_, args_type| {
         Some(Arc::new(Function {
             signature: FunctionSignature {
-                name: "array",
+                name: "array".to_string(),
                 args_type: vec![DataType::Generic(0); args_type.len()],
                 return_type: DataType::Array(Box::new(DataType::Generic(0))),
                 property: FunctionProperty::default(),

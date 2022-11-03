@@ -102,15 +102,17 @@ impl Settings {
             settings
         };
 
-        // Overwrite settings from conf.
+        // Overwrite settings from conf or global set.
         {
             // Set max threads.
-            let cpus = if conf.query.num_cpus == 0 {
-                num_cpus::get() as u64
-            } else {
-                conf.query.num_cpus
-            };
-            ret.set_max_threads(cpus)?;
+            if ret.get_max_threads()? == 0 {
+                let cpus = if conf.query.num_cpus == 0 {
+                    num_cpus::get() as u64
+                } else {
+                    conf.query.num_cpus
+                };
+                ret.set_max_threads(cpus)?;
+            }
         }
 
         Ok(ret)

@@ -10,6 +10,7 @@ edition = { workspace = true }
 storage-hdfs = ["opendal/services-hdfs"]
 
 [dependencies]
+common-auth = { path = "../auth" }
 common-base = { path = "../base" }
 common-exception = { path = "../exception" }
 

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod call;
+mod catalog;
 mod copy;
 mod database;
 mod explain;
@@ -29,6 +30,7 @@ mod user;
 mod view;
 
 pub use call::*;
+pub use catalog::*;
 pub use copy::*;
 pub use database::*;
 pub use explain::*;
