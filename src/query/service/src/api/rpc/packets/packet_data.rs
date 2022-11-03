@@ -246,7 +246,7 @@ impl TryFrom<FlightData> for DataPacket {
                         1 => Ok(ProgressInfo::ScanProgress(ProgressValues { rows, bytes })),
                         2 => Ok(ProgressInfo::WriteProgress(ProgressValues { rows, bytes })),
                         3 => Ok(ProgressInfo::ResultProgress(ProgressValues { rows, bytes })),
-                        _ => Err(ErrorCode::UnImplement(format!(
+                        _ => Err(ErrorCode::Unimplemented(format!(
                             "Unimplemented progress info type, {}",
                             info_type
                         ))),

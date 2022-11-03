@@ -27,44 +27,55 @@ pub struct NullableSerializer<'a> {
 }
 
 impl<'a> TypeSerializer<'a> for NullableSerializer<'a> {
-    fn need_quote(&self) -> bool {
-        self.inner.need_quote()
-    }
-
-    fn write_field(&self, row_index: usize, buf: &mut Vec<u8>, format: &FormatSettings) {
-        if !self.validity.get_bit(row_index) {
-            buf.extend_from_slice(&format.null_bytes);
-        } else {
-            self.inner.write_field(row_index, buf, format)
-        }
-    }
-
-    fn write_field_escaped(
+    fn write_field_values(
         &self,
         row_index: usize,
         buf: &mut Vec<u8>,
         format: &FormatSettings,
-        quote: u8,
+        in_nested: bool,
+    ) {
+        if !self.validity.get_bit(row_index) {
+            buf.extend_from_slice(&format.nested.null_bytes);
+        } else {
+            self.inner
+                .write_field_values(row_index, buf, format, in_nested)
+        }
+    }
+
+    fn write_field_tsv(
+        &self,
+        row_index: usize,
+        buf: &mut Vec<u8>,
+        format: &FormatSettings,
+        in_nested: bool,
     ) {
         if !self.validity.get_bit(row_index) {
             buf.extend_from_slice(&format.null_bytes);
         } else {
             self.inner
-                .write_field_escaped(row_index, buf, format, quote)
+                .write_field_tsv(row_index, buf, format, in_nested)
         }
     }
 
-    fn write_field_quoted(
+    fn write_field_csv(&self, row_index: usize, buf: &mut Vec<u8>, format: &FormatSettings) {
+        if !self.validity.get_bit(row_index) {
+            buf.extend_from_slice(&format.null_bytes);
+        } else {
+            self.inner.write_field_csv(row_index, buf, format)
+        }
+    }
+
+    fn write_field_json(
         &self,
         row_index: usize,
         buf: &mut Vec<u8>,
         format: &FormatSettings,
-        quote: u8,
+        quote: bool,
     ) {
         if !self.validity.get_bit(row_index) {
             buf.extend_from_slice(&format.null_bytes);
         } else {
-            self.inner.write_field_quoted(row_index, buf, format, quote)
+            self.inner.write_field_json(row_index, buf, format, quote)
         }
     }
 

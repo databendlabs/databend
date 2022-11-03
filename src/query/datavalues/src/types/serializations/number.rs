@@ -44,12 +44,38 @@ impl<'a, T: PrimitiveType> NumberSerializer<'a, T> {
 impl<'a, T> TypeSerializer<'a> for NumberSerializer<'a, T>
 where T: PrimitiveType + Marshal + Unmarshal<T> + lexical_core::ToLexical + PrimitiveWithFormat
 {
-    fn need_quote(&self) -> bool {
-        false
+    fn write_field_values(
+        &self,
+        row_index: usize,
+        buf: &mut Vec<u8>,
+        format: &FormatSettings,
+        _in_nested: bool,
+    ) {
+        self.values[row_index].write_field(buf, format, true)
     }
 
-    fn write_field(&self, row_index: usize, buf: &mut Vec<u8>, format: &FormatSettings) {
-        self.values[row_index].write_field(buf, format)
+    fn write_field_tsv(
+        &self,
+        row_index: usize,
+        buf: &mut Vec<u8>,
+        format: &FormatSettings,
+        _in_nested: bool,
+    ) {
+        self.values[row_index].write_field(buf, format, true)
+    }
+
+    fn write_field_csv(&self, row_index: usize, buf: &mut Vec<u8>, format: &FormatSettings) {
+        self.values[row_index].write_field(buf, format, false)
+    }
+
+    fn write_field_json(
+        &self,
+        row_index: usize,
+        buf: &mut Vec<u8>,
+        format: &FormatSettings,
+        _quote: bool,
+    ) {
+        self.values[row_index].write_field(buf, format, false)
     }
 
     fn serialize_json_values(&self, _format: &FormatSettings) -> Result<Vec<Value>> {
@@ -99,20 +125,28 @@ pub fn extend_lexical<N: lexical_core::ToLexical>(n: N, buf: &mut Vec<u8>) {
 }
 
 trait PrimitiveWithFormat {
-    fn write_field(self, buf: &mut Vec<u8>, _format: &FormatSettings);
+    fn write_field(self, buf: &mut Vec<u8>, format: &FormatSettings, nested: bool);
 }
 
 macro_rules! impl_float {
     ($ty:ident) => {
         impl PrimitiveWithFormat for $ty {
-            fn write_field(self: $ty, buf: &mut Vec<u8>, format: &FormatSettings) {
+            fn write_field(self: $ty, buf: &mut Vec<u8>, format: &FormatSettings, nested: bool) {
                 // todo(youngsofun): output the sign optionally
                 match self.classify() {
                     FpCategory::Nan => {
-                        buf.extend_from_slice(&format.nan_bytes);
+                        buf.extend_from_slice(if nested {
+                            &format.nested.nan_bytes
+                        } else {
+                            &format.nan_bytes
+                        });
                     }
                     FpCategory::Infinite => {
-                        buf.extend_from_slice(&format.inf_bytes);
+                        buf.extend_from_slice(if nested {
+                            &format.nested.inf_bytes
+                        } else {
+                            &format.inf_bytes
+                        });
                     }
                     _ => {
                         extend_lexical(self, buf);
@@ -126,7 +160,7 @@ macro_rules! impl_float {
 macro_rules! impl_int {
     ($ty:ident) => {
         impl PrimitiveWithFormat for $ty {
-            fn write_field(self: $ty, buf: &mut Vec<u8>, _format: &FormatSettings) {
+            fn write_field(self: $ty, buf: &mut Vec<u8>, _format: &FormatSettings, _nested: bool) {
                 extend_lexical(self, buf);
             }
         }

@@ -14,7 +14,6 @@
 
 use std::cmp;
 
-use bytes::BufMut;
 use common_exception::Result;
 
 pub fn convert_byte_size(num: f64) -> String {
@@ -64,13 +63,11 @@ pub fn convert_number_size(num: f64) -> String {
 
 /// bincode seralize_into wrap with optimized config
 #[inline]
-pub fn serialize_into_buf<W: bytes::BufMut, T: serde::Serialize>(
-    buf: &mut W,
+pub fn serialize_into_buf<W: std::io::Write, T: serde::Serialize>(
+    writer: &mut W,
     value: &T,
 ) -> Result<()> {
-    let mut writer = BufMut::writer(buf);
-    bincode::serde::encode_into_std_write(value, &mut writer, bincode::config::standard())?;
-
+    bincode::serde::encode_into_std_write(value, writer, bincode::config::standard())?;
     Ok(())
 }
 

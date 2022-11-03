@@ -18,9 +18,9 @@ output         : 1
 
 ast            : abs(null)
 raw expr       : abs(NULL)
-checked expr   : abs<NULL>(NULL)
+checked expr   : abs<UInt64 NULL>(CAST(NULL AS UInt64 NULL))
 optimized expr : NULL
-output type    : NULL
+output type    : UInt64 NULL
 output domain  : {NULL}
 output         : NULL
 
@@ -67,9 +67,9 @@ output         : -1
 
 ast            : sign(null)
 raw expr       : sign(NULL)
-checked expr   : sign<NULL>(NULL)
+checked expr   : sign<Float64 NULL>(CAST(NULL AS Float64 NULL))
 optimized expr : NULL
-output type    : NULL
+output type    : Int8 NULL
 output domain  : {NULL}
 output         : NULL
 
@@ -161,9 +161,9 @@ output         : 1.5707963267
 
 ast            : atan(null)
 raw expr       : atan(NULL)
-checked expr   : atan<NULL>(NULL)
+checked expr   : atan<Float64 NULL>(CAST(NULL AS Float64 NULL))
 optimized expr : NULL
-output type    : NULL
+output type    : Float64 NULL
 output domain  : {NULL}
 output         : NULL
 

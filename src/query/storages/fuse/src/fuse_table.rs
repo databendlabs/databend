@@ -92,7 +92,7 @@ impl FuseTable {
         let mut operator = match table_info.from_share {
             Some(ref from_share) => create_share_table_operator(
                 ShareTableConfig::share_endpoint_address(),
-                &table_info.tenant,
+                ShareTableConfig::share_endpoint_token(),
                 &from_share.tenant,
                 &from_share.share_name,
                 &table_info.name,
@@ -139,7 +139,7 @@ impl FuseTable {
             .options()
             .get(OPT_KEY_DATABASE_ID)
             .ok_or_else(|| {
-                ErrorCode::LogicalError(format!(
+                ErrorCode::Internal(format!(
                     "Invalid fuse table, table option {} not found",
                     OPT_KEY_DATABASE_ID
                 ))
@@ -191,7 +191,7 @@ impl FuseTable {
 
     pub fn try_from_table(tbl: &dyn Table) -> Result<&FuseTable> {
         tbl.as_any().downcast_ref::<FuseTable>().ok_or_else(|| {
-            ErrorCode::LogicalError(format!(
+            ErrorCode::Internal(format!(
                 "expects table of engine FUSE, but got {}",
                 tbl.engine()
             ))

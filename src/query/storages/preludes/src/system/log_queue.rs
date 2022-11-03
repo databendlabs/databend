@@ -87,9 +87,9 @@ impl<Event: SystemLogElement + 'static> SystemLogQueue<Event> {
                 .read()
                 .get(&TypeId::of::<Self>())
             {
-                None => Err(ErrorCode::LogicalError("")),
+                None => Err(ErrorCode::Internal("")),
                 Some(instance) => match instance.downcast_ref::<Arc<Self>>() {
-                    None => Err(ErrorCode::LogicalError("")),
+                    None => Err(ErrorCode::Internal("")),
                     Some(instant) => Ok(instant.clone()),
                 },
             }

@@ -23,16 +23,18 @@ use common_exception::Result;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::TableCopiedFileInfo;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
+use common_meta_types::StageFile;
 use common_meta_types::UserStageInfo;
 use common_planner::stage_table::StageTableInfo;
 use common_planner::ReadDataSourcePlan;
 use common_planner::SourceInfo;
+use common_storages_preludes::stage::StageTable;
 use regex::Regex;
 
-use super::append2table;
 use crate::catalogs::Catalog;
-use crate::interpreters::interpreter_common::list_files;
-use crate::interpreters::interpreter_common::stat_file;
+use crate::interpreters::common::append2table;
+use crate::interpreters::common::list_files;
+use crate::interpreters::common::stat_file;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreterV2;
 use crate::pipelines::PipelineBuildResult;
@@ -40,7 +42,6 @@ use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::plans::CopyPlanV2;
 use crate::sql::plans::Plan;
-use crate::storages::stage::StageTable;
 
 const MAX_QUERY_COPIED_FILES_NUM: usize = 50;
 const TABLE_COPIED_FILE_KEY_EXPIRE_AFTER_DAYS: Option<u64> = Some(7);
@@ -55,7 +56,7 @@ impl CopyInterpreterV2 {
         Ok(CopyInterpreterV2 { ctx, plan })
     }
 
-    async fn do_query_copied_files_info(
+    async fn get_copied_files_info(
         &self,
         catalog_name: String,
         database_name: String,
@@ -98,14 +99,13 @@ impl CopyInterpreterV2 {
         Ok(())
     }
 
-    async fn filter_duplicate_files(
+    async fn filter_have_copied_files(
         &self,
         force: bool,
-        table_info: &StageTableInfo,
         catalog_name: &str,
         database_name: &str,
         table_name: &str,
-        files: &[String],
+        stage_files: &[StageFile],
     ) -> Result<(u64, BTreeMap<String, TableCopiedFileInfo>)> {
         let catalog = self.ctx.get_catalog(catalog_name)?;
         let tenant = self.ctx.get_tenant();
@@ -118,39 +118,43 @@ impl CopyInterpreterV2 {
 
         if !force {
             // if force is false, copy only the files that unmatch to the meta copied files info.
-            let mut file_info = BTreeMap::new();
-
+            let files = stage_files
+                .iter()
+                .map(|v| v.path.clone())
+                .collect::<Vec<_>>();
+            let mut copied_files = BTreeMap::new();
             for query_copied_files in files.chunks(MAX_QUERY_COPIED_FILES_NUM) {
-                self.do_query_copied_files_info(
+                self.get_copied_files_info(
                     catalog_name.to_string(),
                     database_name.to_string(),
                     table_id,
                     query_copied_files,
-                    &mut file_info,
+                    &mut copied_files,
                 )
                 .await?;
             }
 
-            for file in files.iter() {
-                let stage_file = stat_file(&self.ctx, &table_info.stage_info, file).await?;
-
-                if let Some(file_info) = file_info.get(file) {
-                    match &file_info.etag {
+            for stage_file in stage_files {
+                if let Some(copied_file) = copied_files.get(&stage_file.path) {
+                    match &copied_file.etag {
                         Some(_etag) => {
                             // No need to copy the file again if etag is_some and match.
-                            if stage_file.etag == file_info.etag {
-                                tracing::warn!("ignore copy file {:?} matched by etag", file);
+                            if stage_file.etag == copied_file.etag {
+                                tracing::warn!(
+                                    "ignore copy file {:?} matched by etag",
+                                    copied_file
+                                );
                                 continue;
                             }
                         }
                         None => {
                             // etag is none, compare with content_length and last_modified.
-                            if file_info.content_length == stage_file.size
-                                && file_info.last_modified == Some(stage_file.last_modified)
+                            if copied_file.content_length == stage_file.size
+                                && copied_file.last_modified == Some(stage_file.last_modified)
                             {
                                 tracing::warn!(
                                     "ignore copy file {:?} matched by content_length and last_modified",
-                                    file
+                                    copied_file
                                 );
                                 continue;
                             }
@@ -159,7 +163,7 @@ impl CopyInterpreterV2 {
                 }
 
                 // unmatch case: insert into file map for copy.
-                file_map.insert(file.clone(), TableCopiedFileInfo {
+                file_map.insert(stage_file.path.clone(), TableCopiedFileInfo {
                     etag: stage_file.etag.clone(),
                     content_length: stage_file.size,
                     last_modified: Some(stage_file.last_modified),
@@ -167,10 +171,8 @@ impl CopyInterpreterV2 {
             }
         } else {
             // if force is true, copy all the file.
-            for file in files.iter() {
-                let stage_file = stat_file(&self.ctx, &table_info.stage_info, file).await?;
-
-                file_map.insert(file.clone(), TableCopiedFileInfo {
+            for stage_file in stage_files {
+                file_map.insert(stage_file.path.clone(), TableCopiedFileInfo {
                     etag: stage_file.etag.clone(),
                     content_length: stage_file.size,
                     last_modified: Some(stage_file.last_modified),
@@ -244,7 +246,7 @@ impl CopyInterpreterV2 {
                 }
                 Ok(())
             }
-            other => Err(ErrorCode::LogicalError(format!(
+            other => Err(ErrorCode::Internal(format!(
                 "Cannot list files for the source info: {:?}",
                 other
             ))),
@@ -426,51 +428,47 @@ impl Interpreter for CopyInterpreterV2 {
                 SourceInfo::StageSource(table_info) => {
                     let path = &table_info.path;
 
-                    // Here we add the path to the file: /path/to/path/file1.
-                    let mut files = if !files.is_empty() {
-                        let mut files_with_path = vec![];
-                        for file in files {
-                            let new_path = Path::new(path).join(file);
-                            files_with_path.push(new_path.to_string_lossy().to_string());
-                        }
-                        files_with_path
-                    } else {
-                        let stage_files =
-                            list_files(&self.ctx.clone(), &table_info.stage_info, path).await?;
+                    let mut stage_files = if !files.is_empty() {
+                        let mut res = vec![];
 
-                        // TODO(@xuanwo): Reuse existing metadata in StageFile.
-                        stage_files.into_iter().map(|v| v.path).collect()
+                        for file in files {
+                            // Here we add the path to the file: /path/to/path/file1.
+                            let new_path = Path::new(path).join(file).to_string_lossy().to_string();
+                            let info =
+                                stat_file(&self.ctx, &table_info.stage_info, &new_path).await?;
+                            res.push(info);
+                        }
+                        res
+                    } else {
+                        list_files(&self.ctx.clone(), &table_info.stage_info, path).await?
                     };
 
-                    tracing::info!("listed files: {:?}", &files);
-
                     // Pattern match check.
-                    let pattern = &pattern;
-                    if !pattern.is_empty() {
-                        let regex = Regex::new(pattern).map_err(|e| {
-                            ErrorCode::SyntaxException(format!(
-                                "Pattern format invalid, got:{}, error:{:?}",
-                                pattern, e
-                            ))
-                        })?;
-
-                        files.retain(|file| regex.is_match(file));
+                    {
+                        let pattern = &pattern;
+                        if !pattern.is_empty() {
+                            let regex = Regex::new(pattern).map_err(|e| {
+                                ErrorCode::SyntaxException(format!(
+                                    "Pattern format invalid, got:{}, error:{:?}",
+                                    pattern, e
+                                ))
+                            })?;
+                            stage_files.retain(|v| regex.is_match(&v.path));
+                        }
+                        tracing::debug!("matched files: {:?}, pattern: {}", stage_files, pattern);
                     }
 
-                    tracing::info!("matched files: {:?}, pattern: {}", &files, pattern);
-
                     let (table_id, copy_stage_files) = self
-                        .filter_duplicate_files(
+                        .filter_have_copied_files(
                             *force,
-                            table_info,
                             catalog_name,
                             database_name,
                             table_name,
-                            &files,
+                            &stage_files,
                         )
                         .await?;
 
-                    tracing::info!(
+                    tracing::debug!(
                         "matched copy unduplicate files: {:?}",
                         &copy_stage_files.keys(),
                     );
@@ -489,7 +487,7 @@ impl Interpreter for CopyInterpreterV2 {
                     )
                     .await
                 }
-                other => Err(ErrorCode::LogicalError(format!(
+                other => Err(ErrorCode::Internal(format!(
                     "Cannot list files for the source info: {:?}",
                     other
                 ))),

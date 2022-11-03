@@ -160,7 +160,7 @@ INSERT INTO xyzw VALUES (4, 5, 6, 7), (1, 2, 3, 4);
 statement error 1007
 SELECT * FROM xyzw LIMIT x;
 
-statement error 1015
+statement error 1065
 SELECT * FROM xyzw OFFSET 1 + y;
 
 statement error 1007
@@ -175,7 +175,7 @@ SELECT * FROM xyzw OFFSET 1.5;
 statement error 1007
 SELECT * FROM xyzw LIMIT -100;
 
-statement error 1015
+statement error 1065
 SELECT * FROM xyzw OFFSET -100;
 
 statement query IIII
@@ -188,7 +188,7 @@ SELECT * FROM xyzw LIMIT 9223372036854775808;
 statement ok
 SELECT * FROM xyzw OFFSET 9223372036854775808;
 
-statement error 1015
+statement error 1065
 SELECT * FROM xyzw ORDER BY x OFFSET 1 + 0.0;
 
 statement query T
@@ -562,4 +562,3 @@ SELECT * FROM wide;
 
 ----
 0 0  0   0     0 0.0 0.0 10
-

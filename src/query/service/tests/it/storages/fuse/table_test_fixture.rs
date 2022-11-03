@@ -30,10 +30,11 @@ use common_storage::StorageParams;
 use common_storages_fuse::FUSE_TBL_XOR_BLOOM_INDEX_PREFIX;
 use common_streams::SendableDataBlockStream;
 use databend_query::interpreters::append2table;
-use databend_query::interpreters::execute_pipeline;
 use databend_query::interpreters::CreateTableInterpreterV2;
 use databend_query::interpreters::Interpreter;
 use databend_query::interpreters::InterpreterFactory;
+use databend_query::pipelines::executor::ExecutorSettings;
+use databend_query::pipelines::executor::PipelineCompleteExecutor;
 use databend_query::pipelines::processors::BlocksSource;
 use databend_query::pipelines::PipelineBuildResult;
 use databend_query::sessions::QueryContext;
@@ -413,6 +414,16 @@ pub async fn execute_query(ctx: Arc<QueryContext>, query: &str) -> Result<Sendab
     let (plan, _, _) = planner.plan_sql(query).await?;
     let executor = InterpreterFactory::get(ctx.clone(), &plan).await?;
     executor.execute(ctx.clone()).await
+}
+
+pub fn execute_pipeline(ctx: Arc<QueryContext>, mut res: PipelineBuildResult) -> Result<()> {
+    let executor_settings = ExecutorSettings::try_create(&ctx.get_settings())?;
+    res.set_max_threads(ctx.get_settings().get_max_threads()? as usize);
+    let mut pipelines = res.sources_pipelines;
+    pipelines.push(res.main_pipeline);
+    let executor = PipelineCompleteExecutor::from_pipelines(pipelines, executor_settings)?;
+    ctx.set_executor(Arc::downgrade(&executor.get_inner()));
+    executor.execute()
 }
 
 pub async fn execute_command(ctx: Arc<QueryContext>, query: &str) -> Result<()> {

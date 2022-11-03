@@ -15,6 +15,7 @@
 use std::collections::BTreeMap;
 use std::time::Duration;
 
+use common_meta_app::schema::CatalogType;
 use common_meta_app::share::ShareGrantObjectName;
 use common_meta_app::share::ShareGrantObjectPrivilege;
 use common_meta_app::share::ShareNameIdent;
@@ -175,6 +176,48 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         |(_, opt_is_default, _, role_name)| Statement::SetRole {
             is_default: opt_is_default.is_some(),
             role_name,
+        },
+    );
+
+    // catalogs
+    let show_catalogs = map(
+        rule! {
+            SHOW ~ CATALOGS ~ #show_limit?
+        },
+        |(_, _, limit)| Statement::ShowCatalogs(ShowCatalogsStmt { limit }),
+    );
+    let show_create_catalog = map(
+        rule! {
+            SHOW ~ CREATE ~ CATALOG ~ #ident
+        },
+        |(_, _, _, catalog)| Statement::ShowCreateCatalog(ShowCreateCatalogStmt { catalog }),
+    );
+    // TODO: support `COMMENT` in create catalog
+    let create_catalog = map(
+        rule! {
+            CREATE ~ CATALOG ~ ( IF ~ NOT ~ EXISTS )?
+            ~ #ident
+            ~ TYPE ~ "=" ~ #catalog_type
+            ~ CONNECTION ~ "=" ~ #options
+        },
+        |(_, _, opt_if_not_exists, catalog, _, _, ty, _, _, options)| {
+            Statement::CreateCatalog(CreateCatalogStmt {
+                if_not_exists: opt_if_not_exists.is_some(),
+                catalog_name: catalog.to_string(),
+                catalog_type: ty,
+                options,
+            })
+        },
+    );
+    let drop_catalog = map(
+        rule! {
+            DROP ~ CATALOG ~ ( IF ~ EXISTS )? ~ #ident
+        },
+        |(_, _, opt_if_exists, catalog)| {
+            Statement::DropCatalog(DropCatalogStmt {
+                if_exists: opt_if_exists.is_some(),
+                catalog,
+            })
         },
     );
 
@@ -686,7 +729,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     let create_stage = map_res(
         rule! {
             CREATE ~ STAGE ~ ( IF ~ NOT ~ EXISTS )?
-            ~ #ident
+            ~ ( #stage_name )
             ~ ( URL ~ "=" ~ #uri_location)?
             ~ ( FILE_FORMAT ~ "=" ~ #options)?
             ~ ( ON_ERROR ~ "=" ~ #ident)?
@@ -745,7 +788,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
 
     let drop_stage = map(
         rule! {
-            DROP ~ STAGE ~ ( IF ~ EXISTS )? ~ #ident
+            DROP ~ STAGE ~ ( IF ~ EXISTS )? ~ #stage_name
         },
         |(_, _, opt_if_exists, stage_name)| Statement::DropStage {
             if_exists: opt_if_exists.is_some(),
@@ -954,7 +997,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             | #alter_udf : "`ALTER FUNCTION <udf_name> (<parameter>, ...) -> <definition_expr> [DESC = <description>]`"
         ),
         rule!(
-            #create_stage: "`CREATE STAGE [ IF NOT EXISTS ] <internal_stage_name>
+            #create_stage: "`CREATE STAGE [ IF NOT EXISTS ] <stage_name>
                 [ FILE_FORMAT = ( { TYPE = { CSV | PARQUET } [ formatTypeOptions ] ) } ]
                 [ COPY_OPTIONS = ( copyOptions ) ]
                 [ COMMENT = '<string_literal>' ]`"
@@ -993,6 +1036,13 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             | #alter_share_tenants: "`ALTER SHARE [IF EXISTS] <share_name> { ADD | REMOVE } TENANTS = tenant [, tenant, ...]`"
             | #desc_share: "`{DESC | DESCRIBE} SHARE <share_name>`"
             | #show_shares: "`SHOW SHARES`"
+        ),
+        // catalog
+        rule!(
+         #show_catalogs : "`SHOW CATALOGS [<show_limit>]`"
+        | #show_create_catalog : "`SHOW CREATE CATALOG <catalog>`"
+        | #create_catalog: "`CREATE CATALOG [IF NOT EXISITS] <catalog> TYPE=<catalog_type> CONNECTION=<catalog_options>`"
+        | #drop_catalog: "`DROP CATALOG [IF EXISTS] <catalog>`"
         ),
     ));
 
@@ -1571,6 +1621,14 @@ pub fn create_database_option(i: Input) -> IResult<CreateDatabaseOption> {
         },
         |(_, _, option)| option,
     )(i)
+}
+
+pub fn catalog_type(i: Input) -> IResult<CatalogType> {
+    let catalog_type = alt((
+        value(CatalogType::Default, rule! {DEFAULT}),
+        value(CatalogType::Hive, rule! {HIVE}),
+    ));
+    map(rule! { ^#catalog_type }, |catalog_type| catalog_type)(i)
 }
 
 pub fn user_option(i: Input) -> IResult<UserOptionItem> {

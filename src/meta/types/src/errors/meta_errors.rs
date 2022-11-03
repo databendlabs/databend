@@ -18,6 +18,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use thiserror::Error;
 
+use crate::InvalidReply;
 use crate::MetaAPIError;
 use crate::MetaClientError;
 use crate::MetaNetworkError;
@@ -56,5 +57,12 @@ impl From<tonic::Status> for MetaError {
     fn from(status: tonic::Status) -> Self {
         let net_err = MetaNetworkError::from(status);
         MetaError::NetworkError(net_err)
+    }
+}
+
+impl From<InvalidReply> for MetaError {
+    fn from(e: InvalidReply) -> Self {
+        let api_err = MetaAPIError::from(e);
+        Self::APIError(api_err)
     }
 }

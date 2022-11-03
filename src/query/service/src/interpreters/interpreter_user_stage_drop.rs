@@ -14,9 +14,11 @@
 
 use std::sync::Arc;
 
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::StageType;
 use common_planner::plans::DropStagePlan;
+use common_storages_preludes::stage::StageTable;
 use common_users::UserApiProvider;
 use tracing::info;
 
@@ -24,7 +26,6 @@ use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
-use crate::storages::stage::StageTable;
 
 #[derive(Debug)]
 pub struct DropUserStageInterpreter {
@@ -49,6 +50,13 @@ impl Interpreter for DropUserStageInterpreter {
         let plan = self.plan.clone();
         let tenant = self.ctx.get_tenant();
         let user_mgr = UserApiProvider::instance();
+
+        // Check user stage.
+        if plan.name == "~" {
+            return Err(ErrorCode::StagePermissionDenied(
+                "user stage is not allowed to be dropped",
+            ));
+        }
 
         let stage = user_mgr.get_stage(&tenant, &plan.name).await;
         user_mgr

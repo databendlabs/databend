@@ -24,6 +24,8 @@ use common_base::base::Progress;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_formats::ClickhouseFormatType;
+use common_formats::FileFormatTypeExt;
 use common_io::prelude::FormatSettings;
 use common_meta_types::StageFileCompression;
 use common_meta_types::StageFileFormatType;
@@ -37,6 +39,7 @@ use crate::processors::sources::input_formats::impls::input_format_csv::InputFor
 use crate::processors::sources::input_formats::impls::input_format_ndjson::InputFormatNDJson;
 use crate::processors::sources::input_formats::impls::input_format_parquet::InputFormatParquet;
 use crate::processors::sources::input_formats::impls::input_format_tsv::InputFormatTSV;
+use crate::processors::sources::input_formats::impls::input_format_xml::InputFormatXML;
 use crate::processors::sources::input_formats::input_format_text::InputFormatText;
 use crate::processors::sources::input_formats::input_pipeline::StreamingReadBatch;
 use crate::processors::sources::input_formats::input_split::SplitInfo;
@@ -55,7 +58,7 @@ impl InputPlan {
     pub fn as_stream(&self) -> Result<&StreamPlan> {
         match self {
             InputPlan::StreamingLoad(p) => Ok(p),
-            _ => Err(ErrorCode::UnexpectedError("expect StreamingLoad")),
+            _ => Err(ErrorCode::Internal("expect StreamingLoad")),
         }
     }
 }
@@ -81,7 +84,7 @@ pub enum InputSource {
 impl InputSource {
     pub fn take_receiver(&self) -> Result<Receiver<Result<StreamingReadBatch>>> {
         match &self {
-            InputSource::Operator(_) => Err(ErrorCode::UnexpectedError(
+            InputSource::Operator(_) => Err(ErrorCode::Internal(
                 "should not happen: copy with streaming source",
             )),
             InputSource::Stream(i) => {
@@ -96,7 +99,7 @@ impl InputSource {
     pub fn get_operator(&self) -> Result<Operator> {
         match self {
             InputSource::Operator(op) => Ok(op.clone()),
-            InputSource::Stream(_) => Err(ErrorCode::UnexpectedError(
+            InputSource::Stream(_) => Err(ErrorCode::Internal(
                 "should not happen: copy with streaming source",
             )),
         }
@@ -150,7 +153,8 @@ impl InputContext {
                 Ok(Arc::new(InputFormatText::<InputFormatNDJson>::create()))
             }
             StageFileFormatType::Parquet => Ok(Arc::new(InputFormatParquet {})),
-            format => Err(ErrorCode::LogicalError(format!(
+            StageFileFormatType::Xml => Ok(Arc::new(InputFormatText::<InputFormatXML>::create())),
+            format => Err(ErrorCode::Internal(format!(
                 "Unsupported file format: {:?}",
                 format
             ))),
@@ -171,28 +175,32 @@ impl InputContext {
         let plan = Box::new(CopyIntoPlan { stage_info, files });
         let read_batch_size = settings.get_input_read_buffer_size()? as usize;
         let file_format_options = &plan.stage_info.file_format_options;
-        let format = Self::get_input_format(&file_format_options.format)?;
+        let format_typ = file_format_options.format.clone();
+        let file_format_options =
+            StageFileFormatType::get_ext_from_stage(file_format_options.clone());
+        let file_format_options = format_typ.final_file_format_options(&file_format_options)?;
+
+        let format = Self::get_input_format(&format_typ)?;
         let splits = format
             .get_splits(&plan, &operator, &settings, &schema)
             .await?;
         let rows_per_block = MIN_ROW_PER_BLOCK;
         let record_delimiter = {
-            if file_format_options.record_delimiter.is_empty() {
+            if file_format_options.stage.record_delimiter.is_empty() {
                 format.default_record_delimiter()
             } else {
-                RecordDelimiter::try_from(file_format_options.record_delimiter.as_str())?
+                RecordDelimiter::try_from(file_format_options.stage.record_delimiter.as_str())?
             }
         };
 
-        let format_settings =
-            format.get_format_settings_from_options(&settings, file_format_options)?;
+        let format_settings = format_typ.get_format_settings(&file_format_options, &settings)?;
 
-        let rows_to_skip = file_format_options.skip_header as usize;
+        let rows_to_skip = file_format_options.stage.skip_header as usize;
         let field_delimiter = {
-            if file_format_options.field_delimiter.is_empty() {
+            if file_format_options.stage.field_delimiter.is_empty() {
                 format.default_field_delimiter()
             } else {
-                file_format_options.field_delimiter.as_bytes()[0]
+                file_format_options.stage.field_delimiter.as_bytes()[0]
             }
         };
 
@@ -225,13 +233,24 @@ impl InputContext {
         let (format_name, rows_to_skip) = remove_clickhouse_format_suffix(format_name);
         let rows_to_skip = std::cmp::max(settings.get_format_skip_header()? as usize, rows_to_skip);
 
-        let format_type =
-            StageFileFormatType::from_str(format_name).map_err(ErrorCode::UnknownFormat)?;
+        let file_format_options = if is_multi_part {
+            let format_type =
+                StageFileFormatType::from_str(format_name).map_err(ErrorCode::UnknownFormat)?;
+            format_type.get_file_format_options_from_setting(&settings, None)
+        } else {
+            // clickhouse
+            let typ = ClickhouseFormatType::parse_clickhouse_format(format_name)?;
+            typ.typ
+                .get_file_format_options_from_setting(&settings, Some(typ.suffixes))
+        }?;
+        let format_type = file_format_options.stage.format.clone();
+
+        let file_format_options = format_type.final_file_format_options(&file_format_options)?;
         let format = Self::get_input_format(&format_type)?;
-        let format_settings = format.get_format_settings_from_settings(&settings)?;
+        let format_settings = format_type.get_format_settings(&file_format_options, &settings)?;
         let read_batch_size = settings.get_input_read_buffer_size()? as usize;
         let rows_per_block = MIN_ROW_PER_BLOCK;
-        let field_delimiter = settings.get_format_field_delimiter()?;
+        let field_delimiter = file_format_options.stage.field_delimiter;
         let field_delimiter = {
             if field_delimiter.is_empty() {
                 format.default_field_delimiter()
@@ -240,7 +259,7 @@ impl InputContext {
             }
         };
         let record_delimiter =
-            RecordDelimiter::try_from(&settings.get_format_record_delimiter()?[..])?;
+            RecordDelimiter::try_from(file_format_options.stage.record_delimiter.as_bytes())?;
         let compression = settings.get_format_compression()?;
         let compression = if !compression.is_empty() {
             StageFileCompression::from_str(&compression).map_err(ErrorCode::BadArguments)?
@@ -300,10 +319,12 @@ impl InputContext {
             StageFileCompression::RawDeflate => Some(CompressAlgorithm::Deflate),
             StageFileCompression::Xz => Some(CompressAlgorithm::Xz),
             StageFileCompression::Lzo => {
-                return Err(ErrorCode::UnImplement("compress type lzo is unimplemented"));
+                return Err(ErrorCode::Unimplemented(
+                    "compress type lzo is unimplemented",
+                ));
             }
             StageFileCompression::Snappy => {
-                return Err(ErrorCode::UnImplement(
+                return Err(ErrorCode::Unimplemented(
                     "compress type snappy is unimplemented",
                 ));
             }

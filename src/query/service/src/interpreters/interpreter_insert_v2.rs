@@ -39,8 +39,8 @@ use common_sql::MetadataRef;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 
-use super::interpreter_common::append2table;
 use super::plan_schedulers::build_schedule_pipeline;
+use crate::interpreters::common::append2table;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::pipelines::PipelineBuildResult;
@@ -530,14 +530,9 @@ async fn exprs_to_datavalue<'a>(
     metadata: MetadataRef,
 ) -> Result<Vec<DataValue>> {
     let schema_fields_len = schema.fields().len();
-    if exprs.len() > schema_fields_len {
-        return Err(ErrorCode::LogicalError(
-            "Column count shouldn't be more than the number of schema",
-        ));
-    }
-    if exprs.len() < schema_fields_len {
-        return Err(ErrorCode::LogicalError(
-            "Column count doesn't match value count",
+    if exprs.len() != schema_fields_len {
+        return Err(ErrorCode::TableSchemaMismatch(
+            "Table columns count is not match, expect {schema_fields_len}, input: {exprs.len()}",
         ));
     }
     let mut operators = Vec::with_capacity(schema_fields_len);

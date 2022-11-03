@@ -20,6 +20,9 @@ use serde_json;
 use serde_json::Value;
 
 use crate::prelude::*;
+use crate::serializations::write_csv_string;
+use crate::serializations::write_escaped_string;
+use crate::serializations::write_json_string;
 
 #[derive(Debug, Clone)]
 pub struct VariantSerializer<'a> {
@@ -35,12 +38,51 @@ impl<'a> VariantSerializer<'a> {
 }
 
 impl<'a> TypeSerializer<'a> for VariantSerializer<'a> {
-    fn write_field(&self, row_index: usize, buf: &mut Vec<u8>, _format: &FormatSettings) {
+    fn write_field_values(
+        &self,
+        row_index: usize,
+        buf: &mut Vec<u8>,
+        _format: &FormatSettings,
+        _in_nested: bool,
+    ) {
         buf.extend_from_slice(self.values[row_index].to_string().as_bytes());
     }
 
-    fn serialize_field(&self, row_index: usize, _format: &FormatSettings) -> Result<String> {
+    fn to_string_values(&self, row_index: usize, _format: &FormatSettings) -> Result<String> {
         Ok(self.values[row_index].to_string())
+    }
+
+    fn write_field_csv(&self, row_index: usize, buf: &mut Vec<u8>, format: &FormatSettings) {
+        let v = self.to_vec_values(row_index, format);
+        write_csv_string(&v, buf, format.quote_char);
+    }
+
+    fn write_field_tsv(
+        &self,
+        row_index: usize,
+        buf: &mut Vec<u8>,
+        format: &FormatSettings,
+        _in_nested: bool,
+    ) {
+        let v = self.to_vec_values(row_index, format);
+        write_escaped_string(&v, buf, format.quote_char);
+    }
+
+    fn write_field_json(
+        &self,
+        row_index: usize,
+        buf: &mut Vec<u8>,
+        format: &FormatSettings,
+        quote: bool,
+    ) {
+        let v = self.to_vec_values(row_index, format);
+        if quote {
+            buf.push(b'\"');
+        }
+        write_json_string(&v, buf, format);
+        if quote {
+            buf.push(b'\"');
+        }
     }
 
     fn serialize_json_values(&self, _format: &FormatSettings) -> Result<Vec<Value>> {
