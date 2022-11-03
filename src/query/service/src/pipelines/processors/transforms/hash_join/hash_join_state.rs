@@ -52,4 +52,7 @@ pub trait HashJoinState: Send + Sync {
 
     /// Get right semi/anti join results
     fn right_semi_join_blocks(&self, blocks: &[DataBlock]) -> Result<Vec<DataBlock>>;
+
+    /// Get left join results
+    fn left_join_blocks(&self, blocks: &[DataBlock]) -> Result<Vec<DataBlock>>;
 }

@@ -14,17 +14,11 @@
 
 pub use common_storages_fuse as fuse;
 pub use common_storages_index as index;
-pub mod result;
 mod storage_factory;
 
 pub use common_catalog::table::NavigationPoint;
 pub use common_catalog::table::Table;
 pub use common_catalog::table::TableStatistics;
-pub use common_storages_preludes::information_schema;
-pub use common_storages_preludes::memory;
-pub use common_storages_preludes::null;
-pub use common_storages_preludes::random;
-pub use common_storages_preludes::view;
 pub use storage_factory::StorageCreator;
 pub use storage_factory::StorageDescription;
 pub use storage_factory::StorageFactory;

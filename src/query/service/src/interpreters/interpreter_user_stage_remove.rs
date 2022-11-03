@@ -18,7 +18,7 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planner::plans::RemoveStagePlan;
-use common_storages_preludes::stage::StageTable;
+use common_storages_stage::StageTable;
 use regex::Regex;
 
 use crate::interpreters::common::list_files;

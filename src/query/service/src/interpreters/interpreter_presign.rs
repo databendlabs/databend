@@ -18,7 +18,7 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_storages_preludes::stage::StageTable;
+use common_storages_stage::StageTable;
 use serde_json::Value;
 
 use crate::interpreters::Interpreter;
