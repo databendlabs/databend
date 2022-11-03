@@ -49,7 +49,7 @@ impl JoinHashTable {
         let mut local_probe_indexes = Vec::with_capacity(block_size);
         let mut local_build_indexes = Vec::with_capacity(block_size);
         let mut validity = MutableBitmap::with_capacity(block_size);
-        let mut build_indexes = self.hash_join_desc.right_join_desc.build_indexes.write();
+        let mut build_indexes = self.hash_join_desc.join_state.build_indexes.write();
         for (i, key) in keys_iter.enumerate() {
             let probe_result_ptr = self.probe_key(hash_table, key, valids, i);
 
@@ -137,16 +137,8 @@ impl JoinHashTable {
             probe_block = DataBlock::create(self.probe_schema.clone(), nullable_columns);
         }
 
-        let mut rest_build_indexes = self
-            .hash_join_desc
-            .right_join_desc
-            .rest_build_indexes
-            .write();
-        let mut rest_probe_blocks = self
-            .hash_join_desc
-            .right_join_desc
-            .rest_probe_blocks
-            .write();
+        let mut rest_build_indexes = self.hash_join_desc.join_state.rest_build_indexes.write();
+        let mut rest_probe_blocks = self.hash_join_desc.join_state.rest_probe_blocks.write();
         rest_probe_blocks.push(probe_block);
         rest_build_indexes.extend(local_build_indexes);
 

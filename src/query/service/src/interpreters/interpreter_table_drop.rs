@@ -18,12 +18,12 @@ use common_catalog::table::TableExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planner::plans::DropTablePlan;
+use common_storages_view::view_table::VIEW_ENGINE;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
-use crate::storages::view::view_table::VIEW_ENGINE;
 
 pub struct DropTableInterpreter {
     ctx: Arc<QueryContext>,

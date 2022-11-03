@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_arrow::arrow::bitmap::MutableBitmap;
 use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
 use common_exception::Result;
@@ -41,21 +42,23 @@ pub struct MarkJoinDesc {
     pub(crate) has_null: RwLock<bool>,
 }
 
-pub struct RightJoinDesc {
+pub struct JoinState {
     /// Record rows in build side that are matched with rows in probe side.
     /// It's order-sensitive, aligned with the order of rows in merged block.
     pub(crate) build_indexes: RwLock<Vec<RowPtr>>,
     pub(crate) rest_build_indexes: RwLock<Vec<RowPtr>>,
     pub(crate) rest_probe_blocks: RwLock<Vec<DataBlock>>,
+    pub(crate) validity: RwLock<MutableBitmap>,
 }
 
-impl RightJoinDesc {
+impl JoinState {
     pub fn create(ctx: Arc<QueryContext>) -> Result<Self> {
         let max_block_size = ctx.get_settings().get_max_block_size()? as usize;
-        Ok(RightJoinDesc {
+        Ok(JoinState {
             build_indexes: RwLock::new(Vec::with_capacity(max_block_size)),
             rest_build_indexes: RwLock::new(Vec::with_capacity(max_block_size)),
             rest_probe_blocks: RwLock::new(Vec::with_capacity(max_block_size)),
+            validity: RwLock::new(MutableBitmap::with_capacity(max_block_size)),
         })
     }
 }
@@ -68,7 +71,7 @@ pub struct HashJoinDesc {
     pub(crate) marker_join_desc: MarkJoinDesc,
     /// Whether the Join are derived from correlated subquery.
     pub(crate) from_correlated_subquery: bool,
-    pub(crate) right_join_desc: RightJoinDesc,
+    pub(crate) join_state: JoinState,
 }
 
 impl HashJoinDesc {
@@ -88,7 +91,7 @@ impl HashJoinDesc {
                 marker_index: join.marker_index,
             },
             from_correlated_subquery: join.from_correlated_subquery,
-            right_join_desc: RightJoinDesc::create(ctx)?,
+            join_state: JoinState::create(ctx)?,
         })
     }
 

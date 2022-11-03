@@ -17,6 +17,7 @@ use std::str::FromStr;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_meta_types::StageFileFormatType;
+use common_storages_fuse_result::ResultTable;
 use poem::error::Error as PoemError;
 use poem::error::InternalServerError;
 use poem::error::NotFound;
@@ -47,8 +48,6 @@ use crate::servers::http::v1::HttpSessionConf;
 use crate::servers::http::v1::JsonBlock;
 use crate::sessions::QueryAffect;
 use crate::sessions::SessionType;
-use crate::storages::result::ResultTable;
-
 const HEADER_QUERY_ID: &str = "X-DATABEND-QUERY-ID";
 const HEADER_QUERY_STATE: &str = "X-DATABEND-QUERY-STATE";
 
