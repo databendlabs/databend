@@ -1497,23 +1497,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "common-fuse-meta"
-version = "0.1.0"
-dependencies = [
- "common-arrow",
- "common-base",
- "common-cache",
- "common-config",
- "common-datablocks",
- "common-datavalues",
- "common-exception",
- "common-metrics",
- "once_cell",
- "parking_lot 0.12.1",
- "serde",
-]
-
-[[package]]
 name = "common-grpc"
 version = "0.1.0"
 dependencies = [
@@ -1997,7 +1980,6 @@ dependencies = [
  "common-exception",
  "common-formats",
  "common-functions",
- "common-fuse-meta",
  "common-grpc",
  "common-hive-meta-store",
  "common-http",
@@ -2015,6 +1997,7 @@ dependencies = [
  "common-settings",
  "common-storage",
  "common-storages-constants",
+ "common-storages-fuse-meta",
  "common-storages-view",
  "common-tracing",
  "common-users",
@@ -2076,7 +2059,7 @@ dependencies = [
  "common-arrow",
  "common-cache",
  "common-exception",
- "common-fuse-meta",
+ "common-storages-fuse-meta",
  "opendal",
 ]
 
@@ -2120,7 +2103,6 @@ dependencies = [
  "common-datavalues",
  "common-exception",
  "common-functions",
- "common-fuse-meta",
  "common-meta-app",
  "common-meta-types",
  "common-pipeline-core",
@@ -2132,6 +2114,7 @@ dependencies = [
  "common-storage",
  "common-storages-cache",
  "common-storages-constants",
+ "common-storages-fuse-meta",
  "common-storages-index",
  "futures",
  "futures-util",
@@ -2146,6 +2129,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-storages-fuse-meta"
+version = "0.1.0"
+dependencies = [
+ "common-arrow",
+ "common-base",
+ "common-cache",
+ "common-config",
+ "common-datablocks",
+ "common-datavalues",
+ "common-exception",
+ "common-metrics",
+ "once_cell",
+ "parking_lot 0.12.1",
+ "serde",
+]
+
+[[package]]
 name = "common-storages-fuse-result"
 version = "0.1.0"
 dependencies = [
@@ -2153,14 +2153,12 @@ dependencies = [
  "backon",
  "chrono",
  "common-base",
- "common-building",
  "common-catalog",
  "common-datablocks",
  "common-datavalues",
  "common-exception",
  "common-formats",
  "common-functions",
- "common-fuse-meta",
  "common-meta-app",
  "common-meta-types",
  "common-metrics",
@@ -2171,6 +2169,7 @@ dependencies = [
  "common-planner",
  "common-storage",
  "common-storages-fuse",
+ "common-storages-fuse-meta",
  "common-storages-view",
  "common-streams",
  "common-users",
@@ -2201,7 +2200,6 @@ dependencies = [
  "common-datablocks",
  "common-datavalues",
  "common-exception",
- "common-fuse-meta",
  "common-hive-meta-store",
  "common-meta-app",
  "common-meta-types",
@@ -2210,6 +2208,7 @@ dependencies = [
  "common-planner",
  "common-storage",
  "common-storages-cache",
+ "common-storages-fuse-meta",
  "common-storages-index",
  "futures",
  "opendal",
@@ -2230,9 +2229,9 @@ dependencies = [
  "common-datavalues",
  "common-exception",
  "common-functions",
- "common-fuse-meta",
  "common-planner",
  "common-sql",
+ "common-storages-fuse-meta",
  "criterion",
  "rand 0.8.5",
  "serde",
@@ -3106,7 +3105,6 @@ dependencies = [
  "common-exception",
  "common-formats",
  "common-functions",
- "common-fuse-meta",
  "common-grpc",
  "common-hashtable",
  "common-hive-meta-store",
@@ -3131,6 +3129,7 @@ dependencies = [
  "common-storages-constants",
  "common-storages-factory",
  "common-storages-fuse",
+ "common-storages-fuse-meta",
  "common-storages-fuse-result",
  "common-storages-hive",
  "common-storages-index",

@@ -16,8 +16,8 @@ use std::sync::Arc;
 
 use common_cache::Cache;
 use common_exception::Result;
-use common_fuse_meta::caches::CacheDeferMetrics;
-use common_fuse_meta::caches::LabeledItemCache;
+use common_storages_fuse_meta::caches::CacheDeferMetrics;
+use common_storages_fuse_meta::caches::LabeledItemCache;
 
 /// Loads an object from a source
 #[async_trait::async_trait]
