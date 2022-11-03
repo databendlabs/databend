@@ -97,7 +97,7 @@ fn create_table(results: &[DataBlock]) -> Result<Table> {
             for col in 0..batch.num_columns() {
                 let column = batch.column(col);
                 let str = column.get_checked(row)?.to_string();
-                cells.push(Cell::new(&str));
+                cells.push(Cell::new(str));
             }
             table.add_row(cells);
         }
