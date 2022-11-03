@@ -228,7 +228,7 @@ impl SnapshotsIO {
             None => file_list.into_iter().map(|v| v.0).collect::<Vec<String>>(),
             Some(v) => file_list
                 .into_iter()
-                .take(v as usize)
+                .take(v)
                 .map(|v| v.0)
                 .collect::<Vec<String>>(),
         })

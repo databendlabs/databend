@@ -58,11 +58,11 @@ pub fn get_commit_authors(repo: &Repository) -> Result<String> {
     }
 
     let result = authors
-        .iter()
-        .map(|(_, name)| (name, 1))
+        .values()
+        .map(|name| (name, 1))
         .collect::<BTreeMap<&String, u8>>()
-        .iter()
-        .map(|(name, _)| name.as_str())
+        .keys()
+        .map(|name| name.as_str())
         .collect::<Vec<&str>>()
         .join(", ");
 

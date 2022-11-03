@@ -26,7 +26,7 @@ impl FederatedHelper {
         rules: Vec<(&str, Option<DataBlock>)>,
     ) -> Option<DataBlock> {
         let regex_rules = rules.iter().map(|x| x.0).collect::<Vec<_>>();
-        let regex_set = RegexSet::new(&regex_rules).unwrap();
+        let regex_set = RegexSet::new(regex_rules).unwrap();
         let matches = regex_set.matches(query.as_ref());
         for (index, (_regex, data_block)) in rules.iter().enumerate() {
             if matches.matched(index) {
@@ -45,7 +45,7 @@ impl FederatedHelper {
         rules: Vec<(&str, LazyBlockFunc)>,
     ) -> Option<DataBlock> {
         let regex_rules = rules.iter().map(|x| x.0).collect::<Vec<_>>();
-        let regex_set = RegexSet::new(&regex_rules).unwrap();
+        let regex_set = RegexSet::new(regex_rules).unwrap();
         let matches = regex_set.matches(query.as_ref());
         for (index, (_regex, func)) in rules.iter().enumerate() {
             if matches.matched(index) {

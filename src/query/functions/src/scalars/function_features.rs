@@ -38,8 +38,8 @@ pub struct FunctionFeatures {
     pub variadic_arguments: Option<(usize, usize)>,
 }
 
-impl FunctionFeatures {
-    pub fn default() -> FunctionFeatures {
+impl Default for FunctionFeatures {
+    fn default() -> FunctionFeatures {
         FunctionFeatures {
             is_deterministic: false,
             negative_function_name: None,
@@ -50,7 +50,9 @@ impl FunctionFeatures {
             variadic_arguments: None,
         }
     }
+}
 
+impl FunctionFeatures {
     pub fn deterministic(mut self) -> FunctionFeatures {
         self.is_deterministic = true;
         self

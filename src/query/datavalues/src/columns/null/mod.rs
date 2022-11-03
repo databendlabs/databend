@@ -118,7 +118,7 @@ impl Column for NullColumn {
         );
 
         Arc::new(Self {
-            length: *offsets.last().unwrap() as usize,
+            length: *offsets.last().unwrap(),
         })
     }
 
