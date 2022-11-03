@@ -94,6 +94,7 @@ level = "INFO"
 format = "text"
 
 [meta]
+type = "fallback"
 embedded_dir = "./.databend/meta_embedded"
 address = ""
 endpoints = []

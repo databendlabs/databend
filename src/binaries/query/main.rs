@@ -47,7 +47,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
     init_default_metrics_recorder();
     set_panic_hook();
 
-    if conf.meta.address.is_empty() && conf.meta.endpoints.is_empty() {
+    if conf.meta.is_embedded_meta()? {
         MetaEmbedded::init_global_meta_store(conf.meta.embedded_dir.clone()).await?;
     }
     // Make sure gloabl services have been inited.
@@ -179,7 +179,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
     println!("    stderr: {}", conf.log.stderr);
     println!(
         "Meta: {}",
-        if conf.meta.address.is_empty() && conf.meta.endpoints.is_empty() {
+        if conf.meta.is_embedded_meta()? {
             format!("embedded at {}", conf.meta.embedded_dir)
         } else if !conf.meta.endpoints.is_empty() {
             format!("connected to endpoints {:#?}", conf.meta.endpoints)
