@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,13 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub use common_storages_fuse as fuse;
-pub use common_storages_index as index;
-mod storage_factory;
+mod random_parts;
+mod random_table;
 
-pub use common_catalog::table::NavigationPoint;
-pub use common_catalog::table::Table;
-pub use common_catalog::table::TableStatistics;
-pub use storage_factory::StorageCreator;
-pub use storage_factory::StorageDescription;
-pub use storage_factory::StorageFactory;
+pub use random_parts::RandomPartInfo;
+pub use random_table::RandomTable;

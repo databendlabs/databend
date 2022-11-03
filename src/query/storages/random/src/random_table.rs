@@ -15,27 +15,27 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use common_catalog::catalog::StorageDescription;
+use common_catalog::table::Table;
+use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataType;
 use common_exception::Result;
 use common_meta_app::schema::TableInfo;
+use common_pipeline_core::processors::port::OutputPort;
+use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_core::Pipeline;
+use common_pipeline_core::SourcePipeBuilder;
+use common_pipeline_sources::processors::sources::SyncSource;
+use common_pipeline_sources::processors::sources::SyncSourcer;
 use common_planner::extras::Extras;
 use common_planner::extras::Statistics;
 use common_planner::plans::Projection;
 use common_planner::Partitions;
 use common_planner::ReadDataSourcePlan;
 
-use super::RandomPartInfo;
-use crate::pipelines::processors::port::OutputPort;
-use crate::pipelines::processors::processor::ProcessorPtr;
-use crate::pipelines::processors::SyncSource;
-use crate::pipelines::processors::SyncSourcer;
-use crate::pipelines::Pipeline;
-use crate::pipelines::SourcePipeBuilder;
-use crate::sessions::TableContext;
-use crate::storages::StorageDescription;
-use crate::storages::Table;
+use crate::RandomPartInfo;
 
 pub struct RandomTable {
     table_info: TableInfo,

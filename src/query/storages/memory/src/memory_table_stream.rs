@@ -17,12 +17,12 @@ use std::task::Context;
 use std::task::Poll;
 use std::usize;
 
+use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
 use common_exception::Result;
 use futures::stream::Stream;
 
-use crate::sessions::TableContext;
-use crate::storages::memory::memory_part::MemoryPartInfo;
+use crate::memory_part::MemoryPartInfo;
 
 #[derive(Debug, Clone)]
 struct BlockRange {

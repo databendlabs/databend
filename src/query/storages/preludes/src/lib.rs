@@ -14,9 +14,6 @@
 
 #![feature(type_alias_impl_trait)]
 
-pub mod memory;
-pub mod null;
-pub mod random;
 pub mod stage;
 pub mod system;
 
@@ -24,7 +21,6 @@ mod storages {
     pub use common_catalog::catalog::StorageDescription;
     pub use common_catalog::table::Table;
 
-    pub use super::memory;
     pub use super::system;
 }
 

@@ -18,7 +18,9 @@ common-exception = { path = "../../../common/exception" }
 common-meta-app = { path = "../../../meta/app" }
 common-storages-fuse = { path = "../fuse" }
 common-storages-index = { path = "../index" }
-common-storages-preludes = { path = "../preludes" }
+common-storages-memory = { path = "../memory" }
+common-storages-null = { path = "../null" }
+common-storages-random = { path = "../random" }
 common-storages-view = { path = "../view" }
 
 parking_lot = "0.12.1"

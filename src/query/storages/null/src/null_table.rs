@@ -15,25 +15,24 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use common_catalog::catalog::StorageDescription;
+use common_catalog::table::Table;
+use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 use common_meta_app::schema::TableInfo;
+use common_pipeline_core::processors::port::OutputPort;
+use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_core::Pipe;
+use common_pipeline_core::Pipeline;
+use common_pipeline_sinks::processors::sinks::EmptySink;
+use common_pipeline_sources::processors::sources::SyncSource;
+use common_pipeline_sources::processors::sources::SyncSourcer;
 use common_planner::extras::Extras;
 use common_planner::extras::Statistics;
 use common_planner::Partitions;
 use common_planner::ReadDataSourcePlan;
-
-use crate::pipelines::processors::port::OutputPort;
-use crate::pipelines::processors::processor::ProcessorPtr;
-use crate::pipelines::processors::EmptySink;
-use crate::pipelines::processors::SyncSource;
-use crate::pipelines::processors::SyncSourcer;
-use crate::pipelines::Pipe;
-use crate::pipelines::Pipeline;
-use crate::sessions::TableContext;
-use crate::storages::StorageDescription;
-use crate::storages::Table;
 
 pub struct NullTable {
     table_info: TableInfo,
