@@ -105,7 +105,7 @@ impl MemoryTable {
         let part_size = total / workers;
         let part_remain = total % workers;
 
-        let mut partitions = Vec::with_capacity(workers as usize);
+        let mut partitions = Vec::with_capacity(workers);
         if part_size == 0 {
             partitions.push(MemoryPartInfo::create(start, total, total));
         } else {
@@ -171,7 +171,7 @@ impl Table for MemoryTable {
                 blocks
                     .iter()
                     .fold(Statistics::default(), |mut stats, block| {
-                        stats.read_rows += block.num_rows() as usize;
+                        stats.read_rows += block.num_rows();
                         stats.read_bytes += (0..block.num_columns())
                             .into_iter()
                             .collect::<Vec<usize>>()

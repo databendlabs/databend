@@ -48,7 +48,7 @@ impl MemoryTableStream {
     }
 
     fn try_get_one_block(&mut self) -> Result<Option<DataBlock>> {
-        if (self.block_index as usize) == self.block_ranges.len() {
+        if self.block_index == self.block_ranges.len() {
             let part_info = self.ctx.try_get_part();
             if part_info.is_none() {
                 return Ok(None);
