@@ -220,179 +220,137 @@ async fn compact_segment(ctx: Arc<QueryContext>, table: &Arc<dyn Table>) -> Resu
 
 #[tokio::test]
 async fn test_segment_accumulator() -> Result<()> {
-    // TODO refactor this suite
-
     let fixture = TestFixture::new().await;
     let ctx = fixture.ctx();
     let data_accessor = ctx.get_data_operator()?;
     let location_gen = TableMetaLocationGenerator::with_prefix("./test/".to_owned());
-    let block_per_seg = 10;
-
-    let segment_reader = MetaReaders::segment_info_reader(ctx.get_data_operator()?.operator());
+    let threshold = 10;
 
     {
-        // case: highly fragmented segments
+        let case_name = "highly fragmented segments";
+        let threshold = 10;
+        let case = CompactCase {
+            // 3 fragmented segments
+            // - each of them have number blocks lesser than `block_per_sg`
+            blocks_of_input_segments: vec![1, 2, 3],
+            // - these segments should be compacted into one
+            expected_number_of_segments: 1,
+            // - which contains 6 blocks
+            expected_block_number_of_new_segments: vec![1 + 2 + 3],
+            case_name,
+        };
 
-        let num_block_of_segments = vec![2, 2, 2, 2];
-        // settings:
-        // - block_per_seg is 10
-        // - 4 segments, each of them have 2 blocks
-        // expects:
-        // - all the segments should be merged into one
-
-        // setup & run
-        let mut case = CompactSegmentTestFixture::try_new(&ctx, block_per_seg)?;
-        let seg_acc = case.run(&num_block_of_segments).await?;
-        let state = seg_acc.finalize().await?;
-
-        // verify that:
-        // - one newly generated segment
-        assert_eq!(state.new_segment_paths.len(), 1);
-        // - totally one segment collected
-        assert_eq!(state.segments_locations.len(), 1);
-        // - number of blocks should not change
-        assert_eq!(
-            state.statistics.block_count as usize,
-            num_block_of_segments.into_iter().sum::<usize>()
-        );
-
-        // - verify general invariants
-        case.verify_block_order("greedy", &state, &segment_reader)
-            .await?;
+        // run, and verify
+        // - numbers are as expected
+        // - other general invariants
+        //   - unchanged segments still be there
+        //   - blocks and the order of them are not changed
+        //   - statistics are as expected
+        case.run_and_verify(&ctx, threshold).await?;
     }
 
     {
-        // case: fragmented segments, greedy, no barrier
-
-        let num_block_of_segments = vec![2, 3, 6, 5];
-
-        // settings:
-        // - block_per_seg is 10
-        // - 4 segments
-        // expects:
-        // - the first 3 segments should be merged
-        //   segment of size [0, 2N] is allowed, to avoid the ripple effects
-        // - the last segment will be kept and unchanged
-        //   different from block compact:
-        //   segment of size (2N..) is NOT allowed, where N is the threshold
-
-        // setup & run
-        let mut case_fixture = CompactSegmentTestFixture::try_new(&ctx, block_per_seg)?;
-        let seg_acc = case_fixture.run(&num_block_of_segments).await?;
-        let compacted_state = seg_acc.finalize().await?;
-
-        // verify that:
-        // - one newly generated segment
-        assert_eq!(compacted_state.new_segment_paths.len(), 1);
-        // - totally two segments collected
-        assert_eq!(compacted_state.segments_locations.len(), 2);
-
-        // - verify general invariants
-        case_fixture
-            .verify_block_order("greedy", &compacted_state, &segment_reader)
-            .await?;
+        let case_name = "greedy compact, but not too greedy(1)";
+        let threshold = 10;
+        let case = CompactCase {
+            // - 4 segments
+            blocks_of_input_segments: vec![2, 8, 1, 8],
+            // - these segments should be compacted into 2 segments
+            expected_number_of_segments: 2,
+            // -  (2 + 8) meets threshold 10
+            //    they should be compacted into one new segment.
+            //    although the next segment contains only 1 segment, it should NOT
+            //    be compacted (the not too greedy rule)
+            // - (1 + 8) should be compacted into one new segment
+            expected_block_number_of_new_segments: vec![2 + 8, 1 + 8],
+            case_name,
+        };
+        // run & verify
+        case.run_and_verify(&ctx, threshold).await?;
     }
 
     {
-        // case: fragmented segments, not so greedy
+        let case_name = "greedy compact, but not too greedy (2)";
+        let threshold = 10;
+        let case = CompactCase {
+            // 4 segments
+            blocks_of_input_segments: vec![2, 3, 6, 5],
+            // these segments should be compacted into 2 segments
+            expected_number_of_segments: 2,
+            // (2 + 3 + 6) exceeds the threshold 10
+            //  - but not too much, lesser than 2 * threshold, which is 20;
+            //  - they are allowed to be compacted into one, to avoid the ripple effects:
+            //      to merge one fragment, a large amount of non-fragmented segments have to be
+            //      split into pieces and re-compacted.
+            // - but the last segment of 5 blocks should be kept alone
+            expected_block_number_of_new_segments: vec![2 + 3 + 6],
+            case_name,
+        };
 
-        let num_block_of_segments = vec![2, 8, 1, 8];
-
-        // settings:
-        // - block_per_seg is 10
-        // - 4 segments
-        // expects:
-        // - the first 2 segments should be merged
-        //   THE THIRD SEGMENT SHOULD NOT BE MERGED
-        // - the last 2 segments should be merged
-
-        let expected_num_block_of_new_segments = vec![10, 9];
-
-        // setup & run
-        let mut case_fixture = CompactSegmentTestFixture::try_new(&ctx, block_per_seg)?;
-        let seg_acc = case_fixture.run(&num_block_of_segments).await?;
-        let r = seg_acc.finalize().await?;
-
-        // verify that:
-        // - 2 newly generated segment;
-        assert_eq!(r.new_segment_paths.len(), 2);
-        // - totally two segments collected
-        assert_eq!(r.segments_locations.len(), 2);
-
-        // number of blocks should not change
-        assert_eq!(
-            r.statistics.block_count as usize,
-            num_block_of_segments.into_iter().sum::<usize>()
-        );
-
-        // verify that the new segment contains expected number of blocks
-        CompactSegmentTestFixture::verify_new_segments(
-            "",
-            &r.new_segment_paths,
-            &expected_num_block_of_new_segments,
-            &segment_reader,
-        )
-        .await?;
-
-        // - verify that the order of blocks not changed
-        case_fixture
-            .verify_block_order("greedy", &r, &segment_reader)
-            .await?;
-
-        // - verify general invariants
-        case_fixture
-            .verify_block_order("greedy", &r, &segment_reader)
-            .await?;
+        // run & verify
+        case.run_and_verify(&ctx, threshold).await?;
     }
 
     {
         // case: fragmented segments, with barrier
 
-        let num_block_of_segments = vec![2, 10, 6, 8];
+        let case_name = "barrier(1)";
+        let threshold = 10;
+        let case = CompactCase {
+            // input segments
+            blocks_of_input_segments: vec![2, 10, 6, 11, 5],
+            // these segments should be compacted into 2 new segments, 1 segment unchanged
+            expected_number_of_segments: 2 + 1,
+            // new segments: (2 + 10), (6 + 11)
+            // unchanged: (5)
+            expected_block_number_of_new_segments: vec![2 + 10, 6 + 11],
+            case_name,
+        };
 
-        // settings:
-        // - block_per_seg is 10
-        // - 4 segments
-        // expects:
-        // - the first 2 segments should be merged
-        // - the last 2 segments should be merged
-        // thus:
-        let expected_num_block_of_new_segments = vec![12, 14];
+        case.run_and_verify(&ctx, threshold).await?;
+    }
 
-        // setup & run
-        let mut case_fixture = CompactSegmentTestFixture::try_new(&ctx, block_per_seg)?;
-        let seg_acc = case_fixture.run(&num_block_of_segments).await?;
-        let r = seg_acc.finalize().await?;
+    {
+        // case: fragmented segments, with barrier
 
-        // - new segment created
-        assert_eq!(r.new_segment_paths.len(), 2);
-        // - totally two segments collected
-        assert_eq!(r.segments_locations.len(), 2);
-        // number of blocks should not change
-        assert_eq!(
-            r.statistics.block_count as usize,
-            num_block_of_segments.into_iter().sum::<usize>()
-        );
+        let case_name = "barrier(2)";
+        let threshold = 10;
+        let case = CompactCase {
+            // input segments
+            blocks_of_input_segments: vec![10, 10, 1, 2, 10],
+            // these segments should be compacted into
+            // (10), (10), (1 + 2 + 10)
+            // the first two segments kept unchanged, and the last 3, compacted into one
+            expected_number_of_segments: 3,
+            expected_block_number_of_new_segments: vec![(1 + 2 + 10)],
+            case_name,
+        };
 
-        // verify that the new segment contains expected number of blocks
-        CompactSegmentTestFixture::verify_new_segments(
-            "",
-            &r.new_segment_paths,
-            &expected_num_block_of_new_segments,
-            &segment_reader,
-        )
-        .await?;
+        case.run_and_verify(&ctx, threshold).await?;
+    }
 
-        // - verify that the order of blocks not changed
-        case_fixture
-            .verify_block_order("greedy", &r, &segment_reader)
-            .await?;
+    {
+        // case: fragmented segments, with barrier
+
+        let case_name = "barrier(3)";
+        let threshold = 10;
+        let case = CompactCase {
+            // input segments
+            blocks_of_input_segments: vec![1, 19, 5, 6],
+            // these segments should be compacted into
+            // (1), (19), (5, 6)
+            expected_number_of_segments: 3,
+            expected_block_number_of_new_segments: vec![(5 + 6)],
+            case_name,
+        };
+
+        case.run_and_verify(&ctx, threshold).await?;
     }
 
     // empty segment will be dropped
     {
         let segment_writer = SegmentWriter::new(&data_accessor, &location_gen, &None);
-        let mut accumulator = SegmentAccumulator::new(block_per_seg, segment_writer);
+        let mut accumulator = SegmentAccumulator::new(threshold, segment_writer);
         let seg = SegmentInfo::new(vec![], Statistics::default());
         accumulator.add(&seg, ("test".to_owned(), 1)).await?;
         let r = accumulator.finalize().await?;
@@ -518,6 +476,53 @@ impl CompactSegmentTestFixture {
                 case_name
             );
         }
+        Ok(())
+    }
+}
+
+struct CompactCase {
+    blocks_of_input_segments: Vec<usize>,
+    expected_block_number_of_new_segments: Vec<usize>,
+    expected_number_of_segments: usize,
+    case_name: &'static str,
+}
+
+impl CompactCase {
+    async fn run_and_verify(&self, ctx: &Arc<QueryContext>, block_per_segment: u64) -> Result<()> {
+        // setup & run
+        let segment_reader = MetaReaders::segment_info_reader(ctx.get_data_operator()?.operator());
+        let mut case_fixture = CompactSegmentTestFixture::try_new(ctx, block_per_segment)?;
+        let seg_acc = case_fixture.run(&self.blocks_of_input_segments).await?;
+        let r = seg_acc.finalize().await?;
+
+        // verify that:
+
+        // - number of newly generated segment is as expected
+        let expected_num_of_new_segments = self.expected_block_number_of_new_segments.len();
+        assert_eq!(
+            r.new_segment_paths.len(),
+            expected_num_of_new_segments,
+            "case: {}, step: verify number of new segments generated",
+            self.case_name,
+        );
+
+        // - number of segments is as expected (segments not changed and newly generated segments)
+        assert_eq!(r.segments_locations.len(), self.expected_number_of_segments);
+
+        // - each new segment contains expected number of blocks
+        CompactSegmentTestFixture::verify_new_segments(
+            self.case_name,
+            &r.new_segment_paths,
+            &self.expected_block_number_of_new_segments,
+            &segment_reader,
+        )
+        .await?;
+
+        // - the order of blocks not changed
+        case_fixture
+            .verify_block_order(self.case_name, &r, &segment_reader)
+            .await?;
+
         Ok(())
     }
 }
