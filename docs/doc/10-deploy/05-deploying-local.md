@@ -5,7 +5,7 @@ description:
   Deploying a Local Databend
 ---
 
-To evaluate Databend and get some hands-on experience, you can deploy Databend locally and use the file system as storage if you don't have object storage yet. This topic explains how to deploy Databend on MacOS and connect Databend from a MySQL client.
+To evaluate Databend and get some hands-on experience, you can deploy Databend locally and use the file system as storage if you don't have object storage yet. This topic explains how to deploy Databend on MacOS and connect to Databend from a MySQL client.
 
 :::note
 Object storage is required for production. Use the file system only for evaluation, testing, and other non-production purposes.
@@ -29,11 +29,11 @@ Make sure you have installed a MySQL client on your Mac. This topic uses DBeaver
 
 2. Run the script `start.sh` in the folder `scripts`:
 
+    Your Mac might prompt an error saying "*databend-meta can't be opened because Apple cannot check it for malicious software.*". To proceed, open **System Settings** on your Mac, select **Privacy & Security** on the left menu, and click **Open Anyway** for databend-meta in the **Security** section on the right side. Do the same for the error on databend-query.
+
 ```shell
 ./scripts/start.sh
 ```
-
-Your Mac might prompt an error saying "*databend-meta can't be opened because Apple cannot check it for malicious software.*". To proceed, open **System Settings** on your Mac, select **Privacy & Security** on the left menu, and click **Open Anyway** for databend-meta in the **Security** section on the right side. Do the same for the warning on databend-query.
 
 3. Run the following command to verify Databend has been started successfully:
 
