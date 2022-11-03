@@ -16,3 +16,4 @@ pub mod input_format_csv;
 pub mod input_format_ndjson;
 pub mod input_format_parquet;
 pub mod input_format_tsv;
+pub mod input_format_xml;

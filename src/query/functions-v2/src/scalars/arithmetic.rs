@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_expression::types::nullable::NullableDomain;
 use common_expression::types::number::F64;
 use common_expression::types::number::*;
 use common_expression::types::NullableType;
@@ -19,6 +20,8 @@ use common_expression::types::NumberDataType;
 use common_expression::types::ALL_NUMERICS_TYPES;
 use common_expression::utils::arithmetics_type::ResultTypeOfBinary;
 use common_expression::utils::arithmetics_type::ResultTypeOfUnary;
+use common_expression::vectorize_1_arg;
+use common_expression::vectorize_with_builder_1_arg;
 use common_expression::vectorize_with_builder_2_arg;
 use common_expression::with_number_mapped_type;
 use common_expression::FunctionProperty;
@@ -276,6 +279,104 @@ pub fn register(registry: &mut FunctionRegistry) {
                     }
                 }),
             });
+        }
+    }
+
+    for src_type in ALL_NUMERICS_TYPES {
+        for dest_type in ALL_NUMERICS_TYPES {
+            with_number_mapped_type!(|SRC_TYPE| match src_type {
+                NumberDataType::SRC_TYPE => with_number_mapped_type!(|DEST_TYPE| match dest_type {
+                    NumberDataType::DEST_TYPE => {
+                        let name = format!("to_{dest_type}").to_lowercase();
+                        if src_type.can_lossless_cast_to(*dest_type) {
+                            registry.register_1_arg::<NumberType<SRC_TYPE>, NumberType<DEST_TYPE>, _, _>(
+                                &name,
+                                FunctionProperty::default(),
+                                |domain| {
+                                    let (domain, overflowing) = domain.overflow_cast();
+                                    debug_assert!(!overflowing);
+                                    Some(domain)
+                                },
+                                |val, _|  {
+                                    val.as_()
+                                },
+                            );
+                        } else {
+                            registry.register_passthrough_nullable_1_arg::<NumberType<SRC_TYPE>, NumberType<DEST_TYPE>, _, _>(
+                                &name,
+                                FunctionProperty::default(),
+                                |domain| {
+                                    let (domain, overflowing) = domain.overflow_cast();
+                                    if overflowing {
+                                        None
+                                    } else {
+                                        Some(domain)
+                                    }
+                                },
+                                vectorize_with_builder_1_arg::<NumberType<SRC_TYPE>, NumberType<DEST_TYPE>>(
+                                    move |val, output, _| {
+                                        let new_val =
+                                            num_traits::cast::cast(val).ok_or_else(|| {
+                                                format!(
+                                                    "unable to cast {} to {}",
+                                                    val,
+                                                    dest_type,
+                                                )
+                                            })?;
+                                        output.push(new_val);
+                                        Ok(())
+                                    }
+                                ),
+                            );
+                        }
+
+                        let name = format!("try_to_{dest_type}").to_lowercase();
+                        if src_type.can_lossless_cast_to(*dest_type) {
+                            registry.register_combine_nullable_1_arg::<NumberType<SRC_TYPE>, NumberType<DEST_TYPE>, _, _>(
+                                &name,
+                                FunctionProperty::default(),
+                                |domain| {
+                                    let (domain, overflowing) = domain.overflow_cast();
+                                    debug_assert!(!overflowing);
+                                    Some(NullableDomain {
+                                        has_null: false,
+                                        value: Some(Box::new(
+                                            domain,
+                                        )),
+                                    })
+                                },
+                                vectorize_1_arg::<NumberType<SRC_TYPE>, NullableType<NumberType<DEST_TYPE>>>(|val, _| {
+                                    Some(val.as_())
+                                })
+                            );
+                        } else {
+                            registry.register_combine_nullable_1_arg::<NumberType<SRC_TYPE>, NumberType<DEST_TYPE>, _, _>(
+                                &name,
+                                FunctionProperty::default(),
+                                |domain| {
+                                    let (domain, overflowing) = domain.overflow_cast();
+                                    Some(NullableDomain {
+                                        has_null: overflowing,
+                                        value: Some(Box::new(
+                                            domain,
+                                        )),
+                                    })
+                                },
+                                vectorize_with_builder_1_arg::<NumberType<SRC_TYPE>, NullableType<NumberType<DEST_TYPE>>>(
+                                    |val, output, _| {
+                                        if let Some(new_val) = num_traits::cast::cast(val) {
+                                            output.push(new_val);
+                                        } else {
+                                            output.push_null();
+                                        }
+                                        Ok(())
+                                    }
+                                ),
+                            );
+                        }
+                    }
+                }),
+            })
         }
     }
 }
