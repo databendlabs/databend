@@ -152,11 +152,12 @@ impl FromStr for StageFileFormatType {
             "TSV" | "TABSEPARATED" => Ok(StageFileFormatType::Tsv),
             "NDJSON" | "JSONEACHROW" => Ok(StageFileFormatType::NdJson),
             "PARQUET" => Ok(StageFileFormatType::Parquet),
-            "XML" | "ORC" | "AVRO" | "JSON" => Err(format!(
-                "File format type '{s}' not implemented yet', must be one of ( CSV | TSV | NDJSON | PARQUET)"
+            "XML" => Ok(StageFileFormatType::Xml),
+            "ORC" | "AVRO" | "JSON" => Err(format!(
+                "File format type '{s}' not implemented yet', must be one of ( CSV | TSV | NDJSON | PARQUET | XML)"
             )),
             _ => Err(format!(
-                "Unknown file format type '{s}', must be one of ( CSV | TSV | NDJSON | PARQUET)"
+                "Unknown file format type '{s}', must be one of ( CSV | TSV | NDJSON | PARQUET | XML)"
             )),
         }
     }
@@ -172,6 +173,7 @@ pub struct FileFormatOptions {
     pub record_delimiter: String,
     pub escape: String,
     pub compression: StageFileCompression,
+    pub row_tag: String,
 }
 
 impl Default for FileFormatOptions {
@@ -183,6 +185,7 @@ impl Default for FileFormatOptions {
             skip_header: 0,
             escape: "".to_string(),
             compression: StageFileCompression::default(),
+            row_tag: "row".to_string(),
         }
     }
 }

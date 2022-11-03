@@ -68,6 +68,8 @@ pub struct FormatSettings {
     pub json_quote_denormals: bool,
     pub json_escape_forward_slashes: bool,
     pub ident_case_sensitive: bool,
+
+    pub row_tag: Vec<u8>,
 }
 
 impl FormatSettings {
@@ -87,6 +89,13 @@ impl FormatSettings {
         } else {
             Ok(option.as_bytes()[0])
         }
+    }
+
+    pub fn parse_row_tag(option: &str) -> Result<Vec<u8>> {
+        if option.is_empty() {
+            return Ok(vec![b'r', b'o', b'w']);
+        }
+        Ok(Vec::from(option))
     }
 
     fn tsv_default() -> Self {
@@ -110,6 +119,7 @@ impl FormatSettings {
             json_quote_denormals: false,
             json_escape_forward_slashes: true,
             ident_case_sensitive: false,
+            row_tag: vec![],
         }
     }
 }
