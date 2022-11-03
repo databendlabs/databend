@@ -2,7 +2,7 @@ statement ok
 set global timezone = 'UTC';
 
 statement ok
-set global max_block_size = 10000;
+set global max_block_size = 65536;
 
 statement ok
 DROP TABLE IF EXISTS fuse_compat_table;
