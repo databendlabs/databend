@@ -60,9 +60,9 @@ fn test_user_stage_fs_v20() -> anyhow::Result<()> {
     let user_stage_fs_v20 = vec![
         10, 17, 102, 115, 58, 47, 47, 100, 105, 114, 47, 116, 111, 47, 102, 105, 108, 101, 115, 26,
         25, 10, 23, 18, 21, 10, 13, 47, 100, 105, 114, 47, 116, 111, 47, 102, 105, 108, 101, 115,
-        160, 6, 17, 168, 6, 1, 34, 25, 8, 1, 16, 128, 8, 26, 1, 124, 34, 2, 47, 47, 40, 2, 50, 3,
-        114, 111, 119, 160, 6, 17, 168, 6, 1, 42, 10, 10, 3, 32, 154, 5, 16, 142, 8, 24, 1, 50, 4,
-        116, 101, 115, 116, 160, 6, 17, 168, 6, 1,
+        160, 6, 20, 168, 6, 1, 34, 28, 8, 1, 16, 128, 8, 26, 1, 124, 34, 2, 47, 47, 40, 2, 50, 1,
+        92, 58, 3, 114, 111, 119, 160, 6, 20, 168, 6, 1, 42, 10, 10, 3, 32, 154, 5, 16, 142, 8, 24,
+        1, 50, 4, 116, 101, 115, 116, 160, 6, 20, 168, 6, 1,
     ];
     let want = mt::UserStageInfo {
         stage_name: "fs://dir/to/files".to_string(),
@@ -78,8 +78,8 @@ fn test_user_stage_fs_v20() -> anyhow::Result<()> {
             field_delimiter: "|".to_string(),
             record_delimiter: "//".to_string(),
             compression: mt::StageFileCompression::Bz2,
+            escape: "\\".to_string(),
             row_tag: "row".to_string(),
-            escape: "".to_string(),
         },
         copy_options: mt::CopyOptions {
             on_error: mt::OnErrorMode::SkipFileNum(666),
