@@ -47,7 +47,7 @@ impl AsyncSystemTable for CatalogsTable {
     async fn get_full_data(&self, _ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
         let cm = CatalogManager::instance();
 
-        let catalog_names: Vec<&[u8]> = cm.catalogs.keys().map(|x| x.as_bytes()).collect();
+        let catalog_names: Vec<String> = cm.catalogs.iter().map(|x| x.key().clone()).collect();
 
         Ok(DataBlock::create(self.table_info.schema(), vec![
             Series::from_data(catalog_names),

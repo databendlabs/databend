@@ -12,11 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod account;
-mod catalog;
-mod database;
-mod role;
-mod share;
-mod stage;
-mod table;
-mod view;
+use common_datavalues::DataSchemaRef;
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ShowCreateCatalogPlan {
+    pub catalog: String,
+    pub schema: DataSchemaRef,
+}
+
+impl ShowCreateCatalogPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        self.schema.clone()
+    }
+}

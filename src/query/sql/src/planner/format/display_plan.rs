@@ -33,6 +33,13 @@ impl Plan {
 
             Plan::Call(plan) => Ok(format!("{:?}", plan)),
 
+            // catalog
+            Plan::ShowCreateCatalog(show_create_catalog) => {
+                Ok(format!("{:?}", show_create_catalog))
+            }
+            Plan::CreateCatalog(create_catalog) => Ok(format!("{:?}", create_catalog)),
+            Plan::DropCatalog(drop_catalog) => Ok(format!("{:?}", drop_catalog)),
+
             // Databases
             Plan::ShowCreateDatabase(show_create_database) => {
                 Ok(format!("{:?}", show_create_database))

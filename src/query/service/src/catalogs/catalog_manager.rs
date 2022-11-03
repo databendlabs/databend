@@ -12,7 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
+#[cfg(feature = "hive")]
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use common_base::base::Singleton;
@@ -21,8 +22,10 @@ pub use common_catalog::catalog::CatalogManager;
 use common_catalog::catalog::CATALOG_DEFAULT;
 use common_config::Config;
 use common_exception::Result;
+use common_meta_app::schema::CatalogType;
 #[cfg(feature = "hive")]
 use common_storages_hive::CATALOG_HIVE;
+use dashmap::DashMap;
 
 use crate::catalogs::DatabaseCatalog;
 
@@ -32,10 +35,18 @@ pub trait CatalogManagerHelper {
 
     async fn try_create(conf: &Config) -> Result<Arc<CatalogManager>>;
 
-    async fn register_build_in_catalogs(&mut self, conf: &Config) -> Result<()>;
+    async fn register_build_in_catalogs(&self, conf: &Config) -> Result<()>;
 
     #[cfg(feature = "hive")]
-    fn register_external_catalogs(&mut self, conf: &Config) -> Result<()>;
+    fn register_external_catalogs(&self, conf: &Config) -> Result<()>;
+
+    #[cfg(feature = "hive")]
+    fn create_user_defined_catalog(
+        &self,
+        catalog_name: &str,
+        catalog_type: CatalogType,
+        catalog_options: BTreeMap<String, String>,
+    ) -> Result<()>;
 }
 
 #[async_trait::async_trait]
@@ -47,8 +58,8 @@ impl CatalogManagerHelper for CatalogManager {
     }
 
     async fn try_create(conf: &Config) -> Result<Arc<CatalogManager>> {
-        let mut catalog_manager = CatalogManager {
-            catalogs: HashMap::new(),
+        let catalog_manager = CatalogManager {
+            catalogs: DashMap::new(),
         };
 
         catalog_manager.register_build_in_catalogs(conf).await?;
@@ -61,7 +72,7 @@ impl CatalogManagerHelper for CatalogManager {
         Ok(Arc::new(catalog_manager))
     }
 
-    async fn register_build_in_catalogs(&mut self, conf: &Config) -> Result<()> {
+    async fn register_build_in_catalogs(&self, conf: &Config) -> Result<()> {
         let default_catalog: Arc<dyn Catalog> =
             Arc::new(DatabaseCatalog::try_create_with_config(conf.clone()).await?);
         self.catalogs
@@ -70,7 +81,7 @@ impl CatalogManagerHelper for CatalogManager {
     }
 
     #[cfg(feature = "hive")]
-    fn register_external_catalogs(&mut self, conf: &Config) -> Result<()> {
+    fn register_external_catalogs(&self, conf: &Config) -> Result<()> {
         use crate::catalogs::hive::HiveCatalog;
         let hms_address = &conf.catalog.meta_store_address;
         if !hms_address.is_empty() {
@@ -79,5 +90,15 @@ impl CatalogManagerHelper for CatalogManager {
             self.catalogs.insert(CATALOG_HIVE.to_owned(), hive_catalog);
         }
         Ok(())
+    }
+
+    #[cfg(feature = "hive")]
+    fn create_user_defined_catalog(
+        &self,
+        catalog_name: &str,
+        catalog_type: CatalogType,
+        catalog_options: &BTreeMap<String, String>,
+    ) -> Result<()> {
+        todo!();
     }
 }

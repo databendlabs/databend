@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_base::base::Singleton;
@@ -49,6 +48,7 @@ use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_types::MetaId;
+use dashmap::DashMap;
 use dyn_clone::DynClone;
 use once_cell::sync::OnceCell;
 
@@ -62,15 +62,16 @@ pub const CATALOG_DEFAULT: &str = "default";
 static CATALOG_MANAGER: OnceCell<Singleton<Arc<CatalogManager>>> = OnceCell::new();
 
 pub struct CatalogManager {
-    pub catalogs: HashMap<String, Arc<dyn Catalog>>,
+    pub catalogs: DashMap<String, Arc<dyn Catalog>>,
 }
 
 impl CatalogManager {
     pub fn get_catalog(&self, catalog_name: &str) -> Result<Arc<dyn Catalog>> {
         self.catalogs
             .get(catalog_name)
+            .as_deref()
             .cloned()
-            .ok_or_else(|| ErrorCode::BadArguments(format!("not such catalog {}", catalog_name)))
+            .ok_or_else(|| ErrorCode::BadArguments(format!("no such catalog {}", catalog_name)))
     }
 
     pub fn instance() -> Arc<CatalogManager> {

@@ -18,6 +18,7 @@ mod catalog;
 mod database;
 mod table;
 
+pub use catalog::CatalogMeta;
 pub use catalog::CatalogType;
 pub use database::CreateDatabaseReply;
 pub use database::CreateDatabaseReq;

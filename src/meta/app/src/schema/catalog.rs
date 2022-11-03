@@ -12,7 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::fmt::Display;
+
+use common_datavalues::chrono::DateTime;
+use common_datavalues::chrono::Utc;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum CatalogType {
@@ -26,5 +30,22 @@ impl Display for CatalogType {
             CatalogType::Default => write!(f, "DEFAULT"),
             CatalogType::Hive => write!(f, "HIVE"),
         }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CatalogMeta {
+    pub catalog_type: CatalogType,
+    pub options: BTreeMap<String, String>,
+    pub created_on: DateTime<Utc>,
+}
+
+impl Display for CatalogMeta {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Type = {}, Options: {:?}, CreatedOn: {:?}",
+            self.catalog_type, self.options, self.created_on
+        )
     }
 }

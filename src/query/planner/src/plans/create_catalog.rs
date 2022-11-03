@@ -12,11 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod account;
-mod catalog;
-mod database;
-mod role;
-mod share;
-mod stage;
-mod table;
-mod view;
+use std::sync::Arc;
+
+use common_datavalues::DataSchema;
+use common_datavalues::DataSchemaRef;
+use common_meta_app::schema::CatalogMeta;
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CreateCatalogPlan {
+    pub if_not_exists: bool,
+    pub tenant: String,
+    pub catalog: String,
+    pub meta: CatalogMeta,
+}
+
+impl CreateCatalogPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
+}
