@@ -48,6 +48,7 @@ use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_types::MetaId;
+use dashmap::mapref::entry::Entry;
 use dashmap::DashMap;
 use dyn_clone::DynClone;
 use once_cell::sync::OnceCell;
@@ -83,6 +84,40 @@ impl CatalogManager {
 
     pub fn set_instance(manager: Singleton<Arc<CatalogManager>>) {
         CATALOG_MANAGER.set(manager).ok();
+    }
+
+    pub fn insert_catalog(
+        &self,
+        catalog_name: &str,
+        catalog: Arc<dyn Catalog>,
+        if_not_exists: bool,
+    ) -> Result<()> {
+        // NOTE:
+        //
+        // Concurrent write may happen here, should be carefully dealt with.
+        // The problem occurs when the entry is vacant:
+        //
+        // Using `DashMap::entry` can occupy the write lock on the entry,
+        // ensuring a safe concurrent writing.
+        //
+        // If getting with `DashMap::get_mut`, it will unlock the entry and return `None` directly.
+        // This makes a safe concurrent write hard to implement.
+        match self.catalogs.entry(catalog_name.to_string()) {
+            Entry::Occupied(_) => {
+                if if_not_exists {
+                    Ok(())
+                } else {
+                    Err(ErrorCode::CatalogAlreadyExists(format!(
+                        "Catalog {} already exists",
+                        catalog_name
+                    )))
+                }
+            }
+            Entry::Vacant(v) => {
+                v.insert(catalog);
+                Ok(())
+            }
+        }
     }
 }
 

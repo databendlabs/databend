@@ -106,26 +106,14 @@ impl CatalogManagerHelper for CatalogManager {
                 #[cfg(feature = "hive")]
                 {
                     let catalog_options = req.meta.options;
-                    let hms_address = catalog_options
-                        .get("hms_address")
-                        .ok_or_else(|| ErrorCode::InvalidArgument("Expected HMS_ADDRESS"))?;
-                    let catalog: Arc<dyn Catalog> = Arc::new(HiveCatalog::try_create(hms_address)?);
-                    let ctl_name = req.name_ident.catalog_name.clone();
-                    match self.catalogs.entry(ctl_name.clone()) {
-                        dashmap::mapref::entry::Entry::Vacant(v) => {
-                            v.insert(catalog);
-                        }
-                        dashmap::mapref::entry::Entry::Occupied(_) => {
-                            if !req.if_not_exists {
-                                return Err(ErrorCode::CatalogAlreadyExists(format!(
-                                    "Catalog {} already exists",
-                                    ctl_name
-                                )));
-                            }
-                        }
-                    }
+                    let address = catalog_options
+                        .get("address")
+                        .ok_or_else(|| ErrorCode::InvalidArgument("expected field: ADDRESS"))?;
+                    let catalog: Arc<dyn Catalog> = Arc::new(HiveCatalog::try_create(address)?);
+                    let ctl_name = &req.name_ident.catalog_name;
+                    let if_not_exists = req.if_not_exists;
 
-                    Ok(())
+                    self.insert_catalog(ctl_name, catalog, if_not_exists)
                 }
             }
         }

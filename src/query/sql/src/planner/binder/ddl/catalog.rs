@@ -46,7 +46,7 @@ impl<'a> Binder {
     ) -> Result<Plan> {
         let ShowCatalogsStmt { limit } = stmt;
         let mut query = String::new();
-        write!(query, "SELECT name AS Catalog FROM system.catalogs").unwrap();
+        write!(query, "SELECT name AS Catalogs FROM system.catalogs").unwrap();
         match limit {
             Some(ShowLimit::Like { pattern }) => {
                 write!(query, " WHERE name LIKE '{pattern}'").unwrap();
