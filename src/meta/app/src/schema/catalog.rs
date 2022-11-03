@@ -12,4 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub use common_fuse_meta::caches::CacheManager;
+use std::fmt::Display;
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum CatalogType {
+    Default = 1,
+    Hive = 2,
+}
+
+impl Display for CatalogType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CatalogType::Default => write!(f, "DEFAULT"),
+            CatalogType::Hive => write!(f, "HIVE"),
+        }
+    }
+}

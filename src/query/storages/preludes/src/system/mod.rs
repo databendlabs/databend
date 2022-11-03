@@ -14,6 +14,7 @@
 
 mod catalogs_table;
 mod clustering_history_table;
+mod clusters_table;
 mod columns_table;
 mod configs_table;
 mod contributors_table;
@@ -38,6 +39,7 @@ pub use catalogs_table::CatalogsTable;
 pub use clustering_history_table::ClusteringHistoryLogElement;
 pub use clustering_history_table::ClusteringHistoryQueue;
 pub use clustering_history_table::ClusteringHistoryTable;
+pub use clusters_table::ClustersTable;
 pub use columns_table::ColumnsTable;
 pub use configs_table::ConfigsTable;
 pub use contributors_table::ContributorsTable;

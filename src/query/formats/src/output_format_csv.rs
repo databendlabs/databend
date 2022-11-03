@@ -98,12 +98,12 @@ impl<const TSV: bool, const WITH_NAMES: bool, const WITH_TYPES: bool> OutputForm
                 if col_index != 0 {
                     buf.push(fd);
                 }
-                todo!()
-                // if TSV {
-                //     serializer.write_field_tsv(row_index, &mut buf, &self.format_settings);
-                // } else {
-                //     serializer.write_field_csv(row_index, &mut buf, &self.format_settings)
-                // };
+
+                if TSV {
+                    serializer.write_field_tsv(row_index, &mut buf, &self.format_settings, false);
+                } else {
+                    serializer.write_field_csv(row_index, &mut buf, &self.format_settings)
+                };
             }
             buf.push(rd)
         }

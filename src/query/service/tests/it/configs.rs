@@ -75,6 +75,7 @@ async_insert_busy_timeout = 200
 async_insert_stale_timeout = 0
 users = []
 share_endpoint_address = ""
+share_endpoint_auth_token_file = ""
 
 [log]
 level = "INFO"

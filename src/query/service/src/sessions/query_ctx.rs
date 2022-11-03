@@ -45,6 +45,7 @@ use common_planner::ReadDataSourcePlan;
 use common_planner::SourceInfo;
 use common_storage::DataOperator;
 use common_storage::StorageMetrics;
+use common_storages_preludes::stage::StageTable;
 use parking_lot::RwLock;
 use tracing::debug;
 
@@ -61,7 +62,6 @@ use crate::sessions::Session;
 use crate::sessions::SessionManager;
 use crate::sessions::Settings;
 use crate::sessions::TableContext;
-use crate::storages::stage::StageTable;
 use crate::storages::Table;
 
 #[derive(Clone)]
