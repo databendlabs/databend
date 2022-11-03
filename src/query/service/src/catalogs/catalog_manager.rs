@@ -45,7 +45,7 @@ pub trait CatalogManagerHelper {
         &self,
         catalog_name: &str,
         catalog_type: CatalogType,
-        catalog_options: BTreeMap<String, String>,
+        catalog_options: &BTreeMap<String, String>,
     ) -> Result<()>;
 }
 
@@ -95,9 +95,9 @@ impl CatalogManagerHelper for CatalogManager {
     #[cfg(feature = "hive")]
     fn create_user_defined_catalog(
         &self,
-        catalog_name: &str,
-        catalog_type: CatalogType,
-        catalog_options: &BTreeMap<String, String>,
+        _catalog_name: &str,
+        _catalog_type: CatalogType,
+        _catalog_options: &BTreeMap<String, String>,
     ) -> Result<()> {
         todo!();
     }
