@@ -239,7 +239,6 @@ impl<'a> SegmentCompactor<'a> {
         let num_block = segment_info.blocks.len() as u64;
         if self.accumulated_num_blocks + num_block < 2 * self.threshold {
             // TODO doc why we need this branch
-            merge_statistics_mut(&mut self.compacted_state.statistics, &segment_info.summary)?;
             self.fragmented_segments.push((segment_info, location));
             self.compact_fragments().await?;
         } else {
@@ -249,8 +248,7 @@ impl<'a> SegmentCompactor<'a> {
             // this happens if the size of segment BEFORE compaction is already
             // larger than threshold.
             self.compact_fragments().await?;
-            // after compaction, we keep this segment directly as compacted, since
-            // it is large enough
+            // after compaction, we keep this segment directly as compacted, since it is large enough
             merge_statistics_mut(&mut self.compacted_state.statistics, &segment_info.summary)?;
             self.compacted_state.segments_locations.push(location);
         }

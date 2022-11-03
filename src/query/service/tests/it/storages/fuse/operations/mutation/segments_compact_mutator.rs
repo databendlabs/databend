@@ -32,8 +32,8 @@ use common_storages_fuse::io::MetaReaders;
 use common_storages_fuse::io::SegmentInfoReader;
 use common_storages_fuse::io::SegmentWriter;
 use common_storages_fuse::io::TableMetaLocationGenerator;
-use common_storages_fuse::operations::SegmentCompactionState;
 use common_storages_fuse::operations::SegmentCompactor;
+use common_storages_fuse::statistics::reducers::merge_statistics_mut;
 use common_storages_fuse::statistics::BlockStatistics;
 use common_storages_fuse::statistics::StatisticsAccumulator;
 use common_storages_fuse::FuseTable;
@@ -300,9 +300,9 @@ async fn test_segment_accumulator() -> Result<()> {
             // input segments
             blocks_of_input_segments: vec![2, 10, 6, 11, 5],
             // these segments should be compacted into 2 new segments, 1 segment unchanged
-            expected_number_of_segments: 2 + 1,
             // new segments: (2 + 10), (6 + 11)
             // unchanged: (5)
+            expected_number_of_segments: 2 + 1,
             expected_block_number_of_new_segments: vec![2 + 10, 6 + 11],
             case_name,
         };
@@ -440,26 +440,6 @@ impl CompactSegmentTestFixture {
         Ok((segments, collected_blocks))
     }
 
-    pub async fn verify_block_order(
-        &self,
-        case_name: &str,
-        accumulated_state: &SegmentCompactionState,
-        segment_reader: &SegmentInfoReader,
-    ) -> Result<()> {
-        // - blocks should be there and in the original order
-        let segments_after_compaction = &accumulated_state.segments_locations;
-        let mut idx = 0;
-        for location in segments_after_compaction {
-            let segment = segment_reader.read(&location.0, None, location.1).await?;
-            for x in &segment.blocks {
-                let original_block_meta = &self.blocks[idx];
-                assert_eq!(original_block_meta, x.as_ref(), "case : {}", case_name);
-                idx += 1;
-            }
-        }
-        Ok(())
-    }
-
     // verify that newly generated segments contain the proper number of blocks
     pub async fn verify_new_segments(
         case_name: &str,
@@ -518,10 +498,22 @@ impl CompactCase {
         )
         .await?;
 
-        // - the order of blocks not changed
-        case_fixture
-            .verify_block_order(self.case_name, &r, &segment_reader)
-            .await?;
+        let mut idx = 0;
+        let mut statistics = Statistics::default();
+
+        // - blocks should be there and in the original order
+        for location in &r.segments_locations {
+            let segment = segment_reader.read(&location.0, None, location.1).await?;
+            merge_statistics_mut(&mut statistics, &segment.summary)?;
+            for x in &segment.blocks {
+                let original_block_meta = &case_fixture.blocks[idx];
+                assert_eq!(original_block_meta, x.as_ref(), "case : {}", self.case_name);
+                idx += 1;
+            }
+        }
+
+        // - statistics should be the same
+        assert_eq!(statistics, r.statistics, "case : {}", self.case_name);
 
         Ok(())
     }
