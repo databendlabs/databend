@@ -2210,7 +2210,7 @@ impl<'a> TypeChecker<'a> {
 
     fn function_need_collation(&self, name: &str, args: &[Scalar]) -> bool {
         let names = vec!["substr", "substring", "length"];
-        args.len() > 0
+        !args.is_empty()
             && remove_nullable(&args[0].data_type()).data_type_id() == TypeID::String
             && self.ctx.get_settings().get_collation().unwrap() != "binary"
             && names.contains(&name)
