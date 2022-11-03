@@ -35,7 +35,6 @@ use common_sql::evaluator::CompoundChunkOperator;
 use common_sql::executor::AggregateFunctionDesc;
 use common_sql::executor::PhysicalScalar;
 
-use crate::interpreters::fill_missing_columns;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::transforms::HashJoinDesc;
 use crate::pipelines::processors::transforms::RightSemiAntiJoinCompactor;
@@ -51,6 +50,7 @@ use crate::pipelines::processors::RightJoinCompactor;
 use crate::pipelines::processors::SinkBuildHashTable;
 use crate::pipelines::processors::Sinker;
 use crate::pipelines::processors::SortMergeCompactor;
+use crate::pipelines::processors::TransformAddOn;
 use crate::pipelines::processors::TransformAggregator;
 use crate::pipelines::processors::TransformCastSchema;
 use crate::pipelines::processors::TransformHashJoinProbe;
@@ -624,13 +624,24 @@ impl PipelineBuilder {
             .get_catalog(&insert_select.catalog)?
             .get_table_by_info(&insert_select.table_info)?;
 
-        fill_missing_columns(
-            self.ctx.clone(),
-            insert_schema,
-            &table.schema(),
-            &mut self.main_pipeline,
-        )?;
-
+        // Fill missing columns.
+        {
+            let source_schema = insert_schema;
+            let target_schema = &table.schema();
+            if source_schema != target_schema {
+                self.main_pipeline.add_transform(
+                    |transform_input_port, transform_output_port| {
+                        TransformAddOn::try_create(
+                            transform_input_port,
+                            transform_output_port,
+                            source_schema.clone(),
+                            target_schema.clone(),
+                            self.ctx.clone(),
+                        )
+                    },
+                )?;
+            }
+        }
         table.append_data(self.ctx.clone(), &mut self.main_pipeline, true)?;
 
         Ok(())

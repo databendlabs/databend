@@ -33,6 +33,7 @@ use super::InputFormat;
 use crate::processors::sources::input_formats::beyond_end_reader::BeyondEndReader;
 use crate::processors::sources::input_formats::delimiter::RecordDelimiter;
 use crate::processors::sources::input_formats::impls::input_format_csv::CsvReaderState;
+use crate::processors::sources::input_formats::impls::input_format_xml::XmlReaderState;
 use crate::processors::sources::input_formats::input_context::CopyIntoPlan;
 use crate::processors::sources::input_formats::input_context::InputContext;
 use crate::processors::sources::input_formats::input_pipeline::AligningStateTrait;
@@ -204,6 +205,7 @@ pub struct AligningState<T> {
     pub num_fields: usize,
     pub decoder: Option<DecompressDecoder>,
     pub csv_reader: Option<CsvReaderState>,
+    pub xml_reader: Option<XmlReaderState>,
     phantom: PhantomData<T>,
 }
 
@@ -315,6 +317,12 @@ impl<T: InputFormatTextBase> AligningStateTrait for AligningState<T> {
             None
         };
 
+        let xml_reader = if T::format_type() == StageFileFormatType::Xml {
+            Some(XmlReaderState::create(ctx))
+        } else {
+            None
+        };
+
         Ok(AligningState::<T> {
             ctx: ctx.clone(),
             split_info: split_info.clone(),
@@ -322,6 +330,7 @@ impl<T: InputFormatTextBase> AligningStateTrait for AligningState<T> {
             decoder,
             rows_to_skip,
             csv_reader,
+            xml_reader,
             tail_of_last_batch: vec![],
             rows: 0,
             batch_id: 0,

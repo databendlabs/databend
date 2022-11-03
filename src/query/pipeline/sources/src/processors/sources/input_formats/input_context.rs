@@ -39,6 +39,7 @@ use crate::processors::sources::input_formats::impls::input_format_csv::InputFor
 use crate::processors::sources::input_formats::impls::input_format_ndjson::InputFormatNDJson;
 use crate::processors::sources::input_formats::impls::input_format_parquet::InputFormatParquet;
 use crate::processors::sources::input_formats::impls::input_format_tsv::InputFormatTSV;
+use crate::processors::sources::input_formats::impls::input_format_xml::InputFormatXML;
 use crate::processors::sources::input_formats::input_format_text::InputFormatText;
 use crate::processors::sources::input_formats::input_pipeline::StreamingReadBatch;
 use crate::processors::sources::input_formats::input_split::SplitInfo;
@@ -152,6 +153,7 @@ impl InputContext {
                 Ok(Arc::new(InputFormatText::<InputFormatNDJson>::create()))
             }
             StageFileFormatType::Parquet => Ok(Arc::new(InputFormatParquet {})),
+            StageFileFormatType::Xml => Ok(Arc::new(InputFormatText::<InputFormatXML>::create())),
             format => Err(ErrorCode::Internal(format!(
                 "Unsupported file format: {:?}",
                 format

@@ -23,7 +23,7 @@ use common_exception::Result;
 use common_planner::plans::ListPlan;
 use regex::Regex;
 
-use crate::interpreters::interpreter_common::list_files;
+use crate::interpreters::common::list_files;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;

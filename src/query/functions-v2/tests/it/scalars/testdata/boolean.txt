@@ -83,7 +83,6 @@ error:
   |     ^^^ no overload satisfies `not(String)`
 
 has tried possible overloads:
-  not(NULL) :: NULL                  : unable to unify `String` with `NULL`
   not(Boolean) :: Boolean            : unable to unify `String` with `Boolean`
   not(Boolean NULL) :: Boolean NULL  : unable to unify `String` with `Boolean`
 
@@ -343,11 +342,27 @@ evaluation (internal):
 
 ast            : NOT a
 raw expr       : not(ColumnRef(0)::NULL)
-checked expr   : not<NULL>(ColumnRef(0))
+checked expr   : not<Boolean NULL>(CAST(ColumnRef(0) AS Boolean NULL))
 optimized expr : NULL
-output type    : NULL
-output domain  : {NULL}
-output         : NULL
+evaluation:
++--------+--------+--------------+
+|        | a      | Output       |
++--------+--------+--------------+
+| Type   | NULL   | Boolean NULL |
+| Domain | {NULL} | {NULL}       |
+| Row 0  | NULL   | NULL         |
+| Row 1  | NULL   | NULL         |
+| Row 2  | NULL   | NULL         |
+| Row 3  | NULL   | NULL         |
+| Row 4  | NULL   | NULL         |
++--------+--------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| a      | Null { len: 5 }                                                          |
+| Output | NullableColumn { column: Boolean([0b___11111]), validity: [0b___00000] } |
++--------+--------------------------------------------------------------------------+
 
 
 ast            : NOT a
@@ -697,9 +712,9 @@ output         : true
 
 ast            : null XOR false
 raw expr       : xor(NULL, false)
-checked expr   : xor<NULL, Boolean NULL>(NULL, CAST(false AS Boolean NULL))
+checked expr   : xor<Boolean NULL, Boolean NULL>(CAST(NULL AS Boolean NULL), CAST(false AS Boolean NULL))
 optimized expr : NULL
-output type    : NULL
+output type    : Boolean NULL
 output domain  : {NULL}
 output         : NULL
 

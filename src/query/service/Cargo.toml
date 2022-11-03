@@ -80,6 +80,7 @@ async-recursion = "1.0.0"
 async-stream = "0.3.3"
 async-trait = { version = "0.1.57", package = "async-trait-fn" }
 backon = "0.2"
+base64 = "0.13.0"
 bumpalo = "3.11.0"
 byteorder = "1.4.3"
 bytes = "1.2.1"

@@ -744,6 +744,24 @@ UseDatabase {
 
 
 ---------- Input ----------
+create catalog ctl type=hive connection=(url='<hive-meta-store>' thrift_protocol='binary');
+---------- Output ---------
+CREATE CATALOG ctl TYPE='HIVE' CONNECTION = ( thrift_protocol='binary' url='<hive-meta-store>' )
+---------- AST ------------
+CreateCatalog(
+    CreateCatalogStmt {
+        if_not_exists: false,
+        catalog_name: "ctl",
+        catalog_type: Hive,
+        options: {
+            "thrift_protocol": "binary",
+            "url": "<hive-meta-store>",
+        },
+    },
+)
+
+
+---------- Input ----------
 create database if not exists a;
 ---------- Output ---------
 CREATE DATABASE IF NOT EXISTS a
@@ -765,24 +783,24 @@ CreateDatabase(
 
 
 ---------- Input ----------
-create database catalog.t engine = Default;
+create database ctl.t engine = Default;
 ---------- Output ---------
-CREATE DATABASE catalog.t ENGINE = DEFAULT
+CREATE DATABASE ctl.t ENGINE = DEFAULT
 ---------- AST ------------
 CreateDatabase(
     CreateDatabaseStmt {
         if_not_exists: false,
         catalog: Some(
             Identifier {
-                name: "catalog",
+                name: "ctl",
                 quote: None,
-                span: Ident(16..23),
+                span: Ident(16..19),
             },
         ),
         database: Identifier {
             name: "t",
             quote: None,
-            span: Ident(24..25),
+            span: Ident(20..21),
         },
         engine: Some(
             Default,
@@ -843,24 +861,24 @@ CreateDatabase(
 
 
 ---------- Input ----------
-drop database catalog.t;
+drop database ctl.t;
 ---------- Output ---------
-DROP DATABASE catalog.t
+DROP DATABASE ctl.t
 ---------- AST ------------
 DropDatabase(
     DropDatabaseStmt {
         if_exists: false,
         catalog: Some(
             Identifier {
-                name: "catalog",
+                name: "ctl",
                 quote: None,
-                span: Ident(14..21),
+                span: Ident(14..17),
             },
         ),
         database: Identifier {
             name: "t",
             quote: None,
-            span: Ident(22..23),
+            span: Ident(18..19),
         },
     },
 )
@@ -5841,30 +5859,30 @@ AlterTable(
 
 
 ---------- Input ----------
-ALTER DATABASE IF EXISTS catalog.c RENAME TO a;
+ALTER DATABASE IF EXISTS ctl.c RENAME TO a;
 ---------- Output ---------
-ALTER DATABASE IF EXISTS catalog.c RENAME TO a
+ALTER DATABASE IF EXISTS ctl.c RENAME TO a
 ---------- AST ------------
 AlterDatabase(
     AlterDatabaseStmt {
         if_exists: true,
         catalog: Some(
             Identifier {
-                name: "catalog",
+                name: "ctl",
                 quote: None,
-                span: Ident(25..32),
+                span: Ident(25..28),
             },
         ),
         database: Identifier {
             name: "c",
             quote: None,
-            span: Ident(33..34),
+            span: Ident(29..30),
         },
         action: RenameDatabase {
             new_db: Identifier {
                 name: "a",
                 quote: None,
-                span: Ident(45..46),
+                span: Ident(41..42),
             },
         },
     },
@@ -5897,30 +5915,30 @@ AlterDatabase(
 
 
 ---------- Input ----------
-ALTER DATABASE catalog.c RENAME TO a;
+ALTER DATABASE ctl.c RENAME TO a;
 ---------- Output ---------
-ALTER DATABASE catalog.c RENAME TO a
+ALTER DATABASE ctl.c RENAME TO a
 ---------- AST ------------
 AlterDatabase(
     AlterDatabaseStmt {
         if_exists: false,
         catalog: Some(
             Identifier {
-                name: "catalog",
+                name: "ctl",
                 quote: None,
-                span: Ident(15..22),
+                span: Ident(15..18),
             },
         ),
         database: Identifier {
             name: "c",
             quote: None,
-            span: Ident(23..24),
+            span: Ident(19..20),
         },
         action: RenameDatabase {
             new_db: Identifier {
                 name: "a",
                 quote: None,
-                span: Ident(35..36),
+                span: Ident(31..32),
             },
         },
     },
