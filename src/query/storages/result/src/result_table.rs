@@ -15,6 +15,7 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
@@ -30,14 +31,13 @@ use common_planner::extras::Statistics;
 use common_planner::plans::Projection;
 use common_planner::Partitions;
 use common_planner::ReadDataSourcePlan;
+use common_storages_fuse::io::BlockReader;
+use common_storages_fuse::FuseTable;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::fuse::io::BlockReader;
-use crate::fuse::FuseTable;
-use crate::result::result_locations::ResultLocations;
-use crate::result::result_table_source::ResultTableSource;
-use crate::Table;
+use crate::result_locations::ResultLocations;
+use crate::result_table_source::ResultTableSource;
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(tag = "t", content = "c")]

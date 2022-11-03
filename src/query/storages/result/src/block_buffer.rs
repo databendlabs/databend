@@ -22,10 +22,10 @@ use common_datablocks::DataBlock;
 use common_exception::Result;
 use common_planner::plans::Projection;
 use common_planner::PartInfoPtr;
+use common_storages_fuse::io::BlockReader;
 
-use crate::fuse::io::BlockReader;
-use crate::result::ResultQueryInfo;
-use crate::result::ResultTableWriter;
+use crate::ResultQueryInfo;
+use crate::ResultTableWriter;
 
 trait BlockGetter {}
 

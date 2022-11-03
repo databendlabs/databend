@@ -66,6 +66,7 @@ common-storages-hive = { path = "../storages/hive", optional = true }
 common-storages-index = { path = "../storages/index" }
 common-storages-information-schema = { path = "../storages/information-schema" }
 common-storages-preludes = { path = "../storages/preludes" }
+common-storages-result = { path = "../storages/result" }
 common-storages-share = { path = "../storages/share" }
 common-storages-view = { path = "../storages/view" }
 common-streams = { path = "../streams" }

@@ -29,18 +29,18 @@ use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 use common_planner::plans::Projection;
 use common_planner::PartInfoPtr;
+use common_storages_fuse::io::BlockReader;
+use common_storages_fuse::statistics::BlockStatistics;
+use common_storages_fuse::statistics::StatisticsAccumulator;
+use common_storages_fuse::FuseTable;
 use opendal::Operator;
 
-use crate::fuse::io::BlockReader;
-use crate::fuse::statistics::BlockStatistics;
-use crate::fuse::statistics::StatisticsAccumulator;
-use crate::fuse::FuseTable;
-use crate::result::block_buffer::BlockBuffer;
-use crate::result::block_buffer::BlockInfo;
-use crate::result::result_locations::ResultLocations;
-use crate::result::result_table::ResultStorageInfo;
-use crate::result::result_table::ResultTableMeta;
-use crate::result::ResultQueryInfo;
+use crate::block_buffer::BlockBuffer;
+use crate::block_buffer::BlockInfo;
+use crate::result_locations::ResultLocations;
+use crate::result_table::ResultStorageInfo;
+use crate::result_table::ResultTableMeta;
+use crate::ResultQueryInfo;
 
 enum State {
     None,

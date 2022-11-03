@@ -26,9 +26,9 @@ use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 use common_planner::PartInfoPtr;
+use common_storages_fuse::io::BlockReader;
 
-use crate::fuse::io::BlockReader;
-use crate::result::result_table_source::State::Generated;
+use crate::result_table_source::State::Generated;
 
 enum State {
     ReadData(Option<PartInfoPtr>),

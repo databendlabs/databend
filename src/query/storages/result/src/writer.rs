@@ -24,18 +24,18 @@ use common_exception::Result;
 use common_fuse_meta::meta::SegmentInfo;
 use common_fuse_meta::meta::Statistics as FuseMetaStatistics;
 use common_planner::PartInfoPtr;
+use common_storages_fuse::statistics::BlockStatistics;
+use common_storages_fuse::statistics::StatisticsAccumulator;
+use common_storages_fuse::FuseTable;
 use common_streams::SendableDataBlockStream;
 use futures::StreamExt;
 use opendal::Operator;
 use tracing::warn;
 
-use crate::fuse::statistics::BlockStatistics;
-use crate::fuse::statistics::StatisticsAccumulator;
-use crate::fuse::FuseTable;
-use crate::result::result_locations::ResultLocations;
-use crate::result::result_table::ResultStorageInfo;
-use crate::result::result_table::ResultTableMeta;
-use crate::result::ResultQueryInfo;
+use crate::result_locations::ResultLocations;
+use crate::result_table::ResultStorageInfo;
+use crate::result_table::ResultTableMeta;
+use crate::ResultQueryInfo;
 
 pub struct ResultTableWriter {
     stopped: bool,

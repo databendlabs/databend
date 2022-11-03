@@ -54,6 +54,7 @@ members = [
     "src/query/storages/information-schema",
     "src/query/storages/preludes",
     "src/query/storages/factory",
+    "src/query/storages/result",
     "src/query/storages/share",
     "src/query/storages/view",
     "src/query/streams",
