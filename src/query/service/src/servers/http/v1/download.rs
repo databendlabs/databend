@@ -22,7 +22,7 @@ use common_meta_types::StageFileFormatType;
 use common_planner::extras::Extras;
 use common_planner::ReadDataSourcePlan;
 use common_planner::SourceInfo;
-use common_storages_result::ResultTable;
+use common_storages_fuse_result::ResultTable;
 use futures::StreamExt;
 
 use crate::sessions::QueryContext;

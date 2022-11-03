@@ -23,7 +23,7 @@ use common_base::base::tokio::sync::RwLock;
 use common_base::base::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_storages_result::BlockBuffer;
+use common_storages_fuse_result::BlockBuffer;
 use serde::Deserialize;
 use serde::Serialize;
 

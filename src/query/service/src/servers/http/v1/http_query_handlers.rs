@@ -17,7 +17,7 @@ use std::str::FromStr;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_meta_types::StageFileFormatType;
-use common_storages_result::ResultTable;
+use common_storages_fuse_result::ResultTable;
 use poem::error::Error as PoemError;
 use poem::error::InternalServerError;
 use poem::error::NotFound;

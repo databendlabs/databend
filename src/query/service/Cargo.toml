@@ -62,11 +62,11 @@ common-storages-cache = { path = "../storages/cache" }
 common-storages-constants = { path = "../storages/constants" }
 common-storages-factory = { path = "../storages/factory" }
 common-storages-fuse = { path = "../storages/fuse" }
+common-storages-fuse-result = { path = "../storages/fuse-result" }
 common-storages-hive = { path = "../storages/hive", optional = true }
 common-storages-index = { path = "../storages/index" }
 common-storages-information-schema = { path = "../storages/information-schema" }
 common-storages-preludes = { path = "../storages/preludes" }
-common-storages-result = { path = "../storages/result" }
 common-storages-share = { path = "../storages/share" }
 common-storages-view = { path = "../storages/view" }
 common-streams = { path = "../streams" }

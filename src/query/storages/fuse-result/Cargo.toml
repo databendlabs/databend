@@ -1,5 +1,5 @@
 [package]
-name = "common-storages-result"
+name = "common-storages-fuse-result"
 version = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
