@@ -169,7 +169,6 @@ impl<'a> SegmentAccumulator<'a> {
 
     // accumulate one segment
     pub async fn add(&mut self, segment_info: &'a SegmentInfo, location: Location) -> Result<()> {
-        eprintln!("ADD {}", segment_info.blocks.len());
         let num_blocks_current_segment = segment_info.blocks.len() as u64;
 
         if num_blocks_current_segment == 0 {
@@ -182,18 +181,15 @@ impl<'a> SegmentAccumulator<'a> {
                 // not enough blocks yet, just keep this segment
                 self.accumulated_num_blocks = s;
                 self.fragmented_segments.push((segment_info, location));
-                eprintln!("PUSH {}", segment_info.blocks.len());
                 return Ok(());
             } else if s >= self.threshold && s < 2 * self.threshold {
                 // compact the fragmented segments
                 self.fragmented_segments.push((segment_info, location));
                 self.compact_fragments().await?;
-                eprintln!("COMPACT {}", segment_info.blocks.len());
                 return Ok(());
             }
         }
         // TODO doc this
-        eprintln!("BARRIER {}", segment_info.blocks.len());
         self.barrier_compact_with(segment_info, location).await?;
 
         Ok(())
@@ -211,7 +207,6 @@ impl<'a> SegmentAccumulator<'a> {
         if fragments.len() == 1 {
             let (segment, location) = &fragments[0];
             merge_statistics_mut(&mut self.compacted_state.statistics, &segment.summary)?;
-            eprintln!("SEG NOT CHANGE");
             self.compacted_state
                 .segments_locations
                 .push(location.clone());
@@ -230,7 +225,6 @@ impl<'a> SegmentAccumulator<'a> {
         // 2.2 write down new segment
         let new_segment = SegmentInfo::new(blocks, new_statistics);
         let location = self.segment_writer.write_segment(new_segment).await?;
-        eprintln!("NEW_SEG");
         self.compacted_state
             .new_segment_paths
             .push(location.0.clone());
@@ -246,7 +240,6 @@ impl<'a> SegmentAccumulator<'a> {
         let num_block = segment_info.blocks.len() as u64;
         if self.accumulated_num_blocks + num_block < 2 * self.threshold {
             // TODO doc why we need this branch
-            eprintln!("B COMBINE");
             merge_statistics_mut(&mut self.compacted_state.statistics, &segment_info.summary)?;
             self.fragmented_segments.push((segment_info, location));
             self.compact_fragments().await?;
@@ -256,7 +249,6 @@ impl<'a> SegmentAccumulator<'a> {
             // be of perfect size (smaller, but not larger).
             // this happens if the size of segment BEFORE compaction is already
             // larger than threshold.
-            eprintln!("B COMPACT FIRST");
             self.compact_fragments().await?;
             // after compaction, we keep this segment directly as compacted, since
             // it is large enough
@@ -270,7 +262,6 @@ impl<'a> SegmentAccumulator<'a> {
     pub async fn finalize(mut self) -> Result<SegmentCompactionState> {
         if !self.fragmented_segments.is_empty() {
             // some fragments left, compact them with the last compacted segment
-            eprintln!("F COMPACT ");
             self.compact_fragments().await?;
         }
         Ok(self.compacted_state)
