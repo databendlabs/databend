@@ -32,8 +32,8 @@ use common_storages_fuse::io::MetaReaders;
 use common_storages_fuse::io::SegmentInfoReader;
 use common_storages_fuse::io::SegmentWriter;
 use common_storages_fuse::io::TableMetaLocationGenerator;
-use common_storages_fuse::operations::SegmentAccumulator;
 use common_storages_fuse::operations::SegmentCompactionState;
+use common_storages_fuse::operations::SegmentCompactor;
 use common_storages_fuse::statistics::BlockStatistics;
 use common_storages_fuse::statistics::StatisticsAccumulator;
 use common_storages_fuse::FuseTable;
@@ -350,7 +350,7 @@ async fn test_segment_accumulator() -> Result<()> {
     // empty segment will be dropped
     {
         let segment_writer = SegmentWriter::new(&data_accessor, &location_gen, &None);
-        let mut accumulator = SegmentAccumulator::new(threshold, segment_writer);
+        let mut accumulator = SegmentCompactor::new(threshold, segment_writer);
         let seg = SegmentInfo::new(vec![], Statistics::default());
         accumulator.add(&seg, ("test".to_owned(), 1)).await?;
         let r = accumulator.finalize().await?;
@@ -384,14 +384,14 @@ impl CompactSegmentTestFixture {
     async fn run<'a>(
         &'a mut self,
         num_block_of_segments: &'a [usize],
-    ) -> Result<SegmentAccumulator<'a>> {
+    ) -> Result<SegmentCompactor<'a>> {
         let block_per_seg = self.block_per_seg;
         let data_accessor = &self.data_accessor;
         let location_gen = &self.location_gen;
         let block_writer = BlockWriter::new(data_accessor, location_gen);
 
         let segment_writer = SegmentWriter::new(data_accessor, location_gen, &None);
-        let mut seg_acc = SegmentAccumulator::new(block_per_seg, segment_writer.clone());
+        let mut seg_acc = SegmentCompactor::new(block_per_seg, segment_writer.clone());
 
         let (segments, blocks) =
             Self::gen_segments(&block_writer, &segment_writer, num_block_of_segments).await?;

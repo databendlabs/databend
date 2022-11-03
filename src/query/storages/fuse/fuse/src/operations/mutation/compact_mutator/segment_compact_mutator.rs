@@ -49,7 +49,6 @@ pub struct SegmentCompactMutator {
     compact_params: CompactOptions,
     data_accessor: Operator,
     location_generator: TableMetaLocationGenerator,
-
     compacted: SegmentCompactionState,
 }
 
@@ -99,7 +98,7 @@ impl TableMutator for SegmentCompactMutator {
         );
 
         let mut accumulator =
-            SegmentAccumulator::new(self.compact_params.block_per_seg as u64, segment_writer);
+            SegmentCompactor::new(self.compact_params.block_per_seg as u64, segment_writer);
 
         // feed segments into accumulator
         let mut compacted = 0;
@@ -148,22 +147,22 @@ impl TableMutator for SegmentCompactMutator {
     }
 }
 
-pub struct SegmentAccumulator<'a> {
-    compacted_state: SegmentCompactionState,
+pub struct SegmentCompactor<'a> {
     threshold: u64,
     accumulated_num_blocks: u64,
     fragmented_segments: Vec<(&'a SegmentInfo, Location)>,
     segment_writer: SegmentWriter<'a>,
+    compacted_state: SegmentCompactionState,
 }
 
-impl<'a> SegmentAccumulator<'a> {
+impl<'a> SegmentCompactor<'a> {
     pub fn new(threshold: u64, segment_writer: SegmentWriter<'a>) -> Self {
         Self {
-            compacted_state: Default::default(),
             threshold,
             accumulated_num_blocks: 0,
             fragmented_segments: vec![],
             segment_writer,
+            compacted_state: Default::default(),
         }
     }
 
