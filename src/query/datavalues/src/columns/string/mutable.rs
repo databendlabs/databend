@@ -87,6 +87,14 @@ impl MutableStringColumn {
         self.offsets.push(self.last_size as i64);
     }
 
+    pub fn write_from_char_iter(&mut self, iter: impl Iterator<Item = char>) {
+        for c in iter {
+            let mut buf = [0; 4];
+            let result = c.encode_utf8(&mut buf);
+            self.values.extend_from_slice(result.as_bytes());
+        }
+    }
+
     #[inline]
     pub fn commit_row(&mut self) {
         self.last_size = self.values.len();
