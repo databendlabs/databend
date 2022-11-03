@@ -85,44 +85,44 @@ impl Display for StorageParams {
         match self {
             StorageParams::Azblob(v) => write!(
                 f,
-                "azblob://container={},root={},endpoint={}",
+                "azblob | container={},root={},endpoint={}",
                 v.container, v.root, v.endpoint_url
             ),
-            StorageParams::Fs(v) => write!(f, "fs://root={}", v.root),
+            StorageParams::Fs(v) => write!(f, "fs | root={}", v.root),
             StorageParams::Ftp(v) => {
-                write!(f, "ftp://root={},endpoint={}", v.root, v.endpoint)
+                write!(f, "ftp | root={},endpoint={}", v.root, v.endpoint)
             }
             StorageParams::Gcs(v) => write!(
                 f,
-                "gcs://bucket={},root={},endpoint={}",
+                "gcs | bucket={},root={},endpoint={}",
                 v.bucket, v.root, v.endpoint_url
             ),
             #[cfg(feature = "storage-hdfs")]
             StorageParams::Hdfs(v) => {
-                write!(f, "hdfs://root={},name_node={}", v.root, v.name_node)
+                write!(f, "hdfs | root={},name_node={}", v.root, v.name_node)
             }
             StorageParams::Http(v) => {
-                write!(f, "http://endpoint={},paths={:?}", v.endpoint_url, v.paths)
+                write!(f, "http | endpoint={},paths={:?}", v.endpoint_url, v.paths)
             }
             StorageParams::Ipfs(c) => {
-                write!(f, "ipfs://endpoint={},root={}", c.endpoint_url, c.root)
+                write!(f, "ipfs | endpoint={},root={}", c.endpoint_url, c.root)
             }
-            StorageParams::Memory => write!(f, "memory://"),
-            StorageParams::Moka(_) => write!(f, "moka://"),
+            StorageParams::Memory => write!(f, "memory"),
+            StorageParams::Moka(_) => write!(f, "moka"),
             StorageParams::Obs(v) => write!(
                 f,
-                "obs://bucket={},root={},endpoint={}",
+                "obs | bucket={},root={},endpoint={}",
                 v.bucket, v.root, v.endpoint_url
             ),
             StorageParams::Oss(v) => write!(
                 f,
-                "oss://bucket={},root={},endpoint={}",
+                "oss | bucket={},root={},endpoint={}",
                 v.bucket, v.root, v.endpoint_url
             ),
             StorageParams::S3(v) => {
                 write!(
                     f,
-                    "s3://bucket={},root={},endpoint={}",
+                    "s3 | bucket={},root={},endpoint={}",
                     v.bucket, v.root, v.endpoint_url
                 )
             }
