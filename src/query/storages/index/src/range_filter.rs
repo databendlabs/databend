@@ -26,13 +26,13 @@ use common_functions::scalars::check_pattern_type;
 use common_functions::scalars::FunctionContext;
 use common_functions::scalars::FunctionFactory;
 use common_functions::scalars::PatternType;
-use common_fuse_meta::meta::StatisticsOfColumns;
 use common_planner::Expression;
 use common_planner::RequireColumnsVisitor;
 use common_sql::evaluator::EvalNode;
 use common_sql::evaluator::Evaluator;
 use common_sql::evaluator::ExpressionMonotonicityVisitor;
 use common_sql::executor::ExpressionOp;
+use common_storages_fuse_meta::meta::StatisticsOfColumns;
 
 #[derive(Clone)]
 pub struct RangeFilter {

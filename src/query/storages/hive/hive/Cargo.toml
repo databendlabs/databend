@@ -18,7 +18,6 @@ common-catalog = { path = "../../../catalog" }
 common-datablocks = { path = "../../../datablocks" }
 common-datavalues = { path = "../../../datavalues" }
 common-exception = { path = "../../../../common/exception" }
-common-fuse-meta = { path = "../../fuses/fuse-meta" }
 common-hive-meta-store = { path = "../hive-meta-store" }
 common-meta-app = { path = "../../../../meta/app" }
 common-meta-types = { path = "../../../../meta/types" }
@@ -27,6 +26,7 @@ common-pipeline-sources = { path = "../../../pipeline/sources" }
 common-planner = { path = "../../../planner" }
 common-storage = { path = "../../../../common/storage" }
 common-storages-cache = { path = "../../cache" }
+common-storages-fuse-meta = { path = "../../fuse/fuse-meta" }
 common-storages-index = { path = "../../index" }
 
 thrift = { git = "https://github.com/datafuse-extras/thrift", tag = "v0.17.0" }

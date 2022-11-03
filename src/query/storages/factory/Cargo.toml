@@ -16,7 +16,7 @@ common-catalog = { path = "../../catalog" }
 common-config = { path = "../../config" }
 common-exception = { path = "../../../common/exception" }
 common-meta-app = { path = "../../../meta/app" }
-common-storages-fuse = { path = "../fuses/fuse" }
+common-storages-fuse = { path = "../fuse/fuse" }
 common-storages-index = { path = "../index" }
 common-storages-memory = { path = "../memory" }
 common-storages-null = { path = "../null" }

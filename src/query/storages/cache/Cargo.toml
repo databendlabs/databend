@@ -15,7 +15,7 @@ test = false
 common-arrow = { path = "../../../common/arrow" }
 common-cache = { path = "../../../common/cache" }
 common-exception = { path = "../../../common/exception" }
-common-fuse-meta = { path = "../fuses/fuse-meta" }
+common-storages-fuse-meta = { path = "../fuse/fuse-meta" }
 
 async-trait = { version = "0.1.57", package = "async-trait-fn" }
 opendal = { version = "0.19", features = ["layers-retry"] }

@@ -21,7 +21,6 @@ common-datavalues = { path = "../datavalues" }
 common-exception = { path = "../../common/exception" }
 common-formats = { path = "../formats" }
 common-functions = { path = "../functions" }
-common-fuse-meta = { path = "../storages/fuses/fuse-meta" }
 common-grpc = { path = "../../common/grpc" }
 common-hive-meta-store = { path = "../storages/hive/hive-meta-store", optional = true }
 common-http = { path = "../../common/http" }
@@ -41,6 +40,7 @@ common-planner = { path = "../planner" }
 common-settings = { path = "../settings" }
 common-storage = { path = "../../common/storage" }
 common-storages-constants = { path = "../storages/constants" }
+common-storages-fuse-meta = { path = "../storages/fuse/fuse-meta" }
 common-storages-view = { path = "../storages/view" }
 common-tracing = { path = "../../common/tracing" }
 common-users = { path = "../users" }
