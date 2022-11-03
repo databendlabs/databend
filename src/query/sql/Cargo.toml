@@ -23,7 +23,7 @@ common-formats = { path = "../formats" }
 common-functions = { path = "../functions" }
 common-fuse-meta = { path = "../storages/fuses/fuse-meta" }
 common-grpc = { path = "../../common/grpc" }
-common-hive-meta-store = { path = "../storages/hive-meta-store", optional = true }
+common-hive-meta-store = { path = "../storages/hive/hive-meta-store", optional = true }
 common-http = { path = "../../common/http" }
 common-io = { path = "../../common/io" }
 common-management = { path = "../management" }

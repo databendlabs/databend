@@ -40,7 +40,7 @@ common-functions = { path = "../functions" }
 common-fuse-meta = { path = "../storages/fuses/fuse-meta" }
 common-grpc = { path = "../../common/grpc" }
 common-hashtable = { path = "../../common/hashtable" }
-common-hive-meta-store = { path = "../storages/hive-meta-store", optional = true }
+common-hive-meta-store = { path = "../storages/hive/hive-meta-store", optional = true }
 common-http = { path = "../../common/http" }
 common-io = { path = "../../common/io" }
 common-management = { path = "../management" }
@@ -63,7 +63,7 @@ common-storages-constants = { path = "../storages/constants" }
 common-storages-factory = { path = "../storages/factory" }
 common-storages-fuse = { path = "../storages/fuses/fuse" }
 common-storages-fuse-result = { path = "../storages/fuses/fuse-result" }
-common-storages-hive = { path = "../storages/hive", optional = true }
+common-storages-hive = { path = "../storages/hive/hive", optional = true }
 common-storages-index = { path = "../storages/index" }
 common-storages-information-schema = { path = "../storages/information-schema" }
 common-storages-memory = { path = "../storages/memory" }

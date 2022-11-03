@@ -1,0 +1,40 @@
+[package]
+name = "common-storages-hive"
+version = "0.1.0"
+edition = "2021"
+authors = ["Databend Authors <opensource@datafuselabs.com>"]
+license = "Apache-2.0"
+publish = false
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+doctest = false
+test = false
+
+[dependencies]
+common-arrow = { path = "../../../../common/arrow" }
+common-base = { path = "../../../../common/base" }
+common-catalog = { path = "../../../catalog" }
+common-datablocks = { path = "../../../datablocks" }
+common-datavalues = { path = "../../../datavalues" }
+common-exception = { path = "../../../../common/exception" }
+common-fuse-meta = { path = "../../fuses/fuse-meta" }
+common-hive-meta-store = { path = "../hive-meta-store" }
+common-meta-app = { path = "../../../../meta/app" }
+common-meta-types = { path = "../../../../meta/types" }
+common-pipeline-core = { path = "../../../pipeline/core" }
+common-pipeline-sources = { path = "../../../pipeline/sources" }
+common-planner = { path = "../../../planner" }
+common-storage = { path = "../../../../common/storage" }
+common-storages-cache = { path = "../../cache" }
+common-storages-index = { path = "../../index" }
+
+thrift = { git = "https://github.com/datafuse-extras/thrift", tag = "v0.17.0" }
+
+async-recursion = "1.0.0"
+async-trait = "0.1.57"
+futures = "0.3.24"
+opendal = { version = "0.19", features = ["layers-retry"] }
+serde = { workspace = true }
+tracing = "0.1.36"
+typetag = "0.2.3"
