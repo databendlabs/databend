@@ -22,7 +22,7 @@ use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planner::Expression;
-use common_storages_fuse_meta::meta::BlockMeta;
+use common_storages_table_meta::meta::BlockMeta;
 use serde_json::json;
 
 use crate::io::SegmentsIO;

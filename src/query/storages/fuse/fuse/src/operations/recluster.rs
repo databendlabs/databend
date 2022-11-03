@@ -27,7 +27,7 @@ use common_pipeline_transforms::processors::transforms::TransformSortPartial;
 use common_planner::extras::Extras;
 use common_planner::ReadDataSourcePlan;
 use common_planner::SourceInfo;
-use common_storages_fuse_meta::meta::BlockMeta;
+use common_storages_table_meta::meta::BlockMeta;
 
 use crate::operations::FuseTableSink;
 use crate::operations::ReclusterMutator;

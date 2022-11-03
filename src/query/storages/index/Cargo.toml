@@ -22,7 +22,7 @@ common-exception = { path = "../../../common/exception" }
 common-functions = { path = "../../functions" }
 common-planner = { path = "../../planner" }
 common-sql = { path = "../../sql" }
-common-storages-fuse-meta = { path = "../fuse/fuse-meta" }
+common-storages-table-meta = { path = "../table-meta" }
 
 xorfilter-rs = { git = "https://github.com/datafuse-extras/xorfilter", features = [
     "cbordata",

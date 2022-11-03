@@ -20,8 +20,8 @@ use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 use common_planner::Expression;
 use common_sql::executor::ExpressionOp;
-use common_storages_fuse_meta::meta::Location;
 use common_storages_index::BlockFilter;
+use common_storages_table_meta::meta::Location;
 use opendal::Operator;
 
 use crate::io::BlockFilterReader;

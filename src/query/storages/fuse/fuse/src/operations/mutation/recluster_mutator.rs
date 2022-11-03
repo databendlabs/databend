@@ -20,10 +20,10 @@ use std::sync::Arc;
 
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_storages_fuse_meta::meta::BlockMeta;
-use common_storages_fuse_meta::meta::SegmentInfo;
-use common_storages_fuse_meta::meta::TableSnapshot;
-use common_storages_fuse_meta::meta::Versioned;
+use common_storages_table_meta::meta::BlockMeta;
+use common_storages_table_meta::meta::SegmentInfo;
+use common_storages_table_meta::meta::TableSnapshot;
+use common_storages_table_meta::meta::Versioned;
 use opendal::Operator;
 
 use crate::io::BlockCompactor;

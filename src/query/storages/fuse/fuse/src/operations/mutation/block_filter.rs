@@ -23,7 +23,7 @@ use common_exception::Result;
 use common_planner::plans::Projection;
 use common_planner::Expression;
 use common_sql::evaluator::Evaluator;
-use common_storages_fuse_meta::meta::BlockMeta;
+use common_storages_table_meta::meta::BlockMeta;
 
 use crate::operations::mutation::deletion_mutator::Deletion;
 use crate::FuseTable;

@@ -15,10 +15,10 @@
 use std::marker::PhantomData;
 
 use common_exception::Result;
-use common_storages_fuse_meta::meta::SegmentInfo;
-use common_storages_fuse_meta::meta::SegmentInfoVersion;
-use common_storages_fuse_meta::meta::SnapshotVersion;
-use common_storages_fuse_meta::meta::TableSnapshot;
+use common_storages_table_meta::meta::SegmentInfo;
+use common_storages_table_meta::meta::SegmentInfoVersion;
+use common_storages_table_meta::meta::SnapshotVersion;
+use common_storages_table_meta::meta::TableSnapshot;
 use futures::AsyncRead;
 use serde::de::DeserializeOwned;
 use serde_json::from_slice;

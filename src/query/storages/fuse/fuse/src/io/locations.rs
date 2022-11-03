@@ -16,11 +16,11 @@ use std::marker::PhantomData;
 
 use common_datablocks::DataBlock;
 use common_exception::Result;
-use common_storages_fuse_meta::meta::BlockFilter;
-use common_storages_fuse_meta::meta::Location;
-use common_storages_fuse_meta::meta::SegmentInfo;
-use common_storages_fuse_meta::meta::SnapshotVersion;
-use common_storages_fuse_meta::meta::Versioned;
+use common_storages_table_meta::meta::BlockFilter;
+use common_storages_table_meta::meta::Location;
+use common_storages_table_meta::meta::SegmentInfo;
+use common_storages_table_meta::meta::SnapshotVersion;
+use common_storages_table_meta::meta::Versioned;
 use uuid::Uuid;
 
 use crate::constants::FUSE_TBL_BLOCK_PREFIX;
