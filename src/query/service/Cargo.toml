@@ -71,6 +71,8 @@ common-storages-null = { path = "../storages/null" }
 common-storages-preludes = { path = "../storages/preludes" }
 common-storages-random = { path = "../storages/random" }
 common-storages-share = { path = "../storages/share" }
+common-storages-stage = { path = "../storages/stage" }
+common-storages-system = { path = "../storages/system" }
 common-storages-view = { path = "../storages/view" }
 common-streams = { path = "../streams" }
 common-tracing = { path = "../../common/tracing" }

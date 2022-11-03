@@ -18,7 +18,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::StageType;
 use common_planner::plans::DropStagePlan;
-use common_storages_preludes::stage::StageTable;
+use common_storages_stage::StageTable;
 use common_users::UserApiProvider;
 use tracing::info;
 
