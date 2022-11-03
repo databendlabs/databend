@@ -19,6 +19,8 @@ use common_fuse_meta::meta::SegmentInfo;
 use common_fuse_meta::meta::SegmentInfoVersion;
 use common_fuse_meta::meta::SnapshotVersion;
 use common_fuse_meta::meta::TableSnapshot;
+use common_fuse_meta::meta::TableSnapshotStatistics;
+use common_fuse_meta::meta::TableSnapshotStatisticsVersion;
 use futures::AsyncRead;
 use serde::de::DeserializeOwned;
 use serde_json::from_slice;
@@ -36,6 +38,17 @@ impl VersionedReader<TableSnapshot> for SnapshotVersion {
         let r = match self {
             SnapshotVersion::V1(v) => load_by_version(reader, v).await?,
             SnapshotVersion::V0(v) => load_by_version(reader, v).await?.into(),
+        };
+        Ok(r)
+    }
+}
+
+#[async_trait::async_trait]
+impl VersionedReader<TableSnapshotStatistics> for TableSnapshotStatisticsVersion {
+    async fn read<R>(&self, reader: R) -> Result<TableSnapshotStatistics>
+    where R: AsyncRead + Unpin + Send {
+        let r = match self {
+            TableSnapshotStatisticsVersion::V0(v) => load_by_version(reader, v).await?,
         };
         Ok(r)
     }

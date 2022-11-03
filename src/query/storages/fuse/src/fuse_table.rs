@@ -29,10 +29,10 @@ use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_fuse_meta::meta::ClusterKey;
-use common_fuse_meta::meta::ColumnNDVs;
 use common_fuse_meta::meta::ColumnStatistics as FuseColumnStatistics;
 use common_fuse_meta::meta::Statistics as FuseStatistics;
 use common_fuse_meta::meta::TableSnapshot;
+use common_fuse_meta::meta::TableSnapshotStatistics;
 use common_fuse_meta::meta::Versioned;
 use common_meta_app::schema::TableInfo;
 use common_planner::extras::Extras;
@@ -147,6 +147,29 @@ impl FuseTable {
                 ))
             })?;
         Ok(table_storage_prefix(db_id, table_id))
+    }
+
+    pub fn table_snapshot_statitics_format_version(&self, location: &String) -> Result<u64> {
+        Ok(TableMetaLocationGenerator::snapshot_version(location))
+    }
+
+    #[tracing::instrument(level = "debug", skip_all)]
+    pub(crate) async fn read_table_snapshot_statitics(
+        &self,
+        snapshot: Option<&Arc<TableSnapshot>>,
+    ) -> Result<Option<Arc<TableSnapshotStatistics>>> {
+        match snapshot {
+            Some(snapshot) => {
+                if let Some(loc) = &snapshot.statistics_location {
+                    let ver = self.table_snapshot_statitics_format_version(loc)?;
+                    let reader = MetaReaders::table_snapshot_statistics_reader(self.get_operator());
+                    Ok(Some(reader.read(loc.as_str(), None, ver).await?))
+                } else {
+                    Ok(None)
+                }
+            }
+            None => Ok(None),
+        }
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
@@ -279,11 +302,8 @@ impl Table for FuseTable {
         let prev_version = self.snapshot_format_version().await?;
         let prev_timestamp = prev.as_ref().and_then(|v| v.timestamp);
         let prev_snapshot_id = prev.as_ref().map(|v| (v.snapshot_id, prev_version));
-        let prev_ndvs = if let Some(ref v) = prev {
-            v.cloumn_ndvs.clone()
-        } else {
-            Some(ColumnNDVs::default())
-        };
+        let prev_counts = prev.as_ref().and_then(|v| v.column_counts.clone());
+        let prev_stat_loc = prev.as_ref().and_then(|v| v.statistics_location.clone());
         let (summary, segments) = if let Some(v) = prev {
             (v.summary.clone(), v.segments.clone())
         } else {
@@ -298,7 +318,8 @@ impl Table for FuseTable {
             summary,
             segments,
             cluster_key_meta,
-            prev_ndvs,
+            prev_counts,
+            prev_stat_loc,
         );
 
         let mut table_info = self.table_info.clone();
@@ -309,6 +330,7 @@ impl Table for FuseTable {
             &table_info,
             &self.meta_location_generator,
             new_snapshot,
+            None,
             &self.operator,
         )
         .await
@@ -334,21 +356,20 @@ impl Table for FuseTable {
         } else {
             (FuseStatistics::default(), vec![])
         };
-        let prev_ndvs = if let Some(ref v) = prev {
-            v.cloumn_ndvs.clone()
-        } else {
-            Some(ColumnNDVs::default())
-        };
+        let prev_counts = prev.as_ref().and_then(|v| v.column_counts.clone());
+        let prev_stat_loc = prev.as_ref().and_then(|v| v.statistics_location.clone());
+        let snapshot_id = Uuid::new_v4();
 
         let new_snapshot = TableSnapshot::new(
-            Uuid::new_v4(),
+            snapshot_id,
             &prev_timestamp,
             prev_snapshot_id,
             schema,
             summary,
             segments,
             None,
-            prev_ndvs,
+            prev_counts,
+            prev_stat_loc,
         );
 
         let mut table_info = self.table_info.clone();
@@ -359,6 +380,7 @@ impl Table for FuseTable {
             &table_info,
             &self.meta_location_generator,
             new_snapshot,
+            None,
             &self.operator,
         )
         .await
@@ -439,7 +461,10 @@ impl Table for FuseTable {
             let stats = &snapshot.summary.col_stats;
             FuseTableColumnStatisticsProvider {
                 column_stats: stats.clone(),
-                column_ndvs: snapshot.get_number_of_distinct_values(),
+                column_ndvs: match snapshot.get_column_ndvs() {
+                    Some(ndvs) => ndvs.clone(),
+                    None => HashMap::new(),
+                },
             }
         } else {
             FuseTableColumnStatisticsProvider::default()

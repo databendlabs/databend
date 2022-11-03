@@ -36,6 +36,7 @@ use common_fuse_meta::meta::Location;
 use common_fuse_meta::meta::SegmentInfo;
 use common_fuse_meta::meta::Statistics;
 use common_fuse_meta::meta::TableSnapshot;
+use common_fuse_meta::meta::TableSnapshotStatistics;
 use common_fuse_meta::meta::Versioned;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableStatistics;
@@ -181,9 +182,10 @@ impl FuseTable {
         overwrite: bool,
     ) -> Result<()> {
         let prev = self.read_table_snapshot().await?;
+        let prev_statistics = self.read_table_snapshot_statitics(prev.as_ref()).await?;
         let prev_version = self.snapshot_format_version().await?;
         let prev_timestamp = prev.as_ref().and_then(|v| v.timestamp);
-        let prev_ndvs = prev.as_ref().and_then(|v| v.cloumn_ndvs.as_ref());
+        let prev_ndvs = prev_statistics.as_ref().map(|v| &v.column_ndvs);
         let schema = self.table_info.meta.schema.as_ref().clone();
         let (segments, summary) = Self::merge_append_operations(operation_log)?;
 
@@ -202,8 +204,15 @@ impl FuseTable {
             .map(|loc| (loc, SegmentInfo::VERSION))
             .collect();
 
-        let new_snapshot = if overwrite {
-            TableSnapshot::new(
+        let (new_snapshot, new_snapshot_statistics) = if overwrite {
+            let new_snapshot_statistics = TableSnapshotStatistics::new(Uuid::new_v4(), mut_ndvs);
+            let snapshot_statistics_location = self
+                .meta_location_generator
+                .snapshot_statistics_location_from_uuid(
+                    &new_snapshot_statistics.snapshot_id,
+                    new_snapshot_statistics.format_version(),
+                )?;
+            let new_snapshot = TableSnapshot::new(
                 Uuid::new_v4(),
                 &prev_timestamp,
                 prev.as_ref().map(|v| (v.snapshot_id, prev_version)),
@@ -211,8 +220,10 @@ impl FuseTable {
                 summary,
                 segments,
                 self.cluster_key_meta.clone(),
-                Some(ndvs.clone()),
-            )
+                Some(new_snapshot_statistics.get_column_counts()),
+                Some(snapshot_statistics_location),
+            );
+            (new_snapshot, new_snapshot_statistics)
         } else {
             Self::merge_table_operations(
                 self.table_info.meta.schema.as_ref(),
@@ -221,7 +232,8 @@ impl FuseTable {
                 segments,
                 summary,
                 self.cluster_key_meta.clone(),
-                Some(ndvs.clone()),
+                mut_ndvs,
+                &self.meta_location_generator,
             )?
         };
 
@@ -239,6 +251,7 @@ impl FuseTable {
             &self.table_info,
             &self.meta_location_generator,
             new_snapshot,
+            Some(new_snapshot_statistics),
             &self.operator,
         )
         .await
@@ -251,8 +264,9 @@ impl FuseTable {
         mut new_segments: Vec<Location>,
         statistics: Statistics,
         cluster_key_meta: Option<ClusterKey>,
-        ndvs: Option<ColumnNDVs>,
-    ) -> Result<TableSnapshot> {
+        ndvs: ColumnNDVs,
+        location_generator: &TableMetaLocationGenerator,
+    ) -> Result<(TableSnapshot, TableSnapshotStatistics)> {
         // 1. merge stats with previous snapshot, if any
         let stats = if let Some(snapshot) = &previous {
             let summary = &snapshot.summary;
@@ -269,6 +283,14 @@ impl FuseTable {
             new_segments.append(&mut segments)
         };
 
+        let counts = ndvs.get_number_of_distinct_values();
+
+        let new_snapshot_statistics = TableSnapshotStatistics::new(Uuid::new_v4(), ndvs);
+        let snapshot_statistics_location = location_generator
+            .snapshot_statistics_location_from_uuid(
+                &new_snapshot_statistics.snapshot_id,
+                new_snapshot_statistics.format_version(),
+            )?;
         let new_snapshot = TableSnapshot::new(
             Uuid::new_v4(),
             &prev_snapshot_timestamp,
@@ -277,9 +299,10 @@ impl FuseTable {
             stats,
             new_segments,
             cluster_key_meta,
-            ndvs,
+            Some(counts),
+            Some(snapshot_statistics_location),
         );
-        Ok(new_snapshot)
+        Ok((new_snapshot, new_snapshot_statistics))
     }
 
     pub async fn commit_to_meta_server(
@@ -287,6 +310,7 @@ impl FuseTable {
         table_info: &TableInfo,
         location_generator: &TableMetaLocationGenerator,
         snapshot: TableSnapshot,
+        snapshot_statistics: Option<TableSnapshotStatistics>,
         operator: &Operator,
     ) -> Result<()> {
         let snapshot_location = location_generator
@@ -294,6 +318,12 @@ impl FuseTable {
 
         // 1. write down snapshot
         write_meta(operator, &snapshot_location, &snapshot).await?;
+        let snapshot_statistics_location = snapshot.statistics_location.clone();
+        if let Some(snapshot_statistics_location) = &snapshot_statistics_location {
+            if let Some(ref snapshot_statistics) = snapshot_statistics {
+                write_meta(operator, snapshot_statistics_location, snapshot_statistics).await?;
+            }
+        }
 
         // 2. prepare table meta
         let mut new_table_meta = table_info.meta.clone();
@@ -302,6 +332,7 @@ impl FuseTable {
             OPT_KEY_SNAPSHOT_LOCATION.to_owned(),
             snapshot_location.clone(),
         );
+
         // remove legacy options
         utils::remove_legacy_options(&mut new_table_meta.options);
 
@@ -332,10 +363,23 @@ impl FuseTable {
         let reply = catalog.update_table_meta(&tenant, &db_name, req).await;
         match reply {
             Ok(_) => {
+                // upsert snapshot cache
                 if let Some(snapshot_cache) = CacheManager::instance().get_table_snapshot_cache() {
                     let cache = &mut snapshot_cache.write();
                     cache.put(snapshot_location.clone(), Arc::new(snapshot));
                 }
+                // upsert snapshot stastics cache
+                if let Some(snapshot_statistics_location) = snapshot_statistics_location {
+                    if let Some(snapshot_statistics) = snapshot_statistics {
+                        if let Some(mut_snapshot_statistics) =
+                            CacheManager::instance().get_table_snapshot_statistics_cache()
+                        {
+                            let cache = &mut mut_snapshot_statistics.write();
+                            cache.put(snapshot_statistics_location, Arc::new(snapshot_statistics));
+                        }
+                    }
+                }
+
                 // try keep a hit file of last snapshot
                 Self::write_last_snapshot_hint(operator, location_generator, snapshot_location)
                     .await;
@@ -345,6 +389,13 @@ impl FuseTable {
                 // commit snapshot to meta server failed, try to delete it.
                 // "major GC" will collect this, if deletion failure (even after DAL retried)
                 let _ = operator.object(&snapshot_location).delete().await;
+                if let Some(snapshot_statistics_location) = snapshot.statistics_location {
+                    let _ = operator
+                        .object(&snapshot_statistics_location)
+                        .delete()
+                        .await;
+                }
+
                 Err(e)
             }
         }
@@ -467,6 +518,7 @@ impl FuseTable {
                 latest_table_info,
                 &self.meta_location_generator,
                 snapshot_tobe_committed,
+                None,
                 &self.operator,
             )
             .await

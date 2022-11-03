@@ -21,6 +21,7 @@ pub use memory_cache::ItemCache;
 pub use memory_cache::LabeledItemCache;
 pub use memory_cache::SegmentInfoCache;
 pub use memory_cache::TableSnapshotCache;
+pub use memory_cache::TableSnapshotStatisticCache;
 
 pub use self::metrics::CacheDeferMetrics;
 pub use self::metrics::TenantLabel;

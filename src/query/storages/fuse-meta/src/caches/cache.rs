@@ -28,6 +28,7 @@ use crate::caches::memory_cache::LabeledBytesCache;
 use crate::caches::memory_cache::LabeledItemCache;
 use crate::caches::SegmentInfoCache;
 use crate::caches::TableSnapshotCache;
+use crate::caches::TableSnapshotStatisticCache;
 use crate::caches::TenantLabel;
 
 static DEFAULT_FILE_META_DATA_CACHE_ITEMS: u64 = 3000;
@@ -39,6 +40,7 @@ pub struct CacheManager {
     bloom_index_data_cache: Option<BloomIndexCache>,
     bloom_index_meta_cache: Option<BloomIndexMetaCache>,
     file_meta_data_cache: Option<FileMetaDataCache>,
+    table_statistic_cache: Option<TableSnapshotStatisticCache>,
     cluster_id: String,
     tenant_id: String,
 }
@@ -57,6 +59,7 @@ impl CacheManager {
                 bloom_index_data_cache: None,
                 bloom_index_meta_cache: None,
                 file_meta_data_cache: None,
+                table_statistic_cache: None,
                 cluster_id: config.cluster_id.clone(),
                 tenant_id: config.tenant_id.clone(),
             }))?;
@@ -69,6 +72,9 @@ impl CacheManager {
             };
             let table_snapshot_cache =
                 Self::new_item_cache(config.table_cache_snapshot_count, tenant_label.clone());
+            let table_statistic_cache =
+                Self::new_item_cache(config.table_cache_statistic_count, tenant_label.clone());
+
             let segment_info_cache =
                 Self::new_item_cache(config.table_cache_segment_count, tenant_label.clone());
             let bloom_index_data_cache = Self::new_bytes_cache(
@@ -89,6 +95,7 @@ impl CacheManager {
                 bloom_index_data_cache,
                 bloom_index_meta_cache,
                 file_meta_data_cache,
+                table_statistic_cache,
                 cluster_id: config.cluster_id.clone(),
                 tenant_id: config.tenant_id.clone(),
             }))?;
@@ -108,6 +115,10 @@ impl CacheManager {
 
     pub fn get_table_snapshot_cache(&self) -> Option<TableSnapshotCache> {
         self.table_snapshot_cache.clone()
+    }
+
+    pub fn get_table_snapshot_statistics_cache(&self) -> Option<TableSnapshotStatisticCache> {
+        self.table_statistic_cache.clone()
     }
 
     pub fn get_table_segment_cache(&self) -> Option<SegmentInfoCache> {

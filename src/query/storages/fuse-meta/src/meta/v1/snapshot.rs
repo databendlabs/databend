@@ -25,7 +25,6 @@ use serde::Serialize;
 use crate::meta::common::FormatVersion;
 use crate::meta::ClusterKey;
 use crate::meta::ColumnId;
-use crate::meta::ColumnNDVs;
 use crate::meta::Location;
 use crate::meta::SnapshotId;
 use crate::meta::Statistics;
@@ -61,7 +60,10 @@ pub struct TableSnapshot {
     // The metadata of the cluster keys.
     pub cluster_key_meta: Option<ClusterKey>,
 
-    pub cloumn_ndvs: Option<ColumnNDVs>,
+    pub column_counts: Option<HashMap<ColumnId, u64>>,
+
+    // table statistics file location
+    pub statistics_location: Option<String>,
 }
 
 impl TableSnapshot {
@@ -73,7 +75,8 @@ impl TableSnapshot {
         summary: Statistics,
         segments: Vec<Location>,
         cluster_key_meta: Option<ClusterKey>,
-        ndvs: Option<ColumnNDVs>,
+        column_counts: Option<HashMap<ColumnId, u64>>,
+        statistics_location: Option<String>,
     ) -> Self {
         let now = Utc::now();
         // make snapshot timestamp monotonically increased
@@ -92,10 +95,8 @@ impl TableSnapshot {
             summary,
             segments,
             cluster_key_meta,
-            cloumn_ndvs: match ndvs {
-                Some(ndvs) => Some(ndvs),
-                None => Some(ColumnNDVs::default()),
-            },
+            column_counts,
+            statistics_location,
         }
     }
 
@@ -110,7 +111,8 @@ impl TableSnapshot {
             clone.summary,
             clone.segments,
             clone.cluster_key_meta,
-            clone.cloumn_ndvs,
+            clone.column_counts,
+            clone.statistics_location,
         )
     }
 
@@ -118,11 +120,8 @@ impl TableSnapshot {
         self.format_version
     }
 
-    pub fn get_number_of_distinct_values(&self) -> HashMap<ColumnId, u64> {
-        match &self.cloumn_ndvs {
-            Some(column_ndvs) => column_ndvs.get_number_of_distinct_values(),
-            None => HashMap::new(),
-        }
+    pub fn get_column_ndvs(&self) -> &Option<HashMap<ColumnId, u64>> {
+        &self.column_counts
     }
 }
 
@@ -139,7 +138,8 @@ impl From<v0::TableSnapshot> for TableSnapshot {
             summary: s.summary,
             segments: s.segments.into_iter().map(|l| (l, 0)).collect(),
             cluster_key_meta: None,
-            cloumn_ndvs: Some(ColumnNDVs::default()),
+            column_counts: Some(HashMap::new()),
+            statistics_location: None,
         }
     }
 }
