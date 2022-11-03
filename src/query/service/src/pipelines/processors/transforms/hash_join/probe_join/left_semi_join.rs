@@ -26,6 +26,7 @@ use common_exception::Result;
 use common_hashtable::HashtableEntryRefLike;
 use common_hashtable::HashtableLike;
 
+use crate::pipelines::processors::transforms::hash_join::desc::MAX_BLOCK_SIZE;
 use crate::pipelines::processors::transforms::hash_join::row::RowPtr;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
 use crate::pipelines::processors::JoinHashTable;
@@ -131,12 +132,10 @@ impl JoinHashTable {
         H::Key: 'a,
     {
         let valids = &probe_state.valids;
-        let block_size = self.ctx.get_settings().get_max_block_size()? as usize;
-
         // The semi join will return multiple data blocks of similar size
         let mut probed_blocks = vec![];
-        let mut probe_indexes = Vec::with_capacity(block_size);
-        let mut build_indexes = Vec::with_capacity(block_size);
+        let mut probe_indexes = Vec::with_capacity(MAX_BLOCK_SIZE);
+        let mut build_indexes = Vec::with_capacity(MAX_BLOCK_SIZE);
 
         let other_predicate = self.hash_join_desc.other_predicate.as_ref().unwrap();
         // For semi join, it defaults to all
