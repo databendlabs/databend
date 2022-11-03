@@ -37,7 +37,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         let args_type = args_type.to_vec();
         Some(Arc::new(Function {
             signature: FunctionSignature {
-                name: "tuple",
+                name: "tuple".to_string(),
                 args_type: args_type.clone(),
                 return_type: DataType::Tuple(args_type.clone()),
                 property: FunctionProperty::default(),
@@ -88,7 +88,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
         Some(Arc::new(Function {
             signature: FunctionSignature {
-                name: "get",
+                name: "get".to_string(),
                 args_type: vec![DataType::Tuple(fields_ty.to_vec())],
                 return_type: fields_ty[idx].clone(),
                 property: FunctionProperty::default(),
@@ -121,7 +121,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
         Some(Arc::new(Function {
             signature: FunctionSignature {
-                name: "get",
+                name: "get".to_string(),
                 args_type: vec![DataType::Nullable(Box::new(DataType::Tuple(
                     fields_ty.to_vec(),
                 )))],

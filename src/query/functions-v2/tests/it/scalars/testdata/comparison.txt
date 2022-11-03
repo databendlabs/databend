@@ -9,9 +9,9 @@ output         : false
 
 ast            : null=null
 raw expr       : eq(NULL, NULL)
-checked expr   : eq<NULL, String NULL>(NULL, CAST(NULL AS String NULL))
+checked expr   : eq<String NULL, String NULL>(CAST(NULL AS String NULL), CAST(NULL AS String NULL))
 optimized expr : NULL
-output type    : NULL
+output type    : Boolean NULL
 output domain  : {NULL}
 output         : NULL
 
@@ -36,9 +36,9 @@ output         : true
 
 ast            : true=null
 raw expr       : eq(true, NULL)
-checked expr   : eq<Boolean NULL, NULL>(CAST(true AS Boolean NULL), NULL)
+checked expr   : eq<Boolean NULL, Boolean NULL>(CAST(true AS Boolean NULL), CAST(NULL AS Boolean NULL))
 optimized expr : NULL
-output type    : NULL
+output type    : Boolean NULL
 output domain  : {NULL}
 output         : NULL
 
@@ -220,9 +220,9 @@ output         : false
 
 ast            : true != null
 raw expr       : noteq(true, NULL)
-checked expr   : noteq<Boolean NULL, NULL>(CAST(true AS Boolean NULL), NULL)
+checked expr   : noteq<Boolean NULL, Boolean NULL>(CAST(true AS Boolean NULL), CAST(NULL AS Boolean NULL))
 optimized expr : NULL
-output type    : NULL
+output type    : Boolean NULL
 output domain  : {NULL}
 output         : NULL
 
@@ -340,9 +340,9 @@ output         : false
 
 ast            : true < null
 raw expr       : lt(true, NULL)
-checked expr   : lt<Boolean NULL, NULL>(CAST(true AS Boolean NULL), NULL)
+checked expr   : lt<Boolean NULL, Boolean NULL>(CAST(true AS Boolean NULL), CAST(NULL AS Boolean NULL))
 optimized expr : NULL
-output type    : NULL
+output type    : Boolean NULL
 output domain  : {NULL}
 output         : NULL
 
@@ -466,9 +466,9 @@ output         : true
 
 ast            : true <= null
 raw expr       : lte(true, NULL)
-checked expr   : lte<Boolean NULL, NULL>(CAST(true AS Boolean NULL), NULL)
+checked expr   : lte<Boolean NULL, Boolean NULL>(CAST(true AS Boolean NULL), CAST(NULL AS Boolean NULL))
 optimized expr : NULL
-output type    : NULL
+output type    : Boolean NULL
 output domain  : {NULL}
 output         : NULL
 
@@ -593,9 +593,9 @@ output         : false
 
 ast            : true > null
 raw expr       : gt(true, NULL)
-checked expr   : gt<Boolean NULL, NULL>(CAST(true AS Boolean NULL), NULL)
+checked expr   : gt<Boolean NULL, Boolean NULL>(CAST(true AS Boolean NULL), CAST(NULL AS Boolean NULL))
 optimized expr : NULL
-output type    : NULL
+output type    : Boolean NULL
 output domain  : {NULL}
 output         : NULL
 
@@ -724,9 +724,9 @@ output         : true
 
 ast            : true >= null
 raw expr       : gte(true, NULL)
-checked expr   : gte<Boolean NULL, NULL>(CAST(true AS Boolean NULL), NULL)
+checked expr   : gte<Boolean NULL, Boolean NULL>(CAST(true AS Boolean NULL), CAST(NULL AS Boolean NULL))
 optimized expr : NULL
-output type    : NULL
+output type    : Boolean NULL
 output domain  : {NULL}
 output         : NULL
 
