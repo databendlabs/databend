@@ -34,7 +34,13 @@ impl<'a> TypeSerializer<'a> for NullSerializer {
         buf.extend_from_slice(&format.nested.null_bytes);
     }
 
-    fn write_field_tsv(&self, _row_index: usize, buf: &mut Vec<u8>, format: &FormatSettings) {
+    fn write_field_tsv(
+        &self,
+        _row_index: usize,
+        buf: &mut Vec<u8>,
+        format: &FormatSettings,
+        _in_nested: bool,
+    ) {
         buf.extend_from_slice(&format.null_bytes);
     }
 

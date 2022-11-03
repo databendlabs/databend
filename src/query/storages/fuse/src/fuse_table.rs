@@ -92,7 +92,7 @@ impl FuseTable {
         let mut operator = match table_info.from_share {
             Some(ref from_share) => create_share_table_operator(
                 ShareTableConfig::share_endpoint_address(),
-                &table_info.tenant,
+                ShareTableConfig::share_endpoint_token(),
                 &from_share.tenant,
                 &from_share.share_name,
                 &table_info.name,

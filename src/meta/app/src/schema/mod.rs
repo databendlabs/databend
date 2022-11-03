@@ -14,9 +14,11 @@
 
 //! Schema types
 
+mod catalog;
 mod database;
 mod table;
 
+pub use catalog::CatalogType;
 pub use database::CreateDatabaseReply;
 pub use database::CreateDatabaseReq;
 pub use database::DatabaseId;

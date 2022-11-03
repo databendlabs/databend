@@ -21,7 +21,7 @@ use std::sync::Arc;
 
 use anyhow::anyhow;
 use async_trait::async_trait;
-use base64::encode_config;
+use common_auth::RefreshableToken;
 use http::Request;
 use http::StatusCode;
 use opendal::http_util::new_request_build_error;
@@ -93,20 +93,19 @@ impl Layer for SharedLayer {
 
 pub fn create_share_table_operator(
     share_endpoint_address: Option<String>,
-    from_tenant_id: &str,
+    share_endpoint_token: RefreshableToken,
     share_tenant_id: &str,
     share_name: &str,
     table_name: &str,
 ) -> Operator {
     match share_endpoint_address {
         Some(share_endpoint_address) => {
-            let token = encode_config(from_tenant_id, base64::URL_SAFE);
             let signer = SharedSigner::new(
                 &format!(
                     "http://{}/tenant/{}/{}/table/{}/presign",
                     share_endpoint_address, share_tenant_id, share_name, table_name
                 ),
-                &token,
+                share_endpoint_token,
             );
             Operator::from_env(Scheme::Memory)
                 .expect("must init")

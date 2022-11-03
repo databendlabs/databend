@@ -70,7 +70,13 @@ pub trait TypeSerializer<'a>: Send + Sync {
     }
 
     // row based formats
-    fn write_field_tsv(&self, row_index: usize, buf: &mut Vec<u8>, format: &FormatSettings);
+    fn write_field_tsv(
+        &self,
+        row_index: usize,
+        buf: &mut Vec<u8>,
+        format: &FormatSettings,
+        in_nested: bool,
+    );
     fn write_field_csv(&self, row_index: usize, buf: &mut Vec<u8>, format: &FormatSettings);
     fn write_field_json(
         &self,

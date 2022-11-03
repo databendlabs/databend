@@ -1210,6 +1210,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-auth"
+version = "0.1.0"
+dependencies = [
+ "common-base",
+ "common-datavalues",
+ "http",
+ "tempfile",
+]
+
+[[package]]
 name = "common-base"
 version = "0.1.0"
 dependencies = [
@@ -1377,6 +1387,7 @@ dependencies = [
  "goldenfile",
  "hex",
  "itertools",
+ "lexical-core",
  "match-template",
  "num-traits",
  "ordered-float 3.3.0",
@@ -1578,6 +1589,7 @@ dependencies = [
  "byteorder",
  "fast-float",
  "ordered-float 3.3.0",
+ "serde_json",
 ]
 
 [[package]]
@@ -1950,6 +1962,7 @@ dependencies = [
  "async-trait",
  "base64",
  "bytes",
+ "common-auth",
  "http",
  "moka",
  "opendal",
@@ -2043,6 +2056,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "backon",
+ "common-auth",
  "common-base",
  "common-exception",
  "globiter",
@@ -2204,6 +2218,7 @@ name = "common-storages-preludes"
 version = "0.1.0"
 dependencies = [
  "async-trait-fn",
+ "backon",
  "chrono",
  "common-base",
  "common-building",
@@ -2211,6 +2226,7 @@ dependencies = [
  "common-datablocks",
  "common-datavalues",
  "common-exception",
+ "common-formats",
  "common-functions",
  "common-meta-app",
  "common-meta-types",
@@ -2225,6 +2241,7 @@ dependencies = [
  "futures",
  "itertools",
  "once_cell",
+ "opendal",
  "parking_lot 0.12.1",
  "serde",
  "serde_json",
@@ -2232,6 +2249,7 @@ dependencies = [
  "snailquote",
  "tracing",
  "typetag",
+ "uuid",
  "walkdir",
 ]
 

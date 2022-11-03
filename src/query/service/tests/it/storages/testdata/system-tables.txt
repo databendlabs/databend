@@ -206,6 +206,7 @@ DB.Table: 'system'.'configs', Table: configs-table_id:1, ver:0, Engine: SystemCo
 | query   | rpc_tls_server_cert                  |                                |             |
 | query   | rpc_tls_server_key                   |                                |             |
 | query   | share_endpoint_address               |                                |             |
+| query   | share_endpoint_auth_token_file       |                                |             |
 | query   | table_cache_block_meta_count         | 102400                         |             |
 | query   | table_cache_bloom_index_data_bytes   | 1073741824                     |             |
 | query   | table_cache_bloom_index_meta_count   | 3000                           |             |
