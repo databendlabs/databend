@@ -101,11 +101,7 @@ impl RowSpace {
         let mut indices = Vec::with_capacity(row_ptrs.len());
 
         for row_ptr in row_ptrs.iter() {
-            indices.push((
-                row_ptr.chunk_index as usize,
-                row_ptr.row_index as usize,
-                1usize,
-            ));
+            indices.push((row_ptr.chunk_index, row_ptr.row_index, 1usize));
         }
 
         if !data_blocks.is_empty() && num_rows != 0 {

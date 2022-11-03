@@ -552,7 +552,7 @@ async fn test_insert() -> Result<()> {
         assert_eq!(result.data.len(), data_len, "{:?}", result);
         assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
         assert_eq!(
-            result.stats.progresses.write_progress.rows as usize, rows_written,
+            result.stats.progresses.write_progress.rows, rows_written,
             "{:?}",
             result
         );

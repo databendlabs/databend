@@ -99,7 +99,7 @@ impl TopNPrunner {
         Ok(id_stats
             .iter()
             .map(|s| (s.0, s.2.clone()))
-            .take(self.limit as usize)
+            .take(self.limit)
             .collect())
     }
 }
