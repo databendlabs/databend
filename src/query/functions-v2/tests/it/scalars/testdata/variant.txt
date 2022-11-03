@@ -1,8 +1,8 @@
 ast            : parse_json(NULL)
 raw expr       : parse_json(NULL)
-checked expr   : parse_json<NULL>(NULL)
+checked expr   : parse_json<String NULL>(CAST(NULL AS String NULL))
 optimized expr : NULL
-output type    : NULL
+output type    : Variant NULL
 output domain  : {NULL}
 output         : NULL
 
@@ -141,9 +141,9 @@ evaluation (internal):
 
 ast            : try_parse_json(NULL)
 raw expr       : try_parse_json(NULL)
-checked expr   : try_parse_json<NULL>(NULL)
+checked expr   : try_parse_json<String NULL>(CAST(NULL AS String NULL))
 optimized expr : NULL
-output type    : NULL
+output type    : Variant NULL
 output domain  : {NULL}
 output         : NULL
 
@@ -274,9 +274,9 @@ evaluation (internal):
 
 ast            : check_json(NULL)
 raw expr       : check_json(NULL)
-checked expr   : check_json<NULL>(NULL)
+checked expr   : check_json<String NULL>(CAST(NULL AS String NULL))
 optimized expr : NULL
-output type    : NULL
+output type    : String NULL
 output domain  : {NULL}
 output         : NULL
 

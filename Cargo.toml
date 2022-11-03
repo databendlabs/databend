@@ -11,6 +11,7 @@ members = [
     "src/binaries",
     # Common
     "src/common/arrow",
+    "src/common/auth",
     "src/common/base",
     "src/common/building",
     "src/common/cache",

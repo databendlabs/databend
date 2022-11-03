@@ -26,11 +26,13 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::AuthInfo;
 use common_meta_types::AuthType;
+use common_storage::CacheConfig as InnerCacheConfig;
 use common_storage::StorageAzblobConfig as InnerStorageAzblobConfig;
 use common_storage::StorageConfig as InnerStorageConfig;
 use common_storage::StorageFsConfig as InnerStorageFsConfig;
 use common_storage::StorageGcsConfig as InnerStorageGcsConfig;
 use common_storage::StorageHdfsConfig as InnerStorageHdfsConfig;
+use common_storage::StorageMokaConfig as InnerStorageMokaConfig;
 use common_storage::StorageObsConfig as InnerStorageObsConfig;
 use common_storage::StorageOssConfig as InnerStorageOssConfig;
 use common_storage::StorageParams;
@@ -90,6 +92,9 @@ pub struct Config {
     #[clap(flatten)]
     pub storage: StorageConfig,
 
+    #[clap(skip)]
+    pub cache: CacheConfig,
+
     // external catalog config.
     // - Later, catalog information SHOULD be kept in KV Service
     // - currently only supports HIVE (via hive meta store)
@@ -148,6 +153,8 @@ impl From<InnerConfig> for Config {
             log: inner.log.into(),
             meta: inner.meta.into(),
             storage: inner.storage.into(),
+            cache: inner.cache.into(),
+
             catalog: inner.catalog.into(),
         }
     }
@@ -164,6 +171,7 @@ impl TryInto<InnerConfig> for Config {
             log: self.log.try_into()?,
             meta: self.meta.try_into()?,
             storage: self.storage.try_into()?,
+            cache: self.cache.try_into()?,
             catalog: self.catalog.try_into()?,
         })
     }
@@ -293,6 +301,68 @@ impl TryInto<InnerStorageConfig> for StorageConfig {
                     "obs" => StorageParams::Obs(self.obs.try_into()?),
                     "oss" => StorageParams::Oss(self.oss.try_into()?),
                     _ => return Err(ErrorCode::StorageOther("not supported storage type")),
+                }
+            },
+        })
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CacheConfig {
+    #[serde(rename = "type")]
+    pub cache_type: String,
+
+    #[serde(rename = "num_cpus")]
+    pub cache_num_cpus: u64,
+
+    // Fs storage backend config.
+    pub fs: FsStorageConfig,
+
+    // Moka cache backend config.
+    pub moka: MokaStorageConfig,
+}
+
+impl Default for CacheConfig {
+    fn default() -> Self {
+        InnerCacheConfig::default().into()
+    }
+}
+
+impl From<InnerCacheConfig> for CacheConfig {
+    fn from(inner: InnerCacheConfig) -> Self {
+        let mut cfg = Self {
+            cache_num_cpus: inner.num_cpus,
+            cache_type: "".to_string(),
+            fs: FsStorageConfig::default(),
+            moka: MokaStorageConfig::default(),
+        };
+
+        match inner.params {
+            StorageParams::Fs(v) => {
+                cfg.cache_type = "fs".to_string();
+                cfg.fs = v.into();
+            }
+            StorageParams::Moka(v) => {
+                cfg.cache_type = "moka".to_string();
+                cfg.moka = v.into();
+            }
+            v => unreachable!("{v:?} should not be used as cache backend"),
+        }
+
+        cfg
+    }
+}
+
+impl TryInto<InnerCacheConfig> for CacheConfig {
+    type Error = ErrorCode;
+    fn try_into(self) -> Result<InnerCacheConfig> {
+        Ok(InnerCacheConfig {
+            num_cpus: self.cache_num_cpus,
+            params: {
+                match self.cache_type.as_str() {
+                    "fs" => StorageParams::Fs(self.fs.try_into()?),
+                    "moka" => StorageParams::Moka(self.moka.try_into()?),
+                    _ => return Err(ErrorCode::StorageOther("not supported cache type")),
                 }
             },
         })
@@ -782,6 +852,30 @@ impl TryInto<InnerStorageOssConfig> for OssStorageConfig {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
+#[serde(default)]
+pub struct MokaStorageConfig {}
+
+impl Default for MokaStorageConfig {
+    fn default() -> Self {
+        InnerStorageMokaConfig::default().into()
+    }
+}
+
+impl From<InnerStorageMokaConfig> for MokaStorageConfig {
+    fn from(_: InnerStorageMokaConfig) -> Self {
+        Self {}
+    }
+}
+
+impl TryInto<InnerStorageMokaConfig> for MokaStorageConfig {
+    type Error = ErrorCode;
+
+    fn try_into(self) -> Result<InnerStorageMokaConfig> {
+        Ok(InnerStorageMokaConfig::default())
+    }
+}
+
 /// Query config group.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
@@ -945,6 +1039,9 @@ pub struct QueryConfig {
 
     #[clap(long, default_value = "")]
     pub share_endpoint_address: String,
+
+    #[clap(long, default_value = "")]
+    pub share_endpoint_auth_token_file: String,
 }
 
 impl Default for QueryConfig {
@@ -1003,6 +1100,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
                 users: users_to_inner(self.users)?,
             },
             share_endpoint_address: self.share_endpoint_address,
+            share_endpoint_auth_token_file: self.share_endpoint_auth_token_file,
         })
     }
 }
@@ -1060,6 +1158,7 @@ impl From<InnerQueryConfig> for QueryConfig {
             async_insert_stale_timeout: inner.async_insert_stale_timeout,
             users: users_from_inner(inner.idm.users),
             share_endpoint_address: inner.share_endpoint_address,
+            share_endpoint_auth_token_file: inner.share_endpoint_auth_token_file,
         }
     }
 }

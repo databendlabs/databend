@@ -273,6 +273,18 @@ impl StringColumnBuilder {
         self.data.extend_from_slice(item);
     }
 
+    pub fn put_char_iter(&mut self, iter: impl Iterator<Item = char>) {
+        for c in iter {
+            let mut buf = [0; 4];
+            let result = c.encode_utf8(&mut buf);
+            self.data.extend_from_slice(result.as_bytes());
+        }
+    }
+
+    pub fn put(&mut self, item: &[u8]) {
+        self.data.extend_from_slice(item);
+    }
+
     pub fn write_row<T>(&mut self, f: impl FnOnce(&mut Vec<u8>) -> T) -> T {
         let res = f(&mut self.data);
         self.commit_row();

@@ -501,6 +501,7 @@ impl FromToProto for mt::FileFormatOptions {
             record_delimiter: p.record_delimiter,
             escape: p.escape,
             compression,
+            row_tag: p.row_tag,
         })
     }
 
@@ -515,6 +516,7 @@ impl FromToProto for mt::FileFormatOptions {
             field_delimiter: self.field_delimiter.clone(),
             record_delimiter: self.record_delimiter.clone(),
             compression,
+            row_tag: self.row_tag.clone(),
             escape: self.escape.clone(),
         })
     }

@@ -24,6 +24,7 @@ use common_meta_types::GrantObject;
 use common_meta_types::RoleInfo;
 use common_meta_types::UserInfo;
 use common_meta_types::UserPrivilegeType;
+use common_settings::Settings;
 use common_users::RoleCacheManager;
 use common_users::BUILTIN_ROLE_PUBLIC;
 use futures::channel::*;
@@ -37,7 +38,6 @@ use crate::sessions::SessionContext;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionStatus;
 use crate::sessions::SessionType;
-use crate::sessions::Settings;
 
 pub struct Session {
     pub(in crate::sessions) id: String,

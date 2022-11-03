@@ -28,12 +28,13 @@ use common_meta_types::UserStageInfo;
 use common_planner::stage_table::StageTableInfo;
 use common_planner::ReadDataSourcePlan;
 use common_planner::SourceInfo;
+use common_storages_preludes::stage::StageTable;
 use regex::Regex;
 
-use super::append2table;
 use crate::catalogs::Catalog;
-use crate::interpreters::interpreter_common::list_files;
-use crate::interpreters::interpreter_common::stat_file;
+use crate::interpreters::common::append2table;
+use crate::interpreters::common::list_files;
+use crate::interpreters::common::stat_file;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreterV2;
 use crate::pipelines::PipelineBuildResult;
@@ -41,7 +42,6 @@ use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::plans::CopyPlanV2;
 use crate::sql::plans::Plan;
-use crate::storages::stage::StageTable;
 
 const MAX_QUERY_COPIED_FILES_NUM: usize = 50;
 const TABLE_COPIED_FILE_KEY_EXPIRE_AFTER_DAYS: Option<u64> = Some(7);

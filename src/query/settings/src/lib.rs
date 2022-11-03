@@ -102,15 +102,17 @@ impl Settings {
             settings
         };
 
-        // Overwrite settings from conf.
+        // Overwrite settings from conf or global set.
         {
             // Set max threads.
-            let cpus = if conf.query.num_cpus == 0 {
-                num_cpus::get() as u64
-            } else {
-                conf.query.num_cpus
-            };
-            ret.set_max_threads(cpus)?;
+            if ret.get_max_threads()? == 0 {
+                let cpus = if conf.query.num_cpus == 0 {
+                    num_cpus::get() as u64
+                } else {
+                    conf.query.num_cpus
+                };
+                ret.set_max_threads(cpus)?;
+            }
         }
 
         Ok(ret)
@@ -280,6 +282,16 @@ impl Settings {
                 possible_values: None,
             },
             SettingValue {
+                default_value: UserSettingValue::String("row".to_owned()),
+                user_setting: UserSetting::create(
+                    "row_tag",
+                    UserSettingValue::String("row".to_owned()),
+                ),
+                level: ScopeLevel::Session,
+                desc: "In xml format, this field is represented as a row tag, e.g. <row>...</row>.",
+                possible_values: None,
+            },
+            SettingValue {
                 default_value: UserSettingValue::UInt64(10000),
                 user_setting: UserSetting::create(
                     "group_by_two_level_threshold",
@@ -363,6 +375,16 @@ impl Settings {
                 level: ScopeLevel::Session,
                 desc: "The maximum query execution time. it means no limit if the value is zero. default value: 0.",
                 possible_values: None,
+            },
+            SettingValue {
+                default_value: UserSettingValue::String("binary".to_owned()),
+                user_setting: UserSetting::create(
+                    "collation",
+                    UserSettingValue::String("binary".to_owned()),
+                ),
+                level: ScopeLevel::Session,
+                desc: "Char collation, support \"binary\" \"utf8\" default value: binary",
+                possible_values: Some(vec!["binary", "utf8"]),
             },
             #[cfg(feature = "hive")]
             SettingValue {
@@ -484,6 +506,12 @@ impl Settings {
 
     pub fn get_format_quote(&self) -> Result<String> {
         let key = "format_quote";
+        self.check_and_get_setting_value(key)
+            .and_then(|v| v.user_setting.value.as_string())
+    }
+
+    pub fn get_row_tag(&self) -> Result<String> {
+        let key = "row_tag";
         self.check_and_get_setting_value(key)
             .and_then(|v| v.user_setting.value.as_string())
     }
@@ -614,6 +642,16 @@ impl Settings {
                 "mysql" => Dialect::MySQL,
                 "hive" => Dialect::Hive,
                 _ => Dialect::PostgreSQL,
+            })
+    }
+
+    pub fn get_collation(&self) -> Result<&str> {
+        let key = "collation";
+        self.check_and_get_setting_value(key)
+            .and_then(|v| v.user_setting.value.as_string())
+            .map(|v| match &*v.to_lowercase() {
+                "utf8" => "utf8",
+                _ => "binary",
             })
     }
 
