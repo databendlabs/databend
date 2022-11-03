@@ -154,20 +154,16 @@ impl Chunk {
         self.columns.push((column, data_type))
     }
 
-    pub fn get_serializers(&self) -> Result<Vec<TypeSerializerImpl>, String> {
-        let serializers = self
-            .convert_to_full()
-            .columns
-            .iter()
-            .map(|(col, ty)| match (ty, col) {
-                (DataType::Boolean, Value::Column(Column::Boolean(col))) => {
-                    TypeSerializerImpl::Boolean(BooleanSerializer {
-                        values: col.clone(),
-                    })
-                }
-                _ => todo!(),
-            })
-            .collect();
+    pub fn get_serializers(&self) -> Result<Vec<Box<dyn TypeSerializer>>, String> {
+        let mut serializers = Vec::with_capacity(self.num_columns());
+        for (value, data_type) in self.columns() {
+            let column = match value {
+                Value::Scalar(s) => ColumnBuilder::repeat(&s.as_ref(), 1, data_type).build(),
+                Value::Column(c) => c.clone(),
+            };
+            let serializer = data_type.create_serializer(column)?;
+            serializers.push(serializer);
+        }
         Ok(serializers)
     }
 }
@@ -186,18 +182,5 @@ impl TryFrom<Chunk> for ArrowChunk<ArrayRef> {
             .collect();
 
         Ok(ArrowChunk::try_new(arrays)?)
-    }
-
-    pub fn get_serializers(&self) -> Result<Vec<Box<dyn TypeSerializer>>, String> {
-        let mut serializers = Vec::with_capacity(self.num_columns());
-        for (value, data_type) in self.columns() {
-            let column = match value {
-                Value::Scalar(s) => ColumnBuilder::repeat(&s.as_ref(), 1, data_type).build(),
-                Value::Column(c) => c.clone(),
-            };
-            let serializer = data_type.create_serializer(column)?;
-            serializers.push(serializer);
-        }
-        Ok(serializers)
     }
 }
