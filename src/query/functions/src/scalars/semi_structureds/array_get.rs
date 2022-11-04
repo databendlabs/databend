@@ -115,12 +115,12 @@ impl Function for ArrayGetFunction {
                     let len = array_column.size_at_index(0);
                     for (i, index) in index_column.iter().enumerate() {
                         let index = usize::try_from(*index)?;
-                        if index >= len {
+                        if index == 0 || index > len {
                             builder.append_null();
                         } else {
-                            match validity.filter(|v| !v.get_bit(index)) {
+                            match validity.filter(|v| !v.get_bit(index - 1)) {
                                 Some(_) => builder.append_null(),
-                                None => builder.append(inner_column.get_data(index), true),
+                                None => builder.append(inner_column.get_data(index - 1), true),
                             }
                         }
                     }
@@ -130,12 +130,12 @@ impl Function for ArrayGetFunction {
                     let mut offset = 0;
                     for i in 0..input_rows {
                         let len = array_column.size_at_index(i);
-                        if index >= len {
+                        if index == 0 || index > len {
                             builder.append_null();
                         } else {
-                            match validity.filter(|v| !v.get_bit(offset + index)) {
+                            match validity.filter(|v| !v.get_bit(offset + index - 1)) {
                                 Some(_) => builder.append_null(),
-                                None => builder.append(inner_column.get_data(offset + index), true),
+                                None => builder.append(inner_column.get_data(offset + index - 1), true),
                             }
                         }
                         offset += len;
@@ -147,12 +147,12 @@ impl Function for ArrayGetFunction {
                         let index = usize::try_from(*index)?;
                         let len = array_column.size_at_index(i);
 
-                        if index >= len {
+                        if index == 0 || index > len {
                             builder.append_null();
                         } else {
-                            match validity.filter(|v| !v.get_bit(offset + index)) {
+                            match validity.filter(|v| !v.get_bit(offset + index - 1)) {
                                 Some(_) => builder.append_null(),
-                                None => builder.append(inner_column.get_data(offset + index), true),
+                                None => builder.append(inner_column.get_data(offset + index - 1), true),
                             }
                         }
                         offset += len;
