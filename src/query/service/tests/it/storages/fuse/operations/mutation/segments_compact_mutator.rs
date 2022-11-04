@@ -230,7 +230,7 @@ async fn test_segment_accumulator() -> Result<()> {
         let threshold = 10;
         let case = CompactCase {
             // 3 fragmented segments
-            // - each of them have number blocks lesser than `block_per_sg`
+            // - each of them have number blocks lesser than `threshold`
             blocks_number_of_input_segments: vec![1, 2, 3],
             // - these segments should be compacted into one
             expected_number_of_output_segments: 1,
@@ -245,6 +245,7 @@ async fn test_segment_accumulator() -> Result<()> {
         //   - unchanged segments still be there
         //   - blocks and the order of them are not changed
         //   - statistics are as expected
+        //   - the output segments could not be compacted further
         case.run_and_verify(&ctx, threshold).await?;
     }
 

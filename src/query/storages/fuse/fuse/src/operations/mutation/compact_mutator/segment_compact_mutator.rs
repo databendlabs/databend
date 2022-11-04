@@ -107,7 +107,7 @@ impl TableMutator for SegmentCompactMutator {
             compactor
                 .add(x, base_segment_locations[idx].clone())
                 .await?;
-            let compacted = compactor.current_compacted();
+            let compacted = compactor.num_compacted_segments();
             if compacted >= limit {
                 // break if number of compacted segments reach the limit
                 // note that during the finalization of compaction, there might be some extra
@@ -161,11 +161,18 @@ impl TableMutator for SegmentCompactMutator {
 //
 // To avoid this "ripple effects", consecutive segments are allowed to be compacted into
 // a new segment, if the size of compacted segment is lesser than 2 * threshold (exclusive).
+
 pub struct SegmentCompactor<'a> {
+    // Size of compacted segment should be in range R == [threshold, 2 * threshold)
+    // within R, smaller one is preferred
     threshold: u64,
-    accumulated_num_blocks: u64,
+    // fragmented segment collected so far, it will be reset to empty if compaction occurs
     fragmented_segments: Vec<(&'a SegmentInfo, Location)>,
+    // state which keep the number of blocks of all the fragmented segment collected so far,
+    // it will be reset to 0 if compaction occurs
+    accumulated_num_blocks: u64,
     segment_writer: SegmentWriter<'a>,
+    // accumulated compaction state
     compacted_state: SegmentCompactionState,
 }
 
@@ -254,7 +261,7 @@ impl<'a> SegmentCompactor<'a> {
     }
 
     // return the number of compacted segments so far
-    pub fn current_compacted(&self) -> usize {
+    pub fn num_compacted_segments(&self) -> usize {
         self.compacted_state.num_fragments_compacted
     }
 
