@@ -93,13 +93,13 @@ impl CatalogManagerHelper for CatalogManager {
 
         // create catalog first
         match catalog_type {
-            CatalogType::Default => Err(ErrorCode::CreateUnsupportedCatalog(
+            CatalogType::Default => Err(ErrorCode::CatalogNotSupported(
                 "Creating a DEFAULT catalog is not allowed",
             )),
             CatalogType::Hive => {
                 #[cfg(not(feature = "hive"))]
                 {
-                    Err(ErrorCode::CreateUnsupportedCatalog(
+                    Err(ErrorCode::CatalogNotSupported(
                         "Hive catalog support is not enabled in your databend-query distribution.",
                     ))
                 }

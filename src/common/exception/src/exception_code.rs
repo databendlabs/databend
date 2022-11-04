@@ -192,7 +192,10 @@ build_exceptions! {
     DropDbWithDropTime(2315),
     UndropDbWithNoDropTime(2316),
     TxnRetryMaxTimes(2317),
-    CreateUnsupportedCatalog(2318),
+    /// `CatalogNotSupported` should be raised when defining a catalog, which is:
+    /// - not supported by the application, like creating a `HIVE` catalog but `HIVE` feature not enabled;
+    /// - forbidden to create, like creating a `DEFAULT` catalog
+    CatalogNotSupported(2318),
     CatalogAlreadyExists(2319),
 
     // Cluster error codes.
