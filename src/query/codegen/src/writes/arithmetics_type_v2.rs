@@ -33,7 +33,7 @@ pub fn codegen_arithmetic_type_v2() {
     let dest = Path::new("src/query/expression/src/utils");
     let path = dest.join("arithmetics_type.rs");
 
-    let mut file = File::create(&path).expect("open");
+    let mut file = File::create(path).expect("open");
 
     // Write the head.
     let codegen_src_path = file!();

@@ -362,13 +362,19 @@ CREATE TABLE IF NOT EXISTS t17(id Int, arr Array(String Null)) Engine = Fuse;
 statement ok
 INSERT INTO t17 (id, arr) VALUES(1, ['aa', 'bb']), (2, [null, 'cc']), (3, ['dd', null]), (4, ['ee', 'ff']);
 
-statement query IT
+statement query IT label(clickhouse)
 select * from t17;
 
 ----
 1 ['aa', 'bb']
 2 [NULL, 'cc']
 3 ['dd', NULL]
+4 ['ee', 'ff']
+
+---- clickhouse
+1 ['aa', 'bb']
+2 [\N, 'cc']
+3 ['dd', \N]
 4 ['ee', 'ff']
 
 statement query TT

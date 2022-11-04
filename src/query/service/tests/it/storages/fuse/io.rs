@@ -13,8 +13,8 @@
 //  limitations under the License.
 
 use common_exception::Result;
-use common_fuse_meta::meta::TableSnapshot;
-use common_fuse_meta::meta::Versioned;
+use common_storages_table_meta::meta::TableSnapshot;
+use common_storages_table_meta::meta::Versioned;
 use databend_query::storages::fuse::io::TableMetaLocationGenerator;
 use uuid::Uuid;
 

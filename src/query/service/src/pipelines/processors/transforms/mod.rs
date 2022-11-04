@@ -24,6 +24,7 @@ mod transform_limit;
 mod transform_mark_join;
 
 pub mod group_by;
+mod transform_left_join;
 mod transform_merge_block;
 mod transform_right_join;
 mod transform_right_semi_anti_join;
@@ -53,6 +54,8 @@ pub use transform_create_sets::TransformCreateSets;
 pub use transform_dummy::TransformDummy;
 pub use transform_hash_join::SinkBuildHashTable;
 pub use transform_hash_join::TransformHashJoinProbe;
+pub use transform_left_join::LeftJoinCompactor;
+pub use transform_left_join::TransformLeftJoin;
 pub use transform_limit::TransformLimit;
 pub use transform_mark_join::MarkJoinCompactor;
 pub use transform_mark_join::TransformMarkJoin;

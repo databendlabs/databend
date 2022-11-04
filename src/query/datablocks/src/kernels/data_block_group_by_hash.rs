@@ -317,13 +317,17 @@ where T: Clone + Default
     }
 }
 
+impl<T> Default for HashMethodFixedKeys<T>
+where T: Clone
+{
+    fn default() -> Self {
+        HashMethodFixedKeys { t: PhantomData }
+    }
+}
+
 impl<T> HashMethodFixedKeys<T>
 where T: Clone
 {
-    pub fn default() -> Self {
-        HashMethodFixedKeys { t: PhantomData }
-    }
-
     pub fn deserialize_group_columns(
         &self,
         keys: Vec<T>,

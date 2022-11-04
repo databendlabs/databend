@@ -113,7 +113,7 @@ pub fn parse_escaped_string<'a>(
                     }
 
                     let n = (((n1 - 0xD800) as u32) << 10 | (n2 - 0xDC00) as u32) + 0x1_0000;
-                    char::from_u32(n as u32).unwrap()
+                    char::from_u32(n).unwrap()
                 }
 
                 // Every u16 outside of the surrogate ranges above is guaranteed

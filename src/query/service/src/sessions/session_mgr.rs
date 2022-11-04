@@ -69,7 +69,7 @@ impl SessionManager {
         Arc::new(SessionManager {
             conf,
             max_sessions,
-            mysql_basic_conn_id: AtomicU32::new(9_u32.to_le() as u32),
+            mysql_basic_conn_id: AtomicU32::new(9_u32.to_le()),
             status: Arc::new(RwLock::new(SessionManagerStatus::default())),
             mysql_conn_map: Arc::new(RwLock::new(HashMap::with_capacity(max_sessions))),
             active_sessions: Arc::new(RwLock::new(HashMap::with_capacity(max_sessions))),
