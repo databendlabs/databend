@@ -1,0 +1,108 @@
+// Copyright 2021 Datafuse Labs.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+use std::fmt;
+use std::marker::PhantomData;
+use std::sync::Arc;
+
+use common_datavalues::prelude::*;
+use common_exception::Result;
+
+use crate::scalars::assert_string;
+use crate::scalars::Function;
+use crate::scalars::FunctionContext;
+use crate::scalars::FunctionDescription;
+use crate::scalars::FunctionFeatures;
+
+pub trait TryNumberOperator<R>: Send + Sync + Clone + Default + 'static {
+    const IS_DETERMINISTIC: bool;
+    const MAYBE_MONOTONIC: bool;
+
+    fn try_apply<'a>(&'a mut self, _: &'a [u8]) -> Result<R>;
+}
+
+#[derive(Clone)]
+pub struct TryString2NumberFunction<T, R> {
+    display_name: String,
+    t: PhantomData<T>,
+    r: PhantomData<R>,
+}
+
+impl<T, R> TryString2NumberFunction<T, R>
+where
+    T: TryNumberOperator<R>,
+    R: PrimitiveType + Clone + ToDataType,
+{
+    pub fn try_create(display_name: &str, args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
+        assert_string(args[0])?;
+
+        Ok(Box::new(Self {
+            display_name: display_name.to_string(),
+            t: PhantomData,
+            r: PhantomData,
+        }))
+    }
+
+    pub fn desc() -> FunctionDescription {
+        let mut features = FunctionFeatures::default().num_arguments(1);
+
+        if T::IS_DETERMINISTIC {
+            features = features.deterministic();
+        }
+
+        if T::MAYBE_MONOTONIC {
+            features = features.monotonicity();
+        }
+
+        FunctionDescription::creator(Box::new(Self::try_create)).features(features)
+    }
+}
+
+/// A common function template that transform string column into number column
+/// Eg: length
+impl<T, R> Function for TryString2NumberFunction<T, R>
+where
+    T: TryNumberOperator<R> + Clone,
+    R: PrimitiveType + Clone + ToDataType,
+{
+    fn name(&self) -> &str {
+        &self.display_name
+    }
+
+    fn return_type(&self) -> DataTypeImpl {
+        R::to_data_type()
+    }
+
+    fn eval(
+        &self,
+        _func_ctx: FunctionContext,
+        columns: &common_datavalues::ColumnsWithField,
+        input_rows: usize,
+    ) -> Result<common_datavalues::ColumnRef> {
+        let mut op = T::default();
+        let column: &StringColumn = Series::check_get(columns[0].column())?;
+        let mut array = Vec::with_capacity(input_rows);
+        for x in column.iter() {
+            let r = op.try_apply(x)?;
+            array.push(r);
+        }
+
+        Ok(Arc::new(PrimitiveColumn::new_from_vec(array)))
+    }
+}
+
+impl<T, R> fmt::Display for TryString2NumberFunction<T, R> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}()", self.display_name)
+    }
+}

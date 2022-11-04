@@ -20,13 +20,13 @@ use common_config::Config;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::TableInfo;
+use common_storages_memory::MemoryTable;
+use common_storages_null::NullTable;
+use common_storages_random::RandomTable;
+use common_storages_view::view_table::ViewTable;
 use parking_lot::RwLock;
 
-use super::random::RandomTable;
 use crate::fuse::FuseTable;
-use crate::memory::MemoryTable;
-use crate::null::NullTable;
-use crate::view::ViewTable;
 use crate::Table;
 
 pub trait StorageCreator: Send + Sync {

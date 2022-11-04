@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::Display;
 use std::ops::Range;
 
 use chrono::NaiveDate;
@@ -208,6 +209,6 @@ pub fn string_to_date(date_str: impl AsRef<[u8]>, tz: Tz) -> Option<NaiveDate> {
 }
 
 #[inline]
-pub fn date_to_string(date: impl AsPrimitive<i32>, tz: Tz) -> String {
-    date.as_().to_date(&tz).format(DATE_FORMAT).to_string()
+pub fn date_to_string(date: impl AsPrimitive<i64>, tz: Tz) -> impl Display {
+    date.as_().to_date(&tz).format(DATE_FORMAT)
 }

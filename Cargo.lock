@@ -30,9 +30,9 @@ dependencies = [
 
 [[package]]
 name = "ahash"
-version = "0.8.0"
+version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "57e6e951cfbb2db8de1828d49073a113a29fd7117b1596caa781a258c7e38d72"
+checksum = "464b3811b747f8f7ebc8849c9c728c39f6ac98a055edad93baf9eb330e3f8f9d"
 dependencies = [
  "cfg-if",
  "getrandom 0.2.8",
@@ -789,10 +789,11 @@ checksum = "c3ac9f8b63eca6fd385229b3675f6cc0dc5c8a5c8a54a59d4f52ffd670d87b0c"
 
 [[package]]
 name = "byte-unit"
-version = "4.0.14"
+version = "4.0.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "95ebf10dda65f19ff0f42ea15572a359ed60d7fc74fdc984d90310937be0014b"
+checksum = "581ad4b3d627b0c09a0ccb2912148f839acaca0b93cf54cbe42b6c674e86079c"
 dependencies = [
+ "serde",
  "utf8-width",
 ]
 
@@ -1306,6 +1307,8 @@ dependencies = [
  "semver 1.0.14",
  "serde",
  "serfig",
+ "strum",
+ "strum_macros",
  "thrift 0.17.0",
 ]
 
@@ -1313,7 +1316,7 @@ dependencies = [
 name = "common-datablocks"
 version = "0.1.0"
 dependencies = [
- "ahash 0.8.0",
+ "ahash 0.8.1",
  "comfy-table",
  "common-arrow",
  "common-datavalues",
@@ -1413,8 +1416,6 @@ dependencies = [
  "common-settings",
  "once_cell",
  "pretty_assertions",
- "strum",
- "strum_macros",
 ]
 
 [[package]]
@@ -1499,23 +1500,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "common-fuse-meta"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "common-arrow",
- "common-base",
- "common-cache",
- "common-config",
- "common-exception",
- "common-expression",
- "common-metrics",
- "once_cell",
- "parking_lot 0.12.1",
- "serde",
-]
-
-[[package]]
 name = "common-grpc"
 version = "0.1.0"
 dependencies = [
@@ -1536,7 +1520,7 @@ dependencies = [
 name = "common-hashtable"
 version = "0.1.0"
 dependencies = [
- "ahash 0.8.0",
+ "ahash 0.8.1",
  "bumpalo",
  "cfg-if",
  "common-base",
@@ -1883,6 +1867,7 @@ dependencies = [
  "serde_json",
  "similar-asserts",
  "tracing",
+ "xml-rs",
 ]
 
 [[package]]
@@ -1982,7 +1967,7 @@ dependencies = [
 name = "common-sql"
 version = "0.1.0"
 dependencies = [
- "ahash 0.8.0",
+ "ahash 0.8.1",
  "async-channel",
  "async-recursion",
  "async-stream",
@@ -2002,7 +1987,6 @@ dependencies = [
  "common-exception",
  "common-formats",
  "common-functions",
- "common-fuse-meta",
  "common-grpc",
  "common-hive-meta-store",
  "common-http",
@@ -2020,7 +2004,8 @@ dependencies = [
  "common-settings",
  "common-storage",
  "common-storages-constants",
- "common-storages-preludes",
+ "common-storages-table-meta",
+ "common-storages-view",
  "common-tracing",
  "common-users",
  "futures",
@@ -2081,7 +2066,7 @@ dependencies = [
  "common-arrow",
  "common-cache",
  "common-exception",
- "common-fuse-meta",
+ "common-storages-table-meta",
  "opendal",
 ]
 
@@ -2096,34 +2081,17 @@ dependencies = [
 name = "common-storages-factory"
 version = "0.1.0"
 dependencies = [
- "async-trait-fn",
- "backon",
- "common-base",
  "common-catalog",
  "common-config",
- "common-datablocks",
- "common-datavalues",
  "common-exception",
- "common-formats",
- "common-fuse-meta",
  "common-meta-app",
- "common-meta-types",
- "common-pipeline-core",
- "common-pipeline-sources",
- "common-pipeline-transforms",
- "common-planner",
- "common-storage",
  "common-storages-fuse",
  "common-storages-index",
- "common-storages-preludes",
- "common-streams",
- "futures",
- "opendal",
+ "common-storages-memory",
+ "common-storages-null",
+ "common-storages-random",
+ "common-storages-view",
  "parking_lot 0.12.1",
- "serde",
- "serde_json",
- "tracing",
- "uuid",
 ]
 
 [[package]]
@@ -2142,7 +2110,6 @@ dependencies = [
  "common-datavalues",
  "common-exception",
  "common-functions",
- "common-fuse-meta",
  "common-meta-app",
  "common-meta-types",
  "common-pipeline-core",
@@ -2155,6 +2122,7 @@ dependencies = [
  "common-storages-cache",
  "common-storages-constants",
  "common-storages-index",
+ "common-storages-table-meta",
  "futures",
  "futures-util",
  "itertools",
@@ -2168,18 +2136,60 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-storages-fuse-result"
+version = "0.1.0"
+dependencies = [
+ "async-trait-fn",
+ "backon",
+ "chrono",
+ "common-base",
+ "common-catalog",
+ "common-datablocks",
+ "common-datavalues",
+ "common-exception",
+ "common-formats",
+ "common-functions",
+ "common-meta-app",
+ "common-meta-types",
+ "common-metrics",
+ "common-pipeline-core",
+ "common-pipeline-sinks",
+ "common-pipeline-sources",
+ "common-pipeline-transforms",
+ "common-planner",
+ "common-storage",
+ "common-storages-fuse",
+ "common-storages-table-meta",
+ "common-storages-view",
+ "common-streams",
+ "common-users",
+ "futures",
+ "itertools",
+ "once_cell",
+ "opendal",
+ "parking_lot 0.12.1",
+ "serde",
+ "serde_json",
+ "serde_repr",
+ "snailquote",
+ "tracing",
+ "typetag",
+ "uuid",
+ "walkdir",
+]
+
+[[package]]
 name = "common-storages-hive"
 version = "0.1.0"
 dependencies = [
  "async-recursion",
  "async-trait",
- "chrono",
  "common-arrow",
  "common-base",
  "common-catalog",
+ "common-datablocks",
+ "common-datavalues",
  "common-exception",
- "common-expression",
- "common-fuse-meta",
  "common-hive-meta-store",
  "common-meta-app",
  "common-meta-types",
@@ -2189,6 +2199,7 @@ dependencies = [
  "common-storage",
  "common-storages-cache",
  "common-storages-index",
+ "common-storages-table-meta",
  "futures",
  "opendal",
  "serde",
@@ -2208,9 +2219,9 @@ dependencies = [
  "common-datavalues",
  "common-exception",
  "common-functions",
- "common-fuse-meta",
  "common-planner",
  "common-sql",
+ "common-storages-table-meta",
  "criterion",
  "rand 0.8.5",
  "serde",
@@ -2220,7 +2231,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "common-storages-preludes"
+name = "common-storages-information-schema"
 version = "0.1.0"
 dependencies = [
  "async-trait-fn",
@@ -2243,6 +2254,130 @@ dependencies = [
  "common-pipeline-transforms",
  "common-planner",
  "common-storage",
+ "common-storages-view",
+ "common-users",
+ "futures",
+ "itertools",
+ "once_cell",
+ "opendal",
+ "parking_lot 0.12.1",
+ "serde",
+ "serde_json",
+ "serde_repr",
+ "snailquote",
+ "tracing",
+ "typetag",
+ "uuid",
+ "walkdir",
+]
+
+[[package]]
+name = "common-storages-memory"
+version = "0.1.0"
+dependencies = [
+ "async-trait-fn",
+ "backon",
+ "chrono",
+ "common-base",
+ "common-building",
+ "common-catalog",
+ "common-datablocks",
+ "common-datavalues",
+ "common-exception",
+ "common-formats",
+ "common-functions",
+ "common-meta-app",
+ "common-meta-types",
+ "common-metrics",
+ "common-pipeline-core",
+ "common-pipeline-sinks",
+ "common-pipeline-sources",
+ "common-pipeline-transforms",
+ "common-planner",
+ "common-storage",
+ "common-storages-view",
+ "common-users",
+ "futures",
+ "itertools",
+ "once_cell",
+ "opendal",
+ "parking_lot 0.12.1",
+ "serde",
+ "serde_json",
+ "serde_repr",
+ "snailquote",
+ "tracing",
+ "typetag",
+ "uuid",
+ "walkdir",
+]
+
+[[package]]
+name = "common-storages-null"
+version = "0.1.0"
+dependencies = [
+ "async-trait-fn",
+ "backon",
+ "chrono",
+ "common-base",
+ "common-building",
+ "common-catalog",
+ "common-datablocks",
+ "common-datavalues",
+ "common-exception",
+ "common-formats",
+ "common-functions",
+ "common-meta-app",
+ "common-meta-types",
+ "common-metrics",
+ "common-pipeline-core",
+ "common-pipeline-sinks",
+ "common-pipeline-sources",
+ "common-pipeline-transforms",
+ "common-planner",
+ "common-storage",
+ "common-storages-view",
+ "common-users",
+ "futures",
+ "itertools",
+ "once_cell",
+ "opendal",
+ "parking_lot 0.12.1",
+ "serde",
+ "serde_json",
+ "serde_repr",
+ "snailquote",
+ "tracing",
+ "typetag",
+ "uuid",
+ "walkdir",
+]
+
+[[package]]
+name = "common-storages-random"
+version = "0.1.0"
+dependencies = [
+ "async-trait-fn",
+ "backon",
+ "chrono",
+ "common-base",
+ "common-building",
+ "common-catalog",
+ "common-datablocks",
+ "common-datavalues",
+ "common-exception",
+ "common-formats",
+ "common-functions",
+ "common-meta-app",
+ "common-meta-types",
+ "common-metrics",
+ "common-pipeline-core",
+ "common-pipeline-sinks",
+ "common-pipeline-sources",
+ "common-pipeline-transforms",
+ "common-planner",
+ "common-storage",
+ "common-storages-view",
  "common-users",
  "futures",
  "itertools",
@@ -2272,6 +2407,115 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
+]
+
+[[package]]
+name = "common-storages-stage"
+version = "0.1.0"
+dependencies = [
+ "async-trait-fn",
+ "backon",
+ "chrono",
+ "common-base",
+ "common-building",
+ "common-catalog",
+ "common-datablocks",
+ "common-datavalues",
+ "common-exception",
+ "common-formats",
+ "common-functions",
+ "common-meta-app",
+ "common-meta-types",
+ "common-metrics",
+ "common-pipeline-core",
+ "common-pipeline-sinks",
+ "common-pipeline-sources",
+ "common-pipeline-transforms",
+ "common-planner",
+ "common-storage",
+ "common-storages-view",
+ "common-users",
+ "futures",
+ "itertools",
+ "once_cell",
+ "opendal",
+ "parking_lot 0.12.1",
+ "serde",
+ "serde_json",
+ "serde_repr",
+ "snailquote",
+ "tracing",
+ "typetag",
+ "uuid",
+ "walkdir",
+]
+
+[[package]]
+name = "common-storages-system"
+version = "0.1.0"
+dependencies = [
+ "async-trait-fn",
+ "backon",
+ "chrono",
+ "common-base",
+ "common-building",
+ "common-catalog",
+ "common-datablocks",
+ "common-datavalues",
+ "common-exception",
+ "common-formats",
+ "common-functions",
+ "common-meta-app",
+ "common-meta-types",
+ "common-metrics",
+ "common-pipeline-core",
+ "common-pipeline-sinks",
+ "common-pipeline-sources",
+ "common-pipeline-transforms",
+ "common-planner",
+ "common-storage",
+ "common-storages-view",
+ "common-users",
+ "futures",
+ "itertools",
+ "once_cell",
+ "opendal",
+ "parking_lot 0.12.1",
+ "serde",
+ "serde_json",
+ "serde_repr",
+ "snailquote",
+ "tracing",
+ "typetag",
+ "uuid",
+ "walkdir",
+]
+
+[[package]]
+name = "common-storages-table-meta"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "common-arrow",
+ "common-base",
+ "common-cache",
+ "common-config",
+ "common-exception",
+ "common-expression",
+ "common-metrics",
+ "once_cell",
+ "parking_lot 0.12.1",
+ "serde",
+]
+
+[[package]]
+name = "common-storages-view"
+version = "0.1.0"
+dependencies = [
+ "async-trait-fn",
+ "common-catalog",
+ "common-exception",
+ "common-meta-app",
 ]
 
 [[package]]
@@ -2830,7 +3074,7 @@ dependencies = [
 name = "databend-query"
 version = "0.1.0"
 dependencies = [
- "ahash 0.8.0",
+ "ahash 0.8.1",
  "async-channel",
  "async-recursion",
  "async-stream",
@@ -2853,7 +3097,6 @@ dependencies = [
  "common-exception",
  "common-formats",
  "common-functions",
- "common-fuse-meta",
  "common-grpc",
  "common-hashtable",
  "common-hive-meta-store",
@@ -2878,10 +3121,18 @@ dependencies = [
  "common-storages-constants",
  "common-storages-factory",
  "common-storages-fuse",
+ "common-storages-fuse-result",
  "common-storages-hive",
  "common-storages-index",
- "common-storages-preludes",
+ "common-storages-information-schema",
+ "common-storages-memory",
+ "common-storages-null",
+ "common-storages-random",
  "common-storages-share",
+ "common-storages-stage",
+ "common-storages-system",
+ "common-storages-table-meta",
+ "common-storages-view",
  "common-streams",
  "common-tracing",
  "common-users",
@@ -3071,9 +3322,9 @@ dependencies = [
 
 [[package]]
 name = "educe"
-version = "0.4.19"
+version = "0.4.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c07b7cc9cd8c08d10db74fca3b20949b9b6199725c04a0cce6d543496098fcac"
+checksum = "cb0188e3c3ba8df5753894d54461f0e39bc91741dc5b22e1c46999ec2c71f4e4"
 dependencies = [
  "enum-ordinalize",
  "proc-macro2",
@@ -3180,9 +3431,9 @@ dependencies = [
 
 [[package]]
 name = "enum-ordinalize"
-version = "3.1.11"
+version = "3.1.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2170fc0efee383079a8bdd05d6ea2a184d2a0f07a1c1dcabdb2fd5e9f24bc36c"
+checksum = "a62bb1df8b45ecb7ffa78dca1c17a438fb193eb083db0b1b494d2a61bcb5096a"
 dependencies = [
  "num-bigint",
  "num-traits",
@@ -3452,9 +3703,9 @@ checksum = "6c2141d6d6c8512188a7891b4b01590a45f6dac67afb4f255c4124dbb86d4eaa"
 
 [[package]]
 name = "frunk"
-version = "0.4.0"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0cd67cf7d54b7e72d0ea76f3985c3747d74aee43e0218ad993b7903ba7a5395e"
+checksum = "a89c703bf50009f383a0873845357cc400a95fc535f836feddfe015d7df6e1e0"
 dependencies = [
  "frunk_core",
  "frunk_derives",
@@ -3463,15 +3714,15 @@ dependencies = [
 
 [[package]]
 name = "frunk_core"
-version = "0.4.0"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1246cf43ec80bf8b2505b5c360b8fb999c97dabd17dbb604d85558d5cbc25482"
+checksum = "2a446d01a558301dca28ef43222864a9fa2bd9a2e71370f769d5d5d5ec9f3537"
 
 [[package]]
 name = "frunk_derives"
-version = "0.4.0"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3dbc4f084ec5a3f031d24ccedeb87ab2c3189a2f33b8d070889073837d5ea09e"
+checksum = "b83164912bb4c97cfe0772913c7af7387ee2e00cb6d4636fb65a35b3d0c8f173"
 dependencies = [
  "frunk_proc_macro_helpers",
  "quote",
@@ -3480,9 +3731,9 @@ dependencies = [
 
 [[package]]
 name = "frunk_proc_macro_helpers"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "99f11257f106c6753f5ffcb8e601fb39c390a088017aaa55b70c526bff15f63e"
+checksum = "015425591bbeb0f5b8a75593340f1789af428e9f887a4f1e36c0c471f067ef50"
 dependencies = [
  "frunk_core",
  "proc-macro2",
@@ -3492,9 +3743,9 @@ dependencies = [
 
 [[package]]
 name = "frunk_proc_macros"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a078bd8459eccbb85e0b007b8f756585762a72a9efc53f359b371c3b6351dbcc"
+checksum = "ea01524f285deab48affffb342b97f186e657b119c3f1821ac531780e0fbfae0"
 dependencies = [
  "frunk_core",
  "frunk_proc_macros_impl",
@@ -3503,9 +3754,9 @@ dependencies = [
 
 [[package]]
 name = "frunk_proc_macros_impl"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6ffba99f0fa4f57e42f57388fbb9a0ca863bc2b4261f3c5570fed579d5df6c32"
+checksum = "0a802d974cc18ee7fe1a7868fc9ce31086294fd96ba62f8da64ecb44e92a2653"
 dependencies = [
  "frunk_core",
  "frunk_proc_macro_helpers",
@@ -3718,8 +3969,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c05aeb6a22b8f62540c194aac980f2115af067bfe15a0734d7277a768d396b31"
 dependencies = [
  "cfg-if",
+ "js-sys",
  "libc",
  "wasi 0.11.0+wasi-snapshot-preview1",
+ "wasm-bindgen",
 ]
 
 [[package]]
@@ -3848,7 +4101,7 @@ version = "0.15.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e7d52875c47f35a0db141bef968682165623e7d1671a0da40b87f581a3a953fd"
 dependencies = [
- "ahash 0.8.0",
+ "ahash 0.8.1",
  "geo",
  "geo-types",
  "h3ron-h3-sys",
@@ -4985,9 +5238,9 @@ dependencies = [
 
 [[package]]
 name = "moka"
-version = "0.9.4"
+version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dd8256cf9fa396576521e5e94affadb95818ec48f5dbedca36714387688aea29"
+checksum = "e013c8176e5aae43f4c0a982733c44feebddc4e7ac0871a109a9655e668487af"
 dependencies = [
  "async-io",
  "async-lock",
@@ -4999,6 +5252,7 @@ dependencies = [
  "once_cell",
  "parking_lot 0.12.1",
  "quanta",
+ "rustc_version 0.4.0",
  "scheduled-thread-pool",
  "skeptic",
  "smallvec",
@@ -5131,9 +5385,9 @@ checksum = "fce7b49e1e6d8aa67232ef1c4c936c0af58756eb2db6f65c40bacb39035e7f42"
 
 [[package]]
 name = "native-tls"
-version = "0.2.10"
+version = "0.2.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fd7e2f3618557f980e0b17e8856252eee3c97fa12c54dff0ca290fb6266ca4a9"
+checksum = "07226173c32f2926027b63cce4bcd8076c3552846cbe7925f3aaffeac0a3b92e"
 dependencies = [
  "lazy_static",
  "libc",
@@ -5352,9 +5606,9 @@ dependencies = [
 
 [[package]]
 name = "num_cpus"
-version = "1.13.1"
+version = "1.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "19e64526ebdee182341572e50e9ad03965aa510cd94427a4549448f285e957a1"
+checksum = "f6058e64324c71e02bc2b150e4f3bc8286db6c83092132ffa3f6b1eab0f9def5"
 dependencies = [
  "hermit-abi",
  "libc",
@@ -5502,9 +5756,9 @@ checksum = "ff011a302c396a5197692431fc1948019154afc178baf7d8e37367442a4601cf"
 
 [[package]]
 name = "openssl-src"
-version = "111.22.0+1.1.1q"
+version = "111.24.0+1.1.1s"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8f31f0d509d1c1ae9cada2f9539ff8f37933831fd5098879e482aa687d659853"
+checksum = "3498f259dab01178c6228c6b00dcef0ed2a2d5e20d648c017861227773ea4abd"
 dependencies = [
  "cc",
 ]
@@ -6669,9 +6923,9 @@ checksum = "4389f1d5789befaf6029ebd9f7dac4af7f7e3d61b69d4f30e2ac02b57e7712b0"
 
 [[package]]
 name = "rfc6979"
-version = "0.3.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "88c86280f057430a52f4861551b092a01b419b8eacefc7c995eacb9dc132fe32"
+checksum = "7743f17af12fa0b03b803ba12cd6a8d9483a587e89c69445e3909655c0b9fabb"
 dependencies = [
  "crypto-bigint",
  "hmac",
@@ -8928,6 +9182,12 @@ checksum = "30b31594f29d27036c383b53b59ed3476874d518f0efb151b27a4c275141390e"
 dependencies = [
  "tap",
 ]
+
+[[package]]
+name = "xml-rs"
+version = "0.8.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d2d7d3948613f75c98fd9328cfdcc45acc4d360655289d0a7d4ec931392200a3"
 
 [[package]]
 name = "xorfilter-rs"

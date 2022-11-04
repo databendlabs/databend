@@ -38,6 +38,7 @@ use common_sql::executor::PhysicalScalar;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::transforms::HashJoinDesc;
 use crate::pipelines::processors::transforms::RightSemiAntiJoinCompactor;
+use crate::pipelines::processors::transforms::TransformLeftJoin;
 use crate::pipelines::processors::transforms::TransformMarkJoin;
 use crate::pipelines::processors::transforms::TransformMergeBlock;
 use crate::pipelines::processors::transforms::TransformRightJoin;
@@ -45,6 +46,7 @@ use crate::pipelines::processors::transforms::TransformRightSemiAntiJoin;
 use crate::pipelines::processors::AggregatorParams;
 use crate::pipelines::processors::AggregatorTransformParams;
 use crate::pipelines::processors::JoinHashTable;
+use crate::pipelines::processors::LeftJoinCompactor;
 use crate::pipelines::processors::MarkJoinCompactor;
 use crate::pipelines::processors::RightJoinCompactor;
 use crate::pipelines::processors::SinkBuildHashTable;
@@ -147,7 +149,7 @@ impl PipelineBuilder {
             &join.build_keys,
             join.build.output_schema()?,
             join.probe.output_schema()?,
-            HashJoinDesc::create(self.ctx.clone(), join)?,
+            HashJoinDesc::create(join)?,
         )
     }
 
@@ -225,8 +227,8 @@ impl PipelineBuilder {
         let schema = scan.source.schema();
         let projections = scan
             .name_mapping
-            .iter()
-            .map(|(name, _)| schema.index_of(name.as_str()))
+            .keys()
+            .map(|name| schema.index_of(name.as_str()))
             .collect::<Result<Vec<usize>>>()?;
 
         let ops = vec![
@@ -476,6 +478,21 @@ impl PipelineBuilder {
                 join.output_schema()?,
             )
         })?;
+
+        if (join.join_type == JoinType::Left
+            || join.join_type == JoinType::Full
+            || join.join_type == JoinType::Single)
+            && join.non_equi_conditions.is_empty()
+        {
+            self.main_pipeline.resize(1)?;
+            self.main_pipeline.add_transform(|input, output| {
+                TransformLeftJoin::try_create(
+                    input,
+                    output,
+                    LeftJoinCompactor::create(state.clone()),
+                )
+            })?;
+        }
 
         if join.join_type == JoinType::LeftMark {
             self.main_pipeline.resize(1)?;

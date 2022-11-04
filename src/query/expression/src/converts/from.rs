@@ -99,9 +99,7 @@ pub fn from_scalar(datavalue: &DataValue, datatype: &DataTypeImpl) -> Scalar {
         DataTypeImpl::Int32(_) => {
             Scalar::Number(NumberScalar::Int32(datavalue.as_i64().unwrap() as i32))
         }
-        DataTypeImpl::Int64(_) => {
-            Scalar::Number(NumberScalar::Int64(datavalue.as_i64().unwrap() as i64))
-        }
+        DataTypeImpl::Int64(_) => Scalar::Number(NumberScalar::Int64(datavalue.as_i64().unwrap())),
         DataTypeImpl::UInt8(_) => {
             Scalar::Number(NumberScalar::UInt8(datavalue.as_u64().unwrap() as u8))
         }
@@ -112,7 +110,7 @@ pub fn from_scalar(datavalue: &DataValue, datatype: &DataTypeImpl) -> Scalar {
             Scalar::Number(NumberScalar::UInt32(datavalue.as_u64().unwrap() as u32))
         }
         DataTypeImpl::UInt64(_) => {
-            Scalar::Number(NumberScalar::UInt64(datavalue.as_u64().unwrap() as u64))
+            Scalar::Number(NumberScalar::UInt64(datavalue.as_u64().unwrap()))
         }
         DataTypeImpl::Float32(_) => Scalar::Number(NumberScalar::Float32(
             (datavalue.as_f64().unwrap() as f32).into(),
@@ -120,7 +118,7 @@ pub fn from_scalar(datavalue: &DataValue, datatype: &DataTypeImpl) -> Scalar {
         DataTypeImpl::Float64(_) => {
             Scalar::Number(NumberScalar::Float64(datavalue.as_f64().unwrap().into()))
         }
-        DataTypeImpl::Timestamp(_) => Scalar::Timestamp(datavalue.as_i64().unwrap() as i64),
+        DataTypeImpl::Timestamp(_) => Scalar::Timestamp(datavalue.as_i64().unwrap()),
         DataTypeImpl::Date(_) => Scalar::Date(datavalue.as_i64().unwrap() as i32),
         DataTypeImpl::String(_) => Scalar::String(datavalue.as_string().unwrap()),
         DataTypeImpl::Variant(_) => match datavalue {

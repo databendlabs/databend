@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_storages_preludes::stage::StageTable;
+use common_storages_stage::StageTable;
 use common_users::UserApiProvider;
 use poem::error::InternalServerError;
 use poem::error::Result as PoemResult;

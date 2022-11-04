@@ -81,7 +81,7 @@ impl ReadDataSourcePlan {
         self.scan_fields
             .clone()
             .map(|x| {
-                let fields: Vec<_> = x.iter().map(|(_, f)| f.clone()).collect();
+                let fields: Vec<_> = x.values().cloned().collect();
                 Arc::new(self.source_info.schema().project_by_fields(fields))
             })
             .unwrap_or_else(|| self.source_info.schema())

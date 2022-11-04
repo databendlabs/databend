@@ -21,7 +21,7 @@ use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_meta_types::StageFile;
 use common_meta_types::UserStageInfo;
-use common_storages_preludes::stage::StageTable;
+use common_storages_stage::StageTable;
 use futures_util::TryStreamExt;
 use tracing::debug;
 use tracing::warn;

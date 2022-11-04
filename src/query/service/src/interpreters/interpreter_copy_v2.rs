@@ -28,7 +28,7 @@ use common_meta_types::UserStageInfo;
 use common_planner::stage_table::StageTableInfo;
 use common_planner::ReadDataSourcePlan;
 use common_planner::SourceInfo;
-use common_storages_preludes::stage::StageTable;
+use common_storages_stage::StageTable;
 use regex::Regex;
 
 use crate::catalogs::Catalog;
@@ -281,11 +281,17 @@ impl CopyInterpreterV2 {
         from: &ReadDataSourcePlan,
         copy_stage_files: BTreeMap<String, TableCopiedFileInfo>,
     ) -> Result<PipelineBuildResult> {
-        let files: Vec<String> = copy_stage_files.keys().cloned().collect();
-        let mut build_res = PipelineBuildResult::create();
+        // let mut v = [5, 4, 1, 3, 2];
+        // v.sort_by(|a, b| a.cmp(b));
+        // assert!(v == [1, 2, 3, 4, 5]);
+        // https://play.rust-lang.org/?version=stable&mode=debug&edition=2015&gist=aefe5b6d2d4340aa7453b6d62452cbdc
+        let mut copy_files_vec = Vec::from_iter(copy_stage_files.clone());
+        copy_files_vec.sort_by(|(_, a), (_, b)| a.last_modified.cmp(&b.last_modified));
+        let files: Vec<String> = copy_files_vec.iter().map(|(k, _)| k.clone()).collect();
 
+        let mut build_res = PipelineBuildResult::create();
         let read_source_plan = Self::rewrite_read_plan_file_name(from.clone(), &files);
-        tracing::info!("copy_files_to_table from source: {:?}", read_source_plan);
+        tracing::debug!("copy_files_to_table from source: {:?}", read_source_plan);
 
         let from_table = self.ctx.build_table_from_source_plan(&read_source_plan)?;
         from_table.read_partitions(self.ctx.clone(), None).await?;

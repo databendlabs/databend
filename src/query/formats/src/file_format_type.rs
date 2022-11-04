@@ -249,6 +249,7 @@ impl FileFormatTypeExt for StageFileFormatType {
                     ErrorCode::InvalidArgument,
                     || "get_file_format_options_from_setting",
                 )?,
+            row_tag: settings.get_row_tag()?,
         };
         let mut options = FileFormatOptionsExt {
             stage,
@@ -311,9 +312,7 @@ impl FileFormatTypeExt for StageFileFormatType {
                 unreachable!()
             }
             StageFileFormatType::Parquet => format_setting_parquet(options, tz),
-            StageFileFormatType::Xml => {
-                unreachable!()
-            }
+            StageFileFormatType::Xml => format_setting_xml(options, tz),
         };
         Ok(format_setting)
     }
@@ -396,6 +395,7 @@ fn format_setting_csv(options: &FileFormatOptionsExt, timezone: Tz) -> FormatSet
         json_quote_denormals: false,
         json_escape_forward_slashes: true,
         ident_case_sensitive: false,
+        row_tag: vec![],
     }
 }
 
@@ -418,6 +418,7 @@ fn format_setting_tsv(options: &FileFormatOptionsExt, timezone: Tz) -> FormatSet
         json_quote_denormals: false,
         json_escape_forward_slashes: true,
         ident_case_sensitive: false,
+        row_tag: vec![],
     }
 }
 
@@ -440,6 +441,30 @@ fn format_setting_ndjson(options: &FileFormatOptionsExt, timezone: Tz) -> Format
         json_quote_denormals: false,
         json_escape_forward_slashes: true,
         ident_case_sensitive: options.ident_case_sensitive,
+        row_tag: vec![],
+    }
+}
+
+fn format_setting_xml(options: &FileFormatOptionsExt, timezone: Tz) -> FormatSettings {
+    FormatSettings {
+        timezone,
+        nested: Default::default(),
+        true_bytes: TRUE_BYTES_LOWER.as_bytes().to_vec(),
+        false_bytes: FALSE_BYTES_LOWER.as_bytes().to_vec(),
+        nan_bytes: NULL_BYTES_LOWER.as_bytes().to_vec(),
+        inf_bytes: NULL_BYTES_LOWER.as_bytes().to_vec(),
+        null_bytes: NULL_BYTES_LOWER.as_bytes().to_vec(),
+        ident_case_sensitive: options.ident_case_sensitive,
+        row_tag: options.stage.row_tag.clone().into_bytes(),
+
+        // not used
+        empty_as_default: true,
+        json_quote_denormals: false,
+        json_escape_forward_slashes: true,
+        quote_char: b'\"',
+        escape: FormatSettings::parse_escape(&options.stage.escape, Some(b'\\')),
+        record_delimiter: vec![b'\n'],
+        field_delimiter: vec![b','],
     }
 }
 
