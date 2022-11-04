@@ -167,14 +167,6 @@ CREATE TABLE IF NOT EXISTS t_array(id Int null, arr Array(Int32) null) Engine = 
 statement ok
 INSERT INTO t_array VALUES(1, []),                          (2, []),                          (3, [1,2,3]),                          (4, [1,2,3]),                          (5, [4,5,6]),                          (6, [4,5,6]);
 
-statement query IIT
-SELECT max(id), min(id), arr FROM t_array GROUP BY arr ORDER BY arr ASC;
-
-----
-2 1 []
-4 3 [1, 2, 3]
-6 5 [4, 5, 6]
-
 statement query I
 select count() from numbers(10) group by 'ab';
 
