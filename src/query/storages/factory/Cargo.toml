@@ -23,4 +23,4 @@ common-storages-null = { path = "../null" }
 common-storages-random = { path = "../random" }
 common-storages-view = { path = "../view" }
 
-parking_lot = "0.12.1"
+dashmap = "5.4"
