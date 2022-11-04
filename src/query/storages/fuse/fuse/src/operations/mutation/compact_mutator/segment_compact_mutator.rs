@@ -154,10 +154,10 @@ impl TableMutator for SegmentCompactMutator {
 
 // Segments compactor that preserver the order of ingestion.
 //
-// Since the order of blocks should be preserved, if only segments of size "threshold"
-// are allowed to be generated during compaction, there might be cases that to compact
-// one fragmented segment, a large amount of non-fragmented segments have to be split
-// into pieces and re-compacted.
+// Since the order of segments( and the order of blocks as well) should be preserved,
+// if only segments of size "threshold" are allowed to be generated during compaction,
+// there might be cases that to compact one fragmented segment, a large amount of
+// non-fragmented segments have to be split into pieces and re-compacted.
 //
 // To avoid this "ripple effects", consecutive segments are allowed to be compacted into
 // a new segment, if the size of compacted segment is lesser than 2 * threshold (exclusive).
