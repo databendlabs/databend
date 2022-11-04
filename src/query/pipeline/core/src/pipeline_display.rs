@@ -71,21 +71,34 @@ impl<'a> Display for PipelineIndentDisplayWrapper<'a> {
                     ..
                 } => {
                     let prev_name = Self::pipe_name(&pipes[pipes.len() - index - 2]);
-                    let post_name = Self::pipe_name(&pipes[pipes.len() - index]);
-
-                    write!(
-                        f,
-                        "Merge ({} × {} {}) to ({} × {})",
-                        prev_name,
-                        inputs_port.len(),
-                        if inputs_port.len() == 1 {
-                            "processor"
-                        } else {
-                            "processors"
-                        },
-                        post_name,
-                        outputs_port.len(),
-                    )?;
+                    if index > 0 {
+                        let post_name = Self::pipe_name(&pipes[pipes.len() - index]);
+                        write!(
+                            f,
+                            "Merge ({} × {} {}) to ({} × {})",
+                            prev_name,
+                            inputs_port.len(),
+                            if inputs_port.len() == 1 {
+                                "processor"
+                            } else {
+                                "processors"
+                            },
+                            post_name,
+                            outputs_port.len(),
+                        )?;
+                    } else {
+                        write!(
+                            f,
+                            "Merge ({} × {} {})",
+                            prev_name,
+                            inputs_port.len(),
+                            if inputs_port.len() == 1 {
+                                "processor"
+                            } else {
+                                "processors"
+                            },
+                        )?;
+                    }
                 }
             }
         }

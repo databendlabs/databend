@@ -30,6 +30,7 @@ use common_functions::scalars::FunctionContext;
 use common_functions::scalars::FunctionFactory;
 use common_pipeline_core::Pipe;
 use common_pipeline_sinks::processors::sinks::UnionReceiveSink;
+use common_pipeline_transforms::processors::transforms::try_add_multi_sort_merge;
 use common_sql::evaluator::ChunkOperator;
 use common_sql::evaluator::CompoundChunkOperator;
 use common_sql::executor::AggregateFunctionDesc;
@@ -431,6 +432,7 @@ impl PipelineBuilder {
             })
             .collect();
 
+        let block_size = self.ctx.get_settings().get_max_block_size()? as usize;
         // Sort
         self.main_pipeline.add_transform(|input, output| {
             TransformSortPartial::try_create(input, output, sort.limit, sort_desc.clone())
@@ -441,20 +443,18 @@ impl PipelineBuilder {
             TransformSortMerge::try_create(
                 input,
                 output,
-                SortMergeCompactor::new(sort.limit, sort_desc.clone()),
+                SortMergeCompactor::new(block_size, sort.limit, sort_desc.clone()),
             )
         })?;
 
-        self.main_pipeline.resize(1)?;
-
         // Concat merge in single thread
-        self.main_pipeline.add_transform(|input, output| {
-            TransformSortMerge::try_create(
-                input,
-                output,
-                SortMergeCompactor::new(sort.limit, sort_desc.clone()),
-            )
-        })
+        try_add_multi_sort_merge(
+            &mut self.main_pipeline,
+            sort.output_schema()?,
+            block_size,
+            sort.limit,
+            sort_desc,
+        )
     }
 
     fn build_limit(&mut self, limit: &Limit) -> Result<()> {

@@ -61,7 +61,29 @@ impl DataBlock {
         Ok(DataBlock::create(schema.clone(), result_columns))
     }
 
-    pub fn take_columns_by_slices_limit(
+    pub fn block_take_by_slices_limit(
+        raw: &DataBlock,
+        slice: (usize, usize),
+        limit: Option<usize>,
+    ) -> Result<DataBlock> {
+        let fields = raw.schema().fields();
+        let columns = fields
+            .iter()
+            .map(|f| {
+                let column = raw.try_column_by_name(f.name())?.clone();
+                Self::take_column_by_slices_limit(
+                    f.data_type(),
+                    &[column],
+                    &[(0, slice.0, slice.1)],
+                    limit,
+                )
+            })
+            .collect::<Result<Vec<_>>>()?;
+        let data = DataBlock::create(raw.schema().clone(), columns);
+        Ok(data)
+    }
+
+    pub fn take_column_by_slices_limit(
         data_type: &DataTypeImpl,
         columns: &[ColumnRef],
         slices: &[MergeSlice],
