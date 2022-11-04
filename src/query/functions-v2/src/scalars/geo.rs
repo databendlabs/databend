@@ -62,7 +62,7 @@ pub fn geo_dist_init() {
     // Using `get_or_init` for unit tests cause each test will re-registry all functions.
     COS_LUT.get_or_init(|| {
         let cos_lut: [f32; COS_LUT_SIZE + 1] = (0..=COS_LUT_SIZE)
-            .map(|i| (((2f64 * PI * i as f64 / COS_LUT_SIZE as f64) as f64).cos()) as f32)
+            .map(|i| (2f64 * PI * i as f64 / COS_LUT_SIZE as f64).cos() as f32)
             .collect::<Vec<f32>>()
             .try_into()
             .unwrap();
@@ -71,11 +71,7 @@ pub fn geo_dist_init() {
 
     ASIN_SQRT_LUT.get_or_init(|| {
         let asin_sqrt_lut: [f32; ASIN_SQRT_LUT_SIZE + 1] = (0..=ASIN_SQRT_LUT_SIZE)
-            .map(|i| {
-                ((i as f64 / ASIN_SQRT_LUT_SIZE as f64) as f64)
-                    .sqrt()
-                    .asin() as f32
-            })
+            .map(|i| (i as f64 / ASIN_SQRT_LUT_SIZE as f64).sqrt().asin() as f32)
             .collect::<Vec<f32>>()
             .try_into()
             .unwrap();
