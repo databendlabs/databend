@@ -5,7 +5,7 @@ description:
   Deploying a Local Databend
 ---
 
-To evaluate Databend and get some hands-on experience, you can deploy Databend locally and use the file system as storage if you don't have object storage yet. This topic explains how to deploy Databend on MacOS and connect to Databend from a MySQL client.
+To evaluate Databend and get some hands-on experience, you can deploy Databend locally and use the file system as storage if you don't have object storage yet. This topic explains how to deploy a local Databend and connect to Databend from a MySQL client.
 
 :::note
 Object storage is required for production. Use the file system only for evaluation, testing, and other non-production purposes.
@@ -13,7 +13,7 @@ Object storage is required for production. Use the file system only for evaluati
 
 ## Before You Begin
 
-Make sure you have installed a MySQL client. This topic uses DBeaver to connect to Databend. To download and install DBeaver, refer to https://dbeaver.com/2022/02/17/how-to-download-and-install-dbeaver/.
+Make sure you have installed a MySQL client.
 
 ## Download Databend
 
@@ -48,16 +48,19 @@ eric             12776   0.0  0.3 408654368  24848 s003  S     2:15pm   0:00.06 
 
 ## Connect to Databend
 
-1. Open the MySQL client, for example, DBeaver. Select **Database** > **New Database Connection** in the top menu.
+1. Create a connection from your MySQL client using port 3307:
 
-2. In the database connection wizard, select **MySQL**, then click **Next**.
+```shell
+mysql -h 127.0.0.1 -P3307 -uroot
+```
 
-![](../../public/img/deploy/selectMySQL.png)
+2. Query the Databend version to verify the connection:
 
-3. Set `Port` to `3307`, then click **Finish**.
+```sql
+SELECT VERSION();
 
-![](../../public/img/deploy/setconnection.png)
-
-4. Query the Databend version to verify the connection:
-
-![](../../public/img/deploy/queryversion.png)
+---
+version()                                                                             |
+--------------------------------------------------------------------------------------+
+DatabendQuery v0.8.99-nightly-2fdfcaa(rust-1.66.0-nightly-2022-11-02T18:06:39.712775Z)|
+```
