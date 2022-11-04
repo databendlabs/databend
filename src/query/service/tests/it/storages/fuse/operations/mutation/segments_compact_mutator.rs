@@ -383,7 +383,7 @@ async fn test_segment_accumulator() -> Result<()> {
     }
 
     {
-        // case: rand
+        // case: rand test
 
         let case_name = "rand";
         let threshold = 3;
@@ -398,26 +398,45 @@ async fn test_segment_accumulator() -> Result<()> {
 
             let mut expected_number_of_output_segments = 0;
             let mut expected_block_number_of_new_segments = vec![];
+            // simulate the compaction process, verifies that the test target works as expected
             for _ in 0..num_segments {
                 let block_num: usize = rng.gen_range(0..20);
                 blocks_number_of_input_segments.push(block_num);
                 if block_num != 0 {
                     let s = block_num + num_accumulated_blocks;
                     if s < threshold {
+                        // input segment is fragmented, but fragments collected so far
+                        // are not enough yet.
                         num_accumulated_blocks = s;
                         fragment_segments += 1;
                     } else if s >= threshold && s < 2 * threshold {
+                        // input segment is fragmented, and fragments collected are
+                        // large enough to be compacted
                         num_accumulated_blocks = 0;
+                        // mark that a segment will be included in the output
                         expected_number_of_output_segments += 1;
                         if fragment_segments > 0 {
+                            // mark that a NEW segment will be generated, which
+                            // "contains" all the fragmented segments collected so far.
                             expected_block_number_of_new_segments.push(s);
                         }
+                        // reset state
                         fragment_segments = 0;
                     } else {
+                        // input segment is larger than threshold, in this situation:
+                        // fragmented segments collected so far should be compacted
+                        // - if the input segment and the fragments collected so far could be combined
+                        //   into a segment which size is lesser than 2 * threshold, just compact them
+                        // - otherwise, just compact the fragments collected so far, and after that,
+                        //   keep this segment as it is.
                         if fragment_segments > 0 {
+                            // some fragments left there, check them out
                             if fragment_segments > 1 {
+                                // if there are more than one fragments, a new segment is expected
+                                // to be generated
                                 expected_block_number_of_new_segments.push(num_accumulated_blocks);
                             }
+                            // mark that a segment will be include in the output
                             expected_number_of_output_segments += 1;
                         }
                         fragment_segments = 0;
@@ -426,6 +445,8 @@ async fn test_segment_accumulator() -> Result<()> {
                     }
                 }
             }
+
+            // finalize, compact left fragments
             if fragment_segments > 0 {
                 expected_number_of_output_segments += 1;
                 if fragment_segments > 1 {
