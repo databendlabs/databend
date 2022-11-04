@@ -15,7 +15,7 @@
 use common_datablocks::DataBlock;
 use common_datavalues::DataValue;
 use common_exception::Result;
-use common_storages_fuse_meta::meta::ClusterStatistics;
+use common_storages_table_meta::meta::ClusterStatistics;
 
 use crate::io::BlockCompactor;
 
@@ -109,7 +109,7 @@ impl ClusterStatsGenerator {
             // To avoid high cardinality, for the string column,
             // cluster statistics uses only the first 5 bytes.
             if let DataValue::String(v) = &left {
-                let l = v.len() as usize;
+                let l = v.len();
                 let e = if l < 5 { l } else { 5 };
                 left = DataValue::from(&v[0..e]);
             }
@@ -117,7 +117,7 @@ impl ClusterStatsGenerator {
 
             let mut right = col.get_checked(col.len() - 1)?;
             if let DataValue::String(v) = &right {
-                let l = v.len() as usize;
+                let l = v.len();
                 let e = if l < 5 { l } else { 5 };
                 right = DataValue::from(&v[0..e]);
             }

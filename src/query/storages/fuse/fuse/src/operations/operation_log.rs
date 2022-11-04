@@ -22,7 +22,7 @@ use common_datavalues::DataSchemaRef;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_planner::extras::SINK_SCHEMA;
-use common_storages_fuse_meta::meta::SegmentInfo;
+use common_storages_table_meta::meta::SegmentInfo;
 
 // currently, only support append,
 pub type TableOperationLog = Vec<AppendOperationLogEntry>;

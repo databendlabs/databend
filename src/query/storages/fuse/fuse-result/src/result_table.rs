@@ -32,7 +32,7 @@ use common_planner::Partitions;
 use common_planner::ReadDataSourcePlan;
 use common_storages_fuse::io::BlockReader;
 use common_storages_fuse::FuseTable;
-use common_storages_fuse_meta::meta::SegmentInfo;
+use common_storages_table_meta::meta::SegmentInfo;
 use serde::Deserialize;
 use serde::Serialize;
 

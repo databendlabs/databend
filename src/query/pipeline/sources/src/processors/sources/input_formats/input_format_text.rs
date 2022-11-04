@@ -122,7 +122,7 @@ impl<T: InputFormatTextBase> InputFormat for InputFormatText<T> {
             )?;
             let split_size = plan.stage_info.copy_options.split_size;
             if compress_alg.is_none() && T::is_splittable() && split_size > 0 {
-                let split_offsets = split_by_size(size, split_size as usize);
+                let split_offsets = split_by_size(size, split_size);
                 let num_file_splits = split_offsets.len();
                 tracing::debug!(
                     "split file {} of size {} to {} {} bytes splits",

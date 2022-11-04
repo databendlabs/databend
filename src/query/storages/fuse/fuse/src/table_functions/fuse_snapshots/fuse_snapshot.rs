@@ -17,7 +17,7 @@ use std::sync::Arc;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_storages_fuse_meta::meta::TableSnapshotLite;
+use common_storages_table_meta::meta::TableSnapshotLite;
 
 use crate::io::SnapshotsIO;
 use crate::io::TableMetaLocationGenerator;
@@ -97,7 +97,7 @@ impl<'a> FuseSnapshot<'a> {
             compressed.push(s.compressed_byte_size);
             uncompressed.push(s.uncompressed_byte_size);
             index_size.push(s.index_size);
-            timestamps.push(s.timestamp.map(|dt| (dt.timestamp_micros()) as i64));
+            timestamps.push(s.timestamp.map(|dt| (dt.timestamp_micros())));
             current_snapshot_version = ver;
         }
 

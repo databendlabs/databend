@@ -17,11 +17,11 @@ use std::collections::HashMap;
 
 use common_datavalues::DataValue;
 use common_exception::Result;
-use common_storages_fuse_meta::meta::BlockMeta;
-use common_storages_fuse_meta::meta::ColumnId;
-use common_storages_fuse_meta::meta::ColumnStatistics;
-use common_storages_fuse_meta::meta::Statistics;
-use common_storages_fuse_meta::meta::StatisticsOfColumns;
+use common_storages_table_meta::meta::BlockMeta;
+use common_storages_table_meta::meta::ColumnId;
+use common_storages_table_meta::meta::ColumnStatistics;
+use common_storages_table_meta::meta::Statistics;
+use common_storages_table_meta::meta::StatisticsOfColumns;
 
 pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
     stats_of_columns: &[T],

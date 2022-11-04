@@ -20,7 +20,7 @@ use common_pipeline_core::Pipeline;
 use common_pipeline_transforms::processors::transforms::TransformCompact;
 use common_planner::ReadDataSourcePlan;
 use common_planner::SourceInfo;
-use common_storages_fuse_meta::meta::TableSnapshot;
+use common_storages_table_meta::meta::TableSnapshot;
 
 use super::FuseTableSink;
 use crate::operations::mutation::SegmentCompactMutator;

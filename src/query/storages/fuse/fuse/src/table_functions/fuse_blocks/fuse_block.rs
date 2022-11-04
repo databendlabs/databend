@@ -17,7 +17,7 @@ use std::sync::Arc;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_storages_fuse_meta::meta::TableSnapshot;
+use common_storages_table_meta::meta::TableSnapshot;
 use futures_util::TryStreamExt;
 
 use crate::io::MetaReaders;
@@ -79,7 +79,7 @@ impl<'a> FuseBlock<'a> {
     async fn to_block(&self, snapshot: Arc<TableSnapshot>) -> Result<DataBlock> {
         let len = snapshot.summary.block_count as usize;
         let snapshot_id = vec![snapshot.snapshot_id.simple().to_string().into_bytes()];
-        let timestamp = vec![snapshot.timestamp.map(|dt| (dt.timestamp_micros()) as i64)];
+        let timestamp = vec![snapshot.timestamp.map(|dt| (dt.timestamp_micros()))];
         let mut block_location: Vec<Vec<u8>> = Vec::with_capacity(len);
         let mut block_size: Vec<u64> = Vec::with_capacity(len);
         let mut file_size: Vec<u64> = Vec::with_capacity(len);
