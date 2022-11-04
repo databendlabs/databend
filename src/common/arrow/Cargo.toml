@@ -34,7 +34,7 @@ simd = ["arrow/simd"]
 # Workspace dependencies
 
 # Crates.io dependencies
-arrow = { package = "arrow2", git = "https://github.com/RinChanNOWWW/arrow2", rev = "8bd6417", default-features = false, features = [
+arrow = { package = "arrow2", git = "https://github.com/jorgecarleitao/arrow2", rev = "562de6a", default-features = false, features = [
     "io_parquet",
     "io_parquet_compression",
 ] }
