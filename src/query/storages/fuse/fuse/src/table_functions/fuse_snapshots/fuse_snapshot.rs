@@ -97,7 +97,7 @@ impl<'a> FuseSnapshot<'a> {
             compressed.push(s.compressed_byte_size);
             uncompressed.push(s.uncompressed_byte_size);
             index_size.push(s.index_size);
-            timestamps.push(s.timestamp.map(|dt| (dt.timestamp_micros()) as i64));
+            timestamps.push(s.timestamp.map(|dt| (dt.timestamp_micros())));
             current_snapshot_version = ver;
         }
 

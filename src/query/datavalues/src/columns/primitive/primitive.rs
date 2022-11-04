@@ -126,7 +126,7 @@ impl<T: PrimitiveType> PrimitiveColumn<T> {
                         .downcast_ref::<PrimitiveArray<i64>>()
                         .expect("primitive cast should be ok");
 
-                    let array = unary(array, |x| x as i64 * p.0 / p.1, expected_arrow);
+                    let array = unary(array, |x| x * p.0 / p.1, expected_arrow);
                     Self::from_arrow_array(&array)
                 }
                 _ => unreachable!(),
@@ -303,8 +303,7 @@ impl<T: PrimitiveType> Column for PrimitiveColumn<T> {
             return self.slice(0, 0);
         }
 
-        let mut builder =
-            MutablePrimitiveColumn::<T>::with_capacity(*offsets.last().unwrap() as usize);
+        let mut builder = MutablePrimitiveColumn::<T>::with_capacity(*offsets.last().unwrap());
 
         let mut previous_offset: usize = 0;
 

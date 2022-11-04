@@ -468,8 +468,8 @@ impl ProgressReporter for ContextProgressReporter {
             progress.rows,
             convert_byte_size(progress.bytes as f64),
             seconds,
-            convert_number_size((progress.rows as f64) / (seconds as f64)),
-            convert_byte_size((progress.bytes as f64) / (seconds as f64)),
+            convert_number_size((progress.rows as f64) / (seconds)),
+            convert_byte_size((progress.bytes as f64) / (seconds)),
         )
     }
 }

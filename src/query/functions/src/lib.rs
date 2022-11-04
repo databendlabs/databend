@@ -13,8 +13,6 @@
 // limitations under the License.
 
 #![feature(core_intrinsics)]
-#![feature(duration_checked_float)]
-#![feature(map_first_last)]
 #![feature(portable_simd)]
 
 pub mod aggregates;

@@ -52,8 +52,8 @@ impl Progress {
     }
 
     pub fn get_values(&self) -> ProgressValues {
-        let rows = self.rows.load(Ordering::Relaxed) as usize;
-        let bytes = self.bytes.load(Ordering::Relaxed) as usize;
+        let rows = self.rows.load(Ordering::Relaxed);
+        let bytes = self.bytes.load(Ordering::Relaxed);
         ProgressValues { rows, bytes }
     }
 }

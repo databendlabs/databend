@@ -28,7 +28,7 @@ pub fn codegen_arithmetic_type() {
     let dest = Path::new("src/query/datavalues/src/types");
     let path = dest.join("arithmetics_type.rs");
 
-    let mut file = File::create(&path).expect("open");
+    let mut file = File::create(path).expect("open");
     // Write the head.
     writeln!(
         file,

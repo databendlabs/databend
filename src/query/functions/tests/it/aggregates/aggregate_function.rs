@@ -69,7 +69,7 @@ fn test_aggregate_function() -> Result<()> {
             func_name: "count",
             arrays: vec![arrays[0].clone()],
             error: "",
-            input_array: Box::new(MutablePrimitiveColumn::<u64>::default()),
+            input_array: Box::<common_datavalues::MutablePrimitiveColumn<u64>>::default(),
             expect_array: Series::from_data([4u64]),
         },
         Test {
@@ -81,7 +81,7 @@ fn test_aggregate_function() -> Result<()> {
             func_name: "max",
             arrays: vec![arrays[0].clone()],
             error: "",
-            input_array: Box::new(MutablePrimitiveColumn::<i64>::default()),
+            input_array: Box::<common_datavalues::MutablePrimitiveColumn<i64>>::default(),
             expect_array: Series::from_data([4i64]),
         },
         Test {
@@ -93,7 +93,7 @@ fn test_aggregate_function() -> Result<()> {
             func_name: "max",
             arrays: vec![arrays[6].clone()],
             error: "",
-            input_array: Box::new(MutableStringColumn::default()),
+            input_array: Box::<common_datavalues::MutableStringColumn>::default(),
             expect_array: Series::from_data(["y"]),
         },
         Test {
@@ -105,7 +105,7 @@ fn test_aggregate_function() -> Result<()> {
             func_name: "min",
             arrays: vec![arrays[0].clone()],
             error: "",
-            input_array: Box::new(MutablePrimitiveColumn::<i64>::default()),
+            input_array: Box::<common_datavalues::MutablePrimitiveColumn<i64>>::default(),
             expect_array: Series::from_data([1i64]),
         },
         Test {
@@ -117,7 +117,7 @@ fn test_aggregate_function() -> Result<()> {
             func_name: "any",
             arrays: vec![arrays[0].clone()],
             error: "",
-            input_array: Box::new(MutablePrimitiveColumn::<i64>::default()),
+            input_array: Box::<common_datavalues::MutablePrimitiveColumn<i64>>::default(),
             expect_array: Series::from_data([4i64]),
         },
         Test {
@@ -129,7 +129,7 @@ fn test_aggregate_function() -> Result<()> {
             func_name: "avg",
             arrays: vec![arrays[0].clone()],
             error: "",
-            input_array: Box::new(MutablePrimitiveColumn::<f64>::default()),
+            input_array: Box::<common_datavalues::MutablePrimitiveColumn<f64>>::default(),
             expect_array: Series::from_data([2.5f64]),
         },
         Test {
@@ -141,7 +141,7 @@ fn test_aggregate_function() -> Result<()> {
             func_name: "sum",
             arrays: vec![arrays[0].clone()],
             error: "",
-            input_array: Box::new(MutablePrimitiveColumn::<i64>::default()),
+            input_array: Box::<common_datavalues::MutablePrimitiveColumn<i64>>::default(),
             expect_array: Series::from_data([10i64]),
         },
         Test {
@@ -153,7 +153,7 @@ fn test_aggregate_function() -> Result<()> {
             func_name: "arg_max",
             arrays: vec![arrays[0].clone(), arrays[1].clone()],
             error: "",
-            input_array: Box::new(MutablePrimitiveColumn::<i64>::default()),
+            input_array: Box::<common_datavalues::MutablePrimitiveColumn<i64>>::default(),
             expect_array: Series::from_data([1i64]),
         },
         Test {
@@ -165,7 +165,7 @@ fn test_aggregate_function() -> Result<()> {
             func_name: "arg_min",
             arrays: vec![arrays[0].clone(), arrays[1].clone()],
             error: "",
-            input_array: Box::new(MutablePrimitiveColumn::<i64>::default()),
+            input_array: Box::<common_datavalues::MutablePrimitiveColumn<i64>>::default(),
             expect_array: Series::from_data([4i64]),
         },
         Test {
@@ -177,7 +177,7 @@ fn test_aggregate_function() -> Result<()> {
             func_name: "arg_min",
             arrays: arrays.clone(),
             error: "Code: 1028, displayText = arg_min expect to have two arguments, but got 1.",
-            input_array: Box::new(MutablePrimitiveColumn::<i64>::default()),
+            input_array: Box::<common_datavalues::MutablePrimitiveColumn<i64>>::default(),
             expect_array: Series::from_data([4i64]),
         },
         Test {
@@ -189,7 +189,7 @@ fn test_aggregate_function() -> Result<()> {
             func_name: "uniq",
             arrays: vec![arrays[0].clone()],
             error: "",
-            input_array: Box::new(MutablePrimitiveColumn::<u64>::default()),
+            input_array: Box::<common_datavalues::MutablePrimitiveColumn<u64>>::default(),
             expect_array: Series::from_data([4u64]),
         },
         Test {
@@ -201,7 +201,7 @@ fn test_aggregate_function() -> Result<()> {
             func_name: "std",
             arrays: vec![arrays[0].clone()],
             error: "",
-            input_array: Box::new(MutablePrimitiveColumn::<f64>::default()),
+            input_array: Box::<common_datavalues::MutablePrimitiveColumn<f64>>::default(),
             expect_array: Series::from_data([1.118033988749895f64]),
         },
         Test {
@@ -213,7 +213,7 @@ fn test_aggregate_function() -> Result<()> {
             func_name: "stddev",
             arrays: vec![arrays[0].clone()],
             error: "",
-            input_array: Box::new(MutablePrimitiveColumn::<f64>::default()),
+            input_array: Box::<common_datavalues::MutablePrimitiveColumn<f64>>::default(),
             expect_array: Series::from_data([1.118033988749895f64]),
         },
         Test {
@@ -225,7 +225,7 @@ fn test_aggregate_function() -> Result<()> {
             func_name: "stddev_pop",
             arrays: vec![arrays[0].clone()],
             error: "",
-            input_array: Box::new(MutablePrimitiveColumn::<f64>::default()),
+            input_array: Box::<common_datavalues::MutablePrimitiveColumn<f64>>::default(),
             expect_array: Series::from_data([1.118033988749895f64]),
         },
         Test {
@@ -237,7 +237,7 @@ fn test_aggregate_function() -> Result<()> {
             func_name: "covar_samp",
             arrays: vec![arrays[0].clone(), arrays[1].clone()],
             error: "",
-            input_array: Box::new(MutablePrimitiveColumn::<f64>::default()),
+            input_array: Box::<common_datavalues::MutablePrimitiveColumn<f64>>::default(),
             expect_array: Series::from_data([-1.6666666666666667f64]),
         },
         Test {
@@ -249,7 +249,7 @@ fn test_aggregate_function() -> Result<()> {
             func_name: "covar_pop",
             arrays: vec![arrays[0].clone(), arrays[1].clone()],
             error: "",
-            input_array: Box::new(MutablePrimitiveColumn::<f64>::default()),
+            input_array: Box::<common_datavalues::MutablePrimitiveColumn<f64>>::default(),
             expect_array: Series::from_data([-1.25000f64]),
         },
         Test {
@@ -271,7 +271,7 @@ fn test_aggregate_function() -> Result<()> {
                 arrays[5].clone(),
             ],
             error: "",
-            input_array: Box::new(MutablePrimitiveColumn::<u8>::default()),
+            input_array: Box::<common_datavalues::MutablePrimitiveColumn<u8>>::default(),
             expect_array: Series::from_data([1u8]),
         },
     ];
@@ -364,7 +364,7 @@ fn test_aggregate_function_with_group_by() -> Result<()> {
             func_name: "count",
             arrays: vec![arrays[0].clone()],
             error: "",
-            input_array: Box::new(MutablePrimitiveColumn::<u64>::default()),
+            input_array: Box::<common_datavalues::MutablePrimitiveColumn<u64>>::default(),
             expect_array: Box::new(MutablePrimitiveColumn::<u64>::from_data(
                 u64::to_data_type(),
                 Vec::from([2u64, 2u64]),
@@ -379,7 +379,7 @@ fn test_aggregate_function_with_group_by() -> Result<()> {
             func_name: "max",
             arrays: vec![arrays[0].clone()],
             error: "",
-            input_array: Box::new(MutablePrimitiveColumn::<i64>::default()),
+            input_array: Box::<common_datavalues::MutablePrimitiveColumn<i64>>::default(),
             expect_array: Box::new(MutablePrimitiveColumn::<i64>::from_data(
                 i64::to_data_type(),
                 Vec::from([4i64, 3i64]),
@@ -394,7 +394,7 @@ fn test_aggregate_function_with_group_by() -> Result<()> {
             func_name: "min",
             arrays: vec![arrays[0].clone()],
             error: "",
-            input_array: Box::new(MutablePrimitiveColumn::<i64>::default()),
+            input_array: Box::<common_datavalues::MutablePrimitiveColumn<i64>>::default(),
             expect_array: Box::new(MutablePrimitiveColumn::<i64>::from_data(
                 i64::to_data_type(),
                 Vec::from([2i64, 1i64]),
@@ -409,7 +409,7 @@ fn test_aggregate_function_with_group_by() -> Result<()> {
             func_name: "any",
             arrays: vec![arrays[0].clone()],
             error: "",
-            input_array: Box::new(MutablePrimitiveColumn::<i64>::default()),
+            input_array: Box::<common_datavalues::MutablePrimitiveColumn<i64>>::default(),
             expect_array: Box::new(MutablePrimitiveColumn::<i64>::from_data(
                 i64::to_data_type(),
                 Vec::from([4i64, 3i64]),
@@ -424,7 +424,7 @@ fn test_aggregate_function_with_group_by() -> Result<()> {
             func_name: "avg",
             arrays: vec![arrays[0].clone()],
             error: "",
-            input_array: Box::new(MutablePrimitiveColumn::<f64>::default()),
+            input_array: Box::<common_datavalues::MutablePrimitiveColumn<f64>>::default(),
             expect_array: Box::new(MutablePrimitiveColumn::<f64>::from_data(
                 f64::to_data_type(),
                 Vec::from([3.0f64, 2.0f64]),
@@ -439,7 +439,7 @@ fn test_aggregate_function_with_group_by() -> Result<()> {
             func_name: "sum",
             arrays: vec![arrays[0].clone()],
             error: "",
-            input_array: Box::new(MutablePrimitiveColumn::<i64>::default()),
+            input_array: Box::<common_datavalues::MutablePrimitiveColumn<i64>>::default(),
             expect_array: Box::new(MutablePrimitiveColumn::<i64>::from_data(
                 i64::to_data_type(),
                 Vec::from([6i64, 4i64]),
@@ -454,7 +454,7 @@ fn test_aggregate_function_with_group_by() -> Result<()> {
             func_name: "arg_max",
             arrays: vec![arrays[0].clone(), arrays[1].clone()],
             error: "",
-            input_array: Box::new(MutablePrimitiveColumn::<i64>::default()),
+            input_array: Box::<common_datavalues::MutablePrimitiveColumn<i64>>::default(),
             expect_array: Box::new(MutablePrimitiveColumn::<i64>::from_data(
                 i64::to_data_type(),
                 Vec::from([2i64, 1i64]),
@@ -469,7 +469,7 @@ fn test_aggregate_function_with_group_by() -> Result<()> {
             func_name: "arg_max",
             arrays: vec![arrays[0].clone(), arrays[2].clone()],
             error: "",
-            input_array: Box::new(MutablePrimitiveColumn::<i64>::default()),
+            input_array: Box::<common_datavalues::MutablePrimitiveColumn<i64>>::default(),
             expect_array: Box::new(MutablePrimitiveColumn::<i64>::from_data(
                 i64::to_data_type(),
                 Vec::from([2i64, 1i64]),
@@ -484,7 +484,7 @@ fn test_aggregate_function_with_group_by() -> Result<()> {
             func_name: "arg_min",
             arrays: vec![arrays[0].clone(), arrays[1].clone()],
             error: "",
-            input_array: Box::new(MutablePrimitiveColumn::<i64>::default()),
+            input_array: Box::<common_datavalues::MutablePrimitiveColumn<i64>>::default(),
             expect_array: Box::new(MutablePrimitiveColumn::<i64>::from_data(
                 i64::to_data_type(),
                 Vec::from([4i64, 3i64]),
@@ -499,7 +499,7 @@ fn test_aggregate_function_with_group_by() -> Result<()> {
             func_name: "arg_min",
             arrays: vec![arrays[0].clone(), arrays[1].clone()],
             error: "",
-            input_array: Box::new(MutablePrimitiveColumn::<i64>::default()),
+            input_array: Box::<common_datavalues::MutablePrimitiveColumn<i64>>::default(),
             expect_array: Box::new(MutablePrimitiveColumn::<i64>::from_data(
                 i64::to_data_type(),
                 Vec::from([4i64, 3i64]),
@@ -514,7 +514,7 @@ fn test_aggregate_function_with_group_by() -> Result<()> {
             func_name: "uniq",
             arrays: vec![arrays[0].clone()],
             error: "",
-            input_array: Box::new(MutablePrimitiveColumn::<u64>::default()),
+            input_array: Box::<common_datavalues::MutablePrimitiveColumn<u64>>::default(),
             expect_array: Box::new(MutablePrimitiveColumn::<u64>::from_data(
                 u64::to_data_type(),
                 Vec::from([2u64, 2u64]),
@@ -529,7 +529,7 @@ fn test_aggregate_function_with_group_by() -> Result<()> {
             func_name: "std",
             arrays: vec![arrays[0].clone()],
             error: "",
-            input_array: Box::new(MutablePrimitiveColumn::<f64>::default()),
+            input_array: Box::<common_datavalues::MutablePrimitiveColumn<f64>>::default(),
             expect_array: Box::new(MutablePrimitiveColumn::<f64>::from_data(
                 f64::to_data_type(),
                 Vec::from([1.0f64, 1.0f64]),
@@ -544,7 +544,7 @@ fn test_aggregate_function_with_group_by() -> Result<()> {
             func_name: "stddev",
             arrays: vec![arrays[0].clone()],
             error: "",
-            input_array: Box::new(MutablePrimitiveColumn::<f64>::default()),
+            input_array: Box::<common_datavalues::MutablePrimitiveColumn<f64>>::default(),
             expect_array: Box::new(MutablePrimitiveColumn::<f64>::from_data(
                 f64::to_data_type(),
                 Vec::from([1.0f64, 1.0f64]),
@@ -559,7 +559,7 @@ fn test_aggregate_function_with_group_by() -> Result<()> {
             func_name: "stddev_pop",
             arrays: vec![arrays[0].clone()],
             error: "",
-            input_array: Box::new(MutablePrimitiveColumn::<f64>::default()),
+            input_array: Box::<common_datavalues::MutablePrimitiveColumn<f64>>::default(),
             expect_array: Box::new(MutablePrimitiveColumn::<f64>::from_data(
                 f64::to_data_type(),
                 Vec::from([1.0f64, 1.0f64]),
@@ -574,7 +574,7 @@ fn test_aggregate_function_with_group_by() -> Result<()> {
             func_name: "covar_samp",
             arrays: vec![arrays[0].clone(), arrays[1].clone()],
             error: "",
-            input_array: Box::new(MutablePrimitiveColumn::<f64>::default()),
+            input_array: Box::<common_datavalues::MutablePrimitiveColumn<f64>>::default(),
             expect_array: Box::new(MutablePrimitiveColumn::<f64>::from_data(
                 f64::to_data_type(),
                 Vec::from([-2.0f64, -2.0f64]),
@@ -589,7 +589,7 @@ fn test_aggregate_function_with_group_by() -> Result<()> {
             func_name: "covar_pop",
             arrays: vec![arrays[0].clone(), arrays[1].clone()],
             error: "",
-            input_array: Box::new(MutablePrimitiveColumn::<f64>::default()),
+            input_array: Box::<common_datavalues::MutablePrimitiveColumn<f64>>::default(),
             expect_array: Box::new(MutablePrimitiveColumn::<f64>::from_data(
                 f64::to_data_type(),
                 Vec::from([-1.0f64, -1.0f64]),
@@ -609,7 +609,7 @@ fn test_aggregate_function_with_group_by() -> Result<()> {
                 arrays[6].clone(),
             ],
             error: "",
-            input_array: Box::new(MutablePrimitiveColumn::<u8>::default()),
+            input_array: Box::<common_datavalues::MutablePrimitiveColumn<u8>>::default(),
             expect_array: Box::new(MutablePrimitiveColumn::<u8>::from_data(
                 u8::to_data_type(),
                 Vec::from([1u8, 0u8]),
@@ -706,7 +706,7 @@ fn test_aggregate_function_on_empty_data() -> Result<()> {
             func_name: "count",
             arrays: vec![arrays[0].clone()],
             error: "",
-            input_array: Box::new(MutablePrimitiveColumn::<u64>::default()),
+            input_array: Box::<common_datavalues::MutablePrimitiveColumn<u64>>::default(),
             expect_array: Box::new(MutablePrimitiveColumn::<u64>::from_data(
                 u64::to_data_type(),
                 Vec::from([0u64]),
@@ -721,7 +721,7 @@ fn test_aggregate_function_on_empty_data() -> Result<()> {
             func_name: "max",
             arrays: vec![arrays[0].clone()],
             error: "",
-            input_array: Box::new(MutablePrimitiveColumn::<i64>::default()),
+            input_array: Box::<common_datavalues::MutablePrimitiveColumn<i64>>::default(),
             expect_array: Box::new(MutablePrimitiveColumn::<i64>::from_data(
                 i64::to_data_type(),
                 Vec::from([0i64]),
@@ -736,7 +736,7 @@ fn test_aggregate_function_on_empty_data() -> Result<()> {
             func_name: "min",
             arrays: vec![arrays[0].clone()],
             error: "",
-            input_array: Box::new(MutablePrimitiveColumn::<i64>::default()),
+            input_array: Box::<common_datavalues::MutablePrimitiveColumn<i64>>::default(),
             expect_array: Box::new(MutablePrimitiveColumn::<i64>::from_data(
                 i64::to_data_type(),
                 Vec::from([0i64]),
@@ -751,7 +751,7 @@ fn test_aggregate_function_on_empty_data() -> Result<()> {
             func_name: "any",
             arrays: vec![arrays[0].clone()],
             error: "",
-            input_array: Box::new(MutablePrimitiveColumn::<i64>::default()),
+            input_array: Box::<common_datavalues::MutablePrimitiveColumn<i64>>::default(),
             expect_array: Box::new(MutablePrimitiveColumn::<i64>::from_data(
                 i64::to_data_type(),
                 Vec::from([0i64]),
@@ -766,7 +766,7 @@ fn test_aggregate_function_on_empty_data() -> Result<()> {
             func_name: "sum",
             arrays: vec![arrays[0].clone()],
             error: "",
-            input_array: Box::new(MutablePrimitiveColumn::<i64>::default()),
+            input_array: Box::<common_datavalues::MutablePrimitiveColumn<i64>>::default(),
             expect_array: Box::new(MutablePrimitiveColumn::<i64>::from_data(
                 i64::to_data_type(),
                 Vec::from([0i64]),
@@ -781,7 +781,7 @@ fn test_aggregate_function_on_empty_data() -> Result<()> {
             func_name: "arg_max",
             arrays: arrays.clone(),
             error: "",
-            input_array: Box::new(MutablePrimitiveColumn::<i64>::default()),
+            input_array: Box::<common_datavalues::MutablePrimitiveColumn<i64>>::default(),
             expect_array: Box::new(MutablePrimitiveColumn::<i64>::from_data(
                 i64::to_data_type(),
                 Vec::from([0i64]),
@@ -796,7 +796,7 @@ fn test_aggregate_function_on_empty_data() -> Result<()> {
             func_name: "arg_min",
             arrays: arrays.clone(),
             error: "",
-            input_array: Box::new(MutablePrimitiveColumn::<i64>::default()),
+            input_array: Box::<common_datavalues::MutablePrimitiveColumn<i64>>::default(),
             expect_array: Box::new(MutablePrimitiveColumn::<i64>::from_data(
                 i64::to_data_type(),
                 Vec::from([0i64]),
@@ -811,7 +811,7 @@ fn test_aggregate_function_on_empty_data() -> Result<()> {
             func_name: "uniq",
             arrays: vec![arrays[0].clone()],
             error: "",
-            input_array: Box::new(MutablePrimitiveColumn::<u64>::default()),
+            input_array: Box::<common_datavalues::MutablePrimitiveColumn<u64>>::default(),
             expect_array: Box::new(MutablePrimitiveColumn::<u64>::from_data(
                 u64::to_data_type(),
                 Vec::from([0u64]),
@@ -826,7 +826,7 @@ fn test_aggregate_function_on_empty_data() -> Result<()> {
             func_name: "covar_samp",
             arrays: vec![arrays[0].clone(), arrays[1].clone()],
             error: "",
-            input_array: Box::new(MutablePrimitiveColumn::<f64>::default()),
+            input_array: Box::<common_datavalues::MutablePrimitiveColumn<f64>>::default(),
             expect_array: Box::new(MutablePrimitiveColumn::<f64>::from_data(
                 f64::to_data_type(),
                 Vec::from([f64::INFINITY]),
@@ -841,7 +841,7 @@ fn test_aggregate_function_on_empty_data() -> Result<()> {
             func_name: "covar_pop",
             arrays: vec![arrays[0].clone(), arrays[1].clone()],
             error: "",
-            input_array: Box::new(MutablePrimitiveColumn::<f64>::default()),
+            input_array: Box::<common_datavalues::MutablePrimitiveColumn<f64>>::default(),
             expect_array: Box::new(MutablePrimitiveColumn::<f64>::from_data(
                 f64::to_data_type(),
                 Vec::from([f64::INFINITY]),
@@ -982,7 +982,7 @@ fn test_aggregate_function_on_boolean() -> Result<()> {
             func_name: "avg",
             arrays: vec![arrays[0].clone()],
             error: "",
-            input_array: Box::new(MutablePrimitiveColumn::<f64>::default()),
+            input_array: Box::<common_datavalues::MutablePrimitiveColumn<f64>>::default(),
             expect_array: Box::new(MutablePrimitiveColumn::<f64>::from_data(
                 f64::to_data_type(),
                 Vec::from([0.5f64]),
@@ -997,7 +997,7 @@ fn test_aggregate_function_on_boolean() -> Result<()> {
             func_name: "sum",
             arrays: vec![arrays[0].clone()],
             error: "",
-            input_array: Box::new(MutablePrimitiveColumn::<u64>::default()),
+            input_array: Box::<common_datavalues::MutablePrimitiveColumn<u64>>::default(),
             expect_array: Box::new(MutablePrimitiveColumn::<u64>::from_data(
                 u64::to_data_type(),
                 Vec::from([2u64]),
