@@ -149,7 +149,7 @@ impl PipelineBuilder {
             &join.build_keys,
             join.build.output_schema()?,
             join.probe.output_schema()?,
-            HashJoinDesc::create(self.ctx.clone(), join)?,
+            HashJoinDesc::create(join)?,
         )
     }
 
@@ -227,8 +227,8 @@ impl PipelineBuilder {
         let schema = scan.source.schema();
         let projections = scan
             .name_mapping
-            .iter()
-            .map(|(name, _)| schema.index_of(name.as_str()))
+            .keys()
+            .map(|name| schema.index_of(name.as_str()))
             .collect::<Result<Vec<usize>>>()?;
 
         let ops = vec![

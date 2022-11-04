@@ -29,7 +29,7 @@ common-pipeline-transforms = { path = "../../../pipeline/transforms" }
 common-planner = { path = "../../../planner" }
 common-storage = { path = "../../../../common/storage" }
 common-storages-fuse = { path = "../../fuse/fuse" }
-common-storages-fuse-meta = { path = "../../fuse/fuse-meta" }
+common-storages-table-meta = { path = "../../table-meta" }
 common-storages-view = { path = "../../view" }
 common-streams = { path = "../../../streams" }
 common-users = { path = "../../../users" }

@@ -139,7 +139,7 @@ impl AddDaysImpl {
     }
 
     pub fn eval_timestamp(date: i64, delta: impl AsPrimitive<i64>) -> Result<i64, String> {
-        check_timestamp((date as i64).wrapping_add(delta.as_() * 24 * 3600 * 1_000_000))
+        check_timestamp(date.wrapping_add(delta.as_() * 24 * 3600 * 1_000_000))
     }
 }
 

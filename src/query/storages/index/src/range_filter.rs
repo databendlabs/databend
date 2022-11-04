@@ -32,7 +32,7 @@ use common_sql::evaluator::EvalNode;
 use common_sql::evaluator::Evaluator;
 use common_sql::evaluator::ExpressionMonotonicityVisitor;
 use common_sql::executor::ExpressionOp;
-use common_storages_fuse_meta::meta::StatisticsOfColumns;
+use common_storages_table_meta::meta::StatisticsOfColumns;
 
 #[derive(Clone)]
 pub struct RangeFilter {

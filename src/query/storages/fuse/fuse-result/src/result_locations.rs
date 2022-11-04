@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use common_datablocks::DataBlock;
-use common_storages_fuse_meta::meta::SegmentInfo;
-use common_storages_fuse_meta::meta::Versioned;
+use common_storages_table_meta::meta::SegmentInfo;
+use common_storages_table_meta::meta::Versioned;
 use uuid::Uuid;
 
 pub const RESULT_CACHE_PREFIX: &str = "_res";

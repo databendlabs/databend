@@ -24,9 +24,9 @@ use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
-use common_storages_fuse_meta::meta::ColumnStatistics;
-use common_storages_fuse_meta::meta::StatisticsOfColumns;
 use common_storages_index::RangeFilter;
+use common_storages_table_meta::meta::ColumnStatistics;
+use common_storages_table_meta::meta::StatisticsOfColumns;
 
 use crate::hive_parquet_block_reader::HiveParquetBlockReader;
 
@@ -164,8 +164,8 @@ impl HiveBlockFilter {
                     (false, DataValue::from(0), DataValue::from(0), 0)
                 } else {
                     let null_count = s.null_count.unwrap();
-                    let max = DataValue::from(s.max_value.unwrap() as i32);
-                    let min = DataValue::from(s.min_value.unwrap() as i32);
+                    let max = DataValue::from(s.max_value.unwrap());
+                    let min = DataValue::from(s.min_value.unwrap());
                     (true, max, min, null_count)
                 }
             }
@@ -178,8 +178,8 @@ impl HiveBlockFilter {
                     (false, DataValue::from(0), DataValue::from(0), 0)
                 } else {
                     let null_count = s.null_count.unwrap();
-                    let max = DataValue::from(s.max_value.unwrap() as i64);
-                    let min = DataValue::from(s.min_value.unwrap() as i64);
+                    let max = DataValue::from(s.max_value.unwrap());
+                    let min = DataValue::from(s.min_value.unwrap());
                     (true, max, min, null_count)
                 }
             }
@@ -248,8 +248,8 @@ impl HiveBlockFilter {
                     (false, DataValue::from(0), DataValue::from(0), 0)
                 } else {
                     let null_count = s.null_count.unwrap();
-                    let max = DataValue::from(s.max_value.unwrap() as f32);
-                    let min = DataValue::from(s.min_value.unwrap() as f32);
+                    let max = DataValue::from(s.max_value.unwrap());
+                    let min = DataValue::from(s.min_value.unwrap());
                     (true, max, min, null_count)
                 }
             }
@@ -262,8 +262,8 @@ impl HiveBlockFilter {
                     (false, DataValue::from(0), DataValue::from(0), 0)
                 } else {
                     let null_count = s.null_count.unwrap();
-                    let max = DataValue::from(s.max_value.unwrap() as f64);
-                    let min = DataValue::from(s.min_value.unwrap() as f64);
+                    let max = DataValue::from(s.max_value.unwrap());
+                    let min = DataValue::from(s.min_value.unwrap());
                     (true, max, min, null_count)
                 }
             }

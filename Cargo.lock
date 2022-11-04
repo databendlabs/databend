@@ -1998,7 +1998,7 @@ dependencies = [
  "common-settings",
  "common-storage",
  "common-storages-constants",
- "common-storages-fuse-meta",
+ "common-storages-table-meta",
  "common-storages-view",
  "common-tracing",
  "common-users",
@@ -2060,7 +2060,7 @@ dependencies = [
  "common-arrow",
  "common-cache",
  "common-exception",
- "common-storages-fuse-meta",
+ "common-storages-table-meta",
  "opendal",
 ]
 
@@ -2115,8 +2115,8 @@ dependencies = [
  "common-storage",
  "common-storages-cache",
  "common-storages-constants",
- "common-storages-fuse-meta",
  "common-storages-index",
+ "common-storages-table-meta",
  "futures",
  "futures-util",
  "itertools",
@@ -2127,23 +2127,6 @@ dependencies = [
  "tracing",
  "typetag",
  "uuid",
-]
-
-[[package]]
-name = "common-storages-fuse-meta"
-version = "0.1.0"
-dependencies = [
- "common-arrow",
- "common-base",
- "common-cache",
- "common-config",
- "common-datablocks",
- "common-datavalues",
- "common-exception",
- "common-metrics",
- "once_cell",
- "parking_lot 0.12.1",
- "serde",
 ]
 
 [[package]]
@@ -2170,7 +2153,7 @@ dependencies = [
  "common-planner",
  "common-storage",
  "common-storages-fuse",
- "common-storages-fuse-meta",
+ "common-storages-table-meta",
  "common-storages-view",
  "common-streams",
  "common-users",
@@ -2209,8 +2192,8 @@ dependencies = [
  "common-planner",
  "common-storage",
  "common-storages-cache",
- "common-storages-fuse-meta",
  "common-storages-index",
+ "common-storages-table-meta",
  "futures",
  "opendal",
  "serde",
@@ -2232,7 +2215,7 @@ dependencies = [
  "common-functions",
  "common-planner",
  "common-sql",
- "common-storages-fuse-meta",
+ "common-storages-table-meta",
  "criterion",
  "rand 0.8.5",
  "serde",
@@ -2500,6 +2483,23 @@ dependencies = [
  "typetag",
  "uuid",
  "walkdir",
+]
+
+[[package]]
+name = "common-storages-table-meta"
+version = "0.1.0"
+dependencies = [
+ "common-arrow",
+ "common-base",
+ "common-cache",
+ "common-config",
+ "common-datablocks",
+ "common-datavalues",
+ "common-exception",
+ "common-metrics",
+ "once_cell",
+ "parking_lot 0.12.1",
+ "serde",
 ]
 
 [[package]]
@@ -3130,7 +3130,6 @@ dependencies = [
  "common-storages-constants",
  "common-storages-factory",
  "common-storages-fuse",
- "common-storages-fuse-meta",
  "common-storages-fuse-result",
  "common-storages-hive",
  "common-storages-index",
@@ -3141,6 +3140,7 @@ dependencies = [
  "common-storages-share",
  "common-storages-stage",
  "common-storages-system",
+ "common-storages-table-meta",
  "common-storages-view",
  "common-streams",
  "common-tracing",

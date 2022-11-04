@@ -40,7 +40,7 @@ common-planner = { path = "../planner" }
 common-settings = { path = "../settings" }
 common-storage = { path = "../../common/storage" }
 common-storages-constants = { path = "../storages/constants" }
-common-storages-fuse-meta = { path = "../storages/fuse/fuse-meta" }
+common-storages-table-meta = { path = "../storages/table-meta" }
 common-storages-view = { path = "../storages/view" }
 common-tracing = { path = "../../common/tracing" }
 common-users = { path = "../users" }

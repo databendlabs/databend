@@ -32,9 +32,9 @@ use common_datavalues::ToDataType;
 use common_datavalues::Vu8;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_storages_fuse_meta::meta::BlockBloomFilterIndexVersion;
-use common_storages_fuse_meta::meta::BlockFilter;
-use common_storages_fuse_meta::meta::Location;
+use common_storages_table_meta::meta::BlockBloomFilterIndexVersion;
+use common_storages_table_meta::meta::BlockFilter;
+use common_storages_table_meta::meta::Location;
 use futures_util::future::try_join_all;
 use opendal::Operator;
 use tracing::Instrument;
@@ -77,8 +77,8 @@ mod util_v1 {
     use common_base::base::GlobalIORuntime;
     use common_base::base::Runtime;
     use common_base::base::TrySpawn;
-    use common_storages_fuse_meta::caches::CacheDeferMetrics;
-    use common_storages_fuse_meta::caches::CacheManager;
+    use common_storages_table_meta::caches::CacheDeferMetrics;
+    use common_storages_table_meta::caches::CacheManager;
 
     use super::*;
     use crate::io::MetaReaders;

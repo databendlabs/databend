@@ -399,11 +399,8 @@ impl ValueSource {
                 let sql_dialect = settings.get_sql_dialect()?;
                 let tokens = tokenize_sql(sql)?;
                 let backtrace = Backtrace::new();
-                let exprs = parse_comma_separated_exprs(
-                    &tokens[1..tokens.len() as usize],
-                    sql_dialect,
-                    &backtrace,
-                )?;
+                let exprs =
+                    parse_comma_separated_exprs(&tokens[1..tokens.len()], sql_dialect, &backtrace)?;
 
                 let values = exprs_to_datavalue(
                     exprs,

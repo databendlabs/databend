@@ -54,7 +54,7 @@ fn test_aggregate_combinator_function() -> Result<()> {
             func_name: "count_distinct",
             arrays: vec![arrays[0].clone()],
             error: "",
-            input_array: Box::new(MutablePrimitiveColumn::<u64>::default()),
+            input_array: Box::<common_datavalues::MutablePrimitiveColumn<u64>>::default(),
             expect_array: Box::new(MutablePrimitiveColumn::<u64>::from_data(
                 u64::to_data_type(),
                 Vec::from([4u64]),
@@ -68,7 +68,7 @@ fn test_aggregate_combinator_function() -> Result<()> {
             func_name: "sum_distinct",
             arrays: vec![arrays[0].clone()],
             error: "",
-            input_array: Box::new(MutablePrimitiveColumn::<i64>::default()),
+            input_array: Box::<common_datavalues::MutablePrimitiveColumn<i64>>::default(),
             expect_array: Box::new(MutablePrimitiveColumn::<i64>::from_data(
                 i64::to_data_type(),
                 Vec::from([10i64]),
@@ -82,7 +82,7 @@ fn test_aggregate_combinator_function() -> Result<()> {
             func_name: "count_if",
             arrays: arrays.clone(),
             error: "",
-            input_array: Box::new(MutablePrimitiveColumn::<u64>::default()),
+            input_array: Box::<common_datavalues::MutablePrimitiveColumn<u64>>::default(),
             expect_array: Box::new(MutablePrimitiveColumn::<u64>::from_data(
                 u64::to_data_type(),
                 Vec::from([10u64]),
@@ -96,7 +96,7 @@ fn test_aggregate_combinator_function() -> Result<()> {
             func_name: "min_if",
             arrays: arrays.clone(),
             error: "",
-            input_array: Box::new(MutablePrimitiveColumn::<i64>::default()),
+            input_array: Box::<common_datavalues::MutablePrimitiveColumn<i64>>::default(),
             expect_array: Box::new(MutablePrimitiveColumn::<i64>::from_data(
                 i64::to_data_type(),
                 Vec::from([1i64]),
@@ -110,7 +110,7 @@ fn test_aggregate_combinator_function() -> Result<()> {
             func_name: "max_if",
             arrays: arrays.clone(),
             error: "",
-            input_array: Box::new(MutablePrimitiveColumn::<i64>::default()),
+            input_array: Box::<common_datavalues::MutablePrimitiveColumn<i64>>::default(),
             expect_array: Box::new(MutablePrimitiveColumn::<i64>::from_data(
                 i64::to_data_type(),
                 Vec::from([4i64]),
@@ -124,7 +124,7 @@ fn test_aggregate_combinator_function() -> Result<()> {
             func_name: "sum_if",
             arrays: arrays.clone(),
             error: "",
-            input_array: Box::new(MutablePrimitiveColumn::<i64>::default()),
+            input_array: Box::<common_datavalues::MutablePrimitiveColumn<i64>>::default(),
             expect_array: Box::new(MutablePrimitiveColumn::<i64>::from_data(
                 i64::to_data_type(),
                 Vec::from([30i64]),
@@ -138,7 +138,7 @@ fn test_aggregate_combinator_function() -> Result<()> {
             func_name: "avg_if",
             arrays: arrays.clone(),
             error: "",
-            input_array: Box::new(MutablePrimitiveColumn::<f64>::default()),
+            input_array: Box::<common_datavalues::MutablePrimitiveColumn<f64>>::default(),
             expect_array: Box::new(MutablePrimitiveColumn::<f64>::from_data(
                 f64::to_data_type(),
                 Vec::from([3f64]),
@@ -231,7 +231,7 @@ fn test_aggregate_combinator_function_on_empty_data() -> Result<()> {
             func_name: "count_distinct",
             arrays: vec![arrays[0].clone()],
             error: "",
-            input_array: Box::new(MutablePrimitiveColumn::<u64>::default()),
+            input_array: Box::<common_datavalues::MutablePrimitiveColumn<u64>>::default(),
             expect_array: Box::new(MutablePrimitiveColumn::<u64>::from_data(
                 u64::to_data_type(),
                 Vec::from([0u64]),
@@ -245,7 +245,7 @@ fn test_aggregate_combinator_function_on_empty_data() -> Result<()> {
             func_name: "sum_distinct",
             arrays: vec![arrays[0].clone()],
             error: "",
-            input_array: Box::new(MutablePrimitiveColumn::<i64>::default()),
+            input_array: Box::<common_datavalues::MutablePrimitiveColumn<i64>>::default(),
             expect_array: Box::new(MutablePrimitiveColumn::<i64>::from_data(
                 i64::to_data_type(),
                 Vec::from([0i64]),
@@ -259,7 +259,7 @@ fn test_aggregate_combinator_function_on_empty_data() -> Result<()> {
             func_name: "count_if",
             arrays: arrays.clone(),
             error: "",
-            input_array: Box::new(MutablePrimitiveColumn::<u64>::default()),
+            input_array: Box::<common_datavalues::MutablePrimitiveColumn<u64>>::default(),
             expect_array: Box::new(MutablePrimitiveColumn::<u64>::from_data(
                 u64::to_data_type(),
                 Vec::from([0u64]),
@@ -273,7 +273,7 @@ fn test_aggregate_combinator_function_on_empty_data() -> Result<()> {
             func_name: "min_if",
             arrays: arrays.clone(),
             error: "",
-            input_array: Box::new(MutablePrimitiveColumn::<i64>::default()),
+            input_array: Box::<common_datavalues::MutablePrimitiveColumn<i64>>::default(),
             expect_array: Box::new(MutablePrimitiveColumn::<i64>::from_data(
                 i64::to_data_type(),
                 Vec::from([0i64]),
@@ -287,7 +287,7 @@ fn test_aggregate_combinator_function_on_empty_data() -> Result<()> {
             func_name: "max_if",
             arrays: arrays.clone(),
             error: "",
-            input_array: Box::new(MutablePrimitiveColumn::<i64>::default()),
+            input_array: Box::<common_datavalues::MutablePrimitiveColumn<i64>>::default(),
             expect_array: Box::new(MutablePrimitiveColumn::<i64>::from_data(
                 i64::to_data_type(),
                 Vec::from([0i64]),
@@ -301,7 +301,7 @@ fn test_aggregate_combinator_function_on_empty_data() -> Result<()> {
             func_name: "sum_if",
             arrays: arrays.clone(),
             error: "",
-            input_array: Box::new(MutablePrimitiveColumn::<i64>::default()),
+            input_array: Box::<common_datavalues::MutablePrimitiveColumn<i64>>::default(),
             expect_array: Box::new(MutablePrimitiveColumn::<i64>::from_data(
                 i64::to_data_type(),
                 Vec::from([0i64]),

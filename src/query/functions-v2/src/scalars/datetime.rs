@@ -189,7 +189,7 @@ fn register_cast_functions(registry: &mut FunctionRegistry) {
                     String::from_utf8_lossy(val)
                 )
             })?;
-            output.push((d.num_days_from_ce() - EPOCH_DAYS_FROM_CE) as i32);
+            output.push(d.num_days_from_ce() - EPOCH_DAYS_FROM_CE);
             Ok(())
         }),
     );
@@ -280,8 +280,7 @@ fn register_try_cast_functions(registry: &mut FunctionRegistry) {
         |_| None,
         vectorize_1_arg::<NullableType<StringType>, NullableType<DateType>>(|val, ctx| {
             val.and_then(|v| {
-                string_to_date(v, ctx.tz)
-                    .map(|d| (d.num_days_from_ce() - EPOCH_DAYS_FROM_CE) as i32)
+                string_to_date(v, ctx.tz).map(|d| (d.num_days_from_ce() - EPOCH_DAYS_FROM_CE))
             })
         }),
     );

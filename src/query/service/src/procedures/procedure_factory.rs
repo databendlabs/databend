@@ -26,7 +26,7 @@ use crate::procedures::Procedure;
 
 pub type Factory2Creator = Box<dyn Fn() -> Result<Box<dyn Procedure>> + Send + Sync>;
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct ProcedureFeatures {
     // The number of arguments the function accepts.
     pub num_arguments: usize,
@@ -42,15 +42,6 @@ pub struct ProcedureFeatures {
 }
 
 impl ProcedureFeatures {
-    pub fn default() -> ProcedureFeatures {
-        ProcedureFeatures {
-            num_arguments: 0,
-            variadic_arguments: None,
-            management_mode_required: false,
-            user_option_flag: None,
-        }
-    }
-
     pub fn num_arguments(mut self, num_arguments: usize) -> ProcedureFeatures {
         self.num_arguments = num_arguments;
         self

@@ -52,9 +52,7 @@ pub fn cast_from_string(
             let tz = func_ctx.tz;
             for v in str_column.iter() {
                 match string_to_date(v, &tz) {
-                    Some(d) => {
-                        builder.append((d.num_days_from_ce() - EPOCH_DAYS_FROM_CE) as i32, true)
-                    }
+                    Some(d) => builder.append(d.num_days_from_ce() - EPOCH_DAYS_FROM_CE, true),
                     None => builder.append_null(),
                 }
             }

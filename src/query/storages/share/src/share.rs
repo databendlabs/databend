@@ -163,7 +163,7 @@ mod ext {
             };
 
             let share_spec_ext = ShareSpecExt::from_share_spec(share_spec, &operator);
-            let spec_json_value = serde_json::to_value(&share_spec_ext).unwrap();
+            let spec_json_value = serde_json::to_value(share_spec_ext).unwrap();
 
             use serde_json::json;
 

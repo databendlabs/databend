@@ -18,11 +18,11 @@ use std::sync::Arc;
 use common_arrow::parquet::metadata::ThriftFileMetaData;
 use common_datablocks::DataBlock;
 use common_exception::Result;
-use common_storages_fuse_meta::meta::BlockMeta;
-use common_storages_fuse_meta::meta::ColumnMeta;
-use common_storages_fuse_meta::meta::Location;
-use common_storages_fuse_meta::meta::StatisticsOfColumns;
-use common_storages_fuse_meta::meta::Versioned;
+use common_storages_table_meta::meta::BlockMeta;
+use common_storages_table_meta::meta::ColumnMeta;
+use common_storages_table_meta::meta::Location;
+use common_storages_table_meta::meta::StatisticsOfColumns;
+use common_storages_table_meta::meta::Versioned;
 
 use crate::operations::column_metas;
 use crate::statistics::block_statistics::BlockStatistics;

@@ -12,10 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use common_arrow::arrow::bitmap::MutableBitmap;
-use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
 use common_exception::Result;
 use common_functions::scalars::FunctionFactory;
@@ -24,11 +21,12 @@ use common_sql::IndexType;
 use parking_lot::RwLock;
 
 use crate::pipelines::processors::transforms::hash_join::row::RowPtr;
-use crate::sessions::QueryContext;
 use crate::sql::evaluator::EvalNode;
 use crate::sql::evaluator::Evaluator;
 use crate::sql::executor::HashJoin;
 use crate::sql::plans::JoinType;
+
+pub const JOIN_MAX_BLOCK_SIZE: usize = 65535;
 
 #[derive(Clone, Copy, Eq, PartialEq, Debug, Hash)]
 pub enum MarkerKind {
@@ -52,13 +50,12 @@ pub struct JoinState {
 }
 
 impl JoinState {
-    pub fn create(ctx: Arc<QueryContext>) -> Result<Self> {
-        let max_block_size = ctx.get_settings().get_max_block_size()? as usize;
+    pub fn create() -> Result<Self> {
         Ok(JoinState {
-            build_indexes: RwLock::new(Vec::with_capacity(max_block_size)),
-            rest_build_indexes: RwLock::new(Vec::with_capacity(max_block_size)),
-            rest_probe_blocks: RwLock::new(Vec::with_capacity(max_block_size)),
-            validity: RwLock::new(MutableBitmap::with_capacity(max_block_size)),
+            build_indexes: RwLock::new(Vec::with_capacity(JOIN_MAX_BLOCK_SIZE)),
+            rest_build_indexes: RwLock::new(Vec::with_capacity(JOIN_MAX_BLOCK_SIZE)),
+            rest_probe_blocks: RwLock::new(Vec::with_capacity(JOIN_MAX_BLOCK_SIZE)),
+            validity: RwLock::new(MutableBitmap::with_capacity(JOIN_MAX_BLOCK_SIZE)),
         })
     }
 }
@@ -75,7 +72,7 @@ pub struct HashJoinDesc {
 }
 
 impl HashJoinDesc {
-    pub fn create(ctx: Arc<QueryContext>, join: &HashJoin) -> Result<HashJoinDesc> {
+    pub fn create(join: &HashJoin) -> Result<HashJoinDesc> {
         let predicate = Self::join_predicate(&join.non_equi_conditions)?;
 
         Ok(HashJoinDesc {
@@ -91,7 +88,7 @@ impl HashJoinDesc {
                 marker_index: join.marker_index,
             },
             from_correlated_subquery: join.from_correlated_subquery,
-            join_state: JoinState::create(ctx)?,
+            join_state: JoinState::create()?,
         })
     }
 

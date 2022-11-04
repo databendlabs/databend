@@ -252,7 +252,7 @@ impl RowGroupInMemory {
             let array_iters = to_deserializer(
                 meta_data,
                 self.fields[f].clone(),
-                self.meta.num_rows() as usize,
+                self.meta.num_rows(),
                 None,
                 None,
             )?;

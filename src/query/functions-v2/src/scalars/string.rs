@@ -813,7 +813,7 @@ mod soundex {
 #[inline]
 fn substr(str: &[u8], pos: i64, len: u64) -> &[u8] {
     if pos > 0 && pos <= str.len() as i64 {
-        let l = str.len() as usize;
+        let l = str.len();
         let s = (pos - 1) as usize;
         let mut e = len as usize + s;
         if e > l {
@@ -822,7 +822,7 @@ fn substr(str: &[u8], pos: i64, len: u64) -> &[u8] {
         return &str[s..e];
     }
     if pos < 0 && -(pos) <= str.len() as i64 {
-        let l = str.len() as usize;
+        let l = str.len();
         let s = l - -pos as usize;
         let mut e = len as usize + s;
         if e > l {
