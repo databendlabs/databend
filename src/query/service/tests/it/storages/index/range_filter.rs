@@ -17,8 +17,6 @@ use std::collections::HashMap;
 use common_base::base::tokio;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_fuse_meta::meta::ColumnStatistics;
-use common_fuse_meta::meta::StatisticsOfColumns;
 use common_planner::Expression;
 use common_sql::executor::add;
 use common_sql::executor::col;
@@ -28,6 +26,8 @@ use common_sql::executor::lit_null;
 use common_sql::executor::neg;
 use common_sql::executor::sub;
 use common_sql::executor::ExpressionOp;
+use common_storages_table_meta::meta::ColumnStatistics;
+use common_storages_table_meta::meta::StatisticsOfColumns;
 use databend_query::storages::index::range_filter::build_verifiable_expr;
 use databend_query::storages::index::range_filter::left_bound_for_like_pattern;
 use databend_query::storages::index::range_filter::right_bound_for_like_pattern;
@@ -45,23 +45,24 @@ async fn test_range_filter() -> Result<()> {
     ]);
 
     let mut stats: StatisticsOfColumns = HashMap::new();
-    stats.insert(
-        0u32,
-        ColumnStatistics::new(DataValue::Int64(1), DataValue::Int64(20), 1, 0),
-    );
-    stats.insert(
-        1u32,
-        ColumnStatistics::new(DataValue::Int64(3), DataValue::Int64(10), 0, 0),
-    );
-    stats.insert(
-        2u32,
-        ColumnStatistics::new(
-            DataValue::String("abc".as_bytes().to_vec()),
-            DataValue::String("bcd".as_bytes().to_vec()),
-            0,
-            0,
-        ),
-    );
+    stats.insert(0u32, ColumnStatistics {
+        min: DataValue::Int64(1),
+        max: DataValue::Int64(20),
+        null_count: 1,
+        in_memory_size: 0,
+    });
+    stats.insert(1u32, ColumnStatistics {
+        min: DataValue::Int64(3),
+        max: DataValue::Int64(10),
+        null_count: 0,
+        in_memory_size: 0,
+    });
+    stats.insert(2u32, ColumnStatistics {
+        min: DataValue::String("abc".as_bytes().to_vec()),
+        max: DataValue::String("bcd".as_bytes().to_vec()),
+        null_count: 0,
+        in_memory_size: 0,
+    });
 
     let tests: Vec<Test> = vec![
         Test {

@@ -16,8 +16,6 @@ use std::sync::Arc;
 
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
-use common_io::prelude::FormatSettings;
-use common_meta_types::FileFormatOptions;
 use common_pipeline_core::Pipeline;
 use common_settings::Settings;
 use opendal::Operator;
@@ -29,15 +27,6 @@ use crate::processors::sources::input_formats::input_split::SplitInfo;
 
 #[async_trait::async_trait]
 pub trait InputFormat: Send + Sync {
-    fn get_format_settings_from_options(
-        &self,
-        settings: &Arc<Settings>,
-        options: &FileFormatOptions,
-    ) -> Result<FormatSettings>;
-
-    fn get_format_settings_from_settings(&self, settings: &Arc<Settings>)
-    -> Result<FormatSettings>;
-
     fn default_record_delimiter(&self) -> RecordDelimiter;
 
     fn default_field_delimiter(&self) -> u8;

@@ -205,7 +205,7 @@ async fn test_fuse_table_truncate() -> Result<()> {
     let (stats, _) = table
         .read_partitions(ctx.clone(), source_plan.push_downs.clone())
         .await?;
-    assert_eq!(stats.read_rows, (num_blocks * rows_per_block) as usize);
+    assert_eq!(stats.read_rows, (num_blocks * rows_per_block));
 
     // truncate
     let purge = false;

@@ -102,15 +102,17 @@ impl Settings {
             settings
         };
 
-        // Overwrite settings from conf.
+        // Overwrite settings from conf or global set.
         {
             // Set max threads.
-            let cpus = if conf.query.num_cpus == 0 {
-                num_cpus::get() as u64
-            } else {
-                conf.query.num_cpus
-            };
-            ret.set_max_threads(cpus)?;
+            if ret.get_max_threads()? == 0 {
+                let cpus = if conf.query.num_cpus == 0 {
+                    num_cpus::get() as u64
+                } else {
+                    conf.query.num_cpus
+                };
+                ret.set_max_threads(cpus)?;
+            }
         }
 
         Ok(ret)
@@ -120,13 +122,13 @@ impl Settings {
         let values = vec![
             // max_block_size
             SettingValue {
-                default_value: UserSettingValue::UInt64(10000),
+                default_value: UserSettingValue::UInt64(65536),
                 user_setting: UserSetting::create(
                     "max_block_size",
-                    UserSettingValue::UInt64(10000),
+                    UserSettingValue::UInt64(65536),
                 ),
                 level: ScopeLevel::Session,
-                desc: "Maximum block size for reading, default value: 10000.",
+                desc: "Maximum block size for reading, default value: 65536.",
                 possible_values: None,
             },
             // max_threads
@@ -200,23 +202,23 @@ impl Settings {
                 possible_values: None,
             },
             SettingValue {
-                default_value: UserSettingValue::String("\n".to_owned()),
+                default_value: UserSettingValue::String("".to_owned()),
                 user_setting: UserSetting::create(
                     "format_record_delimiter",
-                    UserSettingValue::String("\n".to_owned()),
+                    UserSettingValue::String("".to_owned()),
                 ),
                 level: ScopeLevel::Session,
-                desc: "Format record_delimiter, default value: \"\\n\".",
+                desc: "Format record_delimiter, default value is \"\": use default of the format.",
                 possible_values: None,
             },
             SettingValue {
-                default_value: UserSettingValue::String(",".to_owned()),
+                default_value: UserSettingValue::String("".to_owned()),
                 user_setting: UserSetting::create(
                     "format_field_delimiter",
-                    UserSettingValue::String(",".to_owned()),
+                    UserSettingValue::String("".to_owned()),
                 ),
                 level: ScopeLevel::Session,
-                desc: "Format field delimiter, default value: \",\".",
+                desc: "Format field delimiter, default value is \"\": use default of the format.",
                 possible_values: None,
             },
             SettingValue {
@@ -260,13 +262,13 @@ impl Settings {
                 possible_values: None,
             },
             SettingValue {
-                default_value: UserSettingValue::String("\"".to_owned()),
+                default_value: UserSettingValue::String("".to_owned()),
                 user_setting: UserSetting::create(
-                    "format_quote_char",
-                    UserSettingValue::String("\"".to_owned()),
+                    "format_quote",
+                    UserSettingValue::String("".to_owned()),
                 ),
                 level: ScopeLevel::Session,
-                desc: "The quote char for CSV. default value: '\"'.",
+                desc: "The quote char for format. default value is \"\": use default of the format.",
                 possible_values: None,
             },
             SettingValue {
@@ -277,6 +279,16 @@ impl Settings {
                 ),
                 level: ScopeLevel::Session,
                 desc: "Timezone, default value: \"UTC\".",
+                possible_values: None,
+            },
+            SettingValue {
+                default_value: UserSettingValue::String("row".to_owned()),
+                user_setting: UserSetting::create(
+                    "row_tag",
+                    UserSettingValue::String("row".to_owned()),
+                ),
+                level: ScopeLevel::Session,
+                desc: "In xml format, this field is represented as a row tag, e.g. <row>...</row>.",
                 possible_values: None,
             },
             SettingValue {
@@ -363,6 +375,16 @@ impl Settings {
                 level: ScopeLevel::Session,
                 desc: "The maximum query execution time. it means no limit if the value is zero. default value: 0.",
                 possible_values: None,
+            },
+            SettingValue {
+                default_value: UserSettingValue::String("binary".to_owned()),
+                user_setting: UserSetting::create(
+                    "collation",
+                    UserSettingValue::String("binary".to_owned()),
+                ),
+                level: ScopeLevel::Session,
+                desc: "Char collation, support \"binary\" \"utf8\" default value: binary",
+                possible_values: Some(vec!["binary", "utf8"]),
             },
             #[cfg(feature = "hive")]
             SettingValue {
@@ -482,8 +504,14 @@ impl Settings {
             .and_then(|v| v.user_setting.value.as_string())
     }
 
-    pub fn get_format_quote_char(&self) -> Result<String> {
-        let key = "format_quote_char";
+    pub fn get_format_quote(&self) -> Result<String> {
+        let key = "format_quote";
+        self.check_and_get_setting_value(key)
+            .and_then(|v| v.user_setting.value.as_string())
+    }
+
+    pub fn get_row_tag(&self) -> Result<String> {
+        let key = "row_tag";
         self.check_and_get_setting_value(key)
             .and_then(|v| v.user_setting.value.as_string())
     }
@@ -614,6 +642,16 @@ impl Settings {
                 "mysql" => Dialect::MySQL,
                 "hive" => Dialect::Hive,
                 _ => Dialect::PostgreSQL,
+            })
+    }
+
+    pub fn get_collation(&self) -> Result<&str> {
+        let key = "collation";
+        self.check_and_get_setting_value(key)
+            .and_then(|v| v.user_setting.value.as_string())
+            .map(|v| match &*v.to_lowercase() {
+                "utf8" => "utf8",
+                _ => "binary",
             })
     }
 

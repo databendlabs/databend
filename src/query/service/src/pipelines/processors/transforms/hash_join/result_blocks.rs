@@ -86,7 +86,7 @@ impl JoinHashTable {
                     input,
                 ),
             },
-            _ => Err(ErrorCode::UnImplement(format!(
+            _ => Err(ErrorCode::Unimplemented(format!(
                 "{} is unimplemented",
                 self.hash_join_desc.join_type
             ))),

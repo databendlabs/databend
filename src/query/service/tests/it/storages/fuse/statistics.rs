@@ -19,10 +19,6 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_functions::aggregates::eval_aggr;
 use common_functions::scalars::FunctionContext;
-use common_fuse_meta::meta::BlockMeta;
-use common_fuse_meta::meta::ClusterStatistics;
-use common_fuse_meta::meta::ColumnStatistics;
-use common_fuse_meta::meta::Statistics;
 use common_sql::evaluator::Evaluator;
 use common_sql::executor::add;
 use common_sql::executor::col;
@@ -31,6 +27,10 @@ use common_storages_fuse::statistics::reducers::reduce_block_metas;
 use common_storages_fuse::statistics::Trim;
 use common_storages_fuse::statistics::STATS_REPLACEMENT_CHAR;
 use common_storages_fuse::statistics::STATS_STRING_PREFIX_LEN;
+use common_storages_table_meta::meta::BlockMeta;
+use common_storages_table_meta::meta::ClusterStatistics;
+use common_storages_table_meta::meta::ColumnStatistics;
+use common_storages_table_meta::meta::Statistics;
 use databend_query::storages::fuse::io::BlockCompactor;
 use databend_query::storages::fuse::io::BlockWriter;
 use databend_query::storages::fuse::io::TableMetaLocationGenerator;
@@ -121,10 +121,12 @@ fn test_reduce_block_statistics_in_memory_size() -> common_exception::Result<()>
     let iter = |mut idx| {
         std::iter::from_fn(move || {
             idx += 1;
-            Some((
-                idx,
-                ColumnStatistics::new(DataValue::Null, DataValue::Null, 1, 1),
-            ))
+            Some((idx, ColumnStatistics {
+                min: DataValue::Null,
+                max: DataValue::Null,
+                null_count: 1,
+                in_memory_size: 1,
+            }))
         })
     };
 

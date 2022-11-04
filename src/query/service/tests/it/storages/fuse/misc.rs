@@ -12,7 +12,8 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use common_fuse_meta::meta::ColumnStatistics;
+use common_datavalues::DataValue;
+use common_storages_table_meta::meta::ColumnStatistics;
 use serde_json::Value;
 
 // A non-backward compatible change has been introduced by [PR#6067](https://github.com/datafuselabs/databend/pull/6067/files#diff-20030750809780d6492d2fe215a8eb80294aa6a8a5af2cf1bebe17eb740cae35)
@@ -21,7 +22,12 @@ use serde_json::Value;
 #[test]
 fn test_issue_6556_column_statistics_ser_de_compatability_null_count_alias()
 -> common_exception::Result<()> {
-    let col_stats = ColumnStatistics::new_empty();
+    let col_stats = ColumnStatistics {
+        min: DataValue::Null,
+        max: DataValue::Null,
+        null_count: 0,
+        in_memory_size: 0,
+    };
 
     let mut json_value = serde_json::to_value(&col_stats)?;
 

@@ -389,6 +389,14 @@ pub trait VisitorMut: Sized {
 
     fn visit_update(&mut self, _update: &mut UpdateStmt<'_>) {}
 
+    fn visit_show_catalogs(&mut self, _stmt: &mut ShowCatalogsStmt<'_>) {}
+
+    fn visit_show_create_catalog(&mut self, _stmt: &mut ShowCreateCatalogStmt<'_>) {}
+
+    fn visit_create_catalog(&mut self, _stmt: &mut CreateCatalogStmt) {}
+
+    fn visit_drop_catalog(&mut self, _stmt: &mut DropCatalogStmt<'_>) {}
+
     fn visit_show_databases(&mut self, _stmt: &mut ShowDatabasesStmt<'_>) {}
 
     fn visit_show_create_databases(&mut self, _stmt: &mut ShowCreateDatabaseStmt<'_>) {}

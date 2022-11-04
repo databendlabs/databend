@@ -16,7 +16,7 @@ use common_arrow::arrow::io::parquet::read::read_metadata_async;
 use common_arrow::parquet::metadata::FileMetaData;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_fuse_meta::caches::CacheManager;
+use common_storages_table_meta::caches::CacheManager;
 use opendal::Operator;
 
 use super::cached_reader::CachedReader;
@@ -48,8 +48,8 @@ impl Loader<FileMetaData> for Operator {
         } else {
             object.seekable_reader(..)
         };
-        read_metadata_async(&mut reader)
-            .await
-            .map_err(|err| ErrorCode::ParquetError(format!("read meta failed, {}, {:?}", key, err)))
+        read_metadata_async(&mut reader).await.map_err(|err| {
+            ErrorCode::Internal(format!("read file meta failed, {}, {:?}", key, err))
+        })
     }
 }

@@ -160,7 +160,7 @@ where
                 check_timestamp(x.to_owned_scalar())?;
             }
         } else {
-            return Err(ErrorCode::LogicalError(
+            return Err(ErrorCode::Internal(
                 "LogicalDateType only contains Date/Timestamp",
             ));
         }
@@ -206,7 +206,7 @@ impl IntervalArithmeticImpl for AddDaysImpl {
 
     fn eval_timestamp(l: i64, r: impl AsPrimitive<i64>, ctx: &mut EvalContext) -> i64 {
         let factor = ctx.factor * 24 * 3600 * (1e6 as i64);
-        (l as i64).wrapping_add(r.as_() * factor)
+        l.wrapping_add(r.as_() * factor)
     }
 }
 
@@ -223,7 +223,7 @@ impl IntervalArithmeticImpl for AddTimesImpl {
 
     fn eval_timestamp(l: i64, r: impl AsPrimitive<i64>, ctx: &mut EvalContext) -> i64 {
         let factor = ctx.factor * 1_000_000;
-        (l as i64).wrapping_add(r.as_() * factor)
+        l.wrapping_add(r.as_() * factor)
     }
 }
 

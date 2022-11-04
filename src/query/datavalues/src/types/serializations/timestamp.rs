@@ -18,6 +18,9 @@ use common_exception::Result;
 use common_io::prelude::FormatSettings;
 use serde_json::Value;
 
+use crate::serializations::write_csv_string;
+use crate::serializations::write_escaped_string;
+use crate::serializations::write_json_string;
 use crate::ColumnRef;
 use crate::DateConverter;
 use crate::PrimitiveColumn;
@@ -25,6 +28,7 @@ use crate::Series;
 use crate::TypeSerializer;
 
 const TIME_FMT: &str = "%Y-%m-%d %H:%M:%S";
+const TIME_FMT_MICRO: &str = "%Y-%m-%d %H:%M:%S%.6f";
 
 #[derive(Debug, Clone)]
 pub struct TimestampSerializer<'a> {
@@ -38,20 +42,72 @@ impl<'a> TimestampSerializer<'a> {
             values: col.values(),
         })
     }
+
     pub fn to_timestamp(&self, value: &i64, tz: &Tz) -> DateTime<Tz> {
         value.to_timestamp(tz)
+    }
+
+    pub fn to_string_micro(&self, row_index: usize, tz: &Tz) -> String {
+        let dt = self.to_timestamp(&self.values[row_index], tz);
+        dt.format(TIME_FMT_MICRO).to_string()
     }
 }
 
 impl<'a> TypeSerializer<'a> for TimestampSerializer<'a> {
-    fn need_quote(&self) -> bool {
-        true
+    fn write_field_values(
+        &self,
+        row_index: usize,
+        buf: &mut Vec<u8>,
+        format: &FormatSettings,
+        in_nested: bool,
+    ) {
+        let s = self.to_string_micro(row_index, &format.timezone);
+        if in_nested {
+            buf.push(format.nested.quote_char);
+        }
+        write_escaped_string(s.as_bytes(), buf, format.nested.quote_char);
+        if in_nested {
+            buf.push(format.nested.quote_char);
+        }
     }
 
-    fn write_field(&self, row_index: usize, buf: &mut Vec<u8>, format: &FormatSettings) {
-        let dt = self.to_timestamp(&self.values[row_index], &format.timezone);
-        let s = dt.format("%Y-%m-%d %H:%M:%S%.6f").to_string();
-        buf.extend_from_slice(s.as_bytes())
+    fn write_field_tsv(
+        &self,
+        row_index: usize,
+        buf: &mut Vec<u8>,
+        format: &FormatSettings,
+        in_nested: bool,
+    ) {
+        let s = self.to_string_micro(row_index, &format.timezone);
+        if in_nested {
+            buf.push(format.quote_char);
+        }
+        write_escaped_string(s.as_bytes(), buf, format.quote_char);
+        if in_nested {
+            buf.push(format.quote_char);
+        }
+    }
+
+    fn write_field_csv(&self, row_index: usize, buf: &mut Vec<u8>, format: &FormatSettings) {
+        let s = self.to_string_micro(row_index, &format.timezone);
+        write_csv_string(s.as_bytes(), buf, format.quote_char);
+    }
+
+    fn write_field_json(
+        &self,
+        row_index: usize,
+        buf: &mut Vec<u8>,
+        format: &FormatSettings,
+        quote: bool,
+    ) {
+        let s = self.to_string_micro(row_index, &format.timezone);
+        if quote {
+            buf.push(b'\"');
+        }
+        write_json_string(s.as_bytes(), buf, format);
+        if quote {
+            buf.push(b'\"');
+        }
     }
 
     fn serialize_json_values(&self, format: &FormatSettings) -> Result<Vec<Value>> {

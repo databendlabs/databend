@@ -28,6 +28,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::RoleInfo;
 use common_meta_types::UserInfo;
+use common_settings::Settings;
 use common_storage::DataOperator;
 use common_storage::StorageMetrics;
 use common_storage::StorageParams;
@@ -42,7 +43,6 @@ use crate::pipelines::executor::PipelineExecutor;
 use crate::servers::http::v1::HttpQueryHandle;
 use crate::sessions::query_affect::QueryAffect;
 use crate::sessions::Session;
-use crate::sessions::Settings;
 use crate::storages::Table;
 
 type DatabaseAndTable = (String, String, String);
@@ -216,7 +216,7 @@ impl QueryContextShared {
                 .tables_refs
                 .lock()
                 .get(&table_meta_key)
-                .ok_or_else(|| ErrorCode::LogicalError("Logical error, it's a bug."))?
+                .ok_or_else(|| ErrorCode::Internal("Logical error, it's a bug."))?
                 .clone()),
         }
     }

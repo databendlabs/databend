@@ -12,13 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io::Write;
+
 use chrono::Datelike;
 use chrono::Utc;
 use common_arrow::arrow::temporal_conversions::EPOCH_DAYS_FROM_CE;
 use common_expression::types::date::check_date;
+use common_expression::types::date::date_to_string;
 use common_expression::types::date::string_to_date;
 use common_expression::types::date::DATE_MAX;
 use common_expression::types::date::DATE_MIN;
+use common_expression::types::nullable::NullableColumn;
 use common_expression::types::nullable::NullableDomain;
 use common_expression::types::number::Int64Type;
 use common_expression::types::number::SimpleDomain;
@@ -26,14 +30,18 @@ use common_expression::types::number::UInt16Type;
 use common_expression::types::number::UInt32Type;
 use common_expression::types::number::UInt64Type;
 use common_expression::types::number::UInt8Type;
-use common_expression::types::timestamp::check_number_to_timestamp;
+use common_expression::types::timestamp::check_timestamp;
 use common_expression::types::timestamp::microseconds_to_days;
 use common_expression::types::timestamp::string_to_timestamp;
+use common_expression::types::timestamp::timestamp_to_string;
+use common_expression::types::timestamp::MICROS_IN_A_MILLI;
 use common_expression::types::timestamp::MICROS_IN_A_SEC;
 use common_expression::types::DateType;
 use common_expression::types::NullableType;
+use common_expression::types::NumberType;
 use common_expression::types::StringType;
 use common_expression::types::TimestampType;
+use common_expression::utils::arrow::constant_bitmap;
 use common_expression::utils::date_helper::*;
 use common_expression::vectorize_1_arg;
 use common_expression::vectorize_2_arg;
@@ -42,6 +50,7 @@ use common_expression::vectorize_with_builder_2_arg;
 use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
 use common_expression::Value;
+use common_expression::ValueRef;
 use num_traits::AsPrimitive;
 
 pub fn register(registry: &mut FunctionRegistry) {
@@ -49,6 +58,14 @@ pub fn register(registry: &mut FunctionRegistry) {
     // to_[date | timestamp](xx)
     register_cast_functions(registry);
     register_try_cast_functions(registry);
+
+    // cast([date | timestamp] AS string)
+    // to_string([date | timestamp])
+    register_to_string(registry);
+
+    // cast([date | timestamp] AS [uint8 | int8 | ...])
+    // to_[uint8 | int8 | ...]([date | timestamp])
+    register_to_number(registry);
 
     // [add | subtract]_[years | months | days | hours | minutes | seconds]([date | timestamp], number)
     // date_[add | sub]([year | quarter | month | week | day | hour | minute | second], [date | timstamp], number)
@@ -66,20 +83,25 @@ pub fn register(registry: &mut FunctionRegistry) {
     register_rounder_functions(registry);
 }
 
-fn number_domain_to_timestamp_domain<T: AsPrimitive<i64>>(
+/// Check if timestamp is within range, and return the timestamp in micros.
+#[inline]
+fn int64_to_timestamp(n: i64) -> Result<i64, String> {
+    if -31536000000 < n && n < 31536000000 {
+        Ok(n * MICROS_IN_A_SEC)
+    } else if -31536000000000 < n && n < 31536000000000 {
+        Ok(n * MICROS_IN_A_MILLI)
+    } else {
+        check_timestamp(n)
+    }
+}
+
+fn int64_domain_to_timestamp_domain<T: AsPrimitive<i64>>(
     domain: &SimpleDomain<T>,
 ) -> Option<SimpleDomain<i64>> {
-    let min = if let Ok(min) = check_number_to_timestamp(domain.min.as_()) {
-        min
-    } else {
-        return None;
-    };
-    let max = if let Ok(max) = check_number_to_timestamp(domain.max.as_()) {
-        max
-    } else {
-        return None;
-    };
-    Some(SimpleDomain { min, max })
+    Some(SimpleDomain {
+        min: int64_to_timestamp(domain.min.as_()).ok()?,
+        max: int64_to_timestamp(domain.max.as_()).ok()?,
+    })
 }
 
 fn register_cast_functions(registry: &mut FunctionRegistry) {
@@ -104,9 +126,9 @@ fn register_cast_functions(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_1_arg::<Int64Type, TimestampType, _, _>(
         "to_timestamp",
         FunctionProperty::default(),
-        |domain| number_domain_to_timestamp_domain(domain),
+        |domain| int64_domain_to_timestamp_domain(domain),
         vectorize_with_builder_1_arg::<Int64Type, TimestampType>(|val, output, _| {
-            output.push(check_number_to_timestamp(val)?);
+            output.push(int64_to_timestamp(val)?);
             Ok(())
         }),
     );
@@ -116,7 +138,7 @@ fn register_cast_functions(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| None,
         vectorize_with_builder_1_arg::<StringType, TimestampType>(|val, output, ctx| {
-            let ts = string_to_timestamp(val, &ctx.tz).ok_or_else(|| {
+            let ts = string_to_timestamp(val, ctx.tz).ok_or_else(|| {
                 format!(
                     "unable to cast {} to TimestampType",
                     String::from_utf8_lossy(val)
@@ -161,13 +183,13 @@ fn register_cast_functions(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| None,
         vectorize_with_builder_1_arg::<StringType, DateType>(|val, output, ctx| {
-            let d = string_to_date(val, &ctx.tz).ok_or_else(|| {
+            let d = string_to_date(val, ctx.tz).ok_or_else(|| {
                 format!(
                     "unable to cast {} to DateType",
                     String::from_utf8_lossy(val)
                 )
             })?;
-            output.push((d.num_days_from_ce() - EPOCH_DAYS_FROM_CE) as i32);
+            output.push(d.num_days_from_ce() - EPOCH_DAYS_FROM_CE);
             Ok(())
         }),
     );
@@ -195,7 +217,7 @@ fn register_try_cast_functions(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |domain| {
             let val = if let Some(number_domain) = &domain.value {
-                number_domain_to_timestamp_domain(number_domain).map(Box::new)
+                int64_domain_to_timestamp_domain(number_domain).map(Box::new)
             } else {
                 None
             };
@@ -206,7 +228,7 @@ fn register_try_cast_functions(registry: &mut FunctionRegistry) {
             })
         },
         vectorize_1_arg::<NullableType<Int64Type>, NullableType<TimestampType>>(|val, _| {
-            val.and_then(|v| check_number_to_timestamp(v).ok())
+            val.and_then(|v| int64_to_timestamp(v).ok())
         }),
     );
 
@@ -215,7 +237,7 @@ fn register_try_cast_functions(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| None,
         vectorize_1_arg::<NullableType<StringType>, NullableType<TimestampType>>(|val, ctx| {
-            val.and_then(|v| string_to_timestamp(v, &ctx.tz).map(|ts| ts.timestamp_micros()))
+            val.and_then(|v| string_to_timestamp(v, ctx.tz).map(|ts| ts.timestamp_micros()))
         }),
     );
 
@@ -258,10 +280,114 @@ fn register_try_cast_functions(registry: &mut FunctionRegistry) {
         |_| None,
         vectorize_1_arg::<NullableType<StringType>, NullableType<DateType>>(|val, ctx| {
             val.and_then(|v| {
-                string_to_date(v, &ctx.tz)
-                    .map(|d| (d.num_days_from_ce() - EPOCH_DAYS_FROM_CE) as i32)
+                string_to_date(v, ctx.tz).map(|d| (d.num_days_from_ce() - EPOCH_DAYS_FROM_CE))
             })
         }),
+    );
+}
+
+fn register_to_string(registry: &mut FunctionRegistry) {
+    registry.register_passthrough_nullable_1_arg::<TimestampType, StringType, _, _>(
+        "to_string",
+        FunctionProperty::default(),
+        |_| None,
+        vectorize_with_builder_1_arg::<TimestampType, StringType>(|val, output, ctx| {
+            write!(output.data, "{}", timestamp_to_string(val, ctx.tz)).unwrap();
+            output.commit_row();
+            Ok(())
+        }),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<DateType, StringType, _, _>(
+        "to_string",
+        FunctionProperty::default(),
+        |_| None,
+        vectorize_with_builder_1_arg::<DateType, StringType>(|val, output, ctx| {
+            write!(output.data, "{}", date_to_string(val, ctx.tz)).unwrap();
+            output.commit_row();
+            Ok(())
+        }),
+    );
+
+    registry.register_combine_nullable_1_arg::<TimestampType, StringType, _, _>(
+        "try_to_string",
+        FunctionProperty::default(),
+        |_| None,
+        vectorize_with_builder_1_arg::<TimestampType, NullableType<StringType>>(
+            |val, output, ctx| {
+                write!(output.builder.data, "{}", timestamp_to_string(val, ctx.tz)).unwrap();
+                output.builder.commit_row();
+                output.validity.push(true);
+                Ok(())
+            },
+        ),
+    );
+
+    registry.register_combine_nullable_1_arg::<DateType, StringType, _, _>(
+        "try_to_string",
+        FunctionProperty::default(),
+        |_| None,
+        vectorize_with_builder_1_arg::<DateType, NullableType<StringType>>(|val, output, ctx| {
+            write!(output.builder.data, "{}", date_to_string(val, ctx.tz)).unwrap();
+            output.builder.commit_row();
+            output.validity.push(true);
+            Ok(())
+        }),
+    );
+}
+
+fn register_to_number(registry: &mut FunctionRegistry) {
+    registry.register_passthrough_nullable_1_arg::<TimestampType, NumberType<i64>, _, _>(
+        "to_int64",
+        FunctionProperty::default(),
+        |domain| Some(domain.clone()),
+        |val, _| match val {
+            ValueRef::Scalar(scalar) => Ok(Value::Scalar(scalar)),
+            ValueRef::Column(col) => Ok(Value::Column(col)),
+        },
+    );
+
+    registry.register_1_arg::<DateType, NumberType<i64>, _, _>(
+        "to_int64",
+        FunctionProperty::default(),
+        |domain| Some(domain.overflow_cast().0),
+        |val, _| val as i64,
+    );
+
+    registry.register_combine_nullable_1_arg::<TimestampType, NumberType<i64>, _, _>(
+        "try_to_int64",
+        FunctionProperty::default(),
+        |domain| {
+            Some(NullableDomain {
+                has_null: false,
+                value: Some(Box::new(domain.clone())),
+            })
+        },
+        |val, _| match val {
+            ValueRef::Scalar(scalar) => Ok(Value::Scalar(Some(scalar))),
+            ValueRef::Column(col) => Ok(Value::Column(NullableColumn {
+                validity: constant_bitmap(true, col.len()).into(),
+                column: col,
+            })),
+        },
+    );
+
+    registry.register_combine_nullable_1_arg::<DateType, NumberType<i64>, _, _>(
+        "try_to_int64",
+        FunctionProperty::default(),
+        |domain| {
+            Some(NullableDomain {
+                has_null: false,
+                value: Some(Box::new(domain.overflow_cast().0)),
+            })
+        },
+        |val, _| match val {
+            ValueRef::Scalar(scalar) => Ok(Value::Scalar(Some(scalar as i64))),
+            ValueRef::Column(col) => Ok(Value::Column(NullableColumn {
+                validity: constant_bitmap(true, col.len()).into(),
+                column: col.iter().map(|val| *val as i64).collect(),
+            })),
+        },
     );
 }
 
@@ -455,7 +581,7 @@ fn register_to_number_functions(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| None,
         vectorize_1_arg::<DateType, UInt32Type>(|val, ctx| {
-            ToNumberImpl::eval_date::<ToYYYYMM, _>(val, &ctx.tz)
+            ToNumberImpl::eval_date::<ToYYYYMM, _>(val, ctx.tz)
         }),
     );
     registry.register_passthrough_nullable_1_arg::<DateType, UInt32Type, _, _>(
@@ -463,7 +589,7 @@ fn register_to_number_functions(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| None,
         vectorize_1_arg::<DateType, UInt32Type>(|val, ctx| {
-            ToNumberImpl::eval_date::<ToYYYYMMDD, _>(val, &ctx.tz)
+            ToNumberImpl::eval_date::<ToYYYYMMDD, _>(val, ctx.tz)
         }),
     );
     registry.register_passthrough_nullable_1_arg::<DateType, UInt64Type, _, _>(
@@ -471,7 +597,7 @@ fn register_to_number_functions(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| None,
         vectorize_1_arg::<DateType, UInt64Type>(|val, ctx| {
-            ToNumberImpl::eval_date::<ToYYYYMMDDHHMMSS, _>(val, &ctx.tz)
+            ToNumberImpl::eval_date::<ToYYYYMMDDHHMMSS, _>(val, ctx.tz)
         }),
     );
     registry.register_passthrough_nullable_1_arg::<DateType, UInt16Type, _, _>(
@@ -479,7 +605,7 @@ fn register_to_number_functions(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| None,
         vectorize_1_arg::<DateType, UInt16Type>(|val, ctx| {
-            ToNumberImpl::eval_date::<ToYear, _>(val, &ctx.tz)
+            ToNumberImpl::eval_date::<ToYear, _>(val, ctx.tz)
         }),
     );
     registry.register_passthrough_nullable_1_arg::<DateType, UInt8Type, _, _>(
@@ -487,7 +613,7 @@ fn register_to_number_functions(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| None,
         vectorize_1_arg::<DateType, UInt8Type>(|val, ctx| {
-            ToNumberImpl::eval_date::<ToMonth, _>(val, &ctx.tz)
+            ToNumberImpl::eval_date::<ToMonth, _>(val, ctx.tz)
         }),
     );
     registry.register_passthrough_nullable_1_arg::<DateType, UInt16Type, _, _>(
@@ -495,7 +621,7 @@ fn register_to_number_functions(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| None,
         vectorize_1_arg::<DateType, UInt16Type>(|val, ctx| {
-            ToNumberImpl::eval_date::<ToDayOfYear, _>(val, &ctx.tz)
+            ToNumberImpl::eval_date::<ToDayOfYear, _>(val, ctx.tz)
         }),
     );
     registry.register_passthrough_nullable_1_arg::<DateType, UInt8Type, _, _>(
@@ -503,7 +629,7 @@ fn register_to_number_functions(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| None,
         vectorize_1_arg::<DateType, UInt8Type>(|val, ctx| {
-            ToNumberImpl::eval_date::<ToDayOfMonth, _>(val, &ctx.tz)
+            ToNumberImpl::eval_date::<ToDayOfMonth, _>(val, ctx.tz)
         }),
     );
     registry.register_passthrough_nullable_1_arg::<DateType, UInt8Type, _, _>(
@@ -511,7 +637,7 @@ fn register_to_number_functions(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| None,
         vectorize_1_arg::<DateType, UInt8Type>(|val, ctx| {
-            ToNumberImpl::eval_date::<ToDayOfWeek, _>(val, &ctx.tz)
+            ToNumberImpl::eval_date::<ToDayOfWeek, _>(val, ctx.tz)
         }),
     );
     // timestamp
@@ -520,7 +646,7 @@ fn register_to_number_functions(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| None,
         vectorize_1_arg::<TimestampType, UInt32Type>(|val, ctx| {
-            ToNumberImpl::eval_timestamp::<ToYYYYMM, _>(val, &ctx.tz)
+            ToNumberImpl::eval_timestamp::<ToYYYYMM, _>(val, ctx.tz)
         }),
     );
     registry.register_passthrough_nullable_1_arg::<TimestampType, UInt32Type, _, _>(
@@ -528,7 +654,7 @@ fn register_to_number_functions(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| None,
         vectorize_1_arg::<TimestampType, UInt32Type>(|val, ctx| {
-            ToNumberImpl::eval_timestamp::<ToYYYYMMDD, _>(val, &ctx.tz)
+            ToNumberImpl::eval_timestamp::<ToYYYYMMDD, _>(val, ctx.tz)
         }),
     );
     registry.register_passthrough_nullable_1_arg::<TimestampType, UInt64Type, _, _>(
@@ -536,7 +662,7 @@ fn register_to_number_functions(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| None,
         vectorize_1_arg::<TimestampType, UInt64Type>(|val, ctx| {
-            ToNumberImpl::eval_timestamp::<ToYYYYMMDDHHMMSS, _>(val, &ctx.tz)
+            ToNumberImpl::eval_timestamp::<ToYYYYMMDDHHMMSS, _>(val, ctx.tz)
         }),
     );
     registry.register_passthrough_nullable_1_arg::<TimestampType, UInt16Type, _, _>(
@@ -544,7 +670,7 @@ fn register_to_number_functions(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| None,
         vectorize_1_arg::<TimestampType, UInt16Type>(|val, ctx| {
-            ToNumberImpl::eval_timestamp::<ToYear, _>(val, &ctx.tz)
+            ToNumberImpl::eval_timestamp::<ToYear, _>(val, ctx.tz)
         }),
     );
     registry.register_passthrough_nullable_1_arg::<TimestampType, UInt8Type, _, _>(
@@ -552,7 +678,7 @@ fn register_to_number_functions(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| None,
         vectorize_1_arg::<TimestampType, UInt8Type>(|val, ctx| {
-            ToNumberImpl::eval_timestamp::<ToMonth, _>(val, &ctx.tz)
+            ToNumberImpl::eval_timestamp::<ToMonth, _>(val, ctx.tz)
         }),
     );
     registry.register_passthrough_nullable_1_arg::<TimestampType, UInt16Type, _, _>(
@@ -560,7 +686,7 @@ fn register_to_number_functions(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| None,
         vectorize_1_arg::<TimestampType, UInt16Type>(|val, ctx| {
-            ToNumberImpl::eval_timestamp::<ToDayOfYear, _>(val, &ctx.tz)
+            ToNumberImpl::eval_timestamp::<ToDayOfYear, _>(val, ctx.tz)
         }),
     );
     registry.register_passthrough_nullable_1_arg::<TimestampType, UInt8Type, _, _>(
@@ -568,7 +694,7 @@ fn register_to_number_functions(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| None,
         vectorize_1_arg::<TimestampType, UInt8Type>(|val, ctx| {
-            ToNumberImpl::eval_timestamp::<ToDayOfMonth, _>(val, &ctx.tz)
+            ToNumberImpl::eval_timestamp::<ToDayOfMonth, _>(val, ctx.tz)
         }),
     );
     registry.register_passthrough_nullable_1_arg::<TimestampType, UInt8Type, _, _>(
@@ -576,7 +702,7 @@ fn register_to_number_functions(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| None,
         vectorize_1_arg::<TimestampType, UInt8Type>(|val, ctx| {
-            ToNumberImpl::eval_timestamp::<ToDayOfWeek, _>(val, &ctx.tz)
+            ToNumberImpl::eval_timestamp::<ToDayOfWeek, _>(val, ctx.tz)
         }),
     );
     registry.register_passthrough_nullable_1_arg::<TimestampType, UInt8Type, _, _>(
@@ -584,7 +710,7 @@ fn register_to_number_functions(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| None,
         vectorize_1_arg::<TimestampType, UInt8Type>(|val, ctx| {
-            ToNumberImpl::eval_timestamp::<ToHour, _>(val, &ctx.tz)
+            ToNumberImpl::eval_timestamp::<ToHour, _>(val, ctx.tz)
         }),
     );
     registry.register_passthrough_nullable_1_arg::<TimestampType, UInt8Type, _, _>(
@@ -592,7 +718,7 @@ fn register_to_number_functions(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| None,
         vectorize_1_arg::<TimestampType, UInt8Type>(|val, ctx| {
-            ToNumberImpl::eval_timestamp::<ToMinute, _>(val, &ctx.tz)
+            ToNumberImpl::eval_timestamp::<ToMinute, _>(val, ctx.tz)
         }),
     );
     registry.register_passthrough_nullable_1_arg::<TimestampType, UInt8Type, _, _>(
@@ -600,7 +726,7 @@ fn register_to_number_functions(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| None,
         vectorize_1_arg::<TimestampType, UInt8Type>(|val, ctx| {
-            ToNumberImpl::eval_timestamp::<ToSecond, _>(val, &ctx.tz)
+            ToNumberImpl::eval_timestamp::<ToSecond, _>(val, ctx.tz)
         }),
     );
 }
@@ -612,7 +738,7 @@ fn register_rounder_functions(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| None,
         vectorize_1_arg::<TimestampType, TimestampType>(|val, ctx| {
-            round_timestamp(val, &ctx.tz, Round::Second)
+            round_timestamp(val, ctx.tz, Round::Second)
         }),
     );
     registry.register_passthrough_nullable_1_arg::<TimestampType, TimestampType, _, _>(
@@ -620,7 +746,7 @@ fn register_rounder_functions(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| None,
         vectorize_1_arg::<TimestampType, TimestampType>(|val, ctx| {
-            round_timestamp(val, &ctx.tz, Round::Minute)
+            round_timestamp(val, ctx.tz, Round::Minute)
         }),
     );
     registry.register_passthrough_nullable_1_arg::<TimestampType, TimestampType, _, _>(
@@ -628,7 +754,7 @@ fn register_rounder_functions(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| None,
         vectorize_1_arg::<TimestampType, TimestampType>(|val, ctx| {
-            round_timestamp(val, &ctx.tz, Round::FiveMinutes)
+            round_timestamp(val, ctx.tz, Round::FiveMinutes)
         }),
     );
     registry.register_passthrough_nullable_1_arg::<TimestampType, TimestampType, _, _>(
@@ -636,7 +762,7 @@ fn register_rounder_functions(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| None,
         vectorize_1_arg::<TimestampType, TimestampType>(|val, ctx| {
-            round_timestamp(val, &ctx.tz, Round::TenMinutes)
+            round_timestamp(val, ctx.tz, Round::TenMinutes)
         }),
     );
     registry.register_passthrough_nullable_1_arg::<TimestampType, TimestampType, _, _>(
@@ -644,7 +770,7 @@ fn register_rounder_functions(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| None,
         vectorize_1_arg::<TimestampType, TimestampType>(|val, ctx| {
-            round_timestamp(val, &ctx.tz, Round::FifteenMinutes)
+            round_timestamp(val, ctx.tz, Round::FifteenMinutes)
         }),
     );
     registry.register_passthrough_nullable_1_arg::<TimestampType, TimestampType, _, _>(
@@ -652,7 +778,7 @@ fn register_rounder_functions(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| None,
         vectorize_1_arg::<TimestampType, TimestampType>(|val, ctx| {
-            round_timestamp(val, &ctx.tz, Round::Hour)
+            round_timestamp(val, ctx.tz, Round::Hour)
         }),
     );
     registry.register_passthrough_nullable_1_arg::<TimestampType, TimestampType, _, _>(
@@ -660,7 +786,7 @@ fn register_rounder_functions(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| None,
         vectorize_1_arg::<TimestampType, TimestampType>(|val, ctx| {
-            round_timestamp(val, &ctx.tz, Round::Day)
+            round_timestamp(val, ctx.tz, Round::Day)
         }),
     );
     registry.register_passthrough_nullable_1_arg::<TimestampType, TimestampType, _, _>(
@@ -668,7 +794,7 @@ fn register_rounder_functions(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| None,
         vectorize_1_arg::<TimestampType, TimestampType>(|val, ctx| {
-            round_timestamp(val, &ctx.tz, Round::TimeSlot)
+            round_timestamp(val, ctx.tz, Round::TimeSlot)
         }),
     );
 
@@ -678,7 +804,7 @@ fn register_rounder_functions(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| None,
         vectorize_1_arg::<TimestampType, DateType>(|val, ctx| {
-            DateRounder::eval_timestamp::<ToLastMonday>(val, &ctx.tz)
+            DateRounder::eval_timestamp::<ToLastMonday>(val, ctx.tz)
         }),
     );
     registry.register_passthrough_nullable_1_arg::<DateType, DateType, _, _>(
@@ -686,7 +812,7 @@ fn register_rounder_functions(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| None,
         vectorize_1_arg::<DateType, DateType>(|val, ctx| {
-            DateRounder::eval_date::<ToLastMonday>(val, &ctx.tz)
+            DateRounder::eval_date::<ToLastMonday>(val, ctx.tz)
         }),
     );
 
@@ -695,7 +821,7 @@ fn register_rounder_functions(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| None,
         vectorize_1_arg::<TimestampType, DateType>(|val, ctx| {
-            DateRounder::eval_timestamp::<ToLastSunday>(val, &ctx.tz)
+            DateRounder::eval_timestamp::<ToLastSunday>(val, ctx.tz)
         }),
     );
     registry.register_passthrough_nullable_1_arg::<DateType, DateType, _, _>(
@@ -703,7 +829,7 @@ fn register_rounder_functions(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| None,
         vectorize_1_arg::<DateType, DateType>(|val, ctx| {
-            DateRounder::eval_date::<ToLastSunday>(val, &ctx.tz)
+            DateRounder::eval_date::<ToLastSunday>(val, ctx.tz)
         }),
     );
     registry.register_passthrough_nullable_2_arg::<TimestampType, Int64Type, DateType, _, _>(
@@ -712,9 +838,9 @@ fn register_rounder_functions(registry: &mut FunctionRegistry) {
         |_, _| None,
         vectorize_2_arg::<TimestampType, Int64Type, DateType>(|val, mode, ctx| {
             if mode == 0 {
-                DateRounder::eval_timestamp::<ToLastSunday>(val, &ctx.tz)
+                DateRounder::eval_timestamp::<ToLastSunday>(val, ctx.tz)
             } else {
-                DateRounder::eval_timestamp::<ToLastMonday>(val, &ctx.tz)
+                DateRounder::eval_timestamp::<ToLastMonday>(val, ctx.tz)
             }
         }),
     );
@@ -724,9 +850,9 @@ fn register_rounder_functions(registry: &mut FunctionRegistry) {
         |_, _| None,
         vectorize_2_arg::<DateType, Int64Type, DateType>(|val, mode, ctx| {
             if mode == 0 {
-                DateRounder::eval_date::<ToLastSunday>(val, &ctx.tz)
+                DateRounder::eval_date::<ToLastSunday>(val, ctx.tz)
             } else {
-                DateRounder::eval_date::<ToLastMonday>(val, &ctx.tz)
+                DateRounder::eval_date::<ToLastMonday>(val, ctx.tz)
             }
         }),
     );
@@ -736,7 +862,7 @@ fn register_rounder_functions(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| None,
         vectorize_1_arg::<TimestampType, DateType>(|val, ctx| {
-            DateRounder::eval_timestamp::<ToStartOfMonth>(val, &ctx.tz)
+            DateRounder::eval_timestamp::<ToStartOfMonth>(val, ctx.tz)
         }),
     );
     registry.register_passthrough_nullable_1_arg::<DateType, DateType, _, _>(
@@ -744,7 +870,7 @@ fn register_rounder_functions(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| None,
         vectorize_1_arg::<DateType, DateType>(|val, ctx| {
-            DateRounder::eval_date::<ToStartOfMonth>(val, &ctx.tz)
+            DateRounder::eval_date::<ToStartOfMonth>(val, ctx.tz)
         }),
     );
 
@@ -753,7 +879,7 @@ fn register_rounder_functions(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| None,
         vectorize_1_arg::<TimestampType, DateType>(|val, ctx| {
-            DateRounder::eval_timestamp::<ToStartOfQuarter>(val, &ctx.tz)
+            DateRounder::eval_timestamp::<ToStartOfQuarter>(val, ctx.tz)
         }),
     );
     registry.register_passthrough_nullable_1_arg::<DateType, DateType, _, _>(
@@ -761,7 +887,7 @@ fn register_rounder_functions(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| None,
         vectorize_1_arg::<DateType, DateType>(|val, ctx| {
-            DateRounder::eval_date::<ToStartOfQuarter>(val, &ctx.tz)
+            DateRounder::eval_date::<ToStartOfQuarter>(val, ctx.tz)
         }),
     );
 
@@ -770,7 +896,7 @@ fn register_rounder_functions(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| None,
         vectorize_1_arg::<TimestampType, DateType>(|val, ctx| {
-            DateRounder::eval_timestamp::<ToStartOfYear>(val, &ctx.tz)
+            DateRounder::eval_timestamp::<ToStartOfYear>(val, ctx.tz)
         }),
     );
     registry.register_passthrough_nullable_1_arg::<DateType, DateType, _, _>(
@@ -778,7 +904,7 @@ fn register_rounder_functions(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| None,
         vectorize_1_arg::<DateType, DateType>(|val, ctx| {
-            DateRounder::eval_date::<ToStartOfYear>(val, &ctx.tz)
+            DateRounder::eval_date::<ToStartOfYear>(val, ctx.tz)
         }),
     );
 
@@ -787,7 +913,7 @@ fn register_rounder_functions(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| None,
         vectorize_1_arg::<TimestampType, DateType>(|val, ctx| {
-            DateRounder::eval_timestamp::<ToStartOfISOYear>(val, &ctx.tz)
+            DateRounder::eval_timestamp::<ToStartOfISOYear>(val, ctx.tz)
         }),
     );
     registry.register_passthrough_nullable_1_arg::<DateType, DateType, _, _>(
@@ -795,7 +921,7 @@ fn register_rounder_functions(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_| None,
         vectorize_1_arg::<DateType, DateType>(|val, ctx| {
-            DateRounder::eval_date::<ToStartOfISOYear>(val, &ctx.tz)
+            DateRounder::eval_date::<ToStartOfISOYear>(val, ctx.tz)
         }),
     );
 }

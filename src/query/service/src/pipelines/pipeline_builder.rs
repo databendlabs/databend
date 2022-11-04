@@ -35,10 +35,10 @@ use common_sql::evaluator::CompoundChunkOperator;
 use common_sql::executor::AggregateFunctionDesc;
 use common_sql::executor::PhysicalScalar;
 
-use crate::interpreters::fill_missing_columns;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::transforms::HashJoinDesc;
 use crate::pipelines::processors::transforms::RightSemiAntiJoinCompactor;
+use crate::pipelines::processors::transforms::TransformLeftJoin;
 use crate::pipelines::processors::transforms::TransformMarkJoin;
 use crate::pipelines::processors::transforms::TransformMergeBlock;
 use crate::pipelines::processors::transforms::TransformRightJoin;
@@ -46,11 +46,13 @@ use crate::pipelines::processors::transforms::TransformRightSemiAntiJoin;
 use crate::pipelines::processors::AggregatorParams;
 use crate::pipelines::processors::AggregatorTransformParams;
 use crate::pipelines::processors::JoinHashTable;
+use crate::pipelines::processors::LeftJoinCompactor;
 use crate::pipelines::processors::MarkJoinCompactor;
 use crate::pipelines::processors::RightJoinCompactor;
 use crate::pipelines::processors::SinkBuildHashTable;
 use crate::pipelines::processors::Sinker;
 use crate::pipelines::processors::SortMergeCompactor;
+use crate::pipelines::processors::TransformAddOn;
 use crate::pipelines::processors::TransformAggregator;
 use crate::pipelines::processors::TransformCastSchema;
 use crate::pipelines::processors::TransformHashJoinProbe;
@@ -100,7 +102,7 @@ impl PipelineBuilder {
 
         for source_pipeline in &self.pipelines {
             if !source_pipeline.is_complete_pipeline()? {
-                return Err(ErrorCode::IllegalPipelineState(
+                return Err(ErrorCode::Internal(
                     "Source pipeline must be complete pipeline.",
                 ));
             }
@@ -129,7 +131,7 @@ impl PipelineBuilder {
             PhysicalPlan::DistributedInsertSelect(insert_select) => {
                 self.build_distributed_insert_select(insert_select)
             }
-            PhysicalPlan::Exchange(_) => Err(ErrorCode::LogicalError(
+            PhysicalPlan::Exchange(_) => Err(ErrorCode::Internal(
                 "Invalid physical plan with PhysicalPlan::Exchange",
             )),
         }
@@ -147,7 +149,7 @@ impl PipelineBuilder {
             &join.build_keys,
             join.build.output_schema()?,
             join.probe.output_schema()?,
-            HashJoinDesc::create(self.ctx.clone(), join)?,
+            HashJoinDesc::create(join)?,
         )
     }
 
@@ -225,8 +227,8 @@ impl PipelineBuilder {
         let schema = scan.source.schema();
         let projections = scan
             .name_mapping
-            .iter()
-            .map(|(name, _)| schema.index_of(name.as_str()))
+            .keys()
+            .map(|name| schema.index_of(name.as_str()))
             .collect::<Result<Vec<usize>>>()?;
 
         let ops = vec![
@@ -253,7 +255,7 @@ impl PipelineBuilder {
         self.build_pipeline(&filter.input)?;
 
         if filter.predicates.is_empty() {
-            return Err(ErrorCode::LogicalError(
+            return Err(ErrorCode::Internal(
                 "Invalid empty predicate list".to_string(),
             ));
         }
@@ -477,6 +479,21 @@ impl PipelineBuilder {
             )
         })?;
 
+        if (join.join_type == JoinType::Left
+            || join.join_type == JoinType::Full
+            || join.join_type == JoinType::Single)
+            && join.non_equi_conditions.is_empty()
+        {
+            self.main_pipeline.resize(1)?;
+            self.main_pipeline.add_transform(|input, output| {
+                TransformLeftJoin::try_create(
+                    input,
+                    output,
+                    LeftJoinCompactor::create(state.clone()),
+                )
+            })?;
+        }
+
         if join.join_type == JoinType::LeftMark {
             self.main_pipeline.resize(1)?;
             self.main_pipeline.add_transform(|input, output| {
@@ -624,13 +641,24 @@ impl PipelineBuilder {
             .get_catalog(&insert_select.catalog)?
             .get_table_by_info(&insert_select.table_info)?;
 
-        fill_missing_columns(
-            self.ctx.clone(),
-            insert_schema,
-            &table.schema(),
-            &mut self.main_pipeline,
-        )?;
-
+        // Fill missing columns.
+        {
+            let source_schema = insert_schema;
+            let target_schema = &table.schema();
+            if source_schema != target_schema {
+                self.main_pipeline.add_transform(
+                    |transform_input_port, transform_output_port| {
+                        TransformAddOn::try_create(
+                            transform_input_port,
+                            transform_output_port,
+                            source_schema.clone(),
+                            target_schema.clone(),
+                            self.ctx.clone(),
+                        )
+                    },
+                )?;
+            }
+        }
         table.append_data(self.ctx.clone(), &mut self.main_pipeline, true)?;
 
         Ok(())

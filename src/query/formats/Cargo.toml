@@ -11,16 +11,17 @@ doctest = false
 test = false
 
 [dependencies] # In alphabetical order
+chrono-tz = "0.6.3"
 # Workspace dependencies
 common-datablocks = { path = "../datablocks" }
 common-datavalues = { path = "../datavalues" }
 common-exception = { path = "../../common/exception" }
 common-io = { path = "../../common/io" }
+common-meta-types = { path = "../../meta/types" }
+common-settings = { path = "../settings" }
 
 # Crates.io dependencies
 once_cell = "1.15.0"
-strum = "0.24.1"
-strum_macros = "0.24.3"
 
 [dev-dependencies]
 common-arrow = { path = "../../common/arrow" }

@@ -55,13 +55,13 @@ impl InMemoryMetas {
     /// Get the next db id.
     pub fn next_db_id(&self) -> u64 {
         self.next_db_id.fetch_add(1, Ordering::Relaxed);
-        self.next_db_id.load(Ordering::Relaxed) as u64
+        self.next_db_id.load(Ordering::Relaxed)
     }
 
     /// Get the next table id.
     pub fn next_table_id(&self) -> u64 {
         self.next_table_id.fetch_add(1, Ordering::Relaxed);
-        self.next_table_id.load(Ordering::Relaxed) as u64
+        self.next_table_id.load(Ordering::Relaxed)
     }
 
     pub fn insert(&self, db: &str, tbl_ref: Arc<dyn Table>) {

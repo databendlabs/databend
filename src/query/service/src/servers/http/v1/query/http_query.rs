@@ -23,6 +23,7 @@ use common_base::base::tokio::sync::RwLock;
 use common_base::base::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_storages_fuse_result::BlockBuffer;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -44,7 +45,6 @@ use crate::servers::http::v1::HttpQueryManager;
 use crate::sessions::QueryAffect;
 use crate::sessions::SessionType;
 use crate::sessions::TableContext;
-use crate::storages::result::block_buffer::BlockBuffer;
 
 #[derive(Deserialize, Debug)]
 pub struct HttpQueryRequest {
@@ -189,9 +189,7 @@ impl HttpQuery {
                 tokio::time::sleep(Duration::from_millis(1)).await;
                 n += 1;
                 if n > 10 {
-                    return Err(ErrorCode::UnexpectedError(
-                        "last query stop but not released",
-                    ));
+                    return Err(ErrorCode::Internal("last query stop but not released"));
                 }
             }
             session

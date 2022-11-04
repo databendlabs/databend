@@ -637,6 +637,14 @@ pub fn parse_copy_file_format_options(
     .parse()
     .map_err(ErrorCode::UnknownCompressionType)?;
 
+    // Row tag in xml.
+    let row_tag = parse_escape_string(
+        file_format_options
+            .get("row_tag")
+            .unwrap_or(&"".to_string())
+            .as_bytes(),
+    );
+
     Ok(FileFormatOptions {
         format: file_format,
         skip_header,
@@ -644,5 +652,6 @@ pub fn parse_copy_file_format_options(
         record_delimiter,
         escape,
         compression,
+        row_tag,
     })
 }

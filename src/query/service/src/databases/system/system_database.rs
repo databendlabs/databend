@@ -19,10 +19,30 @@ use common_meta_app::schema::DatabaseIdent;
 use common_meta_app::schema::DatabaseInfo;
 use common_meta_app::schema::DatabaseMeta;
 use common_meta_app::schema::DatabaseNameIdent;
+use common_storages_system::CatalogsTable;
+use common_storages_system::ClusteringHistoryTable;
+use common_storages_system::ClustersTable;
+use common_storages_system::ColumnsTable;
+use common_storages_system::ConfigsTable;
+use common_storages_system::ContributorsTable;
+use common_storages_system::CreditsTable;
+use common_storages_system::DatabasesTable;
+use common_storages_system::EnginesTable;
+use common_storages_system::FunctionsTable;
+use common_storages_system::MetricsTable;
+use common_storages_system::OneTable;
+use common_storages_system::ProcessesTable;
+use common_storages_system::QueryLogTable;
+use common_storages_system::RolesTable;
+use common_storages_system::SettingsTable;
+use common_storages_system::StagesTable;
+use common_storages_system::TablesTableWithHistory;
+use common_storages_system::TablesTableWithoutHistory;
+use common_storages_system::TracingTable;
+use common_storages_system::UsersTable;
 
 use crate::catalogs::InMemoryMetas;
 use crate::databases::Database;
-use crate::storages::system;
 use crate::storages::Table;
 
 #[derive(Clone)]
@@ -33,33 +53,33 @@ pub struct SystemDatabase {
 impl SystemDatabase {
     pub fn create(sys_db_meta: &mut InMemoryMetas, config: &Config) -> Self {
         let table_list: Vec<Arc<dyn Table>> = vec![
-            system::OneTable::create(sys_db_meta.next_table_id()),
-            system::FunctionsTable::create(sys_db_meta.next_table_id()),
-            system::ContributorsTable::create(sys_db_meta.next_table_id()),
-            system::CreditsTable::create(sys_db_meta.next_table_id()),
-            system::SettingsTable::create(sys_db_meta.next_table_id()),
-            system::TablesTableWithoutHistory::create(sys_db_meta.next_table_id()),
-            system::TablesTableWithHistory::create(sys_db_meta.next_table_id()),
-            system::ClustersTable::create(sys_db_meta.next_table_id()),
-            system::DatabasesTable::create(sys_db_meta.next_table_id()),
-            Arc::new(system::TracingTable::create(sys_db_meta.next_table_id())),
-            system::ProcessesTable::create(sys_db_meta.next_table_id()),
-            system::ConfigsTable::create(sys_db_meta.next_table_id()),
-            system::MetricsTable::create(sys_db_meta.next_table_id()),
-            system::ColumnsTable::create(sys_db_meta.next_table_id()),
-            system::UsersTable::create(sys_db_meta.next_table_id()),
-            Arc::new(system::QueryLogTable::create(
+            OneTable::create(sys_db_meta.next_table_id()),
+            FunctionsTable::create(sys_db_meta.next_table_id()),
+            ContributorsTable::create(sys_db_meta.next_table_id()),
+            CreditsTable::create(sys_db_meta.next_table_id()),
+            SettingsTable::create(sys_db_meta.next_table_id()),
+            TablesTableWithoutHistory::create(sys_db_meta.next_table_id()),
+            TablesTableWithHistory::create(sys_db_meta.next_table_id()),
+            ClustersTable::create(sys_db_meta.next_table_id()),
+            DatabasesTable::create(sys_db_meta.next_table_id()),
+            Arc::new(TracingTable::create(sys_db_meta.next_table_id())),
+            ProcessesTable::create(sys_db_meta.next_table_id()),
+            ConfigsTable::create(sys_db_meta.next_table_id()),
+            MetricsTable::create(sys_db_meta.next_table_id()),
+            ColumnsTable::create(sys_db_meta.next_table_id()),
+            UsersTable::create(sys_db_meta.next_table_id()),
+            Arc::new(QueryLogTable::create(
                 sys_db_meta.next_table_id(),
                 config.query.max_query_log_size,
             )),
-            Arc::new(system::ClusteringHistoryTable::create(
+            Arc::new(ClusteringHistoryTable::create(
                 sys_db_meta.next_table_id(),
                 config.query.max_query_log_size,
             )),
-            system::EnginesTable::create(sys_db_meta.next_table_id()),
-            system::RolesTable::create(sys_db_meta.next_table_id()),
-            system::StagesTable::create(sys_db_meta.next_table_id()),
-            system::CatalogsTable::create(sys_db_meta.next_table_id()),
+            EnginesTable::create(sys_db_meta.next_table_id()),
+            RolesTable::create(sys_db_meta.next_table_id()),
+            StagesTable::create(sys_db_meta.next_table_id()),
+            CatalogsTable::create(sys_db_meta.next_table_id()),
         ];
 
         for tbl in table_list.into_iter() {

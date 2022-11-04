@@ -33,6 +33,7 @@ use common_ast::Backtrace;
 use common_ast::DisplayError;
 use common_catalog::catalog::CatalogManager;
 use common_catalog::table_context::TableContext;
+use common_datavalues::remove_nullable;
 use common_datavalues::type_coercion::merge_types;
 use common_datavalues::ArrayType;
 use common_datavalues::DataField;
@@ -131,7 +132,7 @@ impl<'a> TypeChecker<'a> {
             if scalar.is_deterministic() {
                 evaluator.try_eval_const(&func_ctx)
             } else {
-                Err(ErrorCode::LogicalError(
+                Err(ErrorCode::Internal(
                     "Constant folding requires the function deterministic",
                 ))
             }
@@ -954,23 +955,32 @@ impl<'a> TypeChecker<'a> {
 
         let arg_types_ref: Vec<&DataTypeImpl> = arg_types.iter().collect();
 
+        // rewrite_collation
+        let func_name = if self.function_need_collation(func_name, &args)
+            && self.ctx.get_settings().get_collation()? == "utf8"
+        {
+            format!("{func_name}_utf8")
+        } else {
+            func_name.to_owned()
+        };
+
         // Validate function arguments.
         // TODO(leiysky): should be done in `FunctionFactory::get`.
-        let feature = FunctionFactory::instance().get_features(func_name)?;
+        let feature = FunctionFactory::instance().get_features(&func_name)?;
         validate_function_arg(
-            func_name,
+            &func_name,
             arguments.len(),
             feature.variadic_arguments,
             feature.num_arguments,
         )?;
 
         let func = FunctionFactory::instance()
-            .get(func_name, &arg_types_ref)
+            .get(&func_name, &arg_types_ref)
             .map_err(|e| ErrorCode::SemanticError(span.display_error(e.message())))?;
         Ok(Box::new((
             FunctionCall {
                 arguments: args,
-                func_name: func_name.to_string(),
+                func_name,
                 arg_types: arg_types.to_vec(),
                 return_type: Box::new(func.return_type()),
             }
@@ -2196,6 +2206,14 @@ impl<'a> TypeChecker<'a> {
                 _ => Ok(original_expr.clone()),
             },
         }
+    }
+
+    fn function_need_collation(&self, name: &str, args: &[Scalar]) -> bool {
+        let names = vec!["substr", "substring", "length"];
+        !args.is_empty()
+            && remove_nullable(&args[0].data_type()).data_type_id() == TypeID::String
+            && self.ctx.get_settings().get_collation().unwrap() != "binary"
+            && names.contains(&name)
     }
 }
 

@@ -48,7 +48,7 @@ pub fn block_to_json_value_columns(
         let data_type = field.data_type();
         let serializer = data_type.create_serializer(&column)?;
         col_table.push(serializer.serialize_json_values(format).map_err(|e| {
-            ErrorCode::UnexpectedError(format!(
+            ErrorCode::Internal(format!(
                 "fail to serialize filed {}, error = {}",
                 field.name(),
                 e
@@ -91,7 +91,7 @@ fn block_to_json_value_string_fields(
     for row_index in 0..rows_size {
         let mut row: Vec<JsonValue> = Vec::with_capacity(block.num_columns());
         for serializer in serializers.iter() {
-            let s = serializer.serialize_field(row_index, format)?;
+            let s = serializer.to_string_values(row_index, format)?;
             row.push(serde_json::to_value(s)?)
         }
         res.push(row)

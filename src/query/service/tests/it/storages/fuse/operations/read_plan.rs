@@ -21,12 +21,12 @@ use common_arrow::arrow::datatypes::Field as ArrowField;
 use common_base::base::tokio;
 use common_datavalues::DataValue;
 use common_exception::Result;
-use common_fuse_meta::meta::BlockMeta;
-use common_fuse_meta::meta::ColumnMeta;
-use common_fuse_meta::meta::ColumnStatistics;
 use common_planner::extras::Extras;
 use common_planner::plans::Projection;
 use common_storages_fuse::ColumnLeaves;
+use common_storages_table_meta::meta::BlockMeta;
+use common_storages_table_meta::meta::ColumnMeta;
+use common_storages_table_meta::meta::ColumnStatistics;
 use databend_query::storages::fuse::ColumnLeaf;
 use databend_query::storages::fuse::FuseTable;
 use futures::TryStreamExt;
@@ -39,8 +39,11 @@ fn test_to_partitions() -> Result<()> {
     let num_of_col = 10;
     let num_of_block = 5;
 
-    let col_stats_gen = |col_size| {
-        ColumnStatistics::new(DataValue::Int64(1), DataValue::Int64(2), 0, col_size as u64)
+    let col_stats_gen = |col_size| ColumnStatistics {
+        min: DataValue::Int64(1),
+        max: DataValue::Int64(2),
+        null_count: 0,
+        in_memory_size: col_size as u64,
     };
 
     let col_metas_gen = |col_size| ColumnMeta {
@@ -70,8 +73,8 @@ fn test_to_partitions() -> Result<()> {
     let cluster_stats = None;
     let location = ("".to_owned(), 0);
     let block_size = cols_stats
-        .iter()
-        .map(|(_, col_stats)| col_stats.in_memory_size)
+        .values()
+        .map(|col_stats| col_stats.in_memory_size)
         .sum();
 
     let bloom_filter_location = None;
@@ -103,7 +106,7 @@ fn test_to_partitions() -> Result<()> {
     // CASE I:  no projection
     let (s, parts) = FuseTable::to_partitions(&blocks_metas, &column_leafs, None);
     assert_eq!(parts.len(), num_of_block as usize);
-    let expected_block_size: u64 = cols_metas.iter().map(|(_, col_meta)| col_meta.len).sum();
+    let expected_block_size: u64 = cols_metas.values().map(|col_meta| col_meta.len).sum();
     assert_eq!(expected_block_size * num_of_block, s.read_bytes as u64);
 
     // CASE II: col pruning

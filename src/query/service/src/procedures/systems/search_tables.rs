@@ -18,6 +18,7 @@ use common_datablocks::DataBlock;
 use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_storages_system::TablesTableWithoutHistory;
 use futures::TryStreamExt;
 
 use crate::interpreters::Interpreter;
@@ -28,7 +29,6 @@ use crate::procedures::ProcedureFeatures;
 use crate::sessions::QueryContext;
 use crate::sql::plans::Plan;
 use crate::sql::Planner;
-use crate::storages::system::TablesTableWithoutHistory;
 
 pub struct SearchTablesProcedure {}
 
@@ -69,7 +69,7 @@ impl OneBlockProcedure for SearchTablesProcedure {
                 SelectInterpreterV2::try_create(ctx.clone(), *bind_context, *s_expr, metadata)?;
             interpreter.execute(ctx.clone()).await
         } else {
-            return Err(ErrorCode::LogicalError("search tables build query error"));
+            return Err(ErrorCode::Internal("search tables build query error"));
         }?;
         let result = stream.try_collect::<Vec<_>>().await?;
         if !result.is_empty() {

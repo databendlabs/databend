@@ -41,7 +41,7 @@ pub struct PrewhereInfo {
 }
 
 /// Extras is a wrapper for push down items.
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq, Default)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Default, Debug, PartialEq, Eq)]
 pub struct Extras {
     /// Optional column indices to use as a projection
     pub projection: Option<Projection>,
@@ -55,18 +55,6 @@ pub struct Extras {
     pub limit: Option<usize>,
     /// Optional order_by expression plan, asc, null_first
     pub order_by: Vec<(Expression, bool, bool)>,
-}
-
-impl Extras {
-    pub fn default() -> Self {
-        Extras {
-            projection: None,
-            filters: vec![],
-            prewhere: None,
-            limit: None,
-            order_by: vec![],
-        }
-    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Clone, Debug, Default)]

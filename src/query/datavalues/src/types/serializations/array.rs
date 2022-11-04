@@ -17,6 +17,8 @@ use common_io::prelude::FormatSettings;
 use serde_json::Value;
 
 use crate::prelude::*;
+use crate::serializations::write_csv_string;
+use crate::serializations::write_json_string;
 
 #[derive(Clone)]
 pub struct ArraySerializer<'a> {
@@ -36,7 +38,13 @@ impl<'a> ArraySerializer<'a> {
 }
 
 impl<'a> TypeSerializer<'a> for ArraySerializer<'a> {
-    fn write_field(&self, row_index: usize, buf: &mut Vec<u8>, format: &FormatSettings) {
+    fn write_field_values(
+        &self,
+        row_index: usize,
+        buf: &mut Vec<u8>,
+        format: &FormatSettings,
+        _in_nested: bool,
+    ) {
         let start = self.offsets[row_index] as usize;
         let end = self.offsets[row_index + 1] as usize;
         buf.push(b'[');
@@ -45,9 +53,51 @@ impl<'a> TypeSerializer<'a> for ArraySerializer<'a> {
             if i != start {
                 buf.extend_from_slice(b", ");
             }
-            inner.write_field_quoted(i, buf, format, b'\'');
+            inner.write_field_values(i, buf, format, true);
         }
         buf.push(b']');
+    }
+
+    fn write_field_tsv(
+        &self,
+        row_index: usize,
+        buf: &mut Vec<u8>,
+        format: &FormatSettings,
+        _in_nested: bool,
+    ) {
+        let start = self.offsets[row_index] as usize;
+        let end = self.offsets[row_index + 1] as usize;
+        buf.push(b'[');
+        let inner = &self.inner;
+        for i in start..end {
+            if i != start {
+                buf.extend_from_slice(b", ");
+            }
+            inner.write_field_tsv(i, buf, format, true);
+        }
+        buf.push(b']');
+    }
+
+    fn write_field_csv(&self, row_index: usize, buf: &mut Vec<u8>, format: &FormatSettings) {
+        let v = self.to_vec_values(row_index, format);
+        write_csv_string(&v, buf, format.quote_char);
+    }
+
+    fn write_field_json(
+        &self,
+        row_index: usize,
+        buf: &mut Vec<u8>,
+        format: &FormatSettings,
+        quote: bool,
+    ) {
+        let v = self.to_vec_values(row_index, format);
+        if quote {
+            buf.push(b'\"');
+        }
+        write_json_string(&v, buf, format);
+        if quote {
+            buf.push(b'\"');
+        }
     }
 
     fn serialize_json_values(&self, format: &FormatSettings) -> Result<Vec<Value>> {

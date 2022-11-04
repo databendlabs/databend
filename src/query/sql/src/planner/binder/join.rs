@@ -540,11 +540,7 @@ impl<'a> JoinConditionResolver<'a> {
                     join_key_name
                 )));
             };
-            let idx = if let JoinOperator::RightOuter = join_op {
-                0
-            } else {
-                1
-            };
+            let idx = !matches!(join_op, JoinOperator::RightOuter) as usize;
             if let Some(col_binding) = self
                 .join_context
                 .columns

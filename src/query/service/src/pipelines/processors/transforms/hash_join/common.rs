@@ -105,7 +105,7 @@ impl JoinHashTable {
                 .hash_join_desc
                 .marker_join_desc
                 .marker_index
-                .ok_or_else(|| ErrorCode::LogicalError("Invalid mark join"))?
+                .ok_or_else(|| ErrorCode::Internal("Invalid mark join"))?
                 .to_string(),
             NullableType::new_impl(BooleanType::new_impl()),
         )]);
@@ -254,7 +254,7 @@ impl JoinHashTable {
     // Final row_state for right join
     // Record row in build side that is matched how many rows in probe side.
     pub(crate) fn row_state_for_right_join(&self) -> Result<Vec<Vec<usize>>> {
-        let build_indexes = self.hash_join_desc.right_join_desc.build_indexes.read();
+        let build_indexes = self.hash_join_desc.join_state.build_indexes.read();
         let chunks = self.row_space.chunks.read().unwrap();
         let mut row_state = Vec::with_capacity(chunks.len());
         for chunk in chunks.iter() {
@@ -276,23 +276,41 @@ impl JoinHashTable {
         Ok(row_state)
     }
 
-    pub(crate) fn rest_block_for_right_join(&self, blocks: &[DataBlock]) -> Result<DataBlock> {
-        let rest_probe_blocks = self.hash_join_desc.right_join_desc.rest_probe_blocks.read();
+    pub(crate) fn rest_block(&self) -> Result<DataBlock> {
+        let rest_probe_blocks = self.hash_join_desc.join_state.rest_probe_blocks.read();
         if rest_probe_blocks.is_empty() {
-            return if !blocks.is_empty() {
-                DataBlock::concat_blocks(blocks)
-            } else {
-                Ok(DataBlock::empty())
-            };
+            return Ok(DataBlock::empty());
         }
         let probe_block = DataBlock::concat_blocks(&rest_probe_blocks)?;
-        let rest_build_indexes = self
-            .hash_join_desc
-            .right_join_desc
-            .rest_build_indexes
-            .read();
-        let build_block = self.row_space.gather(&rest_build_indexes)?;
-        let rest_block = self.merge_eq_block(&build_block, &probe_block)?;
-        DataBlock::concat_blocks(&[blocks, &[rest_block]].concat())
+        let rest_build_indexes = self.hash_join_desc.join_state.rest_build_indexes.read();
+        let mut build_block = self.row_space.gather(&rest_build_indexes)?;
+        // For left join, wrap nullable for build block
+        if matches!(
+            self.hash_join_desc.join_type,
+            JoinType::Left | JoinType::Single | JoinType::Full
+        ) {
+            let validity = self.hash_join_desc.join_state.validity.read();
+            let validity = (*validity).clone().into();
+            let nullable_columns = if self.row_space.datablocks().is_empty() {
+                build_block
+                    .columns()
+                    .iter()
+                    .map(|c| {
+                        c.data_type()
+                            .create_constant_column(&DataValue::Null, rest_build_indexes.len())
+                    })
+                    .collect::<Result<Vec<_>>>()?
+            } else {
+                build_block
+                    .columns()
+                    .iter()
+                    .map(|c| Self::set_validity(c, &validity))
+                    .collect::<Result<Vec<_>>>()?
+            };
+            build_block =
+                DataBlock::create(self.row_space.data_schema.clone(), nullable_columns.clone());
+        }
+
+        self.merge_eq_block(&build_block, &probe_block)
     }
 }

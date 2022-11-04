@@ -514,9 +514,9 @@ async fn test_system_tables() -> Result<()> {
             continue;
         };
         let sql = format!("select * from system.{}", table_name);
-        let (status, result) = post_sql_to_endpoint(&ep, &sql, 1).await.map_err(|e| {
-            ErrorCode::UnexpectedError(format!("system.{}: {}", table_name, e.message()))
-        })?;
+        let (status, result) = post_sql_to_endpoint(&ep, &sql, 1)
+            .await
+            .map_err(|e| ErrorCode::Internal(format!("system.{}: {}", table_name, e.message())))?;
         let error_message = format!("{}: status={:?}, result={:?}", table_name, status, result);
         assert_eq!(status, StatusCode::OK, "{}", error_message);
         assert!(result.error.is_none(), "{}", error_message);
@@ -552,7 +552,7 @@ async fn test_insert() -> Result<()> {
         assert_eq!(result.data.len(), data_len, "{:?}", result);
         assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
         assert_eq!(
-            result.stats.progresses.write_progress.rows as usize, rows_written,
+            result.stats.progresses.write_progress.rows, rows_written,
             "{:?}",
             result
         );
@@ -755,7 +755,7 @@ async fn post_json_to_endpoint(
     let response = ep
         .call(req)
         .await
-        .map_err(|e| ErrorCode::UnexpectedError(e.to_string()))?;
+        .map_err(|e| ErrorCode::Internal(e.to_string()))?;
 
     check_response(response).await
 }
@@ -1139,7 +1139,6 @@ async fn test_download() -> Result<()> {
             "ndjson",
             "{\"number\":0,\"number + 1\":1}\n{\"number\":1,\"number + 1\":2}\n",
         ),
-        ("values", "(0,1),(1,2)"),
     ] {
         let uri = format!("/v1/query/{}/download?format={}", query_id, fmt);
         let resp = get_uri(&ep, &uri).await;

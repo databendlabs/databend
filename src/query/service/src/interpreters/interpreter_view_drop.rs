@@ -19,12 +19,12 @@ use common_exception::Result;
 use common_meta_app::schema::DropTableReq;
 use common_meta_app::schema::TableNameIdent;
 use common_planner::plans::DropViewPlan;
+use common_storages_view::view_table::VIEW_ENGINE;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
-use crate::storages::view::view_table::VIEW_ENGINE;
 
 pub struct DropViewInterpreter {
     ctx: Arc<QueryContext>,
@@ -55,7 +55,7 @@ impl Interpreter for DropViewInterpreter {
 
         if let Some(table) = &tbl {
             if table.get_table_info().engine() != VIEW_ENGINE {
-                return Err(ErrorCode::UnexpectedError(format!(
+                return Err(ErrorCode::Internal(format!(
                     "{}.{} is not VIEW, please use `DROP TABLE {}.{}`",
                     &self.plan.database,
                     &self.plan.viewname,

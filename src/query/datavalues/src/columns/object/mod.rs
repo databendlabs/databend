@@ -193,8 +193,7 @@ impl<T: ObjectType> Column for ObjectColumn<T> {
             return self.slice(0, 0);
         }
 
-        let mut builder =
-            MutableObjectColumn::<T>::with_capacity(*offsets.last().unwrap() as usize);
+        let mut builder = MutableObjectColumn::<T>::with_capacity(*offsets.last().unwrap());
 
         let mut previous_offset: usize = 0;
 

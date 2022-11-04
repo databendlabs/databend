@@ -16,15 +16,12 @@ use std::marker::PhantomData;
 use std::mem;
 use std::sync::Arc;
 
-use chrono_tz::Tz;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::TypeDeserializer;
 use common_datavalues::TypeDeserializerImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_io::prelude::FormatSettings;
-use common_meta_types::FileFormatOptions;
 use common_meta_types::StageFileFormatType;
 use common_pipeline_core::Pipeline;
 use common_settings::Settings;
@@ -36,6 +33,7 @@ use super::InputFormat;
 use crate::processors::sources::input_formats::beyond_end_reader::BeyondEndReader;
 use crate::processors::sources::input_formats::delimiter::RecordDelimiter;
 use crate::processors::sources::input_formats::impls::input_format_csv::CsvReaderState;
+use crate::processors::sources::input_formats::impls::input_format_xml::XmlReaderState;
 use crate::processors::sources::input_formats::input_context::CopyIntoPlan;
 use crate::processors::sources::input_formats::input_context::InputContext;
 use crate::processors::sources::input_formats::input_pipeline::AligningStateTrait;
@@ -52,13 +50,6 @@ pub trait InputFormatTextBase: Sized + Send + Sync + 'static {
     fn is_splittable() -> bool {
         false
     }
-
-    fn get_format_settings_from_options(
-        settings: &Arc<Settings>,
-        options: &FileFormatOptions,
-    ) -> Result<FormatSettings>;
-
-    fn get_format_settings_from_settings(settings: &Arc<Settings>) -> Result<FormatSettings>;
 
     fn default_record_delimiter() -> RecordDelimiter {
         RecordDelimiter::Crlf
@@ -98,21 +89,6 @@ impl<T: InputFormatTextBase> InputFormatPipe for InputFormatTextPipe<T> {
 
 #[async_trait::async_trait]
 impl<T: InputFormatTextBase> InputFormat for InputFormatText<T> {
-    fn get_format_settings_from_options(
-        &self,
-        settings: &Arc<Settings>,
-        options: &FileFormatOptions,
-    ) -> Result<FormatSettings> {
-        T::get_format_settings_from_options(settings, options)
-    }
-
-    fn get_format_settings_from_settings(
-        &self,
-        settings: &Arc<Settings>,
-    ) -> Result<FormatSettings> {
-        T::get_format_settings_from_settings(settings)
-    }
-
     fn default_record_delimiter(&self) -> RecordDelimiter {
         T::default_record_delimiter()
     }
@@ -146,7 +122,7 @@ impl<T: InputFormatTextBase> InputFormat for InputFormatText<T> {
             )?;
             let split_size = plan.stage_info.copy_options.split_size;
             if compress_alg.is_none() && T::is_splittable() && split_size > 0 {
-                let split_offsets = split_by_size(size, split_size as usize);
+                let split_offsets = split_by_size(size, split_size);
                 let num_file_splits = split_offsets.len();
                 tracing::debug!(
                     "split file {} of size {} to {} {} bytes splits",
@@ -229,6 +205,7 @@ pub struct AligningState<T> {
     pub num_fields: usize,
     pub decoder: Option<DecompressDecoder>,
     pub csv_reader: Option<CsvReaderState>,
+    pub xml_reader: Option<XmlReaderState>,
     phantom: PhantomData<T>,
 }
 
@@ -340,6 +317,12 @@ impl<T: InputFormatTextBase> AligningStateTrait for AligningState<T> {
             None
         };
 
+        let xml_reader = if T::format_type() == StageFileFormatType::Xml {
+            Some(XmlReaderState::create(ctx))
+        } else {
+            None
+        };
+
         Ok(AligningState::<T> {
             ctx: ctx.clone(),
             split_info: split_info.clone(),
@@ -347,6 +330,7 @@ impl<T: InputFormatTextBase> AligningStateTrait for AligningState<T> {
             decoder,
             rows_to_skip,
             csv_reader,
+            xml_reader,
             tail_of_last_batch: vec![],
             rows: 0,
             batch_id: 0,
@@ -480,10 +464,4 @@ fn decompress(decoder: &mut DecompressDecoder, compressed: &[u8]) -> Result<Vec<
         }
     }
     Ok(decompress_bufs.concat())
-}
-
-pub fn get_time_zone(settings: &Settings) -> Result<Tz> {
-    let tz = settings.get_timezone()?;
-    tz.parse::<Tz>()
-        .map_err(|_| ErrorCode::InvalidTimezone("Timezone has been checked and should be valid"))
 }
