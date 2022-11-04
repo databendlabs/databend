@@ -152,6 +152,15 @@ impl TableMutator for SegmentCompactMutator {
     }
 }
 
+// Segments compactor that preserver the order of ingestion.
+//
+// Since the order of blocks should be preserved, if only segments of size "threshold"
+// are allowed to be generated during compaction, there might be cases that to compact
+// one fragmented segment, a large amount of non-fragmented segments have to be split
+// into pieces and re-compacted.
+//
+// To avoid this "ripple effects", consecutive segments are allowed to be compacted into
+// a new segment, if the size of compacted segment is lesser than 2 * threshold (exclusive).
 pub struct SegmentCompactor<'a> {
     threshold: u64,
     accumulated_num_blocks: u64,
@@ -179,25 +188,26 @@ impl<'a> SegmentCompactor<'a> {
             return Ok(());
         }
 
-        if num_blocks_current_segment <= self.threshold {
-            let s = self.accumulated_num_blocks + num_blocks_current_segment;
-            if s < self.threshold {
-                // not enough blocks yet, just keep this segment for later compaction
-                self.accumulated_num_blocks = s;
-                self.fragmented_segments.push((segment_info, location));
-                return Ok(());
-            } else if s >= self.threshold && s < 2 * self.threshold {
-                // compact the fragmented segments
-                self.fragmented_segments.push((segment_info, location));
-                self.compact_fragments().await?;
-                return Ok(());
-            }
+        let s = self.accumulated_num_blocks + num_blocks_current_segment;
+
+        if s < self.threshold {
+            // not enough blocks yet, just keep this segment for later compaction
+            self.accumulated_num_blocks = s;
+            self.fragmented_segments.push((segment_info, location));
+        } else if s >= self.threshold && s < 2 * self.threshold {
+            // compact the fragmented segments
+            self.fragmented_segments.push((segment_info, location));
+            self.compact_fragments().await?;
+        } else {
+            // no choice but to compact the fragmented segments collected so far.
+            // in this situation, after compaction, the size of compacted segments may be
+            // lesser than threshold. this happens if the size of segment BEFORE compaction
+            // is already larger than threshold.
+            self.compact_fragments().await?;
+            // after compaction the fragments, keep this segment as it is
+            merge_statistics_mut(&mut self.compacted_state.statistics, &segment_info.summary)?;
+            self.compacted_state.segments_locations.push(location);
         }
-        // input segment is larger than threshold , try to
-        // - either compact this large segment with previous collected fragmented segments
-        //   if the combined size is lesser than 2 * threshold
-        // - or compact previous collected fragmented segments only, and keep this large segment as it is
-        self.barrier_compact_with(segment_info, location).await?;
 
         Ok(())
     }
@@ -243,35 +253,12 @@ impl<'a> SegmentCompactor<'a> {
         Ok(())
     }
 
-    async fn barrier_compact_with(
-        &mut self,
-        segment_info: &'a SegmentInfo,
-        location: Location,
-    ) -> Result<()> {
-        let num_block = segment_info.blocks.len() as u64;
-        // check the segments collected so far
-        if self.accumulated_num_blocks + num_block < 2 * self.threshold {
-            // if the combined size is lesser than 2 * threshold, just compact them
-            self.fragmented_segments.push((segment_info, location));
-            self.compact_fragments().await?;
-        } else {
-            // no choice but to compact the fragmented segments collected so far,
-            // in this situation, after compaction, the size of compacted segments may be
-            // lesser than threshold.
-            // this happens if the size of segment BEFORE compaction is already larger than threshold.
-            self.compact_fragments().await?;
-            // after compaction the fragments, keep this segment as it is
-            merge_statistics_mut(&mut self.compacted_state.statistics, &segment_info.summary)?;
-            self.compacted_state.segments_locations.push(location);
-        }
-
-        Ok(())
-    }
-
+    // return the number of compacted segments so far
     pub fn current_compacted(&self) -> usize {
         self.compacted_state.num_fragments_compacted
     }
 
+    // finalize the compaction, compacts left fragments (if any)
     pub async fn finalize(mut self) -> Result<SegmentCompactionState> {
         if !self.fragmented_segments.is_empty() {
             // some fragments left, compact them
