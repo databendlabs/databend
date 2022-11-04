@@ -13,7 +13,7 @@ Object storage is required for production. Use the file system only for evaluati
 
 ## Before You Begin
 
-Make sure you have installed a MySQL client on your Mac. This topic uses DBeaver to connect to Databend. To download and install DBeaver, refer to https://dbeaver.com/2022/02/17/how-to-download-and-install-dbeaver/.
+Make sure you have installed a MySQL client. This topic uses DBeaver to connect to Databend. To download and install DBeaver, refer to https://dbeaver.com/2022/02/17/how-to-download-and-install-dbeaver/.
 
 ## Download Databend
 
@@ -29,7 +29,7 @@ Make sure you have installed a MySQL client on your Mac. This topic uses DBeaver
 
 2. Run the script `start.sh` in the folder `scripts`:
 
-    Your Mac might prompt an error saying "*databend-meta can't be opened because Apple cannot check it for malicious software.*". To proceed, open **System Settings** on your Mac, select **Privacy & Security** on the left menu, and click **Open Anyway** for databend-meta in the **Security** section on the right side. Do the same for the error on databend-query.
+    MacOS might prompt an error saying "*databend-meta can't be opened because Apple cannot check it for malicious software.*". To proceed, open **System Settings** on your Mac, select **Privacy & Security** on the left menu, and click **Open Anyway** for databend-meta in the **Security** section on the right side. Do the same for the error on databend-query.
 
 ```shell
 ./scripts/start.sh
@@ -48,7 +48,7 @@ eric             12776   0.0  0.3 408654368  24848 s003  S     2:15pm   0:00.06 
 
 ## Connect to Databend
 
-1. Open DBeaver on your Mac, and select **Database** > **New Database Connection** in the top menu.
+1. Open the MySQL client, for example, DBeaver. Select **Database** > **New Database Connection** in the top menu.
 
 2. In the database connection wizard, select **MySQL**, then click **Next**.
 
