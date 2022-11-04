@@ -102,12 +102,10 @@ pub fn geo_dist_init() {
             );
         }
 
-        // Everything is initialized.
-        let wgs84_metric_meters_lut = unsafe {
+        // Everything is initialized, transmute and return.
+        unsafe {
             std::mem::transmute::<_, [f32; 2 * (METRIC_LUT_SIZE + 1)]>(wgs84_metric_meters_lut)
-        };
-
-        wgs84_metric_meters_lut
+        }
     });
 }
 
@@ -134,7 +132,7 @@ fn geodist_fast_cos(x: f32) -> f32 {
 fn geodist_fast_sin(x: f32) -> f32 {
     let mut y = x.abs() * (COS_LUT_SIZE_F / PI_F / 2.0f32);
     let mut i = float_to_index(y);
-    y = y - i as f32;
+    y -= i as f32;
     // cos(x - pi / 2) = sin(x), costable / 4 = pi / 2
     i = (Wrapping(i) - Wrapping(COS_LUT_SIZE / 4)).0 & (COS_LUT_SIZE - 1);
     let cos_lut = COS_LUT.get().unwrap();
