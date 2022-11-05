@@ -22,7 +22,7 @@ use databend_query::sessions::SessionManager;
 use databend_query::sessions::SessionType;
 use databend_query::sessions::TableContext;
 use databend_query::sql::Planner;
-use databend_query::stream::DataBlockStream;
+use databend_query::stream::ReadDataBlockStream;
 use databend_query::table_functions::NumbersTable;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;

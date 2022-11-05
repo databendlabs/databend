@@ -19,11 +19,10 @@ use std::task::Poll;
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
 use common_datablocks::DataBlock;
+use common_datablocks::SendableDataBlockStream;
 use common_exception::Result;
 use futures::Stream;
 use pin_project_lite::pin_project;
-
-use crate::SendableDataBlockStream;
 
 pin_project! {
     pub struct ProgressStream {

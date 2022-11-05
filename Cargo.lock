@@ -1320,7 +1320,9 @@ dependencies = [
  "common-datavalues",
  "common-exception",
  "common-io",
+ "futures",
  "parking_lot 0.12.1",
+ "pin-project-lite",
  "pretty_assertions",
  "primitive-types",
  "regex",
@@ -1854,7 +1856,6 @@ dependencies = [
  "common-meta-types",
  "common-pipeline-core",
  "common-settings",
- "common-streams",
  "crossbeam-channel",
  "csv-core",
  "futures",
@@ -2148,7 +2149,6 @@ dependencies = [
  "common-storages-fuse",
  "common-storages-table-meta",
  "common-storages-view",
- "common-streams",
  "common-users",
  "futures",
  "itertools",
@@ -2503,19 +2503,6 @@ dependencies = [
  "common-catalog",
  "common-exception",
  "common-meta-app",
-]
-
-[[package]]
-name = "common-streams"
-version = "0.1.0"
-dependencies = [
- "common-base",
- "common-datablocks",
- "common-datavalues",
- "common-exception",
- "futures",
- "opendal",
- "pin-project-lite",
 ]
 
 [[package]]
@@ -3130,7 +3117,6 @@ dependencies = [
  "common-storages-system",
  "common-storages-table-meta",
  "common-storages-view",
- "common-streams",
  "common-tracing",
  "common-users",
  "criterion",
@@ -3155,6 +3141,7 @@ dependencies = [
  "openssl",
  "parking_lot 0.12.1",
  "petgraph",
+ "pin-project-lite",
  "poem",
  "pretty_assertions",
  "primitive-types",
