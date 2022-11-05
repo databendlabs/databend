@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Default, Debug)]
 pub struct BlockCompactThresholds {
     pub max_rows_per_block: usize,
     pub min_rows_per_block: usize,

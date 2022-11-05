@@ -231,6 +231,10 @@ pub trait Table: Sync + Send {
         }
     }
 
+    fn set_block_compact_thresholds(&self, _thresholds: BlockCompactThresholds) {
+        unimplemented!()
+    }
+
     async fn compact(
         &self,
         ctx: Arc<dyn TableContext>,

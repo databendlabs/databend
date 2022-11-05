@@ -103,6 +103,7 @@ impl Table for StageTable {
                 self.table_info.stage_info.clone(),
                 self.table_info.files.clone(),
                 ctx.get_scan_progress(),
+                self.get_block_compact_thresholds(),
             )
             .await?,
         );
