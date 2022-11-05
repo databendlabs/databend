@@ -78,9 +78,6 @@ members = [
     "src/meta/protos",
     # databend-meta
     "src/meta/service",
-    # Hack
-    # This crate is used to hack our cargo.lock to resovle CVEs and so on.
-    "src/workspace-hack",
 ]
 
 [workspace.dependencies]
