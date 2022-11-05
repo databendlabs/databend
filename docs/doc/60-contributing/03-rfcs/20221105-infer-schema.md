@@ -146,3 +146,15 @@ SOME MAGIC SQL
 | CREATE TABLE table_name (name VARCHAR, age INT); |
 +--------------------------------------------------+
 ```
+
+### SELECT FROM external location
+
+With `INFER` support, we can build a temperary table schema to read data from external location.
+
+```sql
+SELECT * from @my_stage;
+
+SELECT * from 's3://my_bucket/data.csv';
+```
+
+We will execute `INFER` internally to get the schema to files and than fill data into the table.
