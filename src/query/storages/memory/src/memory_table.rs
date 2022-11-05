@@ -227,6 +227,7 @@ impl Table for MemoryTable {
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
         _: bool,
+        _: bool,
     ) -> Result<()> {
         pipeline.add_sink(|input| Ok(ContextSink::create(input, ctx.clone())))
     }

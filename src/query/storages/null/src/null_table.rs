@@ -92,6 +92,7 @@ impl Table for NullTable {
         _: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
         _: bool,
+        _: bool,
     ) -> Result<()> {
         pipeline.add_sink(|input| Ok(EmptySink::create(input)))?;
         Ok(())

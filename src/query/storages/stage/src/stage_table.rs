@@ -142,6 +142,7 @@ impl Table for StageTable {
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
         _: bool,
+        _: bool,
     ) -> Result<()> {
         let single = self.table_info.stage_info.copy_options.single;
         let op = StageTable::get_op(&ctx, &self.table_info.stage_info)?;

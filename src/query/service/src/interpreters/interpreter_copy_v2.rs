@@ -304,7 +304,7 @@ impl CopyInterpreterV2 {
             &mut build_res.main_pipeline,
         )?;
 
-        to_table.append_data(self.ctx.clone(), &mut build_res.main_pipeline, false)?;
+        to_table.append_data(self.ctx.clone(), &mut build_res.main_pipeline, false, true)?;
 
         let ctx = self.ctx.clone();
         let files = files.clone();

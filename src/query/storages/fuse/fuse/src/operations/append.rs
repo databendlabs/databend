@@ -22,6 +22,7 @@ use common_datablocks::SortColumnDescription;
 use common_datavalues::DataField;
 use common_exception::Result;
 use common_pipeline_core::Pipeline;
+use common_pipeline_transforms::processors::transforms::transform_block_compact_no_split::BlockCompactorNoSplit;
 use common_pipeline_transforms::processors::transforms::BlockCompactor;
 use common_pipeline_transforms::processors::transforms::TransformCompact;
 use common_pipeline_transforms::processors::transforms::TransformSortPartial;
@@ -41,19 +42,32 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
         need_output: bool,
+        is_ingest: bool,
     ) -> Result<()> {
         let block_per_seg =
             self.get_option(FUSE_OPT_KEY_BLOCK_PER_SEGMENT, DEFAULT_BLOCK_PER_SEGMENT);
 
         let block_compact_thresholds = self.get_block_compact_thresholds();
-        pipeline.add_transform(|transform_input_port, transform_output_port| {
-            TransformCompact::try_create(
-                transform_input_port,
-                transform_output_port,
-                BlockCompactor::new(block_compact_thresholds, true),
-            )
-        })?;
-
+        if is_ingest {
+            let size = pipeline.output_len();
+            pipeline.resize(1)?;
+            pipeline.add_transform(|transform_input_port, transform_output_port| {
+                TransformCompact::try_create(
+                    transform_input_port,
+                    transform_output_port,
+                    BlockCompactorNoSplit::new(block_compact_thresholds),
+                )
+            })?;
+            pipeline.resize(size)?;
+        } else {
+            pipeline.add_transform(|transform_input_port, transform_output_port| {
+                TransformCompact::try_create(
+                    transform_input_port,
+                    transform_output_port,
+                    BlockCompactor::new(block_compact_thresholds, true),
+                )
+            })?;
+        }
         let cluster_stats_gen =
             self.get_cluster_stats_gen(ctx.clone(), pipeline, 0, block_compact_thresholds)?;
 

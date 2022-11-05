@@ -659,7 +659,7 @@ impl PipelineBuilder {
                 )?;
             }
         }
-        table.append_data(self.ctx.clone(), &mut self.main_pipeline, true)?;
+        table.append_data(self.ctx.clone(), &mut self.main_pipeline, true, false)?;
 
         Ok(())
     }

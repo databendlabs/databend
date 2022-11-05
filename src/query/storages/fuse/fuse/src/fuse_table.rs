@@ -365,9 +365,10 @@ impl Table for FuseTable {
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
         need_output: bool,
+        is_ingest: bool,
     ) -> Result<()> {
         self.check_mutable()?;
-        self.do_append_data(ctx, pipeline, need_output)
+        self.do_append_data(ctx, pipeline, need_output, is_ingest)
     }
 
     #[tracing::instrument(level = "debug", name = "fuse_table_commit_insertion", skip(self, ctx, operations), fields(ctx.id = ctx.get_id().as_str()))]

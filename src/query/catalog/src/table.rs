@@ -163,6 +163,7 @@ pub trait Table: Sync + Send {
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
         need_output: bool,
+        _is_ingest: bool,
     ) -> Result<()> {
         let (_, _, _) = (ctx, pipeline, need_output);
 
