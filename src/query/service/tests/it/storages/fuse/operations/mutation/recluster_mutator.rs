@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use common_base::base::tokio;
 use common_catalog::table_mutator::TableMutator;
+use common_datablocks::BlockCompactThresholds;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
@@ -32,7 +33,6 @@ use common_storages_table_meta::meta::Statistics;
 use common_storages_table_meta::meta::TableSnapshot;
 use common_storages_table_meta::meta::Versioned;
 use databend_query::sessions::TableContext;
-use databend_query::storages::fuse::io::BlockCompactThresholds;
 use databend_query::storages::fuse::io::SegmentWriter;
 use databend_query::storages::fuse::io::TableMetaLocationGenerator;
 use databend_query::storages::fuse::operations::ReclusterMutator;
