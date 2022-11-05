@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Utc;
+use common_datablocks::BlockCompactThresholds;
 use common_datablocks::DataBlock;
 use common_datavalues::chrono;
 use common_datavalues::DataSchemaRef;
@@ -220,6 +221,14 @@ pub trait Table: Sync + Send {
             self.name(),
             self.get_table_info().engine(),
         )))
+    }
+
+    fn get_block_compact_thresholds(&self) -> BlockCompactThresholds {
+        BlockCompactThresholds {
+            max_rows_per_block: 1000 * 1000,
+            min_rows_per_block: 800 * 1000,
+            max_bytes_per_block: 100 * 1024 * 1024,
+        }
     }
 
     async fn compact(

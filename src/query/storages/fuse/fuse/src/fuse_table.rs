@@ -212,16 +212,6 @@ impl FuseTable {
     pub fn transient(&self) -> bool {
         self.table_info.meta.options.contains_key("TRANSIENT")
     }
-
-    pub(crate) fn get_block_compact_thresholds(&self) -> BlockCompactThresholds {
-        let max_rows_per_block = self.get_option(FUSE_OPT_KEY_ROW_PER_BLOCK, DEFAULT_ROW_PER_BLOCK);
-        let min_rows_per_block = (max_rows_per_block as f64 * 0.8) as usize;
-        let max_bytes_per_block = self.get_option(
-            FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD,
-            DEFAULT_BLOCK_SIZE_IN_MEM_SIZE_THRESHOLD,
-        );
-        BlockCompactThresholds::new(max_rows_per_block, min_rows_per_block, max_bytes_per_block)
-    }
 }
 
 #[async_trait::async_trait]
@@ -465,6 +455,16 @@ impl Table for FuseTable {
         push_downs: Option<Extras>,
     ) -> Result<Option<Box<dyn TableMutator>>> {
         self.do_recluster(ctx, pipeline, push_downs).await
+    }
+
+    fn get_block_compact_thresholds(&self) -> BlockCompactThresholds {
+        let max_rows_per_block = self.get_option(FUSE_OPT_KEY_ROW_PER_BLOCK, DEFAULT_ROW_PER_BLOCK);
+        let min_rows_per_block = (max_rows_per_block as f64 * 0.8) as usize;
+        let max_bytes_per_block = self.get_option(
+            FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD,
+            DEFAULT_BLOCK_SIZE_IN_MEM_SIZE_THRESHOLD,
+        );
+        BlockCompactThresholds::new(max_rows_per_block, min_rows_per_block, max_bytes_per_block)
     }
 }
 
