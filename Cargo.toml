@@ -45,7 +45,6 @@ members = [
     "src/query/settings",
     "src/query/sql",
     "src/query/storages/cache",
-    "src/query/storages/constants",
     "src/query/storages/factory",
     "src/query/storages/fuse/fuse",
     "src/query/storages/fuse/fuse-result",

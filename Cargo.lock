@@ -1999,7 +1999,6 @@ dependencies = [
  "common-planner",
  "common-settings",
  "common-storage",
- "common-storages-constants",
  "common-storages-table-meta",
  "common-storages-view",
  "common-tracing",
@@ -2067,13 +2066,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "common-storages-constants"
-version = "0.1.0"
-dependencies = [
- "once_cell",
-]
-
-[[package]]
 name = "common-storages-factory"
 version = "0.1.0"
 dependencies = [
@@ -2116,7 +2108,6 @@ dependencies = [
  "common-sql",
  "common-storage",
  "common-storages-cache",
- "common-storages-constants",
  "common-storages-index",
  "common-storages-table-meta",
  "futures",
@@ -2397,7 +2388,7 @@ dependencies = [
  "common-exception",
  "common-meta-app",
  "common-storages-cache",
- "common-storages-constants",
+ "common-storages-table-meta",
  "goldenfile",
  "opendal",
  "serde",
@@ -3129,7 +3120,6 @@ dependencies = [
  "common-sql",
  "common-storage",
  "common-storages-cache",
- "common-storages-constants",
  "common-storages-factory",
  "common-storages-fuse",
  "common-storages-fuse-result",
