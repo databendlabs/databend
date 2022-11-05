@@ -19,7 +19,8 @@ use common_base::base::*;
 use common_datablocks::*;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_streams::*;
+use databend_query::stream::DataBlockStream;
+use databend_query::stream::ProgressStream;
 use futures::TryStreamExt;
 
 #[tokio::test]

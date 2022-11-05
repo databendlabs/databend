@@ -72,7 +72,6 @@ common-storages-stage = { path = "../storages/stage" }
 common-storages-system = { path = "../storages/system" }
 common-storages-table-meta = { path = "../storages/table-meta" }
 common-storages-view = { path = "../storages/view" }
-common-streams = { path = "../streams" }
 common-tracing = { path = "../../common/tracing" }
 common-users = { path = "../users" }
 
@@ -107,6 +106,7 @@ opensrv-mysql = "0.2.0"
 openssl = { version = "0.10.41", features = ["vendored"] }
 parking_lot = "0.12.1"
 petgraph = "0.6.2"
+pin-project-lite = "0.2.9"
 poem = { version = "1", features = ["rustls", "multipart", "compression"] }
 primitive-types = "0.12.0"
 rand = "0.8.5"

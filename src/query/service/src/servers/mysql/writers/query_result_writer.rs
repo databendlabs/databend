@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_base::base::tokio::io::AsyncWrite;
+use common_datablocks::SendableDataBlockStream;
 use common_datavalues::prelude::TypeID;
 use common_datavalues::remove_nullable;
 use common_datavalues::DataField;
@@ -24,7 +25,6 @@ use common_datavalues::TypeSerializer;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::FormatSettings;
-use common_streams::SendableDataBlockStream;
 use futures_util::StreamExt;
 use opensrv_mysql::*;
 use tracing::error;

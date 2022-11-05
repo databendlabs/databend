@@ -35,7 +35,7 @@ use databend_query::sql::plans::create_table_v2::CreateTablePlanV2;
 use databend_query::sql::Planner;
 use databend_query::storages::fuse::io::MetaReaders;
 use databend_query::storages::fuse::FuseTable;
-use databend_query::stream::DataBlockStream;
+use databend_query::stream::ReadDataBlockStream;
 use futures::TryStreamExt;
 
 use crate::storages::fuse::table_test_fixture::TestFixture;

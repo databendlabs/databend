@@ -31,7 +31,7 @@ use common_storages_fuse_result::ResultTable;
 use common_storages_fuse_result::ResultTableWriter;
 use databend_query::sessions::TableContext;
 use databend_query::storages::Table;
-use databend_query::stream::DataBlockStream;
+use databend_query::stream::ReadDataBlockStream;
 use futures::TryStreamExt;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]

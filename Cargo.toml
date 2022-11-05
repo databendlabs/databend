@@ -60,7 +60,6 @@ members = [
     "src/query/storages/stage",
     "src/query/storages/system",
     "src/query/storages/view",
-    "src/query/streams",
     "src/query/users",
     # databend-query
     "src/query/service",
