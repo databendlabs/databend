@@ -20,6 +20,7 @@ use common_catalog::table_context::TableContext;
 use common_datablocks::SortColumnDescription;
 use common_exception::Result;
 use common_pipeline_core::Pipeline;
+use common_pipeline_transforms::processors::transforms::BlockCompactor;
 use common_pipeline_transforms::processors::transforms::SortMergeCompactor;
 use common_pipeline_transforms::processors::transforms::TransformCompact;
 use common_pipeline_transforms::processors::transforms::TransformSortMerge;
@@ -82,7 +83,7 @@ impl FuseTable {
             }
         });
 
-        let block_compactor = self.get_block_compact_thresholds();
+        let block_compact_thresholds = self.get_block_compact_thresholds();
         let avg_depth_threshold = self.get_option(
             FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD,
             DEFAULT_AVG_DEPTH_THRESHOLD,
@@ -100,7 +101,7 @@ impl FuseTable {
             self.meta_location_generator.clone(),
             snapshot,
             threshold,
-            block_compactor.clone(),
+            block_compact_thresholds.clone(),
             blocks_map,
             self.operator.clone(),
         )?;
@@ -141,7 +142,7 @@ impl FuseTable {
             ctx.clone(),
             pipeline,
             mutator.level() + 1,
-            block_compactor.clone(),
+            block_compact_thresholds.clone(),
         )?;
 
         // sort
@@ -184,7 +185,7 @@ impl FuseTable {
             TransformCompact::try_create(
                 transform_input_port,
                 transform_output_port,
-                block_compactor.to_compactor(true),
+                BlockCompactor::new(block_compact_thresholds, true),
             )
         })?;
 

@@ -17,17 +17,18 @@ use std::sync::Arc;
 
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
+use common_datablocks::BlockCompactThresholds;
 use common_datablocks::SortColumnDescription;
 use common_datavalues::DataField;
 use common_exception::Result;
 use common_pipeline_core::Pipeline;
+use common_pipeline_transforms::processors::transforms::BlockCompactor;
 use common_pipeline_transforms::processors::transforms::TransformCompact;
 use common_pipeline_transforms::processors::transforms::TransformSortPartial;
 use common_sql::evaluator::ChunkOperator;
 use common_sql::evaluator::CompoundChunkOperator;
 use common_sql::evaluator::Evaluator;
 
-use crate::io::BlockCompactThresholds;
 use crate::operations::FuseTableSink;
 use crate::statistics::ClusterStatsGenerator;
 use crate::FuseTable;
@@ -44,17 +45,17 @@ impl FuseTable {
         let block_per_seg =
             self.get_option(FUSE_OPT_KEY_BLOCK_PER_SEGMENT, DEFAULT_BLOCK_PER_SEGMENT);
 
-        let block_compactor = self.get_block_compact_thresholds();
+        let block_compact_thresholds = self.get_block_compact_thresholds();
         pipeline.add_transform(|transform_input_port, transform_output_port| {
             TransformCompact::try_create(
                 transform_input_port,
                 transform_output_port,
-                block_compactor.to_compactor(false),
+                BlockCompactor::new(block_compact_thresholds, true),
             )
         })?;
 
         let cluster_stats_gen =
-            self.get_cluster_stats_gen(ctx.clone(), pipeline, 0, block_compactor)?;
+            self.get_cluster_stats_gen(ctx.clone(), pipeline, 0, block_compact_thresholds)?;
 
         let cluster_keys = self.cluster_keys();
         if !cluster_keys.is_empty() {

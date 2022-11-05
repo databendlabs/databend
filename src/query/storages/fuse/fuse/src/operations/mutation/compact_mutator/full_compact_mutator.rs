@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_datablocks::BlockCompactThresholds;
 use common_exception::Result;
 use common_storages_table_meta::caches::CacheManager;
 use common_storages_table_meta::meta::BlockMeta;
@@ -23,7 +24,6 @@ use common_storages_table_meta::meta::Statistics;
 use common_storages_table_meta::meta::Versioned;
 use opendal::Operator;
 
-use crate::io::BlockCompactThresholds;
 use crate::io::SegmentWriter;
 use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;

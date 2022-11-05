@@ -12,12 +12,11 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use common_datablocks::BlockCompactThresholds;
 use common_datablocks::DataBlock;
 use common_datavalues::DataValue;
 use common_exception::Result;
 use common_storages_table_meta::meta::ClusterStatistics;
-
-use crate::io::BlockCompactThresholds;
 
 #[derive(Clone, Default)]
 pub struct ClusterStatsGenerator {
@@ -25,7 +24,7 @@ pub struct ClusterStatsGenerator {
     cluster_key_index: Vec<usize>,
     extra_key_index: Vec<usize>,
     level: i32,
-    block_compactor: BlockCompactThresholds,
+    block_compact_thresholds: BlockCompactThresholds,
 }
 
 impl ClusterStatsGenerator {
@@ -34,14 +33,14 @@ impl ClusterStatsGenerator {
         cluster_key_index: Vec<usize>,
         extra_key_index: Vec<usize>,
         level: i32,
-        block_compactor: BlockCompactThresholds,
+        block_compact_thresholds: BlockCompactThresholds,
     ) -> Self {
         Self {
             cluster_key_id,
             cluster_key_index,
             extra_key_index,
             level,
-            block_compactor,
+            block_compact_thresholds: block_compact_thresholds,
         }
     }
 
@@ -126,7 +125,7 @@ impl ClusterStatsGenerator {
 
         let level = if min == max
             && self
-                .block_compactor
+                .block_compact_thresholds
                 .check_perfect_block(data_block.num_rows(), data_block.memory_size())
         {
             -1

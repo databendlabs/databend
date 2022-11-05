@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_catalog::table::CompactTarget;
 use common_exception::Result;
 use common_pipeline_core::Pipeline;
+use common_pipeline_transforms::processors::transforms::BlockCompactor;
 use common_pipeline_transforms::processors::transforms::TransformCompact;
 use common_planner::ReadDataSourcePlan;
 use common_planner::SourceInfo;
@@ -148,7 +149,7 @@ impl FuseTable {
             TransformCompact::try_create(
                 transform_input_port,
                 transform_output_port,
-                block_compact_thresholds.to_compactor(false),
+                BlockCompactor::new(block_compact_thresholds, false),
             )
         })?;
 

@@ -25,6 +25,7 @@ use common_catalog::table::ColumnStatisticsProvider;
 use common_catalog::table::CompactTarget;
 use common_catalog::table_context::TableContext;
 use common_catalog::table_mutator::TableMutator;
+use common_datablocks::BlockCompactThresholds;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -50,7 +51,6 @@ use common_storages_table_meta::meta::Versioned;
 use opendal::Operator;
 use uuid::Uuid;
 
-use crate::io::BlockCompactThresholds;
 use crate::io::MetaReaders;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::AppendOperationLogEntry;

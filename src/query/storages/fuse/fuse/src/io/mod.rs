@@ -33,6 +33,5 @@ pub use snapshots::SnapshotsIO;
 pub use write::write_block;
 pub use write::write_data;
 pub use write::write_meta;
-pub use write::BlockCompactThresholds;
 pub use write::BlockWriter;
 pub use write::SegmentWriter;

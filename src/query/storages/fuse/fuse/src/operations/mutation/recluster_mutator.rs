@@ -18,6 +18,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use common_datablocks::BlockCompactThresholds;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_storages_table_meta::meta::BlockMeta;
@@ -26,7 +27,6 @@ use common_storages_table_meta::meta::TableSnapshot;
 use common_storages_table_meta::meta::Versioned;
 use opendal::Operator;
 
-use crate::io::BlockCompactThresholds;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::mutation::BaseMutator;
 use crate::operations::AppendOperationLogEntry;

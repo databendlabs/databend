@@ -12,13 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_pipeline_transforms::processors::transforms::BlockCompactor as Compactor;
-
-#[derive(Clone, Default)]
+#[derive(Clone, Copy, Default)]
 pub struct BlockCompactThresholds {
-    max_rows_per_block: usize,
-    min_rows_per_block: usize,
-    max_bytes_per_block: usize,
+    pub max_rows_per_block: usize,
+    pub min_rows_per_block: usize,
+    pub max_bytes_per_block: usize,
 }
 
 impl BlockCompactThresholds {
@@ -48,14 +46,5 @@ impl BlockCompactThresholds {
             return true;
         }
         false
-    }
-
-    pub fn to_compactor(&self, is_recluster: bool) -> Compactor {
-        Compactor::new(
-            self.max_rows_per_block,
-            self.min_rows_per_block,
-            self.max_bytes_per_block,
-            is_recluster,
-        )
     }
 }
