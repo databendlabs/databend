@@ -114,3 +114,34 @@ SELECT 'Кирилл' as a, 'Müller' as b, 1.0 as c, 2 as id UNION SELECT NULL 
 NULL NULL 1.0 1
 Кирилл Müller 1.0 2
 
+statement query TI
+WITH tbl AS
+  (SELECT '12-17' AS age,
+          'a' AS device_id
+   UNION ALL SELECT '17-23' AS age,
+                    'a' AS device_id
+   UNION ALL SELECT '17-23' AS age,
+                    'b' AS device_id
+   UNION ALL SELECT '24-30' AS age,
+                    'c' AS device_id
+   UNION ALL SELECT '24-30' AS age,
+                    'd' AS device_id)
+SELECT age,
+       count(DISTINCT device_id) AS cnt
+FROM
+  (SELECT age,
+          device_id
+   FROM tbl
+   UNION ALL SELECT if(age IN ('12-17', '17-23'), '年轻', '非年轻') AS age,
+                    device_id
+   FROM tbl) AS t
+GROUP BY age
+ORDER BY age,
+         cnt;
+
+----
+12-17  1
+17-23  2
+24-30  2
+年轻  2
+非年轻  2
