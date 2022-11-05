@@ -101,13 +101,13 @@ impl FuseTable {
         pipeline: &mut Pipeline,
         options: CompactOptions,
     ) -> Result<Option<Box<dyn TableMutator>>> {
-        let block_compactor = self.get_block_compactor();
+        let block_compact_thresholds = self.get_block_compact_thresholds();
 
         let block_per_seg = options.block_per_seg;
         let mut mutator = FullCompactMutator::try_create(
             ctx.clone(),
             options,
-            block_compactor.clone(),
+            block_compact_thresholds.clone(),
             self.meta_location_generator().clone(),
             self.cluster_key_meta.is_some(),
             self.operator.clone(),
@@ -148,7 +148,7 @@ impl FuseTable {
             TransformCompact::try_create(
                 transform_input_port,
                 transform_output_port,
-                block_compactor.to_compactor(false),
+                block_compact_thresholds.to_compactor(false),
             )
         })?;
 

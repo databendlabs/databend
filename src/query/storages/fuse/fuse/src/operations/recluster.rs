@@ -82,7 +82,7 @@ impl FuseTable {
             }
         });
 
-        let block_compactor = self.get_block_compactor();
+        let block_compactor = self.get_block_compact_thresholds();
         let avg_depth_threshold = self.get_option(
             FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD,
             DEFAULT_AVG_DEPTH_THRESHOLD,

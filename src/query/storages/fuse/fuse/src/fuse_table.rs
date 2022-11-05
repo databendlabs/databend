@@ -213,7 +213,7 @@ impl FuseTable {
         self.table_info.meta.options.contains_key("TRANSIENT")
     }
 
-    pub(crate) fn get_block_compactor(&self) -> BlockCompactThresholds {
+    pub(crate) fn get_block_compact_thresholds(&self) -> BlockCompactThresholds {
         let max_rows_per_block = self.get_option(FUSE_OPT_KEY_ROW_PER_BLOCK, DEFAULT_ROW_PER_BLOCK);
         let min_rows_per_block = (max_rows_per_block as f64 * 0.8) as usize;
         let max_bytes_per_block = self.get_option(
