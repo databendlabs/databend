@@ -17,7 +17,7 @@ use common_datavalues::DataValue;
 use common_exception::Result;
 use common_storages_table_meta::meta::ClusterStatistics;
 
-use crate::io::BlockCompactor;
+use crate::io::BlockCompactThresholds;
 
 #[derive(Clone, Default)]
 pub struct ClusterStatsGenerator {
@@ -25,7 +25,7 @@ pub struct ClusterStatsGenerator {
     cluster_key_index: Vec<usize>,
     extra_key_index: Vec<usize>,
     level: i32,
-    block_compactor: BlockCompactor,
+    block_compactor: BlockCompactThresholds,
 }
 
 impl ClusterStatsGenerator {
@@ -34,7 +34,7 @@ impl ClusterStatsGenerator {
         cluster_key_index: Vec<usize>,
         extra_key_index: Vec<usize>,
         level: i32,
-        block_compactor: BlockCompactor,
+        block_compactor: BlockCompactThresholds,
     ) -> Self {
         Self {
             cluster_key_id,

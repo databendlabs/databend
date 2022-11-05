@@ -32,7 +32,7 @@ use common_storages_table_meta::meta::Statistics;
 use common_storages_table_meta::meta::TableSnapshot;
 use common_storages_table_meta::meta::Versioned;
 use databend_query::sessions::TableContext;
-use databend_query::storages::fuse::io::BlockCompactor;
+use databend_query::storages::fuse::io::BlockCompactThresholds;
 use databend_query::storages::fuse::io::SegmentWriter;
 use databend_query::storages::fuse::io::TableMetaLocationGenerator;
 use databend_query::storages::fuse::operations::ReclusterMutator;
@@ -131,7 +131,7 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
         location_generator,
         base_snapshot,
         1.0,
-        BlockCompactor::default(),
+        BlockCompactThresholds::default(),
         blocks_map,
         data_accessor,
     )?;

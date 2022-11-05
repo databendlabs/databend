@@ -27,7 +27,7 @@ use common_sql::evaluator::ChunkOperator;
 use common_sql::evaluator::CompoundChunkOperator;
 use common_sql::evaluator::Evaluator;
 
-use crate::io::BlockCompactor;
+use crate::io::BlockCompactThresholds;
 use crate::operations::FuseTableSink;
 use crate::statistics::ClusterStatsGenerator;
 use crate::FuseTable;
@@ -112,7 +112,7 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
         level: i32,
-        block_compactor: BlockCompactor,
+        block_compactor: BlockCompactThresholds,
     ) -> Result<ClusterStatsGenerator> {
         let cluster_keys = self.cluster_keys();
         if cluster_keys.is_empty() {

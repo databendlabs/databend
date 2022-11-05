@@ -50,7 +50,7 @@ use common_storages_table_meta::meta::Versioned;
 use opendal::Operator;
 use uuid::Uuid;
 
-use crate::io::BlockCompactor;
+use crate::io::BlockCompactThresholds;
 use crate::io::MetaReaders;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::AppendOperationLogEntry;
@@ -213,14 +213,14 @@ impl FuseTable {
         self.table_info.meta.options.contains_key("TRANSIENT")
     }
 
-    pub(crate) fn get_block_compactor(&self) -> BlockCompactor {
+    pub(crate) fn get_block_compactor(&self) -> BlockCompactThresholds {
         let max_rows_per_block = self.get_option(FUSE_OPT_KEY_ROW_PER_BLOCK, DEFAULT_ROW_PER_BLOCK);
         let min_rows_per_block = (max_rows_per_block as f64 * 0.8) as usize;
         let max_bytes_per_block = self.get_option(
             FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD,
             DEFAULT_BLOCK_SIZE_IN_MEM_SIZE_THRESHOLD,
         );
-        BlockCompactor::new(max_rows_per_block, min_rows_per_block, max_bytes_per_block)
+        BlockCompactThresholds::new(max_rows_per_block, min_rows_per_block, max_bytes_per_block)
     }
 }
 

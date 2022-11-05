@@ -15,19 +15,19 @@
 use common_pipeline_transforms::processors::transforms::BlockCompactor as Compactor;
 
 #[derive(Clone, Default)]
-pub struct BlockCompactor {
+pub struct BlockCompactThresholds {
     max_rows_per_block: usize,
     min_rows_per_block: usize,
     max_bytes_per_block: usize,
 }
 
-impl BlockCompactor {
+impl BlockCompactThresholds {
     pub fn new(
         max_rows_per_block: usize,
         min_rows_per_block: usize,
         max_bytes_per_block: usize,
     ) -> Self {
-        BlockCompactor {
+        BlockCompactThresholds {
             max_rows_per_block,
             min_rows_per_block,
             max_bytes_per_block,
