@@ -131,4 +131,18 @@ None.
 
 ## Future possibilities
 
-None.
+### Generate Create Table Statement from INFER
+
+It's possible to generate a `CREATE TABLE` statement from `INFER` in the future, so users can modify the statement in manully instead of by SQL.
+
+For example:
+
+```sql
+SOME MAGIC SQL
+
++--------------------------------------------------+
+| STATEMENT                                        |
+|--------------------------------------------------+
+| CREATE TABLE table_name (name VARCHAR, age INT); |
++--------------------------------------------------+
+```
