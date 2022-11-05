@@ -101,7 +101,7 @@ impl FuseTable {
             self.meta_location_generator.clone(),
             snapshot,
             threshold,
-            block_compact_thresholds.clone(),
+            block_compact_thresholds,
             blocks_map,
             self.operator.clone(),
         )?;
@@ -142,7 +142,7 @@ impl FuseTable {
             ctx.clone(),
             pipeline,
             mutator.level() + 1,
-            block_compact_thresholds.clone(),
+            block_compact_thresholds,
         )?;
 
         // sort

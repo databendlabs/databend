@@ -40,7 +40,7 @@ impl ClusterStatsGenerator {
             cluster_key_index,
             extra_key_index,
             level,
-            block_compact_thresholds: block_compact_thresholds,
+            block_compact_thresholds,
         }
     }
 

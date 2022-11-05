@@ -108,7 +108,7 @@ impl FuseTable {
         let mut mutator = FullCompactMutator::try_create(
             ctx.clone(),
             options,
-            block_compact_thresholds.clone(),
+            block_compact_thresholds,
             self.meta_location_generator().clone(),
             self.cluster_key_meta.is_some(),
             self.operator.clone(),
