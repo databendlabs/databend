@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use common_ast::ast::Engine;
 use common_catalog::catalog::CATALOG_DEFAULT;
+use common_catalog::table::AppendMode;
 use common_datablocks::assert_blocks_sorted_eq_with_name;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
@@ -296,6 +297,7 @@ impl TestFixture {
             &mut build_res,
             overwrite,
             commit,
+            AppendMode::Normal,
         )?;
 
         execute_pipeline(self.ctx.clone(), build_res)

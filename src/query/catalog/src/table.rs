@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Utc;
+use common_datablocks::BlockCompactThresholds;
 use common_datablocks::DataBlock;
 use common_datavalues::chrono;
 use common_datavalues::DataSchemaRef;
@@ -161,9 +162,10 @@ pub trait Table: Sync + Send {
         &self,
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
+        append_mode: AppendMode,
         need_output: bool,
     ) -> Result<()> {
-        let (_, _, _) = (ctx, pipeline, need_output);
+        let (_, _, _, _) = (ctx, pipeline, append_mode, need_output);
 
         Err(ErrorCode::Unimplemented(format!(
             "append_data operation for table {} is not implemented. table engine : {}",
@@ -220,6 +222,18 @@ pub trait Table: Sync + Send {
             self.name(),
             self.get_table_info().engine(),
         )))
+    }
+
+    fn get_block_compact_thresholds(&self) -> BlockCompactThresholds {
+        BlockCompactThresholds {
+            max_rows_per_block: 1000 * 1000,
+            min_rows_per_block: 800 * 1000,
+            max_bytes_per_block: 100 * 1024 * 1024,
+        }
+    }
+
+    fn set_block_compact_thresholds(&self, _thresholds: BlockCompactThresholds) {
+        unimplemented!()
     }
 
     async fn compact(
@@ -301,6 +315,13 @@ pub struct ColumnStatistics {
 pub enum CompactTarget {
     Blocks,
     Segments,
+}
+
+pub enum AppendMode {
+    // From INSERT and RECUSTER operation
+    Normal,
+    // From COPY, Streaming load peration
+    Copy,
 }
 
 pub trait ColumnStatisticsProvider {

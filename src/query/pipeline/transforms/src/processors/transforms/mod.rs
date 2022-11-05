@@ -14,6 +14,7 @@
 
 pub mod transform;
 pub mod transform_block_compact;
+pub mod transform_block_compact_no_split;
 pub mod transform_compact;
 pub mod transform_limit;
 pub mod transform_multi_sort_merge;

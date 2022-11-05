@@ -16,6 +16,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use common_base::base::GlobalIORuntime;
+use common_catalog::table::AppendMode;
 use common_datavalues::chrono::Utc;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
@@ -294,6 +295,9 @@ impl CopyInterpreterV2 {
         tracing::debug!("copy_files_to_table from source: {:?}", read_source_plan);
 
         let from_table = self.ctx.build_table_from_source_plan(&read_source_plan)?;
+        let to_table = self.ctx.get_table(catalog_name, db_name, tbl_name).await?;
+        from_table.set_block_compact_thresholds(to_table.get_block_compact_thresholds());
+
         from_table.read_partitions(self.ctx.clone(), None).await?;
         from_table.read_data(
             self.ctx.clone(),
@@ -301,9 +305,12 @@ impl CopyInterpreterV2 {
             &mut build_res.main_pipeline,
         )?;
 
-        let to_table = self.ctx.get_table(catalog_name, db_name, tbl_name).await?;
-
-        to_table.append_data(self.ctx.clone(), &mut build_res.main_pipeline, false)?;
+        to_table.append_data(
+            self.ctx.clone(),
+            &mut build_res.main_pipeline,
+            AppendMode::Copy,
+            false,
+        )?;
 
         let ctx = self.ctx.clone();
         let files = files.clone();
@@ -406,6 +413,7 @@ impl CopyInterpreterV2 {
             &mut build_res,
             false,
             true,
+            AppendMode::Normal,
         )?;
         Ok(build_res)
     }

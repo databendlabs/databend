@@ -12,35 +12,34 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_pipeline_transforms::processors::transforms::BlockCompactor as Compactor;
-
-#[derive(Clone, Default)]
-pub struct BlockCompactor {
-    max_rows_per_block: usize,
-    min_rows_per_block: usize,
-    max_bytes_per_block: usize,
+#[derive(Clone, Copy, Default, Debug)]
+pub struct BlockCompactThresholds {
+    pub max_rows_per_block: usize,
+    pub min_rows_per_block: usize,
+    pub max_bytes_per_block: usize,
 }
 
-impl BlockCompactor {
+impl BlockCompactThresholds {
     pub fn new(
         max_rows_per_block: usize,
         min_rows_per_block: usize,
         max_bytes_per_block: usize,
     ) -> Self {
-        BlockCompactor {
+        BlockCompactThresholds {
             max_rows_per_block,
             min_rows_per_block,
             max_bytes_per_block,
         }
     }
 
+    #[inline]
     pub fn check_perfect_block(&self, row_count: usize, block_size: usize) -> bool {
-        if row_count <= self.max_rows_per_block
-            && (row_count >= self.min_rows_per_block || block_size >= self.max_bytes_per_block)
-        {
-            return true;
-        }
-        false
+        row_count <= self.max_rows_per_block && self.check_large_enough(row_count, block_size)
+    }
+
+    #[inline]
+    pub fn check_large_enough(&self, row_count: usize, block_size: usize) -> bool {
+        row_count >= self.min_rows_per_block || block_size >= self.max_bytes_per_block
     }
 
     pub fn check_for_recluster(&self, total_rows: usize, total_bytes: usize) -> bool {
@@ -48,14 +47,5 @@ impl BlockCompactor {
             return true;
         }
         false
-    }
-
-    pub fn to_compactor(&self, is_recluster: bool) -> Compactor {
-        Compactor::new(
-            self.max_rows_per_block,
-            self.min_rows_per_block,
-            self.max_bytes_per_block,
-            is_recluster,
-        )
     }
 }

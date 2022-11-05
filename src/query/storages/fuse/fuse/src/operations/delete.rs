@@ -182,7 +182,7 @@ impl FuseTable {
             cluster_key_index,
             extra_key_index,
             0,
-            self.get_block_compactor(),
+            self.get_block_compact_thresholds(),
         ))
     }
 }
