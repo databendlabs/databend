@@ -2,8 +2,8 @@
 title: Infer Schema
 ---
 
-- RFC PR: [datafuselabs/databend#8519](https://github.com/datafuselabs/databend/pull/8519)
-- Tracking Issue: [datafuselabs/databend#8520](https://github.com/datafuselabs/databend/issues/8520)
+- RFC PR: [datafuselabs/databend#8645](https://github.com/datafuselabs/databend/pull/8645)
+- Tracking Issue: [datafuselabs/databend#8646](https://github.com/datafuselabs/databend/issues/8646)
 
 ## Summary
 
