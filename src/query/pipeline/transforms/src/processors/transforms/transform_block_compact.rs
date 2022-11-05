@@ -55,7 +55,7 @@ impl Compactor for BlockCompactor {
         self.aborting.store(true, Ordering::Release);
     }
 
-    fn compact_partial(&self, blocks: &mut Vec<DataBlock>) -> Result<Vec<DataBlock>> {
+    fn compact_partial(&mut self, blocks: &mut Vec<DataBlock>) -> Result<Vec<DataBlock>> {
         if blocks.is_empty() {
             return Ok(vec![]);
         }
