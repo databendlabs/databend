@@ -16,3 +16,4 @@
 
 pub mod caches;
 pub mod meta;
+pub mod table;
