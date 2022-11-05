@@ -58,7 +58,6 @@ common-settings = { path = "../settings" }
 common-sql = { path = "../sql" }
 common-storage = { path = "../../common/storage" }
 common-storages-cache = { path = "../storages/cache" }
-common-storages-constants = { path = "../storages/constants" }
 common-storages-factory = { path = "../storages/factory" }
 common-storages-fuse = { path = "../storages/fuse/fuse" }
 common-storages-fuse-result = { path = "../storages/fuse/fuse-result" }

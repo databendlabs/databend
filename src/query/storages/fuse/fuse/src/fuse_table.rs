@@ -47,6 +47,10 @@ use common_storages_table_meta::meta::ColumnStatistics as FuseColumnStatistics;
 use common_storages_table_meta::meta::Statistics as FuseStatistics;
 use common_storages_table_meta::meta::TableSnapshot;
 use common_storages_table_meta::meta::Versioned;
+use common_storages_table_meta::table::table_storage_prefix;
+use common_storages_table_meta::table::OPT_KEY_DATABASE_ID;
+use common_storages_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
+use common_storages_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use opendal::Operator;
 use uuid::Uuid;
 
@@ -55,7 +59,6 @@ use crate::io::MetaReaders;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::AppendOperationLogEntry;
 use crate::pipelines::Pipeline;
-use crate::table_storage_prefix;
 use crate::NavigationPoint;
 use crate::Table;
 use crate::TableStatistics;
@@ -64,9 +67,6 @@ use crate::DEFAULT_ROW_PER_BLOCK;
 use crate::FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD;
 use crate::FUSE_OPT_KEY_ROW_PER_BLOCK;
 use crate::FUSE_TBL_LAST_SNAPSHOT_HINT;
-use crate::OPT_KEY_DATABASE_ID;
-use crate::OPT_KEY_LEGACY_SNAPSHOT_LOC;
-use crate::OPT_KEY_SNAPSHOT_LOCATION;
 
 #[derive(Clone)]
 pub struct FuseTable {
