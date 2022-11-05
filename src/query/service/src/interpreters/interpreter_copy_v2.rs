@@ -413,6 +413,7 @@ impl CopyInterpreterV2 {
             &mut build_res,
             false,
             true,
+            AppendMode::Normal,
         )?;
         Ok(build_res)
     }
