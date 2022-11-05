@@ -30,6 +30,7 @@ use common_expression::types::number::UInt16Type;
 use common_expression::types::number::UInt32Type;
 use common_expression::types::number::UInt64Type;
 use common_expression::types::number::UInt8Type;
+use common_expression::types::string::StringDomain;
 use common_expression::types::timestamp::check_timestamp;
 use common_expression::types::timestamp::microseconds_to_days;
 use common_expression::types::timestamp::string_to_timestamp;
@@ -312,7 +313,15 @@ fn register_to_string(registry: &mut FunctionRegistry) {
     registry.register_combine_nullable_1_arg::<TimestampType, StringType, _, _>(
         "try_to_string",
         FunctionProperty::default(),
-        |_| None,
+        |_| {
+            Some(NullableDomain {
+                has_null: false,
+                value: Some(Box::new(StringDomain {
+                    min: vec![],
+                    max: None,
+                })),
+            })
+        },
         vectorize_with_builder_1_arg::<TimestampType, NullableType<StringType>>(
             |val, output, ctx| {
                 write!(output.builder.data, "{}", timestamp_to_string(val, ctx.tz)).unwrap();
@@ -326,7 +335,15 @@ fn register_to_string(registry: &mut FunctionRegistry) {
     registry.register_combine_nullable_1_arg::<DateType, StringType, _, _>(
         "try_to_string",
         FunctionProperty::default(),
-        |_| None,
+        |_| {
+            Some(NullableDomain {
+                has_null: false,
+                value: Some(Box::new(StringDomain {
+                    min: vec![],
+                    max: None,
+                })),
+            })
+        },
         vectorize_with_builder_1_arg::<DateType, NullableType<StringType>>(|val, output, ctx| {
             write!(output.builder.data, "{}", date_to_string(val, ctx.tz)).unwrap();
             output.builder.commit_row();

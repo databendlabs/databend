@@ -29,6 +29,7 @@ use crate::utils::arrow::constant_bitmap;
 use crate::values::Value;
 use crate::values::ValueRef;
 use crate::Column;
+use crate::Expr;
 use crate::Scalar;
 
 #[derive(Debug, Clone)]
@@ -117,7 +118,7 @@ impl FunctionRegistry {
         &self,
         name: &str,
         params: &[usize],
-        args_type: &[DataType],
+        args: &[Expr],
     ) -> Vec<(FunctionID, Arc<Function>)> {
         let name = name.to_lowercase();
         let name = self
@@ -135,7 +136,7 @@ impl FunctionRegistry {
                         .enumerate()
                         .filter_map(|(id, func)| {
                             if func.signature.name == name
-                                && func.signature.args_type.len() == args_type.len()
+                                && func.signature.args_type.len() == args.len()
                             {
                                 Some((
                                     FunctionID::Builtin {
@@ -157,6 +158,11 @@ impl FunctionRegistry {
             }
         }
 
+        let args_type = args
+            .iter()
+            .map(Expr::data_type)
+            .cloned()
+            .collect::<Vec<_>>();
         self.factories
             .get(name)
             .map(|factories| {
@@ -164,13 +170,13 @@ impl FunctionRegistry {
                     .iter()
                     .enumerate()
                     .filter_map(|(id, factory)| {
-                        factory(params, args_type).map(|func| {
+                        factory(params, &args_type).map(|func| {
                             (
                                 FunctionID::Factory {
                                     name: name.to_string(),
                                     id,
                                     params: params.to_vec(),
-                                    args_type: args_type.to_vec(),
+                                    args_type: args_type.clone(),
                                 },
                                 func,
                             )

@@ -138,13 +138,13 @@ evaluation:
 | Row 4  | 256       | -129       | (NULL, NULL, NULL)                             |
 +--------+-----------+------------+------------------------------------------------+
 evaluation (internal):
-+--------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-| Column | Data                                                                                                                                                                                                                                                                                                           |
-+--------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-| a      | Int16([0, 1, 2, 127, 256])                                                                                                                                                                                                                                                                                     |
-| b      | Int16([0, 1, -127, -128, -129])                                                                                                                                                                                                                                                                                |
-| Output | NullableColumn { column: Tuple { fields: [NullableColumn { column: Int8([0, 1, 2, 127, 0]), validity: [0b___01111] }, NullableColumn { column: UInt8([0, 1, 0, 0, 0]), validity: [0b___00011] }, NullableColumn { column: Boolean([0b___00000]), validity: [0b___00000] }], len: 5 }, validity: [0b___11111] } |
-+--------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
++--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                                                                                                        |
++--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| a      | Int16([0, 1, 2, 127, 256])                                                                                                                                                                                                                                  |
+| b      | Int16([0, 1, -127, -128, -129])                                                                                                                                                                                                                             |
+| Output | Tuple { fields: [NullableColumn { column: Int8([0, 1, 2, 127, 0]), validity: [0b___01111] }, NullableColumn { column: UInt8([0, 1, 0, 0, 0]), validity: [0b___00011] }, NullableColumn { column: Boolean([0b___00000]), validity: [0b___00000] }], len: 5 } |
++--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 
 ast            : CAST(a AS INT16)
@@ -303,7 +303,7 @@ output         : true
 
 ast            : CAST(CAST('🍦 が美味しい' AS VARIANT) AS VARIANT)
 raw expr       : CAST(CAST("🍦 が美味しい" AS Variant) AS Variant)
-checked expr   : CAST(CAST("🍦 が美味しい" AS Variant) AS Variant)
+checked expr   : CAST("🍦 が美味しい" AS Variant)
 optimized expr : 0x2000000010000014f09f8da620e3818ce7be8ee591b3e38197e38184
 output type    : Variant
 output domain  : Undefined
@@ -380,10 +380,10 @@ evaluation (internal):
 ast            : TRY_CAST(NULL AS VARIANT)
 raw expr       : TRY_CAST(NULL AS Variant)
 checked expr   : TRY_CAST(NULL AS Variant NULL)
-optimized expr : 0x2000000000000000
+optimized expr : NULL
 output type    : Variant NULL
-output domain  : Undefined
-output         : null
+output domain  : {NULL}
+output         : NULL
 
 
 ast            : TRY_CAST(0 AS VARIANT)
@@ -469,7 +469,7 @@ output         : true
 
 ast            : TRY_CAST(TRY_CAST('🍦 が美味しい' AS VARIANT) AS VARIANT)
 raw expr       : TRY_CAST(TRY_CAST("🍦 が美味しい" AS Variant) AS Variant)
-checked expr   : TRY_CAST(TRY_CAST("🍦 が美味しい" AS Variant NULL) AS Variant NULL)
+checked expr   : TRY_CAST("🍦 が美味しい" AS Variant NULL)
 optimized expr : 0x2000000010000014f09f8da620e3818ce7be8ee591b3e38197e38184
 output type    : Variant NULL
 output domain  : Undefined
@@ -507,8 +507,8 @@ error:
 
 
 ast            : CAST(-315360000000000 AS TIMESTAMP)
-raw expr       : to_timestamp(minus(315360000000000_u64))
-checked expr   : to_timestamp<Int64>(minus<UInt64>(315360000000000_u64))
+raw expr       : CAST(minus(315360000000000_u64) AS Timestamp)
+checked expr   : CAST(minus<UInt64>(315360000000000_u64) AS Timestamp)
 optimized expr : -315360000000000
 output type    : Timestamp
 output domain  : {-315360000000000..=-315360000000000}
@@ -516,8 +516,8 @@ output         : 1960-01-04 00:00:00.000000
 
 
 ast            : CAST(-315360000000 AS TIMESTAMP)
-raw expr       : to_timestamp(minus(315360000000_u64))
-checked expr   : to_timestamp<Int64>(minus<UInt64>(315360000000_u64))
+raw expr       : CAST(minus(315360000000_u64) AS Timestamp)
+checked expr   : CAST(minus<UInt64>(315360000000_u64) AS Timestamp)
 optimized expr : -315360000000000
 output type    : Timestamp
 output domain  : {-315360000000000..=-315360000000000}
@@ -525,8 +525,8 @@ output         : 1960-01-04 00:00:00.000000
 
 
 ast            : CAST(-100 AS TIMESTAMP)
-raw expr       : to_timestamp(minus(100_u8))
-checked expr   : to_timestamp<Int64>(CAST(minus<UInt8>(100_u8) AS Int64))
+raw expr       : CAST(minus(100_u8) AS Timestamp)
+checked expr   : CAST(minus<UInt8>(100_u8) AS Timestamp)
 optimized expr : -100000000
 output type    : Timestamp
 output domain  : {-100000000..=-100000000}
@@ -534,8 +534,8 @@ output         : 1969-12-31 23:58:20.000000
 
 
 ast            : CAST(-0 AS TIMESTAMP)
-raw expr       : to_timestamp(minus(0_u8))
-checked expr   : to_timestamp<Int64>(CAST(minus<UInt8>(0_u8) AS Int64))
+raw expr       : CAST(minus(0_u8) AS Timestamp)
+checked expr   : CAST(minus<UInt8>(0_u8) AS Timestamp)
 optimized expr : 0
 output type    : Timestamp
 output domain  : {0..=0}
@@ -543,8 +543,8 @@ output         : 1970-01-01 00:00:00.000000
 
 
 ast            : CAST(0 AS TIMESTAMP)
-raw expr       : to_timestamp(0_u8)
-checked expr   : to_timestamp<Int64>(CAST(0_u8 AS Int64))
+raw expr       : CAST(0_u8 AS Timestamp)
+checked expr   : CAST(0_u8 AS Timestamp)
 optimized expr : 0
 output type    : Timestamp
 output domain  : {0..=0}
@@ -552,8 +552,8 @@ output         : 1970-01-01 00:00:00.000000
 
 
 ast            : CAST(100 AS TIMESTAMP)
-raw expr       : to_timestamp(100_u8)
-checked expr   : to_timestamp<Int64>(CAST(100_u8 AS Int64))
+raw expr       : CAST(100_u8 AS Timestamp)
+checked expr   : CAST(100_u8 AS Timestamp)
 optimized expr : 100000000
 output type    : Timestamp
 output domain  : {100000000..=100000000}
@@ -561,8 +561,8 @@ output         : 1970-01-01 00:01:40.000000
 
 
 ast            : CAST(315360000000 AS TIMESTAMP)
-raw expr       : to_timestamp(315360000000_u64)
-checked expr   : to_timestamp<Int64>(CAST(315360000000_u64 AS Int64))
+raw expr       : CAST(315360000000_u64 AS Timestamp)
+checked expr   : CAST(315360000000_u64 AS Timestamp)
 optimized expr : 315360000000000
 output type    : Timestamp
 output domain  : {315360000000000..=315360000000000}
@@ -570,8 +570,8 @@ output         : 1979-12-30 00:00:00.000000
 
 
 ast            : CAST(315360000000000 AS TIMESTAMP)
-raw expr       : to_timestamp(315360000000000_u64)
-checked expr   : to_timestamp<Int64>(CAST(315360000000000_u64 AS Int64))
+raw expr       : CAST(315360000000000_u64 AS Timestamp)
+checked expr   : CAST(315360000000000_u64 AS Timestamp)
 optimized expr : 315360000000000
 output type    : Timestamp
 output domain  : {315360000000000..=315360000000000}
@@ -587,8 +587,8 @@ error:
 
 
 ast            : CAST(a AS TIMESTAMP)
-raw expr       : to_timestamp(ColumnRef(0)::Int64)
-checked expr   : to_timestamp<Int64>(ColumnRef(0))
+raw expr       : CAST(ColumnRef(0)::Int64 AS Timestamp)
+checked expr   : CAST(ColumnRef(0) AS Timestamp)
 evaluation:
 +--------+--------------------------------------+--------------------------------------+
 |        | a                                    | Output                               |
@@ -613,8 +613,8 @@ evaluation (internal):
 
 
 ast            : TRY_CAST(-30610224000000001 AS TIMESTAMP)
-raw expr       : try_to_timestamp(minus(30610224000000001_u64))
-checked expr   : try_to_timestamp<Int64 NULL>(CAST(minus<UInt64>(30610224000000001_u64) AS Int64 NULL))
+raw expr       : TRY_CAST(minus(30610224000000001_u64) AS Timestamp)
+checked expr   : TRY_CAST(minus<UInt64>(30610224000000001_u64) AS Timestamp NULL)
 optimized expr : NULL
 output type    : Timestamp NULL
 output domain  : Unknown
@@ -622,8 +622,8 @@ output         : NULL
 
 
 ast            : TRY_CAST(253402300800000000 AS TIMESTAMP)
-raw expr       : try_to_timestamp(253402300800000000_u64)
-checked expr   : try_to_timestamp<Int64 NULL>(CAST(253402300800000000_u64 AS Int64 NULL))
+raw expr       : TRY_CAST(253402300800000000_u64 AS Timestamp)
+checked expr   : TRY_CAST(253402300800000000_u64 AS Timestamp NULL)
 optimized expr : NULL
 output type    : Timestamp NULL
 output domain  : Unknown
@@ -631,8 +631,8 @@ output         : NULL
 
 
 ast            : TRY_CAST(a AS TIMESTAMP)
-raw expr       : try_to_timestamp(ColumnRef(0)::Int64)
-checked expr   : try_to_timestamp<Int64 NULL>(CAST(ColumnRef(0) AS Int64 NULL))
+raw expr       : TRY_CAST(ColumnRef(0)::Int64 AS Timestamp)
+checked expr   : TRY_CAST(ColumnRef(0) AS Timestamp NULL)
 evaluation:
 +--------+-------------------------------------------+----------------------------+
 |        | a                                         | Output                     |
@@ -761,8 +761,8 @@ error:
 
 
 ast            : CAST(-354285 AS DATE)
-raw expr       : to_date(minus(354285_u32))
-checked expr   : to_date<Int64>(minus<UInt32>(354285_u32))
+raw expr       : CAST(minus(354285_u32) AS Date)
+checked expr   : CAST(minus<UInt32>(354285_u32) AS Date)
 optimized expr : -354285
 output type    : Date
 output domain  : {-354285..=-354285}
@@ -770,8 +770,8 @@ output         : 1000-01-01
 
 
 ast            : CAST(-100 AS DATE)
-raw expr       : to_date(minus(100_u8))
-checked expr   : to_date<Int64>(CAST(minus<UInt8>(100_u8) AS Int64))
+raw expr       : CAST(minus(100_u8) AS Date)
+checked expr   : CAST(minus<UInt8>(100_u8) AS Date)
 optimized expr : -100
 output type    : Date
 output domain  : {-100..=-100}
@@ -779,8 +779,8 @@ output         : 1969-09-23
 
 
 ast            : CAST(-0 AS DATE)
-raw expr       : to_date(minus(0_u8))
-checked expr   : to_date<Int64>(CAST(minus<UInt8>(0_u8) AS Int64))
+raw expr       : CAST(minus(0_u8) AS Date)
+checked expr   : CAST(minus<UInt8>(0_u8) AS Date)
 optimized expr : 0
 output type    : Date
 output domain  : {0..=0}
@@ -788,8 +788,8 @@ output         : 1970-01-01
 
 
 ast            : CAST(0 AS DATE)
-raw expr       : to_date(0_u8)
-checked expr   : to_date<Int64>(CAST(0_u8 AS Int64))
+raw expr       : CAST(0_u8 AS Date)
+checked expr   : CAST(0_u8 AS Date)
 optimized expr : 0
 output type    : Date
 output domain  : {0..=0}
@@ -797,8 +797,8 @@ output         : 1970-01-01
 
 
 ast            : CAST(100 AS DATE)
-raw expr       : to_date(100_u8)
-checked expr   : to_date<Int64>(CAST(100_u8 AS Int64))
+raw expr       : CAST(100_u8 AS Date)
+checked expr   : CAST(100_u8 AS Date)
 optimized expr : 100
 output type    : Date
 output domain  : {100..=100}
@@ -806,8 +806,8 @@ output         : 1970-04-11
 
 
 ast            : CAST(2932896 AS DATE)
-raw expr       : to_date(2932896_u32)
-checked expr   : to_date<Int64>(CAST(2932896_u32 AS Int64))
+raw expr       : CAST(2932896_u32 AS Date)
+checked expr   : CAST(2932896_u32 AS Date)
 optimized expr : 2932896
 output type    : Date
 output domain  : {2932896..=2932896}
@@ -823,8 +823,8 @@ error:
 
 
 ast            : CAST(a AS DATE)
-raw expr       : to_date(ColumnRef(0)::Int32)
-checked expr   : to_date<Int64>(CAST(ColumnRef(0) AS Int64))
+raw expr       : CAST(ColumnRef(0)::Int32 AS Date)
+checked expr   : CAST(ColumnRef(0) AS Date)
 evaluation:
 +--------+---------------------+---------------------+
 |        | a                   | Output              |
@@ -847,8 +847,8 @@ evaluation (internal):
 
 
 ast            : TRY_CAST(-354286 AS DATE)
-raw expr       : try_to_date(minus(354286_u32))
-checked expr   : try_to_date<Int64 NULL>(CAST(minus<UInt32>(354286_u32) AS Int64 NULL))
+raw expr       : TRY_CAST(minus(354286_u32) AS Date)
+checked expr   : TRY_CAST(minus<UInt32>(354286_u32) AS Date NULL)
 optimized expr : NULL
 output type    : Date NULL
 output domain  : Unknown
@@ -856,8 +856,8 @@ output         : NULL
 
 
 ast            : TRY_CAST(2932897 AS DATE)
-raw expr       : try_to_date(2932897_u32)
-checked expr   : try_to_date<Int64 NULL>(CAST(2932897_u32 AS Int64 NULL))
+raw expr       : TRY_CAST(2932897_u32 AS Date)
+checked expr   : TRY_CAST(2932897_u32 AS Date NULL)
 optimized expr : NULL
 output type    : Date NULL
 output domain  : Unknown
@@ -865,8 +865,8 @@ output         : NULL
 
 
 ast            : TRY_CAST(a AS DATE)
-raw expr       : try_to_date(ColumnRef(0)::Int32)
-checked expr   : try_to_date<Int64 NULL>(CAST(ColumnRef(0) AS Int64 NULL))
+raw expr       : TRY_CAST(ColumnRef(0)::Int32 AS Date)
+checked expr   : TRY_CAST(ColumnRef(0) AS Date NULL)
 evaluation:
 +--------+---------------------+------------+
 |        | a                   | Output     |
@@ -888,68 +888,68 @@ evaluation (internal):
 +--------+-------------------------------------------------------------------------+
 
 
-ast            : CAST(TO_DATE(-354285) AS INT32)
-raw expr       : CAST(TO_DATE(minus(354285_u32)) AS Int32)
-checked expr   : CAST(to_date<Int64>(minus<UInt32>(354285_u32)) AS Int32)
-optimized expr : -354285_i32
-output type    : Int32
+ast            : CAST(TO_DATE(-354285) AS INT64)
+raw expr       : CAST(TO_DATE(minus(354285_u32)) AS Int64)
+checked expr   : CAST(to_date<Int64>(minus<UInt32>(354285_u32)) AS Int64)
+optimized expr : -354285_i64
+output type    : Int64
 output domain  : {-354285..=-354285}
 output         : -354285
 
 
-ast            : CAST(TO_DATE(-100) AS INT32)
-raw expr       : CAST(TO_DATE(minus(100_u8)) AS Int32)
-checked expr   : CAST(to_date<Int64>(CAST(minus<UInt8>(100_u8) AS Int64)) AS Int32)
-optimized expr : -100_i32
-output type    : Int32
+ast            : CAST(TO_DATE(-100) AS INT64)
+raw expr       : CAST(TO_DATE(minus(100_u8)) AS Int64)
+checked expr   : CAST(to_date<Int64>(CAST(minus<UInt8>(100_u8) AS Int64)) AS Int64)
+optimized expr : -100_i64
+output type    : Int64
 output domain  : {-100..=-100}
 output         : -100
 
 
-ast            : CAST(TO_DATE(-0) AS INT32)
-raw expr       : CAST(TO_DATE(minus(0_u8)) AS Int32)
-checked expr   : CAST(to_date<Int64>(CAST(minus<UInt8>(0_u8) AS Int64)) AS Int32)
-optimized expr : 0_i32
-output type    : Int32
+ast            : CAST(TO_DATE(-0) AS INT64)
+raw expr       : CAST(TO_DATE(minus(0_u8)) AS Int64)
+checked expr   : CAST(to_date<Int64>(CAST(minus<UInt8>(0_u8) AS Int64)) AS Int64)
+optimized expr : 0_i64
+output type    : Int64
 output domain  : {0..=0}
 output         : 0
 
 
-ast            : CAST(TO_DATE(0) AS INT32)
-raw expr       : CAST(TO_DATE(0_u8) AS Int32)
-checked expr   : CAST(to_date<Int64>(CAST(0_u8 AS Int64)) AS Int32)
-optimized expr : 0_i32
-output type    : Int32
+ast            : CAST(TO_DATE(0) AS INT64)
+raw expr       : CAST(TO_DATE(0_u8) AS Int64)
+checked expr   : CAST(to_date<Int64>(CAST(0_u8 AS Int64)) AS Int64)
+optimized expr : 0_i64
+output type    : Int64
 output domain  : {0..=0}
 output         : 0
 
 
-ast            : CAST(TO_DATE(100) AS INT32)
-raw expr       : CAST(TO_DATE(100_u8) AS Int32)
-checked expr   : CAST(to_date<Int64>(CAST(100_u8 AS Int64)) AS Int32)
-optimized expr : 100_i32
-output type    : Int32
+ast            : CAST(TO_DATE(100) AS INT64)
+raw expr       : CAST(TO_DATE(100_u8) AS Int64)
+checked expr   : CAST(to_date<Int64>(CAST(100_u8 AS Int64)) AS Int64)
+optimized expr : 100_i64
+output type    : Int64
 output domain  : {100..=100}
 output         : 100
 
 
-ast            : CAST(TO_DATE(2932896) AS INT32)
-raw expr       : CAST(TO_DATE(2932896_u32) AS Int32)
-checked expr   : CAST(to_date<Int64>(CAST(2932896_u32 AS Int64)) AS Int32)
-optimized expr : 2932896_i32
-output type    : Int32
+ast            : CAST(TO_DATE(2932896) AS INT64)
+raw expr       : CAST(TO_DATE(2932896_u32) AS Int64)
+checked expr   : CAST(to_date<Int64>(CAST(2932896_u32 AS Int64)) AS Int64)
+optimized expr : 2932896_i64
+output type    : Int64
 output domain  : {2932896..=2932896}
 output         : 2932896
 
 
-ast            : CAST(a AS INT32)
-raw expr       : CAST(ColumnRef(0)::Date AS Int32)
-checked expr   : CAST(ColumnRef(0) AS Int32)
+ast            : CAST(a AS INT64)
+raw expr       : CAST(ColumnRef(0)::Date AS Int64)
+checked expr   : CAST(ColumnRef(0) AS Int64)
 evaluation:
 +--------+---------------------+---------------------+
 |        | a                   | Output              |
 +--------+---------------------+---------------------+
-| Type   | Date                | Int32               |
+| Type   | Date                | Int64               |
 | Domain | {-354285..=2932896} | {-354285..=2932896} |
 | Row 0  | 1000-01-01          | -354285             |
 | Row 1  | 1969-09-23          | -100                |
@@ -962,13 +962,13 @@ evaluation (internal):
 | Column | Data                                    |
 +--------+-----------------------------------------+
 | a      | [-354285, -100, 0, 100, 2932896]        |
-| Output | Int32([-354285, -100, 0, 100, 2932896]) |
+| Output | Int64([-354285, -100, 0, 100, 2932896]) |
 +--------+-----------------------------------------+
 
 
 ast            : CAST(TO_DATE(1) AS TIMESTAMP)
-raw expr       : to_timestamp(TO_DATE(1_u8))
-checked expr   : to_timestamp<Date>(to_date<Int64>(CAST(1_u8 AS Int64)))
+raw expr       : CAST(TO_DATE(1_u8) AS Timestamp)
+checked expr   : CAST(to_date<Int64>(CAST(1_u8 AS Int64)) AS Timestamp)
 optimized expr : 86400000000
 output type    : Timestamp
 output domain  : {86400000000..=86400000000}
@@ -976,8 +976,8 @@ output         : 1970-01-02 00:00:00.000000
 
 
 ast            : CAST(TO_TIMESTAMP(1) AS DATE)
-raw expr       : to_date(TO_TIMESTAMP(1_u8))
-checked expr   : to_date<Timestamp>(to_timestamp<Int64>(CAST(1_u8 AS Int64)))
+raw expr       : CAST(TO_TIMESTAMP(1_u8) AS Date)
+checked expr   : CAST(to_timestamp<Int64>(CAST(1_u8 AS Int64)) AS Date)
 optimized expr : 0
 output type    : Date
 output domain  : {0..=0}
@@ -985,8 +985,8 @@ output         : 1970-01-01
 
 
 ast            : CAST(a AS DATE)
-raw expr       : to_date(ColumnRef(0)::Timestamp)
-checked expr   : to_date<Timestamp>(ColumnRef(0))
+raw expr       : CAST(ColumnRef(0)::Timestamp AS Date)
+checked expr   : CAST(ColumnRef(0) AS Date)
 evaluation:
 +--------+--------------------------------------+----------------+
 |        | a                                    | Output         |
@@ -1011,8 +1011,8 @@ evaluation (internal):
 
 
 ast            : CAST(a AS TIMESTAMP)
-raw expr       : to_timestamp(ColumnRef(0)::Date)
-checked expr   : to_timestamp<Date>(ColumnRef(0))
+raw expr       : CAST(ColumnRef(0)::Date AS Timestamp)
+checked expr   : CAST(ColumnRef(0) AS Timestamp)
 evaluation:
 +--------+---------------------+-------------------------------------------+
 |        | a                   | Output                                    |
@@ -1035,8 +1035,8 @@ evaluation (internal):
 
 
 ast            : CAST(TO_DATE(a) AS TIMESTAMP)
-raw expr       : to_timestamp(TO_DATE(ColumnRef(0)::Int32))
-checked expr   : to_timestamp<Date>(to_date<Int64>(CAST(ColumnRef(0) AS Int64)))
+raw expr       : CAST(TO_DATE(ColumnRef(0)::Int32) AS Timestamp)
+checked expr   : CAST(to_date<Int64>(CAST(ColumnRef(0) AS Int64)) AS Timestamp)
 evaluation:
 +--------+---------------------+-------------------------------------------+
 |        | a                   | Output                                    |
@@ -1161,8 +1161,8 @@ evaluation (internal):
 
 
 ast            : TRY_CAST(a as TIMESTAMP)
-raw expr       : try_to_timestamp(ColumnRef(0)::String)
-checked expr   : try_to_timestamp<String NULL>(CAST(ColumnRef(0) AS String NULL))
+raw expr       : TRY_CAST(ColumnRef(0)::String AS Timestamp)
+checked expr   : TRY_CAST(ColumnRef(0) AS Timestamp NULL)
 evaluation:
 +--------+------------------------------------+----------------------------+
 |        | a                                  | Output                     |
@@ -1388,8 +1388,8 @@ evaluation (internal):
 
 
 ast            : TRY_CAST(a as DATE)
-raw expr       : try_to_date(ColumnRef(0)::String)
-checked expr   : try_to_date<String NULL>(CAST(ColumnRef(0) AS String NULL))
+raw expr       : TRY_CAST(ColumnRef(0)::String AS Date)
+checked expr   : TRY_CAST(ColumnRef(0) AS Date NULL)
 evaluation:
 +--------+------------------------------------+------------+
 |        | a                                  | Output     |
