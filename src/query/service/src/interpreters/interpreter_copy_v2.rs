@@ -16,6 +16,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use common_base::base::GlobalIORuntime;
+use common_catalog::table::AppendMode;
 use common_datavalues::chrono::Utc;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
@@ -304,7 +305,12 @@ impl CopyInterpreterV2 {
             &mut build_res.main_pipeline,
         )?;
 
-        to_table.append_data(self.ctx.clone(), &mut build_res.main_pipeline, false, true)?;
+        to_table.append_data(
+            self.ctx.clone(),
+            &mut build_res.main_pipeline,
+            AppendMode::Copy,
+            false,
+        )?;
 
         let ctx = self.ctx.clone();
         let files = files.clone();

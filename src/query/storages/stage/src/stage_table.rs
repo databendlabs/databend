@@ -17,6 +17,7 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 
 use common_base::base::uuid;
+use common_catalog::table::AppendMode;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_datablocks::BlockCompactThresholds;
@@ -144,7 +145,7 @@ impl Table for StageTable {
         &self,
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
-        _: bool,
+        _: AppendMode,
         _: bool,
     ) -> Result<()> {
         let single = self.table_info.stage_info.copy_options.single;

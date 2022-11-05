@@ -15,6 +15,7 @@
 use std::str::FromStr;
 use std::sync::Arc;
 
+use common_catalog::table::AppendMode;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_datablocks::BlockCompactThresholds;
@@ -41,33 +42,37 @@ impl FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
+        append_mode: AppendMode,
         need_output: bool,
-        is_ingest: bool,
     ) -> Result<()> {
         let block_per_seg =
             self.get_option(FUSE_OPT_KEY_BLOCK_PER_SEGMENT, DEFAULT_BLOCK_PER_SEGMENT);
 
         let block_compact_thresholds = self.get_block_compact_thresholds();
-        if is_ingest {
-            let size = pipeline.output_len();
-            pipeline.resize(1)?;
-            pipeline.add_transform(|transform_input_port, transform_output_port| {
-                TransformCompact::try_create(
-                    transform_input_port,
-                    transform_output_port,
-                    BlockCompactorNoSplit::new(block_compact_thresholds),
-                )
-            })?;
-            pipeline.resize(size)?;
-        } else {
-            pipeline.add_transform(|transform_input_port, transform_output_port| {
-                TransformCompact::try_create(
-                    transform_input_port,
-                    transform_output_port,
-                    BlockCompactor::new(block_compact_thresholds, true),
-                )
-            })?;
+        match append_mode {
+            AppendMode::Normal => {
+                pipeline.add_transform(|transform_input_port, transform_output_port| {
+                    TransformCompact::try_create(
+                        transform_input_port,
+                        transform_output_port,
+                        BlockCompactor::new(block_compact_thresholds, true),
+                    )
+                })?;
+            }
+            AppendMode::Copy => {
+                let size = pipeline.output_len();
+                pipeline.resize(1)?;
+                pipeline.add_transform(|transform_input_port, transform_output_port| {
+                    TransformCompact::try_create(
+                        transform_input_port,
+                        transform_output_port,
+                        BlockCompactorNoSplit::new(block_compact_thresholds),
+                    )
+                })?;
+                pipeline.resize(size)?;
+            }
         }
+
         let cluster_stats_gen =
             self.get_cluster_stats_gen(ctx.clone(), pipeline, 0, block_compact_thresholds)?;
 

@@ -19,6 +19,7 @@ use std::str;
 use std::sync::Arc;
 
 use common_catalog::catalog::StorageDescription;
+use common_catalog::table::AppendMode;
 use common_catalog::table::ColumnId;
 use common_catalog::table::ColumnStatistics;
 use common_catalog::table::ColumnStatisticsProvider;
@@ -364,11 +365,11 @@ impl Table for FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
+        append_mode: AppendMode,
         need_output: bool,
-        is_ingest: bool,
     ) -> Result<()> {
         self.check_mutable()?;
-        self.do_append_data(ctx, pipeline, need_output, is_ingest)
+        self.do_append_data(ctx, pipeline, append_mode, need_output)
     }
 
     #[tracing::instrument(level = "debug", name = "fuse_table_commit_insertion", skip(self, ctx, operations), fields(ctx.id = ctx.get_id().as_str()))]

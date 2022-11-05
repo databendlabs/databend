@@ -162,10 +162,10 @@ pub trait Table: Sync + Send {
         &self,
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
+        append_mode: AppendMode,
         need_output: bool,
-        _is_ingest: bool,
     ) -> Result<()> {
-        let (_, _, _) = (ctx, pipeline, need_output);
+        let (_, _, _, _) = (ctx, pipeline, append_mode, need_output);
 
         Err(ErrorCode::Unimplemented(format!(
             "append_data operation for table {} is not implemented. table engine : {}",
@@ -315,6 +315,13 @@ pub struct ColumnStatistics {
 pub enum CompactTarget {
     Blocks,
     Segments,
+}
+
+pub enum AppendMode {
+    // From INSERT and RECUSTER operation
+    Normal,
+    // From COPY, Streaming load peration
+    Copy,
 }
 
 pub trait ColumnStatisticsProvider {

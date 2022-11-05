@@ -18,6 +18,7 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 
 use common_catalog::catalog::StorageDescription;
+use common_catalog::table::AppendMode;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
@@ -226,7 +227,7 @@ impl Table for MemoryTable {
         &self,
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
-        _: bool,
+        _: AppendMode,
         _: bool,
     ) -> Result<()> {
         pipeline.add_sink(|input| Ok(ContextSink::create(input, ctx.clone())))
