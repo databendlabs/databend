@@ -35,9 +35,14 @@ impl BlockCompactor {
     }
 
     pub fn check_perfect_block(&self, row_count: usize, block_size: usize) -> bool {
-        if row_count <= self.max_rows_per_block
-            && (row_count >= self.min_rows_per_block || block_size >= self.max_bytes_per_block)
-        {
+        if row_count >= self.min_rows_per_block || block_size >= self.max_bytes_per_block {
+            return true;
+        }
+        false
+    }
+
+    pub fn check_for_compact(&self, row_count: usize, block_size: usize) -> bool {
+        if row_count < 2 * self.min_rows_per_block && block_size < 2 * self.max_bytes_per_block {
             return true;
         }
         false

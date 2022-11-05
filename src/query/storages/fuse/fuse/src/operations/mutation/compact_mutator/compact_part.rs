@@ -11,12 +11,4 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//
 
-mod block_compact_mutator;
-mod full_compact_mutator;
-mod segment_compact_mutator;
-mod compact_part;
-
-pub use full_compact_mutator::FullCompactMutator;
-pub use segment_compact_mutator::SegmentCompactMutator;
