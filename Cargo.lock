@@ -2066,7 +2066,7 @@ dependencies = [
  "common-storages-null",
  "common-storages-random",
  "common-storages-view",
- "parking_lot 0.12.1",
+ "dashmap",
 ]
 
 [[package]]
@@ -3095,6 +3095,7 @@ dependencies = [
  "common-tracing",
  "common-users",
  "criterion",
+ "dashmap",
  "futures",
  "futures-util",
  "goldenfile",

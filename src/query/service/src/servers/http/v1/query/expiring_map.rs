@@ -13,14 +13,13 @@
 // limitations under the License.
 
 use std::borrow::Borrow;
-use std::collections::HashMap;
 use std::hash::Hash;
 use std::sync::Arc;
 use std::time::Duration;
 
 use common_base::base::tokio::task;
 use common_base::base::tokio::time::sleep;
-use parking_lot::RwLock;
+use dashmap::DashMap;
 
 use crate::servers::http::v1::query::expirable::Expirable;
 use crate::servers::http::v1::query::expirable::ExpiringState;
@@ -55,7 +54,7 @@ where V: Expirable
 pub struct ExpiringMap<K, V>
 where V: Expirable
 {
-    map: Arc<RwLock<HashMap<K, MaybeExpiring<V>>>>,
+    map: Arc<DashMap<K, MaybeExpiring<V>>>,
 }
 
 async fn run_check<T: Expirable>(e: &T, max_idle: Duration) -> bool {
@@ -76,11 +75,13 @@ async fn run_check<T: Expirable>(e: &T, max_idle: Duration) -> bool {
 }
 
 impl<K, V> Default for ExpiringMap<K, V>
-where V: Expirable
+where
+    K: Eq + Hash + Clone + Send + Sync + 'static,
+    V: Expirable,
 {
     fn default() -> Self {
         Self {
-            map: Arc::new(RwLock::new(HashMap::default())),
+            map: Arc::new(DashMap::new()),
         }
     }
 }
@@ -95,7 +96,6 @@ where
         K: Clone + Send + Sync + 'static,
         V: Send + Sync + 'static,
     {
-        let mut map = self.map.write();
         let task = match max_idle_time {
             Some(d) => {
                 let map_clone = self.map.clone();
@@ -111,7 +111,7 @@ where
             None => None,
         };
         let i = MaybeExpiring { task, value: v };
-        map.insert(k, i);
+        self.map.insert(k, i);
     }
 
     pub fn get<Q: ?Sized>(&self, k: &Q) -> Option<V>
@@ -119,8 +119,7 @@ where
         K: Borrow<Q>,
         Q: Hash + Eq,
     {
-        let map = self.map.read();
-        map.get(k).map(|i| &i.value).cloned()
+        self.map.get(k).map(|i| i.value().value.clone())
     }
 
     pub fn remove<Q: ?Sized>(&mut self, k: &Q)
@@ -131,16 +130,13 @@ where
         Self::remove_inner(&self.map, k)
     }
 
-    fn remove_inner<Q: ?Sized>(map: &Arc<RwLock<HashMap<K, MaybeExpiring<V>>>>, k: &Q)
+    fn remove_inner<Q: ?Sized>(map: &Arc<DashMap<K, MaybeExpiring<V>>>, k: &Q)
     where
         K: Borrow<Q>,
         Q: Hash + Eq,
     {
-        let checker = {
-            let mut map = map.write();
-            map.remove(k)
-        };
-        if let Some(mut checker) = checker {
+        let checker = { map.remove(k) };
+        if let Some((_, mut checker)) = checker {
             checker.on_expire()
         }
     }
