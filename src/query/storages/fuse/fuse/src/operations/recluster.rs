@@ -15,7 +15,7 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use common_catalog::plan::Extras;
+use common_catalog::plan::PushDownInfo;
 use common_catalog::plan::ReadDataSourcePlan;
 use common_catalog::plan::SourceInfo;
 use common_catalog::table::Table;
@@ -45,7 +45,7 @@ impl FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
-        push_downs: Option<Extras>,
+        push_downs: Option<PushDownInfo>,
     ) -> Result<Option<Box<dyn TableMutator>>> {
         if self.cluster_key_meta.is_none() {
             return Ok(None);

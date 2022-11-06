@@ -16,11 +16,11 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
-use common_catalog::plan::Extras;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::Projection;
+use common_catalog::plan::PushDownInfo;
 use common_catalog::table_context::TableContext;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
@@ -44,7 +44,7 @@ impl FuseTable {
     pub async fn do_read_partitions(
         &self,
         ctx: Arc<dyn TableContext>,
-        push_downs: Option<Extras>,
+        push_downs: Option<PushDownInfo>,
     ) -> Result<(PartStatistics, Partitions)> {
         debug!("fuse table do read partitions, push downs:{:?}", push_downs);
 
@@ -97,7 +97,7 @@ impl FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
         dal: Operator,
-        push_downs: Option<Extras>,
+        push_downs: Option<PushDownInfo>,
         table_info: TableInfo,
         segments_location: Vec<Location>,
         summary: usize,
@@ -133,7 +133,7 @@ impl FuseTable {
         &self,
         _: Arc<dyn TableContext>,
         schema: DataSchemaRef,
-        push_downs: Option<Extras>,
+        push_downs: Option<PushDownInfo>,
         block_metas: Vec<Arc<BlockMeta>>,
         partitions_total: usize,
     ) -> Result<(PartStatistics, Partitions)> {
@@ -160,7 +160,7 @@ impl FuseTable {
     pub fn to_partitions(
         blocks_metas: &[Arc<BlockMeta>],
         column_leaves: &ColumnLeaves,
-        push_down: Option<Extras>,
+        push_down: Option<PushDownInfo>,
     ) -> (PartStatistics, Partitions) {
         let limit = push_down
             .as_ref()
@@ -182,7 +182,7 @@ impl FuseTable {
         (statistics, partitions)
     }
 
-    fn is_exact(push_downs: &Option<Extras>) -> bool {
+    fn is_exact(push_downs: &Option<PushDownInfo>) -> bool {
         match push_downs {
             None => true,
             Some(extra) => extra.filters.is_empty(),
@@ -324,10 +324,10 @@ impl FuseTable {
     fn check_quick_path(
         &self,
         snapshot: &TableSnapshot,
-        push_down: &Option<Extras>,
+        push_down: &Option<PushDownInfo>,
     ) -> Option<(PartStatistics, Partitions)> {
         push_down.as_ref().and_then(|extra| match extra {
-            Extras {
+            PushDownInfo {
                 projection: Some(projs),
                 filters,
                 ..

@@ -32,9 +32,9 @@ use common_storage::StorageMetrics;
 
 use crate::plan::DeletePlan;
 use crate::plan::Expression;
-use crate::plan::Extras;
 use crate::plan::PartStatistics;
 use crate::plan::Partitions;
+use crate::plan::PushDownInfo;
 use crate::plan::ReadDataSourcePlan;
 use crate::table::column_stats_provider_impls::DummyColumnStatisticsProvider;
 use crate::table_context::TableContext;
@@ -127,7 +127,7 @@ pub trait Table: Sync + Send {
     async fn read_partitions(
         &self,
         ctx: Arc<dyn TableContext>,
-        push_downs: Option<Extras>,
+        push_downs: Option<PushDownInfo>,
     ) -> Result<(PartStatistics, Partitions)> {
         let (_, _) = (ctx, push_downs);
         Err(ErrorCode::Unimplemented(format!(
@@ -256,7 +256,7 @@ pub trait Table: Sync + Send {
         &self,
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
-        push_downs: Option<Extras>,
+        push_downs: Option<PushDownInfo>,
     ) -> Result<Option<Box<dyn TableMutator>>> {
         let (_, _, _) = (ctx, pipeline, push_downs);
 

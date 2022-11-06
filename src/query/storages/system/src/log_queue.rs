@@ -18,9 +18,9 @@ use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-use common_catalog::plan::Extras;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
+use common_catalog::plan::PushDownInfo;
 use common_catalog::plan::ReadDataSourcePlan;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
@@ -158,7 +158,7 @@ impl<Event: SystemLogElement + 'static> Table for SystemLogTable<Event> {
     async fn read_partitions(
         &self,
         _: Arc<dyn TableContext>,
-        _: Option<Extras>,
+        _: Option<PushDownInfo>,
     ) -> Result<(PartStatistics, Partitions)> {
         Ok((PartStatistics::default(), vec![]))
     }

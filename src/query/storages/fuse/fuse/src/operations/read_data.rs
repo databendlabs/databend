@@ -15,9 +15,9 @@
 use std::sync::Arc;
 
 use common_base::base::Runtime;
-use common_catalog::plan::Extras;
 use common_catalog::plan::PrewhereInfo;
 use common_catalog::plan::Projection;
+use common_catalog::plan::PushDownInfo;
 use common_catalog::plan::ReadDataSourcePlan;
 use common_catalog::table_context::TableContext;
 use common_datavalues::DataSchemaRef;
@@ -39,8 +39,8 @@ impl FuseTable {
         BlockReader::create(self.operator.clone(), table_schema, projection)
     }
 
-    pub fn projection_of_push_downs(&self, push_downs: &Option<Extras>) -> Projection {
-        if let Some(Extras {
+    pub fn projection_of_push_downs(&self, push_downs: &Option<PushDownInfo>) -> Projection {
+        if let Some(PushDownInfo {
             projection: Some(prj),
             ..
         }) = push_downs
@@ -54,8 +54,8 @@ impl FuseTable {
         }
     }
 
-    fn prewhere_of_push_downs(&self, push_downs: &Option<Extras>) -> Option<PrewhereInfo> {
-        if let Some(Extras { prewhere, .. }) = push_downs {
+    fn prewhere_of_push_downs(&self, push_downs: &Option<PushDownInfo>) -> Option<PrewhereInfo> {
+        if let Some(PushDownInfo { prewhere, .. }) = push_downs {
             prewhere.clone()
         } else {
             None

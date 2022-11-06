@@ -16,9 +16,9 @@ use std::any::Any;
 use std::sync::Arc;
 
 use common_catalog::catalog::CATALOG_DEFAULT;
-use common_catalog::plan::Extras;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
+use common_catalog::plan::PushDownInfo;
 use common_catalog::plan::ReadDataSourcePlan;
 use common_datablocks::DataBlock;
 use common_datavalues::DataValue;
@@ -98,7 +98,7 @@ impl Table for ClusteringInformationTable {
     async fn read_partitions(
         &self,
         _ctx: Arc<dyn TableContext>,
-        _push_downs: Option<Extras>,
+        _push_downs: Option<PushDownInfo>,
     ) -> Result<(PartStatistics, Partitions)> {
         Ok((PartStatistics::default(), vec![]))
     }

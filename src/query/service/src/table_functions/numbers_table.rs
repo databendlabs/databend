@@ -17,10 +17,10 @@ use std::mem::size_of;
 use std::sync::Arc;
 
 use chrono::NaiveDateTime;
-use common_catalog::plan::Extras;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
+use common_catalog::plan::PushDownInfo;
 use common_catalog::plan::ReadDataSourcePlan;
 use common_catalog::table::TableStatistics;
 use common_datablocks::DataBlock;
@@ -122,7 +122,7 @@ impl Table for NumbersTable {
     async fn read_partitions(
         &self,
         ctx: Arc<dyn TableContext>,
-        push_downs: Option<Extras>,
+        push_downs: Option<PushDownInfo>,
     ) -> Result<(PartStatistics, Partitions)> {
         let max_block_size = ctx.get_settings().get_max_block_size()?;
         let mut limit = None;

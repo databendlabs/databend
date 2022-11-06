@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use async_stream::stream;
-use common_catalog::plan::Extras;
+use common_catalog::plan::PushDownInfo;
 use common_catalog::plan::ReadDataSourcePlan;
 use common_catalog::plan::SourceInfo;
 use common_catalog::table_context::TableContext;
@@ -51,9 +51,9 @@ impl Downloader for ResultTable {
         limit: Option<usize>,
     ) -> Result<SendableVu8Stream> {
         let push_downs = match limit {
-            Some(limit) if limit > 0 => Some(Extras {
+            Some(limit) if limit > 0 => Some(PushDownInfo {
                 limit: Some(limit),
-                ..Extras::default()
+                ..PushDownInfo::default()
             }),
             _ => None,
         };

@@ -18,10 +18,10 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 
 use common_catalog::catalog::StorageDescription;
-use common_catalog::plan::Extras;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::Projection;
+use common_catalog::plan::PushDownInfo;
 use common_catalog::plan::ReadDataSourcePlan;
 use common_catalog::table::AppendMode;
 use common_catalog::table::Table;
@@ -149,7 +149,7 @@ impl Table for MemoryTable {
     async fn read_partitions(
         &self,
         ctx: Arc<dyn TableContext>,
-        push_downs: Option<Extras>,
+        push_downs: Option<PushDownInfo>,
     ) -> Result<(PartStatistics, Partitions)> {
         let blocks = self.blocks.read();
 
@@ -262,7 +262,7 @@ impl Table for MemoryTable {
 }
 
 struct MemoryTableSource {
-    extras: Option<Extras>,
+    extras: Option<PushDownInfo>,
     data_blocks: Arc<Mutex<VecDeque<DataBlock>>>,
 }
 
@@ -271,7 +271,7 @@ impl MemoryTableSource {
         ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
         data_blocks: Arc<Mutex<VecDeque<DataBlock>>>,
-        extras: Option<Extras>,
+        extras: Option<PushDownInfo>,
     ) -> Result<ProcessorPtr> {
         SyncSourcer::create(ctx, output, MemoryTableSource {
             extras,

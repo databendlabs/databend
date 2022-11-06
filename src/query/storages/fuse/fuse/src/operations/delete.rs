@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use common_catalog::plan::DeletePlan;
 use common_catalog::plan::Expression;
-use common_catalog::plan::Extras;
+use common_catalog::plan::PushDownInfo;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_datavalues::DataField;
@@ -89,7 +89,7 @@ impl FuseTable {
         )?;
         let schema = self.table_info.schema();
         // TODO refine pruner
-        let extras = Extras {
+        let extras = PushDownInfo {
             projection: Some(plan.projection.clone()),
             filters: vec![filter.clone()],
             prewhere: None, // TBD: if delete rows need prewhere optimization

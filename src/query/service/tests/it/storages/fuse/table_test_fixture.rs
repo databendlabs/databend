@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 use common_ast::ast::Engine;
 use common_catalog::catalog::CATALOG_DEFAULT;
-use common_catalog::plan::Extras;
+use common_catalog::plan::PushDownInfo;
 use common_catalog::table::AppendMode;
 use common_datablocks::assert_blocks_sorted_eq_with_name;
 use common_datablocks::DataBlock;
@@ -349,7 +349,7 @@ pub async fn test_drive_with_args_and_ctx(
     let source_plan = func
         .clone()
         .as_table()
-        .read_plan(ctx.clone(), Some(Extras::default()))
+        .read_plan(ctx.clone(), Some(PushDownInfo::default()))
         .await?;
     ctx.try_set_partitions(source_plan.parts.clone())?;
     func.as_table()
@@ -365,7 +365,7 @@ pub async fn test_drive_clustering_information(
     let source_plan = func
         .clone()
         .as_table()
-        .read_plan(ctx.clone(), Some(Extras::default()))
+        .read_plan(ctx.clone(), Some(PushDownInfo::default()))
         .await?;
     ctx.try_set_partitions(source_plan.parts.clone())?;
     func.as_table()

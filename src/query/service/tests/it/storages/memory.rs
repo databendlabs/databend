@@ -13,9 +13,9 @@
 //  limitations under the License.
 
 use common_base::base::tokio;
-use common_catalog::plan::Extras;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Projection;
+use common_catalog::plan::PushDownInfo;
 use common_datablocks::assert_blocks_sorted_eq;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
@@ -69,13 +69,13 @@ async fn test_memorytable() -> Result<()> {
 
     // read tests
     {
-        let push_downs_vec: Vec<Option<Extras>> =
+        let push_downs_vec: Vec<Option<PushDownInfo>> =
             vec![Some(vec![0usize]), Some(vec![1usize]), None]
                 .into_iter()
                 .map(|x| {
                     x.map(|x| {
                         let proj = Projection::Columns(x);
-                        Extras {
+                        PushDownInfo {
                             projection: Some(proj),
                             filters: vec![],
                             limit: None,

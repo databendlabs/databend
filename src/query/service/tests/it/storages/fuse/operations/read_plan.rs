@@ -19,8 +19,8 @@ use std::sync::Arc;
 use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_arrow::arrow::datatypes::Field as ArrowField;
 use common_base::base::tokio;
-use common_catalog::plan::Extras;
 use common_catalog::plan::Projection;
+use common_catalog::plan::PushDownInfo;
 use common_datavalues::DataValue;
 use common_exception::Result;
 use common_storages_fuse::ColumnLeaves;
@@ -125,7 +125,7 @@ fn test_to_partitions() -> Result<()> {
         .sum();
 
     // kick off
-    let push_down = Some(Extras {
+    let push_down = Some(PushDownInfo {
         projection: Some(proj),
         filters: vec![],
         limit: None,
@@ -165,7 +165,7 @@ async fn test_fuse_table_exact_statistic() -> Result<()> {
         table = fixture.latest_default_table().await?;
 
         let proj = Projection::Columns(vec![]);
-        let push_downs = Extras {
+        let push_downs = PushDownInfo {
             projection: Some(proj),
             filters: vec![],
             prewhere: None,

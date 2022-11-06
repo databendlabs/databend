@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use common_ast::ast::Engine;
 use common_base::base::tokio;
-use common_catalog::plan::Extras;
+use common_catalog::plan::PushDownInfo;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
@@ -46,7 +46,7 @@ use crate::storages::fuse::table_test_fixture::TestFixture;
 async fn apply_block_pruning(
     table_snapshot: Arc<TableSnapshot>,
     schema: DataSchemaRef,
-    push_down: &Option<Extras>,
+    push_down: &Option<PushDownInfo>,
     ctx: Arc<QueryContext>,
     op: Operator,
 ) -> Result<Vec<Arc<BlockMeta>>> {
@@ -152,13 +152,13 @@ async fn test_block_pruner() -> Result<()> {
     let snapshot = reader.read(snapshot_loc.as_str(), None, 1).await?;
 
     // nothing is pruned
-    let e1 = Extras {
+    let e1 = PushDownInfo {
         filters: vec![col("a", u64::to_data_type()).gt(&lit(30u64))?],
         ..Default::default()
     };
 
     // some blocks pruned
-    let mut e2 = Extras::default();
+    let mut e2 = PushDownInfo::default();
     let max_val_of_b = 6u64;
     e2.filters = vec![
         col("a", u64::to_data_type())
@@ -168,14 +168,14 @@ async fn test_block_pruner() -> Result<()> {
     let b2 = num_blocks - max_val_of_b as usize - 1;
 
     // Sort asc Limit
-    let e3 = Extras {
+    let e3 = PushDownInfo {
         order_by: vec![(col("b", u64::to_data_type()), true, false)],
         limit: Some(3),
         ..Default::default()
     };
 
     // Sort desc Limit
-    let e4 = Extras {
+    let e4 = PushDownInfo {
         order_by: vec![(col("b", u64::to_data_type()), false, false)],
         limit: Some(4),
         ..Default::default()
@@ -297,7 +297,7 @@ async fn test_block_pruner_monotonic() -> Result<()> {
     let snapshot = reader.read(snapshot_loc.as_str(), None, 1).await?;
 
     // a + b > 20; some blocks pruned
-    let mut extra = Extras::default();
+    let mut extra = PushDownInfo::default();
     let pred = add(col("a", u64::to_data_type()), col("b", u64::to_data_type())).gt(&lit(20u64))?;
     extra.filters = vec![pred];
 
@@ -313,7 +313,7 @@ async fn test_block_pruner_monotonic() -> Result<()> {
     assert_eq!(2, blocks.len());
 
     // b - a < 20; nothing will be pruned.
-    let mut extra = Extras::default();
+    let mut extra = PushDownInfo::default();
     let pred = sub(col("b", u64::to_data_type()), col("a", u64::to_data_type())).lt(&lit(20u64))?;
     extra.filters = vec![pred];
 

@@ -15,10 +15,10 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use common_catalog::plan::Extras;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::Projection;
+use common_catalog::plan::PushDownInfo;
 use common_catalog::plan::ReadDataSourcePlan;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
@@ -116,7 +116,7 @@ impl ResultTable {
     fn create_block_reader(
         &self,
         ctx: &Arc<dyn TableContext>,
-        _push_downs: &Option<Extras>,
+        _push_downs: &Option<PushDownInfo>,
     ) -> Result<Arc<BlockReader>> {
         let indices = (0..self.get_table_info().schema().fields().len())
             .into_iter()
@@ -142,7 +142,7 @@ impl Table for ResultTable {
     async fn read_partitions(
         &self,
         ctx: Arc<dyn TableContext>,
-        push_downs: Option<Extras>,
+        push_downs: Option<PushDownInfo>,
     ) -> Result<(PartStatistics, Partitions)> {
         let data_accessor = ctx.get_data_operator()?;
         let meta_location = self.locations.get_meta_location();
@@ -175,8 +175,8 @@ impl Table for ResultTable {
 
         match &plan.push_downs {
             None => Ok(()),
-            Some(Extras { limit: None, .. }) => Ok(()),
-            Some(Extras {
+            Some(PushDownInfo { limit: None, .. }) => Ok(()),
+            Some(PushDownInfo {
                 limit: Some(limit), ..
             }) => {
                 let limit = *limit;

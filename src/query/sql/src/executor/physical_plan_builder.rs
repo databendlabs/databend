@@ -19,10 +19,10 @@ use std::sync::Arc;
 use common_catalog::catalog::CatalogManager;
 use common_catalog::catalog::CATALOG_DEFAULT;
 use common_catalog::plan::Expression;
-use common_catalog::plan::Extras;
 use common_catalog::plan::FragmentKind;
 use common_catalog::plan::PrewhereInfo;
 use common_catalog::plan::Projection;
+use common_catalog::plan::PushDownInfo;
 use common_catalog::table_context::TableContext;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
@@ -478,7 +478,7 @@ impl PhysicalPlanBuilder {
         scan: &PhysicalScan,
         table_schema: &DataSchemaRef,
         has_inner_column: bool,
-    ) -> Result<Extras> {
+    ) -> Result<PushDownInfo> {
         let metadata = self.metadata.read().clone();
 
         let projection =
@@ -592,7 +592,7 @@ impl PhysicalPlanBuilder {
             })
             .transpose()?;
 
-        Ok(Extras {
+        Ok(PushDownInfo {
             projection: Some(projection),
             filters: push_down_filters.unwrap_or_default(),
             prewhere: prewhere_info,

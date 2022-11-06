@@ -19,9 +19,9 @@ use std::task::Context;
 use std::task::Poll;
 
 use chrono::NaiveDateTime;
-use common_catalog::plan::Extras;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
+use common_catalog::plan::PushDownInfo;
 use common_catalog::plan::ReadDataSourcePlan;
 use common_catalog::table_function::TableFunction;
 use common_datablocks::DataBlock;
@@ -104,7 +104,7 @@ impl Table for AsyncCrashMeTable {
     async fn read_partitions(
         &self,
         _: Arc<dyn TableContext>,
-        _: Option<Extras>,
+        _: Option<PushDownInfo>,
     ) -> Result<(PartStatistics, Partitions)> {
         // dummy statistics
         Ok((PartStatistics::new_exact(1, 1, 1, 1), vec![]))

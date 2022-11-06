@@ -15,7 +15,7 @@
 use std::sync::Arc;
 use std::time::SystemTime;
 
-use common_catalog::plan::Extras;
+use common_catalog::plan::PushDownInfo;
 use common_exception::Result;
 use common_sql::executor::ExpressionBuilderWithoutRenaming;
 
@@ -59,9 +59,9 @@ impl Interpreter for ReclusterTableInterpreter {
             Some(scalar) => {
                 let eb = ExpressionBuilderWithoutRenaming::create(plan.metadata.clone());
                 let pred_expr = eb.build(scalar)?;
-                Some(Extras {
+                Some(PushDownInfo {
                     filters: vec![pred_expr],
-                    ..Extras::default()
+                    ..PushDownInfo::default()
                 })
             }
         };

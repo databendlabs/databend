@@ -16,10 +16,10 @@ use std::any::Any;
 use std::sync::Arc;
 
 use common_catalog::catalog::StorageDescription;
-use common_catalog::plan::Extras;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::Projection;
+use common_catalog::plan::PushDownInfo;
 use common_catalog::plan::ReadDataSourcePlan;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
@@ -89,7 +89,7 @@ impl Table for RandomTable {
     async fn read_partitions(
         &self,
         ctx: Arc<dyn TableContext>,
-        push_downs: Option<Extras>,
+        push_downs: Option<PushDownInfo>,
     ) -> Result<(PartStatistics, Partitions)> {
         let settings = ctx.get_settings();
         let block_size = settings.get_max_block_size()? as usize;

@@ -14,41 +14,7 @@
 
 use std::fmt::Debug;
 
-use common_datavalues::prelude::*;
 use common_meta_app::schema::TableInfo;
-use once_cell::sync::Lazy;
-
-use crate::plan::Expression;
-use crate::plan::Projection;
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct PrewhereInfo {
-    /// columns to be ouput be prewhere scan
-    pub output_columns: Projection,
-    /// columns used for prewhere
-    pub prewhere_columns: Projection,
-    /// remain_columns = scan.columns - need_columns
-    pub remain_columns: Projection,
-    /// filter for prewhere
-    pub filter: Expression,
-}
-
-/// Extras is a wrapper for push down items.
-#[derive(serde::Serialize, serde::Deserialize, Clone, Default, Debug, PartialEq, Eq)]
-pub struct Extras {
-    /// Optional column indices to use as a projection
-    pub projection: Option<Projection>,
-    /// Optional filter expression plan
-    /// split_conjunctions by `and` operator
-    pub filters: Vec<Expression>,
-    /// Optional prewhere information
-    /// used for prewhere optimization
-    pub prewhere: Option<PrewhereInfo>,
-    /// Optional limit to skip read
-    pub limit: Option<usize>,
-    /// Optional order_by expression plan, asc, null_first
-    pub order_by: Vec<(Expression, bool, bool)>,
-}
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Clone, Debug, Default)]
 pub struct PartStatistics {
@@ -126,10 +92,3 @@ impl PartStatistics {
         }
     }
 }
-
-pub static SINK_SCHEMA: Lazy<DataSchemaRef> = Lazy::new(|| {
-    DataSchemaRefExt::create(vec![
-        DataField::new("seg_loc", Vu8::to_data_type()),
-        DataField::new("seg_info", Vu8::to_data_type()),
-    ])
-});

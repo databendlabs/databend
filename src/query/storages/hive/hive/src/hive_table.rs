@@ -20,10 +20,10 @@ use async_recursion::async_recursion;
 use common_base::base::tokio;
 use common_base::base::tokio::sync::Semaphore;
 use common_catalog::plan::Expression;
-use common_catalog::plan::Extras;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::Projection;
+use common_catalog::plan::PushDownInfo;
 use common_catalog::plan::ReadDataSourcePlan;
 use common_catalog::plan::RequireColumnsVisitor;
 use common_catalog::table::Table;
@@ -114,7 +114,7 @@ impl HiveTable {
     fn get_block_filter(
         &self,
         ctx: Arc<dyn TableContext>,
-        push_downs: &Option<Extras>,
+        push_downs: &Option<PushDownInfo>,
     ) -> Result<Arc<HiveBlockFilter>> {
         let enable_hive_parquet_predict_pushdown = ctx
             .get_settings()
@@ -201,7 +201,7 @@ impl HiveTable {
     // we just need to read few datas from table
     fn is_simple_select_query(&self, plan: &ReadDataSourcePlan) -> bool {
         // couldn't get groupby order by info
-        if let Some(Extras {
+        if let Some(PushDownInfo {
             filters: f,
             limit: Some(lm),
             ..
@@ -235,8 +235,8 @@ impl HiveTable {
             .collect::<HashSet<_>>()
     }
 
-    fn get_projections(&self, push_downs: &Option<Extras>) -> Result<Vec<usize>> {
-        if let Some(Extras {
+    fn get_projections(&self, push_downs: &Option<PushDownInfo>) -> Result<Vec<usize>> {
+        if let Some(PushDownInfo {
             projection: Some(prj),
             ..
         }) = push_downs
@@ -257,7 +257,7 @@ impl HiveTable {
 
     fn create_block_reader(
         &self,
-        push_downs: &Option<Extras>,
+        push_downs: &Option<PushDownInfo>,
     ) -> Result<Arc<HiveParquetBlockReader>> {
         let projection = self.get_projections(push_downs)?;
         let (projection, partition_fields) =
@@ -352,7 +352,7 @@ impl HiveTable {
     async fn get_query_locations(
         &self,
         ctx: Arc<dyn TableContext>,
-        push_downs: &Option<Extras>,
+        push_downs: &Option<PushDownInfo>,
     ) -> Result<Vec<(String, Option<String>)>> {
         let path = match &self.table_options.location {
             Some(path) => path,
@@ -417,7 +417,7 @@ impl HiveTable {
     async fn do_read_partitions(
         &self,
         ctx: Arc<dyn TableContext>,
-        push_downs: Option<Extras>,
+        push_downs: Option<PushDownInfo>,
     ) -> Result<(PartStatistics, Partitions)> {
         let start = Instant::now();
         let dirs = self.get_query_locations(ctx.clone(), &push_downs).await?;
@@ -468,7 +468,7 @@ impl Table for HiveTable {
     async fn read_partitions(
         &self,
         ctx: Arc<dyn TableContext>,
-        push_downs: Option<Extras>,
+        push_downs: Option<PushDownInfo>,
     ) -> Result<(PartStatistics, Partitions)> {
         self.do_read_partitions(ctx, push_downs).await
     }

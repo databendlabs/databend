@@ -15,8 +15,8 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use common_catalog::plan::Extras;
 use common_catalog::plan::Projection;
+use common_catalog::plan::PushDownInfo;
 use common_catalog::plan::ReadDataSourcePlan;
 use common_catalog::plan::SourceInfo;
 use common_catalog::table::Table;
@@ -31,7 +31,7 @@ pub trait ToReadDataSourcePlan {
     async fn read_plan(
         &self,
         ctx: Arc<dyn TableContext>,
-        push_downs: Option<Extras>,
+        push_downs: Option<PushDownInfo>,
     ) -> Result<ReadDataSourcePlan> {
         self.read_plan_with_catalog(ctx, "default".to_owned(), push_downs)
             .await
@@ -41,7 +41,7 @@ pub trait ToReadDataSourcePlan {
         &self,
         ctx: Arc<dyn TableContext>,
         catalog: String,
-        push_downs: Option<Extras>,
+        push_downs: Option<PushDownInfo>,
     ) -> Result<ReadDataSourcePlan>;
 }
 
@@ -51,7 +51,7 @@ impl ToReadDataSourcePlan for dyn Table {
         &self,
         ctx: Arc<dyn TableContext>,
         catalog: String,
-        push_downs: Option<Extras>,
+        push_downs: Option<PushDownInfo>,
     ) -> Result<ReadDataSourcePlan> {
         let (statistics, parts) = self.read_partitions(ctx, push_downs.clone()).await?;
 

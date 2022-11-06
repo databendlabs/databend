@@ -24,10 +24,10 @@ use common_datavalues::DataValue;
 use common_meta_app::schema::TableInfo;
 use common_meta_types::UserStageInfo;
 
-use crate::plan::Extras;
 use crate::plan::PartStatistics;
 use crate::plan::Partitions;
 use crate::plan::Projection;
+use crate::plan::PushDownInfo;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq)]
 pub struct StageTableInfo {
@@ -99,7 +99,7 @@ pub struct ReadDataSourcePlan {
     pub description: String,
 
     pub tbl_args: Option<Vec<DataValue>>,
-    pub push_downs: Option<Extras>,
+    pub push_downs: Option<PushDownInfo>,
 }
 
 impl ReadDataSourcePlan {
@@ -128,7 +128,7 @@ impl ReadDataSourcePlan {
                 .collect::<Vec<usize>>()
         };
 
-        if let Some(Extras {
+        if let Some(PushDownInfo {
             projection: Some(prj),
             ..
         }) = &self.push_downs

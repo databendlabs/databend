@@ -17,9 +17,9 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 
 use common_base::base::uuid;
-use common_catalog::plan::Extras;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
+use common_catalog::plan::PushDownInfo;
 use common_catalog::plan::ReadDataSourcePlan;
 use common_catalog::plan::StageTableInfo;
 use common_catalog::table::AppendMode;
@@ -96,7 +96,7 @@ impl Table for StageTable {
     async fn read_partitions(
         &self,
         ctx: Arc<dyn TableContext>,
-        _push_downs: Option<Extras>,
+        _push_downs: Option<PushDownInfo>,
     ) -> Result<(PartStatistics, Partitions)> {
         let operator = StageTable::get_op(&ctx, &self.table_info.stage_info)?;
         let input_ctx = Arc::new(
