@@ -14,9 +14,9 @@
 
 use std::sync::Arc;
 
-use common_catalog::plan::FragmentKind;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
+use common_sql::executor::FragmentKind;
 
 use super::FragmentType;
 use super::PlanFragment;

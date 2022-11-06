@@ -14,9 +14,6 @@
 
 use std::fmt::Debug;
 
-use common_datavalues::prelude::*;
-use once_cell::sync::Lazy;
-
 use crate::plan::Expression;
 use crate::plan::Projection;
 
@@ -48,10 +45,3 @@ pub struct PushDownInfo {
     /// Optional order_by expression plan, asc, null_first
     pub order_by: Vec<(Expression, bool, bool)>,
 }
-
-pub static SINK_SCHEMA: Lazy<DataSchemaRef> = Lazy::new(|| {
-    DataSchemaRefExt::create(vec![
-        DataField::new("seg_loc", Vu8::to_data_type()),
-        DataField::new("seg_info", Vu8::to_data_type()),
-    ])
-});

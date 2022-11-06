@@ -15,8 +15,6 @@
 use std::collections::BTreeMap;
 
 use common_catalog::plan::DataSourcePlan;
-use common_catalog::plan::FragmentKind;
-use common_catalog::plan::SINK_SCHEMA;
 use common_datablocks::DataBlock;
 use common_datavalues::wrap_nullable;
 use common_datavalues::BooleanType;
@@ -316,6 +314,13 @@ impl ExchangeSource {
     }
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub enum FragmentKind {
+    Normal,
+    Expansive,
+    Merge,
+}
+
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ExchangeSink {
     pub input: Box<PhysicalPlan>,
@@ -364,7 +369,10 @@ pub struct DistributedInsertSelect {
 
 impl DistributedInsertSelect {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
-        Ok(SINK_SCHEMA.clone())
+        Ok(DataSchemaRefExt::create(vec![
+            DataField::new("seg_loc", Vu8::to_data_type()),
+            DataField::new("seg_info", Vu8::to_data_type()),
+        ]))
     }
 }
 

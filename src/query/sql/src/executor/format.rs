@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use common_ast::ast::FormatTreeNode;
-use common_catalog::plan::FragmentKind;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use itertools::Itertools;
@@ -31,6 +30,7 @@ use super::Project;
 use super::Sort;
 use super::TableScan;
 use super::UnionAll;
+use crate::executor::FragmentKind;
 use crate::planner::IndexType;
 use crate::planner::MetadataRef;
 use crate::planner::DUMMY_TABLE_INDEX;
