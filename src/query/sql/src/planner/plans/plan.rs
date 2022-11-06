@@ -16,7 +16,6 @@ use std::fmt::Display;
 use std::sync::Arc;
 
 use common_ast::ast::ExplainKind;
-use common_catalog::plan::DeletePlan;
 use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
@@ -49,6 +48,7 @@ use crate::plans::CreateTablePlanV2;
 use crate::plans::CreateUDFPlan;
 use crate::plans::CreateUserPlan;
 use crate::plans::CreateViewPlan;
+use crate::plans::DeletePlan;
 use crate::plans::DescribeTablePlan;
 use crate::plans::DropDatabasePlan;
 use crate::plans::DropRolePlan;

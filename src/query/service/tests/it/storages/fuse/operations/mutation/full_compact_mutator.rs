@@ -156,7 +156,9 @@ async fn test_compact_unresolved_conflict() -> Result<()> {
     let mut planner = Planner::new(ctx.clone());
     let (plan, _, _) = planner.plan_sql(&query).await?;
     if let Plan::Delete(delete) = plan {
-        table.delete(ctx.clone(), *delete.clone()).await?;
+        table
+            .delete(ctx.clone(), &delete.projection, &delete.selection)
+            .await?;
     }
 
     // compact commit

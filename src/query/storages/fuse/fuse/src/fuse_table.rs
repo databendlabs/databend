@@ -20,10 +20,10 @@ use std::sync::Arc;
 
 use common_catalog::catalog::StorageDescription;
 use common_catalog::plan::DataSourcePlan;
-use common_catalog::plan::DeletePlan;
 use common_catalog::plan::Expression;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
+use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table::AppendMode;
 use common_catalog::table::ColumnId;
@@ -436,8 +436,13 @@ impl Table for FuseTable {
     }
 
     #[tracing::instrument(level = "debug", name = "fuse_table_delete", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
-    async fn delete(&self, ctx: Arc<dyn TableContext>, delete_plan: DeletePlan) -> Result<()> {
-        self.do_delete(ctx, &delete_plan).await
+    async fn delete(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        projection: &Projection,
+        selection: &Option<String>,
+    ) -> Result<()> {
+        self.do_delete(ctx, projection, selection).await
     }
 
     async fn compact(

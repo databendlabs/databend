@@ -31,10 +31,10 @@ use common_pipeline_core::Pipeline;
 use common_storage::StorageMetrics;
 
 use crate::plan::DataSourcePlan;
-use crate::plan::DeletePlan;
 use crate::plan::Expression;
 use crate::plan::PartStatistics;
 use crate::plan::Partitions;
+use crate::plan::Projection;
 use crate::plan::PushDownInfo;
 use crate::table::column_stats_provider_impls::DummyColumnStatisticsProvider;
 use crate::table_context::TableContext;
@@ -214,8 +214,13 @@ pub trait Table: Sync + Send {
         )))
     }
 
-    async fn delete(&self, ctx: Arc<dyn TableContext>, delete_plan: DeletePlan) -> Result<()> {
-        let (_, _) = (ctx, delete_plan);
+    async fn delete(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        projection: &Projection,
+        selection: &Option<String>,
+    ) -> Result<()> {
+        let (_, _, _) = (ctx, projection, selection);
 
         Err(ErrorCode::Unimplemented(format!(
             "table {},  of engine type {}, does not support DELETE FROM",
@@ -320,7 +325,7 @@ pub enum CompactTarget {
 pub enum AppendMode {
     // From INSERT and RECUSTER operation
     Normal,
-    // From COPY, Streaming load peration
+    // From COPY, Streaming load operation
     Copy,
 }
 
