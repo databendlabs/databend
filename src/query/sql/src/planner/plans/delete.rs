@@ -14,11 +14,10 @@
 
 use std::sync::Arc;
 
+use common_catalog::plan::Projection;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_meta_app::schema::TableIdent;
-
-use crate::plan::Projection;
 
 /// # TODO
 ///
@@ -41,8 +40,8 @@ pub struct DeletePlan {
     pub database_name: String,
     pub table_name: String,
     pub table_id: TableIdent,
-    pub selection: Option<String>,
     pub projection: Projection,
+    pub selection: Option<String>,
 }
 
 impl DeletePlan {

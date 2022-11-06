@@ -14,13 +14,13 @@
 
 use common_ast::ast::Expr;
 use common_ast::ast::TableReference;
-use common_catalog::plan::DeletePlan;
 use common_catalog::plan::Projection;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::binder::Binder;
 use crate::binder::ScalarBinder;
+use crate::plans::DeletePlan;
 use crate::plans::Plan;
 use crate::BindContext;
 use crate::ScalarExpr;

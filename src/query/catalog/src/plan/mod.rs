@@ -13,7 +13,6 @@
 // limitations under the License.
 
 mod datasource;
-mod delete;
 mod expression;
 mod expression_visitor;
 mod partition;
@@ -22,7 +21,6 @@ mod projection;
 mod pushdown;
 
 pub use datasource::*;
-pub use delete::DeletePlan;
 pub use expression::Expression;
 pub use expression_visitor::*;
 pub use partition::*;
