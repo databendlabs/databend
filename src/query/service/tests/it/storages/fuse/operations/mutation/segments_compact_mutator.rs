@@ -388,8 +388,6 @@ async fn test_segment_compactor() -> Result<()> {
     }
 
     {
-        // edge case: single jumbo block
-
         let case_name = "jumbo block with single fragment";
         let threshold = 3;
         let case = CompactCase {

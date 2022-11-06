@@ -243,6 +243,12 @@ insert into t2 values (9);
 statement ok
 insert into t2 values (10);
 
+statement query II
+select segment_count, block_count from fuse_snapshot('db_09_0008', 't2') limit 1;
+
+----
+4 4
+
 statement ok
 optimize table t2 compact segment limit 2;
 

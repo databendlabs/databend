@@ -51,7 +51,7 @@ pub struct SegmentCompactMutator {
     compact_params: CompactOptions,
     data_accessor: Operator,
     location_generator: TableMetaLocationGenerator,
-    compacted: SegmentCompactionState,
+    compaction: SegmentCompactionState,
 }
 
 impl SegmentCompactMutator {
@@ -66,12 +66,12 @@ impl SegmentCompactMutator {
             compact_params,
             data_accessor: operator,
             location_generator,
-            compacted: Default::default(),
+            compaction: Default::default(),
         })
     }
 
     fn has_compaction(&self) -> bool {
-        !self.compacted.new_segment_paths.is_empty()
+        !self.compaction.new_segment_paths.is_empty()
     }
 }
 
@@ -80,18 +80,25 @@ impl TableMutator for SegmentCompactMutator {
     async fn target_select(&mut self) -> Result<bool> {
         let select_begin = Instant::now();
 
-        // read all the segments
-        let fuse_segment_io = SegmentsIO::create(self.ctx.clone(), self.data_accessor.clone());
         let base_segment_locations = &self.compact_params.base_snapshot.segments;
+        if base_segment_locations.len() <= 1 {
+            // no need to compact
+            return Ok(false);
+        }
+
+        // 1. read all the segments
+        let fuse_segment_io = SegmentsIO::create(self.ctx.clone(), self.data_accessor.clone());
         let base_segments = fuse_segment_io
             .read_segments(&self.compact_params.base_snapshot.segments)
             .await?
             .into_iter()
             .collect::<Result<Vec<_>>>()?;
-        let number_segments = base_segments.len();
-        let limit = self.compact_params.limit.unwrap_or(number_segments);
 
-        // prepare accumulator
+        // need at lease 2 segments to make sense
+        let number_segments = base_segments.len();
+        let limit = std::cmp::max(2, self.compact_params.limit.unwrap_or(number_segments));
+
+        // 2. prepare compactor
         let segment_info_cache = CacheManager::instance().get_table_segment_cache();
         let segment_writer = SegmentWriter::new(
             &self.data_accessor,
@@ -102,7 +109,8 @@ impl TableMutator for SegmentCompactMutator {
         let mut compactor =
             SegmentCompactor::new(self.compact_params.block_per_seg as u64, segment_writer);
 
-        // feed segments into accumulator
+        // 3. feed segments into accumulator, taking limit into account
+        let mut compact_end_at = number_segments;
         for (idx, x) in base_segments.iter().enumerate() {
             compactor
                 .add(x, base_segment_locations[idx].clone())
@@ -112,19 +120,30 @@ impl TableMutator for SegmentCompactMutator {
                 // break if number of compacted segments reach the limit
                 // note that during the finalization of compaction, there might be some extra
                 // fragmented segments also need to be compacted, we just let it go
+                compact_end_at = idx + 1;
                 break;
             }
         }
-
         let compacted_state = compactor.finalize().await?;
+        self.compaction = compacted_state;
 
-        // gather the results
-        self.compacted = compacted_state;
+        // 3. combine with the unprocessed segments (which are outside the limit)
+        if self.has_compaction() {
+            // if some compaction occurred, the reminders
+            // which are outside of the limit should also be collected
+            for idx in compact_end_at..number_segments {
+                self.compaction
+                    .segments_locations
+                    .push(base_segment_locations[idx].clone());
+                merge_statistics_mut(&mut self.compaction.statistics, &base_segments[idx].summary)?;
+            }
+        }
 
         gauge!(
             "fuse_compact_segments_select_duration_second",
             select_begin.elapsed(),
         );
+
         Ok(self.has_compaction())
     }
 
@@ -135,7 +154,7 @@ impl TableMutator for SegmentCompactMutator {
         }
 
         let abort_action = AbortOperation {
-            segments: self.compacted.new_segment_paths,
+            segments: self.compaction.new_segment_paths,
             ..Default::default()
         };
 
@@ -144,8 +163,8 @@ impl TableMutator for SegmentCompactMutator {
             .commit_mutation(
                 &self.ctx,
                 self.compact_params.base_snapshot,
-                self.compacted.segments_locations,
-                self.compacted.statistics,
+                self.compaction.segments_locations,
+                self.compaction.statistics,
                 abort_action,
             )
             .await
