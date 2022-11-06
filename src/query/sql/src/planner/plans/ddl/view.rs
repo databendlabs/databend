@@ -17,6 +17,22 @@ use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CreateViewPlan {
+    pub if_not_exists: bool,
+    pub tenant: String,
+    pub catalog: String,
+    pub database: String,
+    pub viewname: String,
+    pub subquery: String,
+}
+
+impl CreateViewPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AlterViewPlan {
     pub tenant: String,
     pub catalog: String,
@@ -26,6 +42,21 @@ pub struct AlterViewPlan {
 }
 
 impl AlterViewPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DropViewPlan {
+    pub if_exists: bool,
+    pub tenant: String,
+    pub catalog: String,
+    pub database: String,
+    pub viewname: String,
+}
+
+impl DropViewPlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::empty())
     }

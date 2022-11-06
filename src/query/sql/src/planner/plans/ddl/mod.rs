@@ -15,8 +15,12 @@ mod account;
 mod database;
 mod stage;
 mod table;
+mod udf;
+mod view;
 
 pub use account::*;
 pub use database::*;
 pub use stage::*;
 pub use table::*;
+pub use udf::*;
+pub use view::*;

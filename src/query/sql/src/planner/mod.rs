@@ -20,6 +20,8 @@ mod planner;
 mod semantic;
 
 pub(crate) mod binder;
+mod expression;
+mod expression_visitor;
 pub mod optimizer;
 pub mod plans;
 
@@ -28,7 +30,9 @@ pub use binder::Binder;
 pub use binder::ColumnBinding;
 pub use binder::ScalarBinder;
 pub use binder::Visibility;
+pub use expression::Expression;
 pub use expression_parser::ExpressionParser;
+pub use expression_visitor::*;
 pub use metadata::*;
 pub use planner::Planner;
 pub use plans::ScalarExpr;
