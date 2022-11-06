@@ -17,11 +17,21 @@ use std::sync::Arc;
 use common_expression::types::boolean::BooleanDomain;
 use common_expression::types::nullable::NullableColumn;
 use common_expression::types::nullable::NullableDomain;
+use common_expression::types::ArgType;
+use common_expression::types::ArrayType;
 use common_expression::types::BooleanType;
 use common_expression::types::DataType;
+use common_expression::types::DateType;
 use common_expression::types::GenericType;
 use common_expression::types::NullType;
 use common_expression::types::NullableType;
+use common_expression::types::NumberDataType;
+use common_expression::types::NumberType;
+use common_expression::types::StringType;
+use common_expression::types::TimestampType;
+use common_expression::types::ValueType;
+use common_expression::types::ALL_NUMERICS_TYPES;
+use common_expression::with_number_mapped_type;
 use common_expression::Column;
 use common_expression::ColumnBuilder;
 use common_expression::Domain;
@@ -32,6 +42,9 @@ use common_expression::FunctionSignature;
 use common_expression::ScalarRef;
 use common_expression::Value;
 use common_expression::ValueRef;
+use common_hashtable::HashtableKeyable;
+use common_hashtable::KeysRef;
+use common_hashtable::StackHashSet;
 
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_function_factory("multi_if", |_, args_type| {
@@ -172,5 +185,109 @@ pub fn register(registry: &mut FunctionRegistry) {
             ValueRef::Scalar(None) => Ok(Value::Scalar(false)),
             ValueRef::Scalar(Some(_)) => Ok(Value::Scalar(true)),
         },
+    );
+
+    fn cal_in<T: ArgType>(
+        lhs: ValueRef<T>,
+        rhs: ValueRef<ArrayType<T>>,
+    ) -> Result<Value<BooleanType>, String>
+    where
+        T::Scalar: HashtableKeyable,
+    {
+        // must be scalar in rhs, if rhs contains column, it'll be rewrited to `a = b1 or a = b2 or a = b3` in type_checker
+        let array = rhs.as_scalar().unwrap();
+        let mut set = StackHashSet::<_, 128>::with_capacity(T::column_len(array));
+        for val in T::iter_column(array) {
+            let _ = set.set_insert(T::to_owned_scalar(val));
+        }
+        match lhs {
+            ValueRef::Scalar(c) => Ok(Value::Scalar(set.contains(&T::to_owned_scalar(c)))),
+            ValueRef::Column(col) => {
+                let result = BooleanType::column_from_iter(
+                    T::iter_column(&col).map(|c| set.contains(&T::to_owned_scalar(c))),
+                    &[],
+                );
+                Ok(Value::Column(result))
+            }
+        }
+    }
+
+    for left in ALL_NUMERICS_TYPES {
+        with_number_mapped_type!(|NUM_TYPE| match left {
+            NumberDataType::NUM_TYPE => {
+                registry.register_passthrough_nullable_2_arg::<NumberType<NUM_TYPE>, ArrayType<NumberType<NUM_TYPE>>, BooleanType, _, _>(
+                    "in",
+                    FunctionProperty::default(),
+                    |_, _| None,
+                    |lhs, rhs, _| cal_in(lhs, rhs)
+                );
+            }
+        });
+    }
+
+    registry
+        .register_passthrough_nullable_2_arg::<DateType, ArrayType<DateType>, BooleanType, _, _>(
+            "in",
+            FunctionProperty::default(),
+            |_, _| None,
+            |lhs, rhs, _| cal_in(lhs, rhs),
+        );
+
+    registry.register_passthrough_nullable_2_arg::<TimestampType, ArrayType<TimestampType>, BooleanType, _, _>(
+            "in",
+            FunctionProperty::default(),
+            |_, _| None,
+            |lhs, rhs, _| cal_in(lhs, rhs)
+        );
+
+    registry.register_passthrough_nullable_2_arg::<BooleanType, ArrayType<BooleanType>, BooleanType, _, _>(
+        "in",
+        FunctionProperty::default(),
+        |_, _| None,
+        |lhs, rhs, _| {
+             let array = rhs.as_scalar().unwrap();
+                let mut set = StackHashSet::<_, 128>::with_capacity(BooleanType::column_len(array));
+                for val in array.iter() {
+                    let _ = set.set_insert(val as u8);
+                }
+                match lhs {
+                    ValueRef::Scalar(val) =>  {
+                        Ok(Value::Scalar(set.contains( &(val as u8))))
+                    },
+                    ValueRef::Column(col) => {
+                        let result = BooleanType::column_from_iter(BooleanType::iter_column(&col).map(|val| {
+                            set.contains(&(val as u8))
+                        }), &[]);
+                        Ok(Value::Column(result))
+                    }
+                }
+        }
+    );
+
+    registry.register_passthrough_nullable_2_arg::<StringType, ArrayType<StringType>, BooleanType, _, _>(
+        "in",
+        FunctionProperty::default(),
+        |_, _| None,
+        |lhs, rhs, _| {
+                let array = rhs.as_scalar().unwrap();
+                let mut set = StackHashSet::<_, 128>::with_capacity(StringType::column_len(array));
+                for val in array.iter() {
+                    let key_ref = KeysRef::create(val.as_ptr() as usize, val.len());
+                    let _ = set.set_insert(key_ref);
+                }
+                match lhs {
+                    ValueRef::Scalar(val) =>  {
+                        let key_ref = KeysRef::create(val.as_ptr() as usize, val.len());
+                        Ok(Value::Scalar(set.contains( &key_ref)))
+                    },
+                    ValueRef::Column(col) => {
+                        let result = BooleanType::column_from_iter(StringType::iter_column(&col).map(|val| {
+                            let key_ref = KeysRef::create(val.as_ptr() as usize, val.len());
+                            set.contains(&key_ref)
+                        }), &[]);
+                        Ok(Value::Column(result))
+                    }
+                }
+        }
     );
 }

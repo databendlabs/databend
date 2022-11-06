@@ -613,6 +613,34 @@ hex(Int64) :: String
 hex(Int64 NULL) :: String NULL
 hex(String) :: String
 hex(String NULL) :: String NULL
+in(UInt8, Array(UInt8)) :: Boolean
+in(UInt8 NULL, Array(UInt8) NULL) :: Boolean NULL
+in(UInt16, Array(UInt16)) :: Boolean
+in(UInt16 NULL, Array(UInt16) NULL) :: Boolean NULL
+in(UInt32, Array(UInt32)) :: Boolean
+in(UInt32 NULL, Array(UInt32) NULL) :: Boolean NULL
+in(UInt64, Array(UInt64)) :: Boolean
+in(UInt64 NULL, Array(UInt64) NULL) :: Boolean NULL
+in(Int8, Array(Int8)) :: Boolean
+in(Int8 NULL, Array(Int8) NULL) :: Boolean NULL
+in(Int16, Array(Int16)) :: Boolean
+in(Int16 NULL, Array(Int16) NULL) :: Boolean NULL
+in(Int32, Array(Int32)) :: Boolean
+in(Int32 NULL, Array(Int32) NULL) :: Boolean NULL
+in(Int64, Array(Int64)) :: Boolean
+in(Int64 NULL, Array(Int64) NULL) :: Boolean NULL
+in(Float32, Array(Float32)) :: Boolean
+in(Float32 NULL, Array(Float32) NULL) :: Boolean NULL
+in(Float64, Array(Float64)) :: Boolean
+in(Float64 NULL, Array(Float64) NULL) :: Boolean NULL
+in(Date, Array(Date)) :: Boolean
+in(Date NULL, Array(Date) NULL) :: Boolean NULL
+in(Timestamp, Array(Timestamp)) :: Boolean
+in(Timestamp NULL, Array(Timestamp) NULL) :: Boolean NULL
+in(Boolean, Array(Boolean)) :: Boolean
+in(Boolean NULL, Array(Boolean) NULL) :: Boolean NULL
+in(String, Array(String)) :: Boolean
+in(String NULL, Array(String) NULL) :: Boolean NULL
 insert(String, Int64, Int64, String) :: String
 insert(String NULL, Int64 NULL, Int64 NULL, String NULL) :: String NULL
 instr(String, String) :: UInt64

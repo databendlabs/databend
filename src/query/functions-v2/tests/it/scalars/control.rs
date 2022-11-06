@@ -29,6 +29,7 @@ fn test_control() {
 
     test_multi_if(file);
     test_is_not_null(file);
+    test_in(file);
 }
 
 fn test_multi_if(file: &mut impl Write) {
@@ -163,4 +164,20 @@ fn test_is_not_null(file: &mut impl Write) {
         DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int64))),
         Column::from_data_with_validity(vec![9i64, 10, 11, 12], vec![true, true, false, false]),
     )]);
+}
+
+
+fn test_in(file: &mut impl Write) {
+    run_ast(file, "false in (false, true)", &[]);
+    // run_ast(file, "a in [1, 2, 3]", &[(
+    //     "int8_col",
+    //     DataType::Number(NumberDataType::Int8),
+    //     Column::from_data(vec![1i8, 2, 7, 8]),
+    // )]);
+    // run_ast(file, "'33' in ['1', '33', '23']", &[]);
+    // run_ast(file, "nullable_col in [null, 9, 10, 12]", &[(
+    //     "nullable_col",
+    //     DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int64))),
+    //     Column::from_data_with_validity(vec![9i64, 10, 11, 12], vec![true, true, false, false]),
+    // )]);
 }

@@ -419,6 +419,21 @@ pub fn transform_expr(ast: common_ast::ast::Expr, columns: &[(&str, DataType)]) 
                 }
             })
         }
+        common_ast::ast::Expr::InList { span, expr, list, not } => {
+            // TODO rewrite to or equal 
+            let list: Vec<RawExpr> = list.iter().map(|e| transform_expr(*e, columns)).collect();
+            // let e = RawExpr::Literal { span, lit: Literal:: }
+            RawExpr::FunctionCall {
+                span: transform_span(span),
+                name: "in".to_string(),
+                params: vec![],
+                args: vec![
+                    transform_expr(*expr, columns),
+                    RawExpr::Literal {}
+                    transform_expr(*list, columns),
+                ],
+            }
+        }
         expr => unimplemented!("{expr:?} is unimplemented"),
     }
 }
