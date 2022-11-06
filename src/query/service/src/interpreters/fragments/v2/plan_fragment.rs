@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_catalog::plan::ReadDataSourcePlan;
+use common_catalog::plan::DataSourcePlan;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -164,7 +164,7 @@ impl PlanFragment {
         Ok(fragment_actions)
     }
 
-    fn get_read_source(&self) -> Result<ReadDataSourcePlan> {
+    fn get_read_source(&self) -> Result<DataSourcePlan> {
         if self.fragment_type != FragmentType::Source {
             return Err(ErrorCode::Internal(
                 "Cannot get read source from a non-source fragment".to_string(),
@@ -197,7 +197,7 @@ impl PlanFragment {
 }
 
 struct ReplaceReadSource {
-    pub source: ReadDataSourcePlan,
+    pub source: DataSourcePlan,
 }
 
 impl PhysicalPlanReplacer for ReplaceReadSource {

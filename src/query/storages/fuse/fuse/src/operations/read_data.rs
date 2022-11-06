@@ -15,10 +15,10 @@
 use std::sync::Arc;
 
 use common_base::base::Runtime;
+use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PrewhereInfo;
 use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
-use common_catalog::plan::ReadDataSourcePlan;
 use common_catalog::table_context::TableContext;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
@@ -63,7 +63,7 @@ impl FuseTable {
     }
 
     // Build the block reader.
-    fn build_block_reader(&self, plan: &ReadDataSourcePlan) -> Result<Arc<BlockReader>> {
+    fn build_block_reader(&self, plan: &DataSourcePlan) -> Result<Arc<BlockReader>> {
         match self.prewhere_of_push_downs(&plan.push_downs) {
             None => {
                 let projection = self.projection_of_push_downs(&plan.push_downs);
@@ -74,7 +74,7 @@ impl FuseTable {
     }
 
     // Build the prewhere reader.
-    fn build_prewhere_reader(&self, plan: &ReadDataSourcePlan) -> Result<Arc<BlockReader>> {
+    fn build_prewhere_reader(&self, plan: &DataSourcePlan) -> Result<Arc<BlockReader>> {
         match self.prewhere_of_push_downs(&plan.push_downs) {
             None => {
                 let projection = self.projection_of_push_downs(&plan.push_downs);
@@ -88,7 +88,7 @@ impl FuseTable {
     fn build_prewhere_filter_executor(
         &self,
         _ctx: Arc<dyn TableContext>,
-        plan: &ReadDataSourcePlan,
+        plan: &DataSourcePlan,
         schema: DataSchemaRef,
     ) -> Result<Arc<Option<EvalNode>>> {
         Ok(match self.prewhere_of_push_downs(&plan.push_downs) {
@@ -101,7 +101,7 @@ impl FuseTable {
     }
 
     // Build the remain reader.
-    fn build_remain_reader(&self, plan: &ReadDataSourcePlan) -> Result<Arc<Option<BlockReader>>> {
+    fn build_remain_reader(&self, plan: &DataSourcePlan) -> Result<Arc<Option<BlockReader>>> {
         Ok(match self.prewhere_of_push_downs(&plan.push_downs) {
             None => Arc::new(None),
             Some(v) => {
@@ -118,7 +118,7 @@ impl FuseTable {
     pub fn do_read_data(
         &self,
         ctx: Arc<dyn TableContext>,
-        plan: &ReadDataSourcePlan,
+        plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
         max_io_requests: usize,
     ) -> Result<()> {

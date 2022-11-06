@@ -19,12 +19,12 @@ use std::str;
 use std::sync::Arc;
 
 use common_catalog::catalog::StorageDescription;
+use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::DeletePlan;
 use common_catalog::plan::Expression;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PushDownInfo;
-use common_catalog::plan::ReadDataSourcePlan;
 use common_catalog::table::AppendMode;
 use common_catalog::table::ColumnId;
 use common_catalog::table::ColumnStatistics;
@@ -354,7 +354,7 @@ impl Table for FuseTable {
     fn read_data(
         &self,
         ctx: Arc<dyn TableContext>,
-        plan: &ReadDataSourcePlan,
+        plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;

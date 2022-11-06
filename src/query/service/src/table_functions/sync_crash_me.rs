@@ -19,10 +19,10 @@ use std::task::Context;
 use std::task::Poll;
 
 use chrono::NaiveDateTime;
+use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PushDownInfo;
-use common_catalog::plan::ReadDataSourcePlan;
 use common_datablocks::DataBlock;
 use common_datavalues::chrono::TimeZone;
 use common_datavalues::chrono::Utc;
@@ -117,7 +117,7 @@ impl Table for SyncCrashMeTable {
     fn read_data(
         &self,
         ctx: Arc<dyn TableContext>,
-        _plan: &ReadDataSourcePlan,
+        _plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let output = OutputPort::create();

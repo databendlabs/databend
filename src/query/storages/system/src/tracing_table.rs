@@ -19,10 +19,10 @@ use std::io::BufRead;
 use std::io::BufReader;
 use std::sync::Arc;
 
+use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PushDownInfo;
-use common_catalog::plan::ReadDataSourcePlan;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
@@ -108,7 +108,7 @@ impl Table for TracingTable {
     fn read_data(
         &self,
         ctx: Arc<dyn TableContext>,
-        _: &ReadDataSourcePlan,
+        _: &DataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let settings = ctx.get_settings();

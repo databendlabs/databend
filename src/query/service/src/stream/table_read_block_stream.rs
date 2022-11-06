@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_catalog::plan::ReadDataSourcePlan;
+use common_catalog::plan::DataSourcePlan;
 use common_datablocks::SendableDataBlockStream;
 use common_exception::Result;
 
@@ -31,7 +31,7 @@ pub trait ReadDataBlockStream: Send + Sync {
     async fn read_data_block_stream(
         &self,
         _ctx: Arc<QueryContext>,
-        _plan: &ReadDataSourcePlan,
+        _plan: &DataSourcePlan,
     ) -> Result<SendableDataBlockStream>;
 }
 
@@ -40,7 +40,7 @@ impl<T: ?Sized + Table> ReadDataBlockStream for T {
     async fn read_data_block_stream(
         &self,
         ctx: Arc<QueryContext>,
-        plan: &ReadDataSourcePlan,
+        plan: &DataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         let mut pipeline = Pipeline::create();
         self.read_data(ctx.clone(), plan, &mut pipeline)?;

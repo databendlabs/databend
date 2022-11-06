@@ -15,8 +15,8 @@
 use std::sync::Arc;
 
 use common_base::base::tokio;
-use common_catalog::plan::ReadDataSourcePlan;
-use common_catalog::plan::SourceInfo;
+use common_catalog::plan::DataSourceInfo;
+use common_catalog::plan::DataSourcePlan;
 use common_datablocks::assert_blocks_sorted_eq;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::Series;
@@ -74,9 +74,9 @@ async fn test_result_table() -> Result<()> {
         assert_eq!(stats.read_rows, 3);
         ctx.try_set_partitions(parts)?;
         let stream = table
-            .read_data_block_stream(ctx.clone(), &ReadDataSourcePlan {
+            .read_data_block_stream(ctx.clone(), &DataSourcePlan {
                 catalog: "".to_string(),
-                source_info: SourceInfo::TableSource(Default::default()),
+                source_info: DataSourceInfo::TableSource(Default::default()),
                 scan_fields: None,
                 parts: Default::default(),
                 statistics: Default::default(),

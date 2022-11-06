@@ -14,8 +14,8 @@
 
 use std::collections::BTreeMap;
 
+use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::FragmentKind;
-use common_catalog::plan::ReadDataSourcePlan;
 use common_catalog::plan::SINK_SCHEMA;
 use common_datablocks::DataBlock;
 use common_datavalues::wrap_nullable;
@@ -42,7 +42,7 @@ pub type ColumnID = String;
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct TableScan {
     pub name_mapping: BTreeMap<String, ColumnID>,
-    pub source: Box<ReadDataSourcePlan>,
+    pub source: Box<DataSourcePlan>,
 
     /// Only used for display
     pub table_index: IndexType,

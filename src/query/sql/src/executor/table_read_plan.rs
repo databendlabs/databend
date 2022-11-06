@@ -15,10 +15,10 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use common_catalog::plan::DataSourceInfo;
+use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
-use common_catalog::plan::ReadDataSourcePlan;
-use common_catalog::plan::SourceInfo;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_datavalues::DataField;
@@ -32,7 +32,7 @@ pub trait ToReadDataSourcePlan {
         &self,
         ctx: Arc<dyn TableContext>,
         push_downs: Option<PushDownInfo>,
-    ) -> Result<ReadDataSourcePlan> {
+    ) -> Result<DataSourcePlan> {
         self.read_plan_with_catalog(ctx, "default".to_owned(), push_downs)
             .await
     }
@@ -42,7 +42,7 @@ pub trait ToReadDataSourcePlan {
         ctx: Arc<dyn TableContext>,
         catalog: String,
         push_downs: Option<PushDownInfo>,
-    ) -> Result<ReadDataSourcePlan>;
+    ) -> Result<DataSourcePlan>;
 }
 
 #[async_trait::async_trait]
@@ -52,7 +52,7 @@ impl ToReadDataSourcePlan for dyn Table {
         ctx: Arc<dyn TableContext>,
         catalog: String,
         push_downs: Option<PushDownInfo>,
-    ) -> Result<ReadDataSourcePlan> {
+    ) -> Result<DataSourcePlan> {
         let (statistics, parts) = self.read_partitions(ctx, push_downs.clone()).await?;
 
         let table_info = self.get_table_info();
@@ -77,9 +77,9 @@ impl ToReadDataSourcePlan for dyn Table {
 
         // TODO pass in catalog name
 
-        Ok(ReadDataSourcePlan {
+        Ok(DataSourcePlan {
             catalog,
-            source_info: SourceInfo::TableSource(table_info.clone()),
+            source_info: DataSourceInfo::TableSource(table_info.clone()),
             scan_fields,
             parts,
             statistics,

@@ -16,10 +16,10 @@ use std::any::Any;
 use std::sync::Arc;
 
 use common_catalog::catalog::CATALOG_DEFAULT;
+use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PushDownInfo;
-use common_catalog::plan::ReadDataSourcePlan;
 use common_datablocks::DataBlock;
 use common_datavalues::DataValue;
 use common_exception::Result;
@@ -117,7 +117,7 @@ impl Table for FuseBlockTable {
     fn read_data(
         &self,
         ctx: Arc<dyn TableContext>,
-        _: &ReadDataSourcePlan,
+        _: &DataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let output = OutputPort::create();

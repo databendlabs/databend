@@ -18,11 +18,11 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 
 use common_catalog::catalog::StorageDescription;
+use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
-use common_catalog::plan::ReadDataSourcePlan;
 use common_catalog::table::AppendMode;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
@@ -203,7 +203,7 @@ impl Table for MemoryTable {
     fn read_data(
         &self,
         ctx: Arc<dyn TableContext>,
-        plan: &ReadDataSourcePlan,
+        plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let numbers = ctx.get_settings().get_max_threads()? as usize;

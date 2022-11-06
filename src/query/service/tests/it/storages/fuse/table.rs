@@ -16,8 +16,8 @@ use std::default::Default;
 
 use common_ast::ast::Engine;
 use common_base::base::tokio;
-use common_catalog::plan::ReadDataSourcePlan;
-use common_catalog::plan::SourceInfo;
+use common_catalog::plan::DataSourceInfo;
+use common_catalog::plan::DataSourcePlan;
 use common_exception::Result;
 use common_meta_app::schema::TableInfo;
 use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
@@ -72,9 +72,9 @@ async fn test_fuse_table_normal_case() -> Result<()> {
 
         ctx.try_set_partitions(parts.clone())?;
         let stream = table
-            .read_data_block_stream(ctx.clone(), &ReadDataSourcePlan {
+            .read_data_block_stream(ctx.clone(), &DataSourcePlan {
                 catalog: "default".to_owned(),
-                source_info: SourceInfo::TableSource(Default::default()),
+                source_info: DataSourceInfo::TableSource(Default::default()),
                 scan_fields: None,
                 parts,
                 statistics: Default::default(),
@@ -132,9 +132,9 @@ async fn test_fuse_table_normal_case() -> Result<()> {
         ctx.try_set_partitions(parts.clone())?;
 
         let stream = table
-            .read_data_block_stream(ctx.clone(), &ReadDataSourcePlan {
+            .read_data_block_stream(ctx.clone(), &DataSourcePlan {
                 catalog: "default".to_owned(),
-                source_info: SourceInfo::TableSource(Default::default()),
+                source_info: DataSourceInfo::TableSource(Default::default()),
                 scan_fields: None,
                 parts,
                 statistics: Default::default(),

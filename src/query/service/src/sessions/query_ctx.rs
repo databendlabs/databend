@@ -27,10 +27,10 @@ use common_base::base::tokio::task::JoinHandle;
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
 use common_base::base::TrySpawn;
+use common_catalog::plan::DataSourceInfo;
+use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::Partitions;
-use common_catalog::plan::ReadDataSourcePlan;
-use common_catalog::plan::SourceInfo;
 use common_catalog::plan::StageTableInfo;
 use common_config::Config;
 use common_config::DATABEND_COMMIT_VERSION;
@@ -204,12 +204,12 @@ impl TableContext for QueryContext {
     ///
     /// A plan just contains raw information about a table or table function.
     /// This method builds a `dyn Table`, which provides table specific io methods the plan needs.
-    fn build_table_from_source_plan(&self, plan: &ReadDataSourcePlan) -> Result<Arc<dyn Table>> {
+    fn build_table_from_source_plan(&self, plan: &DataSourcePlan) -> Result<Arc<dyn Table>> {
         match &plan.source_info {
-            SourceInfo::TableSource(table_info) => {
+            DataSourceInfo::TableSource(table_info) => {
                 self.build_table_by_table_info(&plan.catalog, table_info, plan.tbl_args.clone())
             }
-            SourceInfo::StageSource(stage_info) => {
+            DataSourceInfo::StageSource(stage_info) => {
                 self.build_external_by_table_info(&plan.catalog, stage_info, plan.tbl_args.clone())
             }
         }

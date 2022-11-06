@@ -30,12 +30,12 @@ use common_meta_types::MetaId;
 use common_pipeline_core::Pipeline;
 use common_storage::StorageMetrics;
 
+use crate::plan::DataSourcePlan;
 use crate::plan::DeletePlan;
 use crate::plan::Expression;
 use crate::plan::PartStatistics;
 use crate::plan::Partitions;
 use crate::plan::PushDownInfo;
-use crate::plan::ReadDataSourcePlan;
 use crate::table::column_stats_provider_impls::DummyColumnStatisticsProvider;
 use crate::table_context::TableContext;
 use crate::table_mutator::TableMutator;
@@ -145,7 +145,7 @@ pub trait Table: Sync + Send {
     fn read_data(
         &self,
         ctx: Arc<dyn TableContext>,
-        plan: &ReadDataSourcePlan,
+        plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let (_, _, _) = (ctx, plan, pipeline);

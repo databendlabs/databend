@@ -17,11 +17,11 @@ use std::mem::size_of;
 use std::sync::Arc;
 
 use chrono::NaiveDateTime;
+use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PushDownInfo;
-use common_catalog::plan::ReadDataSourcePlan;
 use common_catalog::table::TableStatistics;
 use common_datablocks::DataBlock;
 use common_datavalues::chrono::TimeZone;
@@ -167,7 +167,7 @@ impl Table for NumbersTable {
     fn read_data(
         &self,
         ctx: Arc<dyn TableContext>,
-        plan: &ReadDataSourcePlan,
+        plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         if plan.parts.is_empty() {

@@ -17,10 +17,10 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 
 use common_base::base::uuid;
+use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PushDownInfo;
-use common_catalog::plan::ReadDataSourcePlan;
 use common_catalog::plan::StageTableInfo;
 use common_catalog::table::AppendMode;
 use common_catalog::table::Table;
@@ -120,7 +120,7 @@ impl Table for StageTable {
     fn read_data(
         &self,
         _ctx: Arc<dyn TableContext>,
-        _plan: &ReadDataSourcePlan,
+        _plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let input_ctx = self.get_input_context().unwrap();

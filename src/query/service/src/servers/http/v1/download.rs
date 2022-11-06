@@ -15,9 +15,9 @@
 use std::sync::Arc;
 
 use async_stream::stream;
+use common_catalog::plan::DataSourceInfo;
+use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PushDownInfo;
-use common_catalog::plan::ReadDataSourcePlan;
-use common_catalog::plan::SourceInfo;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_formats::FileFormatOptionsExt;
@@ -63,9 +63,9 @@ impl Downloader for ResultTable {
             .await?;
         ctx.try_set_partitions(parts)?;
         let mut block_stream = self
-            .read_data_block_stream(ctx.clone(), &ReadDataSourcePlan {
+            .read_data_block_stream(ctx.clone(), &DataSourcePlan {
                 catalog: "".to_string(),
-                source_info: SourceInfo::TableSource(Default::default()),
+                source_info: DataSourceInfo::TableSource(Default::default()),
                 scan_fields: None,
                 parts: Default::default(),
                 statistics: Default::default(),

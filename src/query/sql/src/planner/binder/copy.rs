@@ -24,8 +24,8 @@ use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
 use common_ast::Backtrace;
 use common_ast::Dialect;
-use common_catalog::plan::ReadDataSourcePlan;
-use common_catalog::plan::SourceInfo;
+use common_catalog::plan::DataSourceInfo;
+use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::StageTableInfo;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
@@ -228,9 +228,9 @@ impl<'a> Binder {
             parse_stage_location_v2(&self.ctx, src_stage, src_path).await?;
         self.apply_stage_options(stmt, &mut stage_info)?;
 
-        let from = ReadDataSourcePlan {
+        let from = DataSourcePlan {
             catalog: dst_catalog_name.to_string(),
-            source_info: SourceInfo::StageSource(StageTableInfo {
+            source_info: DataSourceInfo::StageSource(StageTableInfo {
                 schema: table.schema(),
                 stage_info,
                 path,
@@ -287,9 +287,9 @@ impl<'a> Binder {
         let mut stage_info = UserStageInfo::new_external_stage(storage_params, &path);
         self.apply_stage_options(stmt, &mut stage_info)?;
 
-        let from = ReadDataSourcePlan {
+        let from = DataSourcePlan {
             catalog: dst_catalog_name.to_string(),
-            source_info: SourceInfo::StageSource(StageTableInfo {
+            source_info: DataSourceInfo::StageSource(StageTableInfo {
                 schema: table.schema(),
                 stage_info,
                 path,

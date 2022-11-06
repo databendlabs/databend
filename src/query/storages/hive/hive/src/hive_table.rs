@@ -19,12 +19,12 @@ use std::time::Instant;
 use async_recursion::async_recursion;
 use common_base::base::tokio;
 use common_base::base::tokio::sync::Semaphore;
+use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::Expression;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
-use common_catalog::plan::ReadDataSourcePlan;
 use common_catalog::plan::RequireColumnsVisitor;
 use common_catalog::table::Table;
 use common_catalog::table::TableStatistics;
@@ -157,7 +157,7 @@ impl HiveTable {
     pub fn do_read2(
         &self,
         ctx: Arc<dyn TableContext>,
-        plan: &ReadDataSourcePlan,
+        plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let push_downs = &plan.push_downs;
@@ -199,7 +199,7 @@ impl HiveTable {
     // simple select query is the sql likes `select * from xx limit 10` or
     // `select * from xx where p_date = '20220201' limit 10` where p_date is a partition column;
     // we just need to read few datas from table
-    fn is_simple_select_query(&self, plan: &ReadDataSourcePlan) -> bool {
+    fn is_simple_select_query(&self, plan: &DataSourcePlan) -> bool {
         // couldn't get groupby order by info
         if let Some(PushDownInfo {
             filters: f,
@@ -480,7 +480,7 @@ impl Table for HiveTable {
     fn read_data(
         &self,
         ctx: Arc<dyn TableContext>,
-        plan: &ReadDataSourcePlan,
+        plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         self.do_read2(ctx, plan, pipeline)

@@ -15,11 +15,11 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartInfo;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PushDownInfo;
-use common_catalog::plan::ReadDataSourcePlan;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
@@ -104,7 +104,7 @@ impl<TTable: 'static + SyncSystemTable> Table for SyncOneBlockSystemTable<TTable
     fn read_data(
         &self,
         ctx: Arc<dyn TableContext>,
-        plan: &ReadDataSourcePlan,
+        plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         // avoid duplicate read in cluster mode.
@@ -223,7 +223,7 @@ impl<TTable: 'static + AsyncSystemTable> Table for AsyncOneBlockSystemTable<TTab
     fn read_data(
         &self,
         ctx: Arc<dyn TableContext>,
-        _: &ReadDataSourcePlan,
+        _: &DataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let output = OutputPort::create();

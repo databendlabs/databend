@@ -16,8 +16,8 @@ use std::path::Path;
 use std::sync::Arc;
 
 use common_base::base::GlobalIORuntime;
-use common_catalog::plan::ReadDataSourcePlan;
-use common_catalog::plan::SourceInfo;
+use common_catalog::plan::DataSourceInfo;
+use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::StageTableInfo;
 use common_catalog::table::AppendMode;
 use common_datavalues::chrono::Utc;
@@ -230,11 +230,11 @@ impl CopyInterpreterV2 {
 
     async fn purge_files(
         ctx: Arc<QueryContext>,
-        from: &ReadDataSourcePlan,
+        from: &DataSourcePlan,
         files: &Vec<String>,
     ) -> Result<()> {
         match &from.source_info {
-            SourceInfo::StageSource(table_info) => {
+            DataSourceInfo::StageSource(table_info) => {
                 if table_info.stage_info.copy_options.purge {
                     let rename_me: Arc<dyn TableContext> = ctx.clone();
                     let op = StageTable::get_op(&rename_me, &table_info.stage_info)?;
@@ -255,11 +255,8 @@ impl CopyInterpreterV2 {
     }
 
     /// Rewrite the ReadDataSourcePlan.S3StageSource.file_name to new file name.
-    fn rewrite_read_plan_file_name(
-        mut plan: ReadDataSourcePlan,
-        files: &[String],
-    ) -> ReadDataSourcePlan {
-        if let SourceInfo::StageSource(ref mut stage) = plan.source_info {
+    fn rewrite_read_plan_file_name(mut plan: DataSourcePlan, files: &[String]) -> DataSourcePlan {
+        if let DataSourceInfo::StageSource(ref mut stage) = plan.source_info {
             stage.files = files.to_vec()
         }
         plan
@@ -279,7 +276,7 @@ impl CopyInterpreterV2 {
         db_name: &String,
         tbl_name: &String,
         table_id: u64,
-        from: &ReadDataSourcePlan,
+        from: &DataSourcePlan,
         copy_stage_files: BTreeMap<String, TableCopiedFileInfo>,
     ) -> Result<PipelineBuildResult> {
         // let mut v = [5, 4, 1, 3, 2];
@@ -439,7 +436,7 @@ impl Interpreter for CopyInterpreterV2 {
                 force,
                 ..
             } => match &from.source_info {
-                SourceInfo::StageSource(table_info) => {
+                DataSourceInfo::StageSource(table_info) => {
                     let path = &table_info.path;
 
                     let mut stage_files = if !files.is_empty() {

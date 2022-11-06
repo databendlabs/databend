@@ -55,7 +55,7 @@ impl Debug for StageTableInfo {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub enum SourceInfo {
+pub enum DataSourceInfo {
     // Normal table source, `fuse/system`.
     TableSource(TableInfo),
 
@@ -63,28 +63,28 @@ pub enum SourceInfo {
     StageSource(StageTableInfo),
 }
 
-impl SourceInfo {
+impl DataSourceInfo {
     pub fn schema(&self) -> Arc<DataSchema> {
         match self {
-            SourceInfo::TableSource(table_info) => table_info.schema(),
-            SourceInfo::StageSource(table_info) => table_info.schema(),
+            DataSourceInfo::TableSource(table_info) => table_info.schema(),
+            DataSourceInfo::StageSource(table_info) => table_info.schema(),
         }
     }
 
     pub fn desc(&self) -> String {
         match self {
-            SourceInfo::TableSource(table_info) => table_info.desc.clone(),
-            SourceInfo::StageSource(table_info) => table_info.desc(),
+            DataSourceInfo::TableSource(table_info) => table_info.desc.clone(),
+            DataSourceInfo::StageSource(table_info) => table_info.desc(),
         }
     }
 }
 
 // TODO: Delete the scan plan field, but it depends on plan_parser:L394
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
-pub struct ReadDataSourcePlan {
+pub struct DataSourcePlan {
     // TODO catalog id is better
     pub catalog: String,
-    pub source_info: SourceInfo,
+    pub source_info: DataSourceInfo,
 
     /// Required fields to scan.
     ///
@@ -102,7 +102,7 @@ pub struct ReadDataSourcePlan {
     pub push_downs: Option<PushDownInfo>,
 }
 
-impl ReadDataSourcePlan {
+impl DataSourcePlan {
     /// Return schema after the projection
     pub fn schema(&self) -> DataSchemaRef {
         self.scan_fields
