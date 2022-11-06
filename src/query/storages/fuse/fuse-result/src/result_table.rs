@@ -16,10 +16,10 @@ use std::any::Any;
 use std::sync::Arc;
 
 use common_catalog::plan::Extras;
+use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::Projection;
 use common_catalog::plan::ReadDataSourcePlan;
-use common_catalog::plan::Statistics;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_datavalues::DataSchemaRef;
@@ -143,7 +143,7 @@ impl Table for ResultTable {
         &self,
         ctx: Arc<dyn TableContext>,
         push_downs: Option<Extras>,
-    ) -> Result<(Statistics, Partitions)> {
+    ) -> Result<(PartStatistics, Partitions)> {
         let data_accessor = ctx.get_data_operator()?;
         let meta_location = self.locations.get_meta_location();
         let meta_data = data_accessor.object(&meta_location).read().await?;

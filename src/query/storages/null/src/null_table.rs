@@ -17,9 +17,9 @@ use std::sync::Arc;
 
 use common_catalog::catalog::StorageDescription;
 use common_catalog::plan::Extras;
+use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::ReadDataSourcePlan;
-use common_catalog::plan::Statistics;
 use common_catalog::table::AppendMode;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
@@ -67,8 +67,8 @@ impl Table for NullTable {
         &self,
         _ctx: Arc<dyn TableContext>,
         _push_downs: Option<Extras>,
-    ) -> Result<(Statistics, Partitions)> {
-        Ok((Statistics::default(), vec![]))
+    ) -> Result<(PartStatistics, Partitions)> {
+        Ok((PartStatistics::default(), vec![]))
     }
 
     fn read_data(

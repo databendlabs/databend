@@ -22,9 +22,9 @@ use common_catalog::catalog::StorageDescription;
 use common_catalog::plan::DeletePlan;
 use common_catalog::plan::Expression;
 use common_catalog::plan::Extras;
+use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::ReadDataSourcePlan;
-use common_catalog::plan::Statistics;
 use common_catalog::table::AppendMode;
 use common_catalog::table::ColumnId;
 use common_catalog::table::ColumnStatistics;
@@ -346,7 +346,7 @@ impl Table for FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
         push_downs: Option<Extras>,
-    ) -> Result<(Statistics, Partitions)> {
+    ) -> Result<(PartStatistics, Partitions)> {
         self.do_read_partitions(ctx, push_downs).await
     }
 

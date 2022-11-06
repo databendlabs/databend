@@ -33,9 +33,9 @@ use common_storage::StorageMetrics;
 use crate::plan::DeletePlan;
 use crate::plan::Expression;
 use crate::plan::Extras;
+use crate::plan::PartStatistics;
 use crate::plan::Partitions;
 use crate::plan::ReadDataSourcePlan;
-use crate::plan::Statistics;
 use crate::table::column_stats_provider_impls::DummyColumnStatisticsProvider;
 use crate::table_context::TableContext;
 use crate::table_mutator::TableMutator;
@@ -128,7 +128,7 @@ pub trait Table: Sync + Send {
         &self,
         ctx: Arc<dyn TableContext>,
         push_downs: Option<Extras>,
-    ) -> Result<(Statistics, Partitions)> {
+    ) -> Result<(PartStatistics, Partitions)> {
         let (_, _) = (ctx, push_downs);
         Err(ErrorCode::Unimplemented(format!(
             "read_partitions operation for table {} is not implemented. table engine : {}",

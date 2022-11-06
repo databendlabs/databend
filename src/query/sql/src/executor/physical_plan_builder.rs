@@ -20,9 +20,9 @@ use common_catalog::catalog::CatalogManager;
 use common_catalog::catalog::CATALOG_DEFAULT;
 use common_catalog::plan::Expression;
 use common_catalog::plan::Extras;
+use common_catalog::plan::FragmentKind;
 use common_catalog::plan::PrewhereInfo;
 use common_catalog::plan::Projection;
-use common_catalog::plan::StageKind;
 use common_catalog::table_context::TableContext;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
@@ -436,10 +436,10 @@ impl PhysicalPlanBuilder {
                             let mut builder = PhysicalScalarBuilder::new(&input_schema);
                             keys.push(builder.build(scalar)?);
                         }
-                        StageKind::Normal
+                        FragmentKind::Normal
                     }
-                    Exchange::Broadcast => StageKind::Expansive,
-                    Exchange::Merge => StageKind::Merge,
+                    Exchange::Broadcast => FragmentKind::Expansive,
+                    Exchange::Merge => FragmentKind::Merge,
                 };
                 Ok(PhysicalPlan::Exchange(PhysicalExchange {
                     input,

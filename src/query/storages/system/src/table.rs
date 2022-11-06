@@ -17,9 +17,9 @@ use std::sync::Arc;
 
 use common_catalog::plan::Extras;
 use common_catalog::plan::PartInfo;
+use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::ReadDataSourcePlan;
-use common_catalog::plan::Statistics;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
@@ -62,8 +62,8 @@ pub trait SyncSystemTable: Send + Sync {
         &self,
         _ctx: Arc<dyn TableContext>,
         _push_downs: Option<Extras>,
-    ) -> Result<(Statistics, Partitions)> {
-        Ok((Statistics::default(), vec![Arc::new(Box::new(
+    ) -> Result<(PartStatistics, Partitions)> {
+        Ok((PartStatistics::default(), vec![Arc::new(Box::new(
             SystemTablePart,
         ))]))
     }
@@ -97,7 +97,7 @@ impl<TTable: 'static + SyncSystemTable> Table for SyncOneBlockSystemTable<TTable
         &self,
         ctx: Arc<dyn TableContext>,
         push_downs: Option<Extras>,
-    ) -> Result<(Statistics, Partitions)> {
+    ) -> Result<(PartStatistics, Partitions)> {
         self.inner_table.get_partitions(ctx, push_downs)
     }
 
@@ -181,8 +181,8 @@ pub trait AsyncSystemTable: Send + Sync {
         &self,
         _ctx: Arc<dyn TableContext>,
         _push_downs: Option<Extras>,
-    ) -> Result<(Statistics, Partitions)> {
-        Ok((Statistics::default(), vec![Arc::new(Box::new(
+    ) -> Result<(PartStatistics, Partitions)> {
+        Ok((PartStatistics::default(), vec![Arc::new(Box::new(
             SystemTablePart,
         ))]))
     }
@@ -216,7 +216,7 @@ impl<TTable: 'static + AsyncSystemTable> Table for AsyncOneBlockSystemTable<TTab
         &self,
         ctx: Arc<dyn TableContext>,
         push_downs: Option<Extras>,
-    ) -> Result<(Statistics, Partitions)> {
+    ) -> Result<(PartStatistics, Partitions)> {
         self.inner_table.get_partitions(ctx, push_downs).await
     }
 

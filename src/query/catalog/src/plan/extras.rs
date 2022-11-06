@@ -22,13 +22,6 @@ use crate::plan::Expression;
 use crate::plan::Projection;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub enum StageKind {
-    Normal,
-    Expansive,
-    Merge,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct PrewhereInfo {
     /// columns to be ouput be prewhere scan
     pub output_columns: Projection,
@@ -58,7 +51,7 @@ pub struct Extras {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Clone, Debug, Default)]
-pub struct Statistics {
+pub struct PartStatistics {
     /// Total rows of the query read.
     pub read_rows: usize,
     /// Total bytes of the query read.
@@ -71,14 +64,14 @@ pub struct Statistics {
     pub is_exact: bool,
 }
 
-impl Statistics {
+impl PartStatistics {
     pub fn new_estimated(
         read_rows: usize,
         read_bytes: usize,
         partitions_scanned: usize,
         partitions_total: usize,
     ) -> Self {
-        Statistics {
+        PartStatistics {
             read_rows,
             read_bytes,
             partitions_scanned,
@@ -93,7 +86,7 @@ impl Statistics {
         partitions_scanned: usize,
         partitions_total: usize,
     ) -> Self {
-        Statistics {
+        PartStatistics {
             read_rows,
             read_bytes,
             partitions_scanned,

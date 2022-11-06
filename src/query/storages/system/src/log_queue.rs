@@ -19,9 +19,9 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 
 use common_catalog::plan::Extras;
+use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::ReadDataSourcePlan;
-use common_catalog::plan::Statistics;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
@@ -159,8 +159,8 @@ impl<Event: SystemLogElement + 'static> Table for SystemLogTable<Event> {
         &self,
         _: Arc<dyn TableContext>,
         _: Option<Extras>,
-    ) -> Result<(Statistics, Partitions)> {
-        Ok((Statistics::default(), vec![]))
+    ) -> Result<(PartStatistics, Partitions)> {
+        Ok((PartStatistics::default(), vec![]))
     }
 
     fn read_data(

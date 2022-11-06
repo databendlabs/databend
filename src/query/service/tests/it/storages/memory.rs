@@ -14,8 +14,8 @@
 
 use common_base::base::tokio;
 use common_catalog::plan::Extras;
+use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Projection;
-use common_catalog::plan::Statistics;
 use common_datablocks::assert_blocks_sorted_eq;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
@@ -118,9 +118,9 @@ async fn test_memorytable() -> Result<()> {
             ],
         ];
         let expected_statistics_vec = vec![
-            Statistics::new_estimated(4usize, 16usize, 0, 0),
-            Statistics::new_estimated(4usize, 32usize, 0, 0),
-            Statistics::new_exact(4usize, 48usize, 2, 2),
+            PartStatistics::new_estimated(4usize, 16usize, 0, 0),
+            PartStatistics::new_estimated(4usize, 32usize, 0, 0),
+            PartStatistics::new_exact(4usize, 48usize, 2, 2),
         ];
 
         for i in 0..push_downs_vec.len() {

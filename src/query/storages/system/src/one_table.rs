@@ -15,8 +15,8 @@
 use std::sync::Arc;
 
 use common_catalog::plan::Extras;
+use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
-use common_catalog::plan::Statistics;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
@@ -51,10 +51,10 @@ impl SyncSystemTable for OneTable {
         &self,
         _ctx: Arc<dyn TableContext>,
         _push_downs: Option<Extras>,
-    ) -> Result<(Statistics, Partitions)> {
-        Ok((Statistics::new_exact(1, 1, 1, 1), vec![Arc::new(Box::new(
-            SystemTablePart,
-        ))]))
+    ) -> Result<(PartStatistics, Partitions)> {
+        Ok((PartStatistics::new_exact(1, 1, 1, 1), vec![Arc::new(
+            Box::new(SystemTablePart),
+        )]))
     }
 }
 

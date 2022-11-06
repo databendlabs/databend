@@ -19,9 +19,9 @@ use std::sync::Arc;
 use chrono::NaiveDateTime;
 use common_catalog::plan::Extras;
 use common_catalog::plan::PartInfoPtr;
+use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::ReadDataSourcePlan;
-use common_catalog::plan::Statistics;
 use common_catalog::table::TableStatistics;
 use common_datablocks::DataBlock;
 use common_datavalues::chrono::TimeZone;
@@ -123,7 +123,7 @@ impl Table for NumbersTable {
         &self,
         ctx: Arc<dyn TableContext>,
         push_downs: Option<Extras>,
-    ) -> Result<(Statistics, Partitions)> {
+    ) -> Result<(PartStatistics, Partitions)> {
         let max_block_size = ctx.get_settings().get_max_block_size()?;
         let mut limit = None;
 
@@ -144,7 +144,7 @@ impl Table for NumbersTable {
         };
 
         let fake_partitions = (total / max_block_size) + 1;
-        let statistics = Statistics::new_exact(
+        let statistics = PartStatistics::new_exact(
             total as usize,
             ((total) * size_of::<u64>() as u64) as usize,
             fake_partitions as usize,

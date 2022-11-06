@@ -20,9 +20,9 @@ use std::task::Poll;
 
 use chrono::NaiveDateTime;
 use common_catalog::plan::Extras;
+use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::ReadDataSourcePlan;
-use common_catalog::plan::Statistics;
 use common_datablocks::DataBlock;
 use common_datavalues::chrono::TimeZone;
 use common_datavalues::chrono::Utc;
@@ -105,9 +105,9 @@ impl Table for SyncCrashMeTable {
         &self,
         _: Arc<dyn TableContext>,
         _: Option<Extras>,
-    ) -> Result<(Statistics, Partitions)> {
+    ) -> Result<(PartStatistics, Partitions)> {
         // dummy statistics
-        Ok((Statistics::new_exact(1, 1, 1, 1), vec![]))
+        Ok((PartStatistics::new_exact(1, 1, 1, 1), vec![]))
     }
 
     fn table_args(&self) -> Option<Vec<DataValue>> {

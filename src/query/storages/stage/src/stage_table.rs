@@ -18,10 +18,10 @@ use std::sync::Arc;
 
 use common_base::base::uuid;
 use common_catalog::plan::Extras;
+use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::ReadDataSourcePlan;
 use common_catalog::plan::StageTableInfo;
-use common_catalog::plan::Statistics;
 use common_catalog::table::AppendMode;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
@@ -97,7 +97,7 @@ impl Table for StageTable {
         &self,
         ctx: Arc<dyn TableContext>,
         _push_downs: Option<Extras>,
-    ) -> Result<(Statistics, Partitions)> {
+    ) -> Result<(PartStatistics, Partitions)> {
         let operator = StageTable::get_op(&ctx, &self.table_info.stage_info)?;
         let input_ctx = Arc::new(
             InputContext::try_create_from_copy(
@@ -114,7 +114,7 @@ impl Table for StageTable {
         debug!("copy into {:?}", input_ctx);
         let mut guard = self.input_context.lock();
         *guard = Some(input_ctx);
-        Ok((Statistics::default(), vec![]))
+        Ok((PartStatistics::default(), vec![]))
     }
 
     fn read_data(

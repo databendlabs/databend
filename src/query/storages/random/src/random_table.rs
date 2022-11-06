@@ -17,10 +17,10 @@ use std::sync::Arc;
 
 use common_catalog::catalog::StorageDescription;
 use common_catalog::plan::Extras;
+use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::Projection;
 use common_catalog::plan::ReadDataSourcePlan;
-use common_catalog::plan::Statistics;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
@@ -90,7 +90,7 @@ impl Table for RandomTable {
         &self,
         ctx: Arc<dyn TableContext>,
         push_downs: Option<Extras>,
-    ) -> Result<(Statistics, Partitions)> {
+    ) -> Result<(PartStatistics, Partitions)> {
         let settings = ctx.get_settings();
         let block_size = settings.get_max_block_size()? as usize;
         // If extras.push_downs is None or extras.push_down.limit is None,
@@ -127,7 +127,7 @@ impl Table for RandomTable {
             .sum::<usize>();
         let read_bytes = total_rows * one_row_bytes;
         let parts_num = (total_rows / block_size) + 1;
-        let statistics = Statistics::new_exact(total_rows, read_bytes, parts_num, parts_num);
+        let statistics = PartStatistics::new_exact(total_rows, read_bytes, parts_num, parts_num);
 
         let mut worker_num = settings.get_max_threads()? as usize;
         if worker_num > parts_num {

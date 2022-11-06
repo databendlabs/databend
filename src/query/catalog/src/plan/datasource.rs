@@ -13,6 +13,8 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::fmt::Debug;
+use std::fmt::Formatter;
 use std::sync::Arc;
 
 use common_datavalues::DataField;
@@ -20,12 +22,37 @@ use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataValue;
 use common_meta_app::schema::TableInfo;
+use common_meta_types::UserStageInfo;
 
 use crate::plan::Extras;
+use crate::plan::PartStatistics;
 use crate::plan::Partitions;
 use crate::plan::Projection;
-use crate::plan::StageTableInfo;
-use crate::plan::Statistics;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq)]
+pub struct StageTableInfo {
+    pub schema: DataSchemaRef,
+    pub stage_info: UserStageInfo,
+    pub path: String,
+    pub files: Vec<String>,
+}
+
+impl StageTableInfo {
+    pub fn schema(&self) -> DataSchemaRef {
+        self.schema.clone()
+    }
+
+    pub fn desc(&self) -> String {
+        self.stage_info.stage_name.clone()
+    }
+}
+
+impl Debug for StageTableInfo {
+    // Ignore the schema.
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self.stage_info)
+    }
+}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum SourceInfo {
@@ -68,7 +95,7 @@ pub struct ReadDataSourcePlan {
     pub scan_fields: Option<BTreeMap<usize, DataField>>,
 
     pub parts: Partitions,
-    pub statistics: Statistics,
+    pub statistics: PartStatistics,
     pub description: String,
 
     pub tbl_args: Option<Vec<DataValue>>,

@@ -18,9 +18,9 @@ use std::time::Instant;
 
 use common_catalog::plan::Extras;
 use common_catalog::plan::PartInfoPtr;
+use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::Projection;
-use common_catalog::plan::Statistics;
 use common_catalog::table_context::TableContext;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
@@ -45,7 +45,7 @@ impl FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
         push_downs: Option<Extras>,
-    ) -> Result<(Statistics, Partitions)> {
+    ) -> Result<(PartStatistics, Partitions)> {
         debug!("fuse table do read partitions, push downs:{:?}", push_downs);
 
         let snapshot = self.read_table_snapshot().await?;
@@ -65,7 +65,7 @@ impl FuseTable {
                     }
 
                     return Ok((
-                        Statistics::new_estimated(
+                        PartStatistics::new_estimated(
                             snapshot.summary.row_count as usize,
                             snapshot.summary.compressed_byte_size as usize,
                             snapshot.segments.len(),
@@ -88,7 +88,7 @@ impl FuseTable {
                 )
                 .await
             }
-            None => Ok((Statistics::default(), vec![])),
+            None => Ok((PartStatistics::default(), vec![])),
         }
     }
 
@@ -101,7 +101,7 @@ impl FuseTable {
         table_info: TableInfo,
         segments_location: Vec<Location>,
         summary: usize,
-    ) -> Result<(Statistics, Partitions)> {
+    ) -> Result<(PartStatistics, Partitions)> {
         let start = Instant::now();
         info!(
             "prune snapshot block start, segment numbers:{}",
@@ -136,7 +136,7 @@ impl FuseTable {
         push_downs: Option<Extras>,
         block_metas: Vec<Arc<BlockMeta>>,
         partitions_total: usize,
-    ) -> Result<(Statistics, Partitions)> {
+    ) -> Result<(PartStatistics, Partitions)> {
         let arrow_schema = schema.to_arrow();
         let column_leaves = ColumnLeaves::new_from_schema(&arrow_schema);
 
@@ -161,7 +161,7 @@ impl FuseTable {
         blocks_metas: &[Arc<BlockMeta>],
         column_leaves: &ColumnLeaves,
         push_down: Option<Extras>,
-    ) -> (Statistics, Partitions) {
+    ) -> (PartStatistics, Partitions) {
         let limit = push_down
             .as_ref()
             .filter(|p| p.order_by.is_empty())
@@ -192,8 +192,8 @@ impl FuseTable {
     pub fn all_columns_partitions(
         metas: &[Arc<BlockMeta>],
         limit: usize,
-    ) -> (Statistics, Partitions) {
-        let mut statistics = Statistics::default_exact();
+    ) -> (PartStatistics, Partitions) {
+        let mut statistics = PartStatistics::default_exact();
         let mut partitions = Partitions::default();
 
         if limit == 0 {
@@ -227,8 +227,8 @@ impl FuseTable {
         column_leaves: &ColumnLeaves,
         projection: &Projection,
         limit: usize,
-    ) -> (Statistics, Partitions) {
-        let mut statistics = Statistics::default_exact();
+    ) -> (PartStatistics, Partitions) {
+        let mut statistics = PartStatistics::default_exact();
         let mut partitions = Partitions::default();
 
         if limit == 0 {
@@ -325,7 +325,7 @@ impl FuseTable {
         &self,
         snapshot: &TableSnapshot,
         push_down: &Option<Extras>,
-    ) -> Option<(Statistics, Partitions)> {
+    ) -> Option<(PartStatistics, Partitions)> {
         push_down.as_ref().and_then(|extra| match extra {
             Extras {
                 projection: Some(projs),
@@ -333,7 +333,7 @@ impl FuseTable {
                 ..
             } if projs.is_empty() && filters.is_empty() => {
                 let summary = &snapshot.summary;
-                let stats = Statistics {
+                let stats = PartStatistics {
                     read_rows: summary.row_count as usize,
                     read_bytes: 0,
                     partitions_scanned: 0,

@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use common_ast::ast::FormatTreeNode;
-use common_catalog::plan::StageKind;
+use common_catalog::plan::FragmentKind;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use itertools::Itertools;
@@ -324,7 +324,7 @@ fn exchange_to_format_tree(
 ) -> Result<FormatTreeNode<String>> {
     Ok(FormatTreeNode::with_children("Exchange".to_string(), vec![
         FormatTreeNode::new(format!("exchange type: {}", match plan.kind {
-            StageKind::Normal => format!(
+            FragmentKind::Normal => format!(
                 "Hash({})",
                 plan.keys
                     .iter()
@@ -332,8 +332,8 @@ fn exchange_to_format_tree(
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
-            StageKind::Expansive => "Broadcast".to_string(),
-            StageKind::Merge => "Merge".to_string(),
+            FragmentKind::Expansive => "Broadcast".to_string(),
+            FragmentKind::Merge => "Merge".to_string(),
         })),
         to_format_tree(&plan.input, metadata)?,
     ]))

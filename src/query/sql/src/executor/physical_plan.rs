@@ -14,8 +14,8 @@
 
 use std::collections::BTreeMap;
 
+use common_catalog::plan::FragmentKind;
 use common_catalog::plan::ReadDataSourcePlan;
-use common_catalog::plan::StageKind;
 use common_catalog::plan::SINK_SCHEMA;
 use common_datablocks::DataBlock;
 use common_datavalues::wrap_nullable;
@@ -290,7 +290,7 @@ impl HashJoin {
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Exchange {
     pub input: Box<PhysicalPlan>,
-    pub kind: StageKind,
+    pub kind: FragmentKind,
     pub keys: Vec<PhysicalScalar>,
 }
 
@@ -321,7 +321,7 @@ pub struct ExchangeSink {
     pub input: Box<PhysicalPlan>,
     /// Input schema of exchanged data
     pub schema: DataSchemaRef,
-    pub kind: StageKind,
+    pub kind: FragmentKind,
     pub keys: Vec<PhysicalScalar>,
 
     /// Fragment ID of sink fragment

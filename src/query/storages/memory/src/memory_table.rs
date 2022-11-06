@@ -19,10 +19,10 @@ use std::sync::Arc;
 
 use common_catalog::catalog::StorageDescription;
 use common_catalog::plan::Extras;
+use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::Projection;
 use common_catalog::plan::ReadDataSourcePlan;
-use common_catalog::plan::Statistics;
 use common_catalog::table::AppendMode;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
@@ -150,7 +150,7 @@ impl Table for MemoryTable {
         &self,
         ctx: Arc<dyn TableContext>,
         push_downs: Option<Extras>,
-    ) -> Result<(Statistics, Partitions)> {
+    ) -> Result<(PartStatistics, Partitions)> {
         let blocks = self.blocks.read();
 
         let statistics = match push_downs {
@@ -171,7 +171,7 @@ impl Table for MemoryTable {
 
                 blocks
                     .iter()
-                    .fold(Statistics::default(), |mut stats, block| {
+                    .fold(PartStatistics::default(), |mut stats, block| {
                         stats.read_rows += block.num_rows();
                         stats.read_bytes += (0..block.num_columns())
                             .into_iter()
@@ -188,7 +188,7 @@ impl Table for MemoryTable {
                 let rows = blocks.iter().map(|block| block.num_rows()).sum();
                 let bytes = blocks.iter().map(|block| block.memory_size()).sum();
 
-                Statistics::new_exact(rows, bytes, blocks.len(), blocks.len())
+                PartStatistics::new_exact(rows, bytes, blocks.len(), blocks.len())
             }
         };
 

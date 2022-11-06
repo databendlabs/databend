@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,20 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod datasource;
-mod delete;
-mod expression;
-mod expression_visitor;
-mod extras;
-mod fragment_kind;
-mod partition;
-mod projection;
+use std::fmt::Debug;
 
-pub use datasource::*;
-pub use delete::DeletePlan;
-pub use expression::Expression;
-pub use expression_visitor::*;
-pub use extras::*;
-pub use fragment_kind::FragmentKind;
-pub use partition::*;
-pub use projection::Projection;
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub enum FragmentKind {
+    Normal,
+    Expansive,
+    Merge,
+}
