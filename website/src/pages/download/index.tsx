@@ -1,12 +1,12 @@
 // Copyright 2022 Datafuse Labs.
 import React, { FC, ReactElement, useState } from 'react';
 import Table from 'rc-table';
-import { getLatest } from '@site/src/plugins/releaseVersion';
 import styles from './styles.module.scss';
 import Layout from '@theme/Layout';
 import clsx from 'clsx';
-import { useLocalStorageState } from 'ahooks';
+import { useLocalStorageState, useMount } from 'ahooks';
 import bytes from 'bytes';
+import axios from 'axios';
 
 interface IRow {
   name: string;
@@ -14,44 +14,42 @@ interface IRow {
   tagName?: string;
   osType?: string;
   size: number;
-  browser_download_url?: string;
 }
 const LINUX_GENERIC_X86 = 'Linux Generic(x86, 64-bit)';
 const LINUX_GENERIC_ARM = 'Linux Generic(ARM, 64-bit)';
 const MAC_X86 = 'macOS (x86, 64-bit)';
 const MAC_ARM = 'macOS (ARM, 64-bit)';
 const Releases: FC = (): ReactElement=> {
-  const [cacheTagName] = useLocalStorageState<string>('global-cache-tag-name');
-  const tagName = cacheTagName as string || 'v0.8.96-nightly';
+  const [cacheTagName, setCacheTagName] = useLocalStorageState<string>('global-cache-tag-name');
+  const tagName = cacheTagName as string || 'v0.8.101-nightly';
   const DOWNLOAD_LINK = 'https://repo.databend.rs/databend/';
+  useMount(()=> {
+    getRelease();
+  });
   const [releaseData, setReleaseData] = useState<IRow[]>([
     { 
       name: `databend-${tagName}-aarch64-unknown-linux-musl.tar.gz`, 
       tagName, 
       osType: LINUX_GENERIC_ARM, 
-      size: 0,
-      browser_download_url: `${DOWNLOAD_LINK}${tagName}/${tagName}-aarch64-unknown-linux-musl.tar.gz`
+      size: 0
     },
     { 
       name: `databend-${tagName}-x86_64-unknown-linux-musl.tar.gz`, 
       tagName, 
       osType: LINUX_GENERIC_X86, 
-      size: 0, 
-      browser_download_url: `${DOWNLOAD_LINK}${tagName}/${tagName}-aarch64-apple-darwin.tar.gz`
+      size: 0
     },
     { 
       name: `databend-${tagName}-aarch64-apple-darwin.tar.gz`,
       tagName,
       osType: MAC_ARM, 
-      size: 0,
-      browser_download_url: `${DOWNLOAD_LINK}${tagName}/${tagName}-aarch64-apple-darwin.tar.gz`
+      size: 0
     },
     { 
       name: `databend-${tagName}-x86_64-apple-darwin.tar.gz`, 
       tagName, 
       osType: MAC_X86, 
-      size: 0,
-      browser_download_url: `${DOWNLOAD_LINK}${tagName}/${tagName}-x86_64-apple-darwin.tar.gz`
+      size: 0
     }
   ]);
   const columns = [
@@ -93,6 +91,39 @@ const Releases: FC = (): ReactElement=> {
       }
     }
   ];
+  async function getRelease() {
+    const res = await axios.get(`${DOWNLOAD_LINK}releases.json`); 
+    if(res.data && res.data?.length > 0){
+      const releaseData = res.data[0];
+      const { assets, tag_name } = releaseData || {};
+      setCacheTagName(tag_name);
+      const reslut = assets
+      ?.filter((item)=> {
+        item.tagName = tag_name;
+        if (item?.name?.includes('-apple-')) {
+          item.sort = 1;
+          if (item?.name?.includes('x86')) {
+            item.osType = MAC_X86;
+          } else {
+            item.osType = MAC_ARM;
+          }
+        } else {
+          item.sort = 0;
+          if (item?.name?.includes('x86')) {
+            item.osType = LINUX_GENERIC_X86;
+          } else {
+            item.osType = LINUX_GENERIC_ARM;
+          }
+        }
+        const opName = item.name;
+        return !opName?.includes('linux-gnu') && !opName?.includes('testsuites') && !opName?.includes('sha256sums');
+      })
+      ?.sort((a, b)=> {
+        return a.sort - b.sort;
+      })
+      setReleaseData(reslut);
+    }
+  }
   return (
     <Layout 
       title={`Databend - Activate your Object Storage for real-time analytics`}
@@ -100,36 +131,6 @@ const Releases: FC = (): ReactElement=> {
       <div className={styles.tableWarp}>
         <div className={styles.table}>
           <>
-            {
-              getLatest((releaseData: {assets: IRow[], tag_name: string})=> {
-                const { assets, tag_name } = releaseData || {};
-                const reslut = assets
-                ?.filter((item)=> {
-                  item.tagName = tag_name;
-                  if (item?.name?.includes('-apple-')) {
-                    item.sort = 1;
-                    if (item?.name?.includes('x86')) {
-                      item.osType = MAC_X86;
-                    } else {
-                      item.osType = MAC_ARM;
-                    }
-                  } else {
-                    item.sort = 0;
-                    if (item?.name?.includes('x86')) {
-                      item.osType = LINUX_GENERIC_X86;
-                    } else {
-                      item.osType = LINUX_GENERIC_ARM;
-                    }
-                  }
-                  const opName = item.name;
-                  return !opName?.includes('linux-gnu') && !opName?.includes('testsuites');
-                })
-                ?.sort((a, b)=> {
-                  return a.sort - b.sort;
-                })
-                setReleaseData(reslut);
-              })
-            }
             <Table showHeader={false} rowKey="name" columns={columns} data={releaseData} />
             <a target={'_blank'} className={styles.prev} href="https://github.com/datafuselabs/databend/releases">Looking for previous GA versions?</a>
           </>
