@@ -14,10 +14,10 @@
 
 use common_ast::ast::KillTarget;
 use common_exception::Result;
-use common_planner::plans::KillPlan;
 
 use crate::planner::binder::BindContext;
 use crate::planner::binder::Binder;
+use crate::plans::KillPlan;
 use crate::plans::Plan;
 
 impl<'a> Binder {
