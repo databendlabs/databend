@@ -265,7 +265,7 @@ impl SessionManager {
         // `entry()` will only acquire write lock on one shard
         // if concurrent write happens on different shards
         // multiple threads may go inside this critial zone
-        if self.active_session_counter.fetch_add(1, Ordering::Relaxed) < self.max_sessions {
+        if self.active_session_counter.fetch_add(1, Ordering::AcqRel) < self.max_sessions {
             label_counter(
                 super::metrics::METRIC_SESSION_CONNECT_NUMBERS,
                 &config.query.tenant_id,
@@ -287,7 +287,7 @@ impl SessionManager {
             Ok(session)
         } else {
             // go back one, since nothing inserted
-            self.active_session_counter.fetch_sub(1, Ordering::Relaxed);
+            self.active_session_counter.fetch_sub(1, Ordering::AcqRel);
             Err(ErrorCode::TooManyUserConnections(
                 "The current accept connection has exceeded max_active_sessions config",
             ))
@@ -301,7 +301,7 @@ impl SessionManager {
         let mysql_conn_id = Some(self.mysql_basic_conn_id.fetch_add(1, Ordering::Relaxed));
 
         // acquire write lock by calling `DashMap::entry`
-        let conn_id_session_id = self.mysql_conn_map.entry(mysql_conn_id);
+        let conn_entry = self.mysql_conn_map.entry(mysql_conn_id);
         // Note:
         // # Why not `self.mysql_conn_map.len()`
         //
@@ -314,8 +314,8 @@ impl SessionManager {
         // `entry()` will only acquire write lock on one shard
         // if concurrent write happens on different shards
         // multiple threads may go inside this critial zone
-        if self.mysql_conn_counter.fetch_add(1, Ordering::Relaxed) < self.max_sessions {
-            match conn_id_session_id {
+        if self.mysql_conn_counter.fetch_add(1, Ordering::AcqRel) < self.max_sessions {
+            match conn_entry {
                 Entry::Occupied(mut o) => {
                     o.insert(uuid);
                 }
@@ -325,7 +325,7 @@ impl SessionManager {
             }
         } else {
             // go back one, since nothing inserted
-            self.mysql_conn_counter.fetch_sub(1, Ordering::Relaxed);
+            self.mysql_conn_counter.fetch_sub(1, Ordering::AcqRel);
             return Err(ErrorCode::TooManyUserConnections(
                 "The current accept connection has exceeded max_active_sessions config",
             ));
@@ -335,7 +335,7 @@ impl SessionManager {
 
     fn remove_active_session(&self, session_id: &str) {
         if self.active_sessions.remove(session_id).is_some() {
-            self.active_session_counter.fetch_sub(1, Ordering::Relaxed);
+            self.active_session_counter.fetch_sub(1, Ordering::AcqRel);
         }
     }
 }
