@@ -14,7 +14,6 @@
 
 mod aggregate;
 mod copy_v2;
-pub mod create_table_v2;
 mod ddl;
 mod dummy_table_scan;
 mod eval_scalar;
