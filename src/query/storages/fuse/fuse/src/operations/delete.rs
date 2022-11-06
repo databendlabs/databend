@@ -14,14 +14,14 @@
 
 use std::sync::Arc;
 
+use common_catalog::plan::DeletePlan;
+use common_catalog::plan::Expression;
+use common_catalog::plan::PushDownInfo;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_datavalues::DataField;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planner::extras::Extras;
-use common_planner::plans::DeletePlan;
-use common_planner::Expression;
 use common_sql::ExpressionParser;
 use common_storages_table_meta::meta::TableSnapshot;
 use tracing::debug;
@@ -89,7 +89,7 @@ impl FuseTable {
         )?;
         let schema = self.table_info.schema();
         // TODO refine pruner
-        let extras = Extras {
+        let extras = PushDownInfo {
             projection: Some(plan.projection.clone()),
             filters: vec![filter.clone()],
             prewhere: None, // TBD: if delete rows need prewhere optimization
@@ -182,7 +182,7 @@ impl FuseTable {
             cluster_key_index,
             extra_key_index,
             0,
-            self.get_block_compactor(),
+            self.get_block_compact_thresholds(),
         ))
     }
 }

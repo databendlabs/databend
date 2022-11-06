@@ -19,6 +19,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use backon::ExponentialBackoff;
 use backon::Retryable;
+use common_catalog::plan::StageTableInfo;
 use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
@@ -30,7 +31,6 @@ use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
-use common_planner::stage_table::StageTableInfo;
 use opendal::Operator;
 use tracing::warn;
 

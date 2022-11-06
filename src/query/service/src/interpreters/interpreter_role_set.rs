@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_planner::plans::SetRolePlan;
+use common_sql::plans::SetRolePlan;
 use common_users::UserApiProvider;
 
 use crate::interpreters::Interpreter;

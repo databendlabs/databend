@@ -16,12 +16,12 @@ use common_ast::ast::AlterViewStmt;
 use common_ast::ast::CreateViewStmt;
 use common_ast::ast::DropViewStmt;
 use common_exception::Result;
-use common_planner::plans::AlterViewPlan;
-use common_planner::plans::CreateViewPlan;
-use common_planner::plans::DropViewPlan;
 
 use crate::binder::Binder;
 use crate::planner::semantic::normalize_identifier;
+use crate::plans::AlterViewPlan;
+use crate::plans::CreateViewPlan;
+use crate::plans::DropViewPlan;
 use crate::plans::Plan;
 
 impl<'a> Binder {

@@ -21,6 +21,7 @@ use common_exception::Result;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TableNameIdent;
+use common_sql::plans::CreateTablePlanV2;
 use common_users::UserApiProvider;
 
 use crate::interpreters::InsertInterpreterV2;
@@ -29,7 +30,6 @@ use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::executor::PhysicalScalarBuilder;
-use crate::sql::plans::create_table_v2::CreateTablePlanV2;
 use crate::sql::plans::insert::Insert;
 use crate::sql::plans::insert::InsertInputSource;
 use crate::sql::plans::Plan;

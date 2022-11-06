@@ -128,6 +128,10 @@ pub async fn streaming_load(
                         StatusCode::BAD_REQUEST,
                     ));
                 };
+                let to_table = context
+                    .get_table(&insert.catalog, &insert.database, &insert.table)
+                    .await
+                    .map_err(InternalServerError)?;
                 let (tx, rx) = tokio::sync::mpsc::channel(2);
                 let input_context = Arc::new(
                     InputContext::try_create_from_insert(
@@ -137,6 +141,7 @@ pub async fn streaming_load(
                         schema,
                         context.get_scan_progress(),
                         true,
+                        to_table.get_block_compact_thresholds(),
                     )
                     .await
                     .map_err(InternalServerError)?,
