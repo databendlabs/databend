@@ -15,18 +15,43 @@ use std::sync::Arc;
 
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
-use common_meta_types::GrantObject;
-use common_meta_types::PrincipalIdentity;
-use common_meta_types::UserPrivilegeSet;
+use common_meta_types::UserStageInfo;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct RevokePrivilegePlan {
-    pub principal: PrincipalIdentity,
-    pub priv_types: UserPrivilegeSet,
-    pub on: GrantObject,
+pub struct CreateStagePlan {
+    pub if_not_exists: bool,
+    pub tenant: String,
+    pub user_stage_info: UserStageInfo,
 }
 
-impl RevokePrivilegePlan {
+impl CreateStagePlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
+}
+
+/// Drop.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DropStagePlan {
+    pub if_exists: bool,
+    pub name: String,
+}
+
+impl DropStagePlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
+}
+
+/// Remove.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RemoveStagePlan {
+    pub stage: UserStageInfo,
+    pub path: String,
+    pub pattern: String,
+}
+
+impl RemoveStagePlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::empty())
     }

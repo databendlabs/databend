@@ -18,7 +18,7 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_datavalues::Series;
 use common_exception::Result;
-use common_planner::plans::ShowRolesPlan;
+use common_sql::plans::ShowRolesPlan;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;

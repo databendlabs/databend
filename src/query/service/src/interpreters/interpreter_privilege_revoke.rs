@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_meta_types::PrincipalIdentity;
-use common_planner::plans::RevokePrivilegePlan;
+use common_sql::plans::RevokePrivilegePlan;
 use common_users::UserApiProvider;
 
 use crate::interpreters::common::validate_grant_object_exists;

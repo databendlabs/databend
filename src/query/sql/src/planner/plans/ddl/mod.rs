@@ -11,8 +11,12 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+mod account;
 mod database;
+mod stage;
 mod table;
 
+pub use account::*;
 pub use database::*;
+pub use stage::*;
 pub use table::*;
