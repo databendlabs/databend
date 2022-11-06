@@ -11,18 +11,6 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-use std::sync::Arc;
+mod database;
 
-use common_datavalues::DataSchema;
-use common_datavalues::DataSchemaRef;
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct UseDatabasePlan {
-    pub database: String,
-}
-
-impl UseDatabasePlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
-    }
-}
+pub use database::*;

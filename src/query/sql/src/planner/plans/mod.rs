@@ -15,6 +15,7 @@
 mod aggregate;
 mod copy_v2;
 pub mod create_table_v2;
+mod ddl;
 mod dummy_table_scan;
 mod eval_scalar;
 mod exchange;
@@ -39,6 +40,7 @@ mod update;
 
 pub use aggregate::*;
 pub use copy_v2::*;
+pub use ddl::*;
 pub use dummy_table_scan::DummyTableScan;
 pub use eval_scalar::*;
 pub use exchange::*;
