@@ -12,34 +12,25 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use std::any::Any;
 use std::sync::Arc;
 use std::vec;
 
 use common_exception::Result;
-use common_fuse_meta::caches::CacheManager;
-use common_fuse_meta::meta::BlockMeta;
-use common_fuse_meta::meta::Location;
-use common_fuse_meta::meta::SegmentInfo;
-use common_fuse_meta::meta::Statistics;
-use common_fuse_meta::meta::Versioned;
+use common_planner::Partitions;
+use common_storages_table_meta::meta::BlockMeta;
+use common_storages_table_meta::meta::Location;
+use common_storages_table_meta::meta::Statistics;
 use opendal::Operator;
 
+use super::compact_part::CompactTask;
+use super::CompactPartInfo;
 use crate::io::BlockCompactor;
-use crate::io::SegmentWriter;
 use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
 use crate::metrics::metrics_set_segments_memory_usage;
-use crate::metrics::metrics_set_selected_blocks_memory_usage;
-use crate::operations::mutation::AbortOperation;
-use crate::operations::AppendOperationLogEntry;
 use crate::operations::CompactOptions;
 use crate::statistics::merge_statistics;
-use crate::statistics::reducers::reduce_block_metas;
-use crate::FuseTable;
-use crate::Table;
 use crate::TableContext;
-use crate::TableMutator;
 
 pub struct BlockCompactMutator {
     ctx: Arc<dyn TableContext>,
@@ -47,7 +38,7 @@ pub struct BlockCompactMutator {
     data_accessor: Operator,
     block_compactor: BlockCompactor,
     location_generator: TableMetaLocationGenerator,
-    compact_tasks: Vec<Tasks>,
+    compact_tasks: Partitions,
     // summarised statistics of all the unchanged segments
     unchanged_segment_statistics: Statistics,
     // locations all the unchanged segments, with index and location.
@@ -75,7 +66,7 @@ impl BlockCompactMutator {
         let blocks_per_seg = self.compact_params.block_per_seg;
 
         let mut task = Vec::with_capacity(self.compact_params.block_per_seg);
-        let mut helper = TaskHelper::new(self.block_compactor.clone());
+        let mut builder = CompactTaskBuilder::default();
 
         let mut unchanged_segment_statistics = Statistics::default();
 
@@ -85,10 +76,10 @@ impl BlockCompactMutator {
 
         for (idx, segment) in segments.iter().enumerate() {
             let mut maybe = task.is_empty()
-                && helper.blocks.is_empty()
+                && builder.is_empty()
                 && segment.summary.block_count as usize == blocks_per_seg;
             for b in segment.blocks.iter() {
-                let res = helper.add_block(b);
+                let res = builder.add_block(b, self.block_compactor.clone());
                 if res.len() != 1 {
                     maybe = false;
                 }
@@ -96,9 +87,8 @@ impl BlockCompactMutator {
 
                 if task.len() == blocks_per_seg {
                     order += 1;
-                    let one_task = Tasks::create(task.clone(), order);
-                    self.compact_tasks.push(one_task);
-                    task.clear();
+                    self.compact_tasks
+                        .push(CompactPartInfo::create(std::mem::take(&mut task), order));
                 }
             }
             if maybe {
@@ -116,17 +106,26 @@ impl BlockCompactMutator {
             }
         }
 
-        if !helper.is_empty() {
+        if !builder.is_empty() {
             let mut blocks = task.pop().map_or(vec![], |t| t.get_block_metas());
-            blocks.extend(helper.blocks.clone());
-            helper.blocks = blocks;
-            task.push(helper.create_task());
+            blocks.extend(builder.blocks.clone());
+            builder.blocks = blocks;
+            task.push(builder.create_task());
         }
 
         if !task.is_empty() {
             order += 1;
-            let one_task = Tasks::create(task.clone(), order);
-            self.compact_tasks.push(one_task);
+            self.compact_tasks
+                .push(CompactPartInfo::create(task, order));
+        }
+
+        if self.compact_tasks.is_empty()
+            || (self.compact_tasks.len() == 1
+                && CompactPartInfo::from_part(&self.compact_tasks[0])
+                    .unwrap()
+                    .is_all_trivial())
+        {
+            return Ok(false);
         }
 
         if end < number_segments {
@@ -139,48 +138,18 @@ impl BlockCompactMutator {
             }
         }
 
-        match self.compact_tasks.len() {
-            0 => Ok(false),
-            1 if self.compact_tasks[0].is_all_rivial() => Ok(false),
-            _ => Ok(true),
-        }
+        Ok(true)
     }
 }
 
-pub struct Tasks {
-    task: Vec<Arc<dyn Task>>,
-    order: usize,
-}
-
-impl Tasks {
-    fn create(task: Vec<Arc<dyn Task>>, order: usize) -> Self {
-        Self { task, order }
-    }
-
-    fn is_all_rivial(&self) -> bool {
-        self.task
-            .iter()
-            .all(|v| v.as_any().downcast_ref::<TrivialTask>().is_some())
-    }
-}
-
-struct TaskHelper {
+#[derive(Default)]
+struct CompactTaskBuilder {
     blocks: Vec<Arc<BlockMeta>>,
     total_rows: usize,
     total_size: usize,
-    block_compactor: BlockCompactor,
 }
 
-impl TaskHelper {
-    fn new(block_compactor: BlockCompactor) -> Self {
-        TaskHelper {
-            blocks: vec![],
-            total_rows: 0,
-            total_size: 0,
-            block_compactor,
-        }
-    }
-
+impl CompactTaskBuilder {
     fn clear(&mut self) {
         self.blocks.clear();
         self.total_rows = 0;
@@ -191,25 +160,23 @@ impl TaskHelper {
         self.blocks.is_empty()
     }
 
-    fn add_block(&mut self, block: &Arc<BlockMeta>) -> Vec<Arc<dyn Task>> {
+    fn add_block(
+        &mut self,
+        block: &Arc<BlockMeta>,
+        block_compactor: BlockCompactor,
+    ) -> Vec<CompactTask> {
         self.total_rows += block.row_count as usize;
         self.total_size += block.block_size as usize;
 
-        if !self
-            .block_compactor
-            .check_perfect_block(self.total_rows, self.total_size)
-        {
+        if !block_compactor.check_perfect_block(self.total_rows, self.total_size) {
             self.blocks.push(block.clone());
             return vec![];
         }
 
-        if !self
-            .block_compactor
-            .check_for_compact(self.total_rows, self.total_size)
-        {
-            let trival_task = TrivialTask::create(block.clone());
+        if !block_compactor.check_for_compact(self.total_rows, self.total_size) {
+            let trival_task = CompactTask::Trival(block.clone());
             let res = if !self.blocks.is_empty() {
-                let compact_task = CompactTask::create(self.blocks.clone());
+                let compact_task = CompactTask::Normal(self.blocks.clone());
                 vec![compact_task, trival_task]
             } else {
                 vec![trival_task]
@@ -219,62 +186,16 @@ impl TaskHelper {
         }
 
         self.blocks.push(block.clone());
-        let compact_task = CompactTask::create(self.blocks.clone());
+        let compact_task = CompactTask::Normal(self.blocks.clone());
         self.clear();
         vec![compact_task]
     }
 
-    fn create_task(&self) -> Arc<dyn Task> {
+    fn create_task(&self) -> CompactTask {
         match self.blocks.len() {
             0 => panic!("the blocks is empty"),
-            1 => TrivialTask::create(self.blocks[0].clone()),
-            _ => CompactTask::create(self.blocks.clone()),
+            1 => CompactTask::Trival(self.blocks[0].clone()),
+            _ => CompactTask::Normal(self.blocks.clone()),
         }
-    }
-}
-
-pub trait Task {
-    fn get_block_metas(&self) -> Vec<Arc<BlockMeta>>;
-
-    fn as_any(&self) -> &dyn Any;
-}
-
-pub struct TrivialTask {
-    block: Arc<BlockMeta>,
-}
-
-impl TrivialTask {
-    fn create(block: Arc<BlockMeta>) -> Arc<dyn Task> {
-        Arc::new(Self { block })
-    }
-}
-
-impl Task for TrivialTask {
-    fn get_block_metas(&self) -> Vec<Arc<BlockMeta>> {
-        vec![self.block.clone()]
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-}
-
-pub struct CompactTask {
-    blocks: Vec<Arc<BlockMeta>>,
-}
-
-impl CompactTask {
-    fn create(blocks: Vec<Arc<BlockMeta>>) -> Arc<dyn Task> {
-        Arc::new(Self { blocks })
-    }
-}
-
-impl Task for CompactTask {
-    fn get_block_metas(&self) -> Vec<Arc<BlockMeta>> {
-        self.blocks.clone()
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
     }
 }

@@ -12,12 +12,3 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod block_compact_mutator;
-mod compact_part;
-mod compact_source;
-mod full_compact_mutator;
-mod segment_compact_mutator;
-
-pub use compact_part::CompactPartInfo;
-pub use full_compact_mutator::FullCompactMutator;
-pub use segment_compact_mutator::SegmentCompactMutator;
