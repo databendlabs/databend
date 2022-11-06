@@ -17,11 +17,11 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use common_catalog::plan::Expression;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planner::Expression;
 use common_storages_table_meta::meta::BlockMeta;
 use serde_json::json;
 

@@ -189,8 +189,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                                     |a, b, output, _| {
                                     let b = (b.as_() : F64);
                                     if std::intrinsics::unlikely(b == 0.0) {
-                                            return Err("Division by zero".to_string());
-                                        }
+                                        return Err("Division by zero".to_string());
+                                    }
                                     output.push(((a.as_() : F64) / b).as_() : T);
                                     Ok(())
                                 }),

@@ -17,6 +17,11 @@ use std::mem::size_of;
 use std::sync::Arc;
 
 use chrono::NaiveDateTime;
+use common_catalog::plan::DataSourcePlan;
+use common_catalog::plan::PartInfoPtr;
+use common_catalog::plan::PartStatistics;
+use common_catalog::plan::Partitions;
+use common_catalog::plan::PushDownInfo;
 use common_catalog::table::TableStatistics;
 use common_datablocks::DataBlock;
 use common_datavalues::chrono::TimeZone;
@@ -27,11 +32,6 @@ use common_exception::Result;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
-use common_planner::extras::Extras;
-use common_planner::extras::Statistics;
-use common_planner::PartInfoPtr;
-use common_planner::Partitions;
-use common_planner::ReadDataSourcePlan;
 
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::ProcessorPtr;
@@ -122,8 +122,8 @@ impl Table for NumbersTable {
     async fn read_partitions(
         &self,
         ctx: Arc<dyn TableContext>,
-        push_downs: Option<Extras>,
-    ) -> Result<(Statistics, Partitions)> {
+        push_downs: Option<PushDownInfo>,
+    ) -> Result<(PartStatistics, Partitions)> {
         let max_block_size = ctx.get_settings().get_max_block_size()?;
         let mut limit = None;
 
@@ -144,7 +144,7 @@ impl Table for NumbersTable {
         };
 
         let fake_partitions = (total / max_block_size) + 1;
-        let statistics = Statistics::new_exact(
+        let statistics = PartStatistics::new_exact(
             total as usize,
             ((total) * size_of::<u64>() as u64) as usize,
             fake_partitions as usize,
@@ -167,7 +167,7 @@ impl Table for NumbersTable {
     fn read_data(
         &self,
         ctx: Arc<dyn TableContext>,
-        plan: &ReadDataSourcePlan,
+        plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         if plan.parts.is_empty() {

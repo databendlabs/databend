@@ -18,7 +18,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::DropTableReq;
 use common_meta_app::schema::TableNameIdent;
-use common_planner::plans::DropViewPlan;
+use common_sql::plans::DropViewPlan;
 use common_storages_view::view_table::VIEW_ENGINE;
 
 use crate::interpreters::Interpreter;

@@ -18,7 +18,7 @@ use common_exception::Result;
 use common_meta_types::GrantObject;
 use common_meta_types::PrincipalIdentity;
 use common_meta_types::UserPrivilegeSet;
-use common_planner::plans::GrantPrivilegePlan;
+use common_sql::plans::GrantPrivilegePlan;
 use common_users::UserApiProvider;
 
 use crate::interpreters::common::validate_grant_object_exists;

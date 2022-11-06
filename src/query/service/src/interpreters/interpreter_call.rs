@@ -17,7 +17,7 @@ use std::sync::RwLock;
 
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
-use common_planner::plans::CallPlan;
+use common_sql::plans::CallPlan;
 
 use super::Interpreter;
 use crate::pipelines::PipelineBuildResult;

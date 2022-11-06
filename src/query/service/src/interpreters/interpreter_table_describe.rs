@@ -18,8 +18,8 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planner::plans::DescribeTablePlan;
 use common_sql::executor::PhysicalScalar;
+use common_sql::plans::DescribeTablePlan;
 use common_storages_view::view_table::QUERY;
 use common_storages_view::view_table::VIEW_ENGINE;
 

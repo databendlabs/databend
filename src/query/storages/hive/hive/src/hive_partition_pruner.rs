@@ -16,13 +16,13 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::vec;
 
+use common_catalog::plan::Expression;
 use common_catalog::table_context::TableContext;
 use common_datavalues::DataSchema;
 use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planner::Expression;
 use common_storages_index::range_filter::RangeFilter;
 use common_storages_table_meta::meta::ColumnStatistics;
 use common_storages_table_meta::meta::StatisticsOfColumns;

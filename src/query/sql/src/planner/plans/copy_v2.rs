@@ -16,10 +16,10 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::str::FromStr;
 
+use common_catalog::plan::DataSourcePlan;
 use common_datavalues::DataSchemaRef;
 use common_meta_types::MetaId;
 use common_meta_types::UserStageInfo;
-use common_planner::ReadDataSourcePlan;
 
 use crate::plans::Plan;
 
@@ -65,7 +65,7 @@ pub enum CopyPlanV2 {
         pattern: String,
         schema: DataSchemaRef,
         validation_mode: ValidationMode,
-        from: Box<ReadDataSourcePlan>,
+        from: Box<DataSourcePlan>,
         force: bool,
     },
     IntoStage {
