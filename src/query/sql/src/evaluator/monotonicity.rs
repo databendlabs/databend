@@ -14,6 +14,9 @@
 
 use std::collections::HashMap;
 
+use common_catalog::plan::Expression;
+use common_catalog::plan::ExpressionVisitor;
+use common_catalog::plan::Recursion;
 use common_datavalues::prelude::*;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
@@ -23,9 +26,6 @@ use common_functions::scalars::Function;
 use common_functions::scalars::FunctionContext;
 use common_functions::scalars::FunctionFactory;
 use common_functions::scalars::Monotonicity;
-use common_planner::Expression;
-use common_planner::ExpressionVisitor;
-use common_planner::Recursion;
 
 // ExpressionMonotonicityVisitor visit the expression tree to calculate monotonicity.
 // For example, a function of Add(Neg(number), 5) for number < -100 will have a tree like this:

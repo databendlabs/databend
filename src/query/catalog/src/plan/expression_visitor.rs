@@ -16,7 +16,7 @@ use std::collections::HashSet;
 
 use common_exception::Result;
 
-use crate::Expression;
+use crate::plan::Expression;
 
 /// Controls how the visitor recursion should proceed.
 pub enum Recursion<V: ExpressionVisitor> {

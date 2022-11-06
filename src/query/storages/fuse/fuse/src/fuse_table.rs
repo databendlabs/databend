@@ -19,6 +19,12 @@ use std::str;
 use std::sync::Arc;
 
 use common_catalog::catalog::StorageDescription;
+use common_catalog::plan::DataSourcePlan;
+use common_catalog::plan::DeletePlan;
+use common_catalog::plan::Expression;
+use common_catalog::plan::PartStatistics;
+use common_catalog::plan::Partitions;
+use common_catalog::plan::PushDownInfo;
 use common_catalog::table::AppendMode;
 use common_catalog::table::ColumnId;
 use common_catalog::table::ColumnStatistics;
@@ -31,12 +37,6 @@ use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::TableInfo;
-use common_planner::extras::Extras;
-use common_planner::extras::Statistics;
-use common_planner::plans::DeletePlan;
-use common_planner::Expression;
-use common_planner::Partitions;
-use common_planner::ReadDataSourcePlan;
 use common_sharing::create_share_table_operator;
 use common_sql::ExpressionParser;
 use common_storage::init_operator;
@@ -345,8 +345,8 @@ impl Table for FuseTable {
     async fn read_partitions(
         &self,
         ctx: Arc<dyn TableContext>,
-        push_downs: Option<Extras>,
-    ) -> Result<(Statistics, Partitions)> {
+        push_downs: Option<PushDownInfo>,
+    ) -> Result<(PartStatistics, Partitions)> {
         self.do_read_partitions(ctx, push_downs).await
     }
 
@@ -354,7 +354,7 @@ impl Table for FuseTable {
     fn read_data(
         &self,
         ctx: Arc<dyn TableContext>,
-        plan: &ReadDataSourcePlan,
+        plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
@@ -454,7 +454,7 @@ impl Table for FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
-        push_downs: Option<Extras>,
+        push_downs: Option<PushDownInfo>,
     ) -> Result<Option<Box<dyn TableMutator>>> {
         self.do_recluster(ctx, pipeline, push_downs).await
     }

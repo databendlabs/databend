@@ -14,13 +14,13 @@
 
 use std::sync::Arc;
 
+use common_catalog::plan::DataSourceInfo;
+use common_catalog::plan::DataSourcePlan;
 use common_catalog::table::CompactTarget;
 use common_exception::Result;
 use common_pipeline_core::Pipeline;
 use common_pipeline_transforms::processors::transforms::BlockCompactor;
 use common_pipeline_transforms::processors::transforms::TransformCompact;
-use common_planner::ReadDataSourcePlan;
-use common_planner::SourceInfo;
 use common_storages_table_meta::meta::TableSnapshot;
 
 use super::FuseTableSink;
@@ -128,9 +128,9 @@ impl FuseTable {
         )?;
         let table_info = self.get_table_info();
         let description = statistics.get_description(table_info);
-        let plan = ReadDataSourcePlan {
+        let plan = DataSourcePlan {
             catalog: table_info.catalog().to_string(),
-            source_info: SourceInfo::TableSource(table_info.clone()),
+            source_info: DataSourceInfo::TableSource(table_info.clone()),
             scan_fields: None,
             parts,
             statistics,

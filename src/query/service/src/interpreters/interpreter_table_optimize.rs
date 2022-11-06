@@ -16,8 +16,8 @@ use std::sync::Arc;
 
 use common_catalog::table::CompactTarget;
 use common_exception::Result;
-use common_planner::plans::OptimizeTableAction;
-use common_planner::plans::OptimizeTablePlan;
+use common_sql::plans::OptimizeTableAction;
+use common_sql::plans::OptimizeTablePlan;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::executor::ExecutorSettings;

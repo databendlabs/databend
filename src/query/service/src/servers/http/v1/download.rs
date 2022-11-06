@@ -15,13 +15,13 @@
 use std::sync::Arc;
 
 use async_stream::stream;
+use common_catalog::plan::DataSourceInfo;
+use common_catalog::plan::DataSourcePlan;
+use common_catalog::plan::PushDownInfo;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_formats::FileFormatOptionsExt;
 use common_meta_types::StageFileFormatType;
-use common_planner::extras::Extras;
-use common_planner::ReadDataSourcePlan;
-use common_planner::SourceInfo;
 use common_storages_fuse_result::ResultTable;
 use futures::StreamExt;
 
@@ -51,9 +51,9 @@ impl Downloader for ResultTable {
         limit: Option<usize>,
     ) -> Result<SendableVu8Stream> {
         let push_downs = match limit {
-            Some(limit) if limit > 0 => Some(Extras {
+            Some(limit) if limit > 0 => Some(PushDownInfo {
                 limit: Some(limit),
-                ..Extras::default()
+                ..PushDownInfo::default()
             }),
             _ => None,
         };
@@ -63,9 +63,9 @@ impl Downloader for ResultTable {
             .await?;
         ctx.try_set_partitions(parts)?;
         let mut block_stream = self
-            .read_data_block_stream(ctx.clone(), &ReadDataSourcePlan {
+            .read_data_block_stream(ctx.clone(), &DataSourcePlan {
                 catalog: "".to_string(),
-                source_info: SourceInfo::TableSource(Default::default()),
+                source_info: DataSourceInfo::TableSource(Default::default()),
                 scan_fields: None,
                 parts: Default::default(),
                 statistics: Default::default(),

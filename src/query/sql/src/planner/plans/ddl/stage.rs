@@ -15,17 +15,43 @@ use std::sync::Arc;
 
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
+use common_meta_types::UserStageInfo;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct TruncateTablePlan {
-    pub catalog: String,
-    pub database: String,
-    /// The table name
-    pub table: String,
-    pub purge: bool,
+pub struct CreateStagePlan {
+    pub if_not_exists: bool,
+    pub tenant: String,
+    pub user_stage_info: UserStageInfo,
 }
 
-impl TruncateTablePlan {
+impl CreateStagePlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
+}
+
+/// Drop.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DropStagePlan {
+    pub if_exists: bool,
+    pub name: String,
+}
+
+impl DropStagePlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
+}
+
+/// Remove.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RemoveStagePlan {
+    pub stage: UserStageInfo,
+    pub path: String,
+    pub pattern: String,
+}
+
+impl RemoveStagePlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::empty())
     }

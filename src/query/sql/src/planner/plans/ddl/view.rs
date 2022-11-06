@@ -11,51 +11,52 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 use std::sync::Arc;
 
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
-use common_meta_app::schema::CreateDatabaseReq;
-use common_meta_app::schema::DatabaseMeta;
-use common_meta_app::schema::DatabaseNameIdent;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct CreateDatabasePlan {
+pub struct CreateViewPlan {
     pub if_not_exists: bool,
     pub tenant: String,
     pub catalog: String,
     pub database: String,
-    pub meta: DatabaseMeta,
+    pub viewname: String,
+    pub subquery: String,
 }
 
-impl From<CreateDatabasePlan> for CreateDatabaseReq {
-    fn from(p: CreateDatabasePlan) -> Self {
-        CreateDatabaseReq {
-            if_not_exists: p.if_not_exists,
-            name_ident: DatabaseNameIdent {
-                tenant: p.tenant,
-                db_name: p.database,
-            },
-            meta: p.meta,
-        }
+impl CreateViewPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
     }
 }
 
-impl From<&CreateDatabasePlan> for CreateDatabaseReq {
-    fn from(p: &CreateDatabasePlan) -> Self {
-        CreateDatabaseReq {
-            if_not_exists: p.if_not_exists,
-            name_ident: DatabaseNameIdent {
-                tenant: p.tenant.clone(),
-                db_name: p.database.clone(),
-            },
-            meta: p.meta.clone(),
-        }
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AlterViewPlan {
+    pub tenant: String,
+    pub catalog: String,
+    pub database: String,
+    pub viewname: String,
+    pub subquery: String,
+}
+
+impl AlterViewPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
     }
 }
 
-impl CreateDatabasePlan {
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DropViewPlan {
+    pub if_exists: bool,
+    pub tenant: String,
+    pub catalog: String,
+    pub database: String,
+    pub viewname: String,
+}
+
+impl DropViewPlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::empty())
     }

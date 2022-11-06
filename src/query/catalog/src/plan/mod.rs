@@ -11,23 +11,21 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-use std::sync::Arc;
 
-use common_datavalues::DataSchema;
-use common_datavalues::DataSchemaRef;
-use common_meta_types::GrantObject;
-use common_meta_types::PrincipalIdentity;
-use common_meta_types::UserPrivilegeSet;
+mod datasource;
+mod delete;
+mod expression;
+mod expression_visitor;
+mod partition;
+mod partition_statistics;
+mod projection;
+mod pushdown;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct RevokePrivilegePlan {
-    pub principal: PrincipalIdentity,
-    pub priv_types: UserPrivilegeSet,
-    pub on: GrantObject,
-}
-
-impl RevokePrivilegePlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
-    }
-}
+pub use datasource::*;
+pub use delete::DeletePlan;
+pub use expression::Expression;
+pub use expression_visitor::*;
+pub use partition::*;
+pub use partition_statistics::PartStatistics;
+pub use projection::Projection;
+pub use pushdown::*;

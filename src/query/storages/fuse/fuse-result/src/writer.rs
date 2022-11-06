@@ -17,12 +17,12 @@ use std::sync::Arc;
 
 use backon::ExponentialBackoff;
 use backon::Retryable;
+use common_catalog::plan::PartInfoPtr;
 use common_catalog::table_context::TableContext;
 use common_datablocks::serialize_data_blocks;
 use common_datablocks::DataBlock;
 use common_datablocks::SendableDataBlockStream;
 use common_exception::Result;
-use common_planner::PartInfoPtr;
 use common_storages_fuse::statistics::BlockStatistics;
 use common_storages_fuse::statistics::StatisticsAccumulator;
 use common_storages_fuse::FuseTable;

@@ -11,21 +11,16 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-use std::sync::Arc;
+mod account;
+mod database;
+mod stage;
+mod table;
+mod udf;
+mod view;
 
-use common_datavalues::DataSchema;
-use common_datavalues::DataSchemaRef;
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct DropTableClusterKeyPlan {
-    pub tenant: String,
-    pub catalog: String,
-    pub database: String,
-    pub table: String,
-}
-
-impl DropTableClusterKeyPlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
-    }
-}
+pub use account::*;
+pub use database::*;
+pub use stage::*;
+pub use table::*;
+pub use udf::*;
+pub use view::*;

@@ -18,7 +18,7 @@ use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_meta_app::schema::TableIdent;
 
-use super::Projection;
+use crate::plan::Projection;
 
 /// # TODO
 ///

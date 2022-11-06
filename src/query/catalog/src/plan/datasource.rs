@@ -13,6 +13,8 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::fmt::Debug;
+use std::fmt::Formatter;
 use std::sync::Arc;
 
 use common_datavalues::DataField;
@@ -20,15 +22,40 @@ use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataValue;
 use common_meta_app::schema::TableInfo;
+use common_meta_types::UserStageInfo;
 
-use crate::extras::Extras;
-use crate::extras::Statistics;
-use crate::partition::Partitions;
-use crate::plans::Projection;
-use crate::stage_table::StageTableInfo;
+use crate::plan::PartStatistics;
+use crate::plan::Partitions;
+use crate::plan::Projection;
+use crate::plan::PushDownInfo;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq)]
+pub struct StageTableInfo {
+    pub schema: DataSchemaRef,
+    pub stage_info: UserStageInfo,
+    pub path: String,
+    pub files: Vec<String>,
+}
+
+impl StageTableInfo {
+    pub fn schema(&self) -> DataSchemaRef {
+        self.schema.clone()
+    }
+
+    pub fn desc(&self) -> String {
+        self.stage_info.stage_name.clone()
+    }
+}
+
+impl Debug for StageTableInfo {
+    // Ignore the schema.
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self.stage_info)
+    }
+}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub enum SourceInfo {
+pub enum DataSourceInfo {
     // Normal table source, `fuse/system`.
     TableSource(TableInfo),
 
@@ -36,28 +63,28 @@ pub enum SourceInfo {
     StageSource(StageTableInfo),
 }
 
-impl SourceInfo {
+impl DataSourceInfo {
     pub fn schema(&self) -> Arc<DataSchema> {
         match self {
-            SourceInfo::TableSource(table_info) => table_info.schema(),
-            SourceInfo::StageSource(table_info) => table_info.schema(),
+            DataSourceInfo::TableSource(table_info) => table_info.schema(),
+            DataSourceInfo::StageSource(table_info) => table_info.schema(),
         }
     }
 
     pub fn desc(&self) -> String {
         match self {
-            SourceInfo::TableSource(table_info) => table_info.desc.clone(),
-            SourceInfo::StageSource(table_info) => table_info.desc(),
+            DataSourceInfo::TableSource(table_info) => table_info.desc.clone(),
+            DataSourceInfo::StageSource(table_info) => table_info.desc(),
         }
     }
 }
 
 // TODO: Delete the scan plan field, but it depends on plan_parser:L394
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
-pub struct ReadDataSourcePlan {
+pub struct DataSourcePlan {
     // TODO catalog id is better
     pub catalog: String,
-    pub source_info: SourceInfo,
+    pub source_info: DataSourceInfo,
 
     /// Required fields to scan.
     ///
@@ -68,14 +95,14 @@ pub struct ReadDataSourcePlan {
     pub scan_fields: Option<BTreeMap<usize, DataField>>,
 
     pub parts: Partitions,
-    pub statistics: Statistics,
+    pub statistics: PartStatistics,
     pub description: String,
 
     pub tbl_args: Option<Vec<DataValue>>,
-    pub push_downs: Option<Extras>,
+    pub push_downs: Option<PushDownInfo>,
 }
 
-impl ReadDataSourcePlan {
+impl DataSourcePlan {
     /// Return schema after the projection
     pub fn schema(&self) -> DataSchemaRef {
         self.scan_fields
@@ -101,7 +128,7 @@ impl ReadDataSourcePlan {
                 .collect::<Vec<usize>>()
         };
 
-        if let Some(Extras {
+        if let Some(PushDownInfo {
             projection: Some(prj),
             ..
         }) = &self.push_downs

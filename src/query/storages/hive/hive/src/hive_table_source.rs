@@ -19,6 +19,7 @@ use common_base::base::tokio::time::sleep;
 use common_base::base::tokio::time::Duration;
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
+use common_catalog::plan::PartInfoPtr;
 use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
@@ -27,7 +28,6 @@ use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
-use common_planner::PartInfoPtr;
 use opendal::Operator;
 
 use crate::hive_parquet_block_reader::DataBlockDeserializer;

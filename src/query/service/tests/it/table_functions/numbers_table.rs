@@ -13,9 +13,9 @@
 //  limitations under the License.
 
 use common_base::base::tokio;
+use common_catalog::plan::PushDownInfo;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_planner::extras::Extras;
 use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::SessionManager;
@@ -39,7 +39,7 @@ async fn test_number_table() -> Result<()> {
     let source_plan = table
         .clone()
         .as_table()
-        .read_plan(ctx.clone(), Some(Extras::default()))
+        .read_plan(ctx.clone(), Some(PushDownInfo::default()))
         .await?;
     ctx.try_set_partitions(source_plan.parts.clone())?;
 
