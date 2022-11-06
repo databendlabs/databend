@@ -93,8 +93,9 @@ const Releases: FC = (): ReactElement=> {
   ];
   async function getRelease() {
     const res = await axios.get(`${DOWNLOAD_LINK}releases.json`); 
-    if(res.data && res.data?.length > 0){
-      const releaseData = res.data[0];
+    const data = res?.data;
+    if(data && data?.length > 0){
+      const releaseData = data[0];
       const { assets, tag_name } = releaseData || {};
       setCacheTagName(tag_name);
       const reslut = assets
