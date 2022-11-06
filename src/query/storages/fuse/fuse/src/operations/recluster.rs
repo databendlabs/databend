@@ -23,6 +23,7 @@ use common_catalog::table_context::TableContext;
 use common_datablocks::SortColumnDescription;
 use common_exception::Result;
 use common_pipeline_core::Pipeline;
+use common_pipeline_transforms::processors::transforms::try_add_multi_sort_merge;
 use common_pipeline_transforms::processors::transforms::BlockCompactor;
 use common_pipeline_transforms::processors::transforms::SortMergeCompactor;
 use common_pipeline_transforms::processors::transforms::TransformCompact;
@@ -172,14 +173,8 @@ impl FuseTable {
                 SortMergeCompactor::new(block_size, None, sort_descs.clone()),
             )
         })?;
-        pipeline.resize(1)?;
-        pipeline.add_transform(|transform_input_port, transform_output_port| {
-            TransformSortMerge::try_create(
-                transform_input_port,
-                transform_output_port,
-                SortMergeCompactor::new(block_size, None, sort_descs.clone()),
-            )
-        })?;
+
+        try_add_multi_sort_merge(pipeline, plan.schema(), block_size, None, sort_descs)?;
 
         pipeline.add_transform(|transform_input_port, transform_output_port| {
             TransformCompact::try_create(
