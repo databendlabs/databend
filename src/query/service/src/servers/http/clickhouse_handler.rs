@@ -264,6 +264,11 @@ pub async fn clickhouse_handler_post(
             &mut insert.source
         {
             let (tx, rx) = tokio::sync::mpsc::channel(2);
+            let to_table = ctx
+                .get_table(&insert.catalog, &insert.database, &insert.table)
+                .await
+                .map_err(InternalServerError)?;
+
             let input_context = Arc::new(
                 InputContext::try_create_from_insert(
                     format.as_str(),
@@ -272,6 +277,7 @@ pub async fn clickhouse_handler_post(
                     schema,
                     ctx.get_scan_progress(),
                     false,
+                    to_table.get_block_compact_thresholds(),
                 )
                 .await
                 .map_err(InternalServerError)?,

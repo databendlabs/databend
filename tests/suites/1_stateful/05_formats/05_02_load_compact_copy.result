@@ -1,0 +1,6 @@
+---s3 cp
+---copy into
+---row_count
+1000
+---block_count
+1

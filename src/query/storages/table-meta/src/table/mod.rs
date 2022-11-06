@@ -12,5 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod stream_datablock;
-mod stream_progress;
+mod table_keys;
+mod table_prefix;
+
+pub use table_keys::*;
+pub use table_prefix::*;

@@ -2394,6 +2394,8 @@ try_to_uint8(Float32) :: UInt8 NULL
 try_to_uint8(Float32 NULL) :: UInt8 NULL
 try_to_uint8(Float64) :: UInt8 NULL
 try_to_uint8(Float64 NULL) :: UInt8 NULL
+try_to_variant(T0) :: Variant NULL
+try_to_variant(T0 NULL) :: Variant NULL
 unhex(String) :: String
 unhex(String NULL) :: String NULL
 upper(String) :: String

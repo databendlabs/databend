@@ -154,10 +154,10 @@ pub fn run_scalar_expr(
     chunk: &Chunk,
 ) -> common_expression::Result<(Value<AnyType>, DataType)> {
     let fn_registry = builtin_functions();
-    let (expr, output_ty) = type_check::check(raw_expr, &fn_registry)?;
-    let evaluator = Evaluator::new(chunk, chrono_tz::UTC);
+    let expr = type_check::check(raw_expr, &fn_registry)?;
+    let evaluator = Evaluator::new(chunk, chrono_tz::UTC, &fn_registry);
     let result = evaluator.run(&expr)?;
-    Ok((result, output_ty))
+    Ok((result, expr.data_type().clone()))
 }
 
 /// Simulate group-by aggregation.

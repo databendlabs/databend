@@ -19,12 +19,14 @@ use std::str;
 use std::sync::Arc;
 
 use common_catalog::catalog::StorageDescription;
+use common_catalog::table::AppendMode;
 use common_catalog::table::ColumnId;
 use common_catalog::table::ColumnStatistics;
 use common_catalog::table::ColumnStatisticsProvider;
 use common_catalog::table::CompactTarget;
 use common_catalog::table_context::TableContext;
 use common_catalog::table_mutator::TableMutator;
+use common_datablocks::BlockCompactThresholds;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -47,15 +49,17 @@ use common_storages_table_meta::meta::ColumnStatistics as FuseColumnStatistics;
 use common_storages_table_meta::meta::Statistics as FuseStatistics;
 use common_storages_table_meta::meta::TableSnapshot;
 use common_storages_table_meta::meta::Versioned;
+use common_storages_table_meta::table::table_storage_prefix;
+use common_storages_table_meta::table::OPT_KEY_DATABASE_ID;
+use common_storages_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
+use common_storages_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use opendal::Operator;
 use uuid::Uuid;
 
-use crate::io::BlockCompactor;
 use crate::io::MetaReaders;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::AppendOperationLogEntry;
 use crate::pipelines::Pipeline;
-use crate::table_storage_prefix;
 use crate::NavigationPoint;
 use crate::Table;
 use crate::TableStatistics;
@@ -64,9 +68,6 @@ use crate::DEFAULT_ROW_PER_BLOCK;
 use crate::FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD;
 use crate::FUSE_OPT_KEY_ROW_PER_BLOCK;
 use crate::FUSE_TBL_LAST_SNAPSHOT_HINT;
-use crate::OPT_KEY_DATABASE_ID;
-use crate::OPT_KEY_LEGACY_SNAPSHOT_LOC;
-use crate::OPT_KEY_SNAPSHOT_LOCATION;
 
 #[derive(Clone)]
 pub struct FuseTable {
@@ -211,16 +212,6 @@ impl FuseTable {
 
     pub fn transient(&self) -> bool {
         self.table_info.meta.options.contains_key("TRANSIENT")
-    }
-
-    pub(crate) fn get_block_compactor(&self) -> BlockCompactor {
-        let max_rows_per_block = self.get_option(FUSE_OPT_KEY_ROW_PER_BLOCK, DEFAULT_ROW_PER_BLOCK);
-        let min_rows_per_block = (max_rows_per_block as f64 * 0.8) as usize;
-        let max_bytes_per_block = self.get_option(
-            FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD,
-            DEFAULT_BLOCK_SIZE_IN_MEM_SIZE_THRESHOLD,
-        );
-        BlockCompactor::new(max_rows_per_block, min_rows_per_block, max_bytes_per_block)
     }
 }
 
@@ -374,10 +365,11 @@ impl Table for FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
+        append_mode: AppendMode,
         need_output: bool,
     ) -> Result<()> {
         self.check_mutable()?;
-        self.do_append_data(ctx, pipeline, need_output)
+        self.do_append_data(ctx, pipeline, append_mode, need_output)
     }
 
     #[tracing::instrument(level = "debug", name = "fuse_table_commit_insertion", skip(self, ctx, operations), fields(ctx.id = ctx.get_id().as_str()))]
@@ -465,6 +457,16 @@ impl Table for FuseTable {
         push_downs: Option<Extras>,
     ) -> Result<Option<Box<dyn TableMutator>>> {
         self.do_recluster(ctx, pipeline, push_downs).await
+    }
+
+    fn get_block_compact_thresholds(&self) -> BlockCompactThresholds {
+        let max_rows_per_block = self.get_option(FUSE_OPT_KEY_ROW_PER_BLOCK, DEFAULT_ROW_PER_BLOCK);
+        let min_rows_per_block = (max_rows_per_block as f64 * 0.8) as usize;
+        let max_bytes_per_block = self.get_option(
+            FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD,
+            DEFAULT_BLOCK_SIZE_IN_MEM_SIZE_THRESHOLD,
+        );
+        BlockCompactThresholds::new(max_rows_per_block, min_rows_per_block, max_bytes_per_block)
     }
 }
 

@@ -15,7 +15,7 @@
 use common_base::base::tokio;
 use common_datablocks::*;
 use common_datavalues::prelude::*;
-use common_streams::*;
+use databend_query::stream::DataBlockStream;
 use futures::stream::StreamExt;
 
 #[tokio::test]

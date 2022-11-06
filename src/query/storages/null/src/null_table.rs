@@ -16,6 +16,7 @@ use std::any::Any;
 use std::sync::Arc;
 
 use common_catalog::catalog::StorageDescription;
+use common_catalog::table::AppendMode;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
@@ -91,6 +92,7 @@ impl Table for NullTable {
         &self,
         _: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
+        _: AppendMode,
         _: bool,
     ) -> Result<()> {
         pipeline.add_sink(|input| Ok(EmptySink::create(input)))?;

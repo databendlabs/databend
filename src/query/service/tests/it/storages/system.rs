@@ -48,7 +48,7 @@ use common_storages_system::UsersTable;
 use common_users::UserApiProvider;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
-use databend_query::stream::DataBlockStream;
+use databend_query::stream::ReadDataBlockStream;
 use futures::TryStreamExt;
 use goldenfile::Mint;
 use wiremock::matchers::method;

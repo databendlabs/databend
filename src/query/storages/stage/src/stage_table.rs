@@ -17,8 +17,10 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 
 use common_base::base::uuid;
+use common_catalog::table::AppendMode;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
+use common_datablocks::BlockCompactThresholds;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -49,6 +51,7 @@ pub struct StageTable {
     // fn get_table_info(&self) -> &TableInfo).
     table_info_placeholder: TableInfo,
     input_context: Mutex<Option<Arc<InputContext>>>,
+    block_compact_threshold: Mutex<Option<BlockCompactThresholds>>,
 }
 
 impl StageTable {
@@ -59,6 +62,7 @@ impl StageTable {
             table_info,
             table_info_placeholder,
             input_context: Default::default(),
+            block_compact_threshold: Default::default(),
         }))
     }
 
@@ -103,6 +107,7 @@ impl Table for StageTable {
                 self.table_info.stage_info.clone(),
                 self.table_info.files.clone(),
                 ctx.get_scan_progress(),
+                self.get_block_compact_thresholds(),
             )
             .await?,
         );
@@ -140,6 +145,7 @@ impl Table for StageTable {
         &self,
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
+        _: AppendMode,
         _: bool,
     ) -> Result<()> {
         let single = self.table_info.stage_info.copy_options.single;
@@ -197,5 +203,15 @@ impl Table for StageTable {
         Err(ErrorCode::Unimplemented(
             "S3 external table truncate() unimplemented yet!",
         ))
+    }
+
+    fn get_block_compact_thresholds(&self) -> BlockCompactThresholds {
+        let guard = self.block_compact_threshold.lock();
+        (*guard).expect("must success")
+    }
+
+    fn set_block_compact_thresholds(&self, thresholds: BlockCompactThresholds) {
+        let mut guard = self.block_compact_threshold.lock();
+        (*guard) = Some(thresholds)
     }
 }

@@ -11,11 +11,5 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
-mod stream;
-mod stream_datablock;
-mod stream_progress;
-
-pub use stream::*;
-pub use stream_datablock::DataBlockStream;
-pub use stream_progress::ProgressStream;
+mod datablock_stream;
+mod progress_stream;

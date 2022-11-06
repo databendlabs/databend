@@ -15,6 +15,8 @@
 use std::borrow::Cow;
 
 use bstr::ByteSlice;
+use common_expression::types::nullable::NullableColumn;
+use common_expression::types::nullable::NullableDomain;
 use common_expression::types::number::Float64Type;
 use common_expression::types::number::Int64Type;
 use common_expression::types::number::UInt32Type;
@@ -27,6 +29,7 @@ use common_expression::types::GenericType;
 use common_expression::types::NullableType;
 use common_expression::types::StringType;
 use common_expression::types::VariantType;
+use common_expression::utils::arrow::constant_bitmap;
 use common_expression::vectorize_with_builder_1_arg;
 use common_expression::vectorize_with_builder_2_arg;
 use common_expression::FunctionProperty;
@@ -375,7 +378,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_1_arg::<GenericType<0>, VariantType, _, _>(
         "to_variant",
         FunctionProperty::default(),
-        |_| None,
+        |_| Some(()),
         |val, ctx| match val {
             ValueRef::Scalar(scalar) => {
                 let mut buf = Vec::new();
@@ -385,6 +388,31 @@ pub fn register(registry: &mut FunctionRegistry) {
             ValueRef::Column(col) => {
                 let new_col = cast_scalars_to_variants(col.iter(), ctx.tz);
                 Ok(Value::Column(new_col))
+            }
+        },
+    );
+
+    registry.register_combine_nullable_1_arg::<GenericType<0>, VariantType, _, _>(
+        "try_to_variant",
+        FunctionProperty::default(),
+        |_| {
+            Some(NullableDomain {
+                has_null: false,
+                value: Some(Box::new(())),
+            })
+        },
+        |val, ctx| match val {
+            ValueRef::Scalar(scalar) => {
+                let mut buf = Vec::new();
+                cast_scalar_to_variant(scalar, ctx.tz, &mut buf);
+                Ok(Value::Scalar(Some(buf)))
+            }
+            ValueRef::Column(col) => {
+                let new_col = cast_scalars_to_variants(col.iter(), ctx.tz);
+                Ok(Value::Column(NullableColumn {
+                    validity: constant_bitmap(true, new_col.len()).into(),
+                    column: new_col,
+                }))
             }
         },
     );

@@ -303,14 +303,16 @@ impl Display for RawExpr {
             RawExpr::Literal { lit, .. } => write!(f, "{lit}"),
             RawExpr::ColumnRef { id, data_type, .. } => write!(f, "ColumnRef({id})::{data_type}"),
             RawExpr::Cast {
-                expr, dest_type, ..
+                is_try,
+                expr,
+                dest_type,
+                ..
             } => {
-                write!(f, "CAST({expr} AS {dest_type})")
-            }
-            RawExpr::TryCast {
-                expr, dest_type, ..
-            } => {
-                write!(f, "TRY_CAST({expr} AS {dest_type})")
+                if *is_try {
+                    write!(f, "TRY_CAST({expr} AS {dest_type})")
+                } else {
+                    write!(f, "CAST({expr} AS {dest_type})")
+                }
             }
             RawExpr::FunctionCall {
                 name, args, params, ..
@@ -415,14 +417,16 @@ impl Display for Expr {
             Expr::Constant { scalar, .. } => write!(f, "{:?}", scalar.as_ref()),
             Expr::ColumnRef { id, .. } => write!(f, "ColumnRef({id})"),
             Expr::Cast {
-                expr, dest_type, ..
+                is_try,
+                expr,
+                dest_type,
+                ..
             } => {
-                write!(f, "CAST({expr} AS {dest_type})")
-            }
-            Expr::TryCast {
-                expr, dest_type, ..
-            } => {
-                write!(f, "TRY_CAST({expr} AS {dest_type})")
+                if *is_try {
+                    write!(f, "TRY_CAST({expr} AS {dest_type})")
+                } else {
+                    write!(f, "CAST({expr} AS {dest_type})")
+                }
             }
             Expr::FunctionCall {
                 function,

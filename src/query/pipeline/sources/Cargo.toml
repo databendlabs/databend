@@ -24,7 +24,6 @@ common-io = { path = "../../../common/io" }
 common-meta-types = { path = "../../../meta/types" }
 common-pipeline-core = { path = "../core" }
 common-settings = { path = "../../settings" }
-common-streams = { path = "../../streams" }
 
 async-trait = { version = "0.1.57", package = "async-trait-fn" }
 bstr = "1.0.1"
