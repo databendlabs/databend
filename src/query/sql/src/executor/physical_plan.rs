@@ -14,6 +14,9 @@
 
 use std::collections::BTreeMap;
 
+use common_catalog::plan::ReadDataSourcePlan;
+use common_catalog::plan::StageKind;
+use common_catalog::plan::SINK_SCHEMA;
 use common_datablocks::DataBlock;
 use common_datavalues::wrap_nullable;
 use common_datavalues::BooleanType;
@@ -25,9 +28,6 @@ use common_datavalues::ToDataType;
 use common_datavalues::Vu8;
 use common_exception::Result;
 use common_meta_app::schema::TableInfo;
-use common_planner::extras::StageKind;
-use common_planner::extras::SINK_SCHEMA;
-use common_planner::ReadDataSourcePlan;
 
 use super::AggregateFunctionDesc;
 use super::SortDesc;

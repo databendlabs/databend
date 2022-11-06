@@ -15,6 +15,8 @@
 use std::sync::Arc;
 
 use common_base::base::tokio;
+use common_catalog::plan::ReadDataSourcePlan;
+use common_catalog::plan::SourceInfo;
 use common_datablocks::assert_blocks_sorted_eq;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::Series;
@@ -24,8 +26,6 @@ use common_datavalues::DataSchema;
 use common_datavalues::ToDataType;
 use common_exception::Result;
 use common_meta_types::UserIdentity;
-use common_planner::ReadDataSourcePlan;
-use common_planner::SourceInfo;
 use common_storages_fuse_result::ResultQueryInfo;
 use common_storages_fuse_result::ResultTable;
 use common_storages_fuse_result::ResultTableWriter;

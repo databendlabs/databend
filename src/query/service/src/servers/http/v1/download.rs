@@ -15,13 +15,13 @@
 use std::sync::Arc;
 
 use async_stream::stream;
+use common_catalog::plan::Extras;
+use common_catalog::plan::ReadDataSourcePlan;
+use common_catalog::plan::SourceInfo;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_formats::FileFormatOptionsExt;
 use common_meta_types::StageFileFormatType;
-use common_planner::extras::Extras;
-use common_planner::ReadDataSourcePlan;
-use common_planner::SourceInfo;
 use common_storages_fuse_result::ResultTable;
 use futures::StreamExt;
 

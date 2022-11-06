@@ -14,13 +14,13 @@
 
 use std::sync::Arc;
 
+use common_catalog::plan::ReadDataSourcePlan;
+use common_catalog::plan::SourceInfo;
 use common_catalog::table::CompactTarget;
 use common_exception::Result;
 use common_pipeline_core::Pipeline;
 use common_pipeline_transforms::processors::transforms::BlockCompactor;
 use common_pipeline_transforms::processors::transforms::TransformCompact;
-use common_planner::ReadDataSourcePlan;
-use common_planner::SourceInfo;
 use common_storages_table_meta::meta::TableSnapshot;
 
 use super::FuseTableSink;

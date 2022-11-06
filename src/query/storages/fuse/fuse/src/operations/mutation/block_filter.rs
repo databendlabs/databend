@@ -15,13 +15,13 @@
 use std::ops::Not;
 use std::sync::Arc;
 
+use common_catalog::plan::Expression;
+use common_catalog::plan::Projection;
 use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
 use common_datavalues::BooleanColumn;
 use common_datavalues::Series;
 use common_exception::Result;
-use common_planner::plans::Projection;
-use common_planner::Expression;
 use common_sql::evaluator::Evaluator;
 use common_storages_table_meta::meta::BlockMeta;
 

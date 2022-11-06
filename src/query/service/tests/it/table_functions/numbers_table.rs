@@ -13,9 +13,9 @@
 //  limitations under the License.
 
 use common_base::base::tokio;
+use common_catalog::plan::Extras;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_planner::extras::Extras;
 use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::SessionManager;

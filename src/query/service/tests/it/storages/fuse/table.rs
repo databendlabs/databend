@@ -16,10 +16,10 @@ use std::default::Default;
 
 use common_ast::ast::Engine;
 use common_base::base::tokio;
+use common_catalog::plan::ReadDataSourcePlan;
+use common_catalog::plan::SourceInfo;
 use common_exception::Result;
 use common_meta_app::schema::TableInfo;
-use common_planner::ReadDataSourcePlan;
-use common_planner::SourceInfo;
 use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use common_sql::plans::AlterTableClusterKeyPlan;
 use common_sql::plans::CreateTablePlanV2;

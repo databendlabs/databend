@@ -15,15 +15,15 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use common_catalog::plan::Extras;
+use common_catalog::plan::Projection;
+use common_catalog::plan::ReadDataSourcePlan;
+use common_catalog::plan::SourceInfo;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_exception::Result;
-use common_planner::extras::Extras;
-use common_planner::plans::Projection;
-use common_planner::ReadDataSourcePlan;
-use common_planner::SourceInfo;
 
 #[async_trait::async_trait]
 pub trait ToReadDataSourcePlan {

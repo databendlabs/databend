@@ -16,10 +16,10 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::str::FromStr;
 
+use common_catalog::plan::ReadDataSourcePlan;
 use common_datavalues::DataSchemaRef;
 use common_meta_types::MetaId;
 use common_meta_types::UserStageInfo;
-use common_planner::ReadDataSourcePlan;
 
 use crate::plans::Plan;
 

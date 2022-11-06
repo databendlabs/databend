@@ -18,8 +18,8 @@ use common_datavalues::prelude::*;
 use common_meta_app::schema::TableInfo;
 use once_cell::sync::Lazy;
 
-use crate::plans::Projection;
-use crate::Expression;
+use crate::plan::Expression;
+use crate::plan::Projection;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum StageKind {

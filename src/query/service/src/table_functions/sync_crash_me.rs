@@ -19,6 +19,10 @@ use std::task::Context;
 use std::task::Poll;
 
 use chrono::NaiveDateTime;
+use common_catalog::plan::Extras;
+use common_catalog::plan::Partitions;
+use common_catalog::plan::ReadDataSourcePlan;
+use common_catalog::plan::Statistics;
 use common_datablocks::DataBlock;
 use common_datavalues::chrono::TimeZone;
 use common_datavalues::chrono::Utc;
@@ -27,10 +31,6 @@ use common_exception::Result;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
-use common_planner::extras::Extras;
-use common_planner::extras::Statistics;
-use common_planner::Partitions;
-use common_planner::ReadDataSourcePlan;
 use futures::Stream;
 
 use crate::pipelines::processors::port::OutputPort;

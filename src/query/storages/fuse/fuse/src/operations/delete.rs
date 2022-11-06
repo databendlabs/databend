@@ -14,14 +14,14 @@
 
 use std::sync::Arc;
 
+use common_catalog::plan::DeletePlan;
+use common_catalog::plan::Expression;
+use common_catalog::plan::Extras;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_datavalues::DataField;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planner::extras::Extras;
-use common_planner::plans::DeletePlan;
-use common_planner::Expression;
 use common_sql::ExpressionParser;
 use common_storages_table_meta::meta::TableSnapshot;
 use tracing::debug;

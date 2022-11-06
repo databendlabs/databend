@@ -15,8 +15,8 @@
 use std::sync::Arc;
 use std::time::SystemTime;
 
+use common_catalog::plan::Extras;
 use common_exception::Result;
-use common_planner::extras::Extras;
 use common_sql::executor::ExpressionBuilderWithoutRenaming;
 
 use crate::interpreters::Interpreter;

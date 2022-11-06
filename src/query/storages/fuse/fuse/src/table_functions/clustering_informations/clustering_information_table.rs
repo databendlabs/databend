@@ -16,16 +16,16 @@ use std::any::Any;
 use std::sync::Arc;
 
 use common_catalog::catalog::CATALOG_DEFAULT;
+use common_catalog::plan::Extras;
+use common_catalog::plan::Partitions;
+use common_catalog::plan::ReadDataSourcePlan;
+use common_catalog::plan::Statistics;
 use common_datablocks::DataBlock;
 use common_datavalues::DataValue;
 use common_exception::Result;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
-use common_planner::extras::Extras;
-use common_planner::extras::Statistics;
-use common_planner::Partitions;
-use common_planner::ReadDataSourcePlan;
 
 use super::clustering_information::ClusteringInformation;
 use super::table_args::get_cluster_keys;

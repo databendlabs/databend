@@ -14,9 +14,9 @@
 
 use std::sync::Arc;
 
+use common_catalog::plan::ReadDataSourcePlan;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planner::ReadDataSourcePlan;
 
 use super::Fragmenter;
 use crate::api::DataExchange;

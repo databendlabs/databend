@@ -26,15 +26,15 @@ use common_functions::scalars::FunctionContext;
 use common_io::prelude::FormatSettings;
 use common_meta_types::RoleInfo;
 use common_meta_types::UserInfo;
-use common_planner::PartInfoPtr;
-use common_planner::Partitions;
-use common_planner::ReadDataSourcePlan;
 use common_settings::Settings;
 use common_storage::DataOperator;
 use common_storage::StorageMetrics;
 
 use crate::catalog::Catalog;
 use crate::cluster_info::Cluster;
+use crate::plan::PartInfoPtr;
+use crate::plan::Partitions;
+use crate::plan::ReadDataSourcePlan;
 use crate::table::Table;
 
 pub struct ProcessInfo {

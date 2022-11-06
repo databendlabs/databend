@@ -13,15 +13,15 @@
 //  limitations under the License.
 
 use common_base::base::tokio;
+use common_catalog::plan::Extras;
+use common_catalog::plan::Projection;
+use common_catalog::plan::Statistics;
 use common_datablocks::assert_blocks_sorted_eq;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
-use common_planner::extras::Extras;
-use common_planner::extras::Statistics;
-use common_planner::plans::Projection;
 use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use common_sql::plans::TableOptions;
 use common_storages_memory::MemoryTable;

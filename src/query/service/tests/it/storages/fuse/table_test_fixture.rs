@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use common_ast::ast::Engine;
 use common_catalog::catalog::CATALOG_DEFAULT;
+use common_catalog::plan::Extras;
 use common_catalog::table::AppendMode;
 use common_datablocks::assert_blocks_sorted_eq_with_name;
 use common_datablocks::DataBlock;
@@ -24,7 +25,6 @@ use common_datablocks::SendableDataBlockStream;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_meta_app::schema::DatabaseMeta;
-use common_planner::extras::Extras;
 use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use common_sql::plans::CreateDatabasePlan;
 use common_sql::plans::CreateTablePlanV2;

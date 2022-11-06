@@ -15,6 +15,11 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use common_catalog::plan::Extras;
+use common_catalog::plan::PartInfo;
+use common_catalog::plan::Partitions;
+use common_catalog::plan::ReadDataSourcePlan;
+use common_catalog::plan::Statistics;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
@@ -29,11 +34,6 @@ use common_pipeline_sources::processors::sources::AsyncSourcer;
 use common_pipeline_sources::processors::sources::EmptySource;
 use common_pipeline_sources::processors::sources::SyncSource;
 use common_pipeline_sources::processors::sources::SyncSourcer;
-use common_planner::extras::Extras;
-use common_planner::extras::Statistics;
-use common_planner::PartInfo;
-use common_planner::Partitions;
-use common_planner::ReadDataSourcePlan;
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct SystemTablePart;

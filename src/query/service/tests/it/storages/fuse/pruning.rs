@@ -16,10 +16,10 @@ use std::sync::Arc;
 
 use common_ast::ast::Engine;
 use common_base::base::tokio;
+use common_catalog::plan::Extras;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_planner::extras::Extras;
 use common_sql::executor::add;
 use common_sql::executor::col;
 use common_sql::executor::lit;

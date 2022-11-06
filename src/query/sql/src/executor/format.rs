@@ -13,9 +13,9 @@
 // limitations under the License.
 
 use common_ast::ast::FormatTreeNode;
+use common_catalog::plan::StageKind;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planner::extras::StageKind;
 use itertools::Itertools;
 
 use super::AggregateFinal;

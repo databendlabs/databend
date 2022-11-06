@@ -21,11 +21,11 @@ use common_datavalues::DataSchemaRef;
 use common_datavalues::DataValue;
 use common_meta_app::schema::TableInfo;
 
-use crate::extras::Extras;
-use crate::extras::Statistics;
-use crate::partition::Partitions;
-use crate::plans::Projection;
-use crate::stage_table::StageTableInfo;
+use crate::plan::Extras;
+use crate::plan::Partitions;
+use crate::plan::Projection;
+use crate::plan::StageTableInfo;
+use crate::plan::Statistics;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum SourceInfo {

@@ -12,27 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod expression_parser;
-mod format;
-mod metadata;
-#[allow(clippy::module_inception)]
-mod planner;
-mod semantic;
+mod delete;
+mod expression;
+mod expression_visitor;
+mod extras;
+mod partition;
+mod projection;
+mod read_datasource;
+mod stage_table;
 
-pub(crate) mod binder;
-pub mod optimizer;
-pub mod plans;
-
-pub use binder::BindContext;
-pub use binder::Binder;
-pub use binder::ColumnBinding;
-pub use binder::ScalarBinder;
-pub use binder::Visibility;
-pub use expression_parser::ExpressionParser;
-pub use metadata::*;
-pub use planner::Planner;
-pub use plans::ScalarExpr;
-pub use semantic::normalize_identifier;
-pub use semantic::validate_function_arg;
-pub use semantic::IdentifierNormalizer;
-pub use semantic::NameResolutionContext;
+pub use delete::DeletePlan;
+pub use expression::Expression;
+pub use expression_visitor::*;
+pub use extras::*;
+pub use partition::*;
+pub use projection::Projection;
+pub use read_datasource::*;
+pub use stage_table::StageTableInfo;

@@ -26,14 +26,14 @@ use common_catalog::table_context::TableContext;
 use common_datavalues::DataTypeImpl;
 use common_exception::Result;
 use common_meta_types::UserDefinedFunction;
-use common_planner::plans::AlterUDFPlan;
-use common_planner::plans::CallPlan;
-use common_planner::plans::CreateUDFPlan;
-use common_planner::plans::DropUDFPlan;
 
+use crate::plans::AlterUDFPlan;
+use crate::plans::CallPlan;
 use crate::plans::CreateRolePlan;
+use crate::plans::CreateUDFPlan;
 use crate::plans::DropRolePlan;
 use crate::plans::DropStagePlan;
+use crate::plans::DropUDFPlan;
 use crate::plans::DropUserPlan;
 use crate::plans::Plan;
 use crate::plans::RewriteKind;

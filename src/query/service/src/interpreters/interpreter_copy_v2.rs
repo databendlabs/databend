@@ -16,6 +16,9 @@ use std::path::Path;
 use std::sync::Arc;
 
 use common_base::base::GlobalIORuntime;
+use common_catalog::plan::ReadDataSourcePlan;
+use common_catalog::plan::SourceInfo;
+use common_catalog::plan::StageTableInfo;
 use common_catalog::table::AppendMode;
 use common_datavalues::chrono::Utc;
 use common_datavalues::prelude::*;
@@ -26,9 +29,6 @@ use common_meta_app::schema::TableCopiedFileInfo;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_meta_types::StageFile;
 use common_meta_types::UserStageInfo;
-use common_planner::stage_table::StageTableInfo;
-use common_planner::ReadDataSourcePlan;
-use common_planner::SourceInfo;
 use common_storages_stage::StageTable;
 use regex::Regex;
 

@@ -15,6 +15,11 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use common_catalog::plan::Extras;
+use common_catalog::plan::Partitions;
+use common_catalog::plan::Projection;
+use common_catalog::plan::ReadDataSourcePlan;
+use common_catalog::plan::Statistics;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_datavalues::DataSchemaRef;
@@ -25,11 +30,6 @@ use common_meta_app::schema::TableMeta;
 use common_meta_types::UserIdentity;
 use common_pipeline_core::Pipeline;
 use common_pipeline_transforms::processors::transforms::TransformLimit;
-use common_planner::extras::Extras;
-use common_planner::extras::Statistics;
-use common_planner::plans::Projection;
-use common_planner::Partitions;
-use common_planner::ReadDataSourcePlan;
 use common_storages_fuse::io::BlockReader;
 use common_storages_fuse::FuseTable;
 use common_storages_table_meta::meta::SegmentInfo;

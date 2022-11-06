@@ -19,6 +19,10 @@ use std::io::BufRead;
 use std::io::BufReader;
 use std::sync::Arc;
 
+use common_catalog::plan::Extras;
+use common_catalog::plan::Partitions;
+use common_catalog::plan::ReadDataSourcePlan;
+use common_catalog::plan::Statistics;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
@@ -34,10 +38,6 @@ use common_pipeline_core::Pipe;
 use common_pipeline_core::Pipeline;
 use common_pipeline_sources::processors::sources::SyncSource;
 use common_pipeline_sources::processors::sources::SyncSourcer;
-use common_planner::extras::Extras;
-use common_planner::extras::Statistics;
-use common_planner::Partitions;
-use common_planner::ReadDataSourcePlan;
 use tracing::debug;
 use walkdir::WalkDir;
 

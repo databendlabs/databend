@@ -15,6 +15,9 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use common_catalog::plan::Extras;
+use common_catalog::plan::ReadDataSourcePlan;
+use common_catalog::plan::SourceInfo;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_datablocks::SortColumnDescription;
@@ -25,9 +28,6 @@ use common_pipeline_transforms::processors::transforms::SortMergeCompactor;
 use common_pipeline_transforms::processors::transforms::TransformCompact;
 use common_pipeline_transforms::processors::transforms::TransformSortMerge;
 use common_pipeline_transforms::processors::transforms::TransformSortPartial;
-use common_planner::extras::Extras;
-use common_planner::ReadDataSourcePlan;
-use common_planner::SourceInfo;
 use common_storages_table_meta::meta::BlockMeta;
 
 use crate::operations::FuseTableSink;

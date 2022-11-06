@@ -18,17 +18,17 @@ use std::sync::Arc;
 
 use common_catalog::catalog::CatalogManager;
 use common_catalog::catalog::CATALOG_DEFAULT;
+use common_catalog::plan::Expression;
+use common_catalog::plan::Extras;
+use common_catalog::plan::PrewhereInfo;
+use common_catalog::plan::Projection;
+use common_catalog::plan::StageKind;
 use common_catalog::table_context::TableContext;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::FunctionFactory;
-use common_planner::extras::Extras;
-use common_planner::extras::PrewhereInfo;
-use common_planner::extras::StageKind;
-use common_planner::plans::Projection;
-use common_planner::Expression;
 use itertools::Itertools;
 
 use super::AggregateFinal;

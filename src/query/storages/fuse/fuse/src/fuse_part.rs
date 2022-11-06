@@ -19,11 +19,11 @@ use std::sync::Arc;
 use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_arrow::arrow::datatypes::Field as ArrowField;
 use common_arrow::arrow::datatypes::Schema as ArrowSchema;
+use common_catalog::plan::PartInfo;
+use common_catalog::plan::PartInfoPtr;
+use common_catalog::plan::Projection;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planner::plans::Projection;
-use common_planner::PartInfo;
-use common_planner::PartInfoPtr;
 use common_storages_table_meta::meta::Compression;
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq)]

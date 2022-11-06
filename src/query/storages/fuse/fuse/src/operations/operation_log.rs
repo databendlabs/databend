@@ -15,13 +15,13 @@
 use std::convert::TryFrom;
 use std::sync::Arc;
 
+use common_catalog::plan::SINK_SCHEMA;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::Series;
 use common_datavalues::prelude::SeriesFrom;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
-use common_planner::extras::SINK_SCHEMA;
 use common_storages_table_meta::meta::SegmentInfo;
 
 // currently, only support append,
