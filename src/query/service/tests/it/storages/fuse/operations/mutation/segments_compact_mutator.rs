@@ -221,7 +221,7 @@ async fn compact_segment(ctx: Arc<QueryContext>, table: &Arc<dyn Table>) -> Resu
 }
 
 #[tokio::test]
-async fn test_segment_accumulator() -> Result<()> {
+async fn test_segment_compactor() -> Result<()> {
     let fixture = TestFixture::new().await;
     let ctx = fixture.ctx();
 
@@ -239,8 +239,10 @@ async fn test_segment_accumulator() -> Result<()> {
             case_name,
         };
 
-        // run, and verify
+        // run, and verify that
         // - numbers are as expected
+        //   - number of the newly created segments (which are compacted)
+        //   - number of segments unchanged
         // - other general invariants
         //   - unchanged segments still be there
         //   - blocks and the order of them are not changed
@@ -255,7 +257,7 @@ async fn test_segment_accumulator() -> Result<()> {
         let case = CompactCase {
             // - 4 segments
             blocks_number_of_input_segments: vec![2, 8, 1, 8],
-            // - these segments should be compacted into 2 segments
+            // - these segments should be compacted into 2 new segments
             expected_number_of_output_segments: 2,
             // -  (2 + 8) meets threshold 10
             //    they should be compacted into one new segment.
@@ -284,7 +286,9 @@ async fn test_segment_accumulator() -> Result<()> {
             //      to compact one fragment, a large amount of non-fragmented segments have to be
             //      split into pieces and re-compacted.
             // - but the last segment of 5 blocks should be kept alone
-            //   thus, only one new segment will be generated
+            //   thus, only one new segment will be generated (the not too greedy rule)
+            //   if it is the last segment of the snapshot, we just tolerant this situation.
+            //   if a limited
             expected_block_number_of_new_segments: vec![2 + 3 + 6],
             case_name,
         };
@@ -368,7 +372,7 @@ async fn test_segment_accumulator() -> Result<()> {
     }
 
     {
-        // edge case: empty segments should be dropped
+        // edge case: single jumbo block
 
         let case_name = "single jumbo block";
         let threshold = 3;
@@ -384,22 +388,45 @@ async fn test_segment_accumulator() -> Result<()> {
     }
 
     {
+        // edge case: single jumbo block
+
+        let case_name = "jumbo block with single fragment";
+        let threshold = 3;
+        let case = CompactCase {
+            // input segments
+            blocks_number_of_input_segments: vec![7, 2],
+            // inputs will not be compacted ( 7 > 2 * 3)
+            expected_number_of_output_segments: 2,
+            // now new segment should be generated
+            expected_block_number_of_new_segments: vec![],
+            case_name,
+        };
+
+        case.run_and_verify(&ctx, threshold).await?;
+    }
+
+    {
         // case: rand test
 
         let case_name = "rand";
         let threshold = 3;
         let mut rng = thread_rng();
 
-        for _ in 0..20 {
+        // let rounds = 200; use this setting at home
+        let rounds = 20;
+        for _ in 0..rounds {
             let num_segments: usize = rng.gen_range(0..10);
             let mut blocks_number_of_input_segments = Vec::with_capacity(num_segments);
 
-            let mut num_accumulated_blocks = 0;
-            let mut fragment_segments = 0;
-
-            let mut expected_number_of_output_segments = 0;
-            let mut expected_block_number_of_new_segments = vec![];
             // simulate the compaction process, verifies that the test target works as expected
+            let mut num_accumulated_blocks = 0;
+            let mut fragmented_segments = 0;
+
+            // - number of segment expected in the output of compaction, includes both the compacted
+            //   new segments and the unchanged non-fragmented segments
+            let mut expected_number_of_output_segments = 0;
+            // - number of new segments created during the compaction
+            let mut expected_block_number_of_new_segments = vec![];
             for _ in 0..num_segments {
                 let block_num: usize = rng.gen_range(0..20);
                 blocks_number_of_input_segments.push(block_num);
@@ -409,50 +436,52 @@ async fn test_segment_accumulator() -> Result<()> {
                         // input segment is fragmented, but fragments collected so far
                         // are not enough yet.
                         num_accumulated_blocks = s;
-                        fragment_segments += 1;
+                        // only in this branch, the number of fragmented_segments will increase
+                        fragmented_segments += 1;
                     } else if s >= threshold && s < 2 * threshold {
                         // input segment is fragmented, and fragments collected are
                         // large enough to be compacted
                         num_accumulated_blocks = 0;
                         // mark that a segment will be included in the output
                         expected_number_of_output_segments += 1;
-                        if fragment_segments > 0 {
+                        if fragmented_segments > 0 {
                             // mark that a NEW segment will be generated, which
                             // "contains" all the fragmented segments collected so far.
                             expected_block_number_of_new_segments.push(s);
                         }
                         // reset state
-                        fragment_segments = 0;
+                        fragmented_segments = 0;
                     } else {
-                        // input segment is larger than threshold, in this situation:
-                        // fragmented segments collected so far should be compacted
-                        // - if the input segment and the fragments collected so far could be combined
-                        //   into a segment which size is lesser than 2 * threshold, just compact them
-                        // - otherwise, just compact the fragments collected so far, and after that,
-                        //   keep this segment as it is.
-                        if fragment_segments > 0 {
+                        // input segment is larger than threshold
+                        // - fragmented segments collected so far should be compacted first
+                        if fragmented_segments > 0 {
                             // some fragments left there, check them out
-                            if fragment_segments > 1 {
+                            if fragmented_segments > 1 {
                                 // if there are more than one fragments, a new segment is expected
                                 // to be generated
                                 expected_block_number_of_new_segments.push(num_accumulated_blocks);
                             }
-                            // mark that a segment will be include in the output
+                            // mark that another segment will be include in the output
                             expected_number_of_output_segments += 1;
                         }
-                        fragment_segments = 0;
-                        num_accumulated_blocks = 0;
+                        // - after compacting the fragments, count this large segment in
                         expected_number_of_output_segments += 1;
+
+                        // no fragments left currently, reset the counters
+                        fragmented_segments = 0;
+                        num_accumulated_blocks = 0;
                     }
                 }
             }
 
-            // finalize, compact left fragments
-            if fragment_segments > 0 {
-                expected_number_of_output_segments += 1;
-                if fragment_segments > 1 {
+            // finalize, compact left fragments if any
+            if fragmented_segments > 0 {
+                if fragmented_segments > 1 {
+                    // if there are more than one fragments left there, a new segment should be created
                     expected_block_number_of_new_segments.push(num_accumulated_blocks);
                 }
+                // mark that another segment will be include in the output
+                expected_number_of_output_segments += 1;
             }
 
             let case = CompactCase {
