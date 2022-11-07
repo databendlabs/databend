@@ -49,7 +49,6 @@ sha1 = "0.10.5"
 sha2 = "0.10.6"
 simdutf8 = "0.1.4"
 siphasher = "0.3"
-sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "7f246e3" }
 strength_reduce = "0.2.3"
 twox-hash = "1.6.3"
 uuid = { version = "1.1.2", features = ["v4"] }
