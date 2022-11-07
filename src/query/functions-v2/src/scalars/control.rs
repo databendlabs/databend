@@ -198,7 +198,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         T::Scalar: HashtableKeyable,
     {
         // must be scalar in rhs, if rhs contains column, it'll be rewritted to `a = b1 or a = b2 or a = b3` in type_checker
-        let array = rhs.as_scalar().ok_or(IN_ERROR_MSG.to_string())?;
+        let array = rhs.as_scalar().ok_or_else(|| IN_ERROR_MSG.to_string())?;
         let mut set = StackHashSet::<_, 128>::with_capacity(T::column_len(array));
         for val in T::iter_column(array) {
             let _ = set.set_insert(T::to_owned_scalar(val));
@@ -271,7 +271,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             })
         },
         |lhs, rhs, _| {
-            let array = rhs.as_scalar().ok_or(IN_ERROR_MSG.to_string())?;
+            let array = rhs.as_scalar().ok_or_else(|| IN_ERROR_MSG.to_string())?;
             let mut set = StackHashSet::<_, 128>::with_capacity(BooleanType::column_len(array));
             for val in array.iter() {
                 let _ = set.set_insert(val as u8);
@@ -295,7 +295,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_, _| None,
         |lhs, rhs, _| {
-            let array = rhs.as_scalar().ok_or(IN_ERROR_MSG.to_string())?;
+            let array = rhs.as_scalar().ok_or_else(|| IN_ERROR_MSG.to_string())?;
             let mut set = StackHashSet::<_, 128>::with_capacity(StringType::column_len(array));
             for val in array.iter() {
                 let key_ref = KeysRef::create(val.as_ptr() as usize, val.len());
