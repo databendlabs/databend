@@ -275,15 +275,6 @@ evaluation (internal):
 +--------------+---------------------------------------------------------------------------+
 
 
-ast            : [1,2,3,4]
-raw expr       : array(1_u8, 2_u8, 3_u8, 4_u8)
-checked expr   : array<T0=UInt8><T0, T0, T0, T0>(1_u8, 2_u8, 3_u8, 4_u8)
-optimized expr : [1, 2, 3, 4]
-output type    : Array(UInt8)
-output domain  : [{1..=4}]
-output         : [1, 2, 3, 4]
-
-
 ast            : false in (false, true)
 raw expr       : or(eq(false, false), eq(false, true))
 checked expr   : or<Boolean, Boolean>(eq<Boolean, Boolean>(false, false), eq<Boolean, Boolean>(false, true))
