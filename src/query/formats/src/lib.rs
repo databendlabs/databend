@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod clickhouse;
+mod field_encoder;
 mod file_format_type;
 pub mod output_format;
 pub mod output_format_csv;
