@@ -40,7 +40,7 @@ pub struct BlockMeta {
 }
 
 // TODO move it to common
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct ColumnMeta {
     /// where the data of column start
     pub offset: u64,

@@ -17,7 +17,7 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_meta_app::schema::DatabaseNameIdent;
 use common_meta_app::schema::RenameDatabaseReq;
-use common_planner::plans::RenameDatabasePlan;
+use common_sql::plans::RenameDatabasePlan;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;

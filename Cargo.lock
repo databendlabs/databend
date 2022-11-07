@@ -1279,11 +1279,13 @@ dependencies = [
  "common-meta-app",
  "common-meta-types",
  "common-pipeline-core",
- "common-planner",
  "common-settings",
  "common-storage",
  "dyn-clone",
  "once_cell",
+ "serde",
+ "serde_json",
+ "typetag",
 ]
 
 [[package]]
@@ -1320,7 +1322,9 @@ dependencies = [
  "common-datavalues",
  "common-exception",
  "common-io",
+ "futures",
  "parking_lot 0.12.1",
+ "pin-project-lite",
  "pretty_assertions",
  "primitive-types",
  "regex",
@@ -1352,7 +1356,6 @@ dependencies = [
  "rand 0.8.5",
  "serde",
  "serde_json",
- "smallvec",
 ]
 
 [[package]]
@@ -1854,7 +1857,6 @@ dependencies = [
  "common-meta-types",
  "common-pipeline-core",
  "common-settings",
- "common-streams",
  "crossbeam-channel",
  "csv-core",
  "futures",
@@ -1877,21 +1879,6 @@ dependencies = [
  "common-datavalues",
  "common-exception",
  "common-pipeline-core",
-]
-
-[[package]]
-name = "common-planner"
-version = "0.1.0"
-dependencies = [
- "common-datavalues",
- "common-exception",
- "common-meta-app",
- "common-meta-types",
- "once_cell",
- "parking_lot 0.12.1",
- "serde",
- "serde_json",
- "typetag",
 ]
 
 [[package]]
@@ -1996,10 +1983,8 @@ dependencies = [
  "common-pipeline-core",
  "common-pipeline-sources",
  "common-pipeline-transforms",
- "common-planner",
  "common-settings",
  "common-storage",
- "common-storages-constants",
  "common-storages-table-meta",
  "common-storages-view",
  "common-tracing",
@@ -2067,13 +2052,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "common-storages-constants"
-version = "0.1.0"
-dependencies = [
- "once_cell",
-]
-
-[[package]]
 name = "common-storages-factory"
 version = "0.1.0"
 dependencies = [
@@ -2087,7 +2065,7 @@ dependencies = [
  "common-storages-null",
  "common-storages-random",
  "common-storages-view",
- "parking_lot 0.12.1",
+ "dashmap",
 ]
 
 [[package]]
@@ -2111,12 +2089,10 @@ dependencies = [
  "common-pipeline-core",
  "common-pipeline-sources",
  "common-pipeline-transforms",
- "common-planner",
  "common-sharing",
  "common-sql",
  "common-storage",
  "common-storages-cache",
- "common-storages-constants",
  "common-storages-index",
  "common-storages-table-meta",
  "futures",
@@ -2152,12 +2128,10 @@ dependencies = [
  "common-pipeline-sinks",
  "common-pipeline-sources",
  "common-pipeline-transforms",
- "common-planner",
  "common-storage",
  "common-storages-fuse",
  "common-storages-table-meta",
  "common-storages-view",
- "common-streams",
  "common-users",
  "futures",
  "itertools",
@@ -2191,7 +2165,6 @@ dependencies = [
  "common-meta-types",
  "common-pipeline-core",
  "common-pipeline-sources",
- "common-planner",
  "common-storage",
  "common-storages-cache",
  "common-storages-index",
@@ -2215,7 +2188,6 @@ dependencies = [
  "common-datavalues",
  "common-exception",
  "common-functions",
- "common-planner",
  "common-sql",
  "common-storages-table-meta",
  "criterion",
@@ -2248,7 +2220,6 @@ dependencies = [
  "common-pipeline-sinks",
  "common-pipeline-sources",
  "common-pipeline-transforms",
- "common-planner",
  "common-storage",
  "common-storages-view",
  "common-users",
@@ -2289,7 +2260,6 @@ dependencies = [
  "common-pipeline-sinks",
  "common-pipeline-sources",
  "common-pipeline-transforms",
- "common-planner",
  "common-storage",
  "common-storages-view",
  "common-users",
@@ -2330,7 +2300,6 @@ dependencies = [
  "common-pipeline-sinks",
  "common-pipeline-sources",
  "common-pipeline-transforms",
- "common-planner",
  "common-storage",
  "common-storages-view",
  "common-users",
@@ -2371,7 +2340,6 @@ dependencies = [
  "common-pipeline-sinks",
  "common-pipeline-sources",
  "common-pipeline-transforms",
- "common-planner",
  "common-storage",
  "common-storages-view",
  "common-users",
@@ -2397,7 +2365,7 @@ dependencies = [
  "common-exception",
  "common-meta-app",
  "common-storages-cache",
- "common-storages-constants",
+ "common-storages-table-meta",
  "goldenfile",
  "opendal",
  "serde",
@@ -2427,7 +2395,6 @@ dependencies = [
  "common-pipeline-sinks",
  "common-pipeline-sources",
  "common-pipeline-transforms",
- "common-planner",
  "common-storage",
  "common-storages-view",
  "common-users",
@@ -2468,7 +2435,6 @@ dependencies = [
  "common-pipeline-sinks",
  "common-pipeline-sources",
  "common-pipeline-transforms",
- "common-planner",
  "common-storage",
  "common-storages-view",
  "common-users",
@@ -2515,19 +2481,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "common-streams"
-version = "0.1.0"
-dependencies = [
- "common-base",
- "common-datablocks",
- "common-datavalues",
- "common-exception",
- "futures",
- "opendal",
- "pin-project-lite",
-]
-
-[[package]]
 name = "common-tracing"
 version = "0.1.0"
 dependencies = [
@@ -2565,10 +2518,6 @@ dependencies = [
  "serde",
  "tracing",
 ]
-
-[[package]]
-name = "common-workspace-hack"
-version = "0.1.0"
 
 [[package]]
 name = "concurrent-queue"
@@ -3124,12 +3073,10 @@ dependencies = [
  "common-pipeline-sinks",
  "common-pipeline-sources",
  "common-pipeline-transforms",
- "common-planner",
  "common-settings",
  "common-sql",
  "common-storage",
  "common-storages-cache",
- "common-storages-constants",
  "common-storages-factory",
  "common-storages-fuse",
  "common-storages-fuse-result",
@@ -3144,10 +3091,10 @@ dependencies = [
  "common-storages-system",
  "common-storages-table-meta",
  "common-storages-view",
- "common-streams",
  "common-tracing",
  "common-users",
  "criterion",
+ "dashmap",
  "futures",
  "futures-util",
  "goldenfile",
@@ -3169,6 +3116,7 @@ dependencies = [
  "openssl",
  "parking_lot 0.12.1",
  "petgraph",
+ "pin-project-lite",
  "poem",
  "pretty_assertions",
  "primitive-types",

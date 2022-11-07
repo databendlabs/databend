@@ -12,14 +12,13 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_config::Config;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::DatabaseInfo;
-use parking_lot::RwLock;
+use dashmap::DashMap;
 
 use crate::databases::default::DefaultDatabase;
 use crate::databases::share::ShareDatabase;
@@ -42,12 +41,12 @@ where
 
 #[derive(Default)]
 pub struct DatabaseFactory {
-    creators: RwLock<HashMap<String, Arc<dyn DatabaseCreator>>>,
+    creators: DashMap<String, Arc<dyn DatabaseCreator>>,
 }
 
 impl DatabaseFactory {
     pub fn create(_: Config) -> Self {
-        let mut creators: HashMap<String, Arc<dyn DatabaseCreator>> = Default::default();
+        let creators: DashMap<String, Arc<dyn DatabaseCreator>> = DashMap::new();
         creators.insert(
             DefaultDatabase::NAME.to_string(),
             Arc::new(DefaultDatabase::try_create),
@@ -57,9 +56,7 @@ impl DatabaseFactory {
             Arc::new(ShareDatabase::try_create),
         );
 
-        DatabaseFactory {
-            creators: RwLock::new(creators),
-        }
+        DatabaseFactory { creators }
     }
 
     pub fn get_database(
@@ -74,8 +71,7 @@ impl DatabaseFactory {
             db_engine.to_uppercase()
         };
 
-        let lock = self.creators.read();
-        let factory = lock.get(&engine).ok_or_else(|| {
+        let factory = self.creators.get(&engine).ok_or_else(|| {
             ErrorCode::UnknownDatabaseEngine(format!("Unknown database engine {}", engine))
         })?;
 

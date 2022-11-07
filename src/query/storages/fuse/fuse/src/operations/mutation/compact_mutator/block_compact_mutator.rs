@@ -15,8 +15,9 @@
 use std::sync::Arc;
 use std::vec;
 
+use common_catalog::plan::Partitions;
+use common_datablocks::BlockCompactThresholds;
 use common_exception::Result;
-use common_planner::Partitions;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::Location;
 use common_storages_table_meta::meta::Statistics;
@@ -24,7 +25,6 @@ use opendal::Operator;
 
 use super::compact_part::CompactTask;
 use super::CompactPartInfo;
-use crate::io::BlockCompactor;
 use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
 use crate::metrics::metrics_set_segments_memory_usage;
@@ -36,7 +36,7 @@ pub struct BlockCompactMutator {
     ctx: Arc<dyn TableContext>,
     compact_params: CompactOptions,
     data_accessor: Operator,
-    block_compactor: BlockCompactor,
+    thresholds: BlockCompactThresholds,
     location_generator: TableMetaLocationGenerator,
     compact_tasks: Partitions,
     // summarised statistics of all the unchanged segments
@@ -79,7 +79,7 @@ impl BlockCompactMutator {
                 && builder.is_empty()
                 && segment.summary.block_count as usize == blocks_per_seg;
             for b in segment.blocks.iter() {
-                let res = builder.add_block(b, self.block_compactor.clone());
+                let res = builder.add_block(b, self.thresholds);
                 if res.len() != 1 {
                     maybe = false;
                 }
@@ -163,17 +163,17 @@ impl CompactTaskBuilder {
     fn add_block(
         &mut self,
         block: &Arc<BlockMeta>,
-        block_compactor: BlockCompactor,
+        thresholds: BlockCompactThresholds,
     ) -> Vec<CompactTask> {
         self.total_rows += block.row_count as usize;
         self.total_size += block.block_size as usize;
 
-        if !block_compactor.check_perfect_block(self.total_rows, self.total_size) {
+        if !thresholds.check_large_enough(self.total_rows, self.total_size) {
             self.blocks.push(block.clone());
             return vec![];
         }
 
-        if !block_compactor.check_for_compact(self.total_rows, self.total_size) {
+        if !thresholds.check_for_compact(self.total_rows, self.total_size) {
             let trival_task = CompactTask::Trival(block.clone());
             let res = if !self.blocks.is_empty() {
                 let compact_task = CompactTask::Normal(self.blocks.clone());

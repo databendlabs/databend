@@ -20,6 +20,8 @@ use std::ops::RangeBounds;
 use common_exception::WithContext;
 use common_meta_stoerr::MetaStorageError;
 use common_meta_types::anyerror::AnyError;
+use common_meta_types::Change;
+use common_meta_types::SeqV;
 use sled::transaction::ConflictableTransactionError;
 use sled::transaction::TransactionResult;
 use sled::transaction::TransactionalTree;
@@ -160,12 +162,12 @@ impl SledTree {
         let sync = sync && self.sync;
 
         let result: TransactionResult<T, MetaStorageError> = self.tree.transaction(move |tree| {
-            let txn_sled_tree = TransactionSledTree { txn_tree: tree };
-            let r = f(txn_sled_tree.clone());
+            let txn_sled_tree = TransactionSledTree::new(tree);
+            let r = f(txn_sled_tree);
             match r {
                 Ok(r) => {
                     if sync {
-                        txn_sled_tree.txn_tree.flush();
+                        tree.flush();
                     }
                     Ok(r)
                 }
@@ -386,14 +388,36 @@ impl SledTree {
 #[derive(Clone)]
 pub struct TransactionSledTree<'a> {
     pub txn_tree: &'a TransactionalTree,
+
+    /// The changes that are collected during transaction execution.
+    pub changes: Vec<Change<Vec<u8>, String>>,
 }
 
-impl TransactionSledTree<'_> {
+impl<'a> TransactionSledTree<'a> {
+    pub fn new(txn_tree: &'a TransactionalTree) -> Self {
+        Self {
+            txn_tree,
+            changes: vec![],
+        }
+    }
+
     pub fn key_space<KV: SledKeySpace>(&self) -> TxnKeySpace<KV> {
         TxnKeySpace::<KV> {
             inner: self,
             phantom: PhantomData,
         }
+    }
+
+    /// Push a **change** that is applied to `key`.
+    ///
+    /// It does nothing if `prev == result`
+    pub fn push_change(&mut self, key: impl ToString, prev: Option<SeqV>, result: Option<SeqV>) {
+        if prev == result {
+            return;
+        }
+
+        self.changes
+            .push(Change::new_with_id(key.to_string(), prev, result))
     }
 }
 

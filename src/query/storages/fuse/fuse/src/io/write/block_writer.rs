@@ -24,8 +24,8 @@ use common_datablocks::DataBlock;
 use common_exception::Result;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::ClusterStatistics;
-use common_storages_table_meta::meta::StatisticsOfColumns;
 use common_storages_table_meta::meta::Location;
+use common_storages_table_meta::meta::StatisticsOfColumns;
 use opendal::Operator;
 use tracing::warn;
 use uuid::Uuid;
@@ -33,7 +33,6 @@ use uuid::Uuid;
 use crate::index::BlockFilter;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::util;
-use crate::statistics::gen_columns_statistics;
 
 const DEFAULT_BLOOM_INDEX_WRITE_BUFFER_SIZE: usize = 300 * 1024;
 const DEFAULT_BLOCK_WRITE_BUFFER_SIZE: usize = 100 * 1024 * 1024;

@@ -26,6 +26,8 @@ use crate::types::AnyType;
 use crate::types::DataType;
 use crate::Chunk;
 use crate::Column;
+use crate::ConstantFolder;
+use crate::Domain;
 use crate::Evaluator;
 use crate::FunctionRegistry;
 use crate::RawExpr;
@@ -37,12 +39,13 @@ use crate::Value;
 pub fn eval_function(
     span: Span,
     fn_name: &str,
-    args: impl Iterator<Item = (Value<AnyType>, DataType)>,
+    args: impl IntoIterator<Item = (Value<AnyType>, DataType)>,
     tz: Tz,
     num_rows: usize,
     fn_registry: &FunctionRegistry,
 ) -> Result<(Value<AnyType>, DataType)> {
     let (args, cols) = args
+        .into_iter()
         .enumerate()
         .map(|(id, (val, ty))| {
             (
@@ -61,10 +64,44 @@ pub fn eval_function(
         params: vec![],
         args,
     };
-    let (expr, ty) = crate::type_check::check(&raw_expr, fn_registry)?;
+    let expr = crate::type_check::check(&raw_expr, fn_registry)?;
     let chunk = Chunk::new(cols, num_rows);
-    let evaluator = Evaluator::new(&chunk, tz);
-    Ok((evaluator.run(&expr)?, ty))
+    let evaluator = Evaluator::new(&chunk, tz, fn_registry);
+    Ok((evaluator.run(&expr)?, expr.data_type().clone()))
+}
+
+/// A convenient shortcut to calculate the domain of a scalar function.
+pub fn calculate_function_domain(
+    span: Span,
+    fn_name: &str,
+    args: impl IntoIterator<Item = (Domain, DataType)>,
+    tz: Tz,
+    fn_registry: &FunctionRegistry,
+) -> Result<(Option<Domain>, DataType)> {
+    let (args, args_domain): (Vec<_>, Vec<_>) = args
+        .into_iter()
+        .enumerate()
+        .map(|(id, (domain, ty))| {
+            (
+                RawExpr::ColumnRef {
+                    span: span.clone(),
+                    id,
+                    data_type: ty,
+                },
+                domain,
+            )
+        })
+        .unzip();
+    let raw_expr = RawExpr::FunctionCall {
+        span,
+        name: fn_name.to_string(),
+        params: vec![],
+        args,
+    };
+    let expr = crate::type_check::check(&raw_expr, fn_registry)?;
+    let constant_folder = ConstantFolder::new(&args_domain, tz, fn_registry);
+    let (_, output_domain) = constant_folder.fold(&expr);
+    Ok((output_domain, expr.data_type().clone()))
 }
 
 pub fn column_merge_validity(column: &Column, bitmap: Option<Bitmap>) -> Option<Bitmap> {

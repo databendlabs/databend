@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planner::plans::KillPlan;
+use common_sql::plans::KillPlan;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;

@@ -112,13 +112,13 @@ evaluation (internal):
 
 
 ast            : multi_if(cond_a, expr_a, cond_b, expr_b, expr_else)
-raw expr       : multi_if(ColumnRef(0)::Boolean, ColumnRef(1)::Int64, ColumnRef(2)::Boolean, ColumnRef(3)::Int64, ColumnRef(4)::Int64 NULL)
-checked expr   : multi_if<T0=Int64 NULL><Boolean NULL, T0, Boolean NULL, T0, T0>(CAST(ColumnRef(0) AS Boolean NULL), CAST(ColumnRef(1) AS Int64 NULL), CAST(ColumnRef(2) AS Boolean NULL), CAST(ColumnRef(3) AS Int64 NULL), ColumnRef(4))
+raw expr       : multi_if(ColumnRef(0)::Boolean, ColumnRef(1)::Int64, ColumnRef(2)::Boolean NULL, ColumnRef(3)::Int64, ColumnRef(4)::Int64 NULL)
+checked expr   : multi_if<T0=Int64 NULL><Boolean NULL, T0, Boolean NULL, T0, T0>(CAST(ColumnRef(0) AS Boolean NULL), CAST(ColumnRef(1) AS Int64 NULL), ColumnRef(2), CAST(ColumnRef(3) AS Int64 NULL), ColumnRef(4))
 evaluation:
 +--------+---------------+---------+-----------------+---------+-------------------+-------------------+
 |        | cond_a        | expr_a  | cond_b          | expr_b  | expr_else         | Output            |
 +--------+---------------+---------+-----------------+---------+-------------------+-------------------+
-| Type   | Boolean       | Int64   | Boolean         | Int64   | Int64 NULL        | Int64 NULL        |
+| Type   | Boolean       | Int64   | Boolean NULL    | Int64   | Int64 NULL        | Int64 NULL        |
 | Domain | {FALSE, TRUE} | {1..=4} | {TRUE} ∪ {NULL} | {5..=8} | {9..=12} ∪ {NULL} | {1..=12} ∪ {NULL} |
 | Row 0  | true          | 1       | NULL            | 5       | 9                 | 1                 |
 | Row 1  | true          | 2       | true            | 6       | 10                | 2                 |

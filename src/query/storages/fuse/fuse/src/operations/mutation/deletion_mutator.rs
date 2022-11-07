@@ -27,8 +27,8 @@ use super::AbortOperation;
 use crate::io::BlockWriter;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::mutation::BaseMutator;
-use crate::statistics::ClusterStatsGenerator;
 use crate::statistics::gen_columns_statistics;
+use crate::statistics::ClusterStatsGenerator;
 
 pub enum Deletion {
     NothingDeleted,
@@ -84,7 +84,11 @@ impl DeletionMutator {
             let cluster_stats = self
                 .cluster_stats_gen
                 .gen_with_origin_stats(&replace_with, origin_stats)?;
-            Some(block_writer.write(replace_with, col_stats, cluster_stats).await?)
+            Some(
+                block_writer
+                    .write(replace_with, col_stats, cluster_stats)
+                    .await?,
+            )
         };
         let original_block_loc = location_of_block_to_be_replaced;
         self.base_mutator

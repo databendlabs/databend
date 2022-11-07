@@ -40,6 +40,7 @@ use common_storages_table_meta::meta::SegmentInfo;
 use common_storages_table_meta::meta::Statistics;
 use common_storages_table_meta::meta::TableSnapshot;
 use common_storages_table_meta::meta::Versioned;
+use common_storages_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use opendal::Operator;
 use tracing::debug;
 use tracing::info;
@@ -59,8 +60,6 @@ use crate::operations::TableOperationLog;
 use crate::statistics;
 use crate::statistics::merge_statistics;
 use crate::FuseTable;
-use crate::OPT_KEY_LEGACY_SNAPSHOT_LOC;
-use crate::OPT_KEY_SNAPSHOT_LOCATION;
 
 const OCC_DEFAULT_BACKOFF_INIT_DELAY_MS: Duration = Duration::from_millis(5);
 const OCC_DEFAULT_BACKOFF_MAX_DELAY_MS: Duration = Duration::from_millis(20 * 1000);
@@ -578,6 +577,8 @@ impl MutatorConflictDetector {
 
 mod utils {
     use std::collections::BTreeMap;
+
+    use common_storages_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
 
     use super::*;
     use crate::metrics::metrics_inc_commit_mutation_aborts;

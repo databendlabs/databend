@@ -16,13 +16,13 @@ use std::any::Any;
 use std::sync::Arc;
 
 use common_base::base::Progress;
-use common_cache::Cache;
 use common_base::base::ProgressValues;
+use common_cache::Cache;
+use common_catalog::plan::PartInfoPtr;
 use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planner::PartInfoPtr;
 use common_storages_table_meta::caches::CacheManager;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::SegmentInfo;
@@ -116,7 +116,10 @@ impl Processor for CompactSource {
             }
         }
 
-        if matches!(&self.state, State::Compact { .. } | State::Serialized { .. }) {
+        if matches!(
+            &self.state,
+            State::Compact { .. } | State::Serialized { .. }
+        ) {
             return Ok(Event::Async);
         }
 
@@ -125,7 +128,7 @@ impl Processor for CompactSource {
 
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Finished) {
-            State::Generate{order, metas} => {
+            State::Generate { order, metas } => {
                 let stats = reduce_block_metas(&metas)?;
                 let segment_info = SegmentInfo::new(metas, stats);
                 self.state = State::Serialized {
@@ -135,13 +138,15 @@ impl Processor for CompactSource {
                     segment: Arc::new(segment_info),
                 };
             }
-            State::Output { order, location, segment } => {
+            State::Output {
+                order,
+                location,
+                segment,
+            } => {
                 if let Some(segment_cache) = CacheManager::instance().get_table_segment_cache() {
                     let cache = &mut segment_cache.write();
                     cache.put(location.clone(), segment.clone());
                 }
-
-                
             }
             _ => return Err(ErrorCode::Internal("It's a bug.")),
         }
@@ -166,10 +171,7 @@ impl Processor for CompactSource {
                     for meta in metas {
                         let meta = meta.as_ref();
                         stats_of_columns.push(meta.col_stats.clone());
-                        let block = self
-                            .block_reader
-                            .read_with_block_meta(meta)
-                            .await?;
+                        let block = self.block_reader.read_with_block_meta(meta).await?;
                         let progress_values = ProgressValues {
                             rows: block.num_rows(),
                             bytes: block.memory_size(),
@@ -184,7 +186,7 @@ impl Processor for CompactSource {
                     let new_meta = block_writer.write(new_block, col_stats, None).await?;
                     new_metas.push(Arc::new(new_meta));
                 }
-                self.state = State::Generate{
+                self.state = State::Generate {
                     order: part.order,
                     metas: new_metas,
                 };
@@ -196,7 +198,11 @@ impl Processor for CompactSource {
                 segment,
             } => {
                 self.dal.object(&location).write(data).await?;
-                self.state = State::Output { order, location, segment};
+                self.state = State::Output {
+                    order,
+                    location,
+                    segment,
+                };
             }
             _ => return Err(ErrorCode::Internal("It's a bug.")),
         }
