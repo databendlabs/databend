@@ -15,13 +15,13 @@
 use common_ast::ast::Identifier;
 use common_ast::ast::Literal;
 use common_exception::Result;
-use common_planner::plans::SettingPlan;
-use common_planner::plans::VarValue;
 
 use super::BindContext;
 use super::Binder;
 use crate::planner::semantic::TypeChecker;
 use crate::plans::Plan;
+use crate::plans::SettingPlan;
+use crate::plans::VarValue;
 
 impl<'a> Binder {
     pub(in crate::planner::binder) async fn bind_set_variable(

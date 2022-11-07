@@ -1279,11 +1279,13 @@ dependencies = [
  "common-meta-app",
  "common-meta-types",
  "common-pipeline-core",
- "common-planner",
  "common-settings",
  "common-storage",
  "dyn-clone",
  "once_cell",
+ "serde",
+ "serde_json",
+ "typetag",
 ]
 
 [[package]]
@@ -1354,7 +1356,6 @@ dependencies = [
  "rand 0.8.5",
  "serde",
  "serde_json",
- "smallvec",
 ]
 
 [[package]]
@@ -1881,21 +1882,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "common-planner"
-version = "0.1.0"
-dependencies = [
- "common-datavalues",
- "common-exception",
- "common-meta-app",
- "common-meta-types",
- "once_cell",
- "parking_lot 0.12.1",
- "serde",
- "serde_json",
- "typetag",
-]
-
-[[package]]
 name = "common-proto-conv"
 version = "0.1.0"
 dependencies = [
@@ -1997,7 +1983,6 @@ dependencies = [
  "common-pipeline-core",
  "common-pipeline-sources",
  "common-pipeline-transforms",
- "common-planner",
  "common-settings",
  "common-storage",
  "common-storages-table-meta",
@@ -2080,7 +2065,7 @@ dependencies = [
  "common-storages-null",
  "common-storages-random",
  "common-storages-view",
- "parking_lot 0.12.1",
+ "dashmap",
 ]
 
 [[package]]
@@ -2104,7 +2089,6 @@ dependencies = [
  "common-pipeline-core",
  "common-pipeline-sources",
  "common-pipeline-transforms",
- "common-planner",
  "common-sharing",
  "common-sql",
  "common-storage",
@@ -2144,7 +2128,6 @@ dependencies = [
  "common-pipeline-sinks",
  "common-pipeline-sources",
  "common-pipeline-transforms",
- "common-planner",
  "common-storage",
  "common-storages-fuse",
  "common-storages-table-meta",
@@ -2182,7 +2165,6 @@ dependencies = [
  "common-meta-types",
  "common-pipeline-core",
  "common-pipeline-sources",
- "common-planner",
  "common-storage",
  "common-storages-cache",
  "common-storages-index",
@@ -2206,7 +2188,6 @@ dependencies = [
  "common-datavalues",
  "common-exception",
  "common-functions",
- "common-planner",
  "common-sql",
  "common-storages-table-meta",
  "criterion",
@@ -2239,7 +2220,6 @@ dependencies = [
  "common-pipeline-sinks",
  "common-pipeline-sources",
  "common-pipeline-transforms",
- "common-planner",
  "common-storage",
  "common-storages-view",
  "common-users",
@@ -2280,7 +2260,6 @@ dependencies = [
  "common-pipeline-sinks",
  "common-pipeline-sources",
  "common-pipeline-transforms",
- "common-planner",
  "common-storage",
  "common-storages-view",
  "common-users",
@@ -2321,7 +2300,6 @@ dependencies = [
  "common-pipeline-sinks",
  "common-pipeline-sources",
  "common-pipeline-transforms",
- "common-planner",
  "common-storage",
  "common-storages-view",
  "common-users",
@@ -2362,7 +2340,6 @@ dependencies = [
  "common-pipeline-sinks",
  "common-pipeline-sources",
  "common-pipeline-transforms",
- "common-planner",
  "common-storage",
  "common-storages-view",
  "common-users",
@@ -2418,7 +2395,6 @@ dependencies = [
  "common-pipeline-sinks",
  "common-pipeline-sources",
  "common-pipeline-transforms",
- "common-planner",
  "common-storage",
  "common-storages-view",
  "common-users",
@@ -2459,7 +2435,6 @@ dependencies = [
  "common-pipeline-sinks",
  "common-pipeline-sources",
  "common-pipeline-transforms",
- "common-planner",
  "common-storage",
  "common-storages-view",
  "common-users",
@@ -3098,7 +3073,6 @@ dependencies = [
  "common-pipeline-sinks",
  "common-pipeline-sources",
  "common-pipeline-transforms",
- "common-planner",
  "common-settings",
  "common-sql",
  "common-storage",
@@ -3120,6 +3094,7 @@ dependencies = [
  "common-tracing",
  "common-users",
  "criterion",
+ "dashmap",
  "futures",
  "futures-util",
  "goldenfile",

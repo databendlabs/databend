@@ -119,9 +119,13 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _| None,
         vectorize_with_builder_2_arg::<ArrayType<GenericType<0>>, UInt64Type, NullableType<GenericType<0>>>(
             |arr, idx, output, _| {
-                match arr.index(idx as usize) {
-                    Some(item) => output.push(item),
-                    None => output.push_null(),
+                if idx == 0 {
+                    output.push_null();
+                } else {
+                    match arr.index(idx as usize - 1) {
+                        Some(item) => output.push(item),
+                        None => output.push_null(),
+                    }
                 }
                 Ok(())
             }
@@ -146,9 +150,14 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _, _| None,
         vectorize_with_builder_3_arg::<ArrayType<GenericType<0>>, UInt64Type, UInt64Type, ArrayType<GenericType<0>>>(
             |arr, start, end, output, _| {
-                let start = start as usize;
+                let start = if start > 0 {
+                    start as usize - 1
+                } else {
+                    start as usize
+                };
                 let end = end as usize;
-                if arr.len() == 0 || arr.len() <= start || start >= end {
+
+                if arr.len() == 0 || start >= arr.len() || start >= end {
                     output.push_default();
                 } else {
                     let range = if end < arr.len() {
