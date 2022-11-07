@@ -275,3 +275,78 @@ evaluation (internal):
 +--------------+---------------------------------------------------------------------------+
 
 
+ast            : [1,2,3,4]
+raw expr       : array(1_u8, 2_u8, 3_u8, 4_u8)
+checked expr   : array<T0=UInt8><T0, T0, T0, T0>(1_u8, 2_u8, 3_u8, 4_u8)
+optimized expr : [1, 2, 3, 4]
+output type    : Array(UInt8)
+output domain  : [{1..=4}]
+output         : [1, 2, 3, 4]
+
+
+ast            : false in (false, true)
+raw expr       : or(eq(false, false), eq(false, true))
+checked expr   : or<Boolean, Boolean>(eq<Boolean, Boolean>(false, false), eq<Boolean, Boolean>(false, true))
+optimized expr : true
+output type    : Boolean
+output domain  : Unknown
+output         : true
+
+
+ast            : int8_col not in (1, 2, 3, 4, 5, null)
+raw expr       : not(in(ColumnRef(0)::Int8, array(1_u8, 2_u8, 3_u8, 4_u8, 5_u8)))
+checked expr   : not<Boolean>(in<Int16, Array(Int16)>(CAST(ColumnRef(0) AS Int16), CAST(array<T0=UInt8><T0, T0, T0, T0, T0>(1_u8, 2_u8, 3_u8, 4_u8, 5_u8) AS Array(Int16))))
+optimized expr : not<Boolean>(in<Int16, Array(Int16)>(CAST(ColumnRef(0) AS Int16), [1, 2, 3, 4, 5]))
+evaluation:
++--------+----------+---------+
+|        | int8_col | Output  |
++--------+----------+---------+
+| Type   | Int8     | Boolean |
+| Domain | {1..=8}  | Unknown |
+| Row 0  | 1        | false   |
+| Row 1  | 2        | false   |
+| Row 2  | 7        | true    |
+| Row 3  | 8        | true    |
++--------+----------+---------+
+evaluation (internal):
++----------+-----------------------+
+| Column   | Data                  |
++----------+-----------------------+
+| int8_col | Int8([1, 2, 7, 8])    |
+| Output   | Boolean([0b____1100]) |
++----------+-----------------------+
+
+
+ast            : '33' in ('1', '33', '23', '33')
+raw expr       : in("33", array("1", "33", "23", "33"))
+checked expr   : in<String, Array(String)>("33", array<T0=String><T0, T0, T0, T0>("1", "33", "23", "33"))
+optimized expr : true
+output type    : Boolean
+output domain  : Unknown
+output         : true
+
+
+ast            : nullable_col in (null, 9, 10, 12)
+raw expr       : or(or(eq(ColumnRef(0)::Int64 NULL, 9_u8), eq(ColumnRef(0)::Int64 NULL, 10_u8)), eq(ColumnRef(0)::Int64 NULL, 12_u8))
+checked expr   : or<Boolean NULL, Boolean NULL>(or<Boolean NULL, Boolean NULL>(eq<Int64 NULL, Int64 NULL>(ColumnRef(0), CAST(9_u8 AS Int64 NULL)), eq<Int64 NULL, Int64 NULL>(ColumnRef(0), CAST(10_u8 AS Int64 NULL))), eq<Int64 NULL, Int64 NULL>(ColumnRef(0), CAST(12_u8 AS Int64 NULL)))
+optimized expr : or<Boolean NULL, Boolean NULL>(or<Boolean NULL, Boolean NULL>(eq<Int64 NULL, Int64 NULL>(ColumnRef(0), 9_i64), eq<Int64 NULL, Int64 NULL>(ColumnRef(0), 10_i64)), eq<Int64 NULL, Int64 NULL>(ColumnRef(0), 12_i64))
+evaluation:
++--------+-------------------+--------------+
+|        | nullable_col      | Output       |
++--------+-------------------+--------------+
+| Type   | Int64 NULL        | Boolean NULL |
+| Domain | {9..=12} ∪ {NULL} | Unknown      |
+| Row 0  | 9                 | true         |
+| Row 1  | 10                | true         |
+| Row 2  | NULL              | NULL         |
+| Row 3  | NULL              | NULL         |
++--------+-------------------+--------------+
+evaluation (internal):
++--------------+---------------------------------------------------------------------------+
+| Column       | Data                                                                      |
++--------------+---------------------------------------------------------------------------+
+| nullable_col | NullableColumn { column: Int64([9, 10, 11, 12]), validity: [0b____0011] } |
+| Output       | NullableColumn { column: Boolean([0b____0011]), validity: [0b____0011] }  |
++--------------+---------------------------------------------------------------------------+
+
+
