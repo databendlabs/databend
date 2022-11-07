@@ -249,6 +249,10 @@ where
     type Iterator<'a> = HashtableIter<'a, K, V> where Self:'a, K:'a, V: 'a;
     type IteratorMut<'a> = HashtableIterMut<'a, K, V> where Self:'a, K:'a, V: 'a;
 
+    fn len(&self) -> usize {
+        self.len()
+    }
+
     fn entry<'a>(&self, key_ref: Self::KeyRef<'a>) -> Option<Self::EntryRef<'_>>
     where K: 'a {
         self.entry(&key_ref)

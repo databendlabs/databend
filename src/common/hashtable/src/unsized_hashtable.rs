@@ -1086,6 +1086,10 @@ where A: Allocator + Clone + Default
     type Iterator<'a> = UnsizedHashtableIter<'a, [u8], V> where Self:'a, V: 'a;
     type IteratorMut<'a> = UnsizedHashtableIterMut<'a, [u8], V> where Self:'a, V: 'a;
 
+    fn len(&self) -> usize {
+        self.len()
+    }
+
     fn entry<'a>(&self, key_ref: Self::KeyRef<'a>) -> Option<Self::EntryRef<'_>>
     where Self::Key: 'a {
         self.entry(key_ref)

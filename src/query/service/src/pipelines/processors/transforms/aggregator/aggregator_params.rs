@@ -22,9 +22,11 @@ use common_datavalues::DataTypeImpl;
 use common_exception::Result;
 use common_functions::aggregates::get_layout_offsets;
 use common_functions::aggregates::AggregateFunctionRef;
+use common_functions::aggregates::StateAddr;
 
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
+use crate::pipelines::processors::transforms::group_by::Area;
 
 pub struct AggregatorParams {
     pub output_schema: DataSchemaRef,
@@ -73,6 +75,18 @@ impl AggregatorParams {
             layout: states_layout,
             offsets_aggregate_states: states_offsets,
         }))
+    }
+
+    pub fn alloc_layout(&self, area: &mut Area) -> Option<StateAddr> {
+        let layout = self.layout.unwrap();
+        let place = Into::<StateAddr>::into(area.alloc_layout(layout));
+
+        for idx in 0..self.offsets_aggregate_states.len() {
+            let aggr_state = self.offsets_aggregate_states[idx];
+            let aggr_state_place = place.next(aggr_state);
+            self.aggregate_functions[idx].init_state(aggr_state_place);
+        }
+        Some(place)
     }
 }
 

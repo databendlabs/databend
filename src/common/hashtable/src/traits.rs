@@ -439,6 +439,8 @@ pub trait HashtableLike {
         Self::Key: 'a,
         Self::Value: 'a;
 
+    fn len(&self) -> usize;
+
     fn entry<'a>(&self, key_ref: Self::KeyRef<'a>) -> Option<Self::EntryRef<'_>>
     where Self::Key: 'a;
     fn entry_mut<'a>(&mut self, key_ref: Self::KeyRef<'a>) -> Option<Self::EntryMutRef<'_>>

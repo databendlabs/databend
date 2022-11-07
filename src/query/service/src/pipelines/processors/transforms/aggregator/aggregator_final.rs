@@ -33,17 +33,17 @@ use common_datavalues::StringColumn;
 use common_exception::Result;
 use common_functions::aggregates::StateAddr;
 use common_functions::aggregates::StateAddrs;
+use common_hashtable::HashtableEntryMutRefLike;
+use common_hashtable::HashtableEntryRefLike;
+use common_hashtable::HashtableLike;
 
-use crate::pipelines::processors::transforms::group_by::AggregatorState;
+use crate::pipelines::processors::transforms::group_by::Area;
 use crate::pipelines::processors::transforms::group_by::GroupColumnsBuilder;
 use crate::pipelines::processors::transforms::group_by::KeysColumnIter;
 use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
-use crate::pipelines::processors::transforms::group_by::StateEntityMutRef;
-use crate::pipelines::processors::transforms::group_by::StateEntityRef;
 use crate::pipelines::processors::transforms::transform_aggregator::Aggregator;
 use crate::pipelines::processors::AggregatorParams;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
 
 pub type KeysU8FinalAggregator<const HAS_AGG: bool> = FinalAggregator<HAS_AGG, HashMethodKeysU8>;
 pub type KeysU16FinalAggregator<const HAS_AGG: bool> = FinalAggregator<HAS_AGG, HashMethodKeysU16>;
@@ -59,15 +59,15 @@ pub type KeysU512FinalAggregator<const HAS_AGG: bool> =
 pub type SerializerFinalAggregator<const HAS_AGG: bool> =
     FinalAggregator<HAS_AGG, HashMethodSerializer>;
 
-pub struct FinalAggregator<
-    const HAS_AGG: bool,
-    Method: HashMethod + PolymorphicKeysHelper<Method> + Send,
-> {
+pub struct FinalAggregator<const HAS_AGG: bool, Method>
+where Method: HashMethod + PolymorphicKeysHelper<Method> + Send
+{
     is_generated: bool,
     states_dropped: bool,
 
     method: Method,
-    state: Method::State,
+    area: Area,
+    hashtable: Method::HashTable,
     params: Arc<AggregatorParams>,
     // used for deserialization only, so we can reuse it during the loop
     temp_place: Option<StateAddr>,
@@ -82,21 +82,23 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
         method: Method,
         params: Arc<AggregatorParams>,
     ) -> Result<Self> {
-        let state = method.aggregate_state();
+        let mut area = Area::new();
+        let hashtable = method.create_hash_table();
         let temp_place = if params.aggregate_functions.is_empty() {
             None
         } else {
-            state.alloc_layout(&params)
+            params.alloc_layout(&mut area)
         };
 
         Ok(Self {
             is_generated: false,
             states_dropped: false,
-            state,
+            ctx,
+            area,
             method,
             params,
             temp_place,
-            ctx,
+            hashtable,
         })
     }
 }
@@ -105,30 +107,30 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> FinalAggregator<
     /// Allocate aggregation function state for each key(the same key can always get the same state)
     #[inline(always)]
     fn lookup_state(
+        area: &mut Area,
         params: &AggregatorParams,
-        state: &mut Method::State,
-        keys: &[<Method::State as AggregatorState<Method>>::KeyRef<'_>],
+        hashtable: &mut Method::HashTable,
+        keys: &[<Method::HashTable as HashtableLike>::KeyRef<'_>],
     ) -> StateAddrs {
         let mut places = Vec::with_capacity(keys.len());
 
-        let mut inserted = true;
-        for key in keys {
-            let unsafe_state = state as *mut Method::State;
-            let mut entity = unsafe { (*unsafe_state).entity_by_key(*key, &mut inserted) };
-
-            match inserted {
-                true => {
-                    if let Some(place) = unsafe { (*unsafe_state).alloc_layout(params) } {
-                        places.push(place);
-                        entity.set_state_value(place.addr());
+        unsafe {
+            for key in keys {
+                match hashtable.insert_and_entry(*key) {
+                    Ok(mut entry) => {
+                        if let Some(place) = params.alloc_layout(area) {
+                            places.push(place);
+                            *entry.get_mut() = place.addr();
+                        }
                     }
-                }
-                false => {
-                    let place: StateAddr = entity.get_state_value().into();
-                    places.push(place);
+                    Err(entry) => {
+                        let place = Into::<StateAddr>::into(*entry.get());
+                        places.push(place);
+                    }
                 }
             }
         }
+
         places
     }
 }
@@ -144,14 +146,19 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
         let keys_column = block.column(aggregate_function_len);
         let keys_iter = self.method.keys_iter_from_column(keys_column)?;
 
-        let group_by_two_level_threshold =
-            self.ctx.get_settings().get_group_by_two_level_threshold()? as usize;
-        if !self.state.is_two_level() && self.state.len() >= group_by_two_level_threshold {
-            self.state.convert_to_twolevel();
-        }
+        // let group_by_two_level_threshold =
+        //     self.ctx.get_settings().get_group_by_two_level_threshold()? as usize;
+        // if !self.state.is_two_level() && self.hashtable.len() >= group_by_two_level_threshold {
+        //     self.state.convert_to_twolevel();
+        // }
 
         // first state places of current block
-        let places = Self::lookup_state(&self.params, &mut self.state, keys_iter.get_slice());
+        let places = Self::lookup_state(
+            &mut self.area,
+            &self.params,
+            &mut self.hashtable,
+            keys_iter.get_slice(),
+        );
 
         let states_columns = (0..aggregate_function_len)
             .map(|i| block.column(i))
@@ -181,7 +188,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
     }
 
     fn generate(&mut self) -> Result<Option<DataBlock>> {
-        match self.state.len() == 0 || self.is_generated {
+        match self.hashtable.len() == 0 || self.is_generated {
             true => {
                 self.drop_states();
                 Ok(None)
@@ -190,7 +197,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
                 self.is_generated = true;
                 let mut group_columns_builder = self
                     .method
-                    .group_columns_builder(self.state.len(), &self.params);
+                    .group_columns_builder(self.hashtable.len(), &self.params);
 
                 let aggregate_functions = &self.params.aggregate_functions;
                 let offsets_aggregate_states = &self.params.offsets_aggregate_states;
@@ -204,8 +211,8 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
                     values
                 };
 
-                for group_entity in self.state.iter() {
-                    let place: StateAddr = group_entity.get_state_value().into();
+                for group_entity in self.hashtable.iter() {
+                    let place = Into::<StateAddr>::into(*group_entity.get());
 
                     for (idx, aggregate_function) in aggregate_functions.iter().enumerate() {
                         let arg_place = place.next(offsets_aggregate_states[idx]);
@@ -214,7 +221,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
                         aggregate_function.merge_result(arg_place, builder)?;
                     }
 
-                    group_columns_builder.append_value(group_entity.get_state_key());
+                    group_columns_builder.append_value(group_entity.key());
                 }
 
                 // Build final state block.
@@ -244,30 +251,31 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
         let key_array = block.column(0);
         let keys_iter = self.method.keys_iter_from_column(key_array)?;
 
-        let group_by_two_level_threshold =
-            self.ctx.get_settings().get_group_by_two_level_threshold()? as usize;
-        if !self.state.is_two_level() && self.state.len() >= group_by_two_level_threshold {
-            self.state.convert_to_twolevel();
-        }
+        // let group_by_two_level_threshold =
+        //     self.ctx.get_settings().get_group_by_two_level_threshold()? as usize;
+        // if !self.state.is_two_level() && self.hashtable.len() >= group_by_two_level_threshold {
+        //     self.state.convert_to_twolevel();
+        // }
 
-        let mut inserted = true;
-        for keys_ref in keys_iter.get_slice() {
-            self.state.entity_by_key(*keys_ref, &mut inserted);
+        unsafe {
+            for keys_ref in keys_iter.get_slice() {
+                let _ = self.hashtable.insert_and_entry(*keys_ref);
+            }
         }
 
         Ok(())
     }
 
     fn generate(&mut self) -> Result<Option<DataBlock>> {
-        match self.state.len() == 0 || self.is_generated {
+        match self.hashtable.len() == 0 || self.is_generated {
             true => Ok(None),
             false => {
                 self.is_generated = true;
                 let mut columns_builder = self
                     .method
-                    .group_columns_builder(self.state.len(), &self.params);
-                for group_entity in self.state.iter() {
-                    columns_builder.append_value(group_entity.get_state_key());
+                    .group_columns_builder(self.hashtable.len(), &self.params);
+                for group_entity in self.hashtable.iter() {
+                    columns_builder.append_value(group_entity.key());
                 }
 
                 let columns = columns_builder.finish()?;
@@ -301,8 +309,8 @@ impl<const FINAL: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + Sen
                 .map(|(_, s)| *s)
                 .collect::<Vec<_>>();
 
-            for group_entity in self.state.iter() {
-                let place: StateAddr = group_entity.get_state_value().into();
+            for group_entity in self.hashtable.iter() {
+                let place = Into::<StateAddr>::into(*group_entity.get());
 
                 for (function, state_offset) in functions.iter().zip(state_offsets.iter()) {
                     unsafe { function.drop_state(place.next(*state_offset)) }

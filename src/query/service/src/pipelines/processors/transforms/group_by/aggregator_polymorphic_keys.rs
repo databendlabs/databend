@@ -23,6 +23,8 @@ use common_datablocks::HashMethodKeysU512;
 use common_datablocks::HashMethodSerializer;
 use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_hashtable::HashMap;
+use common_hashtable::HashtableLike;
 use common_hashtable::UnsizedHashMap;
 use primitive_types::U256;
 use primitive_types::U512;
@@ -38,10 +40,6 @@ use crate::pipelines::processors::transforms::group_by::aggregator_keys_builder:
 use crate::pipelines::processors::transforms::group_by::aggregator_keys_iter::FixedKeysColumnIter;
 use crate::pipelines::processors::transforms::group_by::aggregator_keys_iter::KeysColumnIter;
 use crate::pipelines::processors::transforms::group_by::aggregator_keys_iter::SerializedKeysColumnIter;
-use crate::pipelines::processors::transforms::group_by::aggregator_state::LongerFixedKeysAggregatorState;
-use crate::pipelines::processors::transforms::group_by::aggregator_state::SerializedKeysAggregatorState;
-use crate::pipelines::processors::transforms::group_by::aggregator_state::ShortFixedKeysAggregatorState;
-use crate::pipelines::processors::transforms::group_by::AggregatorState;
 use crate::pipelines::processors::AggregatorParams;
 
 // Provide functions for all HashMethod to help implement polymorphic group by key
@@ -81,31 +79,34 @@ use crate::pipelines::processors::AggregatorParams;
 // }
 //
 pub trait PolymorphicKeysHelper<Method: HashMethod> {
-    type State: AggregatorState<Method>;
-    fn aggregate_state(&self) -> Self::State;
+    type HashTable: HashtableLike<Key = Method::HashKey, Value = usize> + Send;
+    fn create_hash_table(&self) -> Self::HashTable;
 
-    type ColumnBuilder<'a>: KeysColumnBuilder<
-        T = <Self::State as AggregatorState<Method>>::KeyRef<'a>,
-    >
+    #[inline(always)]
+    fn cast_key_ref<'a>(
+        key: Method::HashKeyRef<'a>,
+    ) -> <Self::HashTable as HashtableLike>::KeyRef<'a>;
+
+    type ColumnBuilder<'a>: KeysColumnBuilder<T = <Self::HashTable as HashtableLike>::KeyRef<'a>>
     where
         Self: 'a,
-        Self::State: 'a;
+        Method: 'a;
 
     fn keys_column_builder(&self, capacity: usize) -> Self::ColumnBuilder<'_>;
 
-    type KeysColumnIter<'a>: KeysColumnIter<<Self::State as AggregatorState<Method>>::KeyRef<'a>>
+    type KeysColumnIter<'a>: KeysColumnIter<<Self::HashTable as HashtableLike>::KeyRef<'a>>
     where
         Self: 'a,
-        Self::State: 'a;
+        Method: 'a;
 
     fn keys_iter_from_column<'a>(&self, column: &'a ColumnRef) -> Result<Self::KeysColumnIter<'a>>;
 
     type GroupColumnsBuilder<'a>: GroupColumnsBuilder<
-        T = <Self::State as AggregatorState<Method>>::KeyRef<'a>,
+        T = <Self::HashTable as HashtableLike>::KeyRef<'a>,
     >
     where
         Self: 'a,
-        Self::State: 'a;
+        Method: 'a;
 
     fn group_columns_builder<'a>(
         &'a self,
@@ -115,10 +116,18 @@ pub trait PolymorphicKeysHelper<Method: HashMethod> {
 }
 
 impl PolymorphicKeysHelper<HashMethodFixedKeys<u8>> for HashMethodFixedKeys<u8> {
-    type State = ShortFixedKeysAggregatorState<u8>;
-    fn aggregate_state(&self) -> Self::State {
-        Self::State::create((u8::MAX as usize) + 1)
+    type HashTable = HashMap<u8, usize>;
+
+    fn create_hash_table(&self) -> Self::HashTable {
+        HashMap::new()
     }
+
+    #[inline(always)]
+    fn cast_key_ref<'a>(key: u8) -> u8
+    where Self: 'a {
+        key
+    }
+
     type ColumnBuilder<'a> = FixedKeysColumnBuilder<u8>;
     fn keys_column_builder(&self, capacity: usize) -> FixedKeysColumnBuilder<u8> {
         FixedKeysColumnBuilder::<u8> {
@@ -140,10 +149,18 @@ impl PolymorphicKeysHelper<HashMethodFixedKeys<u8>> for HashMethodFixedKeys<u8> 
 }
 
 impl PolymorphicKeysHelper<HashMethodFixedKeys<u16>> for HashMethodFixedKeys<u16> {
-    type State = ShortFixedKeysAggregatorState<u16>;
-    fn aggregate_state(&self) -> Self::State {
-        Self::State::create((u16::MAX as usize) + 1)
+    type HashTable = HashMap<u16, usize>;
+
+    fn create_hash_table(&self) -> Self::HashTable {
+        HashMap::new()
     }
+
+    #[inline(always)]
+    fn cast_key_ref<'a>(key: u16) -> u16
+    where Self: 'a {
+        key
+    }
+
     type ColumnBuilder<'a> = FixedKeysColumnBuilder<u16>;
     fn keys_column_builder(&self, capacity: usize) -> FixedKeysColumnBuilder<u16> {
         FixedKeysColumnBuilder::<u16> {
@@ -165,10 +182,18 @@ impl PolymorphicKeysHelper<HashMethodFixedKeys<u16>> for HashMethodFixedKeys<u16
 }
 
 impl PolymorphicKeysHelper<HashMethodFixedKeys<u32>> for HashMethodFixedKeys<u32> {
-    type State = LongerFixedKeysAggregatorState<u32>;
-    fn aggregate_state(&self) -> Self::State {
-        Self::State::default()
+    type HashTable = HashMap<u32, usize>;
+
+    fn create_hash_table(&self) -> Self::HashTable {
+        HashMap::new()
     }
+
+    #[inline(always)]
+    fn cast_key_ref<'a>(key: u32) -> u32
+    where Self: 'a {
+        key
+    }
+
     type ColumnBuilder<'a> = FixedKeysColumnBuilder<u32>;
     fn keys_column_builder(&self, capacity: usize) -> FixedKeysColumnBuilder<u32> {
         FixedKeysColumnBuilder::<u32> {
@@ -190,10 +215,18 @@ impl PolymorphicKeysHelper<HashMethodFixedKeys<u32>> for HashMethodFixedKeys<u32
 }
 
 impl PolymorphicKeysHelper<HashMethodFixedKeys<u64>> for HashMethodFixedKeys<u64> {
-    type State = LongerFixedKeysAggregatorState<u64>;
-    fn aggregate_state(&self) -> Self::State {
-        Self::State::default()
+    type HashTable = HashMap<u64, usize>;
+
+    fn create_hash_table(&self) -> Self::HashTable {
+        HashMap::new()
     }
+
+    #[inline(always)]
+    fn cast_key_ref<'a>(key: u64) -> u64
+    where Self: 'a {
+        key
+    }
+
     type ColumnBuilder<'a> = FixedKeysColumnBuilder<u64>;
     fn keys_column_builder(&self, capacity: usize) -> FixedKeysColumnBuilder<u64> {
         FixedKeysColumnBuilder::<u64> {
@@ -215,9 +248,16 @@ impl PolymorphicKeysHelper<HashMethodFixedKeys<u64>> for HashMethodFixedKeys<u64
 }
 
 impl PolymorphicKeysHelper<HashMethodKeysU128> for HashMethodKeysU128 {
-    type State = LongerFixedKeysAggregatorState<u128>;
-    fn aggregate_state(&self) -> Self::State {
-        Self::State::default()
+    type HashTable = HashMap<u128, usize>;
+
+    fn create_hash_table(&self) -> Self::HashTable {
+        HashMap::new()
+    }
+
+    #[inline(always)]
+    fn cast_key_ref<'a>(key: u128) -> u128
+    where Self: 'a {
+        key
     }
 
     type ColumnBuilder<'a> = LargeFixedKeysColumnBuilder<u128>;
@@ -244,9 +284,16 @@ impl PolymorphicKeysHelper<HashMethodKeysU128> for HashMethodKeysU128 {
 }
 
 impl PolymorphicKeysHelper<HashMethodKeysU256> for HashMethodKeysU256 {
-    type State = LongerFixedKeysAggregatorState<U256>;
-    fn aggregate_state(&self) -> Self::State {
-        Self::State::default()
+    type HashTable = HashMap<U256, usize>;
+
+    fn create_hash_table(&self) -> Self::HashTable {
+        HashMap::new()
+    }
+
+    #[inline(always)]
+    fn cast_key_ref<'a>(key: U256) -> U256
+    where Self: 'a {
+        key
     }
 
     type ColumnBuilder<'a> = LargeFixedKeysColumnBuilder<U256>;
@@ -273,9 +320,16 @@ impl PolymorphicKeysHelper<HashMethodKeysU256> for HashMethodKeysU256 {
 }
 
 impl PolymorphicKeysHelper<HashMethodKeysU512> for HashMethodKeysU512 {
-    type State = LongerFixedKeysAggregatorState<U512>;
-    fn aggregate_state(&self) -> Self::State {
-        Self::State::default()
+    type HashTable = HashMap<U512, usize>;
+
+    fn create_hash_table(&self) -> Self::HashTable {
+        HashMap::new()
+    }
+
+    #[inline(always)]
+    fn cast_key_ref<'a>(key: U512) -> U512
+    where Self: 'a {
+        key
     }
 
     type ColumnBuilder<'a> = LargeFixedKeysColumnBuilder<U512>;
@@ -302,13 +356,16 @@ impl PolymorphicKeysHelper<HashMethodKeysU512> for HashMethodKeysU512 {
 }
 
 impl PolymorphicKeysHelper<HashMethodSerializer> for HashMethodSerializer {
-    type State = SerializedKeysAggregatorState;
-    fn aggregate_state(&self) -> Self::State {
-        SerializedKeysAggregatorState {
-            area: Bump::new(),
-            data_state_map: UnsizedHashMap::new(),
-            two_level_flag: false,
-        }
+    type HashTable = UnsizedHashMap<[u8], usize>;
+
+    fn create_hash_table(&self) -> Self::HashTable {
+        UnsizedHashMap::new()
+    }
+
+    #[inline(always)]
+    fn cast_key_ref<'a>(key: &'a [u8]) -> &'a [u8]
+    where Self: 'a {
+        key
     }
 
     type ColumnBuilder<'a> = SerializedKeysColumnBuilder<'a>;
