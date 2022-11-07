@@ -313,7 +313,7 @@ raw expr       : in("33", array("1", "33", "23", "33"))
 checked expr   : in<String, Array(String)>("33", array<T0=String><T0, T0, T0, T0>("1", "33", "23", "33"))
 optimized expr : true
 output type    : Boolean
-output domain  : Unknown
+output domain  : {FALSE, TRUE}
 output         : true
 
 

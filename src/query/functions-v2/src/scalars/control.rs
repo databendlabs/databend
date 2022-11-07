@@ -264,10 +264,10 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_2_arg::<BooleanType, ArrayType<BooleanType>, BooleanType, _, _>(
         "in",
         FunctionProperty::default(),
-        |lhs, rhs| {
+        |a, b| {
             Some(BooleanDomain {
-                has_false: true,
-                has_true: (rhs.has_false && lhs.has_false) || (rhs.has_true && lhs.has_true),
+                has_false:  (a.has_false && b.has_true) || (a.has_true && b.has_false),
+                has_true:   (a.has_false && b.has_false) || (a.has_true && b.has_true),
             })
         },
         |lhs, rhs, _| {
@@ -293,7 +293,12 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_2_arg::<StringType, ArrayType<StringType>, BooleanType, _, _>(
         "in",
         FunctionProperty::default(),
-        |_, _| None,
+        |_, _| {
+            Some(BooleanDomain {
+                has_false: true,
+                has_true: true,
+            })
+        },
         |lhs, rhs, _| {
             let array = rhs.as_scalar().ok_or_else(|| IN_ERROR_MSG.to_string())?;
             let mut set = StackHashSet::<_, 128>::with_capacity(StringType::column_len(array));
