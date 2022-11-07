@@ -11,26 +11,23 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use common_base::base::GlobalIORuntime;
 use common_catalog::plan::CopyInfo;
 use common_catalog::plan::DataSourceInfo;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::plan::StageTableInfo;
 use common_catalog::table::AppendMode;
-use common_datavalues::chrono::Utc;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_app::schema::TableCopiedFileInfo;
-use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_meta_types::UserStageInfo;
 use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use common_storages_stage::StageFilePartition;
+use common_storages_stage::StageFileStatus;
 use common_storages_stage::StageTable;
 
-use crate::catalogs::Catalog;
 use crate::interpreters::common::append2table;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreterV2;
@@ -40,8 +37,6 @@ use crate::sessions::TableContext;
 use crate::sql::plans::CopyPlanV2;
 use crate::sql::plans::Plan;
 
-const MAX_QUERY_COPIED_FILES_NUM: usize = 50;
-const TABLE_COPIED_FILE_KEY_EXPIRE_AFTER_DAYS: Option<u64> = Some(7);
 pub struct CopyInterpreterV2 {
     ctx: Arc<QueryContext>,
     plan: CopyPlanV2,
@@ -51,71 +46,6 @@ impl CopyInterpreterV2 {
     /// Create a CopyInterpreterV2 with context and [`CopyPlanV2`].
     pub fn try_create(ctx: Arc<QueryContext>, plan: CopyPlanV2) -> Result<Self> {
         Ok(CopyInterpreterV2 { ctx, plan })
-    }
-
-    async fn do_upsert_copied_files_info(
-        expire_at: Option<u64>,
-        tenant: String,
-        database_name: String,
-        table_id: u64,
-        copy_stage_files: &mut BTreeMap<String, TableCopiedFileInfo>,
-        catalog: Arc<dyn Catalog>,
-    ) -> Result<()> {
-        let req = UpsertTableCopiedFileReq {
-            table_id,
-            file_info: copy_stage_files.clone(),
-            expire_at,
-        };
-        catalog
-            .upsert_table_copied_file_info(&tenant, &database_name, req)
-            .await?;
-        copy_stage_files.clear();
-        Ok(())
-    }
-
-    async fn upsert_copied_files_info(
-        tenant: String,
-        database_name: String,
-        table_id: u64,
-        copy_stage_files: BTreeMap<String, TableCopiedFileInfo>,
-        catalog: Arc<dyn Catalog>,
-    ) -> Result<()> {
-        tracing::debug!("upsert_copied_files_info: {:?}", copy_stage_files);
-
-        if copy_stage_files.is_empty() {
-            return Ok(());
-        }
-
-        let expire_at = TABLE_COPIED_FILE_KEY_EXPIRE_AFTER_DAYS
-            .map(|after_days| after_days * 86400 + Utc::now().timestamp() as u64);
-        let mut do_copy_stage_files = BTreeMap::new();
-        for (file_name, file_info) in copy_stage_files {
-            do_copy_stage_files.insert(file_name.clone(), file_info);
-            if do_copy_stage_files.len() > MAX_QUERY_COPIED_FILES_NUM {
-                CopyInterpreterV2::do_upsert_copied_files_info(
-                    expire_at,
-                    tenant.clone(),
-                    database_name.clone(),
-                    table_id,
-                    &mut do_copy_stage_files,
-                    catalog.clone(),
-                )
-                .await?;
-            }
-        }
-        if !do_copy_stage_files.is_empty() {
-            CopyInterpreterV2::do_upsert_copied_files_info(
-                expire_at,
-                tenant.clone(),
-                database_name.clone(),
-                table_id,
-                &mut do_copy_stage_files,
-                catalog.clone(),
-            )
-            .await?;
-        }
-
-        Ok(())
     }
 
     async fn execute_copy_into_stage(
@@ -176,12 +106,13 @@ impl CopyInterpreterV2 {
         Ok(build_res)
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn execute_copy_into_table(
         &self,
         catalog_name: &str,
         database_name: &str,
         table_name: &str,
-        files: &Vec<String>,
+        files: &[String],
         path: &str,
         pattern: &str,
         force: bool,
@@ -190,7 +121,7 @@ impl CopyInterpreterV2 {
         let stage_table = StageTable::try_create(stage_table_info.clone())?;
         let copy_info = CopyInfo {
             force,
-            files: files.clone(),
+            files: files.to_vec(),
             path: path.to_string(),
             pattern: pattern.to_string(),
             stage_info: stage_table_info.stage_info.clone(),
@@ -208,16 +139,32 @@ impl CopyInterpreterV2 {
         };
 
         let ctx = self.ctx.clone();
+
+        // Get the source plan with all files.
         let read_source_plan = stage_table
             .read_plan_with_catalog(ctx.clone(), catalog_name.to_string(), Some(pushdown))
             .await?;
+
+        // Remove the AlreadyCopied files from the source plan.
+        let mut need_copy_source_plan = read_source_plan.clone();
+        need_copy_source_plan.parts.retain(|v| {
+            if let Some(sv) = v.as_any().downcast_ref::<StageFilePartition>() {
+                return sv.status == StageFileStatus::NeedCopy;
+            }
+            false
+        });
+
         let to_table = ctx
             .get_table(catalog_name, database_name, table_name)
             .await?;
         stage_table.set_block_compact_thresholds(to_table.get_block_compact_thresholds());
 
         let mut build_res = PipelineBuildResult::create();
-        stage_table.read_data(ctx.clone(), &read_source_plan, &mut build_res.main_pipeline)?;
+        stage_table.read_data(
+            ctx.clone(),
+            &need_copy_source_plan,
+            &mut build_res.main_pipeline,
+        )?;
 
         to_table.append_data(
             ctx.clone(),
@@ -227,12 +174,33 @@ impl CopyInterpreterV2 {
         )?;
 
         // TODO(bohu): add commit to meta
-        let mut stage_file_infos = vec![];
-        for part in &read_source_plan.parts {
+        let mut copied_file_infos = vec![];
+        for part in &need_copy_source_plan.parts {
             if let Some(stage_file_info) = part.as_any().downcast_ref::<StageFilePartition>() {
-                stage_file_infos.push(stage_file_info.clone());
+                copied_file_infos.push(stage_file_info.clone());
             }
         }
+
+        build_res.main_pipeline.set_on_finished(move |may_error| {
+            if may_error.is_none() {
+                // capture out variable
+                let ctx = ctx.clone();
+                let to_table = to_table.clone();
+
+                return GlobalIORuntime::instance().block_on(async move {
+                    // Commit
+                    let operations = ctx.consume_precommit_blocks();
+                    to_table
+                        .commit_insertion(ctx.clone(), operations, false)
+                        .await?;
+
+                    // TODO(bohu): Purge copied files
+                    // TODO(bohu): Upsert copied files
+                    Ok(())
+                });
+            }
+            Err(may_error.as_ref().unwrap().clone())
+        });
 
         Ok(build_res)
     }

@@ -28,26 +28,6 @@ use tracing::warn;
 
 use crate::sessions::QueryContext;
 
-pub async fn stat_file(
-    ctx: &Arc<QueryContext>,
-    stage: &UserStageInfo,
-    path: &str,
-) -> Result<StageFile> {
-    let table_ctx: Arc<dyn TableContext> = ctx.clone();
-    let op = StageTable::get_op(&table_ctx, stage)?;
-    let meta = op.object(path).metadata().await?;
-    Ok(StageFile {
-        path: path.to_string(),
-        size: meta.content_length(),
-        md5: meta.content_md5().map(str::to_string),
-        last_modified: meta
-            .last_modified()
-            .map_or(Utc::now(), |t| Utc.timestamp(t.unix_timestamp(), 0)),
-        creator: None,
-        etag: meta.etag().map(str::to_string),
-    })
-}
-
 /// List files from DAL in recursive way.
 ///
 /// - If input path is a dir, we will list it recursively.
