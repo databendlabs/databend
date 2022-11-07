@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
-use common_planner::plans::DeletePlan;
+use common_sql::plans::DeletePlan;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -55,7 +55,12 @@ impl Interpreter for DeleteInterpreter {
         let db_name = self.plan.database_name.as_str();
         let tbl_name = self.plan.table_name.as_str();
         let tbl = self.ctx.get_table(catalog_name, db_name, tbl_name).await?;
-        tbl.delete(self.ctx.clone(), self.plan.clone()).await?;
+        tbl.delete(
+            self.ctx.clone(),
+            &self.plan.projection,
+            &self.plan.selection,
+        )
+        .await?;
 
         Ok(PipelineBuildResult::create())
     }

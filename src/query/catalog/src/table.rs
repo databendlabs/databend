@@ -28,14 +28,14 @@ use common_exception::Result;
 use common_meta_app::schema::TableInfo;
 use common_meta_types::MetaId;
 use common_pipeline_core::Pipeline;
-use common_planner::extras::Extras;
-use common_planner::extras::Statistics;
-use common_planner::plans::DeletePlan;
-use common_planner::Expression;
-use common_planner::Partitions;
-use common_planner::ReadDataSourcePlan;
 use common_storage::StorageMetrics;
 
+use crate::plan::DataSourcePlan;
+use crate::plan::Expression;
+use crate::plan::PartStatistics;
+use crate::plan::Partitions;
+use crate::plan::Projection;
+use crate::plan::PushDownInfo;
 use crate::table::column_stats_provider_impls::DummyColumnStatisticsProvider;
 use crate::table_context::TableContext;
 use crate::table_mutator::TableMutator;
@@ -127,8 +127,8 @@ pub trait Table: Sync + Send {
     async fn read_partitions(
         &self,
         ctx: Arc<dyn TableContext>,
-        push_downs: Option<Extras>,
-    ) -> Result<(Statistics, Partitions)> {
+        push_downs: Option<PushDownInfo>,
+    ) -> Result<(PartStatistics, Partitions)> {
         let (_, _) = (ctx, push_downs);
         Err(ErrorCode::Unimplemented(format!(
             "read_partitions operation for table {} is not implemented. table engine : {}",
@@ -145,7 +145,7 @@ pub trait Table: Sync + Send {
     fn read_data(
         &self,
         ctx: Arc<dyn TableContext>,
-        plan: &ReadDataSourcePlan,
+        plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let (_, _, _) = (ctx, plan, pipeline);
@@ -214,8 +214,13 @@ pub trait Table: Sync + Send {
         )))
     }
 
-    async fn delete(&self, ctx: Arc<dyn TableContext>, delete_plan: DeletePlan) -> Result<()> {
-        let (_, _) = (ctx, delete_plan);
+    async fn delete(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        projection: &Projection,
+        selection: &Option<String>,
+    ) -> Result<()> {
+        let (_, _, _) = (ctx, projection, selection);
 
         Err(ErrorCode::Unimplemented(format!(
             "table {},  of engine type {}, does not support DELETE FROM",
@@ -256,7 +261,7 @@ pub trait Table: Sync + Send {
         &self,
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
-        push_downs: Option<Extras>,
+        push_downs: Option<PushDownInfo>,
     ) -> Result<Option<Box<dyn TableMutator>>> {
         let (_, _, _) = (ctx, pipeline, push_downs);
 
@@ -320,7 +325,7 @@ pub enum CompactTarget {
 pub enum AppendMode {
     // From INSERT and RECUSTER operation
     Normal,
-    // From COPY, Streaming load peration
+    // From COPY, Streaming load operation
     Copy,
 }
 

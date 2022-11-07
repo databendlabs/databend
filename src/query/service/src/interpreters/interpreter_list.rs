@@ -20,7 +20,7 @@ use common_datavalues::Series;
 use common_datavalues::SeriesFrom;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planner::plans::ListPlan;
+use common_sql::plans::ListPlan;
 use regex::Regex;
 
 use crate::interpreters::common::list_files;

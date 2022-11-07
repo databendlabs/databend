@@ -20,11 +20,11 @@ use common_base::base::tokio::sync::OwnedSemaphorePermit;
 use common_base::base::tokio::sync::Semaphore;
 use common_base::base::tokio::task::JoinHandle;
 use common_base::base::Runtime;
+use common_catalog::plan::PushDownInfo;
 use common_catalog::table_context::TableContext;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planner::extras::Extras;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::Location;
 use common_storages_table_meta::meta::SegmentInfo;
@@ -61,7 +61,7 @@ impl BlockPruner {
         ctx: &Arc<dyn TableContext>,
         dal: Operator,
         schema: DataSchemaRef,
-        push_down: &Option<Extras>,
+        push_down: &Option<PushDownInfo>,
         segment_locs: Vec<Location>,
     ) -> Result<Vec<(SegmentIndex, Arc<BlockMeta>)>> {
         if segment_locs.is_empty() {

@@ -15,6 +15,9 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use common_catalog::plan::DataSourceInfo;
+use common_catalog::plan::DataSourcePlan;
+use common_catalog::plan::PushDownInfo;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_datablocks::SortColumnDescription;
@@ -25,9 +28,6 @@ use common_pipeline_transforms::processors::transforms::SortMergeCompactor;
 use common_pipeline_transforms::processors::transforms::TransformCompact;
 use common_pipeline_transforms::processors::transforms::TransformSortMerge;
 use common_pipeline_transforms::processors::transforms::TransformSortPartial;
-use common_planner::extras::Extras;
-use common_planner::ReadDataSourcePlan;
-use common_planner::SourceInfo;
 use common_storages_table_meta::meta::BlockMeta;
 
 use crate::operations::FuseTableSink;
@@ -45,7 +45,7 @@ impl FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
-        push_downs: Option<Extras>,
+        push_downs: Option<PushDownInfo>,
     ) -> Result<Option<Box<dyn TableMutator>>> {
         if self.cluster_key_meta.is_none() {
             return Ok(None);
@@ -121,9 +121,9 @@ impl FuseTable {
         )?;
         let table_info = self.get_table_info();
         let description = statistics.get_description(table_info);
-        let plan = ReadDataSourcePlan {
+        let plan = DataSourcePlan {
             catalog: table_info.catalog().to_string(),
-            source_info: SourceInfo::TableSource(table_info.clone()),
+            source_info: DataSourceInfo::TableSource(table_info.clone()),
             scan_fields: None,
             parts,
             statistics,

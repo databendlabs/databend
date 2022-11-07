@@ -17,6 +17,11 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 
 use common_base::base::uuid;
+use common_catalog::plan::DataSourcePlan;
+use common_catalog::plan::PartStatistics;
+use common_catalog::plan::Partitions;
+use common_catalog::plan::PushDownInfo;
+use common_catalog::plan::StageTableInfo;
 use common_catalog::table::AppendMode;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
@@ -30,11 +35,6 @@ use common_meta_types::UserStageInfo;
 use common_pipeline_core::Pipeline;
 use common_pipeline_sources::processors::sources::input_formats::InputContext;
 use common_pipeline_transforms::processors::transforms::TransformLimit;
-use common_planner::extras::Extras;
-use common_planner::extras::Statistics;
-use common_planner::stage_table::StageTableInfo;
-use common_planner::Partitions;
-use common_planner::ReadDataSourcePlan;
 use common_storage::init_operator;
 use opendal::layers::SubdirLayer;
 use opendal::Operator;
@@ -96,8 +96,8 @@ impl Table for StageTable {
     async fn read_partitions(
         &self,
         ctx: Arc<dyn TableContext>,
-        _push_downs: Option<Extras>,
-    ) -> Result<(Statistics, Partitions)> {
+        _push_downs: Option<PushDownInfo>,
+    ) -> Result<(PartStatistics, Partitions)> {
         let operator = StageTable::get_op(&ctx, &self.table_info.stage_info)?;
         let input_ctx = Arc::new(
             InputContext::try_create_from_copy(
@@ -114,13 +114,13 @@ impl Table for StageTable {
         debug!("copy into {:?}", input_ctx);
         let mut guard = self.input_context.lock();
         *guard = Some(input_ctx);
-        Ok((Statistics::default(), vec![]))
+        Ok((PartStatistics::default(), vec![]))
     }
 
     fn read_data(
         &self,
         _ctx: Arc<dyn TableContext>,
-        _plan: &ReadDataSourcePlan,
+        _plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let input_ctx = self.get_input_context().unwrap();
