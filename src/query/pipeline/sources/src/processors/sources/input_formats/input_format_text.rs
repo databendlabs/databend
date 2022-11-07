@@ -352,7 +352,10 @@ impl<T: InputFormatTextBase> AligningStateTrait for AligningState<T> {
             T::align(self, &buf)?
         } else {
             if let Some(decoder) = &self.decoder {
-                assert_eq!(decoder.state(), DecompressState::Done)
+                let state = decoder.state();
+                if !matches!(state, DecompressState::Done | DecompressState::Reading) {
+                    tracing::warn!("decompressor end with state {:?}", state)
+                }
             }
             self.flush()
         };
