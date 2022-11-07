@@ -197,7 +197,9 @@ impl PipelineExecutor {
     fn init(self: &Arc<Self>) -> Result<()> {
         unsafe {
             // TODO: the on init callback cannot be killed.
-            (self.on_init_callback)()?;
+            if let Err(cause) = (self.on_init_callback)() {
+                return Err(cause.add_message_back("(while in query pipeline init)"));
+            }
 
             let mut init_schedule_queue = self.graph.init_schedule_queue()?;
 
