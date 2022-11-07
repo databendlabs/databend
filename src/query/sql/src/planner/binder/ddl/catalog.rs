@@ -28,13 +28,13 @@ use common_datavalues::Vu8;
 use common_exception::Result;
 use common_meta_app::schema::CatalogMeta;
 use common_meta_app::schema::CatalogType;
-use common_planner::plans::CreateCatalogPlan;
-use common_planner::plans::DropCatalogPlan;
-use common_planner::plans::ShowCreateCatalogPlan;
 
 use crate::normalize_identifier;
+use crate::plans::CreateCatalogPlan;
+use crate::plans::DropCatalogPlan;
 use crate::plans::Plan;
 use crate::plans::RewriteKind;
+use crate::plans::ShowCreateCatalogPlan;
 use crate::BindContext;
 use crate::Binder;
 

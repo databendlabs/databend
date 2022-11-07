@@ -59,3 +59,28 @@ impl CreateCatalogPlan {
         Arc::new(DataSchema::empty())
     }
 }
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DropCatalogPlan {
+    pub if_exists: bool,
+    pub tenant: String,
+    pub catalog: String,
+}
+
+impl DropCatalogPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ShowCreateCatalogPlan {
+    pub catalog: String,
+    pub schema: DataSchemaRef,
+}
+
+impl ShowCreateCatalogPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        self.schema.clone()
+    }
+}

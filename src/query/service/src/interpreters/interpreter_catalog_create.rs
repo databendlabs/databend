@@ -18,7 +18,7 @@ use common_catalog::catalog::CatalogManager;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::CatalogType;
-use common_planner::plans::CreateCatalogPlan;
+use common_sql::plans::CreateCatalogPlan;
 use common_storages_fuse::TableContext;
 
 use super::Interpreter;
