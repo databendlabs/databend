@@ -13,11 +13,14 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::BTreeMap;
+use std::path::Path;
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 
 use common_base::base::uuid;
 use common_catalog::plan::DataSourcePlan;
+use common_catalog::plan::PartInfo;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PushDownInfo;
@@ -29,6 +32,7 @@ use common_datablocks::BlockCompactThresholds;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::TableInfo;
 use common_meta_types::StageType;
 use common_meta_types::UserStageInfo;
@@ -39,9 +43,13 @@ use common_storage::init_operator;
 use opendal::layers::SubdirLayer;
 use opendal::Operator;
 use parking_lot::Mutex;
-use tracing::debug;
+use regex::Regex;
 
+use crate::file::list_file;
+use crate::file::stat_file;
 use crate::stage_table_sink::StageTableSink;
+use crate::StageFilePartition;
+use crate::StageFileStatus;
 
 /// TODO: we need to track the data metrics in stage table.
 pub struct StageTable {
@@ -80,6 +88,58 @@ impl StageTable {
             Ok(pop.layer(SubdirLayer::new(&stage.stage_prefix())))
         }
     }
+
+    // Color file if it is copied.
+    pub async fn color_copied_files(
+        ctx: &Arc<dyn TableContext>,
+        catalog_name: &str,
+        database_name: &str,
+        table_name: &str,
+        files: Vec<StageFilePartition>,
+    ) -> Result<Vec<StageFilePartition>> {
+        let tenant = ctx.get_tenant();
+        let catalog = ctx.get_catalog(catalog_name)?;
+        let table = catalog
+            .get_table(&tenant, database_name, table_name)
+            .await?;
+        let table_id = table.get_id();
+
+        let mut copied_files = BTreeMap::new();
+        for chunk in files.chunks(50) {
+            let files = chunk.iter().map(|v| v.path.clone()).collect::<Vec<_>>();
+            let req = GetTableCopiedFileReq { table_id, files };
+            let resp = catalog
+                .get_table_copied_file_info(&tenant, database_name, req)
+                .await?;
+            copied_files.extend(resp.file_info);
+        }
+
+        // Colored.
+        let mut results = vec![];
+        for mut file in files {
+            if let Some(copied_file) = copied_files.get(&file.path) {
+                match &copied_file.etag {
+                    Some(_etag) => {
+                        // No need to copy the file again if etag is_some and match.
+                        if file.etag == copied_file.etag {
+                            file.status = StageFileStatus::AlreadyCopied;
+                        }
+                    }
+                    None => {
+                        // etag is none, compare with content_length and last_modified.
+                        if copied_file.content_length == file.size
+                            && copied_file.last_modified == Some(file.last_modified)
+                        {
+                            file.status = StageFileStatus::AlreadyCopied;
+                        }
+                    }
+                }
+            }
+            results.push(file);
+        }
+
+        Ok(results)
+    }
 }
 
 #[async_trait::async_trait]
@@ -98,27 +158,62 @@ impl Table for StageTable {
         ctx: Arc<dyn TableContext>,
         push_downs: Option<PushDownInfo>,
     ) -> Result<(PartStatistics, Partitions)> {
-        let _xx = push_downs
-            .ok_or_else(|| ErrorCode::Internal("push down cannot be None for COPY"))?
-            .copy;
+        let pushdown = push_downs
+            .ok_or_else(|| ErrorCode::Internal("copy: pushdown cannot be None(It's a bug)"))?;
+        let copy_info = pushdown
+            .copy
+            .ok_or_else(|| ErrorCode::Internal("copy: pushdown.copy cannot be None(It's a bug)"))?;
 
-        let operator = StageTable::get_op(&ctx, &self.table_info.stage_info)?;
-        let input_ctx = Arc::new(
-            InputContext::try_create_from_copy(
-                operator,
-                ctx.get_settings().clone(),
-                self.table_info.schema.clone(),
-                self.table_info.stage_info.clone(),
-                self.table_info.files.clone(),
-                ctx.get_scan_progress(),
-                self.get_block_compact_thresholds(),
-            )
-            .await?,
-        );
-        debug!("copy into {:?}", input_ctx);
-        let mut guard = self.input_context.lock();
-        *guard = Some(input_ctx);
-        Ok((PartStatistics::default(), vec![]))
+        // User set the files.
+        let files = copy_info.files;
+
+        // 1. Get all files.
+        let path = &copy_info.path;
+        let mut all_files = if !files.is_empty() {
+            let mut res = vec![];
+            for file in files {
+                // Here we add the path to the file: /path/to/path/file1.
+                let new_path = Path::new(path).join(file).to_string_lossy().to_string();
+                let info = stat_file(ctx.clone(), &new_path, &copy_info.stage_info).await?;
+                res.push(info);
+            }
+            res
+        } else {
+            list_file(ctx.clone(), path, &copy_info.stage_info).await?
+        };
+
+        // 2. pattern filter.
+        {
+            let pattern = &copy_info.pattern;
+            if !pattern.is_empty() {
+                let regex = Regex::new(pattern).map_err(|e| {
+                    ErrorCode::SyntaxException(format!(
+                        "Pattern format invalid, got:{}, error:{:?}",
+                        pattern, e
+                    ))
+                })?;
+                all_files.retain(|v| regex.is_match(&v.path));
+            }
+        }
+
+        // 3. colored
+        let all_files = StageTable::color_copied_files(
+            &ctx,
+            &copy_info.into_table_catalog_name,
+            &copy_info.into_table_database_name,
+            &copy_info.into_table_name,
+            all_files,
+        )
+        .await?;
+
+        let partitions = all_files
+            .iter()
+            .map(|v| {
+                let x: Box<dyn PartInfo> = Box::new(v.clone());
+                Arc::new(x)
+            })
+            .collect::<Vec<_>>();
+        Ok((PartStatistics::default(), partitions))
     }
 
     fn read_data(
