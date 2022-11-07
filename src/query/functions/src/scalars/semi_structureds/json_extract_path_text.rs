@@ -20,7 +20,7 @@ use common_exception::Result;
 use common_io::prelude::FormatSettings;
 
 use crate::scalars::semi_structureds::get_path::extract_value_by_path;
-use crate::scalars::semi_structureds::get_path::parse_path_keys;
+use crate::scalars::semi_structureds::get_path::parse_json_paths;
 use crate::scalars::Function;
 use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
@@ -71,7 +71,7 @@ impl Function for JsonExtractPathTextFunction {
         columns: &ColumnsWithField,
         input_rows: usize,
     ) -> Result<ColumnRef> {
-        let path_keys = parse_path_keys(columns[1].column())?;
+        let json_paths = parse_json_paths(columns[1].column())?;
 
         let data_type = columns[0].field().data_type();
         let serializer = data_type.create_serializer(columns[0].column())?;
@@ -83,8 +83,8 @@ impl Function for JsonExtractPathTextFunction {
         if columns[0].column().is_const() {
             let value = values.get(0).unwrap();
             for i in 0..input_rows {
-                let path_key = path_keys.get(i).unwrap();
-                match extract_value_by_path(value, path_key) {
+                let json_path = json_paths.get(i).unwrap();
+                match extract_value_by_path(value, json_path) {
                     Some(child_value) => {
                         builder.append(child_value.to_string().as_bytes(), true);
                     }
@@ -92,10 +92,10 @@ impl Function for JsonExtractPathTextFunction {
                 }
             }
         } else if columns[1].column().is_const() {
-            let path_key = path_keys.get(0).unwrap();
+            let json_path = json_paths.get(0).unwrap();
             for i in 0..input_rows {
                 let value = values.get(i).unwrap();
-                match extract_value_by_path(value, path_key) {
+                match extract_value_by_path(value, json_path) {
                     Some(child_value) => {
                         builder.append(child_value.to_string().as_bytes(), true);
                     }
@@ -104,9 +104,9 @@ impl Function for JsonExtractPathTextFunction {
             }
         } else {
             for i in 0..input_rows {
-                let path_key = path_keys.get(i).unwrap();
+                let json_path = json_paths.get(i).unwrap();
                 let value = values.get(i).unwrap();
-                match extract_value_by_path(value, path_key) {
+                match extract_value_by_path(value, json_path) {
                     Some(child_value) => {
                         builder.append(child_value.to_string().as_bytes(), true);
                     }
