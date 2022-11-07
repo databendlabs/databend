@@ -15,6 +15,7 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planner::PartInfo;
@@ -30,8 +31,8 @@ pub enum CompactTask {
 impl CompactTask {
     pub fn get_block_metas(&self) -> Vec<Arc<BlockMeta>> {
         match self {
-            CompactTask::Trival(block) => vec![block.clone()],
-            CompactTask::Normal(blocks) => blocks.clone(),
+            CompactTask::Trival(block_meta) => vec![block_meta.clone()],
+            CompactTask::Normal(block_metas) => block_metas.clone(),
         }
     }
 
@@ -42,8 +43,8 @@ impl CompactTask {
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct CompactPartInfo {
-    tasks: Vec<CompactTask>,
-    order: usize,
+    pub tasks: Vec<CompactTask>,
+    pub order: usize,
 }
 
 #[typetag::serde(name = "compact")]

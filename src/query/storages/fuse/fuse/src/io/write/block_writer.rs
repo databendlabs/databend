@@ -24,6 +24,7 @@ use common_datablocks::DataBlock;
 use common_exception::Result;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::ClusterStatistics;
+use common_storages_table_meta::meta::StatisticsOfColumns;
 use common_storages_table_meta::meta::Location;
 use opendal::Operator;
 use tracing::warn;
@@ -53,17 +54,17 @@ impl<'a> BlockWriter<'a> {
         }
     }
 
-    pub async fn write_with_location(
+    pub async fn write(
         &self,
         block: DataBlock,
-        block_id: Uuid,
-        location: Location,
+        col_stats: StatisticsOfColumns,
         cluster_stats: Option<ClusterStatistics>,
     ) -> Result<BlockMeta> {
+        let (location, block_id) = self.location_generator.gen_block_location();
+
         let data_accessor = &self.data_accessor;
         let row_count = block.num_rows() as u64;
         let block_size = block.memory_size() as u64;
-        let col_stats = gen_columns_statistics(&block)?;
         let (bloom_filter_index_size, bloom_filter_index_location) = self
             .build_block_index(data_accessor, &block, block_id)
             .await?;
@@ -81,16 +82,6 @@ impl<'a> BlockWriter<'a> {
             bloom_filter_index_size,
         );
         Ok(block_meta)
-    }
-
-    pub async fn write(
-        &self,
-        block: DataBlock,
-        cluster_stats: Option<ClusterStatistics>,
-    ) -> Result<BlockMeta> {
-        let (location, block_id) = self.location_generator.gen_block_location();
-        self.write_with_location(block, block_id, location, cluster_stats)
-            .await
     }
 
     pub async fn build_block_index(
