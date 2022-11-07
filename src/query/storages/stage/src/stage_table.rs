@@ -196,21 +196,23 @@ impl Table for StageTable {
             }
         }
 
-        // 3. colored
-        let all_files = StageTable::color_copied_files(
-            &ctx,
-            &copy_info.into_table_catalog_name,
-            &copy_info.into_table_database_name,
-            &copy_info.into_table_name,
-            all_files,
-        )
-        .await?;
+        // 3. colored if not force
+        if !copy_info.force {
+            all_files = StageTable::color_copied_files(
+                &ctx,
+                &copy_info.into_table_catalog_name,
+                &copy_info.into_table_database_name,
+                &copy_info.into_table_name,
+                all_files,
+            )
+            .await?;
+        }
 
         let partitions = all_files
             .iter()
             .map(|v| {
-                let x: Box<dyn PartInfo> = Box::new(v.clone());
-                Arc::new(x)
+                let part_info: Box<dyn PartInfo> = Box::new(v.clone());
+                Arc::new(part_info)
             })
             .collect::<Vec<_>>();
         Ok((PartStatistics::default(), partitions))

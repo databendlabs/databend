@@ -12,30 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 use std::collections::BTreeMap;
-use std::path::Path;
 use std::sync::Arc;
 
-use common_base::base::GlobalIORuntime;
+use common_catalog::plan::CopyInfo;
 use common_catalog::plan::DataSourceInfo;
-use common_catalog::plan::DataSourcePlan;
+use common_catalog::plan::PushDownInfo;
 use common_catalog::plan::StageTableInfo;
 use common_catalog::table::AppendMode;
 use common_datavalues::chrono::Utc;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::TableCopiedFileInfo;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
-use common_meta_types::StageFile;
 use common_meta_types::UserStageInfo;
+use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
+use common_storages_stage::StageFilePartition;
 use common_storages_stage::StageTable;
-use regex::Regex;
 
 use crate::catalogs::Catalog;
 use crate::interpreters::common::append2table;
-use crate::interpreters::common::list_files;
-use crate::interpreters::common::stat_file;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreterV2;
 use crate::pipelines::PipelineBuildResult;
@@ -57,29 +53,6 @@ impl CopyInterpreterV2 {
         Ok(CopyInterpreterV2 { ctx, plan })
     }
 
-    async fn get_copied_files_info(
-        &self,
-        catalog_name: String,
-        database_name: String,
-        table_id: u64,
-        query_copied_files: &[String],
-        file_info: &mut BTreeMap<String, TableCopiedFileInfo>,
-    ) -> Result<()> {
-        let catalog = self.ctx.get_catalog(&catalog_name)?;
-        let tenant = self.ctx.get_tenant();
-        let req = GetTableCopiedFileReq {
-            table_id,
-            files: query_copied_files.to_owned(),
-        };
-        let resp = catalog
-            .get_table_copied_file_info(&tenant, &database_name, req)
-            .await?;
-
-        file_info.extend(resp.file_info);
-
-        Ok(())
-    }
-
     async fn do_upsert_copied_files_info(
         expire_at: Option<u64>,
         tenant: String,
@@ -98,89 +71,6 @@ impl CopyInterpreterV2 {
             .await?;
         copy_stage_files.clear();
         Ok(())
-    }
-
-    async fn filter_have_copied_files(
-        &self,
-        force: bool,
-        catalog_name: &str,
-        database_name: &str,
-        table_name: &str,
-        stage_files: &[StageFile],
-    ) -> Result<(u64, BTreeMap<String, TableCopiedFileInfo>)> {
-        let catalog = self.ctx.get_catalog(catalog_name)?;
-        let tenant = self.ctx.get_tenant();
-        let table = catalog
-            .get_table(&tenant, database_name, table_name)
-            .await?;
-        let table_id = table.get_id();
-
-        let mut file_map = BTreeMap::new();
-
-        if !force {
-            // if force is false, copy only the files that unmatch to the meta copied files info.
-            let files = stage_files
-                .iter()
-                .map(|v| v.path.clone())
-                .collect::<Vec<_>>();
-            let mut copied_files = BTreeMap::new();
-            for query_copied_files in files.chunks(MAX_QUERY_COPIED_FILES_NUM) {
-                self.get_copied_files_info(
-                    catalog_name.to_string(),
-                    database_name.to_string(),
-                    table_id,
-                    query_copied_files,
-                    &mut copied_files,
-                )
-                .await?;
-            }
-
-            for stage_file in stage_files {
-                if let Some(copied_file) = copied_files.get(&stage_file.path) {
-                    match &copied_file.etag {
-                        Some(_etag) => {
-                            // No need to copy the file again if etag is_some and match.
-                            if stage_file.etag == copied_file.etag {
-                                tracing::warn!(
-                                    "ignore copy file {:?} matched by etag",
-                                    copied_file
-                                );
-                                continue;
-                            }
-                        }
-                        None => {
-                            // etag is none, compare with content_length and last_modified.
-                            if copied_file.content_length == stage_file.size
-                                && copied_file.last_modified == Some(stage_file.last_modified)
-                            {
-                                tracing::warn!(
-                                    "ignore copy file {:?} matched by content_length and last_modified",
-                                    copied_file
-                                );
-                                continue;
-                            }
-                        }
-                    }
-                }
-
-                // unmatch case: insert into file map for copy.
-                file_map.insert(stage_file.path.clone(), TableCopiedFileInfo {
-                    etag: stage_file.etag.clone(),
-                    content_length: stage_file.size,
-                    last_modified: Some(stage_file.last_modified),
-                });
-            }
-        } else {
-            // if force is true, copy all the file.
-            for stage_file in stage_files {
-                file_map.insert(stage_file.path.clone(), TableCopiedFileInfo {
-                    etag: stage_file.etag.clone(),
-                    content_length: stage_file.size,
-                    last_modified: Some(stage_file.last_modified),
-                });
-            }
-        }
-        Ok((table_id, file_map))
     }
 
     async fn upsert_copied_files_info(
@@ -226,135 +116,6 @@ impl CopyInterpreterV2 {
         }
 
         Ok(())
-    }
-
-    async fn purge_files(
-        ctx: Arc<QueryContext>,
-        from: &DataSourcePlan,
-        files: &Vec<String>,
-    ) -> Result<()> {
-        match &from.source_info {
-            DataSourceInfo::StageSource(table_info) => {
-                if table_info.stage_info.copy_options.purge {
-                    let rename_me: Arc<dyn TableContext> = ctx.clone();
-                    let op = StageTable::get_op(&rename_me, &table_info.stage_info)?;
-                    for f in files {
-                        if let Err(e) = op.object(f).delete().await {
-                            tracing::error!("Failed to delete file: {}, error: {}", f, e);
-                        }
-                    }
-                    tracing::info!("purge files: {:?}", files);
-                }
-                Ok(())
-            }
-            other => Err(ErrorCode::Internal(format!(
-                "Cannot list files for the source info: {:?}",
-                other
-            ))),
-        }
-    }
-
-    /// Rewrite the ReadDataSourcePlan.S3StageSource.file_name to new file name.
-    fn rewrite_read_plan_file_name(mut plan: DataSourcePlan, files: &[String]) -> DataSourcePlan {
-        if let DataSourceInfo::StageSource(ref mut stage) = plan.source_info {
-            stage.files = files.to_vec()
-        }
-        plan
-    }
-
-    // Read a file and commit it to the table.
-    // Progress:
-    // 1. Build a select pipeline
-    // 2. Execute the pipeline and get the stream
-    // 3. Read from the stream and write to the table.
-    // Note:
-    //  We parse the `s3://` to ReadSourcePlan instead of to a SELECT plan is that:
-    #[tracing::instrument(level = "debug", name = "copy_files_to_table", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
-    async fn copy_files_to_table(
-        &self,
-        catalog_name: &String,
-        db_name: &String,
-        tbl_name: &String,
-        table_id: u64,
-        from: &DataSourcePlan,
-        copy_stage_files: BTreeMap<String, TableCopiedFileInfo>,
-    ) -> Result<PipelineBuildResult> {
-        // let mut v = [5, 4, 1, 3, 2];
-        // v.sort_by(|a, b| a.cmp(b));
-        // assert!(v == [1, 2, 3, 4, 5]);
-        // https://play.rust-lang.org/?version=stable&mode=debug&edition=2015&gist=aefe5b6d2d4340aa7453b6d62452cbdc
-        let mut copy_files_vec = Vec::from_iter(copy_stage_files.clone());
-        copy_files_vec.sort_by(|(_, a), (_, b)| a.last_modified.cmp(&b.last_modified));
-        let files: Vec<String> = copy_files_vec.iter().map(|(k, _)| k.clone()).collect();
-
-        let mut build_res = PipelineBuildResult::create();
-        let read_source_plan = Self::rewrite_read_plan_file_name(from.clone(), &files);
-        tracing::debug!("copy_files_to_table from source: {:?}", read_source_plan);
-
-        let from_table = self.ctx.build_table_from_source_plan(&read_source_plan)?;
-        let to_table = self.ctx.get_table(catalog_name, db_name, tbl_name).await?;
-        from_table.set_block_compact_thresholds(to_table.get_block_compact_thresholds());
-
-        from_table.read_partitions(self.ctx.clone(), None).await?;
-        from_table.read_data(
-            self.ctx.clone(),
-            &read_source_plan,
-            &mut build_res.main_pipeline,
-        )?;
-
-        to_table.append_data(
-            self.ctx.clone(),
-            &mut build_res.main_pipeline,
-            AppendMode::Copy,
-            false,
-        )?;
-
-        let ctx = self.ctx.clone();
-        let files = files.clone();
-        let from = from.clone();
-        let catalog_name = catalog_name.clone();
-        let db_name = db_name.clone();
-        let catalog = self.ctx.get_catalog(&catalog_name)?;
-        let tenant = self.ctx.get_tenant();
-
-        build_res.main_pipeline.set_on_finished(move |may_error| {
-            if may_error.is_none() {
-                // capture out variable
-                let ctx = ctx.clone();
-                let files = files.clone();
-                let from = from.clone();
-                let to_table = to_table.clone();
-                let copy_stage_files = copy_stage_files.clone();
-                let db_name = db_name.clone();
-                let catalog = catalog.clone();
-                let tenant = tenant.clone();
-
-                return GlobalIORuntime::instance().block_on(async move {
-                    // Commit
-                    let operations = ctx.consume_precommit_blocks();
-                    to_table
-                        .commit_insertion(ctx.clone(), operations, false)
-                        .await?;
-
-                    // Purge
-                    CopyInterpreterV2::purge_files(ctx, &from, &files).await?;
-
-                    // Upsert table copied file info.
-                    CopyInterpreterV2::upsert_copied_files_info(
-                        tenant,
-                        db_name,
-                        table_id,
-                        copy_stage_files,
-                        catalog,
-                    )
-                    .await
-                });
-            }
-
-            Err(may_error.as_ref().unwrap().clone())
-        });
-
-        Ok(build_res)
     }
 
     async fn execute_copy_into_stage(
@@ -414,6 +175,67 @@ impl CopyInterpreterV2 {
         )?;
         Ok(build_res)
     }
+
+    async fn execute_copy_into_table(
+        &self,
+        catalog_name: &str,
+        database_name: &str,
+        table_name: &str,
+        files: &Vec<String>,
+        path: &str,
+        pattern: &str,
+        force: bool,
+        stage_table_info: &StageTableInfo,
+    ) -> Result<PipelineBuildResult> {
+        let stage_table = StageTable::try_create(stage_table_info.clone())?;
+        let copy_info = CopyInfo {
+            force,
+            files: files.clone(),
+            path: path.to_string(),
+            pattern: pattern.to_string(),
+            stage_info: stage_table_info.stage_info.clone(),
+            into_table_catalog_name: catalog_name.to_string(),
+            into_table_database_name: database_name.to_string(),
+            into_table_name: table_name.to_string(),
+        };
+        let pushdown = PushDownInfo {
+            projection: None,
+            filters: vec![],
+            prewhere: None,
+            limit: None,
+            order_by: vec![],
+            copy: Some(copy_info),
+        };
+
+        let ctx = self.ctx.clone();
+        let read_source_plan = stage_table
+            .read_plan_with_catalog(ctx.clone(), catalog_name.to_string(), Some(pushdown))
+            .await?;
+        let to_table = ctx
+            .get_table(catalog_name, database_name, table_name)
+            .await?;
+        stage_table.set_block_compact_thresholds(to_table.get_block_compact_thresholds());
+
+        let mut build_res = PipelineBuildResult::create();
+        stage_table.read_data(ctx.clone(), &read_source_plan, &mut build_res.main_pipeline)?;
+
+        to_table.append_data(
+            ctx.clone(),
+            &mut build_res.main_pipeline,
+            AppendMode::Copy,
+            false,
+        )?;
+
+        // TODO(bohu): add commit to meta
+        let mut stage_file_infos = vec![];
+        for part in &read_source_plan.parts {
+            if let Some(stage_file_info) = part.as_any().downcast_ref::<StageFilePartition>() {
+                stage_file_infos.push(stage_file_info.clone());
+            }
+        }
+
+        Ok(build_res)
+    }
 }
 
 #[async_trait::async_trait]
@@ -425,7 +247,6 @@ impl Interpreter for CopyInterpreterV2 {
     #[tracing::instrument(level = "debug", name = "copy_interpreter_execute_v2", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         match &self.plan {
-            // TODO(xuanwo): extract them as a separate function.
             CopyPlanV2::IntoTable {
                 catalog_name,
                 database_name,
@@ -438,63 +259,15 @@ impl Interpreter for CopyInterpreterV2 {
             } => match &from.source_info {
                 DataSourceInfo::StageSource(table_info) => {
                     let path = &table_info.path;
-
-                    let mut stage_files = if !files.is_empty() {
-                        let mut res = vec![];
-
-                        for file in files {
-                            // Here we add the path to the file: /path/to/path/file1.
-                            let new_path = Path::new(path).join(file).to_string_lossy().to_string();
-                            let info =
-                                stat_file(&self.ctx, &table_info.stage_info, &new_path).await?;
-                            res.push(info);
-                        }
-                        res
-                    } else {
-                        list_files(&self.ctx.clone(), &table_info.stage_info, path).await?
-                    };
-
-                    // Pattern match check.
-                    {
-                        let pattern = &pattern;
-                        if !pattern.is_empty() {
-                            let regex = Regex::new(pattern).map_err(|e| {
-                                ErrorCode::SyntaxException(format!(
-                                    "Pattern format invalid, got:{}, error:{:?}",
-                                    pattern, e
-                                ))
-                            })?;
-                            stage_files.retain(|v| regex.is_match(&v.path));
-                        }
-                        tracing::debug!("matched files: {:?}, pattern: {}", stage_files, pattern);
-                    }
-
-                    let (table_id, copy_stage_files) = self
-                        .filter_have_copied_files(
-                            *force,
-                            catalog_name,
-                            database_name,
-                            table_name,
-                            &stage_files,
-                        )
-                        .await?;
-
-                    tracing::debug!(
-                        "matched copy unduplicate files: {:?}",
-                        &copy_stage_files.keys(),
-                    );
-
-                    if copy_stage_files.is_empty() {
-                        return Ok(PipelineBuildResult::create());
-                    }
-
-                    self.copy_files_to_table(
+                    self.execute_copy_into_table(
                         catalog_name,
                         database_name,
                         table_name,
-                        table_id,
-                        from,
-                        copy_stage_files,
+                        files,
+                        path,
+                        pattern,
+                        *force,
+                        table_info,
                     )
                     .await
                 }
