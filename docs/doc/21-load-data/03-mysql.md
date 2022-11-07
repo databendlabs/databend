@@ -1,6 +1,6 @@
 ---
 title: Load Data From MySQL
-sidebar_label: From MySQL
+sidebar_label: Tutorial - Load from MySQL
 description:
   Load data from MySQL.
 ---

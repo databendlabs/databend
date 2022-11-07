@@ -1,6 +1,6 @@
 ---
 title: Load Data From Remote Files
-sidebar_label: From Remote Files
+sidebar_label: Tutorial - Load from a remote file
 description:
   Load data from remote files.
 ---

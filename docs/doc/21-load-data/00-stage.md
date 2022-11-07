@@ -1,6 +1,6 @@
 ---
 title: Load Data From Databend Stages
-sidebar_label: From Stages
+sidebar_label: Tutorial - Load from an internal stage
 description:
   Load data from Databend stages.
 ---
