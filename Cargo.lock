@@ -1432,6 +1432,7 @@ dependencies = [
  "common-exception",
  "common-hashtable",
  "common-io",
+ "common-jsonb",
  "crc32fast",
  "dyn-clone",
  "float-cmp",

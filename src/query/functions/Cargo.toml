@@ -17,6 +17,7 @@ common-datavalues = { path = "../datavalues" }
 common-exception = { path = "../../common/exception" }
 common-hashtable = { path = "../../common/hashtable" }
 common-io = { path = "../../common/io" }
+common-jsonb = { path = "../../common/jsonb" }
 
 # Crates.io dependencies
 base64 = "0.13.0"
