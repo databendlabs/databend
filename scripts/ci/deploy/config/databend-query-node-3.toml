@@ -44,7 +44,7 @@ table_cache_bloom_index_data_bytes=1073741824
 [log]
 
 [log.file]
-level = "DEBUG"
+level = "ERROR"
 format = "text"
 dir = "./.databend/logs_3"
 
