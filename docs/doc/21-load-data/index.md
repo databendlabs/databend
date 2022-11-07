@@ -29,8 +29,8 @@ Databend recommends the COPY INTO command for loading data from files in a stage
 
 Here are some tutorials to help you get started with data loading:
 
-- Tutorial: Load from an internal stage
-- Tutorial: Load from an Amazon S3 bucket
-- Tutorial: Load from a local file with Streaming Load API
-- Tutorial: Load from a remote file
-- Tutorial: Load from MySQL with mysqldump
+- [Tutorial: Load from an internal stage](00-stage.md)
+- [Tutorial: Load from an Amazon S3 bucket](01-s3.md)
+- [Tutorial: Load from a local file with Streaming Load API](./02-local.md)
+- [Tutorial: Load from a remote file](04-http.md)
+- [Tutorial: Load from MySQL with mysqldump](./03-mysql.md)
