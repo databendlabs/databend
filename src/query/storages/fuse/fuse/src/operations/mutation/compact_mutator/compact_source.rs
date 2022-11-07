@@ -28,10 +28,10 @@ use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::SegmentInfo;
 use opendal::Operator;
 
+use super::CompactMetaInfo;
 use super::CompactPartInfo;
 use crate::io::BlockReader;
 use crate::io::BlockWriter;
-use crate::io::SegmentWriter;
 use crate::io::TableMetaLocationGenerator;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::Event;
@@ -147,6 +147,10 @@ impl Processor for CompactSource {
                     let cache = &mut segment_cache.write();
                     cache.put(location.clone(), segment.clone());
                 }
+
+                let meta = CompactMetaInfo::create(order, location, segment);
+                let new_part = self.ctx.try_get_part();
+                self.state = State::Generated(new_part, DataBlock::empty_with_meta(meta));
             }
             _ => return Err(ErrorCode::Internal("It's a bug.")),
         }

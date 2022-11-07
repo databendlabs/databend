@@ -100,6 +100,15 @@ impl DataBlock {
     }
 
     #[inline]
+    pub fn empty_with_meta(meta: MetaInfoPtr) -> Self {
+        DataBlock {
+            schema: Arc::new(DataSchema::empty()),
+            columns: vec![],
+            meta: Some(meta),
+        }
+    }
+
+    #[inline]
     pub fn is_empty(&self) -> bool {
         self.num_columns() == 0 || self.num_rows() == 0
     }

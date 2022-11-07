@@ -13,11 +13,13 @@
 // limitations under the License.
 
 mod block_compact_mutator;
+mod compact_meta;
 mod compact_part;
 mod compact_source;
 mod full_compact_mutator;
 mod segment_compact_mutator;
 
+pub use compact_meta::CompactMetaInfo;
 pub use compact_part::CompactPartInfo;
 pub use full_compact_mutator::FullCompactMutator;
 pub use segment_compact_mutator::SegmentCompactMutator;

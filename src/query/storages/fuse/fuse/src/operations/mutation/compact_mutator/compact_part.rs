@@ -17,7 +17,6 @@ use std::sync::Arc;
 
 use common_catalog::plan::PartInfo;
 use common_catalog::plan::PartInfoPtr;
-use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_storages_table_meta::meta::BlockMeta;
