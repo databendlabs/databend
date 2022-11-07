@@ -39,7 +39,7 @@ pub struct ColumnStatistics {
     pub in_memory_size: u64,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct ClusterStatistics {
     #[serde(default = "default_cluster_key_id")]
     pub cluster_key_id: u32,

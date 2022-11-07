@@ -1372,7 +1372,6 @@ dependencies = [
  "prost",
  "serde",
  "serde_json",
- "sqlparser",
  "thiserror",
  "tonic",
 ]
@@ -1438,6 +1437,7 @@ dependencies = [
  "common-exception",
  "common-hashtable",
  "common-io",
+ "common-jsonb",
  "crc32fast",
  "dyn-clone",
  "float-cmp",
@@ -1463,7 +1463,6 @@ dependencies = [
  "sha2",
  "simdutf8",
  "siphasher",
- "sqlparser",
  "strength_reduce",
  "twox-hash",
  "uuid",
@@ -7686,15 +7685,6 @@ checksum = "67cf02bbac7a337dc36e4f5a693db6c21e7863f45070f7064577eb4367a3212b"
 dependencies = [
  "base64ct",
  "der",
-]
-
-[[package]]
-name = "sqlparser"
-version = "0.13.1-alpha.0"
-source = "git+https://github.com/datafuse-extras/sqlparser-rs?rev=7f246e3#7f246e348770f6fdf83979453e65309fa9ae4893"
-dependencies = [
- "hashbrown 0.12.3",
- "log",
 ]
 
 [[package]]

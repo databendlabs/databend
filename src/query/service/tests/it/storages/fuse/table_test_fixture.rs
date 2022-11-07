@@ -201,13 +201,13 @@ impl TestFixture {
         Ok(())
     }
 
-    pub fn gen_sample_blocks(num: usize, start: i32) -> Vec<Result<DataBlock>> {
-        Self::gen_sample_blocks_ex(num, 3, start)
+    pub fn gen_sample_blocks(num_of_blocks: usize, start: i32) -> Vec<Result<DataBlock>> {
+        Self::gen_sample_blocks_ex(num_of_blocks, 3, start)
     }
 
     pub fn gen_sample_blocks_ex(
         num_of_block: usize,
-        rows_perf_block: usize,
+        rows_per_block: usize,
         start: i32,
     ) -> Vec<Result<DataBlock>> {
         (0..num_of_block)
@@ -223,17 +223,17 @@ impl TestFixture {
                 ]);
                 let column0 = Series::from_data(
                     std::iter::repeat_with(|| idx as i32 + start)
-                        .take(rows_perf_block)
+                        .take(rows_per_block)
                         .collect::<Vec<i32>>(),
                 );
                 let column1 = Series::from_data(
                     std::iter::repeat_with(|| (idx as i32 + start) * 2)
-                        .take(rows_perf_block)
+                        .take(rows_per_block)
                         .collect::<Vec<i32>>(),
                 );
                 let column2 = Series::from_data(
                     std::iter::repeat_with(|| (idx as i32 + start) * 3)
-                        .take(rows_perf_block)
+                        .take(rows_per_block)
                         .collect::<Vec<i32>>(),
                 );
                 let tuple_inner_columns = vec![column1, column2];
