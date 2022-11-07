@@ -1123,7 +1123,7 @@ async fn test_download_csv_with_names() -> Result<()> {
     let resp = get_uri(&ep, &uri).await;
 
     assert_eq!(resp.status(), StatusCode::OK, "{:?}", resp);
-    let exp = "\"number\",\"number + 1\"\n0,1\n";
+    let exp = "\"number\",\"number + 1\"\n0,1\n1,2\n";
     assert_eq!(resp.into_body().into_string().await.unwrap(), exp);
     Ok(())
 }

@@ -333,7 +333,7 @@ async fn result_download_handler(
     let default_format = "csv".to_string();
     let format_name = &params.format.unwrap_or(default_format);
     let session = ctx.get_session(SessionType::HTTPQuery);
-    let format = ClickhouseFormatType::parse_clickhouse_format(&format_name).map_err(BadRequest)?;
+    let format = ClickhouseFormatType::parse_clickhouse_format(format_name).map_err(BadRequest)?;
 
     let http_query_manager = HttpQueryManager::instance();
     if let Some(query) = http_query_manager.get_query(&query_id).await {
