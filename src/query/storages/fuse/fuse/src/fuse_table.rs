@@ -19,22 +19,24 @@ use std::str;
 use std::sync::Arc;
 
 use common_catalog::catalog::StorageDescription;
+use common_catalog::plan::DataSourcePlan;
+use common_catalog::plan::Expression;
+use common_catalog::plan::PartStatistics;
+use common_catalog::plan::Partitions;
+use common_catalog::plan::Projection;
+use common_catalog::plan::PushDownInfo;
+use common_catalog::table::AppendMode;
 use common_catalog::table::ColumnId;
 use common_catalog::table::ColumnStatistics;
 use common_catalog::table::ColumnStatisticsProvider;
 use common_catalog::table::CompactTarget;
 use common_catalog::table_context::TableContext;
 use common_catalog::table_mutator::TableMutator;
+use common_datablocks::BlockCompactThresholds;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::TableInfo;
-use common_planner::extras::Extras;
-use common_planner::extras::Statistics;
-use common_planner::plans::DeletePlan;
-use common_planner::Expression;
-use common_planner::Partitions;
-use common_planner::ReadDataSourcePlan;
 use common_sharing::create_share_table_operator;
 use common_sql::ExpressionParser;
 use common_storage::init_operator;
@@ -47,15 +49,17 @@ use common_storages_table_meta::meta::ColumnStatistics as FuseColumnStatistics;
 use common_storages_table_meta::meta::Statistics as FuseStatistics;
 use common_storages_table_meta::meta::TableSnapshot;
 use common_storages_table_meta::meta::Versioned;
+use common_storages_table_meta::table::table_storage_prefix;
+use common_storages_table_meta::table::OPT_KEY_DATABASE_ID;
+use common_storages_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
+use common_storages_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use opendal::Operator;
 use uuid::Uuid;
 
-use crate::io::BlockCompactor;
 use crate::io::MetaReaders;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::AppendOperationLogEntry;
 use crate::pipelines::Pipeline;
-use crate::table_storage_prefix;
 use crate::NavigationPoint;
 use crate::Table;
 use crate::TableStatistics;
@@ -64,9 +68,6 @@ use crate::DEFAULT_ROW_PER_BLOCK;
 use crate::FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD;
 use crate::FUSE_OPT_KEY_ROW_PER_BLOCK;
 use crate::FUSE_TBL_LAST_SNAPSHOT_HINT;
-use crate::OPT_KEY_DATABASE_ID;
-use crate::OPT_KEY_LEGACY_SNAPSHOT_LOC;
-use crate::OPT_KEY_SNAPSHOT_LOCATION;
 
 #[derive(Clone)]
 pub struct FuseTable {
@@ -212,16 +213,6 @@ impl FuseTable {
     pub fn transient(&self) -> bool {
         self.table_info.meta.options.contains_key("TRANSIENT")
     }
-
-    pub(crate) fn get_block_compactor(&self) -> BlockCompactor {
-        let max_rows_per_block = self.get_option(FUSE_OPT_KEY_ROW_PER_BLOCK, DEFAULT_ROW_PER_BLOCK);
-        let min_rows_per_block = (max_rows_per_block as f64 * 0.8) as usize;
-        let max_bytes_per_block = self.get_option(
-            FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD,
-            DEFAULT_BLOCK_SIZE_IN_MEM_SIZE_THRESHOLD,
-        );
-        BlockCompactor::new(max_rows_per_block, min_rows_per_block, max_bytes_per_block)
-    }
 }
 
 #[async_trait::async_trait]
@@ -354,8 +345,8 @@ impl Table for FuseTable {
     async fn read_partitions(
         &self,
         ctx: Arc<dyn TableContext>,
-        push_downs: Option<Extras>,
-    ) -> Result<(Statistics, Partitions)> {
+        push_downs: Option<PushDownInfo>,
+    ) -> Result<(PartStatistics, Partitions)> {
         self.do_read_partitions(ctx, push_downs).await
     }
 
@@ -363,7 +354,7 @@ impl Table for FuseTable {
     fn read_data(
         &self,
         ctx: Arc<dyn TableContext>,
-        plan: &ReadDataSourcePlan,
+        plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
@@ -374,10 +365,11 @@ impl Table for FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
+        append_mode: AppendMode,
         need_output: bool,
     ) -> Result<()> {
         self.check_mutable()?;
-        self.do_append_data(ctx, pipeline, need_output)
+        self.do_append_data(ctx, pipeline, append_mode, need_output)
     }
 
     #[tracing::instrument(level = "debug", name = "fuse_table_commit_insertion", skip(self, ctx, operations), fields(ctx.id = ctx.get_id().as_str()))]
@@ -444,8 +436,13 @@ impl Table for FuseTable {
     }
 
     #[tracing::instrument(level = "debug", name = "fuse_table_delete", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
-    async fn delete(&self, ctx: Arc<dyn TableContext>, delete_plan: DeletePlan) -> Result<()> {
-        self.do_delete(ctx, &delete_plan).await
+    async fn delete(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        projection: &Projection,
+        selection: &Option<String>,
+    ) -> Result<()> {
+        self.do_delete(ctx, projection, selection).await
     }
 
     async fn compact(
@@ -462,9 +459,19 @@ impl Table for FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
-        push_downs: Option<Extras>,
+        push_downs: Option<PushDownInfo>,
     ) -> Result<Option<Box<dyn TableMutator>>> {
         self.do_recluster(ctx, pipeline, push_downs).await
+    }
+
+    fn get_block_compact_thresholds(&self) -> BlockCompactThresholds {
+        let max_rows_per_block = self.get_option(FUSE_OPT_KEY_ROW_PER_BLOCK, DEFAULT_ROW_PER_BLOCK);
+        let min_rows_per_block = (max_rows_per_block as f64 * 0.8) as usize;
+        let max_bytes_per_block = self.get_option(
+            FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD,
+            DEFAULT_BLOCK_SIZE_IN_MEM_SIZE_THRESHOLD,
+        );
+        BlockCompactThresholds::new(max_rows_per_block, min_rows_per_block, max_bytes_per_block)
     }
 }
 

@@ -26,15 +26,15 @@ use common_functions::scalars::FunctionContext;
 use common_io::prelude::FormatSettings;
 use common_meta_types::RoleInfo;
 use common_meta_types::UserInfo;
-use common_planner::PartInfoPtr;
-use common_planner::Partitions;
-use common_planner::ReadDataSourcePlan;
 use common_settings::Settings;
 use common_storage::DataOperator;
 use common_storage::StorageMetrics;
 
 use crate::catalog::Catalog;
 use crate::cluster_info::Cluster;
+use crate::plan::DataSourcePlan;
+use crate::plan::PartInfoPtr;
+use crate::plan::Partitions;
 use crate::table::Table;
 
 pub struct ProcessInfo {
@@ -60,7 +60,7 @@ pub trait TableContext: Send + Sync {
     ///
     /// A plan just contains raw information about a table or table function.
     /// This method builds a `dyn Table`, which provides table specific io methods the plan needs.
-    fn build_table_from_source_plan(&self, plan: &ReadDataSourcePlan) -> Result<Arc<dyn Table>>;
+    fn build_table_from_source_plan(&self, plan: &DataSourcePlan) -> Result<Arc<dyn Table>>;
     fn get_scan_progress(&self) -> Arc<Progress>;
     fn get_scan_progress_value(&self) -> ProgressValues;
     fn get_write_progress(&self) -> Arc<Progress>;

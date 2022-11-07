@@ -44,6 +44,7 @@ pub enum Domain {
     Timestamp(SimpleDomain<i64>),
     Date(SimpleDomain<i32>),
     Nullable(NullableDomain<AnyType>),
+    /// `Array(None)` means that the array is empty, thus there is no inner domain information.
     Array(Option<Box<Domain>>),
     Tuple(Vec<Domain>),
     Undefined,

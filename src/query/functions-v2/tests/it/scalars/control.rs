@@ -89,7 +89,7 @@ fn test_multi_if(file: &mut impl Write) {
             ),
             (
                 "cond_b",
-                DataType::Boolean,
+                DataType::Nullable(Box::new(DataType::Boolean)),
                 Column::from_data_with_validity(vec![true, true, true, true], vec![
                     false, true, false, true,
                 ]),

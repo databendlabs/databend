@@ -484,7 +484,7 @@ impl FunctionRegistry {
         self.register_1_arg_core::<I1, NullableType<O>, _, _>(
             name,
             property.clone(),
-            |_| None,
+            calc_domain,
             func,
         );
 
@@ -538,7 +538,7 @@ impl FunctionRegistry {
         self.register_2_arg_core::<I1, I2, NullableType<O>, _, _>(
             name,
             property.clone(),
-            |_, _| None,
+            calc_domain,
             func,
         );
 
@@ -608,7 +608,7 @@ impl FunctionRegistry {
         self.register_3_arg_core::<I1, I2, I3, NullableType<O>, _, _>(
             name,
             property.clone(),
-            |_, _, _| None,
+            calc_domain,
             func,
         );
 
@@ -685,7 +685,7 @@ impl FunctionRegistry {
         self.register_4_arg_core::<I1, I2, I3, I4, NullableType<O>, _, _>(
             name,
             property.clone(),
-            |_, _, _, _| None,
+            calc_domain,
             func,
         );
 
@@ -771,7 +771,7 @@ impl FunctionRegistry {
         self.register_5_arg_core::<I1, I2, I3, I4, I5, NullableType<O>, _, _>(
             name,
             property.clone(),
-            |_, _, _, _, _| None,
+            calc_domain,
             func,
         );
 

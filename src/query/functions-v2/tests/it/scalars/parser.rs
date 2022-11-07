@@ -16,7 +16,6 @@ use common_ast::ast::BinaryOperator;
 use common_ast::ast::IntervalKind;
 use common_ast::ast::Literal as ASTLiteral;
 use common_ast::ast::MapAccessor;
-use common_ast::ast::TypeName;
 use common_ast::ast::UnaryOperator;
 use common_ast::parser::parse_expr;
 use common_ast::parser::token::Token;
@@ -113,48 +112,22 @@ pub fn transform_expr(ast: common_ast::ast::Expr, columns: &[(&str, DataType)]) 
             expr,
             target_type,
             ..
-        } => match target_type {
-            TypeName::Timestamp { .. } => RawExpr::FunctionCall {
-                span: transform_span(span),
-                name: "to_timestamp".to_string(),
-                args: vec![transform_expr(*expr, columns)],
-                params: vec![],
-            },
-            TypeName::Date => RawExpr::FunctionCall {
-                span: transform_span(span),
-                name: "to_date".to_string(),
-                args: vec![transform_expr(*expr, columns)],
-                params: vec![],
-            },
-            _ => RawExpr::Cast {
-                span: transform_span(span),
-                expr: Box::new(transform_expr(*expr, columns)),
-                dest_type: transform_data_type(target_type),
-            },
+        } => RawExpr::Cast {
+            span: transform_span(span),
+            is_try: false,
+            expr: Box::new(transform_expr(*expr, columns)),
+            dest_type: transform_data_type(target_type),
         },
         common_ast::ast::Expr::TryCast {
             span,
             expr,
             target_type,
             ..
-        } => match target_type {
-            TypeName::Timestamp { .. } => RawExpr::FunctionCall {
-                span: transform_span(span),
-                name: "try_to_timestamp".to_string(),
-                args: vec![transform_expr(*expr, columns)],
-                params: vec![],
-            },
-            TypeName::Date => RawExpr::FunctionCall {
-                span: transform_span(span),
-                name: "try_to_date".to_string(),
-                args: vec![transform_expr(*expr, columns)],
-                params: vec![],
-            },
-            _ => RawExpr::TryCast {
-                span: transform_span(span),
-                expr: Box::new(transform_expr(*expr, columns)),
-                dest_type: transform_data_type(target_type),
-            },
+        } => RawExpr::Cast {
+            span: transform_span(span),
+            is_try: true,
+            expr: Box::new(transform_expr(*expr, columns)),
+            dest_type: transform_data_type(target_type),
         },
         common_ast::ast::Expr::FunctionCall {
             span,

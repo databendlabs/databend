@@ -12,6 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::io::Read;
 use std::mem;
 use std::sync::Arc;
 
@@ -19,6 +20,7 @@ use common_datavalues::DataSchemaRef;
 use common_datavalues::TypeDeserializer;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_io::format_diagnostic::verbose_char;
 use common_io::prelude::BufferReadExt;
 use common_io::prelude::FormatSettings;
 use common_io::prelude::NestedCheckpointReader;
@@ -58,8 +60,17 @@ impl InputFormatCSV {
                     let err_msg = format_column_error(schema, c, col_data, &e.message());
                     return Err(csv_error(&err_msg, path, row_index));
                 };
-                if reader.must_eof().is_err() {
-                    let err_msg = format_column_error(schema, c, col_data, "bad field end");
+                let mut next = [0u8; 1];
+                let readn = reader.read(&mut next[..])?;
+                if readn > 0 {
+                    let remaining = col_data.len() - reader.pos + 1;
+                    let err_msg = format!(
+                        "bad field end, remain {} bytes, next char is {}",
+                        remaining,
+                        verbose_char(next[0])
+                    );
+
+                    let err_msg = format_column_error(schema, c, col_data, &err_msg);
                     return Err(csv_error(&err_msg, path, row_index));
                 }
             }

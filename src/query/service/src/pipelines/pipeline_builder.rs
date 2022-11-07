@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use async_channel::Receiver;
+use common_catalog::table::AppendMode;
 use common_datablocks::DataBlock;
 use common_datablocks::SortColumnDescription;
 use common_datavalues::DataField;
@@ -659,7 +660,12 @@ impl PipelineBuilder {
                 )?;
             }
         }
-        table.append_data(self.ctx.clone(), &mut self.main_pipeline, true)?;
+        table.append_data(
+            self.ctx.clone(),
+            &mut self.main_pipeline,
+            AppendMode::Normal,
+            true,
+        )?;
 
         Ok(())
     }

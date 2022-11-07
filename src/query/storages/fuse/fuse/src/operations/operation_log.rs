@@ -18,10 +18,13 @@ use std::sync::Arc;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::Series;
 use common_datavalues::prelude::SeriesFrom;
+use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
+use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataValue;
+use common_datavalues::ToDataType;
+use common_datavalues::Vu8;
 use common_exception::ErrorCode;
-use common_planner::extras::SINK_SCHEMA;
 use common_storages_table_meta::meta::SegmentInfo;
 
 // currently, only support append,
@@ -35,7 +38,10 @@ pub struct AppendOperationLogEntry {
 
 impl AppendOperationLogEntry {
     pub fn schema() -> DataSchemaRef {
-        SINK_SCHEMA.clone()
+        DataSchemaRefExt::create(vec![
+            DataField::new("seg_loc", Vu8::to_data_type()),
+            DataField::new("seg_info", Vu8::to_data_type()),
+        ])
     }
 
     pub fn new(segment_location: String, segment_info: Arc<SegmentInfo>) -> Self {

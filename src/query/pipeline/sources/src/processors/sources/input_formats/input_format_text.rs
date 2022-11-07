@@ -385,7 +385,7 @@ impl<T: InputFormatTextBase> BlockBuilder<T> {
         self.mutable_columns = self
             .ctx
             .schema
-            .create_deserializers(self.ctx.rows_per_block);
+            .create_deserializers(self.ctx.block_compact_thresholds.min_rows_per_block);
         self.num_rows = 0;
 
         Ok(vec![DataBlock::create(self.ctx.schema.clone(), columns)])
@@ -400,7 +400,9 @@ impl<T: InputFormatTextBase> BlockBuilderTrait for BlockBuilder<T> {
     type Pipe = InputFormatTextPipe<T>;
 
     fn create(ctx: Arc<InputContext>) -> Self {
-        let columns = ctx.schema.create_deserializers(ctx.rows_per_block);
+        let columns = ctx
+            .schema
+            .create_deserializers(ctx.block_compact_thresholds.min_rows_per_block);
         BlockBuilder {
             ctx,
             mutable_columns: columns,
@@ -419,8 +421,8 @@ impl<T: InputFormatTextBase> BlockBuilderTrait for BlockBuilder<T> {
                 self.num_rows,
                 mem
             );
-            if self.num_rows >= self.ctx.rows_per_block
-                || mem > self.ctx.block_memory_size_threshold
+            if self.num_rows >= self.ctx.block_compact_thresholds.min_rows_per_block
+                || mem > self.ctx.block_compact_thresholds.max_bytes_per_block
             {
                 self.flush()
             } else {

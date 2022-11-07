@@ -58,12 +58,12 @@ fn test_get(file: &mut impl Write) {
     run_ast(file, "[1, 2]['a']", &[]);
     run_ast(file, "[][1]", &[]);
     run_ast(file, "[][NULL]", &[]);
-    run_ast(file, "[true, false][0]", &[]);
+    run_ast(file, "[true, false][1]", &[]);
     run_ast(file, "['a', 'b', 'c'][2]", &[]);
-    run_ast(file, "[1, 2, 3][0]", &[]);
-    run_ast(file, "[1, 2, 3][5]", &[]);
-    run_ast(file, "[1, null, 3][0]", &[]);
+    run_ast(file, "[1, 2, 3][1]", &[]);
+    run_ast(file, "[1, 2, 3][3]", &[]);
     run_ast(file, "[1, null, 3][1]", &[]);
+    run_ast(file, "[1, null, 3][2]", &[]);
     run_ast(file, "[a, b][idx]", &[
         (
             "a",
@@ -78,7 +78,7 @@ fn test_get(file: &mut impl Write) {
         (
             "idx",
             DataType::Number(NumberDataType::UInt16),
-            Column::from_data(vec![0u16, 1, 2]),
+            Column::from_data(vec![1u16, 2, 3]),
         ),
     ]);
 }
@@ -88,7 +88,9 @@ fn test_slice(file: &mut impl Write) {
     run_ast(file, "slice([1], 1, 2)", &[]);
     run_ast(file, "slice([NULL, 1, 2, 3], 0, 2)", &[]);
     run_ast(file, "slice([0, 1, 2, 3], 1, 2)", &[]);
+    run_ast(file, "slice([0, 1, 2, 3], 1, 5)", &[]);
     run_ast(file, "slice(['a', 'b', 'c', 'd'], 0, 2)", &[]);
+    run_ast(file, "slice(['a', 'b', 'c', 'd'], 1, 4)", &[]);
     run_ast(file, "slice(['a', 'b', 'c', 'd'], 2, 6)", &[]);
 }
 

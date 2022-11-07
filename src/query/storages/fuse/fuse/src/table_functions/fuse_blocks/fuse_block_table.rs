@@ -16,16 +16,16 @@ use std::any::Any;
 use std::sync::Arc;
 
 use common_catalog::catalog::CATALOG_DEFAULT;
+use common_catalog::plan::DataSourcePlan;
+use common_catalog::plan::PartStatistics;
+use common_catalog::plan::Partitions;
+use common_catalog::plan::PushDownInfo;
 use common_datablocks::DataBlock;
 use common_datavalues::DataValue;
 use common_exception::Result;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
-use common_planner::extras::Extras;
-use common_planner::extras::Statistics;
-use common_planner::Partitions;
-use common_planner::ReadDataSourcePlan;
 
 use super::table_args::parse_func_table_args;
 use crate::pipelines::processors::port::OutputPort;
@@ -97,9 +97,9 @@ impl Table for FuseBlockTable {
     async fn read_partitions(
         &self,
         _ctx: Arc<dyn TableContext>,
-        _push_downs: Option<Extras>,
-    ) -> Result<(Statistics, Partitions)> {
-        Ok((Statistics::default(), vec![]))
+        _push_downs: Option<PushDownInfo>,
+    ) -> Result<(PartStatistics, Partitions)> {
+        Ok((PartStatistics::default(), vec![]))
     }
 
     fn table_args(&self) -> Option<Vec<DataValue>> {
@@ -117,7 +117,7 @@ impl Table for FuseBlockTable {
     fn read_data(
         &self,
         ctx: Arc<dyn TableContext>,
-        _: &ReadDataSourcePlan,
+        _: &DataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let output = OutputPort::create();

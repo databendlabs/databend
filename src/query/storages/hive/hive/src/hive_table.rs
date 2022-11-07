@@ -19,6 +19,13 @@ use std::time::Instant;
 use async_recursion::async_recursion;
 use common_base::base::tokio;
 use common_base::base::tokio::sync::Semaphore;
+use common_catalog::plan::DataSourcePlan;
+use common_catalog::plan::Expression;
+use common_catalog::plan::PartStatistics;
+use common_catalog::plan::Partitions;
+use common_catalog::plan::Projection;
+use common_catalog::plan::PushDownInfo;
+use common_catalog::plan::RequireColumnsVisitor;
 use common_catalog::table::Table;
 use common_catalog::table::TableStatistics;
 use common_catalog::table_context::TableContext;
@@ -35,13 +42,6 @@ use common_pipeline_core::Pipeline;
 use common_pipeline_core::SourcePipeBuilder;
 use common_pipeline_sources::processors::sources::sync_source::SyncSource;
 use common_pipeline_sources::processors::sources::sync_source::SyncSourcer;
-use common_planner::extras::Extras;
-use common_planner::extras::Statistics;
-use common_planner::plans::Projection;
-use common_planner::Expression;
-use common_planner::Partitions;
-use common_planner::ReadDataSourcePlan;
-use common_planner::RequireColumnsVisitor;
 use common_storage::init_operator;
 use common_storage::DataOperator;
 use common_storages_index::RangeFilter;
@@ -113,7 +113,7 @@ impl HiveTable {
     fn get_block_filter(
         &self,
         ctx: Arc<dyn TableContext>,
-        push_downs: &Option<Extras>,
+        push_downs: &Option<PushDownInfo>,
     ) -> Result<Arc<HiveBlockFilter>> {
         let enable_hive_parquet_predict_pushdown = ctx
             .get_settings()
@@ -156,7 +156,7 @@ impl HiveTable {
     pub fn do_read2(
         &self,
         ctx: Arc<dyn TableContext>,
-        plan: &ReadDataSourcePlan,
+        plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let push_downs = &plan.push_downs;
@@ -198,9 +198,9 @@ impl HiveTable {
     // simple select query is the sql likes `select * from xx limit 10` or
     // `select * from xx where p_date = '20220201' limit 10` where p_date is a partition column;
     // we just need to read few datas from table
-    fn is_simple_select_query(&self, plan: &ReadDataSourcePlan) -> bool {
+    fn is_simple_select_query(&self, plan: &DataSourcePlan) -> bool {
         // couldn't get groupby order by info
-        if let Some(Extras {
+        if let Some(PushDownInfo {
             filters: f,
             limit: Some(lm),
             ..
@@ -234,8 +234,8 @@ impl HiveTable {
             .collect::<HashSet<_>>()
     }
 
-    fn get_projections(&self, push_downs: &Option<Extras>) -> Result<Vec<usize>> {
-        if let Some(Extras {
+    fn get_projections(&self, push_downs: &Option<PushDownInfo>) -> Result<Vec<usize>> {
+        if let Some(PushDownInfo {
             projection: Some(prj),
             ..
         }) = push_downs
@@ -256,7 +256,7 @@ impl HiveTable {
 
     fn create_block_reader(
         &self,
-        push_downs: &Option<Extras>,
+        push_downs: &Option<PushDownInfo>,
     ) -> Result<Arc<HiveParquetBlockReader>> {
         let projection = self.get_projections(push_downs)?;
         let (projection, partition_fields) =
@@ -351,7 +351,7 @@ impl HiveTable {
     async fn get_query_locations(
         &self,
         ctx: Arc<dyn TableContext>,
-        push_downs: &Option<Extras>,
+        push_downs: &Option<PushDownInfo>,
     ) -> Result<Vec<(String, Option<String>)>> {
         let path = match &self.table_options.location {
             Some(path) => path,
@@ -416,8 +416,8 @@ impl HiveTable {
     async fn do_read_partitions(
         &self,
         ctx: Arc<dyn TableContext>,
-        push_downs: Option<Extras>,
-    ) -> Result<(Statistics, Partitions)> {
+        push_downs: Option<PushDownInfo>,
+    ) -> Result<(PartStatistics, Partitions)> {
         let start = Instant::now();
         let dirs = self.get_query_locations(ctx.clone(), &push_downs).await?;
         if tracing::enabled!(tracing::Level::TRACE) {
@@ -467,8 +467,8 @@ impl Table for HiveTable {
     async fn read_partitions(
         &self,
         ctx: Arc<dyn TableContext>,
-        push_downs: Option<Extras>,
-    ) -> Result<(Statistics, Partitions)> {
+        push_downs: Option<PushDownInfo>,
+    ) -> Result<(PartStatistics, Partitions)> {
         self.do_read_partitions(ctx, push_downs).await
     }
 
@@ -479,7 +479,7 @@ impl Table for HiveTable {
     fn read_data(
         &self,
         ctx: Arc<dyn TableContext>,
-        plan: &ReadDataSourcePlan,
+        plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         self.do_read2(ctx, plan, pipeline)
