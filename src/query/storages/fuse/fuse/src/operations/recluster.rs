@@ -21,6 +21,8 @@ use common_catalog::plan::PushDownInfo;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_datablocks::SortColumnDescription;
+use common_datavalues::DataField;
+use common_datavalues::DataSchemaRefExt;
 use common_exception::Result;
 use common_pipeline_core::Pipeline;
 use common_pipeline_transforms::processors::transforms::try_add_multi_sort_merge;
@@ -174,7 +176,23 @@ impl FuseTable {
             )
         })?;
 
-        try_add_multi_sort_merge(pipeline, plan.schema(), block_size, None, sort_descs)?;
+        // construct output fields
+        let mut output_fields = plan.schema().fields().clone();
+        for expr in self.cluster_keys().iter() {
+            let cname = expr.column_name();
+            if !output_fields.iter().any(|x| x.name() == &cname) {
+                let field = DataField::new(&cname, expr.data_type());
+                output_fields.push(field);
+            }
+        }
+
+        try_add_multi_sort_merge(
+            pipeline,
+            DataSchemaRefExt::create(output_fields),
+            block_size,
+            None,
+            sort_descs,
+        )?;
 
         pipeline.add_transform(|transform_input_port, transform_output_port| {
             TransformCompact::try_create(
