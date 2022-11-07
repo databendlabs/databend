@@ -12,12 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::str::FromStr;
-
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
-use common_meta_types::StageFileFormatType;
+use common_formats::ClickhouseFormatType;
 use common_storages_fuse_result::ResultTable;
+use poem::error::BadRequest;
 use poem::error::Error as PoemError;
 use poem::error::InternalServerError;
 use poem::error::NotFound;
@@ -332,9 +331,9 @@ async fn result_download_handler(
     Query(params): Query<DownloadHandlerParams>,
 ) -> PoemResult<Body> {
     let default_format = "csv".to_string();
+    let format_name = &params.format.unwrap_or(default_format);
     let session = ctx.get_session(SessionType::HTTPQuery);
-    let format = StageFileFormatType::from_str(&params.format.unwrap_or(default_format))
-        .map_err(|e| PoemError::from_string(e, StatusCode::BAD_REQUEST))?;
+    let format = ClickhouseFormatType::parse_clickhouse_format(&format_name).map_err(BadRequest)?;
 
     let http_query_manager = HttpQueryManager::instance();
     if let Some(query) = http_query_manager.get_query(&query_id).await {
