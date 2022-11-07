@@ -55,4 +55,4 @@ type = "fs"
 
 # Fs storage.
 [storage.fs]
-data_path = "./.databend/stateless_test_data_meta_embedded"
+data_path = "./.databend/stateless_test_data"
