@@ -13,9 +13,9 @@
 // limitations under the License.
 
 use common_datavalues::prelude::TypeID;
+use common_datavalues::remove_nullable;
 use common_datavalues::DataType;
 use common_datavalues::DataTypeImpl;
-use common_datavalues::NullableType;
 
 mod bloom;
 pub mod filters;
@@ -33,16 +33,6 @@ pub enum IndexSchemaVersion {
 }
 
 pub trait SupportedType {
-    /// Returns whether the data type is supported by bloom filter.
-    ///
-    /// The supported types are most same as Databricks:
-    /// https://docs.microsoft.com/en-us/azure/databricks/delta/optimizations/bloom-filters
-    ///
-    /// "Bloom filters support columns with the following (input) data types: byte, short, int,
-    /// long, float, double, date, timestamp, and string."
-    ///
-    /// Nulls are not added to the Bloom
-    /// filter, so any null related filter requires reading the data file. "
     fn is_supported_type(data_type: &DataTypeImpl) -> bool {
         // we support nullable column but Nulls are not added into the bloom filter.
         let inner_type = remove_nullable(data_type);
@@ -65,12 +55,4 @@ pub trait SupportedType {
                 | TypeID::String
         )
     }
-}
-
-pub fn remove_nullable(data_type: &DataTypeImpl) -> DataTypeImpl {
-    if matches!(data_type.data_type_id(), TypeID::Nullable) {
-        let nullable: NullableType = data_type.to_owned().try_into().unwrap();
-        return nullable.inner_type().clone();
-    }
-    data_type.clone()
 }
