@@ -64,4 +64,4 @@ type = "fs"
 # Set a local folder to store your data.
 # Comment out this block if you're NOT using local file system as storage.
 [storage.fs]
-data_path = "./.databend/stateless_test_data_2"
+data_path = "./.databend/stateless_test_data"

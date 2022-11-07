@@ -64,7 +64,7 @@ type = "fs"
 # Set a local folder to store your data.
 # Comment out this block if you're NOT using local file system as storage.
 [storage.fs]
-data_path = "./.databend/stateless_test_data_1"
+data_path = "./.databend/stateless_test_data"
 
 # To use S3-compatible object storage, uncomment this block and set your values.
 # [storage.s3]
