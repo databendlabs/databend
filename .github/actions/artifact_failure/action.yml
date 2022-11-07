@@ -13,3 +13,8 @@ runs:
         path: |
           .
           !./target
+          !./website
+          !./docs
+          !./docker
+          !./bins
+          !./.git
