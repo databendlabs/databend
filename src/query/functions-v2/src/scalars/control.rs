@@ -17,7 +17,6 @@ use std::sync::Arc;
 use common_expression::types::boolean::BooleanDomain;
 use common_expression::types::nullable::NullableColumn;
 use common_expression::types::nullable::NullableDomain;
-use common_expression::types::number::SimpleDomain;
 use common_expression::types::ArgType;
 use common_expression::types::ArrayType;
 use common_expression::types::BooleanType;
