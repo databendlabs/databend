@@ -110,6 +110,7 @@ impl Cursor {
         self.num_rows == self.row_index
     }
 
+    #[inline]
     fn current(&self) -> Row<'_> {
         self.rows.row(self.row_index)
     }
@@ -251,24 +252,43 @@ impl MultiSortMergeProcessor {
         let mut need_output = false;
         // Need to pop data to in_progess_rows.
         // Use `>=` because some of the input ports may be finished, but the data is still in the heap.
-        while self.heap.len() >= nums_active_inputs {
+        while self.heap.len() >= nums_active_inputs && !need_output {
             match self.heap.pop() {
                 Some(Reverse(mut cursor)) => {
                     let input_index = cursor.input_index;
-                    let row_index = cursor.advance();
-                    if !cursor.is_finished() {
-                        self.heap.push(Reverse(cursor));
-                    } else {
+                    let block_index = self.blocks[input_index].len() - 1;
+                    if self.heap.is_empty() {
+                        // If there is no other block in the heap, we can drain the whole block.
+                        while !cursor.is_finished() {
+                            self.in_progess_rows
+                                .push((input_index, block_index, cursor.advance()));
+                            if let Some(limit) = self.limit {
+                                if self.in_progess_rows.len() == limit {
+                                    need_output = true;
+                                    break;
+                                }
+                            }
+                        }
                         // We have read all rows of this block, need to read a new one.
                         self.cursor_finished[input_index] = true;
-                    }
-                    let block_index = self.blocks[input_index].len() - 1;
-                    self.in_progess_rows
-                        .push((input_index, block_index, row_index));
-                    if let Some(limit) = self.limit {
-                        if self.in_progess_rows.len() == limit {
-                            need_output = true;
-                            break;
+                    } else {
+                        let next_cursor = &self.heap.peek().unwrap().0;
+                        while !cursor.is_finished() && cursor.lt(next_cursor) {
+                            // If the cursor is smaller than the next cursor, don't need to push the cursor back to the heap.
+                            self.in_progess_rows
+                                .push((input_index, block_index, cursor.advance()));
+                            if let Some(limit) = self.limit {
+                                if self.in_progess_rows.len() == limit {
+                                    need_output = true;
+                                    break;
+                                }
+                            }
+                        }
+                        if !cursor.is_finished() {
+                            self.heap.push(Reverse(cursor));
+                        } else {
+                            // We have read all rows of this block, need to read a new one.
+                            self.cursor_finished[input_index] = true;
                         }
                     }
                     // Reach the block size, need to output.
