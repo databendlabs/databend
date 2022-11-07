@@ -185,10 +185,7 @@ impl PipelinePullingExecutor {
                     continue;
                 }
                 Err(RecvTimeoutError::Disconnected) => {
-                    error!(
-                        "receiver has been disconnected on thread {}, finish executor now",
-                        self.executor.threads_num
-                    );
+                    error!("receiver has been disconnected, finish executor now");
 
                     if !self.executor.is_finished() {
                         self.executor.finish(None);
