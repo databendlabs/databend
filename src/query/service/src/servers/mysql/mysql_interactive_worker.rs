@@ -20,12 +20,11 @@ use common_base::base::tokio::io::AsyncWrite;
 use common_base::base::TrySpawn;
 use common_config::DATABEND_COMMIT_VERSION;
 use common_datablocks::DataBlock;
+use common_datablocks::SendableDataBlockStream;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
 use common_io::prelude::*;
-use common_streams::DataBlockStream;
-use common_streams::SendableDataBlockStream;
 use common_users::CertifiedInfo;
 use common_users::UserApiProvider;
 use futures_util::StreamExt;
@@ -55,6 +54,7 @@ use crate::sessions::Session;
 use crate::sessions::TableContext;
 use crate::sql::plans::Plan;
 use crate::sql::Planner;
+use crate::stream::DataBlockStream;
 
 fn has_result_set_by_plan(plan: &Plan) -> bool {
     matches!(

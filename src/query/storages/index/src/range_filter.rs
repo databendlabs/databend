@@ -17,6 +17,8 @@ use std::collections::HashSet;
 use std::fmt;
 use std::sync::Arc;
 
+use common_catalog::plan::Expression;
+use common_catalog::plan::RequireColumnsVisitor;
 use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
@@ -26,8 +28,6 @@ use common_functions::scalars::check_pattern_type;
 use common_functions::scalars::FunctionContext;
 use common_functions::scalars::FunctionFactory;
 use common_functions::scalars::PatternType;
-use common_planner::Expression;
-use common_planner::RequireColumnsVisitor;
 use common_sql::evaluator::EvalNode;
 use common_sql::evaluator::Evaluator;
 use common_sql::evaluator::ExpressionMonotonicityVisitor;

@@ -32,17 +32,17 @@ use common_datavalues::Vu8;
 use common_exception::Result;
 use common_meta_app::schema::DatabaseMeta;
 use common_meta_app::share::ShareNameIdent;
-use common_planner::plans::CreateDatabasePlan;
-use common_planner::plans::DropDatabasePlan;
-use common_planner::plans::RenameDatabaseEntity;
-use common_planner::plans::RenameDatabasePlan;
-use common_planner::plans::ShowCreateDatabasePlan;
-use common_planner::plans::UndropDatabasePlan;
 
 use crate::binder::Binder;
 use crate::planner::semantic::normalize_identifier;
+use crate::plans::CreateDatabasePlan;
+use crate::plans::DropDatabasePlan;
 use crate::plans::Plan;
+use crate::plans::RenameDatabaseEntity;
+use crate::plans::RenameDatabasePlan;
 use crate::plans::RewriteKind;
+use crate::plans::ShowCreateDatabasePlan;
+use crate::plans::UndropDatabasePlan;
 use crate::BindContext;
 
 impl<'a> Binder {

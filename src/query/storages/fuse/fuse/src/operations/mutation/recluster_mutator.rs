@@ -18,6 +18,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use common_datablocks::BlockCompactThresholds;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_storages_table_meta::meta::BlockMeta;
@@ -26,7 +27,6 @@ use common_storages_table_meta::meta::TableSnapshot;
 use common_storages_table_meta::meta::Versioned;
 use opendal::Operator;
 
-use crate::io::BlockCompactor;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::mutation::BaseMutator;
 use crate::operations::AppendOperationLogEntry;
@@ -44,7 +44,7 @@ pub struct ReclusterMutator {
     blocks_map: BTreeMap<i32, Vec<(usize, Arc<BlockMeta>)>>,
     selected_blocks: Vec<Arc<BlockMeta>>,
     level: i32,
-    block_compactor: BlockCompactor,
+    block_compactor: BlockCompactThresholds,
     threshold: f64,
 }
 
@@ -54,7 +54,7 @@ impl ReclusterMutator {
         location_generator: TableMetaLocationGenerator,
         base_snapshot: Arc<TableSnapshot>,
         threshold: f64,
-        block_compactor: BlockCompactor,
+        block_compactor: BlockCompactThresholds,
         blocks_map: BTreeMap<i32, Vec<(usize, Arc<BlockMeta>)>>,
         data_accessor: Operator,
     ) -> Result<Self> {

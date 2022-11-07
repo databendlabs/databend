@@ -41,11 +41,7 @@ pub enum RawExpr {
     },
     Cast {
         span: Span,
-        expr: Box<RawExpr>,
-        dest_type: DataType,
-    },
-    TryCast {
-        span: Span,
+        is_try: bool,
         expr: Box<RawExpr>,
         dest_type: DataType,
     },
@@ -63,18 +59,16 @@ pub enum Expr {
     Constant {
         span: Span,
         scalar: Scalar,
+        data_type: DataType,
     },
     ColumnRef {
         span: Span,
         id: usize,
+        data_type: DataType,
     },
     Cast {
         span: Span,
-        expr: Box<Expr>,
-        dest_type: DataType,
-    },
-    TryCast {
-        span: Span,
+        is_try: bool,
         expr: Box<Expr>,
         dest_type: DataType,
     },
@@ -85,6 +79,7 @@ pub enum Expr {
         function: Arc<Function>,
         generics: Vec<DataType>,
         args: Vec<Expr>,
+        return_type: DataType,
     },
 }
 
@@ -97,18 +92,16 @@ pub enum RemoteExpr {
     Constant {
         span: Span,
         scalar: Scalar,
+        data_type: DataType,
     },
     ColumnRef {
         span: Span,
         id: usize,
+        data_type: DataType,
     },
     Cast {
         span: Span,
-        expr: Box<RemoteExpr>,
-        dest_type: DataType,
-    },
-    TryCast {
-        span: Span,
+        is_try: bool,
         expr: Box<RemoteExpr>,
         dest_type: DataType,
     },
@@ -117,6 +110,7 @@ pub enum RemoteExpr {
         id: FunctionID,
         generics: Vec<DataType>,
         args: Vec<RemoteExpr>,
+        return_type: DataType,
     },
 }
 
@@ -145,7 +139,6 @@ impl RawExpr {
                     buf.insert(*id);
                 }
                 RawExpr::Cast { expr, .. } => walk(expr, buf),
-                RawExpr::TryCast { expr, .. } => walk(expr, buf),
                 RawExpr::FunctionCall { args, .. } => args.iter().for_each(|expr| walk(expr, buf)),
                 RawExpr::Literal { .. } => (),
             }
@@ -157,26 +150,46 @@ impl RawExpr {
     }
 }
 
+impl Expr {
+    pub fn data_type(&self) -> &DataType {
+        match self {
+            Expr::Constant { data_type, .. } => data_type,
+            Expr::ColumnRef { data_type, .. } => data_type,
+            Expr::Cast { dest_type, .. } => dest_type,
+            Expr::FunctionCall { return_type, .. } => return_type,
+        }
+    }
+}
+
 impl RemoteExpr {
     pub fn from_expr(expr: Expr) -> Self {
         match expr {
-            Expr::Constant { span, scalar } => RemoteExpr::Constant { span, scalar },
-            Expr::ColumnRef { span, id } => RemoteExpr::ColumnRef { span, id },
+            Expr::Constant {
+                span,
+                scalar,
+                data_type,
+            } => RemoteExpr::Constant {
+                span,
+                scalar,
+                data_type,
+            },
+            Expr::ColumnRef {
+                span,
+                id,
+                data_type,
+            } => RemoteExpr::ColumnRef {
+                span,
+                id,
+                data_type,
+            },
             Expr::Cast {
                 span,
+                is_try,
                 expr,
                 dest_type,
             } => RemoteExpr::Cast {
                 span,
-                expr: Box::new(RemoteExpr::from_expr(*expr)),
-                dest_type,
-            },
-            Expr::TryCast {
-                span,
-                expr,
-                dest_type,
-            } => RemoteExpr::TryCast {
-                span,
+                is_try,
                 expr: Box::new(RemoteExpr::from_expr(*expr)),
                 dest_type,
             },
@@ -186,34 +199,45 @@ impl RemoteExpr {
                 function: _,
                 generics,
                 args,
+                return_type,
             } => RemoteExpr::FunctionCall {
                 span,
                 id,
                 generics,
                 args: args.into_iter().map(RemoteExpr::from_expr).collect(),
+                return_type,
             },
         }
     }
 
     pub fn into_expr(self, fn_registry: &FunctionRegistry) -> Option<Expr> {
         Some(match self {
-            RemoteExpr::Constant { span, scalar } => Expr::Constant { span, scalar },
-            RemoteExpr::ColumnRef { span, id } => Expr::ColumnRef { span, id },
+            RemoteExpr::Constant {
+                span,
+                scalar,
+                data_type,
+            } => Expr::Constant {
+                span,
+                scalar,
+                data_type,
+            },
+            RemoteExpr::ColumnRef {
+                span,
+                id,
+                data_type,
+            } => Expr::ColumnRef {
+                span,
+                id,
+                data_type,
+            },
             RemoteExpr::Cast {
                 span,
+                is_try,
                 expr,
                 dest_type,
             } => Expr::Cast {
                 span,
-                expr: Box::new(expr.into_expr(fn_registry)?),
-                dest_type,
-            },
-            RemoteExpr::TryCast {
-                span,
-                expr,
-                dest_type,
-            } => Expr::TryCast {
-                span,
+                is_try,
                 expr: Box::new(expr.into_expr(fn_registry)?),
                 dest_type,
             },
@@ -222,6 +246,7 @@ impl RemoteExpr {
                 id,
                 generics,
                 args,
+                return_type,
             } => {
                 let function = fn_registry.get(&id)?;
                 Expr::FunctionCall {
@@ -233,6 +258,7 @@ impl RemoteExpr {
                         .into_iter()
                         .map(|arg| arg.into_expr(fn_registry))
                         .collect::<Option<_>>()?,
+                    return_type,
                 }
             }
         })

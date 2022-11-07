@@ -44,7 +44,7 @@ pub trait Compactor {
     fn interrupt(&self) {}
 
     /// `compact_partial` is called when a new block is pushed and `use_partial_compact` is enabled
-    fn compact_partial(&self, _blocks: &mut Vec<DataBlock>) -> Result<Vec<DataBlock>> {
+    fn compact_partial(&mut self, _blocks: &mut Vec<DataBlock>) -> Result<Vec<DataBlock>> {
         Ok(vec![])
     }
 

@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_datablocks::BlockCompactThresholds;
 use common_exception::Result;
 use common_storages_table_meta::caches::CacheManager;
 use common_storages_table_meta::meta::BlockMeta;
@@ -23,7 +24,6 @@ use common_storages_table_meta::meta::Statistics;
 use common_storages_table_meta::meta::Versioned;
 use opendal::Operator;
 
-use crate::io::BlockCompactor;
 use crate::io::SegmentWriter;
 use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
@@ -43,7 +43,7 @@ pub struct FullCompactMutator {
     ctx: Arc<dyn TableContext>,
     compact_params: CompactOptions,
     data_accessor: Operator,
-    block_compactor: BlockCompactor,
+    block_compactor: BlockCompactThresholds,
     location_generator: TableMetaLocationGenerator,
     selected_blocks: Vec<Arc<BlockMeta>>,
     // summarised statistics of all the accumulated segments(segment compacted, and unchanged)
@@ -60,7 +60,7 @@ impl FullCompactMutator {
     pub fn try_create(
         ctx: Arc<dyn TableContext>,
         compact_params: CompactOptions,
-        block_compactor: BlockCompactor,
+        block_compactor: BlockCompactThresholds,
         location_generator: TableMetaLocationGenerator,
         is_cluster: bool,
         operator: Operator,
