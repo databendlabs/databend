@@ -19,9 +19,9 @@ use common_ast::parser::tokenize_sql;
 use common_ast::Backtrace;
 use common_ast::Dialect;
 use common_catalog::catalog::CATALOG_DEFAULT;
+use common_catalog::plan::Expression;
 use common_catalog::table::Table;
 use common_exception::Result;
-use common_planner::Expression;
 use common_settings::Settings;
 use parking_lot::RwLock;
 

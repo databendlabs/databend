@@ -14,6 +14,9 @@
 
 use std::sync::Arc;
 
+use common_catalog::plan::PartStatistics;
+use common_catalog::plan::Partitions;
+use common_catalog::plan::PushDownInfo;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
@@ -22,9 +25,6 @@ use common_exception::Result;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
-use common_planner::extras::Extras;
-use common_planner::extras::Statistics;
-use common_planner::Partitions;
 
 use crate::table::SystemTablePart;
 use crate::SyncOneBlockSystemTable;
@@ -50,11 +50,11 @@ impl SyncSystemTable for OneTable {
     fn get_partitions(
         &self,
         _ctx: Arc<dyn TableContext>,
-        _push_downs: Option<Extras>,
-    ) -> Result<(Statistics, Partitions)> {
-        Ok((Statistics::new_exact(1, 1, 1, 1), vec![Arc::new(Box::new(
-            SystemTablePart,
-        ))]))
+        _push_downs: Option<PushDownInfo>,
+    ) -> Result<(PartStatistics, Partitions)> {
+        Ok((PartStatistics::new_exact(1, 1, 1, 1), vec![Arc::new(
+            Box::new(SystemTablePart),
+        )]))
     }
 }
 

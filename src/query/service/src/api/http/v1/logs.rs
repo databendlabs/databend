@@ -14,10 +14,10 @@
 
 use std::sync::Arc;
 
+use common_datablocks::SendableDataBlockStream;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
-use common_streams::SendableDataBlockStream;
 use poem::http::StatusCode;
 use poem::Body;
 use poem::IntoResponse;
@@ -27,7 +27,7 @@ use crate::sessions::QueryContext;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionType;
 use crate::sessions::TableContext;
-use crate::stream::DataBlockStream;
+use crate::stream::ReadDataBlockStream;
 
 // read log files from cfg.log.log_dir
 #[poem::handler]

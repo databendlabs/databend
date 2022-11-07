@@ -16,13 +16,14 @@ use std::default::Default;
 
 use common_ast::ast::Engine;
 use common_base::base::tokio;
+use common_catalog::plan::DataSourceInfo;
+use common_catalog::plan::DataSourcePlan;
 use common_exception::Result;
 use common_meta_app::schema::TableInfo;
-use common_planner::plans::AlterTableClusterKeyPlan;
-use common_planner::plans::DropTableClusterKeyPlan;
-use common_planner::ReadDataSourcePlan;
-use common_planner::SourceInfo;
 use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
+use common_sql::plans::AlterTableClusterKeyPlan;
+use common_sql::plans::CreateTablePlanV2;
+use common_sql::plans::DropTableClusterKeyPlan;
 use common_storages_table_meta::table::OPT_KEY_DATABASE_ID;
 use common_storages_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_query::interpreters::AlterTableClusterKeyInterpreter;
@@ -31,11 +32,10 @@ use databend_query::interpreters::DropTableClusterKeyInterpreter;
 use databend_query::interpreters::Interpreter;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::TableContext;
-use databend_query::sql::plans::create_table_v2::CreateTablePlanV2;
 use databend_query::sql::Planner;
 use databend_query::storages::fuse::io::MetaReaders;
 use databend_query::storages::fuse::FuseTable;
-use databend_query::stream::DataBlockStream;
+use databend_query::stream::ReadDataBlockStream;
 use futures::TryStreamExt;
 
 use crate::storages::fuse::table_test_fixture::TestFixture;
@@ -72,9 +72,9 @@ async fn test_fuse_table_normal_case() -> Result<()> {
 
         ctx.try_set_partitions(parts.clone())?;
         let stream = table
-            .read_data_block_stream(ctx.clone(), &ReadDataSourcePlan {
+            .read_data_block_stream(ctx.clone(), &DataSourcePlan {
                 catalog: "default".to_owned(),
-                source_info: SourceInfo::TableSource(Default::default()),
+                source_info: DataSourceInfo::TableSource(Default::default()),
                 scan_fields: None,
                 parts,
                 statistics: Default::default(),
@@ -132,9 +132,9 @@ async fn test_fuse_table_normal_case() -> Result<()> {
         ctx.try_set_partitions(parts.clone())?;
 
         let stream = table
-            .read_data_block_stream(ctx.clone(), &ReadDataSourcePlan {
+            .read_data_block_stream(ctx.clone(), &DataSourcePlan {
                 catalog: "default".to_owned(),
-                source_info: SourceInfo::TableSource(Default::default()),
+                source_info: DataSourceInfo::TableSource(Default::default()),
                 scan_fields: None,
                 parts,
                 statistics: Default::default(),

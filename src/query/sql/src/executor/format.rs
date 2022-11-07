@@ -15,7 +15,6 @@
 use common_ast::ast::FormatTreeNode;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planner::extras::StageKind;
 use itertools::Itertools;
 
 use super::AggregateFinal;
@@ -31,6 +30,7 @@ use super::Project;
 use super::Sort;
 use super::TableScan;
 use super::UnionAll;
+use crate::executor::FragmentKind;
 use crate::planner::IndexType;
 use crate::planner::MetadataRef;
 use crate::planner::DUMMY_TABLE_INDEX;
@@ -324,7 +324,7 @@ fn exchange_to_format_tree(
 ) -> Result<FormatTreeNode<String>> {
     Ok(FormatTreeNode::with_children("Exchange".to_string(), vec![
         FormatTreeNode::new(format!("exchange type: {}", match plan.kind {
-            StageKind::Normal => format!(
+            FragmentKind::Normal => format!(
                 "Hash({})",
                 plan.keys
                     .iter()
@@ -332,8 +332,8 @@ fn exchange_to_format_tree(
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
-            StageKind::Expansive => "Broadcast".to_string(),
-            StageKind::Merge => "Merge".to_string(),
+            FragmentKind::Expansive => "Broadcast".to_string(),
+            FragmentKind::Merge => "Merge".to_string(),
         })),
         to_format_tree(&plan.input, metadata)?,
     ]))

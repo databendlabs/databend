@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
+use common_datablocks::SendableDataBlockStream;
 use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -23,8 +24,6 @@ use common_pipeline_core::Pipe;
 use common_pipeline_core::Pipeline;
 use common_pipeline_sources::processors::sources::StreamSource;
 use common_sql::validate_function_arg;
-use common_streams::DataBlockStream;
-use common_streams::SendableDataBlockStream;
 use futures::StreamExt;
 
 use crate::procedures::ProcedureFeatures;
@@ -132,8 +131,8 @@ where Self: Sized
 }
 
 mod impls {
-
     use super::*;
+    use crate::stream::DataBlockStream;
 
     // To avoid implementation conflicts, introduce a new type
     pub(in self::super) struct OneBlockProcedureWrapper<T>(pub T);

@@ -17,19 +17,21 @@ use std::sync::Arc;
 
 use common_ast::ast::Engine;
 use common_catalog::catalog::CATALOG_DEFAULT;
+use common_catalog::plan::PushDownInfo;
+use common_catalog::table::AppendMode;
 use common_datablocks::assert_blocks_sorted_eq_with_name;
 use common_datablocks::DataBlock;
+use common_datablocks::SendableDataBlockStream;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_meta_app::schema::DatabaseMeta;
-use common_planner::extras::Extras;
-use common_planner::plans::CreateDatabasePlan;
 use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
+use common_sql::plans::CreateDatabasePlan;
+use common_sql::plans::CreateTablePlanV2;
 use common_storage::StorageFsConfig;
 use common_storage::StorageParams;
 use common_storages_fuse::FUSE_TBL_XOR_BLOOM_INDEX_PREFIX;
 use common_storages_table_meta::table::OPT_KEY_DATABASE_ID;
-use common_streams::SendableDataBlockStream;
 use databend_query::interpreters::append2table;
 use databend_query::interpreters::CreateTableInterpreterV2;
 use databend_query::interpreters::Interpreter;
@@ -40,7 +42,6 @@ use databend_query::pipelines::processors::BlocksSource;
 use databend_query::pipelines::PipelineBuildResult;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
-use databend_query::sql::plans::create_table_v2::CreateTablePlanV2;
 use databend_query::sql::Planner;
 use databend_query::storages::fuse::table_functions::ClusteringInformationTable;
 use databend_query::storages::fuse::table_functions::FuseSnapshotTable;
@@ -48,7 +49,7 @@ use databend_query::storages::fuse::FUSE_TBL_BLOCK_PREFIX;
 use databend_query::storages::fuse::FUSE_TBL_SEGMENT_PREFIX;
 use databend_query::storages::fuse::FUSE_TBL_SNAPSHOT_PREFIX;
 use databend_query::storages::Table;
-use databend_query::stream::DataBlockStream;
+use databend_query::stream::ReadDataBlockStream;
 use databend_query::table_functions::TableArgs;
 use futures::TryStreamExt;
 use parking_lot::Mutex;
@@ -296,6 +297,7 @@ impl TestFixture {
             &mut build_res,
             overwrite,
             commit,
+            AppendMode::Normal,
         )?;
 
         execute_pipeline(self.ctx.clone(), build_res)
@@ -347,7 +349,7 @@ pub async fn test_drive_with_args_and_ctx(
     let source_plan = func
         .clone()
         .as_table()
-        .read_plan(ctx.clone(), Some(Extras::default()))
+        .read_plan(ctx.clone(), Some(PushDownInfo::default()))
         .await?;
     ctx.try_set_partitions(source_plan.parts.clone())?;
     func.as_table()
@@ -363,7 +365,7 @@ pub async fn test_drive_clustering_information(
     let source_plan = func
         .clone()
         .as_table()
-        .read_plan(ctx.clone(), Some(Extras::default()))
+        .read_plan(ctx.clone(), Some(PushDownInfo::default()))
         .await?;
     ctx.try_set_partitions(source_plan.parts.clone())?;
     func.as_table()

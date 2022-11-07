@@ -17,8 +17,8 @@ use std::sync::Arc;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_planner::plans::ShowCreateTablePlan;
 use common_sql::executor::PhysicalScalar;
+use common_sql::plans::ShowCreateTablePlan;
 use common_storages_table_meta::table::is_internal_opt_key;
 use tracing::debug;
 

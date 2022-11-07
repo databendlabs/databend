@@ -15,10 +15,10 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use common_catalog::plan::Expression;
 use common_catalog::table_context::TableContext;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
-use common_planner::Expression;
 use common_sql::executor::ExpressionOp;
 use common_storages_index::BlockFilter;
 use common_storages_table_meta::meta::Location;
@@ -143,8 +143,9 @@ pub fn new_filter_pruner(
 }
 
 mod util {
+    use common_catalog::plan::ExpressionVisitor;
+    use common_catalog::plan::Recursion;
     use common_exception::ErrorCode;
-    use common_planner::ExpressionVisitor;
 
     use super::*;
     #[tracing::instrument(level = "debug", skip_all)]
@@ -182,7 +183,7 @@ mod util {
     }
 
     impl ExpressionVisitor for PointQueryVisitor {
-        fn pre_visit(mut self, expr: &Expression) -> Result<common_planner::Recursion<Self>> {
+        fn pre_visit(mut self, expr: &Expression) -> Result<Recursion<Self>> {
             // 1. only binary op "=" is considered, which is NOT enough
             // 2. should combine this logic with Filter
             match expr {
@@ -194,12 +195,12 @@ mod util {
                         | (Expression::Constant { .. }, Expression::IndexedVariable { name, .. }) =>
                         {
                             self.columns.insert(name.clone());
-                            Ok(common_planner::Recursion::Stop(self))
+                            Ok(Recursion::Stop(self))
                         }
-                        _ => Ok(common_planner::Recursion::Continue(self)),
+                        _ => Ok(Recursion::Continue(self)),
                     }
                 }
-                _ => Ok(common_planner::Recursion::Continue(self)),
+                _ => Ok(Recursion::Continue(self)),
             }
         }
     }
