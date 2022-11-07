@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use common_exception::Result;
 use common_meta_api::KVApi;
 use common_meta_types::MatchSeq;
 use common_meta_types::Operation;
@@ -29,7 +28,7 @@ pub enum KvApiCommand {
 }
 
 impl KvApiCommand {
-    pub fn from_config(config: &Config, op: &str) -> std::result::Result<Self, String> {
+    pub fn from_config(config: &Config, op: &str) -> Result<Self, String> {
         let api = match op {
             "upsert" => {
                 if config.key.len() != 1 {
@@ -57,7 +56,7 @@ impl KvApiCommand {
         Ok(api)
     }
 
-    pub async fn execute(&self, client: Arc<dyn KVApi>) -> Result<String> {
+    pub async fn execute(&self, client: Arc<dyn KVApi>) -> anyhow::Result<String> {
         let res_str = match self {
             KvApiCommand::Get(key) => {
                 let res = client.get_kv(key.as_str()).await?;
