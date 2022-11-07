@@ -38,9 +38,9 @@ impl KVApi for StateMachine {
             value_meta: act.value_meta,
         });
 
-        let res = self.sm_tree.txn(true, |t| {
+        let res = self.sm_tree.txn(true, |mut txn_sled_tree| {
             let r = self
-                .apply_cmd(&cmd, &t, None, SeqV::<()>::now_ms())
+                .apply_cmd(&cmd, &mut txn_sled_tree, None, SeqV::<()>::now_ms())
                 .unwrap();
             Ok(r)
         })?;
@@ -56,9 +56,9 @@ impl KVApi for StateMachine {
     async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, KVAppError> {
         let cmd = Cmd::Transaction(txn);
 
-        let res = self.sm_tree.txn(true, |t| {
+        let res = self.sm_tree.txn(true, |mut txn_sled_tree| {
             let r = self
-                .apply_cmd(&cmd, &t, None, SeqV::<()>::now_ms())
+                .apply_cmd(&cmd, &mut txn_sled_tree, None, SeqV::<()>::now_ms())
                 .unwrap();
             Ok(r)
         })?;
