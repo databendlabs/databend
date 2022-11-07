@@ -289,16 +289,16 @@ raw expr       : not(in(ColumnRef(0)::Int8, array(1_u8, 2_u8, 3_u8, 4_u8, 5_u8))
 checked expr   : not<Boolean>(in<Int16, Array(Int16)>(CAST(ColumnRef(0) AS Int16), CAST(array<T0=UInt8><T0, T0, T0, T0, T0>(1_u8, 2_u8, 3_u8, 4_u8, 5_u8) AS Array(Int16))))
 optimized expr : not<Boolean>(in<Int16, Array(Int16)>(CAST(ColumnRef(0) AS Int16), [1, 2, 3, 4, 5]))
 evaluation:
-+--------+----------+---------+
-|        | int8_col | Output  |
-+--------+----------+---------+
-| Type   | Int8     | Boolean |
-| Domain | {1..=8}  | Unknown |
-| Row 0  | 1        | false   |
-| Row 1  | 2        | false   |
-| Row 2  | 7        | true    |
-| Row 3  | 8        | true    |
-+--------+----------+---------+
++--------+----------+---------------+
+|        | int8_col | Output        |
++--------+----------+---------------+
+| Type   | Int8     | Boolean       |
+| Domain | {1..=8}  | {FALSE, TRUE} |
+| Row 0  | 1        | false         |
+| Row 1  | 2        | false         |
+| Row 2  | 7        | true          |
+| Row 3  | 8        | true          |
++--------+----------+---------------+
 evaluation (internal):
 +----------+-----------------------+
 | Column   | Data                  |

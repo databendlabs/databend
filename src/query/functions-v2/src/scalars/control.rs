@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_expression::types::boolean::BooleanDomain;
 use common_expression::types::nullable::NullableColumn;
 use common_expression::types::nullable::NullableDomain;
+use common_expression::types::number::SimpleDomain;
 use common_expression::types::ArgType;
 use common_expression::types::ArrayType;
 use common_expression::types::BooleanType;
@@ -187,6 +188,8 @@ pub fn register(registry: &mut FunctionRegistry) {
         },
     );
 
+    const IN_ERROR_MSG: &str = "Incorrect element of set. Must be literal or constant expression";
+
     fn cal_in<T: ArgType>(
         lhs: ValueRef<T>,
         rhs: ValueRef<ArrayType<T>>,
@@ -194,8 +197,8 @@ pub fn register(registry: &mut FunctionRegistry) {
     where
         T::Scalar: HashtableKeyable,
     {
-        // must be scalar in rhs, if rhs contains column, it'll be rewrited to `a = b1 or a = b2 or a = b3` in type_checker
-        let array = rhs.as_scalar().unwrap();
+        // must be scalar in rhs, if rhs contains column, it'll be rewritted to `a = b1 or a = b2 or a = b3` in type_checker
+        let array = rhs.as_scalar().ok_or(IN_ERROR_MSG.to_string())?;
         let mut set = StackHashSet::<_, 128>::with_capacity(T::column_len(array));
         for val in T::iter_column(array) {
             let _ = set.set_insert(T::to_owned_scalar(val));
@@ -218,7 +221,13 @@ pub fn register(registry: &mut FunctionRegistry) {
                 registry.register_passthrough_nullable_2_arg::<NumberType<NUM_TYPE>, ArrayType<NumberType<NUM_TYPE>>, BooleanType, _, _>(
                     "in",
                     FunctionProperty::default(),
-                    |_, _| None,
+                    |lhs, rhs| {
+                        Some(BooleanDomain {
+                            has_false: rhs.max < lhs.max || rhs.min > rhs.max,
+                            has_true: (rhs.min..=rhs.max).contains(&lhs.min)
+                                || (rhs.min..=rhs.max).contains(&lhs.max),
+                        })
+                    },
                     |lhs, rhs, _| cal_in(lhs, rhs)
                 );
             }
@@ -229,38 +238,55 @@ pub fn register(registry: &mut FunctionRegistry) {
         .register_passthrough_nullable_2_arg::<DateType, ArrayType<DateType>, BooleanType, _, _>(
             "in",
             FunctionProperty::default(),
-            |_, _| None,
+            |lhs, rhs| {
+                Some(BooleanDomain {
+                    has_false: rhs.max < lhs.max || rhs.min > rhs.max,
+                    has_true: (rhs.min..=rhs.max).contains(&lhs.min)
+                        || (rhs.min..=rhs.max).contains(&lhs.max),
+                })
+            },
             |lhs, rhs, _| cal_in(lhs, rhs),
         );
 
     registry.register_passthrough_nullable_2_arg::<TimestampType, ArrayType<TimestampType>, BooleanType, _, _>(
             "in",
             FunctionProperty::default(),
-            |_, _| None,
+            |lhs, rhs| {
+                Some(BooleanDomain {
+                    has_false: rhs.max < lhs.max || rhs.min > rhs.max,
+                    has_true: (rhs.min..=rhs.max).contains(&lhs.min)
+                        || (rhs.min..=rhs.max).contains(&lhs.max),
+                })
+            },
             |lhs, rhs, _| cal_in(lhs, rhs)
         );
 
     registry.register_passthrough_nullable_2_arg::<BooleanType, ArrayType<BooleanType>, BooleanType, _, _>(
         "in",
         FunctionProperty::default(),
-        |_, _| None,
+        |lhs, rhs| {
+            Some(BooleanDomain {
+                has_false: true,
+                has_true: (rhs.has_false && lhs.has_false) || (rhs.has_true && lhs.has_true),
+            })
+        },
         |lhs, rhs, _| {
-             let array = rhs.as_scalar().unwrap();
-                let mut set = StackHashSet::<_, 128>::with_capacity(BooleanType::column_len(array));
-                for val in array.iter() {
-                    let _ = set.set_insert(val as u8);
+            let array = rhs.as_scalar().ok_or(IN_ERROR_MSG.to_string())?;
+            let mut set = StackHashSet::<_, 128>::with_capacity(BooleanType::column_len(array));
+            for val in array.iter() {
+                let _ = set.set_insert(val as u8);
+            }
+            match lhs {
+                ValueRef::Scalar(val) =>  {
+                    Ok(Value::Scalar(set.contains( &(val as u8))))
+                },
+                ValueRef::Column(col) => {
+                    let result = BooleanType::column_from_iter(BooleanType::iter_column(&col).map(|val| {
+                        set.contains(&(val as u8))
+                    }), &[]);
+                    Ok(Value::Column(result))
                 }
-                match lhs {
-                    ValueRef::Scalar(val) =>  {
-                        Ok(Value::Scalar(set.contains( &(val as u8))))
-                    },
-                    ValueRef::Column(col) => {
-                        let result = BooleanType::column_from_iter(BooleanType::iter_column(&col).map(|val| {
-                            set.contains(&(val as u8))
-                        }), &[]);
-                        Ok(Value::Column(result))
-                    }
-                }
+            }
         }
     );
 
@@ -269,25 +295,25 @@ pub fn register(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_, _| None,
         |lhs, rhs, _| {
-                let array = rhs.as_scalar().unwrap();
-                let mut set = StackHashSet::<_, 128>::with_capacity(StringType::column_len(array));
-                for val in array.iter() {
+            let array = rhs.as_scalar().ok_or(IN_ERROR_MSG.to_string())?;
+            let mut set = StackHashSet::<_, 128>::with_capacity(StringType::column_len(array));
+            for val in array.iter() {
+                let key_ref = KeysRef::create(val.as_ptr() as usize, val.len());
+                let _ = set.set_insert(key_ref);
+            }
+            match lhs {
+                ValueRef::Scalar(val) =>  {
                     let key_ref = KeysRef::create(val.as_ptr() as usize, val.len());
-                    let _ = set.set_insert(key_ref);
-                }
-                match lhs {
-                    ValueRef::Scalar(val) =>  {
+                    Ok(Value::Scalar(set.contains( &key_ref)))
+                },
+                ValueRef::Column(col) => {
+                    let result = BooleanType::column_from_iter(StringType::iter_column(&col).map(|val| {
                         let key_ref = KeysRef::create(val.as_ptr() as usize, val.len());
-                        Ok(Value::Scalar(set.contains( &key_ref)))
-                    },
-                    ValueRef::Column(col) => {
-                        let result = BooleanType::column_from_iter(StringType::iter_column(&col).map(|val| {
-                            let key_ref = KeysRef::create(val.as_ptr() as usize, val.len());
-                            set.contains(&key_ref)
-                        }), &[]);
-                        Ok(Value::Column(result))
-                    }
+                        set.contains(&key_ref)
+                    }), &[]);
+                    Ok(Value::Column(result))
                 }
+            }
         }
     );
 }
