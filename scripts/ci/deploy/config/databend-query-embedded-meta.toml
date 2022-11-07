@@ -34,8 +34,11 @@ table_engine_memory_enabled = true
 database_engine_github_enabled = true
 
 [log]
-level = "INFO"
-dir = "./.databend/logs"
+
+[log.file]
+level = "DEBUG"
+format = "text"
+dir = "./.databend/logs_meta_embedded"
 
 [meta]
 # To enable embedded meta-store, set address to ""
@@ -52,4 +55,4 @@ type = "fs"
 
 # Fs storage.
 [storage.fs]
-data_path = "./.databend/stateless_test_data"
+data_path = "./.databend/stateless_test_data_meta_embedded"
