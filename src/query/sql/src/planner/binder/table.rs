@@ -97,8 +97,8 @@ impl<'a> Binder {
             } => {
                 let table_name = normalize_identifier(table, &self.name_resolution_ctx).name;
                 // Check and bind common table expression
-                if let Some(cte_info) = bind_context.ctes_map.read().get(&table_name) {
-                    return self.bind_cte(bind_context, &table_name, alias, cte_info);
+                if let Some(cte_info) = bind_context.ctes_map.get(&table_name) {
+                    return self.bind_cte(bind_context, &table_name, alias, &cte_info);
                 }
                 // Get catalog name
                 let catalog = catalog

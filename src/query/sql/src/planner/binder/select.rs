@@ -196,7 +196,7 @@ impl<'a> Binder {
         if let Some(with) = &query.with {
             for cte in with.ctes.iter() {
                 let table_name = cte.alias.name.name.clone();
-                if bind_context.ctes_map.read().contains_key(&table_name) {
+                if bind_context.ctes_map.contains_key(&table_name) {
                     return Err(ErrorCode::SemanticError(format!(
                         "duplicate cte {table_name}"
                     )));
@@ -207,8 +207,7 @@ impl<'a> Binder {
                     s_expr,
                     bind_context: cte_bind_context.clone(),
                 };
-                let mut ctes_map = bind_context.ctes_map.write();
-                ctes_map.insert(table_name, cte_info);
+                bind_context.ctes_map.insert(table_name, cte_info);
             }
         }
         let (mut s_expr, bind_context) = match query.body {
