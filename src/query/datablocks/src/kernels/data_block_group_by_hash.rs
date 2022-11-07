@@ -32,7 +32,7 @@ pub enum KeysState {
 }
 
 pub trait HashMethod {
-    type HashKey: std::cmp::Eq + Hash + Clone + Debug;
+    type HashKey: ?Sized + Eq + Hash + Debug;
 
     type HashKeyRef<'a>: std::cmp::Eq + Hash + Clone + Debug
     where Self: 'a;
@@ -134,8 +134,9 @@ impl HashMethodSerializer {
         Ok(res)
     }
 }
+
 impl HashMethod for HashMethodSerializer {
-    type HashKey = SmallVu8;
+    type HashKey = [u8];
     type HashKeyRef<'a> = &'a [u8];
 
     type HashKeyIter<'a> = StringValueIter<'a>;
