@@ -14,6 +14,8 @@
 
 use std::fmt::Debug;
 
+use common_meta_types::UserStageInfo;
+
 use crate::plan::Expression;
 use crate::plan::Projection;
 
@@ -27,6 +29,13 @@ pub struct PrewhereInfo {
     pub remain_columns: Projection,
     /// filter for prewhere
     pub filter: Expression,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct CopyInfo {
+    pub files: Vec<String>,
+    pub pattern: String,
+    pub stage_info: UserStageInfo,
 }
 
 /// Extras is a wrapper for push down items.
@@ -44,4 +53,6 @@ pub struct PushDownInfo {
     pub limit: Option<usize>,
     /// Optional order_by expression plan, asc, null_first
     pub order_by: Vec<(Expression, bool, bool)>,
+    /// Optional copy info, used for COPY into <table> from stage
+    pub copy: Option<CopyInfo>,
 }

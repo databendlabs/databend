@@ -96,8 +96,12 @@ impl Table for StageTable {
     async fn read_partitions(
         &self,
         ctx: Arc<dyn TableContext>,
-        _push_downs: Option<PushDownInfo>,
+        push_downs: Option<PushDownInfo>,
     ) -> Result<(PartStatistics, Partitions)> {
+        let _xx = push_downs
+            .ok_or_else(|| ErrorCode::Internal("push down cannot be None for COPY"))?
+            .copy;
+
         let operator = StageTable::get_op(&ctx, &self.table_info.stage_info)?;
         let input_ctx = Arc::new(
             InputContext::try_create_from_copy(
