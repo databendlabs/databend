@@ -40,16 +40,6 @@ pub struct CatalogMeta {
     pub created_on: DateTime<Utc>,
 }
 
-impl Display for CatalogMeta {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "Type = {}, Options: {:?}, CreatedOn: {:?}",
-            self.catalog_type, self.options, self.created_on
-        )
-    }
-}
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CatalogNameIdent {
     pub tenant: String,
