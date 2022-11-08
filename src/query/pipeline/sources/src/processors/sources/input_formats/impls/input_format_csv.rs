@@ -167,11 +167,7 @@ impl InputFormatTextBase for InputFormatCSV {
                     return Ok(vec![]);
                 }
                 ReadRecordResult::OutputFull => {
-                    return Err(csv_error(
-                        "output more than input, in header",
-                        &state.path,
-                        state.rows,
-                    ));
+                    return Err(output_full_error(&state.path, state.rows));
                 }
                 ReadRecordResult::OutputEndsFull => {
                     return Err(output_ends_full_error(
@@ -224,8 +220,7 @@ impl InputFormatTextBase for InputFormatCSV {
             match result {
                 ReadRecordResult::InputEmpty => break,
                 ReadRecordResult::OutputFull => {
-                    return Err(csv_error(
-                        "output more than input",
+                    return Err(output_full_error(
                         &state.path,
                         start_row + row_batch.row_ends.len(),
                     ));
@@ -326,6 +321,10 @@ impl CsvReaderState {
             n_end: 0,
         }
     }
+}
+
+fn output_full_error(path: &str, row: usize) -> ErrorCode {
+    csv_error("output more than input", path, row)
 }
 
 fn output_ends_full_error(
