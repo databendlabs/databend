@@ -326,7 +326,7 @@ impl CopyInterpreterV2 {
 
         // Build pipeline.
         let mut build_res = PipelineBuildResult::create();
-        {
+        if !need_copied_file_infos.is_empty() {
             //  Build copy pipeline.
             let files = need_copied_file_infos
                 .iter()
@@ -377,59 +377,67 @@ impl CopyInterpreterV2 {
                 AppendMode::Copy,
                 false,
             )?;
-        }
 
-        let stage_table_info_clone = stage_table_info.clone();
-        let catalog = self.ctx.get_catalog(catalog_name)?;
-        let tenant = self.ctx.get_tenant();
-        let database_name = database_name.to_string();
-        let table_id = to_table.get_id();
-        build_res.main_pipeline.set_on_finished(move |may_error| {
-            if may_error.is_none() {
-                // capture out variable
-                let ctx = ctx.clone();
-                let to_table = to_table.clone();
-                let stage_info = stage_table_info_clone.user_stage_info.clone();
-                let all_source_files = all_source_file_infos.clone();
-                let need_copied_files = need_copied_file_infos.clone();
-                let tenant = tenant.clone();
-                let database_name = database_name.clone();
-                let catalog = catalog.clone();
+            // Pipeline finish.
+            // 1. commit the data
+            // 2. purge the copied files
+            // 3. update the NeedCopy file into to meta
+            let stage_table_info_clone = stage_table_info.clone();
+            let catalog = self.ctx.get_catalog(catalog_name)?;
+            let tenant = self.ctx.get_tenant();
+            let database_name = database_name.to_string();
+            let table_id = to_table.get_id();
+            build_res.main_pipeline.set_on_finished(move |may_error| {
+                if may_error.is_none() {
+                    // capture out variable
+                    let ctx = ctx.clone();
+                    let to_table = to_table.clone();
+                    let stage_info = stage_table_info_clone.user_stage_info.clone();
+                    let all_source_files = all_source_file_infos.clone();
+                    let need_copied_files = need_copied_file_infos.clone();
+                    let tenant = tenant.clone();
+                    let database_name = database_name.clone();
+                    let catalog = catalog.clone();
 
-                let mut copied_files = BTreeMap::new();
-                for file in &need_copied_files {
-                    copied_files.insert(file.path.clone(), TableCopiedFileInfo {
-                        etag: file.etag.clone(),
-                        content_length: file.size,
-                        last_modified: Some(file.last_modified),
+                    let mut copied_files = BTreeMap::new();
+                    for file in &need_copied_files {
+                        copied_files.insert(file.path.clone(), TableCopiedFileInfo {
+                            etag: file.etag.clone(),
+                            content_length: file.size,
+                            last_modified: Some(file.last_modified),
+                        });
+                    }
+
+                    return GlobalIORuntime::instance().block_on(async move {
+                        // 1. Commit datas.
+                        let operations = ctx.consume_precommit_blocks();
+                        to_table
+                            .commit_insertion(ctx.clone(), operations, false)
+                            .await?;
+
+                        // 2. Try to purge copied files if purge option is true, if error will skip.
+                        // If a file is already copied(status with AlreadyCopied) we will try to purge them.
+                        CopyInterpreterV2::try_purge_files(
+                            ctx.clone(),
+                            &stage_info,
+                            &all_source_files,
+                        )
+                        .await?;
+
+                        // 3. Upsert files(status with NeedCopy) info to meta.
+                        CopyInterpreterV2::upsert_copied_files_info_to_meta(
+                            tenant,
+                            database_name,
+                            table_id,
+                            catalog,
+                            copied_files,
+                        )
+                        .await
                     });
                 }
-
-                return GlobalIORuntime::instance().block_on(async move {
-                    // 1. Commit datas.
-                    let operations = ctx.consume_precommit_blocks();
-                    to_table
-                        .commit_insertion(ctx.clone(), operations, false)
-                        .await?;
-
-                    // 2. Try to purge copied files if purge option is true, if error will skip.
-                    // If a file is already copied(status with AlreadyCopied) we will try to purge them.
-                    CopyInterpreterV2::try_purge_files(ctx.clone(), &stage_info, &all_source_files)
-                        .await?;
-
-                    // 3. Upsert files(status with NeedCopy) info to meta.
-                    CopyInterpreterV2::upsert_copied_files_info_to_meta(
-                        tenant,
-                        database_name,
-                        table_id,
-                        catalog,
-                        copied_files,
-                    )
-                    .await
-                });
-            }
-            Err(may_error.as_ref().unwrap().clone())
-        });
+                Err(may_error.as_ref().unwrap().clone())
+            });
+        }
 
         Ok(build_res)
     }
