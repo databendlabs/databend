@@ -13,6 +13,7 @@ use std::collections::BTreeMap;
 // See the License for the specific language governing permissions and
 // limitations under the License.
 use std::sync::Arc;
+use std::time::Instant;
 
 use chrono::Utc;
 use common_base::base::GlobalIORuntime;
@@ -190,24 +191,21 @@ impl CopyInterpreterV2 {
         stage_info: &UserStageInfo,
         stage_file_infos: &[StageFilePartition],
     ) {
-        if stage_info.copy_options.purge {
-            info!("copy: try to purge files:{}", all_source_files.len());
-            let table_ctx: Arc<dyn TableContext> = ctx.clone();
-            let op = StageTable::get_op(&table_ctx, stage_info);
-            match op {
-                Ok(op) => {
-                    let file = Files::create(table_ctx, op);
-                    let files = stage_file_infos
-                        .iter()
-                        .map(|v| v.path.clone())
-                        .collect::<Vec<_>>();
-                    if let Err(e) = file.remove_file_in_batch(&files).await {
-                        error!("Failed to delete file: {:?}, error: {}", files, e);
-                    }
+        let table_ctx: Arc<dyn TableContext> = ctx.clone();
+        let op = StageTable::get_op(&table_ctx, stage_info);
+        match op {
+            Ok(op) => {
+                let file = Files::create(table_ctx, op);
+                let files = stage_file_infos
+                    .iter()
+                    .map(|v| v.path.clone())
+                    .collect::<Vec<_>>();
+                if let Err(e) = file.remove_file_in_batch(&files).await {
+                    error!("Failed to delete file: {:?}, error: {}", files, e);
                 }
-                Err(e) => {
-                    error!("Failed to get stage table op, error: {}", e);
-                }
+            }
+            Err(e) => {
+                error!("Failed to get stage table op, error: {}", e);
             }
         }
     }
@@ -276,6 +274,7 @@ impl CopyInterpreterV2 {
         force: bool,
         stage_table_info: &StageTableInfo,
     ) -> Result<PipelineBuildResult> {
+        let start = Instant::now();
         let ctx = self.ctx.clone();
         let table_ctx: Arc<dyn TableContext> = ctx.clone();
         let stage_table = StageTable::try_create(stage_table_info.clone())?;
@@ -333,9 +332,10 @@ impl CopyInterpreterV2 {
         }
 
         info!(
-            "copy: read all files finished, all:{}, need copy:{}",
+            "copy: read all files finished, all:{}, need copy:{}, elapsed:{}",
             all_source_file_infos.len(),
-            need_copied_file_infos.len()
+            need_copied_file_infos.len(),
+            start.elapsed().as_secs()
         );
 
         // COPY into <table> table info.
@@ -431,24 +431,37 @@ impl CopyInterpreterV2 {
                     return GlobalIORuntime::instance().block_on(async move {
                         // 1. Commit datas.
                         let operations = ctx.consume_precommit_blocks();
-                        info!("copy: try to commit operations:{}", operations.len());
+                        info!(
+                            "copy: try to commit operations:{}, elapsed:{}",
+                            operations.len(),
+                            start.elapsed().as_secs()
+                        );
                         to_table
                             .commit_insertion(ctx.clone(), operations, false)
                             .await?;
 
                         // 2. Try to purge copied files if purge option is true, if error will skip.
                         // If a file is already copied(status with AlreadyCopied) we will try to purge them.
-                        CopyInterpreterV2::try_purge_files(
-                            ctx.clone(),
-                            &stage_info,
-                            &all_source_files,
-                        )
-                        .await;
+
+                        if stage_info.copy_options.purge {
+                            info!(
+                                "copy: try to purge files:{}, elapsed:{}",
+                                all_source_files.len(),
+                                start.elapsed().as_secs()
+                            );
+                            CopyInterpreterV2::try_purge_files(
+                                ctx.clone(),
+                                &stage_info,
+                                &all_source_files,
+                            )
+                            .await;
+                        }
 
                         // 3. Upsert files(status with NeedCopy) info to meta.
                         info!(
-                            "copy: try to upsert file infos:{} to meta",
-                            copied_files.len()
+                            "copy: try to upsert file infos:{} to meta, elapsed:{}",
+                            copied_files.len(),
+                            start.elapsed().as_secs()
                         );
                         CopyInterpreterV2::upsert_copied_files_info_to_meta(
                             tenant,
@@ -457,7 +470,14 @@ impl CopyInterpreterV2 {
                             catalog,
                             copied_files,
                         )
-                        .await
+                        .await?;
+
+                        info!(
+                            "copy: all copy finished, elapsed:{}",
+                            start.elapsed().as_secs()
+                        );
+
+                        Ok(())
                     });
                 }
                 Err(may_error.as_ref().unwrap().clone())
