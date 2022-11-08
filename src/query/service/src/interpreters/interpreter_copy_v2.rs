@@ -25,6 +25,7 @@ use common_catalog::table::AppendMode;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::TableCopiedFileInfo;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_meta_types::UserStageInfo;
@@ -198,6 +199,58 @@ impl CopyInterpreterV2 {
         Ok(())
     }
 
+    // Color file if it is copied.
+    async fn color_copied_files(
+        ctx: &Arc<dyn TableContext>,
+        catalog_name: &str,
+        database_name: &str,
+        table_name: &str,
+        files: Vec<StageFilePartition>,
+    ) -> Result<Vec<StageFilePartition>> {
+        let tenant = ctx.get_tenant();
+        let catalog = ctx.get_catalog(catalog_name)?;
+        let table = catalog
+            .get_table(&tenant, database_name, table_name)
+            .await?;
+        let table_id = table.get_id();
+
+        let mut copied_files = BTreeMap::new();
+        for chunk in files.chunks(MAX_QUERY_COPIED_FILES_NUM) {
+            let files = chunk.iter().map(|v| v.path.clone()).collect::<Vec<_>>();
+            let req = GetTableCopiedFileReq { table_id, files };
+            let resp = catalog
+                .get_table_copied_file_info(&tenant, database_name, req)
+                .await?;
+            copied_files.extend(resp.file_info);
+        }
+
+        // Colored.
+        let mut results = vec![];
+        for mut file in files {
+            if let Some(copied_file) = copied_files.get(&file.path) {
+                match &copied_file.etag {
+                    Some(_etag) => {
+                        // No need to copy the file again if etag is_some and match.
+                        if file.etag == copied_file.etag {
+                            file.status = StageFileStatus::AlreadyCopied;
+                        }
+                    }
+                    None => {
+                        // etag is none, compare with content_length and last_modified.
+                        if copied_file.content_length == file.size
+                            && copied_file.last_modified == Some(file.last_modified)
+                        {
+                            file.status = StageFileStatus::AlreadyCopied;
+                        }
+                    }
+                }
+            }
+            results.push(file);
+        }
+
+        Ok(results)
+    }
+
     #[allow(clippy::too_many_arguments)]
     async fn build_copy_into_table_pipeline(
         &self,
@@ -211,6 +264,7 @@ impl CopyInterpreterV2 {
         stage_table_info: &StageTableInfo,
     ) -> Result<PipelineBuildResult> {
         let ctx = self.ctx.clone();
+        let table_ctx: Arc<dyn TableContext> = ctx.clone();
         let stage_table = StageTable::try_create(stage_table_info.clone())?;
 
         // Get the source plan with all files from stage_table.read_partitions:
@@ -218,14 +272,10 @@ impl CopyInterpreterV2 {
         // 2. Have copied files(status with AlreadyCopied)
         let read_source_plan = {
             let copy_info = StageInfo {
-                force_copy: force,
                 files: files.to_vec(),
                 path: path.to_string(),
                 pattern: pattern.to_string(),
                 user_stage_info: stage_table_info.user_stage_info.clone(),
-                into_table_catalog_name: catalog_name.to_string(),
-                into_table_database_name: database_name.to_string(),
-                into_table_name: table_name.to_string(),
             };
             let pushdown = PushDownInfo {
                 projection: None,
@@ -242,25 +292,31 @@ impl CopyInterpreterV2 {
 
         // All files info.
         let mut all_source_file_infos = vec![];
-        // Need copied file info.
-        let mut need_copied_file_infos = vec![];
         for part in &read_source_plan.parts {
             if let Some(stage_file_info) = part.as_any().downcast_ref::<StageFilePartition>() {
                 all_source_file_infos.push(stage_file_info.clone());
-                if stage_file_info.status == StageFileStatus::NeedCopy {
-                    need_copied_file_infos.push(stage_file_info.clone());
-                }
             }
         }
 
-        // Build the NeedCopy source plan: remove the AlreadyCopied status files.
-        let mut need_copy_source_plan = read_source_plan.clone();
-        need_copy_source_plan.parts.retain(|v| {
-            if let Some(sv) = v.as_any().downcast_ref::<StageFilePartition>() {
-                return sv.status == StageFileStatus::NeedCopy;
+        // Color files if copied.
+        if !force {
+            all_source_file_infos = CopyInterpreterV2::color_copied_files(
+                &table_ctx,
+                catalog_name,
+                database_name,
+                table_name,
+                all_source_file_infos,
+            )
+            .await?;
+        }
+
+        // Need copied file info.
+        let mut need_copied_file_infos = vec![];
+        for file in &all_source_file_infos {
+            if file.status == StageFileStatus::NeedCopy {
+                need_copied_file_infos.push(file.clone());
             }
-            false
-        });
+        }
 
         // COPY into <table> table info.
         let to_table = ctx
@@ -277,7 +333,6 @@ impl CopyInterpreterV2 {
                 .map(|v| v.path.clone())
                 .collect::<Vec<_>>();
 
-            let table_ctx: Arc<dyn TableContext> = ctx.clone();
             let operator = StageTable::get_op(&table_ctx, &stage_table_info.user_stage_info)?;
             let settings = ctx.get_settings();
             let schema = stage_table_info.schema.clone();
@@ -340,6 +395,7 @@ impl CopyInterpreterV2 {
                 let tenant = tenant.clone();
                 let database_name = database_name.clone();
                 let catalog = catalog.clone();
+
                 let mut copied_files = BTreeMap::new();
                 for file in &need_copied_files {
                     copied_files.insert(file.path.clone(), TableCopiedFileInfo {

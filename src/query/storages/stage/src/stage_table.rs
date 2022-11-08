@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
@@ -32,7 +31,6 @@ use common_datablocks::BlockCompactThresholds;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::TableInfo;
 use common_meta_types::StageType;
 use common_meta_types::UserStageInfo;
@@ -46,8 +44,6 @@ use regex::Regex;
 use crate::list_file;
 use crate::stage_table_sink::StageTableSink;
 use crate::stat_file;
-use crate::StageFilePartition;
-use crate::StageFileStatus;
 
 /// TODO: we need to track the data metrics in stage table.
 pub struct StageTable {
@@ -78,58 +74,6 @@ impl StageTable {
             let pop = ctx.get_data_operator()?.operator();
             Ok(pop.layer(SubdirLayer::new(&stage.stage_prefix())))
         }
-    }
-
-    // Color file if it is copied.
-    pub async fn color_copied_files(
-        ctx: &Arc<dyn TableContext>,
-        catalog_name: &str,
-        database_name: &str,
-        table_name: &str,
-        files: Vec<StageFilePartition>,
-    ) -> Result<Vec<StageFilePartition>> {
-        let tenant = ctx.get_tenant();
-        let catalog = ctx.get_catalog(catalog_name)?;
-        let table = catalog
-            .get_table(&tenant, database_name, table_name)
-            .await?;
-        let table_id = table.get_id();
-
-        let mut copied_files = BTreeMap::new();
-        for chunk in files.chunks(50) {
-            let files = chunk.iter().map(|v| v.path.clone()).collect::<Vec<_>>();
-            let req = GetTableCopiedFileReq { table_id, files };
-            let resp = catalog
-                .get_table_copied_file_info(&tenant, database_name, req)
-                .await?;
-            copied_files.extend(resp.file_info);
-        }
-
-        // Colored.
-        let mut results = vec![];
-        for mut file in files {
-            if let Some(copied_file) = copied_files.get(&file.path) {
-                match &copied_file.etag {
-                    Some(_etag) => {
-                        // No need to copy the file again if etag is_some and match.
-                        if file.etag == copied_file.etag {
-                            file.status = StageFileStatus::AlreadyCopied;
-                        }
-                    }
-                    None => {
-                        // etag is none, compare with content_length and last_modified.
-                        if copied_file.content_length == file.size
-                            && copied_file.last_modified == Some(file.last_modified)
-                        {
-                            file.status = StageFileStatus::AlreadyCopied;
-                        }
-                    }
-                }
-            }
-            results.push(file);
-        }
-
-        Ok(results)
     }
 }
 
@@ -186,18 +130,6 @@ impl Table for StageTable {
                 })?;
                 all_files.retain(|v| regex.is_match(&v.path));
             }
-        }
-
-        // 3. Colored files(NeedCopy or AlreadyCopied) if COPY force option is false
-        if !stage_info.force_copy {
-            all_files = StageTable::color_copied_files(
-                &ctx,
-                &stage_info.into_table_catalog_name,
-                &stage_info.into_table_database_name,
-                &stage_info.into_table_name,
-                all_files,
-            )
-            .await?;
         }
 
         let partitions = all_files

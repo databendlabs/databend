@@ -33,19 +33,12 @@ pub struct PrewhereInfo {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct StageInfo {
-    pub force_copy: bool,
     /// User set files in the COPY statement.
     pub files: Vec<String>,
     /// User set path.
     pub path: String,
     /// User set pattern in the COPY statement.
     pub pattern: String,
-    /// COPY INTO table's catalog name.
-    pub into_table_catalog_name: String,
-    /// COPY INTO table's database name.
-    pub into_table_database_name: String,
-    /// COPY INTO table's name.
-    pub into_table_name: String,
     /// User Stage info.
     pub user_stage_info: UserStageInfo,
 }
