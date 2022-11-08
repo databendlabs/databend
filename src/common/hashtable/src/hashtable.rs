@@ -27,6 +27,7 @@ use super::table0::Table0IterMut;
 use super::traits::HashtableLike;
 use super::traits::Keyable;
 use super::utils::ZeroEntry;
+use crate::FastHash;
 
 pub struct Hashtable<K, V, A = MmapAllocator<GlobalAllocator>>
 where
@@ -236,7 +237,7 @@ where K: Keyable
 
 impl<K, V, A> HashtableLike for Hashtable<K, V, A>
 where
-    K: Keyable,
+    K: Keyable + FastHash,
     A: Allocator + Clone + 'static,
 {
     type Key = K;

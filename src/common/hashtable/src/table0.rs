@@ -70,6 +70,7 @@ where
     A: Allocator + Clone,
 {
     pub(crate) len: usize,
+    #[allow(dead_code)]
     pub(crate) allocator: A,
     pub(crate) entries: C,
     pub(crate) dropped: bool,

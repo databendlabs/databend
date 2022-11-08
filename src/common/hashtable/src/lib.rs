@@ -59,19 +59,8 @@ pub type StackHashSet<K, const N: usize = 16> = stack_hashtable::StackHashtable<
 pub type StackHashSetIter<'a, K> = stack_hashtable::StackHashtableIter<'a, K, ()>;
 pub type StackHashSetIterMut<'a, K> = stack_hashtable::StackHashtableIter<'a, K, ()>;
 
-pub type TwolevelHashMap<K, V> = twolevel_hashtable::TwolevelHashtable<K, V>;
-pub type TwolevelHashMapIter<'a, K, V> = twolevel_hashtable::TwolevelHashtableIter<'a, K, V>;
-pub type TwolevelHashMapIterMut<'a, K, V> = twolevel_hashtable::TwolevelHashtableIterMut<'a, K, V>;
-pub type TwolevelHashSet<K> = twolevel_hashtable::TwolevelHashtable<K, ()>;
-pub type TwolevelHashSetIter<'a, K> = twolevel_hashtable::TwolevelHashtableIter<'a, K, ()>;
-pub type TwolevelHashSetIterMut<'a, K> = twolevel_hashtable::TwolevelHashtableIterMut<'a, K, ()>;
-
-pub type HashMapKind<K, V> = twolevel_hashtable::HashtableKind<K, V>;
-pub type HashMapKindIter<'a, K, V> = twolevel_hashtable::HashtableKindIter<'a, K, V>;
-pub type HashMapKindIterMut<'a, K, V> = twolevel_hashtable::HashtableKindIterMut<'a, K, V>;
-pub type HashSetKind<K> = twolevel_hashtable::HashtableKind<K, ()>;
-pub type HashSetKindIter<'a, K> = twolevel_hashtable::HashtableKindIter<'a, K, ()>;
-pub type HashSetKindIterMut<'a, K> = twolevel_hashtable::HashtableKindIterMut<'a, K, ()>;
+pub type TwoLevelHashMap<Inner> = twolevel_hashtable::TwoLevelHashtable<Inner>;
+pub type TwoLevelHashMapIter<Inner> = twolevel_hashtable::TwoLevelHashtableIter<Inner>;
 
 pub type UnsizedHashMap<K, V> = unsized_hashtable::UnsizedHashtable<K, V>;
 pub type UnsizedHashMapIter<'a, K, V> = unsized_hashtable::UnsizedHashtableIter<'a, K, V>;

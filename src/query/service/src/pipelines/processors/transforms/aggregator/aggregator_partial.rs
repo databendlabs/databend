@@ -42,25 +42,23 @@ use crate::pipelines::processors::transforms::transform_aggregator::Aggregator;
 use crate::pipelines::processors::AggregatorParams;
 use crate::sessions::QueryContext;
 
-pub type KeysU8PartialAggregator<const HAS_AGG: bool> =
-    PartialAggregator<HAS_AGG, HashMethodKeysU8>;
-pub type KeysU16PartialAggregator<const HAS_AGG: bool> =
-    PartialAggregator<HAS_AGG, HashMethodKeysU16>;
-pub type KeysU32PartialAggregator<const HAS_AGG: bool> =
-    PartialAggregator<HAS_AGG, HashMethodKeysU32>;
-pub type KeysU64PartialAggregator<const HAS_AGG: bool> =
-    PartialAggregator<HAS_AGG, HashMethodKeysU64>;
-pub type KeysU128PartialAggregator<const HAS_AGG: bool> =
-    PartialAggregator<HAS_AGG, HashMethodKeysU128>;
+pub type Keys8Grouper = PartialAggregator<false, HashMethodKeysU8>;
+pub type Keys16Grouper = PartialAggregator<false, HashMethodKeysU16>;
+pub type Keys32Grouper = PartialAggregator<false, HashMethodKeysU32>;
+pub type Keys64Grouper = PartialAggregator<false, HashMethodKeysU64>;
+pub type Keys128Grouper = PartialAggregator<false, HashMethodKeysU128>;
+pub type Keys256Grouper = PartialAggregator<false, HashMethodKeysU256>;
+pub type Keys512Grouper = PartialAggregator<false, HashMethodKeysU512>;
+pub type KeysSerializerGrouper = PartialAggregator<false, HashMethodSerializer>;
 
-pub type KeysU256PartialAggregator<const HAS_AGG: bool> =
-    PartialAggregator<HAS_AGG, HashMethodKeysU256>;
-
-pub type KeysU512PartialAggregator<const HAS_AGG: bool> =
-    PartialAggregator<HAS_AGG, HashMethodKeysU512>;
-
-pub type SerializerPartialAggregator<const HAS_AGG: bool> =
-    PartialAggregator<HAS_AGG, HashMethodSerializer>;
+pub type Keys8Aggregator = PartialAggregator<true, HashMethodKeysU8>;
+pub type Keys16Aggregator = PartialAggregator<true, HashMethodKeysU16>;
+pub type Keys32Aggregator = PartialAggregator<true, HashMethodKeysU32>;
+pub type Keys64Aggregator = PartialAggregator<true, HashMethodKeysU64>;
+pub type Keys128Aggregator = PartialAggregator<true, HashMethodKeysU128>;
+pub type Keys256Aggregator = PartialAggregator<true, HashMethodKeysU256>;
+pub type Keys512Aggregator = PartialAggregator<true, HashMethodKeysU512>;
+pub type KeysSerializerAggregator = PartialAggregator<true, HashMethodSerializer>;
 
 pub struct PartialAggregator<const HAS_AGG: bool, Method>
 where Method: HashMethod + PolymorphicKeysHelper<Method>

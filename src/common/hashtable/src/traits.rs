@@ -94,13 +94,13 @@ unsafe impl Keyable for U256 {
 
 unsafe impl Keyable for U512 {
     #[inline(always)]
-    fn equals_zero(this: &Self) -> bool {
-        U512::is_zero(this)
+    fn is_zero(this: &MaybeUninit<Self>) -> bool {
+        U512::is_zero(unsafe { this.assume_init_ref() })
     }
 
     #[inline(always)]
-    fn is_zero(this: &MaybeUninit<Self>) -> bool {
-        U512::is_zero(unsafe { this.assume_init_ref() })
+    fn equals_zero(this: &Self) -> bool {
+        U512::is_zero(this)
     }
 
     #[inline(always)]
@@ -111,13 +111,13 @@ unsafe impl Keyable for U512 {
 
 unsafe impl Keyable for OrderedFloat<f32> {
     #[inline(always)]
-    fn equals_zero(this: &Self) -> bool {
-        *this == 0.0
+    fn is_zero(this: &MaybeUninit<Self>) -> bool {
+        unsafe { this.assume_init() == 0.0 }
     }
 
     #[inline(always)]
-    fn is_zero(this: &MaybeUninit<Self>) -> bool {
-        unsafe { this.assume_init() == 0.0 }
+    fn equals_zero(this: &Self) -> bool {
+        *this == 0.0
     }
 
     #[inline(always)]
@@ -128,13 +128,13 @@ unsafe impl Keyable for OrderedFloat<f32> {
 
 unsafe impl Keyable for OrderedFloat<f64> {
     #[inline(always)]
-    fn equals_zero(this: &Self) -> bool {
-        *this == 0.0
+    fn is_zero(this: &MaybeUninit<Self>) -> bool {
+        unsafe { this.assume_init() == 0.0 }
     }
 
     #[inline(always)]
-    fn is_zero(this: &MaybeUninit<Self>) -> bool {
-        unsafe { this.assume_init() == 0.0 }
+    fn equals_zero(this: &Self) -> bool {
+        *this == 0.0
     }
 
     #[inline(always)]
@@ -145,13 +145,13 @@ unsafe impl Keyable for OrderedFloat<f64> {
 
 unsafe impl<const N: usize> Keyable for [u8; N] {
     #[inline(always)]
-    fn equals_zero(this: &Self) -> bool {
-        *this == [0; N]
+    fn is_zero(this: &MaybeUninit<Self>) -> bool {
+        unsafe { this.assume_init() == [0; N] }
     }
 
     #[inline(always)]
-    fn is_zero(this: &MaybeUninit<Self>) -> bool {
-        unsafe { this.assume_init() == [0; N] }
+    fn equals_zero(this: &Self) -> bool {
+        *this == [0; N]
     }
 
     #[inline(always)]
@@ -329,6 +329,12 @@ impl FastHash for OrderedFloat<f64> {
     }
 }
 
+impl<'a> FastHash for &'a [u8] {
+    fn fast_hash(&self) -> u64 {
+        (*self).fast_hash()
+    }
+}
+
 impl FastHash for [u8] {
     #[inline(always)]
     fn fast_hash(&self) -> u64 {
@@ -411,9 +417,10 @@ pub trait EntryMutRefLike {
     fn write(&mut self, value: Self::Value);
 }
 
+#[allow(clippy::len_without_is_empty)]
 pub trait HashtableLike {
     type Key: ?Sized;
-    type KeyRef<'a>: Copy
+    type KeyRef<'a>: FastHash + Copy
     where Self::Key: 'a;
     type Value;
 

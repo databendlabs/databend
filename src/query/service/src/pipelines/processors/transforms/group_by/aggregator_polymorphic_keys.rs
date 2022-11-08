@@ -20,6 +20,7 @@ use common_datablocks::HashMethodKeysU128;
 use common_datablocks::HashMethodKeysU256;
 use common_datablocks::HashMethodKeysU512;
 use common_datablocks::HashMethodSerializer;
+use common_datablocks::KeysState;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_hashtable::HashMap;
@@ -384,5 +385,27 @@ impl PolymorphicKeysHelper<HashMethodSerializer> for HashMethodSerializer {
         params: &AggregatorParams,
     ) -> SerializedKeysGroupColumnsBuilder<'_> {
         SerializedKeysGroupColumnsBuilder::create(capacity, params)
+    }
+}
+
+struct TwoLevelHashMethod<Method: HashMethod> {
+    method: Method,
+}
+
+impl<Method: HashMethod> HashMethod for TwoLevelHashMethod<Method> {
+    type HashKey = Method::HashKey;
+    type HashKeyRef<'a> = Method::HashKeyRef<'a> where Self: 'a;
+    type HashKeyIter<'a> = Method::HashKeyIter<'a> where Self: 'a;
+
+    fn name(&self) -> String {
+        format!("TwoLevel{}", self.method.name())
+    }
+
+    fn build_keys_state(&self, group_columns: &[&ColumnRef], rows: usize) -> Result<KeysState> {
+        self.method.build_keys_state(group_columns, rows)
+    }
+
+    fn build_keys_iter<'a>(&self, keys_state: &'a KeysState) -> Result<Self::HashKeyIter<'a>> {
+        self.method.build_keys_iter(keys_state)
     }
 }
