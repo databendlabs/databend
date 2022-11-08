@@ -78,6 +78,35 @@ impl InputFormatCSV {
         }
         Ok(())
     }
+
+    fn check_num_field(
+        expect: usize,
+        actual: usize,
+        field_ends: &[usize],
+        path: &str,
+        rows: usize,
+    ) -> Result<()> {
+        if actual < expect {
+            return Err(csv_error(
+                &format!("expect {} fields, only found {} ", expect, actual),
+                path,
+                rows,
+            ));
+        } else if actual > expect + 1 {
+            return Err(csv_error(
+                &format!("too many fields, expect {}, got {}", expect, actual),
+                path,
+                rows,
+            ));
+        } else if actual == expect + 1 && field_ends[expect] != field_ends[expect - 1] {
+            return Err(csv_error(
+                "CSV allow ending with ',', but should not have data after it",
+                path,
+                rows,
+            ));
+        }
+        Ok(())
+    }
 }
 
 impl InputFormatTextBase for InputFormatCSV {
@@ -156,27 +185,7 @@ impl InputFormatTextBase for InputFormatCSV {
                     ));
                 }
                 ReadRecordResult::Record => {
-                    if endlen < num_fields {
-                        return Err(csv_error(
-                            &format!("expect {} fields, only found {} ", num_fields, n_end),
-                            &state.path,
-                            state.rows,
-                        ));
-                    } else if endlen > num_fields + 1 {
-                        return Err(csv_error(
-                            &format!("too many fields, expect {}, got {}", num_fields, n_end),
-                            &state.path,
-                            state.rows,
-                        ));
-                    } else if endlen == num_fields + 1
-                        && field_ends[num_fields] != field_ends[num_fields - 1]
-                    {
-                        return Err(csv_error(
-                            "CSV allow ending with ',', but should not have data after it",
-                            &state.path,
-                            state.rows,
-                        ));
-                    }
+                    Self::check_num_field(endlen, num_fields, field_ends, &state.path, state.rows)?;
 
                     state.rows_to_skip -= 1;
                     tracing::debug!(
