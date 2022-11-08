@@ -48,6 +48,7 @@ use common_expression::FunctionSignature;
 use common_expression::Scalar;
 use common_expression::Value;
 use common_expression::ValueRef;
+use common_hashtable::HashtableKeyable;
 use common_hashtable::KeysRef;
 use common_hashtable::StackHashSet;
 use itertools::Itertools;
@@ -243,48 +244,49 @@ pub fn register(registry: &mut FunctionRegistry) {
         ),
     );
 
-    macro_rules! cal_contains {
-        ($lhs: expr, $rhs: expr, $T: ty) => {
-            match $lhs {
-                ValueRef::Scalar(array) => {
-                    let mut set = StackHashSet::<_, 128>::with_capacity(<$T>::column_len(&array));
-                    for val in <$T>::iter_column(&array) {
-                        let _ = set.set_insert(<$T>::to_owned_scalar(val));
-                    }
-                    match $rhs {
-                        ValueRef::Scalar(c) => {
-                            Ok(Value::Scalar(set.contains(&<$T>::to_owned_scalar(c))))
-                        }
-                        ValueRef::Column(col) => {
-                            let result = BooleanType::column_from_iter(
-                                <$T>::iter_column(&col)
-                                    .map(|c| set.contains(&<$T>::to_owned_scalar(c))),
-                                &[],
-                            );
-                            Ok(Value::Column(result))
-                        }
-                    }
+    fn eval_contains<T: ArgType>(
+        lhs: ValueRef<ArrayType<T>>,
+        rhs: ValueRef<T>,
+    ) -> Result<Value<BooleanType>, String>
+    where
+        T::Scalar: HashtableKeyable,
+    {
+        match lhs {
+            ValueRef::Scalar(array) => {
+                let mut set = StackHashSet::<_, 128>::with_capacity(T::column_len(&array));
+                for val in T::iter_column(&array) {
+                    let _ = set.set_insert(T::to_owned_scalar(val));
                 }
-                ValueRef::Column(array_column) => {
-                    let result = match $rhs {
-                        ValueRef::Scalar(c) => BooleanType::column_from_iter(
-                            array_column
-                                .iter()
-                                .map(|array| <$T>::iter_column(&array).contains(&c)),
+                match rhs {
+                    ValueRef::Scalar(c) => Ok(Value::Scalar(set.contains(&T::to_owned_scalar(c)))),
+                    ValueRef::Column(col) => {
+                        let result = BooleanType::column_from_iter(
+                            T::iter_column(&col).map(|c| set.contains(&T::to_owned_scalar(c))),
                             &[],
-                        ),
-                        ValueRef::Column(col) => BooleanType::column_from_iter(
-                            array_column
-                                .iter()
-                                .zip(<$T>::iter_column(&col))
-                                .map(|(array, c)| <$T>::iter_column(&array).contains(&c)),
-                            &[],
-                        ),
-                    };
-                    Ok(Value::Column(result))
+                        );
+                        Ok(Value::Column(result))
+                    }
                 }
             }
-        };
+            ValueRef::Column(array_column) => {
+                let result = match rhs {
+                    ValueRef::Scalar(c) => BooleanType::column_from_iter(
+                        array_column.iter().map(|array| {
+                            T::iter_column(&array).contains(&T::upcast_gat(c.clone()))
+                        }),
+                        &[],
+                    ),
+                    ValueRef::Column(col) => BooleanType::column_from_iter(
+                        array_column
+                            .iter()
+                            .zip(T::iter_column(&col))
+                            .map(|(array, c)| T::iter_column(&array).contains(&T::upcast_gat(c))),
+                        &[],
+                    ),
+                };
+                Ok(Value::Column(result))
+            }
+        }
     }
 
     for left in ALL_NUMERICS_TYPES {
@@ -300,7 +302,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                                 || (lhs.min..=lhs.max).contains(&rhs.max),
                         })
                     },
-                    |lhs, rhs, _| cal_contains!(lhs, rhs, NumberType<NUM_TYPE>)
+                    |lhs, rhs, _| eval_contains::<NumberType<NUM_TYPE>>(lhs, rhs)
                 );
             }
         });
@@ -317,7 +319,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                         || (lhs.min..=lhs.max).contains(&rhs.max),
                 })
             },
-            |lhs, rhs, _| cal_contains!(lhs, rhs, DateType),
+            |lhs, rhs, _| eval_contains::<DateType>(lhs, rhs),
         );
 
     registry.register_passthrough_nullable_2_arg::<ArrayType<TimestampType>, TimestampType, BooleanType, _, _>(
@@ -330,7 +332,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                         || (lhs.min..=lhs.max).contains(&rhs.max),
                 })
             },
-            |lhs, rhs, _| cal_contains!{lhs, rhs, TimestampType}
+            |lhs, rhs, _| eval_contains::<TimestampType>(lhs, rhs)
     );
 
     registry.register_passthrough_nullable_2_arg::<ArrayType<BooleanType>, BooleanType, BooleanType, _, _>(
