@@ -1,4 +1,4 @@
-//  Copyright 2021 Datafuse Labs.
+//  Copyright 2022 Datafuse Labs.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
 //  you may not use this file except in compliance with the License.
@@ -12,11 +12,22 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-mod segment;
-mod snapshot;
+use common_expression::Chunk;
 
-pub(crate) mod common;
-pub use segment::BlockMeta;
-pub use segment::ColumnMeta;
-pub use segment::SegmentInfo;
-pub use snapshot::TableSnapshot;
+/// Filter data of a Chunk, which itself is also a Chunk.
+///
+/// Depending on the query conditions, columns of index data will be loaded on demand.
+pub struct ChunkFilter {
+    // Before index mod is extracted from databend-query, we just keep the Chunk here
+    data: Chunk,
+}
+
+impl ChunkFilter {
+    pub fn new(data: Chunk) -> Self {
+        Self { data }
+    }
+
+    pub fn into_data(self) -> Chunk {
+        self.data
+    }
+}

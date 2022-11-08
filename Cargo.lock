@@ -2467,6 +2467,8 @@ dependencies = [
  "common-base",
  "common-cache",
  "common-config",
+ "common-datablocks",
+ "common-datavalues",
  "common-exception",
  "common-expression",
  "common-metrics",

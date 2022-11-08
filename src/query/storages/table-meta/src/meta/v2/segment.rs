@@ -15,13 +15,11 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_datablocks::DataBlock;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::meta::v0::common::ClusterStatistics;
-use crate::meta::v0::common::ColumnStatistics;
-
+use crate::meta::common::ClusterStatistics;
+use crate::meta::common::ColumnStatistics;
 use crate::meta::common::FormatVersion;
 use crate::meta::ColumnId;
 use crate::meta::ColumnMeta;
@@ -115,35 +113,72 @@ impl SegmentInfo {
 }
 
 use super::super::v0;
+use super::super::v1;
 
 impl From<v0::SegmentInfo> for SegmentInfo {
     fn from(s: v0::SegmentInfo) -> Self {
-        Self {
-            format_version: SegmentInfo::VERSION,
-            blocks: s
-                .blocks
-                .into_iter()
-                .map(|b| Arc::new(b.into()))
-                .collect::<_>(),
-            summary: s.summary,
-        }
+        todo!()
+        // Self {
+        //     format_version: SegmentInfo::VERSION,
+        //     blocks: s
+        //         .blocks
+        //         .into_iter()
+        //         .map(|b| Arc::new(b.into()))
+        //         .collect::<_>(),
+        //     summary: s.summary,
+        // }
     }
 }
 
+impl From<v1::SegmentInfo> for SegmentInfo {
+    fn from(s: v1::SegmentInfo) -> Self {
+        todo!()
+        // Self {
+        //     format_version: SegmentInfo::VERSION,
+        //     blocks: s
+        //         .blocks
+        //         .into_iter()
+        //         .map(|b| Arc::new(b.into()))
+        //         .collect::<_>(),
+        //     summary: s.summary,
+        // }
+    }
+}
+
+
 impl From<v0::BlockMeta> for BlockMeta {
     fn from(s: v0::BlockMeta) -> Self {
-        Self {
-            row_count: s.row_count,
-            block_size: s.block_size,
-            file_size: s.file_size,
-            col_stats: s.col_stats,
-            col_metas: s.col_metas,
-            cluster_stats: None,
-            location: (s.location.path, DataBlock::VERSION),
-            bloom_filter_index_location: None,
-            bloom_filter_index_size: 0,
-            compression: Compression::Lz4,
-        }
+        todo!()
+        // Self {
+        //     row_count: s.row_count,
+        //     block_size: s.block_size,
+        //     file_size: s.file_size,
+        //     col_stats: s.col_stats,
+        //     col_metas: s.col_metas,
+        //     cluster_stats: None,
+        //     location: (s.location.path, Chunk::VERSION),
+        //     bloom_filter_index_location: None,
+        //     bloom_filter_index_size: 0,
+        //     compression: Compression::Lz4,
+        // }
+    }
+}
+
+impl From<v1::BlockMeta> for BlockMeta {
+    fn from(s: v1::BlockMeta) -> Self {
+        todo!()
+        // Self {
+        //     row_count: s.row_count,
+        //     block_size: s.block_size,
+        //     file_size: s.file_size,
+        //     col_stats: s.col_stats,
+        //     col_metas: s.col_metas,
+        //     cluster_stats: None,
+        //     location: (s.location.path, Chunk::VERSION),
+        //     bloom_filter_index_location: None,
+        //     bloom_filter_index_size: 0,
+        //     compression: Compression::Lz4,
+        // }
     }
 }
 

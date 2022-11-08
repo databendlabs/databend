@@ -20,10 +20,8 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::schema::DataSchema;
-use crate::serializations::BooleanSerializer;
 use crate::types::AnyType;
 use crate::types::DataType;
-use crate::Column;
 use crate::ColumnBuilder;
 use crate::Domain;
 use crate::TypeSerializer;

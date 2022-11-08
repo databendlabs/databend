@@ -12,22 +12,22 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use common_expression::Chunk;
+use common_datablocks::DataBlock;
 
-/// Filter data of a Chunk, which itself is also a Chunk.
+/// Filter data of a Block, which itself is also a DataBlock.
 ///
 /// Depending on the query conditions, columns of index data will be loaded on demand.
-pub struct ChunkFilter {
-    // Before index mod is extracted from databend-query, we just keep the Chunk here
-    data: Chunk,
+pub struct BlockFilter {
+    // Before index mod is extracted from databend-query, we just keep the DataBlock here
+    data: DataBlock,
 }
 
-impl ChunkFilter {
-    pub fn new(data: Chunk) -> Self {
+impl BlockFilter {
+    pub fn new(data: DataBlock) -> Self {
         Self { data }
     }
 
-    pub fn into_data(self) -> Chunk {
+    pub fn into_data(self) -> DataBlock {
         self.data
     }
 }
