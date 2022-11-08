@@ -1,9 +1,24 @@
 ---
-title: OVERVIEW
+title: Load Data into Databend
 slug: ./
 ---
+These topics describe how to load data into Databend.
 
-Databend enables you to load data from the following locations:
+- [Preparations](#preparations)
+    - [Supported File Locations](#supported-file-locations)
+    - [Supported File Formats](#supported-file-formats)
+- [Loading Methods](#loading-methods)
+    - [COPY INTO Command](#copy-into-command)
+    - [Streaming Load API](#streaming-load-api)
+- [Hands-On Tutorials](#hands-on-tutorials)
+
+---
+
+## Preparations
+
+Databend enables you to load data from files in a variety of formats stored in different locations. Before loading your data into Databend, make sure your files meet these requirements:
+
+### Supported File Locations
 
 - Stage:  Databend loads data from staged files. A Databend stage can be internal or external. For more information, see [What are Databend Stages](../30-reference/30-sql/00-ddl/40-stage/index.md#what-are-databend-stages).
 
@@ -11,20 +26,43 @@ Databend enables you to load data from the following locations:
 
 - Local file system: Databend loads data from local files.
 
-- Remote server: Databend loads data from remote files (including IPFS) accessible by URLs starting with *HTTPS://*.
+- Remote server: Databend loads data from remote files (including [IPFS](https://ipfs.tech)) accessible by URLs starting with *https://*.
 
-The data files can be in various formats and compressed if desired. The following table shows the supported file formats and recommended loading methods for each type of file location.
+### Supported File Formats
 
-| Data File Location  | File Formats                         | Compression Formats                           | Load Data with     |
-|---------------------|--------------------------------------|-----------------------------------------------|--------------------|
-| Stage               | CSV, TSV, JSON, NDJSON, Parquet, XML | GZIP, BZ2, BROTLI, ZSTD, DEFLATE, RAW_DEFLATE | COPY INTO command  |
-| Bucket or container | CSV, TSV, JSON, NDJSON, Parquet, XML | GZIP, BZ2, BROTLI, ZSTD, DEFLATE, RAW_DEFLATE | COPY INTO command  |
-| Local file system   | CSV, TSV, JSON, NDJSON, Parquet, XML | GZIP, BZ2, BROTLI, ZSTD, DEFLATE, RAW_DEFLATE | Streaming Load API |
-| Remote server       | CSV, TSV, JSON, NDJSON, Parquet, XML | GZIP, BZ2, BROTLI, ZSTD, DEFLATE, RAW_DEFLATE | COPY INTO command  |
+The data files can be in various formats and compressed if desired. Databend supports loading data from files in these formats:
 
-Databend recommends the COPY INTO command for loading data from files in a stage, bucket, or remote server. You can tell Databend how to load your data by including the options of the COPY INTO command. The COPY INTO command has many options that allow you to specify how your data will be loaded. Make sure you have fully understood them before you issue the command. For detailed explanations about the COPY INTO command and its options, see [COPY INTO table](../30-reference/30-sql/10-dml/dml-copy-into-table.md).
+- CSV
+- TSV
+- JSON
+- NDJSON
+- Parquet
+- XML
 
-The Streaming Load API can read data from your local data files and load it into Databend. For more information about the Streaming Load API, see [Streaming Load API](02-local.md#streaming-load-api).
+The supported compression formats include:
+
+- GZIP
+- BZ2
+- BROTLI
+- ZSTD
+- DEFLATE
+- RAW_DEFLATE
+
+## Loading Methods
+
+Databend recommends using the COPY INTO command to load data from files in a stage, bucket, or remote server, and using the Streaming Load API to load data from local files.
+
+### COPY INTO Command
+
+The COPY INTO command can load data from files in a stage, bucket, or remote server. You can tell Databend how to load your data by including the options of the COPY INTO command. The COPY INTO command has many options that allow you to specify how your data will be loaded. 
+
+For detailed explanations about the COPY INTO command and its options, see [COPY INTO](../30-reference/30-sql/10-dml/dml-copy-into-table.md).
+
+### Streaming Load API
+
+The Streaming Load API can read data from your local data files and load it into Databend. For more information about the Streaming Load API, see [Streaming Load API](../30-reference/00-api/03-streaming-load.md).
+
+## Hands-On Tutorials
 
 Here are some tutorials to help you get started with data loading:
 
