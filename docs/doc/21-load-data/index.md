@@ -48,6 +48,7 @@ The supported compression formats include:
 - ZSTD
 - DEFLATE
 - RAW_DEFLATE
+- XZ
 
 ## Loading Methods
 

@@ -3,14 +3,12 @@ title: "COPY INTO <table>"
 sidebar_label: "COPY INTO <table>"
 ---
 
-`COPY` loads data into Databend or unloads data from Databend.
-
-This command loads data into a table from files in one of the following locations:
+This command loads data into Databend from files in one of the following locations:
 
 - **Named internal stage**: Databend internal named stages. Files can be staged using the [PUT to Stage](../../00-api/10-put-to-stage.md) API.
-- **Named external stage**: Stages created in AWS S3 compatible object storage services and Azure Blob storage.
-- **External location**. This includes the followings:
-  - Buckets created in AWS S3 compatible object storage services, Azure Blob storage, Google Cloud Storage, or Huawei OBS.
+- **Named external stage**: Stages created in [Supported Object Storage Solutions](../../../10-deploy/00-understanding-deployment-modes.md#supported-object-storage-solutions).
+- **External location**:
+  - Buckets created in [Supported Object Storage Solutions](../../../10-deploy/00-understanding-deployment-modes.md#supported-object-storage-solutions).
   - Remote servers from where you can access the files by their URL (starting with "https://...").
   - [IPFS](https://ipfs.tech).
 
@@ -23,7 +21,7 @@ COPY INTO [<database>.]<table_name>
 FROM { internalStage | externalStage | externalLocation }
 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
 [ PATTERN = '<regex_pattern>' ]
-[ FILE_FORMAT = ( TYPE = { CSV | JSON | NDJSON | PARQUET } [ formatTypeOptions ] ) ]
+[ FILE_FORMAT = ( TYPE = { CSV | TSV | JSON | NDJSON | PARQUET | XML} [ formatTypeOptions ] ) ]
 [ copyOptions ]
 ```
 
@@ -123,14 +121,14 @@ externalLocation ::=
 | ACCESS_KEY_ID            | Your access key ID for connecting the OBS. If not provided, Databend will access the bucket anonymously.                                                                                 | Optional |
 | SECRET_ACCESS_KEY        | Your secret access key for connecting the OBS.                                                                                                                                           | Optional |
 
-**HTTP**
+**Remote Files**
 
 ```sql
 externalLocation ::=
   'https://<url>'
 ```
 
-Please note that, HTTP supports glob patterns. For example, use
+You can use glob patterns to specify moran than one file. For example, use
 
 - `ontime_200{6,7,8}.csv` to represents `ontime_2006.csv`,`ontime_2007.csv`,`ontime_2008.csv`.
 - `ontime_200[6-8].csv` to represents `ontime_2006.csv`,`ontime_2007.csv`,`ontime_2008.csv`.
@@ -149,7 +147,7 @@ Specifies a list of one or more files names (separated by commas) to be loaded.
 
 ### PATTERN = 'regex_pattern'
 
-A regular expression pattern string, enclosed in single quotes, specifying the file names to match.
+A [PCRE2](https://www.pcre.org/current/doc/html/)-based regular expression pattern string, enclosed in single quotes, specifying the file names to match. For PCRE2 syntax, see http://www.pcre.org/current/doc/html/pcre2syntax.html.
 
 ### formatTypeOptions
 
@@ -158,7 +156,7 @@ formatTypeOptions ::=
   RECORD_DELIMITER = '<character>'
   FIELD_DELIMITER = '<character>'
   SKIP_HEADER = <integer>
-  COMPRESSION = AUTO | GZIP | BZ2 | BROTLI | ZSTD | DEFLATE | RAW_DEFLATE | NONE
+  COMPRESSION = AUTO | GZIP | BZ2 | BROTLI | ZSTD | DEFLATE | RAW_DEFLATE | XZ | NONE
 ```
 
 #### `RECORD_DELIMITER = '<character>'`
@@ -216,7 +214,7 @@ copyOptions ::=
 
 ## Examples
 
-### Loading Files from Internal Stage
+### Loading Data from Internal Stage
 
 First, create a named internal stage:
 
@@ -237,7 +235,7 @@ LIST @my_internal_s1;
 COPY INTO mytable FROM @my_internal_s1 pattern = 'books.*parquet' file_format = (type = 'PARQUET');
 ```
 
-### Loading Files from External Stage
+### Loading Data from External Stage
 
 First, create a named external stage:
 
@@ -251,7 +249,7 @@ Then, copy the file into `mytable` from the `my_external_s1` named external stag
 COPY INTO mytable FROM @my_external_s1 pattern = 'books.*parquet' file_format = (type = 'PARQUET');
 ```
 
-### Loading Files Directly from External Location
+### Loading Data from External Location
 
 **AWS S3 compatible object storage services**
 
@@ -313,9 +311,9 @@ COPY INTO mytable
     FILE_FORMAT = (type = 'CSV');
 ```
 
-**HTTP**
+**Remote Files**
 
-This example reads data from three CSV files and inserts it into a table:
+This example reads data from three remote CSV files and inserts it into a table:
 
 ```sql
 COPY INTO mytable
@@ -333,9 +331,9 @@ COPY INTO mytable
     FILE_FORMAT = (type = 'CSV' field_delimiter = ',' record_delimiter = '\n' skip_header = 1);
 ```
 
-### Loading Files Using Pattern Matching
+### Loading Data with Pattern Matching
 
-This example using pattern matching to only load CSV files whose names include the string `sales`:
+This example uses pattern matching to only load from CSV files containing `sales` in their names:
 
 ```sql
 COPY INTO mytable
@@ -345,7 +343,7 @@ COPY INTO mytable
 ```
 Where `.*` is interpreted as `zero or more occurrences of any character`. The square brackets escape the period character `(.)` that precedes a file extension.
 
-If you want to load all the CSV files, we can use `PATTERN = '.*[.]csv'`:
+If you want to load from all the CSV files, use `PATTERN = '.*[.]csv'`:
 ```sql
 COPY INTO mytable
   FROM 's3://mybucket/'
