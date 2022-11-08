@@ -143,6 +143,32 @@ macro_rules! with_match_physical_primitive_type {
 }
 
 #[macro_export]
+macro_rules! with_match_physical_integer_type {
+    (
+    $key_type:expr, | $_:tt $T:ident | $body:tt,  $nbody:tt
+) => {{
+        macro_rules! __with_ty__ {
+            ( $_ $T:ident ) => {
+                $body
+            };
+        }
+
+        match $key_type {
+            PhysicalTypeID::Int8 => __with_ty__! { i8 },
+            PhysicalTypeID::Int16 => __with_ty__! { i16 },
+            PhysicalTypeID::Int32 => __with_ty__! { i32 },
+            PhysicalTypeID::Int64 => __with_ty__! { i64 },
+            PhysicalTypeID::UInt8 => __with_ty__! { u8 },
+            PhysicalTypeID::UInt16 => __with_ty__! { u16 },
+            PhysicalTypeID::UInt32 => __with_ty__! { u32 },
+            PhysicalTypeID::UInt64 => __with_ty__! { u64 },
+
+            _ => $nbody,
+        }
+    }};
+}
+
+#[macro_export]
 macro_rules! with_match_physical_primitive_type_error {(
     $key_type:expr, | $_:tt $T:ident | $($body:tt)*
 ) => ({
