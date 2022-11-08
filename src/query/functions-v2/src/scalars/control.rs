@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_expression::Column;
 use common_expression::types::boolean::BooleanDomain;
 use common_expression::types::nullable::NullableColumn;
 use common_expression::types::nullable::NullableDomain;
@@ -22,7 +23,6 @@ use common_expression::types::DataType;
 use common_expression::types::GenericType;
 use common_expression::types::NullType;
 use common_expression::types::NullableType;
-use common_expression::types::ValueType;
 use common_expression::ColumnBuilder;
 use common_expression::Domain;
 use common_expression::Function;
