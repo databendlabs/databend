@@ -453,11 +453,11 @@ pub fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
                 };
                 RawExpr::FunctionCall {
                     span: transform_span(span),
-                    name: "in".to_string(),
+                    name: "contains".to_string(),
                     params: vec![],
                     args: vec![
-                        transform_expr(*expr, columns),
                         transform_expr(array_expr, columns),
+                        transform_expr(*expr, columns),
                     ],
                 }
             } else {
