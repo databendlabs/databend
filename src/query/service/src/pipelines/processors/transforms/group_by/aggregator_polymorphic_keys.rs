@@ -14,7 +14,6 @@
 
 use std::marker::PhantomData;
 
-use bumpalo::Bump;
 use common_datablocks::HashMethod;
 use common_datablocks::HashMethodFixedKeys;
 use common_datablocks::HashMethodKeysU128;
@@ -25,6 +24,7 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_hashtable::HashMap;
 use common_hashtable::HashtableLike;
+use common_hashtable::LookupHashMap;
 use common_hashtable::UnsizedHashMap;
 use primitive_types::U256;
 use primitive_types::U512;
@@ -82,7 +82,6 @@ pub trait PolymorphicKeysHelper<Method: HashMethod> {
     type HashTable: HashtableLike<Key = Method::HashKey, Value = usize> + Send;
     fn create_hash_table(&self) -> Self::HashTable;
 
-    #[inline(always)]
     fn cast_key_ref<'a>(
         key: Method::HashKeyRef<'a>,
     ) -> <Self::HashTable as HashtableLike>::KeyRef<'a>;
@@ -116,10 +115,10 @@ pub trait PolymorphicKeysHelper<Method: HashMethod> {
 }
 
 impl PolymorphicKeysHelper<HashMethodFixedKeys<u8>> for HashMethodFixedKeys<u8> {
-    type HashTable = HashMap<u8, usize>;
+    type HashTable = LookupHashMap<u8, 256, usize>;
 
     fn create_hash_table(&self) -> Self::HashTable {
-        HashMap::new()
+        LookupHashMap::create(Default::default())
     }
 
     #[inline(always)]
@@ -149,10 +148,10 @@ impl PolymorphicKeysHelper<HashMethodFixedKeys<u8>> for HashMethodFixedKeys<u8> 
 }
 
 impl PolymorphicKeysHelper<HashMethodFixedKeys<u16>> for HashMethodFixedKeys<u16> {
-    type HashTable = HashMap<u16, usize>;
+    type HashTable = LookupHashMap<u16, 65536, usize>;
 
     fn create_hash_table(&self) -> Self::HashTable {
-        HashMap::new()
+        LookupHashMap::create(Default::default())
     }
 
     #[inline(always)]

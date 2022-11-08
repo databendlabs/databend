@@ -18,7 +18,6 @@ mod aggregator_keys_iter;
 mod aggregator_polymorphic_keys;
 mod aggregator_state;
 mod aggregator_state_entity;
-mod aggregator_state_iterator;
 
 pub use aggregator_groups_builder::GroupColumnsBuilder;
 pub use aggregator_keys_builder::KeysColumnBuilder;

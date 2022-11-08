@@ -22,6 +22,7 @@
 mod container;
 mod hashtable;
 mod keys_ref;
+mod lookup_hashtable;
 mod stack_hashtable;
 mod table0;
 mod table1;
@@ -37,6 +38,10 @@ pub use traits::FastHash;
 pub use traits::HashtableLike;
 pub use traits::Keyable as HashtableKeyable;
 pub use traits::UnsizedKeyable as HashtableUnsizedKeyable;
+
+use crate::lookup_hashtable::LookupHashtable;
+use crate::lookup_hashtable::LookupTableIter;
+use crate::lookup_hashtable::LookupTableIterMut;
 
 pub type Hashed<K> = utils::Hashed<K>;
 
@@ -77,5 +82,10 @@ pub type UnsizedHashSetIterMut<'a, K> = unsized_hashtable::UnsizedHashtableIterM
 pub type UnsizedHashtableEntryRef<'a, K, V> = unsized_hashtable::UnsizedHashtableEntryRef<'a, K, V>;
 pub type UnsizedHashtableEntryMutRef<'a, K, V> =
     unsized_hashtable::UnsizedHashtableEntryMutRef<'a, K, V>;
+
+pub type LookupHashMap<K, const CAPACITY: usize, V> = LookupHashtable<K, CAPACITY, V>;
+pub type LookupHashMapIter<'a, K, const CAPACITY: usize, V> = LookupTableIter<'a, CAPACITY, K, V>;
+pub type LookupHashMapIterMut<'a, K, const CAPACITY: usize, V> =
+    LookupTableIterMut<'a, CAPACITY, K, V>;
 
 pub use keys_ref::KeysRef;
