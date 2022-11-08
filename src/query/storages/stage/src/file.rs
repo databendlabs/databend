@@ -19,32 +19,32 @@ use chrono::TimeZone;
 use chrono::Utc;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use common_meta_types::StageFile;
 use common_meta_types::UserStageInfo;
-use common_storages_stage::StageTable;
-use futures_util::TryStreamExt;
-use tracing::debug;
+use futures::TryStreamExt;
 use tracing::warn;
 
-use crate::sessions::QueryContext;
+use crate::StageFilePartition;
+use crate::StageFileStatus;
+use crate::StageTable;
 
 pub async fn stat_file(
-    ctx: &Arc<QueryContext>,
-    stage: &UserStageInfo,
+    table_ctx: Arc<dyn TableContext>,
     path: &str,
-) -> Result<StageFile> {
-    let table_ctx: Arc<dyn TableContext> = ctx.clone();
+    stage: &UserStageInfo,
+) -> Result<StageFilePartition> {
     let op = StageTable::get_op(&table_ctx, stage)?;
     let meta = op.object(path).metadata().await?;
-    Ok(StageFile {
+
+    Ok(StageFilePartition {
         path: path.to_string(),
         size: meta.content_length(),
         md5: meta.content_md5().map(str::to_string),
         last_modified: meta
             .last_modified()
             .map_or(Utc::now(), |t| Utc.timestamp(t.unix_timestamp(), 0)),
-        creator: None,
         etag: meta.etag().map(str::to_string),
+        status: StageFileStatus::NeedCopy,
+        creator: None,
     })
 }
 
@@ -55,12 +55,11 @@ pub async fn stat_file(
 /// - If not exist, we will try to list `path/` too.
 ///
 /// TODO(@xuanwo): return a stream instead.
-pub async fn list_files(
-    ctx: &Arc<QueryContext>,
-    stage: &UserStageInfo,
+pub async fn list_file(
+    table_ctx: Arc<dyn TableContext>,
     path: &str,
-) -> Result<Vec<StageFile>> {
-    let table_ctx: Arc<dyn TableContext> = ctx.clone();
+    stage: &UserStageInfo,
+) -> Result<Vec<StageFilePartition>> {
     let op = StageTable::get_op(&table_ctx, stage)?;
     let mut files = Vec::new();
 
@@ -96,20 +95,20 @@ pub async fn list_files(
         };
     }
 
-    let matched_files = files
+    let results = files
         .into_iter()
-        .map(|(name, meta)| StageFile {
+        .map(|(name, meta)| StageFilePartition {
             path: name,
             size: meta.content_length(),
             md5: meta.content_md5().map(str::to_string),
             last_modified: meta
                 .last_modified()
                 .map_or(Utc::now(), |t| Utc.timestamp(t.unix_timestamp(), 0)),
-            creator: None,
             etag: meta.etag().map(str::to_string),
+            status: StageFileStatus::NeedCopy,
+            creator: None,
         })
-        .collect::<Vec<StageFile>>();
+        .collect::<Vec<StageFilePartition>>();
 
-    debug!("listed files: {:?}", matched_files);
-    Ok(matched_files)
+    Ok(results)
 }

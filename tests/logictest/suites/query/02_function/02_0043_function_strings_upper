@@ -16,3 +16,8 @@ SELECT UPPER(NULL);
 ----
 NULL
 
+statement query T
+SELECT UPPER(1);
+
+----
+1

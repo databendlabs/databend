@@ -21,9 +21,9 @@ use common_datavalues::SeriesFrom;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_sql::plans::ListPlan;
+use common_storages_stage::list_file;
 use regex::Regex;
 
-use crate::interpreters::common::list_files;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
@@ -53,7 +53,8 @@ impl Interpreter for ListInterpreter {
     #[tracing::instrument(level = "debug", name = "list_interpreter_execute", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let plan = &self.plan;
-        let files = list_files(&self.ctx, &plan.stage, &plan.path).await?;
+        let table_ctx: Arc<dyn TableContext> = self.ctx.clone();
+        let mut files = list_file(table_ctx, &plan.path, &plan.stage).await?;
 
         let files = if plan.pattern.is_empty() {
             files
@@ -64,11 +65,8 @@ impl Interpreter for ListInterpreter {
                     &plan.pattern, e
                 ))
             })?;
-
+            files.retain(|v| regex.is_match(&v.path));
             files
-                .into_iter()
-                .filter(|file| regex.is_match(&file.path))
-                .collect()
         };
 
         let names: Vec<String> = files.iter().map(|file| file.path.clone()).collect();
