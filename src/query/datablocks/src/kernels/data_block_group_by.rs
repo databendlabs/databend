@@ -24,7 +24,6 @@ use crate::kernels::HashMethodKeysU8;
 use crate::kernels::HashMethodKind;
 use crate::kernels::HashMethodSerializer;
 use crate::DataBlock;
-use crate::HashMethod;
 use crate::HashMethodKeysU128;
 use crate::HashMethodKeysU256;
 use crate::HashMethodKeysU512;
@@ -74,77 +73,5 @@ impl DataBlock {
             33..=64 => Ok(HashMethodKind::KeysU512(HashMethodKeysU512::default())),
             _ => Ok(HashMethodKind::Serializer(HashMethodSerializer::default())),
         }
-    }
-
-    pub fn group_by_blocks(block: &DataBlock, indices: &[usize]) -> Result<Vec<DataBlock>> {
-        let method = Self::choose_hash_method(block, indices)?;
-        Ok(match method {
-            HashMethodKind::Serializer(s) => {
-                let blocks = s
-                    .group_by(block, indices)?
-                    .iter()
-                    .map(|(_, _, b)| b.clone())
-                    .collect();
-                blocks
-            }
-
-            HashMethodKind::KeysU8(s) => {
-                let blocks = s
-                    .group_by(block, indices)?
-                    .iter()
-                    .map(|(_, _, b)| b.clone())
-                    .collect();
-                blocks
-            }
-            HashMethodKind::KeysU16(s) => {
-                let blocks = s
-                    .group_by(block, indices)?
-                    .iter()
-                    .map(|(_, _, b)| b.clone())
-                    .collect();
-                blocks
-            }
-            HashMethodKind::KeysU32(s) => {
-                let blocks = s
-                    .group_by(block, indices)?
-                    .iter()
-                    .map(|(_, _, b)| b.clone())
-                    .collect();
-                blocks
-            }
-            HashMethodKind::KeysU64(s) => {
-                let blocks = s
-                    .group_by(block, indices)?
-                    .iter()
-                    .map(|(_, _, b)| b.clone())
-                    .collect();
-                blocks
-            }
-
-            HashMethodKind::KeysU128(s) => {
-                let blocks = s
-                    .group_by(block, indices)?
-                    .iter()
-                    .map(|(_, _, b)| b.clone())
-                    .collect();
-                blocks
-            }
-            HashMethodKind::KeysU256(s) => {
-                let blocks = s
-                    .group_by(block, indices)?
-                    .iter()
-                    .map(|(_, _, b)| b.clone())
-                    .collect();
-                blocks
-            }
-            HashMethodKind::KeysU512(s) => {
-                let blocks = s
-                    .group_by(block, indices)?
-                    .iter()
-                    .map(|(_, _, b)| b.clone())
-                    .collect();
-                blocks
-            }
-        })
     }
 }

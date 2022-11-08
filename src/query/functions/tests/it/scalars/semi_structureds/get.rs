@@ -111,7 +111,7 @@ fn test_get_path_function() -> Result<()> {
                     VariantValue::from(json!({"a":[[1_i32],[2_i32]],"o":{"p":{"q":"r"}}})),
                     VariantValue::from(json!({"a":[[1_i32],[2_i32]],"o":{"p":{"q":"r"}}})),
                 ]),
-                Series::from_data(vec!["a[0][0]", "a.b", "o.p:q", "o['p']['q']", "o[0]"]),
+                Series::from_data(vec!["a[0][0]", "a.b", "o.p:q", "o[\"p\"][\"q\"]", "o[0]"]),
             ],
             expect: Series::from_data(vec![
                 Some(VariantValue::from(json!(1_i32))),

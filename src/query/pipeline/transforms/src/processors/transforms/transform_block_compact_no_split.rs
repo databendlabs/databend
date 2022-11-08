@@ -75,7 +75,7 @@ impl Compactor for BlockCompactorNoSplit {
             blocks.remove(size - 1);
         } else {
             let accumulated_rows_new = self.accumulated_rows + num_rows;
-            let accumulated_bytes_new = self.accumulated_bytes + num_rows;
+            let accumulated_bytes_new = self.accumulated_bytes + num_bytes;
 
             if self
                 .thresholds
