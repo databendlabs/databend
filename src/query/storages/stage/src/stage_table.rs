@@ -19,6 +19,7 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 
 use common_base::base::uuid;
+use common_base::base::GlobalIORuntime;
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartInfo;
 use common_catalog::plan::PartStatistics;
@@ -58,7 +59,6 @@ pub struct StageTable {
     // But the Table trait need it:
     // fn get_table_info(&self) -> &TableInfo).
     table_info_placeholder: TableInfo,
-    input_context: Mutex<Option<Arc<InputContext>>>,
     block_compact_threshold: Mutex<Option<BlockCompactThresholds>>,
 }
 
@@ -69,14 +69,8 @@ impl StageTable {
         Ok(Arc::new(Self {
             table_info,
             table_info_placeholder,
-            input_context: Default::default(),
             block_compact_threshold: Default::default(),
         }))
-    }
-
-    fn get_input_context(&self) -> Option<Arc<InputContext>> {
-        let guard = self.input_context.lock();
-        guard.clone()
     }
 
     /// Get operator with correctly prefix.
@@ -220,11 +214,38 @@ impl Table for StageTable {
 
     fn read_data(
         &self,
-        _ctx: Arc<dyn TableContext>,
-        _plan: &DataSourcePlan,
+        ctx: Arc<dyn TableContext>,
+        plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
-        let input_ctx = self.get_input_context().unwrap();
+        let mut copied_file_infos = vec![];
+        for part in &plan.parts {
+            if let Some(stage_file_info) = part.as_any().downcast_ref::<StageFilePartition>() {
+                copied_file_infos.push(stage_file_info.clone());
+            }
+        }
+        let files = copied_file_infos
+            .iter()
+            .map(|v| v.path.clone())
+            .collect::<Vec<_>>();
+
+        let operator = StageTable::get_op(&ctx, &self.table_info.stage_info)?;
+        let settings = ctx.get_settings();
+        let schema = self.table_info.schema.clone();
+        let stage_info = self.table_info.stage_info.clone();
+        let compact_threshold = self.get_block_compact_thresholds();
+        let input_ctx = Arc::new(GlobalIORuntime::instance().block_on(async move {
+            InputContext::try_create_from_copy(
+                operator,
+                settings,
+                schema,
+                stage_info,
+                files,
+                ctx.get_scan_progress(),
+                compact_threshold,
+            )
+            .await
+        })?);
         input_ctx.format.exec_copy(input_ctx.clone(), pipeline)?;
 
         let limit = self.table_info.stage_info.copy_options.size_limit;
