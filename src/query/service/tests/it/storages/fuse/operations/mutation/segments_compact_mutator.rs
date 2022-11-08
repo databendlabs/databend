@@ -549,7 +549,7 @@ impl CompactSegmentTestFixture {
         let mut collected_blocks = vec![];
         for num_blocks in block_num_of_segments {
             let blocks = TestFixture::gen_sample_blocks_ex(*num_blocks, 1, 1);
-            let mut stats_acc = StatisticsAccumulator::new();
+            let mut stats_acc = StatisticsAccumulator::default();
             for block in blocks {
                 let block = block?;
                 let col_stats = gen_columns_statistics(&block)?;
@@ -565,6 +565,7 @@ impl CompactSegmentTestFixture {
             let segment_info = SegmentInfo::new(stats_acc.blocks_metas, Statistics {
                 row_count: stats_acc.summary_row_count,
                 block_count: stats_acc.summary_block_count,
+                perfect_block_count: stats_acc.perfect_block_count,
                 uncompressed_byte_size: stats_acc.in_memory_size,
                 compressed_byte_size: stats_acc.file_size,
                 index_size: stats_acc.index_size,

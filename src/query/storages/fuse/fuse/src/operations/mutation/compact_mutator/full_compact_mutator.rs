@@ -188,7 +188,7 @@ impl TableMutator for FullCompactMutator {
         );
         let chunks = remain_blocks.chunks(self.compact_params.block_per_seg);
         for chunk in chunks {
-            let new_summary = reduce_block_metas(chunk)?;
+            let new_summary = reduce_block_metas(chunk, self.block_compactor)?;
             self.merged_segment_statistics =
                 merge_statistics(&self.merged_segment_statistics, &new_summary)?;
             let new_segment = SegmentInfo::new(chunk.to_vec(), new_summary);

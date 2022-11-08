@@ -20,6 +20,7 @@ use common_base::base::ProgressValues;
 use common_cache::Cache;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::table_context::TableContext;
+use common_datablocks::BlockCompactThresholds;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -69,6 +70,8 @@ pub struct CompactSource {
     block_reader: Arc<BlockReader>,
     location_generator: TableMetaLocationGenerator,
     dal: Operator,
+
+    thresholds: BlockCompactThresholds,
 }
 
 #[async_trait::async_trait]
@@ -129,7 +132,7 @@ impl Processor for CompactSource {
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Finished) {
             State::Generate { order, metas } => {
-                let stats = reduce_block_metas(&metas)?;
+                let stats = reduce_block_metas(&metas, self.thresholds)?;
                 let segment_info = SegmentInfo::new(metas, stats);
                 self.state = State::Serialized {
                     order,

@@ -80,12 +80,14 @@ impl FuseTable {
         projection: &Projection,
     ) -> Result<()> {
         let cluster_stats_gen = self.cluster_stats_gen()?;
+        let block_compact_thresholds = self.get_block_compact_thresholds();
         let mut deletion_collector = DeletionMutator::try_create(
             ctx.clone(),
             self.get_operator(),
             self.meta_location_generator.clone(),
             snapshot.clone(),
             cluster_stats_gen,
+            block_compact_thresholds,
         )?;
         let schema = self.table_info.schema();
         // TODO refine pruner

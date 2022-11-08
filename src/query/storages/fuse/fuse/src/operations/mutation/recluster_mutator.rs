@@ -44,7 +44,6 @@ pub struct ReclusterMutator {
     blocks_map: BTreeMap<i32, Vec<(usize, Arc<BlockMeta>)>>,
     selected_blocks: Vec<Arc<BlockMeta>>,
     level: i32,
-    block_compactor: BlockCompactThresholds,
     threshold: f64,
 }
 
@@ -54,18 +53,22 @@ impl ReclusterMutator {
         location_generator: TableMetaLocationGenerator,
         base_snapshot: Arc<TableSnapshot>,
         threshold: f64,
-        block_compactor: BlockCompactThresholds,
+        thresholds: BlockCompactThresholds,
         blocks_map: BTreeMap<i32, Vec<(usize, Arc<BlockMeta>)>>,
         data_accessor: Operator,
     ) -> Result<Self> {
-        let base_mutator =
-            BaseMutator::try_create(ctx, data_accessor, location_generator, base_snapshot)?;
+        let base_mutator = BaseMutator::try_create(
+            ctx,
+            data_accessor,
+            location_generator,
+            base_snapshot,
+            thresholds,
+        )?;
         Ok(Self {
             base_mutator,
             blocks_map,
             selected_blocks: Vec::new(),
             level: 0,
-            block_compactor,
             threshold,
         })
     }
@@ -113,7 +116,8 @@ impl TableMutator for ReclusterMutator {
 
             // If the statistics of blocks are too small, just merge them into one block.
             if self
-                .block_compactor
+                .base_mutator
+                .thresholds
                 .check_for_recluster(total_rows as usize, total_bytes as usize)
             {
                 self.selected_blocks = block_metas

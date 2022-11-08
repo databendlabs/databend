@@ -150,7 +150,7 @@ fn test_reduce_block_statistics_in_memory_size() -> common_exception::Result<()>
 #[tokio::test]
 async fn test_accumulator() -> common_exception::Result<()> {
     let blocks = TestFixture::gen_sample_blocks(10, 1);
-    let mut stats_acc = StatisticsAccumulator::new();
+    let mut stats_acc = StatisticsAccumulator::default();
 
     let operator = Operator::new(opendal::services::memory::Builder::default().build()?);
     let loc_generator = TableMetaLocationGenerator::with_prefix("/".to_owned());
@@ -411,7 +411,7 @@ fn char_len(value: &[u8]) -> usize {
 fn test_reduce_block_meta() -> common_exception::Result<()> {
     // case 1: empty input should return the default statistics
     let block_metas: Vec<BlockMeta> = vec![];
-    let reduced = reduce_block_metas(&block_metas)?;
+    let reduced = reduce_block_metas(&block_metas, BlockCompactThresholds::default())?;
     assert_eq!(Statistics::default(), reduced);
 
     // case 2: accumulated variants of size index should be as expected
@@ -447,7 +447,7 @@ fn test_reduce_block_meta() -> common_exception::Result<()> {
         blocks.push(block_meta);
     }
 
-    let stats = reduce_block_metas(&blocks)?;
+    let stats = reduce_block_metas(&blocks, BlockCompactThresholds::default())?;
 
     assert_eq!(acc_row_count, stats.row_count);
     assert_eq!(acc_block_size, stats.uncompressed_byte_size);

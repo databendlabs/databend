@@ -12,11 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[derive(Clone, Copy, Default, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct BlockCompactThresholds {
     pub max_rows_per_block: usize,
     pub min_rows_per_block: usize,
     pub max_bytes_per_block: usize,
+}
+
+impl Default for BlockCompactThresholds {
+    fn default() -> Self {
+        Self {
+            // DEFAULT_ROW_PER_BLOCK
+            max_rows_per_block: 1000 * 1000,
+            // 0.8 * DEFAULT_ROW_PER_BLOCK
+            min_rows_per_block: 800 * 1000,
+            // DEFAULT_BLOCK_SIZE_IN_MEM_SIZE_THRESHOLD
+            max_bytes_per_block: 100 * 1024 * 1024,
+        }
+    }
 }
 
 impl BlockCompactThresholds {
