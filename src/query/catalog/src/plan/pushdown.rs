@@ -32,22 +32,22 @@ pub struct PrewhereInfo {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct CopyInfo {
-    pub force: bool,
+pub struct StageInfo {
+    pub force_copy: bool,
     /// User set files in the COPY statement.
     pub files: Vec<String>,
     /// User set path.
     pub path: String,
     /// User set pattern in the COPY statement.
     pub pattern: String,
-    /// Stage info.
-    pub stage_info: UserStageInfo,
     /// COPY INTO table's catalog name.
     pub into_table_catalog_name: String,
     /// COPY INTO table's database name.
     pub into_table_database_name: String,
     /// COPY INTO table's name.
     pub into_table_name: String,
+    /// User Stage info.
+    pub user_stage_info: UserStageInfo,
 }
 
 /// Extras is a wrapper for push down items.
@@ -65,6 +65,6 @@ pub struct PushDownInfo {
     pub limit: Option<usize>,
     /// Optional order_by expression plan, asc, null_first
     pub order_by: Vec<(Expression, bool, bool)>,
-    /// Optional copy info, used for COPY into <table> from stage
-    pub copy: Option<CopyInfo>,
+    /// Optional stage info, used for COPY into <table> from stage
+    pub stage: Option<StageInfo>,
 }

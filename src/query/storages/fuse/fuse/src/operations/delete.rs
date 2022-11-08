@@ -95,7 +95,7 @@ impl FuseTable {
             prewhere: None, // TBD: if delete rows need prewhere optimization
             limit: None,
             order_by: vec![],
-            copy: None,
+            stage: None,
         };
         let push_downs = Some(extras);
         let segments_location = snapshot.segments.clone();

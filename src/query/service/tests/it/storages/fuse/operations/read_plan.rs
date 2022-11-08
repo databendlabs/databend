@@ -131,7 +131,7 @@ fn test_to_partitions() -> Result<()> {
         limit: None,
         order_by: vec![],
         prewhere: None,
-        copy: None,
+        stage: None,
     });
 
     let (stats, parts) = FuseTable::to_partitions(&blocks_metas, &column_leafs, push_down);
@@ -172,7 +172,7 @@ async fn test_fuse_table_exact_statistic() -> Result<()> {
             prewhere: None,
             limit: None,
             order_by: vec![],
-            copy: None,
+            stage: None,
         };
         let (stats, parts) = table.read_partitions(ctx.clone(), Some(push_downs)).await?;
         assert_eq!(stats.read_rows, num_blocks * rows_per_block);

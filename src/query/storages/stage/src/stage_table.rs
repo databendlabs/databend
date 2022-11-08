@@ -149,33 +149,34 @@ impl Table for StageTable {
         ctx: Arc<dyn TableContext>,
         push_downs: Option<PushDownInfo>,
     ) -> Result<(PartStatistics, Partitions)> {
-        let pushdown = push_downs
-            .ok_or_else(|| ErrorCode::Internal("copy: pushdown cannot be None(It's a bug)"))?;
-        let copy_info = pushdown
-            .copy
-            .ok_or_else(|| ErrorCode::Internal("copy: pushdown.copy cannot be None(It's a bug)"))?;
+        let pushdown = push_downs.ok_or_else(|| {
+            ErrorCode::Internal("stage_table: pushdown cannot be None(It's a bug)")
+        })?;
+        let stage_info = pushdown.stage.ok_or_else(|| {
+            ErrorCode::Internal("stage_table: pushdown.stage cannot be None(It's a bug)")
+        })?;
 
         // User set the files.
-        let files = copy_info.files;
+        let files = stage_info.files;
 
         // 1. List all files.
-        let path = &copy_info.path;
+        let path = &stage_info.path;
         let mut all_files = if !files.is_empty() {
             let mut res = vec![];
             for file in files {
                 // Here we add the path to the file: /path/to/path/file1.
                 let new_path = Path::new(path).join(file).to_string_lossy().to_string();
-                let info = stat_file(ctx.clone(), &new_path, &copy_info.stage_info).await?;
+                let info = stat_file(ctx.clone(), &new_path, &stage_info.user_stage_info).await?;
                 res.push(info);
             }
             res
         } else {
-            list_file(ctx.clone(), path, &copy_info.stage_info).await?
+            list_file(ctx.clone(), path, &stage_info.user_stage_info).await?
         };
 
         // 2. Retain pattern match files.
         {
-            let pattern = &copy_info.pattern;
+            let pattern = &stage_info.pattern;
             if !pattern.is_empty() {
                 let regex = Regex::new(pattern).map_err(|e| {
                     ErrorCode::SyntaxException(format!(
@@ -187,13 +188,13 @@ impl Table for StageTable {
             }
         }
 
-        // 3. Colored files(NeedCopy or AlreadCopied) if COPY force option is false
-        if !copy_info.force {
+        // 3. Colored files(NeedCopy or AlreadyCopied) if COPY force option is false
+        if !stage_info.force_copy {
             all_files = StageTable::color_copied_files(
                 &ctx,
-                &copy_info.into_table_catalog_name,
-                &copy_info.into_table_database_name,
-                &copy_info.into_table_name,
+                &stage_info.into_table_catalog_name,
+                &stage_info.into_table_database_name,
+                &stage_info.into_table_name,
                 all_files,
             )
             .await?;
@@ -226,8 +227,8 @@ impl Table for StageTable {
         _: AppendMode,
         _: bool,
     ) -> Result<()> {
-        let single = self.table_info.stage_info.copy_options.single;
-        let op = StageTable::get_op(&ctx, &self.table_info.stage_info)?;
+        let single = self.table_info.user_stage_info.copy_options.single;
+        let op = StageTable::get_op(&ctx, &self.table_info.user_stage_info)?;
 
         let uuid = uuid::Uuid::new_v4().to_string();
         let group_id = AtomicUsize::new(0);

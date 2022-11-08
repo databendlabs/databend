@@ -17,9 +17,9 @@ use std::sync::Arc;
 use chrono::Utc;
 use common_base::base::GlobalIORuntime;
 use common_catalog::catalog::Catalog;
-use common_catalog::plan::CopyInfo;
 use common_catalog::plan::DataSourceInfo;
 use common_catalog::plan::PushDownInfo;
+use common_catalog::plan::StageInfo;
 use common_catalog::plan::StageTableInfo;
 use common_catalog::table::AppendMode;
 use common_datavalues::prelude::*;
@@ -96,7 +96,7 @@ impl CopyInterpreterV2 {
         let data_schema = DataSchemaRefExt::create(fields);
         let stage_table_info = StageTableInfo {
             schema: data_schema.clone(),
-            stage_info: stage.clone(),
+            user_stage_info: stage.clone(),
             path: path.to_string(),
             files: vec![],
         };
@@ -217,12 +217,12 @@ impl CopyInterpreterV2 {
         // 1. Need copy files(status with NeedCopy)
         // 2. Have copied files(status with AlreadyCopied)
         let read_source_plan = {
-            let copy_info = CopyInfo {
-                force,
+            let copy_info = StageInfo {
+                force_copy: force,
                 files: files.to_vec(),
                 path: path.to_string(),
                 pattern: pattern.to_string(),
-                stage_info: stage_table_info.stage_info.clone(),
+                user_stage_info: stage_table_info.user_stage_info.clone(),
                 into_table_catalog_name: catalog_name.to_string(),
                 into_table_database_name: database_name.to_string(),
                 into_table_name: table_name.to_string(),
@@ -233,7 +233,7 @@ impl CopyInterpreterV2 {
                 prewhere: None,
                 limit: None,
                 order_by: vec![],
-                copy: Some(copy_info),
+                stage: Some(copy_info),
             };
             stage_table
                 .read_plan_with_catalog(ctx.clone(), catalog_name.to_string(), Some(pushdown))
@@ -278,10 +278,10 @@ impl CopyInterpreterV2 {
                 .collect::<Vec<_>>();
 
             let table_ctx: Arc<dyn TableContext> = ctx.clone();
-            let operator = StageTable::get_op(&table_ctx, &stage_table_info.stage_info)?;
+            let operator = StageTable::get_op(&table_ctx, &stage_table_info.user_stage_info)?;
             let settings = ctx.get_settings();
             let schema = stage_table_info.schema.clone();
-            let stage_info = stage_table_info.stage_info.clone();
+            let stage_info = stage_table_info.user_stage_info.clone();
             let compact_threshold = stage_table.get_block_compact_thresholds();
             let input_ctx = Arc::new(
                 InputContext::try_create_from_copy(
@@ -300,7 +300,7 @@ impl CopyInterpreterV2 {
                 .exec_copy(input_ctx.clone(), &mut build_res.main_pipeline)?;
 
             // Build Limit pipeline.
-            let limit = stage_table_info.stage_info.copy_options.size_limit;
+            let limit = stage_table_info.user_stage_info.copy_options.size_limit;
             if limit > 0 {
                 build_res.main_pipeline.resize(1)?;
                 build_res.main_pipeline.add_transform(
@@ -334,7 +334,7 @@ impl CopyInterpreterV2 {
                 // capture out variable
                 let ctx = ctx.clone();
                 let to_table = to_table.clone();
-                let stage_info = stage_table_info_clone.stage_info.clone();
+                let stage_info = stage_table_info_clone.user_stage_info.clone();
                 let all_source_files = all_source_file_infos.clone();
                 let need_copied_files = need_copied_file_infos.clone();
                 let tenant = tenant.clone();
