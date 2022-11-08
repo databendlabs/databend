@@ -19,7 +19,6 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 
 use common_base::base::uuid;
-use common_base::base::GlobalIORuntime;
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartInfo;
 use common_catalog::plan::PartStatistics;
@@ -38,8 +37,6 @@ use common_meta_app::schema::TableInfo;
 use common_meta_types::StageType;
 use common_meta_types::UserStageInfo;
 use common_pipeline_core::Pipeline;
-use common_pipeline_sources::processors::sources::input_formats::InputContext;
-use common_pipeline_transforms::processors::transforms::TransformLimit;
 use common_storage::init_operator;
 use opendal::layers::SubdirLayer;
 use opendal::Operator;
@@ -218,48 +215,7 @@ impl Table for StageTable {
         plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
-        let mut copied_file_infos = vec![];
-        for part in &plan.parts {
-            if let Some(stage_file_info) = part.as_any().downcast_ref::<StageFilePartition>() {
-                copied_file_infos.push(stage_file_info.clone());
-            }
-        }
-        let files = copied_file_infos
-            .iter()
-            .map(|v| v.path.clone())
-            .collect::<Vec<_>>();
-
-        let operator = StageTable::get_op(&ctx, &self.table_info.stage_info)?;
-        let settings = ctx.get_settings();
-        let schema = self.table_info.schema.clone();
-        let stage_info = self.table_info.stage_info.clone();
-        let compact_threshold = self.get_block_compact_thresholds();
-        let input_ctx = Arc::new(GlobalIORuntime::instance().block_on(async move {
-            InputContext::try_create_from_copy(
-                operator,
-                settings,
-                schema,
-                stage_info,
-                files,
-                ctx.get_scan_progress(),
-                compact_threshold,
-            )
-            .await
-        })?);
-        input_ctx.format.exec_copy(input_ctx.clone(), pipeline)?;
-
-        let limit = self.table_info.stage_info.copy_options.size_limit;
-        if limit > 0 {
-            pipeline.resize(1)?;
-            pipeline.add_transform(|transform_input_port, transform_output_port| {
-                TransformLimit::try_create(
-                    Some(limit),
-                    0,
-                    transform_input_port,
-                    transform_output_port,
-                )
-            })?;
-        }
+        let (_, _, _) = (ctx, plan, pipeline);
         Ok(())
     }
 
