@@ -1633,6 +1633,7 @@ dependencies = [
 name = "common-meta-app"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "common-building",
  "common-datavalues",
  "common-meta-types",

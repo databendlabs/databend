@@ -14,6 +14,7 @@ test = false
 common-datavalues = { path = "../../query/datavalues" }
 common-meta-types = { path = "../types" }
 common-storage = { path = "../../common/storage" }
+chrono = "0.4"
 
 enumflags2 = { version = "0.7.5", features = ["serde"] }
 maplit = "1.0.2"

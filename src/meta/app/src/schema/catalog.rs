@@ -15,8 +15,8 @@
 use std::collections::BTreeMap;
 use std::fmt::Display;
 
-use common_datavalues::chrono::DateTime;
-use common_datavalues::chrono::Utc;
+use chrono::DateTime;
+use chrono::Utc;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum CatalogType {

@@ -39,7 +39,6 @@ pub trait CatalogManagerHelper {
 
     async fn register_build_in_catalogs(&self, conf: &Config) -> Result<()>;
 
-    #[cfg(feature = "hive")]
     fn register_external_catalogs(&self, conf: &Config) -> Result<()>;
 
     fn create_user_defined_catalog(&self, req: CreateCatalogReq) -> Result<()>;
@@ -76,14 +75,21 @@ impl CatalogManagerHelper for CatalogManager {
         Ok(())
     }
 
-    #[cfg(feature = "hive")]
     fn register_external_catalogs(&self, conf: &Config) -> Result<()> {
-        use crate::catalogs::hive::HiveCatalog;
         let hms_address = &conf.catalog.meta_store_address;
         if !hms_address.is_empty() {
             // register hive catalog
-            let hive_catalog: Arc<dyn Catalog> = Arc::new(HiveCatalog::try_create(hms_address)?);
-            self.catalogs.insert(CATALOG_HIVE.to_owned(), hive_catalog);
+            #[cfg(not(feature = "hive"))]
+            {
+                return Err(ErrorCode::CatalogNotSupported(
+                    "Hive catalog is not enabled, please recompile with --features hive",
+                ));
+            }
+            #[cfg(feature = "hive")]
+            {
+                let hive_catalog = Arc::new(HiveCatalog::try_create(hms_address)?);
+                self.catalogs.insert(CATALOG_HIVE.to_owned(), hive_catalog);
+            }
         }
         Ok(())
     }
@@ -100,7 +106,7 @@ impl CatalogManagerHelper for CatalogManager {
                 #[cfg(not(feature = "hive"))]
                 {
                     Err(ErrorCode::CatalogNotSupported(
-                        "Hive catalog support is not enabled in your databend-query distribution.",
+                        "Hive catalog is not enabled, please recompile with --features hive",
                     ))
                 }
                 #[cfg(feature = "hive")]
