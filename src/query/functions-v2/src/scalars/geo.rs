@@ -225,7 +225,7 @@ fn distance(lon1deg: f32, lat1deg: f32, lon2deg: f32, lat2deg: f32, method: GeoM
                 let lon = sphere_metric_lut[latitude_midpoint_index]
                     + (sphere_metric_lut[latitude_midpoint_index + 1]
                         - sphere_metric_lut[latitude_midpoint_index])
-                        * (latitude_midpoint - latitude_midpoint_index as f32) as f32;
+                        * (latitude_midpoint - latitude_midpoint_index as f32);
 
                 (lat, lon)
             }
@@ -235,7 +235,7 @@ fn distance(lon1deg: f32, lat1deg: f32, lon2deg: f32, lat2deg: f32, method: GeoM
                 let lon = sphere_metric_meters_lut[latitude_midpoint_index]
                     + (sphere_metric_meters_lut[latitude_midpoint_index + 1]
                         - sphere_metric_meters_lut[latitude_midpoint_index])
-                        * (latitude_midpoint - latitude_midpoint_index as f32) as f32;
+                        * (latitude_midpoint - latitude_midpoint_index as f32);
 
                 (lat, lon)
             }
