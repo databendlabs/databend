@@ -102,6 +102,7 @@ macro_rules! lookup_impl {
                 match self.flags[key as usize] {
                     true => Err(&mut self.data[key as usize]),
                     false => {
+                        self.flags[key as usize] = true;
                         let e = &mut self.data[key as usize];
                         self.len += 1;
                         e.key.write(key);
