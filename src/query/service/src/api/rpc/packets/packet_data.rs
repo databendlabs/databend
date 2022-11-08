@@ -32,6 +32,7 @@ use common_datablocks::DataBlock;
 use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use tracing::error;
 
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
@@ -93,7 +94,10 @@ impl PrecommitBlock {
 impl From<DataPacket> for FlightData {
     fn from(packet: DataPacket) -> Self {
         match packet {
-            DataPacket::ErrorCode(error) => FlightData::from(error),
+            DataPacket::ErrorCode(error) => {
+                error!("Got error code data packet: {:?}", error);
+                FlightData::from(error)
+            }
             DataPacket::FragmentData(fragment_data) => FlightData::from(fragment_data),
             DataPacket::FetchProgressAndPrecommit => FlightData {
                 app_metadata: vec![0x03],

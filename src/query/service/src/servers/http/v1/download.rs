@@ -20,8 +20,8 @@ use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
+use common_formats::ClickhouseFormatType;
 use common_formats::FileFormatOptionsExt;
-use common_meta_types::StageFileFormatType;
 use common_storages_fuse_result::ResultTable;
 use futures::StreamExt;
 
@@ -37,7 +37,7 @@ pub trait Downloader {
     async fn download(
         &self,
         ctx: Arc<QueryContext>,
-        fmt: StageFileFormatType,
+        format: ClickhouseFormatType,
         limit: Option<usize>,
     ) -> Result<SendableVu8Stream>;
 }
@@ -47,7 +47,7 @@ impl Downloader for ResultTable {
     async fn download(
         &self,
         ctx: Arc<QueryContext>,
-        fmt: StageFileFormatType,
+        format: ClickhouseFormatType,
         limit: Option<usize>,
     ) -> Result<SendableVu8Stream> {
         let push_downs = match limit {
@@ -74,8 +74,8 @@ impl Downloader for ResultTable {
                 push_downs,
             })
             .await?;
-        let mut output_format = FileFormatOptionsExt::get_output_format_from_settings(
-            fmt,
+        let mut output_format = FileFormatOptionsExt::get_output_format_from_settings_clickhouse(
+            format,
             self.schema(),
             &ctx.get_settings(),
         )?;

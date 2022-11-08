@@ -41,9 +41,11 @@ table_cache_bloom_index_meta_count=3000
 table_cache_bloom_index_data_bytes=1073741824
 
 [log]
+
+[log.file]
 level = "ERROR"
-dir = "./.databend/logs"
-query_enabled = true
+format = "text"
+dir = "./.databend/logs_1"
 
 [meta]
 # To enable embedded meta-store, set address to "".
