@@ -174,12 +174,9 @@ impl InputFormatTextBase for InputFormatCSV {
                     ));
                 }
                 ReadRecordResult::OutputEndsFull => {
-                    return Err(csv_error(
-                        &format!(
-                            "too many fields, expect {}, got more than {}",
-                            num_fields,
-                            field_ends.len()
-                        ),
+                    return Err(output_ends_full_error(
+                        num_fields,
+                        field_ends.len(),
                         &state.path,
                         state.rows,
                     ));
@@ -234,38 +231,21 @@ impl InputFormatTextBase for InputFormatCSV {
                     ));
                 }
                 ReadRecordResult::OutputEndsFull => {
-                    return Err(csv_error(
-                        &format!(
-                            "too many fields, expect {}, got more than {}",
-                            num_fields,
-                            field_ends.len()
-                        ),
+                    return Err(output_ends_full_error(
+                        num_fields,
+                        field_ends.len(),
                         &state.path,
                         start_row + row_batch.row_ends.len(),
                     ));
                 }
                 ReadRecordResult::Record => {
-                    if endlen < num_fields {
-                        return Err(csv_error(
-                            &format!("expect {} fields, only found {} ", num_fields, n_end),
-                            &state.path,
-                            start_row + row_batch.row_ends.len(),
-                        ));
-                    } else if endlen > num_fields + 1 {
-                        return Err(csv_error(
-                            &format!("too many fields, expect {}, got {}", num_fields, n_end),
-                            &state.path,
-                            start_row + row_batch.row_ends.len(),
-                        ));
-                    } else if endlen == num_fields + 1
-                        && field_ends[num_fields] != field_ends[num_fields - 1]
-                    {
-                        return Err(csv_error(
-                            "CSV allow ending with ',', but should not have data after it",
-                            &state.path,
-                            start_row + row_batch.row_ends.len(),
-                        ));
-                    }
+                    Self::check_num_field(
+                        endlen,
+                        num_fields,
+                        field_ends,
+                        &state.path,
+                        start_row + row_batch.row_ends.len(),
+                    )?;
                     row_batch
                         .field_ends
                         .extend_from_slice(&field_ends[..num_fields]);
@@ -346,6 +326,22 @@ impl CsvReaderState {
             n_end: 0,
         }
     }
+}
+
+fn output_ends_full_error(
+    num_fields_expect: usize,
+    num_fields_actual: usize,
+    path: &str,
+    row: usize,
+) -> ErrorCode {
+    csv_error(
+        &format!(
+            "too many fields, expect {}, got more than {}",
+            num_fields_expect, num_fields_actual
+        ),
+        path,
+        row,
+    )
 }
 
 fn csv_error(msg: &str, path: &str, row: usize) -> ErrorCode {
