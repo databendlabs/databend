@@ -81,8 +81,13 @@ impl<R: Rows> Cursor<R> {
     }
 
     #[inline]
-    fn current(&self) -> R::Item<'_> {
+    pub fn current(&self) -> R::Item<'_> {
         self.rows.row_unchecked(self.row_index)
+    }
+
+    #[inline]
+    pub fn last(&self) -> R::Item<'_> {
+        self.rows.row_unchecked(self.num_rows - 1)
     }
 }
 
