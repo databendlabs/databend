@@ -183,7 +183,7 @@ pub trait InputFormatPipe: Sized + Send + 'static {
                     break;
                 };
             }
-            tracing::info!("end copy splits feeder");
+            tracing::debug!("end copy splits feeder");
         });
 
         Ok(())

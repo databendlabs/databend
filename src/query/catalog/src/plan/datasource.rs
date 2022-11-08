@@ -32,9 +32,9 @@ use crate::plan::PushDownInfo;
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq)]
 pub struct StageTableInfo {
     pub schema: DataSchemaRef,
-    pub stage_info: UserStageInfo,
     pub path: String,
     pub files: Vec<String>,
+    pub user_stage_info: UserStageInfo,
 }
 
 impl StageTableInfo {
@@ -43,14 +43,14 @@ impl StageTableInfo {
     }
 
     pub fn desc(&self) -> String {
-        self.stage_info.stage_name.clone()
+        self.user_stage_info.stage_name.clone()
     }
 }
 
 impl Debug for StageTableInfo {
     // Ignore the schema.
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self.stage_info)
+        write!(f, "{:?}", self.user_stage_info)
     }
 }
 
