@@ -32,9 +32,12 @@ use common_meta_types::UserStageInfo;
 use common_pipeline_sources::processors::sources::input_formats::InputContext;
 use common_pipeline_transforms::processors::transforms::TransformLimit;
 use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
+use common_storages_fuse::io::Files;
 use common_storages_stage::StageFilePartition;
 use common_storages_stage::StageFileStatus;
 use common_storages_stage::StageTable;
+use tracing::error;
+use tracing::info;
 
 use crate::interpreters::common::append2table;
 use crate::interpreters::Interpreter;
@@ -186,17 +189,26 @@ impl CopyInterpreterV2 {
         ctx: Arc<QueryContext>,
         stage_info: &UserStageInfo,
         stage_file_infos: &[StageFilePartition],
-    ) -> Result<()> {
+    ) {
         if stage_info.copy_options.purge {
             let table_ctx: Arc<dyn TableContext> = ctx.clone();
-            let op = StageTable::get_op(&table_ctx, stage_info)?;
-            for file in stage_file_infos {
-                if let Err(e) = op.object(&file.path).delete().await {
-                    tracing::error!("Failed to delete file: {}, error: {}", file.path, e);
+            let op = StageTable::get_op(&table_ctx, stage_info);
+            match op {
+                Ok(op) => {
+                    let file = Files::create(table_ctx, op);
+                    let files = stage_file_infos
+                        .iter()
+                        .map(|v| v.path.clone())
+                        .collect::<Vec<_>>();
+                    if let Err(e) = file.remove_file_in_batch(&files).await {
+                        error!("Failed to delete file: {:?}, error: {}", files, e);
+                    }
+                }
+                Err(e) => {
+                    error!("Failed to get stage table op, error: {}", e);
                 }
             }
         }
-        Ok(())
     }
 
     // Color file if it is copied.
@@ -270,6 +282,7 @@ impl CopyInterpreterV2 {
         // Get the source plan with all files from stage_table.read_partitions:
         // 1. Need copy files(status with NeedCopy)
         // 2. Have copied files(status with AlreadyCopied)
+        info!("copy: try to read all files");
         let read_source_plan = {
             let copy_info = StageInfo {
                 files: files.to_vec(),
@@ -317,6 +330,12 @@ impl CopyInterpreterV2 {
                 need_copied_file_infos.push(file.clone());
             }
         }
+
+        info!(
+            "copy: read all files finished, all:{}, need copy:{}",
+            all_source_file_infos.len(),
+            need_copied_file_infos.len()
+        );
 
         // COPY into <table> table info.
         let to_table = ctx
@@ -411,20 +430,26 @@ impl CopyInterpreterV2 {
                     return GlobalIORuntime::instance().block_on(async move {
                         // 1. Commit datas.
                         let operations = ctx.consume_precommit_blocks();
+                        info!("copy: try to commit operations:{}", operations.len());
                         to_table
                             .commit_insertion(ctx.clone(), operations, false)
                             .await?;
 
                         // 2. Try to purge copied files if purge option is true, if error will skip.
                         // If a file is already copied(status with AlreadyCopied) we will try to purge them.
+                        info!("copy: try to purge files:{}", all_source_files.len());
                         CopyInterpreterV2::try_purge_files(
                             ctx.clone(),
                             &stage_info,
                             &all_source_files,
                         )
-                        .await?;
+                        .await;
 
                         // 3. Upsert files(status with NeedCopy) info to meta.
+                        info!(
+                            "copy: try to upsert file infos:{} to meta",
+                            copied_files.len()
+                        );
                         CopyInterpreterV2::upsert_copied_files_info_to_meta(
                             tenant,
                             database_name,
