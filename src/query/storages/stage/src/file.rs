@@ -44,6 +44,7 @@ pub async fn stat_file(
             .map_or(Utc::now(), |t| Utc.timestamp(t.unix_timestamp(), 0)),
         etag: meta.etag().map(str::to_string),
         status: StageFileStatus::NeedCopy,
+        creator: None,
     })
 }
 
@@ -105,6 +106,7 @@ pub async fn list_file(
                 .map_or(Utc::now(), |t| Utc.timestamp(t.unix_timestamp(), 0)),
             etag: meta.etag().map(str::to_string),
             status: StageFileStatus::NeedCopy,
+            creator: None,
         })
         .collect::<Vec<StageFilePartition>>();
 

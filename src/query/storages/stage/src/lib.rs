@@ -12,11 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub(crate) mod file;
-mod stage_partition;
+mod file;
+mod stage_parts;
 mod stage_table;
 mod stage_table_sink;
 
-pub use stage_partition::StageFilePartition;
-pub use stage_partition::StageFileStatus;
+pub use file::*;
+pub use stage_parts::StageFilePartition;
+pub use stage_parts::StageFileStatus;
 pub use stage_table::StageTable;

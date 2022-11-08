@@ -43,9 +43,9 @@ use opendal::Operator;
 use parking_lot::Mutex;
 use regex::Regex;
 
-use crate::file::list_file;
-use crate::file::stat_file;
+use crate::list_file;
 use crate::stage_table_sink::StageTableSink;
+use crate::stat_file;
 use crate::StageFilePartition;
 use crate::StageFileStatus;
 
@@ -158,7 +158,7 @@ impl Table for StageTable {
         // User set the files.
         let files = copy_info.files;
 
-        // 1. Get all files.
+        // 1. List all files.
         let path = &copy_info.path;
         let mut all_files = if !files.is_empty() {
             let mut res = vec![];
@@ -173,7 +173,7 @@ impl Table for StageTable {
             list_file(ctx.clone(), path, &copy_info.stage_info).await?
         };
 
-        // 2. pattern filter.
+        // 2. Retain pattern match files.
         {
             let pattern = &copy_info.pattern;
             if !pattern.is_empty() {
@@ -187,7 +187,7 @@ impl Table for StageTable {
             }
         }
 
-        // 3. colored if not force
+        // 3. Colored files(NeedCopy or AlreadCopied) if COPY force option is false
         if !copy_info.force {
             all_files = StageTable::color_copied_files(
                 &ctx,

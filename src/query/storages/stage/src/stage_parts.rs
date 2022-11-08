@@ -13,11 +13,11 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Utc;
 use common_catalog::plan::PartInfo;
+use common_meta_types::UserIdentity;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum StageFileStatus {
@@ -33,26 +33,7 @@ pub struct StageFilePartition {
     pub last_modified: DateTime<Utc>,
     pub etag: Option<String>,
     pub status: StageFileStatus,
-}
-
-impl StageFilePartition {
-    pub fn create(
-        path: String,
-        size: u64,
-        md5: Option<String>,
-        last_modified: DateTime<Utc>,
-        etag: Option<String>,
-        status: StageFileStatus,
-    ) -> Arc<Box<dyn PartInfo>> {
-        Arc::new(Box::new(Self {
-            path,
-            size,
-            md5,
-            last_modified,
-            etag,
-            status,
-        }))
-    }
+    pub creator: Option<UserIdentity>,
 }
 
 #[typetag::serde(name = "stage_file_partition")]
