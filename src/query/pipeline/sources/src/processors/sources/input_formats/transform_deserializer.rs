@@ -16,7 +16,7 @@ use std::any::Any;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use common_datablocks::DataBlock;
+use common_expression::Chunk;
 use common_exception::Result;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
@@ -32,7 +32,7 @@ use crate::processors::sources::input_formats::input_pipeline::InputFormatPipe;
 struct DeserializeProcessor<I: InputFormatPipe> {
     pub block_builder: I::BlockBuilder,
     pub input_buffer: Option<I::RowBatch>,
-    pub output_buffer: VecDeque<DataBlock>,
+    pub output_buffer: VecDeque<Chunk>,
 }
 
 impl<I: InputFormatPipe> DeserializeProcessor<I> {
@@ -48,7 +48,8 @@ impl<I: InputFormatPipe> DeserializeProcessor<I> {
         let blocks = self.block_builder.deserialize(self.input_buffer.take())?;
         for b in blocks.into_iter() {
             if !b.is_empty() {
-                self.output_buffer.push_back(b)
+                todo!("expression")
+                // self.output_buffer.push_back(b)
             }
         }
         Ok(())

@@ -39,8 +39,8 @@ mod source_example {
     use std::sync::Arc;
 
     use common_catalog::table_context::TableContext;
-    use common_datablocks::DataBlock;
     use common_exception::Result;
+    use common_expression::Chunk;
     use common_pipeline_core::processors::port::OutputPort;
     use common_pipeline_core::processors::processor::ProcessorPtr;
 
@@ -51,13 +51,13 @@ mod source_example {
 
     struct ExampleSyncSource {
         pos: usize,
-        data_blocks: Vec<DataBlock>,
+        data_blocks: Vec<Chunk>,
     }
 
     impl ExampleSyncSource {
         pub fn create(
             ctx: Arc<dyn TableContext>,
-            data_blocks: Vec<DataBlock>,
+            data_blocks: Vec<Chunk>,
             outputs: Arc<OutputPort>,
         ) -> Result<ProcessorPtr> {
             SyncSourcer::create(ctx, outputs, ExampleSyncSource {
@@ -70,7 +70,7 @@ mod source_example {
     impl SyncSource for ExampleSyncSource {
         const NAME: &'static str = "Example";
 
-        fn generate(&mut self) -> Result<Option<DataBlock>> {
+        fn generate(&mut self) -> Result<Option<Chunk>> {
             self.pos += 1;
             match self.data_blocks.len() >= self.pos {
                 true => Ok(Some(self.data_blocks[self.pos - 1].clone())),
@@ -81,13 +81,13 @@ mod source_example {
 
     struct ExampleAsyncSource {
         pos: usize,
-        data_blocks: Vec<DataBlock>,
+        data_blocks: Vec<Chunk>,
     }
 
     impl ExampleAsyncSource {
         pub fn create(
             ctx: Arc<dyn TableContext>,
-            data_blocks: Vec<DataBlock>,
+            data_blocks: Vec<Chunk>,
             output: Arc<OutputPort>,
         ) -> Result<ProcessorPtr> {
             AsyncSourcer::create(ctx, output, ExampleAsyncSource {
@@ -102,7 +102,7 @@ mod source_example {
         const NAME: &'static str = "Async";
 
         #[async_trait::unboxed_simple]
-        async fn generate(&mut self) -> Result<Option<DataBlock>> {
+        async fn generate(&mut self) -> Result<Option<Chunk>> {
             self.pos += 1;
             match self.data_blocks.len() >= self.pos {
                 true => Ok(Some(self.data_blocks[self.pos - 1].clone())),

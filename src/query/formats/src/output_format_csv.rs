@@ -14,7 +14,6 @@
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::serializations::write_csv_string;
 use common_expression::serializations::write_escaped_string;
 use common_expression::Chunk;
 use common_expression::DataSchemaRef;
@@ -57,11 +56,7 @@ impl<const TSV: bool, const WITH_NAMES: bool, const WITH_TYPES: bool>
             if col_index != 0 {
                 buf.push(fd);
             }
-            if TSV {
-                write_escaped_string(v.as_bytes(), &mut buf, b'\'');
-            } else {
-                write_csv_string(v.as_bytes(), &mut buf, b'\"');
-            };
+            todo!("expression")
         }
 
         buf.push(format.record_delimiter[0]);
@@ -99,11 +94,7 @@ impl<const TSV: bool, const WITH_NAMES: bool, const WITH_TYPES: bool> OutputForm
                     buf.push(fd);
                 }
 
-                if TSV {
-                    serializer.write_field_tsv(row_index, &mut buf, &self.format_settings, false);
-                } else {
-                    serializer.write_field_csv(row_index, &mut buf, &self.format_settings)
-                };
+                todo!("expression")
             }
             buf.push(rd)
         }

@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Utc;
+use common_datablocks::BlockCompactThresholds;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::Chunk;

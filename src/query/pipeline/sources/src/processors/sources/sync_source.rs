@@ -18,7 +18,7 @@ use std::sync::Arc;
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
+use common_expression::Chunk;
 use common_exception::Result;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
@@ -31,7 +31,7 @@ use common_pipeline_core::processors::Processor;
 pub trait SyncSource: Send {
     const NAME: &'static str;
 
-    fn generate(&mut self) -> Result<Option<DataBlock>>;
+    fn generate(&mut self) -> Result<Option<Chunk>>;
 }
 
 // TODO: This can be refactored using proc macros
@@ -40,7 +40,7 @@ pub struct SyncSourcer<T: 'static + SyncSource> {
 
     inner: T,
     output: Arc<OutputPort>,
-    generated_data: Option<DataBlock>,
+    generated_data: Option<Chunk>,
     scan_progress: Arc<Progress>,
 }
 

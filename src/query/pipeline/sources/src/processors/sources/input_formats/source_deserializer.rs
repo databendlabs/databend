@@ -81,7 +81,8 @@ impl<I: InputFormatPipe> Processor for DeserializeSource<I> {
             match self.output_buffer.pop_front() {
                 Some(data_block) => {
                     tracing::info!("DeserializeSource push rows {}", data_block.num_rows());
-                    self.output.push_data(Ok(data_block));
+                    todo!("expression");
+                    // self.output.push_data(Ok(data_block));
                     Ok(Event::NeedConsume)
                 }
                 None => {

@@ -16,8 +16,8 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
 use common_exception::Result;
+use common_expression::Chunk;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use parking_lot::Mutex;
@@ -26,14 +26,14 @@ use crate::processors::sources::SyncSource;
 use crate::processors::sources::SyncSourcer;
 
 pub struct BlocksSource {
-    data_blocks: Arc<Mutex<VecDeque<DataBlock>>>,
+    data_blocks: Arc<Mutex<VecDeque<Chunk>>>,
 }
 
 impl BlocksSource {
     pub fn create(
         ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
-        data_blocks: Arc<Mutex<VecDeque<DataBlock>>>,
+        data_blocks: Arc<Mutex<VecDeque<Chunk>>>,
     ) -> Result<ProcessorPtr> {
         SyncSourcer::create(ctx, output, BlocksSource { data_blocks })
     }
@@ -42,7 +42,7 @@ impl BlocksSource {
 impl SyncSource for BlocksSource {
     const NAME: &'static str = "BlocksSource";
 
-    fn generate(&mut self) -> Result<Option<DataBlock>> {
+    fn generate(&mut self) -> Result<Option<Chunk>> {
         let mut blocks_guard = self.data_blocks.lock();
         match blocks_guard.pop_front() {
             None => Ok(None),

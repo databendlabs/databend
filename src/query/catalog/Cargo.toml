@@ -12,6 +12,8 @@ test = false
 chrono = "0.4"
 common-base = { path = "../../common/base" }
 common-config = { path = "../config" }
+common-datablocks = { path = "../datablocks" }
+common-datavalues = { path = "../datavalues" }
 common-exception = { path = "../../common/exception" }
 common-expression = { path = "../expression" }
 common-functions = { path = "../functions" }

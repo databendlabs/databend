@@ -99,7 +99,7 @@ pub struct DataSourcePlan {
     pub description: String,
 
     pub tbl_args: Option<Vec<Scalar>>,
-    pub push_downs: Option<Extras>,
+    pub push_downs: Option<PushDownInfo>,
 }
 
 impl DataSourcePlan {

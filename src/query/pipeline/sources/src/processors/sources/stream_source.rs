@@ -19,6 +19,7 @@ use common_datablocks::DataBlock;
 use common_datablocks::SendableDataBlockStream;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::Chunk;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use futures::StreamExt;
@@ -58,7 +59,7 @@ impl<const T: bool> AsyncSource for AsyncStreamSource<T> {
     const SKIP_EMPTY_DATA_BLOCK: bool = T;
 
     #[async_trait::unboxed_simple]
-    async fn generate(&mut self) -> Result<Option<DataBlock>> {
+    async fn generate(&mut self) -> Result<Option<Chunk>> {
         match self
             .stream
             .as_mut()
@@ -66,7 +67,10 @@ impl<const T: bool> AsyncSource for AsyncStreamSource<T> {
             .next()
             .await
         {
-            Some(Ok(block)) => Ok(Some(block)),
+            Some(Ok(block)) => {
+                todo!("expression")
+                //  Ok(Some(block)),
+            }
             Some(Err(e)) => Err(e),
             None => Ok(None),
         }

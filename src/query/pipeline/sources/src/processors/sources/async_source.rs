@@ -18,8 +18,8 @@ use std::sync::Arc;
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
 use common_exception::Result;
+use common_expression::Chunk;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
@@ -31,7 +31,7 @@ pub trait AsyncSource: Send {
     const SKIP_EMPTY_DATA_BLOCK: bool = true;
 
     #[async_trait::unboxed_simple]
-    async fn generate(&mut self) -> Result<Option<DataBlock>>;
+    async fn generate(&mut self) -> Result<Option<Chunk>>;
 }
 
 // TODO: This can be refactored using proc macros
@@ -43,7 +43,7 @@ pub struct AsyncSourcer<T: 'static + AsyncSource> {
     inner: T,
     output: Arc<OutputPort>,
     scan_progress: Arc<Progress>,
-    generated_data: Option<DataBlock>,
+    generated_data: Option<Chunk>,
 }
 
 impl<T: 'static + AsyncSource> AsyncSourcer<T> {
@@ -90,7 +90,8 @@ impl<T: 'static + AsyncSource> Processor for AsyncSourcer<T> {
         match self.generated_data.take() {
             None => Ok(Event::Async),
             Some(data_block) => {
-                self.output.push_data(Ok(data_block));
+                todo!("expression");
+                // self.output.push_data(Ok(data_block));
                 Ok(Event::NeedConsume)
             }
         }

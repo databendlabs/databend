@@ -15,7 +15,7 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use common_datablocks::DataBlock;
+use common_expression::Chunk;
 use common_exception::Result;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
@@ -24,11 +24,11 @@ use common_pipeline_core::processors::Processor;
 
 pub struct OneBlockSource {
     output: Arc<OutputPort>,
-    data_block: Option<DataBlock>,
+    data_block: Option<Chunk>,
 }
 
 impl OneBlockSource {
-    pub fn create(output: Arc<OutputPort>, data_block: DataBlock) -> Result<ProcessorPtr> {
+    pub fn create(output: Arc<OutputPort>, data_block: Chunk) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(OneBlockSource {
             output,
             data_block: Some(data_block),
