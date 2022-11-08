@@ -83,7 +83,12 @@ pub fn init_logging(name: &str, cfg: &Config) -> Vec<WorkerGuard> {
             "text" => {
                 let layer = fmt::layer()
                     .with_writer(rolling_writer)
-                    .event_format(format().with_ansi(false))
+                    .event_format(
+                        format()
+                            .with_ansi(false)
+                            .with_file(true)
+                            .with_line_number(true),
+                    )
                     .with_filter(filter);
                 subscriber.with(Some(layer)).with(None)
             }

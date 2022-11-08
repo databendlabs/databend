@@ -1926,10 +1926,10 @@ dependencies = [
  "common-exception",
  "common-meta-types",
  "common-users",
+ "dashmap",
  "futures",
  "itertools",
  "num_cpus",
- "parking_lot 0.12.1",
  "tracing",
 ]
 
@@ -1994,6 +1994,7 @@ dependencies = [
  "common-storages-view",
  "common-tracing",
  "common-users",
+ "dashmap",
  "futures",
  "futures-util",
  "headers",
