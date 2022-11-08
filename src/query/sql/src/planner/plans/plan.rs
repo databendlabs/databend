@@ -41,6 +41,7 @@ use crate::plans::AlterUDFPlan;
 use crate::plans::AlterUserPlan;
 use crate::plans::AlterViewPlan;
 use crate::plans::CallPlan;
+use crate::plans::CreateCatalogPlan;
 use crate::plans::CreateDatabasePlan;
 use crate::plans::CreateRolePlan;
 use crate::plans::CreateStagePlan;
@@ -50,6 +51,7 @@ use crate::plans::CreateUserPlan;
 use crate::plans::CreateViewPlan;
 use crate::plans::DeletePlan;
 use crate::plans::DescribeTablePlan;
+use crate::plans::DropCatalogPlan;
 use crate::plans::DropDatabasePlan;
 use crate::plans::DropRolePlan;
 use crate::plans::DropStagePlan;
@@ -71,6 +73,7 @@ use crate::plans::RevokePrivilegePlan;
 use crate::plans::RevokeRolePlan;
 use crate::plans::SetRolePlan;
 use crate::plans::SettingPlan;
+use crate::plans::ShowCreateCatalogPlan;
 use crate::plans::ShowCreateDatabasePlan;
 use crate::plans::ShowCreateTablePlan;
 use crate::plans::ShowGrantsPlan;
@@ -110,6 +113,11 @@ pub enum Plan {
 
     // Call
     Call(Box<CallPlan>),
+
+    // Catalogs
+    ShowCreateCatalog(Box<ShowCreateCatalogPlan>),
+    CreateCatalog(Box<CreateCatalogPlan>),
+    DropCatalog(Box<DropCatalogPlan>),
 
     // Databases
     ShowCreateDatabase(Box<ShowCreateDatabasePlan>),
@@ -196,6 +204,7 @@ pub enum RewriteKind {
     ShowProcessList,
     ShowEngines,
 
+    ShowCatalogs,
     ShowDatabases,
     ShowTables,
     ShowTablesStatus,
@@ -214,6 +223,9 @@ impl Display for Plan {
             Plan::Query { .. } => write!(f, "Query"),
             Plan::Copy(_) => write!(f, "Copy"),
             Plan::Explain { .. } => write!(f, "Explain"),
+            Plan::ShowCreateCatalog(_) => write!(f, "ShowCreateCatalog"),
+            Plan::CreateCatalog(_) => write!(f, "CreateCatalog"),
+            Plan::DropCatalog(_) => write!(f, "DropCatalog"),
             Plan::ShowCreateDatabase(_) => write!(f, "ShowCreateDatabase"),
             Plan::CreateDatabase(_) => write!(f, "CreateDatabase"),
             Plan::DropDatabase(_) => write!(f, "DropDatabase"),
@@ -290,6 +302,9 @@ impl Plan {
                 DataSchemaRefExt::create(vec![DataField::new("explain", StringType::new_impl())])
             }
             Plan::Copy(_) => Arc::new(DataSchema::empty()),
+            Plan::ShowCreateCatalog(plan) => plan.schema(),
+            Plan::CreateCatalog(plan) => plan.schema(),
+            Plan::DropCatalog(plan) => plan.schema(),
             Plan::ShowCreateDatabase(plan) => plan.schema(),
             Plan::CreateDatabase(plan) => plan.schema(),
             Plan::UseDatabase(_) => Arc::new(DataSchema::empty()),

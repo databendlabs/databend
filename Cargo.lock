@@ -1284,6 +1284,7 @@ dependencies = [
  "common-pipeline-core",
  "common-settings",
  "common-storage",
+ "dashmap",
  "dyn-clone",
  "once_cell",
  "serde",
