@@ -232,7 +232,7 @@ impl<'a> Binder {
             catalog: dst_catalog_name.to_string(),
             source_info: DataSourceInfo::StageSource(StageTableInfo {
                 schema: table.schema(),
-                stage_info,
+                user_stage_info: stage_info,
                 path,
                 files: vec![],
             }),
@@ -291,7 +291,7 @@ impl<'a> Binder {
             catalog: dst_catalog_name.to_string(),
             source_info: DataSourceInfo::StageSource(StageTableInfo {
                 schema: table.schema(),
-                stage_info,
+                user_stage_info: stage_info,
                 path,
                 files: vec![],
             }),
