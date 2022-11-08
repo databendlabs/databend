@@ -342,6 +342,11 @@ impl NumberDataType {
     }
 
     pub const fn lossless_super_type(self, other: Self) -> Option<Self> {
+        if self.can_lossless_cast_to(other) {
+            return Some(other);
+        } else if other.can_lossless_cast_to(self) {
+            return Some(self);
+        }
         Some(match (self.is_float(), other.is_float()) {
             (true, true) => NumberDataType::new(
                 max_bit_with(self.bit_width(), other.bit_width()),

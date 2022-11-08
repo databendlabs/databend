@@ -9,9 +9,9 @@ output         : []
 
 ast            : [NULL, 8, -10]
 raw expr       : array(NULL, 8_u8, minus(10_u8))
-checked expr   : array<T0=Int32 NULL><T0, T0, T0>(CAST(NULL AS Int32 NULL), CAST(8_u8 AS Int32 NULL), CAST(minus<UInt8>(10_u8) AS Int32 NULL))
+checked expr   : array<T0=Int16 NULL><T0, T0, T0>(CAST(NULL AS Int16 NULL), CAST(8_u8 AS Int16 NULL), CAST(minus<UInt8>(10_u8) AS Int16 NULL))
 optimized expr : [NULL, 8, -10]
-output type    : Array(Int32 NULL)
+output type    : Array(Int16 NULL)
 output domain  : [{-10..=8} ∪ {NULL}]
 output         : [NULL, 8, -10]
 
@@ -355,6 +355,24 @@ output domain  : Unknown
 output         : true
 
 
+ast            : '33' in ('1', '33', '23', '33')
+raw expr       : contains(array("1", "33", "23", "33"), "33")
+checked expr   : contains<Array(String), String>(array<T0=String><T0, T0, T0, T0>("1", "33", "23", "33"), "33")
+optimized expr : true
+output type    : Boolean
+output domain  : {FALSE, TRUE}
+output         : true
+
+
+ast            : contains([1,2,3], 2)
+raw expr       : contains(array(1_u8, 2_u8, 3_u8), 2_u8)
+checked expr   : contains<Array(UInt8), UInt8>(array<T0=UInt8><T0, T0, T0>(1_u8, 2_u8, 3_u8), 2_u8)
+optimized expr : true
+output type    : Boolean
+output domain  : {FALSE, TRUE}
+output         : true
+
+
 ast            : int8_col not in (1, 2, 3, 4, 5, null)
 raw expr       : not(contains(array(1_u8, 2_u8, 3_u8, 4_u8, 5_u8), ColumnRef(0)::Int8))
 checked expr   : not<Boolean>(contains<Array(Int16), Int16>(CAST(array<T0=UInt8><T0, T0, T0, T0, T0>(1_u8, 2_u8, 3_u8, 4_u8, 5_u8) AS Array(Int16)), CAST(ColumnRef(0) AS Int16)))
@@ -379,18 +397,33 @@ evaluation (internal):
 +----------+-----------------------+
 
 
-ast            : '33' in ('1', '33', '23', '33')
-raw expr       : contains(array("1", "33", "23", "33"), "33")
-checked expr   : contains<Array(String), String>(array<T0=String><T0, T0, T0, T0>("1", "33", "23", "33"), "33")
-optimized expr : true
-output type    : Boolean
-output domain  : {FALSE, TRUE}
-output         : true
+ast            : contains([1,2,null], nullable_col)
+raw expr       : contains(array(1_u8, 2_u8, NULL), ColumnRef(1)::Int64 NULL)
+checked expr   : contains<T0=Int64 NULL><Array(T0), T0>(CAST(array<T0=UInt8 NULL><T0, T0, T0>(CAST(1_u8 AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL)) AS Array(Int64 NULL)), ColumnRef(1))
+optimized expr : contains<T0=Int64 NULL><Array(T0), T0>([1, 2, NULL], ColumnRef(1))
+evaluation:
++--------+-------------------+---------------+
+|        | nullable_col      | Output        |
++--------+-------------------+---------------+
+| Type   | Int64 NULL        | Boolean       |
+| Domain | {9..=12} ∪ {NULL} | {FALSE, TRUE} |
+| Row 0  | 9                 | false         |
+| Row 1  | 10                | false         |
+| Row 2  | NULL              | true          |
+| Row 3  | NULL              | true          |
++--------+-------------------+---------------+
+evaluation (internal):
++--------------+---------------------------------------------------------------------------+
+| Column       | Data                                                                      |
++--------------+---------------------------------------------------------------------------+
+| nullable_col | NullableColumn { column: Int64([9, 10, 11, 12]), validity: [0b____0011] } |
+| Output       | Boolean([0b____1100])                                                     |
++--------------+---------------------------------------------------------------------------+
 
 
-ast            : contains([1,2,3], 2)
-raw expr       : contains(array(1_u8, 2_u8, 3_u8), 2_u8)
-checked expr   : contains<Array(UInt8), UInt8>(array<T0=UInt8><T0, T0, T0>(1_u8, 2_u8, 3_u8), 2_u8)
+ast            : contains([(1,'2', 3, false), (1,'2', 4, true), null], (1,'2', 3, false))
+raw expr       : contains(array(tuple(1_u8, "2", 3_u8, false), tuple(1_u8, "2", 4_u8, true), NULL), tuple(1_u8, "2", 3_u8, false))
+checked expr   : contains<T0=(UInt8, String, UInt8, Boolean) NULL><Array(T0), T0>(array<T0=(UInt8, String, UInt8, Boolean) NULL><T0, T0, T0>(CAST(tuple<UInt8, String, UInt8, Boolean>(1_u8, "2", 3_u8, false) AS (UInt8, String, UInt8, Boolean) NULL), CAST(tuple<UInt8, String, UInt8, Boolean>(1_u8, "2", 4_u8, true) AS (UInt8, String, UInt8, Boolean) NULL), CAST(NULL AS (UInt8, String, UInt8, Boolean) NULL)), CAST(tuple<UInt8, String, UInt8, Boolean>(1_u8, "2", 3_u8, false) AS (UInt8, String, UInt8, Boolean) NULL))
 optimized expr : true
 output type    : Boolean
 output domain  : {FALSE, TRUE}
@@ -398,9 +431,9 @@ output         : true
 
 
 ast            : nullable_col in (null, 9, 10, 12)
-raw expr       : or(or(eq(ColumnRef(0)::Int64 NULL, 9_u8), eq(ColumnRef(0)::Int64 NULL, 10_u8)), eq(ColumnRef(0)::Int64 NULL, 12_u8))
-checked expr   : or<Boolean NULL, Boolean NULL>(or<Boolean NULL, Boolean NULL>(eq<Int64 NULL, Int64 NULL>(ColumnRef(0), CAST(9_u8 AS Int64 NULL)), eq<Int64 NULL, Int64 NULL>(ColumnRef(0), CAST(10_u8 AS Int64 NULL))), eq<Int64 NULL, Int64 NULL>(ColumnRef(0), CAST(12_u8 AS Int64 NULL)))
-optimized expr : or<Boolean NULL, Boolean NULL>(or<Boolean NULL, Boolean NULL>(eq<Int64 NULL, Int64 NULL>(ColumnRef(0), 9_i64), eq<Int64 NULL, Int64 NULL>(ColumnRef(0), 10_i64)), eq<Int64 NULL, Int64 NULL>(ColumnRef(0), 12_i64))
+raw expr       : or(or(eq(ColumnRef(1)::Int64 NULL, 9_u8), eq(ColumnRef(1)::Int64 NULL, 10_u8)), eq(ColumnRef(1)::Int64 NULL, 12_u8))
+checked expr   : or<Boolean NULL, Boolean NULL>(or<Boolean NULL, Boolean NULL>(eq<Int64 NULL, Int64 NULL>(ColumnRef(1), CAST(9_u8 AS Int64 NULL)), eq<Int64 NULL, Int64 NULL>(ColumnRef(1), CAST(10_u8 AS Int64 NULL))), eq<Int64 NULL, Int64 NULL>(ColumnRef(1), CAST(12_u8 AS Int64 NULL)))
+optimized expr : or<Boolean NULL, Boolean NULL>(or<Boolean NULL, Boolean NULL>(eq<Int64 NULL, Int64 NULL>(ColumnRef(1), 9_i64), eq<Int64 NULL, Int64 NULL>(ColumnRef(1), 10_i64)), eq<Int64 NULL, Int64 NULL>(ColumnRef(1), 12_i64))
 evaluation:
 +--------+-------------------+--------------+
 |        | nullable_col      | Output       |

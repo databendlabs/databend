@@ -113,16 +113,28 @@ fn test_remove_last(file: &mut impl Write) {
 
 fn test_contains(file: &mut impl Write) {
     run_ast(file, "false in (false, true)", &[]);
-    run_ast(file, "int8_col not in (1, 2, 3, 4, 5, null)", &[(
-        "int8_col",
-        DataType::Number(NumberDataType::Int8),
-        Column::from_data(vec![1i8, 2, 7, 8]),
-    )]);
     run_ast(file, "'33' in ('1', '33', '23', '33')", &[]);
     run_ast(file, "contains([1,2,3], 2)", &[]);
-    run_ast(file, "nullable_col in (null, 9, 10, 12)", &[(
-        "nullable_col",
-        DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int64))),
-        Column::from_data_with_validity(vec![9i64, 10, 11, 12], vec![true, true, false, false]),
-    )]);
+
+    let columns = [
+        (
+            "int8_col",
+            DataType::Number(NumberDataType::Int8),
+            Column::from_data(vec![1i8, 2, 7, 8]),
+        ),
+        (
+            "nullable_col",
+            DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int64))),
+            Column::from_data_with_validity(vec![9i64, 10, 11, 12], vec![true, true, false, false]),
+        ),
+    ];
+
+    run_ast(file, "int8_col not in (1, 2, 3, 4, 5, null)", &columns);
+    run_ast(file, "contains([1,2,null], nullable_col)", &columns);
+    run_ast(
+        file,
+        "contains([(1,'2', 3, false), (1,'2', 4, true), null], (1,'2', 3, false))",
+        &columns,
+    );
+    run_ast(file, "nullable_col in (null, 9, 10, 12)", &columns);
 }
