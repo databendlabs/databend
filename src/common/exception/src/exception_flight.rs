@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::mem::size_of;
 use std::sync::Arc;
 
 use common_arrow::arrow_format::flight::data::FlightData;
@@ -44,6 +45,10 @@ impl From<ErrorCode> for FlightData {
     }
 }
 
+fn read_be_u64(bytes: &[u8]) -> u64 {
+    u64::from_be_bytes(bytes[0..size_of::<u64>()].try_into().unwrap())
+}
+
 impl TryFrom<FlightData> for ErrorCode {
     type Error = ErrorCode;
 
@@ -54,9 +59,13 @@ impl TryFrom<FlightData> for ErrorCode {
                 let code = u16::from_be_bytes(slice);
                 let data_body = flight_data.data_body;
 
-                let message_len = u64::from_be_bytes(data_body[0..8].try_into().unwrap()) as usize;
-                let message = &data_body[8..8 + message_len];
-                let backtrace = &data_body[16 + message_len..];
+                let mut data_offset = 0;
+                let message_len = read_be_u64(&data_body) as usize;
+                data_offset += size_of::<u64>();
+                let message = &data_body[data_offset..data_offset + message_len];
+                data_offset += message_len;
+                data_offset += size_of::<u64>();
+                let backtrace = &data_body[data_offset..];
 
                 match backtrace.is_empty() {
                     true => Ok(ErrorCode::create(
