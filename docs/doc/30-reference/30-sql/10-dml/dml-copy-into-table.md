@@ -58,8 +58,8 @@ externalLocation ::=
 
 | Parameter                 | Description                                                                                                                                                                           | Required |
 | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
-| `s3://<bucket>[<path>]`   | External files located at the AWS S3 compatible object storage.                                                                                                                       | Optional |
-| ENDPOINT_URL              | The bucket endpoint URL starting with "https://". To use a URL starting with "http://", set `allow_insecure` to `true` in the [storage] block of the file `databend-query-node.toml`. | Optional |
+| `s3://<bucket>[<path>]`   | External files located at the AWS S3 compatible object storage.                                                                                                                       | Required |
+| ENDPOINT_URL              | The bucket endpoint URL starting with "https://". To use a URL starting with "http://", set `allow_insecure` to `true` in the [storage] block of the file `databend-query-node.toml`. | Required |
 | ACCESS_KEY_ID             | Your access key ID for connecting the AWS S3 compatible object storage. If not provided, Databend will access the bucket anonymously.                                                 | Optional |
 | SECRET_ACCESS_KEY         | Your secret access key for connecting the AWS S3 compatible object storage.                                                                                                           | Optional |
 | SESSION_TOKEN             | Your temporary credential for connecting the AWS S3 service                                                                                                                           | Optional |
@@ -81,7 +81,7 @@ externalLocation ::=
 | Parameter                      | Description                                                                                                                                                                              | Required |
 | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
 | `azblob://<container>[<path>]` | External files located at the Azure Blob storage.                                                                                                                                        | Required |
-| ENDPOINT_URL                   | The container endpoint URL starting with "https://". To use a URL starting with "http://", set `allow_insecure` to `true` in the [storage] block of the file `databend-query-node.toml`. | Optional |
+| ENDPOINT_URL                   | The container endpoint URL starting with "https://". To use a URL starting with "http://", set `allow_insecure` to `true` in the [storage] block of the file `databend-query-node.toml`. | Required |
 | ACCOUNT_NAME                   | Your account name for connecting the Azure Blob storage. If not provided, Databend will access the container anonymously.                                                                | Optional |
 | ACCOUNT_KEY                    | Your account key for connecting the Azure Blob storage.                                                                                                                                  | Optional |
 
@@ -117,7 +117,7 @@ externalLocation ::=
 | Parameter                | Description                                                                                                                                                                              | Required |
 | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
 | `obs://<bucket>[<path>]` | External files located at the obs                                                                                                                                                        | Required |
-| ENDPOINT_URL             | The container endpoint URL starting with "https://". To use a URL starting with "http://", set `allow_insecure` to `true` in the [storage] block of the file `databend-query-node.toml`. | Optional |
+| ENDPOINT_URL             | The container endpoint URL starting with "https://". To use a URL starting with "http://", set `allow_insecure` to `true` in the [storage] block of the file `databend-query-node.toml`. | Required |
 | ACCESS_KEY_ID            | Your access key ID for connecting the OBS. If not provided, Databend will access the bucket anonymously.                                                                                 | Optional |
 | SECRET_ACCESS_KEY        | Your secret access key for connecting the OBS.                                                                                                                                           | Optional |
 
@@ -214,7 +214,7 @@ copyOptions ::=
 
 ## Examples
 
-### Loading Data from Internal Stage
+### Loading Data from an Internal Stage
 
 First, create a named internal stage:
 
@@ -235,7 +235,7 @@ LIST @my_internal_s1;
 COPY INTO mytable FROM @my_internal_s1 pattern = 'books.*parquet' file_format = (type = 'PARQUET');
 ```
 
-### Loading Data from External Stage
+### Loading Data from an External Stage
 
 First, create a named external stage:
 
@@ -249,7 +249,7 @@ Then, copy the file into `mytable` from the `my_external_s1` named external stag
 COPY INTO mytable FROM @my_external_s1 pattern = 'books.*parquet' file_format = (type = 'PARQUET');
 ```
 
-### Loading Data from External Location
+### Loading Data from External Locations
 
 **AWS S3 compatible object storage services**
 
