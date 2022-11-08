@@ -454,3 +454,27 @@ evaluation (internal):
 +--------------+---------------------------------------------------------------------------+
 
 
+ast            : nullable_col in (1, '9', 3, true, [1,2,3])
+raw expr       : contains(array(1_u8, "9", 3_u8, true), ColumnRef(1)::Int64 NULL)
+checked expr   : contains<T0=Variant NULL><Array(T0), T0>(CAST(array<T0=Variant><T0, T0, T0, T0>(CAST(1_u8 AS Variant), CAST("9" AS Variant), CAST(3_u8 AS Variant), CAST(true AS Variant)) AS Array(Variant NULL)), CAST(ColumnRef(1) AS Variant NULL))
+optimized expr : contains<T0=Variant NULL><Array(T0), T0>([1, "9", 3, true], CAST(ColumnRef(1) AS Variant NULL))
+evaluation:
++--------+-------------------+---------------+
+|        | nullable_col      | Output        |
++--------+-------------------+---------------+
+| Type   | Int64 NULL        | Boolean       |
+| Domain | {9..=12} ∪ {NULL} | {FALSE, TRUE} |
+| Row 0  | 9                 | false         |
+| Row 1  | 10                | false         |
+| Row 2  | NULL              | false         |
+| Row 3  | NULL              | false         |
++--------+-------------------+---------------+
+evaluation (internal):
++--------------+---------------------------------------------------------------------------+
+| Column       | Data                                                                      |
++--------------+---------------------------------------------------------------------------+
+| nullable_col | NullableColumn { column: Int64([9, 10, 11, 12]), validity: [0b____0011] } |
+| Output       | Boolean([0b____0000])                                                     |
++--------------+---------------------------------------------------------------------------+
+
+
