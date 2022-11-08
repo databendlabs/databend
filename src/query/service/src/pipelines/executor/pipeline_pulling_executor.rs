@@ -26,7 +26,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use parking_lot::Condvar;
 use parking_lot::Mutex;
-use tracing::error;
+use tracing::warn;
 
 use crate::pipelines::executor::executor_settings::ExecutorSettings;
 use crate::pipelines::executor::PipelineExecutor;
@@ -185,7 +185,7 @@ impl PipelinePullingExecutor {
                     continue;
                 }
                 Err(RecvTimeoutError::Disconnected) => {
-                    error!("receiver has been disconnected, finish executor now");
+                    warn!("receiver has been disconnected, finish executor now");
 
                     if !self.executor.is_finished() {
                         self.executor.finish(None);
@@ -193,9 +193,10 @@ impl PipelinePullingExecutor {
 
                     self.state.wait_finish();
 
-                    match !self.state.is_catch_error() {
-                        true => Ok(None),
-                        false => Err(self.state.get_catch_error()),
+                    if self.state.is_catch_error() {
+                        Err(self.state.get_catch_error())
+                    } else {
+                        Ok(None)
                     }
                 }
             };
