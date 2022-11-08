@@ -14,6 +14,7 @@
 
 use std::mem::MaybeUninit;
 use std::num::Wrapping;
+use std::sync::Once;
 
 use common_expression::types::number::F32;
 use common_expression::types::number::F64;
@@ -34,18 +35,46 @@ const ASIN_SQRT_LUT_SIZE: usize = 512;
 const METRIC_LUT_SIZE: usize = 1024;
 
 /// Earth radius in meters using WGS84 authalic radius.
-/// We use this value to be consistent with H3 library.
+/// We use this value to be consistent with Uber H3 library.
 const EARTH_RADIUS: f32 = 6371007.180918475f32;
 const EARTH_DIAMETER: f32 = 2f32 * EARTH_RADIUS;
 
 static COS_LUT: OnceCell<[f32; COS_LUT_SIZE + 1]> = OnceCell::new();
 static ASIN_SQRT_LUT: OnceCell<[f32; ASIN_SQRT_LUT_SIZE + 1]> = OnceCell::new();
 
+static SPHERE_METRIC_LUT: OnceCell<[f32; METRIC_LUT_SIZE + 1]> = OnceCell::new();
+static SPHERE_METRIC_METERS_LUT: OnceCell<[f32; METRIC_LUT_SIZE + 1]> = OnceCell::new();
 static WGS84_METRIC_METERS_LUT: OnceCell<[f32; 2 * (METRIC_LUT_SIZE + 1)]> = OnceCell::new();
+
+enum GeoMethod {
+    SphereDegrees,
+    SphereMeters,
+    Wgs84Meters,
+}
 
 pub fn register(registry: &mut FunctionRegistry) {
     // init globals.
     geo_dist_init();
+
+    // geo distance
+    registry.register_4_arg::<NumberType<F64>, NumberType<F64>, NumberType<F64>, NumberType<F64>,NumberType<F32>,_, _>(
+        "geo_distance",
+        FunctionProperty::default(),
+        |_,_,_,_|None,
+        |lon1:F64,lat1:F64,lon2:F64,lat2:F64,_| {
+            F32::from(distance(lon1.0 as f32, lat1.0 as f32, lon2.0 as f32, lat2.0 as f32, GeoMethod::Wgs84Meters))
+        },
+    );
+
+    // great circle angle
+    registry.register_4_arg::<NumberType<F64>, NumberType<F64>, NumberType<F64>, NumberType<F64>,NumberType<F32>,_, _>(
+        "great_circle_angle",
+        FunctionProperty::default(),
+        |_,_,_,_|None,
+        |lon1:F64,lat1:F64,lon2:F64,lat2:F64,_| {
+            F32::from(distance(lon1.0 as f32, lat1.0 as f32, lon2.0 as f32, lat2.0 as f32, GeoMethod::SphereDegrees))
+        },
+    );
 
     // great circle distance
     registry.register_4_arg::<NumberType<F64>, NumberType<F64>, NumberType<F64>, NumberType<F64>,NumberType<F32>,_, _>(
@@ -53,19 +82,20 @@ pub fn register(registry: &mut FunctionRegistry) {
         FunctionProperty::default(),
         |_,_,_,_|None,
         |lon1:F64,lat1:F64,lon2:F64,lat2:F64,_| {
-            F32::from(distance(lon1.0 as f32, lat1.0 as f32, lon2.0 as f32, lat2.0 as f32))
+            F32::from(distance(lon1.0 as f32, lat1.0 as f32, lon2.0 as f32, lat2.0 as f32, GeoMethod::SphereMeters))
         },
     );
 }
 
 pub fn geo_dist_init() {
-    // Using `get_or_init` for unit tests cause each test will re-registry all functions.
+    // Using `get_or_init` for unit tests cause each test will re-register all functions.
     COS_LUT.get_or_init(|| {
         let cos_lut: [f32; COS_LUT_SIZE + 1] = (0..=COS_LUT_SIZE)
             .map(|i| (2f64 * PI * i as f64 / COS_LUT_SIZE as f64).cos() as f32)
             .collect::<Vec<f32>>()
             .try_into()
             .unwrap();
+
         cos_lut
     });
 
@@ -79,29 +109,50 @@ pub fn geo_dist_init() {
         asin_sqrt_lut
     });
 
-    WGS84_METRIC_METERS_LUT.get_or_init(|| {
-        let mut wgs84_metric_meters_lut: [MaybeUninit<f32>; 2 * (METRIC_LUT_SIZE + 1)] =
-            unsafe { MaybeUninit::uninit().assume_init() };
+    Once::new().call_once(|| {
+        let (wsg84_metric_meters_lut, sphere_metric_meters_lut, sphere_metric_lut) = {
+            let mut wgs84_metric_meters_lut: [MaybeUninit<f32>; 2 * (METRIC_LUT_SIZE + 1)] =
+                unsafe { MaybeUninit::uninit().assume_init() };
+            let mut sphere_metric_meters_lut: [MaybeUninit<f32>; METRIC_LUT_SIZE + 1] =
+                unsafe { MaybeUninit::uninit().assume_init() };
+            let mut sphere_metric_lut: [MaybeUninit<f32>; METRIC_LUT_SIZE + 1] =
+                unsafe { MaybeUninit::uninit().assume_init() };
 
-        for i in 0..=METRIC_LUT_SIZE {
-            let latitude: f64 = i as f64 * (PI / METRIC_LUT_SIZE as f64) - PI * 0.5f64;
+            for i in 0..=METRIC_LUT_SIZE {
+                let latitude: f64 = i as f64 * (PI / METRIC_LUT_SIZE as f64) - PI * 0.5f64;
 
-            wgs84_metric_meters_lut[i].write(
-                (111132.09f64 - 566.05f64 * (2f64 * latitude).cos()
-                    + 1.20f64 * (4f64 * latitude).cos())
-                .sqrt() as f32,
-            );
-            wgs84_metric_meters_lut[i * 2 + 1].write(
-                (111415.13f64 * latitude.cos() - 94.55f64 * (3f64 * latitude).cos()
-                    + 0.12f64 * (5f64 * latitude).cos())
-                .sqrt() as f32,
-            );
-        }
+                wgs84_metric_meters_lut[i].write(
+                    (111132.09f64 - 566.05f64 * (2f64 * latitude).cos()
+                        + 1.20f64 * (4f64 * latitude).cos())
+                    .sqrt() as f32,
+                );
+                wgs84_metric_meters_lut[i * 2 + 1].write(
+                    (111415.13f64 * latitude.cos() - 94.55f64 * (3f64 * latitude).cos()
+                        + 0.12f64 * (5f64 * latitude).cos())
+                    .sqrt() as f32,
+                );
 
-        // Everything is initialized, transmute and return.
-        unsafe {
-            std::mem::transmute::<_, [f32; 2 * (METRIC_LUT_SIZE + 1)]>(wgs84_metric_meters_lut)
-        }
+                sphere_metric_meters_lut[i]
+                    .write(((EARTH_DIAMETER as f64 * PI / 360f64) * latitude.cos()).powi(2) as f32);
+
+                sphere_metric_lut[i].write(latitude.cos().powi(2) as f32);
+            }
+
+            // Everything is initialized, transmute and return.
+            unsafe {
+                (
+                    std::mem::transmute::<_, [f32; 2 * (METRIC_LUT_SIZE + 1)]>(
+                        wgs84_metric_meters_lut,
+                    ),
+                    std::mem::transmute::<_, [f32; METRIC_LUT_SIZE + 1]>(sphere_metric_meters_lut),
+                    std::mem::transmute::<_, [f32; METRIC_LUT_SIZE + 1]>(sphere_metric_lut),
+                )
+            }
+        };
+
+        WGS84_METRIC_METERS_LUT.get_or_init(|| wsg84_metric_meters_lut);
+        SPHERE_METRIC_METERS_LUT.get_or_init(|| sphere_metric_meters_lut);
+        SPHERE_METRIC_LUT.get_or_init(|| sphere_metric_lut);
     });
 }
 
@@ -159,7 +210,7 @@ fn float_to_index(x: f32) -> usize {
     x as usize
 }
 
-fn distance(lon1deg: f32, lat1deg: f32, lon2deg: f32, lat2deg: f32) -> f32 {
+fn distance(lon1deg: f32, lat1deg: f32, lon2deg: f32, lat2deg: f32, method: GeoMethod) -> f32 {
     let lat_diff = geodist_deg_diff(lat1deg - lat2deg);
     let lon_diff = geodist_deg_diff(lon1deg - lon2deg);
 
@@ -167,16 +218,42 @@ fn distance(lon1deg: f32, lat1deg: f32, lon2deg: f32, lat2deg: f32) -> f32 {
         let latitude_midpoint: f32 = (lat1deg + lat2deg + 180f32) * METRIC_LUT_SIZE as f32 / 360f32;
         let latitude_midpoint_index = float_to_index(latitude_midpoint);
 
-        let wgs84_metric_meters_lut = WGS84_METRIC_METERS_LUT.get().unwrap();
-        let k_lat: f32 = wgs84_metric_meters_lut[latitude_midpoint_index * 2]
-            + (wgs84_metric_meters_lut[(latitude_midpoint_index + 1) * 2]
-                - wgs84_metric_meters_lut[latitude_midpoint_index * 2])
-                * (latitude_midpoint - latitude_midpoint_index as f32);
+        let (k_lat, k_lon) = match method {
+            GeoMethod::SphereDegrees => {
+                let sphere_metric_lut = SPHERE_METRIC_LUT.get().unwrap();
+                let lat = 1f32;
+                let lon = sphere_metric_lut[latitude_midpoint_index]
+                    + (sphere_metric_lut[latitude_midpoint_index + 1]
+                        - sphere_metric_lut[latitude_midpoint_index])
+                        * (latitude_midpoint - latitude_midpoint_index as f32) as f32;
 
-        let k_lon: f32 = wgs84_metric_meters_lut[latitude_midpoint_index * 2 + 1]
-            + (wgs84_metric_meters_lut[(latitude_midpoint_index + 1) * 2 + 1]
-                - wgs84_metric_meters_lut[latitude_midpoint_index * 2 + 1])
-                * (latitude_midpoint - latitude_midpoint_index as f32);
+                (lat, lon)
+            }
+            GeoMethod::SphereMeters => {
+                let sphere_metric_meters_lut = SPHERE_METRIC_METERS_LUT.get().unwrap();
+                let lat = (EARTH_DIAMETER * PI_F / 360f32).powi(2);
+                let lon = sphere_metric_meters_lut[latitude_midpoint_index]
+                    + (sphere_metric_meters_lut[latitude_midpoint_index + 1]
+                        - sphere_metric_meters_lut[latitude_midpoint_index])
+                        * (latitude_midpoint - latitude_midpoint_index as f32) as f32;
+
+                (lat, lon)
+            }
+            GeoMethod::Wgs84Meters => {
+                let wgs84_metric_meters_lut = WGS84_METRIC_METERS_LUT.get().unwrap();
+                let lat: f32 = wgs84_metric_meters_lut[latitude_midpoint_index * 2]
+                    + (wgs84_metric_meters_lut[(latitude_midpoint_index + 1) * 2]
+                        - wgs84_metric_meters_lut[latitude_midpoint_index * 2])
+                        * (latitude_midpoint - latitude_midpoint_index as f32);
+
+                let lon: f32 = wgs84_metric_meters_lut[latitude_midpoint_index * 2 + 1]
+                    + (wgs84_metric_meters_lut[(latitude_midpoint_index + 1) * 2 + 1]
+                        - wgs84_metric_meters_lut[latitude_midpoint_index * 2 + 1])
+                        * (latitude_midpoint - latitude_midpoint_index as f32);
+
+                (lat, lon)
+            }
+        };
 
         (k_lat * lat_diff * lat_diff + k_lon * lon_diff * lon_diff).sqrt()
     } else {
