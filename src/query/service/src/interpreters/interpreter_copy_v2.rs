@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 // Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,7 +14,9 @@
 // limitations under the License.
 use std::sync::Arc;
 
+use chrono::Utc;
 use common_base::base::GlobalIORuntime;
+use common_catalog::catalog::Catalog;
 use common_catalog::plan::CopyInfo;
 use common_catalog::plan::DataSourceInfo;
 use common_catalog::plan::PushDownInfo;
@@ -22,6 +25,8 @@ use common_catalog::table::AppendMode;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_app::schema::TableCopiedFileInfo;
+use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_meta_types::UserStageInfo;
 use common_pipeline_sources::processors::sources::input_formats::InputContext;
 use common_pipeline_transforms::processors::transforms::TransformLimit;
@@ -39,6 +44,9 @@ use crate::sessions::TableContext;
 use crate::sql::plans::CopyPlanV2;
 use crate::sql::plans::Plan;
 
+const MAX_QUERY_COPIED_FILES_NUM: usize = 50;
+const TABLE_COPIED_FILE_KEY_EXPIRE_AFTER_DAYS: Option<u64> = Some(7);
+
 pub struct CopyInterpreterV2 {
     ctx: Arc<QueryContext>,
     plan: CopyPlanV2,
@@ -50,7 +58,7 @@ impl CopyInterpreterV2 {
         Ok(CopyInterpreterV2 { ctx, plan })
     }
 
-    async fn execute_copy_into_stage(
+    async fn build_copy_into_stage_pipeline(
         &self,
         stage: &UserStageInfo,
         path: &str,
@@ -108,6 +116,71 @@ impl CopyInterpreterV2 {
         Ok(build_res)
     }
 
+    async fn do_upsert_copied_files_info_to_meta(
+        expire_at: Option<u64>,
+        tenant: String,
+        database_name: String,
+        table_id: u64,
+        catalog: Arc<dyn Catalog>,
+        copy_stage_files: &mut BTreeMap<String, TableCopiedFileInfo>,
+    ) -> Result<()> {
+        let req = UpsertTableCopiedFileReq {
+            table_id,
+            file_info: copy_stage_files.clone(),
+            expire_at,
+        };
+        catalog
+            .upsert_table_copied_file_info(&tenant, &database_name, req)
+            .await?;
+        copy_stage_files.clear();
+        Ok(())
+    }
+
+    async fn upsert_copied_files_info_to_meta(
+        tenant: String,
+        database_name: String,
+        table_id: u64,
+        catalog: Arc<dyn Catalog>,
+        copy_stage_files: BTreeMap<String, TableCopiedFileInfo>,
+    ) -> Result<()> {
+        tracing::debug!("upsert_copied_files_info: {:?}", copy_stage_files);
+
+        if copy_stage_files.is_empty() {
+            return Ok(());
+        }
+
+        let expire_at = TABLE_COPIED_FILE_KEY_EXPIRE_AFTER_DAYS
+            .map(|after_days| after_days * 86400 + Utc::now().timestamp() as u64);
+        let mut do_copy_stage_files = BTreeMap::new();
+        for (file_name, file_info) in copy_stage_files {
+            do_copy_stage_files.insert(file_name.clone(), file_info);
+            if do_copy_stage_files.len() > MAX_QUERY_COPIED_FILES_NUM {
+                CopyInterpreterV2::do_upsert_copied_files_info_to_meta(
+                    expire_at,
+                    tenant.clone(),
+                    database_name.clone(),
+                    table_id,
+                    catalog.clone(),
+                    &mut do_copy_stage_files,
+                )
+                .await?;
+            }
+        }
+        if !do_copy_stage_files.is_empty() {
+            CopyInterpreterV2::do_upsert_copied_files_info_to_meta(
+                expire_at,
+                tenant.clone(),
+                database_name.clone(),
+                table_id,
+                catalog.clone(),
+                &mut do_copy_stage_files,
+            )
+            .await?;
+        }
+
+        Ok(())
+    }
+
     async fn try_purge_files(
         ctx: Arc<QueryContext>,
         stage_info: &UserStageInfo,
@@ -140,7 +213,9 @@ impl CopyInterpreterV2 {
         let ctx = self.ctx.clone();
         let stage_table = StageTable::try_create(stage_table_info.clone())?;
 
-        // Get the source plan with all files from stage_table.read_partitions.
+        // Get the source plan with all files from stage_table.read_partitions:
+        // 1. Need copy files(status with NeedCopy)
+        // 2. Have copied files(status with AlreadyCopied)
         let read_source_plan = {
             let copy_info = CopyInfo {
                 force,
@@ -165,7 +240,20 @@ impl CopyInterpreterV2 {
                 .await?
         };
 
-        // Remove the AlreadyCopied files from the source plan.
+        // All files info.
+        let mut all_source_file_infos = vec![];
+        // Need copied file info.
+        let mut need_copied_file_infos = vec![];
+        for part in &read_source_plan.parts {
+            if let Some(stage_file_info) = part.as_any().downcast_ref::<StageFilePartition>() {
+                all_source_file_infos.push(stage_file_info.clone());
+                if stage_file_info.status == StageFileStatus::NeedCopy {
+                    need_copied_file_infos.push(stage_file_info.clone());
+                }
+            }
+        }
+
+        // Build the NeedCopy source plan: remove the AlreadyCopied status files.
         let mut need_copy_source_plan = read_source_plan.clone();
         need_copy_source_plan.parts.retain(|v| {
             if let Some(sv) = v.as_any().downcast_ref::<StageFilePartition>() {
@@ -174,23 +262,17 @@ impl CopyInterpreterV2 {
             false
         });
 
+        // COPY into <table> table info.
         let to_table = ctx
             .get_table(catalog_name, database_name, table_name)
             .await?;
         stage_table.set_block_compact_thresholds(to_table.get_block_compact_thresholds());
 
-        let mut copied_file_infos = vec![];
-        for part in &need_copy_source_plan.parts {
-            if let Some(stage_file_info) = part.as_any().downcast_ref::<StageFilePartition>() {
-                copied_file_infos.push(stage_file_info.clone());
-            }
-        }
-
         // Build pipeline.
         let mut build_res = PipelineBuildResult::create();
         {
             //  Build copy pipeline.
-            let files = copied_file_infos
+            let files = need_copied_file_infos
                 .iter()
                 .map(|v| v.path.clone())
                 .collect::<Vec<_>>();
@@ -243,25 +325,51 @@ impl CopyInterpreterV2 {
         }
 
         let stage_table_info_clone = stage_table_info.clone();
+        let catalog = self.ctx.get_catalog(catalog_name)?;
+        let tenant = self.ctx.get_tenant();
+        let database_name = database_name.to_string();
+        let table_id = to_table.get_id();
         build_res.main_pipeline.set_on_finished(move |may_error| {
             if may_error.is_none() {
                 // capture out variable
                 let ctx = ctx.clone();
                 let to_table = to_table.clone();
                 let stage_info = stage_table_info_clone.stage_info.clone();
-                let files = copied_file_infos.clone();
+                let all_source_files = all_source_file_infos.clone();
+                let need_copied_files = need_copied_file_infos.clone();
+                let tenant = tenant.clone();
+                let database_name = database_name.clone();
+                let catalog = catalog.clone();
+                let mut copied_files = BTreeMap::new();
+                for file in &need_copied_files {
+                    copied_files.insert(file.path.clone(), TableCopiedFileInfo {
+                        etag: file.etag.clone(),
+                        content_length: file.size,
+                        last_modified: Some(file.last_modified),
+                    });
+                }
 
                 return GlobalIORuntime::instance().block_on(async move {
-                    // Commit
+                    // 1. Commit datas.
                     let operations = ctx.consume_precommit_blocks();
                     to_table
                         .commit_insertion(ctx.clone(), operations, false)
                         .await?;
 
-                    // Try purge copied files, if error will skip.
-                    CopyInterpreterV2::try_purge_files(ctx.clone(), &stage_info, &files).await?;
-                    // TODO(bohu): Upsert copied files
-                    Ok(())
+                    // 2. Try to purge copied files if purge option is true, if error will skip.
+                    // If a file is already copied(status with AlreadyCopied) we will try to purge them.
+                    CopyInterpreterV2::try_purge_files(ctx.clone(), &stage_info, &all_source_files)
+                        .await?;
+
+                    // 3. Upsert files(status with NeedCopy) info to meta.
+                    CopyInterpreterV2::upsert_copied_files_info_to_meta(
+                        tenant,
+                        database_name,
+                        table_id,
+                        catalog,
+                        copied_files,
+                    )
+                    .await
                 });
             }
             Err(may_error.as_ref().unwrap().clone())
@@ -311,7 +419,7 @@ impl Interpreter for CopyInterpreterV2 {
             },
             CopyPlanV2::IntoStage {
                 stage, from, path, ..
-            } => self.execute_copy_into_stage(stage, path, from).await,
+            } => self.build_copy_into_stage_pipeline(stage, path, from).await,
         }
     }
 }
