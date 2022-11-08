@@ -1281,6 +1281,7 @@ dependencies = [
  "common-pipeline-core",
  "common-settings",
  "common-storage",
+ "dashmap",
  "dyn-clone",
  "once_cell",
  "serde",
@@ -1632,6 +1633,7 @@ dependencies = [
 name = "common-meta-app"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "common-building",
  "common-datavalues",
  "common-meta-types",
