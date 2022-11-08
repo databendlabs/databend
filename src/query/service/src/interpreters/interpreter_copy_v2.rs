@@ -1,4 +1,3 @@
-use std::collections::BTreeMap;
 // Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,6 +11,7 @@ use std::collections::BTreeMap;
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -20,7 +20,7 @@ use common_base::base::GlobalIORuntime;
 use common_catalog::catalog::Catalog;
 use common_catalog::plan::DataSourceInfo;
 use common_catalog::plan::PushDownInfo;
-use common_catalog::plan::StageInfo;
+use common_catalog::plan::StagePushDownInfo;
 use common_catalog::plan::StageTableInfo;
 use common_catalog::table::AppendMode;
 use common_datavalues::prelude::*;
@@ -284,7 +284,7 @@ impl CopyInterpreterV2 {
         // 2. Have copied files(status with AlreadyCopied)
         info!("copy: try to read all files");
         let read_source_plan = {
-            let copy_info = StageInfo {
+            let copy_info = StagePushDownInfo {
                 files: files.to_vec(),
                 path: path.to_string(),
                 pattern: pattern.to_string(),

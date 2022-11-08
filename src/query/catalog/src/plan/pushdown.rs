@@ -32,7 +32,7 @@ pub struct PrewhereInfo {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct StageInfo {
+pub struct StagePushDownInfo {
     /// User set files in the COPY statement.
     pub files: Vec<String>,
     /// User set path.
@@ -59,5 +59,5 @@ pub struct PushDownInfo {
     /// Optional order_by expression plan, asc, null_first
     pub order_by: Vec<(Expression, bool, bool)>,
     /// Optional stage info, used for COPY into <table> from stage
-    pub stage: Option<StageInfo>,
+    pub stage: Option<StagePushDownInfo>,
 }
