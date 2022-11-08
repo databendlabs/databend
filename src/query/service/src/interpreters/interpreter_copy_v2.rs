@@ -191,6 +191,7 @@ impl CopyInterpreterV2 {
         stage_file_infos: &[StageFilePartition],
     ) {
         if stage_info.copy_options.purge {
+            info!("copy: try to purge files:{}", all_source_files.len());
             let table_ctx: Arc<dyn TableContext> = ctx.clone();
             let op = StageTable::get_op(&table_ctx, stage_info);
             match op {
@@ -437,7 +438,6 @@ impl CopyInterpreterV2 {
 
                         // 2. Try to purge copied files if purge option is true, if error will skip.
                         // If a file is already copied(status with AlreadyCopied) we will try to purge them.
-                        info!("copy: try to purge files:{}", all_source_files.len());
                         CopyInterpreterV2::try_purge_files(
                             ctx.clone(),
                             &stage_info,
