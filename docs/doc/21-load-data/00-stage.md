@@ -1,15 +1,13 @@
 ---
-title: Load Data From Databend Stages
-sidebar_label: Tutorial - Load from an internal stage
+title: Tutorial - Load from an Internal Stage
+sidebar_label: Tutorial - Load from an Internal Stage
 description:
   Load data from Databend stages.
 ---
 
 ![image](../../public/img/load/load-data-from-stage.png)
 
-### Before You Begin
-
-* **Databend :** Make sure Databend is running and accessible, see [Deploy Databend With MinIO](../10-deploy/02-deploying-databend.md).
+In this tutorial, you will create an internal stage, stage a sample file, and then load data from the file into Databend with the [COPY INTO](../30-reference/30-sql/10-dml/dml-copy-into-table.md) command.
 
 ### Step 1. Create Stage Object
 
@@ -201,7 +199,3 @@ SELECT * FROM books;
 | Readings in Database Systems |  Michael Stonebraker |  2004 |
 +------------------------------+----------------------+-------+
 ```
-
-### Step 7. Congratulations!
-
-You have successfully completed the tutorial.

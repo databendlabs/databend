@@ -12,6 +12,7 @@ These topics describe how to load data into Databend.
     - [Streaming Load API](#streaming-load-api)
 - [Hands-On Tutorials](#hands-on-tutorials)
 
+
 ---
 
 ## Preparations
@@ -68,5 +69,5 @@ Here are some tutorials to help you get started with data loading:
 
 - [Tutorial: Load from an internal stage](00-stage.md): In this tutorial, you will create an internal stage, stage a sample file, and then load data from the file into Databend with the COPY INTO command.
 - [Tutorial: Load from an Amazon S3 bucket](01-s3.md): In this tutorial, you will upload a sample file to your Amazon S3 bucket, and then load data from the file into Databend with the COPY INTO command.
-- [Tutorial: Load from a local file](./02-local.md): This tutorial explains the Streaming Load API first, then shows you how to load data from a local sample file into Databend with the API.
+- [Tutorial: Load from a local file](./02-local.md): In this tutorial, you will load data from a local sample file into Databend with the Streaming Load API.
 - [Tutorial: Load from a remote file](04-http.md): In this tutorial, you will load data from a remote sample file into Databend with the COPY INTO command.
