@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io::BufRead;
 use std::io::Cursor;
 use std::ops::Not;
 use std::sync::Arc;
@@ -26,10 +27,8 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_io::prelude::BufferRead;
-use common_io::prelude::BufferReadExt;
-use common_io::prelude::BufferReader;
-use common_io::prelude::NestedCheckpointReader;
+use common_io::cursor_ext::ReadBytesExt;
+use common_io::cursor_ext::ReadCheckPointExt;
 use common_pipeline_sources::processors::sources::AsyncSource;
 use common_pipeline_sources::processors::sources::AsyncSourcer;
 use common_pipeline_transforms::processors::transforms::Transform;
@@ -278,8 +277,7 @@ impl AsyncSource for ValueSource {
         if self.is_finished {
             return Ok(None);
         }
-        let cursor = Cursor::new(self.data.as_bytes());
-        let mut reader = NestedCheckpointReader::new(BufferReader::new(cursor));
+        let mut reader = Cursor::new(self.data.as_bytes());
         let block = self.read(&mut reader).await?;
         self.is_finished = true;
         Ok(Some(block))
@@ -307,10 +305,7 @@ impl ValueSource {
         }
     }
 
-    pub async fn read<R: BufferRead>(
-        &self,
-        reader: &mut NestedCheckpointReader<R>,
-    ) -> Result<DataBlock> {
+    pub async fn read<R: AsRef<[u8]>>(&self, reader: &mut Cursor<R>) -> Result<DataBlock> {
         let mut desers = self
             .schema
             .fields()
@@ -322,8 +317,8 @@ impl ValueSource {
         let mut rows = 0;
 
         loop {
-            let _ = reader.ignore_white_spaces()?;
-            if !reader.has_data_left()? {
+            let _ = reader.ignore_white_spaces();
+            if reader.eof() {
                 break;
             }
             // Not the first row
@@ -355,19 +350,19 @@ impl ValueSource {
     }
 
     /// Parse single row value, like ('111', 222, 1 + 1)
-    async fn parse_next_row<R: BufferRead>(
+    async fn parse_next_row<R: AsRef<[u8]>>(
         &self,
-        reader: &mut NestedCheckpointReader<R>,
+        reader: &mut Cursor<R>,
         col_size: usize,
         desers: &mut [TypeDeserializerImpl],
         bind_context: &BindContext,
         metadata: MetadataRef,
     ) -> Result<()> {
-        let _ = reader.ignore_white_spaces()?;
-        reader.push_checkpoint();
+        let _ = reader.ignore_white_spaces();
+        let start_pos_of_row = reader.checkpoint();
 
         // Start of the row --- '('
-        if !reader.ignore_byte(b'(')? {
+        if !reader.ignore_byte(b'(') {
             return Err(ErrorCode::BadDataValueType(
                 "Must start with parentheses".to_string(),
             ));
@@ -375,7 +370,7 @@ impl ValueSource {
 
         let format = self.ctx.get_format_settings()?;
         for col_idx in 0..col_size {
-            let _ = reader.ignore_white_spaces()?;
+            let _ = reader.ignore_white_spaces();
             let col_end = if col_idx + 1 == col_size { b')' } else { b',' };
 
             let deser = desers
@@ -385,8 +380,8 @@ impl ValueSource {
             let (need_fallback, pop_count) = deser
                 .de_text_quoted(reader, &format)
                 .and_then(|_| {
-                    let _ = reader.ignore_white_spaces()?;
-                    let need_fallback = reader.ignore_byte(col_end)?.not();
+                    let _ = reader.ignore_white_spaces();
+                    let need_fallback = reader.ignore_byte(col_end).not();
                     Ok((need_fallback, col_idx + 1))
                 })
                 .unwrap_or((true, col_idx));
@@ -397,9 +392,12 @@ impl ValueSource {
                     deser.pop_data_value()?;
                 }
                 skip_to_next_row(reader, 1)?;
+                let end_pos_of_row = reader.position();
 
                 // Parse from expression and append all columns.
-                let buf = reader.get_checkpoint_buffer();
+                reader.set_position(start_pos_of_row);
+                let row_len = end_pos_of_row - start_pos_of_row;
+                let buf = &reader.remaining_slice()[..row_len as usize];
 
                 let sql = std::str::from_utf8(buf).unwrap();
                 let settings = self.ctx.get_settings();
@@ -419,33 +417,27 @@ impl ValueSource {
                 )
                 .await?;
 
-                reader.pop_checkpoint();
-
                 for (append_idx, deser) in desers.iter_mut().enumerate().take(col_size) {
                     deser.append_data_value(values[append_idx].clone(), &format)?;
                 }
-
+                reader.set_position(end_pos_of_row);
                 return Ok(());
             }
         }
 
-        reader.pop_checkpoint();
         Ok(())
     }
 }
 
 // Values |(xxx), (yyy), (zzz)
-pub fn skip_to_next_row<R: BufferRead>(
-    reader: &mut NestedCheckpointReader<R>,
-    mut balance: i32,
-) -> Result<()> {
-    let _ = reader.ignore_white_spaces()?;
+pub fn skip_to_next_row<R: AsRef<[u8]>>(reader: &mut Cursor<R>, mut balance: i32) -> Result<()> {
+    let _ = reader.ignore_white_spaces();
 
     let mut quoted = false;
     let mut escaped = false;
 
     while balance > 0 {
-        let buffer = reader.fill_buf()?;
+        let buffer = reader.remaining_slice();
         if buffer.is_empty() {
             break;
         }

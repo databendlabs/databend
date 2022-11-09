@@ -23,6 +23,7 @@
 #![feature(option_get_or_insert_default)]
 #![feature(result_option_inspect)]
 #![feature(result_flattening)]
+#![feature(cursor_remaining)]
 
 extern crate core;
 
