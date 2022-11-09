@@ -113,47 +113,6 @@ impl TypeDeserializer for ArrayDeserializer {
         Ok(())
     }
 
-    fn de_text_csv<R: BufferRead>(
-        &mut self,
-        reader: &mut NestedCheckpointReader<R>,
-        format: &FormatSettings,
-    ) -> Result<()> {
-        let maybe_single_quote = reader.ignore_byte(b'\'')?;
-        let maybe_double_quote = if !maybe_single_quote {
-            reader.ignore_byte(b'"')?
-        } else {
-            false
-        };
-        reader.must_ignore_byte(b'[')?;
-        let mut idx = 0;
-        loop {
-            let _ = reader.ignore_white_spaces()?;
-            if let Ok(res) = reader.ignore_byte(b']') {
-                if res {
-                    break;
-                }
-            }
-            if idx != 0 {
-                reader.must_ignore_byte(b',')?;
-            }
-            let _ = reader.ignore_white_spaces()?;
-            self.inner.de_text_quoted(reader, format)?;
-            idx += 1;
-        }
-        if maybe_single_quote {
-            reader.must_ignore_byte(b'\'')?;
-        } else if maybe_double_quote {
-            reader.must_ignore_byte(b'"')?;
-        }
-        let mut values = Vec::with_capacity(idx);
-        for _ in 0..idx {
-            values.push(self.inner.pop_data_value()?);
-        }
-        values.reverse();
-        self.builder.append_value(ArrayValue::new(values));
-        Ok(())
-    }
-
     fn de_whole_text(&mut self, reader: &[u8], format: &FormatSettings) -> Result<()> {
         let reader = BufferReader::new(reader);
         let mut reader = NestedCheckpointReader::new(Box::new(reader));

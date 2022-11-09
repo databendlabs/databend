@@ -117,19 +117,6 @@ impl TypeDeserializer for VariantDeserializer {
         Ok(())
     }
 
-    fn de_text_csv<R: BufferRead>(
-        &mut self,
-        reader: &mut NestedCheckpointReader<R>,
-        settings: &FormatSettings,
-    ) -> Result<()> {
-        self.buffer.clear();
-        reader.read_csv_string(&mut self.buffer, settings)?;
-        let val = serde_json::from_slice(self.buffer.as_slice())?;
-        self.builder.append_value(val);
-        self.memory_size += self.buffer.len();
-        Ok(())
-    }
-
     fn append_data_value(&mut self, value: DataValue, _format: &FormatSettings) -> Result<()> {
         self.builder.append_data_value(value)
     }

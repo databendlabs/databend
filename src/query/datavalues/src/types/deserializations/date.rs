@@ -119,32 +119,6 @@ where
         Ok(())
     }
 
-    fn de_text_csv<R: BufferRead>(
-        &mut self,
-        reader: &mut NestedCheckpointReader<R>,
-        format: &FormatSettings,
-    ) -> Result<()> {
-        let maybe_single_quote = reader.ignore_byte(b'\'')?;
-        let maybe_double_quote = if !maybe_single_quote {
-            reader.ignore_byte(b'"')?
-        } else {
-            false
-        };
-        let date = reader.read_date_text(&format.timezone);
-        if maybe_single_quote {
-            reader.must_ignore_byte(b'\'')?;
-        } else if maybe_double_quote {
-            reader.must_ignore_byte(b'"')?;
-        }
-        if date.is_err() {
-            return Err(date.err().unwrap());
-        }
-        let days = uniform(date.unwrap());
-        check_date(days.as_i32())?;
-        self.builder.append_value(days);
-        Ok(())
-    }
-
     fn de_text_json<R: BufferRead>(
         &mut self,
         reader: &mut NestedCheckpointReader<R>,

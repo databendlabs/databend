@@ -71,14 +71,6 @@ pub trait TypeDeserializer: Send + Sync {
         format: &FormatSettings,
     ) -> Result<()>;
 
-    fn de_text_csv<R: BufferRead>(
-        &mut self,
-        reader: &mut NestedCheckpointReader<R>,
-        format: &FormatSettings,
-    ) -> Result<()> {
-        self.de_text(reader, format)
-    }
-
     fn de_text_json<R: BufferRead>(
         &mut self,
         reader: &mut NestedCheckpointReader<R>,

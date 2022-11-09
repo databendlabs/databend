@@ -110,21 +110,6 @@ impl TypeDeserializer for StringDeserializer {
         Ok(())
     }
 
-    fn de_text_csv<R: BufferRead>(
-        &mut self,
-        reader: &mut NestedCheckpointReader<R>,
-        settings: &FormatSettings,
-    ) -> Result<()> {
-        self.buffer.clear();
-        reader.read_csv_string(&mut self.buffer, settings)?;
-        if self.buffer.is_empty() {
-            self.builder.append_default();
-        } else {
-            self.builder.append_value(self.buffer.as_slice());
-        }
-        Ok(())
-    }
-
     fn append_data_value(&mut self, value: DataValue, _format: &FormatSettings) -> Result<()> {
         self.builder.append_data_value(value)
     }

@@ -136,36 +136,6 @@ impl TypeDeserializer for NullableDeserializer {
         Ok(())
     }
 
-    fn de_text_csv<R: BufferRead>(
-        &mut self,
-        reader: &mut NestedCheckpointReader<R>,
-        format: &FormatSettings,
-    ) -> Result<()> {
-        if reader.eof()? {
-            self.de_default(format);
-        } else {
-            reader.push_checkpoint();
-            if reader.ignore_insensitive_bytes(&format.null_bytes)? {
-                let buffer = reader.fill_buf()?;
-
-                if buffer.is_empty()
-                    || (buffer[0] == b'\r'
-                        || buffer[0] == b'\n'
-                        || buffer[0] == format.field_delimiter[0])
-                {
-                    self.de_default(format);
-                    reader.pop_checkpoint();
-                    return Ok(());
-                }
-            }
-            reader.rollback_to_checkpoint()?;
-            reader.pop_checkpoint();
-            self.inner.de_text_csv(reader, format)?;
-            self.bitmap.push(true);
-        }
-        Ok(())
-    }
-
     fn de_whole_text(&mut self, reader: &[u8], format: &FormatSettings) -> Result<()> {
         if reader.eq_ignore_ascii_case(&format.null_bytes) {
             self.de_default(format);

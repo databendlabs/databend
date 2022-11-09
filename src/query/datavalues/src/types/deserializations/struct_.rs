@@ -106,14 +106,6 @@ impl TypeDeserializer for StructDeserializer {
         Ok(())
     }
 
-    fn de_text_csv<R: BufferRead>(
-        &mut self,
-        _reader: &mut NestedCheckpointReader<R>,
-        _format: &FormatSettings,
-    ) -> Result<()> {
-        Err(ErrorCode::Unimplemented("Unimplement error"))
-    }
-
     fn de_whole_text(&mut self, _reader: &[u8], _format: &FormatSettings) -> Result<()> {
         Err(ErrorCode::Unimplemented("Unimplement error"))
     }
