@@ -67,7 +67,7 @@ pub enum ValueRef<'a, T: ValueType> {
     Column(T::Column),
 }
 
-#[derive(Debug, Clone, PartialEq, Default, EnumAsInner, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, EnumAsInner, Serialize, Deserialize)]
 pub enum Scalar {
     #[default]
     Null,
@@ -82,7 +82,7 @@ pub enum Scalar {
     Variant(Vec<u8>),
 }
 
-#[derive(Clone, PartialEq, Default, EnumAsInner)]
+#[derive(Clone, Default, EnumAsInner)]
 pub enum ScalarRef<'a> {
     #[default]
     Null,
@@ -97,7 +97,7 @@ pub enum ScalarRef<'a> {
     Variant(&'a [u8]),
 }
 
-#[derive(Clone, PartialEq, EnumAsInner)]
+#[derive(Clone, EnumAsInner)]
 pub enum Column {
     Null { len: usize },
     EmptyArray { len: usize },
@@ -112,7 +112,7 @@ pub enum Column {
     Variant(StringColumn),
 }
 
-#[derive(Debug, Clone, PartialEq, EnumAsInner)]
+#[derive(Debug, Clone, EnumAsInner)]
 pub enum ColumnBuilder {
     Null {
         len: usize,
@@ -292,6 +292,12 @@ impl PartialOrd for Scalar {
     }
 }
 
+impl PartialEq for Scalar {
+    fn eq(&self, other: &Self) -> bool {
+        self.partial_cmp(other) == Some(Ordering::Equal)
+    }
+}
+
 impl PartialOrd for ScalarRef<'_> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         match (self, other) {
@@ -311,6 +317,12 @@ impl PartialOrd for ScalarRef<'_> {
             },
             _ => None,
         }
+    }
+}
+
+impl PartialEq for ScalarRef<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        self.partial_cmp(other) == Some(Ordering::Equal)
     }
 }
 
@@ -351,6 +363,12 @@ impl PartialOrd for Column {
             }
             _ => None,
         }
+    }
+}
+
+impl PartialEq for Column {
+    fn eq(&self, other: &Self) -> bool {
+        self.partial_cmp(other) == Some(Ordering::Equal)
     }
 }
 
