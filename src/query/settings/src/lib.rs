@@ -133,10 +133,10 @@ impl Settings {
             },
             // max_threads
             SettingValue {
-                default_value: UserSettingValue::UInt64(16),
-                user_setting: UserSetting::create("max_threads", UserSettingValue::UInt64(16)),
+                default_value: UserSettingValue::UInt64(0),
+                user_setting: UserSetting::create("max_threads", UserSettingValue::UInt64(0)),
                 level: ScopeLevel::Session,
-                desc: "The maximum number of threads to execute the request. By default, it is determined automatically.",
+                desc: "The maximum number of threads to execute the request. By default the value is 0 it means determined automatically.",
                 possible_values: None,
             },
             // max_storage_io_requests
