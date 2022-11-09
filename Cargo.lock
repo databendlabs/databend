@@ -1329,7 +1329,9 @@ dependencies = [
  "pretty_assertions",
  "primitive-types",
  "regex",
+ "serde",
  "serde_json",
+ "typetag",
 ]
 
 [[package]]
