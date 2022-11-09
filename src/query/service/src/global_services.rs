@@ -15,8 +15,6 @@
 use std::cell::UnsafeCell;
 use std::sync::Arc;
 
-use base64::encode_config;
-use base64::URL_SAFE;
 use common_base::base::GlobalIORuntime;
 use common_base::base::Runtime;
 use common_base::base::SingletonImpl;
@@ -86,7 +84,7 @@ impl GlobalServices {
         ShareTableConfig::init(
             &config.query.share_endpoint_address,
             &config.query.share_endpoint_auth_token_file,
-            encode_config(config.query.tenant_id.clone(), URL_SAFE),
+            config.query.tenant_id.clone(),
             global_services.clone(),
         )?;
 
