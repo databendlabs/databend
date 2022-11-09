@@ -130,10 +130,10 @@ impl<'a> Binder {
             },
             Statement::ShowSettings { like } => self.bind_show_settings(bind_context, like).await?,
             // Catalogs
-            Statement::CreateCatalog(_stmt) => todo!(),
-            Statement::ShowCreateCatalog(_stmt) => todo!(),
-            Statement::DropCatalog(_stmt) => todo!(),
-            Statement::ShowCatalogs(_stmt) => todo!(),
+            Statement::ShowCatalogs(stmt) => self.bind_show_catalogs(bind_context, stmt).await?,
+            Statement::ShowCreateCatalog(stmt) => self.bind_show_create_catalogs(stmt).await?,
+            Statement::CreateCatalog(stmt) => self.bind_create_catalog(stmt).await?,
+            Statement::DropCatalog(stmt) => self.bind_drop_catalog(stmt).await?,
 
             // Databases
             Statement::ShowDatabases(stmt) => self.bind_show_databases(bind_context, stmt).await?,

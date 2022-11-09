@@ -12,18 +12,14 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::any::Any;
 use std::convert::TryFrom;
+use std::fmt::Debug;
 use std::sync::Arc;
 
+use common_datablocks::BlockMetaInfo;
 use common_datablocks::DataBlock;
-use common_datavalues::prelude::Series;
-use common_datavalues::prelude::SeriesFrom;
-use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
-use common_datavalues::DataSchemaRefExt;
-use common_datavalues::DataValue;
-use common_datavalues::ToDataType;
-use common_datavalues::Vu8;
 use common_exception::ErrorCode;
 use common_storages_table_meta::meta::SegmentInfo;
 
@@ -31,19 +27,13 @@ use common_storages_table_meta::meta::SegmentInfo;
 pub type TableOperationLog = Vec<AppendOperationLogEntry>;
 
 // to be wrapped in enum
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct AppendOperationLogEntry {
     pub segment_location: String,
     pub segment_info: Arc<SegmentInfo>,
 }
 
 impl AppendOperationLogEntry {
-    pub fn schema() -> DataSchemaRef {
-        DataSchemaRefExt::create(vec![
-            DataField::new("seg_loc", Vu8::to_data_type()),
-            DataField::new("seg_info", Vu8::to_data_type()),
-        ])
-    }
-
     pub fn new(segment_location: String, segment_info: Arc<SegmentInfo>) -> Self {
         Self {
             segment_location,
@@ -53,47 +43,46 @@ impl AppendOperationLogEntry {
 }
 
 impl TryFrom<AppendOperationLogEntry> for DataBlock {
-    type Error = common_exception::ErrorCode;
+    type Error = ErrorCode;
     fn try_from(value: AppendOperationLogEntry) -> Result<Self, Self::Error> {
-        Ok(DataBlock::create(AppendOperationLogEntry::schema(), vec![
-            Series::from_data(vec![value.segment_location.as_str()]),
-            Series::from_data(vec![serde_json::to_string(&value.segment_info)?.as_str()]),
-        ]))
+        Ok(DataBlock::create_with_meta(
+            DataSchemaRef::default(),
+            vec![],
+            Some(Arc::new(Box::new(value))),
+        ))
     }
 }
 
 impl TryFrom<&DataBlock> for AppendOperationLogEntry {
-    type Error = common_exception::ErrorCode;
+    type Error = ErrorCode;
     fn try_from(block: &DataBlock) -> Result<Self, Self::Error> {
-        // check schema
-        if block.schema() != &AppendOperationLogEntry::schema() {
-            return Err(ErrorCode::Internal(format!(
-                "invalid data block of AppendOperation log, {:?}",
-                block.schema()
-            )));
+        let err = ErrorCode::Internal(format!(
+            "invalid data block meta of AppendOperation log, {:?}",
+            block.meta()
+        ));
+
+        if let Some(meta) = block.meta()? {
+            let cast = meta.as_any().downcast_ref::<AppendOperationLogEntry>();
+            return match cast {
+                None => Err(err),
+                Some(entry) => Ok(entry.clone()),
+            };
         }
 
-        let segment_location = Self::parse_col(0, block)?;
-        let seg_info = Self::parse_col(1, block)?;
-        let segment_info = Arc::new(serde_json::from_str(seg_info.as_str())?);
-        Ok(AppendOperationLogEntry {
-            segment_location,
-            segment_info,
-        })
+        Err(err)
     }
 }
 
-impl AppendOperationLogEntry {
-    fn parse_col(idx: usize, val: &DataBlock) -> common_exception::Result<String> {
-        let col = &val.column(idx).to_values()[0];
-        if let DataValue::String(v) = col {
-            Ok(String::from_utf8(v.clone())?)
-        } else {
-            Err(ErrorCode::Internal(format!(
-                "can not extract string value from data block as \
-                 a column of Append Operation log (col: {})",
-                idx
-            )))
+#[typetag::serde(name = "operation_log")]
+impl BlockMetaInfo for AppendOperationLogEntry {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
+        match info.as_any().downcast_ref::<AppendOperationLogEntry>() {
+            None => false,
+            Some(other) => self == other,
         }
     }
 }

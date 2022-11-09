@@ -12,7 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod file;
+mod stage_parts;
 mod stage_table;
 mod stage_table_sink;
 
+pub use file::*;
+pub use stage_parts::StageFilePartition;
+pub use stage_parts::StageFileStatus;
 pub use stage_table::StageTable;

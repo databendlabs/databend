@@ -33,6 +33,7 @@ fn test_array() {
     test_slice(file);
     test_remove_first(file);
     test_remove_last(file);
+    test_contains(file);
 }
 
 fn test_create(file: &mut impl Write) {
@@ -108,4 +109,37 @@ fn test_remove_last(file: &mut impl Write) {
     run_ast(file, "remove_last([0, 1, 2, NULL])", &[]);
     run_ast(file, "remove_last([0, 1, 2, 3])", &[]);
     run_ast(file, "remove_last(['a', 'b', 'c', 'd'])", &[]);
+}
+
+fn test_contains(file: &mut impl Write) {
+    run_ast(file, "false in (false, true)", &[]);
+    run_ast(file, "'33' in ('1', '33', '23', '33')", &[]);
+    run_ast(file, "contains([1,2,3], 2)", &[]);
+
+    let columns = [
+        (
+            "int8_col",
+            DataType::Number(NumberDataType::Int8),
+            Column::from_data(vec![1i8, 2, 7, 8]),
+        ),
+        (
+            "nullable_col",
+            DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int64))),
+            Column::from_data_with_validity(vec![9i64, 10, 11, 12], vec![true, true, false, false]),
+        ),
+    ];
+
+    run_ast(file, "int8_col not in (1, 2, 3, 4, 5, null)", &columns);
+    run_ast(file, "contains([1,2,null], nullable_col)", &columns);
+    run_ast(
+        file,
+        "contains([(1,'2', 3, false), (1,'2', 4, true), null], (1,'2', 3, false))",
+        &columns,
+    );
+    run_ast(file, "nullable_col in (null, 9, 10, 12)", &columns);
+    run_ast(
+        file,
+        "nullable_col in (1, '9', 3, 10, 12, true, [1,2,3])",
+        &columns,
+    );
 }

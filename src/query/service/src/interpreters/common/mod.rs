@@ -12,11 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod file;
 mod grant;
 mod table;
 
-pub use file::list_files;
-pub use file::stat_file;
 pub use grant::validate_grant_object_exists;
 pub use table::append2table;
