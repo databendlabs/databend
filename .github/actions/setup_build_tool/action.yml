@@ -42,13 +42,16 @@ runs:
           scripts/setup/run_build_tool.sh \${script_name} \$@
         fi
         EOF
+
         chmod +x $BIN_LOCAL/build-tool
         ln -s build-tool $BIN_LOCAL/rustc
         ln -s build-tool $BIN_LOCAL/cargo
         ln -s build-tool $BIN_LOCAL/rustup
         ln -s build-tool $BIN_LOCAL/make
         ln -s build-tool $BIN_LOCAL/taplo
-        ln -s build-tool $BIN_LOCAL/sccache
+        # Symbolic links to sccache won't work.
+        # ref: https://github.com/mozilla/sccache#symbolic-links
+        ln build-tool $BIN_LOCAL/sccache
 
     - name: check cargo version
       shell: bash
