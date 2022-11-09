@@ -241,22 +241,12 @@ where
                     if self.heap.is_empty() {
                         // If there is no other block in the heap, we can drain the whole block.
                         need_output = self.drain_cursor(cursor);
-                        if !self.input_finished[input_index] {
-                            // Correctness: if input is not finished, we need to pull more data,
-                            // or we can continue this loop.
-                            break;
-                        }
                     } else {
                         let next_cursor = &self.heap.peek().unwrap().0;
                         // If the last row of current block is smaller than the next cursor,
                         // we can drain the whole block.
                         if cursor.last().le(&next_cursor.current()) {
                             need_output = self.drain_cursor(cursor);
-                            if !self.input_finished[input_index] {
-                                // Correctness: if input is not finished, we need to pull more data,
-                                // or we can continue this loop.
-                                break;
-                            }
                         } else {
                             let block_index = self.blocks[input_index].len() - 1;
                             while !cursor.is_finished() && cursor.le(next_cursor) {
@@ -284,6 +274,12 @@ where
                     // Reach the block size, need to output.
                     if self.in_progess_rows.len() >= self.block_size {
                         need_output = true;
+                        break;
+                    }
+                    if self.cursor_finished[input_index] && !self.input_finished[input_index] {
+                        // Correctness: if input is not finished, we need to pull more data,
+                        // or we can continue this loop.
+                        break;
                     }
                 }
                 None => {
