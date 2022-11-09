@@ -14,18 +14,20 @@ runs:
       uses: ./.github/actions/setup_build_tool
       with:
         image: ${{ inputs.target }}
-        bypass_env_vars: RUSTFLAGS,RUST_LOG,RUSTC_WRAPPER,SCCACHE_BUCKET,SCCACHE_S3_KEY_PREFIX,SCCACHE_LOG,SCCACHE_ERROR_LOG,AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY,AWS_SESSION_TOKEN
+        bypass_env_vars: RUSTFLAGS,RUST_LOG,RUSTC_WRAPPER,SCCACHE_BUCKET,SCCACHE_S3_KEY_PREFIX,SCCACHE_LOG,SCCACHE_ERROR_LOG,SCCACHE_S3_USE_SSL
 
     - name: Build Debug
       if: inputs.profile == 'debug'
       shell: bash
       run: |
+        curl http://169.254.169.254/latest/meta-data/iam/security-credentials/
         cargo -Z sparse-registry build --target ${{ inputs.target }} || true
         cat sccache.log
       env:
         RUSTC_WRAPPER: /opt/rust/cargo/bin/sccache
         SCCACHE_BUCKET: databend-ci
         SCCACHE_S3_KEY_PREFIX: cache/
+        SCCACHE_S3_USE_SSL: true
         SCCACHE_LOG: debug
         SCCACHE_ERROR_LOG: /workspace/sccache.log
 
