@@ -18,6 +18,7 @@ use std::io::ErrorKind;
 use std::io::Result;
 
 pub trait ReadBytesExt {
+    fn peek(&self) -> Option<char>;
     fn ignore(&mut self, f: impl Fn(u8) -> bool) -> bool;
     fn ignores(&mut self, f: impl Fn(u8) -> bool) -> usize;
     fn ignore_byte(&mut self, b: u8) -> bool;
@@ -38,15 +39,7 @@ pub trait ReadBytesExt {
         Ok(())
     }
 
-    fn must_ignore_byte(&mut self, b: u8) -> Result<()> {
-        if !self.ignore_byte(b) {
-            return Err(std::io::Error::new(
-                ErrorKind::InvalidData,
-                format!("Expected to have char {}.", b as char),
-            ));
-        }
-        Ok(())
-    }
+    fn must_ignore_byte(&mut self, b: u8) -> Result<()>;
 
     fn must_ignore_bytes(&mut self, bs: &[u8]) -> Result<()> {
         if !self.ignore_bytes(bs) {
@@ -72,6 +65,15 @@ pub trait ReadBytesExt {
 impl<T> ReadBytesExt for Cursor<T>
 where T: AsRef<[u8]>
 {
+    fn peek(&self) -> Option<char> {
+        let buf = self.remaining_slice();
+        if buf.is_empty() {
+            None
+        } else {
+            Some(buf[0] as char)
+        }
+    }
+
     fn eof(&mut self) -> bool {
         self.remaining_slice().is_empty()
     }
@@ -128,6 +130,21 @@ where T: AsRef<[u8]>
             BufRead::consume(self, len);
         }
         eq
+    }
+
+    fn must_ignore_byte(&mut self, b: u8) -> Result<()> {
+        if !self.ignore_byte(b) {
+            return Err(std::io::Error::new(
+                ErrorKind::InvalidData,
+                format!(
+                    "Expected to have char '{}', got '{:?}' at pos {}",
+                    b as char,
+                    self.peek(),
+                    self.position()
+                ),
+            ));
+        }
+        Ok(())
     }
 
     fn ignore_insensitive_bytes(&mut self, bs: &[u8]) -> bool {
