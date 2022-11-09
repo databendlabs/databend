@@ -19,7 +19,7 @@ runs:
     - name: Build Debug
       if: inputs.profile == 'debug'
       shell: bash
-      run: cargo -Z sparse-registry build --target ${{ inputs.target }}
+      run: build-tool cargo -Z sparse-registry build --target ${{ inputs.target }}
       env:
         RUSTC_WRAPPER: /opt/rust/cargo/bin/sccache
         SCCACHE_BUCKET: databend-ci
