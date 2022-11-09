@@ -23,6 +23,13 @@ runs:
         RUSTC_WRAPPER: sccache
         SCCACHE_BUCKET: databend-ci
         SCCACHE_S3_KEY_PREFIX: cache/
+        SCCACHE_ERROR_LOG: /tmp/sccache_log.txt
+        SCCACHE_LOG: debug
+
+    - name: Print sccache debug
+      if: inputs.profile == 'debug'
+      shell: bash
+      run: cat /tmp/sccache_log.txt
 
     - name: Build Release
       if: inputs.profile == 'release'
