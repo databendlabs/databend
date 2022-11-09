@@ -20,7 +20,7 @@ runs:
       if: inputs.profile == 'debug'
       shell: bash
       run: |
-        cargo -Z sparse-registry build --target ${{ inputs.target }}
+        cargo -Z sparse-registry build --target ${{ inputs.target }} || true
         cat .databend/sccache.log
       env:
         RUSTC_WRAPPER: /opt/rust/cargo/bin/sccache
