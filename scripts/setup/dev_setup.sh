@@ -512,6 +512,10 @@ if [[ "$INSTALL_BUILD_TOOLS" == "true" ]]; then
 
 	# Any call to cargo will make rustup install the correct toolchain
 	cargo version
+
+	# Install tools that needed in build
+	cargo install sccache
+	cargo install cccache
 fi
 
 if [[ "$INSTALL_CHECK_TOOLS" == "true" ]]; then
