@@ -14,6 +14,7 @@
 
 mod packet;
 mod packet_data;
+mod packet_data_precommit;
 mod packet_execute;
 mod packet_executor;
 mod packet_fragment;
@@ -22,8 +23,8 @@ mod packet_publisher;
 pub use packet::Packet;
 pub use packet_data::DataPacket;
 pub use packet_data::FragmentData;
-pub use packet_data::PrecommitBlock;
 pub use packet_data::ProgressInfo;
+pub use packet_data_precommit::PrecommitBlock;
 pub use packet_execute::ExecutePartialQueryPacket;
 pub use packet_executor::QueryFragmentsPlanPacket;
 pub use packet_fragment::FragmentPayload;

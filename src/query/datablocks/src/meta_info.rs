@@ -16,6 +16,7 @@ use std::any::Any;
 use std::fmt::Debug;
 use std::sync::Arc;
 
+#[typetag::serde(tag = "type")]
 pub trait BlockMetaInfo: Debug + Send + Sync {
     fn as_any(&self) -> &dyn Any;
 

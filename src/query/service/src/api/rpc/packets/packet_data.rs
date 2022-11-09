@@ -14,26 +14,18 @@
 
 use std::fmt::Debug;
 use std::fmt::Formatter;
-use std::io::Read;
-use std::io::Write;
 use std::sync::Arc;
 
 use byteorder::BigEndian;
 use byteorder::ReadBytesExt;
 use byteorder::WriteBytesExt;
-use common_arrow::arrow::io::flight::deserialize_batch;
-use common_arrow::arrow::io::flight::serialize_batch;
-use common_arrow::arrow::io::ipc::write::default_ipc_fields;
-use common_arrow::arrow::io::ipc::write::WriteOptions;
-use common_arrow::arrow::io::ipc::IpcSchema;
 use common_arrow::arrow_format::flight::data::FlightData;
 use common_base::base::ProgressValues;
-use common_datablocks::DataBlock;
-use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use tracing::error;
 
+use crate::api::PrecommitBlock;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
@@ -61,9 +53,6 @@ pub enum ProgressInfo {
     ResultProgress(ProgressValues),
 }
 
-#[derive(Debug, Eq, PartialEq, Clone)]
-pub struct PrecommitBlock(pub DataBlock);
-
 #[derive(Debug)]
 pub enum DataPacket {
     ErrorCode(ErrorCode),
@@ -82,12 +71,6 @@ impl ProgressInfo {
             ProgressInfo::WriteProgress(values) => ctx.get_write_progress().incr(values),
             ProgressInfo::ResultProgress(values) => ctx.get_result_progress().incr(values),
         };
-    }
-}
-
-impl PrecommitBlock {
-    pub fn precommit(&self, ctx: &Arc<QueryContext>) {
-        ctx.push_precommit_block(self.0.clone());
     }
 }
 
@@ -156,68 +139,6 @@ impl From<FragmentData> for FlightData {
             data_header: data.data.data_header,
             flight_descriptor: None,
         }
-    }
-}
-
-impl PrecommitBlock {
-    pub fn write<T: Write>(self, bytes: &mut T) -> Result<()> {
-        let data_block = self.0;
-        let data_schema = data_block.schema();
-        let serialized_schema = serde_json::to_vec(data_schema)?;
-        let arrow_schema = data_schema.to_arrow();
-
-        // schema_flight
-        let options = WriteOptions { compression: None };
-        let ipc_fields = default_ipc_fields(&arrow_schema.fields);
-        let chunks = data_block.try_into()?;
-        let (_dicts, data_flight) = serialize_batch(&chunks, &ipc_fields, &options)?;
-
-        bytes.write_u64::<BigEndian>(serialized_schema.len() as u64)?;
-        bytes.write_u64::<BigEndian>(data_flight.data_header.len() as u64)?;
-        bytes.write_u64::<BigEndian>(data_flight.data_body.len() as u64)?;
-
-        bytes.write_all(&serialized_schema)?;
-        bytes.write_all(&data_flight.data_header)?;
-        bytes.write_all(&data_flight.data_body)?;
-        Ok(())
-    }
-
-    pub fn read<T: Read>(bytes: &mut T) -> Result<PrecommitBlock> {
-        let schema_len = bytes.read_u64::<BigEndian>()? as usize;
-        let header_len = bytes.read_u64::<BigEndian>()? as usize;
-        let body_len = bytes.read_u64::<BigEndian>()? as usize;
-
-        let mut schema = vec![0; schema_len];
-        let mut flight_header = vec![0; header_len];
-        let mut flight_body = vec![0; body_len];
-
-        bytes.read_exact(&mut schema)?;
-        bytes.read_exact(&mut flight_header)?;
-        bytes.read_exact(&mut flight_body)?;
-        let data_schema = serde_json::from_slice::<DataSchema>(&schema)?;
-        let arrow_schema = data_schema.to_arrow();
-
-        let ipc_fields = default_ipc_fields(&arrow_schema.fields);
-        let ipc_schema = IpcSchema {
-            fields: ipc_fields,
-            is_little_endian: true,
-        };
-
-        let chunk = deserialize_batch(
-            &FlightData {
-                app_metadata: vec![],
-                data_header: flight_header,
-                data_body: flight_body,
-                flight_descriptor: None,
-            },
-            &arrow_schema.fields,
-            &ipc_schema,
-            &Default::default(),
-        )?;
-
-        let data_schema = Arc::new(DataSchema::from(arrow_schema));
-
-        Ok(PrecommitBlock(DataBlock::from_chunk(&data_schema, &chunk)?))
     }
 }
 

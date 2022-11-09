@@ -17,12 +17,13 @@ use std::any::Any;
 use common_datablocks::BlockMetaInfo;
 use common_exception::Result;
 
-#[derive(Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq)]
 struct TestMetaInfoA {
     field_a: usize,
     field_b: String,
 }
 
+#[typetag::serde(name = "meta_info")]
 impl BlockMetaInfo for TestMetaInfoA {
     fn as_any(&self) -> &dyn Any {
         self
@@ -36,12 +37,13 @@ impl BlockMetaInfo for TestMetaInfoA {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq)]
 struct TestPartInfoB {
     field_a: String,
     field_b: u64,
 }
 
+#[typetag::serde(name = "meta_info")]
 impl BlockMetaInfo for TestPartInfoB {
     fn as_any(&self) -> &dyn Any {
         self

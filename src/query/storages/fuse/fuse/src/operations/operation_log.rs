@@ -73,6 +73,7 @@ impl TryFrom<&DataBlock> for AppendOperationLogEntry {
     }
 }
 
+#[typetag::serde(name = "operation_log")]
 impl BlockMetaInfo for AppendOperationLogEntry {
     fn as_any(&self) -> &dyn Any {
         self
