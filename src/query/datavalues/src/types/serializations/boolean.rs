@@ -21,7 +21,7 @@ use crate::prelude::*;
 
 #[derive(Clone)]
 pub struct BooleanSerializer {
-    pub(crate) values: Bitmap,
+    pub values: Bitmap,
 }
 
 impl BooleanSerializer {

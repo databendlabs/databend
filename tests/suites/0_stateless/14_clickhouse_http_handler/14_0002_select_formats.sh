@@ -4,10 +4,10 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../../../shell_env.sh
 
 
-echo "----tsv"
+echo "----csv"
 curl -s -u root: -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}" -d 'select number, number::varchar, number + 1 from numbers(3) FORMAT CSV'
 
-echo "----csv"
+echo "----tsv"
 curl -s -u root: -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}" -d 'select number, number::varchar, number + 1 from numbers(3) FORMAT TSV'
 
 echo "----tsv header escape"

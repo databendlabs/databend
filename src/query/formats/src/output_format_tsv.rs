@@ -13,99 +13,76 @@
 // limitations under the License.
 
 use common_datablocks::DataBlock;
+use common_datavalues::serializations::write_escaped_string;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataType;
 use common_exception::Result;
 
-use crate::field_encoder::FieldEncoderJSON;
 use crate::field_encoder::FieldEncoderRowBased;
+use crate::field_encoder::FieldEncoderTSV;
 use crate::output_format::OutputFormat;
 use crate::FileFormatOptionsExt;
 
-pub struct JsonEachRowOutputFormatBase<
-    const STRINGS: bool,
-    const COMPACT: bool,
-    const WITH_NAMES: bool,
-    const WITH_TYPES: bool,
-> {
+pub type TSVOutputFormat = TSVOutputFormatBase<false, false>;
+pub type TSVWithNamesOutputFormat = TSVOutputFormatBase<true, false>;
+pub type TSVWithNamesAndTypesOutputFormat = TSVOutputFormatBase<true, true>;
+
+pub struct TSVOutputFormatBase<const WITH_NAMES: bool, const WITH_TYPES: bool> {
     schema: DataSchemaRef,
-    field_encoder: FieldEncoderJSON,
+    field_encoder: FieldEncoderTSV,
+    field_delimiter: u8,
+    record_delimiter: Vec<u8>,
+    quote: u8,
 }
 
-impl<const STRINGS: bool, const COMPACT: bool, const WITH_NAMES: bool, const WITH_TYPES: bool>
-    JsonEachRowOutputFormatBase<STRINGS, COMPACT, WITH_NAMES, WITH_TYPES>
-{
+impl<const WITH_NAMES: bool, const WITH_TYPES: bool> TSVOutputFormatBase<WITH_NAMES, WITH_TYPES> {
     pub fn create(schema: DataSchemaRef, options: &FileFormatOptionsExt) -> Self {
-        let field_encoder = FieldEncoderJSON::create(options);
+        let field_encoder = FieldEncoderTSV::create(options);
         Self {
             schema,
             field_encoder,
+            field_delimiter: options.stage.field_delimiter.as_bytes()[0],
+            record_delimiter: options.stage.record_delimiter.as_bytes().to_vec(),
+            quote: b'\'',
         }
     }
 
     fn serialize_strings(&self, values: Vec<String>) -> Vec<u8> {
-        assert!(COMPACT);
-        let mut buf = vec![b'['];
+        let mut buf = vec![];
+        let fd = self.field_delimiter;
+
         for (col_index, v) in values.iter().enumerate() {
             if col_index != 0 {
-                buf.push(b',');
+                buf.push(fd);
             }
-            self.field_encoder
-                .write_string_inner(v.as_bytes(), &mut buf, false);
+            write_escaped_string(v.as_bytes(), &mut buf, self.quote);
         }
-        buf.extend_from_slice(b"]\n");
+
+        buf.extend_from_slice(&self.record_delimiter);
         buf
     }
 }
 
-impl<const STRINGS: bool, const COMPACT: bool, const WITH_NAMES: bool, const WITH_TYPES: bool>
-    OutputFormat for JsonEachRowOutputFormatBase<STRINGS, COMPACT, WITH_NAMES, WITH_TYPES>
+impl<const WITH_NAMES: bool, const WITH_TYPES: bool> OutputFormat
+    for TSVOutputFormatBase<WITH_NAMES, WITH_TYPES>
 {
     fn serialize_block(&mut self, block: &DataBlock) -> Result<Vec<u8>> {
         let rows_size = block.column(0).len();
-
         let mut buf = Vec::with_capacity(block.memory_size());
         let serializers = block.get_serializers()?;
-        let field_names: Vec<_> = block
-            .schema()
-            .fields()
-            .iter()
-            .map(|f| f.name().as_bytes())
-            .collect();
+
+        let fd = self.field_delimiter;
+        let rd = &self.record_delimiter;
 
         for row_index in 0..rows_size {
-            if COMPACT {
-                buf.push(b'[');
-            } else {
-                buf.push(b'{');
-            }
             for (col_index, serializer) in serializers.iter().enumerate() {
                 if col_index != 0 {
-                    buf.push(b',');
+                    buf.push(fd);
                 }
-                if !COMPACT {
-                    buf.push(b'"');
-                    buf.extend_from_slice(field_names[col_index]);
-                    buf.push(b'"');
-
-                    buf.push(b':');
-                }
-
-                if STRINGS {
-                    buf.push(b'"');
-                    self.field_encoder
-                        .write_field(serializer, row_index, &mut buf, true);
-                    buf.push(b'"');
-                } else {
-                    self.field_encoder
-                        .write_field(serializer, row_index, &mut buf, false)
-                }
+                self.field_encoder
+                    .write_field(serializer, row_index, &mut buf, true);
             }
-            if COMPACT {
-                buf.extend_from_slice("]\n".as_bytes());
-            } else {
-                buf.extend_from_slice("}\n".as_bytes());
-            }
+            buf.extend_from_slice(rd)
         }
         Ok(buf)
     }
@@ -113,7 +90,6 @@ impl<const STRINGS: bool, const COMPACT: bool, const WITH_NAMES: bool, const WIT
     fn serialize_prefix(&self) -> Result<Vec<u8>> {
         let mut buf = vec![];
         if WITH_NAMES {
-            assert!(COMPACT);
             let names = self
                 .schema
                 .fields()
@@ -133,7 +109,6 @@ impl<const STRINGS: bool, const COMPACT: bool, const WITH_NAMES: bool, const WIT
         }
         Ok(buf)
     }
-
     fn finalize(&mut self) -> Result<Vec<u8>> {
         Ok(vec![])
     }

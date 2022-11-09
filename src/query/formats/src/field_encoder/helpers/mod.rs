@@ -12,16 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod clickhouse;
-pub mod field_encoder;
-mod file_format_type;
-pub mod output_format;
-pub mod output_format_csv;
-mod output_format_json_each_row;
-mod output_format_parquet;
-mod output_format_tsv;
-mod output_format_values;
+mod json;
+mod number_helpers;
 
-pub use clickhouse::ClickhouseFormatType;
-pub use file_format_type::FileFormatOptionsExt;
-pub use file_format_type::FileFormatTypeExt;
+use chrono_tz::Tz;
+pub use json::write_json_string;
+pub use number_helpers::PrimitiveWithFormat;
+
+pub struct CommonSettings {
+    pub true_bytes: Vec<u8>,
+    pub false_bytes: Vec<u8>,
+    pub null_bytes: Vec<u8>,
+    pub nan_bytes: Vec<u8>,
+    pub inf_bytes: Vec<u8>,
+    pub timezone: Tz,
+}

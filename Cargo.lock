@@ -1415,6 +1415,9 @@ dependencies = [
  "common-io",
  "common-meta-types",
  "common-settings",
+ "lexical-core",
+ "micromarshal",
+ "num",
  "once_cell",
  "pretty_assertions",
 ]

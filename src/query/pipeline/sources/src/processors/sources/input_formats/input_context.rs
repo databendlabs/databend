@@ -175,7 +175,7 @@ impl InputContext {
         let file_format_options = &plan.stage_info.file_format_options;
         let format_typ = file_format_options.format.clone();
         let file_format_options =
-            StageFileFormatType::get_ext_from_stage(file_format_options.clone());
+            StageFileFormatType::get_ext_from_stage(file_format_options.clone(), &settings)?;
         let file_format_options = format_typ.final_file_format_options(&file_format_options)?;
 
         let format = Self::get_input_format(&format_typ)?;
