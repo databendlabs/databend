@@ -24,6 +24,8 @@ fn test_geo() {
     let file = &mut mint.new_goldenfile("geo.txt").unwrap();
 
     test_great_circle_distance(file);
+    test_geo_distance(file);
+    test_great_circle_angle(file);
 }
 
 fn test_great_circle_distance(file: &mut impl Write) {
@@ -32,4 +34,16 @@ fn test_great_circle_distance(file: &mut impl Write) {
         "great_circle_distance(55.755831, 37.617673, -55.755831, -37.617673)",
         &[],
     );
+}
+
+fn test_geo_distance(file: &mut impl Write) {
+    run_ast(
+        file,
+        "geo_distance(55.755831, 37.617673, -55.755831, -37.617673)",
+        &[],
+    );
+}
+
+fn test_great_circle_angle(file: &mut impl Write) {
+    run_ast(file, "great_circle_angle(0, 0, 45, 0)", &[]);
 }

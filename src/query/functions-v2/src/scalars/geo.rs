@@ -46,6 +46,7 @@ static SPHERE_METRIC_LUT: OnceCell<[f32; METRIC_LUT_SIZE + 1]> = OnceCell::new()
 static SPHERE_METRIC_METERS_LUT: OnceCell<[f32; METRIC_LUT_SIZE + 1]> = OnceCell::new();
 static WGS84_METRIC_METERS_LUT: OnceCell<[f32; 2 * (METRIC_LUT_SIZE + 1)]> = OnceCell::new();
 
+#[derive(PartialEq)]
 enum GeoMethod {
     SphereDegrees,
     SphereMeters,
@@ -261,6 +262,10 @@ fn distance(lon1deg: f32, lat1deg: f32, lon2deg: f32, lat2deg: f32, method: GeoM
             + geodist_fast_cos(lat1deg * RAD_IN_DEG)
                 * geodist_fast_cos(lat2deg * RAD_IN_DEG)
                 * (geodist_fast_sin(lon_diff * RAD_IN_DEG_HALF)).powi(2);
+
+        if method == GeoMethod::SphereDegrees {
+            return (360f32 / PI_F) * geodist_fast_asin_sqrt(a);
+        }
 
         EARTH_DIAMETER * geodist_fast_asin_sqrt(a)
     }
