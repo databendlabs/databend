@@ -1885,6 +1885,7 @@ dependencies = [
  "common-datablocks",
  "common-datavalues",
  "common-exception",
+ "common-expression",
  "common-pipeline-core",
 ]
 
@@ -2167,9 +2168,8 @@ dependencies = [
  "common-arrow",
  "common-base",
  "common-catalog",
- "common-datablocks",
- "common-datavalues",
  "common-exception",
+ "common-expression",
  "common-hive-meta-store",
  "common-meta-app",
  "common-meta-types",

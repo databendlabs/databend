@@ -72,22 +72,22 @@ impl HivePartitionFiller {
 
     pub fn fill_data(
         &self,
-        mut data_chunk: Chunk,
+        mut chunk: Chunk,
         part: &HivePartInfo,
         origin_num_rows: usize,
     ) -> Result<Chunk> {
         let data_values = self.extract_partition_values(part)?;
 
         // create column, create datafiled
-        let mut num_rows = data_chunk.num_rows();
+        let mut num_rows = chunk.num_rows();
         if num_rows == 0 {
             num_rows = origin_num_rows;
         }
         for (i, field) in self.partition_fields.iter().enumerate() {
             let value = &data_values[i];
             let column = self.generate_column(num_rows, value.clone(), field)?;
-            data_chunk.add_column(column, field.data_type().clone());
+            chunk.add_column(column, field.data_type().clone());
         }
-        Ok(data_chunk)
+        Ok(chunk)
     }
 }

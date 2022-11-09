@@ -236,7 +236,8 @@ impl MultiSortMergeProcessor {
                 data.push((i, input.pull_data().unwrap()?));
             }
         }
-        Ok(data)
+        // Ok(data)
+        todo!("expression")
     }
 
     fn nums_active_inputs(&self) -> usize {
@@ -438,7 +439,8 @@ impl Processor for MultiSortMergeProcessor {
                         limit - data_block.num_rows()
                     }
                 });
-                self.output.push_data(Ok(data_block));
+                // self.output.push_data(Ok(data_block));
+                todo!("expression");
                 return Ok(Event::NeedConsume);
             }
         }

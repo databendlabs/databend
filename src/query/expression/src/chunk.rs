@@ -14,6 +14,7 @@
 
 use std::ops::Range;
 
+use common_arrow::arrow::array::Array;
 use common_arrow::arrow::chunk::Chunk as ArrowChunk;
 use common_arrow::ArrayRef;
 use common_exception::ErrorCode;
@@ -22,7 +23,9 @@ use common_exception::Result;
 use crate::schema::DataSchema;
 use crate::types::AnyType;
 use crate::types::DataType;
+use crate::Column;
 use crate::ColumnBuilder;
+use crate::DataSchemaRef;
 use crate::Domain;
 use crate::TypeSerializer;
 use crate::Value;
@@ -163,6 +166,26 @@ impl Chunk {
             serializers.push(serializer);
         }
         Ok(serializers)
+    }
+
+    pub fn from_arrow_chunk<A: AsRef<dyn Array>>(
+        arrow_chunk: &ArrowChunk<A>,
+        schema: &DataSchemaRef,
+    ) -> Result<Self> {
+        let mut num_rows = 0;
+        let columns: Vec<(Value<AnyType>, DataType)> = arrow_chunk
+            .columns()
+            .iter()
+            .zip(schema.fields())
+            .map(|(c, f)| {
+                let col = Column::from_arrow(c.as_ref());
+                num_rows = col.len();
+                let data_type = f.data_type().into();
+                (Value::Column(col), data_type)
+            })
+            .collect();
+
+        Ok(Self::new(columns, num_rows))
     }
 }
 

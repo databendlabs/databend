@@ -76,13 +76,16 @@ impl<T: Compactor + Send + 'static> TransformCompact<T> {
                     return Ok(Event::NeedConsume);
                 }
                 let block = state.output_data_blocks.pop_front().unwrap();
-                state.output_port.push_data(Ok(block));
+                todo!("expression");
+                // state.output_port.push_data(Ok(block));
                 return Ok(Event::NeedConsume);
             }
 
             if state.input_port.has_data() {
                 let data_block = state.input_port.pull_data().unwrap()?;
-                state.input_data_blocks.push(data_block);
+                
+                todo!("expression");
+                // state.input_data_blocks.push(data_block);
 
                 if T::use_partial_compact() {
                     return Ok(Event::Sync);
@@ -116,32 +119,33 @@ impl<T: Compactor + Send + 'static> Processor for TransformCompact<T> {
     }
 
     fn event(&mut self) -> Result<Event> {
-        match &mut self.state {
-            ProcessorState::Finished => Ok(Event::Finished),
-            ProcessorState::Consume(_) => self.consume_event(),
-            ProcessorState::Compacting(_) => Err(ErrorCode::Internal("It's a bug.")),
-            ProcessorState::Compacted(state) => {
-                if state.output_port.is_finished() {
-                    state.input_port.finish();
-                    return Ok(Event::Finished);
-                }
+        todo!("expression")
+        // match &mut self.state {
+        //     ProcessorState::Finished => Ok(Event::Finished),
+        //     ProcessorState::Consume(_) => self.consume_event(),
+        //     ProcessorState::Compacting(_) => Err(ErrorCode::Internal("It's a bug.")),
+        //     ProcessorState::Compacted(state) => {
+        //         if state.output_port.is_finished() {
+        //             state.input_port.finish();
+        //             return Ok(Event::Finished);
+        //         }
 
-                if !state.output_port.can_push() {
-                    return Ok(Event::NeedConsume);
-                }
+        //         if !state.output_port.can_push() {
+        //             return Ok(Event::NeedConsume);
+        //         }
 
-                match state.compacted_blocks.pop_front() {
-                    None => {
-                        state.output_port.finish();
-                        Ok(Event::Finished)
-                    }
-                    Some(data) => {
-                        state.output_port.push_data(Ok(data));
-                        Ok(Event::NeedConsume)
-                    }
-                }
-            }
-        }
+        //         match state.compacted_blocks.pop_front() {
+        //             None => {
+        //                 state.output_port.finish();
+        //                 Ok(Event::Finished)
+        //             }
+        //             Some(data) => {
+        //                 state.output_port.push_data(Ok(data));
+        //                 Ok(Event::NeedConsume)
+        //             }
+        //         }
+        //     }
+        // }
     }
 
     fn interrupt(&self) {

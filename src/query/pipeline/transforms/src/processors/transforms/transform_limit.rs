@@ -134,59 +134,60 @@ impl<const MODE: usize> Processor for TransformLimitImpl<MODE> {
     }
 
     fn event(&mut self) -> Result<Event> {
-        if self.output.is_finished() {
-            self.input.finish();
-            return Ok(Event::Finished);
-        }
+        // if self.output.is_finished() {
+        //     self.input.finish();
+        //     return Ok(Event::Finished);
+        // }
 
-        if !self.output.can_push() {
-            self.input.set_not_need_data();
-            return Ok(Event::NeedConsume);
-        }
+        // if !self.output.can_push() {
+        //     self.input.set_not_need_data();
+        //     return Ok(Event::NeedConsume);
+        // }
 
-        if let Some(data_block) = self.output_data_block.take() {
-            self.output.push_data(Ok(data_block));
-            return Ok(Event::NeedConsume);
-        }
+        // if let Some(data_block) = self.output_data_block.take() {
+        //     self.output.push_data(Ok(data_block));
+        //     return Ok(Event::NeedConsume);
+        // }
 
-        if self.skip_remaining == 0 && self.take_remaining == 0 {
-            if MODE == ONLY_LIMIT || MODE == OFFSET_AND_LIMIT {
-                self.input.finish();
-                self.output.finish();
-                return Ok(Event::Finished);
-            }
+        // if self.skip_remaining == 0 && self.take_remaining == 0 {
+        //     if MODE == ONLY_LIMIT || MODE == OFFSET_AND_LIMIT {
+        //         self.input.finish();
+        //         self.output.finish();
+        //         return Ok(Event::Finished);
+        //     }
 
-            if MODE == ONLY_OFFSET {
-                if self.input.is_finished() {
-                    self.output.finish();
-                    return Ok(Event::Finished);
-                }
+        //     if MODE == ONLY_OFFSET {
+        //         if self.input.is_finished() {
+        //             self.output.finish();
+        //             return Ok(Event::Finished);
+        //         }
 
-                if !self.input.has_data() {
-                    self.input.set_need_data();
-                    return Ok(Event::NeedData);
-                }
+        //         if !self.input.has_data() {
+        //             self.input.set_need_data();
+        //             return Ok(Event::NeedData);
+        //         }
 
-                self.output.push_data(self.input.pull_data().unwrap());
-                return Ok(Event::NeedConsume);
-            }
-        }
+        //         self.output.push_data(self.input.pull_data().unwrap());
+        //         return Ok(Event::NeedConsume);
+        //     }
+        // }
 
-        if self.input_data_block.is_some() {
-            return Ok(Event::Sync);
-        }
+        // if self.input_data_block.is_some() {
+        //     return Ok(Event::Sync);
+        // }
 
-        if self.input.is_finished() {
-            self.output.finish();
-            return Ok(Event::Finished);
-        }
+        // if self.input.is_finished() {
+        //     self.output.finish();
+        //     return Ok(Event::Finished);
+        // }
 
-        if !self.input.has_data() {
-            self.input.set_need_data();
-            return Ok(Event::NeedData);
-        }
+        // if !self.input.has_data() {
+        //     self.input.set_need_data();
+        //     return Ok(Event::NeedData);
+        // }
 
-        self.input_data_block = Some(self.input.pull_data().unwrap()?);
+        // self.input_data_block = Some(self.input.pull_data().unwrap()?);
+        todo!("expression");
         Ok(Event::Sync)
     }
 

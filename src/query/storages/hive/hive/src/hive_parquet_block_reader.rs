@@ -25,8 +25,8 @@ use common_arrow::parquet::metadata::RowGroupMetaData;
 use common_arrow::parquet::read::BasicDecompressor;
 use common_arrow::parquet::read::PageReader;
 use common_base::base::tokio::sync::Semaphore;
-use common_datablocks::DataBlock;
-use common_datavalues::DataSchemaRef;
+use common_expression::Chunk;
+use common_expression::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_storages_cache::FileMetaDataReader;
@@ -65,21 +65,21 @@ impl DataBlockDeserializer {
         schema: &DataSchemaRef,
         filler: &Option<HivePartitionFiller>,
         part_info: &HivePartInfo,
-    ) -> Result<Option<DataBlock>> {
+    ) -> Result<Option<Chunk>> {
         if self.drained {
             return Ok(None);
         };
 
         let opt = self.deserializer.next().transpose()?;
-        if let Some(chunk) = opt {
+        if let Some(arrow_chunk) = opt {
             // If the `Vec<ArrayIter<'static>>` we have passed into the `RowGroupDeserializer`
             // is empty, the deserializer will returns an empty chunk as well(since now rows are consumed).
             // In this case, mark self as drained.
-            if chunk.is_empty() {
+            if arrow_chunk.is_empty() {
                 self.drained = true;
             }
 
-            let block: DataBlock = DataBlock::from_chunk(schema, &chunk)?;
+            let chunk: Chunk = Chunk::from_arrow_chunk(&arrow_chunk, schema)?;
             return if let Some(filler) = &filler {
                 let num_rows = self.deserializer.num_rows();
                 let filled = filler.fill_data(block, part_info, num_rows)?;

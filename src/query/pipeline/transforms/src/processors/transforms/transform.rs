@@ -15,8 +15,8 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use common_datablocks::DataBlock;
 use common_exception::Result;
+use common_expression::Chunk;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
@@ -28,7 +28,7 @@ pub trait Transform: Send {
     const NAME: &'static str;
     const SKIP_EMPTY_DATA_BLOCK: bool = false;
 
-    fn transform(&mut self, data: DataBlock) -> Result<DataBlock>;
+    fn transform(&mut self, data: Chunk) -> Result<Chunk>;
 
     fn name(&self) -> String {
         Self::NAME.to_string()
@@ -40,8 +40,8 @@ pub struct Transformer<T: Transform + 'static> {
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
 
-    input_data: Option<DataBlock>,
-    output_data: Option<DataBlock>,
+    input_data: Option<Chunk>,
+    output_data: Option<Chunk>,
 }
 
 impl<T: Transform + 'static> Transformer<T> {
