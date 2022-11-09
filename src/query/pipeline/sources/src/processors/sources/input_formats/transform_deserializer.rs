@@ -16,8 +16,8 @@ use std::any::Any;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use common_expression::Chunk;
 use common_exception::Result;
+use common_expression::Chunk;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;

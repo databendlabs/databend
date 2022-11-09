@@ -15,8 +15,8 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use common_expression::Chunk;
 use common_exception::Result;
+use common_expression::Chunk;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;

@@ -83,7 +83,7 @@ impl<T: Compactor + Send + 'static> TransformCompact<T> {
 
             if state.input_port.has_data() {
                 let data_block = state.input_port.pull_data().unwrap()?;
-                
+
                 todo!("expression");
                 // state.input_data_blocks.push(data_block);
 

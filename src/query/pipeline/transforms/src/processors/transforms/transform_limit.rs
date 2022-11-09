@@ -15,9 +15,9 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::Chunk;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
@@ -57,8 +57,8 @@ struct TransformLimitImpl<const MODE: usize> {
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
 
-    input_data_block: Option<DataBlock>,
-    output_data_block: Option<DataBlock>,
+    input_data_block: Option<Chunk>,
+    output_data_block: Option<Chunk>,
 }
 
 impl<const MODE: usize> TransformLimitImpl<MODE> {
@@ -78,7 +78,7 @@ impl<const MODE: usize> TransformLimitImpl<MODE> {
         })))
     }
 
-    pub fn take_rows(&mut self, data_block: DataBlock) -> DataBlock {
+    pub fn take_rows(&mut self, data_block: Chunk) -> Chunk {
         let rows = data_block.num_rows();
         debug_assert_ne!(self.take_remaining, 0);
 
@@ -89,10 +89,10 @@ impl<const MODE: usize> TransformLimitImpl<MODE> {
 
         let remaining = self.take_remaining;
         self.take_remaining = 0;
-        data_block.slice(0, remaining)
+        data_block.slice((0..remaining))
     }
 
-    pub fn skip_rows(&mut self, data_block: DataBlock) -> Option<DataBlock> {
+    pub fn skip_rows(&mut self, data_block: Chunk) -> Option<Chunk> {
         let rows = data_block.num_rows();
 
         if self.skip_remaining >= rows {
@@ -106,12 +106,12 @@ impl<const MODE: usize> TransformLimitImpl<MODE> {
                 self.skip_remaining = 0;
                 let length = std::cmp::min(self.take_remaining, rows - offset);
                 self.take_remaining -= length;
-                Some(data_block.slice(offset, length))
+                Some(data_block.slice((offset..offset + length)))
             }
             _ => {
                 let offset = self.skip_remaining;
                 self.skip_remaining = 0;
-                Some(data_block.slice(offset, rows - offset))
+                Some(data_block.slice((offset..rows)))
             }
         }
     }
@@ -134,60 +134,59 @@ impl<const MODE: usize> Processor for TransformLimitImpl<MODE> {
     }
 
     fn event(&mut self) -> Result<Event> {
-        // if self.output.is_finished() {
-        //     self.input.finish();
-        //     return Ok(Event::Finished);
-        // }
+        if self.output.is_finished() {
+            self.input.finish();
+            return Ok(Event::Finished);
+        }
 
-        // if !self.output.can_push() {
-        //     self.input.set_not_need_data();
-        //     return Ok(Event::NeedConsume);
-        // }
+        if !self.output.can_push() {
+            self.input.set_not_need_data();
+            return Ok(Event::NeedConsume);
+        }
 
-        // if let Some(data_block) = self.output_data_block.take() {
-        //     self.output.push_data(Ok(data_block));
-        //     return Ok(Event::NeedConsume);
-        // }
+        if let Some(data_block) = self.output_data_block.take() {
+            self.output.push_data(Ok(data_block));
+            return Ok(Event::NeedConsume);
+        }
 
-        // if self.skip_remaining == 0 && self.take_remaining == 0 {
-        //     if MODE == ONLY_LIMIT || MODE == OFFSET_AND_LIMIT {
-        //         self.input.finish();
-        //         self.output.finish();
-        //         return Ok(Event::Finished);
-        //     }
+        if self.skip_remaining == 0 && self.take_remaining == 0 {
+            if MODE == ONLY_LIMIT || MODE == OFFSET_AND_LIMIT {
+                self.input.finish();
+                self.output.finish();
+                return Ok(Event::Finished);
+            }
 
-        //     if MODE == ONLY_OFFSET {
-        //         if self.input.is_finished() {
-        //             self.output.finish();
-        //             return Ok(Event::Finished);
-        //         }
+            if MODE == ONLY_OFFSET {
+                if self.input.is_finished() {
+                    self.output.finish();
+                    return Ok(Event::Finished);
+                }
 
-        //         if !self.input.has_data() {
-        //             self.input.set_need_data();
-        //             return Ok(Event::NeedData);
-        //         }
+                if !self.input.has_data() {
+                    self.input.set_need_data();
+                    return Ok(Event::NeedData);
+                }
 
-        //         self.output.push_data(self.input.pull_data().unwrap());
-        //         return Ok(Event::NeedConsume);
-        //     }
-        // }
+                self.output.push_data(self.input.pull_data().unwrap());
+                return Ok(Event::NeedConsume);
+            }
+        }
 
-        // if self.input_data_block.is_some() {
-        //     return Ok(Event::Sync);
-        // }
+        if self.input_data_block.is_some() {
+            return Ok(Event::Sync);
+        }
 
-        // if self.input.is_finished() {
-        //     self.output.finish();
-        //     return Ok(Event::Finished);
-        // }
+        if self.input.is_finished() {
+            self.output.finish();
+            return Ok(Event::Finished);
+        }
 
-        // if !self.input.has_data() {
-        //     self.input.set_need_data();
-        //     return Ok(Event::NeedData);
-        // }
+        if !self.input.has_data() {
+            self.input.set_need_data();
+            return Ok(Event::NeedData);
+        }
 
-        // self.input_data_block = Some(self.input.pull_data().unwrap()?);
-        todo!("expression");
+        self.input_data_block = Some(self.input.pull_data().unwrap()?);
         Ok(Event::Sync)
     }
 

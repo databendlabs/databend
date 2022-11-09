@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
-use common_datablocks::SendableDataBlockStream;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::Chunk;
@@ -27,9 +26,12 @@ use futures::StreamExt;
 use crate::processors::sources::AsyncSource;
 use crate::processors::sources::AsyncSourcer;
 
+pub type SendableChunkStream =
+    std::pin::Pin<Box<dyn futures::stream::Stream<Item = Result<Chunk>> + Send>>;
+
 /// AsyncSource backed by a stream
 pub struct AsyncStreamSource<const SKIP_EMPTY_DATA_BLOCK: bool> {
-    stream: Option<SendableDataBlockStream>,
+    stream: Option<SendableChunkStream>,
 }
 
 /// AsyncSource backed by a stream, and will skip empty data blocks
@@ -40,13 +42,13 @@ pub type StreamSource = AsyncStreamSource<true>;
 pub type StreamSourceNoSkipEmpty = AsyncStreamSource<false>;
 
 impl<const T: bool> AsyncStreamSource<T> {
-    pub fn new(stream: Option<SendableDataBlockStream>) -> Self {
+    pub fn new(stream: Option<SendableChunkStream>) -> Self {
         AsyncStreamSource { stream }
     }
 
     pub fn create(
         ctx: Arc<dyn TableContext>,
-        stream: Option<SendableDataBlockStream>,
+        stream: Option<SendableChunkStream>,
         out: Arc<OutputPort>,
     ) -> Result<ProcessorPtr> {
         AsyncSourcer::create(ctx, out, AsyncStreamSource::<T> { stream })
@@ -67,10 +69,7 @@ impl<const T: bool> AsyncSource for AsyncStreamSource<T> {
             .next()
             .await
         {
-            Some(Ok(block)) => {
-                todo!("expression")
-                //  Ok(Some(block)),
-            }
+            Some(Ok(block)) => Ok(Some(block)),
             Some(Err(e)) => Err(e),
             None => Ok(None),
         }

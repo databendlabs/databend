@@ -89,9 +89,8 @@ impl<T: 'static + AsyncSource> Processor for AsyncSourcer<T> {
 
         match self.generated_data.take() {
             None => Ok(Event::Async),
-            Some(data_block) => {
-                todo!("expression");
-                // self.output.push_data(Ok(data_block));
+            Some(chunk) => {
+                self.output.push_data(Ok(chunk));
                 Ok(Event::NeedConsume)
             }
         }
@@ -100,17 +99,17 @@ impl<T: 'static + AsyncSource> Processor for AsyncSourcer<T> {
     async fn async_process(&mut self) -> Result<()> {
         match self.inner.generate().await? {
             None => self.is_finish = true,
-            Some(data_block) => {
-                if !data_block.is_empty() {
+            Some(chunk) => {
+                if !chunk.is_empty() {
                     let progress_values = ProgressValues {
-                        rows: data_block.num_rows(),
-                        bytes: data_block.memory_size(),
+                        rows: chunk.num_rows(),
+                        bytes: chunk.memory_size(),
                     };
                     self.scan_progress.incr(&progress_values);
                 }
 
-                if !T::SKIP_EMPTY_DATA_BLOCK || !data_block.is_empty() {
-                    self.generated_data = Some(data_block)
+                if !T::SKIP_EMPTY_DATA_BLOCK || !chunk.is_empty() {
+                    self.generated_data = Some(chunk)
                 }
             }
         };
