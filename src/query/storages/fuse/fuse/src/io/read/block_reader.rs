@@ -42,6 +42,7 @@ use futures::TryStreamExt;
 use opendal::Object;
 use opendal::Operator;
 use tracing::debug_span;
+use tracing::error;
 use tracing::Instrument;
 
 use crate::fuse_part::ColumnLeaf;
@@ -379,7 +380,17 @@ impl BlockReader {
     ) -> Result<(usize, Vec<u8>)> {
         let mut chunk = vec![0; length as usize];
         let mut r = o.range_reader(offset..offset + length).await?;
-        r.read_exact(&mut chunk).await?;
+        r.read_exact(&mut chunk).await.map_err(|err| {
+            error!(
+                target = "opendal",
+                "read {}, range:[{}, {}], error:{:?}",
+                o.path(),
+                offset,
+                offset + length,
+                err
+            );
+            err
+        })?;
 
         Ok((index, chunk))
     }
@@ -390,7 +401,19 @@ impl BlockReader {
         offset: u64,
         length: u64,
     ) -> Result<(usize, Vec<u8>)> {
-        let chunk = o.blocking_range_read(offset..offset + length)?;
+        let chunk = o
+            .blocking_range_read(offset..offset + length)
+            .map_err(|err| {
+                error!(
+                    target = "opendal",
+                    "read {}, range:[{}, {}], error:{:?}",
+                    o.path(),
+                    offset,
+                    offset + length,
+                    err
+                );
+                err
+            })?;
         Ok((index, chunk))
     }
 
