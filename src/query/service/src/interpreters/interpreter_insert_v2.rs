@@ -17,6 +17,7 @@ use std::io::Cursor;
 use std::ops::Not;
 use std::sync::Arc;
 
+use chrono_tz::Tz;
 use common_ast::ast::Expr;
 use common_ast::parser::parse_comma_separated_exprs;
 use common_ast::parser::tokenize_sql;
@@ -29,6 +30,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::cursor_ext::ReadBytesExt;
 use common_io::cursor_ext::ReadCheckPointExt;
+use common_io::prelude::FormatSettings;
 use common_pipeline_sources::processors::sources::AsyncSource;
 use common_pipeline_sources::processors::sources::AsyncSourcer;
 use common_pipeline_transforms::processors::transforms::Transform;
@@ -368,7 +370,11 @@ impl ValueSource {
             ));
         }
 
-        let format = self.ctx.get_format_settings()?;
+        let mut format = FormatSettings::for_values_parsing();
+        let tz = self.ctx.get_settings().get_timezone()?;
+        format.timezone = tz.parse::<Tz>().map_err(|_| {
+            ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
+        })?;
         for col_idx in 0..col_size {
             let _ = reader.ignore_white_spaces();
             let col_end = if col_idx + 1 == col_size { b')' } else { b',' };
