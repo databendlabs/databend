@@ -385,10 +385,10 @@ impl ValueSource {
 
             let (need_fallback, pop_count) = deser
                 .de_text_quoted(reader, &format)
-                .and_then(|_| {
+                .map(|_| {
                     let _ = reader.ignore_white_spaces();
                     let need_fallback = reader.ignore_byte(col_end).not();
-                    Ok((need_fallback, col_idx + 1))
+                    (need_fallback, col_idx + 1)
                 })
                 .unwrap_or((true, col_idx));
 
