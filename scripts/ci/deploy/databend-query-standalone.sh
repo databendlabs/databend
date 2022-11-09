@@ -8,8 +8,8 @@ SCRIPT_PATH="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)"
 cd "$SCRIPT_PATH/../../.." || exit
 BUILD_PROFILE=${BUILD_PROFILE:-debug}
 
-killall databend-query
-killall databend-meta
+killall databend-query || true
+killall databend-meta || true
 sleep 1
 
 for bin in databend-query databend-meta; do

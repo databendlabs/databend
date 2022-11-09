@@ -12,10 +12,10 @@ BUILD_PROFILE=${BUILD_PROFILE:-debug}
 # `query` tries to remove its liveness record from meta before shutting down.
 # If meta is stopped, `query` will receive an error that hangs graceful
 # shutdown.
-killall databend-query
+killall databend-query || true
 sleep 3
 
-killall databend-meta
+killall databend-meta || true
 sleep 3
 
 for bin in databend-query databend-meta; do
