@@ -2,6 +2,8 @@
 # Copyright 2020-2021 The Databend Authors.
 # SPDX-License-Identifier: Apache-2.0.
 
+set -e
+
 echo "Starting Cluster databend-query"
 
 # Enable backtrace to debug https://github.com/datafuselabs/databend/issues/7986
