@@ -1490,6 +1490,7 @@ dependencies = [
  "common-io",
  "common-jsonb",
  "crc32fast",
+ "criterion",
  "goldenfile",
  "hex",
  "itertools",
