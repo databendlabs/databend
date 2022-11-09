@@ -119,6 +119,11 @@ impl DataBlock {
     }
 
     #[inline]
+    pub fn meta(&self) -> Option<&MetaInfoPtr> {
+        self.meta.as_ref()
+    }
+
+    #[inline]
     pub fn num_rows(&self) -> usize {
         if self.columns.is_empty() {
             0

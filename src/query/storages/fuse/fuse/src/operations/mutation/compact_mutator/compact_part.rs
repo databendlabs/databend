@@ -20,8 +20,9 @@ use common_catalog::plan::PartInfoPtr;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_storages_table_meta::meta::BlockMeta;
+use common_storages_table_meta::meta::SegmentInfo;
 
-#[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum CompactTask {
     Trival(Arc<BlockMeta>),
     Normal(Vec<Arc<BlockMeta>>),
@@ -34,15 +35,11 @@ impl CompactTask {
             CompactTask::Normal(block_metas) => block_metas.clone(),
         }
     }
-
-    fn is_trival(&self) -> bool {
-        matches!(self, CompactTask::Trival(_))
-    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct CompactPartInfo {
-    pub tasks: Vec<CompactTask>,
+    pub segments: Vec<Arc<SegmentInfo>>,
     pub order: usize,
 }
 
@@ -61,8 +58,8 @@ impl PartInfo for CompactPartInfo {
 }
 
 impl CompactPartInfo {
-    pub fn create(tasks: Vec<CompactTask>, order: usize) -> PartInfoPtr {
-        Arc::new(Box::new(CompactPartInfo { tasks, order }))
+    pub fn create(segments: Vec<Arc<SegmentInfo>>, order: usize) -> PartInfoPtr {
+        Arc::new(Box::new(CompactPartInfo { segments, order }))
     }
 
     pub fn from_part(info: &PartInfoPtr) -> Result<&CompactPartInfo> {
@@ -72,9 +69,5 @@ impl CompactPartInfo {
                 "Cannot downcast from PartInfo to CompactPartInfo.",
             )),
         }
-    }
-
-    pub fn is_all_trivial(&self) -> bool {
-        self.tasks.iter().all(|v| v.is_trival())
     }
 }

@@ -18,18 +18,17 @@ use std::vec;
 use common_catalog::plan::Partitions;
 use common_datablocks::BlockCompactThresholds;
 use common_exception::Result;
-use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::Location;
+use common_storages_table_meta::meta::SegmentInfo;
 use common_storages_table_meta::meta::Statistics;
 use opendal::Operator;
 
-use super::compact_part::CompactTask;
-use super::CompactPartInfo;
+use super::compact_part::CompactPartInfo;
 use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
 use crate::metrics::metrics_set_segments_memory_usage;
 use crate::operations::CompactOptions;
-use crate::statistics::merge_statistics;
+use crate::statistics::reducers::merge_statistics_mut;
 use crate::TableContext;
 
 pub struct BlockCompactMutator {
@@ -57,84 +56,67 @@ impl BlockCompactMutator {
             .await?
             .into_iter()
             .collect::<Result<Vec<_>>>()?;
-        let number_segments = segments.len();
 
         // todo: add real metrics
         metrics_set_segments_memory_usage(0.0);
 
+        let number_segments = segments.len();
         let limit = self.compact_params.limit.unwrap_or(number_segments);
-        let blocks_per_seg = self.compact_params.block_per_seg;
-
-        let mut task = Vec::with_capacity(self.compact_params.block_per_seg);
-        let mut builder = CompactTaskBuilder::default();
-
-        let mut unchanged_segment_statistics = Statistics::default();
+        let blocks_per_seg = self.compact_params.block_per_seg as u64;
 
         let mut order = 0;
         let mut end = 0;
         let mut compacted_segment_cnt = 0;
 
-        for (idx, segment) in segments.iter().enumerate() {
-            let mut maybe = task.is_empty()
-                && builder.is_empty()
-                && segment.summary.block_count as usize == blocks_per_seg;
-            for b in segment.blocks.iter() {
-                let res = builder.add_block(b, self.thresholds);
-                if res.len() != 1 {
-                    maybe = false;
-                }
-                task.extend(res);
+        let mut builder = CompactPartBuilder::new(blocks_per_seg);
 
-                if task.len() == blocks_per_seg {
-                    order += 1;
-                    self.compact_tasks
-                        .push(CompactPartInfo::create(std::mem::take(&mut task), order));
+        for (idx, segment) in segments.iter().enumerate() {
+            let tasks = builder.add(segment.clone());
+            for t in tasks {
+                if CompactPartBuilder::check_for_compact(&t) {
+                    compacted_segment_cnt += t.len();
+                    self.compact_tasks.push(CompactPartInfo::create(t, order));
+                } else {
+                    self.unchanged_segments_locations
+                        .push((order, segment_locations[idx].clone()));
+                    merge_statistics_mut(
+                        &mut self.unchanged_segment_statistics,
+                        &segments[idx].summary,
+                    )?;
                 }
+                order += 1;
             }
-            if maybe {
-                self.compact_tasks.pop();
-                self.unchanged_segments_locations
-                    .push((order, segment_locations[idx].clone()));
-                unchanged_segment_statistics =
-                    merge_statistics(&unchanged_segment_statistics, &segments[idx].summary)?;
-                continue;
-            }
-            compacted_segment_cnt += 1;
-            if compacted_segment_cnt == limit {
+            if compacted_segment_cnt >= limit {
                 end = idx + 1;
                 break;
             }
         }
 
         if !builder.is_empty() {
-            let mut blocks = task.pop().map_or(vec![], |t| t.get_block_metas());
-            blocks.extend(builder.blocks.clone());
-            builder.blocks = blocks;
-            task.push(builder.create_task());
-        }
-
-        if !task.is_empty() {
+            let t = std::mem::take(&mut builder.segments);
+            if CompactPartBuilder::check_for_compact(&t) {
+                self.compact_tasks.push(CompactPartInfo::create(t, order));
+            } else {
+                self.unchanged_segments_locations
+                    .push((order, segment_locations[end - 1].clone()));
+                merge_statistics_mut(
+                    &mut self.unchanged_segment_statistics,
+                    &segments[end - 1].summary,
+                )?;
+            }
             order += 1;
-            self.compact_tasks
-                .push(CompactPartInfo::create(task, order));
         }
 
-        if self.compact_tasks.is_empty()
-            || (self.compact_tasks.len() == 1
-                && CompactPartInfo::from_part(&self.compact_tasks[0])
-                    .unwrap()
-                    .is_all_trivial())
-        {
+        if self.compact_tasks.is_empty() {
             return Ok(false);
         }
 
         if end < number_segments {
             for i in end..number_segments {
-                order += 1;
                 self.unchanged_segments_locations
                     .push((order, segment_locations[i].clone()));
-                unchanged_segment_statistics =
-                    merge_statistics(&unchanged_segment_statistics, &segments[i].summary)?;
+                merge_statistics_mut(&mut self.unchanged_segment_statistics, &segments[i].summary)?;
+                order += 1;
             }
         }
 
@@ -143,59 +125,48 @@ impl BlockCompactMutator {
 }
 
 #[derive(Default)]
-struct CompactTaskBuilder {
-    blocks: Vec<Arc<BlockMeta>>,
-    total_rows: usize,
-    total_size: usize,
+struct CompactPartBuilder {
+    segments: Vec<Arc<SegmentInfo>>,
+    block_count: u64,
+    threshold: u64,
 }
 
-impl CompactTaskBuilder {
-    fn clear(&mut self) {
-        self.blocks.clear();
-        self.total_rows = 0;
-        self.total_size = 0;
+impl CompactPartBuilder {
+    fn new(threshold: u64) -> Self {
+        Self {
+            threshold,
+            ..Default::default()
+        }
     }
 
-    fn is_empty(&self) -> bool {
-        self.blocks.is_empty()
+    fn check_for_compact(segments: &Vec<Arc<SegmentInfo>>) -> bool {
+        segments.len() != 1
+            || segments[0].summary.perfect_block_count != segments[0].summary.block_count
     }
 
-    fn add_block(
-        &mut self,
-        block: &Arc<BlockMeta>,
-        thresholds: BlockCompactThresholds,
-    ) -> Vec<CompactTask> {
-        self.total_rows += block.row_count as usize;
-        self.total_size += block.block_size as usize;
-
-        if !thresholds.check_large_enough(self.total_rows, self.total_size) {
-            self.blocks.push(block.clone());
+    fn add(&mut self, segment: Arc<SegmentInfo>) -> Vec<Vec<Arc<SegmentInfo>>> {
+        self.block_count += segment.summary.block_count;
+        if self.block_count < self.threshold {
+            self.segments.push(segment);
             return vec![];
         }
 
-        if !thresholds.check_for_compact(self.total_rows, self.total_size) {
-            let trival_task = CompactTask::Trival(block.clone());
-            let res = if !self.blocks.is_empty() {
-                let compact_task = CompactTask::Normal(self.blocks.clone());
-                vec![compact_task, trival_task]
+        if self.block_count > 2 * self.threshold {
+            self.block_count = 0;
+            let trival = vec![segment];
+            if self.segments.is_empty() {
+                return vec![trival];
             } else {
-                vec![trival_task]
-            };
-            self.clear();
-            return res;
+                return vec![std::mem::take(&mut self.segments), trival];
+            }
         }
 
-        self.blocks.push(block.clone());
-        let compact_task = CompactTask::Normal(self.blocks.clone());
-        self.clear();
-        vec![compact_task]
+        self.block_count = 0;
+        self.segments.push(segment);
+        vec![std::mem::take(&mut self.segments)]
     }
 
-    fn create_task(&self) -> CompactTask {
-        match self.blocks.len() {
-            0 => panic!("the blocks is empty"),
-            1 => CompactTask::Trival(self.blocks[0].clone()),
-            _ => CompactTask::Normal(self.blocks.clone()),
-        }
+    fn is_empty(&self) -> bool {
+        self.segments.is_empty()
     }
 }

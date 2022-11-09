@@ -15,62 +15,35 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use common_base::base::Progress;
-use common_base::base::ProgressValues;
-use common_cache::Cache;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::table_context::TableContext;
 use common_datablocks::BlockCompactThresholds;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_storages_table_meta::caches::CacheManager;
 use common_storages_table_meta::meta::BlockMeta;
-use common_storages_table_meta::meta::SegmentInfo;
-use opendal::Operator;
 
-use super::CompactMetaInfo;
-use super::CompactPartInfo;
-use crate::io::BlockReader;
-use crate::io::BlockWriter;
-use crate::io::TableMetaLocationGenerator;
+use super::compact_meta::CompactSourceMeta;
+use super::compact_part::CompactPartInfo;
+use super::compact_part::CompactTask;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::Event;
 use crate::pipelines::processors::Processor;
-use crate::statistics::reduce_block_statistics;
-use crate::statistics::reducers::reduce_block_metas;
 
 enum State {
-    Compact(Option<PartInfoPtr>),
+    ReadData(Option<PartInfoPtr>),
     Generate {
         order: usize,
-        metas: Vec<Arc<BlockMeta>>,
+        tasks: Vec<CompactTask>,
     },
-    Serialized {
-        order: usize,
-        data: Vec<u8>,
-        location: String,
-        segment: Arc<SegmentInfo>,
-    },
-    Output {
-        order: usize,
-        location: String,
-        segment: Arc<SegmentInfo>,
-    },
-    Generated(Option<PartInfoPtr>, DataBlock),
-    Finished,
+    Output(Option<PartInfoPtr>, DataBlock),
+    Finish,
 }
 
 pub struct CompactSource {
     ctx: Arc<dyn TableContext>,
     state: State,
-    scan_progress: Arc<Progress>,
     output: Arc<OutputPort>,
-
-    block_reader: Arc<BlockReader>,
-    location_generator: TableMetaLocationGenerator,
-    dal: Operator,
-
     thresholds: BlockCompactThresholds,
 }
 
@@ -85,14 +58,14 @@ impl Processor for CompactSource {
     }
 
     fn event(&mut self) -> Result<Event> {
-        if matches!(self.state, State::Compact(None)) {
+        if matches!(self.state, State::ReadData(None)) {
             self.state = match self.ctx.try_get_part() {
-                None => State::Finished,
-                Some(part) => State::Compact(Some(part)),
+                None => State::Finish,
+                Some(part) => State::ReadData(Some(part)),
             }
         }
 
-        if matches!(self.state, State::Finished) {
+        if matches!(self.state, State::Finish) {
             self.output.finish();
             return Ok(Event::Finished);
         }
@@ -105,114 +78,108 @@ impl Processor for CompactSource {
             return Ok(Event::NeedConsume);
         }
 
-        if matches!(self.state, State::Generated(_, _)) {
-            if let State::Generated(part, data_block) =
-                std::mem::replace(&mut self.state, State::Finished)
+        if matches!(self.state, State::Output(_, _)) {
+            if let State::Output(part, data_block) =
+                std::mem::replace(&mut self.state, State::Finish)
             {
                 self.state = match part {
-                    None => State::Finished,
-                    Some(part) => State::Compact(Some(part)),
+                    None => State::Finish,
+                    Some(part) => State::ReadData(Some(part)),
                 };
 
                 self.output.push_data(Ok(data_block));
                 return Ok(Event::NeedConsume);
             }
         }
-
-        if matches!(
-            &self.state,
-            State::Compact { .. } | State::Serialized { .. }
-        ) {
-            return Ok(Event::Async);
-        }
-
         Ok(Event::Sync)
     }
 
     fn process(&mut self) -> Result<()> {
-        match std::mem::replace(&mut self.state, State::Finished) {
-            State::Generate { order, metas } => {
-                let stats = reduce_block_metas(&metas, self.thresholds)?;
-                let segment_info = SegmentInfo::new(metas, stats);
-                self.state = State::Serialized {
-                    order,
-                    data: serde_json::to_vec(&segment_info)?,
-                    location: self.location_generator.gen_segment_info_location(),
-                    segment: Arc::new(segment_info),
-                };
-            }
-            State::Output {
-                order,
-                location,
-                segment,
-            } => {
-                if let Some(segment_cache) = CacheManager::instance().get_table_segment_cache() {
-                    let cache = &mut segment_cache.write();
-                    cache.put(location.clone(), segment.clone());
-                }
-
-                let meta = CompactMetaInfo::create(order, location, segment);
-                let new_part = self.ctx.try_get_part();
-                self.state = State::Generated(new_part, DataBlock::empty_with_meta(meta));
-            }
-            _ => return Err(ErrorCode::Internal("It's a bug.")),
-        }
-
-        Ok(())
-    }
-
-    async fn async_process(&mut self) -> Result<()> {
-        match std::mem::replace(&mut self.state, State::Finished) {
-            State::Compact(Some(part)) => {
+        match std::mem::replace(&mut self.state, State::Finish) {
+            State::ReadData(Some(part)) => {
                 let part = CompactPartInfo::from_part(&part)?;
-                let mut new_metas = Vec::with_capacity(part.tasks.len());
-                for task in &part.tasks {
-                    let metas = task.get_block_metas();
-                    if metas.len() == 1 {
-                        new_metas.push(metas[0].clone());
-                        continue;
+                let mut builder = CompactTaskBuilder::default();
+                let mut tasks = Vec::new();
+                for segment in part.segments.iter() {
+                    for block in segment.blocks.iter() {
+                        let res = builder.add(block, self.thresholds);
+                        tasks.extend(res);
                     }
-
-                    let mut blocks = Vec::with_capacity(metas.len());
-                    let mut stats_of_columns = Vec::with_capacity(metas.len());
-                    for meta in metas {
-                        let meta = meta.as_ref();
-                        stats_of_columns.push(meta.col_stats.clone());
-                        let block = self.block_reader.read_with_block_meta(meta).await?;
-                        let progress_values = ProgressValues {
-                            rows: block.num_rows(),
-                            bytes: block.memory_size(),
-                        };
-                        self.scan_progress.incr(&progress_values);
-                        blocks.push(block);
-                    }
-                    let new_block = DataBlock::concat_blocks(&blocks)?;
-                    let col_stats = reduce_block_statistics(&stats_of_columns)?;
-
-                    let block_writer = BlockWriter::new(&self.dal, &self.location_generator);
-                    let new_meta = block_writer.write(new_block, col_stats, None).await?;
-                    new_metas.push(Arc::new(new_meta));
+                }
+                if !builder.is_empty() {
+                    let task = tasks.pop();
+                    tasks.push(builder.finalize(task));
                 }
                 self.state = State::Generate {
                     order: part.order,
-                    metas: new_metas,
-                };
+                    tasks,
+                }
             }
-            State::Serialized {
-                order,
-                data,
-                location,
-                segment,
-            } => {
-                self.dal.object(&location).write(data).await?;
-                self.state = State::Output {
-                    order,
-                    location,
-                    segment,
-                };
+            State::Generate { order, tasks } => {
+                let meta = CompactSourceMeta::create(order, tasks);
+                let new_part = self.ctx.try_get_part();
+                self.state = State::Output(new_part, DataBlock::empty_with_meta(meta));
             }
             _ => return Err(ErrorCode::Internal("It's a bug.")),
         }
         Ok(())
+    }
+}
+
+#[derive(Default)]
+struct CompactTaskBuilder {
+    blocks: Vec<Arc<BlockMeta>>,
+    total_rows: usize,
+    total_size: usize,
+}
+
+impl CompactTaskBuilder {
+    fn is_empty(&self) -> bool {
+        self.blocks.is_empty()
+    }
+
+    fn add(
+        &mut self,
+        block: &Arc<BlockMeta>,
+        thresholds: BlockCompactThresholds,
+    ) -> Vec<CompactTask> {
+        self.total_rows += block.row_count as usize;
+        self.total_size += block.block_size as usize;
+
+        if !thresholds.check_large_enough(self.total_rows, self.total_size) {
+            self.blocks.push(block.clone());
+            return vec![];
+        }
+
+        let tasks = if !thresholds.check_for_compact(self.total_rows, self.total_size) {
+            let trival_task = CompactTask::Trival(block.clone());
+            if !self.blocks.is_empty() {
+                let compact_task = Self::create_task(std::mem::take(&mut self.blocks));
+                vec![compact_task, trival_task]
+            } else {
+                vec![trival_task]
+            }
+        } else {
+            self.blocks.push(block.clone());
+            vec![Self::create_task(std::mem::take(&mut self.blocks))]
+        };
+
+        self.total_rows = 0;
+        self.total_size = 0;
+        tasks
+    }
+
+    fn finalize(&mut self, task: Option<CompactTask>) -> CompactTask {
+        let mut blocks = task.map_or(vec![], |t| t.get_block_metas());
+        blocks.extend(std::mem::take(&mut self.blocks));
+        Self::create_task(blocks)
+    }
+
+    fn create_task(blocks: Vec<Arc<BlockMeta>>) -> CompactTask {
+        match blocks.len() {
+            0 => panic!("the blocks is empty"),
+            1 => CompactTask::Trival(blocks[0].clone()),
+            _ => CompactTask::Normal(blocks),
+        }
     }
 }
