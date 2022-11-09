@@ -21,7 +21,7 @@ sleep 3
 for bin in databend-query databend-meta; do
 	if test -n "$(pgrep $bin)"; then
 		echo "The $bin is not killed. force killing."
-		killall -9 $bin
+		killall -9 $bin || true
 	fi
 done
 
