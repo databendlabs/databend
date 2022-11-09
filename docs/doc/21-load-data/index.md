@@ -7,11 +7,11 @@ These topics describe how to load data into Databend.
 - [Preparations](#preparations)
     - [Supported File Locations](#supported-file-locations)
     - [Supported File Formats](#supported-file-formats)
-- [Loading Methods](#loading-methods)
+- [Data Loading Methods](#loading-methods)
     - [COPY INTO Command](#copy-into-command)
     - [Streaming Load API](#streaming-load-api)
+- [Data Loading Considerations](#data-loading-considerations)
 - [Hands-On Tutorials](#hands-on-tutorials)
-
 
 ---
 
@@ -63,6 +63,8 @@ For detailed explanations about the COPY INTO command and its options, see [COPY
 ### Streaming Load API
 
 The Streaming Load API can read data from your local data files and load it into Databend. For more information about the Streaming Load API, see [Streaming Load API](../30-reference/00-api/03-streaming-load.md).
+
+## Data Loading Considerations
 
 ## Hands-On Tutorials
 

@@ -3,7 +3,13 @@ title: "COPY INTO <table>"
 sidebar_label: "COPY INTO <table>"
 ---
 
-This command loads data into Databend from files in one of the following locations:
+This command loads data into Databend from files in a variety of locations.
+
+See Also: [COPY INTO location](dml-copy-into-location.md)
+
+## Supported File Locations
+
+Your data files must be located in one of these locations for COPY INTO to work:
 
 - **Named internal stage**: Databend internal named stages. Files can be staged using the [PUT to Stage](../../00-api/10-put-to-stage.md) API.
 - **Named external stage**: Stages created in [Supported Object Storage Solutions](../../../10-deploy/00-understanding-deployment-modes.md#supported-object-storage-solutions).
@@ -11,8 +17,6 @@ This command loads data into Databend from files in one of the following locatio
   - Buckets created in [Supported Object Storage Solutions](../../../10-deploy/00-understanding-deployment-modes.md#supported-object-storage-solutions).
   - Remote servers from where you can access the files by their URL (starting with "https://...").
   - [IPFS](https://ipfs.tech).
-
-See Also: [COPY INTO location](dml-copy-into-location.md)
 
 ## Syntax
 
@@ -52,7 +56,7 @@ externalLocation ::=
         SECRET_ACCESS_KEY = '<your-secret-access-key>'
         SESSION_TOKEN = '<your-session-token>'
         REGION = '<region-name>'
-        ENABLE_VIRTUAL_HOST_STYLE = true|false
+        ENABLE_VIRTUAL_HOST_STYLE = 'true|false'
   )
 ```
 
@@ -147,7 +151,7 @@ Specifies a list of one or more files names (separated by commas) to be loaded.
 
 ### PATTERN = 'regex_pattern'
 
-A [PCRE2](https://www.pcre.org/current/doc/html/)-based regular expression pattern string, enclosed in single quotes, specifying the file names to match. For PCRE2 syntax, see http://www.pcre.org/current/doc/html/pcre2syntax.html.
+A [PCRE2](https://www.pcre.org/current/doc/html/)-based regular expression pattern string, enclosed in single quotes, specifying the file names to match. Click [here](#loading-data-with-pattern-matching) to see an example. For PCRE2 syntax, see http://www.pcre.org/current/doc/html/pcre2syntax.html. 
 
 ### formatTypeOptions
 
@@ -274,7 +278,7 @@ COPY INTO mytable
         ENDPOINT_URL = 'https://<endpoint-URL>'
         ACCESS_KEY_ID = '<your-access-key-ID>'
         SECRET_ACCESS_KEY = '<your-secret-access-key>')
-  FILE_FORMAT = (type = 'CSV' field_delimiter = ',' record_delimiter = '\n' skip_header = 1 compression = GZIP) size_limit=10;
+  FILE_FORMAT = (type = 'CSV' field_delimiter = ',' record_delimiter = '\n' skip_header = 1 compression = 'GZIP') size_limit=10;
 ```
 
 This example loads data from a CSV file without specifying the endpoint URL:
@@ -350,3 +354,11 @@ COPY INTO mytable
   PATTERN = '.*[.]csv'
   FILE_FORMAT = (type = 'CSV' field_delimiter = ','  record_delimiter = '\n' skip_header = 1);
 ```
+
+## Tutorials
+
+Here are some tutorials to help you get started with COPY INTO:
+
+- [Tutorial: Load from an internal stage](../../../21-load-data/00-stage.md): In this tutorial, you will create an internal stage, stage a sample file, and then load data from the file into Databend with the COPY INTO command.
+- [Tutorial: Load from an Amazon S3 bucket](../../../21-load-data/01-s3.md): In this tutorial, you will upload a sample file to your Amazon S3 bucket, and then load data from the file into Databend with the COPY INTO command.
+- [Tutorial: Load from a remote file](../../../21-load-data/04-http.md): In this tutorial, you will load data from a remote sample file into Databend with the COPY INTO command.
