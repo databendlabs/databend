@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 
 use common_datavalues::prelude::*;
+use memchr::memmem;
 use regex::bytes::Regex as BytesRegex;
 
 use super::comparison::StringSearchCreator;
@@ -84,22 +85,42 @@ impl StringSearchImpl for StringSearchLike {
                 let re_pattern = like_pattern_to_regex(pattern);
                 let re = BytesRegex::new(&re_pattern)
                     .expect("Unable to build regex from LIKE pattern: {}");
-                BooleanColumn::from_iterator(lhs.scalar_iter().map(|x| {
-                    if !is_empty {
-                        let lhs_str = std::str::from_utf8(x)
-                            .expect("Unable to convert lhs value to string: {}");
-                        let contain = lhs_str.find(sub_strings[0]);
-                        if contain.is_none() {
-                            op(false)
-                        } else {
-                            op(re.is_match(x))
-                        }
+                if std::intrinsics::unlikely(is_empty) {
+                    BooleanColumn::from_iterator(lhs.scalar_iter().map(|x| op(re.is_match(x))))
+                } else {
+                    let sub_string = sub_strings[0].as_bytes();
+                    // This impl like position function
+                    if sub_strings.len() == 1 {
+                        BooleanColumn::from_iterator(lhs.scalar_iter().map(|x| {
+                            let contain = search_sub_str(x, sub_string);
+                            if contain.is_none() {
+                                op(false)
+                            } else {
+                                op(true)
+                            }
+                        }))
                     } else {
-                        op(re.is_match(x))
+                        BooleanColumn::from_iterator(lhs.scalar_iter().map(|x| {
+                            let contain = memmem::find(x, sub_string).is_none();
+                            if contain {
+                                op(false)
+                            } else {
+                                op(re.is_match(x))
+                            }
+                        }))
                     }
-                }))
+                }
             }
         }
+    }
+}
+
+#[inline]
+fn search_sub_str(str: &[u8], substr: &[u8]) -> Option<usize> {
+    if substr.len() <= str.len() {
+        str.windows(substr.len()).position(|w| w == substr)
+    } else {
+        None
     }
 }
 

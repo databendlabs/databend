@@ -1449,6 +1449,7 @@ dependencies = [
  "hex",
  "itertools",
  "md-5",
+ "memchr",
  "naive-cityhash",
  "num",
  "num-format",
