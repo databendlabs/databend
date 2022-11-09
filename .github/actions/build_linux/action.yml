@@ -19,6 +19,10 @@ runs:
       if: inputs.profile == 'debug'
       shell: bash
       run: cargo -Z sparse-registry build --target ${{ inputs.target }}
+      env:
+        RUSTC_WRAPPER: sccache
+        SCCACHE_BUCKET: databend-ci
+        SCCACHE_S3_KEY_PREFIX: cache/
 
     - name: Build Release
       if: inputs.profile == 'release'
