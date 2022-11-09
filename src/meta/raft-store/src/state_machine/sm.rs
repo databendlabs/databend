@@ -98,8 +98,6 @@ pub trait StateMachineSubscriber: Debug + Sync + Send {
     fn kv_changed(&self, key: &str, prev: Option<SeqV>, current: Option<SeqV>);
 }
 
-type NotifyKVEvent = (String, Option<SeqV>, Option<SeqV>);
-
 /// The state machine of the `MemStore`.
 /// It includes user data and two raft-related informations:
 /// `last_applied_logs` and `client_serial_responses` to achieve idempotence.
@@ -272,11 +270,11 @@ impl StateMachine {
 
         let kv_pairs = self.scan_prefix_if_needed(entry)?;
 
-        let result = self.sm_tree.txn(true, move |txn_tree| {
+        let result = self.sm_tree.txn(true, move |mut txn_tree| {
+            self.clean_expired_kvs(&mut txn_tree, &expired)?;
+
             let txn_sm_meta = txn_tree.key_space::<StateMachineMeta>();
             txn_sm_meta.insert(&LastApplied, &StateMachineMetaValue::LogId(*log_id))?;
-
-            self.clean_expired_kvs(&txn_tree, &expired)?;
 
             match entry.payload {
                 EntryPayload::Blank => {
@@ -288,11 +286,12 @@ impl StateMachine {
                         let (serial, resp) =
                             self.txn_get_client_last_resp(&txid.client, &txn_tree)?;
                         if serial == txid.serial {
-                            return Ok(Some(resp));
+                            return Ok((Some(resp), txn_tree.changes));
                         }
                     }
 
-                    let res = self.apply_cmd(&data.cmd, &txn_tree, kv_pairs.as_ref(), log_time_ms);
+                    let res =
+                        self.apply_cmd(&data.cmd, &mut txn_tree, kv_pairs.as_ref(), log_time_ms);
                     if let Ok(ok) = &res {
                         info!("apply_result: summary: {}; res ok: {}", entry.summary(), ok);
                     }
@@ -313,7 +312,7 @@ impl StateMachine {
                             &txn_tree,
                         )?;
                     }
-                    return Ok(Some(applied_state));
+                    return Ok((Some(applied_state), txn_tree.changes));
                 }
                 EntryPayload::Membership(ref mem) => {
                     info!("apply: membership: {:?}", mem);
@@ -324,14 +323,14 @@ impl StateMachine {
                             membership: mem.clone(),
                         }),
                     )?;
-                    return Ok(Some(AppliedState::None));
+                    return Ok((Some(AppliedState::None), txn_tree.changes));
                 }
             };
 
-            Ok(None)
+            Ok((None, txn_tree.changes))
         });
 
-        let opt_applied_state = result?;
+        let (opt_applied_state, changes) = result?;
 
         debug!("sled tx done: {:?}", entry);
 
@@ -339,6 +338,15 @@ impl StateMachine {
             Some(r) => r,
             None => AppliedState::None,
         };
+
+        // Send queued change events to subscriber
+        if let Some(subscriber) = &self.subscriber {
+            for event in changes {
+                // TODO: use Change as the event data type.
+                // safe unwrap
+                subscriber.kv_changed(&event.ident.unwrap(), event.prev, event.result);
+            }
+        }
 
         Ok(applied_state)
     }
@@ -419,7 +427,7 @@ impl StateMachine {
     fn apply_update_kv_cmd(
         &self,
         upsert_kv: &UpsertKV,
-        txn_tree: &TransactionSledTree,
+        txn_tree: &mut TransactionSledTree,
         log_time_ms: u64,
     ) -> Result<AppliedState, MetaStorageError> {
         debug!(upsert_kv = debug(upsert_kv), "apply_update_kv_cmd");
@@ -428,14 +436,10 @@ impl StateMachine {
 
         debug!("applied UpsertKV: {:?} {:?}", upsert_kv, result);
 
-        if let Some(subscriber) = &self.subscriber {
-            if expired.is_some() {
-                subscriber.kv_changed(&upsert_kv.key, expired, None);
-            }
-            if prev != result {
-                subscriber.kv_changed(&upsert_kv.key, prev.clone(), result.clone());
-            }
+        if expired.is_some() {
+            txn_tree.push_change(&upsert_kv.key, expired, None);
         }
+        txn_tree.push_change(&upsert_kv.key, prev.clone(), result.clone());
 
         Ok(Change::new(prev, result).into())
     }
@@ -556,10 +560,9 @@ impl StateMachine {
 
     fn txn_execute_put_operation(
         &self,
-        txn_tree: &TransactionSledTree,
+        txn_tree: &mut TransactionSledTree,
         put: &TxnPutRequest,
         resp: &mut TxnReply,
-        events: &mut Option<Vec<NotifyKVEvent>>,
         log_time_ms: u64,
     ) -> Result<(), MetaStorageError> {
         let (expired, prev, result) = Self::txn_upsert_kv(
@@ -570,14 +573,10 @@ impl StateMachine {
             log_time_ms,
         )?;
 
-        if let Some(events) = events {
-            if expired.is_some() {
-                events.push((put.key.to_string(), expired, None));
-            }
-            if prev != result {
-                events.push((put.key.to_string(), prev.clone(), result));
-            }
+        if expired.is_some() {
+            txn_tree.push_change(&put.key, expired, None);
         }
+        txn_tree.push_change(&put.key, prev.clone(), result);
 
         let put_resp = TxnPutResponse {
             key: put.key.clone(),
@@ -597,23 +596,18 @@ impl StateMachine {
 
     fn txn_execute_delete_operation(
         &self,
-        txn_tree: &TransactionSledTree,
+        txn_tree: &mut TransactionSledTree,
         delete: &TxnDeleteRequest,
         resp: &mut TxnReply,
-        events: &mut Option<Vec<NotifyKVEvent>>,
         log_time_ms: u64,
     ) -> Result<(), MetaStorageError> {
         let (expired, prev, result) =
             Self::txn_upsert_kv(txn_tree, &UpsertKV::delete(&delete.key), log_time_ms)?;
 
-        if let Some(events) = events {
-            if expired.is_some() {
-                events.push((delete.key.to_string(), expired, None));
-            }
-            if prev != result {
-                events.push((delete.key.to_string(), prev.clone(), result));
-            }
+        if expired.is_some() {
+            txn_tree.push_change(&delete.key, expired, None);
         }
+        txn_tree.push_change(&delete.key, prev.clone(), result);
 
         let del_resp = TxnDeleteResponse {
             key: delete.key.clone(),
@@ -634,30 +628,26 @@ impl StateMachine {
 
     fn txn_execute_delete_by_prefix_operation(
         &self,
-        txn_tree: &TransactionSledTree,
+        txn_tree: &mut TransactionSledTree,
         delete_by_prefix: &TxnDeleteByPrefixRequest,
         kv_pairs: Option<&DeleteByPrefixKeyMap>,
         resp: &mut TxnReply,
-        events: &mut Option<Vec<NotifyKVEvent>>,
         log_time_ms: u64,
     ) -> Result<(), MetaStorageError> {
         let mut count: u32 = 0;
         if let Some(kv_pairs) = kv_pairs {
             if let Some(kv_pairs) = kv_pairs.get(delete_by_prefix) {
                 for (key, _seq) in kv_pairs.iter() {
+                    // TODO: return StorageError
                     let ret = Self::txn_upsert_kv(txn_tree, &UpsertKV::delete(key), log_time_ms);
 
                     if let Ok(ret) = ret {
                         count += 1;
 
-                        if let Some(events) = events {
-                            if ret.0.is_some() {
-                                events.push((key.to_string(), ret.0.clone(), None));
-                            }
-                            if ret.1 != ret.2 {
-                                events.push((key.to_string(), ret.1.clone(), ret.2));
-                            }
+                        if ret.0.is_some() {
+                            txn_tree.push_change(key, ret.0.clone(), None);
                         }
+                        txn_tree.push_change(key, ret.1.clone(), ret.2);
                     }
                 }
             }
@@ -678,11 +668,10 @@ impl StateMachine {
     #[tracing::instrument(level = "debug", skip(self, txn_tree, op, resp))]
     fn txn_execute_operation(
         &self,
-        txn_tree: &TransactionSledTree,
+        txn_tree: &mut TransactionSledTree,
         op: &TxnOp,
         kv_pairs: Option<&DeleteByPrefixKeyMap>,
         resp: &mut TxnReply,
-        events: &mut Option<Vec<NotifyKVEvent>>,
         log_time_ms: u64,
     ) -> Result<(), MetaStorageError> {
         debug!(op = display(op), "txn execute TxnOp");
@@ -691,10 +680,10 @@ impl StateMachine {
                 self.txn_execute_get_operation(txn_tree, get, resp)?;
             }
             Some(txn_op::Request::Put(put)) => {
-                self.txn_execute_put_operation(txn_tree, put, resp, events, log_time_ms)?;
+                self.txn_execute_put_operation(txn_tree, put, resp, log_time_ms)?;
             }
             Some(txn_op::Request::Delete(delete)) => {
-                self.txn_execute_delete_operation(txn_tree, delete, resp, events, log_time_ms)?;
+                self.txn_execute_delete_operation(txn_tree, delete, resp, log_time_ms)?;
             }
             Some(txn_op::Request::DeleteByPrefix(delete_by_prefix)) => {
                 self.txn_execute_delete_by_prefix_operation(
@@ -702,7 +691,6 @@ impl StateMachine {
                     delete_by_prefix,
                     kv_pairs,
                     resp,
-                    events,
                     log_time_ms,
                 )?;
             }
@@ -716,7 +704,7 @@ impl StateMachine {
     fn apply_txn_cmd(
         &self,
         req: &TxnRequest,
-        txn_tree: &TransactionSledTree,
+        txn_tree: &mut TransactionSledTree,
         kv_pairs: Option<&(DeleteByPrefixKeyMap, DeleteByPrefixKeyMap)>,
         log_time_ms: u64,
     ) -> Result<AppliedState, MetaStorageError> {
@@ -750,28 +738,8 @@ impl StateMachine {
             responses: vec![],
         };
 
-        let mut events: Option<Vec<NotifyKVEvent>> = if self.subscriber.is_some() {
-            Some(vec![])
-        } else {
-            None
-        };
         for op in ops {
-            self.txn_execute_operation(
-                txn_tree,
-                op,
-                kv_op_pairs,
-                &mut resp,
-                &mut events,
-                log_time_ms,
-            )?;
-        }
-
-        if let Some(subscriber) = &self.subscriber {
-            if let Some(events) = events {
-                for event in events {
-                    subscriber.kv_changed(&event.0, event.1, event.2);
-                }
-            }
+            self.txn_execute_operation(txn_tree, op, kv_op_pairs, &mut resp, log_time_ms)?;
         }
 
         Ok(AppliedState::TxnReply(resp))
@@ -786,7 +754,7 @@ impl StateMachine {
     pub fn apply_cmd(
         &self,
         cmd: &Cmd,
-        txn_tree: &TransactionSledTree,
+        txn_tree: &mut TransactionSledTree,
         kv_pairs: Option<&(DeleteByPrefixKeyMap, DeleteByPrefixKeyMap)>,
         log_time_ms: u64,
     ) -> Result<AppliedState, MetaStorageError> {
@@ -855,25 +823,20 @@ impl StateMachine {
     #[tracing::instrument(level = "debug", skip_all)]
     fn clean_expired_kvs(
         &self,
-        txn_tree: &TransactionSledTree,
+        txn_tree: &mut TransactionSledTree,
         expired: &[(String, ExpireKey)],
     ) -> Result<(), MetaStorageError> {
-        let kvs = txn_tree.key_space::<GenericKV>();
-        let expires = txn_tree.key_space::<Expire>();
-
         for (key, expire_key) in expired.iter() {
-            let sv = kvs.get(key)?;
+            let sv = txn_tree.key_space::<GenericKV>().get(key)?;
 
             if let Some(seq_v) = &sv {
                 if expire_key.seq == seq_v.seq {
                     info!("clean expired: {}, {}", key, expire_key);
 
-                    kvs.remove(key)?;
-                    expires.remove(expire_key)?;
+                    txn_tree.key_space::<GenericKV>().remove(key)?;
+                    txn_tree.key_space::<Expire>().remove(expire_key)?;
 
-                    if let Some(subscriber) = &self.subscriber {
-                        subscriber.kv_changed(key, sv, None);
-                    }
+                    txn_tree.push_change(key, sv, None);
                     continue;
                 }
             }

@@ -60,6 +60,32 @@ pub trait InputFormatTextBase: Sized + Send + Sync + 'static {
     fn deserialize(builder: &mut BlockBuilder<Self>, batch: RowBatch) -> Result<()>;
 
     fn align(state: &mut AligningState<Self>, buf: &[u8]) -> Result<Vec<RowBatch>>;
+
+    fn align_flush(state: &mut AligningState<Self>) -> Result<Vec<RowBatch>> {
+        if state.tail_of_last_batch.is_empty() {
+            Ok(vec![])
+        } else {
+            // last row
+            let data = mem::take(&mut state.tail_of_last_batch);
+            let end = data.len();
+            let row_batch = RowBatch {
+                data,
+                row_ends: vec![end],
+                field_ends: vec![],
+                path: state.path.to_string(),
+                batch_id: state.batch_id,
+                offset: state.offset,
+                start_row: Some(state.rows),
+            };
+            tracing::debug!(
+                "align flush batch {}, bytes = {}, start_row = {}",
+                row_batch.batch_id,
+                state.tail_of_last_batch.len(),
+                state.rows
+            );
+            Ok(vec![row_batch])
+        }
+    }
 }
 
 pub struct InputFormatText<T: InputFormatTextBase> {
@@ -122,7 +148,7 @@ impl<T: InputFormatTextBase> InputFormat for InputFormatText<T> {
             )?;
             let split_size = plan.stage_info.copy_options.split_size;
             if compress_alg.is_none() && T::is_splittable() && split_size > 0 {
-                let split_offsets = split_by_size(size, split_size as usize);
+                let split_offsets = split_by_size(size, split_size);
                 let num_file_splits = split_offsets.len();
                 tracing::debug!(
                     "split file {} of size {} to {} {} bytes splits",
@@ -270,32 +296,6 @@ impl<T: InputFormatTextBase> AligningState<T> {
             vec![output]
         }
     }
-
-    fn flush(&mut self) -> Vec<RowBatch> {
-        if self.tail_of_last_batch.is_empty() {
-            vec![]
-        } else {
-            // last row
-            let data = mem::take(&mut self.tail_of_last_batch);
-            let end = data.len();
-            let row_batch = RowBatch {
-                data,
-                row_ends: vec![end],
-                field_ends: vec![],
-                path: self.path.to_string(),
-                batch_id: self.batch_id,
-                offset: self.offset,
-                start_row: Some(self.rows),
-            };
-            tracing::debug!(
-                "align flush batch {}, bytes = {}, start_row = {}",
-                row_batch.batch_id,
-                self.tail_of_last_batch.len(),
-                self.rows
-            );
-            vec![row_batch]
-        }
-    }
 }
 
 #[async_trait::async_trait]
@@ -352,9 +352,12 @@ impl<T: InputFormatTextBase> AligningStateTrait for AligningState<T> {
             T::align(self, &buf)?
         } else {
             if let Some(decoder) = &self.decoder {
-                assert_eq!(decoder.state(), DecompressState::Done)
+                let state = decoder.state();
+                if !matches!(state, DecompressState::Done | DecompressState::Reading) {
+                    tracing::warn!("decompressor end with state {:?}", state)
+                }
             }
-            self.flush()
+            T::align_flush(self)?
         };
         Ok(row_batches)
     }
@@ -385,7 +388,7 @@ impl<T: InputFormatTextBase> BlockBuilder<T> {
         self.mutable_columns = self
             .ctx
             .schema
-            .create_deserializers(self.ctx.rows_per_block);
+            .create_deserializers(self.ctx.block_compact_thresholds.min_rows_per_block);
         self.num_rows = 0;
 
         Ok(vec![DataBlock::create(self.ctx.schema.clone(), columns)])
@@ -400,7 +403,9 @@ impl<T: InputFormatTextBase> BlockBuilderTrait for BlockBuilder<T> {
     type Pipe = InputFormatTextPipe<T>;
 
     fn create(ctx: Arc<InputContext>) -> Self {
-        let columns = ctx.schema.create_deserializers(ctx.rows_per_block);
+        let columns = ctx
+            .schema
+            .create_deserializers(ctx.block_compact_thresholds.min_rows_per_block);
         BlockBuilder {
             ctx,
             mutable_columns: columns,
@@ -419,8 +424,8 @@ impl<T: InputFormatTextBase> BlockBuilderTrait for BlockBuilder<T> {
                 self.num_rows,
                 mem
             );
-            if self.num_rows >= self.ctx.rows_per_block
-                || mem > self.ctx.block_memory_size_threshold
+            if self.num_rows >= self.ctx.block_compact_thresholds.min_rows_per_block
+                || mem > self.ctx.block_compact_thresholds.max_bytes_per_block
             {
                 self.flush()
             } else {

@@ -21,6 +21,7 @@ use common_ast::parser::parse_comma_separated_exprs;
 use common_ast::parser::tokenize_sql;
 use common_ast::Backtrace;
 use common_base::base::GlobalIORuntime;
+use common_catalog::table::AppendMode;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
@@ -232,6 +233,11 @@ impl Interpreter for InsertInterpreterV2 {
             };
         }
 
+        let append_mode = match &self.plan.source {
+            InsertInputSource::StreamingWithFormat(_, _, _) => AppendMode::Copy,
+            _ => AppendMode::Normal,
+        };
+
         append2table(
             self.ctx.clone(),
             table.clone(),
@@ -239,6 +245,7 @@ impl Interpreter for InsertInterpreterV2 {
             &mut build_res,
             self.plan.overwrite,
             true,
+            append_mode,
         )?;
 
         Ok(build_res)
@@ -399,11 +406,8 @@ impl ValueSource {
                 let sql_dialect = settings.get_sql_dialect()?;
                 let tokens = tokenize_sql(sql)?;
                 let backtrace = Backtrace::new();
-                let exprs = parse_comma_separated_exprs(
-                    &tokens[1..tokens.len() as usize],
-                    sql_dialect,
-                    &backtrace,
-                )?;
+                let exprs =
+                    parse_comma_separated_exprs(&tokens[1..tokens.len()], sql_dialect, &backtrace)?;
 
                 let values = exprs_to_datavalue(
                     exprs,

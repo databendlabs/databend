@@ -25,7 +25,7 @@ use crate::types::serializations::helper::escape::write_escaped_string;
 
 #[derive(Clone)]
 pub struct StringSerializer<'a> {
-    pub(crate) column: &'a StringColumn,
+    pub column: &'a StringColumn,
 }
 
 impl<'a> StringSerializer<'a> {

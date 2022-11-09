@@ -552,7 +552,7 @@ async fn test_insert() -> Result<()> {
         assert_eq!(result.data.len(), data_len, "{:?}", result);
         assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
         assert_eq!(
-            result.stats.progresses.write_progress.rows as usize, rows_written,
+            result.stats.progresses.write_progress.rows, rows_written,
             "{:?}",
             result
         );
@@ -1104,6 +1104,28 @@ pub async fn download(ep: &EndpointType, query_id: &str) -> Response {
     let uri = format!("/v1/query/{}/download", query_id);
 
     get_uri(ep, &uri).await
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn test_download_csv_with_names() -> Result<()> {
+    let _guard = TestGlobalServices::setup(ConfigBuilder::create().build()).await?;
+
+    let ep = create_endpoint().await?;
+
+    let sql = "select number, number + 1 from numbers(2)";
+    let (status, result) = post_sql_to_endpoint_new_session(&ep, sql, 2).await?;
+    assert_eq!(status, StatusCode::OK, "{:?}", result);
+    assert_eq!(result.data.len(), 2, "{:?}", result);
+    assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
+
+    // succeeded query
+    let uri = format!("/v1/query/{}/download?format=csvWithNames", result.id);
+    let resp = get_uri(&ep, &uri).await;
+
+    assert_eq!(resp.status(), StatusCode::OK, "{:?}", resp);
+    let exp = "\"number\",\"number + 1\"\n0,1\n1,2\n";
+    assert_eq!(resp.into_body().into_string().await.unwrap(), exp);
+    Ok(())
 }
 
 #[tokio::test(flavor = "current_thread")]

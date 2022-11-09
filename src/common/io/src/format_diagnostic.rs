@@ -143,6 +143,14 @@ static ASCII_TABLE: [&str; 128] = [
     "<DEL>",
 ];
 
+pub fn verbose_char(c: u8) -> String {
+    if c < 128 {
+        ASCII_TABLE[c as usize].to_string()
+    } else {
+        (c as char).to_string()
+    }
+}
+
 pub fn verbose_string(buf: &[u8], out: &mut String) {
     out.push('"');
 

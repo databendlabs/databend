@@ -19,6 +19,10 @@ use std::io::BufRead;
 use std::io::BufReader;
 use std::sync::Arc;
 
+use common_catalog::plan::DataSourcePlan;
+use common_catalog::plan::PartStatistics;
+use common_catalog::plan::Partitions;
+use common_catalog::plan::PushDownInfo;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
@@ -34,10 +38,6 @@ use common_pipeline_core::Pipe;
 use common_pipeline_core::Pipeline;
 use common_pipeline_sources::processors::sources::SyncSource;
 use common_pipeline_sources::processors::sources::SyncSourcer;
-use common_planner::extras::Extras;
-use common_planner::extras::Statistics;
-use common_planner::Partitions;
-use common_planner::ReadDataSourcePlan;
 use tracing::debug;
 use walkdir::WalkDir;
 
@@ -100,15 +100,15 @@ impl Table for TracingTable {
     async fn read_partitions(
         &self,
         _ctx: Arc<dyn TableContext>,
-        _push_downs: Option<Extras>,
-    ) -> Result<(Statistics, Partitions)> {
-        Ok((Statistics::default(), vec![]))
+        _push_downs: Option<PushDownInfo>,
+    ) -> Result<(PartStatistics, Partitions)> {
+        Ok((PartStatistics::default(), vec![]))
     }
 
     fn read_data(
         &self,
         ctx: Arc<dyn TableContext>,
-        _: &ReadDataSourcePlan,
+        _: &DataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let settings = ctx.get_settings();

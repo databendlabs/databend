@@ -83,7 +83,7 @@ impl DataType for NullType {
     }
 
     fn create_mutable(&self, _capacity: usize) -> Box<dyn MutableColumn> {
-        Box::new(MutableNullColumn::default())
+        Box::<MutableNullColumn>::default()
     }
 }
 

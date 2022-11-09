@@ -47,7 +47,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
     init_default_metrics_recorder();
     set_panic_hook();
 
-    if conf.meta.address.is_empty() && conf.meta.endpoints.is_empty() {
+    if conf.meta.is_embedded_meta()? {
         MetaEmbedded::init_global_meta_store(conf.meta.embedded_dir.clone()).await?;
     }
     // Make sure gloabl services have been inited.
@@ -173,12 +173,13 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
     println!("Databend Query");
     println!();
     println!("Version: {}", *DATABEND_COMMIT_VERSION);
-    println!("Log:");
-    println!("    File: {}", conf.log.file);
-    println!("    Stderr: {}", conf.log.stderr);
+    println!();
+    println!("Logging:");
+    println!("    file: {}", conf.log.file);
+    println!("    stderr: {}", conf.log.stderr);
     println!(
         "Meta: {}",
-        if conf.meta.address.is_empty() && conf.meta.endpoints.is_empty() {
+        if conf.meta.is_embedded_meta()? {
             format!("embedded at {}", conf.meta.embedded_dir)
         } else if !conf.meta.endpoints.is_empty() {
             format!("connected to endpoints {:#?}", conf.meta.endpoints)
@@ -187,6 +188,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
         }
     );
     println!("Storage: {}", conf.storage.params);
+    println!("Cache: {}", conf.cache.params);
     println!();
     println!("Admin");
     println!("    listened at {}", conf.query.admin_api_address);

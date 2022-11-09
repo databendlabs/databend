@@ -425,10 +425,10 @@ impl DFTryFrom<&DataValue> for VariantValue {
     fn try_from(value: &DataValue) -> Result<Self> {
         match value {
             DataValue::Null => Ok(VariantValue::from(serde_json::Value::Null)),
-            DataValue::Boolean(v) => Ok(VariantValue::from(json!(*v as bool))),
-            DataValue::Int64(v) => Ok(VariantValue::from(json!(*v as i64))),
-            DataValue::UInt64(v) => Ok(VariantValue::from(json!(*v as u64))),
-            DataValue::Float64(v) => Ok(VariantValue::from(json!(*v as f64))),
+            DataValue::Boolean(v) => Ok(VariantValue::from(json!(*v))),
+            DataValue::Int64(v) => Ok(VariantValue::from(json!(*v))),
+            DataValue::UInt64(v) => Ok(VariantValue::from(json!(*v))),
+            DataValue::Float64(v) => Ok(VariantValue::from(json!(*v))),
             DataValue::String(v) => Ok(VariantValue::from(json!(
                 String::from_utf8(v.to_vec()).unwrap()
             ))),

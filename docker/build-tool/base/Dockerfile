@@ -42,5 +42,7 @@ ENV LD_LIBRARY_PATH /opt/java/lib/server
 ENV RUSTUP_HOME /opt/rust/rustup
 ENV CARGO_HOME /opt/rust/cargo
 ENV PATH /opt/rust/cargo/bin:/opt/java/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-VOLUME [ "/workspace", "/opt/rust/cargo/registry", "/opt/rust/cargo/git" ]
 
+RUN cargo install sccache
+
+VOLUME [ "/workspace", "/opt/rust/cargo/registry", "/opt/rust/cargo/git" ]

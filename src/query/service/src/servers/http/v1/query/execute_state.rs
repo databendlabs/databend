@@ -24,6 +24,7 @@ use common_base::base::GlobalIORuntime;
 use common_base::base::ProgressValues;
 use common_base::base::Thread;
 use common_base::base::TrySpawn;
+use common_datablocks::SendableDataBlockStream;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -32,8 +33,6 @@ use common_storages_fuse_result::BlockBufferWriterMemOnly;
 use common_storages_fuse_result::BlockBufferWriterWithResultTable;
 use common_storages_fuse_result::ResultQueryInfo;
 use common_storages_fuse_result::ResultTableSink;
-use common_streams::DataBlockStream;
-use common_streams::SendableDataBlockStream;
 use futures::StreamExt;
 use futures_util::FutureExt;
 use serde::Deserialize;
@@ -55,6 +54,7 @@ use crate::sessions::Session;
 use crate::sessions::TableContext;
 use crate::sql::plans::Plan;
 use crate::sql::Planner;
+use crate::stream::DataBlockStream;
 
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Eq)]
 pub enum ExecuteStateKind {

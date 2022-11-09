@@ -18,7 +18,6 @@ use std::sync::atomic::Ordering;
 
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
-use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
 use common_datavalues::wrap_nullable;
 use common_datavalues::ColumnRef;
@@ -30,6 +29,7 @@ use common_hashtable::HashtableEntryRefLike;
 use common_hashtable::HashtableLike;
 
 use crate::pipelines::processors::transforms::hash_join::desc::MarkerKind;
+use crate::pipelines::processors::transforms::hash_join::desc::JOIN_MAX_BLOCK_SIZE;
 use crate::pipelines::processors::transforms::hash_join::row::RowPtr;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
 use crate::pipelines::processors::JoinHashTable;
@@ -53,15 +53,14 @@ impl JoinHashTable {
         H::Key: 'a,
     {
         let valids = &probe_state.valids;
-        let block_size = self.ctx.get_settings().get_max_block_size()? as usize;
 
         // The left join will return multiple data blocks of similar size
         let mut probed_blocks = vec![];
-        let mut probe_indexes = Vec::with_capacity(block_size);
+        let mut probe_indexes = Vec::with_capacity(JOIN_MAX_BLOCK_SIZE);
         let mut probe_indexes_vec = Vec::new();
         // Collect each probe_indexes, used by non-equi conditions filter
-        let mut local_build_indexes = Vec::with_capacity(block_size);
-        let mut validity = MutableBitmap::with_capacity(block_size);
+        let mut local_build_indexes = Vec::with_capacity(JOIN_MAX_BLOCK_SIZE);
+        let mut validity = MutableBitmap::with_capacity(JOIN_MAX_BLOCK_SIZE);
 
         let mut row_state = match WITH_OTHER_CONJUNCT {
             true => vec![0; keys_iter.size_hint().0],
@@ -219,7 +218,7 @@ impl JoinHashTable {
                         remain -= addition;
                         probe_indexes.clear();
                         local_build_indexes.clear();
-                        validity = MutableBitmap::with_capacity(block_size);
+                        validity = MutableBitmap::with_capacity(JOIN_MAX_BLOCK_SIZE);
                     }
                 }
             }

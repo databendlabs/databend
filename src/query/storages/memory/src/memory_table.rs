@@ -18,6 +18,12 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 
 use common_catalog::catalog::StorageDescription;
+use common_catalog::plan::DataSourcePlan;
+use common_catalog::plan::PartStatistics;
+use common_catalog::plan::Partitions;
+use common_catalog::plan::Projection;
+use common_catalog::plan::PushDownInfo;
+use common_catalog::table::AppendMode;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
@@ -36,11 +42,6 @@ use common_pipeline_core::Pipeline;
 use common_pipeline_sinks::processors::sinks::ContextSink;
 use common_pipeline_sources::processors::sources::SyncSource;
 use common_pipeline_sources::processors::sources::SyncSourcer;
-use common_planner::extras::Extras;
-use common_planner::extras::Statistics;
-use common_planner::plans::Projection;
-use common_planner::Partitions;
-use common_planner::ReadDataSourcePlan;
 use common_storage::StorageMetrics;
 use once_cell::sync::Lazy;
 use parking_lot::Mutex;
@@ -105,7 +106,7 @@ impl MemoryTable {
         let part_size = total / workers;
         let part_remain = total % workers;
 
-        let mut partitions = Vec::with_capacity(workers as usize);
+        let mut partitions = Vec::with_capacity(workers);
         if part_size == 0 {
             partitions.push(MemoryPartInfo::create(start, total, total));
         } else {
@@ -148,8 +149,8 @@ impl Table for MemoryTable {
     async fn read_partitions(
         &self,
         ctx: Arc<dyn TableContext>,
-        push_downs: Option<Extras>,
-    ) -> Result<(Statistics, Partitions)> {
+        push_downs: Option<PushDownInfo>,
+    ) -> Result<(PartStatistics, Partitions)> {
         let blocks = self.blocks.read();
 
         let statistics = match push_downs {
@@ -170,8 +171,8 @@ impl Table for MemoryTable {
 
                 blocks
                     .iter()
-                    .fold(Statistics::default(), |mut stats, block| {
-                        stats.read_rows += block.num_rows() as usize;
+                    .fold(PartStatistics::default(), |mut stats, block| {
+                        stats.read_rows += block.num_rows();
                         stats.read_bytes += (0..block.num_columns())
                             .into_iter()
                             .collect::<Vec<usize>>()
@@ -187,7 +188,7 @@ impl Table for MemoryTable {
                 let rows = blocks.iter().map(|block| block.num_rows()).sum();
                 let bytes = blocks.iter().map(|block| block.memory_size()).sum();
 
-                Statistics::new_exact(rows, bytes, blocks.len(), blocks.len())
+                PartStatistics::new_exact(rows, bytes, blocks.len(), blocks.len())
             }
         };
 
@@ -202,7 +203,7 @@ impl Table for MemoryTable {
     fn read_data(
         &self,
         ctx: Arc<dyn TableContext>,
-        plan: &ReadDataSourcePlan,
+        plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let numbers = ctx.get_settings().get_max_threads()? as usize;
@@ -226,6 +227,7 @@ impl Table for MemoryTable {
         &self,
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
+        _: AppendMode,
         _: bool,
     ) -> Result<()> {
         pipeline.add_sink(|input| Ok(ContextSink::create(input, ctx.clone())))
@@ -260,7 +262,7 @@ impl Table for MemoryTable {
 }
 
 struct MemoryTableSource {
-    extras: Option<Extras>,
+    extras: Option<PushDownInfo>,
     data_blocks: Arc<Mutex<VecDeque<DataBlock>>>,
 }
 
@@ -269,7 +271,7 @@ impl MemoryTableSource {
         ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
         data_blocks: Arc<Mutex<VecDeque<DataBlock>>>,
-        extras: Option<Extras>,
+        extras: Option<PushDownInfo>,
     ) -> Result<ProcessorPtr> {
         SyncSourcer::create(ctx, output, MemoryTableSource {
             extras,

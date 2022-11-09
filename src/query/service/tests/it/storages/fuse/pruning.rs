@@ -16,25 +16,25 @@ use std::sync::Arc;
 
 use common_ast::ast::Engine;
 use common_base::base::tokio;
+use common_catalog::plan::PushDownInfo;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_fuse_meta::meta::BlockMeta;
-use common_fuse_meta::meta::TableSnapshot;
-use common_planner::extras::Extras;
 use common_sql::executor::add;
 use common_sql::executor::col;
 use common_sql::executor::lit;
 use common_sql::executor::sub;
 use common_sql::executor::ExpressionOp;
+use common_sql::plans::CreateTablePlanV2;
 use common_storages_fuse::FuseTable;
+use common_storages_table_meta::meta::BlockMeta;
+use common_storages_table_meta::meta::TableSnapshot;
+use common_storages_table_meta::table::OPT_KEY_DATABASE_ID;
+use common_storages_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_query::interpreters::CreateTableInterpreterV2;
 use databend_query::interpreters::Interpreter;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
-use databend_query::sql::plans::create_table_v2::CreateTablePlanV2;
-use databend_query::sql::OPT_KEY_DATABASE_ID;
-use databend_query::sql::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_query::storages::fuse::io::MetaReaders;
 use databend_query::storages::fuse::pruning::BlockPruner;
 use databend_query::storages::fuse::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
@@ -46,7 +46,7 @@ use crate::storages::fuse::table_test_fixture::TestFixture;
 async fn apply_block_pruning(
     table_snapshot: Arc<TableSnapshot>,
     schema: DataSchemaRef,
-    push_down: &Option<Extras>,
+    push_down: &Option<PushDownInfo>,
     ctx: Arc<QueryContext>,
     op: Operator,
 ) -> Result<Vec<Arc<BlockMeta>>> {
@@ -152,11 +152,13 @@ async fn test_block_pruner() -> Result<()> {
     let snapshot = reader.read(snapshot_loc.as_str(), None, 1).await?;
 
     // nothing is pruned
-    let mut e1 = Extras::default();
-    e1.filters = vec![col("a", u64::to_data_type()).gt(&lit(30u64))?];
+    let e1 = PushDownInfo {
+        filters: vec![col("a", u64::to_data_type()).gt(&lit(30u64))?],
+        ..Default::default()
+    };
 
     // some blocks pruned
-    let mut e2 = Extras::default();
+    let mut e2 = PushDownInfo::default();
     let max_val_of_b = 6u64;
     e2.filters = vec![
         col("a", u64::to_data_type())
@@ -166,14 +168,18 @@ async fn test_block_pruner() -> Result<()> {
     let b2 = num_blocks - max_val_of_b as usize - 1;
 
     // Sort asc Limit
-    let mut e3 = Extras::default();
-    e3.order_by = vec![(col("b", u64::to_data_type()), true, false)];
-    e3.limit = Some(3);
+    let e3 = PushDownInfo {
+        order_by: vec![(col("b", u64::to_data_type()), true, false)],
+        limit: Some(3),
+        ..Default::default()
+    };
 
     // Sort desc Limit
-    let mut e4 = Extras::default();
-    e4.order_by = vec![(col("b", u64::to_data_type()), false, false)];
-    e4.limit = Some(4);
+    let e4 = PushDownInfo {
+        order_by: vec![(col("b", u64::to_data_type()), false, false)],
+        limit: Some(4),
+        ..Default::default()
+    };
 
     let extras = vec![
         (None, num_blocks, num_blocks * row_per_block),
@@ -291,7 +297,7 @@ async fn test_block_pruner_monotonic() -> Result<()> {
     let snapshot = reader.read(snapshot_loc.as_str(), None, 1).await?;
 
     // a + b > 20; some blocks pruned
-    let mut extra = Extras::default();
+    let mut extra = PushDownInfo::default();
     let pred = add(col("a", u64::to_data_type()), col("b", u64::to_data_type())).gt(&lit(20u64))?;
     extra.filters = vec![pred];
 
@@ -307,7 +313,7 @@ async fn test_block_pruner_monotonic() -> Result<()> {
     assert_eq!(2, blocks.len());
 
     // b - a < 20; nothing will be pruned.
-    let mut extra = Extras::default();
+    let mut extra = PushDownInfo::default();
     let pred = sub(col("b", u64::to_data_type()), col("a", u64::to_data_type())).lt(&lit(20u64))?;
     extra.filters = vec![pred];
 

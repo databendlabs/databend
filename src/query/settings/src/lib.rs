@@ -30,8 +30,8 @@ use common_exception::Result;
 use common_meta_types::UserSetting;
 use common_meta_types::UserSettingValue;
 use common_users::UserApiProvider;
+use dashmap::DashMap;
 use itertools::Itertools;
-use parking_lot::RwLock;
 
 #[derive(Clone)]
 enum ScopeLevel {
@@ -65,7 +65,7 @@ pub struct SettingValue {
 
 #[derive(Clone)]
 pub struct Settings {
-    settings: Arc<RwLock<HashMap<String, SettingValue>>>,
+    settings: Arc<DashMap<String, SettingValue>>,
     // TODO verify this, will tenant change during the lifetime of a given session?
     //#[allow(dead_code)]
     // session_ctx: Arc<T>,
@@ -122,13 +122,13 @@ impl Settings {
         let values = vec![
             // max_block_size
             SettingValue {
-                default_value: UserSettingValue::UInt64(10000),
+                default_value: UserSettingValue::UInt64(65536),
                 user_setting: UserSetting::create(
                     "max_block_size",
-                    UserSettingValue::UInt64(10000),
+                    UserSettingValue::UInt64(65536),
                 ),
                 level: ScopeLevel::Session,
-                desc: "Maximum block size for reading, default value: 10000.",
+                desc: "Maximum block size for reading, default value: 65536.",
                 possible_values: None,
             },
             // max_threads
@@ -409,15 +409,13 @@ impl Settings {
             },
         ];
 
-        let settings: Arc<RwLock<HashMap<String, SettingValue>>> =
-            Arc::new(RwLock::new(HashMap::default()));
+        let settings: Arc<DashMap<String, SettingValue>> = Arc::new(DashMap::default());
 
         // Initial settings.
         {
-            let mut settings_mut = settings.write();
             for value in values {
                 let name = value.user_setting.name.clone();
-                settings_mut.insert(name, value);
+                settings.insert(name, value);
             }
         }
 
@@ -661,16 +659,16 @@ impl Settings {
     }
 
     pub fn has_setting(&self, key: &str) -> bool {
-        let settings = self.settings.read();
-        settings.get(key).is_some()
+        self.settings.get(key).is_some()
     }
 
     fn check_and_get_setting_value(&self, key: &str) -> Result<SettingValue> {
-        let settings = self.settings.read();
-        let setting = settings
+        let setting = self
+            .settings
             .get(key)
+            .map(|e| e.value().clone())
             .ok_or_else(|| ErrorCode::UnknownVariable(format!("Unknown variable: {:?}", key)))?;
-        Ok(setting.clone())
+        Ok(setting)
     }
 
     fn check_possible_values(&self, setting: &SettingValue, val: String) -> Result<String> {
@@ -696,8 +694,8 @@ impl Settings {
 
     // Set u64 value to settings map, if is_global will write to metasrv.
     fn try_set_u64(&self, key: &str, val: u64, is_global: bool) -> Result<()> {
-        let mut settings = self.settings.write();
-        let mut setting = settings
+        let mut setting = self
+            .settings
             .get_mut(key)
             .ok_or_else(|| ErrorCode::UnknownVariable(format!("Unknown variable: {:?}", key)))?;
         setting.user_setting.value = UserSettingValue::UInt64(val);
@@ -719,8 +717,8 @@ impl Settings {
     }
 
     fn try_set_string(&self, key: &str, val: String, is_global: bool) -> Result<()> {
-        let mut settings = self.settings.write();
-        let mut setting = settings
+        let mut setting = self
+            .settings
             .get_mut(key)
             .ok_or_else(|| ErrorCode::UnknownVariable(format!("Unknown variable: {:?}", key)))?;
         setting.user_setting.value = UserSettingValue::String(val);
@@ -742,8 +740,8 @@ impl Settings {
     }
 
     fn set_setting_level(&self, key: &str, is_global: bool) -> Result<()> {
-        let mut settings = self.settings.write();
-        let mut setting = settings
+        let mut setting = self
+            .settings
             .get_mut(key)
             .ok_or_else(|| ErrorCode::UnknownVariable(format!("Unknown variable: {:?}", key)))?;
 
@@ -756,41 +754,46 @@ impl Settings {
     pub fn get_setting_values(
         &self,
     ) -> Vec<(String, UserSettingValue, UserSettingValue, String, String)> {
-        let settings = self.settings.read();
-
-        let mut result = vec![];
-        for (k, v) in settings.iter().sorted_by_key(|&(k, _)| k) {
-            let res = (
-                // Name.
-                k.to_owned(),
-                // Value.
-                v.user_setting.value.clone(),
-                // Default Value.
-                v.default_value.clone(),
-                // Scope level.
-                format!("{:?}", v.level),
-                // Desc.
-                v.desc.to_owned(),
-            );
-            result.push(res);
-        }
-        result
+        let mut v = self
+            .settings
+            .iter()
+            .map(|e| {
+                let (k, v) = e.pair();
+                (
+                    // Name.
+                    k.to_owned(),
+                    // Value.
+                    v.user_setting.value.clone(),
+                    // Default Value.
+                    v.default_value.clone(),
+                    // Scope level.
+                    format!("{:?}", v.level),
+                    // Desc.
+                    v.desc.to_owned(),
+                )
+            })
+            .collect_vec();
+        v.sort_by(|a, b| a.0.cmp(&b.0));
+        v
     }
 
     pub fn get_changed_settings(&self) -> Settings {
-        let settings = self.settings.read();
         let mut values = vec![];
-        for (_k, v) in settings.iter().sorted_by_key(|&(k, _)| k) {
+        for v in self
+            .settings
+            .iter()
+            .sorted_by(|a, b| a.key().cmp(b.key()))
+            .map(|e| e.value().clone())
+        {
             if v.user_setting.value != v.default_value {
-                values.push(v.clone());
+                values.push(v);
             }
         }
-        let new_settings = Arc::new(RwLock::new(HashMap::default()));
+        let new_settings = Arc::new(DashMap::new());
         {
-            let mut new_settings_mut = new_settings.write();
             for value in values {
                 let name = value.user_setting.name.clone();
-                new_settings_mut.insert(name, value.clone());
+                new_settings.insert(name, value.clone());
             }
         }
         Settings {
@@ -800,11 +803,10 @@ impl Settings {
     }
 
     pub fn apply_changed_settings(&self, changed_settings: Arc<Settings>) -> Result<()> {
-        let mut settings = self.settings.write();
         let values = changed_settings.get_setting_values();
         for value in values.into_iter() {
             let key = value.0;
-            let mut val = settings.get_mut(&key).ok_or_else(|| {
+            let mut val = self.settings.get_mut(&key).ok_or_else(|| {
                 ErrorCode::UnknownVariable(format!("Unknown variable: {:?}", key))
             })?;
             val.user_setting.value = value.1.clone();
@@ -813,11 +815,10 @@ impl Settings {
     }
 
     pub fn get_setting_values_short(&self) -> BTreeMap<String, UserSettingValue> {
-        let settings = self.settings.read();
-
         let mut result = BTreeMap::new();
-        for (k, v) in settings.iter().sorted_by_key(|&(k, _)| k) {
-            result.insert(k.clone(), v.user_setting.value.clone());
+        for e in self.settings.iter().sorted_by(|a, b| a.key().cmp(b.key())) {
+            let (k, v) = e.pair();
+            result.insert(k.to_owned(), v.user_setting.value.clone());
         }
         result
     }

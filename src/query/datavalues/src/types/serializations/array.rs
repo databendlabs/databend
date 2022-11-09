@@ -22,8 +22,8 @@ use crate::serializations::write_json_string;
 
 #[derive(Clone)]
 pub struct ArraySerializer<'a> {
-    offsets: &'a [i64],
-    inner: Box<TypeSerializerImpl<'a>>,
+    pub offsets: &'a [i64],
+    pub inner: Box<TypeSerializerImpl<'a>>,
 }
 
 impl<'a> ArraySerializer<'a> {

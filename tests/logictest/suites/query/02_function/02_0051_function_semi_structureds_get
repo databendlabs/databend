@@ -59,13 +59,13 @@ select get_path(parse_json('{"attr":[{"name": 1}, {"name": 2}]}'), 'attr[0].name
 1
 
 statement query T
-select get_path(parse_json('{"attr":[{"name": 1}, {"name": 2}]}'), 'attr[1]: name');
+select get_path(parse_json('{"attr":[{"name": 1}, {"name": 2}]}'), 'attr[1]["name"]');
 
 ----
 2
 
 statement query T
-select get_path(parse_json('{"customer":{"id": 1, "name":"databend", "extras":["ext", "test"]}}'), 'customer: id');
+select get_path(parse_json('{"customer":{"id": 1, "name":"databend", "extras":["ext", "test"]}}'), 'customer["id"]');
 
 ----
 1
@@ -99,13 +99,13 @@ select json_extract_path_text('{"attr":[{"name": 1}, {"name": 2}]}', 'attr[0].na
 1
 
 statement query T
-select json_extract_path_text('{"attr":[{"name": 1}, {"name": 2}]}', 'attr[1]: name');
+select json_extract_path_text('{"attr":[{"name": 1}, {"name": 2}]}', 'attr[1]["name"]');
 
 ----
 2
 
 statement query T
-select json_extract_path_text('{"customer":{"id": 1, "name":"databend", "extras":["ext", "test"]}}', 'customer: id');
+select json_extract_path_text('{"customer":{"id": 1, "name":"databend", "extras":["ext", "test"]}}', 'customer["id"]');
 
 ----
 1
@@ -139,31 +139,31 @@ select [][0];
 NULL
 
 statement query I
-select [0,1,2,3][0];
+select [0,1,2,3][1];
 
 ----
 0
 
 statement query T
-select [[[1,2,3],[4,5,6]],[[7,8,9]]][0];
+select [[[1,2,3],[4,5,6]],[[7,8,9]]][1];
 
 ----
 [[1, 2, 3], [4, 5, 6]]
 
 statement query T
-select [[[1,2,3],[4,5,6]],[[7,8,9]]][0][1];
+select [[[1,2,3],[4,5,6]],[[7,8,9]]][1][2];
 
 ----
 [4, 5, 6]
 
 statement query I
-select [[[1,2,3],[4,5,6]],[[7,8,9]]][0][1][2];
+select [[[1,2,3],[4,5,6]],[[7,8,9]]][1][2][3];
 
 ----
 6
 
 statement query I
-select ([0,1,2,3])[0];
+select ([0,1,2,3])[1];
 
 ----
 0
@@ -316,21 +316,21 @@ select id, json_extract_path_text(str, '["b"]["c"]') from t3;
 2 2
 
 statement query II
-select id, get(arr, 0) from t4;
+select id, get(arr, 1) from t4;
 
 ----
 1 10
 2 50
 
 statement query II
-select id, get(arr, 1) from t4;
+select id, get(arr, 2) from t4;
 
 ----
 1 20
 2 60
 
 statement query II
-select id, get(arr, 4) from t4;
+select id, get(arr, 5) from t4;
 
 ----
 1 NULL

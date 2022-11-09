@@ -95,7 +95,7 @@ impl<const SUPPRESS_CAST_ERROR: bool> Function for InetNtoaFunctionImpl<SUPPRESS
                 NullableColumnBuilder::with_capacity(input_rows);
 
             for (i, val) in viewer_iter.enumerate() {
-                let addr_str = Ipv4Addr::from((val as u32).to_be_bytes()).to_string();
+                let addr_str = Ipv4Addr::from(val.to_be_bytes()).to_string();
                 builder.append(addr_str.as_bytes(), viewer.valid_at(i));
             }
             Ok(builder.build(input_rows))

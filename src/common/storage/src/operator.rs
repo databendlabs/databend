@@ -48,6 +48,7 @@ use crate::config::StorageHttpConfig;
 use crate::config::StorageMokaConfig;
 use crate::config::StorageObsConfig;
 use crate::runtime_layer::RuntimeLayer;
+use crate::CacheConfig;
 use crate::StorageConfig;
 use crate::StorageOssConfig;
 
@@ -398,7 +399,7 @@ static CACHE_OPERATOR: OnceCell<Singleton<CacheOperator>> = OnceCell::new();
 
 impl CacheOperator {
     pub async fn init(
-        conf: &StorageConfig,
+        conf: &CacheConfig,
         v: Singleton<CacheOperator>,
     ) -> common_exception::Result<()> {
         v.init(Self::try_create(conf).await?)?;
@@ -407,15 +408,32 @@ impl CacheOperator {
         Ok(())
     }
 
-    pub async fn try_create(conf: &StorageConfig) -> common_exception::Result<CacheOperator> {
-        let op = init_operator(&conf.params)?;
+    pub async fn try_create(conf: &CacheConfig) -> common_exception::Result<CacheOperator> {
+        let operator = init_operator(&conf.params)?;
 
-        Ok(CacheOperator { op })
+        // OpenDAL will send a real request to underlying storage to check whether it works or not.
+        // If this check failed, it's highly possible that the users have configured it wrongly.
+        //
+        // Make sure the check is called inside GlobalIORuntime to prevent
+        // IO hang on reuse connection.
+        let op = operator.clone();
+        if let Err(cause) = GlobalIORuntime::instance()
+            .spawn(async move { op.object("health_check").create().await })
+            .await
+            .expect("join must succeed")
+        {
+            return Err(ErrorCode::StorageUnavailable(format!(
+                "current configured cache is not available: config: {:?}, cause: {cause}",
+                conf
+            )));
+        }
+
+        Ok(CacheOperator { op: operator })
     }
 
     pub fn instance() -> CacheOperator {
         match CACHE_OPERATOR.get() {
-            None => panic!("StorageOperator is not init"),
+            None => panic!("CacheOperator is not init"),
             Some(op) => op.get(),
         }
     }

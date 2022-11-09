@@ -16,6 +16,11 @@ use std::any::Any;
 use std::sync::Arc;
 
 use common_catalog::catalog::StorageDescription;
+use common_catalog::plan::DataSourcePlan;
+use common_catalog::plan::PartStatistics;
+use common_catalog::plan::Partitions;
+use common_catalog::plan::Projection;
+use common_catalog::plan::PushDownInfo;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
@@ -29,11 +34,6 @@ use common_pipeline_core::Pipeline;
 use common_pipeline_core::SourcePipeBuilder;
 use common_pipeline_sources::processors::sources::SyncSource;
 use common_pipeline_sources::processors::sources::SyncSourcer;
-use common_planner::extras::Extras;
-use common_planner::extras::Statistics;
-use common_planner::plans::Projection;
-use common_planner::Partitions;
-use common_planner::ReadDataSourcePlan;
 
 use crate::RandomPartInfo;
 
@@ -89,8 +89,8 @@ impl Table for RandomTable {
     async fn read_partitions(
         &self,
         ctx: Arc<dyn TableContext>,
-        push_downs: Option<Extras>,
-    ) -> Result<(Statistics, Partitions)> {
+        push_downs: Option<PushDownInfo>,
+    ) -> Result<(PartStatistics, Partitions)> {
         let settings = ctx.get_settings();
         let block_size = settings.get_max_block_size()? as usize;
         // If extras.push_downs is None or extras.push_down.limit is None,
@@ -127,7 +127,7 @@ impl Table for RandomTable {
             .sum::<usize>();
         let read_bytes = total_rows * one_row_bytes;
         let parts_num = (total_rows / block_size) + 1;
-        let statistics = Statistics::new_exact(total_rows, read_bytes, parts_num, parts_num);
+        let statistics = PartStatistics::new_exact(total_rows, read_bytes, parts_num, parts_num);
 
         let mut worker_num = settings.get_max_threads()? as usize;
         if worker_num > parts_num {
@@ -145,7 +145,7 @@ impl Table for RandomTable {
     fn read_data(
         &self,
         ctx: Arc<dyn TableContext>,
-        plan: &ReadDataSourcePlan,
+        plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let mut output_schema = self.table_info.schema();
