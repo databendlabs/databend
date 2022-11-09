@@ -53,7 +53,7 @@ impl<'a, T: PrimitiveType + AsPrimitive<i64> + ToLexical> DateSerializer<'a, T> 
         })
     }
 
-    fn fmt(&self, row_index: usize) -> String {
+    pub fn fmt(&self, row_index: usize) -> String {
         v_to_string(&self.values[row_index].as_i64())
     }
 }

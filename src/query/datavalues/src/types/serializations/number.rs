@@ -29,7 +29,7 @@ use crate::TypeSerializer;
 
 #[derive(Debug, Clone)]
 pub struct NumberSerializer<'a, T: PrimitiveType> {
-    pub(crate) values: &'a [T],
+    pub values: &'a [T],
 }
 
 impl<'a, T: PrimitiveType> NumberSerializer<'a, T> {
