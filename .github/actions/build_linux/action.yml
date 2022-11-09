@@ -14,7 +14,7 @@ runs:
       uses: ./.github/actions/setup_build_tool
       with:
         image: ${{ inputs.target }}
-        bypass_env_vars: RUSTFLAGS,RUST_LOG,RUSTC_WRAPPER,SCCACHE_BUCKET,SCCACHE_S3_KEY_PREFIX,SCCACHE_LOG,SCCACHE_ERROR_LOG
+        bypass_env_vars: RUSTFLAGS,RUST_LOG,RUSTC_WRAPPER,SCCACHE_BUCKET,SCCACHE_S3_KEY_PREFIX,SCCACHE_LOG,SCCACHE_ERROR_LOG,AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY,AWS_SESSION_TOKEN
 
     - name: Build Debug
       if: inputs.profile == 'debug'
