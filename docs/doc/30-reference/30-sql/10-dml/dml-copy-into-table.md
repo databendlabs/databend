@@ -220,34 +220,11 @@ copyOptions ::=
 
 ### Loading Data from an Internal Stage
 
-First, create a named internal stage:
-
 ```sql
-CREATE STAGE my_internal_s1;
-```
-
-Then, PUT a local file to `my_internal_s1` stage with [PUT to Stage](../../00-api/10-put-to-stage.md) API:
-
-```shell
-curl  -H "stage_name:my_internal_s1" -F "upload=@books.parquet" -XPUT "http://localhost:8081/v1/upload_to_stage"
-```
-
-Finally, copy the file into `mytable` from the `my_internal_s1` named internal stage:
-
-```sql
-LIST @my_internal_s1;
 COPY INTO mytable FROM @my_internal_s1 pattern = 'books.*parquet' file_format = (type = 'PARQUET');
 ```
 
 ### Loading Data from an External Stage
-
-First, create a named external stage:
-
-```sql
-CREATE STAGE my_external_s1 url = 's3://testbucket/admin/data/' credentials=(aws_key_id='minioadmin' aws_secret_key='minioadmin');
-```
-
-Then, copy the file into `mytable` from the `my_external_s1` named external stage:
 
 ```sql
 COPY INTO mytable FROM @my_external_s1 pattern = 'books.*parquet' file_format = (type = 'PARQUET');
