@@ -14,7 +14,7 @@ runs:
       uses: ./.github/actions/setup_build_tool
       with:
         image: ${{ inputs.target }}
-        bypass_env_vars: RUSTFLAGS,RUST_LOG,RUSTC_WRAPPER,SCCACHE_BUCKET,SCCACHE_S3_KEY_PREFIX,SCCACHE_LOG,SCCACHE_ERROR_LOG
+        bypass_env_vars: RUSTFLAGS,RUST_LOG,RUSTC_WRAPPER,SCCACHE_BUCKET,SCCACHE_S3_KEY_PREFIX,SCCACHE_LOG
 
     - name: Build Debug
       if: inputs.profile == 'debug'
@@ -24,12 +24,7 @@ runs:
         RUSTC_WRAPPER: /opt/rust/cargo/bin/sccache
         SCCACHE_BUCKET: databend-ci
         SCCACHE_S3_KEY_PREFIX: cache/
-        SCCACHE_LOG: debug
-        SCCACHE_ERROR_LOG: /tmp/sccache_log.txt
-    - name: Print Debug
-      if: inputs.profile == 'debug'
-      shell: bash
-      run: cat /tmp/sccache_log.txt
+        SCCACHE_LOG: trace
 
     - name: Build Release
       if: inputs.profile == 'release'
