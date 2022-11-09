@@ -21,13 +21,13 @@ runs:
       shell: bash
       run: |
         cargo -Z sparse-registry build --target ${{ inputs.target }}
-        build-tool cat /tmp/sccache.log
+        cat .databend/sccache.log
       env:
         RUSTC_WRAPPER: /opt/rust/cargo/bin/sccache
         SCCACHE_BUCKET: databend-ci
         SCCACHE_S3_KEY_PREFIX: cache/
         SCCACHE_LOG: debug
-        SCCACHE_ERROR_LOG: /tmp/sccache.log
+        SCCACHE_ERROR_LOG: .databend/sccache.log
 
     - name: Build Release
       if: inputs.profile == 'release'
