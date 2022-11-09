@@ -21,7 +21,7 @@ runs:
       shell: bash
       run: cargo -Z sparse-registry build --target ${{ inputs.target }}
       env:
-        RUSTC_WRAPPER: sccache
+        RUSTC_WRAPPER: /opt/rust/cargo/bin/sccache
         SCCACHE_BUCKET: databend-ci
         SCCACHE_S3_KEY_PREFIX: cache/
         SCCACHE_ERROR_LOG: /tmp/sccache_log.txt
