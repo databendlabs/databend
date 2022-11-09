@@ -156,7 +156,7 @@ pub fn optimize_query(
     // with reading data from local tales(e.g. system tables).
     let enable_distributed_query =
         opt_ctx.config.enable_distributed_optimization && !contains_local_table_scan;
-    if enable_distributed_query && validate_distributed_query(&result) {
+    if enable_distributed_query {
         result = optimize_distributed_query(&result)?;
     }
 
