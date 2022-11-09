@@ -39,15 +39,12 @@ pub fn validate_distributed_query(s_expr: &SExpr) -> bool {
                 | JoinType::LeftSemi
                 | JoinType::LeftAnti
                 | JoinType::RightSemi
-                | JoinType::RightAnti => true,
-
-                JoinType::Left
-                | JoinType::Right
-                | JoinType::Full
+                | JoinType::RightAnti
                 | JoinType::Cross
                 | JoinType::LeftMark
-                | JoinType::RightMark
-                | JoinType::Single => false,
+                | JoinType::RightMark => true,
+
+                JoinType::Left | JoinType::Right | JoinType::Full | JoinType::Single => false,
             },
             _ => true,
         }
