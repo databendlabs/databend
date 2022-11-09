@@ -12,9 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io::Cursor;
+
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_io::prelude::*;
+use common_io::cursor_ext::*;
+use common_io::prelude::BinaryRead;
+use common_io::prelude::FormatSettings;
 
 use crate::prelude::*;
 
@@ -83,24 +87,22 @@ impl TypeDeserializer for ArrayDeserializer {
         }
     }
 
-    fn de_text<R: BufferRead>(
+    fn de_text<R: AsRef<[u8]>>(
         &mut self,
-        reader: &mut NestedCheckpointReader<R>,
+        reader: &mut Cursor<R>,
         format: &FormatSettings,
     ) -> Result<()> {
         reader.must_ignore_byte(b'[')?;
         let mut idx = 0;
         loop {
-            let _ = reader.ignore_white_spaces()?;
-            if let Ok(res) = reader.ignore_byte(b']') {
-                if res {
-                    break;
-                }
+            let _ = reader.ignore_white_spaces();
+            if reader.ignore_byte(b']') {
+                break;
             }
             if idx != 0 {
                 reader.must_ignore_byte(b',')?;
             }
-            let _ = reader.ignore_white_spaces()?;
+            let _ = reader.ignore_white_spaces();
             self.inner.de_text_quoted(reader, format)?;
             idx += 1;
         }
@@ -114,8 +116,7 @@ impl TypeDeserializer for ArrayDeserializer {
     }
 
     fn de_whole_text(&mut self, reader: &[u8], format: &FormatSettings) -> Result<()> {
-        let reader = BufferReader::new(reader);
-        let mut reader = NestedCheckpointReader::new(Box::new(reader));
+        let mut reader = Cursor::new(reader);
         self.de_text(&mut reader, format)
     }
 

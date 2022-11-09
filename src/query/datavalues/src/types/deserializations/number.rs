@@ -12,14 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io::Cursor;
+
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_io::prelude::*;
+use common_io::cursor_ext::*;
+use common_io::prelude::BinaryRead;
+use common_io::prelude::FormatSettings;
+use common_io::prelude::StatBuffer;
 use lexical_core::FromLexical;
 use micromarshal::Unmarshal;
 
 use crate::prelude::*;
-
 pub struct NumberDeserializer<T: PrimitiveType> {
     pub builder: MutablePrimitiveColumn<T>,
 }
@@ -62,7 +66,7 @@ where
         match value {
             serde_json::Value::Number(v) => {
                 let v = v.to_string();
-                let mut reader = BufferReader::new(v.as_bytes());
+                let mut reader = Cursor::new(v.as_bytes());
                 let v: T = if !T::FLOATING {
                     reader.read_int_text()
                 } else {
@@ -81,7 +85,7 @@ where
     }
 
     fn de_whole_text(&mut self, reader: &[u8], _format: &FormatSettings) -> Result<()> {
-        let mut reader = BufferReader::new(reader);
+        let mut reader = Cursor::new(reader);
         let v: T = if !T::FLOATING {
             reader.read_int_text()
         } else {
@@ -93,9 +97,9 @@ where
         Ok(())
     }
 
-    fn de_text<R: BufferRead>(
+    fn de_text<R: AsRef<[u8]>>(
         &mut self,
-        reader: &mut NestedCheckpointReader<R>,
+        reader: &mut Cursor<R>,
         _format: &FormatSettings,
     ) -> Result<()> {
         let v: T = if !T::FLOATING {

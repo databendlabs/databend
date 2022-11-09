@@ -12,10 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io::Cursor;
+
 use chrono::Datelike;
 use chrono::NaiveDate;
 use common_exception::*;
-use common_io::prelude::*;
+use common_io::cursor_ext::*;
+use common_io::prelude::BinaryRead;
+use common_io::prelude::FormatSettings;
+use common_io::prelude::StatBuffer;
 use lexical_core::FromLexical;
 use micromarshal::Unmarshal;
 use num::cast::AsPrimitive;
@@ -68,7 +73,7 @@ where
     fn de_json(&mut self, value: &serde_json::Value, format: &FormatSettings) -> Result<()> {
         match value {
             serde_json::Value::String(v) => {
-                let mut reader = BufferReader::new(v.as_bytes());
+                let mut reader = Cursor::new(v.as_bytes());
                 let date = reader.read_date_text(&format.timezone)?;
                 let days = uniform(date);
                 check_date(days.as_i32())?;
@@ -80,7 +85,7 @@ where
     }
 
     fn de_whole_text(&mut self, reader: &[u8], format: &FormatSettings) -> Result<()> {
-        let mut reader = BufferReader::new(reader);
+        let mut reader = Cursor::new(reader);
         let date = reader.read_date_text(&format.timezone)?;
         let days = uniform(date);
         check_date(days.as_i32())?;
@@ -89,9 +94,9 @@ where
         Ok(())
     }
 
-    fn de_text_quoted<R: BufferRead>(
+    fn de_text_quoted<R: AsRef<[u8]>>(
         &mut self,
-        reader: &mut NestedCheckpointReader<R>,
+        reader: &mut Cursor<R>,
         format: &FormatSettings,
     ) -> Result<()> {
         reader.must_ignore_byte(b'\'')?;
@@ -107,9 +112,9 @@ where
         Ok(())
     }
 
-    fn de_text<R: BufferRead>(
+    fn de_text<R: AsRef<[u8]>>(
         &mut self,
-        reader: &mut NestedCheckpointReader<R>,
+        reader: &mut Cursor<R>,
         format: &FormatSettings,
     ) -> Result<()> {
         let date = reader.read_date_text(&format.timezone)?;
@@ -119,9 +124,9 @@ where
         Ok(())
     }
 
-    fn de_text_json<R: BufferRead>(
+    fn de_text_json<R: AsRef<[u8]>>(
         &mut self,
-        reader: &mut NestedCheckpointReader<R>,
+        reader: &mut Cursor<R>,
         format: &FormatSettings,
     ) -> Result<()> {
         reader.must_ignore_byte(b'"')?;
