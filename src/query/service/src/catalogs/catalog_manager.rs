@@ -81,9 +81,10 @@ impl CatalogManagerHelper for CatalogManager {
                     // register hive catalog
                     #[cfg(not(feature = "hive"))]
                     {
-                        return Err(ErrorCode::CatalogNotSupported(
-                            "Hive catalog is not enabled, please recompile with --features hive",
-                        ));
+                        return Err(ErrorCode::CatalogNotSupported(format!(
+                            "Failed to create catalog {} to {}: Hive catalog is not enabled, please recompile with --features hive",
+                            name, ctl.meta_store_address
+                        )));
                     }
                     #[cfg(feature = "hive")]
                     {

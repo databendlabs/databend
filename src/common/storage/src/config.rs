@@ -480,19 +480,23 @@ impl ShareTableConfig {
 }
 
 #[derive(Clone, Default, PartialEq, Eq, Debug, Serialize, Deserialize)]
+#[serde(default)]
 pub struct CatalogConfig {
+    #[serde(flatten)]
     pub catalogs: HashMap<String, CatalogDescription>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum CatalogDescription {
+    #[serde(rename = "hive")]
     Hive(HiveCatalogConfig),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "protocol")]
 pub enum ThriftProtocol {
+    #[serde(rename = "binary")]
     Binary,
     // Compact,
 }

@@ -101,7 +101,7 @@ pub struct Config {
     // - Later, catalog information SHOULD be kept in KV Service
     // - currently only supports HIVE (via hive meta store)
     #[clap(skip)]
-    pub catalog: CatalogConfig,
+    pub catalogs: CatalogConfig,
 }
 
 impl Default for Config {
@@ -157,7 +157,7 @@ impl From<InnerConfig> for Config {
             storage: inner.storage.into(),
             cache: inner.cache.into(),
 
-            catalog: inner.catalogs.into(),
+            catalogs: inner.catalogs.into(),
         }
     }
 }
@@ -174,7 +174,7 @@ impl TryInto<InnerConfig> for Config {
             meta: self.meta.try_into()?,
             storage: self.storage.try_into()?,
             cache: self.cache.try_into()?,
-            catalogs: self.catalog.try_into()?,
+            catalogs: self.catalogs.try_into()?,
         })
     }
 }
@@ -306,6 +306,92 @@ impl TryInto<InnerStorageConfig> for StorageConfig {
                 }
             },
         })
+    }
+}
+#[derive(Clone, Debug, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct CatalogConfig {
+    #[serde(flatten)]
+    pub catalogs: HashMap<String, CatalogDescription>,
+}
+
+impl TryInto<InnerCatalogConfig> for CatalogConfig {
+    type Error = ErrorCode;
+
+    fn try_into(self) -> Result<InnerCatalogConfig, Self::Error> {
+        let mut catalogs = HashMap::new();
+        for (k, v) in self.catalogs.into_iter() {
+            let catalog = v.try_into()?;
+            catalogs.insert(k, catalog);
+        }
+        Ok(InnerCatalogConfig { catalogs })
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum CatalogDescription {
+    #[serde(rename = "hive")]
+    Hive(HiveCatalogConfig),
+}
+
+impl Default for CatalogDescription {
+    fn default() -> Self {
+        Self::Hive(HiveCatalogConfig::default())
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct HiveCatalogConfig {
+    pub meta_store_address: String,
+    pub protocol: String,
+}
+
+impl From<InnerCatalogConfig> for CatalogConfig {
+    fn from(value: InnerCatalogConfig) -> Self {
+        let mut catalogs = HashMap::new();
+        for (k, v) in value.catalogs.into_iter() {
+            let catalog = v.into();
+            catalogs.insert(k, catalog);
+        }
+        Self { catalogs }
+    }
+}
+
+impl TryInto<InnerCatalogDescription> for CatalogDescription {
+    type Error = ErrorCode;
+
+    fn try_into(self) -> Result<InnerCatalogDescription, Self::Error> {
+        match self {
+            CatalogDescription::Hive(v) => Ok(InnerCatalogDescription::Hive(v.try_into()?)),
+        }
+    }
+}
+
+impl From<InnerCatalogDescription> for CatalogDescription {
+    fn from(inner: InnerCatalogDescription) -> Self {
+        match inner {
+            InnerCatalogDescription::Hive(v) => Self::Hive(v.into()),
+        }
+    }
+}
+
+impl TryInto<InnerHiveCatalogConfig> for HiveCatalogConfig {
+    type Error = ErrorCode;
+    fn try_into(self) -> Result<InnerHiveCatalogConfig, Self::Error> {
+        Ok(InnerHiveCatalogConfig {
+            meta_store_address: self.meta_store_address,
+            protocol: self.protocol.parse()?,
+        })
+    }
+}
+
+impl From<InnerHiveCatalogConfig> for HiveCatalogConfig {
+    fn from(inner: InnerHiveCatalogConfig) -> Self {
+        Self {
+            meta_store_address: inner.meta_store_address,
+            protocol: inner.protocol.to_string(),
+        }
     }
 }
 
@@ -878,85 +964,6 @@ impl TryInto<InnerStorageMokaConfig> for MokaStorageConfig {
     }
 }
 
-/// External catalog config group
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default)]
-pub struct CatalogConfig {
-    pub catalogs: HashMap<String, CatalogDescription>,
-}
-
-impl TryInto<InnerCatalogConfig> for CatalogConfig {
-    type Error = ErrorCode;
-
-    fn try_into(self) -> Result<InnerCatalogConfig> {
-        let mut catalogs = HashMap::new();
-        for (k, v) in self.catalogs.into_iter() {
-            let val = match v.catalog_type.as_str() {
-                "hive" if cfg!(feature = "hive") => v.try_into()?,
-                ctl => {
-                    return Err(ErrorCode::CatalogNotSupported(format!(
-                        "External catalogs with type {} is not supported in your databend distribution",
-                        ctl
-                    )));
-                }
-            };
-            catalogs.insert(k, val);
-        }
-        Ok(InnerCatalogConfig { catalogs })
-    }
-}
-
-impl From<InnerCatalogConfig> for CatalogConfig {
-    fn from(value: InnerCatalogConfig) -> Self {
-        let mut catalogs = HashMap::new();
-        for (k, v) in value.catalogs.into_iter() {
-            let catalog = match v {
-                InnerCatalogDescription::Hive(h) => CatalogDescription {
-                    catalog_type: "hive".to_string(),
-                    hive_config: h.into(),
-                },
-            };
-            catalogs.insert(k, catalog);
-        }
-        Self { catalogs }
-    }
-}
-
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default)]
-pub struct CatalogDescription {
-    #[serde(rename = "type", alias = "catalog_type")]
-    pub catalog_type: String,
-    pub hive_config: HiveCatalogConfig,
-}
-
-impl TryInto<InnerCatalogDescription> for CatalogDescription {
-    type Error = ErrorCode;
-
-    fn try_into(self) -> Result<InnerCatalogDescription, Self::Error> {
-        match self.catalog_type.as_str() {
-            "hive" if cfg!(feature = "hive") => {
-                Ok(InnerCatalogDescription::Hive(self.hive_config.try_into()?))
-            }
-            ctl => Err(ErrorCode::CatalogNotSupported(format!(
-                "External catalogs with type {} is not supported in your databend distribution",
-                ctl
-            ))),
-        }
-    }
-}
-
-impl From<InnerCatalogDescription> for CatalogDescription {
-    fn from(value: InnerCatalogDescription) -> Self {
-        match value {
-            InnerCatalogDescription::Hive(h) => Self {
-                catalog_type: "hive".to_string(),
-                hive_config: h.into(),
-            },
-        }
-    }
-}
-
 /// Query config group.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
@@ -1400,41 +1407,6 @@ impl From<InnerStderrLogConfig> for StderrLogConfig {
             stderr_on: inner.on,
             stderr_level: inner.level,
             stderr_format: inner.format,
-        }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
-#[serde(default)]
-pub struct HiveCatalogConfig {
-    #[clap(long = "hive-meta-store-address", default_value = "127.0.0.1:9083")]
-    pub meta_store_address: String,
-    #[clap(long = "hive-thrift-protocol", default_value = "binary")]
-    pub protocol: String,
-}
-
-impl Default for HiveCatalogConfig {
-    fn default() -> Self {
-        InnerHiveCatalogConfig::default().into()
-    }
-}
-
-impl TryInto<InnerHiveCatalogConfig> for HiveCatalogConfig {
-    type Error = ErrorCode;
-
-    fn try_into(self) -> Result<InnerHiveCatalogConfig> {
-        Ok(InnerHiveCatalogConfig {
-            meta_store_address: self.meta_store_address,
-            protocol: self.protocol.parse()?,
-        })
-    }
-}
-
-impl From<InnerHiveCatalogConfig> for HiveCatalogConfig {
-    fn from(inner: InnerHiveCatalogConfig) -> Self {
-        Self {
-            meta_store_address: inner.meta_store_address,
-            protocol: inner.protocol.to_string(),
         }
     }
 }
