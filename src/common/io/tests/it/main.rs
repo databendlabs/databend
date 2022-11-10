@@ -1,3 +1,4 @@
+#![feature(cursor_remaining)]
 // Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,5 +16,6 @@
 mod binary_read;
 mod binary_write;
 mod buffer;
+mod cursor_ext;
 mod options_deserializer;
 mod utils;

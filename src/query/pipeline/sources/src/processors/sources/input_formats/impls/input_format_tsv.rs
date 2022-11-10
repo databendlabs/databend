@@ -12,14 +12,15 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::io::Cursor;
+
 use common_datavalues::DataSchemaRef;
 use common_datavalues::TypeDeserializer;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_io::cursor_ext::*;
 use common_io::format_diagnostic::verbose_string;
-use common_io::prelude::BufferReadExt;
 use common_io::prelude::FormatSettings;
-use common_io::prelude::NestedCheckpointReader;
 use common_meta_types::StageFileFormatType;
 
 use crate::processors::sources::input_formats::input_format_text::AligningState;
@@ -53,8 +54,8 @@ impl InputFormatTSV {
                 if col_data.is_empty() {
                     deserializers[column_index].de_default(format_settings);
                 } else {
-                    let mut reader = NestedCheckpointReader::new(col_data);
-                    reader.ignores(|c: u8| c == b' ').expect("must success");
+                    let mut reader = Cursor::new(col_data);
+                    reader.ignores(|c: u8| c == b' ');
                     if let Err(e) =
                         deserializers[column_index].de_text(&mut reader, format_settings)
                     {
@@ -66,7 +67,7 @@ impl InputFormatTSV {
                         ));
                         break;
                     };
-                    reader.ignore_white_spaces().expect("must success");
+                    reader.ignore_white_spaces();
                     if reader.must_eof().is_err() {
                         err_msg = Some(format_column_error(
                             schema,

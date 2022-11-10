@@ -43,6 +43,4 @@ ENV RUSTUP_HOME /opt/rust/rustup
 ENV CARGO_HOME /opt/rust/cargo
 ENV PATH /opt/rust/cargo/bin:/opt/java/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
-RUN cargo install sccache
-
 VOLUME [ "/workspace", "/opt/rust/cargo/registry", "/opt/rust/cargo/git" ]

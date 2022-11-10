@@ -12,28 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// https://github.com/rust-lang/rust-clippy/issues/8334
-#![allow(clippy::ptr_arg)]
-#![feature(can_vector)]
-#![feature(read_buf)]
-#![feature(slice_internals)]
-#![feature(maybe_uninit_slice)]
-#![feature(new_uninit)]
-#![feature(cursor_remaining)]
-#![feature(buf_read_has_data_left)]
-
-pub mod consts;
-pub mod format_diagnostic;
-pub mod prelude;
-
-mod binary_read;
-mod binary_write;
-
-mod buffer;
-pub mod cursor_ext;
-mod file_split;
-mod format_settings;
-mod options_deserializer;
-mod position;
-mod stat_buffer;
-mod utils;
+mod read_bytes_ext;
+mod read_datetime_ext;
+mod read_number_ext;

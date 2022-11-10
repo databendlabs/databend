@@ -12,15 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io::Cursor;
+
 use common_exception::Result;
-use common_io::prelude::*;
+use common_io::prelude::FormatSettings;
 
 use crate::ColumnRef;
 use crate::DataValue;
 use crate::MutableColumn;
 use crate::MutableNullColumn;
 use crate::TypeDeserializer;
-
 #[derive(Debug, Default)]
 pub struct NullDeserializer {
     pub builder: MutableNullColumn,
@@ -63,9 +64,9 @@ impl TypeDeserializer for NullDeserializer {
         Ok(())
     }
 
-    fn de_text<R: BufferRead>(
+    fn de_text<R: AsRef<[u8]>>(
         &mut self,
-        _reader: &mut NestedCheckpointReader<R>,
+        _reader: &mut Cursor<R>,
         _format: &FormatSettings,
     ) -> Result<()> {
         self.builder.append_default();
