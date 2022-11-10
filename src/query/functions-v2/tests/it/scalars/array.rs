@@ -137,5 +137,9 @@ fn test_contains(file: &mut impl Write) {
         &columns,
     );
     run_ast(file, "nullable_col in (null, 9, 10, 12)", &columns);
-    run_ast(file, "nullable_col in (1, '9', 3, true, [1,2,3])", &columns);
+    run_ast(
+        file,
+        "nullable_col in (1, '9', 3, 10, 12, true, [1,2,3])",
+        &columns,
+    );
 }

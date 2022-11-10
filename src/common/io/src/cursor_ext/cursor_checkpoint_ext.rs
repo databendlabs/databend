@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,28 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// https://github.com/rust-lang/rust-clippy/issues/8334
-#![allow(clippy::ptr_arg)]
-#![feature(can_vector)]
-#![feature(read_buf)]
-#![feature(slice_internals)]
-#![feature(maybe_uninit_slice)]
-#![feature(new_uninit)]
-#![feature(cursor_remaining)]
-#![feature(buf_read_has_data_left)]
+use std::io::Cursor;
 
-pub mod consts;
-pub mod format_diagnostic;
-pub mod prelude;
+pub trait ReadCheckPointExt {
+    fn checkpoint(&self) -> u64;
+    fn rollback(&mut self, checkpoint: u64);
+}
 
-mod binary_read;
-mod binary_write;
+impl<T> ReadCheckPointExt for Cursor<T>
+where T: AsRef<[u8]>
+{
+    fn checkpoint(&self) -> u64 {
+        self.position()
+    }
 
-mod buffer;
-pub mod cursor_ext;
-mod file_split;
-mod format_settings;
-mod options_deserializer;
-mod position;
-mod stat_buffer;
-mod utils;
+    fn rollback(&mut self, checkpoint: u64) {
+        self.set_position(checkpoint)
+    }
+}
