@@ -142,7 +142,11 @@ impl FuseTable {
                 let per_column_bytes = block_file_size / table_column_len;
                 let column_memory_usage = per_column_bytes * projection.len();
                 let max_memory_usage = ctx.get_settings().get_max_memory_usage()? as usize;
-                max_memory_usage / column_memory_usage
+
+                let setting_io_requests =
+                    ctx.get_settings().get_max_storage_io_requests()? as usize + 1;
+                let adjust_io_requests = (max_memory_usage / column_memory_usage) + 1;
+                std::cmp::min(adjust_io_requests, setting_io_requests)
             }
         })
     }
