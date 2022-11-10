@@ -21,7 +21,7 @@ use common_datavalues::chrono::Utc;
 async fn direct_token() {
     let token = "test-token".to_string();
     let refreshable_token = RefreshableToken::Direct(token.clone());
-    let expected = "Bearer test-token";
+    let expected = "Bearer dGVzdC10b2tlbg==";
     assert_eq!(
         refreshable_token
             .to_header()
