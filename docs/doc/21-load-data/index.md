@@ -35,7 +35,6 @@ The data files can be in various formats and compressed if desired. Databend sup
 
 - CSV
 - TSV
-- JSON
 - NDJSON
 - Parquet
 - XML
