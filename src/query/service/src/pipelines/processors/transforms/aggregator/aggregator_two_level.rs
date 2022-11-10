@@ -13,7 +13,7 @@ use crate::pipelines::processors::transforms::group_by::TwoLevelHashMethod;
 use crate::pipelines::processors::transforms::transform_aggregator::Aggregator;
 
 pub trait TwoLevelAggregatorLike
-    where Self: Aggregator + Send
+where Self: Aggregator + Send
 {
     const SUPPORT_TWO_LEVEL: bool;
 
@@ -32,9 +32,9 @@ pub trait TwoLevelAggregatorLike
 }
 
 impl<Method> TwoLevelAggregatorLike for PartialAggregator<true, Method>
-    where
-        Method: HashMethod + PolymorphicKeysHelper<Method> + Send,
-        Method::HashKey: FastHash,
+where
+    Method: HashMethod + PolymorphicKeysHelper<Method> + Send,
+    Method::HashKey: FastHash,
 {
     type TwoLevelAggregator = PartialAggregator<true, TwoLevelHashMethod<Method>>;
 
@@ -60,9 +60,9 @@ impl<Method> TwoLevelAggregatorLike for PartialAggregator<true, Method>
 }
 
 impl<Method> TwoLevelAggregatorLike for PartialAggregator<false, Method>
-    where
-        Method: HashMethod + PolymorphicKeysHelper<Method> + Send,
-        Method::HashKey: FastHash,
+where
+    Method: HashMethod + PolymorphicKeysHelper<Method> + Send,
+    Method::HashKey: FastHash,
 {
     type TwoLevelAggregator = PartialAggregator<true, TwoLevelHashMethod<Method>>;
 
@@ -98,16 +98,18 @@ impl TwoLevelAggregatorLike for SingleStateAggregator<false> {
 }
 
 impl<Method> TwoLevelAggregatorLike for FinalAggregator<true, Method>
-    where Method: HashMethod + PolymorphicKeysHelper<Method> + Send,
-          Method::HashKey: FastHash
+where
+    Method: HashMethod + PolymorphicKeysHelper<Method> + Send,
+    Method::HashKey: FastHash,
 {
     const SUPPORT_TWO_LEVEL: bool = false;
     type TwoLevelAggregator = FinalAggregator<true, TwoLevelHashMethod<Method>>;
 }
 
 impl<Method> TwoLevelAggregatorLike for FinalAggregator<false, Method>
-    where Method: HashMethod + PolymorphicKeysHelper<Method> + Send,
-          Method::HashKey: FastHash
+where
+    Method: HashMethod + PolymorphicKeysHelper<Method> + Send,
+    Method::HashKey: FastHash,
 {
     const SUPPORT_TWO_LEVEL: bool = false;
     type TwoLevelAggregator = FinalAggregator<true, TwoLevelHashMethod<Method>>;

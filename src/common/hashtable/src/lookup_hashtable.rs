@@ -159,12 +159,3 @@ macro_rules! lookup_impl {
 
 lookup_impl!(u8, 256);
 lookup_impl!(u16, 65536);
-
-// pub struct LookupHashtable<K, V, A = MmapAllocator<GlobalAllocator>> {
-//     pub(crate) zero: ZeroEntry<K, V>,
-//     pub(crate) table: Table0<K, V, HeapContainer<Entry<K, V>, A>, A>,
-// }
-
-// unsafe impl<K: Keyable + Send, V: Send, A: Allocator + Clone + Send> Send for Hashtable<K, V, A> {}
-//
-// unsafe impl<K, V: Sync, A: Allocator + Clone + Sync> Sync for Hashtable<K, V, A> {}
