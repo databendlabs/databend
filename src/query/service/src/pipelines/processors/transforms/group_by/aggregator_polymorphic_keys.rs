@@ -83,8 +83,6 @@ pub trait PolymorphicKeysHelper<Method: HashMethod> {
     type HashTable: HashtableLike<Key = Method::HashKey, Value = usize> + Send;
     fn create_hash_table(&self) -> Self::HashTable;
 
-    fn cast_key_ref<'a>(key: &'a Method::HashKey) -> &'a <Self::HashTable as HashtableLike>::Key;
-
     type ColumnBuilder<'a>: KeysColumnBuilder<T = &'a <Self::HashTable as HashtableLike>::Key>
     where
         Self: 'a,
@@ -117,11 +115,6 @@ impl PolymorphicKeysHelper<HashMethodFixedKeys<u8>> for HashMethodFixedKeys<u8> 
         LookupHashMap::create(Default::default())
     }
 
-    #[inline(always)]
-    fn cast_key_ref<'a>(key: &'a u8) -> &'a u8 {
-        key
-    }
-
     type ColumnBuilder<'a> = FixedKeysColumnBuilder<'a, u8>;
     fn keys_column_builder(&self, capacity: usize) -> FixedKeysColumnBuilder<u8> {
         FixedKeysColumnBuilder::<u8> {
@@ -148,11 +141,6 @@ impl PolymorphicKeysHelper<HashMethodFixedKeys<u16>> for HashMethodFixedKeys<u16
 
     fn create_hash_table(&self) -> Self::HashTable {
         LookupHashMap::create(Default::default())
-    }
-
-    #[inline(always)]
-    fn cast_key_ref<'a>(key: &'a u16) -> &'a u16 {
-        key
     }
 
     type ColumnBuilder<'a> = FixedKeysColumnBuilder<'a, u16>;
@@ -183,11 +171,6 @@ impl PolymorphicKeysHelper<HashMethodFixedKeys<u32>> for HashMethodFixedKeys<u32
         HashMap::new()
     }
 
-    #[inline(always)]
-    fn cast_key_ref<'a>(key: &'a u32) -> &'a u32 {
-        key
-    }
-
     type ColumnBuilder<'a> = FixedKeysColumnBuilder<'a, u32>;
     fn keys_column_builder(&self, capacity: usize) -> FixedKeysColumnBuilder<u32> {
         FixedKeysColumnBuilder::<u32> {
@@ -216,11 +199,6 @@ impl PolymorphicKeysHelper<HashMethodFixedKeys<u64>> for HashMethodFixedKeys<u64
         HashMap::new()
     }
 
-    #[inline(always)]
-    fn cast_key_ref<'a>(key: &'a u64) -> &'a u64 {
-        key
-    }
-
     type ColumnBuilder<'a> = FixedKeysColumnBuilder<'a, u64>;
     fn keys_column_builder(&self, capacity: usize) -> FixedKeysColumnBuilder<u64> {
         FixedKeysColumnBuilder::<u64> {
@@ -247,11 +225,6 @@ impl PolymorphicKeysHelper<HashMethodKeysU128> for HashMethodKeysU128 {
 
     fn create_hash_table(&self) -> Self::HashTable {
         HashMap::new()
-    }
-
-    #[inline(always)]
-    fn cast_key_ref<'a>(key: &'a u128) -> &'a u128 {
-        key
     }
 
     type ColumnBuilder<'a> = LargeFixedKeysColumnBuilder<'a, u128>;
@@ -284,11 +257,6 @@ impl PolymorphicKeysHelper<HashMethodKeysU256> for HashMethodKeysU256 {
         HashMap::new()
     }
 
-    #[inline(always)]
-    fn cast_key_ref<'a>(key: &'a U256) -> &'a U256 {
-        key
-    }
-
     type ColumnBuilder<'a> = LargeFixedKeysColumnBuilder<'a, U256>;
     fn keys_column_builder(&self, capacity: usize) -> LargeFixedKeysColumnBuilder<U256> {
         LargeFixedKeysColumnBuilder {
@@ -319,11 +287,6 @@ impl PolymorphicKeysHelper<HashMethodKeysU512> for HashMethodKeysU512 {
         HashMap::new()
     }
 
-    #[inline(always)]
-    fn cast_key_ref<'a>(key: &'a U512) -> &'a U512 {
-        key
-    }
-
     type ColumnBuilder<'a> = LargeFixedKeysColumnBuilder<'a, U512>;
     fn keys_column_builder(&self, capacity: usize) -> LargeFixedKeysColumnBuilder<U512> {
         LargeFixedKeysColumnBuilder {
@@ -352,11 +315,6 @@ impl PolymorphicKeysHelper<HashMethodSerializer> for HashMethodSerializer {
 
     fn create_hash_table(&self) -> Self::HashTable {
         UnsizedHashMap::new()
-    }
-
-    #[inline(always)]
-    fn cast_key_ref<'a>(key: &'a [u8]) -> &'a [u8] {
-        key
     }
 
     type ColumnBuilder<'a> = SerializedKeysColumnBuilder<'a>;

@@ -93,7 +93,7 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
     fn lookup_key(keys_iter: Method::HashKeyIter<'_>, hashtable: &mut Method::HashTable) {
         unsafe {
             for key in keys_iter {
-                let _ = hashtable.insert_and_entry(Method::cast_key_ref(key));
+                let _ = hashtable.insert_and_entry(key);
             }
         }
     }
@@ -110,7 +110,7 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
 
         unsafe {
             for key in keys_iter {
-                match hashtable.insert_and_entry(Method::cast_key_ref(key)) {
+                match hashtable.insert_and_entry(key) {
                     Ok(mut entry) => {
                         if let Some(place) = params.alloc_layout(area) {
                             places.push(place);
