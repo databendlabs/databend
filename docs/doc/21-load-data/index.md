@@ -21,13 +21,7 @@ Databend enables you to load data from files in a variety of formats stored in d
 
 ### Supported File Locations
 
-- Stage:  Databend loads data from staged files. A Databend stage can be internal or external. For more information, see [What are Databend Stages](../30-reference/30-sql/00-ddl/40-stage/index.md#what-are-databend-stages).
-
-- Bucket or container: Databend loads data from files stored in an object storage bucket or container. For the object storage solutions supported by Databend, see [Supported Object Storage Solutions](../10-deploy/00-understanding-deployment-modes.md#supported-object-storage-solutions).
-
-- Local file system: Databend loads data from local files.
-
-- Remote server: Databend loads data from remote files (including [IPFS](https://ipfs.tech)) accessible by URLs starting with *https://*.
+Databend can load data from files that are stored in local file system, [Supported Object Storage Solutions](../10-deploy/00-understanding-deployment-modes.md#supported-object-storage-solutions), and remote servers.
 
 ### Supported File Formats
 
