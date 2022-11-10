@@ -23,10 +23,9 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::CatalogType;
 use common_meta_app::schema::CreateCatalogReq;
+use common_storage::CatalogDescription;
 #[cfg(feature = "hive")]
 use common_storages_hive::HiveCatalog;
-#[cfg(feature = "hive")]
-use common_storages_hive::CATALOG_HIVE;
 use dashmap::DashMap;
 
 use crate::catalogs::DatabaseCatalog;
@@ -76,19 +75,23 @@ impl CatalogManagerHelper for CatalogManager {
     }
 
     fn register_external_catalogs(&self, conf: &Config) -> Result<()> {
-        let hms_address = &conf.catalog.meta_store_address;
-        if !hms_address.is_empty() {
-            // register hive catalog
-            #[cfg(not(feature = "hive"))]
-            {
-                return Err(ErrorCode::CatalogNotSupported(
-                    "Hive catalog is not enabled, please recompile with --features hive",
-                ));
-            }
-            #[cfg(feature = "hive")]
-            {
-                let hive_catalog = Arc::new(HiveCatalog::try_create(hms_address)?);
-                self.catalogs.insert(CATALOG_HIVE.to_owned(), hive_catalog);
+        for (name, ctl) in conf.catalogs.catalogs.iter() {
+            match ctl {
+                CatalogDescription::Hive(ctl) => {
+                    // register hive catalog
+                    #[cfg(not(feature = "hive"))]
+                    {
+                        return Err(ErrorCode::CatalogNotSupported(
+                            "Hive catalog is not enabled, please recompile with --features hive",
+                        ));
+                    }
+                    #[cfg(feature = "hive")]
+                    {
+                        let hms_address = ctl.meta_store_address.clone();
+                        let hive_catalog = Arc::new(HiveCatalog::try_create(hms_address)?);
+                        self.catalogs.insert(name.to_string(), hive_catalog);
+                    }
+                }
             }
         }
         Ok(())

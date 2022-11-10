@@ -27,6 +27,9 @@ use common_exception::Result;
 use common_meta_types::AuthInfo;
 use common_meta_types::AuthType;
 use common_storage::CacheConfig as InnerCacheConfig;
+use common_storage::CatalogConfig as InnerCatalogConfig;
+use common_storage::CatalogDescription as InnerCatalogDescription;
+use common_storage::HiveCatalogConfig as InnerHiveCatalogConfig;
 use common_storage::StorageAzblobConfig as InnerStorageAzblobConfig;
 use common_storage::StorageConfig as InnerStorageConfig;
 use common_storage::StorageFsConfig as InnerStorageFsConfig;
@@ -49,7 +52,6 @@ use serfig::collectors::from_self;
 use serfig::parsers::Toml;
 
 use super::inner::Config as InnerConfig;
-use super::inner::HiveCatalogConfig as InnerHiveCatalogConfig;
 use super::inner::MetaConfig as InnerMetaConfig;
 use super::inner::MetaType;
 use super::inner::QueryConfig as InnerQueryConfig;
@@ -98,8 +100,8 @@ pub struct Config {
     // external catalog config.
     // - Later, catalog information SHOULD be kept in KV Service
     // - currently only supports HIVE (via hive meta store)
-    #[clap(flatten)]
-    pub catalog: HiveCatalogConfig,
+    #[clap(skip)]
+    pub catalog: CatalogConfig,
 }
 
 impl Default for Config {
@@ -155,7 +157,7 @@ impl From<InnerConfig> for Config {
             storage: inner.storage.into(),
             cache: inner.cache.into(),
 
-            catalog: inner.catalog.into(),
+            catalog: inner.catalogs.into(),
         }
     }
 }
@@ -172,7 +174,7 @@ impl TryInto<InnerConfig> for Config {
             meta: self.meta.try_into()?,
             storage: self.storage.try_into()?,
             cache: self.cache.try_into()?,
-            catalog: self.catalog.try_into()?,
+            catalogs: self.catalog.try_into()?,
         })
     }
 }
@@ -873,6 +875,85 @@ impl TryInto<InnerStorageMokaConfig> for MokaStorageConfig {
 
     fn try_into(self) -> Result<InnerStorageMokaConfig> {
         Ok(InnerStorageMokaConfig::default())
+    }
+}
+
+/// External catalog config group
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct CatalogConfig {
+    pub catalogs: HashMap<String, CatalogDescription>,
+}
+
+impl TryInto<InnerCatalogConfig> for CatalogConfig {
+    type Error = ErrorCode;
+
+    fn try_into(self) -> Result<InnerCatalogConfig> {
+        let mut catalogs = HashMap::new();
+        for (k, v) in self.catalogs.into_iter() {
+            let val = match v.catalog_type.as_str() {
+                "hive" if cfg!(feature = "hive") => v.try_into()?,
+                ctl => {
+                    return Err(ErrorCode::CatalogNotSupported(format!(
+                        "External catalogs with type {} is not supported in your databend distribution",
+                        ctl
+                    )));
+                }
+            };
+            catalogs.insert(k, val);
+        }
+        Ok(InnerCatalogConfig { catalogs })
+    }
+}
+
+impl From<InnerCatalogConfig> for CatalogConfig {
+    fn from(value: InnerCatalogConfig) -> Self {
+        let mut catalogs = HashMap::new();
+        for (k, v) in value.catalogs.into_iter() {
+            let catalog = match v {
+                InnerCatalogDescription::Hive(h) => CatalogDescription {
+                    catalog_type: "hive".to_string(),
+                    hive_config: h.into(),
+                },
+            };
+            catalogs.insert(k, catalog);
+        }
+        Self { catalogs }
+    }
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct CatalogDescription {
+    #[serde(rename = "type", alias = "catalog_type")]
+    pub catalog_type: String,
+    pub hive_config: HiveCatalogConfig,
+}
+
+impl TryInto<InnerCatalogDescription> for CatalogDescription {
+    type Error = ErrorCode;
+
+    fn try_into(self) -> Result<InnerCatalogDescription, Self::Error> {
+        match self.catalog_type.as_str() {
+            "hive" if cfg!(feature = "hive") => {
+                Ok(InnerCatalogDescription::Hive(self.hive_config.try_into()?))
+            }
+            ctl => Err(ErrorCode::CatalogNotSupported(format!(
+                "External catalogs with type {} is not supported in your databend distribution",
+                ctl
+            ))),
+        }
+    }
+}
+
+impl From<InnerCatalogDescription> for CatalogDescription {
+    fn from(value: InnerCatalogDescription) -> Self {
+        match value {
+            InnerCatalogDescription::Hive(h) => Self {
+                catalog_type: "hive".to_string(),
+                hive_config: h.into(),
+            },
+        }
     }
 }
 
