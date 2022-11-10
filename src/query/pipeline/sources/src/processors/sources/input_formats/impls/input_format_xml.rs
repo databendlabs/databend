@@ -20,9 +20,8 @@ use common_datavalues::TypeDeserializer;
 use common_datavalues::TypeDeserializerImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_io::prelude::BufferReadExt;
+use common_io::cursor_ext::*;
 use common_io::prelude::FormatSettings;
-use common_io::prelude::NestedCheckpointReader;
 use common_meta_types::StageFileFormatType;
 use xml::reader::XmlEvent;
 use xml::EventReader;
@@ -62,8 +61,8 @@ impl InputFormatXML {
             };
 
             if let Some(value) = value {
-                let mut reader = NestedCheckpointReader::new(&**value);
-                if reader.eof().expect("must success") {
+                let mut reader = Cursor::new(&**value);
+                if reader.eof() {
                     deserializer.de_default(format_settings);
                 } else {
                     if let Err(e) = deserializer.de_text(&mut reader, format_settings) {
