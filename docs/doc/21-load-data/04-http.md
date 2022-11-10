@@ -1,19 +1,18 @@
 ---
-title: Load Data From Remote Files
-sidebar_label: From Remote Files
+title: Tutorial - Load from Remote File
+sidebar_label: Tutorial - Load from a Remote File
 description:
   Load data from remote files.
 ---
 
-This tutorial explains how to load data into a table from remote files.
+In this tutorial, you will load data from a remote sample file into Databend with the [COPY INTO](../30-reference/30-sql/10-dml/dml-copy-into-table.md) command.
 
-The [COPY INTO `<table>` FROM REMOTE FILES](../30-reference/30-sql/10-dml/dml-copy-into-table.md) command allows you to load data into a table from one or more remote files by their URL. The supported file types include CSV, JSON, NDJSON, and PARQUET.
+This tutorial uses this remote sample file: [books.csv](https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/data/books.csv). The sample contains the following records:
 
-### Before You Begin
-
-Upload the file(s) containing your data to a safe place and get the URL(s). 
-
-This tutorial uses this file as an example: [books.csv](https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/data/books.csv).
+```
+Transaction Processing,Jim Gray,1992
+Readings in Database Systems,Michael Stonebraker,2004
+```
 
 ### Step 1. Create Database and Table
 
