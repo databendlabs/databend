@@ -18,13 +18,13 @@ use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_sql::executor::FragmentKind;
 
-use super::FragmentType;
-use super::PlanFragment;
 use crate::api::BroadcastExchange;
 use crate::api::DataExchange;
 use crate::api::MergeExchange;
 use crate::api::ShuffleDataExchange;
 use crate::clusters::ClusterHelper;
+use crate::interpreters::fragments::plan_fragment::FragmentType;
+use crate::interpreters::fragments::PlanFragment;
 use crate::sessions::QueryContext;
 use crate::sql::executor::Exchange;
 use crate::sql::executor::ExchangeSink;

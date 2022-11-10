@@ -69,7 +69,7 @@ impl<'a> Display for QueryFragmentActionsWrap<'a> {
         if !self.inner.fragment_actions.is_empty() {
             let fragment_action = &self.inner.fragment_actions[0];
             match &fragment_action.payload {
-                FragmentPayload::PlanV2(node) => {
+                FragmentPayload::Plan(node) => {
                     write!(f, "{}", node.format_indent(1))?;
                 }
             };
