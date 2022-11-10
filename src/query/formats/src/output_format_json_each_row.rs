@@ -13,17 +13,15 @@
 // limitations under the License.
 
 use common_datablocks::DataBlock;
-use common_datavalues::serializations::write_escaped_string;
-use common_datavalues::serializations::write_json_string;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataType;
-use common_datavalues::TypeSerializer;
 use common_exception::Result;
-use common_io::prelude::FormatSettings;
 
+use crate::field_encoder::FieldEncoderJSON;
+use crate::field_encoder::FieldEncoderRowBased;
 use crate::output_format::OutputFormat;
+use crate::FileFormatOptionsExt;
 
-#[derive(Default)]
 pub struct JsonEachRowOutputFormatBase<
     const STRINGS: bool,
     const COMPACT: bool,
@@ -31,33 +29,29 @@ pub struct JsonEachRowOutputFormatBase<
     const WITH_TYPES: bool,
 > {
     schema: DataSchemaRef,
-    format_settings: FormatSettings,
+    field_encoder: FieldEncoderJSON,
 }
 
 impl<const STRINGS: bool, const COMPACT: bool, const WITH_NAMES: bool, const WITH_TYPES: bool>
     JsonEachRowOutputFormatBase<STRINGS, COMPACT, WITH_NAMES, WITH_TYPES>
 {
-    pub fn create(schema: DataSchemaRef, format_settings: FormatSettings) -> Self {
+    pub fn create(schema: DataSchemaRef, options: &FileFormatOptionsExt) -> Self {
+        let field_encoder = FieldEncoderJSON::create(options);
         Self {
             schema,
-            format_settings,
+            field_encoder,
         }
     }
 
-    fn serialize_strings(&self, values: Vec<String>, format: &FormatSettings) -> Vec<u8> {
+    fn serialize_strings(&self, values: Vec<String>) -> Vec<u8> {
         assert!(COMPACT);
         let mut buf = vec![b'['];
         for (col_index, v) in values.iter().enumerate() {
             if col_index != 0 {
                 buf.push(b',');
             }
-            buf.push(b'"');
-            if STRINGS {
-                write_escaped_string(v.as_bytes(), &mut buf, b'\"');
-            } else {
-                write_json_string(v.as_bytes(), &mut buf, format);
-            }
-            buf.push(b'"');
+            self.field_encoder
+                .write_string_inner(v.as_bytes(), &mut buf, false);
         }
         buf.extend_from_slice(b"]\n");
         buf
@@ -99,10 +93,12 @@ impl<const STRINGS: bool, const COMPACT: bool, const WITH_NAMES: bool, const WIT
 
                 if STRINGS {
                     buf.push(b'"');
-                    serializer.write_field_json(row_index, &mut buf, &self.format_settings, false);
+                    self.field_encoder
+                        .write_field(serializer, row_index, &mut buf, true);
                     buf.push(b'"');
                 } else {
-                    serializer.write_field_json(row_index, &mut buf, &self.format_settings, true);
+                    self.field_encoder
+                        .write_field(serializer, row_index, &mut buf, false)
                 }
             }
             if COMPACT {
@@ -115,8 +111,6 @@ impl<const STRINGS: bool, const COMPACT: bool, const WITH_NAMES: bool, const WIT
     }
 
     fn serialize_prefix(&self) -> Result<Vec<u8>> {
-        let format_settings = &self.format_settings;
-
         let mut buf = vec![];
         if WITH_NAMES {
             assert!(COMPACT);
@@ -126,7 +120,7 @@ impl<const STRINGS: bool, const COMPACT: bool, const WITH_NAMES: bool, const WIT
                 .iter()
                 .map(|f| f.name().to_string())
                 .collect::<Vec<_>>();
-            buf.extend_from_slice(&self.serialize_strings(names, format_settings));
+            buf.extend_from_slice(&self.serialize_strings(names));
             if WITH_TYPES {
                 let types = self
                     .schema
@@ -134,7 +128,7 @@ impl<const STRINGS: bool, const COMPACT: bool, const WITH_NAMES: bool, const WIT
                     .iter()
                     .map(|f| f.data_type().name())
                     .collect::<Vec<_>>();
-                buf.extend_from_slice(&self.serialize_strings(types, format_settings));
+                buf.extend_from_slice(&self.serialize_strings(types));
             }
         }
         Ok(buf)

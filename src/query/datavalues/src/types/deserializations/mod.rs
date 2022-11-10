@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use common_exception::Result;
-use common_io::prelude::*;
 use enum_dispatch::enum_dispatch;
 use serde_json::Value;
 
@@ -29,9 +28,11 @@ mod string;
 mod struct_;
 mod timestamp;
 mod variant;
+use std::io::Cursor;
 
 pub use array::*;
 pub use boolean::*;
+use common_io::prelude::FormatSettings;
 pub use date::*;
 pub use null::*;
 pub use nullable::*;
@@ -65,31 +66,23 @@ pub trait TypeDeserializer: Send + Sync {
 
     fn de_whole_text(&mut self, reader: &[u8], format: &FormatSettings) -> Result<()>;
 
-    fn de_text<R: BufferRead>(
+    fn de_text<R: AsRef<[u8]>>(
         &mut self,
-        reader: &mut NestedCheckpointReader<R>,
+        reader: &mut Cursor<R>,
         format: &FormatSettings,
     ) -> Result<()>;
 
-    fn de_text_csv<R: BufferRead>(
+    fn de_text_json<R: AsRef<[u8]>>(
         &mut self,
-        reader: &mut NestedCheckpointReader<R>,
+        reader: &mut Cursor<R>,
         format: &FormatSettings,
     ) -> Result<()> {
         self.de_text(reader, format)
     }
 
-    fn de_text_json<R: BufferRead>(
+    fn de_text_quoted<R: AsRef<[u8]>>(
         &mut self,
-        reader: &mut NestedCheckpointReader<R>,
-        format: &FormatSettings,
-    ) -> Result<()> {
-        self.de_text(reader, format)
-    }
-
-    fn de_text_quoted<R: BufferRead>(
-        &mut self,
-        reader: &mut NestedCheckpointReader<R>,
+        reader: &mut Cursor<R>,
         format: &FormatSettings,
     ) -> Result<()> {
         self.de_text(reader, format)

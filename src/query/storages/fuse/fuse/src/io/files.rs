@@ -75,8 +75,8 @@ impl Files {
         Ok(())
     }
 
-    async fn remove_file(opeartor: Operator, block_location: impl AsRef<str>) -> Result<()> {
-        match Self::do_remove_file_by_location(opeartor, block_location.as_ref()).await {
+    async fn remove_file(operator: Operator, block_location: impl AsRef<str>) -> Result<()> {
+        match Self::do_remove_file_by_location(operator, block_location.as_ref()).await {
             Err(e) if e.code() == ErrorCode::STORAGE_NOT_FOUND => {
                 warn!(
                     "concurrent remove: file of location {} already removed",

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 mod account;
+mod catalog;
 mod database;
 mod stage;
 mod table;
@@ -19,6 +20,7 @@ mod udf;
 mod view;
 
 pub use account::*;
+pub use catalog::*;
 pub use database::*;
 pub use stage::*;
 pub use table::*;
