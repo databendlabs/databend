@@ -98,12 +98,12 @@ impl Function for BinFunction {
                     let val = if val.ge(&0f64) {
                         format!(
                             "{:b}",
-                            val.max(i64::MIN as f64).min(i64::MAX as f64).round() as i64
+                            val.clamp(i64::MIN as f64, i64::MAX as f64).round() as i64
                         )
                     } else {
                         format!(
                             "{:b}",
-                            val.max(u64::MIN as f64).min(u64::MAX as f64).round() as u64
+                            val.clamp(u64::MIN as f64, u64::MAX as f64).round() as u64
                         )
                     };
                     builder.append(val.as_bytes());

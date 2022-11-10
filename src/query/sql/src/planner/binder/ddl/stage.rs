@@ -19,16 +19,16 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::OnErrorMode;
 use common_meta_types::UserStageInfo;
-use common_planner::plans::CreateStagePlan;
-use common_planner::plans::ListPlan;
-use common_planner::plans::RemoveStagePlan;
 use common_storage::parse_uri_location;
 use common_storage::UriLocation;
 
 use super::super::copy::parse_copy_file_format_options;
 use super::super::copy::parse_stage_location;
 use crate::binder::Binder;
+use crate::plans::CreateStagePlan;
+use crate::plans::ListPlan;
 use crate::plans::Plan;
+use crate::plans::RemoveStagePlan;
 
 impl<'a> Binder {
     pub(in crate::planner::binder) async fn bind_list_stage(

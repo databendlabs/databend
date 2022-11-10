@@ -16,11 +16,11 @@ common-catalog = { path = "../../catalog" }
 common-config = { path = "../../config" }
 common-exception = { path = "../../../common/exception" }
 common-meta-app = { path = "../../../meta/app" }
-common-storages-fuse = { path = "../fuse" }
+common-storages-fuse = { path = "../fuse/fuse" }
 common-storages-index = { path = "../index" }
 common-storages-memory = { path = "../memory" }
 common-storages-null = { path = "../null" }
 common-storages-random = { path = "../random" }
 common-storages-view = { path = "../view" }
 
-parking_lot = "0.12.1"
+dashmap = "5.4"

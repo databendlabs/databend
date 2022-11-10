@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use common_planner::extras::StageKind;
+use common_sql::executor::FragmentKind;
 
 use super::FragmentType;
 use super::PlanFragment;
@@ -76,12 +76,14 @@ impl Fragmenter {
     ) -> Result<Option<DataExchange>> {
         match plan {
             PhysicalPlan::ExchangeSink(plan) => match plan.kind {
-                StageKind::Normal => Ok(Some(ShuffleDataExchangeV2::create(
+                FragmentKind::Normal => Ok(Some(ShuffleDataExchangeV2::create(
                     Self::get_executors(ctx),
                     plan.keys.clone(),
                 ))),
-                StageKind::Merge => Ok(Some(MergeExchange::create(Self::get_local_executor(ctx)))),
-                StageKind::Expansive => Ok(Some(BroadcastExchange::create(
+                FragmentKind::Merge => {
+                    Ok(Some(MergeExchange::create(Self::get_local_executor(ctx))))
+                }
+                FragmentKind::Expansive => Ok(Some(BroadcastExchange::create(
                     from_multiple_nodes,
                     Self::get_executors(ctx),
                 ))),

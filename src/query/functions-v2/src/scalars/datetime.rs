@@ -30,6 +30,7 @@ use common_expression::types::number::UInt16Type;
 use common_expression::types::number::UInt32Type;
 use common_expression::types::number::UInt64Type;
 use common_expression::types::number::UInt8Type;
+use common_expression::types::string::StringDomain;
 use common_expression::types::timestamp::check_timestamp;
 use common_expression::types::timestamp::microseconds_to_days;
 use common_expression::types::timestamp::string_to_timestamp;
@@ -189,7 +190,7 @@ fn register_cast_functions(registry: &mut FunctionRegistry) {
                     String::from_utf8_lossy(val)
                 )
             })?;
-            output.push((d.num_days_from_ce() - EPOCH_DAYS_FROM_CE) as i32);
+            output.push(d.num_days_from_ce() - EPOCH_DAYS_FROM_CE);
             Ok(())
         }),
     );
@@ -280,8 +281,7 @@ fn register_try_cast_functions(registry: &mut FunctionRegistry) {
         |_| None,
         vectorize_1_arg::<NullableType<StringType>, NullableType<DateType>>(|val, ctx| {
             val.and_then(|v| {
-                string_to_date(v, ctx.tz)
-                    .map(|d| (d.num_days_from_ce() - EPOCH_DAYS_FROM_CE) as i32)
+                string_to_date(v, ctx.tz).map(|d| (d.num_days_from_ce() - EPOCH_DAYS_FROM_CE))
             })
         }),
     );
@@ -313,7 +313,15 @@ fn register_to_string(registry: &mut FunctionRegistry) {
     registry.register_combine_nullable_1_arg::<TimestampType, StringType, _, _>(
         "try_to_string",
         FunctionProperty::default(),
-        |_| None,
+        |_| {
+            Some(NullableDomain {
+                has_null: false,
+                value: Some(Box::new(StringDomain {
+                    min: vec![],
+                    max: None,
+                })),
+            })
+        },
         vectorize_with_builder_1_arg::<TimestampType, NullableType<StringType>>(
             |val, output, ctx| {
                 write!(output.builder.data, "{}", timestamp_to_string(val, ctx.tz)).unwrap();
@@ -327,7 +335,15 @@ fn register_to_string(registry: &mut FunctionRegistry) {
     registry.register_combine_nullable_1_arg::<DateType, StringType, _, _>(
         "try_to_string",
         FunctionProperty::default(),
-        |_| None,
+        |_| {
+            Some(NullableDomain {
+                has_null: false,
+                value: Some(Box::new(StringDomain {
+                    min: vec![],
+                    max: None,
+                })),
+            })
+        },
         vectorize_with_builder_1_arg::<DateType, NullableType<StringType>>(|val, output, ctx| {
             write!(output.builder.data, "{}", date_to_string(val, ctx.tz)).unwrap();
             output.builder.commit_row();

@@ -18,21 +18,21 @@ use std::sync::Arc;
 
 use common_base::base::tokio;
 use common_catalog::table_mutator::TableMutator;
+use common_datablocks::BlockCompactThresholds;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_fuse_meta::caches::CacheManager;
-use common_fuse_meta::meta::BlockMeta;
-use common_fuse_meta::meta::ClusterStatistics;
-use common_fuse_meta::meta::SegmentInfo;
-use common_fuse_meta::meta::Statistics;
-use common_fuse_meta::meta::TableSnapshot;
-use common_fuse_meta::meta::Versioned;
+use common_storages_table_meta::caches::CacheManager;
+use common_storages_table_meta::meta::BlockMeta;
+use common_storages_table_meta::meta::ClusterStatistics;
+use common_storages_table_meta::meta::SegmentInfo;
+use common_storages_table_meta::meta::Statistics;
+use common_storages_table_meta::meta::TableSnapshot;
+use common_storages_table_meta::meta::Versioned;
 use databend_query::sessions::TableContext;
-use databend_query::storages::fuse::io::BlockCompactor;
 use databend_query::storages::fuse::io::SegmentWriter;
 use databend_query::storages::fuse::io::TableMetaLocationGenerator;
 use databend_query::storages::fuse::operations::ReclusterMutator;
@@ -131,7 +131,7 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
         location_generator,
         base_snapshot,
         1.0,
-        BlockCompactor::default(),
+        BlockCompactThresholds::default(),
         blocks_map,
         data_accessor,
     )?;

@@ -131,7 +131,7 @@ pub fn cast_from_variant(
                         JsonValue::Null => builder.append_null(),
                         JsonValue::String(v) => {
                             if let Some(d) = string_to_date(v, &tz) {
-                                builder.append((d.num_days_from_ce() - EPOCH_DAYS_FROM_CE) as i32, true);
+                                builder.append(d.num_days_from_ce() - EPOCH_DAYS_FROM_CE, true);
                             } else {
                                 builder.append_null();
                             }

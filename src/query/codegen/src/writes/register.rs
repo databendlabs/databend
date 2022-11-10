@@ -230,7 +230,6 @@ pub fn codegen_register() {
             .map(|n| n + 1)
             .map(|n| format!("value{n}"))
             .join(",");
-        let n_widecards = "_,".repeat(n_args);
         let any_arg_has_null = (0..n_args)
             .map(|n| n + 1)
             .map(|n| format!("arg{n}.has_null"))
@@ -262,7 +261,7 @@ pub fn codegen_register() {
                     self.register_{n_args}_arg_core::<{arg_generics} NullableType<O>, _, _>(
                         name,
                         property.clone(),
-                        |{n_widecards}| None,
+                        calc_domain,
                         func
                     );
 

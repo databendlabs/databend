@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_catalog::plan::Expression;
 use common_datavalues::DataSchema;
 use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
@@ -21,7 +22,6 @@ use common_datavalues::ToDataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::FunctionFactory;
-use common_planner::Expression;
 
 use crate::executor::util::format_field_name;
 use crate::plans::Scalar;

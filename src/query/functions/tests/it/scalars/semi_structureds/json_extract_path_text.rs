@@ -25,7 +25,7 @@ fn test_json_extract_path_text_function() -> Result<()> {
             name: "json_extract_path_text",
             columns: vec![
                 Series::from_data(vec!["{\"a\":[[1],[2]],\"o\":{\"p\":{\"q\":\"r\"}}}"]),
-                Series::from_data(vec!["a[0][0]", "a.b", "o.p:q", "o['p']['q']", "o[0]"]),
+                Series::from_data(vec!["a[0][0]", "a.b", "o.p:q", "o[\"p\"][\"q\"]", "o[0]"]),
             ],
             expect: Series::from_data(vec![
                 Some("1"),

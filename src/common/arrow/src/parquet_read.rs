@@ -73,7 +73,7 @@ pub async fn read_columns_many_async<'a, R: AsyncRead + AsyncSeek + Send + Unpin
         arrays.push(to_deserializer(
             columns,
             field.to_owned(),
-            row_group.num_rows() as usize,
+            row_group.num_rows(),
             chunk_size,
             None,
         )?);

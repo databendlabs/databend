@@ -276,13 +276,13 @@ fn test_cast_number_to_date(file: &mut impl Write) {
         Column::from_data(vec![-354286, -100, 0, 100, 2932897]),
     )]);
 
-    run_ast(file, "CAST(TO_DATE(-354285) AS INT32)", &[]);
-    run_ast(file, "CAST(TO_DATE(-100) AS INT32)", &[]);
-    run_ast(file, "CAST(TO_DATE(-0) AS INT32)", &[]);
-    run_ast(file, "CAST(TO_DATE(0) AS INT32)", &[]);
-    run_ast(file, "CAST(TO_DATE(100) AS INT32)", &[]);
-    run_ast(file, "CAST(TO_DATE(2932896) AS INT32)", &[]);
-    run_ast(file, "CAST(a AS INT32)", &[(
+    run_ast(file, "CAST(TO_DATE(-354285) AS INT64)", &[]);
+    run_ast(file, "CAST(TO_DATE(-100) AS INT64)", &[]);
+    run_ast(file, "CAST(TO_DATE(-0) AS INT64)", &[]);
+    run_ast(file, "CAST(TO_DATE(0) AS INT64)", &[]);
+    run_ast(file, "CAST(TO_DATE(100) AS INT64)", &[]);
+    run_ast(file, "CAST(TO_DATE(2932896) AS INT64)", &[]);
+    run_ast(file, "CAST(a AS INT64)", &[(
         "a",
         DataType::Date,
         from_date_data(vec![-354285, -100, 0, 100, 2932896]),

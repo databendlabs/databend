@@ -26,7 +26,7 @@ use crate::serializations::write_json_string;
 
 #[derive(Debug, Clone)]
 pub struct VariantSerializer<'a> {
-    values: &'a [VariantValue],
+    pub values: &'a [VariantValue],
 }
 
 impl<'a> VariantSerializer<'a> {

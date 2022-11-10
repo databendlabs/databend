@@ -16,6 +16,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
+use common_datablocks::BlockCompactThresholds;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -24,9 +25,7 @@ use super::Compactor;
 use super::TransformCompact;
 
 pub struct BlockCompactor {
-    max_rows_per_block: usize,
-    min_rows_per_block: usize,
-    max_bytes_per_block: usize,
+    thresholds: BlockCompactThresholds,
     // A flag denoting whether it is a recluster operation.
     // Will be removed later.
     is_recluster: bool,
@@ -34,16 +33,9 @@ pub struct BlockCompactor {
 }
 
 impl BlockCompactor {
-    pub fn new(
-        max_rows_per_block: usize,
-        min_rows_per_block: usize,
-        max_bytes_per_block: usize,
-        is_recluster: bool,
-    ) -> Self {
+    pub fn new(thresholds: BlockCompactThresholds, is_recluster: bool) -> Self {
         BlockCompactor {
-            max_rows_per_block,
-            min_rows_per_block,
-            max_bytes_per_block,
+            thresholds,
             is_recluster,
             aborting: Arc::new(AtomicBool::new(false)),
         }
@@ -63,7 +55,7 @@ impl Compactor for BlockCompactor {
         self.aborting.store(true, Ordering::Release);
     }
 
-    fn compact_partial(&self, blocks: &mut Vec<DataBlock>) -> Result<Vec<DataBlock>> {
+    fn compact_partial(&mut self, blocks: &mut Vec<DataBlock>) -> Result<Vec<DataBlock>> {
         if blocks.is_empty() {
             return Ok(vec![]);
         }
@@ -73,9 +65,9 @@ impl Compactor for BlockCompactor {
         let block = blocks[size - 1].clone();
 
         // perfect block
-        if block.num_rows() <= self.max_rows_per_block
-            && (block.num_rows() >= self.min_rows_per_block
-                || block.memory_size() >= self.max_bytes_per_block)
+        if self
+            .thresholds
+            .check_perfect_block(block.num_rows(), block.memory_size())
         {
             res.push(block);
             blocks.remove(size - 1);
@@ -86,16 +78,16 @@ impl Compactor for BlockCompactor {
             let merged = DataBlock::concat_blocks(blocks)?;
             blocks.clear();
 
-            if accumulated_rows >= self.max_rows_per_block {
+            if accumulated_rows >= self.thresholds.max_rows_per_block {
                 // Used for recluster opreation, will be removed later.
                 if self.is_recluster {
                     let mut offset = 0;
                     let mut remain_rows = accumulated_rows;
-                    while remain_rows >= self.max_rows_per_block {
-                        let cut = merged.slice(offset, self.max_rows_per_block);
+                    while remain_rows >= self.thresholds.max_rows_per_block {
+                        let cut = merged.slice(offset, self.thresholds.max_rows_per_block);
                         res.push(cut);
-                        offset += self.max_rows_per_block;
-                        remain_rows -= self.max_rows_per_block;
+                        offset += self.thresholds.max_rows_per_block;
+                        remain_rows -= self.thresholds.max_rows_per_block;
                     }
 
                     if remain_rows > 0 {
@@ -105,7 +97,7 @@ impl Compactor for BlockCompactor {
                     // we can't use slice here, it did not deallocate memory
                     res.push(merged);
                 }
-            } else if accumulated_bytes >= self.max_bytes_per_block {
+            } else if accumulated_bytes >= self.thresholds.max_bytes_per_block {
                 // too large for merged block, flush to results
                 res.push(merged);
             } else {
@@ -130,18 +122,18 @@ impl Compactor for BlockCompactor {
             }
 
             // Perfect block, no need to compact
-            if block.num_rows() <= self.max_rows_per_block
-                && (block.num_rows() >= self.min_rows_per_block
-                    || block.memory_size() >= self.max_bytes_per_block)
+            if self
+                .thresholds
+                .check_perfect_block(block.num_rows(), block.memory_size())
             {
                 res.push(block.clone());
             } else {
-                let block = if block.num_rows() > self.max_rows_per_block {
-                    let b = block.slice(0, self.max_rows_per_block);
+                let block = if block.num_rows() > self.thresholds.max_rows_per_block {
+                    let b = block.slice(0, self.thresholds.max_rows_per_block);
                     res.push(b);
                     block.slice(
-                        self.max_rows_per_block,
-                        block.num_rows() - self.max_rows_per_block,
+                        self.thresholds.max_rows_per_block,
+                        block.num_rows() - self.thresholds.max_rows_per_block,
                     )
                 } else {
                     block.clone()
@@ -150,7 +142,7 @@ impl Compactor for BlockCompactor {
                 accumulated_rows += block.num_rows();
                 temp_blocks.push(block);
 
-                while accumulated_rows >= self.max_rows_per_block {
+                while accumulated_rows >= self.thresholds.max_rows_per_block {
                     if self.aborting.load(Ordering::Relaxed) {
                         return Err(ErrorCode::AbortedQuery(
                             "Aborted query, because the server is shutting down or the query was killed.",
@@ -158,14 +150,14 @@ impl Compactor for BlockCompactor {
                     }
 
                     let block = DataBlock::concat_blocks(&temp_blocks)?;
-                    res.push(block.slice(0, self.max_rows_per_block));
-                    accumulated_rows -= self.max_rows_per_block;
+                    res.push(block.slice(0, self.thresholds.max_rows_per_block));
+                    accumulated_rows -= self.thresholds.max_rows_per_block;
 
                     temp_blocks.clear();
                     if accumulated_rows != 0 {
                         temp_blocks.push(block.slice(
-                            self.max_rows_per_block,
-                            block.num_rows() - self.max_rows_per_block,
+                            self.thresholds.max_rows_per_block,
+                            block.num_rows() - self.thresholds.max_rows_per_block,
                         ));
                     }
                 }

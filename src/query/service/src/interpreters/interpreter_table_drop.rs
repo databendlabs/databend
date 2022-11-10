@@ -17,7 +17,7 @@ use std::sync::Arc;
 use common_catalog::table::TableExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planner::plans::DropTablePlan;
+use common_sql::plans::DropTablePlan;
 use common_storages_view::view_table::VIEW_ENGINE;
 
 use crate::interpreters::Interpreter;

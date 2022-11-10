@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_base::base::tokio::io::AsyncWrite;
+use common_datablocks::SendableDataBlockStream;
 use common_datavalues::prelude::TypeID;
 use common_datavalues::remove_nullable;
 use common_datavalues::DataField;
@@ -24,7 +25,6 @@ use common_datavalues::TypeSerializer;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::FormatSettings;
-use common_streams::SendableDataBlockStream;
 use futures_util::StreamExt;
 use opensrv_mysql::*;
 use tracing::error;
@@ -98,8 +98,12 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
             let blocks = &mut query_result.blocks;
             while let Some(block) = blocks.next().await {
                 if let Err(e) = block {
+                    error!("dataset write failed: {:?}", e);
                     dataset_writer
-                        .error(ErrorKind::ER_UNKNOWN_ERROR, &e.to_string().as_bytes())
+                        .error(
+                            ErrorKind::ER_UNKNOWN_ERROR,
+                            format!("dataset write failed: {}", e).as_bytes(),
+                        )
                         .await?;
 
                     return Ok(());
@@ -163,10 +167,11 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
                 while let Some(block) = blocks.next().await {
                     let block = match block {
                         Err(e) => {
+                            error!("result row write failed: {:?}", e);
                             row_writer
                                 .finish_error(
                                     ErrorKind::ER_UNKNOWN_ERROR,
-                                    &e.to_string().as_bytes(),
+                                    &format!("result row write failed: {}", e).as_bytes(),
                                 )
                                 .await?;
                             return Ok(());
@@ -252,10 +257,11 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
                             }
                         }
                         Err(e) => {
+                            error!("result row write failed: {:?}", e);
                             row_writer
                                 .finish_error(
                                     ErrorKind::ER_UNKNOWN_ERROR,
-                                    &e.to_string().as_bytes(),
+                                    &format!("result row write failed: {}", e).as_bytes(),
                                 )
                                 .await?;
                             return Ok(());

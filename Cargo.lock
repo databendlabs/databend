@@ -164,8 +164,7 @@ dependencies = [
 [[package]]
 name = "arrow2"
 version = "0.14.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ee6f62e41078c967a4c063fcbdfd3801a2a9632276402c045311c4d73d0845f3"
+source = "git+https://github.com/jorgecarleitao/arrow2?rev=562de6a#562de6a6ed961eff46e7db752b384583886a5e5d"
 dependencies = [
  "ahash 0.7.6",
  "arrow-format",
@@ -181,6 +180,7 @@ dependencies = [
  "foreign_vec",
  "futures",
  "hash_hasher",
+ "hashbrown 0.12.3",
  "indexmap",
  "itertools",
  "json-deserializer",
@@ -190,6 +190,7 @@ dependencies = [
  "parquet2",
  "regex",
  "regex-syntax",
+ "rustc_version 0.4.0",
  "simdutf8",
  "streaming-iterator",
  "strength_reduce",
@@ -1279,11 +1280,14 @@ dependencies = [
  "common-meta-app",
  "common-meta-types",
  "common-pipeline-core",
- "common-planner",
  "common-settings",
  "common-storage",
+ "dashmap",
  "dyn-clone",
  "once_cell",
+ "serde",
+ "serde_json",
+ "typetag",
 ]
 
 [[package]]
@@ -1305,6 +1309,8 @@ dependencies = [
  "semver 1.0.14",
  "serde",
  "serfig",
+ "strum",
+ "strum_macros",
  "thrift 0.17.0",
 ]
 
@@ -1318,11 +1324,15 @@ dependencies = [
  "common-datavalues",
  "common-exception",
  "common-io",
+ "futures",
  "parking_lot 0.12.1",
+ "pin-project-lite",
  "pretty_assertions",
  "primitive-types",
  "regex",
+ "serde",
  "serde_json",
+ "typetag",
 ]
 
 [[package]]
@@ -1350,7 +1360,6 @@ dependencies = [
  "rand 0.8.5",
  "serde",
  "serde_json",
- "smallvec",
 ]
 
 [[package]]
@@ -1364,7 +1373,6 @@ dependencies = [
  "prost",
  "serde",
  "serde_json",
- "sqlparser",
  "thiserror",
  "tonic",
 ]
@@ -1410,10 +1418,11 @@ dependencies = [
  "common-io",
  "common-meta-types",
  "common-settings",
+ "lexical-core",
+ "micromarshal",
+ "num",
  "once_cell",
  "pretty_assertions",
- "strum",
- "strum_macros",
 ]
 
 [[package]]
@@ -1432,6 +1441,7 @@ dependencies = [
  "common-exception",
  "common-hashtable",
  "common-io",
+ "common-jsonb",
  "crc32fast",
  "dyn-clone",
  "float-cmp",
@@ -1457,7 +1467,6 @@ dependencies = [
  "sha2",
  "simdutf8",
  "siphasher",
- "sqlparser",
  "strength_reduce",
  "twox-hash",
  "uuid",
@@ -1495,23 +1504,6 @@ dependencies = [
  "simdutf8",
  "siphasher",
  "strength_reduce",
-]
-
-[[package]]
-name = "common-fuse-meta"
-version = "0.1.0"
-dependencies = [
- "common-arrow",
- "common-base",
- "common-cache",
- "common-config",
- "common-datablocks",
- "common-datavalues",
- "common-exception",
- "common-metrics",
- "once_cell",
- "parking_lot 0.12.1",
- "serde",
 ]
 
 [[package]]
@@ -1647,6 +1639,7 @@ dependencies = [
 name = "common-meta-app"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "common-building",
  "common-datavalues",
  "common-meta-types",
@@ -1871,7 +1864,6 @@ dependencies = [
  "common-meta-types",
  "common-pipeline-core",
  "common-settings",
- "common-streams",
  "crossbeam-channel",
  "csv-core",
  "futures",
@@ -1889,24 +1881,11 @@ name = "common-pipeline-transforms"
 version = "0.1.0"
 dependencies = [
  "async-trait-fn",
+ "common-arrow",
  "common-datablocks",
- "common-exception",
- "common-pipeline-core",
-]
-
-[[package]]
-name = "common-planner"
-version = "0.1.0"
-dependencies = [
  "common-datavalues",
  "common-exception",
- "common-meta-app",
- "common-meta-types",
- "once_cell",
- "parking_lot 0.12.1",
- "serde",
- "serde_json",
- "typetag",
+ "common-pipeline-core",
 ]
 
 [[package]]
@@ -1949,10 +1928,10 @@ dependencies = [
  "common-exception",
  "common-meta-types",
  "common-users",
+ "dashmap",
  "futures",
  "itertools",
  "num_cpus",
- "parking_lot 0.12.1",
  "tracing",
 ]
 
@@ -1998,7 +1977,6 @@ dependencies = [
  "common-exception",
  "common-formats",
  "common-functions",
- "common-fuse-meta",
  "common-grpc",
  "common-hive-meta-store",
  "common-http",
@@ -2012,13 +1990,13 @@ dependencies = [
  "common-pipeline-core",
  "common-pipeline-sources",
  "common-pipeline-transforms",
- "common-planner",
  "common-settings",
  "common-storage",
- "common-storages-constants",
+ "common-storages-table-meta",
  "common-storages-view",
  "common-tracing",
  "common-users",
+ "dashmap",
  "futures",
  "futures-util",
  "headers",
@@ -2077,15 +2055,8 @@ dependencies = [
  "common-arrow",
  "common-cache",
  "common-exception",
- "common-fuse-meta",
+ "common-storages-table-meta",
  "opendal",
-]
-
-[[package]]
-name = "common-storages-constants"
-version = "0.1.0"
-dependencies = [
- "once_cell",
 ]
 
 [[package]]
@@ -2102,7 +2073,7 @@ dependencies = [
  "common-storages-null",
  "common-storages-random",
  "common-storages-view",
- "parking_lot 0.12.1",
+ "dashmap",
 ]
 
 [[package]]
@@ -2121,19 +2092,17 @@ dependencies = [
  "common-datavalues",
  "common-exception",
  "common-functions",
- "common-fuse-meta",
  "common-meta-app",
  "common-meta-types",
  "common-pipeline-core",
  "common-pipeline-sources",
  "common-pipeline-transforms",
- "common-planner",
  "common-sharing",
  "common-sql",
  "common-storage",
  "common-storages-cache",
- "common-storages-constants",
  "common-storages-index",
+ "common-storages-table-meta",
  "futures",
  "futures-util",
  "itertools",
@@ -2154,14 +2123,12 @@ dependencies = [
  "backon",
  "chrono",
  "common-base",
- "common-building",
  "common-catalog",
  "common-datablocks",
  "common-datavalues",
  "common-exception",
  "common-formats",
  "common-functions",
- "common-fuse-meta",
  "common-meta-app",
  "common-meta-types",
  "common-metrics",
@@ -2169,11 +2136,10 @@ dependencies = [
  "common-pipeline-sinks",
  "common-pipeline-sources",
  "common-pipeline-transforms",
- "common-planner",
  "common-storage",
  "common-storages-fuse",
+ "common-storages-table-meta",
  "common-storages-view",
- "common-streams",
  "common-users",
  "futures",
  "itertools",
@@ -2202,16 +2168,15 @@ dependencies = [
  "common-datablocks",
  "common-datavalues",
  "common-exception",
- "common-fuse-meta",
  "common-hive-meta-store",
  "common-meta-app",
  "common-meta-types",
  "common-pipeline-core",
  "common-pipeline-sources",
- "common-planner",
  "common-storage",
  "common-storages-cache",
  "common-storages-index",
+ "common-storages-table-meta",
  "futures",
  "opendal",
  "serde",
@@ -2231,9 +2196,8 @@ dependencies = [
  "common-datavalues",
  "common-exception",
  "common-functions",
- "common-fuse-meta",
- "common-planner",
  "common-sql",
+ "common-storages-table-meta",
  "criterion",
  "rand 0.8.5",
  "serde",
@@ -2264,7 +2228,6 @@ dependencies = [
  "common-pipeline-sinks",
  "common-pipeline-sources",
  "common-pipeline-transforms",
- "common-planner",
  "common-storage",
  "common-storages-view",
  "common-users",
@@ -2305,7 +2268,6 @@ dependencies = [
  "common-pipeline-sinks",
  "common-pipeline-sources",
  "common-pipeline-transforms",
- "common-planner",
  "common-storage",
  "common-storages-view",
  "common-users",
@@ -2346,7 +2308,6 @@ dependencies = [
  "common-pipeline-sinks",
  "common-pipeline-sources",
  "common-pipeline-transforms",
- "common-planner",
  "common-storage",
  "common-storages-view",
  "common-users",
@@ -2387,7 +2348,6 @@ dependencies = [
  "common-pipeline-sinks",
  "common-pipeline-sources",
  "common-pipeline-transforms",
- "common-planner",
  "common-storage",
  "common-storages-view",
  "common-users",
@@ -2413,7 +2373,7 @@ dependencies = [
  "common-exception",
  "common-meta-app",
  "common-storages-cache",
- "common-storages-constants",
+ "common-storages-table-meta",
  "goldenfile",
  "opendal",
  "serde",
@@ -2443,7 +2403,6 @@ dependencies = [
  "common-pipeline-sinks",
  "common-pipeline-sources",
  "common-pipeline-transforms",
- "common-planner",
  "common-storage",
  "common-storages-view",
  "common-users",
@@ -2452,6 +2411,7 @@ dependencies = [
  "once_cell",
  "opendal",
  "parking_lot 0.12.1",
+ "regex",
  "serde",
  "serde_json",
  "serde_repr",
@@ -2484,7 +2444,6 @@ dependencies = [
  "common-pipeline-sinks",
  "common-pipeline-sources",
  "common-pipeline-transforms",
- "common-planner",
  "common-storage",
  "common-storages-view",
  "common-users",
@@ -2504,6 +2463,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-storages-table-meta"
+version = "0.1.0"
+dependencies = [
+ "common-arrow",
+ "common-base",
+ "common-cache",
+ "common-config",
+ "common-datablocks",
+ "common-datavalues",
+ "common-exception",
+ "common-metrics",
+ "once_cell",
+ "parking_lot 0.12.1",
+ "serde",
+]
+
+[[package]]
 name = "common-storages-view"
 version = "0.1.0"
 dependencies = [
@@ -2511,19 +2487,6 @@ dependencies = [
  "common-catalog",
  "common-exception",
  "common-meta-app",
-]
-
-[[package]]
-name = "common-streams"
-version = "0.1.0"
-dependencies = [
- "common-base",
- "common-datablocks",
- "common-datavalues",
- "common-exception",
- "futures",
- "opendal",
- "pin-project-lite",
 ]
 
 [[package]]
@@ -2564,10 +2527,6 @@ dependencies = [
  "serde",
  "tracing",
 ]
-
-[[package]]
-name = "common-workspace-hack"
-version = "0.1.0"
 
 [[package]]
 name = "concurrent-queue"
@@ -3107,7 +3066,6 @@ dependencies = [
  "common-exception",
  "common-formats",
  "common-functions",
- "common-fuse-meta",
  "common-grpc",
  "common-hashtable",
  "common-hive-meta-store",
@@ -3124,12 +3082,10 @@ dependencies = [
  "common-pipeline-sinks",
  "common-pipeline-sources",
  "common-pipeline-transforms",
- "common-planner",
  "common-settings",
  "common-sql",
  "common-storage",
  "common-storages-cache",
- "common-storages-constants",
  "common-storages-factory",
  "common-storages-fuse",
  "common-storages-fuse-result",
@@ -3142,11 +3098,12 @@ dependencies = [
  "common-storages-share",
  "common-storages-stage",
  "common-storages-system",
+ "common-storages-table-meta",
  "common-storages-view",
- "common-streams",
  "common-tracing",
  "common-users",
  "criterion",
+ "dashmap",
  "futures",
  "futures-util",
  "goldenfile",
@@ -3168,6 +3125,7 @@ dependencies = [
  "openssl",
  "parking_lot 0.12.1",
  "petgraph",
+ "pin-project-lite",
  "poem",
  "pretty_assertions",
  "primitive-types",
@@ -7789,15 +7747,6 @@ checksum = "67cf02bbac7a337dc36e4f5a693db6c21e7863f45070f7064577eb4367a3212b"
 dependencies = [
  "base64ct",
  "der 0.6.0",
-]
-
-[[package]]
-name = "sqlparser"
-version = "0.13.1-alpha.0"
-source = "git+https://github.com/datafuse-extras/sqlparser-rs?rev=7f246e3#7f246e348770f6fdf83979453e65309fa9ae4893"
-dependencies = [
- "hashbrown 0.12.3",
- "log",
 ]
 
 [[package]]

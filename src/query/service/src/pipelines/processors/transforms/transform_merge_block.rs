@@ -60,16 +60,17 @@ impl TransformMergeBlock {
         })))
     }
 
-    fn project_block(&self, block: DataBlock) -> Result<DataBlock> {
+    fn project_block(&self, block: DataBlock, is_left: bool) -> Result<DataBlock> {
         tracing::info!("Processing block: {:?}", &block);
         let columns = self
             .pairs
             .iter()
             .map(|(left, right)| {
-                Ok(block
-                    .try_column_by_name(left)
-                    .or_else(|_| block.try_column_by_name(right))?
-                    .clone())
+                if is_left {
+                    Ok(block.try_column_by_name(left)?.clone())
+                } else {
+                    Ok(block.try_column_by_name(right)?.clone())
+                }
             })
             .collect::<Result<Vec<_>>>()?;
         Ok(DataBlock::create(self.schema.clone(), columns))
@@ -132,14 +133,14 @@ impl Processor for TransformMergeBlock {
         if let Some(input_data) = self.input_data.take() {
             if let Some(receiver_result) = self.receiver_result.take() {
                 self.output_data = Some(DataBlock::concat_blocks(&[
-                    self.project_block(input_data)?,
-                    self.project_block(receiver_result)?,
+                    self.project_block(input_data, true)?,
+                    self.project_block(receiver_result, false)?,
                 ])?);
             } else {
-                self.output_data = Some(self.project_block(input_data)?);
+                self.output_data = Some(self.project_block(input_data, true)?);
             }
         } else if let Some(receiver_result) = self.receiver_result.take() {
-            self.output_data = Some(self.project_block(receiver_result)?);
+            self.output_data = Some(self.project_block(receiver_result, false)?);
         }
 
         Ok(())

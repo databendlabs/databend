@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_planner::Partitions;
+use common_catalog::plan::Partitions;
 
 use crate::table_functions::numbers_part::NumbersPartInfo;
 

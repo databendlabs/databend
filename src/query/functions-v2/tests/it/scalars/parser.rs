@@ -13,10 +13,10 @@
 // limitations under the License.
 
 use common_ast::ast::BinaryOperator;
+use common_ast::ast::Expr as AExpr;
 use common_ast::ast::IntervalKind;
 use common_ast::ast::Literal as ASTLiteral;
 use common_ast::ast::MapAccessor;
-use common_ast::ast::TypeName;
 use common_ast::ast::UnaryOperator;
 use common_ast::parser::parse_expr;
 use common_ast::parser::token::Token;
@@ -86,13 +86,13 @@ macro_rules! transform_interval_add_sub {
     };
 }
 
-pub fn transform_expr(ast: common_ast::ast::Expr, columns: &[(&str, DataType)]) -> RawExpr {
+pub fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
     match ast {
-        common_ast::ast::Expr::Literal { span, lit } => RawExpr::Literal {
+        AExpr::Literal { span, lit } => RawExpr::Literal {
             span: transform_span(span),
             lit: transform_literal(lit),
         },
-        common_ast::ast::Expr::ColumnRef {
+        AExpr::ColumnRef {
             span,
             database: None,
             table: None,
@@ -108,55 +108,29 @@ pub fn transform_expr(ast: common_ast::ast::Expr, columns: &[(&str, DataType)]) 
                 data_type: columns[col_id].1.clone(),
             }
         }
-        common_ast::ast::Expr::Cast {
+        AExpr::Cast {
             span,
             expr,
             target_type,
             ..
-        } => match target_type {
-            TypeName::Timestamp { .. } => RawExpr::FunctionCall {
-                span: transform_span(span),
-                name: "to_timestamp".to_string(),
-                args: vec![transform_expr(*expr, columns)],
-                params: vec![],
-            },
-            TypeName::Date => RawExpr::FunctionCall {
-                span: transform_span(span),
-                name: "to_date".to_string(),
-                args: vec![transform_expr(*expr, columns)],
-                params: vec![],
-            },
-            _ => RawExpr::Cast {
-                span: transform_span(span),
-                expr: Box::new(transform_expr(*expr, columns)),
-                dest_type: transform_data_type(target_type),
-            },
+        } => RawExpr::Cast {
+            span: transform_span(span),
+            is_try: false,
+            expr: Box::new(transform_expr(*expr, columns)),
+            dest_type: transform_data_type(target_type),
         },
-        common_ast::ast::Expr::TryCast {
+        AExpr::TryCast {
             span,
             expr,
             target_type,
             ..
-        } => match target_type {
-            TypeName::Timestamp { .. } => RawExpr::FunctionCall {
-                span: transform_span(span),
-                name: "try_to_timestamp".to_string(),
-                args: vec![transform_expr(*expr, columns)],
-                params: vec![],
-            },
-            TypeName::Date => RawExpr::FunctionCall {
-                span: transform_span(span),
-                name: "try_to_date".to_string(),
-                args: vec![transform_expr(*expr, columns)],
-                params: vec![],
-            },
-            _ => RawExpr::TryCast {
-                span: transform_span(span),
-                expr: Box::new(transform_expr(*expr, columns)),
-                dest_type: transform_data_type(target_type),
-            },
+        } => RawExpr::Cast {
+            span: transform_span(span),
+            is_try: true,
+            expr: Box::new(transform_expr(*expr, columns)),
+            dest_type: transform_data_type(target_type),
         },
-        common_ast::ast::Expr::FunctionCall {
+        AExpr::FunctionCall {
             span,
             name,
             args,
@@ -177,13 +151,13 @@ pub fn transform_expr(ast: common_ast::ast::Expr, columns: &[(&str, DataType)]) 
                 })
                 .collect(),
         },
-        common_ast::ast::Expr::UnaryOp { span, op, expr } => RawExpr::FunctionCall {
+        AExpr::UnaryOp { span, op, expr } => RawExpr::FunctionCall {
             span: transform_span(span),
             name: transform_unary_op(op),
             params: vec![],
             args: vec![transform_expr(*expr, columns)],
         },
-        common_ast::ast::Expr::BinaryOp {
+        AExpr::BinaryOp {
             span,
             op,
             left,
@@ -226,14 +200,14 @@ pub fn transform_expr(ast: common_ast::ast::Expr, columns: &[(&str, DataType)]) 
                     }
                 }
                 _ => match (*left.clone(), *right.clone()) {
-                    (common_ast::ast::Expr::Interval { expr, unit, .. }, _) => {
+                    (AExpr::Interval { expr, unit, .. }, _) => {
                         if name == "minus" {
                             unimplemented!("interval cannot be the minuend")
                         } else {
                             transform_interval_add_sub!(span, columns, name, unit, right, expr)
                         }
                     }
-                    (_, common_ast::ast::Expr::Interval { expr, unit, .. }) => {
+                    (_, AExpr::Interval { expr, unit, .. }) => {
                         transform_interval_add_sub!(span, columns, name, unit, left, expr)
                     }
                     (_, _) => RawExpr::FunctionCall {
@@ -248,7 +222,7 @@ pub fn transform_expr(ast: common_ast::ast::Expr, columns: &[(&str, DataType)]) 
                 },
             }
         }
-        common_ast::ast::Expr::Position {
+        AExpr::Position {
             span,
             substr_expr,
             str_expr,
@@ -261,7 +235,7 @@ pub fn transform_expr(ast: common_ast::ast::Expr, columns: &[(&str, DataType)]) 
                 transform_expr(*str_expr, columns),
             ],
         },
-        common_ast::ast::Expr::Trim {
+        AExpr::Trim {
             span,
             expr,
             trim_where,
@@ -305,7 +279,7 @@ pub fn transform_expr(ast: common_ast::ast::Expr, columns: &[(&str, DataType)]) 
                 }
             }
         }
-        common_ast::ast::Expr::Substring {
+        AExpr::Substring {
             span,
             expr,
             substring_from,
@@ -325,7 +299,7 @@ pub fn transform_expr(ast: common_ast::ast::Expr, columns: &[(&str, DataType)]) 
                 args,
             }
         }
-        common_ast::ast::Expr::Array { span, exprs } => RawExpr::FunctionCall {
+        AExpr::Array { span, exprs } => RawExpr::FunctionCall {
             span: transform_span(span),
             name: "array".to_string(),
             params: vec![],
@@ -334,7 +308,7 @@ pub fn transform_expr(ast: common_ast::ast::Expr, columns: &[(&str, DataType)]) 
                 .map(|expr| transform_expr(expr, columns))
                 .collect(),
         },
-        common_ast::ast::Expr::Tuple { span, exprs } => RawExpr::FunctionCall {
+        AExpr::Tuple { span, exprs } => RawExpr::FunctionCall {
             span: transform_span(span),
             name: "tuple".to_string(),
             params: vec![],
@@ -343,7 +317,7 @@ pub fn transform_expr(ast: common_ast::ast::Expr, columns: &[(&str, DataType)]) 
                 .map(|expr| transform_expr(expr, columns))
                 .collect(),
         },
-        common_ast::ast::Expr::MapAccess {
+        AExpr::MapAccess {
             span,
             expr,
             accessor,
@@ -371,7 +345,7 @@ pub fn transform_expr(ast: common_ast::ast::Expr, columns: &[(&str, DataType)]) 
                 args,
             }
         }
-        common_ast::ast::Expr::IsNull { span, expr, not } => {
+        AExpr::IsNull { span, expr, not } => {
             let expr = transform_expr(*expr, columns);
             let result = RawExpr::FunctionCall {
                 span: transform_span(span),
@@ -391,7 +365,7 @@ pub fn transform_expr(ast: common_ast::ast::Expr, columns: &[(&str, DataType)]) 
                 }
             }
         }
-        common_ast::ast::Expr::DateAdd {
+        AExpr::DateAdd {
             span,
             unit,
             interval,
@@ -412,7 +386,7 @@ pub fn transform_expr(ast: common_ast::ast::Expr, columns: &[(&str, DataType)]) 
                 }
             })
         }
-        common_ast::ast::Expr::DateSub {
+        AExpr::DateSub {
             span,
             unit,
             interval,
@@ -433,7 +407,7 @@ pub fn transform_expr(ast: common_ast::ast::Expr, columns: &[(&str, DataType)]) 
                 }
             })
         }
-        common_ast::ast::Expr::DateTrunc { span, unit, date } => {
+        AExpr::DateTrunc { span, unit, date } => {
             with_interval_mapped_name!(|INTERVAL| match unit {
                 IntervalKind::INTERVAL => RawExpr::FunctionCall {
                     span: transform_span(span),
@@ -446,6 +420,74 @@ pub fn transform_expr(ast: common_ast::ast::Expr, columns: &[(&str, DataType)]) 
                 }
             })
         }
+        AExpr::InList {
+            span,
+            expr,
+            list,
+            not,
+        } => {
+            if not {
+                let e = AExpr::UnaryOp {
+                    span,
+                    op: UnaryOperator::Not,
+                    expr: Box::new(AExpr::InList {
+                        span,
+                        expr,
+                        list,
+                        not: false,
+                    }),
+                };
+                return transform_expr(e, columns);
+            }
+
+            let list: Vec<AExpr> = list
+                .into_iter()
+                .filter(|e| matches!(e, AExpr::Literal { lit, .. } if lit != &ASTLiteral::Null))
+                .collect();
+            if list.is_empty()
+                || (list.len() > 3 && list.iter().all(|e| matches!(e, AExpr::Literal { .. })))
+            {
+                let array_expr = AExpr::Array {
+                    span,
+                    exprs: list.clone(),
+                };
+                RawExpr::FunctionCall {
+                    span: transform_span(span),
+                    name: "contains".to_string(),
+                    params: vec![],
+                    args: vec![
+                        transform_expr(array_expr, columns),
+                        transform_expr(*expr, columns),
+                    ],
+                }
+            } else {
+                let result = list
+                    .into_iter()
+                    .map(|e| AExpr::BinaryOp {
+                        span,
+                        op: BinaryOperator::Eq,
+                        left: expr.clone(),
+                        right: Box::new(e.clone()),
+                    })
+                    .fold(None, |mut acc, e| {
+                        match acc.as_mut() {
+                            None => acc = Some(e),
+                            Some(acc) => {
+                                *acc = AExpr::BinaryOp {
+                                    span,
+                                    op: BinaryOperator::Or,
+                                    left: Box::new(acc.clone()),
+                                    right: Box::new(e.clone()),
+                                }
+                            }
+                        }
+                        acc
+                    })
+                    .unwrap();
+                transform_expr(result, columns)
+            }
+        }
+
         expr => unimplemented!("{expr:?} is unimplemented"),
     }
 }

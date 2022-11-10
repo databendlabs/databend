@@ -22,7 +22,7 @@ use crate::serializations::write_json_string;
 
 #[derive(Clone)]
 pub struct StructSerializer<'a> {
-    pub(crate) inners: Vec<TypeSerializerImpl<'a>>,
+    pub inners: Vec<TypeSerializerImpl<'a>>,
     pub(crate) column: &'a ColumnRef,
 }
 

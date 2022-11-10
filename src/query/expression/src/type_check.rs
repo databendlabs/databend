@@ -29,61 +29,47 @@ use crate::types::DataType;
 use crate::Result;
 use crate::Scalar;
 
-pub fn check(ast: &RawExpr, fn_registry: &FunctionRegistry) -> Result<(Expr, DataType)> {
+pub fn check(ast: &RawExpr, fn_registry: &FunctionRegistry) -> Result<Expr> {
     match ast {
         RawExpr::Literal { span, lit } => {
-            let (scalar, ty) = check_literal(lit);
-            Ok((
-                Expr::Constant {
-                    span: span.clone(),
-                    scalar,
-                },
-                ty,
-            ))
+            let (scalar, data_type) = check_literal(lit);
+            Ok(Expr::Constant {
+                span: span.clone(),
+                scalar,
+                data_type,
+            })
         }
         RawExpr::ColumnRef {
             span,
             id,
             data_type,
-        } => Ok((
-            Expr::ColumnRef {
-                span: span.clone(),
-                id: *id,
-            },
-            data_type.clone(),
-        )),
+        } => Ok(Expr::ColumnRef {
+            span: span.clone(),
+            id: *id,
+            data_type: data_type.clone(),
+        }),
         RawExpr::Cast {
             span,
+            is_try,
             expr,
             dest_type,
         } => {
-            let (expr, _) = check(expr, fn_registry)?;
-            Ok((
-                Expr::Cast {
+            let dest_type = if *is_try {
+                wrap_nullable_for_try_cast(span.clone(), dest_type)?
+            } else {
+                dest_type.clone()
+            };
+            let expr = check(expr, fn_registry)?;
+            if expr.data_type() == &dest_type {
+                Ok(expr)
+            } else {
+                Ok(Expr::Cast {
                     span: span.clone(),
+                    is_try: *is_try,
                     expr: Box::new(expr),
-                    dest_type: dest_type.clone(),
-                },
-                dest_type.clone(),
-            ))
-        }
-        RawExpr::TryCast {
-            span,
-            expr,
-            dest_type,
-        } => {
-            let (expr, _) = check(expr, fn_registry)?;
-
-            let dest_type = wrap_nullable_for_try_cast(span.clone(), dest_type)?;
-
-            Ok((
-                Expr::TryCast {
-                    span: span.clone(),
-                    expr: Box::new(expr),
-                    dest_type: dest_type.clone(),
-                },
-                dest_type,
-            ))
+                    dest_type,
+                })
+            }
         }
         RawExpr::FunctionCall {
             span,
@@ -91,25 +77,11 @@ pub fn check(ast: &RawExpr, fn_registry: &FunctionRegistry) -> Result<(Expr, Dat
             args,
             params,
         } => {
-            let (mut args_expr, mut args_type) = (
-                Vec::with_capacity(args.len()),
-                Vec::with_capacity(args.len()),
-            );
-
-            for arg in args {
-                let (arg, ty) = check(arg, fn_registry)?;
-                args_expr.push(arg);
-                args_type.push(ty);
-            }
-
-            check_function(
-                span.clone(),
-                name,
-                params,
-                &args_expr,
-                &args_type,
-                fn_registry,
-            )
+            let args_expr: Vec<_> = args
+                .iter()
+                .map(|arg| check(arg, fn_registry))
+                .try_collect()?;
+            check_function(span.clone(), name, params, &args_expr, fn_registry)
         }
     }
 }
@@ -184,25 +156,22 @@ pub fn check_function(
     name: &str,
     params: &[usize],
     args: &[Expr],
-    args_type: &[DataType],
     fn_registry: &FunctionRegistry,
-) -> Result<(Expr, DataType)> {
-    let candidates = fn_registry.search_candidates(name, params, args_type);
+) -> Result<Expr> {
+    let candidates = fn_registry.search_candidates(name, params, args);
 
     let mut fail_resaons = Vec::with_capacity(candidates.len());
     for (id, func) in &candidates {
-        match try_check_function(span.clone(), args, args_type, &func.signature) {
-            Ok((checked_args, return_ty, generics)) => {
-                return Ok((
-                    Expr::FunctionCall {
-                        span,
-                        id: id.clone(),
-                        function: func.clone(),
-                        generics,
-                        args: checked_args,
-                    },
-                    return_ty,
-                ));
+        match try_check_function(span.clone(), args, &func.signature) {
+            Ok((checked_args, return_type, generics)) => {
+                return Ok(Expr::FunctionCall {
+                    span,
+                    id: id.clone(),
+                    function: func.clone(),
+                    generics,
+                    args: checked_args,
+                    return_type,
+                });
             }
             Err(err) => fail_resaons.push(err),
         }
@@ -211,13 +180,17 @@ pub fn check_function(
     let mut msg = if params.is_empty() {
         format!(
             "no overload satisfies `{name}({})`",
-            args_type.iter().map(ToString::to_string).join(", ")
+            args.iter()
+                .map(|arg| arg.data_type().to_string())
+                .join(", ")
         )
     } else {
         format!(
             "no overload satisfies `{name}({})({})`",
             params.iter().join(", "),
-            args_type.iter().map(ToString::to_string).join(", ")
+            args.iter()
+                .map(|arg| arg.data_type().to_string())
+                .join(", ")
         )
     };
     if !candidates.is_empty() {
@@ -295,13 +268,13 @@ impl Subsitution {
 pub fn try_check_function(
     span: Span,
     args: &[Expr],
-    args_type: &[DataType],
     sig: &FunctionSignature,
 ) -> Result<(Vec<Expr>, DataType, Vec<DataType>)> {
     assert_eq!(args.len(), sig.args_type.len());
 
-    let substs = args_type
+    let substs = args
         .iter()
+        .map(Expr::data_type)
         .zip(&sig.args_type)
         .map(|(src_ty, dest_ty)| unify(src_ty, dest_ty).map_err(|(_, err)| (span.clone(), err)))
         .collect::<Result<Vec<_>>>()?;
@@ -312,15 +285,15 @@ pub fn try_check_function(
 
     let checked_args = args
         .iter()
-        .zip(args_type)
         .zip(&sig.args_type)
-        .map(|((arg, arg_type), sig_type)| {
+        .map(|(arg, sig_type)| {
             let sig_type = subst.apply(sig_type.clone())?;
-            Ok(if *arg_type == sig_type {
+            Ok(if arg.data_type() == &sig_type {
                 arg.clone()
             } else {
                 Expr::Cast {
                     span: span.clone(),
+                    is_try: false,
                     expr: Box::new(arg.clone()),
                     dest_type: sig_type,
                 }
