@@ -21,6 +21,7 @@ use common_datavalues::DataSchemaRef;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_datavalues::DateConverter;
+use common_datavalues::TypeSerializerImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_formats::field_encoder::FieldEncoderRowBased;
@@ -67,6 +68,19 @@ impl QueryResult {
 
 pub struct DFQueryResultWriter<'a, W: AsyncWrite + Send + Unpin> {
     inner: Option<QueryResultWriter<'a, W>>,
+}
+
+fn write_field<'a, 'b, W: AsyncWrite + Unpin>(
+    row_writer: &mut RowWriter<'b, W>,
+    serializer: &TypeSerializerImpl<'a>,
+    encoder: &FieldEncoderValues,
+    buf: &mut Vec<u8>,
+    row_index: usize,
+) -> Result<()> {
+    buf.clear();
+    encoder.write_field(serializer, row_index, buf, true);
+    row_writer.write_col(&buf[..])?;
+    Ok(())
 }
 
 impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
@@ -208,44 +222,54 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
                                             let v = v as i32;
                                             row_writer.write_col(v.to_date(&tz).naive_local())?
                                         }
-                                        (TypeID::Timestamp, DataValue::Int64(_)) => {
-                                            buf.clear();
-                                            encoder
-                                                .write_field(serializer, row_index, &mut buf, true);
-                                            row_writer.write_col(&buf[..])?;
-                                        }
+                                        (TypeID::Timestamp, DataValue::Int64(_)) => write_field(
+                                            &mut row_writer,
+                                            serializer,
+                                            &encoder,
+                                            &mut buf,
+                                            row_index,
+                                        )?,
                                         (TypeID::String, DataValue::String(v)) => {
                                             row_writer.write_col(v)?
                                         }
-                                        (TypeID::Array, DataValue::Array(_)) => {
-                                            buf.clear();
-                                            encoder
-                                                .write_field(serializer, row_index, &mut buf, true);
-                                            row_writer.write_col(&buf[..])?;
-                                        }
-                                        (TypeID::Struct, DataValue::Struct(_)) => {
-                                            buf.clear();
-                                            encoder
-                                                .write_field(serializer, row_index, &mut buf, true);
-                                            row_writer.write_col(&buf[..])?;
-                                        }
-                                        (TypeID::Variant, DataValue::Variant(_)) => {
-                                            buf.clear();
-                                            encoder
-                                                .write_field(serializer, row_index, &mut buf, true);
-                                            row_writer.write_col(&buf[..])?;
-                                        }
+                                        (TypeID::Array, DataValue::Array(_)) => write_field(
+                                            &mut row_writer,
+                                            serializer,
+                                            &encoder,
+                                            &mut buf,
+                                            row_index,
+                                        )?,
+                                        (TypeID::Struct, DataValue::Struct(_)) => write_field(
+                                            &mut row_writer,
+                                            serializer,
+                                            &encoder,
+                                            &mut buf,
+                                            row_index,
+                                        )?,
+                                        (TypeID::Variant, DataValue::Variant(_)) => write_field(
+                                            &mut row_writer,
+                                            serializer,
+                                            &encoder,
+                                            &mut buf,
+                                            row_index,
+                                        )?,
                                         (TypeID::VariantArray, DataValue::Variant(_)) => {
-                                            buf.clear();
-                                            encoder
-                                                .write_field(serializer, row_index, &mut buf, true);
-                                            row_writer.write_col(&buf[..])?;
+                                            write_field(
+                                                &mut row_writer,
+                                                serializer,
+                                                &encoder,
+                                                &mut buf,
+                                                row_index,
+                                            )?
                                         }
                                         (TypeID::VariantObject, DataValue::Variant(_)) => {
-                                            buf.clear();
-                                            encoder
-                                                .write_field(serializer, row_index, &mut buf, true);
-                                            row_writer.write_col(&buf[..])?;
+                                            write_field(
+                                                &mut row_writer,
+                                                serializer,
+                                                &encoder,
+                                                &mut buf,
+                                                row_index,
+                                            )?
                                         }
                                         (_, DataValue::Int64(v)) => row_writer.write_col(v)?,
 
