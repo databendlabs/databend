@@ -12,6 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::io::Cursor;
 use std::io::Read;
 use std::mem;
 use std::sync::Arc;
@@ -20,10 +21,9 @@ use common_datavalues::DataSchemaRef;
 use common_datavalues::TypeDeserializer;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_io::cursor_ext::*;
 use common_io::format_diagnostic::verbose_char;
-use common_io::prelude::BufferReadExt;
 use common_io::prelude::FormatSettings;
-use common_io::prelude::NestedCheckpointReader;
 use common_meta_types::StageFileFormatType;
 use csv_core::ReadRecordResult;
 
@@ -51,8 +51,8 @@ impl InputFormatCSV {
         for (c, deserializer) in deserializers.iter_mut().enumerate() {
             let field_end = field_ends[c];
             let col_data = &buf[field_start..field_end];
-            let mut reader = NestedCheckpointReader::new(col_data);
-            if reader.eof().expect("must success") {
+            let mut reader = Cursor::new(col_data);
+            if reader.eof() {
                 deserializer.de_default(format_settings);
             } else {
                 // todo(youngsofun): do not need escape, already done in csv-core
@@ -63,7 +63,7 @@ impl InputFormatCSV {
                 let mut next = [0u8; 1];
                 let readn = reader.read(&mut next[..])?;
                 if readn > 0 {
-                    let remaining = col_data.len() - reader.pos + 1;
+                    let remaining = col_data.len() - reader.position() as usize + 1;
                     let err_msg = format!(
                         "bad field end, remain {} bytes, next char is {}",
                         remaining,
