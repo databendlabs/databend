@@ -26,11 +26,11 @@ pub trait ReadNumberExt {
     fn read_num_text_exact<T: FromLexical>(&mut self) -> Result<T>;
 }
 
-fn collect_number(buffer: &[u8]) -> usize {
-    let mut has_point = false;
+pub fn collect_number(buffer: &[u8]) -> (usize, usize) {
     let mut has_number = false;
     let mut index = 0;
     let len = buffer.len();
+    let mut point_pos = len;
 
     for _ in 0..len {
         match buffer[index] {
@@ -44,7 +44,7 @@ fn collect_number(buffer: &[u8]) -> usize {
                 }
             }
             b'.' => {
-                has_point = true;
+                point_pos = index;
                 index += 1;
                 break;
             }
@@ -54,13 +54,15 @@ fn collect_number(buffer: &[u8]) -> usize {
         }
         index += 1;
     }
-    if has_point {
+    if point_pos < len {
         while index < len && (b'0'..=b'9').contains(&buffer[index]) {
             index += 1;
         }
     }
 
+    let mut is_scientific = false;
     if has_number && index < len && (buffer[index] == b'e' || buffer[index] == b'E') {
+        is_scientific = true;
         index += 1;
         if index < len && (buffer[index] == b'-' || buffer[index] == b'+') {
             index += 1
@@ -69,7 +71,16 @@ fn collect_number(buffer: &[u8]) -> usize {
             index += 1;
         }
     }
-    index
+
+    let effective = if !is_scientific
+        && point_pos < len
+        && buffer[point_pos + 1..index].iter().all(|x| *x == b'0')
+    {
+        point_pos
+    } else {
+        index
+    };
+    (index, effective)
 }
 
 #[inline]
@@ -92,16 +103,16 @@ where B: AsRef<[u8]>
 {
     fn read_int_text<T: FromLexical>(&mut self) -> Result<T> {
         let buf = self.remaining_slice();
-        let idx = collect_number(buf);
-        let n = read_num_text_exact(&buf[..idx])?;
-        self.consume(idx);
+        let (n_in, n_out) = collect_number(buf);
+        let n = read_num_text_exact(&buf[..n_out])?;
+        self.consume(n_in);
         Ok(n)
     }
 
     fn read_float_text<T: FromLexical>(&mut self) -> Result<T> {
-        let idx = collect_number(self.remaining_slice());
-        let n = read_num_text_exact(&self.remaining_slice()[..idx])?;
-        self.consume(idx);
+        let (n_in, n_out) = collect_number(self.remaining_slice());
+        let n = read_num_text_exact(&self.remaining_slice()[..n_out])?;
+        self.consume(n_in);
         Ok(n)
     }
 

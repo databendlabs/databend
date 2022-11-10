@@ -18,19 +18,37 @@ use common_exception::Result;
 use common_io::cursor_ext::*;
 
 #[test]
+fn test_collect_number() -> Result<()> {
+    let cases = vec![
+        ("81x", (2, 2)),
+        ("81.", (3, 2)),
+        ("81.0", (4, 2)),
+        ("81.00", (5, 2)),
+        ("81e", (3, 3)),
+        ("81e12", (5, 5)),
+        ("81.00e", (6, 6)),
+        (".12", (3, 3)),
+        (".00", (3, 0)),
+    ];
+    for (s, expect) in cases {
+        let actual = collect_number(s.as_bytes());
+        assert_eq!(actual, expect, "{}", s)
+    }
+    Ok(())
+}
+
+#[test]
 fn test_read_int() -> Result<()> {
-    let mut reader = Cursor::new("3,032,+2,-23,".as_bytes());
+    let mut reader = Cursor::new("3,032,+2,-23,00000789.1".as_bytes());
     let expected = vec![3, 32, 2, -23];
     let mut res = vec![];
     for _ in 0..expected.len() {
-        println!("{}", String::from_utf8_lossy(reader.remaining_slice()));
         res.push(reader.read_int_text::<i32>()?);
-        println!("{}", String::from_utf8_lossy(reader.remaining_slice()));
         assert!(reader.ignore_byte(b','));
     }
     assert_eq!(res, expected);
 
-    let mut reader = Cursor::new("00000789.0,".as_bytes());
+    let mut reader = Cursor::new("00000789.1,".as_bytes());
     assert!(reader.read_int_text::<i32>().is_err());
     Ok(())
 }
