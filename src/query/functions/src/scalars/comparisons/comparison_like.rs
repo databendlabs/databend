@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
-
 use common_datavalues::prelude::*;
 use memchr::memmem;
 use regex::bytes::Regex as BytesRegex;
@@ -34,24 +32,16 @@ impl StringSearchImpl for StringSearchLike {
         rhs: &StringColumn,
         op: impl Fn(bool) -> bool,
     ) -> BooleanColumn {
-        let mut map = HashMap::new();
-
         let mut builder: ColumnBuilder<bool> = ColumnBuilder::with_capacity(lhs.len());
 
         for (lhs_value, rhs_value) in lhs.scalar_iter().zip(rhs.scalar_iter()) {
-            let pattern = if let Some(pattern) = map.get(rhs_value) {
-                pattern
-            } else {
-                let pattern_str = simdutf8::basic::from_utf8(rhs_value)
-                    .expect("Unable to convert the LIKE pattern to string: {}");
-                let re_pattern = like_pattern_to_regex(pattern_str);
-                let re = BytesRegex::new(&re_pattern)
-                    .expect("Unable to build regex from LIKE pattern: {}");
-                map.insert(rhs_value, re);
-                map.get(rhs_value).unwrap()
-            };
+            let pattern_str = simdutf8::basic::from_utf8(rhs_value)
+                .expect("Unable to convert the LIKE pattern to string: {}");
+            let re_pattern = like_pattern_to_regex(pattern_str);
+            let re =
+                BytesRegex::new(&re_pattern).expect("Unable to build regex from LIKE pattern: {}");
 
-            builder.append(op(pattern.is_match(lhs_value)));
+            builder.append(op(re.is_match(lhs_value)));
         }
         builder.build_column()
     }
