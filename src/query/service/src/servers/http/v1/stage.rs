@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_storages_stage::StageTable;
 use common_users::UserApiProvider;
 use poem::error::InternalServerError;
 use poem::error::Result as PoemResult;
@@ -27,7 +28,6 @@ use serde::Serialize;
 use super::HttpQueryContext;
 use crate::sessions::SessionType;
 use crate::sessions::TableContext;
-use crate::storages::stage::StageTable;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct UploadToStageResponse {

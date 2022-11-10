@@ -12,13 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io::Cursor;
+
 use common_exception::*;
-use common_io::prelude::*;
+use common_io::cursor_ext::*;
+use common_io::prelude::BinaryRead;
+use common_io::prelude::FormatSettings;
 use num::cast::AsPrimitive;
 
 use crate::columns::MutableColumn;
 use crate::prelude::*;
-
 pub struct TimestampDeserializer {
     pub builder: MutablePrimitiveColumn<i64>,
 }
@@ -59,7 +62,7 @@ impl TypeDeserializer for TimestampDeserializer {
         match value {
             serde_json::Value::String(v) => {
                 let v = v.clone();
-                let mut reader = BufferReader::new(v.as_bytes());
+                let mut reader = Cursor::new(v.as_bytes());
                 let ts = reader.read_timestamp_text(&format.timezone)?;
 
                 let micros = ts.timestamp_micros();
@@ -71,9 +74,9 @@ impl TypeDeserializer for TimestampDeserializer {
         }
     }
 
-    fn de_text_quoted<R: BufferRead>(
+    fn de_text_quoted<R: AsRef<[u8]>>(
         &mut self,
-        reader: &mut NestedCheckpointReader<R>,
+        reader: &mut Cursor<R>,
         format: &FormatSettings,
     ) -> Result<()> {
         reader.must_ignore_byte(b'\'')?;
@@ -89,7 +92,7 @@ impl TypeDeserializer for TimestampDeserializer {
     }
 
     fn de_whole_text(&mut self, reader: &[u8], format: &FormatSettings) -> Result<()> {
-        let mut reader = BufferReader::new(reader);
+        let mut reader = Cursor::new(reader);
         let ts = reader.read_timestamp_text(&format.timezone)?;
         let micros = ts.timestamp_micros();
         check_timestamp(micros)?;
@@ -98,9 +101,9 @@ impl TypeDeserializer for TimestampDeserializer {
         Ok(())
     }
 
-    fn de_text<R: BufferRead>(
+    fn de_text<R: AsRef<[u8]>>(
         &mut self,
-        reader: &mut NestedCheckpointReader<R>,
+        reader: &mut Cursor<R>,
         format: &FormatSettings,
     ) -> Result<()> {
         let ts = reader.read_timestamp_text(&format.timezone)?;
@@ -110,35 +113,9 @@ impl TypeDeserializer for TimestampDeserializer {
         Ok(())
     }
 
-    fn de_text_csv<R: BufferRead>(
+    fn de_text_json<R: AsRef<[u8]>>(
         &mut self,
-        reader: &mut NestedCheckpointReader<R>,
-        format: &FormatSettings,
-    ) -> Result<()> {
-        let maybe_single_quote = reader.ignore_byte(b'\'')?;
-        let maybe_double_quote = if !maybe_single_quote {
-            reader.ignore_byte(b'"')?
-        } else {
-            false
-        };
-        let ts = reader.read_timestamp_text(&format.timezone);
-        if maybe_single_quote {
-            reader.must_ignore_byte(b'\'')?;
-        } else if maybe_double_quote {
-            reader.must_ignore_byte(b'"')?;
-        }
-        if ts.is_err() {
-            return Err(ts.err().unwrap());
-        }
-        let micros = ts.unwrap().timestamp_micros();
-        check_timestamp(micros)?;
-        self.builder.append_value(micros.as_());
-        Ok(())
-    }
-
-    fn de_text_json<R: BufferRead>(
-        &mut self,
-        reader: &mut NestedCheckpointReader<R>,
+        reader: &mut Cursor<R>,
         format: &FormatSettings,
     ) -> Result<()> {
         reader.must_ignore_byte(b'"')?;

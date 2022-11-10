@@ -22,11 +22,11 @@ use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::FormatSettings;
+use common_storages_fuse_result::BlockBuffer;
 use serde_json::Value as JsonValue;
 
 use crate::servers::http::v1::json_block::block_to_json_value;
 use crate::servers::http::v1::JsonBlock;
-use crate::storages::result::block_buffer::BlockBuffer;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Wait {

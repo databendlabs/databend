@@ -11,6 +11,7 @@ members = [
     "src/binaries",
     # Common
     "src/common/arrow",
+    "src/common/auth",
     "src/common/base",
     "src/common/building",
     "src/common/cache",
@@ -36,7 +37,6 @@ members = [
     "src/query/functions",
     "src/query/functions-v2",
     "src/query/management",
-    "src/query/planner",
     "src/query/pipeline/core",
     "src/query/pipeline/sinks",
     "src/query/pipeline/sources",
@@ -44,16 +44,21 @@ members = [
     "src/query/settings",
     "src/query/sql",
     "src/query/storages/cache",
-    "src/query/storages/constants",
-    "src/query/storages/fuse",
-    "src/query/storages/fuse-meta",
-    "src/query/storages/hive",
-    "src/query/storages/hive-meta-store",
-    "src/query/storages/index",
-    "src/query/storages/preludes",
     "src/query/storages/factory",
+    "src/query/storages/fuse/fuse",
+    "src/query/storages/fuse/fuse-result",
+    "src/query/storages/hive/hive",
+    "src/query/storages/hive/hive-meta-store",
+    "src/query/storages/index",
+    "src/query/storages/information-schema",
+    "src/query/storages/memory",
+    "src/query/storages/null",
+    "src/query/storages/table-meta",
+    "src/query/storages/random",
     "src/query/storages/share",
-    "src/query/streams",
+    "src/query/storages/stage",
+    "src/query/storages/system",
+    "src/query/storages/view",
     "src/query/users",
     # databend-query
     "src/query/service",
@@ -71,9 +76,6 @@ members = [
     "src/meta/protos",
     # databend-meta
     "src/meta/service",
-    # Hack
-    # This crate is used to hack our cargo.lock to resovle CVEs and so on.
-    "src/workspace-hack",
 ]
 
 [workspace.dependencies]
@@ -118,7 +120,7 @@ opt-level = 0
 debug = 0
 codegen-units = 16
 lto = false
-incremental = true
+incremental = false
 debug-assertions = true
 overflow-checks = true
 rpath = false

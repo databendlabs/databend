@@ -29,11 +29,12 @@ use crate::utils::arrow::constant_bitmap;
 use crate::values::Value;
 use crate::values::ValueRef;
 use crate::Column;
+use crate::Expr;
 use crate::Scalar;
 
 #[derive(Debug, Clone)]
 pub struct FunctionSignature {
-    pub name: &'static str,
+    pub name: String,
     pub args_type: Vec<DataType>,
     pub return_type: DataType,
     pub property: FunctionProperty,
@@ -82,17 +83,15 @@ pub struct Function {
 
 #[derive(Default)]
 pub struct FunctionRegistry {
-    pub funcs: HashMap<&'static str, Vec<Arc<Function>>>,
+    pub funcs: HashMap<String, Vec<Arc<Function>>>,
     /// A function to build function depending on the const parameters and the type of arguments (before coersion).
     ///
     /// The first argument is the const parameters and the second argument is the number of arguments.
     #[allow(clippy::type_complexity)]
-    pub factories: HashMap<
-        &'static str,
-        Vec<Box<dyn Fn(&[usize], &[DataType]) -> Option<Arc<Function>> + 'static>>,
-    >,
+    pub factories:
+        HashMap<String, Vec<Box<dyn Fn(&[usize], &[DataType]) -> Option<Arc<Function>> + 'static>>>,
     /// Aliases map from alias function name to concrete function name.
-    pub aliases: HashMap<&'static str, &'static str>,
+    pub aliases: HashMap<String, String>,
 }
 
 impl FunctionRegistry {
@@ -119,13 +118,13 @@ impl FunctionRegistry {
         &self,
         name: &str,
         params: &[usize],
-        args_type: &[DataType],
+        args: &[Expr],
     ) -> Vec<(FunctionID, Arc<Function>)> {
         let name = name.to_lowercase();
         let name = self
             .aliases
             .get(name.as_str())
-            .cloned()
+            .map(String::as_str)
             .unwrap_or(name.as_str());
         if params.is_empty() {
             let builtin_funcs = self
@@ -137,7 +136,7 @@ impl FunctionRegistry {
                         .enumerate()
                         .filter_map(|(id, func)| {
                             if func.signature.name == name
-                                && func.signature.args_type.len() == args_type.len()
+                                && func.signature.args_type.len() == args.len()
                             {
                                 Some((
                                     FunctionID::Builtin {
@@ -159,6 +158,11 @@ impl FunctionRegistry {
             }
         }
 
+        let args_type = args
+            .iter()
+            .map(Expr::data_type)
+            .cloned()
+            .collect::<Vec<_>>();
         self.factories
             .get(name)
             .map(|factories| {
@@ -166,13 +170,13 @@ impl FunctionRegistry {
                     .iter()
                     .enumerate()
                     .filter_map(|(id, factory)| {
-                        factory(params, args_type).map(|func| {
+                        factory(params, &args_type).map(|func| {
                             (
                                 FunctionID::Factory {
                                     name: name.to_string(),
                                     id,
                                     params: params.to_vec(),
-                                    args_type: args_type.to_vec(),
+                                    args_type: args_type.clone(),
                                 },
                                 func,
                             )
@@ -185,18 +189,18 @@ impl FunctionRegistry {
 
     pub fn register_function_factory(
         &mut self,
-        name: &'static str,
+        name: &str,
         factory: impl Fn(&[usize], &[DataType]) -> Option<Arc<Function>> + 'static,
     ) {
         self.factories
-            .entry(name)
+            .entry(name.to_string())
             .or_insert_with(Vec::new)
             .push(Box::new(factory));
     }
 
-    pub fn register_aliases(&mut self, fn_name: &'static str, aliases: &[&'static str]) {
+    pub fn register_aliases(&mut self, fn_name: &str, aliases: &[&str]) {
         for alias in aliases {
-            self.aliases.insert(alias, fn_name);
+            self.aliases.insert(alias.to_string(), fn_name.to_string());
         }
     }
 }

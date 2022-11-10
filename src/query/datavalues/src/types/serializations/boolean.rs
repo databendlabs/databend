@@ -21,7 +21,7 @@ use crate::prelude::*;
 
 #[derive(Clone)]
 pub struct BooleanSerializer {
-    pub(crate) values: Bitmap,
+    pub values: Bitmap,
 }
 
 impl BooleanSerializer {
@@ -58,7 +58,13 @@ impl<'a> TypeSerializer<'a> for BooleanSerializer {
         buf.extend_from_slice(v);
     }
 
-    fn write_field_tsv(&self, row_index: usize, buf: &mut Vec<u8>, format: &FormatSettings) {
+    fn write_field_tsv(
+        &self,
+        row_index: usize,
+        buf: &mut Vec<u8>,
+        format: &FormatSettings,
+        _in_nested: bool,
+    ) {
         self.write_field_outer(row_index, buf, format)
     }
 

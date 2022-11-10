@@ -21,6 +21,7 @@ use common_base::base::tokio::sync::mpsc::Sender;
 use common_base::base::GlobalIORuntime;
 use common_base::base::TrySpawn;
 use common_datablocks::DataBlock;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_pipeline_core::Pipeline;
 use futures::AsyncRead;
@@ -182,7 +183,7 @@ pub trait InputFormatPipe: Sized + Send + 'static {
                     break;
                 };
             }
-            tracing::info!("end copy splits feeder");
+            tracing::debug!("end copy splits feeder");
         });
 
         Ok(())
@@ -288,6 +289,12 @@ pub trait InputFormatPipe: Sized + Send + 'static {
             let mut batch = vec![0u8; batch_size];
             let n = read_full(&mut reader, &mut batch[0..]).await?;
             if n == 0 {
+                if total_read != size {
+                    return Err(ErrorCode::BadBytes(format!(
+                        "split {} expect {} bytes, read only {} bytes",
+                        split_info, size, total_read
+                    )));
+                }
                 break;
             } else {
                 total_read += n;
@@ -299,7 +306,6 @@ pub trait InputFormatPipe: Sized + Send + 'static {
                 }
             }
         }
-        assert_eq!(total_read, size);
         tracing::debug!("finished");
         Ok(())
     }

@@ -14,6 +14,7 @@
 
 use std::collections::BTreeMap;
 
+use common_catalog::plan::DataSourcePlan;
 use common_datablocks::DataBlock;
 use common_datavalues::wrap_nullable;
 use common_datavalues::BooleanType;
@@ -25,9 +26,6 @@ use common_datavalues::ToDataType;
 use common_datavalues::Vu8;
 use common_exception::Result;
 use common_meta_app::schema::TableInfo;
-use common_planner::extras::StageKind;
-use common_planner::extras::SINK_SCHEMA;
-use common_planner::ReadDataSourcePlan;
 
 use super::AggregateFunctionDesc;
 use super::SortDesc;
@@ -42,7 +40,7 @@ pub type ColumnID = String;
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct TableScan {
     pub name_mapping: BTreeMap<String, ColumnID>,
-    pub source: Box<ReadDataSourcePlan>,
+    pub source: Box<DataSourcePlan>,
 
     /// Only used for display
     pub table_index: IndexType,
@@ -290,7 +288,7 @@ impl HashJoin {
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Exchange {
     pub input: Box<PhysicalPlan>,
-    pub kind: StageKind,
+    pub kind: FragmentKind,
     pub keys: Vec<PhysicalScalar>,
 }
 
@@ -316,12 +314,19 @@ impl ExchangeSource {
     }
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub enum FragmentKind {
+    Normal,
+    Expansive,
+    Merge,
+}
+
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ExchangeSink {
     pub input: Box<PhysicalPlan>,
     /// Input schema of exchanged data
     pub schema: DataSchemaRef,
-    pub kind: StageKind,
+    pub kind: FragmentKind,
     pub keys: Vec<PhysicalScalar>,
 
     /// Fragment ID of sink fragment
@@ -364,7 +369,10 @@ pub struct DistributedInsertSelect {
 
 impl DistributedInsertSelect {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
-        Ok(SINK_SCHEMA.clone())
+        Ok(DataSchemaRefExt::create(vec![
+            DataField::new("seg_loc", Vu8::to_data_type()),
+            DataField::new("seg_info", Vu8::to_data_type()),
+        ]))
     }
 }
 

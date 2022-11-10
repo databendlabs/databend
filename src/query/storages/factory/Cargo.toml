@@ -12,32 +12,15 @@ doctest = false
 test = false
 
 [dependencies]
-common-base = { path = "../../../common/base" }
 common-catalog = { path = "../../catalog" }
 common-config = { path = "../../config" }
-common-datablocks = { path = "../../datablocks" }
-common-datavalues = { path = "../../datavalues" }
 common-exception = { path = "../../../common/exception" }
-common-formats = { path = "../../formats" }
-common-fuse-meta = { path = "../fuse-meta" }
 common-meta-app = { path = "../../../meta/app" }
-common-meta-types = { path = "../../../meta/types" }
-common-pipeline-core = { path = "../../pipeline/core" }
-common-pipeline-sources = { path = "../../pipeline/sources" }
-common-pipeline-transforms = { path = "../../pipeline/transforms" }
-common-planner = { path = "../../planner" }
-common-storage = { path = "../../../common/storage" }
-common-storages-fuse = { path = "../fuse" }
+common-storages-fuse = { path = "../fuse/fuse" }
 common-storages-index = { path = "../index" }
-common-storages-preludes = { path = "../preludes" }
-common-streams = { path = "../../streams" }
+common-storages-memory = { path = "../memory" }
+common-storages-null = { path = "../null" }
+common-storages-random = { path = "../random" }
+common-storages-view = { path = "../view" }
 
-async-trait = { version = "0.1.57", package = "async-trait-fn" }
-backon = "0.2"
-futures = "0.3.24"
-opendal = { version = "0.19", features = ["layers-retry", "layers-tracing", "layers-metrics", "compress"] }
-parking_lot = "0.12.1"
-serde = { workspace = true }
-serde_json = { workspace = true }
-tracing = "0.1.36"
-uuid = { version = "1.1.2", features = ["serde", "v4"] }
+dashmap = "5.4"

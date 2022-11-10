@@ -18,16 +18,16 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planner::plans::DescribeTablePlan;
 use common_sql::executor::PhysicalScalar;
+use common_sql::plans::DescribeTablePlan;
+use common_storages_view::view_table::QUERY;
+use common_storages_view::view_table::VIEW_ENGINE;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::Planner;
-use crate::storages::view::view_table::QUERY;
-use crate::storages::view::view_table::VIEW_ENGINE;
 
 pub struct DescribeTableInterpreter {
     ctx: Arc<QueryContext>,

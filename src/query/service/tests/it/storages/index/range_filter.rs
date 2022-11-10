@@ -15,11 +15,9 @@
 use std::collections::HashMap;
 
 use common_base::base::tokio;
+use common_catalog::plan::Expression;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_fuse_meta::meta::ColumnStatistics;
-use common_fuse_meta::meta::StatisticsOfColumns;
-use common_planner::Expression;
 use common_sql::executor::add;
 use common_sql::executor::col;
 use common_sql::executor::func;
@@ -28,6 +26,8 @@ use common_sql::executor::lit_null;
 use common_sql::executor::neg;
 use common_sql::executor::sub;
 use common_sql::executor::ExpressionOp;
+use common_storages_table_meta::meta::ColumnStatistics;
+use common_storages_table_meta::meta::StatisticsOfColumns;
 use databend_query::storages::index::range_filter::build_verifiable_expr;
 use databend_query::storages::index::range_filter::left_bound_for_like_pattern;
 use databend_query::storages::index::range_filter::right_bound_for_like_pattern;

@@ -17,9 +17,11 @@ use std::sync::Arc;
 
 use common_datavalues::prelude::*;
 use common_datavalues::StringType;
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::scalars::assert_string;
+use crate::scalars::cast_column_field;
 use crate::scalars::Function;
 use crate::scalars::FunctionContext;
 use crate::scalars::FunctionDescription;
@@ -44,7 +46,9 @@ pub struct String2StringFunction<T> {
 
 impl<T: StringOperator> String2StringFunction<T> {
     pub fn try_create(display_name: &str, args: &[&DataTypeImpl]) -> Result<Box<dyn Function>> {
-        assert_string(args[0])?;
+        if display_name.to_lowercase() != "upper" {
+            assert_string(args[0])?;
+        }
 
         Ok(Box::new(Self {
             display_name: display_name.to_string(),
@@ -69,17 +73,39 @@ impl<T: StringOperator> Function for String2StringFunction<T> {
 
     fn eval(
         &self,
-        _func_ctx: FunctionContext,
+        func_ctx: FunctionContext,
         columns: &common_datavalues::ColumnsWithField,
         _input_rows: usize,
     ) -> Result<common_datavalues::ColumnRef> {
         let mut op = T::default();
-        let column: &StringColumn = Series::check_get(columns[0].column())?;
-        let estimate_bytes = op.estimate_bytes(column);
-        let col = StringColumn::try_transform(column, estimate_bytes, |val, buffer| {
-            op.try_apply(val, buffer)
-        })?;
-        Ok(Arc::new(col))
+        match columns[0].data_type().data_type_id() {
+            TypeID::UInt8
+            | TypeID::UInt16
+            | TypeID::UInt32
+            | TypeID::UInt64
+            | TypeID::Int8
+            | TypeID::Int16
+            | TypeID::Int32
+            | TypeID::Int64
+            | TypeID::String => {
+                let col = cast_column_field(
+                    &columns[0],
+                    columns[0].data_type(),
+                    &StringType::new_impl(),
+                    &func_ctx,
+                )?;
+                let column = col.as_any().downcast_ref::<StringColumn>().unwrap();
+                let estimate_bytes = op.estimate_bytes(column);
+                let col = StringColumn::try_transform(column, estimate_bytes, |val, buffer| {
+                    op.try_apply(val, buffer)
+                })?;
+                Ok(Arc::new(col))
+            }
+            _ => Err(ErrorCode::IllegalDataType(format!(
+                "Expected integer or string type but got {}",
+                columns[0].data_type().data_type_id()
+            ))),
+        }
     }
 }
 

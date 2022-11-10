@@ -15,17 +15,21 @@
 #![feature(hash_raw_entry)]
 #![feature(trusted_len)]
 
+mod block_compact_thresholds;
 mod data_block;
 mod data_block_debug;
 mod kernels;
 mod memory;
 mod meta_info;
-mod utils;
+mod serialize;
+mod stream;
 
+pub use block_compact_thresholds::BlockCompactThresholds;
 pub use data_block::DataBlock;
 pub use data_block_debug::*;
 pub use kernels::*;
 pub use memory::InMemoryData;
-pub use meta_info::MetaInfo;
-pub use meta_info::MetaInfoPtr;
-pub use utils::*;
+pub use meta_info::BlockMetaInfo;
+pub use meta_info::BlockMetaInfoPtr;
+pub use serialize::*;
+pub use stream::SendableDataBlockStream;

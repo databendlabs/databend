@@ -68,6 +68,8 @@ pub struct FormatSettings {
     pub json_quote_denormals: bool,
     pub json_escape_forward_slashes: bool,
     pub ident_case_sensitive: bool,
+
+    pub row_tag: Vec<u8>,
 }
 
 impl FormatSettings {
@@ -86,6 +88,38 @@ impl FormatSettings {
             ))
         } else {
             Ok(option.as_bytes()[0])
+        }
+    }
+
+    pub fn parse_row_tag(option: &str) -> Result<Vec<u8>> {
+        if option.is_empty() {
+            return Ok(vec![b'r', b'o', b'w']);
+        }
+        Ok(Vec::from(option))
+    }
+
+    pub fn for_values_parsing() -> Self {
+        Self {
+            timezone: "UTC".parse::<Tz>().unwrap(),
+            nested: Default::default(),
+
+            true_bytes: TRUE_BYTES_LOWER.as_bytes().to_vec(),
+            false_bytes: FALSE_BYTES_LOWER.as_bytes().to_vec(),
+            null_bytes: NULL_BYTES_UPPER.as_bytes().to_vec(),
+            nan_bytes: NAN_BYTES_LOWER.as_bytes().to_vec(),
+            inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
+            quote_char: b'\'',
+            escape: Some(b'\\'),
+
+            record_delimiter: vec![b'\n'],
+            field_delimiter: vec![b'\t'],
+
+            // not used
+            empty_as_default: true,
+            json_quote_denormals: false,
+            json_escape_forward_slashes: true,
+            ident_case_sensitive: false,
+            row_tag: vec![],
         }
     }
 
@@ -110,6 +144,7 @@ impl FormatSettings {
             json_quote_denormals: false,
             json_escape_forward_slashes: true,
             ident_case_sensitive: false,
+            row_tag: vec![],
         }
     }
 }

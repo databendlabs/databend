@@ -14,13 +14,14 @@
 
 mod access;
 // mod async_insert_queue_v2;
+mod common;
 mod fragments;
 mod interpreter;
 mod interpreter_call;
+mod interpreter_catalog_create;
 mod interpreter_cluster_key_alter;
 mod interpreter_cluster_key_drop;
 mod interpreter_clustering_history;
-mod interpreter_common;
 mod interpreter_copy_v2;
 mod interpreter_database_create;
 mod interpreter_database_drop;
@@ -81,6 +82,7 @@ mod interpreter_view_drop;
 mod plan_schedulers;
 
 pub use access::ManagementModeAccess;
+pub use common::append2table;
 pub use fragments::QueryFragmentAction;
 pub use fragments::QueryFragmentActions;
 pub use fragments::QueryFragmentsActions;
@@ -90,9 +92,6 @@ pub use interpreter_call::CallInterpreter;
 pub use interpreter_cluster_key_alter::AlterTableClusterKeyInterpreter;
 pub use interpreter_cluster_key_drop::DropTableClusterKeyInterpreter;
 pub use interpreter_clustering_history::InterpreterClusteringHistory;
-pub use interpreter_common::append2table;
-pub use interpreter_common::execute_pipeline;
-pub use interpreter_common::fill_missing_columns;
 pub use interpreter_database_create::CreateDatabaseInterpreter;
 pub use interpreter_database_drop::DropDatabaseInterpreter;
 pub use interpreter_database_rename::RenameDatabaseInterpreter;

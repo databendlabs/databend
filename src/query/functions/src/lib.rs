@@ -13,14 +13,11 @@
 // limitations under the License.
 
 #![feature(core_intrinsics)]
-#![feature(duration_checked_float)]
-#![feature(map_first_last)]
 #![feature(portable_simd)]
 
 pub mod aggregates;
 pub mod rdoc;
 pub mod scalars;
-pub mod window;
 
 use aggregates::AggregateFunctionFactory;
 use scalars::FunctionFactory;

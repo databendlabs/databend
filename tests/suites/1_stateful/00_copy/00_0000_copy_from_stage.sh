@@ -63,7 +63,7 @@ copy_from_named_external_stage_cases=(
   # copy bz2 csv
   "copy into ontime200 from @named_external_stage FILES = ('ontime_200.csv.bz2') FILE_FORMAT = (type = 'CSV' field_delimiter = ',' compression = 'bz2'  record_delimiter = '\n' skip_header = 1);"
   # copy auto csv
-  "copy into ontime200 from @named_external_stage FILES = ('ontime_200.csv.gz','ontime_200.csv.bz2','ontime_200.csv.zst') FILE_FORMAT = (type = 'CSV' field_delimiter = ',' compression = 'auto'  record_delimiter = '\n' skip_header = 1);"
+  "copy into ontime200 from @named_external_stage FILES = ('ontime_200.csv.gz','ontime_200.csv.bz2','ontime_200.csv.zst') FILE_FORMAT = (type = 'CSV' field_delimiter = ',' compression = 'auto'  record_delimiter = '\n' skip_header = 1) FORCE = true;"
 )
 
 ## Copy file twiice but return the same result to test idempotent-copy

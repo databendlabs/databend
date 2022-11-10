@@ -53,7 +53,7 @@ impl<'a, T: PrimitiveType + AsPrimitive<i64> + ToLexical> DateSerializer<'a, T> 
         })
     }
 
-    fn fmt(&self, row_index: usize) -> String {
+    pub fn fmt(&self, row_index: usize) -> String {
         v_to_string(&self.values[row_index].as_i64())
     }
 }
@@ -78,9 +78,21 @@ impl<'a, T: PrimitiveType + AsPrimitive<i64> + ToLexical> TypeSerializer<'a>
         }
     }
 
-    fn write_field_tsv(&self, row_index: usize, buf: &mut Vec<u8>, format: &FormatSettings) {
+    fn write_field_tsv(
+        &self,
+        row_index: usize,
+        buf: &mut Vec<u8>,
+        format: &FormatSettings,
+        in_nested: bool,
+    ) {
+        if in_nested {
+            buf.push(format.quote_char);
+        }
         let s = self.fmt(row_index);
         write_escaped_string(s.as_bytes(), buf, format.quote_char);
+        if in_nested {
+            buf.push(format.quote_char);
+        }
     }
 
     fn write_field_csv(&self, row_index: usize, buf: &mut Vec<u8>, format: &FormatSettings) {

@@ -1,0 +1,19 @@
+[package]
+name = "common-auth"
+version = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+publish = { workspace = true }
+edition = { workspace = true }
+
+[lib]
+doctest = false
+test = false
+
+[dependencies]
+base64 = "0.13.0"
+common-base = { path = "../../common/base" }
+common-datavalues = { path = "../../query/datavalues" }
+http = "0.2"
+[dev-dependencies]
+tempfile = "3.1.0"

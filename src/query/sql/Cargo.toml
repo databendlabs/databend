@@ -21,9 +21,8 @@ common-datavalues = { path = "../datavalues" }
 common-exception = { path = "../../common/exception" }
 common-formats = { path = "../formats" }
 common-functions = { path = "../functions" }
-common-fuse-meta = { path = "../storages/fuse-meta" }
 common-grpc = { path = "../../common/grpc" }
-common-hive-meta-store = { path = "../storages/hive-meta-store", optional = true }
+common-hive-meta-store = { path = "../storages/hive/hive-meta-store", optional = true }
 common-http = { path = "../../common/http" }
 common-io = { path = "../../common/io" }
 common-management = { path = "../management" }
@@ -37,11 +36,10 @@ common-pipeline-core = { path = "../pipeline/core" }
 common-pipeline-sources = { path = "../pipeline/sources" }
 common-pipeline-transforms = { path = "../pipeline/transforms" }
 
-common-planner = { path = "../planner" }
 common-settings = { path = "../settings" }
 common-storage = { path = "../../common/storage" }
-common-storages-constants = { path = "../storages/constants" }
-common-storages-preludes = { path = "../storages/preludes" }
+common-storages-table-meta = { path = "../storages/table-meta" }
+common-storages-view = { path = "../storages/view" }
 common-tracing = { path = "../../common/tracing" }
 common-users = { path = "../users" }
 
@@ -60,6 +58,7 @@ byteorder = "1.4.3"
 bytes = "1.2.1"
 chrono = "0.4.22"
 chrono-tz = "0.6.3"
+dashmap = "5.4"
 futures = "0.3.24"
 futures-util = "0.3.24"
 headers = "0.3.8"

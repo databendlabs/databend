@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use async_channel::Receiver;
+use common_catalog::table::AppendMode;
 use common_datablocks::DataBlock;
 use common_datablocks::SortColumnDescription;
 use common_datavalues::DataField;
@@ -30,15 +31,16 @@ use common_functions::scalars::FunctionContext;
 use common_functions::scalars::FunctionFactory;
 use common_pipeline_core::Pipe;
 use common_pipeline_sinks::processors::sinks::UnionReceiveSink;
+use common_pipeline_transforms::processors::transforms::try_add_multi_sort_merge;
 use common_sql::evaluator::ChunkOperator;
 use common_sql::evaluator::CompoundChunkOperator;
 use common_sql::executor::AggregateFunctionDesc;
 use common_sql::executor::PhysicalScalar;
 
-use crate::interpreters::fill_missing_columns;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::transforms::HashJoinDesc;
 use crate::pipelines::processors::transforms::RightSemiAntiJoinCompactor;
+use crate::pipelines::processors::transforms::TransformLeftJoin;
 use crate::pipelines::processors::transforms::TransformMarkJoin;
 use crate::pipelines::processors::transforms::TransformMergeBlock;
 use crate::pipelines::processors::transforms::TransformRightJoin;
@@ -46,11 +48,13 @@ use crate::pipelines::processors::transforms::TransformRightSemiAntiJoin;
 use crate::pipelines::processors::AggregatorParams;
 use crate::pipelines::processors::AggregatorTransformParams;
 use crate::pipelines::processors::JoinHashTable;
+use crate::pipelines::processors::LeftJoinCompactor;
 use crate::pipelines::processors::MarkJoinCompactor;
 use crate::pipelines::processors::RightJoinCompactor;
 use crate::pipelines::processors::SinkBuildHashTable;
 use crate::pipelines::processors::Sinker;
 use crate::pipelines::processors::SortMergeCompactor;
+use crate::pipelines::processors::TransformAddOn;
 use crate::pipelines::processors::TransformAggregator;
 use crate::pipelines::processors::TransformCastSchema;
 use crate::pipelines::processors::TransformHashJoinProbe;
@@ -147,7 +151,7 @@ impl PipelineBuilder {
             &join.build_keys,
             join.build.output_schema()?,
             join.probe.output_schema()?,
-            HashJoinDesc::create(self.ctx.clone(), join)?,
+            HashJoinDesc::create(join)?,
         )
     }
 
@@ -225,8 +229,8 @@ impl PipelineBuilder {
         let schema = scan.source.schema();
         let projections = scan
             .name_mapping
-            .iter()
-            .map(|(name, _)| schema.index_of(name.as_str()))
+            .keys()
+            .map(|name| schema.index_of(name.as_str()))
             .collect::<Result<Vec<usize>>>()?;
 
         let ops = vec![
@@ -429,6 +433,7 @@ impl PipelineBuilder {
             })
             .collect();
 
+        let block_size = self.ctx.get_settings().get_max_block_size()? as usize;
         // Sort
         self.main_pipeline.add_transform(|input, output| {
             TransformSortPartial::try_create(input, output, sort.limit, sort_desc.clone())
@@ -439,20 +444,18 @@ impl PipelineBuilder {
             TransformSortMerge::try_create(
                 input,
                 output,
-                SortMergeCompactor::new(sort.limit, sort_desc.clone()),
+                SortMergeCompactor::new(block_size, sort.limit, sort_desc.clone()),
             )
         })?;
 
-        self.main_pipeline.resize(1)?;
-
         // Concat merge in single thread
-        self.main_pipeline.add_transform(|input, output| {
-            TransformSortMerge::try_create(
-                input,
-                output,
-                SortMergeCompactor::new(sort.limit, sort_desc.clone()),
-            )
-        })
+        try_add_multi_sort_merge(
+            &mut self.main_pipeline,
+            sort.output_schema()?,
+            block_size,
+            sort.limit,
+            sort_desc,
+        )
     }
 
     fn build_limit(&mut self, limit: &Limit) -> Result<()> {
@@ -476,6 +479,21 @@ impl PipelineBuilder {
                 join.output_schema()?,
             )
         })?;
+
+        if (join.join_type == JoinType::Left
+            || join.join_type == JoinType::Full
+            || join.join_type == JoinType::Single)
+            && join.non_equi_conditions.is_empty()
+        {
+            self.main_pipeline.resize(1)?;
+            self.main_pipeline.add_transform(|input, output| {
+                TransformLeftJoin::try_create(
+                    input,
+                    output,
+                    LeftJoinCompactor::create(state.clone()),
+                )
+            })?;
+        }
 
         if join.join_type == JoinType::LeftMark {
             self.main_pipeline.resize(1)?;
@@ -624,14 +642,30 @@ impl PipelineBuilder {
             .get_catalog(&insert_select.catalog)?
             .get_table_by_info(&insert_select.table_info)?;
 
-        fill_missing_columns(
+        // Fill missing columns.
+        {
+            let source_schema = insert_schema;
+            let target_schema = &table.schema();
+            if source_schema != target_schema {
+                self.main_pipeline.add_transform(
+                    |transform_input_port, transform_output_port| {
+                        TransformAddOn::try_create(
+                            transform_input_port,
+                            transform_output_port,
+                            source_schema.clone(),
+                            target_schema.clone(),
+                            self.ctx.clone(),
+                        )
+                    },
+                )?;
+            }
+        }
+        table.append_data(
             self.ctx.clone(),
-            insert_schema,
-            &table.schema(),
             &mut self.main_pipeline,
+            AppendMode::Normal,
+            true,
         )?;
-
-        table.append_data(self.ctx.clone(), &mut self.main_pipeline, true)?;
 
         Ok(())
     }

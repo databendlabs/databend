@@ -43,14 +43,6 @@ runs:
       run: |
         ./scripts/ci/ci-run-stateful-tests-cluster-s3.sh
 
-    - name: Upload .stdout files
-      if: failure()
-      uses: actions/upload-artifact@v3
-      with:
-        name: test-stateful-cluster-linux-stdouts
-        path: |
-           ./tests/suites/1_stateful/*/*.stdout
-
     - name: Upload failure
       if: failure()
       uses: ./.github/actions/artifact_failure

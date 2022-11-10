@@ -97,13 +97,7 @@ where
     R: AsPrimitive<i64>,
 {
     let precision = precision.as_();
-    let precision = if precision > FORMAT_MAX_DECIMALS {
-        FORMAT_MAX_DECIMALS
-    } else if precision < 0 {
-        0
-    } else {
-        precision
-    };
+    let precision = precision.clamp(0, FORMAT_MAX_DECIMALS);
 
     let trunc: i64 = number.as_();
     let number: f64 = number.as_();

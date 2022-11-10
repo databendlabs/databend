@@ -16,9 +16,9 @@ use common_datablocks::serialize_data_blocks;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
-use common_io::prelude::FormatSettings;
 
 use crate::output_format::OutputFormat;
+use crate::FileFormatOptionsExt;
 
 #[derive(Default)]
 pub struct ParquetOutputFormat {
@@ -27,7 +27,7 @@ pub struct ParquetOutputFormat {
 }
 
 impl ParquetOutputFormat {
-    pub fn create(schema: DataSchemaRef, _format_setting: FormatSettings) -> Self {
+    pub fn create(schema: DataSchemaRef, _options: &FileFormatOptionsExt) -> Self {
         Self {
             schema,
             data_blocks: vec![],

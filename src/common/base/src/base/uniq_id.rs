@@ -36,7 +36,7 @@ impl GlobalUniqName {
             let m = (uuid % 62) as u8;
             uuid /= 62;
 
-            match m as u8 {
+            match m {
                 0..=9 => unique_name.push((b'0' + m) as char),
                 10..=35 => unique_name.push((b'a' + (m - 10)) as char),
                 36..=61 => unique_name.push((b'A' + (m - 36)) as char),

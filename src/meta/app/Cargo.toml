@@ -11,6 +11,7 @@ doctest = false
 test = false
 
 [dependencies]
+chrono = "0.4"
 common-datavalues = { path = "../../query/datavalues" }
 common-meta-types = { path = "../types" }
 common-storage = { path = "../../common/storage" }

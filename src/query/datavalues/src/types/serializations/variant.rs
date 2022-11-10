@@ -26,7 +26,7 @@ use crate::serializations::write_json_string;
 
 #[derive(Debug, Clone)]
 pub struct VariantSerializer<'a> {
-    values: &'a [VariantValue],
+    pub values: &'a [VariantValue],
 }
 
 impl<'a> VariantSerializer<'a> {
@@ -57,7 +57,13 @@ impl<'a> TypeSerializer<'a> for VariantSerializer<'a> {
         write_csv_string(&v, buf, format.quote_char);
     }
 
-    fn write_field_tsv(&self, row_index: usize, buf: &mut Vec<u8>, format: &FormatSettings) {
+    fn write_field_tsv(
+        &self,
+        row_index: usize,
+        buf: &mut Vec<u8>,
+        format: &FormatSettings,
+        _in_nested: bool,
+    ) {
         let v = self.to_vec_values(row_index, format);
         write_escaped_string(&v, buf, format.quote_char);
     }

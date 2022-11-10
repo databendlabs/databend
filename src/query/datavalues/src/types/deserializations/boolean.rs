@@ -12,9 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io::Cursor;
+
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_io::prelude::*;
+use common_io::cursor_ext::*;
+use common_io::prelude::BinaryRead;
+use common_io::prelude::FormatSettings;
 
 use crate::prelude::*;
 
@@ -72,14 +76,14 @@ impl TypeDeserializer for BooleanDeserializer {
         Ok(())
     }
 
-    fn de_text<R: BufferRead>(
+    fn de_text<R: AsRef<[u8]>>(
         &mut self,
-        reader: &mut NestedCheckpointReader<R>,
+        reader: &mut Cursor<R>,
         _format: &FormatSettings,
     ) -> Result<()> {
-        let v = if BufferReadExt::ignore_insensitive_bytes(reader, b"true")? {
+        let v = if reader.ignore_insensitive_bytes(b"true") {
             Ok(true)
-        } else if BufferReadExt::ignore_insensitive_bytes(reader, b"false")? {
+        } else if reader.ignore_insensitive_bytes(b"false") {
             Ok(false)
         } else {
             Err(ErrorCode::BadBytes("Incorrect boolean value"))

@@ -26,20 +26,20 @@ use common_catalog::table_context::TableContext;
 use common_datavalues::DataTypeImpl;
 use common_exception::Result;
 use common_meta_types::UserDefinedFunction;
-use common_planner::plans::AlterUDFPlan;
-use common_planner::plans::CallPlan;
-use common_planner::plans::CreateRolePlan;
-use common_planner::plans::CreateUDFPlan;
-use common_planner::plans::DropRolePlan;
-use common_planner::plans::DropStagePlan;
-use common_planner::plans::DropUDFPlan;
-use common_planner::plans::DropUserPlan;
-use common_planner::plans::ShowGrantsPlan;
-use common_planner::plans::ShowRolesPlan;
-use common_planner::plans::UseDatabasePlan;
 
+use crate::plans::AlterUDFPlan;
+use crate::plans::CallPlan;
+use crate::plans::CreateRolePlan;
+use crate::plans::CreateUDFPlan;
+use crate::plans::DropRolePlan;
+use crate::plans::DropStagePlan;
+use crate::plans::DropUDFPlan;
+use crate::plans::DropUserPlan;
 use crate::plans::Plan;
 use crate::plans::RewriteKind;
+use crate::plans::ShowGrantsPlan;
+use crate::plans::ShowRolesPlan;
+use crate::plans::UseDatabasePlan;
 use crate::BindContext;
 use crate::ColumnBinding;
 use crate::MetadataRef;
@@ -129,6 +129,11 @@ impl<'a> Binder {
                     .await?
             },
             Statement::ShowSettings { like } => self.bind_show_settings(bind_context, like).await?,
+            // Catalogs
+            Statement::ShowCatalogs(stmt) => self.bind_show_catalogs(bind_context, stmt).await?,
+            Statement::ShowCreateCatalog(stmt) => self.bind_show_create_catalogs(stmt).await?,
+            Statement::CreateCatalog(stmt) => self.bind_create_catalog(stmt).await?,
+            Statement::DropCatalog(stmt) => self.bind_drop_catalog(stmt).await?,
 
             // Databases
             Statement::ShowDatabases(stmt) => self.bind_show_databases(bind_context, stmt).await?,

@@ -17,7 +17,8 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::StageType;
-use common_planner::plans::DropStagePlan;
+use common_sql::plans::DropStagePlan;
+use common_storages_stage::StageTable;
 use common_users::UserApiProvider;
 use tracing::info;
 
@@ -25,7 +26,6 @@ use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
-use crate::storages::stage::StageTable;
 
 #[derive(Debug)]
 pub struct DropUserStageInterpreter {

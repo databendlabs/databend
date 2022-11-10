@@ -25,7 +25,7 @@ use crate::types::serializations::helper::escape::write_escaped_string;
 
 #[derive(Clone)]
 pub struct StringSerializer<'a> {
-    pub(crate) column: &'a StringColumn,
+    pub column: &'a StringColumn,
 }
 
 impl<'a> StringSerializer<'a> {
@@ -56,12 +56,24 @@ impl<'a> TypeSerializer<'a> for StringSerializer<'a> {
         }
     }
 
-    fn write_field_tsv(&self, row_index: usize, buf: &mut Vec<u8>, format: &FormatSettings) {
+    fn write_field_tsv(
+        &self,
+        row_index: usize,
+        buf: &mut Vec<u8>,
+        format: &FormatSettings,
+        in_nested: bool,
+    ) {
+        if in_nested {
+            buf.push(format.quote_char);
+        };
         write_escaped_string(
             unsafe { self.column.value_unchecked(row_index) },
             buf,
-            format.quote_char,
+            format.nested.quote_char,
         );
+        if in_nested {
+            buf.push(format.quote_char);
+        };
     }
 
     fn write_field_csv(&self, row_index: usize, buf: &mut Vec<u8>, format: &FormatSettings) {

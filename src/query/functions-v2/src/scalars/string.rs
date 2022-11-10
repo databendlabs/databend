@@ -38,7 +38,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_aliases("upper", &["ucase"]);
     registry.register_aliases("lower", &["lcase"]);
     registry.register_aliases("length", &["octet_length"]);
-    registry.register_aliases("char_length", &["character_length"]);
+    registry.register_aliases("char_length", &["character_length", "length_utf8"]);
     registry.register_aliases("substr", &["substring", "mid"]);
 
     registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
@@ -105,14 +105,19 @@ pub fn register(registry: &mut FunctionRegistry) {
         |val, _| val.len() as u64,
     );
 
-    registry.register_1_arg::<StringType, NumberType<u64>, _, _>(
+    registry.register_passthrough_nullable_1_arg::<StringType, NumberType<u64>, _, _>(
         "char_length",
         FunctionProperty::default(),
         |_| None,
-        |val, _| match std::str::from_utf8(val) {
-            Ok(s) => s.chars().count() as u64,
-            Err(_) => val.len() as u64,
-        },
+        vectorize_with_builder_1_arg::<StringType, NumberType<u64>>(|s, output, _| {
+            match std::str::from_utf8(s) {
+                Ok(s) => {
+                    output.push(s.chars().count() as u64);
+                    Ok(())
+                }
+                Err(err) => Err(err.to_string()),
+            }
+        }),
     );
 
     registry.register_passthrough_nullable_3_arg::<StringType, NumberType<u64>, StringType, StringType, _, _>(
@@ -750,6 +755,30 @@ pub fn register(registry: &mut FunctionRegistry) {
             Ok(())
         }),
     );
+
+    registry.register_passthrough_nullable_2_arg::<StringType, NumberType<i64>, StringType, _, _>(
+        "substr_utf8",
+        FunctionProperty::default(),
+        |_, _| None,
+        vectorize_with_builder_2_arg::<StringType, NumberType<i64>, StringType>(
+            |s, pos, output, _| {
+                let s = std::str::from_utf8(s).map_err(|e| e.to_string())?;
+                substr_utf8(output, s, pos, s.len() as u64);
+                Ok(())
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_3_arg::<StringType, NumberType<i64>, NumberType<u64>, StringType, _, _>(
+        "substr_utf8",
+        FunctionProperty::default(),
+        |_, _, _| None,
+        vectorize_with_builder_3_arg::<StringType, NumberType<i64>, NumberType<u64>, StringType>(|s, pos, len, output, _| {
+            let s = std::str::from_utf8(s).map_err(|e| e.to_string())?;
+            substr_utf8(output, s, pos, len);
+            Ok(())
+        }),
+    );
 }
 
 mod soundex {
@@ -784,7 +813,7 @@ mod soundex {
 #[inline]
 fn substr(str: &[u8], pos: i64, len: u64) -> &[u8] {
     if pos > 0 && pos <= str.len() as i64 {
-        let l = str.len() as usize;
+        let l = str.len();
         let s = (pos - 1) as usize;
         let mut e = len as usize + s;
         if e > l {
@@ -793,7 +822,7 @@ fn substr(str: &[u8], pos: i64, len: u64) -> &[u8] {
         return &str[s..e];
     }
     if pos < 0 && -(pos) <= str.len() as i64 {
-        let l = str.len() as usize;
+        let l = str.len();
         let s = l - -pos as usize;
         let mut e = len as usize + s;
         if e > l {
@@ -802,6 +831,26 @@ fn substr(str: &[u8], pos: i64, len: u64) -> &[u8] {
         return &str[s..e];
     }
     &str[0..0]
+}
+
+#[inline]
+fn substr_utf8(builder: &mut StringColumnBuilder, str: &str, pos: i64, len: u64) {
+    if pos == 0 || len == 0 {
+        builder.commit_row();
+        return;
+    }
+
+    let char_len = str.chars().count();
+    let start = if pos > 0 {
+        (pos - 1).min(char_len as i64) as usize
+    } else {
+        char_len
+            .checked_sub(pos.unsigned_abs() as usize)
+            .unwrap_or(char_len)
+    };
+
+    builder.put_char_iter(str.chars().skip(start).take(len as usize));
+    builder.commit_row();
 }
 
 /// String to String scalar function with estimiated ouput column capacity.

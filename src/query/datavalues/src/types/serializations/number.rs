@@ -29,7 +29,7 @@ use crate::TypeSerializer;
 
 #[derive(Debug, Clone)]
 pub struct NumberSerializer<'a, T: PrimitiveType> {
-    pub(crate) values: &'a [T],
+    pub values: &'a [T],
 }
 
 impl<'a, T: PrimitiveType> NumberSerializer<'a, T> {
@@ -54,8 +54,14 @@ where T: PrimitiveType + Marshal + Unmarshal<T> + lexical_core::ToLexical + Prim
         self.values[row_index].write_field(buf, format, true)
     }
 
-    fn write_field_tsv(&self, row_index: usize, buf: &mut Vec<u8>, format: &FormatSettings) {
-        self.values[row_index].write_field(buf, format, false)
+    fn write_field_tsv(
+        &self,
+        row_index: usize,
+        buf: &mut Vec<u8>,
+        format: &FormatSettings,
+        _in_nested: bool,
+    ) {
+        self.values[row_index].write_field(buf, format, true)
     }
 
     fn write_field_csv(&self, row_index: usize, buf: &mut Vec<u8>, format: &FormatSettings) {

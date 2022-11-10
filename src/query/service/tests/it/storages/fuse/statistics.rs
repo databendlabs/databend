@@ -15,14 +15,11 @@
 use std::collections::HashMap;
 
 use common_base::base::tokio;
+use common_datablocks::BlockCompactThresholds;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_functions::aggregates::eval_aggr;
 use common_functions::scalars::FunctionContext;
-use common_fuse_meta::meta::BlockMeta;
-use common_fuse_meta::meta::ClusterStatistics;
-use common_fuse_meta::meta::ColumnStatistics;
-use common_fuse_meta::meta::Statistics;
 use common_sql::evaluator::Evaluator;
 use common_sql::executor::add;
 use common_sql::executor::col;
@@ -31,7 +28,10 @@ use common_storages_fuse::statistics::reducers::reduce_block_metas;
 use common_storages_fuse::statistics::Trim;
 use common_storages_fuse::statistics::STATS_REPLACEMENT_CHAR;
 use common_storages_fuse::statistics::STATS_STRING_PREFIX_LEN;
-use databend_query::storages::fuse::io::BlockCompactor;
+use common_storages_table_meta::meta::BlockMeta;
+use common_storages_table_meta::meta::ClusterStatistics;
+use common_storages_table_meta::meta::ColumnStatistics;
+use common_storages_table_meta::meta::Statistics;
 use databend_query::storages::fuse::io::BlockWriter;
 use databend_query::storages::fuse::io::TableMetaLocationGenerator;
 use databend_query::storages::fuse::statistics::gen_columns_statistics;
@@ -179,8 +179,8 @@ fn test_ft_stats_cluster_stats() -> common_exception::Result<()> {
         Series::from_data(vec!["123456", "234567", "345678"]),
     ]);
 
-    let block_compactor = BlockCompactor::new(1_000_000, 800_000, 100 * 1024 * 1024);
-    let stats_gen = ClusterStatsGenerator::new(0, vec![0], vec![], 0, block_compactor.clone());
+    let block_compactor = BlockCompactThresholds::new(1_000_000, 800_000, 100 * 1024 * 1024);
+    let stats_gen = ClusterStatsGenerator::new(0, vec![0], vec![], 0, block_compactor);
     let (stats, _) = stats_gen.gen_stats_for_append(&blocks)?;
     assert!(stats.is_some());
     let stats = stats.unwrap();
@@ -208,8 +208,8 @@ async fn test_ft_cluster_stats_with_stats() -> common_exception::Result<()> {
         level: 0,
     });
 
-    let block_compactor = BlockCompactor::new(1_000_000, 800_000, 100 * 1024 * 1024);
-    let stats_gen = ClusterStatsGenerator::new(0, vec![0], vec![], 0, block_compactor.clone());
+    let block_compactor = BlockCompactThresholds::new(1_000_000, 800_000, 100 * 1024 * 1024);
+    let stats_gen = ClusterStatsGenerator::new(0, vec![0], vec![], 0, block_compactor);
     let stats = stats_gen.gen_with_origin_stats(&blocks, origin.clone())?;
     assert!(stats.is_some());
     let stats = stats.unwrap();
@@ -225,7 +225,7 @@ async fn test_ft_cluster_stats_with_stats() -> common_exception::Result<()> {
         DataSchemaRefExt::create(vec![DataField::new("(a + 1)", i64::to_data_type())]);
     let blocks = DataBlock::create(output_schema, vec![result.vector]);
 
-    let stats_gen = ClusterStatsGenerator::new(0, vec![0], vec![], 0, block_compactor.clone());
+    let stats_gen = ClusterStatsGenerator::new(0, vec![0], vec![], 0, block_compactor);
     let stats = stats_gen.gen_with_origin_stats(&blocks, origin.clone())?;
     assert!(stats.is_some());
     let stats = stats.unwrap();

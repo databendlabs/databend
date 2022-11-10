@@ -27,9 +27,9 @@ output         : "SS😀山"
 
 ast            : upper(NULL)
 raw expr       : upper(NULL)
-checked expr   : upper<NULL>(NULL)
+checked expr   : upper<String NULL>(CAST(NULL AS String NULL))
 optimized expr : NULL
-output type    : NULL
+output type    : String NULL
 output domain  : {NULL}
 output         : NULL
 
@@ -85,9 +85,9 @@ output         : "i\u{307}😀山"
 
 ast            : lower(NULL)
 raw expr       : lower(NULL)
-checked expr   : lower<NULL>(NULL)
+checked expr   : lower<String NULL>(CAST(NULL AS String NULL))
 optimized expr : NULL
-output type    : NULL
+output type    : String NULL
 output domain  : {NULL}
 output         : NULL
 
@@ -125,9 +125,9 @@ output         : 40
 
 ast            : bit_length(NULL)
 raw expr       : bit_length(NULL)
-checked expr   : bit_length<NULL>(NULL)
+checked expr   : bit_length<String NULL>(CAST(NULL AS String NULL))
 optimized expr : NULL
-output type    : NULL
+output type    : UInt64 NULL
 output domain  : {NULL}
 output         : NULL
 
@@ -165,9 +165,9 @@ output         : 5
 
 ast            : octet_length(NULL)
 raw expr       : octet_length(NULL)
-checked expr   : length<NULL>(NULL)
+checked expr   : length<Array(Nothing) NULL>(CAST(NULL AS Array(Nothing) NULL))
 optimized expr : NULL
-output type    : NULL
+output type    : UInt8 NULL
 output domain  : {NULL}
 output         : NULL
 
@@ -205,9 +205,9 @@ output         : 5
 
 ast            : char_length(NULL)
 raw expr       : char_length(NULL)
-checked expr   : char_length<NULL>(NULL)
+checked expr   : char_length<String NULL>(CAST(NULL AS String NULL))
 optimized expr : NULL
-output type    : NULL
+output type    : UInt64 NULL
 output domain  : {NULL}
 output         : NULL
 
@@ -254,9 +254,9 @@ output         : "MTIz"
 
 ast            : to_base64(Null)
 raw expr       : to_base64(NULL)
-checked expr   : to_base64<NULL>(NULL)
+checked expr   : to_base64<String NULL>(CAST(NULL AS String NULL))
 optimized expr : NULL
-output type    : NULL
+output type    : String NULL
 output domain  : {NULL}
 output         : NULL
 
@@ -302,9 +302,9 @@ output         : "123"
 
 ast            : from_base64(Null)
 raw expr       : from_base64(NULL)
-checked expr   : from_base64<NULL>(NULL)
+checked expr   : from_base64<String NULL>(CAST(NULL AS String NULL))
 optimized expr : NULL
-output type    : NULL
+output type    : String NULL
 output domain  : {NULL}
 output         : NULL
 
@@ -431,9 +431,9 @@ output         : "Dobrý den"
 
 ast            : quote(Null)
 raw expr       : quote(NULL)
-checked expr   : quote<NULL>(NULL)
+checked expr   : quote<String NULL>(CAST(NULL AS String NULL))
 optimized expr : NULL
-output type    : NULL
+output type    : String NULL
 output domain  : {NULL}
 output         : NULL
 
@@ -516,9 +516,9 @@ output         : "ned ��rboD"
 
 ast            : reverse(Null)
 raw expr       : reverse(NULL)
-checked expr   : reverse<NULL>(NULL)
+checked expr   : reverse<String NULL>(CAST(NULL AS String NULL))
 optimized expr : NULL
-output type    : NULL
+output type    : String NULL
 output domain  : {NULL}
 output         : NULL
 
@@ -601,9 +601,9 @@ output         : 240
 
 ast            : ascii(Null)
 raw expr       : ascii(NULL)
-checked expr   : ascii<NULL>(NULL)
+checked expr   : ascii<String NULL>(CAST(NULL AS String NULL))
 optimized expr : NULL
-output type    : NULL
+output type    : UInt8 NULL
 output domain  : {NULL}
 output         : NULL
 
@@ -672,9 +672,9 @@ output         : ""
 
 ast            : ltrim(NULL)
 raw expr       : ltrim(NULL)
-checked expr   : ltrim<NULL>(NULL)
+checked expr   : ltrim<String NULL>(CAST(NULL AS String NULL))
 optimized expr : NULL
-output type    : NULL
+output type    : String NULL
 output domain  : {NULL}
 output         : NULL
 
@@ -722,9 +722,9 @@ output         : ""
 
 ast            : rtrim(NULL)
 raw expr       : rtrim(NULL)
-checked expr   : rtrim<NULL>(NULL)
+checked expr   : rtrim<String NULL>(CAST(NULL AS String NULL))
 optimized expr : NULL
-output type    : NULL
+output type    : String NULL
 output domain  : {NULL}
 output         : NULL
 
@@ -790,18 +790,18 @@ output         : "aaabbaaa"
 
 ast            : trim_leading(NULL, 'a')
 raw expr       : trim_leading(NULL, "a")
-checked expr   : trim_leading<NULL, String NULL>(NULL, CAST("a" AS String NULL))
+checked expr   : trim_leading<String NULL, String NULL>(CAST(NULL AS String NULL), CAST("a" AS String NULL))
 optimized expr : NULL
-output type    : NULL
+output type    : String NULL
 output domain  : {NULL}
 output         : NULL
 
 
 ast            : trim_leading('aaaaaaaa', NULL)
 raw expr       : trim_leading("aaaaaaaa", NULL)
-checked expr   : trim_leading<String NULL, NULL>(CAST("aaaaaaaa" AS String NULL), NULL)
+checked expr   : trim_leading<String NULL, String NULL>(CAST("aaaaaaaa" AS String NULL), CAST(NULL AS String NULL))
 optimized expr : NULL
-output type    : NULL
+output type    : String NULL
 output domain  : {NULL}
 output         : NULL
 
@@ -911,18 +911,18 @@ output         : "aaabbaaa"
 
 ast            : trim_trailing(NULL, 'a')
 raw expr       : trim_trailing(NULL, "a")
-checked expr   : trim_trailing<NULL, String NULL>(NULL, CAST("a" AS String NULL))
+checked expr   : trim_trailing<String NULL, String NULL>(CAST(NULL AS String NULL), CAST("a" AS String NULL))
 optimized expr : NULL
-output type    : NULL
+output type    : String NULL
 output domain  : {NULL}
 output         : NULL
 
 
 ast            : trim_trailing('aaaaaaaa', NULL)
 raw expr       : trim_trailing("aaaaaaaa", NULL)
-checked expr   : trim_trailing<String NULL, NULL>(CAST("aaaaaaaa" AS String NULL), NULL)
+checked expr   : trim_trailing<String NULL, String NULL>(CAST("aaaaaaaa" AS String NULL), CAST(NULL AS String NULL))
 optimized expr : NULL
-output type    : NULL
+output type    : String NULL
 output domain  : {NULL}
 output         : NULL
 
@@ -1032,18 +1032,18 @@ output         : "aaabbaaa"
 
 ast            : trim_both(NULL, 'a')
 raw expr       : trim_both(NULL, "a")
-checked expr   : trim_both<NULL, String NULL>(NULL, CAST("a" AS String NULL))
+checked expr   : trim_both<String NULL, String NULL>(CAST(NULL AS String NULL), CAST("a" AS String NULL))
 optimized expr : NULL
-output type    : NULL
+output type    : String NULL
 output domain  : {NULL}
 output         : NULL
 
 
 ast            : trim_both('aaaaaaaa', NULL)
 raw expr       : trim_both("aaaaaaaa", NULL)
-checked expr   : trim_both<String NULL, NULL>(CAST("aaaaaaaa" AS String NULL), NULL)
+checked expr   : trim_both<String NULL, String NULL>(CAST("aaaaaaaa" AS String NULL), CAST(NULL AS String NULL))
 optimized expr : NULL
-output type    : NULL
+output type    : String NULL
 output domain  : {NULL}
 output         : NULL
 
@@ -1135,9 +1135,9 @@ output         : ""
 
 ast            : trim(NULL)
 raw expr       : trim(NULL)
-checked expr   : trim<NULL>(NULL)
+checked expr   : trim<String NULL>(CAST(NULL AS String NULL))
 optimized expr : NULL
-output type    : NULL
+output type    : String NULL
 output domain  : {NULL}
 output         : NULL
 
@@ -1203,18 +1203,18 @@ output         : "aaabbaaa"
 
 ast            : trim(both 'a' from NULL)
 raw expr       : trim_both(NULL, "a")
-checked expr   : trim_both<NULL, String NULL>(NULL, CAST("a" AS String NULL))
+checked expr   : trim_both<String NULL, String NULL>(CAST(NULL AS String NULL), CAST("a" AS String NULL))
 optimized expr : NULL
-output type    : NULL
+output type    : String NULL
 output domain  : {NULL}
 output         : NULL
 
 
 ast            : trim(both NULL from 'aaaaaaaa')
 raw expr       : trim_both("aaaaaaaa", NULL)
-checked expr   : trim_both<String NULL, NULL>(CAST("aaaaaaaa" AS String NULL), NULL)
+checked expr   : trim_both<String NULL, String NULL>(CAST("aaaaaaaa" AS String NULL), CAST(NULL AS String NULL))
 optimized expr : NULL
-output type    : NULL
+output type    : String NULL
 output domain  : {NULL}
 output         : NULL
 
@@ -1346,18 +1346,18 @@ output         : "aaabbaaa"
 
 ast            : trim(leading 'a' from NULL)
 raw expr       : trim_leading(NULL, "a")
-checked expr   : trim_leading<NULL, String NULL>(NULL, CAST("a" AS String NULL))
+checked expr   : trim_leading<String NULL, String NULL>(CAST(NULL AS String NULL), CAST("a" AS String NULL))
 optimized expr : NULL
-output type    : NULL
+output type    : String NULL
 output domain  : {NULL}
 output         : NULL
 
 
 ast            : trim(leading NULL from 'aaaaaaaa')
 raw expr       : trim_leading("aaaaaaaa", NULL)
-checked expr   : trim_leading<String NULL, NULL>(CAST("aaaaaaaa" AS String NULL), NULL)
+checked expr   : trim_leading<String NULL, String NULL>(CAST("aaaaaaaa" AS String NULL), CAST(NULL AS String NULL))
 optimized expr : NULL
-output type    : NULL
+output type    : String NULL
 output domain  : {NULL}
 output         : NULL
 
@@ -1489,18 +1489,18 @@ output         : "aaabbaaa"
 
 ast            : trim(trailing 'a' from NULL)
 raw expr       : trim_trailing(NULL, "a")
-checked expr   : trim_trailing<NULL, String NULL>(NULL, CAST("a" AS String NULL))
+checked expr   : trim_trailing<String NULL, String NULL>(CAST(NULL AS String NULL), CAST("a" AS String NULL))
 optimized expr : NULL
-output type    : NULL
+output type    : String NULL
 output domain  : {NULL}
 output         : NULL
 
 
 ast            : trim(trailing NULL from 'aaaaaaaa')
 raw expr       : trim_trailing("aaaaaaaa", NULL)
-checked expr   : trim_trailing<String NULL, NULL>(CAST("aaaaaaaa" AS String NULL), NULL)
+checked expr   : trim_trailing<String NULL, String NULL>(CAST("aaaaaaaa" AS String NULL), CAST(NULL AS String NULL))
 optimized expr : NULL
-output type    : NULL
+output type    : String NULL
 output domain  : {NULL}
 output         : NULL
 
@@ -1855,7 +1855,6 @@ error:
   | ^^^^^^ no overload satisfies `bin(Float64)`
 
 has tried possible overloads:
-  bin(NULL) :: NULL               : unable to unify `Float64` with `NULL`
   bin(Int64) :: String            : unable to unify `Float64` with `Int64`
   bin(Int64 NULL) :: String NULL  : unable to unify `Float64` with `Int64`
 
@@ -1868,7 +1867,6 @@ error:
   | ^^^^^^ no overload satisfies `bin(String)`
 
 has tried possible overloads:
-  bin(NULL) :: NULL               : unable to unify `String` with `NULL`
   bin(Int64) :: String            : unable to unify `String` with `Int64`
   bin(Int64 NULL) :: String NULL  : unable to unify `String` with `Int64`
 
@@ -1969,7 +1967,6 @@ error:
   | ^^^^^^ no overload satisfies `oct(Float64)`
 
 has tried possible overloads:
-  oct(NULL) :: NULL               : unable to unify `Float64` with `NULL`
   oct(Int64) :: String            : unable to unify `Float64` with `Int64`
   oct(Int64 NULL) :: String NULL  : unable to unify `Float64` with `Int64`
 
@@ -1982,7 +1979,6 @@ error:
   | ^^^^^^ no overload satisfies `oct(String)`
 
 has tried possible overloads:
-  oct(NULL) :: NULL               : unable to unify `String` with `NULL`
   oct(Int64) :: String            : unable to unify `String` with `Int64`
   oct(Int64 NULL) :: String NULL  : unable to unify `String` with `Int64`
 
@@ -2083,10 +2079,8 @@ error:
   | ^^^^^^ no overload satisfies `hex(Float64)`
 
 has tried possible overloads:
-  hex(NULL) :: NULL                : unable to unify `Float64` with `NULL`
   hex(Int64) :: String             : unable to unify `Float64` with `Int64`
   hex(Int64 NULL) :: String NULL   : unable to unify `Float64` with `Int64`
-  hex(NULL) :: NULL                : unable to unify `Float64` with `NULL`
   hex(String) :: String            : unable to unify `Float64` with `String`
   hex(String NULL) :: String NULL  : unable to unify `Float64` with `String`
 
@@ -2210,9 +2204,6 @@ error:
   | ^^^^^^^^^^^^^^^^^^^ no overload satisfies `lpad(String, Int16, String)`
 
 has tried possible overloads:
-  lpad(NULL, UInt64 NULL, String NULL) :: NULL                : unable to unify `String` with `NULL`
-  lpad(String NULL, NULL, String NULL) :: NULL                : unable to unify `Int16` with `NULL`
-  lpad(String NULL, UInt64 NULL, NULL) :: NULL                : unable to unify `Int16` with `UInt64`
   lpad(String, UInt64, String) :: String                      : unable to unify `Int16` with `UInt64`
   lpad(String NULL, UInt64 NULL, String NULL) :: String NULL  : unable to unify `Int16` with `UInt64`
 
@@ -2236,7 +2227,7 @@ evaluation (internal):
 | Column | Data                                                             |
 +--------+------------------------------------------------------------------+
 | a      | StringColumn { data: 0x6869746573746363, offsets: [0, 2, 6, 8] } |
-| b      | Int32([0, 3, 5])                                                 |
+| b      | UInt8([0, 3, 5])                                                 |
 | c      | StringColumn { data: 0x3f786262, offsets: [0, 1, 2, 4] }         |
 | Output | StringColumn { data: 0x7465736262626363, offsets: [0, 0, 3, 8] } |
 +--------+------------------------------------------------------------------+
@@ -2285,9 +2276,6 @@ error:
   | ^^^^^^^^^^^^^^^^^^^ no overload satisfies `rpad(String, Int16, String)`
 
 has tried possible overloads:
-  rpad(NULL, UInt64 NULL, String NULL) :: NULL                : unable to unify `String` with `NULL`
-  rpad(String NULL, NULL, String NULL) :: NULL                : unable to unify `Int16` with `NULL`
-  rpad(String NULL, UInt64 NULL, NULL) :: NULL                : unable to unify `Int16` with `UInt64`
   rpad(String, UInt64, String) :: String                      : unable to unify `Int16` with `UInt64`
   rpad(String NULL, UInt64 NULL, String NULL) :: String NULL  : unable to unify `Int16` with `UInt64`
 
@@ -2311,7 +2299,7 @@ evaluation (internal):
 | Column | Data                                                             |
 +--------+------------------------------------------------------------------+
 | a      | StringColumn { data: 0x6869746573746363, offsets: [0, 2, 6, 8] } |
-| b      | Int32([0, 3, 5])                                                 |
+| b      | UInt8([0, 3, 5])                                                 |
 | c      | StringColumn { data: 0x3f786262, offsets: [0, 1, 2, 4] }         |
 | Output | StringColumn { data: 0x7465736363626262, offsets: [0, 0, 3, 8] } |
 +--------+------------------------------------------------------------------+
@@ -2493,7 +2481,7 @@ evaluation (internal):
 +--------+------------------------------------------------------------------------------------------------+
 | a      | StringColumn { data: 0x6261726363636371, offsets: [0, 3, 5, 7, 8] }                            |
 | b      | StringColumn { data: 0x666f6f6261726261726264636361636378783536, offsets: [0, 9, 16, 18, 20] } |
-| c      | Int32([1, 2, 0, 1])                                                                            |
+| c      | UInt8([1, 2, 0, 1])                                                                            |
 | Output | UInt64([4, 3, 0, 0])                                                                           |
 +--------+------------------------------------------------------------------------------------------------+
 
@@ -2645,9 +2633,9 @@ evaluation (internal):
 
 ast            : ord(NULL)
 raw expr       : ord(NULL)
-checked expr   : ord<NULL>(NULL)
+checked expr   : ord<String NULL>(CAST(NULL AS String NULL))
 optimized expr : NULL
-output type    : NULL
+output type    : UInt64 NULL
 output domain  : {NULL}
 output         : NULL
 
@@ -2681,9 +2669,9 @@ output         : 4036989590
 
 ast            : repeat('3', NULL)
 raw expr       : repeat("3", NULL)
-checked expr   : repeat<String NULL, NULL>(CAST("3" AS String NULL), NULL)
+checked expr   : repeat<String NULL, UInt64 NULL>(CAST("3" AS String NULL), CAST(NULL AS UInt64 NULL))
 optimized expr : NULL
-output type    : NULL
+output type    : String NULL
 output domain  : {NULL}
 output         : NULL
 
@@ -2773,36 +2761,36 @@ output         : "QuWhat"
 
 ast            : insert('Quadratic', 3, 100, NULL)
 raw expr       : insert("Quadratic", 3_u8, 100_u8, NULL)
-checked expr   : insert<String NULL, Int64 NULL, Int64 NULL, NULL>(CAST("Quadratic" AS String NULL), CAST(3_u8 AS Int64 NULL), CAST(100_u8 AS Int64 NULL), NULL)
+checked expr   : insert<String NULL, Int64 NULL, Int64 NULL, String NULL>(CAST("Quadratic" AS String NULL), CAST(3_u8 AS Int64 NULL), CAST(100_u8 AS Int64 NULL), CAST(NULL AS String NULL))
 optimized expr : NULL
-output type    : NULL
+output type    : String NULL
 output domain  : {NULL}
 output         : NULL
 
 
 ast            : insert('Quadratic', 3, NULL, 'NULL')
 raw expr       : insert("Quadratic", 3_u8, NULL, "NULL")
-checked expr   : insert<String NULL, Int64 NULL, NULL, String NULL>(CAST("Quadratic" AS String NULL), CAST(3_u8 AS Int64 NULL), NULL, CAST("NULL" AS String NULL))
+checked expr   : insert<String NULL, Int64 NULL, Int64 NULL, String NULL>(CAST("Quadratic" AS String NULL), CAST(3_u8 AS Int64 NULL), CAST(NULL AS Int64 NULL), CAST("NULL" AS String NULL))
 optimized expr : NULL
-output type    : NULL
+output type    : String NULL
 output domain  : {NULL}
 output         : NULL
 
 
 ast            : insert('Quadratic', NULL, 100, 'NULL')
 raw expr       : insert("Quadratic", NULL, 100_u8, "NULL")
-checked expr   : insert<String NULL, NULL, Int64 NULL, String NULL>(CAST("Quadratic" AS String NULL), NULL, CAST(100_u8 AS Int64 NULL), CAST("NULL" AS String NULL))
+checked expr   : insert<String NULL, Int64 NULL, Int64 NULL, String NULL>(CAST("Quadratic" AS String NULL), CAST(NULL AS Int64 NULL), CAST(100_u8 AS Int64 NULL), CAST("NULL" AS String NULL))
 optimized expr : NULL
-output type    : NULL
+output type    : String NULL
 output domain  : {NULL}
 output         : NULL
 
 
 ast            : insert(NULL, 2, 100, 'NULL')
 raw expr       : insert(NULL, 2_u8, 100_u8, "NULL")
-checked expr   : insert<NULL, Int64 NULL, Int64 NULL, String NULL>(NULL, CAST(2_u8 AS Int64 NULL), CAST(100_u8 AS Int64 NULL), CAST("NULL" AS String NULL))
+checked expr   : insert<String NULL, Int64 NULL, Int64 NULL, String NULL>(CAST(NULL AS String NULL), CAST(2_u8 AS Int64 NULL), CAST(100_u8 AS Int64 NULL), CAST("NULL" AS String NULL))
 optimized expr : NULL
-output type    : NULL
+output type    : String NULL
 output domain  : {NULL}
 output         : NULL
 
@@ -2826,8 +2814,8 @@ evaluation (internal):
 | Column | Data                                                                          |
 +--------+-------------------------------------------------------------------------------+
 | a      | StringColumn { data: 0x686974657374636371, offsets: [0, 2, 6, 8, 9] }         |
-| b      | Int32([1, 4, 1, 1])                                                           |
-| c      | Int32([3, 5, 1, 1])                                                           |
+| b      | UInt8([1, 4, 1, 1])                                                           |
+| c      | UInt8([3, 5, 1, 1])                                                           |
 | d      | StringColumn { data: 0x78787a6331323536, offsets: [0, 2, 4, 6, 8] }           |
 | Output | StringColumn { data: 0x78787465737a633132633536, offsets: [0, 2, 7, 10, 12] } |
 +--------+-------------------------------------------------------------------------------+
@@ -2852,8 +2840,8 @@ evaluation (internal):
 | Column | Data                                                                                                                             |
 +--------+----------------------------------------------------------------------------------------------------------------------------------+
 | x      | NullableColumn { column: StringColumn { data: 0x686974657374636371, offsets: [0, 2, 6, 8, 9] }, validity: [0b____1110] }         |
-| y      | NullableColumn { column: Int32([1, 4, 1, 1]), validity: [0b____1011] }                                                           |
-| z      | NullableColumn { column: Int32([3, 5, 1, 1]), validity: [0b____1101] }                                                           |
+| y      | NullableColumn { column: UInt8([1, 4, 1, 1]), validity: [0b____1011] }                                                           |
+| z      | NullableColumn { column: UInt8([3, 5, 1, 1]), validity: [0b____1101] }                                                           |
 | u      | NullableColumn { column: StringColumn { data: 0x78787a6331323536, offsets: [0, 2, 4, 6, 8] }, validity: [0b____1110] }           |
 | Output | NullableColumn { column: StringColumn { data: 0x78787465737a633132633536, offsets: [0, 2, 7, 10, 12] }, validity: [0b____1000] } |
 +--------+----------------------------------------------------------------------------------------------------------------------------------+

@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_planner::plans::AlterUDFPlan;
+use common_sql::plans::AlterUDFPlan;
 use common_users::UserApiProvider;
 
 use crate::interpreters::Interpreter;

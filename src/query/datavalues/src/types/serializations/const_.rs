@@ -45,8 +45,14 @@ impl<'a> TypeSerializer<'a> for ConstSerializer<'a> {
         self.inner.write_field_values(0, buf, format, in_nested)
     }
 
-    fn write_field_tsv(&self, _row_index: usize, buf: &mut Vec<u8>, format: &FormatSettings) {
-        self.inner.write_field_tsv(0, buf, format)
+    fn write_field_tsv(
+        &self,
+        _row_index: usize,
+        buf: &mut Vec<u8>,
+        format: &FormatSettings,
+        in_nested: bool,
+    ) {
+        self.inner.write_field_tsv(0, buf, format, in_nested)
     }
 
     fn write_field_csv(&self, _row_index: usize, buf: &mut Vec<u8>, format: &FormatSettings) {

@@ -19,9 +19,9 @@ use common_ast::parser::tokenize_sql;
 use common_ast::Backtrace;
 use common_ast::Dialect;
 use common_catalog::catalog::CATALOG_DEFAULT;
+use common_catalog::plan::Expression;
 use common_catalog::table::Table;
 use common_exception::Result;
-use common_planner::Expression;
 use common_settings::Settings;
 use parking_lot::RwLock;
 
@@ -40,11 +40,7 @@ impl ExpressionParser {
         let sql_dialect = Dialect::MySQL;
         let tokens = tokenize_sql(sql)?;
         let backtrace = Backtrace::new();
-        let exprs = parse_comma_separated_exprs(
-            &tokens[1..tokens.len() as usize],
-            sql_dialect,
-            &backtrace,
-        )?;
+        let exprs = parse_comma_separated_exprs(&tokens[1..tokens.len()], sql_dialect, &backtrace)?;
 
         let settings = Settings::default_settings("");
         let mut bind_context = BindContext::new();
