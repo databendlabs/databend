@@ -258,14 +258,13 @@ impl<'a> Evaluator<'a> {
             return value;
         }
 
-        if let Some(cast_fn) = check_simple_cast(true, dest_type) {
+        // The dest_type of `TRY_CAST` must be `Nullable`, which is guaranteed by the type checker.
+        let inner_dest_type = &**dest_type.as_nullable().unwrap();
+        if let Some(cast_fn) = check_simple_cast(true, inner_dest_type) {
             return self
                 .run_simple_cast(span, src_type, dest_type, value, &cast_fn)
                 .unwrap();
         }
-
-        // The dest_type of `TRY_CAST` must be `Nullable`, which is guaranteed by the type checker.
-        let inner_dest_type = &**dest_type.as_nullable().unwrap();
 
         match (src_type, inner_dest_type) {
             (DataType::Null, _) => match value {
@@ -660,14 +659,14 @@ impl<'a> ConstantFolder<'a> {
             return Some(domain.clone());
         }
 
-        if let Some(cast_fn) = check_simple_cast(true, dest_type) {
+        // The dest_type of `TRY_CAST` must be `Nullable`, which is guaranteed by the type checker.
+        let inner_dest_type = &**dest_type.as_nullable().unwrap();
+
+        if let Some(cast_fn) = check_simple_cast(true, inner_dest_type) {
             return self
                 .calculate_simple_cast(span, src_type, dest_type, domain, &cast_fn)
                 .unwrap();
         }
-
-        // The dest_type of `TRY_CAST` must be `Nullable`, which is guaranteed by the type checker.
-        let inner_dest_type = &**dest_type.as_nullable().unwrap();
 
         match (src_type, inner_dest_type) {
             (DataType::Null, _) => Some(domain.clone()),

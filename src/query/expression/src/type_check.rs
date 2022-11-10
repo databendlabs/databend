@@ -54,13 +54,13 @@ pub fn check(ast: &RawExpr, fn_registry: &FunctionRegistry) -> Result<Expr> {
             expr,
             dest_type,
         } => {
-            let dest_type = if *is_try {
+            let wrapped_dest_type = if *is_try {
                 wrap_nullable_for_try_cast(span.clone(), dest_type)?
             } else {
                 dest_type.clone()
             };
             let expr = check(expr, fn_registry)?;
-            if expr.data_type() == &dest_type {
+            if expr.data_type() == &wrapped_dest_type {
                 Ok(expr)
             } else {
                 // faster path to eval function for cast
@@ -71,7 +71,7 @@ pub fn check(ast: &RawExpr, fn_registry: &FunctionRegistry) -> Result<Expr> {
                     span: span.clone(),
                     is_try: *is_try,
                     expr: Box::new(expr),
-                    dest_type,
+                    dest_type: wrapped_dest_type,
                 })
             }
         }
@@ -402,6 +402,7 @@ pub fn common_super_type(ty1: DataType, ty2: DataType) -> Option<DataType> {
 }
 
 pub fn check_simple_cast(is_try: bool, dest_type: &DataType) -> Option<String> {
+    let prefix = if is_try { "try_" } else { "" };
     let cast_function_name = match dest_type {
         DataType::String => Some("to_string"),
         DataType::Number(NumberDataType::UInt8) => Some("to_uint8"),
@@ -419,6 +420,5 @@ pub fn check_simple_cast(is_try: bool, dest_type: &DataType) -> Option<String> {
         DataType::Variant => Some("to_variant"),
         _ => None,
     };
-    let prefix = if is_try { "try_" } else { "" };
     cast_function_name.map(|name| format!("{prefix}{name}"))
 }
