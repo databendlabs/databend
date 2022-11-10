@@ -1214,6 +1214,7 @@ dependencies = [
 name = "common-auth"
 version = "0.1.0"
 dependencies = [
+ "base64",
  "common-base",
  "common-datavalues",
  "http",
