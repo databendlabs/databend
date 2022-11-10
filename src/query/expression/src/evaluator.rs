@@ -29,7 +29,6 @@ use crate::types::any::AnyType;
 use crate::types::array::ArrayColumn;
 use crate::types::nullable::NullableColumn;
 use crate::types::nullable::NullableDomain;
-use crate::types::number::NumberDataType;
 use crate::types::DataType;
 use crate::utils::arrow::constant_bitmap;
 use crate::utils::calculate_function_domain;
@@ -585,7 +584,9 @@ impl<'a> ConstantFolder<'a> {
         }
 
         if let Some(cast_fn) = check_simple_cast(false, dest_type) {
-            return self.calculate_simple_cast(span, src_type, dest_type, domain, &cast_fn);
+            return self
+                .calculate_simple_cast(span, src_type, dest_type, domain, &cast_fn)
+                .unwrap();
         }
 
         match (src_type, dest_type) {
@@ -660,7 +661,9 @@ impl<'a> ConstantFolder<'a> {
         }
 
         if let Some(cast_fn) = check_simple_cast(true, dest_type) {
-            return self.calculate_simple_cast(span, src_type, dest_type, domain, &cast_fn);
+            return self
+                .calculate_simple_cast(span, src_type, dest_type, domain, &cast_fn)
+                .unwrap();
         }
 
         // The dest_type of `TRY_CAST` must be `Nullable`, which is guaranteed by the type checker.
