@@ -30,7 +30,6 @@ pub use boolean::BooleanSerializer;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_exception::ToErrorCode;
 use common_io::prelude::FormatSettings;
 pub use const_::ConstSerializer;
 pub use date::DateSerializer;
@@ -49,43 +48,6 @@ pub use variant::VariantSerializer;
 
 #[enum_dispatch]
 pub trait TypeSerializer<'a>: Send + Sync {
-    // values and nested
-    fn write_field_values(
-        &self,
-        row_index: usize,
-        buf: &mut Vec<u8>,
-        format: &FormatSettings,
-        in_nested: bool,
-    );
-
-    fn to_vec_values(&self, row_index: usize, format: &FormatSettings) -> Vec<u8> {
-        let mut buf = Vec::with_capacity(64);
-        self.write_field_values(row_index, &mut buf, format, false);
-        buf
-    }
-
-    fn to_string_values(&self, row_index: usize, format: &FormatSettings) -> Result<String> {
-        let buf = self.to_vec_values(row_index, format);
-        String::from_utf8(buf).map_err_to_code(ErrorCode::BadBytes, || "fail to serialize field")
-    }
-
-    // row based formats
-    fn write_field_tsv(
-        &self,
-        row_index: usize,
-        buf: &mut Vec<u8>,
-        format: &FormatSettings,
-        in_nested: bool,
-    );
-    fn write_field_csv(&self, row_index: usize, buf: &mut Vec<u8>, format: &FormatSettings);
-    fn write_field_json(
-        &self,
-        row_index: usize,
-        buf: &mut Vec<u8>,
-        format: &FormatSettings,
-        quote: bool,
-    );
-
     // nested json
     fn serialize_json_values(&self, _format: &FormatSettings) -> Result<Vec<Value>>;
 
