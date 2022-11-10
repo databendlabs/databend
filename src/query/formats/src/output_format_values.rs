@@ -14,21 +14,20 @@
 
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
-use common_datavalues::TypeSerializer;
 use common_exception::Result;
-use common_io::prelude::FormatSettings;
 
+use crate::field_encoder::FieldEncoderRowBased;
+use crate::field_encoder::FieldEncoderValues;
 use crate::output_format::OutputFormat;
 
-#[derive(Default)]
 pub struct ValuesOutputFormat {
-    format_settings: FormatSettings,
+    field_encoder: FieldEncoderValues,
 }
 
 impl ValuesOutputFormat {
     #[allow(unused)]
-    pub fn create(_schema: DataSchemaRef, format_settings: FormatSettings) -> Self {
-        Self { format_settings }
+    pub fn create(_schema: DataSchemaRef, field_encoder: FieldEncoderValues) -> Self {
+        Self { field_encoder }
     }
 }
 
@@ -48,7 +47,8 @@ impl OutputFormat for ValuesOutputFormat {
                 if i != 0 {
                     buf.push(b',');
                 }
-                serializer.write_field_values(row_index, &mut buf, &self.format_settings, false);
+                self.field_encoder
+                    .write_field(serializer, row_index, &mut buf, true);
             }
             buf.push(b')');
         }

@@ -2,6 +2,8 @@
 # Copyright 2020-2021 The Databend Authors.
 # SPDX-License-Identifier: Apache-2.0.
 
+set -e
+
 echo "EXPORTING TLS RPC CONFIGURATION ENV VARS"
 export RPC_TLS_SERVER_CERT="./tests/certs/server.pem"
 export RPC_TLS_SERVER_KEY="./tests/certs/server.key"

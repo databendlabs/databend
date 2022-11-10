@@ -16,6 +16,7 @@
 //! insipration for the crate*
 
 #![feature(trusted_len)]
+#![feature(cursor_remaining)]
 
 #[macro_use]
 mod macros;

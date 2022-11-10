@@ -1329,7 +1329,9 @@ dependencies = [
  "pretty_assertions",
  "primitive-types",
  "regex",
+ "serde",
  "serde_json",
+ "typetag",
 ]
 
 [[package]]
@@ -1415,6 +1417,9 @@ dependencies = [
  "common-io",
  "common-meta-types",
  "common-settings",
+ "lexical-core",
+ "micromarshal",
+ "num",
  "once_cell",
  "pretty_assertions",
 ]
@@ -1444,6 +1449,7 @@ dependencies = [
  "hex",
  "itertools",
  "md-5",
+ "memchr",
  "naive-cityhash",
  "num",
  "num-format",
@@ -1485,6 +1491,7 @@ dependencies = [
  "common-io",
  "common-jsonb",
  "crc32fast",
+ "criterion",
  "goldenfile",
  "hex",
  "itertools",
