@@ -44,9 +44,9 @@ pub struct QueryFragmentAction {
 }
 
 impl QueryFragmentAction {
-    pub fn create_v2(executor: String, plan: PhysicalPlan) -> QueryFragmentAction {
+    pub fn create(executor: String, plan: PhysicalPlan) -> QueryFragmentAction {
         QueryFragmentAction {
-            payload: FragmentPayload::PlanV2(plan),
+            payload: FragmentPayload::Plan(plan),
             executor,
         }
     }

@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use bstr::ByteSlice;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
@@ -21,6 +22,8 @@ use common_datavalues::DataType;
 use common_datavalues::TypeSerializer;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_formats::field_encoder::FieldEncoderRowBased;
+use common_formats::field_encoder::FieldEncoderValues;
 use common_io::prelude::FormatSettings;
 use serde_json::Value as JsonValue;
 
@@ -88,11 +91,17 @@ fn block_to_json_value_string_fields(
     let rows_size = block.column(0).len();
     let mut res = Vec::new();
     let serializers = block.get_serializers()?;
+    let encoder = FieldEncoderValues::create_for_handler(format.timezone);
+    let mut buf = vec![];
     for row_index in 0..rows_size {
         let mut row: Vec<JsonValue> = Vec::with_capacity(block.num_columns());
         for serializer in serializers.iter() {
-            let s = serializer.to_string_values(row_index, format)?;
-            row.push(serde_json::to_value(s)?)
+            buf.clear();
+            encoder.write_field(serializer, row_index, &mut buf, true);
+            row.push(serde_json::to_value(
+                buf.to_str()
+                    .map_err(|e| ErrorCode::BadBytes(format!("{}", e)))?,
+            )?);
         }
         res.push(row)
     }
