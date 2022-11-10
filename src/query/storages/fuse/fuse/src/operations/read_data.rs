@@ -33,6 +33,16 @@ use crate::io::BlockReader;
 use crate::operations::FuseTableSource;
 use crate::FuseTable;
 
+/// Read data kind to avoid OOM.
+pub enum ReadDataKind {
+    // Compact/Recluster data, need less io requests.
+    // io_requests = max_threads()
+    OptimizeDataLessIORequests,
+    // Read column block data, need adjust io requests.
+    // io requests = memory-size/avg(blocks-size)
+    BlockDataAdjustIORequests,
+}
+
 impl FuseTable {
     pub fn create_block_reader(&self, projection: Projection) -> Result<Arc<BlockReader>> {
         let table_schema = self.table_info.schema();
@@ -114,13 +124,40 @@ impl FuseTable {
         })
     }
 
+    fn adjust_io_request(
+        &self,
+        ctx: &Arc<dyn TableContext>,
+        projection: &Projection,
+        kind: ReadDataKind,
+    ) -> Result<usize> {
+        Ok(match kind {
+            ReadDataKind::OptimizeDataLessIORequests => {
+                ctx.get_settings().get_max_threads()? as usize
+            }
+            ReadDataKind::BlockDataAdjustIORequests => {
+                // Assume 160MB one block file.
+                let block_file_size = 160 * 1024 * 1024_usize;
+
+                let table_column_len = self.table_info.schema().fields().len();
+                let per_column_bytes = block_file_size / table_column_len;
+                let column_memory_usage = per_column_bytes * projection.len();
+                let max_memory_usage = ctx.get_settings().get_max_memory_usage()? as usize;
+
+                let setting_io_requests =
+                    ctx.get_settings().get_max_storage_io_requests()? as usize + 1;
+                let adjust_io_requests = (max_memory_usage / column_memory_usage) + 1;
+                std::cmp::min(adjust_io_requests, setting_io_requests)
+            }
+        })
+    }
+
     #[inline]
     pub fn do_read_data(
         &self,
         ctx: Arc<dyn TableContext>,
         plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
-        max_io_requests: usize,
+        read_kind: ReadDataKind,
     ) -> Result<()> {
         let mut lazy_init_segments = Vec::with_capacity(plan.parts.len());
 
@@ -167,6 +204,8 @@ impl FuseTable {
             });
         }
 
+        let projection = self.projection_of_push_downs(&plan.push_downs);
+        let max_io_requests = self.adjust_io_request(&ctx, &projection, read_kind)?;
         let block_reader = self.build_block_reader(plan)?;
         let prewhere_reader = self.build_prewhere_reader(plan)?;
         let prewhere_filter =

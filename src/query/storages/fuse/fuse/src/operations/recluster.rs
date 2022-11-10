@@ -34,6 +34,7 @@ use common_pipeline_transforms::processors::transforms::TransformSortPartial;
 use common_storages_table_meta::meta::BlockMeta;
 
 use crate::operations::FuseTableSink;
+use crate::operations::ReadDataKind;
 use crate::operations::ReclusterMutator;
 use crate::pruning::BlockPruner;
 use crate::FuseTable;
@@ -137,9 +138,13 @@ impl FuseTable {
 
         ctx.try_set_partitions(plan.parts.clone())?;
 
-        // It's easy to OOM if we set the max_io_request more than the max threads.
-        let max_threads = ctx.get_settings().get_max_threads()? as usize;
-        self.do_read_data(ctx.clone(), &plan, pipeline, max_threads)?;
+        // ReadDataKind to avoid OOM.
+        self.do_read_data(
+            ctx.clone(),
+            &plan,
+            pipeline,
+            ReadDataKind::OptimizeDataLessIORequests,
+        )?;
 
         let cluster_stats_gen = self.get_cluster_stats_gen(
             ctx.clone(),

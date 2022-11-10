@@ -26,6 +26,7 @@ use common_storages_table_meta::meta::TableSnapshot;
 use super::FuseTableSink;
 use crate::operations::mutation::SegmentCompactMutator;
 use crate::operations::FullCompactMutator;
+use crate::operations::ReadDataKind;
 use crate::statistics::ClusterStatsGenerator;
 use crate::FuseTable;
 use crate::Table;
@@ -141,9 +142,13 @@ impl FuseTable {
 
         ctx.try_set_partitions(plan.parts.clone())?;
 
-        // It's easy to OOM if we set the max_io_request more than the max threads.
-        let max_threads = ctx.get_settings().get_max_threads()? as usize;
-        self.do_read_data(ctx.clone(), &plan, pipeline, max_threads)?;
+        // ReadDataKind to avoid OOM.
+        self.do_read_data(
+            ctx.clone(),
+            &plan,
+            pipeline,
+            ReadDataKind::OptimizeDataLessIORequests,
+        )?;
 
         pipeline.add_transform(|transform_input_port, transform_output_port| {
             TransformCompact::try_create(
