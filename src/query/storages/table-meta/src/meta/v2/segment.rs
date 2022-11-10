@@ -15,6 +15,10 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use common_expression::Chunk;
+use common_expression::DataSchema;
+use common_expression::converts::from_scalar;
+use common_expression::converts::to_schema;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -115,70 +119,104 @@ impl SegmentInfo {
 use super::super::v0;
 use super::super::v1;
 
-impl From<v0::SegmentInfo> for SegmentInfo {
-    fn from(s: v0::SegmentInfo) -> Self {
-        todo!()
-        // Self {
-        //     format_version: SegmentInfo::VERSION,
-        //     blocks: s
-        //         .blocks
-        //         .into_iter()
-        //         .map(|b| Arc::new(b.into()))
-        //         .collect::<_>(),
-        //     summary: s.summary,
-        // }
+impl From<(v0::SegmentInfo, &DataSchema)> for SegmentInfo {
+    fn from(s: (v0::SegmentInfo, &DataSchema)) -> Self {
+        let schema = s.1;
+        let s = s.0;
+        
+        Self {
+            format_version: SegmentInfo::VERSION,
+            blocks: s
+                .blocks
+                .into_iter()
+                .map(|b| Arc::new((b, schema).into()))
+                .collect::<_>(),
+            summary: s.summary,
+        }
     }
 }
 
-impl From<v1::SegmentInfo> for SegmentInfo {
-    fn from(s: v1::SegmentInfo) -> Self {
-        todo!()
-        // Self {
-        //     format_version: SegmentInfo::VERSION,
-        //     blocks: s
-        //         .blocks
-        //         .into_iter()
-        //         .map(|b| Arc::new(b.into()))
-        //         .collect::<_>(),
-        //     summary: s.summary,
-        // }
+impl From<(v1::SegmentInfo, &DataSchema)> for SegmentInfo {
+    fn from(s: (v1::SegmentInfo, &DataSchema)) -> Self {
+        let schema = s.1;
+        let s = s.0;
+        
+        Self {
+            format_version: SegmentInfo::VERSION,
+            blocks: s
+                .blocks
+                .into_iter()
+                .map(|b| Arc::new((b.as_ref(), schema).into()))
+                .collect::<_>(),
+            summary: s.summary,
+        }
     }
 }
 
 
-impl From<v0::BlockMeta> for BlockMeta {
-    fn from(s: v0::BlockMeta) -> Self {
-        todo!()
-        // Self {
-        //     row_count: s.row_count,
-        //     block_size: s.block_size,
-        //     file_size: s.file_size,
-        //     col_stats: s.col_stats,
-        //     col_metas: s.col_metas,
-        //     cluster_stats: None,
-        //     location: (s.location.path, Chunk::VERSION),
-        //     bloom_filter_index_location: None,
-        //     bloom_filter_index_size: 0,
-        //     compression: Compression::Lz4,
-        // }
+impl From< (v0::BlockMeta, &DataSchema) > for BlockMeta {
+    fn from(s: (v0::BlockMeta, &DataSchema)) -> Self {
+        let schema = s.1;
+        let s = s.0;
+        let to_schema = to_schema(schema);
+        
+        let col_stats = s.col_stats.iter().map(|(k,v)| {
+            let f = to_schema.field(*k as usize);
+            let stats = ColumnStatistics {
+                min: from_scalar(&v.min, f.data_type()),
+                max: from_scalar(&v.max, f.data_type()),
+                null_count: v.null_count,
+                in_memory_size: v.in_memory_size,
+            };
+            
+            (*k, stats)
+        }).collect();
+        
+        Self {
+            row_count: s.row_count,
+            block_size: s.block_size,
+            file_size: s.file_size,
+            col_stats,
+            col_metas: s.col_metas,
+            cluster_stats: None,
+            location: (s.location.path, Chunk::VERSION),
+            bloom_filter_index_location: None,
+            bloom_filter_index_size: 0,
+            compression: Compression::Lz4,
+        }
     }
 }
 
-impl From<v1::BlockMeta> for BlockMeta {
-    fn from(s: v1::BlockMeta) -> Self {
-        todo!()
-        // Self {
-        //     row_count: s.row_count,
-        //     block_size: s.block_size,
-        //     file_size: s.file_size,
-        //     col_stats: s.col_stats,
-        //     col_metas: s.col_metas,
-        //     cluster_stats: None,
-        //     location: (s.location.path, Chunk::VERSION),
-        //     bloom_filter_index_location: None,
-        //     bloom_filter_index_size: 0,
-        //     compression: Compression::Lz4,
-        // }
+impl From< (&v1::BlockMeta, &DataSchema)> for BlockMeta {
+    fn from(s: (&v1::BlockMeta, &DataSchema)) -> Self {
+        let schema = s.1;
+        let s = s.0;
+        let to_schema = to_schema(schema);
+        
+        let col_stats = s.col_stats.iter().map(|(k,v)| {
+            let f = to_schema.field(*k as usize);
+            let stats = ColumnStatistics {
+                min: from_scalar(&v.min, f.data_type()),
+                max: from_scalar(&v.max, f.data_type()),
+                null_count: v.null_count,
+                in_memory_size: v.in_memory_size,
+            };
+            
+            (*k, stats)
+        }).collect();
+        
+        Self {
+            row_count: s.row_count,
+            block_size: s.block_size,
+            file_size: s.file_size,
+            col_stats,
+            col_metas: s.col_metas.clone(),
+            cluster_stats: None,
+            location: s.location.clone(),
+            bloom_filter_index_location: None,
+            bloom_filter_index_size: 0,
+            compression: Compression::Lz4,
+        }
     }
 }
 

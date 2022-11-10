@@ -18,6 +18,7 @@ use chrono::DateTime;
 use chrono::Utc;
 use common_base::base::uuid::Uuid;
 use common_expression::DataSchema;
+use common_expression::converts::from_schema;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -113,34 +114,33 @@ use super::super::v0;
 
 impl From<v0::TableSnapshot> for TableSnapshot {
     fn from(s: v0::TableSnapshot) -> Self {
-        todo!()
-        // Self {
-        //     format_version: TableSnapshot::VERSION,
-        //     snapshot_id: s.snapshot_id,
-        //     timestamp: None,
-        //     prev_snapshot_id: s.prev_snapshot_id.map(|id| (id, 0)),
-        //     schema: s.schema,
-        //     summary: s.summary,
-        //     segments: s.segments.into_iter().map(|l| (l, 0)).collect(),
-        //     cluster_key_meta: None,
-        // }
+        let schema =  from_schema(&s.schema);
+        Self {
+            format_version: TableSnapshot::VERSION,
+            snapshot_id: s.snapshot_id,
+            timestamp: None,
+            prev_snapshot_id: s.prev_snapshot_id.map(|id| (id, 0)),
+            schema,
+            summary: s.summary,
+            segments: s.segments.into_iter().map(|l| (l, 0)).collect(),
+            cluster_key_meta: None,
+        }
     }
 }
 
-
 impl From<v1::TableSnapshot> for TableSnapshot {
     fn from(s: v1::TableSnapshot) -> Self {
-        todo!()
-        // Self {
-        //     format_version: TableSnapshot::VERSION,
-        //     snapshot_id: s.snapshot_id,
-        //     timestamp: None,
-        //     prev_snapshot_id: s.prev_snapshot_id.map(|id| (id, 0)),
-        //     schema: s.schema,
-        //     summary: s.summary,
-        //     segments: s.segments.into_iter().map(|l| (l, 0)).collect(),
-        //     cluster_key_meta: None,
-        // }
+        let schema =  from_schema(&s.schema);
+        Self {
+            format_version: TableSnapshot::VERSION,
+            snapshot_id: s.snapshot_id,
+            timestamp: None,
+            prev_snapshot_id: s.prev_snapshot_id,
+            schema,
+            summary: s.summary,
+            segments: s.segments,
+            cluster_key_meta: None,
+        }
     }
 }
 

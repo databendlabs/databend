@@ -125,6 +125,7 @@ impl SnapshotLocationCreator for SnapshotVersion {
         match self {
             SnapshotVersion::V0(_) => "",
             SnapshotVersion::V1(_) => "_v1.json",
+            SnapshotVersion::V2(_) => "_v2.json",
         }
     }
 }

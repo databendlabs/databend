@@ -67,7 +67,7 @@ pub enum ValueRef<'a, T: ValueType> {
     Column(T::Column),
 }
 
-#[derive(Debug, Clone, Default, EnumAsInner, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, EnumAsInner, Eq, Serialize, Deserialize)]
 pub enum Scalar {
     #[default]
     Null,

@@ -18,8 +18,6 @@ use common_datavalues::DataValue;
 
 use crate::meta::ColumnId;
 
-pub type StatisticsOfColumns = HashMap<u32, ColumnStatistics>;
-
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct ColumnStatistics {
     pub min: DataValue,

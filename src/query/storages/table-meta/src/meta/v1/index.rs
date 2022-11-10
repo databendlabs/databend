@@ -21,13 +21,3 @@ pub struct BlockFilter {
     // Before index mod is extracted from databend-query, we just keep the DataBlock here
     data: DataBlock,
 }
-
-impl BlockFilter {
-    pub fn new(data: DataBlock) -> Self {
-        Self { data }
-    }
-
-    pub fn into_data(self) -> DataBlock {
-        self.data
-    }
-}
