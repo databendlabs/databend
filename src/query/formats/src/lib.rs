@@ -16,11 +16,6 @@ mod clickhouse;
 pub mod field_encoder;
 mod file_format_type;
 pub mod output_format;
-pub mod output_format_csv;
-mod output_format_json_each_row;
-mod output_format_parquet;
-mod output_format_tsv;
-mod output_format_values;
 
 pub use clickhouse::ClickhouseFormatType;
 pub use file_format_type::FileFormatOptionsExt;

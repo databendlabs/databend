@@ -27,15 +27,15 @@ use common_meta_types::StageFileFormatType;
 use common_settings::Settings;
 
 use super::clickhouse::ClickhouseSuffix;
+use crate::output_format::output_format_csv::CSVOutputFormat;
+use crate::output_format::output_format_csv::CSVWithNamesAndTypesOutputFormat;
+use crate::output_format::output_format_csv::CSVWithNamesOutputFormat;
+use crate::output_format::output_format_json_each_row::JsonEachRowOutputFormatBase;
+use crate::output_format::output_format_parquet::ParquetOutputFormat;
+use crate::output_format::output_format_tsv::TSVOutputFormat;
+use crate::output_format::output_format_tsv::TSVWithNamesAndTypesOutputFormat;
+use crate::output_format::output_format_tsv::TSVWithNamesOutputFormat;
 use crate::output_format::OutputFormat;
-use crate::output_format_csv::CSVOutputFormat;
-use crate::output_format_csv::CSVWithNamesAndTypesOutputFormat;
-use crate::output_format_csv::CSVWithNamesOutputFormat;
-use crate::output_format_json_each_row::JsonEachRowOutputFormatBase;
-use crate::output_format_parquet::ParquetOutputFormat;
-use crate::output_format_tsv::TSVOutputFormat;
-use crate::output_format_tsv::TSVWithNamesAndTypesOutputFormat;
-use crate::output_format_tsv::TSVWithNamesOutputFormat;
 use crate::ClickhouseFormatType;
 
 pub trait FileFormatTypeExt {

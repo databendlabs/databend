@@ -14,6 +14,11 @@
 
 use common_datablocks::DataBlock;
 use common_exception::Result;
+pub(crate) mod output_format_csv;
+pub(crate) mod output_format_json_each_row;
+pub(crate) mod output_format_parquet;
+pub(crate) mod output_format_tsv;
+pub(crate) mod output_format_values;
 
 pub trait OutputFormat: Send {
     fn serialize_block(&mut self, data_block: &DataBlock) -> Result<Vec<u8>>;
