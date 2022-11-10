@@ -30,10 +30,10 @@ use common_arrow::parquet::read::PageMetaData;
 use common_arrow::parquet::read::PageReader;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::Projection;
-use common_datablocks::DataBlock;
-use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::Chunk;
+use common_expression::DataSchemaRef;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::Compression;
 use futures::StreamExt;
@@ -133,7 +133,7 @@ impl BlockReader {
     // TODO refine these
 
     #[tracing::instrument(level = "debug", skip_all)]
-    pub async fn read_with_block_meta(&self, meta: &BlockMeta) -> Result<DataBlock> {
+    pub async fn read_with_block_meta(&self, meta: &BlockMeta) -> Result<Chunk> {
         let (num_rows, columns_array_iter) = self.read_columns_with_block_meta(meta).await?;
         let mut deserializer = RowGroupDeserializer::new(columns_array_iter, num_rows, None);
         self.try_next_block(&mut deserializer)
@@ -277,11 +277,7 @@ impl BlockReader {
         Ok((num_rows, columns_array_iter))
     }
 
-    pub fn deserialize(
-        &self,
-        part: PartInfoPtr,
-        chunks: Vec<(usize, Vec<u8>)>,
-    ) -> Result<DataBlock> {
+    pub fn deserialize(&self, part: PartInfoPtr, chunks: Vec<(usize, Vec<u8>)>) -> Result<Chunk> {
         let part = FusePartInfo::from_part(&part)?;
         let mut chunk_map: HashMap<usize, Vec<u8>> = chunks.into_iter().collect();
         let mut columns_array_iter = Vec::with_capacity(self.projection.len());
@@ -392,19 +388,19 @@ impl BlockReader {
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
-    pub async fn read(&self, part: PartInfoPtr) -> Result<DataBlock> {
+    pub async fn read(&self, part: PartInfoPtr) -> Result<Chunk> {
         let (num_rows, columns_array_iter) = self.read_columns(part).await?;
         let mut deserializer = RowGroupDeserializer::new(columns_array_iter, num_rows, None);
         self.try_next_block(&mut deserializer)
     }
 
-    fn try_next_block(&self, deserializer: &mut RowGroupDeserializer) -> Result<DataBlock> {
+    fn try_next_block(&self, deserializer: &mut RowGroupDeserializer) -> Result<Chunk> {
         match deserializer.next() {
             None => Err(ErrorCode::Internal(
                 "deserializer from row group: fail to get a chunk",
             )),
             Some(Err(cause)) => Err(ErrorCode::from(cause)),
-            Some(Ok(chunk)) => DataBlock::from_chunk(&self.projected_schema, &chunk),
+            Some(Ok(chunk)) => Chunk::from_arrow_chunk(&chunk, &self.projected_schema),
         }
     }
 

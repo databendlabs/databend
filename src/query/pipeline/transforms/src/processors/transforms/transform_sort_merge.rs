@@ -16,9 +16,9 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use common_datablocks::DataBlock;
-use common_datablocks::SortColumnDescription;
 use common_exception::Result;
+use common_expression::Chunk;
+use common_expression::SortColumnDescription;
 
 use super::Compactor;
 use super::TransformCompact;
@@ -55,14 +55,14 @@ impl Compactor for SortMergeCompactor {
         self.aborting.store(true, Ordering::Release);
     }
 
-    fn compact_final(&self, blocks: &[DataBlock]) -> Result<Vec<DataBlock>> {
+    fn compact_final(&self, blocks: &[Chunk]) -> Result<Vec<Chunk>> {
         if blocks.is_empty() {
             Ok(vec![])
         } else {
             let aborting = self.aborting.clone();
             let aborting: Aborting = Arc::new(Box::new(move || aborting.load(Ordering::Relaxed)));
 
-            let block = DataBlock::merge_sort_blocks(
+            let block = Chunk::merge_sort_blocks(
                 blocks,
                 &self.sort_columns_descriptions,
                 self.limit,
@@ -76,11 +76,8 @@ impl Compactor for SortMergeCompactor {
             let mut output = Vec::with_capacity(num_blocks);
             for _ in 0..num_blocks {
                 let end = std::cmp::min(start + self.block_size, num_rows);
-                let block = DataBlock::block_take_by_slices_limit(
-                    &block,
-                    (start, end - start),
-                    self.limit,
-                )?;
+                let block =
+                    Chunk::block_take_by_slices_limit(&block, (start, end - start), self.limit)?;
                 start = end;
                 output.push(block);
             }

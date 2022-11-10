@@ -17,10 +17,9 @@ use std::convert::TryFrom;
 use std::fmt::Debug;
 use std::sync::Arc;
 
-use common_datablocks::BlockMetaInfo;
-use common_datablocks::DataBlock;
-use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
+use common_expression::Chunk;
+use common_expression::ChunkMetaInfo;
 use common_storages_table_meta::meta::SegmentInfo;
 
 // currently, only support append,
@@ -42,26 +41,26 @@ impl AppendOperationLogEntry {
     }
 }
 
-impl TryFrom<AppendOperationLogEntry> for DataBlock {
+impl TryFrom<AppendOperationLogEntry> for Chunk {
     type Error = ErrorCode;
     fn try_from(value: AppendOperationLogEntry) -> Result<Self, Self::Error> {
-        Ok(DataBlock::create_with_meta(
-            DataSchemaRef::default(),
+        Ok(Chunk::new_with_meta(
             vec![],
+            0,
             Some(Arc::new(Box::new(value))),
         ))
     }
 }
 
-impl TryFrom<&DataBlock> for AppendOperationLogEntry {
+impl TryFrom<&Chunk> for AppendOperationLogEntry {
     type Error = ErrorCode;
-    fn try_from(block: &DataBlock) -> Result<Self, Self::Error> {
+    fn try_from(chunk: &Chunk) -> Result<Self, Self::Error> {
         let err = ErrorCode::Internal(format!(
             "invalid data block meta of AppendOperation log, {:?}",
             block.meta()
         ));
 
-        if let Some(meta) = block.meta()? {
+        if let Some(meta) = chunk.meta()? {
             let cast = meta.as_any().downcast_ref::<AppendOperationLogEntry>();
             return match cast {
                 None => Err(err),
@@ -74,12 +73,12 @@ impl TryFrom<&DataBlock> for AppendOperationLogEntry {
 }
 
 #[typetag::serde(name = "operation_log")]
-impl BlockMetaInfo for AppendOperationLogEntry {
+impl ChunkMetaInfo for AppendOperationLogEntry {
     fn as_any(&self) -> &dyn Any {
         self
     }
 
-    fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
+    fn equals(&self, info: &Box<dyn ChunkMetaInfo>) -> bool {
         match info.as_any().downcast_ref::<AppendOperationLogEntry>() {
             None => false,
             Some(other) => self == other,

@@ -32,22 +32,30 @@ pub type Result<T> = std::result::Result<T, (crate::Span, String)>;
 #[allow(dead_code)]
 mod chunk;
 
+mod chunk_compact_thresholds;
 pub mod converts;
 mod deserializations;
 mod evaluator;
 mod expression;
 mod function;
 mod kernels;
+mod meta_info;
 mod property;
 mod register;
 pub mod schema;
 pub mod serializations;
+mod stream;
 pub mod type_check;
 pub mod types;
 pub mod utils;
 pub mod values;
 
+pub use meta_info::ChunkMetaInfo;
+pub use meta_info::ChunkMetaInfoPtr;
+pub use stream::SendableChunkStream;
+
 pub use crate::chunk::*;
+pub use crate::chunk_compact_thresholds::ChunkCompactThresholds;
 pub use crate::deserializations::TypeDeserializer;
 pub use crate::evaluator::*;
 pub use crate::expression::*;

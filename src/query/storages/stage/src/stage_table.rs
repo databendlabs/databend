@@ -27,10 +27,10 @@ use common_catalog::plan::StageTableInfo;
 use common_catalog::table::AppendMode;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
-use common_datablocks::BlockCompactThresholds;
-use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::Chunk;
+use common_expression::ChunkCompactThresholds;
 use common_meta_app::schema::TableInfo;
 use common_meta_types::StageType;
 use common_meta_types::UserStageInfo;
@@ -203,7 +203,7 @@ impl Table for StageTable {
     async fn commit_insertion(
         &self,
         _ctx: Arc<dyn TableContext>,
-        _operations: Vec<DataBlock>,
+        _operations: Vec<Chunk>,
         _overwrite: bool,
     ) -> Result<()> {
         Ok(())
@@ -216,12 +216,12 @@ impl Table for StageTable {
         ))
     }
 
-    fn get_block_compact_thresholds(&self) -> BlockCompactThresholds {
+    fn get_block_compact_thresholds(&self) -> ChunkCompactThresholds {
         let guard = self.block_compact_threshold.lock();
         (*guard).expect("must success")
     }
 
-    fn set_block_compact_thresholds(&self, thresholds: BlockCompactThresholds) {
+    fn set_block_compact_thresholds(&self, thresholds: ChunkCompactThresholds) {
         let mut guard = self.block_compact_threshold.lock();
         (*guard) = Some(thresholds)
     }

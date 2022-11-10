@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datablocks::DataBlock;
+use common_expression::Chunk;
 use common_storages_table_meta::meta::SegmentInfo;
 use common_storages_table_meta::meta::Versioned;
 use uuid::Uuid;
@@ -40,7 +40,7 @@ impl ResultLocations {
             "{}/_t/part-{}_v{}.parquet",
             &self.prefix,
             part_uuid,
-            DataBlock::VERSION,
+            Chunk::VERSION,
         )
     }
 }

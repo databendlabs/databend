@@ -18,9 +18,8 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use common_datablocks::BlockCompactThresholds;
-use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_expression::ChunkCompactThresholds;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::SegmentInfo;
 use common_storages_table_meta::meta::TableSnapshot;
@@ -44,7 +43,7 @@ pub struct ReclusterMutator {
     blocks_map: BTreeMap<i32, Vec<(usize, Arc<BlockMeta>)>>,
     selected_blocks: Vec<Arc<BlockMeta>>,
     level: i32,
-    block_compactor: BlockCompactThresholds,
+    chunk_compactor: ChunkCompactThresholds,
     threshold: f64,
 }
 
@@ -54,7 +53,7 @@ impl ReclusterMutator {
         location_generator: TableMetaLocationGenerator,
         base_snapshot: Arc<TableSnapshot>,
         threshold: f64,
-        block_compactor: BlockCompactThresholds,
+        chunk_compactor: ChunkCompactThresholds,
         blocks_map: BTreeMap<i32, Vec<(usize, Arc<BlockMeta>)>>,
         data_accessor: Operator,
     ) -> Result<Self> {
@@ -65,7 +64,7 @@ impl ReclusterMutator {
             blocks_map,
             selected_blocks: Vec::new(),
             level: 0,
-            block_compactor,
+            chunk_compactor,
             threshold,
         })
     }
@@ -113,7 +112,7 @@ impl TableMutator for ReclusterMutator {
 
             // If the statistics of blocks are too small, just merge them into one block.
             if self
-                .block_compactor
+                .chunk_compactor
                 .check_for_recluster(total_rows as usize, total_bytes as usize)
             {
                 self.selected_blocks = block_metas

@@ -12,50 +12,46 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use common_datablocks::DataBlock;
-use common_datavalues::ColumnWithField;
-use common_datavalues::DataField;
-use common_datavalues::DataValue;
 use common_exception::Result;
-use common_functions::aggregates::eval_aggr;
+use common_expression::Chunk;
+use common_expression::ChunkCompactThresholds;
+use common_expression::DataType;
+use common_expression::Scalar;
+use common_functions_v2::aggregates::eval_aggr;
 use common_storages_index::MinMaxIndex;
 use common_storages_index::SupportedType;
 use common_storages_table_meta::meta::ColumnStatistics;
 use common_storages_table_meta::meta::StatisticsOfColumns;
 
-pub fn gen_columns_statistics(data_block: &DataBlock) -> Result<StatisticsOfColumns> {
+pub fn gen_columns_statistics(chunk: &Chunk) -> Result<StatisticsOfColumns> {
     let mut statistics = StatisticsOfColumns::new();
 
-    let leaves = traverse::traverse_columns_dfs(data_block.columns())?;
+    let leaves = traverse::traverse_columns_dfs(chunk.columns())?;
 
-    for (idx, col) in leaves.iter().enumerate() {
-        let col_data_type = col.data_type();
-        if !MinMaxIndex::is_supported_type(&col_data_type) {
+    for (idx, (column, data_type)) in leaves.iter().enumerate() {
+        if !MinMaxIndex::is_supported_type(&data_type) {
             continue;
         }
 
         // later, during the evaluation of expressions, name of field does not matter
-        let data_field = DataField::new("", col_data_type);
-        let column_field = ColumnWithField::new(col.clone(), data_field);
-        let mut min = DataValue::Null;
-        let mut max = DataValue::Null;
-
+        let mut min = Scalar::Null;
+        let mut max = Scalar::Null;
         let rows = col.len();
 
-        let mins = eval_aggr("min", vec![], &[column_field.clone()], rows)?;
-        let maxs = eval_aggr("max", vec![], &[column_field], rows)?;
+        let mins = eval_aggr("min", vec![], &[column.clone()], &[data_type.cloen()], rows)?;
+        let maxs = eval_aggr("max", vec![], &[column], &[data_type], rows)?;
 
         if mins.len() > 0 {
-            min = if let Some(v) = mins.get(0).trim_min() {
-                v
+            min = if let Some(v) = mins.index(0) {
+                v.into_owned().trim_min()
             } else {
                 continue;
             }
         }
 
         if maxs.len() > 0 {
-            max = if let Some(v) = maxs.get(0).trim_max() {
-                v
+            max = if let Some(v) = maxs.index(0) {
+                v.into_owned().trim_max()
             } else {
                 continue;
             }
@@ -82,33 +78,41 @@ pub fn gen_columns_statistics(data_block: &DataBlock) -> Result<StatisticsOfColu
 }
 
 pub mod traverse {
-    use common_datavalues::ColumnRef;
-    use common_datavalues::DataTypeImpl;
-    use common_datavalues::Series;
-    use common_datavalues::StructColumn;
+    use common_expression::AnyType;
+    use common_expression::Column;
+    use common_expression::DataType;
+    use common_expression::Value;
 
     use super::*;
 
     // traverses columns and collects the leaves in depth first manner
-    pub fn traverse_columns_dfs(columns: &[ColumnRef]) -> Result<Vec<ColumnRef>> {
+    pub fn traverse_columns_dfs(
+        columns: &[(Value<AnyType>, DataType)],
+    ) -> Result<Vec<(Column, DataType)>> {
         let mut leaves = vec![];
-        for f in columns {
-            traverse_recursive(f, &mut leaves)?;
+        for (value, data_type) in columns {
+            let column = value.into_column().unwrap();
+            traverse_recursive(column, data_type, &mut leaves)?;
         }
         Ok(leaves)
     }
 
-    fn traverse_recursive(column: &ColumnRef, leaves: &mut Vec<ColumnRef>) -> Result<()> {
-        match column.data_type() {
-            DataTypeImpl::Struct(_) => {
-                let full_column = column.convert_full_column();
-                let struct_col: &StructColumn = Series::check_get(&full_column)?;
-                for f in struct_col.values() {
-                    traverse_recursive(f, leaves)?
+    fn traverse_recursive(
+        column: Column,
+        data_type: DataType,
+        leaves: &mut Vec<(Value<AnyType>, DataType)>,
+    ) -> Result<()> {
+        match data_type {
+            DataType::Tuple(inner_data_types) => {
+                let (inner_columns, _) = col.into_tuple().unwrap();
+                for (inner_column, inner_data_type) in
+                    inner_columns.iter().zip(inner_data_types.iter())
+                {
+                    traverse_recursive(inner_column, inner_data_type, leaves)?;
                 }
             }
             _ => {
-                leaves.push(column.clone());
+                leaves.push((column, data_type));
             }
         }
         Ok(())
@@ -127,13 +131,13 @@ pub trait Trim: Sized {
 pub const STATS_REPLACEMENT_CHAR: char = '\u{FFFD}';
 pub const STATS_STRING_PREFIX_LEN: usize = 16;
 
-impl Trim for DataValue {
+impl Trim for Scalar {
     fn trim_min(self) -> Option<Self> {
         match self {
-            DataValue::String(bytes) => match String::from_utf8(bytes) {
+            Scalar::String(bytes) => match String::from_utf8(bytes) {
                 Ok(mut v) => {
                     if v.len() <= STATS_STRING_PREFIX_LEN {
-                        Some(DataValue::String(v.into_bytes()))
+                        Some(Scalar::String(v.into_bytes()))
                     } else {
                         // find the character boundary to prevent String::truncate from panic
                         let vs = v.as_str();
@@ -143,7 +147,7 @@ impl Trim for DataValue {
                         };
 
                         // do truncate
-                        Some(DataValue::String({
+                        Some(Scalar::String({
                             v.truncate(slice.len());
                             v.into_bytes()
                         }))
@@ -160,16 +164,16 @@ impl Trim for DataValue {
 
     fn trim_max(self) -> Option<Self> {
         match self {
-            DataValue::String(bytes) => match String::from_utf8(bytes) {
+            Scalar::String(bytes) => match String::from_utf8(bytes) {
                 Ok(v) => {
                     if v.len() <= STATS_STRING_PREFIX_LEN {
                         // if number of bytes is lesser, just return
-                        Some(DataValue::String(v.into_bytes()))
+                        Some(Scalar::String(v.into_bytes()))
                     } else {
                         // no need to trim, less than STRING_RREFIX_LEN chars
                         let number_of_chars = v.as_str().chars().count();
                         if number_of_chars <= STATS_STRING_PREFIX_LEN {
-                            return Some(DataValue::String(v.into_bytes()));
+                            return Some(Scalar::String(v.into_bytes()));
                         }
 
                         // slice the input (at the boundary of chars), takes at most STRING_PREFIX_LEN chars
@@ -202,7 +206,7 @@ impl Trim for DataValue {
                             }
                         }
 
-                        Some(DataValue::String(r.into_bytes()))
+                        Some(Scalar::String(r.into_bytes()))
                     }
                 }
                 Err(_) => {

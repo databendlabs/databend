@@ -20,11 +20,11 @@ use common_arrow::parquet::compression::CompressionOptions;
 use common_arrow::parquet::metadata::ThriftFileMetaData;
 use common_cache::Cache;
 use common_catalog::table_context::TableContext;
-use common_datablocks::serialize_data_blocks;
-use common_datablocks::serialize_data_blocks_with_compression;
-use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::serialize_chunks;
+use common_expression::serialize_chunks_with_compression;
+use common_expression::Chunk;
 use common_pipeline_core::processors::port::OutputPort;
 use common_storages_index::*;
 use common_storages_table_meta::caches::CacheManager;
@@ -52,7 +52,7 @@ struct BloomIndexState {
 
 enum State {
     None,
-    NeedSerialize(DataBlock),
+    NeedSerialize(Chunk),
     Serialized {
         data: Vec<u8>,
         size: u64,
@@ -172,7 +172,7 @@ impl Processor for FuseTableSink {
                     let location = self.meta_locations.block_bloom_index_location(&block_id);
                     let mut data = Vec::with_capacity(100 * 1024);
                     let index_block_schema = &bloom_index.filter_schema;
-                    let (size, _) = serialize_data_blocks_with_compression(
+                    let (size, _) = serialize_chunks_with_compression(
                         vec![index_block],
                         index_block_schema,
                         &mut data,
@@ -190,7 +190,7 @@ impl Processor for FuseTableSink {
                 // we need a configuration of block size threshold here
                 let mut data = Vec::with_capacity(100 * 1024 * 1024);
                 let schema = block.schema().clone();
-                let (size, meta_data) = serialize_data_blocks(vec![block], &schema, &mut data)?;
+                let (size, meta_data) = serialize_chunks(vec![block], &schema, &mut data)?;
 
                 self.state = State::Serialized {
                     data,
@@ -227,7 +227,7 @@ impl Processor for FuseTableSink {
 
                 // TODO: dyn operation for table trait
                 let log_entry = AppendOperationLogEntry::new(location, segment);
-                let data_block = DataBlock::try_from(log_entry)?;
+                let data_block = Chunk::try_from(log_entry)?;
                 self.ctx.push_precommit_block(data_block);
             }
             _state => {

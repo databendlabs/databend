@@ -18,10 +18,10 @@ use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Utc;
-use common_datablocks::BlockCompactThresholds;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::Chunk;
+use common_expression::ChunkCompactThresholds;
 use common_expression::DataSchema;
 use common_expression::Scalar;
 use common_meta_app::schema::TableInfo;
@@ -228,15 +228,15 @@ pub trait Table: Sync + Send {
         )))
     }
 
-    fn get_block_compact_thresholds(&self) -> BlockCompactThresholds {
-        BlockCompactThresholds {
+    fn get_block_compact_thresholds(&self) -> ChunkCompactThresholds {
+        ChunkCompactThresholds {
             max_rows_per_block: 1000 * 1000,
             min_rows_per_block: 800 * 1000,
             max_bytes_per_block: 100 * 1024 * 1024,
         }
     }
 
-    fn set_block_compact_thresholds(&self, _thresholds: BlockCompactThresholds) {
+    fn set_block_compact_thresholds(&self, _thresholds: ChunkCompactThresholds) {
         unimplemented!()
     }
 

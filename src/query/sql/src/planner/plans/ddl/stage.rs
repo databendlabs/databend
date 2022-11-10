@@ -11,10 +11,9 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-use std::sync::Arc;
-
 use std::fmt::Debug;
 use std::fmt::Formatter;
+use std::sync::Arc;
 
 use common_expression::DataSchemaRef;
 use common_meta_types::UserStageInfo;

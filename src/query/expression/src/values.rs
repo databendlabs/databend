@@ -153,6 +153,13 @@ impl<'a, T: ValueType> ValueRef<'a, T> {
         }
     }
 
+    pub fn len(&'a self) -> usize {
+        match self {
+            ValueRef::Scalar(_) => 1,
+            ValueRef::Column(col) => T::column_len(col),
+        }
+    }
+
     pub fn index(&'a self, index: usize) -> Option<T::ScalarRef<'a>> {
         match self {
             ValueRef::Scalar(scalar) => Some(scalar.clone()),

@@ -25,6 +25,7 @@ use crate::types::DataType;
 use crate::types::NumberDataType;
 use crate::with_number_type;
 use crate::Result;
+use crate::TypeDeserializer;
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct DataSchema {
@@ -224,6 +225,15 @@ impl DataSchema {
         let fields = self.fields().iter().map(|f| f.into()).collect::<Vec<_>>();
 
         ArrowSchema::from(fields).with_metadata(self.metadata.clone())
+    }
+
+    pub fn create_deserializers(&self, _capacity: usize) -> Vec<Box<dyn TypeDeserializer>> {
+        let mut deserializers = Vec::with_capacity(self.num_fields());
+        for field in self.fields() {
+            let data_type: DataType = field.data_type().into();
+            deserializers.push(data_type.create_deserializer());
+        }
+        deserializers
     }
 }
 

@@ -18,10 +18,8 @@ use std::sync::Arc;
 use common_catalog::plan::Expression;
 use common_catalog::plan::Projection;
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
-use common_datavalues::BooleanColumn;
-use common_datavalues::Series;
 use common_exception::Result;
+use common_expression::Chunk;
 use common_sql::evaluator::Evaluator;
 use common_storages_table_meta::meta::BlockMeta;
 
@@ -65,25 +63,23 @@ pub async fn delete_from_block(
     let filter_result = eval_node
         .eval(&ctx.try_get_function_context()?, &data_block)?
         .vector;
-    let predicates = DataBlock::cast_to_nonull_boolean(&filter_result)?;
+    let predicates = Chunk::cast_to_nonull_boolean(&filter_result)?;
 
     // shortcut, if predicates is const boolean (or can be cast to boolean)
-    if let Some(const_bool) = DataBlock::try_as_const_bool(&predicates)? {
+    if let Some(const_bool) = Chunk::try_as_const_bool(&predicates)? {
         return if const_bool {
             // all the rows should be removed
-            Ok(Deletion::Remains(DataBlock::empty_with_schema(
-                data_block.schema().clone(),
-            )))
+            Ok(Deletion::Remains(Chunk::empty()))
         } else {
             // none of the rows should be removed
             Ok(Deletion::NothingDeleted)
         };
     }
 
+    let col = predicates.into_column()?;
+    let values = Chunk::cast_column_to_boolean(&col).unwrap();
     // reverse the filter
-    let boolean_col: &BooleanColumn = Series::check_get(&predicates)?;
-    let values = boolean_col.values();
-    let filter = BooleanColumn::from_arrow_data(values.not());
+    let values = values.not();
 
     // read the whole block if necessary
     let whole_block = if filtering_whole_block {
@@ -96,13 +92,13 @@ pub async fn delete_from_block(
     };
 
     // filter out rows
-    let data_block = DataBlock::filter_block_with_bool_column(whole_block, &filter)?;
+    let chunk = Chunk::filter_chunk_with_bool_column(whole_block, &values)?;
 
-    let res = if data_block.num_rows() == block_meta.row_count as usize {
+    let res = if chunk.num_rows() == block_meta.row_count as usize {
         // false positive, nothing removed indeed
         Deletion::NothingDeleted
     } else {
-        Deletion::Remains(data_block)
+        Deletion::Remains(chunk)
     };
     Ok(res)
 }

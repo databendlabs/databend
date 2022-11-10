@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_datablocks::BlockCompactThresholds;
 use common_exception::Result;
+use common_expression::ChunkCompactThresholds;
 use common_storages_table_meta::caches::CacheManager;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::Location;
@@ -43,7 +44,7 @@ pub struct FullCompactMutator {
     ctx: Arc<dyn TableContext>,
     compact_params: CompactOptions,
     data_accessor: Operator,
-    block_compactor: BlockCompactThresholds,
+    chunk_compactor: ChunkCompactThresholds,
     location_generator: TableMetaLocationGenerator,
     selected_blocks: Vec<Arc<BlockMeta>>,
     // summarised statistics of all the accumulated segments(segment compacted, and unchanged)
@@ -60,7 +61,7 @@ impl FullCompactMutator {
     pub fn try_create(
         ctx: Arc<dyn TableContext>,
         compact_params: CompactOptions,
-        block_compactor: BlockCompactThresholds,
+        chunk_compactor: ChunkCompactThresholds,
         location_generator: TableMetaLocationGenerator,
         is_cluster: bool,
         operator: Operator,
@@ -69,7 +70,7 @@ impl FullCompactMutator {
             ctx,
             compact_params,
             data_accessor: operator,
-            block_compactor,
+            chunk_compactor,
             location_generator,
             selected_blocks: Vec::new(),
             merged_segment_statistics: Statistics::default(),
@@ -130,7 +131,7 @@ impl TableMutator for FullCompactMutator {
                 segments[i].blocks.iter().for_each(|b| {
                     if self.is_cluster
                         || self
-                            .block_compactor
+                            .chunk_compactor
                             .check_perfect_block(b.row_count as usize, b.block_size as usize)
                     {
                         remains.push(b.clone());

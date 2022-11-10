@@ -32,10 +32,10 @@ use common_catalog::table::ColumnStatisticsProvider;
 use common_catalog::table::CompactTarget;
 use common_catalog::table_context::TableContext;
 use common_catalog::table_mutator::TableMutator;
-use common_datablocks::BlockCompactThresholds;
-use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::Chunk;
+use common_expression::ChunkCompactThresholds;
 use common_meta_app::schema::TableInfo;
 use common_sharing::create_share_table_operator;
 use common_sql::ExpressionParser;
@@ -376,7 +376,7 @@ impl Table for FuseTable {
     async fn commit_insertion(
         &self,
         ctx: Arc<dyn TableContext>,
-        operations: Vec<DataBlock>,
+        operations: Vec<Chunk>,
         overwrite: bool,
     ) -> Result<()> {
         self.check_mutable()?;
@@ -464,14 +464,14 @@ impl Table for FuseTable {
         self.do_recluster(ctx, pipeline, push_downs).await
     }
 
-    fn get_block_compact_thresholds(&self) -> BlockCompactThresholds {
+    fn get_block_compact_thresholds(&self) -> ChunkCompactThresholds {
         let max_rows_per_block = self.get_option(FUSE_OPT_KEY_ROW_PER_BLOCK, DEFAULT_ROW_PER_BLOCK);
         let min_rows_per_block = (max_rows_per_block as f64 * 0.8) as usize;
         let max_bytes_per_block = self.get_option(
             FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD,
             DEFAULT_BLOCK_SIZE_IN_MEM_SIZE_THRESHOLD,
         );
-        BlockCompactThresholds::new(max_rows_per_block, min_rows_per_block, max_bytes_per_block)
+        ChunkCompactThresholds::new(max_rows_per_block, min_rows_per_block, max_bytes_per_block)
     }
 }
 

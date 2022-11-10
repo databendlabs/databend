@@ -16,8 +16,8 @@ use std::sync::Arc;
 
 use common_catalog::plan::Expression;
 use common_catalog::table_context::TableContext;
-use common_datavalues::DataSchemaRef;
 use common_exception::Result;
+use common_expression::DataSchemaRef;
 use common_storages_index::RangeFilter;
 use common_storages_table_meta::meta::StatisticsOfColumns;
 

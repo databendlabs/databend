@@ -25,13 +25,12 @@ use common_arrow::parquet::read::PageMetaData;
 use common_arrow::parquet::read::PageReader;
 use common_cache::Cache;
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
-use common_datavalues::DataField;
-use common_datavalues::DataSchema;
-use common_datavalues::ToDataType;
-use common_datavalues::Vu8;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::Chunk;
+use common_expression::DataField;
+use common_expression::DataSchema;
+use common_expression::SchemaDataType;
 use common_storages_table_meta::meta::BlockBloomFilterIndexVersion;
 use common_storages_table_meta::meta::ChunkFilter;
 use common_storages_table_meta::meta::Location;
@@ -91,7 +90,7 @@ mod util_v1 {
         column_needed: &[String],
         path: &str,
         length: u64,
-    ) -> Result<DataBlock> {
+    ) -> Result<Chunk> {
         let file_meta = load_index_meta(dal.clone(), path, length).await?;
         if file_meta.row_groups.len() != 1 {
             return Err(ErrorCode::StorageOther(format!(
@@ -103,7 +102,7 @@ mod util_v1 {
 
         let fields = column_needed
             .iter()
-            .map(|name| DataField::new(name, Vu8::to_data_type()))
+            .map(|name| DataField::new(name, SchemaDataType::String))
             .collect::<Vec<_>>();
 
         let schema = Arc::new(DataSchema::new(fields));
@@ -188,7 +187,7 @@ mod util_v1 {
             Some(Err(cause)) => Err(ErrorCode::from(cause)),
             Some(Ok(chunk)) => {
                 let span = tracing::info_span!("from_chunk");
-                span.in_scope(|| DataBlock::from_chunk(&schema, &chunk))
+                span.in_scope(|| Chunk::from_arrow_chunk(&chunk, &schema))
             }
         }
     }

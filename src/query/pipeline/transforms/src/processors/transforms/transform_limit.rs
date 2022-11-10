@@ -89,7 +89,7 @@ impl<const MODE: usize> TransformLimitImpl<MODE> {
 
         let remaining = self.take_remaining;
         self.take_remaining = 0;
-        data_block.slice((0..remaining))
+        data_block.slice(0..remaining)
     }
 
     pub fn skip_rows(&mut self, data_block: Chunk) -> Option<Chunk> {
@@ -106,12 +106,12 @@ impl<const MODE: usize> TransformLimitImpl<MODE> {
                 self.skip_remaining = 0;
                 let length = std::cmp::min(self.take_remaining, rows - offset);
                 self.take_remaining -= length;
-                Some(data_block.slice((offset..offset + length)))
+                Some(data_block.slice(offset..offset + length))
             }
             _ => {
                 let offset = self.skip_remaining;
                 self.skip_remaining = 0;
-                Some(data_block.slice((offset..rows)))
+                Some(data_block.slice(offset..rows))
             }
         }
     }

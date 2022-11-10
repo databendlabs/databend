@@ -16,16 +16,16 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use common_datablocks::BlockCompactThresholds;
-use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::Chunk;
+use common_expression::ChunkCompactThresholds;
 
 use super::Compactor;
 use super::TransformCompact;
 
 pub struct BlockCompactorNoSplit {
-    thresholds: BlockCompactThresholds,
+    thresholds: ChunkCompactThresholds,
     aborting: Arc<AtomicBool>,
     // call block.memory_size() only once.
     // we may no longer need it if we start using jsonb, otherwise it should be put in CompactorState
@@ -34,7 +34,7 @@ pub struct BlockCompactorNoSplit {
 }
 
 impl BlockCompactorNoSplit {
-    pub fn new(thresholds: BlockCompactThresholds) -> Self {
+    pub fn new(thresholds: ChunkCompactThresholds) -> Self {
         BlockCompactorNoSplit {
             thresholds,
             accumulated_rows: 0,
@@ -57,7 +57,7 @@ impl Compactor for BlockCompactorNoSplit {
         self.aborting.store(true, Ordering::Release);
     }
 
-    fn compact_partial(&mut self, blocks: &mut Vec<DataBlock>) -> Result<Vec<DataBlock>> {
+    fn compact_partial(&mut self, blocks: &mut Vec<Chunk>) -> Result<Vec<Chunk>> {
         if blocks.is_empty() {
             return Ok(vec![]);
         }
@@ -82,7 +82,7 @@ impl Compactor for BlockCompactorNoSplit {
                 .check_large_enough(accumulated_rows_new, accumulated_bytes_new)
             {
                 // avoid call concat_blocks for each new block
-                let merged = DataBlock::concat_blocks(blocks)?;
+                let merged = Chunk::concat(blocks)?;
                 blocks.clear();
                 self.accumulated_rows = 0;
                 self.accumulated_bytes = 0;
@@ -96,7 +96,7 @@ impl Compactor for BlockCompactorNoSplit {
         Ok(res)
     }
 
-    fn compact_final(&self, blocks: &[DataBlock]) -> Result<Vec<DataBlock>> {
+    fn compact_final(&self, blocks: &[Chunk]) -> Result<Vec<Chunk>> {
         let mut res = vec![];
         if self.accumulated_rows != 0 {
             if self.aborting.load(Ordering::Relaxed) {
@@ -105,7 +105,7 @@ impl Compactor for BlockCompactorNoSplit {
                 ));
             }
 
-            let block = DataBlock::concat_blocks(blocks)?;
+            let block = Chunk::concat(blocks)?;
             res.push(block);
         }
 

@@ -12,11 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod concat;
-mod filter;
-mod scatter;
-mod sort;
-mod take;
-mod take_chunks;
+use common_exception::Result;
 
-pub use sort::SortColumnDescription;
+use crate::Chunk;
+
+pub type SendableChunkStream =
+    std::pin::Pin<Box<dyn futures::stream::Stream<Item = Result<Chunk>> + Send>>;

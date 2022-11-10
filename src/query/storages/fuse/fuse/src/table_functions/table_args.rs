@@ -12,15 +12,15 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::Scalar;
 
-pub fn string_value(value: &DataValue) -> Result<String> {
-    String::from_utf8(value.as_string()?)
+pub fn string_value(value: &Scalar) -> Result<String> {
+    String::from_utf8(value.into_string()?)
         .map_err(|e| ErrorCode::BadArguments(format!("invalid string. {}", e)))
 }
 
-pub fn string_literal(val: &str) -> DataValue {
-    DataValue::String(val.as_bytes().to_vec())
+pub fn string_literal(val: &str) -> Scalar {
+    Scalar::String(val.as_bytes().to_vec())
 }

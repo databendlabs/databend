@@ -15,8 +15,8 @@
 use std::borrow::Borrow;
 use std::collections::HashMap;
 
-use common_datavalues::DataValue;
 use common_exception::Result;
+use common_expression::Scalar;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::ColumnId;
 use common_storages_table_meta::meta::ColumnStatistics;
@@ -70,14 +70,14 @@ pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
                 .filter(|s| !s.is_null())
                 .min_by(|&x, &y| x.cmp(y))
                 .cloned()
-                .unwrap_or(DataValue::Null);
+                .unwrap_or(Scalar::Null);
 
             let max = max_stats
                 .iter()
                 .filter(|s| !s.is_null())
                 .max_by(|&x, &y| x.cmp(y))
                 .cloned()
-                .unwrap_or(DataValue::Null);
+                .unwrap_or(Scalar::Null);
 
             acc.insert(*id, ColumnStatistics {
                 min,

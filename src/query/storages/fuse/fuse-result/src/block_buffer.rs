@@ -20,8 +20,8 @@ use common_base::base::tokio::sync::Notify;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::Projection;
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
 use common_exception::Result;
+use common_expression::Chunk;
 use common_storages_fuse::io::BlockReader;
 
 use crate::ResultQueryInfo;
@@ -35,13 +35,13 @@ pub struct BlockInfo {
 }
 
 impl BlockInfo {
-    async fn get_block(&self) -> Result<DataBlock> {
+    async fn get_block(&self) -> Result<Chunk> {
         self.reader.read(self.part_info.clone()).await
     }
 }
 
 enum BlockDataOrInfo {
-    Data(DataBlock),
+    Data(Chunk),
     Info(BlockInfo),
 }
 
@@ -68,7 +68,7 @@ impl BlockBufferInner {
 }
 
 impl BlockBufferInner {
-    fn try_push_block(&mut self, block: DataBlock) -> bool {
+    fn try_push_block(&mut self, block: Chunk) -> bool {
         if self.pop_stopped {
             return false;
         }
@@ -80,7 +80,7 @@ impl BlockBufferInner {
         }
     }
 
-    fn push_block(&mut self, block: DataBlock) {
+    fn push_block(&mut self, block: Chunk) {
         self.curr_rows += block.num_rows();
         self.blocks.push_back(BlockDataOrInfo::Data(block));
         self.block_notify.notify_one();
@@ -133,7 +133,7 @@ impl BlockBuffer {
         })
     }
 
-    pub async fn pop(self: &Arc<Self>) -> Result<(Option<DataBlock>, bool)> {
+    pub async fn pop(self: &Arc<Self>) -> Result<(Option<Chunk>, bool)> {
         let (block, done) = {
             let mut guard = self.buffer.lock().await;
             guard.pop().await
@@ -159,7 +159,7 @@ impl BlockBuffer {
         guard.is_pop_done()
     }
 
-    pub async fn try_push_block(&self, block: DataBlock) -> bool {
+    pub async fn try_push_block(&self, block: Chunk) -> bool {
         let mut guard = self.buffer.lock().await;
         guard.try_push_block(block)
     }
@@ -169,7 +169,7 @@ impl BlockBuffer {
         guard.push_info(block_info)
     }
 
-    async fn push(&self, block: DataBlock) -> Result<()> {
+    async fn push(&self, block: Chunk) -> Result<()> {
         let mut guard = self.buffer.lock().await;
         guard.push_block(block);
         Ok(())
@@ -184,7 +184,7 @@ impl BlockBuffer {
 
 #[async_trait::async_trait]
 pub trait BlockBufferWriter: Send {
-    async fn push(&mut self, block: DataBlock) -> Result<()>;
+    async fn push(&mut self, block: Chunk) -> Result<()>;
     async fn stop_push(&mut self, abort: bool) -> Result<()>;
 }
 
@@ -192,7 +192,7 @@ pub struct BlockBufferWriterMemOnly(pub Arc<BlockBuffer>);
 
 #[async_trait::async_trait]
 impl BlockBufferWriter for BlockBufferWriterMemOnly {
-    async fn push(&mut self, block: DataBlock) -> Result<()> {
+    async fn push(&mut self, block: Chunk) -> Result<()> {
         self.0.push(block).await
     }
 
@@ -231,7 +231,7 @@ impl BlockBufferWriterWithResultTable {
 
 #[async_trait::async_trait]
 impl BlockBufferWriter for BlockBufferWriterWithResultTable {
-    async fn push(&mut self, block: DataBlock) -> Result<()> {
+    async fn push(&mut self, block: Chunk) -> Result<()> {
         let block_clone = block.clone();
         if self.buffer.try_push_block(block).await {
             let _ = self.writer.append_block(block_clone).await?;

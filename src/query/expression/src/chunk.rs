@@ -23,6 +23,7 @@ use common_exception::Result;
 use crate::schema::DataSchema;
 use crate::types::AnyType;
 use crate::types::DataType;
+use crate::ChunkMetaInfoPtr;
 use crate::Column;
 use crate::ColumnBuilder;
 use crate::DataSchemaRef;
@@ -35,6 +36,7 @@ use crate::Value;
 pub struct Chunk {
     columns: Vec<(Value<AnyType>, DataType)>,
     num_rows: usize,
+    meta: Option<ChunkMetaInfoPtr>,
 }
 
 impl Chunk {
@@ -44,7 +46,28 @@ impl Chunk {
             Value::Scalar(_) => true,
             Value::Column(c) => c.len() == num_rows,
         }));
-        Self { columns, num_rows }
+        Self {
+            columns,
+            num_rows,
+            meta: None,
+        }
+    }
+
+    #[inline]
+    pub fn new_with_meta(
+        columns: Vec<(Value<AnyType>, DataType)>,
+        num_rows: usize,
+        meta: Option<ChunkMetaInfoPtr>,
+    ) -> Self {
+        debug_assert!(columns.iter().all(|(col, _)| match col {
+            Value::Scalar(_) => true,
+            Value::Column(c) => c.len() == num_rows,
+        }));
+        Self {
+            columns,
+            num_rows,
+            meta,
+        }
     }
 
     #[inline]
@@ -112,6 +135,7 @@ impl Chunk {
         Self {
             columns,
             num_rows: self.num_rows,
+            meta: self.meta.clone(),
         }
     }
 
@@ -143,6 +167,7 @@ impl Chunk {
         Self {
             columns,
             num_rows: range.end - range.start + 1,
+            meta: self.meta.clone(),
         }
     }
 
@@ -153,6 +178,20 @@ impl Chunk {
             assert_eq!(self.num_rows, col.len());
         }
         self.columns.push((column, data_type))
+    }
+
+    #[inline]
+    pub fn add_meta(self, meta: Option<ChunkMetaInfoPtr>) -> Result<Self> {
+        Ok(Self {
+            columns: self.columns.clone(),
+            num_rows: self.num_rows,
+            meta,
+        })
+    }
+
+    #[inline]
+    pub fn meta(&self) -> Result<Option<ChunkMetaInfoPtr>> {
+        Ok(self.meta.clone())
     }
 
     pub fn get_serializers(&self) -> Result<Vec<Box<dyn TypeSerializer>>, String> {

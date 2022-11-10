@@ -19,10 +19,10 @@ use async_trait::async_trait;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::Projection;
 use common_catalog::table_context::TableContext;
-use common_datablocks::serialize_data_blocks;
-use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::serialize_chunks;
+use common_expression::Chunk;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
@@ -44,9 +44,9 @@ use crate::ResultQueryInfo;
 
 enum State {
     None,
-    NeedSerialize(DataBlock),
+    NeedSerialize(Chunk),
     Serialized {
-        block: DataBlock,
+        block: Chunk,
         data: Vec<u8>,
         location: String,
     },
@@ -107,7 +107,7 @@ impl ResultTableSink {
         FuseTable::all_columns_part(meta)
     }
 
-    async fn push(&mut self, block: DataBlock) -> Result<()> {
+    async fn push(&mut self, block: Chunk) -> Result<()> {
         if !self.block_buffer.try_push_block(block).await {
             let part_info = self.get_last_part_info();
             let block_info = BlockInfo {
@@ -179,8 +179,7 @@ impl Processor for ResultTableSink {
 
                 let mut data = Vec::with_capacity(100 * 1024 * 1024);
                 let schema = block.schema().clone();
-                let (size, meta_data) =
-                    serialize_data_blocks(vec![block.clone()], &schema, &mut data)?;
+                let (size, meta_data) = serialize_chunks(vec![block.clone()], &schema, &mut data)?;
 
                 let bloom_index_location = None;
                 let bloom_index_size = 0_u64;

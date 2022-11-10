@@ -16,8 +16,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_arrow::parquet::metadata::ThriftFileMetaData;
-use common_datablocks::DataBlock;
 use common_exception::Result;
+use common_expression::Chunk;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::ColumnMeta;
 use common_storages_table_meta::meta::Location;
@@ -103,7 +103,7 @@ impl StatisticsAccumulator {
         let row_count = block_statistics.block_rows_size;
         let block_size = block_statistics.block_bytes_size;
         let col_stats = block_statistics.block_column_statistics.clone();
-        let data_location = (block_statistics.block_file_location, DataBlock::VERSION);
+        let data_location = (block_statistics.block_file_location, Chunk::VERSION);
         let cluster_stats = block_statistics.block_cluster_statistics;
 
         self.blocks_metas.push(Arc::new(BlockMeta::new(

@@ -18,10 +18,10 @@ use backon::ExponentialBackoff;
 use backon::Retryable;
 use common_arrow::parquet::compression::CompressionOptions;
 use common_arrow::parquet::metadata::ThriftFileMetaData;
-use common_datablocks::serialize_data_blocks;
-use common_datablocks::serialize_data_blocks_with_compression;
-use common_datablocks::DataBlock;
 use common_exception::Result;
+use common_expression::serialize_chunks;
+use common_expression::serialize_chunks_with_compression;
+use common_expression::Chunk;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::ClusterStatistics;
 use common_storages_table_meta::meta::Location;
@@ -55,7 +55,7 @@ impl<'a> BlockWriter<'a> {
 
     pub async fn write_with_location(
         &self,
-        block: DataBlock,
+        block: Chunk,
         block_id: Uuid,
         location: Location,
         cluster_stats: Option<ClusterStatistics>,
@@ -85,7 +85,7 @@ impl<'a> BlockWriter<'a> {
 
     pub async fn write(
         &self,
-        block: DataBlock,
+        block: Chunk,
         cluster_stats: Option<ClusterStatistics>,
     ) -> Result<BlockMeta> {
         let (location, block_id) = self.location_generator.gen_block_location();
@@ -96,7 +96,7 @@ impl<'a> BlockWriter<'a> {
     pub async fn build_block_index(
         &self,
         data_accessor: &Operator,
-        block: &DataBlock,
+        block: &Chunk,
         block_id: Uuid,
     ) -> Result<(u64, Location)> {
         let bloom_index = BlockFilter::try_create(&[block])?;
@@ -106,7 +106,7 @@ impl<'a> BlockWriter<'a> {
             .block_bloom_index_location(&block_id);
         let mut data = Vec::with_capacity(DEFAULT_BLOOM_INDEX_WRITE_BUFFER_SIZE);
         let index_block_schema = &bloom_index.filter_schema;
-        let (size, _) = serialize_data_blocks_with_compression(
+        let (size, _) = serialize_chunks_with_compression(
             vec![index_block],
             index_block_schema,
             &mut data,
@@ -118,13 +118,13 @@ impl<'a> BlockWriter<'a> {
 }
 
 pub async fn write_block(
-    block: DataBlock,
+    block: Chunk,
     data_accessor: &Operator,
     location: &str,
 ) -> Result<(u64, ThriftFileMetaData)> {
     let mut buf = Vec::with_capacity(DEFAULT_BLOCK_WRITE_BUFFER_SIZE);
     let schema = block.schema().clone();
-    let result = serialize_data_blocks(vec![block], &schema, &mut buf)?;
+    let result = serialize_chunks(vec![block], &schema, &mut buf)?;
     write_data(&buf, data_accessor, location).await?;
     Ok(result)
 }

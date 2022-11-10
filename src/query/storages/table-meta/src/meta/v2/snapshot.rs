@@ -17,18 +17,18 @@ use std::ops::Add;
 use chrono::DateTime;
 use chrono::Utc;
 use common_base::base::uuid::Uuid;
-use common_expression::DataSchema;
 use common_expression::converts::from_schema;
+use common_expression::DataSchema;
 use serde::Deserialize;
 use serde::Serialize;
 
 use crate::meta::common::FormatVersion;
+use crate::meta::v1;
 use crate::meta::ClusterKey;
 use crate::meta::Location;
 use crate::meta::SnapshotId;
 use crate::meta::Statistics;
 use crate::meta::Versioned;
-use crate::meta::v1;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct TableSnapshot {
@@ -114,7 +114,7 @@ use super::super::v0;
 
 impl From<v0::TableSnapshot> for TableSnapshot {
     fn from(s: v0::TableSnapshot) -> Self {
-        let schema =  from_schema(&s.schema);
+        let schema = from_schema(&s.schema);
         Self {
             format_version: TableSnapshot::VERSION,
             snapshot_id: s.snapshot_id,
@@ -130,7 +130,7 @@ impl From<v0::TableSnapshot> for TableSnapshot {
 
 impl From<v1::TableSnapshot> for TableSnapshot {
     fn from(s: v1::TableSnapshot) -> Self {
-        let schema =  from_schema(&s.schema);
+        let schema = from_schema(&s.schema);
         Self {
             format_version: TableSnapshot::VERSION,
             snapshot_id: s.snapshot_id,

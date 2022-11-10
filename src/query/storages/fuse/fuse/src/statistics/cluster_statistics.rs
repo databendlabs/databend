@@ -12,10 +12,11 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use common_datablocks::BlockCompactThresholds;
-use common_datablocks::DataBlock;
-use common_datavalues::DataValue;
 use common_exception::Result;
+use common_expression::Chunk;
+use common_expression::ChunkCompactThresholds;
+use common_expression::DataType;
+use common_expression::ScalarRef;
 use common_storages_table_meta::meta::ClusterStatistics;
 
 #[derive(Clone, Default)]
@@ -24,7 +25,7 @@ pub struct ClusterStatsGenerator {
     cluster_key_index: Vec<usize>,
     extra_key_index: Vec<usize>,
     level: i32,
-    block_compact_thresholds: BlockCompactThresholds,
+    chunk_compact_thresholds: ChunkCompactThresholds,
 }
 
 impl ClusterStatsGenerator {
@@ -33,14 +34,14 @@ impl ClusterStatsGenerator {
         cluster_key_index: Vec<usize>,
         extra_key_index: Vec<usize>,
         level: i32,
-        block_compact_thresholds: BlockCompactThresholds,
+        chunk_compact_thresholds: ChunkCompactThresholds,
     ) -> Self {
         Self {
             cluster_key_id,
             cluster_key_index,
             extra_key_index,
             level,
-            block_compact_thresholds,
+            chunk_compact_thresholds,
         }
     }
 
@@ -48,10 +49,10 @@ impl ClusterStatsGenerator {
     // The input block contains the cluster key block.
     pub fn gen_stats_for_append(
         &self,
-        data_block: &DataBlock,
-    ) -> Result<(Option<ClusterStatistics>, DataBlock)> {
-        let cluster_stats = self.clusters_statistics(data_block, self.level)?;
-        let mut block = data_block.clone();
+        chunk: &Chunk,
+    ) -> Result<(Option<ClusterStatistics>, Chunk)> {
+        let cluster_stats = self.clusters_statistics(chunk, self.level)?;
+        let mut block = chunk.clone();
 
         for id in self.extra_key_index.iter() {
             block = block.remove_column_index(*id)?;
@@ -63,7 +64,7 @@ impl ClusterStatsGenerator {
     // This can be used in deletion, for an existing block.
     pub fn gen_with_origin_stats(
         &self,
-        data_block: &DataBlock,
+        chunk: &Chunk,
         origin_stats: Option<ClusterStatistics>,
     ) -> Result<Option<ClusterStatistics>> {
         if origin_stats.is_none() {
@@ -75,7 +76,7 @@ impl ClusterStatsGenerator {
             return Ok(None);
         }
 
-        let mut block = data_block.clone();
+        let mut block = chunk.clone();
 
         for id in self.extra_key_index.iter() {
             block = block.remove_column_index(*id)?;
@@ -83,17 +84,13 @@ impl ClusterStatsGenerator {
 
         if !self.cluster_key_index.is_empty() {
             let indices = vec![0u32, block.num_rows() as u32 - 1];
-            block = DataBlock::block_take_by_indices(&block, &indices)?;
+            block = Chunk::take_chunks(&block, &indices)?;
         }
 
         self.clusters_statistics(&block, origin_stats.level)
     }
 
-    fn clusters_statistics(
-        &self,
-        data_block: &DataBlock,
-        level: i32,
-    ) -> Result<Option<ClusterStatistics>> {
+    fn clusters_statistics(&self, chunk: &Chunk, level: i32) -> Result<Option<ClusterStatistics>> {
         if self.cluster_key_index.is_empty() {
             return Ok(None);
         }
@@ -102,31 +99,33 @@ impl ClusterStatsGenerator {
         let mut max = Vec::with_capacity(self.cluster_key_index.len());
 
         for key in self.cluster_key_index.iter() {
-            let col = data_block.column(*key);
-
-            let mut left = col.get_checked(0)?;
+            let (val, data_type) = chunk.column(*key);
+            let val_ref = val.as_ref();
+            let mut left = unsafe { val_ref.index_unchecked(0) };
             // To avoid high cardinality, for the string column,
             // cluster statistics uses only the first 5 bytes.
-            if let DataValue::String(v) = &left {
+            if data_type == DataType::String {
+                let v = val_ref.into_string().unwrap();
                 let l = v.len();
                 let e = if l < 5 { l } else { 5 };
-                left = DataValue::from(&v[0..e]);
+                left = ScalarRef::String(&v[0..e]);
             }
-            min.push(left);
+            min.push(left.to_owned());
 
-            let mut right = col.get_checked(col.len() - 1)?;
-            if let DataValue::String(v) = &right {
+            let mut right = unsafe { val_ref.index_unchecked(val_ref.len() - 1) };
+            if data_type == DataType::String {
+                let v = val_ref.into_string().unwrap();
                 let l = v.len();
                 let e = if l < 5 { l } else { 5 };
-                right = DataValue::from(&v[0..e]);
+                right = ScalarRef::String(&v[0..e]);
             }
             max.push(right);
         }
 
         let level = if min == max
             && self
-                .block_compact_thresholds
-                .check_perfect_block(data_block.num_rows(), data_block.memory_size())
+                .chunk_compact_thresholds
+                .check_perfect_block(chunk.num_rows(), chunk.memory_size())
         {
             -1
         } else {

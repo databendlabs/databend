@@ -14,10 +14,9 @@
 
 use std::sync::Arc;
 
-use common_datablocks::DataBlock;
-use common_datablocks::SortColumnDescription;
 use common_exception::Result;
 use common_expression::Chunk;
+use common_expression::SortColumnDescription;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;

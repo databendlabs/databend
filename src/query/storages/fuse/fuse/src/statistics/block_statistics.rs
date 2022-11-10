@@ -14,7 +14,7 @@
 
 use std::collections::HashMap;
 
-use common_datablocks::DataBlock;
+use common_expression::Chunk;
 use common_storages_table_meta::meta::ClusterStatistics;
 use common_storages_table_meta::meta::ColumnId;
 use common_storages_table_meta::meta::ColumnStatistics;
@@ -31,14 +31,14 @@ pub struct BlockStatistics {
 
 impl BlockStatistics {
     pub fn from(
-        data_block: &DataBlock,
+        chunk: &Chunk,
         location: String,
         cluster_stats: Option<ClusterStatistics>,
     ) -> common_exception::Result<BlockStatistics> {
         Ok(BlockStatistics {
             block_file_location: location,
-            block_rows_size: data_block.num_rows() as u64,
-            block_bytes_size: data_block.memory_size() as u64,
+            block_rows_size: chunk.num_rows() as u64,
+            block_bytes_size: chunk.memory_size() as u64,
             block_column_statistics: column_statistic::gen_columns_statistics(data_block)?,
             block_cluster_statistics: cluster_stats,
         })

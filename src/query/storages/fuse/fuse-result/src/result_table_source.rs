@@ -19,9 +19,9 @@ use common_base::base::Progress;
 use common_base::base::ProgressValues;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::Chunk;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
@@ -33,7 +33,7 @@ use crate::result_table_source::State::Generated;
 enum State {
     ReadData(Option<PartInfoPtr>),
     Deserialize(PartInfoPtr, Vec<(usize, Vec<u8>)>),
-    Generated(Option<PartInfoPtr>, DataBlock),
+    Generated(Option<PartInfoPtr>, Chunk),
     Finish,
 }
 

@@ -18,12 +18,11 @@ use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_expression::Chunk;
 
+use super::v2;
 use crate::meta::v0;
 use crate::meta::v1;
 use crate::meta::v2::ChunkFilter;
 use crate::meta::Versioned;
-
-use super::v2;
 
 // Here versions of meta are tagged with numeric values
 //
@@ -40,7 +39,6 @@ use super::v2;
 impl Versioned<0> for v0::SegmentInfo {}
 impl Versioned<1> for v1::SegmentInfo {}
 impl Versioned<2> for v2::SegmentInfo {}
-
 
 pub enum SegmentInfoVersion {
     V0(PhantomData<v0::SegmentInfo>),

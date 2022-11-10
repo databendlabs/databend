@@ -14,8 +14,8 @@
 
 use std::marker::PhantomData;
 
-use common_datablocks::DataBlock;
 use common_exception::Result;
+use common_expression::Chunk;
 use common_storages_table_meta::meta::BlockFilter;
 use common_storages_table_meta::meta::Location;
 use common_storages_table_meta::meta::SegmentInfo;
@@ -55,9 +55,9 @@ impl TableMetaLocationGenerator {
                     &self.prefix,
                     FUSE_TBL_BLOCK_PREFIX,
                     part_uuid.as_simple(),
-                    DataBlock::VERSION,
+                    Chunk::VERSION,
                 ),
-                DataBlock::VERSION,
+                Chunk::VERSION,
             ),
             part_uuid,
         )

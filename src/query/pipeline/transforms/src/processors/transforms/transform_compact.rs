@@ -16,9 +16,9 @@ use std::any::Any;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::Chunk;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
@@ -44,12 +44,12 @@ pub trait Compactor {
     fn interrupt(&self) {}
 
     /// `compact_partial` is called when a new block is pushed and `use_partial_compact` is enabled
-    fn compact_partial(&mut self, _blocks: &mut Vec<DataBlock>) -> Result<Vec<DataBlock>> {
+    fn compact_partial(&mut self, _chunks: &mut Vec<Chunk>) -> Result<Vec<Chunk>> {
         Ok(vec![])
     }
 
     /// `compact_final` is called when all the blocks are pushed to finish the compaction
-    fn compact_final(&self, blocks: &[DataBlock]) -> Result<Vec<DataBlock>>;
+    fn compact_final(&self, chunks: &[Chunk]) -> Result<Vec<Chunk>>;
 }
 
 impl<T: Compactor + Send + 'static> TransformCompact<T> {
@@ -189,20 +189,20 @@ enum ProcessorState {
 pub struct CompactedState {
     input_port: Arc<InputPort>,
     output_port: Arc<OutputPort>,
-    compacted_blocks: VecDeque<DataBlock>,
+    compacted_blocks: VecDeque<Chunk>,
 }
 
 pub struct ConsumeState {
     input_port: Arc<InputPort>,
     output_port: Arc<OutputPort>,
-    input_data_blocks: Vec<DataBlock>,
-    output_data_blocks: VecDeque<DataBlock>,
+    input_data_blocks: Vec<Chunk>,
+    output_data_blocks: VecDeque<Chunk>,
 }
 
 pub struct CompactingState {
     input_port: Arc<InputPort>,
     output_port: Arc<OutputPort>,
-    blocks: Vec<DataBlock>,
+    blocks: Vec<Chunk>,
 }
 
 impl ProcessorState {
@@ -219,7 +219,7 @@ impl ProcessorState {
     }
 
     #[inline(always)]
-    fn convert_to_compacted_state(self, compacted_blocks: Vec<DataBlock>) -> Result<Self> {
+    fn convert_to_compacted_state(self, compacted_blocks: Vec<Chunk>) -> Result<Self> {
         match self {
             ProcessorState::Compacting(state) => {
                 let compacted_blocks = VecDeque::from(compacted_blocks);

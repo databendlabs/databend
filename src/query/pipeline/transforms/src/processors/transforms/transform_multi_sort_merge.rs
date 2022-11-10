@@ -27,11 +27,11 @@ use common_arrow::arrow::compute::sort::row::Rows;
 use common_arrow::arrow::compute::sort::row::SortField;
 use common_arrow::arrow::compute::sort::SortOptions;
 use common_arrow::arrow::datatypes::DataType;
-use common_datablocks::DataBlock;
-use common_datablocks::SortColumnDescription;
-use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::Chunk;
+use common_expression::DataSchemaRef;
+use common_expression::SortColumnDescription;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
@@ -157,7 +157,7 @@ pub struct MultiSortMergeProcessor {
     limit: Option<usize>,
 
     /// For each input port, maintain a dequeue of data blocks.
-    blocks: Vec<VecDeque<DataBlock>>,
+    blocks: Vec<VecDeque<Chunk>>,
     /// Maintain a flag for each input denoting if the current cursor has finished
     /// and needs to pull data from input.
     cursor_finished: Vec<bool>,
@@ -190,25 +190,7 @@ impl MultiSortMergeProcessor {
         let mut sort_field_indices = Vec::with_capacity(sort_columns_descriptions.len());
         let sort_fields = sort_columns_descriptions
             .iter()
-            .map(|d| {
-                let data_type = match output_schema
-                    .field_with_name(&d.column_name)?
-                    .to_arrow()
-                    .data_type()
-                {
-                    // The actual data type of `Data` and `Timestmap` will be `Int32` and `Int64`.
-                    DataType::Date32 | DataType::Time32(_) => DataType::Int32,
-                    DataType::Date64 | DataType::Time64(_) | DataType::Timestamp(_, _) => {
-                        DataType::Int64
-                    }
-                    date_type => date_type.clone(),
-                };
-                sort_field_indices.push(output_schema.index_of(&d.column_name)?);
-                Ok(SortField::new_with_options(data_type, SortOptions {
-                    descending: !d.asc,
-                    nulls_first: d.nulls_first,
-                }))
-            })
+            .map(|d| todo!("expression"))
             .collect::<Result<Vec<_>>>()?;
         let row_converter = RowConverter::new(sort_fields);
         Ok(Self {
@@ -229,7 +211,7 @@ impl MultiSortMergeProcessor {
         })
     }
 
-    fn get_data_blocks(&mut self) -> Result<Vec<(usize, DataBlock)>> {
+    fn get_data_blocks(&mut self) -> Result<Vec<(usize, Chunk)>> {
         let mut data = Vec::new();
         for (i, input) in self.inputs.iter().enumerate() {
             if input.is_finished() {
@@ -342,7 +324,7 @@ impl MultiSortMergeProcessor {
     }
 
     /// Drain `self.in_progess_rows` to build a output data block.
-    fn build_block(&mut self) -> Result<DataBlock> {
+    fn build_block(&mut self) -> Result<Chunk> {
         let num_rows = self.in_progess_rows.len();
         debug_assert!(num_rows > 0);
 
@@ -389,12 +371,7 @@ impl MultiSortMergeProcessor {
                     .flatten()
                     .map(|block| block.column(column_index).clone())
                     .collect::<Vec<_>>();
-                DataBlock::take_column_by_slices_limit(
-                    field.data_type(),
-                    &candidate_cols,
-                    &indices,
-                    None,
-                )
+                Chunk::take_column_by_slices_limit(&candidate_cols, &indices, None)
             })
             .collect::<Result<Vec<_>>>()?;
 
@@ -409,7 +386,7 @@ impl MultiSortMergeProcessor {
             }
         }
 
-        Ok(DataBlock::create(self.output_schema.clone(), columns))
+        Ok(Chunk::new(columns, num_rows))
     }
 }
 
@@ -518,8 +495,9 @@ impl Processor for MultiSortMergeProcessor {
                         .sort_field_indices
                         .iter()
                         .map(|i| {
-                            let col = block.column(*i);
-                            col.as_arrow_array(col.data_type())
+                            let (val, data_type) = block.column(*i);
+                            // val.as_arrow_array(data_type)
+                            todo!("expression")
                         })
                         .collect::<Vec<_>>();
                     let rows = self.row_converter.convert_columns(&columns)?;
@@ -544,8 +522,8 @@ impl Processor for MultiSortMergeProcessor {
 }
 
 enum ProcessorState {
-    Consume,                           // Need to consume data from input.
-    Preserve(Vec<(usize, DataBlock)>), // Need to preserve blocks in memory.
-    Output,                            // Need to generate output block.
-    Generated(DataBlock),              // Need to push output block to output port.
+    Consume,                       // Need to consume data from input.
+    Preserve(Vec<(usize, Chunk)>), // Need to preserve blocks in memory.
+    Output,                        // Need to generate output block.
+    Generated(Chunk),              // Need to push output block to output port.
 }

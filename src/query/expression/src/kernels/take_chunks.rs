@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_arrow::arrow::compute::merge_sort::MergeSlice;
+use common_exception::Result;
+
 use crate::types::array::ArrayColumnBuilder;
 use crate::types::nullable::NullableColumn;
 use crate::types::number::NumberColumn;
@@ -96,6 +99,22 @@ impl Chunk {
         }
 
         Chunk::new(result_columns, result_size)
+    }
+
+    pub fn block_take_by_slices_limit(
+        _raw: &Chunk,
+        _slice: (usize, usize),
+        _limit: Option<usize>,
+    ) -> Result<Chunk> {
+        todo!("expression")
+    }
+
+    pub fn take_column_by_slices_limit(
+        _columns: &[(Value<AnyType>, DataType)],
+        _slices: &[MergeSlice],
+        _limit: Option<usize>,
+    ) -> Result<(Value<AnyType>, DataType)> {
+        todo!("expression")
     }
 }
 

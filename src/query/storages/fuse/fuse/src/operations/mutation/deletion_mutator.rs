@@ -15,8 +15,8 @@
 use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
 use common_exception::Result;
+use common_expression::Chunk;
 use common_storages_table_meta::meta::ClusterStatistics;
 use common_storages_table_meta::meta::Location;
 use common_storages_table_meta::meta::Statistics;
@@ -31,7 +31,7 @@ use crate::statistics::ClusterStatsGenerator;
 
 pub enum Deletion {
     NothingDeleted,
-    Remains(DataBlock),
+    Remains(Chunk),
 }
 
 pub struct DeletionMutator {
@@ -69,7 +69,7 @@ impl DeletionMutator {
         seg_idx: usize,
         location_of_block_to_be_replaced: Location,
         origin_stats: Option<ClusterStatistics>,
-        replace_with: DataBlock,
+        replace_with: Chunk,
     ) -> Result<()> {
         // write new block, and keep the mutations
         let new_block_meta = if replace_with.num_rows() == 0 {

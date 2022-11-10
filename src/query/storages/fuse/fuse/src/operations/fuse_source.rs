@@ -19,10 +19,11 @@ use common_base::base::Progress;
 use common_base::base::ProgressValues;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
-use common_datavalues::ColumnRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::BooleanType;
+use common_expression::Chunk;
+use common_expression::Value;
 use common_functions::scalars::FunctionContext;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
@@ -37,7 +38,7 @@ type DataChunks = Vec<(usize, Vec<u8>)>;
 
 pub struct PrewhereData {
     data_block: DataBlock,
-    filter: ColumnRef,
+    filter: Value<BooleanType>,
 }
 
 pub enum State {
@@ -45,7 +46,7 @@ pub enum State {
     ReadDataRemain(PartInfoPtr, PrewhereData),
     PrewhereFilter(PartInfoPtr, DataChunks),
     Deserialize(PartInfoPtr, DataChunks, Option<PrewhereData>),
-    Generated(Option<PartInfoPtr>, DataBlock),
+    Generated(Option<PartInfoPtr>, Chunk),
     Finish,
 }
 
@@ -87,7 +88,7 @@ impl FuseTableSource {
         })))
     }
 
-    fn generate_one_block(&mut self, block: DataBlock) -> Result<()> {
+    fn generate_one_block(&mut self, block: Chunk) -> Result<()> {
         let new_part = self.ctx.try_get_part();
         // resort and prune columns
         let block = block.resort(self.output_reader.schema())?;
@@ -98,7 +99,7 @@ impl FuseTableSource {
     fn generate_one_empty_block(&mut self) -> Result<()> {
         let schema = self.output_reader.schema();
         let new_part = self.ctx.try_get_part();
-        self.state = Generated(new_part, DataBlock::empty_with_schema(schema));
+        self.state = Generated(new_part, Chunk::empty());
         Ok(())
     }
 }
@@ -198,7 +199,7 @@ impl Processor for FuseTableSource {
                         bytes: block.memory_size(),
                     };
                     self.scan_progress.incr(&progress_values);
-                    DataBlock::filter_block(block, &filter)?
+                    Chunk::filter(block, &filter)?
                 } else {
                     let block = self.output_reader.deserialize(part, chunks)?;
                     let progress_values = ProgressValues {
@@ -221,9 +222,9 @@ impl Processor for FuseTableSource {
                     let res = filter
                         .eval(&FunctionContext::default(), &data_block)?
                         .vector;
-                    let filter = DataBlock::cast_to_nonull_boolean(&res)?;
+                    let filter = Chunk::cast_to_nonull_boolean(&res)?;
                     // shortcut, if predicates is const boolean (or can be cast to boolean)
-                    if !DataBlock::filter_exists(&filter)? {
+                    if !Chunk::filter_exists(&filter)? {
                         // all rows in this block are filtered out
                         // turn to read next part
                         let progress_values = ProgressValues {
@@ -241,7 +242,7 @@ impl Processor for FuseTableSource {
                             bytes: data_block.memory_size(),
                         };
                         self.scan_progress.incr(&progress_values);
-                        let block = DataBlock::filter_block(data_block, &filter)?;
+                        let block = Chunk::filter(data_block, &filter)?;
                         self.generate_one_block(block)?;
                     } else {
                         self.state =

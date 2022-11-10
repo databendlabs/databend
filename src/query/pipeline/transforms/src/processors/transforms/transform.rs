@@ -74,8 +74,9 @@ impl<T: Transform + 'static> Processor for Transformer<T> {
                 None if self.input_data.is_some() => Ok(Event::Sync),
                 None => self.pull_data(),
                 Some(data) => {
-                    self.output.push_data(Ok(data));
-                    Ok(Event::NeedConsume)
+                    // self.output.push_data(Ok(data));
+                    // Ok(Event::NeedConsume)
+                    todo!("expression")
                 }
             },
         }
@@ -94,8 +95,9 @@ impl<T: Transform + 'static> Processor for Transformer<T> {
 impl<T: Transform> Transformer<T> {
     fn pull_data(&mut self) -> Result<Event> {
         if self.input.has_data() {
-            self.input_data = Some(self.input.pull_data().unwrap()?);
-            return Ok(Event::Sync);
+            // self.input_data = Some(self.input.pull_data().unwrap()?);
+            // return Ok(Event::Sync);
+            todo!("expression")
         }
 
         if self.input.is_finished() {

@@ -135,6 +135,17 @@ impl Chunk {
             _ => None,
         }
     }
+
+    pub fn try_as_const_bool(value: &Value<BooleanType>) -> Result<Option<bool>> {
+        match value {
+            Value::Scalar(v) => Ok(Some(*v)),
+            _ => Ok(None),
+        }
+    }
+
+    pub fn filter_chunk_with_bool_column(_chunk: Chunk, _filter: &Bitmap) -> Result<Chunk> {
+        todo!("expression")
+    }
 }
 
 impl Column {

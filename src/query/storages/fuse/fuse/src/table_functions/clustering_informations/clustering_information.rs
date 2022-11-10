@@ -18,12 +18,17 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_catalog::plan::Expression;
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::Chunk;
+use common_expression::DataSchemaRefExt;
+use common_expression::DataType;
+use common_expression::NumberScalar;
+use common_expression::Scalar;
+use common_expression::SchemaDataType;
 use common_storages_table_meta::meta::BlockMeta;
 use serde_json::json;
+use serde_json::Value as JsonValue;
 
 use crate::io::SegmentsIO;
 use crate::sessions::TableContext;
@@ -41,7 +46,7 @@ struct ClusteringStatistics {
     total_constant_block_count: u64,
     average_overlaps: f64,
     average_depth: f64,
-    block_depth_histogram: VariantValue,
+    block_depth_histogram: JsonValue,
 }
 
 impl Default for ClusteringStatistics {
@@ -51,7 +56,7 @@ impl Default for ClusteringStatistics {
             total_constant_block_count: 0,
             average_overlaps: 0.0,
             average_depth: 0.0,
-            block_depth_histogram: VariantValue::from(json!({})),
+            block_depth_histogram: json!({}),
         }
     }
 }
@@ -69,7 +74,7 @@ impl<'a> ClusteringInformation<'a> {
         }
     }
 
-    pub async fn get_clustering_info(&self) -> Result<DataBlock> {
+    pub async fn get_clustering_info(&self) -> Result<Chunk> {
         let snapshot = self.table.read_table_snapshot().await?;
 
         let mut info = ClusteringStatistics::default();
@@ -95,17 +100,42 @@ impl<'a> ClusteringInformation<'a> {
             .join(", ");
         let cluster_by_keys = format!("({})", names);
 
-        Ok(DataBlock::create(ClusteringInformation::schema(), vec![
-            Series::from_data(vec![cluster_by_keys]),
-            Series::from_data(vec![info.total_block_count]),
-            Series::from_data(vec![info.total_constant_block_count]),
-            Series::from_data(vec![info.average_overlaps]),
-            Series::from_data(vec![info.average_depth]),
-            Series::from_data(vec![info.block_depth_histogram]),
-        ]))
+        Ok(Chunk::new(
+            vec![
+                (
+                    Value::Scalar(Scalar::String(cluster_by_keys.to_vec())),
+                    DataType::String,
+                ),
+                (
+                    Value::Scalar(Scalar::Number(NumberScalar::UInt64(info.total_block_count))),
+                    DataType::Number(NumberDataType::UInt64),
+                ),
+                (
+                    Value::Scalar(Scalar::Number(NumberScalar::UInt64(
+                        info.total_constant_block_count,
+                    ))),
+                    DataType::Number(NumberDataType::UInt64),
+                ),
+                (
+                    Value::Scalar(Scalar::Number(NumberScalar::Float64(info.average_overlaps))),
+                    DataType::Number(NumberDataType::Float64),
+                ),
+                (
+                    Value::Scalar(Scalar::Number(NumberScalar::Float64(info.average_depth))),
+                    DataType::Number(NumberDataType::Float64),
+                ),
+                (
+                    Value::Scalar(Scalar::Variant(
+                        info.block_depth_histogram.to_string().as_bytes().to_vec(),
+                    )),
+                    DataType::Variant,
+                ),
+            ],
+            1,
+        ))
     }
 
-    fn get_min_max_stats(&self, block: &BlockMeta) -> Result<(Vec<DataValue>, Vec<DataValue>)> {
+    fn get_min_max_stats(&self, block: &BlockMeta) -> Result<(Vec<Scalar>, Vec<Scalar>)> {
         if self.table.cluster_keys() != self.cluster_keys || block.cluster_stats.is_none() {
             // Todo(zhyass): support manually specifying the cluster key.
             return Err(ErrorCode::Unimplemented("Unimplemented"));
@@ -129,7 +159,7 @@ impl<'a> ClusteringInformation<'a> {
         // Key: The cluster statistics points.
         // Value: 0: The block indexes with key as min value;
         //        1: The block indexes with key as max value;
-        let mut points_map: BTreeMap<Vec<DataValue>, (Vec<usize>, Vec<usize>)> = BTreeMap::new();
+        let mut points_map: BTreeMap<Vec<Scalar>, (Vec<usize>, Vec<usize>)> = BTreeMap::new();
         let mut total_constant_block_count = 0;
         let mut total_block_count = 0;
         for (i, block) in blocks.enumerate() {
@@ -198,7 +228,7 @@ impl<'a> ClusteringInformation<'a> {
                 acc
             },
         );
-        let block_depth_histogram = VariantValue::from(serde_json::Value::Object(objects));
+        let block_depth_histogram = serde_json::Value::Object(objects);
 
         Ok(ClusteringStatistics {
             total_block_count,
@@ -211,12 +241,24 @@ impl<'a> ClusteringInformation<'a> {
 
     pub fn schema() -> Arc<DataSchema> {
         DataSchemaRefExt::create(vec![
-            DataField::new("cluster_by_keys", Vu8::to_data_type()),
-            DataField::new("total_block_count", u64::to_data_type()),
-            DataField::new("total_constant_block_count", u64::to_data_type()),
-            DataField::new("average_overlaps", f64::to_data_type()),
-            DataField::new("average_depth", f64::to_data_type()),
-            DataField::new("block_depth_histogram", VariantArrayType::new_impl()),
+            DataField::new("cluster_by_keys", SchemaDataType::String),
+            DataField::new(
+                "total_block_count",
+                SchemaDataType::Number(NumberDataType::UInt64),
+            ),
+            DataField::new(
+                "total_constant_block_count",
+                SchemaDataType::Number(NumberDataType::UInt64),
+            ),
+            DataField::new(
+                "average_overlaps",
+                SchemaDataType::Number(NumberDataType::Float64),
+            ),
+            DataField::new(
+                "average_depth",
+                SchemaDataType::Number(NumberDataType::Float64),
+            ),
+            DataField::new("block_depth_histogram", SchemaDataType::Variant),
         ])
     }
 }

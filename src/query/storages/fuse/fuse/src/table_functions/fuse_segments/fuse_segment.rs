@@ -14,9 +14,12 @@
 
 use std::sync::Arc;
 
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_expression::Chunk;
+use common_expression::DataSchema;
+use common_expression::DataSchemaRefExt;
+use common_expression::NumberScalar;
+use common_expression::Scalar;
 use common_storages_table_meta::meta::Location;
 use futures_util::TryStreamExt;
 
@@ -41,7 +44,7 @@ impl<'a> FuseSegment<'a> {
         }
     }
 
-    pub async fn get_segments(&self) -> Result<DataBlock> {
+    pub async fn get_segments(&self) -> Result<Chunk> {
         let tbl = self.table;
         let maybe_snapshot = tbl.read_table_snapshot().await?;
         if let Some(snapshot) = maybe_snapshot {
@@ -65,10 +68,10 @@ impl<'a> FuseSegment<'a> {
             }
         }
 
-        Ok(DataBlock::empty_with_schema(Self::schema()))
+        Ok(Chunk::empty())
     }
 
-    async fn to_block(&self, segment_locations: &[Location]) -> Result<DataBlock> {
+    async fn to_block(&self, segment_locations: &[Location]) -> Result<Chunk> {
         let len = segment_locations.len();
         let mut format_versions: Vec<u64> = Vec::with_capacity(len);
         let mut block_count: Vec<u64> = Vec::with_capacity(len);
@@ -89,24 +92,57 @@ impl<'a> FuseSegment<'a> {
             file_location.push(segment_locations[idx].0.clone().into_bytes());
         }
 
-        Ok(DataBlock::create(FuseSegment::schema(), vec![
-            Series::from_data(file_location),
-            Series::from_data(format_versions),
-            Series::from_data(block_count),
-            Series::from_data(row_count),
-            Series::from_data(uncompressed),
-            Series::from_data(compressed),
-        ]))
+        Ok(Chunk::new(
+            vec![
+                (
+                    Value::Scalar(Scalar::String(file_location.to_vec())),
+                    DataType::String,
+                ),
+                (
+                    Value::Scalar(Scalar::Number(NumberScalar::UInt64(format_versions))),
+                    DataType::Number(NumberDataType::UInt64),
+                ),
+                (
+                    Value::Scalar(Scalar::Number(NumberScalar::UInt64(block_count))),
+                    DataType::Number(NumberDataType::UInt64),
+                ),
+                (
+                    Value::Scalar(Scalar::Number(NumberScalar::UInt64(row_count))),
+                    DataType::Number(NumberDataType::UInt64),
+                ),
+                (
+                    Value::Scalar(Scalar::Number(NumberScalar::UInt64(uncompressed))),
+                    DataType::Number(NumberDataType::UInt64),
+                ),
+                (
+                    Value::Scalar(Scalar::Number(NumberScalar::UInt64(compressed))),
+                    DataType::Number(NumberDataType::UInt64),
+                ),
+            ],
+            1,
+        ))
     }
 
     pub fn schema() -> Arc<DataSchema> {
         DataSchemaRefExt::create(vec![
-            DataField::new("file_location", Vu8::to_data_type()),
-            DataField::new("format_version", u64::to_data_type()),
-            DataField::new("block_count", u64::to_data_type()),
-            DataField::new("row_count", u64::to_data_type()),
-            DataField::new("bytes_uncompressed", u64::to_data_type()),
-            DataField::new("bytes_compressed", u64::to_data_type()),
+            DataField::new("file_location", SchemaDataType::String),
+            DataField::new(
+                "format_version",
+                SchemaDataType::Number(NumberDataType::UInt64),
+            ),
+            DataField::new(
+                "block_count",
+                SchemaDataType::Number(NumberDataType::UInt64),
+            ),
+            DataField::new("row_count", SchemaDataType::Number(NumberDataType::UInt64)),
+            DataField::new(
+                "bytes_uncompressed",
+                SchemaDataType::Number(NumberDataType::UInt64),
+            ),
+            DataField::new(
+                "bytes_compressed",
+                SchemaDataType::Number(NumberDataType::UInt64),
+            ),
         ])
     }
 }

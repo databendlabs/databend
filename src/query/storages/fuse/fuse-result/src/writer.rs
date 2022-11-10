@@ -19,10 +19,10 @@ use backon::ExponentialBackoff;
 use backon::Retryable;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::table_context::TableContext;
-use common_datablocks::serialize_data_blocks;
-use common_datablocks::DataBlock;
-use common_datablocks::SendableDataBlockStream;
 use common_exception::Result;
+use common_expression::serialize_chunks;
+use common_expression::Chunk;
+use common_expression::SendableChunkStream;
 use common_storages_fuse::statistics::BlockStatistics;
 use common_storages_fuse::statistics::StatisticsAccumulator;
 use common_storages_fuse::FuseTable;
@@ -98,12 +98,12 @@ impl ResultTableWriter {
         Ok(())
     }
 
-    pub async fn append_block(&mut self, block: DataBlock) -> Result<PartInfoPtr> {
+    pub async fn append_block(&mut self, block: Chunk) -> Result<PartInfoPtr> {
         let location = self.locations.gen_block_location();
         let mut data = Vec::with_capacity(100 * 1024 * 1024);
         let block_statistics = BlockStatistics::from(&block, location.clone(), None)?;
         let schema = block.schema().clone();
-        let (size, meta_data) = serialize_data_blocks(vec![block], &schema, &mut data)?;
+        let (size, meta_data) = serialize_chunks(vec![block], &schema, &mut data)?;
 
         let object = self.data_accessor.object(&location);
         { || object.write(data.as_slice()) }
@@ -122,7 +122,7 @@ impl ResultTableWriter {
         Ok(self.get_last_part_info())
     }
 
-    pub async fn write_stream(&mut self, mut stream: SendableDataBlockStream) -> Result<()> {
+    pub async fn write_stream(&mut self, mut stream: SendableChunkStream) -> Result<()> {
         while let Some(Ok(block)) = stream.next().await {
             self.append_block(block).await?;
         }

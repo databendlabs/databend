@@ -15,10 +15,10 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_expression::Chunk;
-use common_expression::DataSchema;
 use common_expression::converts::from_scalar;
 use common_expression::converts::to_schema;
+use common_expression::Chunk;
+use common_expression::DataSchema;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -123,7 +123,7 @@ impl From<(v0::SegmentInfo, &DataSchema)> for SegmentInfo {
     fn from(s: (v0::SegmentInfo, &DataSchema)) -> Self {
         let schema = s.1;
         let s = s.0;
-        
+
         Self {
             format_version: SegmentInfo::VERSION,
             blocks: s
@@ -140,7 +140,7 @@ impl From<(v1::SegmentInfo, &DataSchema)> for SegmentInfo {
     fn from(s: (v1::SegmentInfo, &DataSchema)) -> Self {
         let schema = s.1;
         let s = s.0;
-        
+
         Self {
             format_version: SegmentInfo::VERSION,
             blocks: s
@@ -153,25 +153,28 @@ impl From<(v1::SegmentInfo, &DataSchema)> for SegmentInfo {
     }
 }
 
-
-impl From< (v0::BlockMeta, &DataSchema) > for BlockMeta {
+impl From<(v0::BlockMeta, &DataSchema)> for BlockMeta {
     fn from(s: (v0::BlockMeta, &DataSchema)) -> Self {
         let schema = s.1;
         let s = s.0;
         let to_schema = to_schema(schema);
-        
-        let col_stats = s.col_stats.iter().map(|(k,v)| {
-            let f = to_schema.field(*k as usize);
-            let stats = ColumnStatistics {
-                min: from_scalar(&v.min, f.data_type()),
-                max: from_scalar(&v.max, f.data_type()),
-                null_count: v.null_count,
-                in_memory_size: v.in_memory_size,
-            };
-            
-            (*k, stats)
-        }).collect();
-        
+
+        let col_stats = s
+            .col_stats
+            .iter()
+            .map(|(k, v)| {
+                let f = to_schema.field(*k as usize);
+                let stats = ColumnStatistics {
+                    min: from_scalar(&v.min, f.data_type()),
+                    max: from_scalar(&v.max, f.data_type()),
+                    null_count: v.null_count,
+                    in_memory_size: v.in_memory_size,
+                };
+
+                (*k, stats)
+            })
+            .collect();
+
         Self {
             row_count: s.row_count,
             block_size: s.block_size,
@@ -187,24 +190,28 @@ impl From< (v0::BlockMeta, &DataSchema) > for BlockMeta {
     }
 }
 
-impl From< (&v1::BlockMeta, &DataSchema)> for BlockMeta {
+impl From<(&v1::BlockMeta, &DataSchema)> for BlockMeta {
     fn from(s: (&v1::BlockMeta, &DataSchema)) -> Self {
         let schema = s.1;
         let s = s.0;
         let to_schema = to_schema(schema);
-        
-        let col_stats = s.col_stats.iter().map(|(k,v)| {
-            let f = to_schema.field(*k as usize);
-            let stats = ColumnStatistics {
-                min: from_scalar(&v.min, f.data_type()),
-                max: from_scalar(&v.max, f.data_type()),
-                null_count: v.null_count,
-                in_memory_size: v.in_memory_size,
-            };
-            
-            (*k, stats)
-        }).collect();
-        
+
+        let col_stats = s
+            .col_stats
+            .iter()
+            .map(|(k, v)| {
+                let f = to_schema.field(*k as usize);
+                let stats = ColumnStatistics {
+                    min: from_scalar(&v.min, f.data_type()),
+                    max: from_scalar(&v.max, f.data_type()),
+                    null_count: v.null_count,
+                    in_memory_size: v.in_memory_size,
+                };
+
+                (*k, stats)
+            })
+            .collect();
+
         Self {
             row_count: s.row_count,
             block_size: s.block_size,
@@ -219,4 +226,3 @@ impl From< (&v1::BlockMeta, &DataSchema)> for BlockMeta {
         }
     }
 }
-

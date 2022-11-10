@@ -12,20 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::ops::Range;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use common_datablocks::BlockCompactThresholds;
-use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::Chunk;
+use common_expression::ChunkCompactThresholds;
 
 use super::Compactor;
 use super::TransformCompact;
 
 pub struct BlockCompactor {
-    thresholds: BlockCompactThresholds,
+    thresholds: ChunkCompactThresholds,
     // A flag denoting whether it is a recluster operation.
     // Will be removed later.
     is_recluster: bool,
@@ -33,7 +34,7 @@ pub struct BlockCompactor {
 }
 
 impl BlockCompactor {
-    pub fn new(thresholds: BlockCompactThresholds, is_recluster: bool) -> Self {
+    pub fn new(thresholds: ChunkCompactThresholds, is_recluster: bool) -> Self {
         BlockCompactor {
             thresholds,
             is_recluster,
@@ -55,7 +56,7 @@ impl Compactor for BlockCompactor {
         self.aborting.store(true, Ordering::Release);
     }
 
-    fn compact_partial(&mut self, blocks: &mut Vec<DataBlock>) -> Result<Vec<DataBlock>> {
+    fn compact_partial(&mut self, blocks: &mut Vec<Chunk>) -> Result<Vec<Chunk>> {
         if blocks.is_empty() {
             return Ok(vec![]);
         }
@@ -75,7 +76,7 @@ impl Compactor for BlockCompactor {
             let accumulated_rows: usize = blocks.iter_mut().map(|b| b.num_rows()).sum();
             let accumulated_bytes: usize = blocks.iter_mut().map(|b| b.memory_size()).sum();
 
-            let merged = DataBlock::concat_blocks(blocks)?;
+            let merged = Chunk::concat(blocks)?;
             blocks.clear();
 
             if accumulated_rows >= self.thresholds.max_rows_per_block {
@@ -84,14 +85,22 @@ impl Compactor for BlockCompactor {
                     let mut offset = 0;
                     let mut remain_rows = accumulated_rows;
                     while remain_rows >= self.thresholds.max_rows_per_block {
-                        let cut = merged.slice(offset, self.thresholds.max_rows_per_block);
+                        let range = Range {
+                            start: offset,
+                            end: self.thresholds.max_rows_per_block,
+                        };
+                        let cut = merged.slice(range);
                         res.push(cut);
                         offset += self.thresholds.max_rows_per_block;
                         remain_rows -= self.thresholds.max_rows_per_block;
                     }
 
                     if remain_rows > 0 {
-                        blocks.push(merged.slice(offset, remain_rows));
+                        let range = Range {
+                            start: offset,
+                            end: remain_rows,
+                        };
+                        blocks.push(merged.slice(range));
                     }
                 } else {
                     // we can't use slice here, it did not deallocate memory
@@ -109,7 +118,7 @@ impl Compactor for BlockCompactor {
         Ok(res)
     }
 
-    fn compact_final(&self, blocks: &[DataBlock]) -> Result<Vec<DataBlock>> {
+    fn compact_final(&self, blocks: &[Chunk]) -> Result<Vec<Chunk>> {
         let mut res = Vec::with_capacity(blocks.len());
         let mut temp_blocks = vec![];
         let mut accumulated_rows = 0;
@@ -129,12 +138,17 @@ impl Compactor for BlockCompactor {
                 res.push(block.clone());
             } else {
                 let block = if block.num_rows() > self.thresholds.max_rows_per_block {
-                    let b = block.slice(0, self.thresholds.max_rows_per_block);
+                    let range = Range {
+                        start: 0,
+                        end: self.thresholds.max_rows_per_block,
+                    };
+                    let b = block.slice(range);
                     res.push(b);
-                    block.slice(
-                        self.thresholds.max_rows_per_block,
-                        block.num_rows() - self.thresholds.max_rows_per_block,
-                    )
+                    let range = Range {
+                        start: self.thresholds.max_rows_per_block,
+                        end: block.num_rows() - self.thresholds.max_rows_per_block,
+                    };
+                    block.slice(range)
                 } else {
                     block.clone()
                 };
@@ -149,16 +163,21 @@ impl Compactor for BlockCompactor {
                         ));
                     }
 
-                    let block = DataBlock::concat_blocks(&temp_blocks)?;
-                    res.push(block.slice(0, self.thresholds.max_rows_per_block));
+                    let block = Chunk::concat(&temp_blocks)?;
+                    let range = Range {
+                        start: 0,
+                        end: self.thresholds.max_rows_per_block,
+                    };
+                    res.push(block.slice(range));
                     accumulated_rows -= self.thresholds.max_rows_per_block;
 
                     temp_blocks.clear();
                     if accumulated_rows != 0 {
-                        temp_blocks.push(block.slice(
-                            self.thresholds.max_rows_per_block,
-                            block.num_rows() - self.thresholds.max_rows_per_block,
-                        ));
+                        let range = Range {
+                            start: self.thresholds.max_rows_per_block,
+                            end: block.num_rows() - self.thresholds.max_rows_per_block,
+                        };
+                        temp_blocks.push(block.slice(range));
                     }
                 }
             }
@@ -171,7 +190,7 @@ impl Compactor for BlockCompactor {
                 ));
             }
 
-            let block = DataBlock::concat_blocks(&temp_blocks)?;
+            let block = Chunk::concat(&temp_blocks)?;
             res.push(block);
         }
 

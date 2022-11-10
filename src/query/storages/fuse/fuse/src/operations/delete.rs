@@ -19,9 +19,9 @@ use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
-use common_datavalues::DataField;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::DataField;
 use common_sql::ExpressionParser;
 use common_storages_table_meta::meta::TableSnapshot;
 
