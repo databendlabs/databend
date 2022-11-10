@@ -38,9 +38,6 @@ pub enum ReadDataKind {
     // Compact/Recluster data, need less io requests.
     // io_requests = max_threads()
     OptimizeDataLessIORequests,
-    // Read segments/bloomfilter data, need more io requests.
-    // io_requests = max_storage_io_requests()
-    IndexDataMoreIORequests,
     // Read column block data, need adjust io requests.
     // io requests = memory-size/avg(blocks-size)
     BlockDataAdjustIORequests,
@@ -131,9 +128,6 @@ impl FuseTable {
         Ok(match kind {
             ReadDataKind::OptimizeDataLessIORequests => {
                 ctx.get_settings().get_max_threads()? as usize
-            }
-            ReadDataKind::IndexDataMoreIORequests => {
-                ctx.get_settings().get_max_storage_io_requests()? as usize
             }
             ReadDataKind::BlockDataAdjustIORequests => {
                 ctx.get_settings().get_max_storage_io_requests()? as usize
