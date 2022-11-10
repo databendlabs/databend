@@ -63,7 +63,7 @@ impl JoinHashTable {
     pub(crate) fn probe_key<'a, H: HashtableLike<Value = Vec<RowPtr>>>(
         &self,
         hash_table: &'a H,
-        key: H::KeyRef<'_>,
+        key: &'a H::Key,
         valids: &Option<Bitmap>,
         i: usize,
     ) -> Option<H::EntryRef<'a>> {

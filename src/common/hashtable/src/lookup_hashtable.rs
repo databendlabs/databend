@@ -58,7 +58,6 @@ macro_rules! lookup_impl {
     ($ty:ident, $capacity:expr) => {
         impl<V, A: Allocator + Clone> HashtableLike for LookupHashtable<$ty, $capacity, V, A> {
             type Key = $ty;
-            type KeyRef<'a> = $ty where Self::Key: 'a;
             type Value = V;
             type EntryRef<'a> = &'a Entry<$ty, V> where Self: 'a, Self::Key: 'a, Self::Value: 'a;
             type EntryMutRef<'a> = &'a mut Entry<$ty, V> where Self: 'a, Self::Key:'a, Self::Value: 'a;
@@ -69,43 +68,43 @@ macro_rules! lookup_impl {
                 self.len
             }
 
-            fn entry<'a>(&self, key: Self::KeyRef<'a>) -> Option<Self::EntryRef<'_>> where Self::Key: 'a {
-                match self.flags[key as usize] {
-                    true => Some(&self.data[key as usize]),
+            fn entry<'a>(&self, key: &'a $ty) -> Option<Self::EntryRef<'_>> where Self::Key: 'a {
+                match self.flags[*key as usize] {
+                    true => Some(&self.data[*key as usize]),
                     false => None,
                 }
             }
 
-            fn entry_mut<'a>(&mut self, key: Self::KeyRef<'a>) -> Option<Self::EntryMutRef<'_>> where Self::Key: 'a {
-                match self.flags[key as usize] {
-                    true => Some(&mut self.data[key as usize]),
+            fn entry_mut<'a>(&mut self, key: &'a $ty) -> Option<Self::EntryMutRef<'_>> where Self::Key: 'a {
+                match self.flags[*key as usize] {
+                    true => Some(&mut self.data[*key as usize]),
                     false => None,
                 }
             }
 
-            fn get<'a>(&self, key: Self::KeyRef<'a>) -> Option<&Self::Value> where Self::Key: 'a {
+            fn get<'a>(&self, key: &'a $ty) -> Option<&Self::Value> where Self::Key: 'a {
                 unsafe { self.entry(key).map(|e| e.val.assume_init_ref()) }
             }
 
-            fn get_mut<'a>(&mut self, key: Self::KeyRef<'a>) -> Option<&mut Self::Value> where Self::Key: 'a {
+            fn get_mut<'a>(&mut self, key: &'a $ty) -> Option<&mut Self::Value> where Self::Key: 'a {
                 unsafe { self.entry_mut(key).map(|e| e.val.assume_init_mut()) }
             }
 
-            unsafe fn insert<'a>(&mut self, key: Self::KeyRef<'a>) -> Result<&mut MaybeUninit<Self::Value>, &mut Self::Value> where Self::Key: 'a {
+            unsafe fn insert<'a>(&mut self, key: &'a $ty) -> Result<&mut MaybeUninit<Self::Value>, &mut Self::Value> where Self::Key: 'a {
                 match self.insert_and_entry(key) {
                     Ok(e) => Ok(&mut e.val),
                     Err(e) => Err(e.val.assume_init_mut()),
                 }
             }
 
-            unsafe fn insert_and_entry<'a>(&mut self, key: Self::KeyRef<'a>) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>> where Self::Key: 'a {
-                match self.flags[key as usize] {
-                    true => Err(&mut self.data[key as usize]),
+            unsafe fn insert_and_entry<'a>(&mut self, key: &'a $ty) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>> where Self::Key: 'a {
+                match self.flags[*key as usize] {
+                    true => Err(&mut self.data[*key as usize]),
                     false => {
-                        self.flags[key as usize] = true;
-                        let e = &mut self.data[key as usize];
+                        self.flags[*key as usize] = true;
+                        let e = &mut self.data[*key as usize];
                         self.len += 1;
-                        e.key.write(key);
+                        e.key.write(*key);
                         Ok(e)
                     }
                 }

@@ -34,10 +34,7 @@ pub enum KeysState {
 pub trait HashMethod {
     type HashKey: ?Sized + Eq + Hash + Debug;
 
-    type HashKeyRef<'a>: std::cmp::Eq + Hash + Clone + Debug
-    where Self: 'a;
-
-    type HashKeyIter<'a>: Iterator<Item = Self::HashKeyRef<'a>> + TrustedLen
+    type HashKeyIter<'a>: Iterator<Item = &'a Self::HashKey> + TrustedLen
     where Self: 'a;
 
     fn name(&self) -> String;
@@ -137,7 +134,7 @@ impl HashMethodSerializer {
 
 impl HashMethod for HashMethodSerializer {
     type HashKey = [u8];
-    type HashKeyRef<'a> = &'a [u8];
+    // type HashKeyRef<'a> = &'a [u8];
 
     type HashKeyIter<'a> = StringValueIter<'a>;
 
@@ -325,8 +322,8 @@ macro_rules! impl_hash_method_fixed_keys {
     ($ty:ty) => {
         impl HashMethod for HashMethodFixedKeys<$ty> {
             type HashKey = $ty;
-            type HashKeyRef<'a> = $ty;
-            type HashKeyIter<'a> = std::iter::Copied<std::slice::Iter<'a, $ty>>;
+            // type HashKeyRef<'a> = $ty;
+            type HashKeyIter<'a> = std::slice::Iter<'a, $ty>;
 
             fn name(&self) -> String {
                 format!("FixedKeys{}", std::mem::size_of::<Self::HashKey>())
@@ -358,7 +355,7 @@ macro_rules! impl_hash_method_fixed_keys {
                 match key_state {
                     KeysState::Column(col) => {
                         let col: &PrimitiveColumn<$ty> = Series::check_get(col)?;
-                        Ok(col.iter().copied())
+                        Ok(col.iter())
                     }
                     _ => unreachable!(),
                 }
@@ -376,9 +373,8 @@ macro_rules! impl_hash_method_fixed_large_keys {
     ($ty:ty, $name: ident) => {
         impl HashMethod for HashMethodFixedKeys<$ty> {
             type HashKey = $ty;
-            type HashKeyRef<'a> = $ty;
 
-            type HashKeyIter<'a> = std::iter::Copied<std::slice::Iter<'a, $ty>>;
+            type HashKeyIter<'a> = std::slice::Iter<'a, $ty>;
 
             fn name(&self) -> String {
                 format!("FixedKeys{}", std::mem::size_of::<Self::HashKey>())
@@ -398,7 +394,7 @@ macro_rules! impl_hash_method_fixed_large_keys {
                 key_state: &'a KeysState,
             ) -> Result<Self::HashKeyIter<'a>> {
                 match key_state {
-                    KeysState::$name(v) => Ok(v.iter().copied()),
+                    KeysState::$name(v) => Ok(v.iter()),
                     _ => unreachable!(),
                 }
             }

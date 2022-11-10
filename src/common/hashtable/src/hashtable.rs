@@ -241,7 +241,6 @@ where
     A: Allocator + Clone + 'static,
 {
     type Key = K;
-    type KeyRef<'a> = K where K:'a;
     type Value = V;
 
     type EntryRef<'a> = &'a Entry<K, V> where Self:'a, K:'a, V: 'a;
@@ -254,41 +253,60 @@ where
         self.len()
     }
 
-    fn entry<'a>(&self, key_ref: Self::KeyRef<'a>) -> Option<Self::EntryRef<'_>>
+    fn entry<'a>(&self, key_ref: &'a Self::Key) -> Option<Self::EntryRef<'_>>
     where K: 'a {
         self.entry(&key_ref)
     }
-    fn entry_mut<'a>(&mut self, key_ref: Self::KeyRef<'a>) -> Option<Self::EntryMutRef<'_>>
+    fn entry_mut<'a>(&mut self, key_ref: &'a Self::Key) -> Option<Self::EntryMutRef<'_>>
     where K: 'a {
         self.entry_mut(&key_ref)
     }
 
-    fn get<'a>(&self, key_ref: Self::KeyRef<'a>) -> Option<&Self::Value>
+    fn get<'a>(&self, key_ref: &'a Self::Key) -> Option<&Self::Value>
     where K: 'a {
         self.get(&key_ref)
     }
-    fn get_mut<'a>(&mut self, key_ref: Self::KeyRef<'a>) -> Option<&mut Self::Value>
+    fn get_mut<'a>(&mut self, key_ref: &'a Self::Key) -> Option<&mut Self::Value>
     where K: 'a {
         self.get_mut(&key_ref)
     }
 
     unsafe fn insert<'a>(
         &mut self,
-        key_ref: Self::KeyRef<'a>,
+        key: &'a Self::Key,
     ) -> Result<&mut MaybeUninit<Self::Value>, &mut Self::Value>
     where
         K: 'a,
     {
-        self.insert(key_ref)
+        self.insert(*key)
     }
     unsafe fn insert_and_entry<'a>(
         &mut self,
-        key_ref: Self::KeyRef<'a>,
+        key: &'a Self::Key,
     ) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>>
     where
         K: 'a,
     {
-        self.insert_and_entry(key_ref)
+        if unlikely(K::equals_zero(key)) {
+            let res = self.zero.is_some();
+            if !res {
+                *self.zero = Some(MaybeUninit::zeroed().assume_init());
+            }
+            let zero = self.zero.as_mut().unwrap();
+            if res {
+                return Err(zero);
+            } else {
+                return Ok(zero);
+            }
+        }
+        if unlikely((self.table.len() + 1) * 2 > self.table.capacity()) {
+            if (self.table.entries.len() >> 22) == 0 {
+                self.table.grow(2);
+            } else {
+                self.table.grow(1);
+            }
+        }
+        self.table.insert(*key)
     }
 
     fn iter(&self) -> Self::Iterator<'_> {

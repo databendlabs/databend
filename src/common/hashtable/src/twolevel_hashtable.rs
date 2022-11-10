@@ -11,9 +11,10 @@ pub struct TwoLevelHashtable<Impl> {
     tables: [Impl; BUCKETS],
 }
 
-impl<K, V, Impl: HashtableLike<Key = K, Value = V>> HashtableLike for TwoLevelHashtable<Impl> {
+impl<K: ?Sized + FastHash, V, Impl: HashtableLike<Key = K, Value = V>> HashtableLike
+    for TwoLevelHashtable<Impl>
+{
     type Key = Impl::Key;
-    type KeyRef<'a> = Impl::KeyRef<'a> where Self::Key: 'a;
     type Value = Impl::Value;
     type EntryRef<'a> = Impl::EntryRef<'a> where Self: 'a, Self::Key: 'a, Self::Value: 'a;
     type EntryMutRef<'a> = Impl::EntryMutRef<'a> where Self: 'a, Self::Key: 'a, Self::Value: 'a;
@@ -24,28 +25,28 @@ impl<K, V, Impl: HashtableLike<Key = K, Value = V>> HashtableLike for TwoLevelHa
         self.tables.iter().map(|x| x.len()).sum::<usize>()
     }
 
-    fn entry<'a>(&self, key: Self::KeyRef<'a>) -> Option<Self::EntryRef<'_>>
+    fn entry<'a>(&self, key: &'a Self::Key) -> Option<Self::EntryRef<'_>>
     where Self::Key: 'a {
         let hash = key.fast_hash();
         let index = hash as usize >> (64u32 - BUCKETS_LG2);
         self.tables[index].entry(key)
     }
 
-    fn entry_mut<'a>(&mut self, key: Self::KeyRef<'a>) -> Option<Self::EntryMutRef<'_>>
+    fn entry_mut<'a>(&mut self, key: &'a Self::Key) -> Option<Self::EntryMutRef<'_>>
     where Self::Key: 'a {
         let hash = key.fast_hash();
         let index = hash as usize >> (64u32 - BUCKETS_LG2);
         self.tables[index].entry_mut(key)
     }
 
-    fn get<'a>(&self, key: Self::KeyRef<'a>) -> Option<&Self::Value>
+    fn get<'a>(&self, key: &'a Self::Key) -> Option<&Self::Value>
     where Self::Key: 'a {
         let hash = key.fast_hash();
         let index = hash as usize >> (64u32 - BUCKETS_LG2);
         self.tables[index].get(key)
     }
 
-    fn get_mut<'a>(&mut self, key: Self::KeyRef<'a>) -> Option<&mut Self::Value>
+    fn get_mut<'a>(&mut self, key: &'a Self::Key) -> Option<&mut Self::Value>
     where Self::Key: 'a {
         let hash = key.fast_hash();
         let index = hash as usize >> (64u32 - BUCKETS_LG2);
@@ -54,7 +55,7 @@ impl<K, V, Impl: HashtableLike<Key = K, Value = V>> HashtableLike for TwoLevelHa
 
     unsafe fn insert<'a>(
         &mut self,
-        key: Self::KeyRef<'a>,
+        key: &'a Self::Key,
     ) -> Result<&mut MaybeUninit<Self::Value>, &mut Self::Value>
     where
         Self::Key: 'a,
@@ -66,7 +67,7 @@ impl<K, V, Impl: HashtableLike<Key = K, Value = V>> HashtableLike for TwoLevelHa
 
     unsafe fn insert_and_entry<'a>(
         &mut self,
-        key: Self::KeyRef<'a>,
+        key: &'a Self::Key,
     ) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>>
     where
         Self::Key: 'a,

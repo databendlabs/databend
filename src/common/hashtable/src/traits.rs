@@ -408,10 +408,10 @@ pub trait EntryRefLike: Copy {
 }
 
 pub trait EntryMutRefLike {
-    type KeyRef;
+    type Key: ?Sized;
     type Value;
 
-    fn key(&self) -> Self::KeyRef;
+    fn key(&self) -> &Self::Key;
     fn get(&self) -> &Self::Value;
     fn get_mut(&mut self) -> &mut Self::Value;
     fn write(&mut self, value: Self::Value);
@@ -419,17 +419,15 @@ pub trait EntryMutRefLike {
 
 #[allow(clippy::len_without_is_empty)]
 pub trait HashtableLike {
-    type Key: ?Sized;
-    type KeyRef<'a>: FastHash + Copy
-    where Self::Key: 'a;
+    type Key: ?Sized + FastHash;
     type Value;
 
-    type EntryRef<'a>: EntryRefLike<KeyRef = Self::KeyRef<'a>, ValueRef = &'a Self::Value>
+    type EntryRef<'a>: EntryRefLike<KeyRef = &'a Self::Key, ValueRef = &'a Self::Value>
     where
         Self: 'a,
         Self::Key: 'a,
         Self::Value: 'a;
-    type EntryMutRef<'a>: EntryMutRefLike<KeyRef = Self::KeyRef<'a>, Value = Self::Value>
+    type EntryMutRef<'a>: EntryMutRefLike<Key = Self::Key, Value = Self::Value>
     where
         Self: 'a,
         Self::Key: 'a,
@@ -448,14 +446,14 @@ pub trait HashtableLike {
 
     fn len(&self) -> usize;
 
-    fn entry<'a>(&self, key_ref: Self::KeyRef<'a>) -> Option<Self::EntryRef<'_>>
+    fn entry<'a>(&self, key_ref: &'a Self::Key) -> Option<Self::EntryRef<'_>>
     where Self::Key: 'a;
-    fn entry_mut<'a>(&mut self, key_ref: Self::KeyRef<'a>) -> Option<Self::EntryMutRef<'_>>
+    fn entry_mut<'a>(&mut self, key_ref: &'a Self::Key) -> Option<Self::EntryMutRef<'_>>
     where Self::Key: 'a;
 
-    fn get<'a>(&self, key_ref: Self::KeyRef<'a>) -> Option<&Self::Value>
+    fn get<'a>(&self, key_ref: &'a Self::Key) -> Option<&Self::Value>
     where Self::Key: 'a;
-    fn get_mut<'a>(&mut self, key_ref: Self::KeyRef<'a>) -> Option<&mut Self::Value>
+    fn get_mut<'a>(&mut self, key_ref: &'a Self::Key) -> Option<&mut Self::Value>
     where Self::Key: 'a;
 
     /// # Safety
@@ -463,7 +461,7 @@ pub trait HashtableLike {
     /// The uninitialized value of returned entry should be written immediately.
     unsafe fn insert<'a>(
         &mut self,
-        key_ref: Self::KeyRef<'a>,
+        key_ref: &'a Self::Key,
     ) -> Result<&mut MaybeUninit<Self::Value>, &mut Self::Value>
     where
         Self::Key: 'a;
@@ -472,7 +470,7 @@ pub trait HashtableLike {
     /// The uninitialized value of returned entry should be written immediately.
     unsafe fn insert_and_entry<'a>(
         &mut self,
-        key_ref: Self::KeyRef<'a>,
+        key_ref: &'a Self::Key,
     ) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>>
     where
         Self::Key: 'a;

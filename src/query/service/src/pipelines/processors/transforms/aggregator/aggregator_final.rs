@@ -110,13 +110,15 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> FinalAggregator<
         area: &mut Area,
         params: &AggregatorParams,
         hashtable: &mut Method::HashTable,
-        keys: &[<Method::HashTable as HashtableLike>::KeyRef<'_>],
+        keys: &Method::KeysColumnIter,
     ) -> StateAddrs {
-        let mut places = Vec::with_capacity(keys.len());
+        let iterator = keys.iter();
+        let (len, _) = iterator.size_hint();
+        let mut places = Vec::with_capacity(len);
 
         unsafe {
-            for key in keys {
-                match hashtable.insert_and_entry(*key) {
+            for key in iterator {
+                match hashtable.insert_and_entry(key) {
                     Ok(mut entry) => {
                         if let Some(place) = params.alloc_layout(area) {
                             places.push(place);
@@ -157,7 +159,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
             &mut self.area,
             &self.params,
             &mut self.hashtable,
-            keys_iter.get_slice(),
+            &keys_iter,
         );
 
         let states_columns = (0..aggregate_function_len)
@@ -258,8 +260,8 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
         // }
 
         unsafe {
-            for keys_ref in keys_iter.get_slice() {
-                let _ = self.hashtable.insert_and_entry(*keys_ref);
+            for keys_ref in keys_iter.iter() {
+                let _ = self.hashtable.insert_and_entry(keys_ref);
             }
         }
 
