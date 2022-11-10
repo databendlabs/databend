@@ -100,6 +100,7 @@ impl<'a> Iterator for SerializedKeysIter<'a> {
         if self.pos < (self.offsets.len() - 1) {
             let offset = self.offsets[self.pos] as usize;
             let offset_1 = self.offsets[self.pos + 1] as usize;
+            self.pos += 1;
             return Some(&self.data[offset..offset_1]);
         }
 
