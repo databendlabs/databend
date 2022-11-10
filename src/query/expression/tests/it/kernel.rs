@@ -63,8 +63,8 @@ pub fn test_pass() {
         );
     }
 
-    run_concat(&mut file, &vec![
-        new_chunk(&vec![
+    run_concat(&mut file, &[
+        new_chunk(&[
             (
                 DataType::Number(NumberDataType::Int32),
                 Column::from_data(vec![0i32, 1, 2, 3, -4]),
@@ -84,7 +84,7 @@ pub fn test_pass() {
                 ]),
             ),
         ]),
-        new_chunk(&vec![
+        new_chunk(&[
             (
                 DataType::Number(NumberDataType::Int32),
                 Column::from_data(vec![5i32, 6]),
@@ -251,7 +251,7 @@ fn run_take_chunk(file: &mut impl Write, indices: &[ChunkRowIndex], chunks: &[Ch
 }
 
 fn run_scatter(file: &mut impl Write, chunk: &Chunk, indices: &[u32], scatter_size: usize) {
-    let result = Chunk::scatter(&chunk, indices, scatter_size);
+    let result = Chunk::scatter(chunk, indices, scatter_size);
 
     match result {
         Ok(result_chunk) => {
