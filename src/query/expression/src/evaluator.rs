@@ -132,7 +132,7 @@ impl<'a> Evaluator<'a> {
             return Ok(value);
         }
 
-        if let Some(cast_fn) = check_simple_cast(true, dest_type) {
+        if let Some(cast_fn) = check_simple_cast(false, dest_type) {
             return self.run_simple_cast(span, src_type, dest_type, value, &cast_fn);
         }
 
