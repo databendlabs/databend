@@ -134,7 +134,6 @@ impl HashMethodSerializer {
 
 impl HashMethod for HashMethodSerializer {
     type HashKey = [u8];
-    // type HashKeyRef<'a> = &'a [u8];
 
     type HashKeyIter<'a> = StringValueIter<'a>;
 
@@ -322,7 +321,6 @@ macro_rules! impl_hash_method_fixed_keys {
     ($ty:ty) => {
         impl HashMethod for HashMethodFixedKeys<$ty> {
             type HashKey = $ty;
-            // type HashKeyRef<'a> = $ty;
             type HashKeyIter<'a> = std::slice::Iter<'a, $ty>;
 
             fn name(&self) -> String {

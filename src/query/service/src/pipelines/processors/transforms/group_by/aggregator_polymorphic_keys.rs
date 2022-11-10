@@ -23,9 +23,11 @@ use common_datablocks::HashMethodSerializer;
 use common_datablocks::KeysState;
 use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_hashtable::FastHash;
 use common_hashtable::HashMap;
 use common_hashtable::HashtableLike;
 use common_hashtable::LookupHashMap;
+use common_hashtable::TwoLevelHashMap;
 use common_hashtable::UnsizedHashMap;
 use primitive_types::U256;
 use primitive_types::U512;
@@ -83,29 +85,27 @@ pub trait PolymorphicKeysHelper<Method: HashMethod> {
     type HashTable: HashtableLike<Key = Method::HashKey, Value = usize> + Send;
     fn create_hash_table(&self) -> Self::HashTable;
 
-    type ColumnBuilder<'a>: KeysColumnBuilder<T = &'a <Self::HashTable as HashtableLike>::Key>
+    type ColumnBuilder<'a>: KeysColumnBuilder<T = &'a Method::HashKey>
     where
         Self: 'a,
         Method: 'a;
 
     fn keys_column_builder(&self, capacity: usize) -> Self::ColumnBuilder<'_>;
 
-    type KeysColumnIter: KeysColumnIter<<Self::HashTable as HashtableLike>::Key>;
+    type KeysColumnIter: KeysColumnIter<Method::HashKey>;
 
     fn keys_iter_from_column(&self, column: &ColumnRef) -> Result<Self::KeysColumnIter>;
 
-    type GroupColumnsBuilder<'a>: GroupColumnsBuilder<
-        T = &'a <Self::HashTable as HashtableLike>::Key,
-    >
+    type GroupColumnsBuilder<'a>: GroupColumnsBuilder<T = &'a Method::HashKey>
     where
         Self: 'a,
         Method: 'a;
 
-    fn group_columns_builder<'a>(
-        &'a self,
+    fn group_columns_builder(
+        &self,
         capacity: usize,
         params: &AggregatorParams,
-    ) -> Self::GroupColumnsBuilder<'a>;
+    ) -> Self::GroupColumnsBuilder<'_>;
 }
 
 impl PolymorphicKeysHelper<HashMethodFixedKeys<u8>> for HashMethodFixedKeys<u8> {
@@ -337,13 +337,12 @@ impl PolymorphicKeysHelper<HashMethodSerializer> for HashMethodSerializer {
     }
 }
 
-struct TwoLevelHashMethod<Method: HashMethod> {
+pub struct TwoLevelHashMethod<Method: HashMethod> {
     method: Method,
 }
 
 impl<Method: HashMethod> HashMethod for TwoLevelHashMethod<Method> {
     type HashKey = Method::HashKey;
-    // type HashKeyRef<'a> = Method::HashKeyRef<'a> where Self: 'a;
     type HashKeyIter<'a> = Method::HashKeyIter<'a> where Self: 'a;
 
     fn name(&self) -> String {
@@ -356,5 +355,40 @@ impl<Method: HashMethod> HashMethod for TwoLevelHashMethod<Method> {
 
     fn build_keys_iter<'a>(&self, keys_state: &'a KeysState) -> Result<Self::HashKeyIter<'a>> {
         self.method.build_keys_iter(keys_state)
+    }
+}
+
+impl<Method> PolymorphicKeysHelper<TwoLevelHashMethod<Method>> for TwoLevelHashMethod<Method>
+where
+    Self: HashMethod<HashKey = Method::HashKey>,
+    Method: HashMethod + PolymorphicKeysHelper<Method>,
+    Method::HashKey: FastHash,
+{
+    type HashTable = TwoLevelHashMap<Method::HashTable>;
+
+    fn create_hash_table(&self) -> Self::HashTable {
+        unimplemented!()
+    }
+
+    type ColumnBuilder<'a> = Method::ColumnBuilder<'a> where Self: 'a, TwoLevelHashMethod<Method>: 'a;
+
+    fn keys_column_builder(&self, capacity: usize) -> Self::ColumnBuilder<'_> {
+        self.method.keys_column_builder(capacity)
+    }
+
+    type KeysColumnIter = Method::KeysColumnIter;
+
+    fn keys_iter_from_column(&self, column: &ColumnRef) -> Result<Self::KeysColumnIter> {
+        self.method.keys_iter_from_column(column)
+    }
+
+    type GroupColumnsBuilder<'a> = Method::GroupColumnsBuilder<'a> where Self: 'a, TwoLevelHashMethod<Method>: 'a;
+
+    fn group_columns_builder(
+        &self,
+        capacity: usize,
+        params: &AggregatorParams,
+    ) -> Self::GroupColumnsBuilder<'_> {
+        self.method.group_columns_builder(capacity, params)
     }
 }

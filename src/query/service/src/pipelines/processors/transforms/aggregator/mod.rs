@@ -16,6 +16,7 @@ mod aggregator_final;
 mod aggregator_params;
 mod aggregator_partial;
 mod aggregator_single_key;
+mod aggregator_two_level;
 
 pub use aggregator_final::FinalAggregator;
 pub use aggregator_final::KeysU128FinalAggregator;
@@ -48,3 +49,5 @@ pub use aggregator_partial::PartialAggregator;
 pub use aggregator_single_key::FinalSingleStateAggregator;
 pub use aggregator_single_key::PartialSingleStateAggregator;
 pub use aggregator_single_key::SingleStateAggregator;
+pub use aggregator_two_level::TwoLevelAggregator;
+pub use aggregator_two_level::TwoLevelAggregatorLike;

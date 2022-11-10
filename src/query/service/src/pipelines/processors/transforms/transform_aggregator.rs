@@ -248,14 +248,15 @@ pub trait Aggregator: Sized + Send {
     fn generate(&mut self) -> Result<Option<DataBlock>>;
 }
 
-enum AggregatorTransform<TAggregator: Aggregator> {
+enum AggregatorTransform<TAggregator: Aggregator + TwoLevelAggregatorLike> {
     ConsumeData(ConsumeState<TAggregator>),
-    // TwolevelConsumeData()
+    TwoLevelConsumeData(ConsumeState<TwoLevelAggregator<TAggregator>>),
     Generate(GenerateState<TAggregator>),
+    TwoLevelGenerate(GenerateState<TwoLevelAggregator<TAggregator>>),
     Finished,
 }
 
-impl<TAggregator: Aggregator + 'static> AggregatorTransform<TAggregator> {
+impl<TAggregator: Aggregator + TwoLevelAggregatorLike + 'static> AggregatorTransform<TAggregator> {
     pub fn create(
         input_port: Arc<InputPort>,
         output_port: Arc<OutputPort>,
@@ -288,7 +289,9 @@ impl<TAggregator: Aggregator + 'static> AggregatorTransform<TAggregator> {
     }
 }
 
-impl<TAggregator: Aggregator + 'static> Processor for AggregatorTransform<TAggregator> {
+impl<TAggregator: Aggregator + TwoLevelAggregatorLike + 'static> Processor
+    for AggregatorTransform<TAggregator>
+{
     fn name(&self) -> String {
         TAggregator::NAME.to_string()
     }
@@ -302,6 +305,7 @@ impl<TAggregator: Aggregator + 'static> Processor for AggregatorTransform<TAggre
             AggregatorTransform::Finished => Ok(Event::Finished),
             AggregatorTransform::Generate(_) => self.generate_event(),
             AggregatorTransform::ConsumeData(_) => self.consume_event(),
+            _ => unimplemented!(),
         }
     }
 
@@ -310,14 +314,23 @@ impl<TAggregator: Aggregator + 'static> Processor for AggregatorTransform<TAggre
             AggregatorTransform::Finished => Ok(()),
             AggregatorTransform::ConsumeData(state) => state.consume(),
             AggregatorTransform::Generate(state) => state.generate(),
+            _ => unimplemented!(),
         }
     }
 }
 
-impl<TAggregator: Aggregator + 'static> AggregatorTransform<TAggregator> {
+impl<TAggregator: Aggregator + TwoLevelAggregatorLike + 'static> AggregatorTransform<TAggregator> {
     #[inline(always)]
     fn consume_event(&mut self) -> Result<Event> {
         if let AggregatorTransform::ConsumeData(state) = self {
+            if TAggregator::SUPPORT_TWO_LEVEL {
+                let _cardinality = state.inner.get_state_cardinality();
+                // TODO: convert to two level state if need
+                // if cardinality >= 10000 {
+                //     let mut temp_state = AggregatorTransform::Finished;
+                // }
+            }
+
             if state.input_data_block.is_some() {
                 return Ok(Event::Sync);
             }

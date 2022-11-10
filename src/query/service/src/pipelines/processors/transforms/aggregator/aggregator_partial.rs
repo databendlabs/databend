@@ -63,14 +63,14 @@ pub type KeysSerializerAggregator = PartialAggregator<true, HashMethodSerializer
 pub struct PartialAggregator<const HAS_AGG: bool, Method>
 where Method: HashMethod + PolymorphicKeysHelper<Method>
 {
-    is_generated: bool,
-    states_dropped: bool,
+    pub is_generated: bool,
+    pub states_dropped: bool,
 
-    area: Area,
-    method: Method,
-    hash_table: Method::HashTable,
-    params: Arc<AggregatorParams>,
-    ctx: Arc<QueryContext>,
+    pub area: Option<Area>,
+    pub method: Method,
+    pub hash_table: Method::HashTable,
+    pub params: Arc<AggregatorParams>,
+    pub ctx: Arc<QueryContext>,
 }
 
 impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + Send>
@@ -79,13 +79,13 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
     pub fn create(ctx: Arc<QueryContext>, method: Method, params: Arc<AggregatorParams>) -> Self {
         let hash_table = method.create_hash_table();
         Self {
+            ctx,
+            params,
+            method,
+            hash_table,
+            area: Some(Area::new()),
             is_generated: false,
             states_dropped: false,
-            area: Area::new(),
-            hash_table,
-            method,
-            params,
-            ctx,
         }
     }
 
@@ -246,12 +246,8 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
         //     // self.state.convert_to_twolevel();
         // }
 
-        let places = Self::lookup_state(
-            &mut self.area,
-            &self.params,
-            group_keys_iter,
-            &mut self.hash_table,
-        );
+        let area = self.area.as_mut().unwrap();
+        let places = Self::lookup_state(area, &self.params, group_keys_iter, &mut self.hash_table);
         Self::execute(&self.params, &block, &places)
     }
 
