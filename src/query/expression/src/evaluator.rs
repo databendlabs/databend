@@ -584,6 +584,10 @@ impl<'a> ConstantFolder<'a> {
             return Some(domain.clone());
         }
 
+        if let Some(cast_fn) = check_simple_cast(false, dest_type) {
+            return self.calculate_simple_cast(span, src_type, dest_type, domain, &cast_fn);
+        }
+
         match (src_type, dest_type) {
             (DataType::Null, DataType::Nullable(_)) => Some(domain.clone()),
             (DataType::Nullable(inner_src_ty), DataType::Nullable(inner_dest_ty)) => {
@@ -640,50 +644,6 @@ impl<'a> ConstantFolder<'a> {
                         .collect::<Option<Vec<_>>>()?,
                 ))
             }
-
-            (_, DataType::String) => self
-                .calculate_simple_cast(span, src_type, dest_type, domain, "to_string")
-                .unwrap(),
-            (_, DataType::Number(NumberDataType::UInt8)) => self
-                .calculate_simple_cast(span, src_type, dest_type, domain, "to_uint8")
-                .unwrap(),
-            (_, DataType::Number(NumberDataType::UInt16)) => self
-                .calculate_simple_cast(span, src_type, dest_type, domain, "to_uint16")
-                .unwrap(),
-            (_, DataType::Number(NumberDataType::UInt32)) => self
-                .calculate_simple_cast(span, src_type, dest_type, domain, "to_uint32")
-                .unwrap(),
-            (_, DataType::Number(NumberDataType::UInt64)) => self
-                .calculate_simple_cast(span, src_type, dest_type, domain, "to_uint64")
-                .unwrap(),
-            (_, DataType::Number(NumberDataType::Int8)) => self
-                .calculate_simple_cast(span, src_type, dest_type, domain, "to_int8")
-                .unwrap(),
-            (_, DataType::Number(NumberDataType::Int16)) => self
-                .calculate_simple_cast(span, src_type, dest_type, domain, "to_int16")
-                .unwrap(),
-            (_, DataType::Number(NumberDataType::Int32)) => self
-                .calculate_simple_cast(span, src_type, dest_type, domain, "to_int32")
-                .unwrap(),
-            (_, DataType::Number(NumberDataType::Int64)) => self
-                .calculate_simple_cast(span, src_type, dest_type, domain, "to_int64")
-                .unwrap(),
-            (_, DataType::Number(NumberDataType::Float32)) => self
-                .calculate_simple_cast(span, src_type, dest_type, domain, "to_float32")
-                .unwrap(),
-            (_, DataType::Number(NumberDataType::Float64)) => self
-                .calculate_simple_cast(span, src_type, dest_type, domain, "to_float64")
-                .unwrap(),
-            (_, DataType::Timestamp) => self
-                .calculate_simple_cast(span, src_type, dest_type, domain, "to_timestamp")
-                .unwrap(),
-            (_, DataType::Date) => self
-                .calculate_simple_cast(span, src_type, dest_type, domain, "to_date")
-                .unwrap(),
-            (_, DataType::Variant) => self
-                .calculate_simple_cast(span, src_type, dest_type, domain, "to_variant")
-                .unwrap(),
-
             _ => None,
         }
     }
@@ -697,6 +657,10 @@ impl<'a> ConstantFolder<'a> {
     ) -> Option<Domain> {
         if src_type == dest_type {
             return Some(domain.clone());
+        }
+
+        if let Some(cast_fn) = check_simple_cast(true, dest_type) {
+            return self.calculate_simple_cast(span, src_type, dest_type, domain, &cast_fn);
         }
 
         // The dest_type of `TRY_CAST` must be `Nullable`, which is guaranteed by the type checker.
@@ -753,49 +717,6 @@ impl<'a> ConstantFolder<'a> {
                     .collect::<Option<_>>()?;
                 Some(Domain::Tuple(new_fields_domain))
             }
-
-            (_, DataType::String) => self
-                .calculate_simple_cast(span, src_type, dest_type, domain, "try_to_string")
-                .unwrap(),
-            (_, DataType::Number(NumberDataType::UInt8)) => self
-                .calculate_simple_cast(span, src_type, dest_type, domain, "try_to_uint8")
-                .unwrap(),
-            (_, DataType::Number(NumberDataType::UInt16)) => self
-                .calculate_simple_cast(span, src_type, dest_type, domain, "try_to_uint16")
-                .unwrap(),
-            (_, DataType::Number(NumberDataType::UInt32)) => self
-                .calculate_simple_cast(span, src_type, dest_type, domain, "try_to_uint32")
-                .unwrap(),
-            (_, DataType::Number(NumberDataType::UInt64)) => self
-                .calculate_simple_cast(span, src_type, dest_type, domain, "try_to_uint64")
-                .unwrap(),
-            (_, DataType::Number(NumberDataType::Int8)) => self
-                .calculate_simple_cast(span, src_type, dest_type, domain, "try_to_int8")
-                .unwrap(),
-            (_, DataType::Number(NumberDataType::Int16)) => self
-                .calculate_simple_cast(span, src_type, dest_type, domain, "try_to_int16")
-                .unwrap(),
-            (_, DataType::Number(NumberDataType::Int32)) => self
-                .calculate_simple_cast(span, src_type, dest_type, domain, "try_to_int32")
-                .unwrap(),
-            (_, DataType::Number(NumberDataType::Int64)) => self
-                .calculate_simple_cast(span, src_type, dest_type, domain, "try_to_int64")
-                .unwrap(),
-            (_, DataType::Number(NumberDataType::Float32)) => self
-                .calculate_simple_cast(span, src_type, dest_type, domain, "try_to_float32")
-                .unwrap(),
-            (_, DataType::Number(NumberDataType::Float64)) => self
-                .calculate_simple_cast(span, src_type, dest_type, domain, "try_to_float64")
-                .unwrap(),
-            (_, DataType::Timestamp) => self
-                .calculate_simple_cast(span, src_type, dest_type, domain, "try_to_timestamp")
-                .unwrap(),
-            (_, DataType::Date) => self
-                .calculate_simple_cast(span, src_type, dest_type, domain, "try_to_date")
-                .unwrap(),
-            (_, DataType::Variant) => self
-                .calculate_simple_cast(span, src_type, dest_type, domain, "try_to_variant")
-                .unwrap(),
 
             _ => Some(Domain::Nullable(NullableDomain {
                 has_null: true,
