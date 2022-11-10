@@ -36,7 +36,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::Compression;
-use futures::AsyncReadExt;
 use futures::StreamExt;
 use futures::TryStreamExt;
 use opendal::Object;
@@ -377,9 +376,7 @@ impl BlockReader {
         offset: u64,
         length: u64,
     ) -> Result<(usize, Vec<u8>)> {
-        let mut chunk = vec![0; length as usize];
-        let mut r = o.range_reader(offset..offset + length).await?;
-        r.read_exact(&mut chunk).await?;
+        let chunk = o.range_read(offset..offset + length).await?;
 
         Ok((index, chunk))
     }

@@ -242,7 +242,7 @@ COPY INTO mytable FROM @my_internal_s1 pattern = 'books.*parquet' file_format = 
 First, create a named external stage:
 
 ```sql
-CREATE STAGE my_external_s1 url = 's3://testbucket/admin/data/' credentials=(aws_key_id='minioadmin' aws_secret_key='minioadmin');
+CREATE STAGE my_external_s1 url = 's3://testbucket/admin/data/' connection = (aws_key_id='minioadmin' aws_secret_key='minioadmin');
 ```
 
 Then, copy the file into `mytable` from the `my_external_s1` named external stage:

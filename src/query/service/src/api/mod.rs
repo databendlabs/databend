@@ -33,7 +33,6 @@ pub use rpc::MergeExchange;
 pub use rpc::PrecommitBlock;
 pub use rpc::QueryFragmentsPlanPacket;
 pub use rpc::ServerFlightExchange;
-pub use rpc::ShuffleDataExchange;
 pub use rpc::ShuffleDataExchangeV2;
 pub use rpc_service::RpcService;
 
