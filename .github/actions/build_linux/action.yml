@@ -14,7 +14,7 @@ runs:
       uses: ./.github/actions/setup_build_tool
       with:
         image: ${{ inputs.target }}
-        bypass_env_vars: RUSTFLAGS,RUST_LOG,RUSTC_WRAPPER,SCCACHE_BUCKET,SCCACHE_S3_KEY_PREFIX,SCCACHE_LOG,SCCACHE_ERROR_LOG,SCCACHE_S3_USE_SSL
+        bypass_env_vars: RUSTFLAGS,RUST_LOG,RUSTC_WRAPPER,SCCACHE_BUCKET,SCCACHE_S3_KEY_PREFIX,SCCACHE_LOG,SCCACHE_ERROR_LOG,SCCACHE_S3_USE_SSL,AWS_DEFAULT_REGION,AWS_REGION,AWS_ROLE_ARN,AWS_STS_REGIONAL_ENDPOINTS,AWS_WEB_IDENTITY_TOKEN_FILE
 
     - name: Build Debug
       if: inputs.profile == 'debug'
