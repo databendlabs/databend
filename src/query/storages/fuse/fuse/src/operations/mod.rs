@@ -42,4 +42,5 @@ pub use mutation::SegmentCompactionState;
 pub use mutation::SegmentCompactor;
 pub use operation_log::AppendOperationLogEntry;
 pub use operation_log::TableOperationLog;
+pub use read_data::ReadDataKind;
 pub use util::column_metas;
