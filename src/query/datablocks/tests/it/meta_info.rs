@@ -14,21 +14,22 @@
 
 use std::any::Any;
 
-use common_datablocks::MetaInfo;
+use common_datablocks::BlockMetaInfo;
 use common_exception::Result;
 
-#[derive(Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq)]
 struct TestMetaInfoA {
     field_a: usize,
     field_b: String,
 }
 
-impl MetaInfo for TestMetaInfoA {
+#[typetag::serde(name = "meta_info")]
+impl BlockMetaInfo for TestMetaInfoA {
     fn as_any(&self) -> &dyn Any {
         self
     }
 
-    fn equals(&self, info: &Box<dyn MetaInfo>) -> bool {
+    fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
         match info.as_any().downcast_ref::<TestMetaInfoA>() {
             None => false,
             Some(other) => self == other,
@@ -36,18 +37,19 @@ impl MetaInfo for TestMetaInfoA {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq)]
 struct TestPartInfoB {
     field_a: String,
     field_b: u64,
 }
 
-impl MetaInfo for TestPartInfoB {
+#[typetag::serde(name = "meta_info")]
+impl BlockMetaInfo for TestPartInfoB {
     fn as_any(&self) -> &dyn Any {
         self
     }
 
-    fn equals(&self, info: &Box<dyn MetaInfo>) -> bool {
+    fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
         match info.as_any().downcast_ref::<TestPartInfoB>() {
             None => false,
             Some(other) => self == other,
@@ -57,12 +59,12 @@ impl MetaInfo for TestPartInfoB {
 
 #[test]
 fn test_partial_equals_part_info() -> Result<()> {
-    let info_a: Box<dyn MetaInfo> = Box::new(TestMetaInfoA {
+    let info_a: Box<dyn BlockMetaInfo> = Box::new(TestMetaInfoA {
         field_a: 123,
         field_b: String::from("456"),
     });
 
-    let info_b: Box<dyn MetaInfo> = Box::new(TestPartInfoB {
+    let info_b: Box<dyn BlockMetaInfo> = Box::new(TestPartInfoB {
         field_a: String::from("123"),
         field_b: 456,
     });

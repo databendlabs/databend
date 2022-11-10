@@ -31,7 +31,7 @@ use crate::meta::Statistics;
 use crate::meta::Versioned;
 
 /// A segment comprises one or more blocks
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub struct SegmentInfo {
     /// format version
     format_version: FormatVersion,

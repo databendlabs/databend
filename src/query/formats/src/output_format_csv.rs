@@ -12,98 +12,82 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::ErrorCode;
+use common_datablocks::DataBlock;
+use common_datavalues::serializations::write_csv_string;
+use common_datavalues::DataSchemaRef;
+use common_datavalues::DataType;
 use common_exception::Result;
-use common_expression::serializations::write_escaped_string;
-use common_expression::Chunk;
-use common_expression::DataSchemaRef;
-use common_expression::TypeSerializer;
-use common_io::prelude::FormatSettings;
 
+use crate::field_encoder::FieldEncoderCSV;
+use crate::field_encoder::FieldEncoderRowBased;
 use crate::output_format::OutputFormat;
+use crate::FileFormatOptionsExt;
 
-const FIELD_DELIMITER: u8 = b'\t';
-const ROW_DELIMITER: u8 = b'\n';
+pub type CSVOutputFormat = CSVOutputFormatBase<false, false>;
+pub type CSVWithNamesOutputFormat = CSVOutputFormatBase<true, false>;
+pub type CSVWithNamesAndTypesOutputFormat = CSVOutputFormatBase<true, true>;
 
-pub type TSVOutputFormat = TCSVOutputFormat<true, false, false>;
-pub type CSVOutputFormat = TCSVOutputFormat<false, false, false>;
-pub type TSVWithNamesOutputFormat = TCSVOutputFormat<true, true, false>;
-pub type CSVWithNamesOutputFormat = TCSVOutputFormat<false, true, false>;
-pub type TSVWithNamesAndTypesOutputFormat = TCSVOutputFormat<true, true, true>;
-pub type CSVWithNamesAndTypesOutputFormat = TCSVOutputFormat<false, true, true>;
-
-#[derive(Default)]
-pub struct TCSVOutputFormat<const TSV: bool, const WITH_NAMES: bool, const WITH_TYPES: bool> {
+pub struct CSVOutputFormatBase<const WITH_NAMES: bool, const WITH_TYPES: bool> {
     schema: DataSchemaRef,
-    format_settings: FormatSettings,
+    field_encoder: FieldEncoderCSV,
+    field_delimiter: u8,
+    record_delimiter: Vec<u8>,
+    quote: u8,
 }
 
-impl<const TSV: bool, const WITH_NAMES: bool, const WITH_TYPES: bool>
-    TCSVOutputFormat<TSV, WITH_NAMES, WITH_TYPES>
-{
-    pub fn create(schema: DataSchemaRef, format_settings: FormatSettings) -> Self {
+impl<const WITH_NAMES: bool, const WITH_TYPES: bool> CSVOutputFormatBase<WITH_NAMES, WITH_TYPES> {
+    pub fn create(schema: DataSchemaRef, options: &FileFormatOptionsExt) -> Self {
+        let field_encoder = FieldEncoderCSV::create(options);
         Self {
             schema,
-            format_settings,
+            field_encoder,
+            field_delimiter: options.stage.field_delimiter.as_bytes()[0],
+            record_delimiter: options.stage.record_delimiter.as_bytes().to_vec(),
+            quote: options.quote.as_bytes()[0],
         }
     }
 
-    fn serialize_strings(&self, values: Vec<String>, format: &FormatSettings) -> Vec<u8> {
+    fn serialize_strings(&self, values: Vec<String>) -> Vec<u8> {
         let mut buf = vec![];
-        let fd = format.field_delimiter[0];
+        let fd = self.field_delimiter;
 
         for (col_index, v) in values.iter().enumerate() {
             if col_index != 0 {
                 buf.push(fd);
             }
-            todo!("expression")
+            write_csv_string(v.as_bytes(), &mut buf, self.quote);
         }
 
-        buf.push(format.record_delimiter[0]);
+        buf.extend_from_slice(&self.record_delimiter);
         buf
     }
 }
 
-impl<const TSV: bool, const WITH_NAMES: bool, const WITH_TYPES: bool> OutputFormat
-    for TCSVOutputFormat<TSV, WITH_NAMES, WITH_TYPES>
+impl<const WITH_NAMES: bool, const WITH_TYPES: bool> OutputFormat
+    for CSVOutputFormatBase<WITH_NAMES, WITH_TYPES>
 {
-    fn serialize_block(&mut self, chunk: &Chunk) -> Result<Vec<u8>> {
-        let rows_size = chunk.num_rows();
-        let format_settings = &self.format_settings;
+    fn serialize_block(&mut self, block: &DataBlock) -> Result<Vec<u8>> {
+        let rows_size = block.column(0).len();
+        let mut buf = Vec::with_capacity(block.memory_size());
+        let serializers = block.get_serializers()?;
 
-        let mut buf = Vec::with_capacity(chunk.memory_size());
-        let serializers = chunk
-            .get_serializers()
-            .map_err(|err| ErrorCode::UnknownColumn(err))?;
-
-        let fd = if TSV {
-            FIELD_DELIMITER
-        } else {
-            format_settings.field_delimiter[0]
-        };
-
-        let rd = if TSV {
-            ROW_DELIMITER
-        } else {
-            format_settings.record_delimiter[0]
-        };
+        let fd = self.field_delimiter;
+        let rd = &self.record_delimiter;
 
         for row_index in 0..rows_size {
             for (col_index, serializer) in serializers.iter().enumerate() {
                 if col_index != 0 {
                     buf.push(fd);
                 }
-
-                todo!("expression")
+                self.field_encoder
+                    .write_field(serializer, row_index, &mut buf, false);
             }
-            buf.push(rd)
+            buf.extend_from_slice(rd)
         }
         Ok(buf)
     }
 
     fn serialize_prefix(&self) -> Result<Vec<u8>> {
-        let format_settings = &self.format_settings;
-
         let mut buf = vec![];
         if WITH_NAMES {
             let names = self
@@ -112,20 +96,19 @@ impl<const TSV: bool, const WITH_NAMES: bool, const WITH_TYPES: bool> OutputForm
                 .iter()
                 .map(|f| f.name().to_string())
                 .collect::<Vec<_>>();
-            buf.extend_from_slice(&self.serialize_strings(names, format_settings));
+            buf.extend_from_slice(&self.serialize_strings(names));
             if WITH_TYPES {
                 let types = self
                     .schema
                     .fields()
                     .iter()
-                    .map(|f| f.data_type().to_string())
+                    .map(|f| f.data_type().name())
                     .collect::<Vec<_>>();
-                buf.extend_from_slice(&self.serialize_strings(types, format_settings));
+                buf.extend_from_slice(&self.serialize_strings(types));
             }
         }
         Ok(buf)
     }
-
     fn finalize(&mut self) -> Result<Vec<u8>> {
         Ok(vec![])
     }

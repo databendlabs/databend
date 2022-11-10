@@ -13,102 +13,48 @@
 // limitations under the License.
 
 use common_arrow::arrow::bitmap::MutableBitmap;
+use common_datablocks::DataBlock;
+use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_expression::from_date_data;
-use common_expression::from_date_data_with_validity;
-use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
-use common_expression::Chunk;
-use common_expression::Column;
-use common_expression::ColumnFrom;
-use common_expression::DataField;
-use common_expression::DataSchemaRef;
-use common_expression::DataSchemaRefExt;
 
-pub fn get_simple_chunk(is_nullable: bool) -> Result<(DataSchemaRef, Chunk)> {
+pub fn get_simple_block(is_nullable: bool) -> Result<DataBlock> {
     let schema = match is_nullable {
         false => DataSchemaRefExt::create(vec![
-            DataField::new("c1", DataType::Number(NumberDataType::Int32)),
-            DataField::new("c2", DataType::String),
-            DataField::new("c3", DataType::Boolean),
-            DataField::new("c4", DataType::Number(NumberDataType::Float64)),
-            DataField::new("c5", DataType::Date),
+            DataField::new("c1", i32::to_data_type()),
+            DataField::new("c2", Vu8::to_data_type()),
+            DataField::new("c3", bool::to_data_type()),
+            DataField::new("c4", f64::to_data_type()),
+            DataField::new("c5", DateType::new_impl()),
         ]),
         true => DataSchemaRefExt::create(vec![
-            DataField::new(
-                "c1",
-                DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int32))),
-            ),
-            DataField::new("c2", DataType::Nullable(Box::new(DataType::String))),
-            DataField::new("c3", DataType::Nullable(Box::new(DataType::Boolean))),
-            DataField::new(
-                "c4",
-                DataType::Nullable(Box::new(DataType::Number(NumberDataType::Float64))),
-            ),
-            DataField::new("c5", DataType::Nullable(Box::new(DataType::Date))),
+            DataField::new_nullable("c1", i32::to_data_type()),
+            DataField::new_nullable("c2", Vu8::to_data_type()),
+            DataField::new_nullable("c3", bool::to_data_type()),
+            DataField::new_nullable("c4", f64::to_data_type()),
+            DataField::new_nullable("c5", DateType::new_impl()),
         ]),
     };
 
-    let chunk = match is_nullable {
-        false => Chunk::new(
-            vec![
-                (
-                    Value::Column(Column::from_data(vec![1i32, 2, 3])),
-                    DataType::Number(NumberDataType::Int32),
-                ),
-                (
-                    Value::Column(Column::from_data(vec!["a", "b\"", "c'"])),
-                    DataType::String,
-                ),
-                (
-                    Value::Column(Column::from_data(vec![true, true, false])),
-                    DataType::Boolean,
-                ),
-                (
-                    Value::Column(Column::from_data(vec![1.1f64, 2.2, 3.3])),
-                    DataType::Number(NumberDataType::Float64),
-                ),
-                (from_date_data(vec![1_i32, 2, 3]), DataType::Date),
-            ],
-            3,
-        ),
-        true => Chunk::new(
-            vec![
-                (
-                    Value::Column(Column::from_data_with_validity(vec![1i32, 2, 3], vec![
-                        true, true, true,
-                    ])),
-                    DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int32))),
-                ),
-                (
-                    Value::Column(Column::from_data_with_validity(
-                        vec!["a", "b\"", "c'"],
-                        vec![true, true, true],
-                    )),
-                    DataType::Nullable(Box::new(DataType::String)),
-                ),
-                (
-                    Value::Column(Column::from_data_with_validity(
-                        vec![true, true, false],
-                        vec![true, true, true],
-                    )),
-                    DataType::Nullable(Box::new(DataType::Boolean)),
-                ),
-                (
-                    Value::Column(Column::from_data_with_validity(
-                        vec![1.1f64, 2.2, 3.3],
-                        vec![true, true, true],
-                    )),
-                    DataType::Nullable(Box::new(DataType::Number(NumberDataType::Float64))),
-                ),
-                (
-                    from_date_data_with_validity(vec![1_i32, 2, 3], vec![true, true, true]),
-                    DataType::Nullable(Box::new(DataType::Date)),
-                ),
-            ],
-            3,
-        ),
-    };
+    let mut columns = vec![
+        Series::from_data(vec![1i32, 2, 3]),
+        Series::from_data(vec!["a", "b\"", "c'"]),
+        Series::from_data(vec![true, true, false]),
+        Series::from_data(vec![1.1f64, 2.2, 3.3]),
+        Series::from_data(vec![1_i32, 2_i32, 3_i32]),
+    ];
 
-    Ok((schema, chunk))
+    if is_nullable {
+        columns = columns
+            .iter()
+            .map(|c| {
+                let mut validity = MutableBitmap::new();
+                validity.extend_constant(c.len(), true);
+                NullableColumn::wrap_inner(c.clone(), Some(validity.into()))
+            })
+            .collect();
+    }
+
+    let block = DataBlock::create(schema, columns);
+
+    Ok(block)
 }

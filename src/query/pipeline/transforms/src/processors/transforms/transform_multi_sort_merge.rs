@@ -111,8 +111,13 @@ impl Cursor {
     }
 
     #[inline]
-    fn current(&self) -> Row<'_> {
-        self.rows.row(self.row_index)
+    pub fn current(&self) -> Row<'_> {
+        self.rows.row_unchecked(self.row_index)
+    }
+
+    #[inline]
+    pub fn last(&self) -> Row<'_> {
+        self.rows.row_unchecked(self.num_rows - 1)
     }
 }
 
@@ -248,6 +253,25 @@ impl MultiSortMergeProcessor {
             .count()
     }
 
+    // Return if need output
+    #[inline]
+    fn drain_cursor(&mut self, mut cursor: Cursor) -> bool {
+        let input_index = cursor.input_index;
+        let block_index = self.blocks[input_index].len() - 1;
+        while !cursor.is_finished() {
+            self.in_progess_rows
+                .push((input_index, block_index, cursor.advance()));
+            if let Some(limit) = self.limit {
+                if self.in_progess_rows.len() == limit {
+                    return true;
+                }
+            }
+        }
+        // We have read all rows of this block, need to read a new one.
+        self.cursor_finished[input_index] = true;
+        false
+    }
+
     fn drain_heap(&mut self) {
         let nums_active_inputs = self.nums_active_inputs();
         let mut need_output = false;
@@ -257,44 +281,48 @@ impl MultiSortMergeProcessor {
             match self.heap.pop() {
                 Some(Reverse(mut cursor)) => {
                     let input_index = cursor.input_index;
-                    let block_index = self.blocks[input_index].len() - 1;
                     if self.heap.is_empty() {
                         // If there is no other block in the heap, we can drain the whole block.
-                        while !cursor.is_finished() {
-                            self.in_progess_rows
-                                .push((input_index, block_index, cursor.advance()));
-                            if let Some(limit) = self.limit {
-                                if self.in_progess_rows.len() == limit {
-                                    need_output = true;
-                                    break;
-                                }
-                            }
-                        }
-                        // We have read all rows of this block, need to read a new one.
-                        self.cursor_finished[input_index] = true;
+                        need_output = self.drain_cursor(cursor);
                     } else {
                         let next_cursor = &self.heap.peek().unwrap().0;
-                        while !cursor.is_finished() && cursor.lt(next_cursor) {
-                            // If the cursor is smaller than the next cursor, don't need to push the cursor back to the heap.
-                            self.in_progess_rows
-                                .push((input_index, block_index, cursor.advance()));
-                            if let Some(limit) = self.limit {
-                                if self.in_progess_rows.len() == limit {
-                                    need_output = true;
-                                    break;
+                        // If the last row of current block is smaller than the next cursor,
+                        // we can drain the whole block.
+                        if cursor.last().le(&next_cursor.current()) {
+                            need_output = self.drain_cursor(cursor);
+                        } else {
+                            let block_index = self.blocks[input_index].len() - 1;
+                            while !cursor.is_finished() && cursor.le(next_cursor) {
+                                // If the cursor is smaller than the next cursor, don't need to push the cursor back to the heap.
+                                self.in_progess_rows.push((
+                                    input_index,
+                                    block_index,
+                                    cursor.advance(),
+                                ));
+                                if let Some(limit) = self.limit {
+                                    if self.in_progess_rows.len() == limit {
+                                        need_output = true;
+                                        break;
+                                    }
                                 }
                             }
-                        }
-                        if !cursor.is_finished() {
-                            self.heap.push(Reverse(cursor));
-                        } else {
-                            // We have read all rows of this block, need to read a new one.
-                            self.cursor_finished[input_index] = true;
+                            if !cursor.is_finished() {
+                                self.heap.push(Reverse(cursor));
+                            } else {
+                                // We have read all rows of this block, need to read a new one.
+                                self.cursor_finished[input_index] = true;
+                            }
                         }
                     }
                     // Reach the block size, need to output.
                     if self.in_progess_rows.len() >= self.block_size {
                         need_output = true;
+                        break;
+                    }
+                    if self.cursor_finished[input_index] && !self.input_finished[input_index] {
+                        // Correctness: if input is not finished, we need to pull more data,
+                        // or we can continue this loop.
+                        break;
                     }
                 }
                 None => {

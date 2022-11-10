@@ -1334,7 +1334,9 @@ dependencies = [
  "pretty_assertions",
  "primitive-types",
  "regex",
+ "serde",
  "serde_json",
+ "typetag",
 ]
 
 [[package]]
@@ -1415,11 +1417,15 @@ version = "0.1.0"
 dependencies = [
  "chrono-tz",
  "common-arrow",
+ "common-datablocks",
+ "common-datavalues",
  "common-exception",
- "common-expression",
  "common-io",
  "common-meta-types",
  "common-settings",
+ "lexical-core",
+ "micromarshal",
+ "num",
  "once_cell",
  "pretty_assertions",
 ]
@@ -1449,6 +1455,7 @@ dependencies = [
  "hex",
  "itertools",
  "md-5",
+ "memchr",
  "naive-cityhash",
  "num",
  "num-format",
@@ -1490,6 +1497,7 @@ dependencies = [
  "common-io",
  "common-jsonb",
  "crc32fast",
+ "criterion",
  "goldenfile",
  "hex",
  "itertools",

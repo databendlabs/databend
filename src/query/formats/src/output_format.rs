@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_datablocks::DataBlock;
 use common_exception::Result;
-use common_expression::Chunk;
 
 pub trait OutputFormat: Send {
-    fn serialize_block(&mut self, data_block: &Chunk) -> Result<Vec<u8>>;
+    fn serialize_block(&mut self, data_block: &DataBlock) -> Result<Vec<u8>>;
 
     fn serialize_prefix(&self) -> Result<Vec<u8>> {
         Ok(vec![])

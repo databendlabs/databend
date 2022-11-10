@@ -12,35 +12,31 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::ErrorCode;
+use common_datablocks::DataBlock;
+use common_datavalues::DataSchemaRef;
 use common_exception::Result;
-use common_expression::Chunk;
-use common_expression::DataSchemaRef;
-use common_expression::TypeSerializer;
-use common_io::prelude::FormatSettings;
 
+use crate::field_encoder::FieldEncoderRowBased;
+use crate::field_encoder::FieldEncoderValues;
 use crate::output_format::OutputFormat;
 
-#[derive(Default)]
 pub struct ValuesOutputFormat {
-    format_settings: FormatSettings,
+    field_encoder: FieldEncoderValues,
 }
 
 impl ValuesOutputFormat {
     #[allow(unused)]
-    pub fn create(_schema: DataSchemaRef, format_settings: FormatSettings) -> Self {
-        Self { format_settings }
+    pub fn create(_schema: DataSchemaRef, field_encoder: FieldEncoderValues) -> Self {
+        Self { field_encoder }
     }
 }
 
 impl OutputFormat for ValuesOutputFormat {
-    fn serialize_block(&mut self, chunk: &Chunk) -> Result<Vec<u8>> {
-        let rows_size = chunk.num_rows();
+    fn serialize_block(&mut self, block: &DataBlock) -> Result<Vec<u8>> {
+        let rows_size = block.column(0).len();
 
-        let mut buf = Vec::with_capacity(chunk.memory_size());
-        let serializers = chunk
-            .get_serializers()
-            .map_err(|err| ErrorCode::UnknownColumn(err))?;
+        let mut buf = Vec::with_capacity(block.memory_size());
+        let serializers = block.get_serializers()?;
 
         for row_index in 0..rows_size {
             if row_index != 0 {
@@ -51,7 +47,8 @@ impl OutputFormat for ValuesOutputFormat {
                 if i != 0 {
                     buf.push(b',');
                 }
-                todo!()
+                self.field_encoder
+                    .write_field(serializer, row_index, &mut buf, true);
             }
             buf.push(b')');
         }

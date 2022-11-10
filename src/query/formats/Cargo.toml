@@ -12,9 +12,14 @@ test = false
 
 [dependencies] # In alphabetical order
 chrono-tz = "0.6.3"
+lexical-core = "0.8.5"
+micromarshal = "0.2.0"
+num = "0.4.0"
+
 # Workspace dependencies
+common-datablocks = { path = "../datablocks" }
+common-datavalues = { path = "../datavalues" }
 common-exception = { path = "../../common/exception" }
-common-expression = { path = "../expression" }
 common-io = { path = "../../common/io" }
 common-meta-types = { path = "../../meta/types" }
 common-settings = { path = "../settings" }

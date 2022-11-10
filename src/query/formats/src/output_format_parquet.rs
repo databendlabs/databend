@@ -12,46 +12,46 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_datablocks::serialize_data_blocks;
+use common_datablocks::DataBlock;
+use common_datavalues::DataSchemaRef;
 use common_exception::Result;
-use common_expression::serialize_chunks;
-use common_expression::Chunk;
-use common_expression::DataSchemaRef;
-use common_io::prelude::FormatSettings;
 
 use crate::output_format::OutputFormat;
+use crate::FileFormatOptionsExt;
 
 #[derive(Default)]
 pub struct ParquetOutputFormat {
     schema: DataSchemaRef,
-    chunks: Vec<Chunk>,
+    data_blocks: Vec<DataBlock>,
 }
 
 impl ParquetOutputFormat {
-    pub fn create(schema: DataSchemaRef, _format_setting: FormatSettings) -> Self {
+    pub fn create(schema: DataSchemaRef, _options: &FileFormatOptionsExt) -> Self {
         Self {
             schema,
-            chunks: vec![],
+            data_blocks: vec![],
         }
     }
 }
 
 impl OutputFormat for ParquetOutputFormat {
-    fn serialize_block(&mut self, chunk: &Chunk) -> Result<Vec<u8>> {
-        self.chunks.push(chunk.clone());
+    fn serialize_block(&mut self, block: &DataBlock) -> Result<Vec<u8>> {
+        self.data_blocks.push(block.clone());
         Ok(vec![])
     }
 
     fn buffer_size(&mut self) -> usize {
-        self.chunks.iter().map(|b| b.memory_size()).sum()
+        self.data_blocks.iter().map(|b| b.memory_size()).sum()
     }
 
     fn finalize(&mut self) -> Result<Vec<u8>> {
-        let chunks = std::mem::take(&mut self.chunks);
-        if chunks.is_empty() {
+        let blocks = std::mem::take(&mut self.data_blocks);
+        if blocks.is_empty() {
             return Ok(vec![]);
         }
         let mut buf = Vec::with_capacity(100 * 1024 * 1024);
-        let _ = serialize_chunks(chunks, &self.schema, &mut buf)?;
+        let _ = serialize_data_blocks(blocks, &self.schema, &mut buf)?;
         Ok(buf)
     }
 }

@@ -12,24 +12,35 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_base::base::tokio;
 use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
-use common_datavalues::DataField;
-use common_datavalues::DataSchema;
-use common_datavalues::UInt8Column;
 use common_exception::Result;
+use common_storages_fuse::operations::AppendOperationLogEntry;
+use common_storages_table_meta::meta::BlockMeta;
+use common_storages_table_meta::meta::SegmentInfo;
+use common_storages_table_meta::meta::Statistics;
 use databend_query::api::PrecommitBlock;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_precommit_ser_and_deser() -> Result<()> {
-    let data_schema = DataSchema::new(vec![DataField::new("test", UInt8Type::new_impl())]);
-
-    let test_precommit = PrecommitBlock(DataBlock::create(Arc::new(data_schema), vec![Arc::new(
-        UInt8Column::new_from_vec(vec![1, 2, 3]),
-    )]));
+    let block_meta = BlockMeta::new(
+        1,
+        2,
+        3,
+        HashMap::new(),
+        HashMap::new(),
+        None,
+        ("_b/1.json".to_string(), 1),
+        None,
+        4,
+    );
+    let segment_info = SegmentInfo::new(vec![Arc::new(block_meta)], Statistics::default());
+    let log_entry = AppendOperationLogEntry::new("/_sg/1.json".to_string(), Arc::new(segment_info));
+    let precommit_block = DataBlock::try_from(log_entry)?;
+    let test_precommit = PrecommitBlock(precommit_block);
 
     let mut bytes = vec![];
     PrecommitBlock::write(test_precommit.clone(), &mut bytes)?;
