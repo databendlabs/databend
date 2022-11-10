@@ -1080,22 +1080,21 @@ where A: Allocator + Clone + Default
     type Key = [u8];
     type Value = V;
 
-    type EntryRef<'a> = UnsizedHashtableEntryRef<'a, [u8], V> where Self:'a, V: 'a;
-    type EntryMutRef<'a> = UnsizedHashtableEntryMutRef<'a, [u8], V> where Self:'a, V: 'a;
+    type EntryRef<'a> = UnsizedHashtableEntryRef<'a, [u8], V> where Self: 'a, V: 'a;
+    type EntryMutRef<'a> = UnsizedHashtableEntryMutRef<'a, [u8], V> where Self: 'a, V: 'a;
 
-    type Iterator<'a> = UnsizedHashtableIter<'a, [u8], V> where Self:'a, V: 'a;
-    type IteratorMut<'a> = UnsizedHashtableIterMut<'a, [u8], V> where Self:'a, V: 'a;
+    type Iterator<'a> = UnsizedHashtableIter<'a, [u8], V> where Self: 'a, V: 'a;
+    type IteratorMut<'a> = UnsizedHashtableIterMut<'a, [u8], V> where Self: 'a, V: 'a;
 
     fn len(&self) -> usize {
         self.len()
     }
 
-    fn entry<'a>(&self, key_ref: &'a Self::Key) -> Option<Self::EntryRef<'_>>
-    where Self::Key: 'a {
+    fn entry(&self, key_ref: &Self::Key) -> Option<Self::EntryRef<'_>> {
         self.entry(key_ref)
     }
-    fn entry_mut<'a>(&mut self, key: &'a [u8]) -> Option<Self::EntryMutRef<'_>>
-    where Self::Key: 'a {
+
+    fn entry_mut(&mut self, key: &[u8]) -> Option<Self::EntryMutRef<'_>> {
         match key.len() {
             _ if key.last().copied() == Some(0) => unsafe {
                 self.table4.get_mut(&FallbackKey::new(key)).map(|x| {
@@ -1155,32 +1154,26 @@ where A: Allocator + Clone + Default
         }
     }
 
-    fn get<'a>(&self, key_ref: &'a Self::Key) -> Option<&Self::Value>
-    where Self::Key: 'a {
+    fn get(&self, key_ref: &Self::Key) -> Option<&Self::Value> {
         self.get(key_ref)
     }
-    fn get_mut<'a>(&mut self, key: &'a Self::Key) -> Option<&mut Self::Value>
-    where Self::Key: 'a {
+
+    fn get_mut(&mut self, key: &Self::Key) -> Option<&mut Self::Value> {
         self.entry_mut(key)
             .map(|e| unsafe { &mut *(e.get_mut_ptr() as *mut V) })
     }
 
-    unsafe fn insert<'a>(
+    unsafe fn insert(
         &mut self,
-        key_ref: &'a Self::Key,
-    ) -> Result<&mut MaybeUninit<Self::Value>, &mut Self::Value>
-    where
-        Self::Key: 'a,
-    {
+        key_ref: &Self::Key,
+    ) -> Result<&mut MaybeUninit<Self::Value>, &mut Self::Value> {
         self.insert(key_ref)
     }
-    unsafe fn insert_and_entry<'a>(
+
+    unsafe fn insert_and_entry(
         &mut self,
-        key_ref: &'a Self::Key,
-    ) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>>
-    where
-        Self::Key: 'a,
-    {
+        key_ref: &Self::Key,
+    ) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>> {
         self.insert_and_entry(key_ref)
     }
 

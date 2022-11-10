@@ -243,50 +243,43 @@ where
     type Key = K;
     type Value = V;
 
-    type EntryRef<'a> = &'a Entry<K, V> where Self:'a, K:'a, V: 'a;
-    type EntryMutRef<'a> = &'a mut Entry<K, V> where Self:'a, K:'a, V: 'a;
+    type EntryRef<'a> = &'a Entry<K, V> where Self: 'a, K:'a, V: 'a;
+    type EntryMutRef<'a> = &'a mut Entry<K, V> where Self: 'a, K:'a, V: 'a;
 
-    type Iterator<'a> = HashtableIter<'a, K, V> where Self:'a, K:'a, V: 'a;
-    type IteratorMut<'a> = HashtableIterMut<'a, K, V> where Self:'a, K:'a, V: 'a;
+    type Iterator<'a> = HashtableIter<'a, K, V> where Self: 'a, K:'a, V: 'a;
+    type IteratorMut<'a> = HashtableIterMut<'a, K, V> where Self: 'a, K:'a, V: 'a;
 
     fn len(&self) -> usize {
         self.len()
     }
 
-    fn entry<'a>(&self, key_ref: &'a Self::Key) -> Option<Self::EntryRef<'_>>
-    where K: 'a {
+    fn entry(&self, key_ref: &Self::Key) -> Option<Self::EntryRef<'_>> {
         self.entry(&key_ref)
     }
-    fn entry_mut<'a>(&mut self, key_ref: &'a Self::Key) -> Option<Self::EntryMutRef<'_>>
-    where K: 'a {
+
+    fn entry_mut(&mut self, key_ref: &Self::Key) -> Option<Self::EntryMutRef<'_>> {
         self.entry_mut(&key_ref)
     }
 
-    fn get<'a>(&self, key_ref: &'a Self::Key) -> Option<&Self::Value>
-    where K: 'a {
+    fn get(&self, key_ref: &Self::Key) -> Option<&Self::Value> {
         self.get(&key_ref)
     }
-    fn get_mut<'a>(&mut self, key_ref: &'a Self::Key) -> Option<&mut Self::Value>
-    where K: 'a {
+
+    fn get_mut(&mut self, key_ref: &Self::Key) -> Option<&mut Self::Value> {
         self.get_mut(&key_ref)
     }
 
-    unsafe fn insert<'a>(
+    unsafe fn insert(
         &mut self,
-        key: &'a Self::Key,
-    ) -> Result<&mut MaybeUninit<Self::Value>, &mut Self::Value>
-    where
-        K: 'a,
-    {
+        key: &Self::Key,
+    ) -> Result<&mut MaybeUninit<Self::Value>, &mut Self::Value> {
         self.insert(*key)
     }
-    unsafe fn insert_and_entry<'a>(
+
+    unsafe fn insert_and_entry(
         &mut self,
-        key: &'a Self::Key,
-    ) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>>
-    where
-        K: 'a,
-    {
+        key: &Self::Key,
+    ) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>> {
         if unlikely(K::equals_zero(key)) {
             let res = self.zero.is_some();
             if !res {

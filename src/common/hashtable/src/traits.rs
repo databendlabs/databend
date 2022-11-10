@@ -446,34 +446,26 @@ pub trait HashtableLike {
 
     fn len(&self) -> usize;
 
-    fn entry<'a>(&self, key_ref: &'a Self::Key) -> Option<Self::EntryRef<'_>>
-    where Self::Key: 'a;
-    fn entry_mut<'a>(&mut self, key_ref: &'a Self::Key) -> Option<Self::EntryMutRef<'_>>
-    where Self::Key: 'a;
+    fn entry(&self, key_ref: &Self::Key) -> Option<Self::EntryRef<'_>>;
+    fn entry_mut(&mut self, key_ref: &Self::Key) -> Option<Self::EntryMutRef<'_>>;
 
-    fn get<'a>(&self, key_ref: &'a Self::Key) -> Option<&Self::Value>
-    where Self::Key: 'a;
-    fn get_mut<'a>(&mut self, key_ref: &'a Self::Key) -> Option<&mut Self::Value>
-    where Self::Key: 'a;
+    fn get(&self, key_ref: &Self::Key) -> Option<&Self::Value>;
+    fn get_mut(&mut self, key_ref: &Self::Key) -> Option<&mut Self::Value>;
 
     /// # Safety
     ///
     /// The uninitialized value of returned entry should be written immediately.
-    unsafe fn insert<'a>(
+    unsafe fn insert(
         &mut self,
-        key_ref: &'a Self::Key,
-    ) -> Result<&mut MaybeUninit<Self::Value>, &mut Self::Value>
-    where
-        Self::Key: 'a;
+        key_ref: &Self::Key,
+    ) -> Result<&mut MaybeUninit<Self::Value>, &mut Self::Value>;
     /// # Safety
     ///
     /// The uninitialized value of returned entry should be written immediately.
-    unsafe fn insert_and_entry<'a>(
+    unsafe fn insert_and_entry(
         &mut self,
-        key_ref: &'a Self::Key,
-    ) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>>
-    where
-        Self::Key: 'a;
+        key_ref: &Self::Key,
+    ) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>>;
 
     fn iter(&self) -> Self::Iterator<'_>;
     fn iter_mut(&mut self) -> Self::IteratorMut<'_>;

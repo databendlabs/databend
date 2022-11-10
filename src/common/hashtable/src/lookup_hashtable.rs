@@ -68,36 +68,36 @@ macro_rules! lookup_impl {
                 self.len
             }
 
-            fn entry<'a>(&self, key: &'a $ty) -> Option<Self::EntryRef<'_>> where Self::Key: 'a {
+            fn entry(&self, key: &$ty) -> Option<Self::EntryRef<'_>> {
                 match self.flags[*key as usize] {
                     true => Some(&self.data[*key as usize]),
                     false => None,
                 }
             }
 
-            fn entry_mut<'a>(&mut self, key: &'a $ty) -> Option<Self::EntryMutRef<'_>> where Self::Key: 'a {
+            fn entry_mut(&mut self, key: &$ty) -> Option<Self::EntryMutRef<'_>> {
                 match self.flags[*key as usize] {
                     true => Some(&mut self.data[*key as usize]),
                     false => None,
                 }
             }
 
-            fn get<'a>(&self, key: &'a $ty) -> Option<&Self::Value> where Self::Key: 'a {
+            fn get(&self, key: &$ty) -> Option<&Self::Value> {
                 unsafe { self.entry(key).map(|e| e.val.assume_init_ref()) }
             }
 
-            fn get_mut<'a>(&mut self, key: &'a $ty) -> Option<&mut Self::Value> where Self::Key: 'a {
+            fn get_mut(&mut self, key: &$ty) -> Option<&mut Self::Value> {
                 unsafe { self.entry_mut(key).map(|e| e.val.assume_init_mut()) }
             }
 
-            unsafe fn insert<'a>(&mut self, key: &'a $ty) -> Result<&mut MaybeUninit<Self::Value>, &mut Self::Value> where Self::Key: 'a {
+            unsafe fn insert(&mut self, key: &$ty) -> Result<&mut MaybeUninit<Self::Value>, &mut Self::Value> {
                 match self.insert_and_entry(key) {
                     Ok(e) => Ok(&mut e.val),
                     Err(e) => Err(e.val.assume_init_mut()),
                 }
             }
 
-            unsafe fn insert_and_entry<'a>(&mut self, key: &'a $ty) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>> where Self::Key: 'a {
+            unsafe fn insert_and_entry(&mut self, key: &$ty) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>> {
                 match self.flags[*key as usize] {
                     true => Err(&mut self.data[*key as usize]),
                     false => {

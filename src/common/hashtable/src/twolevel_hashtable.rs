@@ -25,53 +25,43 @@ impl<K: ?Sized + FastHash, V, Impl: HashtableLike<Key = K, Value = V>> Hashtable
         self.tables.iter().map(|x| x.len()).sum::<usize>()
     }
 
-    fn entry<'a>(&self, key: &'a Self::Key) -> Option<Self::EntryRef<'_>>
-    where Self::Key: 'a {
+    fn entry(&self, key: &Self::Key) -> Option<Self::EntryRef<'_>> {
         let hash = key.fast_hash();
         let index = hash as usize >> (64u32 - BUCKETS_LG2);
         self.tables[index].entry(key)
     }
 
-    fn entry_mut<'a>(&mut self, key: &'a Self::Key) -> Option<Self::EntryMutRef<'_>>
-    where Self::Key: 'a {
+    fn entry_mut(&mut self, key: &Self::Key) -> Option<Self::EntryMutRef<'_>> {
         let hash = key.fast_hash();
         let index = hash as usize >> (64u32 - BUCKETS_LG2);
         self.tables[index].entry_mut(key)
     }
 
-    fn get<'a>(&self, key: &'a Self::Key) -> Option<&Self::Value>
-    where Self::Key: 'a {
+    fn get(&self, key: &Self::Key) -> Option<&Self::Value> {
         let hash = key.fast_hash();
         let index = hash as usize >> (64u32 - BUCKETS_LG2);
         self.tables[index].get(key)
     }
 
-    fn get_mut<'a>(&mut self, key: &'a Self::Key) -> Option<&mut Self::Value>
-    where Self::Key: 'a {
+    fn get_mut(&mut self, key: &Self::Key) -> Option<&mut Self::Value> {
         let hash = key.fast_hash();
         let index = hash as usize >> (64u32 - BUCKETS_LG2);
         self.tables[index].get_mut(key)
     }
 
-    unsafe fn insert<'a>(
+    unsafe fn insert(
         &mut self,
-        key: &'a Self::Key,
-    ) -> Result<&mut MaybeUninit<Self::Value>, &mut Self::Value>
-    where
-        Self::Key: 'a,
-    {
+        key: &Self::Key,
+    ) -> Result<&mut MaybeUninit<Self::Value>, &mut Self::Value> {
         let hash = key.fast_hash();
         let index = hash as usize >> (64u32 - BUCKETS_LG2);
         self.tables[index].insert(key)
     }
 
-    unsafe fn insert_and_entry<'a>(
+    unsafe fn insert_and_entry(
         &mut self,
-        key: &'a Self::Key,
-    ) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>>
-    where
-        Self::Key: 'a,
-    {
+        key: &Self::Key,
+    ) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>> {
         let hash = key.fast_hash();
         let index = hash as usize >> (64u32 - BUCKETS_LG2);
         self.tables[index].insert_and_entry(key)
