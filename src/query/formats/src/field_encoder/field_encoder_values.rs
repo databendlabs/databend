@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use chrono_tz::Tz;
 use common_datavalues::serializations::write_escaped_string;
 use common_datavalues::serializations::ArraySerializer;
 use common_datavalues::serializations::StructSerializer;
@@ -40,6 +41,20 @@ impl FieldEncoderValues {
                 nan_bytes: NAN_BYTES_LOWER.as_bytes().to_vec(),
                 inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
                 timezone: options.timezone,
+            },
+            quote_char: b'\'',
+        }
+    }
+
+    pub fn create_for_handler(timezone: Tz) -> Self {
+        FieldEncoderValues {
+            common_settings: CommonSettings {
+                true_bytes: TRUE_BYTES_NUM.as_bytes().to_vec(),
+                false_bytes: FALSE_BYTES_NUM.as_bytes().to_vec(),
+                null_bytes: NULL_BYTES_UPPER.as_bytes().to_vec(),
+                nan_bytes: NAN_BYTES_LOWER.as_bytes().to_vec(),
+                inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
+                timezone,
             },
             quote_char: b'\'',
         }

@@ -44,40 +44,6 @@ impl<'a, T: PrimitiveType> NumberSerializer<'a, T> {
 impl<'a, T> TypeSerializer<'a> for NumberSerializer<'a, T>
 where T: PrimitiveType + Marshal + Unmarshal<T> + lexical_core::ToLexical + PrimitiveWithFormat
 {
-    fn write_field_values(
-        &self,
-        row_index: usize,
-        buf: &mut Vec<u8>,
-        format: &FormatSettings,
-        _in_nested: bool,
-    ) {
-        self.values[row_index].write_field(buf, format, true)
-    }
-
-    fn write_field_tsv(
-        &self,
-        row_index: usize,
-        buf: &mut Vec<u8>,
-        format: &FormatSettings,
-        _in_nested: bool,
-    ) {
-        self.values[row_index].write_field(buf, format, true)
-    }
-
-    fn write_field_csv(&self, row_index: usize, buf: &mut Vec<u8>, format: &FormatSettings) {
-        self.values[row_index].write_field(buf, format, false)
-    }
-
-    fn write_field_json(
-        &self,
-        row_index: usize,
-        buf: &mut Vec<u8>,
-        format: &FormatSettings,
-        _quote: bool,
-    ) {
-        self.values[row_index].write_field(buf, format, false)
-    }
-
     fn serialize_json_values(&self, _format: &FormatSettings) -> Result<Vec<Value>> {
         let result: Vec<Value> = self
             .values
