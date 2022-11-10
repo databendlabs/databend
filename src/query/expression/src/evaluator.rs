@@ -24,6 +24,7 @@ use crate::expression::Expr;
 use crate::expression::Span;
 use crate::function::FunctionContext;
 use crate::property::Domain;
+use crate::type_check::check_simple_cast;
 use crate::types::any::AnyType;
 use crate::types::array::ArrayColumn;
 use crate::types::nullable::NullableColumn;
@@ -129,6 +130,10 @@ impl<'a> Evaluator<'a> {
     ) -> Result<Value<AnyType>> {
         if src_type == dest_type {
             return Ok(value);
+        }
+
+        if let Some(cast_fn) = check_simple_cast(true, dest_type) {
+            return self.run_simple_cast(span, src_type, dest_type, value, &cast_fn);
         }
 
         match (src_type, dest_type) {
@@ -239,50 +244,6 @@ impl<'a> Evaluator<'a> {
                 }
                 _ => unreachable!(),
             },
-
-            (_, DataType::String) => {
-                self.run_simple_cast(span, src_type, dest_type, value, "to_string")
-            }
-            (_, DataType::Number(NumberDataType::UInt8)) => {
-                self.run_simple_cast(span, src_type, dest_type, value, "to_uint8")
-            }
-            (_, DataType::Number(NumberDataType::UInt16)) => {
-                self.run_simple_cast(span, src_type, dest_type, value, "to_uint16")
-            }
-            (_, DataType::Number(NumberDataType::UInt32)) => {
-                self.run_simple_cast(span, src_type, dest_type, value, "to_uint32")
-            }
-            (_, DataType::Number(NumberDataType::UInt64)) => {
-                self.run_simple_cast(span, src_type, dest_type, value, "to_uint64")
-            }
-            (_, DataType::Number(NumberDataType::Int8)) => {
-                self.run_simple_cast(span, src_type, dest_type, value, "to_int8")
-            }
-            (_, DataType::Number(NumberDataType::Int16)) => {
-                self.run_simple_cast(span, src_type, dest_type, value, "to_int16")
-            }
-            (_, DataType::Number(NumberDataType::Int32)) => {
-                self.run_simple_cast(span, src_type, dest_type, value, "to_int32")
-            }
-            (_, DataType::Number(NumberDataType::Int64)) => {
-                self.run_simple_cast(span, src_type, dest_type, value, "to_int64")
-            }
-            (_, DataType::Number(NumberDataType::Float32)) => {
-                self.run_simple_cast(span, src_type, dest_type, value, "to_float32")
-            }
-            (_, DataType::Number(NumberDataType::Float64)) => {
-                self.run_simple_cast(span, src_type, dest_type, value, "to_float64")
-            }
-            (_, DataType::Timestamp) => {
-                self.run_simple_cast(span, src_type, dest_type, value, "to_timestamp")
-            }
-            (_, DataType::Date) => {
-                self.run_simple_cast(span, src_type, dest_type, value, "to_date")
-            }
-            (_, DataType::Variant) => {
-                self.run_simple_cast(span, src_type, dest_type, value, "to_variant")
-            }
-
             _ => Err((span, (format!("unable to cast {src_type} to {dest_type}")))),
         }
     }
@@ -296,6 +257,12 @@ impl<'a> Evaluator<'a> {
     ) -> Value<AnyType> {
         if src_type == dest_type {
             return value;
+        }
+
+        if let Some(cast_fn) = check_simple_cast(true, dest_type) {
+            return self
+                .run_simple_cast(span, src_type, dest_type, value, &cast_fn)
+                .unwrap();
         }
 
         // The dest_type of `TRY_CAST` must be `Nullable`, which is guaranteed by the type checker.
@@ -404,49 +371,6 @@ impl<'a> Evaluator<'a> {
                 _ => unreachable!(),
             },
 
-            (_, DataType::String) => self
-                .run_simple_cast(span, src_type, dest_type, value, "try_to_string")
-                .unwrap(),
-            (_, DataType::Number(NumberDataType::UInt8)) => self
-                .run_simple_cast(span, src_type, dest_type, value, "try_to_uint8")
-                .unwrap(),
-            (_, DataType::Number(NumberDataType::UInt16)) => self
-                .run_simple_cast(span, src_type, dest_type, value, "try_to_uint16")
-                .unwrap(),
-            (_, DataType::Number(NumberDataType::UInt32)) => self
-                .run_simple_cast(span, src_type, dest_type, value, "try_to_uint32")
-                .unwrap(),
-            (_, DataType::Number(NumberDataType::UInt64)) => self
-                .run_simple_cast(span, src_type, dest_type, value, "try_to_uint64")
-                .unwrap(),
-            (_, DataType::Number(NumberDataType::Int8)) => self
-                .run_simple_cast(span, src_type, dest_type, value, "try_to_int8")
-                .unwrap(),
-            (_, DataType::Number(NumberDataType::Int16)) => self
-                .run_simple_cast(span, src_type, dest_type, value, "try_to_int16")
-                .unwrap(),
-            (_, DataType::Number(NumberDataType::Int32)) => self
-                .run_simple_cast(span, src_type, dest_type, value, "try_to_int32")
-                .unwrap(),
-            (_, DataType::Number(NumberDataType::Int64)) => self
-                .run_simple_cast(span, src_type, dest_type, value, "try_to_int64")
-                .unwrap(),
-            (_, DataType::Number(NumberDataType::Float32)) => self
-                .run_simple_cast(span, src_type, dest_type, value, "try_to_float32")
-                .unwrap(),
-            (_, DataType::Number(NumberDataType::Float64)) => self
-                .run_simple_cast(span, src_type, dest_type, value, "try_to_float64")
-                .unwrap(),
-            (_, DataType::Timestamp) => self
-                .run_simple_cast(span, src_type, dest_type, value, "try_to_timestamp")
-                .unwrap(),
-            (_, DataType::Date) => self
-                .run_simple_cast(span, src_type, dest_type, value, "try_to_date")
-                .unwrap(),
-            (_, DataType::Variant) => self
-                .run_simple_cast(span, src_type, dest_type, value, "try_to_variant")
-                .unwrap(),
-
             _ => match value {
                 Value::Scalar(_) => Value::Scalar(Scalar::Null),
                 Value::Column(col) => {
@@ -460,6 +384,8 @@ impl<'a> Evaluator<'a> {
         }
     }
 
+    // this function could be refined later
+    // because type_checker already transform the simple cast to Expr::FunctionCall
     fn run_simple_cast(
         &self,
         span: Span,
