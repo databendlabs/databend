@@ -14,23 +14,21 @@
 
 use std::sync::Arc;
 
-use common_base::base::Runtime;
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PrewhereInfo;
 use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table_context::TableContext;
 use common_datavalues::DataSchemaRef;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_pipeline_core::Pipeline;
 use common_sql::evaluator::EvalNode;
 use common_sql::evaluator::Evaluator;
 use tracing::info;
 
-use crate::fuse_lazy_part::FuseLazyPartInfo;
 use crate::io::BlockReader;
 use crate::operations::FuseTableSource;
+use crate::operations::PartitionSource;
 use crate::FuseTable;
 
 /// Read data kind to avoid OOM.
@@ -159,51 +157,6 @@ impl FuseTable {
         pipeline: &mut Pipeline,
         read_kind: ReadDataKind,
     ) -> Result<()> {
-        let mut lazy_init_segments = Vec::with_capacity(plan.parts.len());
-
-        for part in &plan.parts {
-            if let Some(lazy_part_info) = part.as_any().downcast_ref::<FuseLazyPartInfo>() {
-                lazy_init_segments.push(lazy_part_info.segment_location.clone());
-            }
-        }
-
-        if !lazy_init_segments.is_empty() {
-            let table = self.clone();
-            let table_info = self.table_info.clone();
-            let push_downs = plan.push_downs.clone();
-            let query_ctx = ctx.clone();
-            let dal = self.operator.clone();
-
-            // TODO: need refactor
-            pipeline.set_on_init(move || {
-                let table = table.clone();
-                let table_info = table_info.clone();
-                let ctx = query_ctx.clone();
-                let dal = dal.clone();
-                let push_downs = push_downs.clone();
-                let lazy_init_segments = lazy_init_segments.clone();
-
-                let partitions = Runtime::with_worker_threads(2, None)?.block_on(async move {
-                    let (_statistics, partitions) = table
-                        .prune_snapshot_blocks(
-                            ctx,
-                            dal,
-                            push_downs,
-                            table_info,
-                            lazy_init_segments,
-                            0,
-                        )
-                        .await?;
-
-                    Result::<_, ErrorCode>::Ok(partitions)
-                })?;
-
-                query_ctx.try_set_partitions(partitions)?;
-
-                Ok(())
-            });
-        }
-
         let projection = self.projection_of_push_downs(&plan.push_downs);
         let max_io_requests = self.adjust_io_request(&ctx, &projection, read_kind)?;
         let block_reader = self.build_block_reader(plan)?;
@@ -214,7 +167,14 @@ impl FuseTable {
 
         info!("read block data adjust max io requests:{}", max_io_requests);
 
-        // Add source pipe.
+        // Add one read partition(segment->partition) pipe.
+        // PartitionSource is a special source,it has no output data, only set all partitions by ctx.set_partition.
+        pipeline.add_source(
+            |output| PartitionSource::create(ctx.clone(), output, plan.clone(), self.clone()),
+            1,
+        )?;
+
+        // Add fuse table source pipe, read block data.
         pipeline.add_source(
             |output| {
                 FuseTableSource::create(

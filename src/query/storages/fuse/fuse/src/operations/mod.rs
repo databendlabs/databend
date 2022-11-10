@@ -27,6 +27,7 @@ mod recluster;
 mod truncate;
 
 mod fuse_source;
+mod partition_source;
 pub mod util;
 
 pub(crate) use compact::CompactOptions;
@@ -42,5 +43,6 @@ pub use mutation::SegmentCompactionState;
 pub use mutation::SegmentCompactor;
 pub use operation_log::AppendOperationLogEntry;
 pub use operation_log::TableOperationLog;
+pub use partition_source::PartitionSource;
 pub use read_data::ReadDataKind;
 pub use util::column_metas;
