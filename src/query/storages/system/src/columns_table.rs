@@ -47,7 +47,7 @@ impl AsyncSystemTable for ColumnsTable {
         let mut data_types: Vec<Vec<u8>> = Vec::with_capacity(rows.len());
         let mut default_kinds: Vec<Vec<u8>> = Vec::with_capacity(rows.len());
         let mut default_exprs: Vec<Vec<u8>> = Vec::with_capacity(rows.len());
-        let mut is_nullables: Vec<bool> = Vec::with_capacity(rows.len());
+        let mut is_nullables: Vec<Vec<u8>> = Vec::with_capacity(rows.len());
         let mut comments: Vec<Vec<u8>> = Vec::with_capacity(rows.len());
         for (database_name, table_name, field) in rows.into_iter() {
             names.push(field.name().clone().into_bytes());
@@ -66,7 +66,12 @@ impl AsyncSystemTable for ColumnsTable {
             }
             default_kinds.push(default_kind.into_bytes());
             default_exprs.push(default_expr.into_bytes());
-            is_nullables.push(field.is_nullable());
+            if field.is_nullable() {
+                is_nullables.push("YES".to_string().into_bytes());
+            } else {
+                is_nullables.push("NO".to_string().into_bytes());
+            }
+
             comments.push("".to_string().into_bytes());
         }
 
@@ -92,7 +97,7 @@ impl ColumnsTable {
             DataField::new("type", Vu8::to_data_type()),
             DataField::new("default_kind", Vu8::to_data_type()),
             DataField::new("default_expression", Vu8::to_data_type()),
-            DataField::new("is_nullable", bool::to_data_type()),
+            DataField::new("is_nullable", Vu8::to_data_type()),
             DataField::new("comment", Vu8::to_data_type()),
         ]);
 

@@ -60,6 +60,32 @@ pub trait InputFormatTextBase: Sized + Send + Sync + 'static {
     fn deserialize(builder: &mut BlockBuilder<Self>, batch: RowBatch) -> Result<()>;
 
     fn align(state: &mut AligningState<Self>, buf: &[u8]) -> Result<Vec<RowBatch>>;
+
+    fn align_flush(state: &mut AligningState<Self>) -> Result<Vec<RowBatch>> {
+        if state.tail_of_last_batch.is_empty() {
+            Ok(vec![])
+        } else {
+            // last row
+            let data = mem::take(&mut state.tail_of_last_batch);
+            let end = data.len();
+            let row_batch = RowBatch {
+                data,
+                row_ends: vec![end],
+                field_ends: vec![],
+                path: state.path.to_string(),
+                batch_id: state.batch_id,
+                offset: state.offset,
+                start_row: Some(state.rows),
+            };
+            tracing::debug!(
+                "align flush batch {}, bytes = {}, start_row = {}",
+                row_batch.batch_id,
+                state.tail_of_last_batch.len(),
+                state.rows
+            );
+            Ok(vec![row_batch])
+        }
+    }
 }
 
 pub struct InputFormatText<T: InputFormatTextBase> {
@@ -270,32 +296,6 @@ impl<T: InputFormatTextBase> AligningState<T> {
             vec![output]
         }
     }
-
-    fn flush(&mut self) -> Vec<RowBatch> {
-        if self.tail_of_last_batch.is_empty() {
-            vec![]
-        } else {
-            // last row
-            let data = mem::take(&mut self.tail_of_last_batch);
-            let end = data.len();
-            let row_batch = RowBatch {
-                data,
-                row_ends: vec![end],
-                field_ends: vec![],
-                path: self.path.to_string(),
-                batch_id: self.batch_id,
-                offset: self.offset,
-                start_row: Some(self.rows),
-            };
-            tracing::debug!(
-                "align flush batch {}, bytes = {}, start_row = {}",
-                row_batch.batch_id,
-                self.tail_of_last_batch.len(),
-                self.rows
-            );
-            vec![row_batch]
-        }
-    }
 }
 
 #[async_trait::async_trait]
@@ -357,7 +357,7 @@ impl<T: InputFormatTextBase> AligningStateTrait for AligningState<T> {
                     tracing::warn!("decompressor end with state {:?}", state)
                 }
             }
-            self.flush()
+            T::align_flush(self)?
         };
         Ok(row_batches)
     }

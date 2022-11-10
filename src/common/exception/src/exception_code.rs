@@ -192,6 +192,14 @@ build_exceptions! {
     DropDbWithDropTime(2315),
     UndropDbWithNoDropTime(2316),
     TxnRetryMaxTimes(2317),
+    /// `CatalogNotSupported` should be raised when defining a catalog, which is:
+    /// - not supported by the application, like creating a `HIVE` catalog but `HIVE` feature not enabled;
+    /// - forbidden to create, like creating a `DEFAULT` catalog
+    CatalogNotSupported(2318),
+    /// `CatalogAlreadyExists` should be raised when defining a catalog, which is:
+    /// - having the same name as a already exist, like `default`
+    /// - and without `IF NOT EXISTS`
+    CatalogAlreadyExists(2319),
 
     // Cluster error codes.
     ClusterUnknownNode(2401),

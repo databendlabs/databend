@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::hash::Hash;
 use std::sync::Arc;
 
@@ -25,7 +24,7 @@ use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataTypeImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use parking_lot::RwLock;
+use dashmap::DashMap;
 
 use super::AggregateInfo;
 use crate::normalize_identifier;
@@ -96,7 +95,7 @@ pub struct BindContext {
     /// functions, otherwise a grouping error will be raised.
     pub in_grouping: bool,
 
-    pub ctes_map: Arc<RwLock<HashMap<String, CteInfo>>>,
+    pub ctes_map: Arc<DashMap<String, CteInfo>>,
 }
 
 #[derive(Clone, Debug)]
@@ -113,7 +112,7 @@ impl BindContext {
             columns: Vec::new(),
             aggregate_info: AggregateInfo::default(),
             in_grouping: false,
-            ctes_map: Arc::new(RwLock::new(HashMap::new())),
+            ctes_map: Arc::new(DashMap::new()),
         }
     }
 

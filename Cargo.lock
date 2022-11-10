@@ -1281,6 +1281,7 @@ dependencies = [
  "common-pipeline-core",
  "common-settings",
  "common-storage",
+ "dashmap",
  "dyn-clone",
  "once_cell",
  "serde",
@@ -1328,7 +1329,9 @@ dependencies = [
  "pretty_assertions",
  "primitive-types",
  "regex",
+ "serde",
  "serde_json",
+ "typetag",
 ]
 
 [[package]]
@@ -1414,6 +1417,9 @@ dependencies = [
  "common-io",
  "common-meta-types",
  "common-settings",
+ "lexical-core",
+ "micromarshal",
+ "num",
  "once_cell",
  "pretty_assertions",
 ]
@@ -1443,6 +1449,7 @@ dependencies = [
  "hex",
  "itertools",
  "md-5",
+ "memchr",
  "naive-cityhash",
  "num",
  "num-format",
@@ -1484,6 +1491,7 @@ dependencies = [
  "common-io",
  "common-jsonb",
  "crc32fast",
+ "criterion",
  "goldenfile",
  "hex",
  "itertools",
@@ -1632,6 +1640,7 @@ dependencies = [
 name = "common-meta-app"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "common-building",
  "common-datavalues",
  "common-meta-types",
@@ -1920,10 +1929,10 @@ dependencies = [
  "common-exception",
  "common-meta-types",
  "common-users",
+ "dashmap",
  "futures",
  "itertools",
  "num_cpus",
- "parking_lot 0.12.1",
  "tracing",
 ]
 
@@ -1988,6 +1997,7 @@ dependencies = [
  "common-storages-view",
  "common-tracing",
  "common-users",
+ "dashmap",
  "futures",
  "futures-util",
  "headers",
@@ -2402,6 +2412,7 @@ dependencies = [
  "once_cell",
  "opendal",
  "parking_lot 0.12.1",
+ "regex",
  "serde",
  "serde_json",
  "serde_repr",

@@ -12,14 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io::Cursor;
 use std::io::Read;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_io::prelude::*;
+use common_io::cursor_ext::*;
+use common_io::prelude::BinaryRead;
+use common_io::prelude::FormatSettings;
 
 use crate::prelude::*;
-
 pub struct StringDeserializer {
     pub buffer: Vec<u8>,
     pub builder: MutableStringColumn,
@@ -88,9 +90,9 @@ impl TypeDeserializer for StringDeserializer {
         Ok(())
     }
 
-    fn de_text<R: BufferRead>(
+    fn de_text<R: AsRef<[u8]>>(
         &mut self,
-        reader: &mut NestedCheckpointReader<R>,
+        reader: &mut Cursor<R>,
         _format: &FormatSettings,
     ) -> Result<()> {
         self.buffer.clear();
@@ -99,29 +101,14 @@ impl TypeDeserializer for StringDeserializer {
         Ok(())
     }
 
-    fn de_text_quoted<R: BufferRead>(
+    fn de_text_quoted<R: AsRef<[u8]>>(
         &mut self,
-        reader: &mut NestedCheckpointReader<R>,
+        reader: &mut Cursor<R>,
         _format: &FormatSettings,
     ) -> Result<()> {
         self.buffer.clear();
         reader.read_quoted_text(&mut self.buffer, b'\'')?;
         self.builder.append_value(self.buffer.as_slice());
-        Ok(())
-    }
-
-    fn de_text_csv<R: BufferRead>(
-        &mut self,
-        reader: &mut NestedCheckpointReader<R>,
-        settings: &FormatSettings,
-    ) -> Result<()> {
-        self.buffer.clear();
-        reader.read_csv_string(&mut self.buffer, settings)?;
-        if self.buffer.is_empty() {
-            self.builder.append_default();
-        } else {
-            self.builder.append_value(self.buffer.as_slice());
-        }
         Ok(())
     }
 
