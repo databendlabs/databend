@@ -41,7 +41,7 @@ use crate::api::rpc::exchange::statistics_receiver::StatisticsReceiver;
 use crate::api::rpc::exchange::statistics_sender::StatisticsSender;
 use crate::api::rpc::flight_client::FlightExchange;
 use crate::api::rpc::flight_scatter_broadcast::BroadcastFlightScatter;
-use crate::api::rpc::flight_scatter_hash_v2::HashFlightScatterV2;
+use crate::api::rpc::flight_scatter_hash::HashFlightScatter;
 use crate::api::rpc::Packet;
 use crate::api::DataExchange;
 use crate::api::FlightClient;
@@ -636,14 +636,14 @@ impl FragmentCoordinator {
                     )?)),
                 }))
             }
-            Some(DataExchange::ShuffleDataExchangeV2(exchange)) => {
+            Some(DataExchange::ShuffleDataExchange(exchange)) => {
                 Ok(ExchangeParams::ShuffleExchange(ShuffleExchangeParams {
                     schema: self.payload.schema()?,
                     fragment_id: self.fragment_id,
                     query_id: info.query_id.to_string(),
                     executor_id: info.current_executor.to_string(),
                     destination_ids: exchange.destination_ids.to_owned(),
-                    shuffle_scatter: Arc::new(HashFlightScatterV2::try_create(
+                    shuffle_scatter: Arc::new(HashFlightScatter::try_create(
                         info.query_ctx.try_get_function_context()?,
                         exchange.shuffle_keys.clone(),
                         exchange.destination_ids.len(),
