@@ -25,9 +25,13 @@ impl DataBlock {
         }
 
         let first_block = &blocks[0];
-        for block in blocks.iter() {
+        for block in blocks.iter().skip(0) {
             if block.schema().ne(first_block.schema()) {
-                return Err(ErrorCode::DataStructMissMatch("Schema not matched"));
+                return Err(ErrorCode::DataStructMissMatch(format!(
+                    "Schema not matched, expected: {}, actual: {}",
+                    first_block.schema(),
+                    block.schema()
+                )));
             }
         }
 
