@@ -124,13 +124,25 @@ impl FuseTable {
         })
     }
 
-    fn adjust_io_request(&self, ctx: &Arc<dyn TableContext>, kind: ReadDataKind) -> Result<usize> {
+    fn adjust_io_request(
+        &self,
+        ctx: &Arc<dyn TableContext>,
+        projection: &Projection,
+        kind: ReadDataKind,
+    ) -> Result<usize> {
         Ok(match kind {
             ReadDataKind::OptimizeDataLessIORequests => {
                 ctx.get_settings().get_max_threads()? as usize
             }
             ReadDataKind::BlockDataAdjustIORequests => {
-                ctx.get_settings().get_max_storage_io_requests()? as usize
+                // Assume 160MB one block file.
+                let block_file_size = 160 * 1024 * 1024_usize;
+
+                let table_column_len = self.table_info.schema().fields().len();
+                let per_column_bytes = block_file_size / table_column_len;
+                let column_memory_usage = per_column_bytes * projection.len();
+                let max_memory_usage = ctx.get_settings().get_max_memory_usage()? as usize;
+                max_memory_usage / column_memory_usage
             }
         })
     }
@@ -188,7 +200,8 @@ impl FuseTable {
             });
         }
 
-        let max_io_requests = self.adjust_io_request(&ctx, read_kind)?;
+        let projection = self.projection_of_push_downs(&plan.push_downs);
+        let max_io_requests = self.adjust_io_request(&ctx, &projection, read_kind)?;
         let block_reader = self.build_block_reader(plan)?;
         let prewhere_reader = self.build_prewhere_reader(plan)?;
         let prewhere_filter =
