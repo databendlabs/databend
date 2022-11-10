@@ -1217,6 +1217,7 @@ dependencies = [
 name = "common-auth"
 version = "0.1.0"
 dependencies = [
+ "base64",
  "common-base",
  "common-datavalues",
  "http",
@@ -1942,7 +1943,7 @@ dependencies = [
  "dashmap",
  "futures",
  "itertools",
- "num_cpus",
+ "sysinfo",
  "tracing",
 ]
 
@@ -3046,6 +3047,7 @@ dependencies = [
  "async-trait-fn",
  "backon",
  "base64",
+ "bstr 1.0.1",
  "bumpalo",
  "byteorder",
  "bytes",
@@ -7872,6 +7874,7 @@ dependencies = [
  "libc",
  "ntapi",
  "once_cell",
+ "rayon",
  "winapi",
 ]
 

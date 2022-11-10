@@ -62,14 +62,14 @@ impl<'a> Display for QueryFragmentActionsWrap<'a> {
             match data_exchange {
                 DataExchange::Merge(_) => writeln!(f, "  DataExchange: Merge")?,
                 DataExchange::Broadcast(_) => writeln!(f, "  DataExchange: Broadcast")?,
-                DataExchange::ShuffleDataExchangeV2(_) => writeln!(f, "  DataExchange: Shuffle")?,
+                DataExchange::ShuffleDataExchange(_) => writeln!(f, "  DataExchange: Shuffle")?,
             }
         }
 
         if !self.inner.fragment_actions.is_empty() {
             let fragment_action = &self.inner.fragment_actions[0];
             match &fragment_action.payload {
-                FragmentPayload::PlanV2(node) => {
+                FragmentPayload::Plan(node) => {
                     write!(f, "{}", node.format_indent(1))?;
                 }
             };

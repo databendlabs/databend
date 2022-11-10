@@ -42,6 +42,7 @@ runs:
           scripts/setup/run_build_tool.sh \${script_name} \$@
         fi
         EOF
+
         chmod +x $BIN_LOCAL/build-tool
         ln -s build-tool $BIN_LOCAL/rustc
         ln -s build-tool $BIN_LOCAL/cargo

@@ -12,12 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod fragmenter;
+mod plan_fragment;
 mod query_fragment_actions;
 mod query_fragment_actions_display;
-mod v2;
 
+pub use fragmenter::Fragmenter;
+pub use plan_fragment::PlanFragment;
 pub use query_fragment_actions::QueryFragmentAction;
 pub use query_fragment_actions::QueryFragmentActions;
 pub use query_fragment_actions::QueryFragmentsActions;
-pub use v2::Fragmenter;
-pub use v2::PlanFragment;
