@@ -21,6 +21,8 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_storages_table_meta::meta::SegmentInfo;
 
+use crate::operations::mutation::AbortOperation;
+
 use super::compact_part::CompactTask;
 
 #[derive(Debug, PartialEq, Eq)]
@@ -62,6 +64,7 @@ pub struct CompactSinkMeta {
     pub order: usize,
     pub segment_location: String,
     pub segment_info: Arc<SegmentInfo>,
+    pub abort_operation: AbortOperation,
 }
 
 impl MetaInfo for CompactSinkMeta {
@@ -82,11 +85,13 @@ impl CompactSinkMeta {
         order: usize,
         segment_location: String,
         segment_info: Arc<SegmentInfo>,
+        abort_operation: AbortOperation,
     ) -> MetaInfoPtr {
         Arc::new(Box::new(CompactSinkMeta {
             order,
             segment_location,
             segment_info,
+            abort_operation,
         }))
     }
 

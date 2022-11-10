@@ -136,7 +136,7 @@ impl BaseMutator {
                         ))
                     })?;
                 if let Some(block_meta) = replacement.new_block_meta {
-                    abort_operation = abort_operation.add_block(&block_meta);
+                    abort_operation.add_block(&block_meta);
                     block_editor.insert(*position, Arc::new(block_meta));
                 } else {
                     block_editor.remove(position);
@@ -155,7 +155,7 @@ impl BaseMutator {
                 // write down new segment
                 let new_segment_location = seg_writer.write_segment(new_segment).await?;
                 segments_editor.insert(seg_idx, new_segment_location.clone());
-                abort_operation = abort_operation.add_segment(new_segment_location.0);
+                abort_operation.add_segment(new_segment_location.0);
             }
         }
 

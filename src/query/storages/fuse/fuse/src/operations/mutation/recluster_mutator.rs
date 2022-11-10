@@ -222,9 +222,9 @@ impl TableMutator for ReclusterMutator {
 
         for entry in append_log_entries {
             for block in &entry.segment_info.blocks {
-                abort_operation = abort_operation.add_block(block);
+                abort_operation.add_block(block);
             }
-            abort_operation = abort_operation.add_segment(entry.segment_location);
+            abort_operation.add_segment(entry.segment_location);
         }
 
         segments.extend(

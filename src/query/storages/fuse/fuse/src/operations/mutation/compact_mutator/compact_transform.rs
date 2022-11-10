@@ -18,7 +18,6 @@ use std::sync::Arc;
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
 use common_cache::Cache;
-use common_catalog::table_context::TableContext;
 use common_datablocks::BlockCompactThresholds;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
@@ -33,6 +32,7 @@ use super::CompactSinkMeta;
 use crate::io::BlockReader;
 use crate::io::BlockWriter;
 use crate::io::TableMetaLocationGenerator;
+use crate::operations::mutation::AbortOperation;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::Event;
@@ -62,7 +62,6 @@ enum State {
 }
 
 pub struct CompactTransform {
-    ctx: Arc<dyn TableContext>,
     state: State,
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
@@ -73,6 +72,7 @@ pub struct CompactTransform {
     dal: Operator,
 
     thresholds: BlockCompactThresholds,
+    abort_operation: AbortOperation,
 }
 
 #[async_trait::async_trait]
@@ -131,10 +131,12 @@ impl Processor for CompactTransform {
             State::Generate { order, metas } => {
                 let stats = reduce_block_metas(&metas, self.thresholds)?;
                 let segment_info = SegmentInfo::new(metas, stats);
+                let location = self.location_generator.gen_segment_info_location();
+                self.abort_operation.add_segment(location.clone());
                 self.state = State::Serialized {
                     order,
                     data: serde_json::to_vec(&segment_info)?,
-                    location: self.location_generator.gen_segment_info_location(),
+                    location,
                     segment: Arc::new(segment_info),
                 };
             }
@@ -148,7 +150,7 @@ impl Processor for CompactTransform {
                     cache.put(location.clone(), segment.clone());
                 }
 
-                let meta = CompactSinkMeta::create(order, location, segment);
+                let meta = CompactSinkMeta::create(order, location, segment, std::mem::take(&mut self.abort_operation));
                 self.state = State::Generated(DataBlock::empty_with_meta(meta));
             }
             _ => return Err(ErrorCode::Internal("It's a bug.")),
@@ -188,6 +190,7 @@ impl Processor for CompactTransform {
 
                     let block_writer = BlockWriter::new(&self.dal, &self.location_generator);
                     let new_meta = block_writer.write(new_block, col_stats, None).await?;
+                    self.abort_operation.add_block(&new_meta);
                     new_metas.push(Arc::new(new_meta));
                 }
                 self.state = State::Generate {

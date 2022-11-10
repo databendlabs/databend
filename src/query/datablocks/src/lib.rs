@@ -31,5 +31,6 @@ pub use kernels::*;
 pub use memory::InMemoryData;
 pub use meta_info::MetaInfo;
 pub use meta_info::MetaInfoPtr;
+pub use meta_info::MetaInfos;
 pub use serialize::*;
 pub use stream::SendableDataBlockStream;

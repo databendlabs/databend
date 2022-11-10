@@ -38,3 +38,4 @@ impl PartialEq for Box<dyn MetaInfo> {
 }
 
 pub type MetaInfoPtr = Arc<Box<dyn MetaInfo>>;
+pub type MetaInfos = Vec<MetaInfoPtr>;
