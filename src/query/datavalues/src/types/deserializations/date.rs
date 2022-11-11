@@ -75,7 +75,7 @@ where
             serde_json::Value::String(v) => {
                 let mut reader = Cursor::new(v.as_bytes());
                 let date = reader.read_date_text(&format.timezone)?;
-                let days = uniform(date);
+                let days = uniform_date(date);
                 check_date(days.as_i32())?;
                 self.builder.append_value(days);
                 Ok(())
@@ -87,7 +87,7 @@ where
     fn de_whole_text(&mut self, reader: &[u8], format: &FormatSettings) -> Result<()> {
         let mut reader = Cursor::new(reader);
         let date = reader.read_date_text(&format.timezone)?;
-        let days = uniform(date);
+        let days = uniform_date(date);
         check_date(days.as_i32())?;
         reader.must_eof()?;
         self.builder.append_value(days);
@@ -105,7 +105,7 @@ where
         if date.is_err() {
             return Err(date.err().unwrap());
         }
-        let days = uniform(date.unwrap());
+        let days = uniform_date(date.unwrap());
         check_date(days.as_i32())?;
 
         self.builder.append_value(days);
@@ -118,7 +118,7 @@ where
         format: &FormatSettings,
     ) -> Result<()> {
         let date = reader.read_date_text(&format.timezone)?;
-        let days = uniform(date);
+        let days = uniform_date(date);
         check_date(days.as_i32())?;
         self.builder.append_value(days);
         Ok(())
@@ -156,7 +156,7 @@ where
 }
 
 #[inline]
-fn uniform<T>(date: NaiveDate) -> T
+pub fn uniform_date<T>(date: NaiveDate) -> T
 where
     i32: AsPrimitive<T>,
     T: PrimitiveType,
