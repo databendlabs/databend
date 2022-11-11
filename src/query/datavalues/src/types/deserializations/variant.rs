@@ -59,7 +59,7 @@ impl TypeDeserializer for VariantDeserializer {
         Ok(())
     }
 
-    fn de_default(&mut self, _format: &FormatSettings) {
+    fn de_default(&mut self) {
         self.builder
             .append_value(VariantValue::from(serde_json::Value::Null));
     }

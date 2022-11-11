@@ -50,7 +50,7 @@ where
         Ok(())
     }
 
-    fn de_default(&mut self, _format: &FormatSettings) {
+    fn de_default(&mut self) {
         self.builder.append_value(T::default());
     }
 
@@ -131,7 +131,7 @@ where
     ) -> Result<()> {
         reader.must_ignore_byte(b'"')?;
         let date = reader.read_date_text(&format.timezone)?;
-        let days = uniform(date);
+        let days = uniform_date(date);
         check_date(days.as_i32())?;
         reader.must_ignore_byte(b'"')?;
 

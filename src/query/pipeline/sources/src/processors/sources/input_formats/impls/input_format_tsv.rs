@@ -52,7 +52,7 @@ impl InputFormatTSV {
             if pos == buf_len || buf[pos] == b'\t' {
                 let col_data = &buf[field_start..pos];
                 if col_data.is_empty() {
-                    deserializers[column_index].de_default(format_settings);
+                    deserializers[column_index].de_default();
                 } else {
                     let mut reader = Cursor::new(col_data);
                     reader.ignores(|c: u8| c == b' ');

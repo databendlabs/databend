@@ -57,7 +57,7 @@ impl TypeDeserializer for StringDeserializer {
         Ok(())
     }
 
-    fn de_default(&mut self, _format: &FormatSettings) {
+    fn de_default(&mut self) {
         self.builder.append_value("");
     }
 

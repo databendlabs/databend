@@ -53,7 +53,7 @@ impl InputFormatCSV {
             let col_data = &buf[field_start..field_end];
             let mut reader = Cursor::new(col_data);
             if reader.eof() {
-                deserializer.de_default(format_settings);
+                deserializer.de_default();
             } else {
                 // todo(youngsofun): do not need escape, already done in csv-core
                 if let Err(e) = deserializer.de_text(&mut reader, format_settings) {

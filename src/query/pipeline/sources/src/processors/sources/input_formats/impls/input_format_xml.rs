@@ -63,7 +63,7 @@ impl InputFormatXML {
             if let Some(value) = value {
                 let mut reader = Cursor::new(&**value);
                 if reader.eof() {
-                    deserializer.de_default(format_settings);
+                    deserializer.de_default();
                 } else {
                     if let Err(e) = deserializer.de_text(&mut reader, format_settings) {
                         let value_str = format!("{:?}", value);
@@ -78,7 +78,7 @@ impl InputFormatXML {
                     }
                 }
             } else {
-                deserializer.de_default(format_settings);
+                deserializer.de_default();
             }
         }
         Ok(())

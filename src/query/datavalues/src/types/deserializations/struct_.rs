@@ -41,7 +41,7 @@ impl TypeDeserializer for StructDeserializer {
         self.builder.append_data_value(DataValue::Struct(values))
     }
 
-    fn de_default(&mut self, _format: &FormatSettings) {
+    fn de_default(&mut self) {
         self.builder.append_default();
     }
 

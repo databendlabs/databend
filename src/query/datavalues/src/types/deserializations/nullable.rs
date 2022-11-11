@@ -42,14 +42,14 @@ impl TypeDeserializer for NullableDeserializer {
         if valid {
             self.inner.de_binary(reader, format)?;
         } else {
-            self.inner.de_default(format);
+            self.inner.de_default();
         }
         self.bitmap.push(valid);
         Ok(())
     }
 
-    fn de_default(&mut self, format: &FormatSettings) {
-        self.inner.de_default(format);
+    fn de_default(&mut self) {
+        self.inner.de_default();
         self.bitmap.push(false);
     }
 
@@ -83,7 +83,7 @@ impl TypeDeserializer for NullableDeserializer {
         format: &FormatSettings,
     ) -> Result<()> {
         if reader.ignore_insensitive_bytes(&format.null_bytes) {
-            self.de_default(format);
+            self.de_default();
             return Ok(());
         }
         self.inner.de_text_json(reader, format)?;
@@ -97,14 +97,14 @@ impl TypeDeserializer for NullableDeserializer {
         format: &FormatSettings,
     ) -> Result<()> {
         if reader.eof() {
-            self.de_default(format);
+            self.de_default();
         } else {
             if reader.ignore_insensitive_bytes(&format.null_bytes) {
                 let buffer = reader.remaining_slice();
                 if buffer.is_empty()
                     || (buffer[0] == b'\r' || buffer[0] == b'\n' || buffer[0] == b'\t')
                 {
-                    self.de_default(format);
+                    self.de_default();
                     return Ok(());
                 }
             }
@@ -120,7 +120,7 @@ impl TypeDeserializer for NullableDeserializer {
         format: &FormatSettings,
     ) -> Result<()> {
         if reader.ignore_insensitive_bytes(&format.null_bytes) {
-            self.de_default(format);
+            self.de_default();
         } else {
             self.inner.de_text_quoted(reader, format)?;
             self.bitmap.push(true);
@@ -130,7 +130,7 @@ impl TypeDeserializer for NullableDeserializer {
 
     fn de_whole_text(&mut self, reader: &[u8], format: &FormatSettings) -> Result<()> {
         if reader.eq_ignore_ascii_case(&format.null_bytes) {
-            self.de_default(format);
+            self.de_default();
             return Ok(());
         }
 
@@ -139,15 +139,15 @@ impl TypeDeserializer for NullableDeserializer {
         Ok(())
     }
 
-    fn de_null(&mut self, format: &FormatSettings) -> bool {
-        self.inner.de_default(format);
+    fn de_null(&mut self, _format: &FormatSettings) -> bool {
+        self.inner.de_default();
         self.bitmap.push(false);
         true
     }
 
     fn append_data_value(&mut self, value: DataValue, format: &FormatSettings) -> Result<()> {
         if value.is_null() {
-            self.inner.de_default(format);
+            self.inner.de_default();
             self.bitmap.push(false);
         } else {
             self.inner.append_data_value(value, format)?;

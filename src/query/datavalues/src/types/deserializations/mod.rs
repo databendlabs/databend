@@ -48,7 +48,7 @@ pub trait TypeDeserializer: Send + Sync {
 
     fn de_binary(&mut self, reader: &mut &[u8], format: &FormatSettings) -> Result<()>;
 
-    fn de_default(&mut self, format: &FormatSettings);
+    fn de_default(&mut self);
 
     fn de_fixed_binary_batch(
         &mut self,

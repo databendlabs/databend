@@ -38,7 +38,7 @@ impl TypeDeserializer for TimestampDeserializer {
         Ok(())
     }
 
-    fn de_default(&mut self, _format: &FormatSettings) {
+    fn de_default(&mut self) {
         self.builder.append_value(i64::default());
     }
 
