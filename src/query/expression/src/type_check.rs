@@ -64,7 +64,7 @@ pub fn check(ast: &RawExpr, fn_registry: &FunctionRegistry) -> Result<Expr> {
                 Ok(expr)
             } else {
                 // faster path to eval function for cast
-                if let Some(cast_fn) = check_simple_cast(*is_try, &dest_type) {
+                if let Some(cast_fn) = check_simple_cast(*is_try, dest_type) {
                     return check_function(span.clone(), &cast_fn, &[], &[expr], fn_registry);
                 }
                 Ok(Expr::Cast {

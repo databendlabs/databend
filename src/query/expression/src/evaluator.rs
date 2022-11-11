@@ -382,8 +382,6 @@ impl<'a> Evaluator<'a> {
         }
     }
 
-    // this function could be refined later
-    // because type_checker already transform the simple cast to Expr::FunctionCall
     fn run_simple_cast(
         &self,
         span: Span,
