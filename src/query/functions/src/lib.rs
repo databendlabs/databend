@@ -14,8 +14,6 @@
 
 #![feature(core_intrinsics)]
 #![feature(portable_simd)]
-#![feature(duration_checked_float)]
-#![feature(map_first_last)]
 
 pub mod aggregates;
 pub mod rdoc;
