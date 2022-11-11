@@ -26,6 +26,7 @@ fn test_geo() {
     test_great_circle_distance(file);
     test_geo_distance(file);
     test_great_circle_angle(file);
+    test_point_in_ellipses(file);
 }
 
 fn test_great_circle_distance(file: &mut impl Write) {
@@ -46,4 +47,12 @@ fn test_geo_distance(file: &mut impl Write) {
 
 fn test_great_circle_angle(file: &mut impl Write) {
     run_ast(file, "great_circle_angle(0, 0, 45, 0)", &[]);
+}
+
+fn test_point_in_ellipses(file: &mut impl Write) {
+    run_ast(
+        file,
+        "point_in_ellipses(10., 10., 10., 9.1, 1., 0.9999)",
+        &[],
+    );
 }

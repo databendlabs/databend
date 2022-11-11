@@ -14,13 +14,26 @@
 
 use std::mem::MaybeUninit;
 use std::num::Wrapping;
+use std::sync::Arc;
 use std::sync::Once;
 
+use common_expression::types::number::Float64Type;
+use common_expression::types::number::NumberColumn;
 use common_expression::types::number::F32;
 use common_expression::types::number::F64;
+use common_expression::types::AnyType;
+use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
 use common_expression::types::NumberType;
+use common_expression::types::ValueType;
+use common_expression::Column;
+use common_expression::Function;
+use common_expression::FunctionContext;
 use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
+use common_expression::FunctionSignature;
+use common_expression::Value;
+use common_expression::ValueRef;
 use once_cell::sync::OnceCell;
 
 const PI: f64 = std::f64::consts::PI;
@@ -51,6 +64,13 @@ enum GeoMethod {
     SphereDegrees,
     SphereMeters,
     Wgs84Meters,
+}
+
+struct Ellipse {
+    x: f64,
+    y: f64,
+    a: f64,
+    b: f64,
 }
 
 pub fn register(registry: &mut FunctionRegistry) {
@@ -86,6 +106,113 @@ pub fn register(registry: &mut FunctionRegistry) {
             F32::from(distance(lon1.0 as f32, lat1.0 as f32, lon2.0 as f32, lat2.0 as f32, GeoMethod::SphereMeters))
         },
     );
+
+    registry.register_function_factory("point_in_ellipses", |_, args_type| {
+        if args_type.len() < 6 {
+            return None;
+        }
+        Some(Arc::new(Function {
+            signature: FunctionSignature {
+                name: "point_in_ellipses".to_string(),
+                args_type: vec![DataType::Number(NumberDataType::Float64); args_type.len()],
+                return_type: DataType::Number(NumberDataType::UInt8),
+                property: Default::default(),
+            },
+            calc_domain: Box::new(|_| None),
+            eval: Box::new(point_in_ellipses_fn),
+        }))
+    });
+}
+
+fn point_in_ellipses_fn(
+    args: &[ValueRef<AnyType>],
+    _: FunctionContext,
+) -> Result<Value<AnyType>, f64> {
+    let len = args.iter().find_map(|arg| match arg {
+        ValueRef::Column(col) => Some(col.len()),
+        _ => None,
+    });
+    let args = args
+        .iter()
+        .map(|arg| arg.try_downcast::<Float64Type>().unwrap())
+        .collect::<Vec<_>>();
+
+    let input_rows = len.unwrap_or(1);
+
+    let mut values: Vec<u8> = vec![0; input_rows];
+
+    let ellipses_cnt = (args.len() - 2) / 4;
+    let mut ellipses: Vec<Ellipse> = Vec::with_capacity(ellipses_cnt);
+
+    for ellipse_idx in 0..ellipses_cnt {
+        let mut ellipse_data = [0.0; 4];
+        for idx in 0..4 {
+            let arg_idx = 2 + 4 * ellipse_idx + idx;
+            ellipse_data[idx] = match args[arg_idx] {
+                ValueRef::Scalar(v) => *v,
+                _ => 0f64,
+            };
+        }
+        ellipses[ellipse_idx] = Ellipse {
+            x: ellipse_data[0],
+            y: ellipse_data[1],
+            a: ellipse_data[2],
+            b: ellipse_data[3],
+        };
+    }
+
+    let mut start_index = 0;
+    for idx in 0..input_rows {
+        let col_x = match args[0] {
+            ValueRef::Scalar(v) => *v,
+            ValueRef::Column(c) => unsafe { Float64Type::index_column_unchecked(&c, idx).0 },
+        };
+        let col_y = match args[1] {
+            ValueRef::Scalar(v) => *v,
+            ValueRef::Column(c) => unsafe { Float64Type::index_column_unchecked(&c, idx).0 },
+        };
+
+        values[idx] = u8::from(is_point_in_ellipses(
+            col_x,
+            col_y,
+            &ellipses,
+            ellipses_cnt,
+            &mut start_index,
+        ));
+    }
+
+    Ok(Value::Column(Column::Number(NumberColumn::UInt8(
+        values.into(),
+    ))))
+}
+
+fn is_point_in_ellipses(
+    x: f64,
+    y: f64,
+    ellipses: &[Ellipse],
+    ellipses_count: usize,
+    start_idx: &mut usize,
+) -> bool {
+    let mut index = 0 + *start_idx;
+    for i in 0..ellipses_count {
+        let el = &ellipses[index];
+        let p1 = (x - el.x) / el.a;
+        let p2 = (y - el.y) / el.b;
+        if x <= el.x + el.a
+            && x >= el.x - el.a
+            && y <= el.y + el.b
+            && y >= el.y - el.b
+            && p1 * p1 + p2 * p2 <= 1.0
+        {
+            *start_idx = index;
+            return true;
+        }
+        index += 1;
+        if index == ellipses_count {
+            index = 0;
+        }
+    }
+    false
 }
 
 pub fn geo_dist_init() {
