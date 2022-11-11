@@ -855,7 +855,7 @@ raw expr       : like("%", "\\%")
 checked expr   : like<String, String>("%", "\\%")
 optimized expr : true
 output type    : Boolean
-output domain  : Unknown
+output domain  : {FALSE, TRUE}
 output         : true
 
 
@@ -864,7 +864,7 @@ raw expr       : like("v%xx", "_\\%%")
 checked expr   : like<String, String>("v%xx", "_\\%%")
 optimized expr : true
 output type    : Boolean
-output domain  : Unknown
+output domain  : {FALSE, TRUE}
 output         : true
 
 
