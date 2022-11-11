@@ -12,20 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::path::Path;
-use std::str::FromStr;
 use std::sync::Arc;
 
 use common_auth::RefreshableToken;
 use common_auth::TokenFile;
 use common_base::base::tokio::sync::RwLock;
 use common_base::base::Singleton;
-use common_exception::ErrorCode;
-use common_exception::Result;
 use once_cell::sync::OnceCell;
 use serde::Deserialize;
 use serde::Serialize;
@@ -475,63 +471,6 @@ impl ShareTableConfig {
         match SHARE_TABLE_CONFIG.get() {
             None => panic!("ShareTableConfig is not init"),
             Some(config) => config.get(),
-        }
-    }
-}
-
-#[derive(Clone, Default, PartialEq, Eq, Debug, Serialize, Deserialize)]
-#[serde(default)]
-pub struct CatalogConfig {
-    #[serde(flatten)]
-    pub catalogs: HashMap<String, CatalogDescription>,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "type")]
-pub enum CatalogDescription {
-    #[serde(rename = "hive")]
-    Hive(HiveCatalogConfig),
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "protocol")]
-pub enum ThriftProtocol {
-    #[serde(rename = "binary")]
-    Binary,
-    // Compact,
-}
-
-impl FromStr for ThriftProtocol {
-    type Err = ErrorCode;
-
-    fn from_str(s: &str) -> Result<ThriftProtocol> {
-        let s = s.to_lowercase();
-        match s.as_str() {
-            "binary" => Ok(ThriftProtocol::Binary),
-            _ => Err(ErrorCode::StorageOther("invalid thrift protocol spec")),
-        }
-    }
-}
-
-impl Display for ThriftProtocol {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Binary => write!(f, "binary"),
-        }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct HiveCatalogConfig {
-    pub meta_store_address: String,
-    pub protocol: ThriftProtocol,
-}
-
-impl Default for HiveCatalogConfig {
-    fn default() -> Self {
-        Self {
-            meta_store_address: "127.0.0.1:9083".to_string(),
-            protocol: ThriftProtocol::Binary,
         }
     }
 }

@@ -17,9 +17,9 @@ use std::env::temp_dir;
 use std::fs;
 use std::io::Write;
 
+use common_config::CatalogConfig;
 use common_config::Config;
 use common_exception::Result;
-use common_storage::CatalogDescription;
 use pretty_assertions::assert_eq;
 
 // Default.
@@ -284,7 +284,7 @@ fn test_env_config_s3() -> Result<()> {
                 1024 * 1024 * 1024,
                 configured.query.table_cache_bloom_index_data_bytes
             );
-            assert_eq!(HashMap::new(), configured.catalogs.catalogs);
+            assert_eq!(HashMap::new(), configured.catalogs);
         },
     );
 
@@ -795,16 +795,13 @@ protocol = "binary"
             assert_eq!("access_key_id_from_env", cfg.storage.s3.access_key_id);
             assert_eq!("s3", cfg.storage.storage_type);
 
-            assert!(
-                cfg.catalogs.catalogs.get("my_hive").is_some(),
-                "catalogs is none!"
-            );
+            assert!(cfg.catalogs.get("my_hive").is_some(), "catalogs is none!");
 
-            let inner = cfg.catalogs.catalogs["my_hive"].clone().try_into();
+            let inner = cfg.catalogs["my_hive"].clone().try_into();
             assert!(inner.is_ok(), "casting must success");
             let cfg = inner.unwrap();
             match cfg {
-                CatalogDescription::Hive(cfg) => {
+                CatalogConfig::Hive(cfg) => {
                     assert_eq!(
                         "127.0.0.1:9083", cfg.meta_store_address,
                         "address incorrect"

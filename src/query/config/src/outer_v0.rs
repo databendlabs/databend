@@ -27,9 +27,6 @@ use common_exception::Result;
 use common_meta_types::AuthInfo;
 use common_meta_types::AuthType;
 use common_storage::CacheConfig as InnerCacheConfig;
-use common_storage::CatalogConfig as InnerCatalogConfig;
-use common_storage::CatalogDescription as InnerCatalogDescription;
-use common_storage::HiveCatalogConfig as InnerHiveCatalogConfig;
 use common_storage::StorageAzblobConfig as InnerStorageAzblobConfig;
 use common_storage::StorageConfig as InnerStorageConfig;
 use common_storage::StorageFsConfig as InnerStorageFsConfig;
@@ -51,6 +48,8 @@ use serfig::collectors::from_file;
 use serfig::collectors::from_self;
 use serfig::parsers::Toml;
 
+use super::inner::CatalogConfig as InnerCatalogConfig;
+use super::inner::CatalogHiveConfig as InnerCatalogHiveConfig;
 use super::inner::Config as InnerConfig;
 use super::inner::MetaConfig as InnerMetaConfig;
 use super::inner::MetaType;
@@ -101,7 +100,7 @@ pub struct Config {
     // - Later, catalog information SHOULD be kept in KV Service
     // - currently only supports HIVE (via hive meta store)
     #[clap(skip)]
-    pub catalogs: CatalogConfig,
+    pub catalogs: HashMap<String, CatalogConfig>,
 }
 
 impl Default for Config {
@@ -157,7 +156,11 @@ impl From<InnerConfig> for Config {
             storage: inner.storage.into(),
             cache: inner.cache.into(),
 
-            catalogs: inner.catalogs.into(),
+            catalogs: inner
+                .catalogs
+                .into_iter()
+                .map(|(k, v)| (k, v.into()))
+                .collect(),
         }
     }
 }
@@ -166,6 +169,11 @@ impl TryInto<InnerConfig> for Config {
     type Error = ErrorCode;
 
     fn try_into(self) -> Result<InnerConfig> {
+        let mut catalogs = vec![];
+        for (k, v) in self.catalogs.into_iter() {
+            let catalog = v.try_into()?;
+            catalogs.push((k, catalog));
+        }
         Ok(InnerConfig {
             cmd: self.cmd,
             config_file: self.config_file,
@@ -174,7 +182,7 @@ impl TryInto<InnerConfig> for Config {
             meta: self.meta.try_into()?,
             storage: self.storage.try_into()?,
             cache: self.cache.try_into()?,
-            catalogs: self.catalogs.try_into()?,
+            catalogs,
         })
     }
 }
@@ -308,86 +316,56 @@ impl TryInto<InnerStorageConfig> for StorageConfig {
         })
     }
 }
-#[derive(Clone, Debug, PartialEq, Eq, Default, Serialize, Deserialize)]
-#[serde(default)]
-pub struct CatalogConfig {
-    #[serde(flatten)]
-    pub catalogs: HashMap<String, CatalogDescription>,
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum CatalogConfig {
+    #[serde(alias = "hive")]
+    Hive(CatalogHiveConfig),
+}
+
+impl Default for CatalogConfig {
+    fn default() -> Self {
+        Self::Hive(CatalogHiveConfig::default())
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CatalogHiveConfig {
+    pub meta_store_address: String,
+    pub protocol: String,
 }
 
 impl TryInto<InnerCatalogConfig> for CatalogConfig {
     type Error = ErrorCode;
 
     fn try_into(self) -> Result<InnerCatalogConfig, Self::Error> {
-        let mut catalogs = HashMap::new();
-        for (k, v) in self.catalogs.into_iter() {
-            let catalog = v.try_into()?;
-            catalogs.insert(k, catalog);
+        match self {
+            CatalogConfig::Hive(v) => Ok(InnerCatalogConfig::Hive(v.try_into()?)),
         }
-        Ok(InnerCatalogConfig { catalogs })
     }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "type")]
-pub enum CatalogDescription {
-    #[serde(alias = "hive")]
-    Hive(HiveCatalogConfig),
-}
-
-impl Default for CatalogDescription {
-    fn default() -> Self {
-        Self::Hive(HiveCatalogConfig::default())
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct HiveCatalogConfig {
-    pub meta_store_address: String,
-    pub protocol: String,
 }
 
 impl From<InnerCatalogConfig> for CatalogConfig {
-    fn from(value: InnerCatalogConfig) -> Self {
-        let mut catalogs = HashMap::new();
-        for (k, v) in value.catalogs.into_iter() {
-            let catalog = v.into();
-            catalogs.insert(k, catalog);
-        }
-        Self { catalogs }
-    }
-}
-
-impl TryInto<InnerCatalogDescription> for CatalogDescription {
-    type Error = ErrorCode;
-
-    fn try_into(self) -> Result<InnerCatalogDescription, Self::Error> {
-        match self {
-            CatalogDescription::Hive(v) => Ok(InnerCatalogDescription::Hive(v.try_into()?)),
-        }
-    }
-}
-
-impl From<InnerCatalogDescription> for CatalogDescription {
-    fn from(inner: InnerCatalogDescription) -> Self {
+    fn from(inner: InnerCatalogConfig) -> Self {
         match inner {
-            InnerCatalogDescription::Hive(v) => Self::Hive(v.into()),
+            InnerCatalogConfig::Hive(v) => Self::Hive(v.into()),
         }
     }
 }
 
-impl TryInto<InnerHiveCatalogConfig> for HiveCatalogConfig {
+impl TryInto<InnerCatalogHiveConfig> for CatalogHiveConfig {
     type Error = ErrorCode;
-    fn try_into(self) -> Result<InnerHiveCatalogConfig, Self::Error> {
-        Ok(InnerHiveCatalogConfig {
+    fn try_into(self) -> Result<InnerCatalogHiveConfig, Self::Error> {
+        Ok(InnerCatalogHiveConfig {
             meta_store_address: self.meta_store_address,
             protocol: self.protocol.parse()?,
         })
     }
 }
 
-impl From<InnerHiveCatalogConfig> for HiveCatalogConfig {
-    fn from(inner: InnerHiveCatalogConfig) -> Self {
+impl From<InnerCatalogHiveConfig> for CatalogHiveConfig {
+    fn from(inner: InnerCatalogHiveConfig) -> Self {
         Self {
             meta_store_address: inner.meta_store_address,
             protocol: inner.protocol.to_string(),
@@ -395,9 +373,9 @@ impl From<InnerHiveCatalogConfig> for HiveCatalogConfig {
     }
 }
 
-impl Default for HiveCatalogConfig {
+impl Default for CatalogHiveConfig {
     fn default() -> Self {
-        InnerHiveCatalogConfig::default().into()
+        InnerCatalogHiveConfig::default().into()
     }
 }
 

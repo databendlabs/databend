@@ -14,15 +14,17 @@
 
 use std::fmt;
 use std::fmt::Debug;
+use std::fmt::Display;
 use std::fmt::Formatter;
+use std::str::FromStr;
 use std::time::Duration;
 
 use common_base::base::mask_string;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_grpc::RpcClientConf;
 use common_grpc::RpcClientTlsConfig;
 use common_storage::CacheConfig;
-use common_storage::CatalogConfig;
 use common_storage::StorageConfig;
 use common_tracing::Config as LogConfig;
 use common_users::idm_config::IDMConfig;
@@ -54,7 +56,7 @@ pub struct Config {
     // external catalog config.
     // - Later, catalog information SHOULD be kept in KV Service
     // - currently only supports HIVE (via hive meta store)
-    pub catalogs: CatalogConfig,
+    pub catalogs: Vec<(String, CatalogConfig)>,
 }
 
 impl Config {
@@ -337,5 +339,51 @@ impl Debug for MetaConfig {
                 &self.rpc_tls_meta_service_domain_name,
             )
             .finish()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum CatalogConfig {
+    Hive(CatalogHiveConfig),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ThriftProtocol {
+    Binary,
+    // Compact,
+}
+
+impl FromStr for ThriftProtocol {
+    type Err = ErrorCode;
+
+    fn from_str(s: &str) -> Result<ThriftProtocol> {
+        let s = s.to_lowercase();
+        match s.as_str() {
+            "binary" => Ok(ThriftProtocol::Binary),
+            _ => Err(ErrorCode::StorageOther("invalid thrift protocol spec")),
+        }
+    }
+}
+
+impl Display for ThriftProtocol {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Binary => write!(f, "binary"),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CatalogHiveConfig {
+    pub meta_store_address: String,
+    pub protocol: ThriftProtocol,
+}
+
+impl Default for CatalogHiveConfig {
+    fn default() -> Self {
+        Self {
+            meta_store_address: "127.0.0.1:9083".to_string(),
+            protocol: ThriftProtocol::Binary,
+        }
     }
 }

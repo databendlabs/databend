@@ -12,13 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-/// configuration of external catalog
-mod config;
 /// catalog_interface is the module defining `Catalog` trait
 mod interface;
 /// the catalog manager implementation
 mod manager;
 
-pub use config::*;
 pub use interface::*;
 pub use manager::*;

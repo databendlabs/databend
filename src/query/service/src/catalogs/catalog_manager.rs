@@ -18,12 +18,12 @@ use common_base::base::Singleton;
 use common_catalog::catalog::Catalog;
 pub use common_catalog::catalog::CatalogManager;
 use common_catalog::catalog_kind::CATALOG_DEFAULT;
+use common_config::CatalogConfig;
 use common_config::Config;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::CatalogType;
 use common_meta_app::schema::CreateCatalogReq;
-use common_storage::CatalogDescription;
 #[cfg(feature = "hive")]
 use common_storages_hive::HiveCatalog;
 use dashmap::DashMap;
@@ -75,9 +75,9 @@ impl CatalogManagerHelper for CatalogManager {
     }
 
     fn register_external_catalogs(&self, conf: &Config) -> Result<()> {
-        for (name, ctl) in conf.catalogs.catalogs.iter() {
+        for (name, ctl) in conf.catalogs.iter() {
             match ctl {
-                CatalogDescription::Hive(ctl) => {
+                CatalogConfig::Hive(ctl) => {
                     // register hive catalog
                     #[cfg(not(feature = "hive"))]
                     {

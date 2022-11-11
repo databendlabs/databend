@@ -30,9 +30,6 @@
 
 mod config;
 pub use config::CacheConfig;
-pub use config::CatalogConfig;
-pub use config::CatalogDescription;
-pub use config::HiveCatalogConfig;
 pub use config::ShareTableConfig;
 pub use config::StorageAzblobConfig;
 pub use config::StorageConfig;
