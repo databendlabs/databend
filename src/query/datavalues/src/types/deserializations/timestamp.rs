@@ -113,21 +113,6 @@ impl TypeDeserializer for TimestampDeserializer {
         Ok(())
     }
 
-    fn de_text_json<R: AsRef<[u8]>>(
-        &mut self,
-        reader: &mut Cursor<R>,
-        format: &FormatSettings,
-    ) -> Result<()> {
-        reader.must_ignore_byte(b'"')?;
-        let ts = reader.read_timestamp_text(&format.timezone)?;
-        let micros = ts.timestamp_micros();
-        check_timestamp(micros)?;
-        reader.must_ignore_byte(b'"')?;
-
-        self.builder.append_value(micros.as_());
-        Ok(())
-    }
-
     fn append_data_value(&mut self, value: DataValue, _format: &FormatSettings) -> Result<()> {
         let v = value.as_i64()?;
         check_timestamp(v)?;

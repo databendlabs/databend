@@ -72,14 +72,6 @@ pub trait TypeDeserializer: Send + Sync {
         format: &FormatSettings,
     ) -> Result<()>;
 
-    fn de_text_json<R: AsRef<[u8]>>(
-        &mut self,
-        reader: &mut Cursor<R>,
-        format: &FormatSettings,
-    ) -> Result<()> {
-        self.de_text(reader, format)
-    }
-
     fn de_text_quoted<R: AsRef<[u8]>>(
         &mut self,
         reader: &mut Cursor<R>,

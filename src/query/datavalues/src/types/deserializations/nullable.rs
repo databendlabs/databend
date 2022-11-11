@@ -77,20 +77,6 @@ impl TypeDeserializer for NullableDeserializer {
         }
     }
 
-    fn de_text_json<R: AsRef<[u8]>>(
-        &mut self,
-        reader: &mut Cursor<R>,
-        format: &FormatSettings,
-    ) -> Result<()> {
-        if reader.ignore_insensitive_bytes(&format.null_bytes) {
-            self.de_default();
-            return Ok(());
-        }
-        self.inner.de_text_json(reader, format)?;
-        self.bitmap.push(true);
-        Ok(())
-    }
-
     fn de_text<R: AsRef<[u8]>>(
         &mut self,
         reader: &mut Cursor<R>,

@@ -124,21 +124,6 @@ where
         Ok(())
     }
 
-    fn de_text_json<R: AsRef<[u8]>>(
-        &mut self,
-        reader: &mut Cursor<R>,
-        format: &FormatSettings,
-    ) -> Result<()> {
-        reader.must_ignore_byte(b'"')?;
-        let date = reader.read_date_text(&format.timezone)?;
-        let days = uniform_date(date);
-        check_date(days.as_i32())?;
-        reader.must_ignore_byte(b'"')?;
-
-        self.builder.append_value(days);
-        Ok(())
-    }
-
     fn append_data_value(&mut self, value: DataValue, _format: &FormatSettings) -> Result<()> {
         let v = value.as_i64()? as i32;
         check_date(v)?;
