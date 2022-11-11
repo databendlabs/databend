@@ -58,8 +58,6 @@ use crate::table::Table;
 use crate::table_args::TableArgs;
 use crate::table_function::TableFunction;
 
-pub const CATALOG_DEFAULT: &str = "default";
-
 static CATALOG_MANAGER: OnceCell<Singleton<Arc<CatalogManager>>> = OnceCell::new();
 
 pub struct CatalogManager {

@@ -12,13 +12,5 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod catalog;
-pub mod catalog_kind;
-pub mod cluster_info;
-pub mod database;
-pub mod plan;
-pub mod table;
-pub mod table_args;
-pub mod table_context;
-pub mod table_function;
-pub mod table_mutator;
+pub const CATALOG_DEFAULT: &str = "default";
+pub const CATALOG_HIVE: &str = "hive";
