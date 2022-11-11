@@ -140,7 +140,7 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
                 TypeID::UInt32 => Ok(ColumnType::MYSQL_TYPE_LONG),
                 TypeID::UInt64 => Ok(ColumnType::MYSQL_TYPE_LONG),
                 TypeID::Float32 => Ok(ColumnType::MYSQL_TYPE_FLOAT),
-                TypeID::Float64 => Ok(ColumnType::MYSQL_TYPE_FLOAT),
+                TypeID::Float64 => Ok(ColumnType::MYSQL_TYPE_DOUBLE),
                 TypeID::String => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
                 TypeID::Boolean => Ok(ColumnType::MYSQL_TYPE_SHORT),
                 TypeID::Date => Ok(ColumnType::MYSQL_TYPE_DATE),
