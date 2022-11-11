@@ -12,14 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chrono_tz::Tz;
+mod csv;
+mod row_based;
+mod tsv;
+mod values;
+mod xml;
 
-#[derive(Clone)]
-pub struct CommonSettings {
-    pub true_bytes: Vec<u8>,
-    pub false_bytes: Vec<u8>,
-    pub null_bytes: Vec<u8>,
-    pub nan_bytes: Vec<u8>,
-    pub inf_bytes: Vec<u8>,
-    pub timezone: Tz,
+use std::any::Any;
+
+pub use csv::FieldDecoderCSV;
+pub use row_based::FieldDecoderRowBased;
+pub use tsv::FieldDecoderTSV;
+pub use values::FieldDecoderValues;
+pub use xml::FieldDecoderXML;
+
+pub trait FieldDecoder: Send + Sync {
+    fn as_any(&self) -> &dyn Any;
 }
