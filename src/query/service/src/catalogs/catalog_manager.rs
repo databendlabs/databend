@@ -17,7 +17,9 @@ use std::sync::Arc;
 use common_base::base::Singleton;
 use common_catalog::catalog::Catalog;
 pub use common_catalog::catalog::CatalogManager;
-use common_catalog::catalog::CATALOG_DEFAULT;
+use common_catalog::catalog_kind::CATALOG_DEFAULT;
+#[cfg(feature = "hive")]
+use common_catalog::catalog_kind::CATALOG_HIVE;
 use common_config::Config;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -25,8 +27,6 @@ use common_meta_app::schema::CatalogType;
 use common_meta_app::schema::CreateCatalogReq;
 #[cfg(feature = "hive")]
 use common_storages_hive::HiveCatalog;
-#[cfg(feature = "hive")]
-use common_storages_hive::CATALOG_HIVE;
 use dashmap::DashMap;
 
 use crate::catalogs::DatabaseCatalog;
