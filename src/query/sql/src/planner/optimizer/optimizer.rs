@@ -27,7 +27,6 @@ use crate::optimizer::cascades::CascadesOptimizer;
 use crate::optimizer::distributed::optimize_distributed_query;
 use crate::optimizer::heuristic::RuleList;
 use crate::optimizer::util::contains_local_table_scan;
-use crate::optimizer::util::validate_distributed_query;
 use crate::optimizer::HeuristicOptimizer;
 use crate::optimizer::SExpr;
 use crate::optimizer::DEFAULT_REWRITE_RULES;

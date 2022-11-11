@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use super::SExpr;
-use crate::plans::JoinType;
 use crate::plans::RelOperator;
 use crate::MetadataRef;
 
@@ -27,25 +26,5 @@ pub fn contains_local_table_scan(s_expr: &SExpr, metadata: &MetadataRef) -> bool
             metadata.read().table(get.table_index).table().is_local()
         } else {
             false
-        }
-}
-
-/// Check if a query supports to be executed in cluster mode
-pub fn validate_distributed_query(s_expr: &SExpr) -> bool {
-    s_expr.children().iter().all(validate_distributed_query)
-        && match s_expr.plan() {
-            RelOperator::PhysicalHashJoin(join) => match join.join_type {
-                JoinType::Inner
-                | JoinType::LeftSemi
-                | JoinType::LeftAnti
-                | JoinType::RightSemi
-                | JoinType::RightAnti
-                | JoinType::Cross
-                | JoinType::LeftMark
-                | JoinType::RightMark => true,
-
-                JoinType::Left | JoinType::Right | JoinType::Full | JoinType::Single => false,
-            },
-            _ => true,
         }
 }
