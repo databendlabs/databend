@@ -22,7 +22,7 @@ use crate::field_encoder::FieldEncoderRowBased;
 use crate::output_format::OutputFormat;
 use crate::FileFormatOptionsExt;
 
-pub struct JsonEachRowOutputFormatBase<
+pub struct NDJSONOutputFormatBase<
     const STRINGS: bool,
     const COMPACT: bool,
     const WITH_NAMES: bool,
@@ -33,7 +33,7 @@ pub struct JsonEachRowOutputFormatBase<
 }
 
 impl<const STRINGS: bool, const COMPACT: bool, const WITH_NAMES: bool, const WITH_TYPES: bool>
-    JsonEachRowOutputFormatBase<STRINGS, COMPACT, WITH_NAMES, WITH_TYPES>
+    NDJSONOutputFormatBase<STRINGS, COMPACT, WITH_NAMES, WITH_TYPES>
 {
     pub fn create(schema: DataSchemaRef, options: &FileFormatOptionsExt) -> Self {
         let field_encoder = FieldEncoderJSON::create(options);
@@ -59,7 +59,7 @@ impl<const STRINGS: bool, const COMPACT: bool, const WITH_NAMES: bool, const WIT
 }
 
 impl<const STRINGS: bool, const COMPACT: bool, const WITH_NAMES: bool, const WITH_TYPES: bool>
-    OutputFormat for JsonEachRowOutputFormatBase<STRINGS, COMPACT, WITH_NAMES, WITH_TYPES>
+    OutputFormat for NDJSONOutputFormatBase<STRINGS, COMPACT, WITH_NAMES, WITH_TYPES>
 {
     fn serialize_block(&mut self, block: &DataBlock) -> Result<Vec<u8>> {
         let rows_size = block.column(0).len();

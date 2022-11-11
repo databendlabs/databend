@@ -27,15 +27,15 @@ use common_meta_types::StageFileFormatType;
 use common_settings::Settings;
 
 use super::clickhouse::ClickhouseSuffix;
-use crate::output_format::output_format_csv::CSVOutputFormat;
-use crate::output_format::output_format_csv::CSVWithNamesAndTypesOutputFormat;
-use crate::output_format::output_format_csv::CSVWithNamesOutputFormat;
-use crate::output_format::output_format_json_each_row::JsonEachRowOutputFormatBase;
-use crate::output_format::output_format_parquet::ParquetOutputFormat;
-use crate::output_format::output_format_tsv::TSVOutputFormat;
-use crate::output_format::output_format_tsv::TSVWithNamesAndTypesOutputFormat;
-use crate::output_format::output_format_tsv::TSVWithNamesOutputFormat;
+use crate::output_format::CSVOutputFormat;
+use crate::output_format::CSVWithNamesAndTypesOutputFormat;
+use crate::output_format::CSVWithNamesOutputFormat;
+use crate::output_format::NDJSONOutputFormatBase;
 use crate::output_format::OutputFormat;
+use crate::output_format::ParquetOutputFormat;
+use crate::output_format::TSVOutputFormat;
+use crate::output_format::TSVWithNamesAndTypesOutputFormat;
+use crate::output_format::TSVWithNamesOutputFormat;
 use crate::ClickhouseFormatType;
 
 pub trait FileFormatTypeExt {
@@ -130,55 +130,42 @@ impl FileFormatOptionsExt {
                 match (options.headers, options.json_strings, options.json_compact) {
                     // string, compact, name, type
                     // not compact
-                    (0, false, false) => Box::new(JsonEachRowOutputFormatBase::<
+                    (0, false, false) => Box::new(NDJSONOutputFormatBase::<
                         false,
                         false,
                         false,
                         false,
                     >::create(schema, &options)),
-                    (0, true, false) => Box::new(JsonEachRowOutputFormatBase::<
-                        true,
-                        false,
-                        false,
-                        false,
-                    >::create(schema, &options)),
+                    (0, true, false) => {
+                        Box::new(NDJSONOutputFormatBase::<true, false, false, false>::create(
+                            schema, &options,
+                        ))
+                    }
                     // compact
-                    (0, false, true) => Box::new(JsonEachRowOutputFormatBase::<
-                        false,
-                        true,
-                        false,
-                        false,
-                    >::create(schema, &options)),
-                    (0, true, true) => Box::new(JsonEachRowOutputFormatBase::<
-                        true,
-                        true,
-                        false,
-                        false,
-                    >::create(schema, &options)),
-                    (1, false, true) => Box::new(JsonEachRowOutputFormatBase::<
-                        false,
-                        true,
-                        true,
-                        false,
-                    >::create(schema, &options)),
-                    (1, true, true) => Box::new(JsonEachRowOutputFormatBase::<
-                        true,
-                        true,
-                        true,
-                        false,
-                    >::create(schema, &options)),
-                    (2, false, true) => Box::new(JsonEachRowOutputFormatBase::<
-                        false,
-                        true,
-                        true,
-                        true,
-                    >::create(schema, &options)),
-                    (2, true, true) => Box::new(JsonEachRowOutputFormatBase::<
-                        true,
-                        true,
-                        true,
-                        true,
-                    >::create(schema, &options)),
+                    (0, false, true) => {
+                        Box::new(NDJSONOutputFormatBase::<false, true, false, false>::create(
+                            schema, &options,
+                        ))
+                    }
+                    (0, true, true) => {
+                        Box::new(NDJSONOutputFormatBase::<true, true, false, false>::create(
+                            schema, &options,
+                        ))
+                    }
+                    (1, false, true) => {
+                        Box::new(NDJSONOutputFormatBase::<false, true, true, false>::create(
+                            schema, &options,
+                        ))
+                    }
+                    (1, true, true) => Box::new(
+                        NDJSONOutputFormatBase::<true, true, true, false>::create(schema, &options),
+                    ),
+                    (2, false, true) => Box::new(
+                        NDJSONOutputFormatBase::<false, true, true, true>::create(schema, &options),
+                    ),
+                    (2, true, true) => Box::new(
+                        NDJSONOutputFormatBase::<true, true, true, true>::create(schema, &options),
+                    ),
                     _ => unreachable!(),
                 }
             }
