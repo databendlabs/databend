@@ -17,78 +17,14 @@ use common_io::prelude::FormatSettings;
 use serde_json::Value;
 
 use crate::prelude::*;
-use crate::serializations::write_csv_string;
-use crate::serializations::write_json_string;
 
 #[derive(Clone)]
 pub struct StructSerializer<'a> {
-    pub(crate) inners: Vec<TypeSerializerImpl<'a>>,
+    pub inners: Vec<TypeSerializerImpl<'a>>,
     pub(crate) column: &'a ColumnRef,
 }
 
 impl<'a> TypeSerializer<'a> for StructSerializer<'a> {
-    fn write_field_values(
-        &self,
-        row_index: usize,
-        buf: &mut Vec<u8>,
-        format: &FormatSettings,
-        _in_nested: bool,
-    ) {
-        buf.push(b'(');
-        let mut first = true;
-
-        for inner in &self.inners {
-            if !first {
-                buf.extend_from_slice(b", ");
-            }
-            first = false;
-            inner.write_field_values(row_index, buf, format, true);
-        }
-        buf.push(b')');
-    }
-
-    fn write_field_tsv(
-        &self,
-        row_index: usize,
-        buf: &mut Vec<u8>,
-        format: &FormatSettings,
-        _in_nested: bool,
-    ) {
-        buf.push(b'(');
-        let mut first = true;
-
-        for inner in &self.inners {
-            if !first {
-                buf.extend_from_slice(b", ");
-            }
-            first = false;
-            inner.write_field_tsv(row_index, buf, format, true);
-        }
-        buf.push(b')');
-    }
-
-    fn write_field_csv(&self, row_index: usize, buf: &mut Vec<u8>, format: &FormatSettings) {
-        let v = self.to_vec_values(row_index, format);
-        write_csv_string(&v, buf, format.quote_char);
-    }
-
-    fn write_field_json(
-        &self,
-        row_index: usize,
-        buf: &mut Vec<u8>,
-        format: &FormatSettings,
-        quote: bool,
-    ) {
-        let v = self.to_vec_values(row_index, format);
-        if quote {
-            buf.push(b'\"');
-        }
-        write_json_string(&v, buf, format);
-        if quote {
-            buf.push(b'\"');
-        }
-    }
-
     fn serialize_json_values(&self, _format: &FormatSettings) -> Result<Vec<Value>> {
         let column = self.column;
         let mut result = Vec::with_capacity(column.len());

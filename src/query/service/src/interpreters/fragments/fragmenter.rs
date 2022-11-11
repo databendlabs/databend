@@ -18,13 +18,13 @@ use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_sql::executor::FragmentKind;
 
-use super::FragmentType;
-use super::PlanFragment;
 use crate::api::BroadcastExchange;
 use crate::api::DataExchange;
 use crate::api::MergeExchange;
-use crate::api::ShuffleDataExchangeV2;
+use crate::api::ShuffleDataExchange;
 use crate::clusters::ClusterHelper;
+use crate::interpreters::fragments::plan_fragment::FragmentType;
+use crate::interpreters::fragments::PlanFragment;
 use crate::sessions::QueryContext;
 use crate::sql::executor::Exchange;
 use crate::sql::executor::ExchangeSink;
@@ -76,7 +76,7 @@ impl Fragmenter {
     ) -> Result<Option<DataExchange>> {
         match plan {
             PhysicalPlan::ExchangeSink(plan) => match plan.kind {
-                FragmentKind::Normal => Ok(Some(ShuffleDataExchangeV2::create(
+                FragmentKind::Normal => Ok(Some(ShuffleDataExchange::create(
                     Self::get_executors(ctx),
                     plan.keys.clone(),
                 ))),

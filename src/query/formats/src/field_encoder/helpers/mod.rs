@@ -12,19 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datablocks::DataBlock;
-use common_exception::Result;
+mod json;
+mod number_helpers;
 
-pub trait OutputFormat: Send {
-    fn serialize_block(&mut self, data_block: &DataBlock) -> Result<Vec<u8>>;
+use chrono_tz::Tz;
+pub use json::write_json_string;
+pub use number_helpers::PrimitiveWithFormat;
 
-    fn serialize_prefix(&self) -> Result<Vec<u8>> {
-        Ok(vec![])
-    }
-
-    fn buffer_size(&mut self) -> usize {
-        0
-    }
-
-    fn finalize(&mut self) -> Result<Vec<u8>>;
+pub struct CommonSettings {
+    pub true_bytes: Vec<u8>,
+    pub false_bytes: Vec<u8>,
+    pub null_bytes: Vec<u8>,
+    pub nan_bytes: Vec<u8>,
+    pub inf_bytes: Vec<u8>,
+    pub timezone: Tz,
 }

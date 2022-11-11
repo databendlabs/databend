@@ -18,6 +18,8 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use base64::encode_config;
+use base64::URL_SAFE;
 use common_base::base::tokio::sync::RwLock;
 use common_datavalues::chrono::DateTime;
 use common_datavalues::chrono::Duration;
@@ -74,6 +76,8 @@ pub enum RefreshableToken {
 }
 
 fn bearer_header(token: &str) -> Result<HeaderValue, Error> {
+    // trim spaces and base 64
+    let token = encode_config(token.trim(), URL_SAFE);
     let mut value = HeaderValue::try_from(format!("Bearer {}", token))
         .map_err(|err| Error::new(ErrorKind::InvalidInput, err))?;
     value.set_sensitive(true);

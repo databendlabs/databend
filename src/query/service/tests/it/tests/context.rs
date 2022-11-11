@@ -65,6 +65,9 @@ async fn create_query_context_with_session(
 
     let dummy_query_context = dummy_session.create_query_context().await?;
     dummy_query_context.get_settings().set_max_threads(8)?;
+    dummy_query_context
+        .get_settings()
+        .set_max_memory_usage(16 * 1024 * 1024 * 1024)?;
     Ok((guard, dummy_query_context))
 }
 

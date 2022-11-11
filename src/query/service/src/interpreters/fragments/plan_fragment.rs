@@ -18,8 +18,8 @@ use common_catalog::plan::DataSourcePlan;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use super::Fragmenter;
 use crate::api::DataExchange;
+use crate::interpreters::fragments::Fragmenter;
 use crate::interpreters::QueryFragmentAction;
 use crate::interpreters::QueryFragmentActions;
 use crate::interpreters::QueryFragmentsActions;
@@ -69,7 +69,7 @@ impl PlanFragment {
 
         match &self.fragment_type {
             FragmentType::Root => {
-                let action = QueryFragmentAction::create_v2(
+                let action = QueryFragmentAction::create(
                     Fragmenter::get_local_executor(ctx),
                     self.plan.clone(),
                 );
@@ -87,7 +87,7 @@ impl PlanFragment {
                 {
                     // If this is a intermediate fragment with merge input,
                     // we will only send it to coordinator node.
-                    let action = QueryFragmentAction::create_v2(
+                    let action = QueryFragmentAction::create(
                         Fragmenter::get_local_executor(ctx),
                         self.plan.clone(),
                     );
@@ -95,7 +95,7 @@ impl PlanFragment {
                 } else {
                     // Otherwise distribute the fragment to all the executors.
                     for executor in Fragmenter::get_executors(ctx) {
-                        let action = QueryFragmentAction::create_v2(executor, self.plan.clone());
+                        let action = QueryFragmentAction::create(executor, self.plan.clone());
                         fragment_actions.add_action(action);
                     }
                 }
@@ -155,10 +155,8 @@ impl PlanFragment {
             };
             plan = replace_read_source.replace(&plan)?;
 
-            fragment_actions.add_action(QueryFragmentAction::create_v2(
-                executor.clone(),
-                plan.clone(),
-            ));
+            fragment_actions
+                .add_action(QueryFragmentAction::create(executor.clone(), plan.clone()));
         }
 
         Ok(fragment_actions)

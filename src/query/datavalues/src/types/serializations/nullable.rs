@@ -27,58 +27,6 @@ pub struct NullableSerializer<'a> {
 }
 
 impl<'a> TypeSerializer<'a> for NullableSerializer<'a> {
-    fn write_field_values(
-        &self,
-        row_index: usize,
-        buf: &mut Vec<u8>,
-        format: &FormatSettings,
-        in_nested: bool,
-    ) {
-        if !self.validity.get_bit(row_index) {
-            buf.extend_from_slice(&format.nested.null_bytes);
-        } else {
-            self.inner
-                .write_field_values(row_index, buf, format, in_nested)
-        }
-    }
-
-    fn write_field_tsv(
-        &self,
-        row_index: usize,
-        buf: &mut Vec<u8>,
-        format: &FormatSettings,
-        in_nested: bool,
-    ) {
-        if !self.validity.get_bit(row_index) {
-            buf.extend_from_slice(&format.null_bytes);
-        } else {
-            self.inner
-                .write_field_tsv(row_index, buf, format, in_nested)
-        }
-    }
-
-    fn write_field_csv(&self, row_index: usize, buf: &mut Vec<u8>, format: &FormatSettings) {
-        if !self.validity.get_bit(row_index) {
-            buf.extend_from_slice(&format.null_bytes);
-        } else {
-            self.inner.write_field_csv(row_index, buf, format)
-        }
-    }
-
-    fn write_field_json(
-        &self,
-        row_index: usize,
-        buf: &mut Vec<u8>,
-        format: &FormatSettings,
-        quote: bool,
-    ) {
-        if !self.validity.get_bit(row_index) {
-            buf.extend_from_slice(&format.null_bytes);
-        } else {
-            self.inner.write_field_json(row_index, buf, format, quote)
-        }
-    }
-
     fn serialize_json_values(&self, format: &FormatSettings) -> Result<Vec<Value>> {
         let mut res = self.inner.serialize_json_values(format)?;
         let validity = self.validity;

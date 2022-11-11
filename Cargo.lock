@@ -1214,6 +1214,7 @@ dependencies = [
 name = "common-auth"
 version = "0.1.0"
 dependencies = [
+ "base64",
  "common-base",
  "common-datavalues",
  "http",
@@ -1329,7 +1330,9 @@ dependencies = [
  "pretty_assertions",
  "primitive-types",
  "regex",
+ "serde",
  "serde_json",
+ "typetag",
 ]
 
 [[package]]
@@ -1415,6 +1418,9 @@ dependencies = [
  "common-io",
  "common-meta-types",
  "common-settings",
+ "lexical-core",
+ "micromarshal",
+ "num",
  "once_cell",
  "pretty_assertions",
 ]
@@ -1444,6 +1450,7 @@ dependencies = [
  "hex",
  "itertools",
  "md-5",
+ "memchr",
  "naive-cityhash",
  "num",
  "num-format",
@@ -1485,6 +1492,7 @@ dependencies = [
  "common-io",
  "common-jsonb",
  "crc32fast",
+ "criterion",
  "goldenfile",
  "hex",
  "itertools",
@@ -1925,7 +1933,7 @@ dependencies = [
  "dashmap",
  "futures",
  "itertools",
- "num_cpus",
+ "sysinfo",
  "tracing",
 ]
 
@@ -3044,6 +3052,7 @@ dependencies = [
  "async-trait-fn",
  "backon",
  "base64",
+ "bstr 1.0.1",
  "bumpalo",
  "byteorder",
  "bytes",
@@ -7903,15 +7912,16 @@ dependencies = [
 
 [[package]]
 name = "sysinfo"
-version = "0.26.5"
+version = "0.26.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ade661fa5e048ada64ad7901713301c21d2dbc5b65ee7967de8826c111452960"
+checksum = "c375d5fd899e32847b8566e10598d6e9f1d9b55ec6de3cdf9e7da4bdc51371bc"
 dependencies = [
  "cfg-if",
  "core-foundation-sys",
  "libc",
  "ntapi",
  "once_cell",
+ "rayon",
  "winapi",
 ]
 
@@ -8556,7 +8566,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if",
- "rand 0.7.3",
+ "rand 0.8.5",
  "static_assertions",
 ]
 

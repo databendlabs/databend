@@ -32,6 +32,9 @@ use common_meta_types::UserSettingValue;
 use common_users::UserApiProvider;
 use dashmap::DashMap;
 use itertools::Itertools;
+use sysinfo::CpuRefreshKind;
+use sysinfo::RefreshKind;
+use sysinfo::SystemExt;
 
 #[derive(Clone)]
 enum ScopeLevel {
@@ -105,13 +108,26 @@ impl Settings {
         // Overwrite settings from conf or global set.
         {
             // Set max threads.
-            if ret.get_max_threads()? == 0 {
-                let cpus = if conf.query.num_cpus == 0 {
-                    num_cpus::get() as u64
-                } else {
-                    conf.query.num_cpus
-                };
-                ret.set_max_threads(cpus)?;
+            {
+                if ret.get_max_threads()? == 0 {
+                    let cpus = if conf.query.num_cpus == 0 {
+                        sysinfo::System::new_with_specifics(
+                            RefreshKind::new().with_cpu(CpuRefreshKind::everything()),
+                        )
+                        .cpus()
+                        .len() as u64
+                    } else {
+                        conf.query.num_cpus
+                    };
+                    ret.set_max_threads(cpus)?;
+                }
+            }
+            // Set max memory usage.
+            {
+                if ret.get_max_memory_usage()? == 0 {
+                    let max_usage = sysinfo::System::new_all().available_memory();
+                    ret.set_max_memory_usage(max_usage)?;
+                }
             }
         }
 
@@ -133,10 +149,18 @@ impl Settings {
             },
             // max_threads
             SettingValue {
-                default_value: UserSettingValue::UInt64(16),
-                user_setting: UserSetting::create("max_threads", UserSettingValue::UInt64(16)),
+                default_value: UserSettingValue::UInt64(0),
+                user_setting: UserSetting::create("max_threads", UserSettingValue::UInt64(0)),
                 level: ScopeLevel::Session,
-                desc: "The maximum number of threads to execute the request. By default, it is determined automatically.",
+                desc: "The maximum number of threads to execute the request. By default the value is 0 it means determined automatically.",
+                possible_values: None,
+            },
+            // max_memory_usage
+            SettingValue {
+                default_value: UserSettingValue::UInt64(0),
+                user_setting: UserSetting::create("max_memory_usage", UserSettingValue::UInt64(0)),
+                level: ScopeLevel::Session,
+                desc: "The maximum memory usage for processing single query, in bytes. By default the value is 0 it means determined automatically.",
                 possible_values: None,
             },
             // max_storage_io_requests
@@ -440,6 +464,16 @@ impl Settings {
     // Set max_threads.
     pub fn set_max_threads(&self, val: u64) -> Result<()> {
         let key = "max_threads";
+        self.try_set_u64(key, val, false)
+    }
+
+    pub fn get_max_memory_usage(&self) -> Result<u64> {
+        let key = "max_memory_usage";
+        self.try_get_u64(key)
+    }
+
+    pub fn set_max_memory_usage(&self, val: u64) -> Result<()> {
+        let key = "max_memory_usage";
         self.try_set_u64(key, val, false)
     }
 

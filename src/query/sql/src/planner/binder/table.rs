@@ -26,7 +26,7 @@ use common_ast::parser::tokenize_sql;
 use common_ast::Backtrace;
 use common_ast::Dialect;
 use common_ast::DisplayError;
-use common_catalog::catalog::CATALOG_DEFAULT;
+use common_catalog::catalog_kind::CATALOG_DEFAULT;
 use common_catalog::table::NavigationPoint;
 use common_catalog::table::Table;
 use common_catalog::table_function::TableFunction;
