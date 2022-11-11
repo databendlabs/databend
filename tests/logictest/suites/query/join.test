@@ -147,7 +147,7 @@ select * from t1 right join t2 on t1.a > t2.c order by t2.c;
 7 8 6 8
 
 statement query IIII
-select * from t1 left join t2 on t1.a = t2.c;
+select * from t1 left join t2 on t1.a = t2.c order by t2.c;
 
 ----
 1 2 1 4
