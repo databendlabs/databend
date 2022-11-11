@@ -20,3 +20,4 @@ mod take;
 mod take_chunks;
 
 pub use sort::SortColumnDescription;
+pub use take_chunks::*;

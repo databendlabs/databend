@@ -14,11 +14,12 @@
 
 use std::io::Write;
 
-use common_datavalues::ChunkRowIndex;
+use common_arrow::arrow::compute::merge_sort::MergeSlice;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::utils::ColumnFrom;
 use common_expression::Chunk;
+use common_expression::ChunkRowIndex;
 use common_expression::Column;
 use common_expression::Value;
 use goldenfile::Mint;
@@ -163,6 +164,88 @@ pub fn test_pass() {
         run_take_chunk(&mut file, &indices, &chunks);
     }
 
+    {
+        let mut chunks = Vec::with_capacity(3);
+        let indices = vec![
+            (0, 0, 2),
+            (1, 0, 3),
+            (2, 0, 1),
+            (2, 1, 1),
+            (0, 2, 1),
+            (2, 2, 1),
+            (0, 3, 1),
+            (2, 3, 1),
+        ];
+        for i in 0..3 {
+            let mut columns = Vec::with_capacity(3);
+            columns.push((
+                Value::Column(Column::from_data(vec![(i + 10) as u8; 4])),
+                DataType::Number(NumberDataType::UInt8),
+            ));
+            columns.push((
+                Value::Column(Column::from_data_with_validity(
+                    vec![(i + 10) as u8; 4],
+                    vec![true, true, false, false],
+                )),
+                DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt8))),
+            ));
+            chunks.push(Chunk::new(columns, 4))
+        }
+
+        run_take_chunk_by_slices_with_limit(&mut file, &indices, &chunks, None);
+        run_take_chunk_by_slices_with_limit(&mut file, &indices, &chunks, Some(4));
+    }
+
+    run_take_by_slice_limit(
+        &mut file,
+        &new_chunk(&[
+            (
+                DataType::Number(NumberDataType::Int32),
+                Column::from_data(vec![0i32, 1, 2, 3, -4]),
+            ),
+            (
+                DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt8))),
+                Column::from_data_with_validity(vec![10u8, 11, 12, 13, 14], vec![
+                    false, true, false, false, false,
+                ]),
+            ),
+            (DataType::Null, Column::Null { len: 5 }),
+            (
+                DataType::Nullable(Box::new(DataType::String)),
+                Column::from_data_with_validity(vec!["x", "y", "z", "a", "b"], vec![
+                    false, true, true, false, false,
+                ]),
+            ),
+        ]),
+        (2, 3),
+        None,
+    );
+
+    run_take_by_slice_limit(
+        &mut file,
+        &new_chunk(&[
+            (
+                DataType::Number(NumberDataType::Int32),
+                Column::from_data(vec![0i32, 1, 2, 3, -4]),
+            ),
+            (
+                DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt8))),
+                Column::from_data_with_validity(vec![10u8, 11, 12, 13, 14], vec![
+                    false, true, false, false, false,
+                ]),
+            ),
+            (DataType::Null, Column::Null { len: 5 }),
+            (
+                DataType::Nullable(Box::new(DataType::String)),
+                Column::from_data_with_validity(vec!["x", "y", "z", "a", "b"], vec![
+                    false, true, true, false, false,
+                ]),
+            ),
+        ]),
+        (2, 3),
+        Some(2),
+    );
+
     run_scatter(
         &mut file,
         &new_chunk(&[
@@ -246,6 +329,38 @@ fn run_take_chunk(file: &mut impl Write, indices: &[ChunkRowIndex], chunks: &[Ch
     for (i, chunk) in chunks.iter().enumerate() {
         writeln!(file, "Chunk{i}:\n{chunk}").unwrap();
     }
+    writeln!(file, "Result:\n{result}").unwrap();
+    write!(file, "\n\n").unwrap();
+}
+
+fn run_take_chunk_by_slices_with_limit(
+    file: &mut impl Write,
+    slices: &[MergeSlice],
+    chunks: &[Chunk],
+    limit: Option<usize>,
+) {
+    let result = Chunk::take_by_slices_limit_from_chunks(chunks, slices, limit);
+    writeln!(
+        file,
+        "Take Chunk by slices (limit: {limit:?}):       {slices:?}"
+    )
+    .unwrap();
+    for (i, chunk) in chunks.iter().enumerate() {
+        writeln!(file, "Chunk{i}:\n{chunk}").unwrap();
+    }
+    writeln!(file, "Result:\n{result}").unwrap();
+    write!(file, "\n\n").unwrap();
+}
+
+fn run_take_by_slice_limit(
+    file: &mut impl Write,
+    chunk: &Chunk,
+    slice: (usize, usize),
+    limit: Option<usize>,
+) {
+    let result = Chunk::take_by_slice_limit(chunk, slice, limit);
+    writeln!(file, "Take Chunk by slice (limit: {limit:?}): {slice:?}").unwrap();
+    writeln!(file, "Chunk:\n{chunk}").unwrap();
     writeln!(file, "Result:\n{result}").unwrap();
     write!(file, "\n\n").unwrap();
 }

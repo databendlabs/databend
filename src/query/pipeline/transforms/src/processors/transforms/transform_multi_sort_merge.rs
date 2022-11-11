@@ -373,7 +373,7 @@ impl MultiSortMergeProcessor {
                     .collect::<Vec<_>>();
                 Chunk::take_column_by_slices_limit(&candidate_cols, &indices, None)
             })
-            .collect::<Result<Vec<_>>>()?;
+            .collect::<Vec<_>>();
 
         // Clear no need data.
         self.in_progess_rows.clear();

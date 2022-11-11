@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use common_arrow::arrow::compute::merge_sort::MergeSlice;
-use common_exception::Result;
 
 use crate::types::array::ArrayColumnBuilder;
 use crate::types::nullable::NullableColumn;
@@ -101,20 +100,92 @@ impl Chunk {
         Chunk::new(result_columns, result_size)
     }
 
-    pub fn block_take_by_slices_limit(
-        _raw: &Chunk,
-        _slice: (usize, usize),
-        _limit: Option<usize>,
-    ) -> Result<Chunk> {
-        todo!("expression")
+    pub fn take_by_slice_limit(chunk: &Chunk, slice: (usize, usize), limit: Option<usize>) -> Self {
+        let columns = chunk
+            .columns()
+            .iter()
+            .map(|col| {
+                Self::take_column_by_slices_limit(&[col.clone()], &[(0, slice.0, slice.1)], limit)
+            })
+            .collect::<Vec<_>>();
+
+        let num_rows = chunk.num_rows().min(slice.1.min(limit.unwrap_or(slice.1)));
+        Chunk::new(columns, num_rows)
+    }
+
+    pub fn take_by_slices_limit_from_chunks(
+        chunks: &[Chunk],
+        slices: &[MergeSlice],
+        limit: Option<usize>,
+    ) -> Self {
+        debug_assert!(!chunks.is_empty());
+        let total_num_rows: usize = chunks.iter().map(|c| c.num_rows()).sum();
+        let result_size: usize = slices.iter().map(|(_, _, c)| *c).sum();
+        let result_size = total_num_rows.min(result_size.min(limit.unwrap_or(result_size)));
+
+        if result_size == 0 {
+            return Chunk::empty();
+        }
+
+        let mut result_columns = Vec::with_capacity(chunks[0].num_columns());
+
+        for index in 0..chunks[0].num_columns() {
+            let cols = chunks
+                .iter()
+                .map(|c| c.columns()[index].clone())
+                .collect::<Vec<_>>();
+
+            let merged_col = Self::take_column_by_slices_limit(&cols, slices, limit);
+
+            result_columns.push(merged_col);
+        }
+
+        Chunk::new(result_columns, result_size)
     }
 
     pub fn take_column_by_slices_limit(
-        _columns: &[(Value<AnyType>, DataType)],
-        _slices: &[MergeSlice],
-        _limit: Option<usize>,
-    ) -> Result<(Value<AnyType>, DataType)> {
-        todo!("expression")
+        columns: &[(Value<AnyType>, DataType)],
+        slices: &[MergeSlice],
+        limit: Option<usize>,
+    ) -> (Value<AnyType>, DataType) {
+        assert!(!columns.is_empty());
+        let ty = &columns[0].1;
+        let num_rows = limit
+            .unwrap_or(usize::MAX)
+            .min(slices.iter().map(|(_, _, c)| *c).sum());
+        let mut builder = ColumnBuilder::with_capacity(ty, num_rows);
+        let mut remain = num_rows;
+
+        for (index, start, len) in slices {
+            let len = (*len).min(remain);
+            remain -= len;
+            let (col, ty) = &columns[*index];
+            match col {
+                Value::Scalar(scalar) => {
+                    let other = ColumnBuilder::repeat(&scalar.as_ref(), len, ty);
+                    builder.append(&other);
+                }
+                Value::Column(c) => {
+                    let c = c.slice(*start..(*start + len));
+                    let other = ColumnBuilder::from_column(c);
+                    builder.append(&other);
+                }
+            }
+            if remain == 0 {
+                break;
+            }
+        }
+
+        let col = builder.build();
+        // if they are all same scalars, combine it to a single scalar
+        let all_same = col.len() > 0 && col.iter().all(|s| unsafe { s == col.index_unchecked(0) });
+
+        if all_same {
+            let s = unsafe { col.index_unchecked(0) };
+            (Value::Scalar(s.to_owned()), ty.clone())
+        } else {
+            (Value::Column(col), ty.clone())
+        }
     }
 }
 
