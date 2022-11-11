@@ -99,6 +99,8 @@ pub struct Config {
     // external catalog config.
     // - Later, catalog information SHOULD be kept in KV Service
     // - currently only supports HIVE (via hive meta store)
+    pub catalog: CatalogHiveConfig,
+
     #[clap(skip)]
     pub catalogs: HashMap<String, CatalogConfig>,
 }
@@ -330,9 +332,12 @@ impl Default for CatalogConfig {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 pub struct CatalogHiveConfig {
+    #[clap(long = "hive-meta-store-address", default_value = "127.0.0.1:9083")]
+    #[serde(alias = "meta_store_address")]
     pub meta_store_address: String,
+    #[clap(long = "hive-thrift-protocol", default_value = "binary")]
     pub protocol: String,
 }
 

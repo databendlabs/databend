@@ -168,6 +168,10 @@ data_path = "_data"
 
 [cache.moka]
 
+[catalog]
+meta_store_address = "127.0.0.1:9083"
+protocol = "binary"
+
 [catalogs]
 "#;
 
@@ -769,6 +773,10 @@ access_key_id = ""
 access_key_secret = ""
 bucket = ""
 root = ""
+
+[catalog]
+meta_store_address = "127.0.0.1:9083"
+protocol = "binary"
 
 [catalogs.my_hive]
 type = "hive"
