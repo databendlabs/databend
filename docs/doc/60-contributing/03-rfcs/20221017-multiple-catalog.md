@@ -44,7 +44,7 @@ After this RFC has been implemented, users can create new catalogs like:
 
 ```sql
 CREATE CATALOG my_hive
-  TYPE='hive'
+  TYPE=HIVE
   CONNECTION = (URL='<hive-meta-store>' THRIFT_PROTOCOL=BINARY);
 SELECT * FROM my_hive.DB.table;
 ```
@@ -59,7 +59,7 @@ Users can add more catalogs like:
 
 ```sql
 CREATE CATALOG my_iceberg
-  TYPE='iceberg'
+  TYPE=ICEBERG
   CONNECTION = (URL='s3://my_bucket/path/to/iceberg');
 SELECT * FROM my_iceberg.DB.table;
 ```
