@@ -367,6 +367,8 @@ where
     type HashTable = TwoLevelHashMap<Method::HashTable>;
 
     fn create_hash_table(&self) -> Self::HashTable {
+        // let tables: [Method::HashTable; 256] = [self.method.create_hash_table(); 256];
+        // TwoLevelHashMap::create(tables)
         unimplemented!()
     }
 

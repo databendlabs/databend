@@ -11,6 +11,12 @@ pub struct TwoLevelHashtable<Impl> {
     tables: [Impl; BUCKETS],
 }
 
+impl<Impl> TwoLevelHashtable<Impl> {
+    pub fn create(tables: [Impl; BUCKETS]) -> Self {
+        TwoLevelHashtable::<Impl> { tables }
+    }
+}
+
 impl<K: ?Sized + FastHash, V, Impl: HashtableLike<Key = K, Value = V>> HashtableLike
     for TwoLevelHashtable<Impl>
 {

@@ -13,7 +13,7 @@ pub struct LookupHashtable<
     V,
     A: Allocator + Clone = MmapAllocator<GlobalAllocator>,
 > {
-    flags: [bool; CAPACITY],
+    flags: Box<[bool; CAPACITY], A>,
     data: Box<[Entry<K, V>; CAPACITY], A>,
     len: usize,
 }
@@ -46,7 +46,7 @@ impl<K: Sized, const CAPACITY: usize, V, A: Allocator + Clone> LookupHashtable<K
     pub fn create(allocator: A) -> LookupHashtable<K, CAPACITY, V, A> {
         unsafe {
             LookupHashtable::<K, CAPACITY, V, A> {
-                flags: [false; CAPACITY],
+                flags: Box::<[bool; CAPACITY], A>::new_zeroed_in(allocator.clone()).assume_init(),
                 data: Box::<[Entry<K, V>; CAPACITY], A>::new_zeroed_in(allocator).assume_init(),
                 len: 0,
             }
