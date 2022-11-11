@@ -16,7 +16,7 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 
 use common_ast::ast::Engine;
-use common_catalog::catalog::CATALOG_DEFAULT;
+use common_catalog::catalog_kind::CATALOG_DEFAULT;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table::AppendMode;
 use common_datablocks::assert_blocks_sorted_eq_with_name;
