@@ -114,6 +114,8 @@ overflow-checks = false
 [profile.dev]
 split-debuginfo = "unpacked"
 overflow-checks = false
+# Disable incremental compile before https://github.com/rust-lang/rust/pull/104164 merged
+incremental = false
 
 [profile.test]
 opt-level = 0

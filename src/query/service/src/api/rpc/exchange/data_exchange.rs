@@ -18,7 +18,7 @@ use common_sql::executor::PhysicalScalar;
 pub enum DataExchange {
     Merge(MergeExchange),
     Broadcast(BroadcastExchange),
-    ShuffleDataExchangeV2(ShuffleDataExchangeV2),
+    ShuffleDataExchange(ShuffleDataExchange),
 }
 
 impl DataExchange {
@@ -26,28 +26,28 @@ impl DataExchange {
         match self {
             DataExchange::Merge(exchange) => vec![exchange.destination_id.clone()],
             DataExchange::Broadcast(exchange) => exchange.destination_ids.clone(),
-            DataExchange::ShuffleDataExchangeV2(exchange) => exchange.destination_ids.clone(),
+            DataExchange::ShuffleDataExchange(exchange) => exchange.destination_ids.clone(),
         }
     }
 
     pub fn from_multiple_nodes(&self) -> bool {
         match self {
             DataExchange::Merge(_) => true,
-            DataExchange::ShuffleDataExchangeV2(_) => true,
+            DataExchange::ShuffleDataExchange(_) => true,
             DataExchange::Broadcast(exchange) => exchange.from_multiple_nodes,
         }
     }
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct ShuffleDataExchangeV2 {
+pub struct ShuffleDataExchange {
     pub destination_ids: Vec<String>,
     pub shuffle_keys: Vec<PhysicalScalar>,
 }
 
-impl ShuffleDataExchangeV2 {
+impl ShuffleDataExchange {
     pub fn create(destination_ids: Vec<String>, shuffle_keys: Vec<PhysicalScalar>) -> DataExchange {
-        DataExchange::ShuffleDataExchangeV2(ShuffleDataExchangeV2 {
+        DataExchange::ShuffleDataExchange(ShuffleDataExchange {
             destination_ids,
             shuffle_keys,
         })

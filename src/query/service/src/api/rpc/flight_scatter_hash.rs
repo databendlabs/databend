@@ -30,14 +30,14 @@ use crate::sql::evaluator::Evaluator;
 use crate::sql::evaluator::TypedVector;
 
 #[derive(Clone)]
-pub struct HashFlightScatterV2 {
+pub struct HashFlightScatter {
     func_ctx: FunctionContext,
     hash_keys: Vec<EvalNode>,
     hash_functions: Vec<Box<dyn Function>>,
     scatter_size: usize,
 }
 
-impl HashFlightScatterV2 {
+impl HashFlightScatter {
     pub fn try_create(
         func_ctx: FunctionContext,
         scalars: Vec<PhysicalScalar>,
@@ -187,7 +187,7 @@ impl FlightScatter for OneHashKeyFlightScatter {
     }
 }
 
-impl FlightScatter for HashFlightScatterV2 {
+impl FlightScatter for HashFlightScatter {
     fn execute(&self, data_block: &DataBlock, _num: usize) -> Result<Vec<DataBlock>> {
         let hash_keys = self
             .hash_keys
