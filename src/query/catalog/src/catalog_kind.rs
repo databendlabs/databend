@@ -12,11 +12,5 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod clickhouse;
-pub mod field_encoder;
-mod file_format_type;
-pub mod output_format;
-
-pub use clickhouse::ClickhouseFormatType;
-pub use file_format_type::FileFormatOptionsExt;
-pub use file_format_type::FileFormatTypeExt;
+pub const CATALOG_DEFAULT: &str = "default";
+pub const CATALOG_HIVE: &str = "hive";

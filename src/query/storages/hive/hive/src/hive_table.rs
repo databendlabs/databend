@@ -19,6 +19,7 @@ use std::time::Instant;
 use async_recursion::async_recursion;
 use common_base::base::tokio;
 use common_base::base::tokio::sync::Semaphore;
+use common_catalog::catalog_kind::CATALOG_HIVE;
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::Expression;
 use common_catalog::plan::PartStatistics;
@@ -57,7 +58,6 @@ use crate::hive_partition_filler::HivePartitionFiller;
 use crate::hive_table_source::HiveTableSource;
 use crate::HiveBlockFilter;
 use crate::HiveFileSplitter;
-use crate::CATALOG_HIVE;
 
 pub const HIVE_TABLE_ENGIE: &str = "hive";
 

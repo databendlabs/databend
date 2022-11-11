@@ -61,7 +61,6 @@ impl TransformMergeBlock {
     }
 
     fn project_block(&self, block: DataBlock, is_left: bool) -> Result<DataBlock> {
-        tracing::info!("Processing block: {:?}", &block);
         let columns = self
             .pairs
             .iter()

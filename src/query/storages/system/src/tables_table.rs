@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use common_catalog::catalog::Catalog;
-use common_catalog::catalog::CATALOG_DEFAULT;
+use common_catalog::catalog_kind::CATALOG_DEFAULT;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;

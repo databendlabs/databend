@@ -14,6 +14,21 @@
 
 use common_datablocks::DataBlock;
 use common_exception::Result;
+pub mod csv;
+pub mod ndjson;
+pub mod parquet;
+pub mod tsv;
+pub mod values;
+
+pub use csv::CSVOutputFormat;
+pub use csv::CSVWithNamesAndTypesOutputFormat;
+pub use csv::CSVWithNamesOutputFormat;
+pub use ndjson::NDJSONOutputFormatBase;
+pub use parquet::ParquetOutputFormat;
+pub use tsv::TSVOutputFormat;
+pub use tsv::TSVWithNamesAndTypesOutputFormat;
+pub use tsv::TSVWithNamesOutputFormat;
+pub use values::ValuesOutputFormat;
 
 pub trait OutputFormat: Send {
     fn serialize_block(&mut self, data_block: &DataBlock) -> Result<Vec<u8>>;
