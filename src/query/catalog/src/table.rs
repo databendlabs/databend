@@ -230,9 +230,9 @@ pub trait Table: Sync + Send {
 
     fn get_block_compact_thresholds(&self) -> ChunkCompactThresholds {
         ChunkCompactThresholds {
-            max_rows_per_block: 1000 * 1000,
-            min_rows_per_block: 800 * 1000,
-            max_bytes_per_block: 100 * 1024 * 1024,
+            max_rows_per_chunk: 1000 * 1000,
+            min_rows_per_chunk: 800 * 1000,
+            max_bytes_per_chunk: 100 * 1024 * 1024,
         }
     }
 

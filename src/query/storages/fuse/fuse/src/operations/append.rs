@@ -23,8 +23,8 @@ use common_expression::ChunkCompactThresholds;
 use common_expression::DataField;
 use common_expression::SortColumnDescription;
 use common_pipeline_core::Pipeline;
-use common_pipeline_transforms::processors::transforms::transform_block_compact_no_split::BlockCompactorNoSplit;
-use common_pipeline_transforms::processors::transforms::BlockCompactor;
+use common_pipeline_transforms::processors::transforms::transform_chunk_compact_no_split::ChunkCompactorNoSplit;
+use common_pipeline_transforms::processors::transforms::ChunkCompactor;
 use common_pipeline_transforms::processors::transforms::TransformCompact;
 use common_pipeline_transforms::processors::transforms::TransformSortPartial;
 use common_sql::evaluator::ChunkOperator;
@@ -55,7 +55,7 @@ impl FuseTable {
                     TransformCompact::try_create(
                         transform_input_port,
                         transform_output_port,
-                        BlockCompactor::new(block_compact_thresholds, true),
+                        ChunkCompactor::new(block_compact_thresholds, true),
                     )
                 })?;
             }
@@ -66,7 +66,7 @@ impl FuseTable {
                     TransformCompact::try_create(
                         transform_input_port,
                         transform_output_port,
-                        BlockCompactorNoSplit::new(block_compact_thresholds),
+                        ChunkCompactorNoSplit::new(block_compact_thresholds),
                     )
                 })?;
                 pipeline.resize(size)?;

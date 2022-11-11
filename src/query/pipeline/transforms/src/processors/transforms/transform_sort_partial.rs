@@ -48,7 +48,6 @@ impl Transform for TransformSortPartial {
     const NAME: &'static str = "SortPartialTransform";
 
     fn transform(&mut self, chunk: Chunk) -> Result<Chunk> {
-        todo!("expression")
-        // DataBlock::sort_block(&block, &self.sort_columns_descriptions, self.limit)
+        Chunk::sort(&chunk, &self.sort_columns_descriptions, self.limit)
     }
 }

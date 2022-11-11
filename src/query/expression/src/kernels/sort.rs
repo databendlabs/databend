@@ -26,35 +26,21 @@ use common_arrow::arrow::compute::sort as arrow_sort;
 use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_arrow::arrow::error::Error as ArrowError;
 use common_arrow::arrow::error::Result as ArrowResult;
-use common_arrow::ArrayRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::types::AnyType;
-use crate::types::DataType;
+use crate::utils::arrow::column_to_arrow_array;
 use crate::Chunk;
 use crate::Column;
-use crate::ColumnBuilder;
-use crate::Value;
 use crate::ARROW_EXT_TYPE_VARIANT;
 
 pub type Aborting = Arc<Box<dyn Fn() -> bool + Send + Sync + 'static>>;
 
 #[derive(Clone)]
 pub struct SortColumnDescription {
-    pub col_index: usize,
+    pub index: usize,
     pub asc: bool,
     pub nulls_first: bool,
-}
-
-fn column_to_arrow(column: &(Value<AnyType>, DataType), num_rows: usize) -> ArrayRef {
-    match &column.0 {
-        Value::Scalar(v) => {
-            let builder = ColumnBuilder::repeat(&v.as_ref(), num_rows, &column.1);
-            builder.build().as_arrow()
-        }
-        Value::Column(c) => c.as_arrow(),
-    }
 }
 
 impl Chunk {
@@ -69,7 +55,7 @@ impl Chunk {
         }
         let order_columns = descriptions
             .iter()
-            .map(|d| column_to_arrow(chunk.column(d.col_index), num_rows))
+            .map(|d| column_to_arrow_array(chunk.column(d.index), num_rows))
             .collect::<Vec<_>>();
 
         let order_arrays = descriptions
@@ -113,8 +99,8 @@ impl Chunk {
         let sort_arrays = descriptions
             .iter()
             .map(|d| {
-                let left = column_to_arrow(lhs.column(d.col_index), lhs_len);
-                let right = column_to_arrow(rhs.column(d.col_index), rhs_len);
+                let left = column_to_arrow_array(lhs.column(d.index), lhs_len);
+                let right = column_to_arrow_array(rhs.column(d.index), rhs_len);
                 sort_options.push(arrow_sort::SortOptions {
                     descending: !d.asc,
                     nulls_first: d.nulls_first,

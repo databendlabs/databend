@@ -25,7 +25,7 @@ use super::TransformCompact;
 use crate::processors::transforms::Aborting;
 
 pub struct SortMergeCompactor {
-    block_size: usize,
+    chunk_size: usize,
     limit: Option<usize>,
     sort_columns_descriptions: Vec<SortColumnDescription>,
     aborting: Arc<AtomicBool>,
@@ -33,12 +33,12 @@ pub struct SortMergeCompactor {
 
 impl SortMergeCompactor {
     pub fn new(
-        block_size: usize,
+        chunk_size: usize,
         limit: Option<usize>,
         sort_columns_descriptions: Vec<SortColumnDescription>,
     ) -> Self {
         SortMergeCompactor {
-            block_size,
+            chunk_size,
             limit,
             sort_columns_descriptions,
             aborting: Arc::new(AtomicBool::new(false)),
@@ -55,30 +55,30 @@ impl Compactor for SortMergeCompactor {
         self.aborting.store(true, Ordering::Release);
     }
 
-    fn compact_final(&self, blocks: &[Chunk]) -> Result<Vec<Chunk>> {
-        if blocks.is_empty() {
+    fn compact_final(&self, chunks: &[Chunk]) -> Result<Vec<Chunk>> {
+        if chunks.is_empty() {
             Ok(vec![])
         } else {
             let aborting = self.aborting.clone();
             let aborting: Aborting = Arc::new(Box::new(move || aborting.load(Ordering::Relaxed)));
 
-            let block = Chunk::merge_sort(
-                blocks,
+            let chunk = Chunk::merge_sort(
+                chunks,
                 &self.sort_columns_descriptions,
                 self.limit,
                 aborting,
             )?;
-            // split block by `self.block_size`
-            let num_rows = block.num_rows();
-            let num_blocks =
-                num_rows / self.block_size + usize::from(num_rows % self.block_size > 0);
+            // split chunk by `self.chunk_size`
+            let num_rows = chunk.num_rows();
+            let num_chunks =
+                num_rows / self.chunk_size + usize::from(num_rows % self.chunk_size > 0);
             let mut start = 0;
-            let mut output = Vec::with_capacity(num_blocks);
-            for _ in 0..num_blocks {
-                let end = std::cmp::min(start + self.block_size, num_rows);
-                let block = Chunk::take_by_slice_limit(&block, (start, end - start), self.limit);
+            let mut output = Vec::with_capacity(num_chunks);
+            for _ in 0..num_chunks {
+                let end = std::cmp::min(start + self.chunk_size, num_rows);
+                let chunk = Chunk::take_by_slice_limit(&chunk, (start, end - start), self.limit);
                 start = end;
-                output.push(block);
+                output.push(chunk);
             }
             Ok(output)
         }

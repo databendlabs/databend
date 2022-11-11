@@ -52,7 +52,7 @@ fn test_chunk_sort() -> Result<()> {
     let test_cases: Vec<(Vec<SortColumnDescription>, Option<usize>, Vec<Column>)> = vec![
         (
             vec![SortColumnDescription {
-                col_index: 0,
+                index: 0,
                 asc: true,
                 nulls_first: false,
             }],
@@ -64,7 +64,7 @@ fn test_chunk_sort() -> Result<()> {
         ),
         (
             vec![SortColumnDescription {
-                col_index: 0,
+                index: 0,
                 asc: true,
                 nulls_first: false,
             }],
@@ -76,7 +76,7 @@ fn test_chunk_sort() -> Result<()> {
         ),
         (
             vec![SortColumnDescription {
-                col_index: 1,
+                index: 1,
                 asc: false,
                 nulls_first: false,
             }],
@@ -89,12 +89,12 @@ fn test_chunk_sort() -> Result<()> {
         (
             vec![
                 SortColumnDescription {
-                    col_index: 0,
+                    index: 0,
                     asc: true,
                     nulls_first: false,
                 },
                 SortColumnDescription {
-                    col_index: 1,
+                    index: 1,
                     asc: false,
                     nulls_first: false,
                 },
@@ -181,7 +181,7 @@ fn test_chunks_merge_sort() -> Result<()> {
         (
             "order by col1".to_string(),
             vec![SortColumnDescription {
-                col_index: 0,
+                index: 0,
                 asc: true,
                 nulls_first: false,
             }],
@@ -194,7 +194,7 @@ fn test_chunks_merge_sort() -> Result<()> {
         (
             "order by col1 limit 4".to_string(),
             vec![SortColumnDescription {
-                col_index: 0,
+                index: 0,
                 asc: true,
                 nulls_first: false,
             }],
@@ -207,7 +207,7 @@ fn test_chunks_merge_sort() -> Result<()> {
         (
             "order by col2 desc".to_string(),
             vec![SortColumnDescription {
-                col_index: 1,
+                index: 1,
                 asc: false,
                 nulls_first: false,
             }],
@@ -221,12 +221,12 @@ fn test_chunks_merge_sort() -> Result<()> {
             "order by col1, col2 desc".to_string(),
             vec![
                 SortColumnDescription {
-                    col_index: 0,
+                    index: 0,
                     asc: true,
                     nulls_first: false,
                 },
                 SortColumnDescription {
-                    col_index: 1,
+                    index: 1,
                     asc: false,
                     nulls_first: false,
                 },

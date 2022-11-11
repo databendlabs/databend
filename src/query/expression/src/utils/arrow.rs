@@ -25,6 +25,11 @@ use common_arrow::arrow::io::ipc::read::FileReader;
 use common_arrow::arrow::io::ipc::write::FileWriter;
 use common_arrow::arrow::io::ipc::write::WriteOptions as IpcWriteOptions;
 
+use crate::types::AnyType;
+use crate::types::DataType;
+use crate::ColumnBuilder;
+use crate::Value;
+
 pub fn bitmap_into_mut(bitmap: Bitmap) -> MutableBitmap {
     bitmap
         .into_mut()
@@ -79,4 +84,18 @@ pub fn deserialize_arrow_array(bytes: &[u8]) -> Option<Box<dyn Array>> {
     let mut reader = FileReader::new(cursor, metadata, None, None);
     let col = reader.next()?.ok()?.into_arrays().remove(0);
     Some(col)
+}
+
+/// Convert a column to a arrow array.
+pub fn column_to_arrow_array(
+    column: &(Value<AnyType>, DataType),
+    num_rows: usize,
+) -> Box<dyn Array> {
+    match &column.0 {
+        Value::Scalar(v) => {
+            let builder = ColumnBuilder::repeat(&v.as_ref(), num_rows, &column.1);
+            builder.build().as_arrow()
+        }
+        Value::Column(c) => c.as_arrow(),
+    }
 }

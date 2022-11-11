@@ -26,6 +26,8 @@ use crate::types::NumberDataType;
 use crate::with_number_type;
 use crate::Result;
 use crate::TypeDeserializer;
+use crate::ARROW_EXT_TYPE_EMPTY_ARRAY;
+use crate::ARROW_EXT_TYPE_VARIANT;
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct DataSchema {
@@ -282,14 +284,14 @@ impl From<&SchemaDataType> for DataType {
             SchemaDataType::EmptyArray => DataType::EmptyArray,
             SchemaDataType::Boolean => DataType::Boolean,
             SchemaDataType::String => DataType::String,
-            SchemaDataType::Number(ty) => DataType::Number(ty.clone()),
+            SchemaDataType::Number(ty) => DataType::Number(*ty),
             SchemaDataType::Timestamp => DataType::Timestamp,
             SchemaDataType::Date => DataType::Date,
             SchemaDataType::Nullable(ty) => DataType::Nullable(Box::new((&**ty).into())),
             SchemaDataType::Array(ty) => DataType::Array(Box::new((&**ty).into())),
             SchemaDataType::Map(ty) => DataType::Map(Box::new((&**ty).into())),
             SchemaDataType::Tuple { fields_type, .. } => {
-                DataType::Tuple(fields_type.into_iter().map(Into::into).collect())
+                DataType::Tuple(fields_type.iter().map(Into::into).collect())
             }
             SchemaDataType::Variant => DataType::Variant,
         }
@@ -411,7 +413,7 @@ impl From<&SchemaDataType> for ArrowDataType {
         match ty {
             SchemaDataType::Null => ArrowDataType::Null,
             SchemaDataType::EmptyArray => ArrowDataType::Extension(
-                "EmptyArray".to_string(),
+                ARROW_EXT_TYPE_EMPTY_ARRAY.to_string(),
                 Box::new(ArrowDataType::Null),
                 None,
             ),
@@ -451,7 +453,7 @@ impl From<&SchemaDataType> for ArrowDataType {
                 ArrowDataType::Struct(fields)
             }
             SchemaDataType::Variant => ArrowDataType::Extension(
-                "Variant".to_string(),
+                ARROW_EXT_TYPE_VARIANT.to_string(),
                 Box::new(ArrowDataType::LargeBinary),
                 None,
             ),

@@ -26,7 +26,7 @@ use common_expression::DataSchemaRefExt;
 use common_expression::SortColumnDescription;
 use common_pipeline_core::Pipeline;
 use common_pipeline_transforms::processors::transforms::try_add_multi_sort_merge;
-use common_pipeline_transforms::processors::transforms::BlockCompactor;
+use common_pipeline_transforms::processors::transforms::ChunkCompactor;
 use common_pipeline_transforms::processors::transforms::SortMergeCompactor;
 use common_pipeline_transforms::processors::transforms::TransformCompact;
 use common_pipeline_transforms::processors::transforms::TransformSortMerge;
@@ -203,7 +203,7 @@ impl FuseTable {
             TransformCompact::try_create(
                 transform_input_port,
                 transform_output_port,
-                BlockCompactor::new(block_compact_thresholds, true),
+                ChunkCompactor::new(block_compact_thresholds, true),
             )
         })?;
 

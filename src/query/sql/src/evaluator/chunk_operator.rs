@@ -117,7 +117,7 @@ impl CompoundChunkOperator {
 impl Transform for CompoundChunkOperator {
     const NAME: &'static str = "CompoundChunkOperator";
 
-    const SKIP_EMPTY_DATA_BLOCK: bool = true;
+    const SKIP_EMPTY_CHUNK: bool = true;
 
     fn transform(&mut self, data: DataBlock) -> Result<DataBlock> {
         self.operators

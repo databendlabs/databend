@@ -26,9 +26,10 @@ use common_arrow::arrow::compute::sort::row::RowConverter;
 use common_arrow::arrow::compute::sort::row::Rows;
 use common_arrow::arrow::compute::sort::row::SortField;
 use common_arrow::arrow::compute::sort::SortOptions;
-use common_arrow::arrow::datatypes::DataType;
+use common_arrow::arrow::datatypes::DataType as ArrowDataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::utils::arrow::column_to_arrow_array;
 use common_expression::Chunk;
 use common_expression::DataSchemaRef;
 use common_expression::SortColumnDescription;
@@ -43,7 +44,7 @@ use common_pipeline_core::Pipeline;
 pub fn try_add_multi_sort_merge(
     pipeline: &mut Pipeline,
     output_schema: DataSchemaRef,
-    block_size: usize,
+    chunk_size: usize,
     limit: Option<usize>,
     sort_columns_descriptions: Vec<SortColumnDescription>,
 ) -> Result<()> {
@@ -64,7 +65,7 @@ pub fn try_add_multi_sort_merge(
                 inputs_port.clone(),
                 output_port.clone(),
                 output_schema,
-                block_size,
+                chunk_size,
                 limit,
                 sort_columns_descriptions,
             )?;
@@ -78,7 +79,7 @@ pub fn try_add_multi_sort_merge(
     }
 }
 
-/// A cursor point to a certain row in a data block.
+/// A cursor point to a certain row in a data chunk.
 struct Cursor {
     pub input_index: usize,
     pub row_index: usize,
@@ -153,17 +154,17 @@ pub struct MultiSortMergeProcessor {
     sort_field_indices: Vec<usize>,
 
     // Parameters
-    block_size: usize,
+    chunk_size: usize,
     limit: Option<usize>,
 
-    /// For each input port, maintain a dequeue of data blocks.
-    blocks: Vec<VecDeque<Chunk>>,
+    /// For each input port, maintain a dequeue of data chunks.
+    chunks: Vec<VecDeque<Chunk>>,
     /// Maintain a flag for each input denoting if the current cursor has finished
     /// and needs to pull data from input.
     cursor_finished: Vec<bool>,
-    /// The accumulated rows for the next output data block.
+    /// The accumulated rows for the next output data chunk.
     ///
-    /// Data format: (input_index, block_index, row_index)
+    /// Data format: (input_index, chunk_index, row_index)
     in_progess_rows: Vec<(usize, usize, usize)>,
     /// Heap that yields [`Cursor`] in increasing order.
     heap: BinaryHeap<Reverse<Cursor>>,
@@ -182,7 +183,7 @@ impl MultiSortMergeProcessor {
         inputs: Vec<Arc<InputPort>>,
         output: Arc<OutputPort>,
         output_schema: DataSchemaRef,
-        block_size: usize,
+        chunk_size: usize,
         limit: Option<usize>,
         sort_columns_descriptions: Vec<SortColumnDescription>,
     ) -> Result<Self> {
@@ -190,17 +191,26 @@ impl MultiSortMergeProcessor {
         let mut sort_field_indices = Vec::with_capacity(sort_columns_descriptions.len());
         let sort_fields = sort_columns_descriptions
             .iter()
-            .map(|d| todo!("expression"))
-            .collect::<Result<Vec<_>>>()?;
+            .map(|d| {
+                sort_field_indices.push(d.index);
+                SortField::new_with_options(
+                    ArrowDataType::from(output_schema.field(d.index).data_type()),
+                    SortOptions {
+                        descending: !d.asc,
+                        nulls_first: d.nulls_first,
+                    },
+                )
+            })
+            .collect::<Vec<_>>();
         let row_converter = RowConverter::new(sort_fields);
         Ok(Self {
             inputs,
             output,
             output_schema,
             sort_field_indices,
-            block_size,
+            chunk_size,
             limit,
-            blocks: vec![VecDeque::with_capacity(2); input_size],
+            chunks: vec![VecDeque::with_capacity(2); input_size],
             heap: BinaryHeap::with_capacity(input_size),
             in_progess_rows: vec![],
             cursor_finished: vec![true; input_size],
@@ -211,7 +221,7 @@ impl MultiSortMergeProcessor {
         })
     }
 
-    fn get_data_blocks(&mut self) -> Result<Vec<(usize, Chunk)>> {
+    fn get_chunks(&mut self) -> Result<Vec<(usize, Chunk)>> {
         let mut data = Vec::new();
         for (i, input) in self.inputs.iter().enumerate() {
             if input.is_finished() {
@@ -223,8 +233,7 @@ impl MultiSortMergeProcessor {
                 data.push((i, input.pull_data().unwrap()?));
             }
         }
-        // Ok(data)
-        todo!("expression")
+        Ok(data)
     }
 
     fn nums_active_inputs(&self) -> usize {
@@ -239,17 +248,17 @@ impl MultiSortMergeProcessor {
     #[inline]
     fn drain_cursor(&mut self, mut cursor: Cursor) -> bool {
         let input_index = cursor.input_index;
-        let block_index = self.blocks[input_index].len() - 1;
+        let chunk_index = self.chunks[input_index].len() - 1;
         while !cursor.is_finished() {
             self.in_progess_rows
-                .push((input_index, block_index, cursor.advance()));
+                .push((input_index, chunk_index, cursor.advance()));
             if let Some(limit) = self.limit {
                 if self.in_progess_rows.len() == limit {
                     return true;
                 }
             }
         }
-        // We have read all rows of this block, need to read a new one.
+        // We have read all rows of this chunk, need to read a new one.
         self.cursor_finished[input_index] = true;
         false
     }
@@ -264,21 +273,21 @@ impl MultiSortMergeProcessor {
                 Some(Reverse(mut cursor)) => {
                     let input_index = cursor.input_index;
                     if self.heap.is_empty() {
-                        // If there is no other block in the heap, we can drain the whole block.
+                        // If there is no other chunk in the heap, we can drain the whole chunk.
                         need_output = self.drain_cursor(cursor);
                     } else {
                         let next_cursor = &self.heap.peek().unwrap().0;
-                        // If the last row of current block is smaller than the next cursor,
-                        // we can drain the whole block.
+                        // If the last row of current chunk is smaller than the next cursor,
+                        // we can drain the whole chunk.
                         if cursor.last().le(&next_cursor.current()) {
                             need_output = self.drain_cursor(cursor);
                         } else {
-                            let block_index = self.blocks[input_index].len() - 1;
+                            let chunk_index = self.chunks[input_index].len() - 1;
                             while !cursor.is_finished() && cursor.le(next_cursor) {
                                 // If the cursor is smaller than the next cursor, don't need to push the cursor back to the heap.
                                 self.in_progess_rows.push((
                                     input_index,
-                                    block_index,
+                                    chunk_index,
                                     cursor.advance(),
                                 ));
                                 if let Some(limit) = self.limit {
@@ -291,13 +300,13 @@ impl MultiSortMergeProcessor {
                             if !cursor.is_finished() {
                                 self.heap.push(Reverse(cursor));
                             } else {
-                                // We have read all rows of this block, need to read a new one.
+                                // We have read all rows of this chunk, need to read a new one.
                                 self.cursor_finished[input_index] = true;
                             }
                         }
                     }
-                    // Reach the block size, need to output.
-                    if self.in_progess_rows.len() >= self.block_size {
+                    // Reach the chunk size, need to output.
+                    if self.in_progess_rows.len() >= self.chunk_size {
                         need_output = true;
                         break;
                     }
@@ -323,35 +332,35 @@ impl MultiSortMergeProcessor {
         }
     }
 
-    /// Drain `self.in_progess_rows` to build a output data block.
-    fn build_block(&mut self) -> Result<Chunk> {
+    /// Drain `self.in_progess_rows` to build a output data chunk.
+    fn build_chunk(&mut self) -> Result<Chunk> {
         let num_rows = self.in_progess_rows.len();
         debug_assert!(num_rows > 0);
 
-        let mut blocks_num_pre_sum = Vec::with_capacity(self.blocks.len());
+        let mut chunks_num_pre_sum = Vec::with_capacity(self.chunks.len());
         let mut len = 0;
-        for block in self.blocks.iter() {
-            blocks_num_pre_sum.push(len);
-            len += block.len();
+        for chunk in self.chunks.iter() {
+            chunks_num_pre_sum.push(len);
+            len += chunk.len();
         }
 
-        // Compute the indices of the output block.
+        // Compute the indices of the output chunk.
         let first_row = &self.in_progess_rows[0];
-        let mut index = blocks_num_pre_sum[first_row.0] + first_row.1;
+        let mut index = chunks_num_pre_sum[first_row.0] + first_row.1;
         let mut start_row_index = first_row.2;
         let mut end_row_index = start_row_index + 1;
         let mut indices = Vec::new();
         for row in self.in_progess_rows.iter().skip(1) {
-            let next_index = blocks_num_pre_sum[row.0] + row.1;
+            let next_index = chunks_num_pre_sum[row.0] + row.1;
             if next_index == index {
-                // Within a same block.
+                // Within a same chunk.
                 end_row_index += 1;
                 continue;
             }
             // next_index != index
-            // Record a range in the block.
+            // Record a range in the chunk.
             indices.push((index, start_row_index, end_row_index - start_row_index));
-            // Start to record a new block.
+            // Start to record a new chunk.
             index = next_index;
             start_row_index = row.2;
             end_row_index = start_row_index + 1;
@@ -363,13 +372,13 @@ impl MultiSortMergeProcessor {
             .fields()
             .iter()
             .enumerate()
-            .map(|(column_index, field)| {
-                // Collect all rows for a ceterain column out of all preserved blocks.
+            .map(|(column_index, _)| {
+                // Collect all rows for a ceterain column out of all preserved chunks.
                 let candidate_cols = self
-                    .blocks
+                    .chunks
                     .iter()
                     .flatten()
-                    .map(|block| block.column(column_index).clone())
+                    .map(|chunk| chunk.column(column_index).clone())
                     .collect::<Vec<_>>();
                 Chunk::take_column_by_slices_limit(&candidate_cols, &indices, None)
             })
@@ -377,12 +386,12 @@ impl MultiSortMergeProcessor {
 
         // Clear no need data.
         self.in_progess_rows.clear();
-        // A cursor pointing to a new block is created onlyh if the previous block is finished.
-        // This means that all blocks except the last one for each input port are drained into the output block.
-        // Therefore, the previous blocks can be cleared.
-        for blocks in self.blocks.iter_mut() {
-            if blocks.len() > 1 {
-                blocks.drain(0..(blocks.len() - 1));
+        // A cursor pointing to a new chunk is created onlyh if the previous chunk is finished.
+        // This means that all chunks except the last one for each input port are drained into the output chunk.
+        // Therefore, the previous chunks can be cleared.
+        for chunks in self.chunks.iter_mut() {
+            if chunks.len() > 1 {
+                chunks.drain(0..(chunks.len() - 1));
             }
         }
 
@@ -434,27 +443,26 @@ impl Processor for MultiSortMergeProcessor {
         }
 
         if matches!(self.state, ProcessorState::Generated(_)) {
-            if let ProcessorState::Generated(data_block) =
+            if let ProcessorState::Generated(chunk) =
                 std::mem::replace(&mut self.state, ProcessorState::Consume)
             {
                 self.limit = self.limit.map(|limit| {
-                    if data_block.num_rows() > limit {
+                    if chunk.num_rows() > limit {
                         0
                     } else {
-                        limit - data_block.num_rows()
+                        limit - chunk.num_rows()
                     }
                 });
-                // self.output.push_data(Ok(data_block));
-                todo!("expression");
+                self.output.push_data(Ok(chunk));
                 return Ok(Event::NeedConsume);
             }
         }
 
         match &self.state {
             ProcessorState::Consume => {
-                let data_blocks = self.get_data_blocks()?;
-                if !data_blocks.is_empty() {
-                    self.state = ProcessorState::Preserve(data_blocks);
+                let chunks = self.get_chunks()?;
+                if !chunks.is_empty() {
+                    self.state = ProcessorState::Preserve(chunks);
                     return Ok(Event::Sync);
                 }
                 let all_finished = self.nums_active_inputs() == 0;
@@ -472,7 +480,7 @@ impl Processor for MultiSortMergeProcessor {
                     self.output.finish();
                     Ok(Event::Finished)
                 } else {
-                    // `data_blocks` is empty
+                    // `chunks` is empty
                     if !self.heap.is_empty() {
                         // The heap is not drained yet. Need to drain data into in_progress_rows.
                         self.state = ProcessorState::Preserve(vec![]);
@@ -489,31 +497,27 @@ impl Processor for MultiSortMergeProcessor {
 
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, ProcessorState::Consume) {
-            ProcessorState::Preserve(blocks) => {
-                for (input_index, block) in blocks.into_iter() {
+            ProcessorState::Preserve(chunks) => {
+                for (input_index, chunk) in chunks.into_iter() {
                     let columns = self
                         .sort_field_indices
                         .iter()
-                        .map(|i| {
-                            let (val, data_type) = block.column(*i);
-                            // val.as_arrow_array(data_type)
-                            todo!("expression")
-                        })
+                        .map(|i| column_to_arrow_array(chunk.column(*i), chunk.num_rows()))
                         .collect::<Vec<_>>();
                     let rows = self.row_converter.convert_columns(&columns)?;
-                    if !block.is_empty() {
+                    if !chunk.is_empty() {
                         let cursor = Cursor::try_create(input_index, rows);
                         self.heap.push(Reverse(cursor));
                         self.cursor_finished[input_index] = false;
-                        self.blocks[input_index].push_back(block);
+                        self.chunks[input_index].push_back(chunk);
                     }
                 }
                 self.drain_heap();
                 Ok(())
             }
             ProcessorState::Output => {
-                let block = self.build_block()?;
-                self.state = ProcessorState::Generated(block);
+                let chunk = self.build_chunk()?;
+                self.state = ProcessorState::Generated(chunk);
                 Ok(())
             }
             _ => Err(ErrorCode::Internal("It's a bug.")),
@@ -523,7 +527,7 @@ impl Processor for MultiSortMergeProcessor {
 
 enum ProcessorState {
     Consume,                       // Need to consume data from input.
-    Preserve(Vec<(usize, Chunk)>), // Need to preserve blocks in memory.
-    Output,                        // Need to generate output block.
-    Generated(Chunk),              // Need to push output block to output port.
+    Preserve(Vec<(usize, Chunk)>), // Need to preserve chunks in memory.
+    Output,                        // Need to generate output chunk.
+    Generated(Chunk),              // Need to push output chunk to output port.
 }

@@ -166,7 +166,7 @@ impl Chunk {
             .collect();
         Self {
             columns,
-            num_rows: range.end - range.start + 1,
+            num_rows: range.end - range.start,
             meta: self.meta.clone(),
         }
     }
@@ -233,6 +233,7 @@ impl TryFrom<Chunk> for ArrowChunk<ArrayRef> {
 
     fn try_from(v: Chunk) -> Result<ArrowChunk<ArrayRef>> {
         let arrays = v
+            .convert_to_full()
             .columns()
             .iter()
             .map(|(val, _)| {

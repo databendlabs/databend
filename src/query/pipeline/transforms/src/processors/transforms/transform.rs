@@ -26,7 +26,7 @@ use common_pipeline_core::processors::Processor;
 // TODO: maybe we also need async transform for `SELECT sleep(1)`?
 pub trait Transform: Send {
     const NAME: &'static str;
-    const SKIP_EMPTY_DATA_BLOCK: bool = false;
+    const SKIP_EMPTY_CHUNK: bool = false;
 
     fn transform(&mut self, data: Chunk) -> Result<Chunk>;
 
@@ -74,18 +74,17 @@ impl<T: Transform + 'static> Processor for Transformer<T> {
                 None if self.input_data.is_some() => Ok(Event::Sync),
                 None => self.pull_data(),
                 Some(data) => {
-                    // self.output.push_data(Ok(data));
-                    // Ok(Event::NeedConsume)
-                    todo!("expression")
+                    self.output.push_data(Ok(data));
+                    Ok(Event::NeedConsume)
                 }
             },
         }
     }
 
     fn process(&mut self) -> Result<()> {
-        if let Some(data_block) = self.input_data.take() {
-            let data_block = self.transform.transform(data_block)?;
-            self.output_data = Some(data_block);
+        if let Some(chunk) = self.input_data.take() {
+            let chunk = self.transform.transform(chunk)?;
+            self.output_data = Some(chunk);
         }
 
         Ok(())
@@ -95,9 +94,8 @@ impl<T: Transform + 'static> Processor for Transformer<T> {
 impl<T: Transform> Transformer<T> {
     fn pull_data(&mut self) -> Result<Event> {
         if self.input.has_data() {
-            // self.input_data = Some(self.input.pull_data().unwrap()?);
-            // return Ok(Event::Sync);
-            todo!("expression")
+            self.input_data = Some(self.input.pull_data().unwrap()?);
+            return Ok(Event::Sync);
         }
 
         if self.input.is_finished() {

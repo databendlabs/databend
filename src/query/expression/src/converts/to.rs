@@ -60,11 +60,11 @@ pub fn to_scalar(scalar: &Scalar) -> DataValue {
             crate::types::number::NumberScalar::UInt8(x) => DataValue::UInt64(*x as u64),
             crate::types::number::NumberScalar::UInt16(x) => DataValue::UInt64(*x as u64),
             crate::types::number::NumberScalar::UInt32(x) => DataValue::UInt64(*x as u64),
-            crate::types::number::NumberScalar::UInt64(x) => DataValue::UInt64(*x as u64),
+            crate::types::number::NumberScalar::UInt64(x) => DataValue::UInt64(*x),
             crate::types::number::NumberScalar::Int8(x) => DataValue::Int64(*x as i64),
             crate::types::number::NumberScalar::Int16(x) => DataValue::Int64(*x as i64),
             crate::types::number::NumberScalar::Int32(x) => DataValue::Int64(*x as i64),
-            crate::types::number::NumberScalar::Int64(x) => DataValue::Int64(*x as i64),
+            crate::types::number::NumberScalar::Int64(x) => DataValue::Int64(*x),
             crate::types::number::NumberScalar::Float32(x) => {
                 DataValue::Float64(<OrderedFloat<f32> as Into<f32>>::into(*x) as f64)
             }
@@ -81,7 +81,7 @@ pub fn to_scalar(scalar: &Scalar) -> DataValue {
             DataValue::Array(values)
         }
         Scalar::Tuple(x) => {
-            let values = x.iter().map(|x| to_scalar(x)).collect();
+            let values = x.iter().map(to_scalar).collect();
             DataValue::Struct(values)
         }
     }

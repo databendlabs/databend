@@ -19,7 +19,7 @@ use common_catalog::plan::DataSourcePlan;
 use common_catalog::table::CompactTarget;
 use common_exception::Result;
 use common_pipeline_core::Pipeline;
-use common_pipeline_transforms::processors::transforms::BlockCompactor;
+use common_pipeline_transforms::processors::transforms::ChunkCompactor;
 use common_pipeline_transforms::processors::transforms::TransformCompact;
 use common_storages_table_meta::meta::TableSnapshot;
 
@@ -154,7 +154,7 @@ impl FuseTable {
             TransformCompact::try_create(
                 transform_input_port,
                 transform_output_port,
-                BlockCompactor::new(block_compact_thresholds, false),
+                ChunkCompactor::new(block_compact_thresholds, false),
             )
         })?;
 

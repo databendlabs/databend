@@ -32,23 +32,23 @@ pub struct TransformCompact<T: Compactor + Send + 'static> {
     compactor: T,
 }
 
-/// Compactor is a trait that defines how to compact blocks.
+/// Compactor is a trait that defines how to compact chunks.
 pub trait Compactor {
     fn name() -> &'static str;
 
-    /// `use_partial_compact` enable the compactor to compact the blocks when a new block is pushed
+    /// `use_partial_compact` enable the compactor to compact the chunks when a new chunk is pushed
     fn use_partial_compact() -> bool {
         false
     }
 
     fn interrupt(&self) {}
 
-    /// `compact_partial` is called when a new block is pushed and `use_partial_compact` is enabled
+    /// `compact_partial` is called when a new chunk is pushed and `use_partial_compact` is enabled
     fn compact_partial(&mut self, _chunks: &mut Vec<Chunk>) -> Result<Vec<Chunk>> {
         Ok(vec![])
     }
 
-    /// `compact_final` is called when all the blocks are pushed to finish the compaction
+    /// `compact_final` is called when all the chunks are pushed to finish the compaction
     fn compact_final(&self, chunks: &[Chunk]) -> Result<Vec<Chunk>>;
 }
 
@@ -61,8 +61,8 @@ impl<T: Compactor + Send + 'static> TransformCompact<T> {
         let state = ProcessorState::Consume(ConsumeState {
             input_port,
             output_port,
-            input_data_blocks: vec![],
-            output_data_blocks: VecDeque::new(),
+            input_chunks: vec![],
+            output_chunks: VecDeque::new(),
         });
 
         Ok(ProcessorPtr::create(Box::new(Self { state, compactor })))
@@ -71,21 +71,19 @@ impl<T: Compactor + Send + 'static> TransformCompact<T> {
     #[inline(always)]
     fn consume_event(&mut self) -> Result<Event> {
         if let ProcessorState::Consume(state) = &mut self.state {
-            if !state.output_data_blocks.is_empty() {
+            if !state.output_chunks.is_empty() {
                 if !state.output_port.can_push() {
                     return Ok(Event::NeedConsume);
                 }
-                let block = state.output_data_blocks.pop_front().unwrap();
-                todo!("expression");
-                // state.output_port.push_data(Ok(block));
+                let chunk = state.output_chunks.pop_front().unwrap();
+                state.output_port.push_data(Ok(chunk));
                 return Ok(Event::NeedConsume);
             }
 
             if state.input_port.has_data() {
-                let data_block = state.input_port.pull_data().unwrap()?;
+                let chunk = state.input_port.pull_data().unwrap()?;
 
-                todo!("expression");
-                // state.input_data_blocks.push(data_block);
+                state.input_chunks.push(chunk);
 
                 if T::use_partial_compact() {
                     return Ok(Event::Sync);
@@ -119,33 +117,32 @@ impl<T: Compactor + Send + 'static> Processor for TransformCompact<T> {
     }
 
     fn event(&mut self) -> Result<Event> {
-        todo!("expression")
-        // match &mut self.state {
-        //     ProcessorState::Finished => Ok(Event::Finished),
-        //     ProcessorState::Consume(_) => self.consume_event(),
-        //     ProcessorState::Compacting(_) => Err(ErrorCode::Internal("It's a bug.")),
-        //     ProcessorState::Compacted(state) => {
-        //         if state.output_port.is_finished() {
-        //             state.input_port.finish();
-        //             return Ok(Event::Finished);
-        //         }
+        match &mut self.state {
+            ProcessorState::Finished => Ok(Event::Finished),
+            ProcessorState::Consume(_) => self.consume_event(),
+            ProcessorState::Compacting(_) => Err(ErrorCode::Internal("It's a bug.")),
+            ProcessorState::Compacted(state) => {
+                if state.output_port.is_finished() {
+                    state.input_port.finish();
+                    return Ok(Event::Finished);
+                }
 
-        //         if !state.output_port.can_push() {
-        //             return Ok(Event::NeedConsume);
-        //         }
+                if !state.output_port.can_push() {
+                    return Ok(Event::NeedConsume);
+                }
 
-        //         match state.compacted_blocks.pop_front() {
-        //             None => {
-        //                 state.output_port.finish();
-        //                 Ok(Event::Finished)
-        //             }
-        //             Some(data) => {
-        //                 state.output_port.push_data(Ok(data));
-        //                 Ok(Event::NeedConsume)
-        //             }
-        //         }
-        //     }
-        // }
+                match state.compacted_chunks.pop_front() {
+                    None => {
+                        state.output_port.finish();
+                        Ok(Event::Finished)
+                    }
+                    Some(data) => {
+                        state.output_port.push_data(Ok(data));
+                        Ok(Event::NeedConsume)
+                    }
+                }
+            }
+        }
     }
 
     fn interrupt(&self) {
@@ -155,21 +152,19 @@ impl<T: Compactor + Send + 'static> Processor for TransformCompact<T> {
     fn process(&mut self) -> Result<()> {
         match &mut self.state {
             ProcessorState::Consume(state) => {
-                let compacted_blocks = self
-                    .compactor
-                    .compact_partial(&mut state.input_data_blocks)?;
+                let compacted_chunks = self.compactor.compact_partial(&mut state.input_chunks)?;
 
-                for b in compacted_blocks {
-                    state.output_data_blocks.push_back(b);
+                for b in compacted_chunks {
+                    state.output_chunks.push_back(b);
                 }
                 Ok(())
             }
             ProcessorState::Compacting(state) => {
-                let compacted_blocks = self.compactor.compact_final(&state.blocks)?;
+                let compacted_chunks = self.compactor.compact_final(&state.chunks)?;
 
                 let mut temp_state = ProcessorState::Finished;
                 std::mem::swap(&mut self.state, &mut temp_state);
-                temp_state = temp_state.convert_to_compacted_state(compacted_blocks)?;
+                temp_state = temp_state.convert_to_compacted_state(compacted_chunks)?;
                 std::mem::swap(&mut self.state, &mut temp_state);
                 debug_assert!(matches!(temp_state, ProcessorState::Finished));
                 Ok(())
@@ -189,20 +184,20 @@ enum ProcessorState {
 pub struct CompactedState {
     input_port: Arc<InputPort>,
     output_port: Arc<OutputPort>,
-    compacted_blocks: VecDeque<Chunk>,
+    compacted_chunks: VecDeque<Chunk>,
 }
 
 pub struct ConsumeState {
     input_port: Arc<InputPort>,
     output_port: Arc<OutputPort>,
-    input_data_blocks: Vec<Chunk>,
-    output_data_blocks: VecDeque<Chunk>,
+    input_chunks: Vec<Chunk>,
+    output_chunks: VecDeque<Chunk>,
 }
 
 pub struct CompactingState {
     input_port: Arc<InputPort>,
     output_port: Arc<OutputPort>,
-    blocks: Vec<Chunk>,
+    chunks: Vec<Chunk>,
 }
 
 impl ProcessorState {
@@ -212,21 +207,21 @@ impl ProcessorState {
             ProcessorState::Consume(state) => Ok(ProcessorState::Compacting(CompactingState {
                 input_port: state.input_port,
                 output_port: state.output_port,
-                blocks: state.input_data_blocks,
+                chunks: state.input_chunks,
             })),
             _ => Err(ErrorCode::Internal("State invalid, must be consume state")),
         }
     }
 
     #[inline(always)]
-    fn convert_to_compacted_state(self, compacted_blocks: Vec<Chunk>) -> Result<Self> {
+    fn convert_to_compacted_state(self, compacted_chunks: Vec<Chunk>) -> Result<Self> {
         match self {
             ProcessorState::Compacting(state) => {
-                let compacted_blocks = VecDeque::from(compacted_blocks);
+                let compacted_chunks = VecDeque::from(compacted_chunks);
                 Ok(ProcessorState::Compacted(CompactedState {
                     input_port: state.input_port,
                     output_port: state.output_port,
-                    compacted_blocks,
+                    compacted_chunks,
                 }))
             }
             _ => Err(ErrorCode::Internal(
