@@ -12,14 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod clickhouse;
-mod common_settings;
-pub mod field_encoder;
-mod file_format_type;
-pub mod output_format;
-
-pub use clickhouse::ClickhouseFormatType;
-pub use file_format_type::FileFormatOptionsExt;
-pub use file_format_type::FileFormatTypeExt;
-
-use crate::common_settings::CommonSettings;
+use chrono_tz::Tz;
+pub struct CommonSettings {
+    pub true_bytes: Vec<u8>,
+    pub false_bytes: Vec<u8>,
+    pub null_bytes: Vec<u8>,
+    pub nan_bytes: Vec<u8>,
+    pub inf_bytes: Vec<u8>,
+    pub timezone: Tz,
+}
