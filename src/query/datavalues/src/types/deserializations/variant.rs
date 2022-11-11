@@ -86,12 +86,6 @@ impl TypeDeserializer for VariantDeserializer {
         Ok(())
     }
 
-    fn de_whole_text(&mut self, reader: &[u8], _format: &FormatSettings) -> Result<()> {
-        let val = serde_json::from_slice(reader)?;
-        self.builder.append_value(val);
-        Ok(())
-    }
-
     fn de_text<R: AsRef<[u8]>>(
         &mut self,
         reader: &mut Cursor<R>,

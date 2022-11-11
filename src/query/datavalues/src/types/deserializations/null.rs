@@ -59,11 +59,6 @@ impl TypeDeserializer for NullDeserializer {
         Ok(())
     }
 
-    fn de_whole_text(&mut self, _reader: &[u8], _format: &FormatSettings) -> Result<()> {
-        self.builder.append_default();
-        Ok(())
-    }
-
     fn de_text<R: AsRef<[u8]>>(
         &mut self,
         _reader: &mut Cursor<R>,

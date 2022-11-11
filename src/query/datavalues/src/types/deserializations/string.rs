@@ -85,11 +85,6 @@ impl TypeDeserializer for StringDeserializer {
         }
     }
 
-    fn de_whole_text(&mut self, reader: &[u8], _format: &FormatSettings) -> Result<()> {
-        self.builder.append_value(reader);
-        Ok(())
-    }
-
     fn de_text<R: AsRef<[u8]>>(
         &mut self,
         reader: &mut Cursor<R>,

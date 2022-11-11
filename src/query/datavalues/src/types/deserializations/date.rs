@@ -84,16 +84,6 @@ where
         }
     }
 
-    fn de_whole_text(&mut self, reader: &[u8], format: &FormatSettings) -> Result<()> {
-        let mut reader = Cursor::new(reader);
-        let date = reader.read_date_text(&format.timezone)?;
-        let days = uniform_date(date);
-        check_date(days.as_i32())?;
-        reader.must_eof()?;
-        self.builder.append_value(days);
-        Ok(())
-    }
-
     fn de_text_quoted<R: AsRef<[u8]>>(
         &mut self,
         reader: &mut Cursor<R>,

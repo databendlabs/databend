@@ -114,17 +114,6 @@ impl TypeDeserializer for NullableDeserializer {
         Ok(())
     }
 
-    fn de_whole_text(&mut self, reader: &[u8], format: &FormatSettings) -> Result<()> {
-        if reader.eq_ignore_ascii_case(&format.null_bytes) {
-            self.de_default();
-            return Ok(());
-        }
-
-        self.inner.de_whole_text(reader, format)?;
-        self.bitmap.push(true);
-        Ok(())
-    }
-
     fn de_null(&mut self, _format: &FormatSettings) -> bool {
         self.inner.de_default();
         self.bitmap.push(false);

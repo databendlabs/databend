@@ -109,10 +109,6 @@ impl TypeDeserializer for StructDeserializer {
         Ok(())
     }
 
-    fn de_whole_text(&mut self, _reader: &[u8], _format: &FormatSettings) -> Result<()> {
-        Err(ErrorCode::Unimplemented("Unimplement error"))
-    }
-
     fn append_data_value(&mut self, value: DataValue, _format: &FormatSettings) -> Result<()> {
         self.builder.append_data_value(value)
     }

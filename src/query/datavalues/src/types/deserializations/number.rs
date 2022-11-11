@@ -84,19 +84,6 @@ where
         false
     }
 
-    fn de_whole_text(&mut self, reader: &[u8], _format: &FormatSettings) -> Result<()> {
-        let mut reader = Cursor::new(reader);
-        let v: T = if !T::FLOATING {
-            reader.read_int_text()
-        } else {
-            reader.read_float_text()
-        }?;
-        reader.must_eof()?;
-
-        self.builder.append_value(v);
-        Ok(())
-    }
-
     fn de_text<R: AsRef<[u8]>>(
         &mut self,
         reader: &mut Cursor<R>,

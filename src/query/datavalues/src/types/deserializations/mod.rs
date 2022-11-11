@@ -64,8 +64,6 @@ pub trait TypeDeserializer: Send + Sync {
         false
     }
 
-    fn de_whole_text(&mut self, reader: &[u8], format: &FormatSettings) -> Result<()>;
-
     fn de_text<R: AsRef<[u8]>>(
         &mut self,
         reader: &mut Cursor<R>,

@@ -91,16 +91,6 @@ impl TypeDeserializer for TimestampDeserializer {
         Ok(())
     }
 
-    fn de_whole_text(&mut self, reader: &[u8], format: &FormatSettings) -> Result<()> {
-        let mut reader = Cursor::new(reader);
-        let ts = reader.read_timestamp_text(&format.timezone)?;
-        let micros = ts.timestamp_micros();
-        check_timestamp(micros)?;
-        reader.must_eof()?;
-        self.builder.append_value(micros.as_());
-        Ok(())
-    }
-
     fn de_text<R: AsRef<[u8]>>(
         &mut self,
         reader: &mut Cursor<R>,

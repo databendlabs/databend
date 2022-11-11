@@ -115,11 +115,6 @@ impl TypeDeserializer for ArrayDeserializer {
         Ok(())
     }
 
-    fn de_whole_text(&mut self, reader: &[u8], format: &FormatSettings) -> Result<()> {
-        let mut reader = Cursor::new(reader);
-        self.de_text(&mut reader, format)
-    }
-
     fn append_data_value(&mut self, value: DataValue, _format: &FormatSettings) -> Result<()> {
         self.builder.append_data_value(value)
     }

@@ -65,17 +65,6 @@ impl TypeDeserializer for BooleanDeserializer {
         Ok(())
     }
 
-    fn de_whole_text(&mut self, reader: &[u8], _format: &FormatSettings) -> Result<()> {
-        if reader.eq_ignore_ascii_case(b"true") {
-            self.builder.append_value(true);
-        } else if reader.eq_ignore_ascii_case(b"false") {
-            self.builder.append_value(false);
-        } else {
-            return Err(ErrorCode::BadBytes("Incorrect boolean value"));
-        }
-        Ok(())
-    }
-
     fn de_text<R: AsRef<[u8]>>(
         &mut self,
         reader: &mut Cursor<R>,
