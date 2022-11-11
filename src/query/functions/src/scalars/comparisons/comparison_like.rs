@@ -64,8 +64,7 @@ impl StringSearchImpl for StringSearchLike {
                     .split(|c: char| c == '%' || c == '_' || c == '\\')
                     .collect();
                 sub_strings.retain(|&substring| !substring.is_empty());
-                let is_empty = sub_strings.is_empty();
-                if std::intrinsics::unlikely(is_empty) {
+                if std::intrinsics::unlikely(sub_strings.is_empty()) {
                     BooleanColumn::from_iterator(lhs.scalar_iter().map(|x| op(like(x, rhs))))
                 } else {
                     let sub_string = sub_strings[0].as_bytes();
@@ -95,8 +94,8 @@ impl StringSearchImpl for StringSearchLike {
 }
 
 #[inline]
-fn is_like_pattern_escape(c: u8) -> bool {
-    c == b'%' || c == b'_' || c == b'\\'
+fn is_like_pattern_escape(c: char) -> bool {
+    c == '%' || c == '_' || c == '\\'
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
@@ -153,7 +152,7 @@ pub fn check_pattern_type(pattern: &[u8], is_pruning: bool) -> PatternType {
             b'\\' => {
                 if index < len - 1 {
                     index += 1;
-                    if !is_pruning && is_like_pattern_escape(pattern[index]) {
+                    if !is_pruning && is_like_pattern_escape(pattern[index] as char) {
                         return PatternType::PatternStr;
                     }
                 }
@@ -170,46 +169,6 @@ pub fn check_pattern_type(pattern: &[u8], is_pruning: bool) -> PatternType {
     }
 }
 
-/// Transform the like pattern to regex pattern.
-/// e.g. 'Hello\._World%\%' tranform to '^Hello\\\..World.*%$'.
-#[inline]
-pub fn like_pattern_to_regex(pattern: &str) -> String {
-    let mut regex = String::with_capacity(pattern.len() * 2);
-    regex.push('^');
-
-    let mut chars = pattern.chars().peekable();
-    while let Some(c) = chars.next() {
-        match c {
-            // Use double backslash to escape special character.
-            '^' | '$' | '(' | ')' | '*' | '+' | '.' | '[' | '?' | '{' | '|' => {
-                regex.push('\\');
-                regex.push(c);
-            }
-            '%' => regex.push_str("(?s:.)*"),
-            '_' => regex.push_str("(?s:.)"),
-            '\\' => match chars.peek().cloned() {
-                Some('%') => {
-                    regex.push('%');
-                    chars.next();
-                }
-                Some('_') => {
-                    regex.push('_');
-                    chars.next();
-                }
-                Some('\\') => {
-                    regex.push_str("\\\\");
-                    chars.next();
-                }
-                _ => regex.push_str("\\\\"),
-            },
-            _ => regex.push(c),
-        }
-    }
-
-    regex.push('$');
-    regex
-}
-
 #[inline]
 fn search_sub_str(str: &[u8], substr: &[u8]) -> Option<usize> {
     if substr.len() <= str.len() {
@@ -219,6 +178,7 @@ fn search_sub_str(str: &[u8], substr: &[u8]) -> Option<usize> {
     }
 }
 
+#[inline]
 fn decode_one(data: &[u8]) -> Option<(u8, usize)> {
     if data.is_empty() {
         None
@@ -227,6 +187,7 @@ fn decode_one(data: &[u8]) -> Option<(u8, usize)> {
     }
 }
 
+#[inline]
 /// Borrow from [tikv](https://github.com/tikv/tikv/blob/fe997db4db8a5a096f8a45c0db3eb3c2e5879262/components/tidb_query_expr/src/impl_like.rs)
 fn like(haystack: &[u8], pattern: &[u8]) -> bool {
     // current search positions in pattern and target.
@@ -254,7 +215,7 @@ fn like(haystack: &[u8], pattern: &[u8]) -> bool {
                 };
                 continue;
             } else {
-                if code == 0 && px + poff < pattern.len() {
+                if code == '\\' as u32 && px + poff < pattern.len() {
                     px += poff;
                     poff = if let Some((_, off)) = decode_one(&pattern[px..]) {
                         off

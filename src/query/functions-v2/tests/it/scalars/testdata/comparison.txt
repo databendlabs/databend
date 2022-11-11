@@ -850,6 +850,24 @@ output domain  : Unknown
 output         : true
 
 
+ast            : '%' like '\%'
+raw expr       : like("%", "\\%")
+checked expr   : like<String, String>("%", "\\%")
+optimized expr : true
+output type    : Boolean
+output domain  : Unknown
+output         : true
+
+
+ast            : 'v%xx' like '_\%%'
+raw expr       : like("v%xx", "_\\%%")
+checked expr   : like<String, String>("v%xx", "_\\%%")
+optimized expr : true
+output type    : Boolean
+output domain  : Unknown
+output         : true
+
+
 ast            : lhs like 'a%'
 raw expr       : like(ColumnRef(0)::String, "a%")
 checked expr   : like<String, String>(ColumnRef(0), "a%")
