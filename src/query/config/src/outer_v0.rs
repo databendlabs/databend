@@ -331,7 +331,7 @@ impl TryInto<InnerCatalogConfig> for CatalogConfig {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum CatalogDescription {
-    #[serde(rename = "hive")]
+    #[serde(alias = "hive")]
     Hive(HiveCatalogConfig),
 }
 
@@ -341,7 +341,7 @@ impl Default for CatalogDescription {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct HiveCatalogConfig {
     pub meta_store_address: String,
     pub protocol: String,
@@ -392,6 +392,12 @@ impl From<InnerHiveCatalogConfig> for HiveCatalogConfig {
             meta_store_address: inner.meta_store_address,
             protocol: inner.protocol.to_string(),
         }
+    }
+}
+
+impl Default for HiveCatalogConfig {
+    fn default() -> Self {
+        InnerHiveCatalogConfig::default().into()
     }
 }
 

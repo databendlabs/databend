@@ -25,7 +25,7 @@ use pretty_assertions::assert_eq;
 // Default.
 #[test]
 fn test_default_config() -> Result<()> {
-    let mut actual = Config::default();
+    let actual = Config::default();
 
     let tom_expect = r#"cmd = ""
 config_file = ""
@@ -171,18 +171,9 @@ data_path = "_data"
 [catalogs]
 "#;
 
-    let tom_actual = toml::to_string(&actual.clone().into_outer()).unwrap();
+    let tom_actual = toml::to_string(&actual.into_outer()).unwrap();
     assert_eq!(tom_expect, tom_actual);
 
-    let ctl = CatalogDescription::Hive(common_storage::HiveCatalogConfig {
-        meta_store_address: "127.0.0.1:9083".to_string(),
-        protocol: "binary".parse()?,
-    });
-    actual.catalogs.catalogs.insert("hive".to_string(), ctl);
-    println!(
-        "toml_actual: {}",
-        toml::to_string(&actual.into_outer()).unwrap()
-    );
     Ok(())
 }
 
@@ -779,8 +770,7 @@ access_key_secret = ""
 bucket = ""
 root = ""
 
-[catalogs]
-[catalogs.hive]
+[catalogs.my_hive]
 type = "hive"
 meta_store_address = "127.0.0.1:9083"
 protocol = "binary"
