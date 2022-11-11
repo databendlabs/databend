@@ -14,6 +14,7 @@
 use std::sync::Arc;
 
 use common_ast::ast::ExplainKind;
+use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
@@ -22,6 +23,7 @@ use common_sql::MetadataRef;
 
 use super::fragments::Fragmenter;
 use super::QueryFragmentsActions;
+use crate::interpreters::plan_schedulers::schedule_query_v2;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::PipelineBuilder;
@@ -149,7 +151,11 @@ impl ExplainInterpreterV2 {
         let plan = builder.build(&s_expr).await?;
 
         let pipeline_builder = PipelineBuilder::create(self.ctx.clone());
-        let build_res = pipeline_builder.finalize(&plan)?;
+        let build_res = if self.ctx.get_cluster().is_empty() {
+            pipeline_builder.finalize(&plan)?
+        } else {
+            schedule_query_v2(self.ctx.clone(), &[], &plan).await?
+        };
 
         let mut blocks = vec![];
         // Format root pipeline
