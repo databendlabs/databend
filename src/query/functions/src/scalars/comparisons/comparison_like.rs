@@ -14,7 +14,6 @@
 
 use common_datavalues::prelude::*;
 use memchr::memmem;
-use regex::bytes::Regex as BytesRegex;
 
 use super::comparison::StringSearchCreator;
 use super::utils::StringSearchImpl;
@@ -35,13 +34,7 @@ impl StringSearchImpl for StringSearchLike {
         let mut builder: ColumnBuilder<bool> = ColumnBuilder::with_capacity(lhs.len());
 
         for (lhs_value, rhs_value) in lhs.scalar_iter().zip(rhs.scalar_iter()) {
-            let pattern_str = simdutf8::basic::from_utf8(rhs_value)
-                .expect("Unable to convert the LIKE pattern to string: {}");
-            let re_pattern = like_pattern_to_regex(pattern_str);
-            let re =
-                BytesRegex::new(&re_pattern).expect("Unable to build regex from LIKE pattern: {}");
-
-            builder.append(op(re.is_match(lhs_value)));
+            builder.append(op(like(lhs_value, rhs_value)));
         }
         builder.build_column()
     }
@@ -72,11 +65,8 @@ impl StringSearchImpl for StringSearchLike {
                     .collect();
                 sub_strings.retain(|&substring| !substring.is_empty());
                 let is_empty = sub_strings.is_empty();
-                let re_pattern = like_pattern_to_regex(pattern);
-                let re = BytesRegex::new(&re_pattern)
-                    .expect("Unable to build regex from LIKE pattern: {}");
                 if std::intrinsics::unlikely(is_empty) {
-                    BooleanColumn::from_iterator(lhs.scalar_iter().map(|x| op(re.is_match(x))))
+                    BooleanColumn::from_iterator(lhs.scalar_iter().map(|x| op(like(x, rhs))))
                 } else {
                     let sub_string = sub_strings[0].as_bytes();
                     // This impl like position function
@@ -91,26 +81,16 @@ impl StringSearchImpl for StringSearchLike {
                         }))
                     } else {
                         BooleanColumn::from_iterator(lhs.scalar_iter().map(|x| {
-                            let contain = memmem::find(x, sub_string).is_none();
-                            if contain {
+                            if memmem::find(x, sub_string).is_none() {
                                 op(false)
                             } else {
-                                op(re.is_match(x))
+                                op(like(x, rhs))
                             }
                         }))
                     }
                 }
             }
         }
-    }
-}
-
-#[inline]
-fn search_sub_str(str: &[u8], substr: &[u8]) -> Option<usize> {
-    if substr.len() <= str.len() {
-        str.windows(substr.len()).position(|w| w == substr)
-    } else {
-        None
     }
 }
 
@@ -228,4 +208,78 @@ pub fn like_pattern_to_regex(pattern: &str) -> String {
 
     regex.push('$');
     regex
+}
+
+#[inline]
+fn search_sub_str(str: &[u8], substr: &[u8]) -> Option<usize> {
+    if substr.len() <= str.len() {
+        str.windows(substr.len()).position(|w| w == substr)
+    } else {
+        None
+    }
+}
+
+fn decode_one(data: &[u8]) -> Option<(u8, usize)> {
+    if data.is_empty() {
+        None
+    } else {
+        Some((data[0], 1))
+    }
+}
+
+/// Borrow from [tikv](https://github.com/tikv/tikv/blob/fe997db4db8a5a096f8a45c0db3eb3c2e5879262/components/tidb_query_expr/src/impl_like.rs)
+fn like(haystack: &[u8], pattern: &[u8]) -> bool {
+    // current search positions in pattern and target.
+    let (mut px, mut tx) = (0, 0);
+    // positions for backtrace.
+    let (mut next_px, mut next_tx) = (0, 0);
+    while px < pattern.len() || tx < haystack.len() {
+        if let Some((c, mut poff)) = decode_one(&pattern[px..]) {
+            let code: u32 = c.into();
+            if code == '_' as u32 {
+                if let Some((_, toff)) = decode_one(&haystack[tx..]) {
+                    px += poff;
+                    tx += toff;
+                    continue;
+                }
+            } else if code == '%' as u32 {
+                // update the backtrace point.
+                next_px = px;
+                px += poff;
+                next_tx = tx;
+                next_tx += if let Some((_, toff)) = decode_one(&haystack[tx..]) {
+                    toff
+                } else {
+                    1
+                };
+                continue;
+            } else {
+                if code == 0 && px + poff < pattern.len() {
+                    px += poff;
+                    poff = if let Some((_, off)) = decode_one(&pattern[px..]) {
+                        off
+                    } else {
+                        break;
+                    }
+                }
+                if let Some((_, toff)) = decode_one(&haystack[tx..]) {
+                    if let std::cmp::Ordering::Equal =
+                        haystack[tx..tx + toff].cmp(&pattern[px..px + poff])
+                    {
+                        tx += toff;
+                        px += poff;
+                        continue;
+                    }
+                }
+            }
+        }
+        // mismatch and backtrace to last %.
+        if 0 < next_tx && next_tx <= haystack.len() {
+            px = next_px;
+            tx = next_tx;
+            continue;
+        }
+        return false;
+    }
+    true
 }
