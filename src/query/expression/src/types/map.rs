@@ -159,6 +159,8 @@ impl<K: ArgType, V: ArgType> ArgType for KvPair<K, V> {
         DataType::Tuple(vec![K::data_type(), V::data_type()])
     }
 
+    fn full_domain() -> Self::Domain {}
+
     fn create_builder(capacity: usize, generics: &GenericMap) -> Self::ColumnBuilder {
         KvColumnBuilder::with_capacity(capacity, generics)
     }
@@ -395,6 +397,8 @@ impl<T: ArgType> ArgType for MapType<T> {
     fn data_type() -> DataType {
         DataType::Map(Box::new(T::data_type()))
     }
+
+    fn full_domain() -> Self::Domain {}
 
     fn create_builder(capacity: usize, generics: &GenericMap) -> Self::ColumnBuilder {
         <MapInternal<T> as ArgType>::create_builder(capacity, generics)

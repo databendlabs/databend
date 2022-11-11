@@ -1164,20 +1164,20 @@ ast            : TRY_CAST(a as TIMESTAMP)
 raw expr       : TRY_CAST(ColumnRef(0)::String AS Timestamp)
 checked expr   : try_to_timestamp<String NULL>(CAST(ColumnRef(0) AS String NULL))
 evaluation:
-+--------+------------------------------------+----------------------------+
-|        | a                                  | Output                     |
-+--------+------------------------------------+----------------------------+
-| Type   | String                             | Timestamp NULL             |
-| Domain | {"2022"..="A NON-TIMESTAMP STR"}   | Unknown                    |
-| Row 0  | "A NON-TIMESTAMP STR"              | NULL                       |
-| Row 1  | "2022"                             | NULL                       |
-| Row 2  | "2022-01"                          | NULL                       |
-| Row 3  | "2022-01-02"                       | 2022-01-02 00:00:00.000000 |
-| Row 4  | "2022-01-02T03:25:02.868894-07:00" | 2022-01-02 10:25:02.868894 |
-| Row 5  | "2022-01-02 02:00:11"              | 2022-01-02 02:00:11.000000 |
-| Row 6  | "2022-01-02T01:12:00-07:00"        | 2022-01-02 08:12:00.000000 |
-| Row 7  | "2022-01-02T01"                    | 2022-01-02 01:00:00.000000 |
-+--------+------------------------------------+----------------------------+
++--------+------------------------------------+----------------------------------------------------+
+|        | a                                  | Output                                             |
++--------+------------------------------------+----------------------------------------------------+
+| Type   | String                             | Timestamp NULL                                     |
+| Domain | {"2022"..="A NON-TIMESTAMP STR"}   | {-30610224000000000..=253402300799999999} ∪ {NULL} |
+| Row 0  | "A NON-TIMESTAMP STR"              | NULL                                               |
+| Row 1  | "2022"                             | NULL                                               |
+| Row 2  | "2022-01"                          | NULL                                               |
+| Row 3  | "2022-01-02"                       | 2022-01-02 00:00:00.000000                         |
+| Row 4  | "2022-01-02T03:25:02.868894-07:00" | 2022-01-02 10:25:02.868894                         |
+| Row 5  | "2022-01-02 02:00:11"              | 2022-01-02 02:00:11.000000                         |
+| Row 6  | "2022-01-02T01:12:00-07:00"        | 2022-01-02 08:12:00.000000                         |
+| Row 7  | "2022-01-02T01"                    | 2022-01-02 01:00:00.000000                         |
++--------+------------------------------------+----------------------------------------------------+
 evaluation (internal):
 +--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                                                                                                                                                                                                                        |
@@ -1192,7 +1192,7 @@ raw expr       : CAST(TO_TIMESTAMP(minus(315360000000000_u64)) AS String)
 checked expr   : to_string<Timestamp>(to_timestamp<Int64>(minus<UInt64>(315360000000000_u64)))
 optimized expr : "1960-01-04 00:00:00.000000"
 output type    : String
-output domain  : Unknown
+output domain  : {""..}
 output         : "1960-01-04 00:00:00.000000"
 
 
@@ -1201,7 +1201,7 @@ raw expr       : CAST(TO_TIMESTAMP(minus(315360000000_u64)) AS String)
 checked expr   : to_string<Timestamp>(to_timestamp<Int64>(minus<UInt64>(315360000000_u64)))
 optimized expr : "1960-01-04 00:00:00.000000"
 output type    : String
-output domain  : Unknown
+output domain  : {""..}
 output         : "1960-01-04 00:00:00.000000"
 
 
@@ -1210,7 +1210,7 @@ raw expr       : CAST(TO_TIMESTAMP(minus(100_u8)) AS String)
 checked expr   : to_string<Timestamp>(to_timestamp<Int64>(CAST(minus<UInt8>(100_u8) AS Int64)))
 optimized expr : "1969-12-31 23:58:20.000000"
 output type    : String
-output domain  : Unknown
+output domain  : {""..}
 output         : "1969-12-31 23:58:20.000000"
 
 
@@ -1219,7 +1219,7 @@ raw expr       : CAST(TO_TIMESTAMP(minus(0_u8)) AS String)
 checked expr   : to_string<Timestamp>(to_timestamp<Int64>(CAST(minus<UInt8>(0_u8) AS Int64)))
 optimized expr : "1970-01-01 00:00:00.000000"
 output type    : String
-output domain  : Unknown
+output domain  : {""..}
 output         : "1970-01-01 00:00:00.000000"
 
 
@@ -1228,7 +1228,7 @@ raw expr       : CAST(TO_TIMESTAMP(0_u8) AS String)
 checked expr   : to_string<Timestamp>(to_timestamp<Int64>(CAST(0_u8 AS Int64)))
 optimized expr : "1970-01-01 00:00:00.000000"
 output type    : String
-output domain  : Unknown
+output domain  : {""..}
 output         : "1970-01-01 00:00:00.000000"
 
 
@@ -1237,7 +1237,7 @@ raw expr       : CAST(TO_TIMESTAMP(100_u8) AS String)
 checked expr   : to_string<Timestamp>(to_timestamp<Int64>(CAST(100_u8 AS Int64)))
 optimized expr : "1970-01-01 00:01:40.000000"
 output type    : String
-output domain  : Unknown
+output domain  : {""..}
 output         : "1970-01-01 00:01:40.000000"
 
 
@@ -1246,7 +1246,7 @@ raw expr       : CAST(TO_TIMESTAMP(315360000000_u64) AS String)
 checked expr   : to_string<Timestamp>(to_timestamp<Int64>(CAST(315360000000_u64 AS Int64)))
 optimized expr : "1979-12-30 00:00:00.000000"
 output type    : String
-output domain  : Unknown
+output domain  : {""..}
 output         : "1979-12-30 00:00:00.000000"
 
 
@@ -1255,7 +1255,7 @@ raw expr       : CAST(TO_TIMESTAMP(315360000000000_u64) AS String)
 checked expr   : to_string<Timestamp>(to_timestamp<Int64>(CAST(315360000000000_u64 AS Int64)))
 optimized expr : "1979-12-30 00:00:00.000000"
 output type    : String
-output domain  : Unknown
+output domain  : {""..}
 output         : "1979-12-30 00:00:00.000000"
 
 
@@ -1267,7 +1267,7 @@ evaluation:
 |        | a                                    | Output                       |
 +--------+--------------------------------------+------------------------------+
 | Type   | Timestamp                            | String                       |
-| Domain | {-315360000000000..=315360000000000} | Unknown                      |
+| Domain | {-315360000000000..=315360000000000} | {""..}                       |
 | Row 0  | 1960-01-04 00:00:00.000000           | "1960-01-04 00:00:00.000000" |
 | Row 1  | 1969-12-28 08:24:00.000000           | "1969-12-28 08:24:00.000000" |
 | Row 2  | 1969-12-31 23:59:59.999900           | "1969-12-31 23:59:59.999900" |
@@ -1391,20 +1391,20 @@ ast            : TRY_CAST(a as DATE)
 raw expr       : TRY_CAST(ColumnRef(0)::String AS Date)
 checked expr   : try_to_date<String NULL>(CAST(ColumnRef(0) AS String NULL))
 evaluation:
-+--------+------------------------------------+------------+
-|        | a                                  | Output     |
-+--------+------------------------------------+------------+
-| Type   | String                             | Date NULL  |
-| Domain | {"2022"..="A NON-DATE STR"}        | Unknown    |
-| Row 0  | "A NON-DATE STR"                   | NULL       |
-| Row 1  | "2022"                             | NULL       |
-| Row 2  | "2022-01"                          | NULL       |
-| Row 3  | "2022-01-02"                       | 2022-01-02 |
-| Row 4  | "2022-01-02T03:25:02.868894-07:00" | 2022-01-02 |
-| Row 5  | "2022-01-02 02:00:11"              | 2022-01-02 |
-| Row 6  | "2022-01-02T01:12:00-07:00"        | 2022-01-02 |
-| Row 7  | "2022-01-02T01"                    | 2022-01-02 |
-+--------+------------------------------------+------------+
++--------+------------------------------------+------------------------------+
+|        | a                                  | Output                       |
++--------+------------------------------------+------------------------------+
+| Type   | String                             | Date NULL                    |
+| Domain | {"2022"..="A NON-DATE STR"}        | {-354285..=2932896} ∪ {NULL} |
+| Row 0  | "A NON-DATE STR"                   | NULL                         |
+| Row 1  | "2022"                             | NULL                         |
+| Row 2  | "2022-01"                          | NULL                         |
+| Row 3  | "2022-01-02"                       | 2022-01-02                   |
+| Row 4  | "2022-01-02T03:25:02.868894-07:00" | 2022-01-02                   |
+| Row 5  | "2022-01-02 02:00:11"              | 2022-01-02                   |
+| Row 6  | "2022-01-02T01:12:00-07:00"        | 2022-01-02                   |
+| Row 7  | "2022-01-02T01"                    | 2022-01-02                   |
++--------+------------------------------------+------------------------------+
 evaluation (internal):
 +--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                                                                                                                                                                                                              |
@@ -1419,7 +1419,7 @@ raw expr       : CAST(TO_DATE(minus(354285_u32)) AS String)
 checked expr   : to_string<Date>(to_date<Int64>(minus<UInt32>(354285_u32)))
 optimized expr : "1000-01-01"
 output type    : String
-output domain  : Unknown
+output domain  : {""..}
 output         : "1000-01-01"
 
 
@@ -1428,7 +1428,7 @@ raw expr       : CAST(TO_DATE(minus(100_u8)) AS String)
 checked expr   : to_string<Date>(to_date<Int64>(CAST(minus<UInt8>(100_u8) AS Int64)))
 optimized expr : "1969-09-23"
 output type    : String
-output domain  : Unknown
+output domain  : {""..}
 output         : "1969-09-23"
 
 
@@ -1437,7 +1437,7 @@ raw expr       : CAST(TO_DATE(minus(0_u8)) AS String)
 checked expr   : to_string<Date>(to_date<Int64>(CAST(minus<UInt8>(0_u8) AS Int64)))
 optimized expr : "1970-01-01"
 output type    : String
-output domain  : Unknown
+output domain  : {""..}
 output         : "1970-01-01"
 
 
@@ -1446,7 +1446,7 @@ raw expr       : CAST(TO_DATE(0_u8) AS String)
 checked expr   : to_string<Date>(to_date<Int64>(CAST(0_u8 AS Int64)))
 optimized expr : "1970-01-01"
 output type    : String
-output domain  : Unknown
+output domain  : {""..}
 output         : "1970-01-01"
 
 
@@ -1455,7 +1455,7 @@ raw expr       : CAST(TO_DATE(100_u8) AS String)
 checked expr   : to_string<Date>(to_date<Int64>(CAST(100_u8 AS Int64)))
 optimized expr : "1970-04-11"
 output type    : String
-output domain  : Unknown
+output domain  : {""..}
 output         : "1970-04-11"
 
 
@@ -1464,7 +1464,7 @@ raw expr       : CAST(TO_DATE(2932896_u32) AS String)
 checked expr   : to_string<Date>(to_date<Int64>(CAST(2932896_u32 AS Int64)))
 optimized expr : "9999-12-31"
 output type    : String
-output domain  : Unknown
+output domain  : {""..}
 output         : "9999-12-31"
 
 
@@ -1476,7 +1476,7 @@ evaluation:
 |        | a                   | Output       |
 +--------+---------------------+--------------+
 | Type   | Date                | String       |
-| Domain | {-354285..=2932896} | Unknown      |
+| Domain | {-354285..=2932896} | {""..}       |
 | Row 0  | 1000-01-01          | "1000-01-01" |
 | Row 1  | 1969-09-23          | "1969-09-23" |
 | Row 2  | 1970-01-01          | "1970-01-01" |
