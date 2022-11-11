@@ -20,9 +20,9 @@ use common_base::base::tokio::sync::mpsc::Receiver;
 use common_base::base::tokio::sync::mpsc::Sender;
 use common_base::base::GlobalIORuntime;
 use common_base::base::TrySpawn;
-use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::Chunk;
 use common_pipeline_core::Pipeline;
 use futures::AsyncRead;
 use futures_util::stream::FuturesUnordered;
@@ -66,14 +66,14 @@ pub trait AligningStateTrait: Sync + Sized {
     }
 }
 
-pub trait BlockBuilderTrait {
-    type Pipe: InputFormatPipe<BlockBuilder = Self>;
+pub trait ChunkBuilderTrait {
+    type Pipe: InputFormatPipe<ChunkBuilder = Self>;
     fn create(ctx: Arc<InputContext>) -> Self;
 
     fn deserialize(
         &mut self,
         batch: Option<<Self::Pipe as InputFormatPipe>::RowBatch>,
-    ) -> Result<Vec<DataBlock>>;
+    ) -> Result<Vec<Chunk>>;
 }
 
 pub trait ReadBatchTrait: From<Vec<u8>> + Send + Debug {
@@ -97,7 +97,7 @@ pub trait InputFormatPipe: Sized + Send + 'static {
     type ReadBatch: ReadBatchTrait;
     type RowBatch: RowBatchTrait;
     type AligningState: AligningStateTrait<Pipe = Self> + Send;
-    type BlockBuilder: BlockBuilderTrait<Pipe = Self> + Send;
+    type ChunkBuilder: ChunkBuilderTrait<Pipe = Self> + Send;
 
     fn get_split_meta(split_info: &Arc<SplitInfo>) -> Option<&Self::SplitMeta> {
         split_info

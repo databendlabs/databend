@@ -317,6 +317,13 @@ impl SchemaDataType {
     pub fn can_inside_nullable(&self) -> bool {
         !self.is_nullable_or_null()
     }
+
+    pub fn remove_nullable(&self) -> Self {
+        match self {
+            SchemaDataType::Nullable(ty) => (**ty).clone(),
+            _ => self.clone(),
+        }
+    }
 }
 
 pub type DataSchemaRef = Arc<DataSchema>;

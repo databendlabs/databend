@@ -14,8 +14,8 @@
 
 use std::sync::Arc;
 
-use common_datavalues::DataSchemaRef;
 use common_exception::Result;
+use common_expression::DataSchemaRef;
 use common_pipeline_core::Pipeline;
 use common_settings::Settings;
 use opendal::Operator;

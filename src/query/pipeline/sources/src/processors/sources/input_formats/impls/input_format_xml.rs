@@ -15,11 +15,10 @@ use std::collections::HashMap;
 use std::io::Cursor;
 use std::sync::Arc;
 
-use common_datavalues::DataSchemaRef;
-use common_datavalues::TypeDeserializer;
-use common_datavalues::TypeDeserializerImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::DataSchemaRef;
+use common_expression::TypeDeserializer;
 use common_io::cursor_ext::*;
 use common_io::prelude::FormatSettings;
 use common_meta_types::StageFileFormatType;
@@ -28,7 +27,7 @@ use xml::EventReader;
 use xml::ParserConfig;
 
 use crate::processors::sources::input_formats::input_format_text::AligningState;
-use crate::processors::sources::input_formats::input_format_text::BlockBuilder;
+use crate::processors::sources::input_formats::input_format_text::ChunkBuilder;
 use crate::processors::sources::input_formats::input_format_text::InputFormatTextBase;
 use crate::processors::sources::input_formats::input_format_text::RowBatch;
 use crate::processors::sources::input_formats::InputContext;
@@ -38,7 +37,7 @@ pub struct InputFormatXML {}
 impl InputFormatXML {
     fn read_row(
         buf: &[u8],
-        deserializers: &mut [TypeDeserializerImpl],
+        deserializers: &mut [Box<dyn TypeDeserializer>],
         schema: &DataSchemaRef,
         format_settings: &FormatSettings,
         path: &str,
@@ -65,17 +64,18 @@ impl InputFormatXML {
                 if reader.eof() {
                     deserializer.de_default(format_settings);
                 } else {
-                    if let Err(e) = deserializer.de_text(&mut reader, format_settings) {
-                        let value_str = format!("{:?}", value);
-                        let err_msg = format!("{}. column={} value={}", e, field.name(), value_str);
-                        return Err(xml_error(&err_msg, path, row_index));
-                    };
-                    if reader.must_eof().is_err() {
-                        let value_str = format!("{:?}", value);
-                        let err_msg =
-                            format!("bad field end. column={} value={}", field.name(), value_str);
-                        return Err(xml_error(&err_msg, path, row_index));
-                    }
+                    todo!("expression")
+                    // if let Err(e) = deserializer.de_text(&mut reader, format_settings) {
+                    //     let value_str = format!("{:?}", value);
+                    //     let err_msg = format!("{}. column={} value={}", e, field.name(), value_str);
+                    //     return Err(xml_error(&err_msg, path, row_index));
+                    // };
+                    // if reader.must_eof().is_err() {
+                    //     let value_str = format!("{:?}", value);
+                    //     let err_msg =
+                    //         format!("bad field end. column={} value={}", field.name(), value_str);
+                    //     return Err(xml_error(&err_msg, path, row_index));
+                    // }
                 }
             } else {
                 deserializer.de_default(format_settings);
@@ -94,7 +94,7 @@ impl InputFormatTextBase for InputFormatXML {
         b','
     }
 
-    fn deserialize(builder: &mut BlockBuilder<Self>, batch: RowBatch) -> Result<()> {
+    fn deserialize(builder: &mut ChunkBuilder<Self>, batch: RowBatch) -> Result<()> {
         tracing::debug!(
             "xml deserializing row batch {}, id={}, start_row={:?}, offset={}",
             batch.path,

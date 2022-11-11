@@ -26,11 +26,11 @@ use common_pipeline_core::processors::Processor;
 use crossbeam_channel::TryRecvError;
 
 use crate::processors::sources::input_formats::input_context::InputContext;
-use crate::processors::sources::input_formats::input_pipeline::BlockBuilderTrait;
+use crate::processors::sources::input_formats::input_pipeline::ChunkBuilderTrait;
 use crate::processors::sources::input_formats::input_pipeline::InputFormatPipe;
 
 struct DeserializeProcessor<I: InputFormatPipe> {
-    pub block_builder: I::BlockBuilder,
+    pub chunk_builder: I::ChunkBuilder,
     pub input_buffer: Option<I::RowBatch>,
     pub output_buffer: VecDeque<Chunk>,
 }
@@ -38,18 +38,17 @@ struct DeserializeProcessor<I: InputFormatPipe> {
 impl<I: InputFormatPipe> DeserializeProcessor<I> {
     pub(crate) fn create(ctx: Arc<InputContext>) -> Result<Self> {
         Ok(Self {
-            block_builder: I::BlockBuilder::create(ctx),
+            chunk_builder: I::ChunkBuilder::create(ctx),
             input_buffer: Default::default(),
             output_buffer: Default::default(),
         })
     }
 
     fn process(&mut self) -> Result<()> {
-        let blocks = self.block_builder.deserialize(self.input_buffer.take())?;
-        for b in blocks.into_iter() {
-            if !b.is_empty() {
-                todo!("expression")
-                // self.output_buffer.push_back(b)
+        let chunks = self.chunk_builder.deserialize(self.input_buffer.take())?;
+        for c in chunks.into_iter() {
+            if !c.is_empty() {
+                self.output_buffer.push_back(c)
             }
         }
         Ok(())
@@ -101,9 +100,9 @@ impl<I: InputFormatPipe> Processor for DeserializeTransformer<I> {
             Ok(Event::NeedConsume)
         } else {
             match self.processor.output_buffer.pop_front() {
-                Some(data_block) => {
-                    tracing::trace!("DeserializeTransformer push rows {}", data_block.num_rows());
-                    self.output.push_data(Ok(data_block));
+                Some(chunk) => {
+                    tracing::trace!("DeserializeTransformer push rows {}", chunk.num_rows());
+                    self.output.push_data(Ok(chunk));
                     Ok(Event::NeedConsume)
                 }
                 None => {

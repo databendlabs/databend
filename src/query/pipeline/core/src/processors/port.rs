@@ -174,8 +174,8 @@ impl InputPort {
             match self.shared.swap(std::ptr::null_mut(), 0, unset_flags) {
                 address if address.is_null() => None,
                 address => {
-                    if let SharedData::Data(block) = *Box::from_raw(address) {
-                        Some(block)
+                    if let SharedData::Data(chunk) = *Box::from_raw(address) {
+                        Some(chunk)
                     } else {
                         unreachable!()
                     }

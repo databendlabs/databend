@@ -16,12 +16,11 @@ use std::marker::PhantomData;
 use std::mem;
 use std::sync::Arc;
 
-use common_datablocks::DataBlock;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::TypeDeserializer;
-use common_datavalues::TypeDeserializerImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::Chunk;
+use common_expression::DataSchemaRef;
+use common_expression::TypeDeserializer;
 use common_meta_types::StageFileFormatType;
 use common_pipeline_core::Pipeline;
 use common_settings::Settings;
@@ -37,7 +36,7 @@ use crate::processors::sources::input_formats::impls::input_format_xml::XmlReade
 use crate::processors::sources::input_formats::input_context::CopyIntoPlan;
 use crate::processors::sources::input_formats::input_context::InputContext;
 use crate::processors::sources::input_formats::input_pipeline::AligningStateTrait;
-use crate::processors::sources::input_formats::input_pipeline::BlockBuilderTrait;
+use crate::processors::sources::input_formats::input_pipeline::ChunkBuilderTrait;
 use crate::processors::sources::input_formats::input_pipeline::InputFormatPipe;
 use crate::processors::sources::input_formats::input_pipeline::RowBatchTrait;
 use crate::processors::sources::input_formats::input_split::split_by_size;
@@ -57,7 +56,7 @@ pub trait InputFormatTextBase: Sized + Send + Sync + 'static {
 
     fn default_field_delimiter() -> u8;
 
-    fn deserialize(builder: &mut BlockBuilder<Self>, batch: RowBatch) -> Result<()>;
+    fn deserialize(builder: &mut ChunkBuilder<Self>, batch: RowBatch) -> Result<()>;
 
     fn align(state: &mut AligningState<Self>, buf: &[u8]) -> Result<Vec<RowBatch>>;
 
@@ -110,7 +109,7 @@ impl<T: InputFormatTextBase> InputFormatPipe for InputFormatTextPipe<T> {
     type ReadBatch = Vec<u8>;
     type RowBatch = RowBatch;
     type AligningState = AligningState<T>;
-    type BlockBuilder = BlockBuilder<T>;
+    type ChunkBuilder = ChunkBuilder<T>;
 }
 
 #[async_trait::async_trait]
@@ -372,15 +371,15 @@ impl<T: InputFormatTextBase> AligningStateTrait for AligningState<T> {
     }
 }
 
-pub struct BlockBuilder<T> {
+pub struct ChunkBuilder<T> {
     pub ctx: Arc<InputContext>,
-    pub mutable_columns: Vec<TypeDeserializerImpl>,
+    pub mutable_columns: Vec<Box<dyn TypeDeserializer>>,
     pub num_rows: usize,
     phantom: PhantomData<T>,
 }
 
-impl<T: InputFormatTextBase> BlockBuilder<T> {
-    fn flush(&mut self) -> Result<Vec<DataBlock>> {
+impl<T: InputFormatTextBase> ChunkBuilder<T> {
+    fn flush(&mut self) -> Result<Vec<Chunk>> {
         let mut columns = Vec::with_capacity(self.mutable_columns.len());
         for deserializer in &mut self.mutable_columns {
             columns.push(deserializer.finish_to_column());
@@ -388,10 +387,11 @@ impl<T: InputFormatTextBase> BlockBuilder<T> {
         self.mutable_columns = self
             .ctx
             .schema
-            .create_deserializers(self.ctx.block_compact_thresholds.min_rows_per_block);
+            .create_deserializers(self.ctx.chunk_compact_thresholds.min_rows_per_chunk);
         self.num_rows = 0;
 
-        Ok(vec![DataBlock::create(self.ctx.schema.clone(), columns)])
+        todo!("expression")
+        // Ok(vec![DataBlock::create(self.ctx.schema.clone(), columns)])
     }
 
     fn memory_size(&self) -> usize {
@@ -399,14 +399,14 @@ impl<T: InputFormatTextBase> BlockBuilder<T> {
     }
 }
 
-impl<T: InputFormatTextBase> BlockBuilderTrait for BlockBuilder<T> {
+impl<T: InputFormatTextBase> ChunkBuilderTrait for ChunkBuilder<T> {
     type Pipe = InputFormatTextPipe<T>;
 
     fn create(ctx: Arc<InputContext>) -> Self {
         let columns = ctx
             .schema
-            .create_deserializers(ctx.block_compact_thresholds.min_rows_per_block);
-        BlockBuilder {
+            .create_deserializers(ctx.chunk_compact_thresholds.min_rows_per_chunk);
+        ChunkBuilder {
             ctx,
             mutable_columns: columns,
             num_rows: 0,
@@ -414,18 +414,18 @@ impl<T: InputFormatTextBase> BlockBuilderTrait for BlockBuilder<T> {
         }
     }
 
-    fn deserialize(&mut self, batch: Option<RowBatch>) -> Result<Vec<DataBlock>> {
+    fn deserialize(&mut self, batch: Option<RowBatch>) -> Result<Vec<Chunk>> {
         if let Some(b) = batch {
             self.num_rows += b.row_ends.len();
             T::deserialize(self, b)?;
             let mem = self.memory_size();
             tracing::debug!(
-                "block builder added new batch: row {} size {}",
+                "chunk builder added new batch: row {} size {}",
                 self.num_rows,
                 mem
             );
-            if self.num_rows >= self.ctx.block_compact_thresholds.min_rows_per_block
-                || mem > self.ctx.block_compact_thresholds.max_bytes_per_block
+            if self.num_rows >= self.ctx.chunk_compact_thresholds.min_rows_per_chunk
+                || mem > self.ctx.chunk_compact_thresholds.max_bytes_per_chunk
             {
                 self.flush()
             } else {

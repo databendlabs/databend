@@ -1866,8 +1866,6 @@ dependencies = [
  "common-arrow",
  "common-base",
  "common-catalog",
- "common-datablocks",
- "common-datavalues",
  "common-exception",
  "common-expression",
  "common-formats",

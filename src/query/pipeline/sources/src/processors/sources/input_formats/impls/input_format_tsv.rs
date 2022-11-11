@@ -14,17 +14,17 @@
 
 use std::io::Cursor;
 
-use common_datavalues::DataSchemaRef;
-use common_datavalues::TypeDeserializer;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::DataSchemaRef;
+use common_expression::TypeDeserializer;
 use common_io::cursor_ext::*;
 use common_io::format_diagnostic::verbose_string;
 use common_io::prelude::FormatSettings;
 use common_meta_types::StageFileFormatType;
 
 use crate::processors::sources::input_formats::input_format_text::AligningState;
-use crate::processors::sources::input_formats::input_format_text::BlockBuilder;
+use crate::processors::sources::input_formats::input_format_text::ChunkBuilder;
 use crate::processors::sources::input_formats::input_format_text::InputFormatTextBase;
 use crate::processors::sources::input_formats::input_format_text::RowBatch;
 
@@ -34,7 +34,7 @@ impl InputFormatTSV {
     #[allow(clippy::too_many_arguments)]
     fn read_row(
         buf: &[u8],
-        deserializers: &mut Vec<common_datavalues::TypeDeserializerImpl>,
+        deserializers: &mut Vec<Box<dyn TypeDeserializer>>,
         schema: &DataSchemaRef,
         format_settings: &FormatSettings,
         path: &str,
@@ -56,27 +56,28 @@ impl InputFormatTSV {
                 } else {
                     let mut reader = Cursor::new(col_data);
                     reader.ignores(|c: u8| c == b' ');
-                    if let Err(e) =
-                        deserializers[column_index].de_text(&mut reader, format_settings)
-                    {
-                        err_msg = Some(format_column_error(
-                            schema,
-                            column_index,
-                            col_data,
-                            &e.message(),
-                        ));
-                        break;
-                    };
-                    reader.ignore_white_spaces();
-                    if reader.must_eof().is_err() {
-                        err_msg = Some(format_column_error(
-                            schema,
-                            column_index,
-                            col_data,
-                            "bad field end",
-                        ));
-                        break;
-                    }
+                    todo!("expression")
+                    // if let Err(e) =
+                    //     deserializers[column_index].de_text(&mut reader, format_settings)
+                    // {
+                    //     err_msg = Some(format_column_error(
+                    //         schema,
+                    //         column_index,
+                    //         col_data,
+                    //         &e.message(),
+                    //     ));
+                    //     break;
+                    // };
+                    // reader.ignore_white_spaces();
+                    // if reader.must_eof().is_err() {
+                    //     err_msg = Some(format_column_error(
+                    //         schema,
+                    //         column_index,
+                    //         col_data,
+                    //         "bad field end",
+                    //     ));
+                    //     break;
+                    // }
                 }
                 column_index += 1;
                 field_start = pos + 1;
@@ -130,7 +131,7 @@ impl InputFormatTextBase for InputFormatTSV {
         b'\t'
     }
 
-    fn deserialize(builder: &mut BlockBuilder<Self>, batch: RowBatch) -> Result<()> {
+    fn deserialize(builder: &mut ChunkBuilder<Self>, batch: RowBatch) -> Result<()> {
         tracing::debug!(
             "tsv deserializing row batch {}, id={}, start_row={:?}, offset={}",
             batch.path,

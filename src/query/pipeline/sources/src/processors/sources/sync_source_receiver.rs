@@ -47,7 +47,7 @@ impl SyncSource for SyncReceiverSource {
         match self.receiver.blocking_recv() {
             None => Ok(None),
             Some(Err(cause)) => Err(cause),
-            Some(Ok(data_block)) => Ok(Some(data_block)),
+            Some(Ok(chunk)) => Ok(Some(chunk)),
         }
     }
 }

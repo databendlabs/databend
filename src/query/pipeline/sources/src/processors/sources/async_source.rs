@@ -28,7 +28,7 @@ use common_pipeline_core::processors::Processor;
 #[async_trait::async_trait]
 pub trait AsyncSource: Send {
     const NAME: &'static str;
-    const SKIP_EMPTY_DATA_BLOCK: bool = true;
+    const SKIP_EMPTY_CHUNK: bool = true;
 
     #[async_trait::unboxed_simple]
     async fn generate(&mut self) -> Result<Option<Chunk>>;
@@ -108,7 +108,7 @@ impl<T: 'static + AsyncSource> Processor for AsyncSourcer<T> {
                     self.scan_progress.incr(&progress_values);
                 }
 
-                if !T::SKIP_EMPTY_DATA_BLOCK || !chunk.is_empty() {
+                if !T::SKIP_EMPTY_CHUNK || !chunk.is_empty() {
                     self.generated_data = Some(chunk)
                 }
             }

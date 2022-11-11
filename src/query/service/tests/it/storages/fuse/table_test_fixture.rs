@@ -38,7 +38,7 @@ use databend_query::interpreters::Interpreter;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::pipelines::executor::ExecutorSettings;
 use databend_query::pipelines::executor::PipelineCompleteExecutor;
-use databend_query::pipelines::processors::BlocksSource;
+use databend_query::pipelines::processors::ChunksSource;
 use databend_query::pipelines::PipelineBuildResult;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
@@ -286,7 +286,7 @@ impl TestFixture {
 
         let blocks = Arc::new(Mutex::new(VecDeque::from_iter(blocks)));
         build_res.main_pipeline.add_source(
-            |output| BlocksSource::create(self.ctx.clone(), output, blocks.clone()),
+            |output| ChunksSource::create(self.ctx.clone(), output, blocks.clone()),
             1,
         )?;
 

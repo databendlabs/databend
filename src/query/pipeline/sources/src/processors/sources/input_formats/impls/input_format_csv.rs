@@ -17,10 +17,10 @@ use std::io::Read;
 use std::mem;
 use std::sync::Arc;
 
-use common_datavalues::DataSchemaRef;
-use common_datavalues::TypeDeserializer;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::DataSchemaRef;
+use common_expression::TypeDeserializer;
 use common_io::cursor_ext::*;
 use common_io::format_diagnostic::verbose_char;
 use common_io::prelude::FormatSettings;
@@ -30,7 +30,7 @@ use csv_core::ReadRecordResult;
 use crate::processors::sources::input_formats::delimiter::RecordDelimiter;
 use crate::processors::sources::input_formats::impls::input_format_tsv::format_column_error;
 use crate::processors::sources::input_formats::input_format_text::AligningState;
-use crate::processors::sources::input_formats::input_format_text::BlockBuilder;
+use crate::processors::sources::input_formats::input_format_text::ChunkBuilder;
 use crate::processors::sources::input_formats::input_format_text::InputFormatTextBase;
 use crate::processors::sources::input_formats::input_format_text::RowBatch;
 use crate::processors::sources::input_formats::InputContext;
@@ -40,7 +40,7 @@ pub struct InputFormatCSV {}
 impl InputFormatCSV {
     fn read_row(
         buf: &[u8],
-        deserializers: &mut [common_datavalues::TypeDeserializerImpl],
+        deserializers: &mut [Box<dyn TypeDeserializer>],
         schema: &DataSchemaRef,
         field_ends: &[usize],
         format_settings: &FormatSettings,
@@ -55,24 +55,25 @@ impl InputFormatCSV {
             if reader.eof() {
                 deserializer.de_default(format_settings);
             } else {
+                todo!("expression")
                 // todo(youngsofun): do not need escape, already done in csv-core
-                if let Err(e) = deserializer.de_text(&mut reader, format_settings) {
-                    let err_msg = format_column_error(schema, c, col_data, &e.message());
-                    return Err(csv_error(&err_msg, path, row_index));
-                };
-                let mut next = [0u8; 1];
-                let readn = reader.read(&mut next[..])?;
-                if readn > 0 {
-                    let remaining = col_data.len() - reader.position() as usize + 1;
-                    let err_msg = format!(
-                        "bad field end, remain {} bytes, next char is {}",
-                        remaining,
-                        verbose_char(next[0])
-                    );
+                // if let Err(e) = deserializer.de_text(&mut reader, format_settings) {
+                //     let err_msg = format_column_error(schema, c, col_data, &e.message());
+                //     return Err(csv_error(&err_msg, path, row_index));
+                // };
+                // let mut next = [0u8; 1];
+                // let readn = reader.read(&mut next[..])?;
+                // if readn > 0 {
+                //     let remaining = col_data.len() - reader.position() as usize + 1;
+                //     let err_msg = format!(
+                //         "bad field end, remain {} bytes, next char is {}",
+                //         remaining,
+                //         verbose_char(next[0])
+                //     );
 
-                    let err_msg = format_column_error(schema, c, col_data, &err_msg);
-                    return Err(csv_error(&err_msg, path, row_index));
-                }
+                //     let err_msg = format_column_error(schema, c, col_data, &err_msg);
+                //     return Err(csv_error(&err_msg, path, row_index));
+                // }
             }
             field_start = field_end;
         }
@@ -118,7 +119,7 @@ impl InputFormatTextBase for InputFormatCSV {
         b','
     }
 
-    fn deserialize(builder: &mut BlockBuilder<Self>, batch: RowBatch) -> Result<()> {
+    fn deserialize(builder: &mut ChunkBuilder<Self>, batch: RowBatch) -> Result<()> {
         let columns = &mut builder.mutable_columns;
         let n_column = columns.len();
         let mut start = 0usize;
