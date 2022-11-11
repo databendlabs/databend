@@ -18,8 +18,6 @@ use common_base::base::Singleton;
 use common_catalog::catalog::Catalog;
 pub use common_catalog::catalog::CatalogManager;
 use common_catalog::catalog_kind::CATALOG_DEFAULT;
-#[cfg(feature = "hive")]
-use common_catalog::catalog_kind::CATALOG_HIVE;
 use common_config::Config;
 use common_exception::ErrorCode;
 use common_exception::Result;
