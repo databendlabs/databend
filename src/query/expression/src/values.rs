@@ -379,6 +379,9 @@ impl PartialEq for Column {
     }
 }
 
+pub const ARROW_EXT_TYPE_EMPTY_ARRAY: &str = "EmptyArray";
+pub const ARROW_EXT_TYPE_VARIANT: &str = "Variant";
+
 impl Column {
     pub fn len(&self) -> usize {
         match self {
@@ -546,7 +549,7 @@ impl Column {
         match self {
             Column::Null { .. } => ArrowDataType::Null,
             Column::EmptyArray { .. } => ArrowDataType::Extension(
-                "EmptyArray".to_owned(),
+                ARROW_EXT_TYPE_EMPTY_ARRAY.to_owned(),
                 Box::new(ArrowDataType::Null),
                 None,
             ),
@@ -589,9 +592,11 @@ impl Column {
                     .collect();
                 ArrowDataType::Struct(arrow_fields)
             }
-            Column::Variant(_) => {
-                ArrowType::Extension("Variant".to_owned(), Box::new(ArrowType::LargeBinary), None)
-            }
+            Column::Variant(_) => ArrowType::Extension(
+                ARROW_EXT_TYPE_VARIANT.to_owned(),
+                Box::new(ArrowType::LargeBinary),
+                None,
+            ),
         }
     }
 

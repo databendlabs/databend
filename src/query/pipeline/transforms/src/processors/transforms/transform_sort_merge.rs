@@ -62,7 +62,7 @@ impl Compactor for SortMergeCompactor {
             let aborting = self.aborting.clone();
             let aborting: Aborting = Arc::new(Box::new(move || aborting.load(Ordering::Relaxed)));
 
-            let block = Chunk::merge_sort_blocks(
+            let block = Chunk::merge_sort(
                 blocks,
                 &self.sort_columns_descriptions,
                 self.limit,
