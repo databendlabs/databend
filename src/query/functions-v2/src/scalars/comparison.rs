@@ -17,7 +17,7 @@ use std::collections::HashMap;
 
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_exception::Result;
-use common_expression::types::ArgType;
+use common_expression::types::boolean::BooleanDomain;
 use common_expression::types::BooleanType;
 use common_expression::types::NumberDataType;
 use common_expression::types::NumberType;
@@ -39,89 +39,259 @@ use regex::bytes::Regex;
 use crate::scalars::string_multi_args::regexp;
 
 pub fn register(registry: &mut FunctionRegistry) {
-    register_simple_cmp::<StringType>(registry);
-    register_simple_cmp::<TimestampType>(registry);
+    register_string_cmp(registry);
+    register_date_cmp(registry);
     register_boolean_cmp(registry);
     register_number_cmp(registry);
     register_variant_cmp(registry);
     register_like(registry);
 }
 
-fn register_simple_cmp<T: ArgType>(registry: &mut FunctionRegistry)
-where for<'a> T::ScalarRef<'a>: PartialOrd + PartialEq {
-    registry.register_2_arg::<T, T, BooleanType, _, _>(
+#[inline(always)]
+fn all_true_domain() -> BooleanDomain {
+    BooleanDomain {
+        has_true: true,
+        has_false: false,
+    }
+}
+
+#[inline(always)]
+fn all_false_domain() -> BooleanDomain {
+    BooleanDomain {
+        has_true: false,
+        has_false: true,
+    }
+}
+
+fn register_string_cmp(registry: &mut FunctionRegistry) {
+    registry.register_2_arg::<StringType, StringType, BooleanType, _, _>(
         "eq",
         FunctionProperty::default(),
         |_, _| FunctionDomain::NoThrow,
-        |lhs, rhs, _| T::upcast_gat(lhs) == T::upcast_gat(rhs),
+        |lhs, rhs, _| lhs == rhs,
     );
-    registry.register_2_arg::<T, T, BooleanType, _, _>(
+    registry.register_2_arg::<StringType, StringType, BooleanType, _, _>(
         "noteq",
         FunctionProperty::default(),
         |_, _| FunctionDomain::NoThrow,
-        |lhs, rhs, _| T::upcast_gat(lhs) != T::upcast_gat(rhs),
+        |lhs, rhs, _| lhs != rhs,
     );
-    registry.register_2_arg::<T, T, BooleanType, _, _>(
+    registry.register_2_arg::<StringType, StringType, BooleanType, _, _>(
         "gt",
         FunctionProperty::default(),
         |_, _| FunctionDomain::NoThrow,
-        |lhs, rhs, _| T::upcast_gat(lhs) > T::upcast_gat(rhs),
+        |lhs, rhs, _| lhs > rhs,
     );
-    registry.register_2_arg::<T, T, BooleanType, _, _>(
+    registry.register_2_arg::<StringType, StringType, BooleanType, _, _>(
         "gte",
         FunctionProperty::default(),
         |_, _| FunctionDomain::NoThrow,
-        |lhs, rhs, _| T::upcast_gat(lhs) >= T::upcast_gat(rhs),
+        |lhs, rhs, _| lhs >= rhs,
     );
-    registry.register_2_arg::<T, T, BooleanType, _, _>(
+    registry.register_2_arg::<StringType, StringType, BooleanType, _, _>(
         "lt",
         FunctionProperty::default(),
         |_, _| FunctionDomain::NoThrow,
-        |lhs, rhs, _| T::upcast_gat(lhs) < T::upcast_gat(rhs),
+        |lhs, rhs, _| lhs < rhs,
     );
-    registry.register_2_arg::<T, T, BooleanType, _, _>(
+    registry.register_2_arg::<StringType, StringType, BooleanType, _, _>(
         "lte",
         FunctionProperty::default(),
         |_, _| FunctionDomain::NoThrow,
-        |lhs, rhs, _| T::upcast_gat(lhs) <= T::upcast_gat(rhs),
+        |lhs, rhs, _| lhs <= rhs,
     );
+}
+
+macro_rules! register_simple_domain_type_cmp {
+    ($registry:ident, $T:ty) => {
+        $registry.register_2_arg::<$T, $T, BooleanType, _, _>(
+            "eq",
+            FunctionProperty::default(),
+            |d1, d2| {
+                if d1.min > d2.max || d1.max < d2.min {
+                    FunctionDomain::Domain(all_false_domain())
+                } else if d1.min == d1.max && d2.min == d2.max {
+                    if d1.min == d2.min {
+                        FunctionDomain::Domain(all_true_domain())
+                    } else {
+                        FunctionDomain::Domain(all_false_domain())
+                    }
+                } else {
+                    FunctionDomain::NoThrow
+                }
+            },
+            |lhs, rhs, _| lhs == rhs,
+        );
+        $registry.register_2_arg::<$T, $T, BooleanType, _, _>(
+            "noteq",
+            FunctionProperty::default(),
+            |d1, d2| {
+                if d1.min > d2.max || d1.max < d2.min {
+                    FunctionDomain::Domain(all_true_domain())
+                } else if d1.min == d1.max && d2.min == d2.max {
+                    if d1.min == d2.min {
+                        FunctionDomain::Domain(all_false_domain())
+                    } else {
+                        FunctionDomain::Domain(all_true_domain())
+                    }
+                } else {
+                    FunctionDomain::NoThrow
+                }
+            },
+            |lhs, rhs, _| lhs != rhs,
+        );
+        $registry.register_2_arg::<$T, $T, BooleanType, _, _>(
+            "gt",
+            FunctionProperty::default(),
+            |d1, d2| {
+                if d1.min > d2.max {
+                    FunctionDomain::Domain(all_true_domain())
+                } else if d1.max < d2.min {
+                    FunctionDomain::Domain(all_false_domain())
+                } else if d1.min == d1.max && d2.min == d2.max {
+                    if (d1.min > d2.min) {
+                        FunctionDomain::Domain(all_true_domain())
+                    } else {
+                        FunctionDomain::Domain(all_false_domain())
+                    }
+                } else {
+                    FunctionDomain::NoThrow
+                }
+            },
+            |lhs, rhs, _| lhs > rhs,
+        );
+        $registry.register_2_arg::<$T, $T, BooleanType, _, _>(
+            "gte",
+            FunctionProperty::default(),
+            |d1, d2| {
+                if d1.min >= d2.max {
+                    FunctionDomain::Domain(all_true_domain())
+                } else if d1.max < d2.min {
+                    FunctionDomain::Domain(all_false_domain())
+                } else if d1.min == d1.max && d2.min == d2.max {
+                    if (d1.min >= d2.min) {
+                        FunctionDomain::Domain(all_true_domain())
+                    } else {
+                        FunctionDomain::Domain(all_false_domain())
+                    }
+                } else {
+                    FunctionDomain::NoThrow
+                }
+            },
+            |lhs, rhs, _| lhs >= rhs,
+        );
+        $registry.register_2_arg::<$T, $T, BooleanType, _, _>(
+            "lt",
+            FunctionProperty::default(),
+            |d1, d2| {
+                if d1.max < d2.min {
+                    FunctionDomain::Domain(all_true_domain())
+                } else if d1.min > d2.max {
+                    FunctionDomain::Domain(all_false_domain())
+                } else if d1.min == d1.max && d2.min == d2.max {
+                    if (d1.min < d2.min) {
+                        FunctionDomain::Domain(all_true_domain())
+                    } else {
+                        FunctionDomain::Domain(all_false_domain())
+                    }
+                } else {
+                    FunctionDomain::NoThrow
+                }
+            },
+            |lhs, rhs, _| lhs < rhs,
+        );
+        $registry.register_2_arg::<$T, $T, BooleanType, _, _>(
+            "lte",
+            FunctionProperty::default(),
+            |d1, d2| {
+                if d1.max <= d2.min {
+                    FunctionDomain::Domain(all_true_domain())
+                } else if d1.min > d2.max {
+                    FunctionDomain::Domain(all_false_domain())
+                } else if d1.min == d1.max && d2.min == d2.max {
+                    if (d1.min <= d2.min) {
+                        FunctionDomain::Domain(all_true_domain())
+                    } else {
+                        FunctionDomain::Domain(all_false_domain())
+                    }
+                } else {
+                    FunctionDomain::NoThrow
+                }
+            },
+            |lhs, rhs, _| lhs <= rhs,
+        );
+    };
+}
+
+fn register_date_cmp(registry: &mut FunctionRegistry) {
+    register_simple_domain_type_cmp!(registry, TimestampType);
 }
 
 fn register_boolean_cmp(registry: &mut FunctionRegistry) {
     registry.register_2_arg::<BooleanType, BooleanType, BooleanType, _, _>(
         "eq",
         FunctionProperty::default(),
-        |_, _| FunctionDomain::NoThrow,
+        |d1, d2| match (d1.has_true, d1.has_false, d2.has_true, d2.has_false) {
+            (true, false, true, false) => FunctionDomain::Domain(all_true_domain()),
+            (false, true, false, true) => FunctionDomain::Domain(all_true_domain()),
+            (true, false, false, true) => FunctionDomain::Domain(all_false_domain()),
+            (false, true, true, false) => FunctionDomain::Domain(all_false_domain()),
+            _ => FunctionDomain::NoThrow,
+        },
         |lhs, rhs, _| lhs == rhs,
     );
     registry.register_2_arg::<BooleanType, BooleanType, BooleanType, _, _>(
         "noteq",
         FunctionProperty::default(),
-        |_, _| FunctionDomain::NoThrow,
+        |d1, d2| match (d1.has_true, d1.has_false, d2.has_true, d2.has_false) {
+            (true, false, true, false) => FunctionDomain::Domain(all_false_domain()),
+            (false, true, false, true) => FunctionDomain::Domain(all_false_domain()),
+            (true, false, false, true) => FunctionDomain::Domain(all_true_domain()),
+            (false, true, true, false) => FunctionDomain::Domain(all_true_domain()),
+            _ => FunctionDomain::NoThrow,
+        },
         |lhs, rhs, _| lhs != rhs,
     );
     registry.register_2_arg::<BooleanType, BooleanType, BooleanType, _, _>(
         "gt",
         FunctionProperty::default(),
-        |_, _| FunctionDomain::NoThrow,
+        |d1, d2| match (d1.has_true, d1.has_false, d2.has_true, d2.has_false) {
+            (true, false, false, true) => FunctionDomain::Domain(all_true_domain()),
+            (false, true, _, _) => FunctionDomain::Domain(all_false_domain()),
+            _ => FunctionDomain::NoThrow,
+        },
         |lhs, rhs, _| lhs & !rhs,
     );
     registry.register_2_arg::<BooleanType, BooleanType, BooleanType, _, _>(
         "gte",
         FunctionProperty::default(),
-        |_, _| FunctionDomain::NoThrow,
+        |d1, d2| match (d1.has_true, d1.has_false, d2.has_true, d2.has_false) {
+            (true, false, _, _) => FunctionDomain::Domain(all_true_domain()),
+            (_, _, false, true) => FunctionDomain::Domain(all_true_domain()),
+            (false, true, true, false) => FunctionDomain::Domain(all_false_domain()),
+            _ => FunctionDomain::NoThrow,
+        },
         |lhs, rhs, _| (lhs & !rhs) || (lhs & rhs),
     );
     registry.register_2_arg::<BooleanType, BooleanType, BooleanType, _, _>(
         "lt",
         FunctionProperty::default(),
-        |_, _| FunctionDomain::NoThrow,
+        |d1, d2| match (d1.has_true, d1.has_false, d2.has_true, d2.has_false) {
+            (false, true, true, false) => FunctionDomain::Domain(all_true_domain()),
+            (_, _, false, true) => FunctionDomain::Domain(all_false_domain()),
+            _ => FunctionDomain::NoThrow,
+        },
         |lhs, rhs, _| !lhs & rhs,
     );
     registry.register_2_arg::<BooleanType, BooleanType, BooleanType, _, _>(
         "lte",
         FunctionProperty::default(),
-        |_, _| FunctionDomain::NoThrow,
+        |d1, d2| match (d1.has_true, d1.has_false, d2.has_true, d2.has_false) {
+            (false, true, _, _) => FunctionDomain::Domain(all_true_domain()),
+            (_, _, true, false) => FunctionDomain::Domain(all_true_domain()),
+            (true, false, false, true) => FunctionDomain::Domain(all_false_domain()),
+            _ => FunctionDomain::NoThrow,
+        },
         |lhs, rhs, _| (!lhs & rhs) || (lhs & rhs),
     );
 }
@@ -130,48 +300,7 @@ fn register_number_cmp(registry: &mut FunctionRegistry) {
     for ty in ALL_NUMERICS_TYPES {
         with_number_mapped_type!(|NUM_TYPE| match ty {
             NumberDataType::NUM_TYPE => {
-                registry
-                    .register_2_arg::<NumberType<NUM_TYPE>, NumberType<NUM_TYPE>, BooleanType, _, _>(
-                        "eq",
-                        FunctionProperty::default(),
-                        |_, _| FunctionDomain::NoThrow,
-                        |lhs, rhs, _| lhs == rhs,
-                    );
-                registry
-                    .register_2_arg::<NumberType<NUM_TYPE>, NumberType<NUM_TYPE>, BooleanType, _, _>(
-                        "noteq",
-                        FunctionProperty::default(),
-                        |_, _| FunctionDomain::NoThrow,
-                        |lhs, rhs, _| lhs != rhs,
-                    );
-                registry
-                    .register_2_arg::<NumberType<NUM_TYPE>, NumberType<NUM_TYPE>, BooleanType, _, _>(
-                        "gt",
-                        FunctionProperty::default(),
-                        |_, _| FunctionDomain::NoThrow,
-                        |lhs, rhs, _| lhs > rhs,
-                    );
-                registry
-                    .register_2_arg::<NumberType<NUM_TYPE>, NumberType<NUM_TYPE>, BooleanType, _, _>(
-                        "gte",
-                        FunctionProperty::default(),
-                        |_, _| FunctionDomain::NoThrow,
-                        |lhs, rhs, _| lhs >= rhs,
-                    );
-                registry
-                    .register_2_arg::<NumberType<NUM_TYPE>, NumberType<NUM_TYPE>, BooleanType, _, _>(
-                        "lt",
-                        FunctionProperty::default(),
-                        |_, _| FunctionDomain::NoThrow,
-                        |lhs, rhs, _| lhs < rhs,
-                    );
-                registry
-                    .register_2_arg::<NumberType<NUM_TYPE>, NumberType<NUM_TYPE>, BooleanType, _, _>(
-                        "lte",
-                        FunctionProperty::default(),
-                        |_, _| FunctionDomain::NoThrow,
-                        |lhs, rhs, _| lhs <= rhs,
-                    );
+                register_simple_domain_type_cmp!(registry, NumberType<NUM_TYPE>);
             }
         });
     }
