@@ -25,3 +25,12 @@ output domain  : Unknown
 output         : 44.99998
 
 
+ast            : point_in_ellipses(10., 10., 10., 9.1, 1., 0.9999)
+raw expr       : point_in_ellipses(10_f64, 10_f64, 10_f64, 9.1_f64, 1_f64, 0.9999_f64)
+checked expr   : point_in_ellipses<Float64, Float64, Float64, Float64, Float64, Float64>(10_f64, 10_f64, 10_f64, 9.1_f64, 1_f64, 0.9999_f64)
+optimized expr : 1_u8
+output type    : UInt8
+output domain  : Unknown
+output         : 1
+
+

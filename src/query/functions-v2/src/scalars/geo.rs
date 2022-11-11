@@ -18,7 +18,8 @@ use std::sync::Arc;
 use std::sync::Once;
 
 use common_expression::types::number::Float64Type;
-use common_expression::types::number::NumberColumn;
+use common_expression::types::number::NumberColumnBuilder;
+use common_expression::types::number::NumberScalar;
 use common_expression::types::number::F32;
 use common_expression::types::number::F64;
 use common_expression::types::AnyType;
@@ -32,6 +33,7 @@ use common_expression::FunctionContext;
 use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
 use common_expression::FunctionSignature;
+use common_expression::Scalar;
 use common_expression::Value;
 use common_expression::ValueRef;
 use once_cell::sync::OnceCell;
@@ -127,7 +129,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 fn point_in_ellipses_fn(
     args: &[ValueRef<AnyType>],
     _: FunctionContext,
-) -> Result<Value<AnyType>, f64> {
+) -> Result<Value<AnyType>, String> {
     let len = args.iter().find_map(|arg| match arg {
         ValueRef::Column(col) => Some(col.len()),
         _ => None,
@@ -138,8 +140,6 @@ fn point_in_ellipses_fn(
         .collect::<Vec<_>>();
 
     let input_rows = len.unwrap_or(1);
-
-    let mut values: Vec<u8> = vec![0; input_rows];
 
     let ellipses_cnt = (args.len() - 2) / 4;
     let mut ellipses: Vec<Ellipse> = Vec::with_capacity(ellipses_cnt);
@@ -153,37 +153,40 @@ fn point_in_ellipses_fn(
                 _ => 0f64,
             };
         }
-        ellipses[ellipse_idx] = Ellipse {
+        ellipses.push(Ellipse {
             x: ellipse_data[0],
             y: ellipse_data[1],
             a: ellipse_data[2],
             b: ellipse_data[3],
-        };
+        });
     }
 
     let mut start_index = 0;
+    let mut builder = NumberColumnBuilder::with_capacity(&NumberDataType::UInt8, input_rows);
     for idx in 0..input_rows {
-        let col_x = match args[0] {
+        let col_x = match &args[0] {
             ValueRef::Scalar(v) => *v,
-            ValueRef::Column(c) => unsafe { Float64Type::index_column_unchecked(&c, idx).0 },
+            ValueRef::Column(c) => unsafe { Float64Type::index_column_unchecked(&c, idx) },
         };
-        let col_y = match args[1] {
+        let col_y = match &args[1] {
             ValueRef::Scalar(v) => *v,
-            ValueRef::Column(c) => unsafe { Float64Type::index_column_unchecked(&c, idx).0 },
+            ValueRef::Column(c) => unsafe { Float64Type::index_column_unchecked(&c, idx) },
         };
 
-        values[idx] = u8::from(is_point_in_ellipses(
-            col_x,
-            col_y,
+        let r = u8::from(is_point_in_ellipses(
+            col_x.0,
+            col_y.0,
             &ellipses,
             ellipses_cnt,
             &mut start_index,
         ));
+        builder.push(NumberScalar::UInt8(r));
     }
 
-    Ok(Value::Column(Column::Number(NumberColumn::UInt8(
-        values.into(),
-    ))))
+    match len {
+        Some(_) => Ok(Value::Column(Column::Number(builder.build()))),
+        _ => Ok(Value::Scalar(Scalar::Number(builder.build_scalar()))),
+    }
 }
 
 fn is_point_in_ellipses(
@@ -194,7 +197,7 @@ fn is_point_in_ellipses(
     start_idx: &mut usize,
 ) -> bool {
     let mut index = 0 + *start_idx;
-    for i in 0..ellipses_count {
+    for _ in 0..ellipses_count {
         let el = &ellipses[index];
         let p1 = (x - el.x) / el.a;
         let p2 = (y - el.y) / el.b;
