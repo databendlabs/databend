@@ -146,9 +146,9 @@ fn point_in_ellipses_fn(
 
     for ellipse_idx in 0..ellipses_cnt {
         let mut ellipse_data = [0.0; 4];
-        for idx in 0..4 {
+        for (idx, e_data) in ellipse_data.iter_mut().enumerate() {
             let arg_idx = 2 + 4 * ellipse_idx + idx;
-            ellipse_data[idx] = match args[arg_idx] {
+            *e_data = match args[arg_idx] {
                 ValueRef::Scalar(v) => *v,
                 _ => 0f64,
             };
@@ -166,11 +166,11 @@ fn point_in_ellipses_fn(
     for idx in 0..input_rows {
         let col_x = match &args[0] {
             ValueRef::Scalar(v) => *v,
-            ValueRef::Column(c) => unsafe { Float64Type::index_column_unchecked(&c, idx) },
+            ValueRef::Column(c) => unsafe { Float64Type::index_column_unchecked(c, idx) },
         };
         let col_y = match &args[1] {
             ValueRef::Scalar(v) => *v,
-            ValueRef::Column(c) => unsafe { Float64Type::index_column_unchecked(&c, idx) },
+            ValueRef::Column(c) => unsafe { Float64Type::index_column_unchecked(c, idx) },
         };
 
         let r = u8::from(is_point_in_ellipses(
@@ -196,7 +196,7 @@ fn is_point_in_ellipses(
     ellipses_count: usize,
     start_idx: &mut usize,
 ) -> bool {
-    let mut index = 0 + *start_idx;
+    let mut index = *start_idx;
     for _ in 0..ellipses_count {
         let el = &ellipses[index];
         let p1 = (x - el.x) / el.a;
