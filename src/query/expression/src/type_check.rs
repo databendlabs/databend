@@ -54,20 +54,24 @@ pub fn check(ast: &RawExpr, fn_registry: &FunctionRegistry) -> Result<Expr> {
             expr,
             dest_type,
         } => {
-            let dest_type = if *is_try {
+            let wrapped_dest_type = if *is_try {
                 wrap_nullable_for_try_cast(span.clone(), dest_type)?
             } else {
                 dest_type.clone()
             };
             let expr = check(expr, fn_registry)?;
-            if expr.data_type() == &dest_type {
+            if expr.data_type() == &wrapped_dest_type {
                 Ok(expr)
             } else {
+                // faster path to eval function for cast
+                if let Some(cast_fn) = check_simple_cast(*is_try, dest_type) {
+                    return check_function(span.clone(), &cast_fn, &[], &[expr], fn_registry);
+                }
                 Ok(Expr::Cast {
                     span: span.clone(),
                     is_try: *is_try,
                     expr: Box::new(expr),
-                    dest_type,
+                    dest_type: wrapped_dest_type,
                 })
             }
         }
@@ -395,4 +399,26 @@ pub fn common_super_type(ty1: DataType, ty2: DataType) -> Option<DataType> {
         }
         _ => Some(DataType::Variant),
     }
+}
+
+pub fn check_simple_cast(is_try: bool, dest_type: &DataType) -> Option<String> {
+    let prefix = if is_try { "try_" } else { "" };
+    let cast_function_name = match dest_type {
+        DataType::String => Some("to_string"),
+        DataType::Number(NumberDataType::UInt8) => Some("to_uint8"),
+        DataType::Number(NumberDataType::UInt16) => Some("to_uint16"),
+        DataType::Number(NumberDataType::UInt32) => Some("to_uint32"),
+        DataType::Number(NumberDataType::UInt64) => Some("to_uint64"),
+        DataType::Number(NumberDataType::Int8) => Some("to_int8"),
+        DataType::Number(NumberDataType::Int16) => Some("to_int16"),
+        DataType::Number(NumberDataType::Int32) => Some("to_int32"),
+        DataType::Number(NumberDataType::Int64) => Some("to_int64"),
+        DataType::Number(NumberDataType::Float32) => Some("to_float32"),
+        DataType::Number(NumberDataType::Float64) => Some("to_float64"),
+        DataType::Timestamp => Some("to_timestamp"),
+        DataType::Date => Some("to_date"),
+        DataType::Variant => Some("to_variant"),
+        _ => None,
+    };
+    cast_function_name.map(|name| format!("{prefix}{name}"))
 }
