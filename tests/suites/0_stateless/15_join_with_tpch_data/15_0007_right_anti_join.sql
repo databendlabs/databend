@@ -13,12 +13,3 @@ order by o_custkey
     limit 20;
 
 set enable_cbo = 1;
-
-drop table customer;
-drop table orders;
-drop table lineitem;
-drop table nation;
-drop table region;
-drop table supplier;
-drop table part;
-drop table partsupp;
