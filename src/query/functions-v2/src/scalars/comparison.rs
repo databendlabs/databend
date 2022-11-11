@@ -29,6 +29,7 @@ use common_expression::types::ALL_NUMERICS_TYPES;
 use common_expression::values::Value;
 use common_expression::with_number_mapped_type;
 use common_expression::FunctionContext;
+use common_expression::FunctionDomain;
 use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
 use common_expression::ValueRef;
@@ -51,37 +52,37 @@ where for<'a> T::ScalarRef<'a>: PartialOrd + PartialEq {
     registry.register_2_arg::<T, T, BooleanType, _, _>(
         "eq",
         FunctionProperty::default(),
-        |_, _| None,
+        |_, _| FunctionDomain::NoThrow,
         |lhs, rhs, _| T::upcast_gat(lhs) == T::upcast_gat(rhs),
     );
     registry.register_2_arg::<T, T, BooleanType, _, _>(
         "noteq",
         FunctionProperty::default(),
-        |_, _| None,
+        |_, _| FunctionDomain::NoThrow,
         |lhs, rhs, _| T::upcast_gat(lhs) != T::upcast_gat(rhs),
     );
     registry.register_2_arg::<T, T, BooleanType, _, _>(
         "gt",
         FunctionProperty::default(),
-        |_, _| None,
+        |_, _| FunctionDomain::NoThrow,
         |lhs, rhs, _| T::upcast_gat(lhs) > T::upcast_gat(rhs),
     );
     registry.register_2_arg::<T, T, BooleanType, _, _>(
         "gte",
         FunctionProperty::default(),
-        |_, _| None,
+        |_, _| FunctionDomain::NoThrow,
         |lhs, rhs, _| T::upcast_gat(lhs) >= T::upcast_gat(rhs),
     );
     registry.register_2_arg::<T, T, BooleanType, _, _>(
         "lt",
         FunctionProperty::default(),
-        |_, _| None,
+        |_, _| FunctionDomain::NoThrow,
         |lhs, rhs, _| T::upcast_gat(lhs) < T::upcast_gat(rhs),
     );
     registry.register_2_arg::<T, T, BooleanType, _, _>(
         "lte",
         FunctionProperty::default(),
-        |_, _| None,
+        |_, _| FunctionDomain::NoThrow,
         |lhs, rhs, _| T::upcast_gat(lhs) <= T::upcast_gat(rhs),
     );
 }
@@ -90,37 +91,37 @@ fn register_boolean_cmp(registry: &mut FunctionRegistry) {
     registry.register_2_arg::<BooleanType, BooleanType, BooleanType, _, _>(
         "eq",
         FunctionProperty::default(),
-        |_, _| None,
+        |_, _| FunctionDomain::NoThrow,
         |lhs, rhs, _| lhs == rhs,
     );
     registry.register_2_arg::<BooleanType, BooleanType, BooleanType, _, _>(
         "noteq",
         FunctionProperty::default(),
-        |_, _| None,
+        |_, _| FunctionDomain::NoThrow,
         |lhs, rhs, _| lhs != rhs,
     );
     registry.register_2_arg::<BooleanType, BooleanType, BooleanType, _, _>(
         "gt",
         FunctionProperty::default(),
-        |_, _| None,
+        |_, _| FunctionDomain::NoThrow,
         |lhs, rhs, _| lhs & !rhs,
     );
     registry.register_2_arg::<BooleanType, BooleanType, BooleanType, _, _>(
         "gte",
         FunctionProperty::default(),
-        |_, _| None,
+        |_, _| FunctionDomain::NoThrow,
         |lhs, rhs, _| (lhs & !rhs) || (lhs & rhs),
     );
     registry.register_2_arg::<BooleanType, BooleanType, BooleanType, _, _>(
         "lt",
         FunctionProperty::default(),
-        |_, _| None,
+        |_, _| FunctionDomain::NoThrow,
         |lhs, rhs, _| !lhs & rhs,
     );
     registry.register_2_arg::<BooleanType, BooleanType, BooleanType, _, _>(
         "lte",
         FunctionProperty::default(),
-        |_, _| None,
+        |_, _| FunctionDomain::NoThrow,
         |lhs, rhs, _| (!lhs & rhs) || (lhs & rhs),
     );
 }
@@ -133,42 +134,42 @@ fn register_number_cmp(registry: &mut FunctionRegistry) {
                     .register_2_arg::<NumberType<NUM_TYPE>, NumberType<NUM_TYPE>, BooleanType, _, _>(
                         "eq",
                         FunctionProperty::default(),
-                        |_, _| None,
+                        |_, _| FunctionDomain::NoThrow,
                         |lhs, rhs, _| lhs == rhs,
                     );
                 registry
                     .register_2_arg::<NumberType<NUM_TYPE>, NumberType<NUM_TYPE>, BooleanType, _, _>(
                         "noteq",
                         FunctionProperty::default(),
-                        |_, _| None,
+                        |_, _| FunctionDomain::NoThrow,
                         |lhs, rhs, _| lhs != rhs,
                     );
                 registry
                     .register_2_arg::<NumberType<NUM_TYPE>, NumberType<NUM_TYPE>, BooleanType, _, _>(
                         "gt",
                         FunctionProperty::default(),
-                        |_, _| None,
+                        |_, _| FunctionDomain::NoThrow,
                         |lhs, rhs, _| lhs > rhs,
                     );
                 registry
                     .register_2_arg::<NumberType<NUM_TYPE>, NumberType<NUM_TYPE>, BooleanType, _, _>(
                         "gte",
                         FunctionProperty::default(),
-                        |_, _| None,
+                        |_, _| FunctionDomain::NoThrow,
                         |lhs, rhs, _| lhs >= rhs,
                     );
                 registry
                     .register_2_arg::<NumberType<NUM_TYPE>, NumberType<NUM_TYPE>, BooleanType, _, _>(
                         "lt",
                         FunctionProperty::default(),
-                        |_, _| None,
+                        |_, _| FunctionDomain::NoThrow,
                         |lhs, rhs, _| lhs < rhs,
                     );
                 registry
                     .register_2_arg::<NumberType<NUM_TYPE>, NumberType<NUM_TYPE>, BooleanType, _, _>(
                         "lte",
                         FunctionProperty::default(),
-                        |_, _| None,
+                        |_, _| FunctionDomain::NoThrow,
                         |lhs, rhs, _| lhs <= rhs,
                     );
             }
@@ -180,7 +181,7 @@ fn register_variant_cmp(registry: &mut FunctionRegistry) {
     registry.register_2_arg::<VariantType, VariantType, BooleanType, _, _>(
         "eq",
         FunctionProperty::default(),
-        |_, _| None,
+        |_, _| FunctionDomain::NoThrow,
         |lhs, rhs, _| {
             common_jsonb::compare(lhs, rhs).expect("unable to parse jsonb value") == Ordering::Equal
         },
@@ -188,7 +189,7 @@ fn register_variant_cmp(registry: &mut FunctionRegistry) {
     registry.register_2_arg::<VariantType, VariantType, BooleanType, _, _>(
         "noteq",
         FunctionProperty::default(),
-        |_, _| None,
+        |_, _| FunctionDomain::NoThrow,
         |lhs, rhs, _| {
             common_jsonb::compare(lhs, rhs).expect("unable to parse jsonb value") != Ordering::Equal
         },
@@ -196,7 +197,7 @@ fn register_variant_cmp(registry: &mut FunctionRegistry) {
     registry.register_2_arg::<VariantType, VariantType, BooleanType, _, _>(
         "gt",
         FunctionProperty::default(),
-        |_, _| None,
+        |_, _| FunctionDomain::NoThrow,
         |lhs, rhs, _| {
             common_jsonb::compare(lhs, rhs).expect("unable to parse jsonb value")
                 == Ordering::Greater
@@ -205,7 +206,7 @@ fn register_variant_cmp(registry: &mut FunctionRegistry) {
     registry.register_2_arg::<VariantType, VariantType, BooleanType, _, _>(
         "gte",
         FunctionProperty::default(),
-        |_, _| None,
+        |_, _| FunctionDomain::NoThrow,
         |lhs, rhs, _| {
             common_jsonb::compare(lhs, rhs).expect("unable to parse jsonb value") != Ordering::Less
         },
@@ -213,7 +214,7 @@ fn register_variant_cmp(registry: &mut FunctionRegistry) {
     registry.register_2_arg::<VariantType, VariantType, BooleanType, _, _>(
         "lt",
         FunctionProperty::default(),
-        |_, _| None,
+        |_, _| FunctionDomain::NoThrow,
         |lhs, rhs, _| {
             common_jsonb::compare(lhs, rhs).expect("unable to parse jsonb value") == Ordering::Less
         },
@@ -221,7 +222,7 @@ fn register_variant_cmp(registry: &mut FunctionRegistry) {
     registry.register_2_arg::<VariantType, VariantType, BooleanType, _, _>(
         "lte",
         FunctionProperty::default(),
-        |_, _| None,
+        |_, _| FunctionDomain::NoThrow,
         |lhs, rhs, _| {
             common_jsonb::compare(lhs, rhs).expect("unable to parse jsonb value")
                 != Ordering::Greater
@@ -235,7 +236,7 @@ fn register_like(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_2_arg::<StringType, StringType, BooleanType, _, _>(
         "like",
         FunctionProperty::default(),
-        |_, _| None,
+        |_, _| FunctionDomain::NoThrow,
         vectorize_like(|str, pat, _, pattern_type| {
             match pattern_type {
                 PatternType::OrdinalStr => Ok(str == pat),
@@ -276,7 +277,7 @@ fn register_like(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_2_arg::<StringType, StringType, BooleanType, _, _>(
         "regexp",
         FunctionProperty::default(),
-        |_, _| None,
+        |_, _| FunctionDomain::NoThrow,
         vectorize_regexp(|str, pat, _, map, _| {
             let pattern = if let Some(pattern) = map.get(pat) {
                 pattern

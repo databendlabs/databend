@@ -149,6 +149,13 @@ impl ArgType for BooleanType {
         DataType::Boolean
     }
 
+    fn full_domain() -> Self::Domain {
+        BooleanDomain {
+            has_false: true,
+            has_true: true,
+        }
+    }
+
     fn create_builder(capacity: usize, _: &GenericMap) -> Self::ColumnBuilder {
         MutableBitmap::with_capacity(capacity)
     }

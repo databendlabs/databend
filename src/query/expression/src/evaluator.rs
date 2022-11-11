@@ -37,6 +37,7 @@ use crate::values::Column;
 use crate::values::ColumnBuilder;
 use crate::values::Scalar;
 use crate::values::Value;
+use crate::FunctionDomain;
 use crate::FunctionRegistry;
 use crate::Result;
 
@@ -522,7 +523,12 @@ impl<'a> ConstantFolder<'a> {
                     });
                 }
 
-                let func_domain = args_domain.and_then(|domains| (function.calc_domain)(&domains));
+                let func_domain =
+                    args_domain.and_then(|domains| match (function.calc_domain)(&domains) {
+                        FunctionDomain::MayThrow => None,
+                        FunctionDomain::NoThrow => Some(Domain::full(return_type)),
+                        FunctionDomain::Domain(domain) => Some(domain),
+                    });
                 let all_args_is_scalar = args_expr.iter().all(|arg| arg.as_constant().is_some());
 
                 if let Some(scalar) = func_domain.as_ref().and_then(Domain::as_singleton) {
