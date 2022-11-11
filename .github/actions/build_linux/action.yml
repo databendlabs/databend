@@ -24,7 +24,7 @@ runs:
         RUSTC_WRAPPER: /opt/rust/cargo/bin/cccache
         SCCACHE_BUCKET: databend-ci
         SCCACHE_S3_KEY_PREFIX: cache/
-        SCCACHE_S3_USE_SSL: true
+        SCCACHE_S3_USE_SSL: "true"
 
     - name: Build Release
       if: inputs.profile == 'release'
