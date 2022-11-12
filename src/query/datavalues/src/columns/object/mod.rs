@@ -149,22 +149,35 @@ impl<T: ObjectType> Column for ObjectColumn<T> {
         })
     }
 
-    fn filter(&self, filter: &BooleanColumn) -> ColumnRef {
+    /// filter() return (remain_columns, deleted_columns)
+    fn filter(&self, filter: &BooleanColumn) -> (ColumnRef, Option<ColumnRef>) {
         let length = filter.values().len() - filter.values().unset_bits();
         if length == self.len() {
-            return Arc::new(self.clone());
+            return (Arc::new(self.clone()), None);
         }
-        let iter = self
-            .values()
+
+        let mut remain_values: Vec<T> = vec![];
+        let mut deleted_values: Vec<T> = vec![];
+
+        self.values()
             .iter()
             .zip(filter.values().iter())
-            .filter(|(_, f)| *f)
-            .map(|(v, _)| v.clone());
+            .for_each(|(v, f)| {
+                if f {
+                    remain_values.push(v.clone())
+                } else {
+                    deleted_values.push(v.clone())
+                }
+            });
 
-        let values: Vec<T> = iter.collect();
-        let col = ObjectColumn { values };
-
-        Arc::new(col)
+        (
+            Arc::new(ObjectColumn {
+                values: remain_values,
+            }),
+            Some(Arc::new(ObjectColumn {
+                values: deleted_values,
+            })),
+        )
     }
 
     fn scatter(&self, indices: &[usize], scattered_size: usize) -> Vec<ColumnRef> {

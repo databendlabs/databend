@@ -135,13 +135,28 @@ impl Column for StructColumn {
         })
     }
 
-    fn filter(&self, filter: &BooleanColumn) -> ColumnRef {
-        let values = self.values.iter().map(|v| v.filter(filter)).collect();
+    /// filter() return (remain_columns, deleted_columns)
+    fn filter(&self, filter: &BooleanColumn) -> (ColumnRef, Option<ColumnRef>) {
+        let mut values = vec![];
+        let mut deleted_values = vec![];
+        self.values.iter().for_each(|v| {
+            let (value, deleted_value) = v.filter(filter);
+            values.push(value);
+            if let Some(deleted_value) = deleted_value {
+                deleted_values.push(deleted_value);
+            }
+        });
 
-        Arc::new(Self {
-            values,
-            data_type: self.data_type.clone(),
-        })
+        (
+            Arc::new(Self {
+                values,
+                data_type: self.data_type.clone(),
+            }),
+            Some(Arc::new(Self {
+                values: deleted_values,
+                data_type: self.data_type.clone(),
+            })),
+        )
     }
 
     fn scatter(&self, indices: &[usize], scattered_size: usize) -> Vec<ColumnRef> {

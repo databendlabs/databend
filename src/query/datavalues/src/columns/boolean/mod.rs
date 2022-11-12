@@ -107,13 +107,14 @@ impl Column for BooleanColumn {
         }
     }
 
-    fn filter(&self, filter: &BooleanColumn) -> ColumnRef {
+    /// filter() return (remain_columns, deleted_columns)
+    fn filter(&self, filter: &BooleanColumn) -> (ColumnRef, Option<ColumnRef>) {
         if self.values().unset_bits() == 0 {
             let values = self
                 .values
                 .clone()
                 .slice(0, filter.len() - filter.values().unset_bits());
-            return Arc::new(BooleanColumn::from_arrow_data(values));
+            return (Arc::new(BooleanColumn::from_arrow_data(values)), None);
         }
         filter_scalar_column(self, filter)
     }

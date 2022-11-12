@@ -200,16 +200,20 @@ impl<T: PrimitiveType> Column for PrimitiveColumn<T> {
         Arc::new(Self { values })
     }
 
-    fn filter(&self, filter: &BooleanColumn) -> ColumnRef {
+    /// filter() return (remain_columns, deleted_columns)
+    fn filter(&self, filter: &BooleanColumn) -> (ColumnRef, Option<ColumnRef>) {
         assert_eq!(self.len(), filter.values().len());
 
         let selected = filter.values().len() - filter.values().unset_bits();
         if selected == self.len() {
-            return Arc::new(self.clone());
+            return (Arc::new(self.clone()), None);
         }
 
         let mut new = Vec::<T>::with_capacity(selected);
         let mut dst = new.as_mut_ptr();
+
+        let mut deleted = Vec::<T>::with_capacity(filter.values().unset_bits());
+        let mut deleted_dst = deleted.as_mut_ptr();
 
         let (mut slice, offset, mut length) = filter.values().as_slice();
         let mut values = self.values();
@@ -226,6 +230,11 @@ impl<T: PrimitiveType> Column for PrimitiveColumn<T> {
                             dst.write(*value);
                             dst = dst.add(1);
                         }
+                    } else {
+                        unsafe {
+                            deleted_dst.write(*value);
+                            deleted_dst = deleted_dst.add(1);
+                        }
                     }
                 });
             slice = &slice[1..];
@@ -240,20 +249,26 @@ impl<T: PrimitiveType> Column for PrimitiveColumn<T> {
         chunks
             .by_ref()
             .zip(mask_chunks.by_ref())
-            .for_each(|(chunk, mut mask)| {
+            .for_each(|(chunk, mask)| {
                 if mask == u64::MAX {
                     unsafe {
                         std::ptr::copy(chunk.as_ptr(), dst, CHUNK_SIZE);
                         dst = dst.add(CHUNK_SIZE);
                     }
                 } else {
-                    while mask != 0 {
-                        let n = mask.trailing_zeros() as usize;
-                        unsafe {
-                            dst.write(chunk[n]);
-                            dst = dst.add(1);
+                    // for n in 0..CHUNK_SIZE {
+                    for (n, item) in chunk.iter().enumerate().take(CHUNK_SIZE) {
+                        if mask & 1 << n != 0 {
+                            unsafe {
+                                dst.write(*item);
+                                dst = dst.add(1);
+                            }
+                        } else {
+                            unsafe {
+                                deleted_dst.write(*item);
+                                deleted_dst = deleted_dst.add(1);
+                            }
                         }
-                        mask = mask & (mask - 1);
                     }
                 }
             });
@@ -268,13 +283,23 @@ impl<T: PrimitiveType> Column for PrimitiveColumn<T> {
                         dst.write(*value);
                         dst = dst.add(1);
                     }
+                } else {
+                    unsafe {
+                        deleted_dst.write(*value);
+                        deleted_dst = deleted_dst.add(1);
+                    }
                 }
             });
 
         unsafe { new.set_len(selected) };
         let col = PrimitiveColumn { values: new.into() };
 
-        Arc::new(col)
+        unsafe { deleted.set_len(filter.values().unset_bits()) };
+        let deleted_col = PrimitiveColumn {
+            values: deleted.into(),
+        };
+
+        (Arc::new(col), Some(Arc::new(deleted_col)))
     }
 
     fn scatter(&self, indices: &[usize], scattered_size: usize) -> Vec<ColumnRef> {

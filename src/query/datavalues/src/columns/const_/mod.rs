@@ -102,12 +102,19 @@ impl Column for ConstColumn {
         })
     }
 
-    fn filter(&self, filter: &BooleanColumn) -> ColumnRef {
+    /// filter() return (remain_columns, deleted_columns)
+    fn filter(&self, filter: &BooleanColumn) -> (ColumnRef, Option<ColumnRef>) {
         let length = filter.values().len() - filter.values().unset_bits();
         if length == self.len() {
-            return Arc::new(self.clone());
+            return (Arc::new(self.clone()), None);
         }
-        Arc::new(Self::new(self.inner().clone(), length))
+        (
+            Arc::new(Self::new(self.inner().clone(), length)),
+            Some(Arc::new(Self::new(
+                self.inner().clone(),
+                filter.values().unset_bits(),
+            ))),
+        )
     }
 
     fn scatter(&self, indices: &[usize], scattered_size: usize) -> Vec<ColumnRef> {

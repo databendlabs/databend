@@ -181,7 +181,8 @@ impl Column for StringColumn {
         scatter_scalar_column(self, indices, scattered_size)
     }
 
-    fn filter(&self, filter: &BooleanColumn) -> ColumnRef {
+    /// filter() return (remain_columns, deleted_columns)
+    fn filter(&self, filter: &BooleanColumn) -> (ColumnRef, Option<ColumnRef>) {
         filter_scalar_column(self, filter)
     }
 

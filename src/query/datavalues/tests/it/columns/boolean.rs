@@ -60,16 +60,19 @@ fn test_filter_column() {
     struct Test {
         filter: BooleanColumn,
         expect: Vec<bool>,
+        deleted: Option<Vec<bool>>,
     }
 
     let tests: Vec<Test> = vec![
         Test {
             filter: BooleanColumn::from_iterator((0..N).map(|_| true)),
             expect: (0..N).map(|e| e % 2 == 0).collect(),
+            deleted: None,
         },
         Test {
             filter: BooleanColumn::from_iterator((0..N).map(|_| false)),
             expect: vec![],
+            deleted: Some((0..N).map(|e| e % 2 == 0).collect()),
         },
         Test {
             filter: BooleanColumn::from_iterator((0..N).map(|i| i % 3 == 0)),
@@ -79,11 +82,19 @@ fn test_filter_column() {
                 .filter(|(i, _)| i % 3 == 0)
                 .map(|(_, e)| e)
                 .collect(),
+            deleted: Some(
+                (0..N)
+                    .map(|e| e % 2 == 0)
+                    .enumerate()
+                    .filter(|(i, _)| i % 3 != 0)
+                    .map(|(_, e)| e)
+                    .collect(),
+            ),
         },
     ];
 
     for test in tests {
-        let res = data_column.filter(&test.filter);
+        let (res, deleted) = data_column.filter(&test.filter);
         let iter = test.expect.into_iter();
         let bitmap: Bitmap = MutableBitmap::from_iter(iter).into();
         assert_eq!(
@@ -93,5 +104,19 @@ fn test_filter_column() {
                 .values(),
             &bitmap
         );
+
+        assert_eq!(deleted.is_some(), test.deleted.is_some());
+        if let Some(deleted) = deleted {
+            let iter = test.deleted.unwrap().into_iter();
+            let bitmap: Bitmap = MutableBitmap::from_iter(iter).into();
+            assert_eq!(
+                deleted
+                    .as_any()
+                    .downcast_ref::<BooleanColumn>()
+                    .unwrap()
+                    .values(),
+                &bitmap
+            )
+        };
     }
 }

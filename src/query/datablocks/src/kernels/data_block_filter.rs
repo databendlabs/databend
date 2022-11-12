@@ -76,7 +76,9 @@ impl DataBlock {
                 }
                 let mut after_columns = Vec::with_capacity(block.num_columns());
                 for data_column in block.columns() {
-                    after_columns.push(data_column.filter(filter));
+                    let (after_column, _deleted_column): (ColumnRef, Option<ColumnRef>) =
+                        data_column.filter(filter);
+                    after_columns.push(after_column);
                 }
 
                 Ok(DataBlock::create(block.schema().clone(), after_columns))

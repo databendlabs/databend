@@ -58,6 +58,7 @@ fn test_string_column() {
     struct Test {
         filter: BooleanColumn,
         expect: StringColumn,
+        deleted: Option<StringColumn>,
     }
 
     let empty_case: Vec<&str> = vec![];
@@ -65,6 +66,12 @@ fn test_string_column() {
         .map(|i| if i % 2 == 0 { "你好" } else { "hello" })
         .enumerate()
         .filter(|(i, _)| i % 3 == 0)
+        .map(|(_, e)| e)
+        .collect();
+    let not_normal_case: Vec<&str> = (0..N)
+        .map(|i| if i % 2 == 0 { "你好" } else { "hello" })
+        .enumerate()
+        .filter(|(i, _)| i % 3 != 0)
         .map(|(_, e)| e)
         .collect();
 
@@ -78,19 +85,28 @@ fn test_string_column() {
                     "hello".as_bytes()
                 }
             })),
+            deleted: None,
         },
         Test {
             filter: BooleanColumn::from_iterator((0..N).map(|_| false)),
             expect: NewColumn::new_from_iter(empty_case.iter()),
+            deleted: Some(NewColumn::new_from_iter((0..N).map(|i| {
+                if i % 2 == 0 {
+                    "你好".as_bytes()
+                } else {
+                    "hello".as_bytes()
+                }
+            }))),
         },
         Test {
             filter: BooleanColumn::from_iterator((0..N).map(|i| i % 3 == 0)),
             expect: NewColumn::new_from_iter(normal_case.iter()),
+            deleted: Some(NewColumn::new_from_iter(not_normal_case.iter())),
         },
     ];
 
     for test in tests {
-        let res = data_column.filter(&test.filter);
+        let (res, deleted) = data_column.filter(&test.filter);
         let values = res
             .as_any()
             .downcast_ref::<StringColumn>()
@@ -105,5 +121,24 @@ fn test_string_column() {
                 .unwrap()
                 .values()
         );
+
+        assert_eq!(deleted.is_some(), test.deleted.is_some());
+        if let Some(deleted) = deleted {
+            let values = deleted
+                .as_any()
+                .downcast_ref::<StringColumn>()
+                .unwrap()
+                .values();
+
+            assert_eq!(
+                values,
+                test.deleted
+                    .unwrap()
+                    .as_any()
+                    .downcast_ref::<StringColumn>()
+                    .unwrap()
+                    .values()
+            );
+        }
     }
 }

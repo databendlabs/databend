@@ -146,26 +146,43 @@ impl Column for NullableColumn {
         })
     }
 
-    fn filter(&self, filter: &BooleanColumn) -> ColumnRef {
+    /// filter() return (remain_columns, deleted_columns)
+    fn filter(&self, filter: &BooleanColumn) -> (ColumnRef, Option<ColumnRef>) {
         if filter.values().unset_bits() == 0 {
-            return Arc::new(self.clone());
+            return (Arc::new(self.clone()), None);
         }
-        let inner = self.inner().filter(filter);
+        let (inner, deleted_inner) = self.inner().filter(filter);
 
-        let validity = if self.validity.unset_bits() == 0 {
-            self.validity
-                .clone()
-                .slice(0, filter.len() - filter.values().unset_bits())
+        let (validity, deleted_validity) = if self.validity.unset_bits() == 0 {
+            (
+                self.validity
+                    .clone()
+                    .slice(0, filter.len() - filter.values().unset_bits()),
+                self.validity.clone().slice(0, filter.values().unset_bits()),
+            )
         } else {
-            let iter = self
-                .validity
+            let mut remain = vec![];
+            let mut deleted = vec![];
+            self.validity
                 .iter()
                 .zip(filter.values().iter())
-                .filter(|(_, f)| *f)
-                .map(|(v, _)| v);
-            MutableBitmap::from_iter(iter).into()
+                .for_each(|(v, _)| {
+                    if v {
+                        remain.push(v);
+                    } else {
+                        deleted.push(v);
+                    }
+                });
+            (
+                MutableBitmap::from(remain).into(),
+                MutableBitmap::from(deleted).into(),
+            )
         };
-        Arc::new(Self::new(inner, validity))
+
+        (Arc::new(Self::new(inner, validity)), match deleted_inner {
+            Some(deleted_inner) => Some(Arc::new(Self::new(deleted_inner, deleted_validity))),
+            None => None,
+        })
     }
 
     fn scatter(&self, indices: &[usize], scattered_size: usize) -> Vec<ColumnRef> {
