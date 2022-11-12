@@ -150,6 +150,7 @@ pub mod linux_or_macos {
         ) -> Result<NonNull<[u8]>, AllocError> {
             debug_assert_eq!(old_layout.align(), new_layout.align());
             debug_assert!(old_layout.size() <= new_layout.size());
+
             let data_address = if new_layout.size() == 0 {
                 NonNull::new(new_layout.align() as *mut ()).unwrap_unchecked()
             } else if old_layout.size() == 0 {
