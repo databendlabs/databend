@@ -16,12 +16,12 @@ use std::sync::Arc;
 
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
+use common_meta_types::UserStageInfo;
 use common_pipeline_core::Pipeline;
 use common_settings::Settings;
 use opendal::Operator;
 
 use crate::processors::sources::input_formats::delimiter::RecordDelimiter;
-use crate::processors::sources::input_formats::input_context::CopyIntoPlan;
 use crate::processors::sources::input_formats::input_context::InputContext;
 use crate::processors::sources::input_formats::input_split::SplitInfo;
 
@@ -33,7 +33,8 @@ pub trait InputFormat: Send + Sync {
 
     async fn get_splits(
         &self,
-        plan: &CopyIntoPlan,
+        files: &[String],
+        stage_info: &UserStageInfo,
         op: &Operator,
         settings: &Arc<Settings>,
         schema: &DataSchemaRef,
