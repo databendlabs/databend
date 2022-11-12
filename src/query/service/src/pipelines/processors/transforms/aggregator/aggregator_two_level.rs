@@ -23,8 +23,8 @@ use common_hashtable::HashtableEntryMutRefLike;
 use common_hashtable::HashtableEntryRefLike;
 use common_hashtable::HashtableLike;
 use tracing::info;
-use crate::pipelines::processors::transforms::aggregator::aggregator_final_parallel::ParallelFinalAggregator;
 
+use crate::pipelines::processors::transforms::aggregator::aggregator_final_parallel::ParallelFinalAggregator;
 use crate::pipelines::processors::transforms::aggregator::PartialAggregator;
 use crate::pipelines::processors::transforms::aggregator::SingleStateAggregator;
 use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
@@ -92,7 +92,6 @@ where
             inner: PartialAggregator::<true, TwoLevelHashMethod<Method>> {
                 area: self.area.take(),
                 params: self.params.clone(),
-                is_generated: self.is_generated,
                 states_dropped: self.states_dropped,
                 method: two_level_method,
                 hash_table: two_level_hashtable,
@@ -143,7 +142,6 @@ where
             inner: PartialAggregator::<false, TwoLevelHashMethod<Method>> {
                 area: self.area.take(),
                 params: self.params.clone(),
-                is_generated: self.is_generated,
                 states_dropped: self.states_dropped,
                 method: two_level_method,
                 hash_table: two_level_hashtable,
@@ -197,7 +195,7 @@ impl<T: TwoLevelAggregatorLike> Aggregator for TwoLevelAggregator<T> {
     }
 
     #[inline(always)]
-    fn generate(&mut self) -> Result<Option<DataBlock>> {
+    fn generate(&mut self) -> Result<Vec<DataBlock>> {
         self.inner.generate()
     }
 }

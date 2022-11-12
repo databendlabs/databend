@@ -15,12 +15,14 @@ use common_datavalues::StringColumn;
 use common_exception::Result;
 use common_functions::aggregates::StateAddr;
 use common_functions::aggregates::StateAddrs;
+use common_hashtable::HashtableEntryMutRefLike;
 use common_hashtable::HashtableEntryRefLike;
+use common_hashtable::HashtableLike;
 use tracing::info;
-use common_hashtable::{HashtableEntryMutRefLike, HashtableLike};
 
 use crate::pipelines::processors::transforms::aggregator::aggregate_info::AggregateInfo;
-use crate::pipelines::processors::transforms::group_by::{Area, GroupColumnsBuilder};
+use crate::pipelines::processors::transforms::group_by::Area;
+use crate::pipelines::processors::transforms::group_by::GroupColumnsBuilder;
 use crate::pipelines::processors::transforms::group_by::KeysColumnIter;
 use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
 use crate::pipelines::processors::transforms::transform_aggregator::Aggregator;
@@ -28,18 +30,16 @@ use crate::pipelines::processors::AggregatorParams;
 use crate::sessions::QueryContext;
 
 pub struct ParallelFinalAggregator<const HAS_AGG: bool, Method>
-    where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
+where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
 {
-    is_generated: bool,
     method: Method,
     query_ctx: Arc<QueryContext>,
     params: Arc<AggregatorParams>,
     buckets_blocks: HashMap<isize, Vec<DataBlock>>,
-    generate_blocks: Vec<DataBlock>,
 }
 
 impl<Method, const HAS_AGG: bool> ParallelFinalAggregator<HAS_AGG, Method>
-    where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
+where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
 {
     pub fn create(
         ctx: Arc<QueryContext>,
@@ -50,15 +50,13 @@ impl<Method, const HAS_AGG: bool> ParallelFinalAggregator<HAS_AGG, Method>
             params,
             method,
             query_ctx: ctx,
-            is_generated: false,
             buckets_blocks: HashMap::new(),
-            generate_blocks: vec![],
         })
     }
 }
 
 impl<Method, const HAS_AGG: bool> Aggregator for ParallelFinalAggregator<HAS_AGG, Method>
-    where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
+where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
 {
     const NAME: &'static str = "GroupByFinalTransform";
 
@@ -82,53 +80,47 @@ impl<Method, const HAS_AGG: bool> Aggregator for ParallelFinalAggregator<HAS_AGG
         }
     }
 
-    fn generate(&mut self) -> Result<Option<DataBlock>> {
-        if !self.is_generated {
-            self.is_generated = true;
+    fn generate(&mut self) -> Result<Vec<DataBlock>> {
+        let mut generate_blocks = Vec::new();
+        if self.buckets_blocks.len() == 1 || self.buckets_blocks.contains_key(&-1) {
+            let mut data_blocks = vec![];
+            for (_, bucket_blocks) in std::mem::take(&mut self.buckets_blocks) {
+                data_blocks.extend(bucket_blocks);
+            }
 
-            if self.buckets_blocks.len() == 1 || self.buckets_blocks.contains_key(&-1) {
-                let mut data_blocks = vec![];
-                for (_, bucket_blocks) in std::mem::take(&mut self.buckets_blocks) {
-                    data_blocks.extend(bucket_blocks);
-                }
+            let method = self.method.clone();
+            let params = self.params.clone();
+            let mut bucket_aggregator = BucketAggregator::<HAS_AGG, _>::create(method, params)?;
+            generate_blocks = bucket_aggregator.merge_blocks(data_blocks)?;
+        } else if self.buckets_blocks.len() > 1 {
+            info!("Merge to final state using a parallel algorithm.");
 
+            let settings = self.query_ctx.get_settings();
+            let max_threads = settings.get_max_threads()? as usize;
+            let thread_pool = ThreadPool::create(max_threads)?;
+            let mut join_handles = Vec::with_capacity(self.buckets_blocks.len());
+
+            for (_, bucket_blocks) in std::mem::take(&mut self.buckets_blocks) {
                 let method = self.method.clone();
                 let params = self.params.clone();
-                let mut bucket_aggregator =
-                    BucketAggregator::<HAS_AGG, Method>::create(method, params)?;
-                self.generate_blocks
-                    .extend(bucket_aggregator.merge_blocks(data_blocks)?);
-            } else if self.buckets_blocks.len() > 1 {
-                info!("Merge to final state using a parallel algorithm.");
+                let mut bucket_aggregator = BucketAggregator::<HAS_AGG, _>::create(method, params)?;
+                join_handles.push(
+                    thread_pool.execute(move || bucket_aggregator.merge_blocks(bucket_blocks)),
+                );
+            }
 
-                let settings = self.query_ctx.get_settings();
-                let max_threads = settings.get_max_threads()? as usize;
-                let thread_pool = ThreadPool::create(max_threads)?;
-                let mut join_handles = Vec::with_capacity(self.buckets_blocks.len());
-
-                for (_, bucket_blocks) in std::mem::take(&mut self.buckets_blocks) {
-                    let method = self.method.clone();
-                    let params = self.params.clone();
-                    let mut bucket_aggregator =
-                        BucketAggregator::<HAS_AGG, Method>::create(method, params)?;
-                    join_handles.push(
-                        thread_pool.execute(move || bucket_aggregator.merge_blocks(bucket_blocks)),
-                    );
-                }
-
-                self.generate_blocks.reserve(join_handles.len());
-                for join_handle in join_handles {
-                    self.generate_blocks.extend(join_handle.join()?);
-                }
+            generate_blocks.reserve(join_handles.len());
+            for join_handle in join_handles {
+                generate_blocks.extend(join_handle.join()?);
             }
         }
 
-        Ok(self.generate_blocks.pop())
+        Ok(generate_blocks)
     }
 }
 
 struct BucketAggregator<const HAS_AGG: bool, Method>
-    where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
+where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
 {
     area: Area,
     method: Method,
@@ -140,7 +132,7 @@ struct BucketAggregator<const HAS_AGG: bool, Method>
 }
 
 impl<const HAS_AGG: bool, Method> BucketAggregator<HAS_AGG, Method>
-    where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
+where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
 {
     pub fn create(method: Method, params: Arc<AggregatorParams>) -> Result<Self> {
         let mut area = Area::create();
@@ -261,10 +253,7 @@ impl<const HAS_AGG: bool, Method> BucketAggregator<HAS_AGG, Method>
 
     /// Allocate aggregation function state for each key(the same key can always get the same state)
     #[inline(always)]
-    fn lookup_state(
-        &mut self,
-        keys_iter: &Method::KeysColumnIter,
-    ) -> StateAddrs {
+    fn lookup_state(&mut self, keys_iter: &Method::KeysColumnIter) -> StateAddrs {
         let iter = keys_iter.iter();
         let (len, _) = iter.size_hint();
         let mut places = Vec::with_capacity(len);
@@ -291,7 +280,7 @@ impl<const HAS_AGG: bool, Method> BucketAggregator<HAS_AGG, Method>
 }
 
 impl<const HAS_AGG: bool, Method> Drop for BucketAggregator<HAS_AGG, Method>
-    where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
+where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
 {
     fn drop(&mut self) {
         let aggregator_params = self.params.as_ref();

@@ -62,7 +62,6 @@ pub type KeysSerializerAggregator = PartialAggregator<true, HashMethodSerializer
 pub struct PartialAggregator<const HAS_AGG: bool, Method>
 where Method: HashMethod + PolymorphicKeysHelper<Method>
 {
-    pub is_generated: bool,
     pub states_dropped: bool,
 
     pub area: Option<Area>,
@@ -81,7 +80,6 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
             method,
             hash_table,
             area: Some(Area::create()),
-            is_generated: false,
             states_dropped: false,
         })
     }
@@ -182,12 +180,11 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
     }
 
     #[inline(always)]
-    fn generate_data(&mut self) -> Result<Option<DataBlock>> {
-        if self.hash_table.len() == 0 || self.is_generated {
-            return Ok(None);
+    fn generate_data(&mut self) -> Result<Vec<DataBlock>> {
+        if self.hash_table.len() == 0 {
+            return Ok(vec![]);
         }
 
-        self.is_generated = true;
         let state_groups_len = self.hash_table.len();
         let aggregator_params = self.params.as_ref();
         let funcs = &aggregator_params.aggregate_functions;
@@ -219,7 +216,7 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
         }
 
         columns.push(group_key_builder.finish());
-        Ok(Some(DataBlock::create(schema.clone(), columns)))
+        Ok(vec![DataBlock::create(schema.clone(), columns)])
     }
 }
 
@@ -242,7 +239,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
         Self::execute(&self.params, &block, &places)
     }
 
-    fn generate(&mut self) -> Result<Option<DataBlock>> {
+    fn generate(&mut self) -> Result<Vec<DataBlock>> {
         self.generate_data()
     }
 }
@@ -265,27 +262,23 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
         Ok(())
     }
 
-    fn generate(&mut self) -> Result<Option<DataBlock>> {
-        match self.hash_table.len() == 0 || self.is_generated {
-            true => {
-                self.drop_states();
-                Ok(None)
-            }
-            false => {
-                self.is_generated = true;
-                let capacity = self.hash_table.len();
-                let mut keys_column_builder = self.method.keys_column_builder(capacity);
-                for group_entity in self.hash_table.iter() {
-                    keys_column_builder.append_value(group_entity.key());
-                }
-
-                let columns = keys_column_builder.finish();
-                Ok(Some(DataBlock::create(
-                    self.params.output_schema.clone(),
-                    vec![columns],
-                )))
-            }
+    fn generate(&mut self) -> Result<Vec<DataBlock>> {
+        if self.hash_table.len() == 0 {
+            self.drop_states();
+            return Ok(vec![]);
         }
+
+        let capacity = self.hash_table.len();
+        let mut keys_column_builder = self.method.keys_column_builder(capacity);
+        for group_entity in self.hash_table.iter() {
+            keys_column_builder.append_value(group_entity.key());
+        }
+
+        let columns = keys_column_builder.finish();
+
+        self.drop_states();
+        let schema = self.params.output_schema.clone();
+        Ok(vec![DataBlock::create(schema, vec![columns])])
     }
 }
 

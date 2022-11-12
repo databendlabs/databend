@@ -280,7 +280,7 @@ pub trait Aggregator: Sized + Send {
     const NAME: &'static str;
 
     fn consume(&mut self, data: DataBlock) -> Result<()>;
-    fn generate(&mut self) -> Result<Option<DataBlock>>;
+    fn generate(&mut self) -> Result<Vec<DataBlock>>;
 }
 
 enum AggregatorTransform<TAggregator: Aggregator + TwoLevelAggregatorLike> {
@@ -319,17 +319,17 @@ impl<TAggregator: Aggregator + TwoLevelAggregatorLike + 'static> AggregatorTrans
             AggregatorTransform::ConsumeData(s) => {
                 Ok(AggregatorTransform::Generate(GenerateState {
                     inner: s.inner,
-                    is_finished: false,
+                    is_generated: false,
                     output_port: s.output_port,
-                    output_data_block: None,
+                    output_data_block: vec![],
                 }))
             }
             AggregatorTransform::TwoLevelConsumeData(s) => {
                 Ok(AggregatorTransform::TwoLevelGenerate(GenerateState {
                     inner: s.inner,
-                    is_finished: false,
+                    is_generated: false,
                     output_port: s.output_port,
-                    output_data_block: None,
+                    output_data_block: vec![],
                 }))
             }
             _ => Err(ErrorCode::Internal("")),
@@ -467,12 +467,12 @@ impl<TAggregator: Aggregator + TwoLevelAggregatorLike + 'static> AggregatorTrans
                 return Ok(Event::NeedConsume);
             }
 
-            if let Some(block) = state.output_data_block.take() {
+            if let Some(block) = state.output_data_block.pop() {
                 state.output_port.push_data(Ok(block));
                 return Ok(Event::NeedConsume);
             }
 
-            if state.is_finished {
+            if state.is_generated {
                 if !state.output_port.is_finished() {
                     state.output_port.finish();
                 }
@@ -496,12 +496,12 @@ impl<TAggregator: Aggregator + TwoLevelAggregatorLike + 'static> AggregatorTrans
                 return Ok(Event::NeedConsume);
             }
 
-            if let Some(block) = state.output_data_block.take() {
+            if let Some(block) = state.output_data_block.pop() {
                 state.output_port.push_data(Ok(block));
                 return Ok(Event::NeedConsume);
             }
 
-            if state.is_finished {
+            if state.is_generated {
                 if !state.output_port.is_finished() {
                     state.output_port.finish();
                 }
@@ -557,20 +557,18 @@ impl<TAggregator: Aggregator + TwoLevelAggregatorLike> TwoLevelConsumeState<TAgg
 
 struct GenerateState<TAggregator: Aggregator> {
     inner: TAggregator,
-    is_finished: bool,
+    is_generated: bool,
     output_port: Arc<OutputPort>,
-    output_data_block: Option<DataBlock>,
+    output_data_block: Vec<DataBlock>,
 }
 
 impl<TAggregator: Aggregator> GenerateState<TAggregator> {
     pub fn generate(&mut self) -> Result<()> {
-        let generate_data = self.inner.generate()?;
-
-        if generate_data.is_none() {
-            self.is_finished = true;
+        if !self.is_generated {
+            self.is_generated = true;
+            self.output_data_block = self.inner.generate()?;
         }
 
-        self.output_data_block = generate_data;
         Ok(())
     }
 }
