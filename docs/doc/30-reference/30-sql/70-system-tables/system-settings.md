@@ -81,17 +81,17 @@ set group_by_two_level_threshold = 10000;
 
 ## max_block_size
 
-Maximum block size for reading, default value: 10000.
+Maximum block size for reading, default value: 65536.
 
 Examples:
 
 ```sql
-set max_block_size = 10000;
+set max_block_size = 65536;
 ```
 
 ## max_threads
 
-The maximum number of threads to execute the request. By default, it is determined automatically. The value usually the same as the number of logical cpus.
+The maximum number of threads to execute the request. By default the value is 0 it means determined automatically. The value usually the same as the number of logical cpus.
 
 Examples:
 

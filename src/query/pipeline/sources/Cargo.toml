@@ -8,6 +8,9 @@ edition = "2021"
 doctest = false
 test = false
 
+[package.metadata.cargo-machete]
+ignored = ["xml-rs"]
+
 [dependencies]
 async-channel = "1.7.1"
 common-arrow = { path = "../../../common/arrow" }
@@ -21,7 +24,6 @@ common-io = { path = "../../../common/io" }
 common-meta-types = { path = "../../../meta/types" }
 common-pipeline-core = { path = "../core" }
 common-settings = { path = "../../settings" }
-common-streams = { path = "../../streams" }
 
 async-trait = { version = "0.1.57", package = "async-trait-fn" }
 bstr = "1.0.1"
@@ -34,3 +36,4 @@ parking_lot = "0.12.1"
 serde_json = { workspace = true }
 similar-asserts = "1.4.2"
 tracing = "0.1.36"
+xml-rs = "0.8.4"

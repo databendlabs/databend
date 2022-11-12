@@ -15,5 +15,7 @@
 #![feature(box_patterns)]
 #![feature(try_blocks)]
 
+mod common;
 mod convert;
 mod kernel;
+mod serializations;

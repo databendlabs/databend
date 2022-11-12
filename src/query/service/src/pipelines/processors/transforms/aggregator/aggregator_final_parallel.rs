@@ -15,24 +15,23 @@ use common_datavalues::StringColumn;
 use common_exception::Result;
 use common_functions::aggregates::StateAddr;
 use common_functions::aggregates::StateAddrs;
+use common_hashtable::HashtableEntryRefLike;
 use tracing::info;
+use common_hashtable::{HashtableEntryMutRefLike, HashtableLike};
 
 use crate::pipelines::processors::transforms::aggregator::aggregate_info::AggregateInfo;
-use crate::pipelines::processors::transforms::group_by::AggregatorState;
-use crate::pipelines::processors::transforms::group_by::GroupColumnsBuilder;
+use crate::pipelines::processors::transforms::group_by::{Area, GroupColumnsBuilder};
 use crate::pipelines::processors::transforms::group_by::KeysColumnIter;
 use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
-use crate::pipelines::processors::transforms::group_by::StateEntityMutRef;
-use crate::pipelines::processors::transforms::group_by::StateEntityRef;
 use crate::pipelines::processors::transforms::transform_aggregator::Aggregator;
 use crate::pipelines::processors::AggregatorParams;
 use crate::sessions::QueryContext;
 
 pub struct ParallelFinalAggregator<const HAS_AGG: bool, Method>
-where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + Sync + 'static
+    where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
 {
     is_generated: bool,
-    method: Arc<Method>,
+    method: Method,
     query_ctx: Arc<QueryContext>,
     params: Arc<AggregatorParams>,
     buckets_blocks: HashMap<isize, Vec<DataBlock>>,
@@ -40,7 +39,7 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + Sync + 'static
 }
 
 impl<Method, const HAS_AGG: bool> ParallelFinalAggregator<HAS_AGG, Method>
-where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + Sync + 'static
+    where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
 {
     pub fn create(
         ctx: Arc<QueryContext>,
@@ -49,9 +48,9 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + Sync + 'static
     ) -> Result<Self> {
         Ok(Self {
             params,
+            method,
             query_ctx: ctx,
             is_generated: false,
-            method: Arc::new(method),
             buckets_blocks: HashMap::new(),
             generate_blocks: vec![],
         })
@@ -59,7 +58,7 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + Sync + 'static
 }
 
 impl<Method, const HAS_AGG: bool> Aggregator for ParallelFinalAggregator<HAS_AGG, Method>
-where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + Sync + 'static
+    where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
 {
     const NAME: &'static str = "GroupByFinalTransform";
 
@@ -129,31 +128,34 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + Sync + 'static
 }
 
 struct BucketAggregator<const HAS_AGG: bool, Method>
-where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + Sync + 'static
+    where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
 {
-    method: Arc<Method>,
+    area: Area,
+    method: Method,
     params: Arc<AggregatorParams>,
-    aggregator_state: Method::State,
+    hash_table: Method::HashTable,
 
     // used for deserialization only, so we can reuse it during the loop
     temp_place: Option<StateAddr>,
 }
 
 impl<const HAS_AGG: bool, Method> BucketAggregator<HAS_AGG, Method>
-where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + Sync + 'static
+    where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
 {
-    pub fn create(method: Arc<Method>, params: Arc<AggregatorParams>) -> Result<Self> {
-        let state = method.aggregate_state();
+    pub fn create(method: Method, params: Arc<AggregatorParams>) -> Result<Self> {
+        let mut area = Area::create();
+        let hash_table = method.create_hash_table()?;
         let temp_place = match params.aggregate_functions.is_empty() {
             true => None,
-            false => state.alloc_layout(&params),
+            false => params.alloc_layout(&mut area),
         };
 
         Ok(Self {
+            area,
             method,
             params,
+            hash_table,
             temp_place,
-            aggregator_state: state,
         })
     }
 
@@ -165,14 +167,14 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + Sync + 'static
             let keys_iter = self.method.keys_iter_from_column(keys_column)?;
 
             if !HAS_AGG {
-                let mut inserted = true;
-                for keys_ref in keys_iter.get_slice() {
-                    self.aggregator_state
-                        .entity_by_key(*keys_ref, &mut inserted);
+                unsafe {
+                    for key in keys_iter.iter() {
+                        let _ = self.hash_table.insert_and_entry(key);
+                    }
                 }
             } else {
                 // first state places of current block
-                let places = self.lookup_state(keys_iter.get_slice());
+                let places = self.lookup_state(&keys_iter);
 
                 let states_columns = (0..aggregate_function_len)
                     .map(|i| data_block.column(i))
@@ -203,11 +205,11 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + Sync + 'static
 
         let mut group_columns_builder = self
             .method
-            .group_columns_builder(self.aggregator_state.len(), &self.params);
+            .group_columns_builder(self.hash_table.len(), &self.params);
 
         if !HAS_AGG {
-            for group_entity in self.aggregator_state.iter() {
-                group_columns_builder.append_value(group_entity.get_state_key());
+            for group_entity in self.hash_table.iter() {
+                group_columns_builder.append_value(group_entity.key());
             }
 
             let columns = group_columns_builder.finish()?;
@@ -228,8 +230,8 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + Sync + 'static
                 values
             };
 
-            for group_entity in self.aggregator_state.iter() {
-                let place: StateAddr = group_entity.get_state_value().into();
+            for group_entity in self.hash_table.iter() {
+                let place = Into::<StateAddr>::into(*group_entity.get());
 
                 for (idx, aggregate_function) in aggregate_functions.iter().enumerate() {
                     let arg_place = place.next(offsets_aggregate_states[idx]);
@@ -238,7 +240,7 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + Sync + 'static
                     aggregate_function.merge_result(arg_place, builder)?;
                 }
 
-                group_columns_builder.append_value(group_entity.get_state_key());
+                group_columns_builder.append_value(group_entity.key());
             }
 
             // Build final state block.
@@ -261,34 +263,35 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + Sync + 'static
     #[inline(always)]
     fn lookup_state(
         &mut self,
-        keys: &[<Method::State as AggregatorState<Method>>::KeyRef<'_>],
+        keys_iter: &Method::KeysColumnIter,
     ) -> StateAddrs {
-        let mut places = Vec::with_capacity(keys.len());
+        let iter = keys_iter.iter();
+        let (len, _) = iter.size_hint();
+        let mut places = Vec::with_capacity(len);
 
-        let mut inserted = true;
-        let unsafe_state = &mut self.aggregator_state as *mut Method::State;
-        for key in keys {
-            let mut entity = unsafe { (*unsafe_state).entity_by_key(*key, &mut inserted) };
-
-            match inserted {
-                true => {
-                    if let Some(place) = unsafe { (*unsafe_state).alloc_layout(&self.params) } {
-                        places.push(place);
-                        entity.set_state_value(place.addr());
+        unsafe {
+            for key in iter {
+                match self.hash_table.insert_and_entry(key) {
+                    Ok(mut entry) => {
+                        if let Some(place) = self.params.alloc_layout(&mut self.area) {
+                            places.push(place);
+                            *entry.get_mut() = place.addr();
+                        }
                     }
-                }
-                false => {
-                    let place: StateAddr = entity.get_state_value().into();
-                    places.push(place);
+                    Err(entry) => {
+                        let place = Into::<StateAddr>::into(*entry.get());
+                        places.push(place);
+                    }
                 }
             }
         }
+
         places
     }
 }
 
 impl<const HAS_AGG: bool, Method> Drop for BucketAggregator<HAS_AGG, Method>
-where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + Sync + 'static
+    where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
 {
     fn drop(&mut self) {
         let aggregator_params = self.params.as_ref();
@@ -307,8 +310,8 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + Sync + 'static
             .map(|(_, s)| *s)
             .collect::<Vec<_>>();
 
-        for group_entity in self.aggregator_state.iter() {
-            let place: StateAddr = group_entity.get_state_value().into();
+        for group_entity in self.hash_table.iter() {
+            let place = Into::<StateAddr>::into(*group_entity.get());
 
             for (function, state_offset) in functions.iter().zip(state_offsets.iter()) {
                 unsafe { function.drop_state(place.next(*state_offset)) }

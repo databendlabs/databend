@@ -16,11 +16,11 @@ use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
+use common_datablocks::SendableDataBlockStream;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
-use common_streams::SendableDataBlockStream;
 use futures::StreamExt;
 
 use crate::processors::sources::AsyncSource;

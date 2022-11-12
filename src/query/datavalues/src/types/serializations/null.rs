@@ -24,38 +24,6 @@ pub struct NullSerializer {
 }
 
 impl<'a> TypeSerializer<'a> for NullSerializer {
-    fn write_field_values(
-        &self,
-        _row_index: usize,
-        buf: &mut Vec<u8>,
-        format: &FormatSettings,
-        _in_nested: bool,
-    ) {
-        buf.extend_from_slice(&format.nested.null_bytes);
-    }
-
-    fn write_field_tsv(&self, _row_index: usize, buf: &mut Vec<u8>, format: &FormatSettings) {
-        buf.extend_from_slice(&format.null_bytes);
-    }
-
-    fn write_field_csv(&self, _row_index: usize, buf: &mut Vec<u8>, format: &FormatSettings) {
-        buf.extend_from_slice(&format.null_bytes);
-    }
-
-    fn write_field_json(
-        &self,
-        _row_index: usize,
-        buf: &mut Vec<u8>,
-        format: &FormatSettings,
-        _quote: bool,
-    ) {
-        buf.extend_from_slice(&format.null_bytes);
-    }
-
-    fn to_string_values(&self, _row_index: usize, format: &FormatSettings) -> Result<String> {
-        Ok(unsafe { String::from_utf8_unchecked(format.nested.null_bytes.clone()) })
-    }
-
     fn serialize_json_values(&self, _format: &FormatSettings) -> Result<Vec<Value>> {
         let null = Value::Null;
         let result: Vec<Value> = vec![null; self.size];

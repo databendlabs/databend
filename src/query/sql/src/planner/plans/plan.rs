@@ -21,52 +21,9 @@ use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::StringType;
-use common_planner::plans::AlterTableClusterKeyPlan;
-use common_planner::plans::AlterUDFPlan;
-use common_planner::plans::AlterUserPlan;
-use common_planner::plans::AlterViewPlan;
-use common_planner::plans::CallPlan;
-use common_planner::plans::CreateDatabasePlan;
-use common_planner::plans::CreateRolePlan;
-use common_planner::plans::CreateStagePlan;
-use common_planner::plans::CreateUDFPlan;
-use common_planner::plans::CreateUserPlan;
-use common_planner::plans::CreateViewPlan;
-use common_planner::plans::DeletePlan;
-use common_planner::plans::DescribeTablePlan;
-use common_planner::plans::DropDatabasePlan;
-use common_planner::plans::DropRolePlan;
-use common_planner::plans::DropStagePlan;
-use common_planner::plans::DropTableClusterKeyPlan;
-use common_planner::plans::DropTablePlan;
-use common_planner::plans::DropUDFPlan;
-use common_planner::plans::DropUserPlan;
-use common_planner::plans::DropViewPlan;
-use common_planner::plans::ExistsTablePlan;
-use common_planner::plans::GrantPrivilegePlan;
-use common_planner::plans::GrantRolePlan;
-use common_planner::plans::KillPlan;
-use common_planner::plans::ListPlan;
-use common_planner::plans::OptimizeTablePlan;
-use common_planner::plans::RemoveStagePlan;
-use common_planner::plans::RenameDatabasePlan;
-use common_planner::plans::RenameTablePlan;
-use common_planner::plans::RevokePrivilegePlan;
-use common_planner::plans::RevokeRolePlan;
-use common_planner::plans::SetRolePlan;
-use common_planner::plans::SettingPlan;
-use common_planner::plans::ShowCreateDatabasePlan;
-use common_planner::plans::ShowCreateTablePlan;
-use common_planner::plans::ShowGrantsPlan;
-use common_planner::plans::ShowRolesPlan;
-use common_planner::plans::TruncateTablePlan;
-use common_planner::plans::UndropDatabasePlan;
-use common_planner::plans::UndropTablePlan;
-use common_planner::plans::UseDatabasePlan;
 
 use crate::optimizer::SExpr;
 use crate::plans::copy_v2::CopyPlanV2;
-use crate::plans::create_table_v2::CreateTablePlanV2;
 use crate::plans::insert::Insert;
 use crate::plans::presign::PresignPlan;
 use crate::plans::recluster_table::ReclusterTablePlan;
@@ -79,7 +36,53 @@ use crate::plans::share::RevokeShareObjectPlan;
 use crate::plans::share::ShowGrantTenantsOfSharePlan;
 use crate::plans::share::ShowObjectGrantPrivilegesPlan;
 use crate::plans::share::ShowSharesPlan;
+use crate::plans::AlterTableClusterKeyPlan;
+use crate::plans::AlterUDFPlan;
+use crate::plans::AlterUserPlan;
+use crate::plans::AlterViewPlan;
+use crate::plans::CallPlan;
+use crate::plans::CreateCatalogPlan;
+use crate::plans::CreateDatabasePlan;
+use crate::plans::CreateRolePlan;
+use crate::plans::CreateStagePlan;
+use crate::plans::CreateTablePlanV2;
+use crate::plans::CreateUDFPlan;
+use crate::plans::CreateUserPlan;
+use crate::plans::CreateViewPlan;
+use crate::plans::DeletePlan;
+use crate::plans::DescribeTablePlan;
+use crate::plans::DropCatalogPlan;
+use crate::plans::DropDatabasePlan;
+use crate::plans::DropRolePlan;
+use crate::plans::DropStagePlan;
+use crate::plans::DropTableClusterKeyPlan;
+use crate::plans::DropTablePlan;
+use crate::plans::DropUDFPlan;
+use crate::plans::DropUserPlan;
+use crate::plans::DropViewPlan;
+use crate::plans::ExistsTablePlan;
+use crate::plans::GrantPrivilegePlan;
+use crate::plans::GrantRolePlan;
+use crate::plans::KillPlan;
+use crate::plans::ListPlan;
+use crate::plans::OptimizeTablePlan;
+use crate::plans::RemoveStagePlan;
+use crate::plans::RenameDatabasePlan;
+use crate::plans::RenameTablePlan;
+use crate::plans::RevokePrivilegePlan;
+use crate::plans::RevokeRolePlan;
+use crate::plans::SetRolePlan;
+use crate::plans::SettingPlan;
+use crate::plans::ShowCreateCatalogPlan;
+use crate::plans::ShowCreateDatabasePlan;
+use crate::plans::ShowCreateTablePlan;
+use crate::plans::ShowGrantsPlan;
+use crate::plans::ShowRolesPlan;
+use crate::plans::TruncateTablePlan;
+use crate::plans::UndropDatabasePlan;
+use crate::plans::UndropTablePlan;
 use crate::plans::UpdatePlan;
+use crate::plans::UseDatabasePlan;
 use crate::BindContext;
 use crate::MetadataRef;
 
@@ -110,6 +113,11 @@ pub enum Plan {
 
     // Call
     Call(Box<CallPlan>),
+
+    // Catalogs
+    ShowCreateCatalog(Box<ShowCreateCatalogPlan>),
+    CreateCatalog(Box<CreateCatalogPlan>),
+    DropCatalog(Box<DropCatalogPlan>),
 
     // Databases
     ShowCreateDatabase(Box<ShowCreateDatabasePlan>),
@@ -196,6 +204,7 @@ pub enum RewriteKind {
     ShowProcessList,
     ShowEngines,
 
+    ShowCatalogs,
     ShowDatabases,
     ShowTables,
     ShowTablesStatus,
@@ -214,6 +223,9 @@ impl Display for Plan {
             Plan::Query { .. } => write!(f, "Query"),
             Plan::Copy(_) => write!(f, "Copy"),
             Plan::Explain { .. } => write!(f, "Explain"),
+            Plan::ShowCreateCatalog(_) => write!(f, "ShowCreateCatalog"),
+            Plan::CreateCatalog(_) => write!(f, "CreateCatalog"),
+            Plan::DropCatalog(_) => write!(f, "DropCatalog"),
             Plan::ShowCreateDatabase(_) => write!(f, "ShowCreateDatabase"),
             Plan::CreateDatabase(_) => write!(f, "CreateDatabase"),
             Plan::DropDatabase(_) => write!(f, "DropDatabase"),
@@ -290,6 +302,9 @@ impl Plan {
                 DataSchemaRefExt::create(vec![DataField::new("explain", StringType::new_impl())])
             }
             Plan::Copy(_) => Arc::new(DataSchema::empty()),
+            Plan::ShowCreateCatalog(plan) => plan.schema(),
+            Plan::CreateCatalog(plan) => plan.schema(),
+            Plan::DropCatalog(plan) => plan.schema(),
             Plan::ShowCreateDatabase(plan) => plan.schema(),
             Plan::CreateDatabase(plan) => plan.schema(),
             Plan::UseDatabase(_) => Arc::new(DataSchema::empty()),

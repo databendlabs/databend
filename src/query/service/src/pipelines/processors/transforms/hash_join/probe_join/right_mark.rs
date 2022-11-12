@@ -26,6 +26,7 @@ use common_hashtable::HashtableEntryRefLike;
 use common_hashtable::HashtableLike;
 
 use crate::pipelines::processors::transforms::hash_join::desc::MarkerKind;
+use crate::pipelines::processors::transforms::hash_join::desc::JOIN_MAX_BLOCK_SIZE;
 use crate::pipelines::processors::transforms::hash_join::row::RowPtr;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
 use crate::pipelines::processors::JoinHashTable;
@@ -39,7 +40,7 @@ impl JoinHashTable {
         input: &DataBlock,
     ) -> Result<Vec<DataBlock>>
     where
-        IT: Iterator<Item = H::KeyRef<'a>> + TrustedLen,
+        IT: Iterator<Item = &'a H::Key> + TrustedLen,
         H::Key: 'a,
     {
         let valids = &probe_state.valids;
@@ -74,20 +75,18 @@ impl JoinHashTable {
         input: &DataBlock,
     ) -> Result<Vec<DataBlock>>
     where
-        IT: Iterator<Item = H::KeyRef<'a>> + TrustedLen,
+        IT: Iterator<Item = &'a H::Key> + TrustedLen,
         H::Key: 'a,
     {
         let valids = &probe_state.valids;
-        let block_size = self.ctx.get_settings().get_max_block_size()? as usize;
-
         let has_null = *self.hash_join_desc.marker_join_desc.has_null.read();
         let mut markers = Self::init_markers(input.columns(), input.num_rows());
 
         let func_ctx = self.ctx.try_get_function_context()?;
         let other_predicate = self.hash_join_desc.other_predicate.as_ref().unwrap();
 
-        let mut probe_indexes = Vec::with_capacity(block_size);
-        let mut build_indexes = Vec::with_capacity(block_size);
+        let mut probe_indexes = Vec::with_capacity(JOIN_MAX_BLOCK_SIZE);
+        let mut build_indexes = Vec::with_capacity(JOIN_MAX_BLOCK_SIZE);
 
         for (i, key) in keys_iter.enumerate() {
             let probe_result_ptr = match self.hash_join_desc.from_correlated_subquery {

@@ -26,6 +26,7 @@ use common_expression::Column;
 use common_expression::ColumnBuilder;
 use common_expression::Domain;
 use common_expression::Function;
+use common_expression::FunctionDomain;
 use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
 use common_expression::FunctionSignature;
@@ -50,7 +51,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
         Some(Arc::new(Function {
             signature: FunctionSignature {
-                name: "multi_if",
+                name: "multi_if".to_string(),
                 args_type: sig_args_type,
                 return_type: DataType::Generic(0),
                 property: FunctionProperty::default(),
@@ -72,7 +73,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                     };
                     match (&mut domain, has_true, has_null_or_false) {
                         (None, true, false) => {
-                            return Some(args_domain[cond_idx + 1].clone());
+                            return FunctionDomain::Domain(args_domain[cond_idx + 1].clone());
                         }
                         (None, false, true) => {
                             continue;
@@ -81,7 +82,9 @@ pub fn register(registry: &mut FunctionRegistry) {
                             domain = Some(args_domain[cond_idx + 1].clone());
                         }
                         (Some(prev_domain), true, false) => {
-                            return Some(prev_domain.merge(&args_domain[cond_idx + 1]));
+                            return FunctionDomain::Domain(
+                                prev_domain.merge(&args_domain[cond_idx + 1]),
+                            );
                         }
                         (Some(_), false, true) => {
                             continue;
@@ -93,7 +96,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                     }
                 }
 
-                Some(match domain {
+                FunctionDomain::Domain(match domain {
                     Some(domain) => domain.merge(args_domain.last().unwrap()),
                     None => args_domain.last().unwrap().clone(),
                 })
@@ -148,7 +151,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "is_not_null",
         FunctionProperty::default(),
         |_| {
-            Some(BooleanDomain {
+            FunctionDomain::Domain(BooleanDomain {
                 has_true: false,
                 has_false: true,
             })
@@ -159,7 +162,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "is_not_null",
         FunctionProperty::default(),
         |NullableDomain { has_null, value }| {
-            Some(BooleanDomain {
+            FunctionDomain::Domain(BooleanDomain {
                 has_true: value.is_some(),
                 has_false: *has_null,
             })

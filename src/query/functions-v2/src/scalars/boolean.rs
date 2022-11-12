@@ -17,6 +17,7 @@ use common_expression::types::nullable::NullableDomain;
 use common_expression::types::BooleanType;
 use common_expression::types::NullableType;
 use common_expression::vectorize_2_arg;
+use common_expression::FunctionDomain;
 use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
 use common_expression::Value;
@@ -27,7 +28,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "not",
         FunctionProperty::default(),
         |arg| {
-            Some(BooleanDomain {
+            FunctionDomain::Domain(BooleanDomain {
                 has_false: arg.has_true,
                 has_true: arg.has_false,
             })
@@ -43,7 +44,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "and_filters",
         FunctionProperty::default(),
         |lhs, rhs| {
-            Some(BooleanDomain {
+            FunctionDomain::Domain(BooleanDomain {
                 has_false: lhs.has_false || rhs.has_false,
                 has_true: lhs.has_true && rhs.has_true,
             })
@@ -61,7 +62,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "and",
         FunctionProperty::default(),
         |lhs, rhs| {
-            Some(BooleanDomain {
+            FunctionDomain::Domain(BooleanDomain {
                 has_false: lhs.has_false || rhs.has_false,
                 has_true: lhs.has_true && rhs.has_true,
             })
@@ -79,7 +80,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "or",
         FunctionProperty::default(),
         |lhs, rhs| {
-            Some(BooleanDomain {
+            FunctionDomain::Domain(BooleanDomain {
                 has_false: lhs.has_false && rhs.has_false,
                 has_true: lhs.has_true || rhs.has_true,
             })
@@ -104,14 +105,15 @@ pub fn register(registry: &mut FunctionRegistry) {
                     has_false: a.has_false || b.has_false,
                     has_true: a.has_true && b.has_true,
                     })),
-                    _ => return None,
+                    _ => return FunctionDomain::NoThrow,
                 };
-                return Some(NullableDomain::<BooleanType> {
+                FunctionDomain::Domain(NullableDomain::<BooleanType> {
                     has_null: false,
                     value: bools,
-                });
+                })
+            } else {
+                FunctionDomain::NoThrow
             }
-            None
         },
         // value = lhs & rhs,  valid = (lhs_v & rhs_v) | (!lhs & lhs_v) | (!rhs & rhs_v))
         vectorize_2_arg::<NullableType<BooleanType>, NullableType<BooleanType>, NullableType<BooleanType>>(|lhs, rhs, _| {
@@ -134,14 +136,15 @@ pub fn register(registry: &mut FunctionRegistry) {
                         has_false: a.has_false && b.has_false,
                         has_true: a.has_true || b.has_true,
                     })),
-                    _ => return None,
+                    _ => return FunctionDomain::NoThrow,
                 };
-                return Some(NullableDomain::<BooleanType> {
+                FunctionDomain::Domain(NullableDomain::<BooleanType> {
                     has_null: false,
                     value: bools,
-                });
+                })
+            } else {
+                FunctionDomain::NoThrow
             }
-            None
         },
         // value = lhs | rhs,  valid = (lhs_v & rhs_v) | (lhs_v & lhs) | (rhs_v & rhs)
         vectorize_2_arg::<NullableType<BooleanType>, NullableType<BooleanType>, NullableType<BooleanType>>(|lhs, rhs, _| {
@@ -158,7 +161,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "xor",
         FunctionProperty::default(),
         |lhs, rhs| {
-            Some(BooleanDomain {
+            FunctionDomain::Domain(BooleanDomain {
                 has_false: (lhs.has_false && rhs.has_false) || (lhs.has_true && rhs.has_true),
                 has_true: (lhs.has_false && rhs.has_true) || (lhs.has_true && rhs.has_false),
             })

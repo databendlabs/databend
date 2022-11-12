@@ -17,47 +17,43 @@ use std::sync::Mutex;
 
 use chrono_tz::Tz;
 use common_arrow::arrow::bitmap;
-use common_arrow::arrow::bitmap::MutableBitmap;
 use itertools::Itertools;
-use num_traits::AsPrimitive;
 
 use crate::chunk::Chunk;
 use crate::expression::Expr;
 use crate::expression::Span;
 use crate::function::FunctionContext;
 use crate::property::Domain;
+use crate::type_check::check_simple_cast;
 use crate::types::any::AnyType;
 use crate::types::array::ArrayColumn;
-use crate::types::date::date_to_string;
 use crate::types::nullable::NullableColumn;
 use crate::types::nullable::NullableDomain;
-use crate::types::number::NumberColumn;
-use crate::types::number::NumberDataType;
-use crate::types::number::NumberDomain;
-use crate::types::number::NumberScalar;
-use crate::types::number::SimpleDomain;
-use crate::types::string::StringColumnBuilder;
-use crate::types::timestamp::timestamp_to_string;
-use crate::types::variant::cast_scalar_to_variant;
-use crate::types::variant::cast_scalars_to_variants;
 use crate::types::DataType;
 use crate::utils::arrow::constant_bitmap;
+use crate::utils::calculate_function_domain;
+use crate::utils::eval_function;
 use crate::values::Column;
 use crate::values::ColumnBuilder;
 use crate::values::Scalar;
 use crate::values::Value;
-use crate::with_number_type;
+use crate::FunctionDomain;
+use crate::FunctionRegistry;
 use crate::Result;
-use crate::ScalarRef;
 
 pub struct Evaluator<'a> {
     input_columns: &'a Chunk,
     tz: Tz,
+    fn_registry: &'a FunctionRegistry,
 }
 
 impl<'a> Evaluator<'a> {
-    pub fn new(input_columns: &'a Chunk, tz: Tz) -> Self {
-        Evaluator { input_columns, tz }
+    pub fn new(input_columns: &'a Chunk, tz: Tz, fn_registry: &'a FunctionRegistry) -> Self {
+        Evaluator {
+            input_columns,
+            tz,
+            fn_registry,
+        }
     }
 
     pub fn run(&self, expr: &Expr) -> Result<Value<AnyType>> {
@@ -93,40 +89,15 @@ impl<'a> Evaluator<'a> {
             }
             Expr::Cast {
                 span,
+                is_try,
                 expr,
                 dest_type,
             } => {
                 let value = self.run(expr)?;
-                match value {
-                    Value::Scalar(scalar) => Ok(Value::Scalar(self.run_cast_scalar(
-                        span.clone(),
-                        scalar,
-                        dest_type,
-                    )?)),
-                    Value::Column(col) => Ok(Value::Column(self.run_cast_column(
-                        span.clone(),
-                        col,
-                        dest_type,
-                    )?)),
-                }
-            }
-            Expr::TryCast {
-                span,
-                expr,
-                dest_type,
-            } => {
-                let value = self.run(expr)?;
-                match value {
-                    Value::Scalar(scalar) => Ok(Value::Scalar(self.run_try_cast_scalar(
-                        span.clone(),
-                        scalar,
-                        dest_type,
-                    ))),
-                    Value::Column(col) => Ok(Value::Column(self.run_try_cast_column(
-                        span.clone(),
-                        col,
-                        dest_type,
-                    ))),
+                if *is_try {
+                    Ok(self.run_try_cast(span.clone(), expr.data_type(), dest_type, value))
+                } else {
+                    self.run_cast(span.clone(), expr.data_type(), dest_type, value)
                 }
             }
         };
@@ -137,7 +108,7 @@ impl<'a> Evaluator<'a> {
             if !*RECURSING.lock().unwrap() {
                 *RECURSING.lock().unwrap() = true;
                 assert_eq!(
-                    ConstantFolder::new(&self.input_columns.domains(), self.tz)
+                    ConstantFolder::new(&self.input_columns.domains(), self.tz, self.fn_registry)
                         .fold(expr)
                         .1,
                     None,
@@ -150,635 +121,388 @@ impl<'a> Evaluator<'a> {
         result
     }
 
-    pub fn run_cast_scalar(
+    fn run_cast(
         &self,
         span: Span,
-        scalar: Scalar,
+        src_type: &DataType,
         dest_type: &DataType,
-    ) -> Result<Scalar> {
-        match (scalar, dest_type) {
-            (Scalar::Null, DataType::Nullable(_)) => Ok(Scalar::Null),
-            (Scalar::EmptyArray, DataType::Array(dest_ty)) => {
-                let new_column = ColumnBuilder::with_capacity(dest_ty, 0).build();
-                Ok(Scalar::Array(new_column))
-            }
-            (scalar, DataType::Nullable(dest_ty)) => self.run_cast_scalar(span, scalar, dest_ty),
-            (Scalar::Array(array), DataType::Array(dest_ty)) => {
-                let new_array = self.run_cast_column(span, array, dest_ty)?;
-                Ok(Scalar::Array(new_array))
-            }
-            (Scalar::Tuple(fields), DataType::Tuple(fields_ty)) => {
-                let new_fields = fields
-                    .into_iter()
-                    .zip(fields_ty.iter())
-                    .map(|(field, dest_ty)| self.run_cast_scalar(span.clone(), field, dest_ty))
-                    .collect::<Result<Vec<_>>>()?;
-                Ok(Scalar::Tuple(new_fields))
-            }
-            (scalar, DataType::Variant) => {
-                let mut buf = Vec::new();
-                cast_scalar_to_variant(scalar.as_ref(), self.tz, &mut buf);
-                Ok(Scalar::Variant(buf))
-            }
+        value: Value<AnyType>,
+    ) -> Result<Value<AnyType>> {
+        if src_type == dest_type {
+            return Ok(value);
+        }
 
-            (Scalar::Number(num), DataType::Number(dest_ty)) => {
-                let new_number = with_number_type!(|SRC_TYPE| match num {
-                    NumberScalar::SRC_TYPE(value) => {
-                        with_number_type!(|DEST_TYPE| match dest_ty {
-                            NumberDataType::DEST_TYPE => {
-                                if NumberDataType::SRC_TYPE.can_lossless_cast_to(*dest_ty) {
-                                    NumberScalar::DEST_TYPE(value.as_())
-                                } else {
-                                    let value = num_traits::cast::cast(value).ok_or_else(|| {
-                                        (
-                                            span.clone(),
-                                            format!(
-                                                "unable to cast {} to {}",
-                                                ScalarRef::Number(num),
-                                                stringify!(DEST_TYPE)
-                                            ),
-                                        )
-                                    })?;
-                                    NumberScalar::DEST_TYPE(value)
-                                }
-                            }
+        if let Some(cast_fn) = check_simple_cast(false, dest_type) {
+            return self.run_simple_cast(span, src_type, dest_type, value, &cast_fn);
+        }
+
+        match (src_type, dest_type) {
+            (DataType::Null, DataType::Nullable(_)) => match value {
+                Value::Scalar(Scalar::Null) => Ok(Value::Scalar(Scalar::Null)),
+                Value::Column(Column::Null { len }) => {
+                    let mut builder = ColumnBuilder::with_capacity(dest_type, len);
+                    for _ in 0..len {
+                        builder.push_default();
+                    }
+                    Ok(Value::Column(builder.build()))
+                }
+                _ => unreachable!(),
+            },
+            (DataType::Nullable(inner_src_ty), DataType::Nullable(inner_dest_ty)) => match value {
+                Value::Scalar(Scalar::Null) => Ok(Value::Scalar(Scalar::Null)),
+                Value::Scalar(_) => self.run_cast(span, inner_src_ty, inner_dest_ty, value),
+                Value::Column(Column::Nullable(col)) => {
+                    let column = self
+                        .run_cast(span, inner_src_ty, inner_dest_ty, Value::Column(col.column))?
+                        .into_column()
+                        .unwrap();
+                    Ok(Value::Column(Column::Nullable(Box::new(NullableColumn {
+                        column,
+                        validity: col.validity,
+                    }))))
+                }
+                _ => unreachable!(),
+            },
+            (_, DataType::Nullable(inner_dest_ty)) => match value {
+                Value::Scalar(scalar) => {
+                    self.run_cast(span, src_type, inner_dest_ty, Value::Scalar(scalar))
+                }
+                Value::Column(col) => {
+                    let column = self
+                        .run_cast(span, src_type, inner_dest_ty, Value::Column(col))?
+                        .into_column()
+                        .unwrap();
+                    Ok(Value::Column(Column::Nullable(Box::new(NullableColumn {
+                        validity: constant_bitmap(true, column.len()).into(),
+                        column,
+                    }))))
+                }
+            },
+
+            (DataType::EmptyArray, DataType::Array(inner_dest_ty)) => match value {
+                Value::Scalar(Scalar::EmptyArray) => {
+                    let new_column = ColumnBuilder::with_capacity(inner_dest_ty, 0).build();
+                    Ok(Value::Scalar(Scalar::Array(new_column)))
+                }
+                Value::Column(Column::EmptyArray { len }) => {
+                    let mut builder = ColumnBuilder::with_capacity(dest_type, len);
+                    for _ in 0..len {
+                        builder.push_default();
+                    }
+                    Ok(Value::Column(builder.build()))
+                }
+                _ => unreachable!(),
+            },
+            (DataType::Array(inner_src_ty), DataType::Array(inner_dest_ty)) => match value {
+                Value::Scalar(Scalar::Array(array)) => {
+                    let new_array = self
+                        .run_cast(span, inner_src_ty, inner_dest_ty, Value::Column(array))?
+                        .into_column()
+                        .unwrap();
+                    Ok(Value::Scalar(Scalar::Array(new_array)))
+                }
+                Value::Column(Column::Array(col)) => {
+                    let new_col = self
+                        .run_cast(span, inner_src_ty, inner_dest_ty, Value::Column(col.values))?
+                        .into_column()
+                        .unwrap();
+                    Ok(Value::Column(Column::Array(Box::new(ArrayColumn {
+                        values: new_col,
+                        offsets: col.offsets,
+                    }))))
+                }
+                _ => unreachable!(),
+            },
+
+            (DataType::Tuple(fields_src_ty), DataType::Tuple(fields_dest_ty)) => match value {
+                Value::Scalar(Scalar::Tuple(fields)) => {
+                    let new_fields = fields
+                        .into_iter()
+                        .zip(fields_src_ty.iter())
+                        .zip(fields_dest_ty.iter())
+                        .map(|((field, src_ty), dest_ty)| {
+                            self.run_cast(span.clone(), src_ty, dest_ty, Value::Scalar(field))
+                                .map(|val| val.into_scalar().unwrap())
                         })
-                    }
-                });
-                Ok(Scalar::Number(new_number))
-            }
-
-            (Scalar::Timestamp(value), DataType::Number(dest_ty)) => {
-                let new_number = with_number_type!(|DEST_TYPE| match dest_ty {
-                    NumberDataType::DEST_TYPE => {
-                        if NumberDataType::Int64.can_lossless_cast_to(*dest_ty) {
-                            NumberScalar::DEST_TYPE(value.as_())
-                        } else {
-                            let value = num_traits::cast::cast(value).ok_or_else(|| {
-                                (
-                                    span.clone(),
-                                    format!(
-                                        "unable to cast TimestampType to {}",
-                                        stringify!(DEST_TYPE)
-                                    ),
-                                )
-                            })?;
-                            NumberScalar::DEST_TYPE(value)
-                        }
-                    }
-                });
-                Ok(Scalar::Number(new_number))
-            }
-
-            (Scalar::Date(value), DataType::Number(dest_ty)) => {
-                let new_number = with_number_type!(|DEST_TYPE| match dest_ty {
-                    NumberDataType::DEST_TYPE => {
-                        if NumberDataType::Int32.can_lossless_cast_to(*dest_ty) {
-                            NumberScalar::DEST_TYPE(value.as_())
-                        } else {
-                            let value = num_traits::cast::cast(value).ok_or_else(|| {
-                                (
-                                    span.clone(),
-                                    format!("unable to cast DateType to {}", stringify!(DEST_TYPE)),
-                                )
-                            })?;
-                            NumberScalar::DEST_TYPE(value)
-                        }
-                    }
-                });
-                Ok(Scalar::Number(new_number))
-            }
-
-            (Scalar::Timestamp(ts), DataType::String) => Ok(Scalar::String(
-                timestamp_to_string(ts, self.tz).as_bytes().to_vec(),
-            )),
-
-            (Scalar::Date(d), DataType::String) => Ok(Scalar::String(
-                date_to_string(d, self.tz).as_bytes().to_vec(),
-            )),
-
-            // identical types
-            (scalar @ Scalar::Null, DataType::Null)
-            | (scalar @ Scalar::EmptyArray, DataType::EmptyArray)
-            | (scalar @ Scalar::Boolean(_), DataType::Boolean)
-            | (scalar @ Scalar::String(_), DataType::String)
-            | (scalar @ Scalar::Timestamp(_), DataType::Timestamp)
-            | (scalar @ Scalar::Date(_), DataType::Date) => Ok(scalar),
-
-            (scalar, dest_ty) => Err((
-                span,
-                (format!("unable to cast {} to {dest_ty}", scalar.as_ref())),
-            )),
+                        .collect::<Result<Vec<_>>>()?;
+                    Ok(Value::Scalar(Scalar::Tuple(new_fields)))
+                }
+                Value::Column(Column::Tuple { fields, len }) => {
+                    let new_fields = fields
+                        .into_iter()
+                        .zip(fields_src_ty.iter())
+                        .zip(fields_dest_ty.iter())
+                        .map(|((field, src_ty), dest_ty)| {
+                            self.run_cast(span.clone(), src_ty, dest_ty, Value::Column(field))
+                                .map(|val| val.into_column().unwrap())
+                        })
+                        .collect::<Result<_>>()?;
+                    Ok(Value::Column(Column::Tuple {
+                        fields: new_fields,
+                        len,
+                    }))
+                }
+                _ => unreachable!(),
+            },
+            _ => Err((span, (format!("unable to cast {src_type} to {dest_type}")))),
         }
     }
 
-    #[allow(clippy::only_used_in_recursion)]
-    pub fn run_cast_column(
+    fn run_try_cast(
         &self,
         span: Span,
-        column: Column,
+        src_type: &DataType,
         dest_type: &DataType,
-    ) -> Result<Column> {
-        match (column, dest_type) {
-            (Column::Null { len }, DataType::Nullable(_)) => {
-                let mut builder = ColumnBuilder::with_capacity(dest_type, len);
-                for _ in 0..len {
-                    builder.push_default();
-                }
-                Ok(builder.build())
-            }
-            (Column::EmptyArray { len }, DataType::Array(_)) => {
-                let mut builder = ColumnBuilder::with_capacity(dest_type, len);
-                for _ in 0..len {
-                    builder.push_default();
-                }
-                Ok(builder.build())
-            }
-            (Column::Nullable(box col), DataType::Nullable(dest_ty)) => {
-                let column = self.run_cast_column(span, col.column, dest_ty)?;
-                Ok(Column::Nullable(Box::new(NullableColumn {
-                    column,
-                    validity: col.validity,
-                })))
-            }
-            (col, DataType::Nullable(dest_ty)) => {
-                let column = self.run_cast_column(span, col, dest_ty)?;
-                Ok(Column::Nullable(Box::new(NullableColumn {
-                    validity: constant_bitmap(true, column.len()).into(),
-                    column,
-                })))
-            }
-            (Column::Array(col), DataType::Array(dest_ty)) => {
-                let values = self.run_cast_column(span, col.values, dest_ty)?;
-                Ok(Column::Array(Box::new(ArrayColumn {
-                    values,
-                    offsets: col.offsets,
-                })))
-            }
-            (Column::Tuple { fields, len }, DataType::Tuple(fields_ty)) => {
-                let new_fields = fields
-                    .into_iter()
-                    .zip(fields_ty)
-                    .map(|(field, field_ty)| self.run_cast_column(span.clone(), field, field_ty))
-                    .collect::<Result<_>>()?;
-                Ok(Column::Tuple {
-                    fields: new_fields,
-                    len,
-                })
-            }
-            (col, DataType::Variant) => {
-                let new_col = Column::Variant(cast_scalars_to_variants(col.iter(), self.tz));
-                Ok(new_col)
-            }
+        value: Value<AnyType>,
+    ) -> Value<AnyType> {
+        if src_type == dest_type {
+            return value;
+        }
 
-            (Column::Number(col), DataType::Number(dest_ty)) => {
-                let new_column = with_number_type!(|SRC_TYPE| match col {
-                    NumberColumn::SRC_TYPE(col) => {
-                        with_number_type!(|DEST_TYPE| match dest_ty {
-                            NumberDataType::DEST_TYPE => {
-                                if NumberDataType::SRC_TYPE.can_lossless_cast_to(*dest_ty) {
-                                    let new_col = col.iter().map(|x| x.as_()).collect::<Vec<_>>();
-                                    NumberColumn::DEST_TYPE(new_col.into())
-                                } else {
-                                    let mut new_col = Vec::with_capacity(col.len());
-                                    for &val in col.iter() {
-                                        let new_val =
-                                            num_traits::cast::cast(val).ok_or_else(|| {
-                                                (
-                                                    span.clone(),
-                                                    format!(
-                                                        "unable to cast {} to {}",
-                                                        val,
-                                                        stringify!(DEST_TYPE)
-                                                    ),
-                                                )
-                                            })?;
-                                        new_col.push(new_val);
-                                    }
-                                    NumberColumn::DEST_TYPE(new_col.into())
-                                }
-                            }
+        // The dest_type of `TRY_CAST` must be `Nullable`, which is guaranteed by the type checker.
+        let inner_dest_type = &**dest_type.as_nullable().unwrap();
+        if let Some(cast_fn) = check_simple_cast(true, inner_dest_type) {
+            return self
+                .run_simple_cast(span, src_type, dest_type, value, &cast_fn)
+                .unwrap();
+        }
+
+        match (src_type, inner_dest_type) {
+            (DataType::Null, _) => match value {
+                Value::Scalar(Scalar::Null) => Value::Scalar(Scalar::Null),
+                Value::Column(Column::Null { len }) => {
+                    let mut builder = ColumnBuilder::with_capacity(dest_type, len);
+                    for _ in 0..len {
+                        builder.push_default();
+                    }
+                    Value::Column(builder.build())
+                }
+                _ => unreachable!(),
+            },
+            (DataType::Nullable(inner_src_ty), _) => match value {
+                Value::Scalar(Scalar::Null) => Value::Scalar(Scalar::Null),
+                Value::Scalar(_) => self.run_try_cast(span, inner_src_ty, inner_dest_type, value),
+                Value::Column(Column::Nullable(col)) => {
+                    let new_col = *self
+                        .run_try_cast(span, inner_src_ty, dest_type, Value::Column(col.column))
+                        .into_column()
+                        .unwrap()
+                        .into_nullable()
+                        .unwrap();
+                    Value::Column(Column::Nullable(Box::new(NullableColumn {
+                        column: new_col.column,
+                        validity: bitmap::or(&col.validity, &new_col.validity),
+                    })))
+                }
+                _ => unreachable!(),
+            },
+
+            (DataType::EmptyArray, DataType::Array(inner_dest_ty)) => match value {
+                Value::Scalar(Scalar::EmptyArray) => {
+                    let new_column = ColumnBuilder::with_capacity(inner_dest_ty, 0).build();
+                    Value::Scalar(Scalar::Array(new_column))
+                }
+                Value::Column(Column::EmptyArray { len }) => {
+                    let mut builder = ColumnBuilder::with_capacity(dest_type, len);
+                    for _ in 0..len {
+                        builder.push_default();
+                    }
+                    Value::Column(builder.build())
+                }
+                _ => unreachable!(),
+            },
+            (DataType::Array(inner_src_ty), DataType::Array(inner_dest_ty)) => match value {
+                Value::Scalar(Scalar::Array(array)) => {
+                    let new_array = self
+                        .run_try_cast(span, inner_src_ty, inner_dest_ty, Value::Column(array))
+                        .into_column()
+                        .unwrap();
+                    Value::Scalar(Scalar::Array(new_array))
+                }
+                Value::Column(Column::Array(col)) => {
+                    let new_values = self
+                        .run_try_cast(span, inner_src_ty, inner_dest_ty, Value::Column(col.values))
+                        .into_column()
+                        .unwrap();
+                    let new_col = Column::Array(Box::new(ArrayColumn {
+                        values: new_values,
+                        offsets: col.offsets,
+                    }));
+                    Value::Column(Column::Nullable(Box::new(NullableColumn {
+                        validity: constant_bitmap(true, new_col.len()).into(),
+                        column: new_col,
+                    })))
+                }
+                _ => unreachable!(),
+            },
+
+            (DataType::Tuple(fields_src_ty), DataType::Tuple(fields_dest_ty)) => match value {
+                Value::Scalar(Scalar::Tuple(fields)) => {
+                    let new_fields = fields
+                        .into_iter()
+                        .zip(fields_src_ty.iter())
+                        .zip(fields_dest_ty.iter())
+                        .map(|((field, src_ty), dest_ty)| {
+                            self.run_try_cast(span.clone(), src_ty, dest_ty, Value::Scalar(field))
+                                .into_scalar()
+                                .unwrap()
                         })
-                    }
-                });
-                Ok(Column::Number(new_column))
-            }
-
-            (Column::Timestamp(col), DataType::Number(dest_ty)) => {
-                let new_column = with_number_type!(|DEST_TYPE| match dest_ty {
-                    NumberDataType::DEST_TYPE => {
-                        if NumberDataType::Int64.can_lossless_cast_to(*dest_ty) {
-                            let new_col = col.iter().map(|x| x.as_()).collect::<Vec<_>>();
-                            NumberColumn::DEST_TYPE(new_col.into())
-                        } else {
-                            let mut new_col = Vec::with_capacity(col.len());
-                            for &val in col.iter() {
-                                let new_val = num_traits::cast::cast(val).ok_or_else(|| {
-                                    (
-                                        span.clone(),
-                                        format!("unable to cast TimestampType to {}", val),
-                                    )
-                                })?;
-                                new_col.push(new_val);
-                            }
-                            NumberColumn::DEST_TYPE(new_col.into())
-                        }
-                    }
-                });
-                Ok(Column::Number(new_column))
-            }
-
-            (Column::Date(col), DataType::Number(dest_ty)) => {
-                let new_column = with_number_type!(|DEST_TYPE| match dest_ty {
-                    NumberDataType::DEST_TYPE => {
-                        if NumberDataType::Int32.can_lossless_cast_to(*dest_ty) {
-                            let new_col = col.iter().map(|x| x.as_()).collect::<Vec<_>>();
-                            NumberColumn::DEST_TYPE(new_col.into())
-                        } else {
-                            let mut new_col = Vec::with_capacity(col.len());
-                            for &val in col.iter() {
-                                let new_val = num_traits::cast::cast(val).ok_or_else(|| {
-                                    (span.clone(), format!("unable to cast DateType to {}", val))
-                                })?;
-                                new_col.push(new_val);
-                            }
-                            NumberColumn::DEST_TYPE(new_col.into())
-                        }
-                    }
-                });
-                Ok(Column::Number(new_column))
-            }
-
-            (Column::Timestamp(col), DataType::String) => {
-                // We can get the data_capacity, so no need to use `from_iter`.
-                // "YYYY-mm-DD HH:MM:SS.ssssss"
-                let mut builder = StringColumnBuilder::with_capacity(col.len(), col.len() * 26);
-                for val in col.iter() {
-                    let s = timestamp_to_string(*val, self.tz);
-                    builder.put_str(s.as_str());
-                    builder.commit_row();
+                        .collect::<Vec<_>>();
+                    Value::Scalar(Scalar::Tuple(new_fields))
                 }
-                Ok(Column::String(builder.build()))
-            }
-
-            (Column::Date(col), DataType::String) => {
-                // We can get the data_capacity, so no need to use `from_iter`.
-                // "YYYY-mm-DD"
-                let mut builder = StringColumnBuilder::with_capacity(col.len(), col.len() * 10);
-                for &val in col.iter() {
-                    let s = date_to_string(val, self.tz);
-                    builder.put_str(s.as_str());
-                    builder.commit_row();
+                Value::Column(Column::Tuple { fields, len }) => {
+                    let new_fields = fields
+                        .into_iter()
+                        .zip(fields_src_ty.iter())
+                        .zip(fields_dest_ty.iter())
+                        .map(|((field, src_ty), dest_ty)| {
+                            self.run_try_cast(span.clone(), src_ty, dest_ty, Value::Column(field))
+                                .into_column()
+                                .unwrap()
+                        })
+                        .collect();
+                    let new_col = Column::Tuple {
+                        fields: new_fields,
+                        len,
+                    };
+                    Value::Column(new_col)
                 }
-                Ok(Column::String(builder.build()))
-            }
+                _ => unreachable!(),
+            },
 
-            // identical types
-            (col @ Column::Null { .. }, DataType::Null)
-            | (col @ Column::EmptyArray { .. }, DataType::EmptyArray)
-            | (col @ Column::Boolean(_), DataType::Boolean)
-            | (col @ Column::String { .. }, DataType::String)
-            | (col @ Column::Timestamp { .. }, DataType::Timestamp)
-            | (col @ Column::Date(_), DataType::Date) => Ok(col),
-
-            (col, dest_ty) => Err((span, (format!("unable to cast {col:?} to {dest_ty}")))),
+            _ => match value {
+                Value::Scalar(_) => Value::Scalar(Scalar::Null),
+                Value::Column(col) => {
+                    let mut builder = ColumnBuilder::with_capacity(dest_type, col.len());
+                    for _ in 0..col.len() {
+                        builder.push_default();
+                    }
+                    Value::Column(builder.build())
+                }
+            },
         }
     }
 
-    pub fn run_try_cast_scalar(&self, span: Span, scalar: Scalar, dest_type: &DataType) -> Scalar {
-        let inner_type: &DataType = dest_type.as_nullable().unwrap();
-        self.run_cast_scalar(span, scalar, inner_type)
-            .unwrap_or(Scalar::Null)
-    }
-
-    #[allow(clippy::only_used_in_recursion)]
-    pub fn run_try_cast_column(&self, span: Span, column: Column, dest_type: &DataType) -> Column {
-        let inner_type: &DataType = dest_type.as_nullable().unwrap();
-        match (column, inner_type) {
-            (_, DataType::Null | DataType::Nullable(_)) => {
-                unreachable!("inner type can not be nullable")
-            }
-            (Column::Null { len }, _) => {
-                let mut builder = ColumnBuilder::with_capacity(dest_type, len);
-                for _ in 0..len {
-                    builder.push_default();
-                }
-                builder.build()
-            }
-            (Column::EmptyArray { len }, DataType::Array(_)) => {
-                let mut builder = ColumnBuilder::with_capacity(dest_type, len);
-                for _ in 0..len {
-                    builder.push_default();
-                }
-                builder.build()
-            }
-            (Column::Nullable(box col), _) => {
-                let new_col = *self
-                    .run_try_cast_column(span, col.column, dest_type)
-                    .into_nullable()
-                    .unwrap();
-                Column::Nullable(Box::new(NullableColumn {
-                    column: new_col.column,
-                    validity: bitmap::or(&col.validity, &new_col.validity),
-                }))
-            }
-            (Column::Array(col), DataType::Array(dest_ty)) => {
-                let new_values = self.run_try_cast_column(span, col.values, dest_ty);
-                let new_col = Column::Array(Box::new(ArrayColumn {
-                    values: new_values,
-                    offsets: col.offsets,
-                }));
-                Column::Nullable(Box::new(NullableColumn {
-                    validity: constant_bitmap(true, new_col.len()).into(),
-                    column: new_col,
-                }))
-            }
-            (Column::Tuple { fields, len }, DataType::Tuple(fields_ty)) => {
-                let new_fields = fields
-                    .into_iter()
-                    .zip(fields_ty)
-                    .map(|(field, field_ty)| {
-                        self.run_try_cast_column(span.clone(), field, field_ty)
-                    })
-                    .collect();
-                let new_col = Column::Tuple {
-                    fields: new_fields,
-                    len,
-                };
-                Column::Nullable(Box::new(NullableColumn {
-                    validity: constant_bitmap(true, len).into(),
-                    column: new_col,
-                }))
-            }
-            (col, DataType::Variant) => {
-                let new_col = Column::Variant(cast_scalars_to_variants(col.iter(), self.tz));
-                Column::Nullable(Box::new(NullableColumn {
-                    validity: constant_bitmap(true, new_col.len()).into(),
-                    column: new_col,
-                }))
-            }
-
-            (Column::Number(col), DataType::Number(dest_ty)) => {
-                with_number_type!(|SRC_TYPE| match &col {
-                    NumberColumn::SRC_TYPE(col) => {
-                        with_number_type!(|DEST_TYPE| match dest_ty {
-                            NumberDataType::DEST_TYPE => {
-                                if NumberDataType::SRC_TYPE.can_lossless_cast_to(*dest_ty) {
-                                    let new_col = col.iter().map(|x| x.as_()).collect::<Vec<_>>();
-                                    Column::Nullable(Box::new(NullableColumn {
-                                        validity: constant_bitmap(true, new_col.len()).into(),
-                                        column: Column::Number(NumberColumn::DEST_TYPE(
-                                            new_col.into(),
-                                        )),
-                                    }))
-                                } else {
-                                    let mut new_col = Vec::with_capacity(col.len());
-                                    let mut validity = MutableBitmap::with_capacity(col.len());
-                                    for &val in col.iter() {
-                                        if let Some(new_val) = num_traits::cast::cast(val) {
-                                            new_col.push(new_val);
-                                            validity.push(true);
-                                        } else {
-                                            new_col.push(Default::default());
-                                            validity.push(false);
-                                        }
-                                    }
-                                    Column::Nullable(Box::new(NullableColumn {
-                                        validity: validity.into(),
-                                        column: Column::Number(NumberColumn::DEST_TYPE(
-                                            new_col.into(),
-                                        )),
-                                    }))
-                                }
-                            }
-                        })
-                    }
-                })
-            }
-
-            (Column::Timestamp(col), DataType::Number(dest_ty)) => {
-                with_number_type!(|DEST_TYPE| match dest_ty {
-                    NumberDataType::DEST_TYPE => {
-                        if NumberDataType::Int64.can_lossless_cast_to(*dest_ty) {
-                            let new_col = col.iter().map(|x| x.as_()).collect::<Vec<_>>();
-                            Column::Nullable(Box::new(NullableColumn {
-                                validity: constant_bitmap(true, new_col.len()).into(),
-                                column: Column::Number(NumberColumn::DEST_TYPE(new_col.into())),
-                            }))
-                        } else {
-                            let mut new_col = Vec::with_capacity(col.len());
-                            let mut validity = MutableBitmap::with_capacity(col.len());
-                            for &val in col.iter() {
-                                if let Some(new_val) = num_traits::cast::cast(val) {
-                                    new_col.push(new_val);
-                                    validity.push(true);
-                                } else {
-                                    new_col.push(Default::default());
-                                    validity.push(false);
-                                }
-                            }
-                            Column::Nullable(Box::new(NullableColumn {
-                                validity: validity.into(),
-                                column: Column::Number(NumberColumn::DEST_TYPE(new_col.into())),
-                            }))
-                        }
-                    }
-                })
-            }
-
-            (Column::Date(col), DataType::Number(dest_ty)) => {
-                with_number_type!(|DEST_TYPE| match dest_ty {
-                    NumberDataType::DEST_TYPE => {
-                        if NumberDataType::Int32.can_lossless_cast_to(*dest_ty) {
-                            let new_col = col.iter().map(|x| x.as_()).collect::<Vec<_>>();
-                            Column::Nullable(Box::new(NullableColumn {
-                                validity: constant_bitmap(true, new_col.len()).into(),
-                                column: Column::Number(NumberColumn::DEST_TYPE(new_col.into())),
-                            }))
-                        } else {
-                            let mut new_col = Vec::with_capacity(col.len());
-                            let mut validity = MutableBitmap::with_capacity(col.len());
-                            for &val in col.iter() {
-                                if let Some(new_val) = num_traits::cast::cast(val) {
-                                    new_col.push(new_val);
-                                    validity.push(true);
-                                } else {
-                                    new_col.push(Default::default());
-                                    validity.push(false);
-                                }
-                            }
-                            Column::Nullable(Box::new(NullableColumn {
-                                validity: validity.into(),
-                                column: Column::Number(NumberColumn::DEST_TYPE(new_col.into())),
-                            }))
-                        }
-                    }
-                })
-            }
-
-            (Column::Timestamp(col), DataType::String) => {
-                // We can get the data_capacity, so no need to use `from_iter`.
-                // "YYYY-mm-DD HH:MM:SS.ssssss"
-                let mut builder = StringColumnBuilder::with_capacity(col.len(), col.len() * 26);
-                for val in col.iter() {
-                    let s = timestamp_to_string(*val, self.tz);
-                    builder.put_str(s.as_str());
-                    builder.commit_row();
-                }
-                let new_col = builder.build();
-                Column::Nullable(Box::new(NullableColumn {
-                    validity: constant_bitmap(true, col.len()).into(),
-                    column: Column::String(new_col),
-                }))
-            }
-
-            (Column::Date(col), DataType::String) => {
-                // We can get the data_capacity, so no need to use `from_iter`.
-                // "YYYY-mm-DD"
-                let mut builder = StringColumnBuilder::with_capacity(col.len(), col.len() * 10);
-                for &val in col.iter() {
-                    let s = date_to_string(val, self.tz);
-                    builder.put_str(s.as_str());
-                    builder.commit_row();
-                }
-                let new_col = builder.build();
-                Column::Nullable(Box::new(NullableColumn {
-                    validity: constant_bitmap(true, col.len()).into(),
-                    column: Column::String(new_col),
-                }))
-            }
-
-            // identical types
-            (column @ Column::Boolean(_), DataType::Boolean)
-            | (column @ Column::String { .. }, DataType::String)
-            | (column @ Column::EmptyArray { .. }, DataType::EmptyArray)
-            | (column @ Column::Timestamp { .. }, DataType::Timestamp)
-            | (column @ Column::Date(_), DataType::Date) => {
-                Column::Nullable(Box::new(NullableColumn {
-                    validity: constant_bitmap(true, column.len()).into(),
-                    column,
-                }))
-            }
-
-            // failure cases
-            (col, _) => {
-                let len = col.len();
-                let mut builder = ColumnBuilder::with_capacity(dest_type, len);
-                for _ in 0..len {
-                    builder.push_default();
-                }
-                builder.build()
-            }
-        }
+    fn run_simple_cast(
+        &self,
+        span: Span,
+        src_type: &DataType,
+        dest_type: &DataType,
+        value: Value<AnyType>,
+        cast_fn: &str,
+    ) -> Result<Value<AnyType>> {
+        let num_rows = match &value {
+            Value::Scalar(_) => 1,
+            Value::Column(col) => col.len(),
+        };
+        let (val, ty) = eval_function(
+            span,
+            cast_fn,
+            [(value, src_type.clone())],
+            self.tz,
+            num_rows,
+            self.fn_registry,
+        )?;
+        assert_eq!(&ty, dest_type);
+        Ok(val)
     }
 }
 
 pub struct ConstantFolder<'a> {
     input_domains: &'a [Domain],
     tz: Tz,
+    fn_registry: &'a FunctionRegistry,
 }
 
 impl<'a> ConstantFolder<'a> {
-    pub fn new(input_domains: &'a [Domain], tz: Tz) -> Self {
-        ConstantFolder { input_domains, tz }
+    pub fn new(input_domains: &'a [Domain], tz: Tz, fn_registry: &'a FunctionRegistry) -> Self {
+        ConstantFolder {
+            input_domains,
+            tz,
+            fn_registry,
+        }
     }
 
     pub fn fold(&self, expr: &Expr) -> (Expr, Option<Domain>) {
-        match expr {
+        let (new_expr, domain) = match expr {
             Expr::Constant { scalar, .. } => (expr.clone(), Some(scalar.as_ref().domain())),
-            Expr::ColumnRef { span, id } => {
+            Expr::ColumnRef {
+                span,
+                id,
+                data_type,
+            } => {
                 let domain = &self.input_domains[*id];
                 let expr = domain
                     .as_singleton()
                     .map(|scalar| Expr::Constant {
                         span: span.clone(),
                         scalar,
+                        data_type: data_type.clone(),
                     })
                     .unwrap_or_else(|| expr.clone());
                 (expr, Some(domain.clone()))
             }
             Expr::Cast {
                 span,
+                is_try,
                 expr,
                 dest_type,
             } => {
                 let (inner_expr, inner_domain) = self.fold(expr);
-                let cast_domain = inner_domain.and_then(|inner_domain| {
-                    self.calculate_cast(span.clone(), &inner_domain, dest_type)
-                });
+
+                let new_domain = if *is_try {
+                    inner_domain.and_then(|inner_domain| {
+                        self.calculate_try_cast(
+                            span.clone(),
+                            expr.data_type(),
+                            dest_type,
+                            &inner_domain,
+                        )
+                    })
+                } else {
+                    inner_domain.and_then(|inner_domain| {
+                        self.calculate_cast(
+                            span.clone(),
+                            expr.data_type(),
+                            dest_type,
+                            &inner_domain,
+                        )
+                    })
+                };
 
                 let cast_expr = Expr::Cast {
                     span: span.clone(),
+                    is_try: *is_try,
                     expr: Box::new(inner_expr.clone()),
                     dest_type: dest_type.clone(),
                 };
 
                 if inner_expr.as_constant().is_some() {
                     let chunk = Chunk::empty();
-                    let evaluator = Evaluator::new(&chunk, self.tz);
+                    let evaluator = Evaluator::new(&chunk, self.tz, self.fn_registry);
                     if let Ok(Value::Scalar(scalar)) = evaluator.run(&cast_expr) {
                         return (
                             Expr::Constant {
                                 span: span.clone(),
                                 scalar,
+                                data_type: dest_type.clone(),
                             },
-                            cast_domain,
+                            new_domain,
                         );
                     }
                 }
 
                 (
-                    cast_domain
+                    new_domain
                         .as_ref()
                         .and_then(Domain::as_singleton)
                         .map(|scalar| Expr::Constant {
                             span: span.clone(),
                             scalar,
+                            data_type: dest_type.clone(),
                         })
                         .unwrap_or(cast_expr),
-                    cast_domain,
-                )
-            }
-            Expr::TryCast {
-                span,
-                expr,
-                dest_type,
-            } => {
-                let (inner_expr, inner_domain) = self.fold(expr);
-                let try_cast_domain = inner_domain.map(|inner_domain| {
-                    self.calculate_try_cast(span.clone(), &inner_domain, dest_type)
-                });
-
-                let try_cast_expr = Expr::TryCast {
-                    span: span.clone(),
-                    expr: Box::new(inner_expr.clone()),
-                    dest_type: dest_type.clone(),
-                };
-
-                if inner_expr.as_constant().is_some() {
-                    let chunk = Chunk::empty();
-                    let evaluator = Evaluator::new(&chunk, self.tz);
-                    if let Ok(Value::Scalar(scalar)) = evaluator.run(&try_cast_expr) {
-                        return (
-                            Expr::Constant {
-                                span: span.clone(),
-                                scalar,
-                            },
-                            try_cast_domain,
-                        );
-                    }
-                }
-
-                (
-                    try_cast_domain
-                        .as_ref()
-                        .and_then(Domain::as_singleton)
-                        .map(|scalar| Expr::Constant {
-                            span: span.clone(),
-                            scalar,
-                        })
-                        .unwrap_or(try_cast_expr),
-                    try_cast_domain,
+                    new_domain,
                 )
             }
             Expr::FunctionCall {
@@ -787,6 +511,7 @@ impl<'a> ConstantFolder<'a> {
                 function,
                 generics,
                 args,
+                return_type,
             } => {
                 let (mut args_expr, mut args_domain) = (Vec::new(), Some(Vec::new()));
                 for arg in args {
@@ -798,7 +523,12 @@ impl<'a> ConstantFolder<'a> {
                     });
                 }
 
-                let func_domain = args_domain.and_then(|domains| (function.calc_domain)(&domains));
+                let func_domain =
+                    args_domain.and_then(|domains| match (function.calc_domain)(&domains) {
+                        FunctionDomain::MayThrow => None,
+                        FunctionDomain::NoThrow => Some(Domain::full(return_type)),
+                        FunctionDomain::Domain(domain) => Some(domain),
+                    });
                 let all_args_is_scalar = args_expr.iter().all(|arg| arg.as_constant().is_some());
 
                 if let Some(scalar) = func_domain.as_ref().and_then(Domain::as_singleton) {
@@ -806,6 +536,7 @@ impl<'a> ConstantFolder<'a> {
                         Expr::Constant {
                             span: span.clone(),
                             scalar,
+                            data_type: return_type.clone(),
                         },
                         func_domain,
                     );
@@ -817,16 +548,18 @@ impl<'a> ConstantFolder<'a> {
                     function: function.clone(),
                     generics: generics.clone(),
                     args: args_expr,
+                    return_type: return_type.clone(),
                 };
 
                 if all_args_is_scalar {
                     let chunk = Chunk::empty();
-                    let evaluator = Evaluator::new(&chunk, self.tz);
+                    let evaluator = Evaluator::new(&chunk, self.tz, self.fn_registry);
                     if let Ok(Value::Scalar(scalar)) = evaluator.run(&func_expr) {
                         return (
                             Expr::Constant {
                                 span: span.clone(),
                                 scalar,
+                                data_type: return_type.clone(),
                             },
                             func_domain,
                         );
@@ -835,236 +568,185 @@ impl<'a> ConstantFolder<'a> {
 
                 (func_expr, func_domain)
             }
-        }
+        };
+
+        debug_assert_eq!(expr.data_type(), new_expr.data_type());
+
+        (new_expr, domain)
     }
 
-    #[allow(clippy::only_used_in_recursion)]
-    pub fn calculate_cast(
+    fn calculate_cast(
         &self,
         span: Span,
-        domain: &Domain,
+        src_type: &DataType,
         dest_type: &DataType,
+        domain: &Domain,
     ) -> Option<Domain> {
-        match (domain, dest_type) {
-            (
-                Domain::Nullable(NullableDomain { value: None, .. }),
-                DataType::Null | DataType::Nullable(_),
-            ) => Some(domain.clone()),
-            (Domain::Array(None), DataType::EmptyArray | DataType::Array(_)) => {
-                Some(Domain::Array(None))
+        if src_type == dest_type {
+            return Some(domain.clone());
+        }
+
+        if let Some(cast_fn) = check_simple_cast(false, dest_type) {
+            return self
+                .calculate_simple_cast(span, src_type, dest_type, domain, &cast_fn)
+                .unwrap();
+        }
+
+        match (src_type, dest_type) {
+            (DataType::Null, DataType::Nullable(_)) => Some(domain.clone()),
+            (DataType::Nullable(inner_src_ty), DataType::Nullable(inner_dest_ty)) => {
+                let domain = domain.as_nullable().unwrap();
+                let value = match &domain.value {
+                    Some(value) => Some(Box::new(self.calculate_cast(
+                        span,
+                        inner_src_ty,
+                        inner_dest_ty,
+                        value,
+                    )?)),
+                    None => None,
+                };
+                Some(Domain::Nullable(NullableDomain {
+                    has_null: domain.has_null,
+                    value,
+                }))
             }
-            (
-                Domain::Nullable(NullableDomain {
-                    has_null,
-                    value: Some(value),
-                }),
-                DataType::Nullable(ty),
-            ) => Some(Domain::Nullable(NullableDomain {
-                has_null: *has_null,
-                value: Some(Box::new(self.calculate_cast(span, value, ty)?)),
-            })),
-            (domain, DataType::Nullable(ty)) => Some(Domain::Nullable(NullableDomain {
+            (_, DataType::Nullable(inner_dest_ty)) => Some(Domain::Nullable(NullableDomain {
                 has_null: false,
-                value: Some(Box::new(self.calculate_cast(span, domain, ty)?)),
+                value: Some(Box::new(self.calculate_cast(
+                    span,
+                    src_type,
+                    inner_dest_ty,
+                    domain,
+                )?)),
             })),
-            (Domain::Array(Some(domain)), DataType::Array(ty)) => Some(Domain::Array(Some(
-                Box::new(self.calculate_cast(span, domain, ty)?),
-            ))),
-            (Domain::Tuple(fields), DataType::Tuple(fields_ty)) => Some(Domain::Tuple(
-                fields
-                    .iter()
-                    .zip(fields_ty)
-                    .map(|(field, ty)| self.calculate_cast(span.clone(), field, ty))
-                    .collect::<Option<Vec<_>>>()?,
-            )),
-            (_, DataType::Variant) => Some(Domain::Undefined),
 
-            (Domain::Number(domain), DataType::Number(dest_ty)) => {
-                with_number_type!(|SRC_TYPE| match domain {
-                    NumberDomain::SRC_TYPE(domain) => {
-                        with_number_type!(|DEST_TYPE| match dest_ty {
-                            NumberDataType::DEST_TYPE => {
-                                let (domain, overflowing) = domain.overflow_cast();
-                                if overflowing {
-                                    None
-                                } else {
-                                    Some(Domain::Number(NumberDomain::DEST_TYPE(domain)))
-                                }
-                            }
+            (DataType::EmptyArray, DataType::Array(_)) => Some(domain.clone()),
+            (DataType::Array(inner_src_ty), DataType::Array(inner_dest_ty)) => {
+                let inner_domain = match domain.as_array().unwrap() {
+                    Some(inner_domain) => Some(Box::new(self.calculate_cast(
+                        span,
+                        inner_src_ty,
+                        inner_dest_ty,
+                        inner_domain,
+                    )?)),
+                    None => None,
+                };
+                Some(Domain::Array(inner_domain))
+            }
+
+            (DataType::Tuple(fields_src_ty), DataType::Tuple(fields_dest_ty)) => {
+                Some(Domain::Tuple(
+                    domain
+                        .as_tuple()
+                        .unwrap()
+                        .iter()
+                        .zip(fields_src_ty)
+                        .zip(fields_dest_ty)
+                        .map(|((field_domain, src_ty), dest_ty)| {
+                            self.calculate_cast(span.clone(), src_ty, dest_ty, field_domain)
                         })
-                    }
-                })
+                        .collect::<Option<Vec<_>>>()?,
+                ))
             }
-
-            (Domain::Timestamp(domain), DataType::Number(dest_ty)) => {
-                with_number_type!(|DEST_TYPE| match dest_ty {
-                    NumberDataType::DEST_TYPE => {
-                        let simple_domain = SimpleDomain {
-                            min: domain.min,
-                            max: domain.max,
-                        };
-                        let (domain, overflowing) = simple_domain.overflow_cast();
-                        if overflowing {
-                            None
-                        } else {
-                            Some(Domain::Number(NumberDomain::DEST_TYPE(domain)))
-                        }
-                    }
-                })
-            }
-
-            (Domain::Date(domain), DataType::Number(dest_ty)) => {
-                with_number_type!(|DEST_TYPE| match dest_ty {
-                    NumberDataType::DEST_TYPE => {
-                        let (domain, overflowing) = domain.overflow_cast();
-                        if overflowing {
-                            None
-                        } else {
-                            Some(Domain::Number(NumberDomain::DEST_TYPE(domain)))
-                        }
-                    }
-                })
-            }
-
-            // identical types
-            (Domain::Boolean(_), DataType::Boolean)
-            | (Domain::String(_), DataType::String)
-            | (Domain::Timestamp(_), DataType::Timestamp)
-            | (Domain::Date(_), DataType::Date) => Some(domain.clone()),
-
-            // failure cases
             _ => None,
         }
     }
 
-    #[allow(clippy::only_used_in_recursion)]
-    pub fn calculate_try_cast(&self, span: Span, domain: &Domain, dest_type: &DataType) -> Domain {
-        let inner_type: &DataType = dest_type.as_nullable().unwrap();
-        match (domain, inner_type) {
-            (_, DataType::Null | DataType::Nullable(_)) => {
-                unreachable!("inner type cannot be nullable")
-            }
-            (Domain::Array(None), DataType::EmptyArray | DataType::Array(_)) => {
-                Domain::Nullable(NullableDomain {
-                    has_null: false,
-                    value: Some(Box::new(Domain::Array(None))),
-                })
-            }
-            (
-                Domain::Nullable(NullableDomain {
-                    has_null,
-                    value: Some(value),
-                }),
-                _,
-            ) => {
-                let inner_domain = self
-                    .calculate_try_cast(span, value, dest_type)
-                    .into_nullable()
-                    .unwrap();
-                Domain::Nullable(NullableDomain {
-                    has_null: *has_null || inner_domain.has_null,
-                    value: inner_domain.value,
-                })
-            }
-            (Domain::Array(Some(domain)), DataType::Array(ty)) => {
-                let inner_domain = self.calculate_try_cast(span, domain, ty);
-                Domain::Nullable(NullableDomain {
-                    has_null: false,
-                    value: Some(Box::new(Domain::Array(Some(Box::new(inner_domain))))),
-                })
-            }
-            (Domain::Tuple(fields), DataType::Tuple(fields_ty)) => {
-                let new_fields = fields
-                    .iter()
-                    .zip(fields_ty)
-                    .map(|(field, ty)| self.calculate_try_cast(span.clone(), field, ty))
-                    .collect();
-                Domain::Nullable(NullableDomain {
-                    has_null: false,
-                    value: Some(Box::new(Domain::Tuple(new_fields))),
-                })
-            }
-            (_, DataType::Variant) => Domain::Nullable(NullableDomain {
-                has_null: false,
-                value: Some(Box::new(Domain::Undefined)),
-            }),
+    fn calculate_try_cast(
+        &self,
+        span: Span,
+        src_type: &DataType,
+        dest_type: &DataType,
+        domain: &Domain,
+    ) -> Option<Domain> {
+        if src_type == dest_type {
+            return Some(domain.clone());
+        }
 
-            (Domain::Number(domain), DataType::Number(dest_ty)) => {
-                with_number_type!(|SRC_TYPE| match domain {
-                    NumberDomain::SRC_TYPE(domain) => {
-                        with_number_type!(|DEST_TYPE| match dest_ty {
-                            NumberDataType::DEST_TYPE => {
-                                let (domain, overflowing) = domain.overflow_cast();
-                                Domain::Nullable(NullableDomain {
-                                    has_null: overflowing,
-                                    value: Some(Box::new(Domain::Number(NumberDomain::DEST_TYPE(
-                                        domain,
-                                    )))),
-                                })
-                            }
-                        })
+        // The dest_type of `TRY_CAST` must be `Nullable`, which is guaranteed by the type checker.
+        let inner_dest_type = &**dest_type.as_nullable().unwrap();
+
+        if let Some(cast_fn) = check_simple_cast(true, inner_dest_type) {
+            return self
+                .calculate_simple_cast(span, src_type, dest_type, domain, &cast_fn)
+                .unwrap();
+        }
+
+        match (src_type, inner_dest_type) {
+            (DataType::Null, _) => Some(domain.clone()),
+            (DataType::Nullable(inner_src_ty), _) => {
+                let nullable_domain = domain.as_nullable().unwrap();
+                match &nullable_domain.value {
+                    Some(value) => {
+                        let new_domain = self
+                            .calculate_try_cast(span, inner_src_ty, dest_type, value)?
+                            .into_nullable()
+                            .unwrap();
+                        Some(Domain::Nullable(NullableDomain {
+                            has_null: nullable_domain.has_null || new_domain.has_null,
+                            value: new_domain.value,
+                        }))
                     }
-                })
+                    None => Some(domain.clone()),
+                }
             }
 
-            (Domain::Timestamp(domain), DataType::Number(dest_ty)) => {
-                with_number_type!(|DEST_TYPE| match dest_ty {
-                    NumberDataType::DEST_TYPE => {
-                        let simple_domain = SimpleDomain {
-                            min: domain.min,
-                            max: domain.max,
-                        };
-                        let (domain, overflowing) = simple_domain.overflow_cast();
-                        Domain::Nullable(NullableDomain {
-                            has_null: overflowing,
-                            value: Some(Box::new(Domain::Number(NumberDomain::DEST_TYPE(domain)))),
-                        })
-                    }
-                })
-            }
-
-            (Domain::Date(domain), DataType::Number(dest_ty)) => {
-                with_number_type!(|DEST_TYPE| match dest_ty {
-                    NumberDataType::DEST_TYPE => {
-                        let (domain, overflowing) = domain.overflow_cast();
-                        Domain::Nullable(NullableDomain {
-                            has_null: overflowing,
-                            value: Some(Box::new(Domain::Number(NumberDomain::DEST_TYPE(domain)))),
-                        })
-                    }
-                })
-            }
-
-            (Domain::Timestamp(domain), DataType::Date) => Domain::Nullable(NullableDomain {
-                has_null: false,
-                value: Some(Box::new(Domain::Date(SimpleDomain {
-                    min: (domain.min / 1000000 / 24 / 3600) as i32,
-                    max: (domain.max / 1000000 / 24 / 3600) as i32,
-                }))),
-            }),
-
-            (Domain::Date(domain), DataType::Timestamp) => Domain::Nullable(NullableDomain {
-                has_null: false,
-                value: Some(Box::new(Domain::Timestamp(SimpleDomain {
-                    min: domain.min as i64 * 24 * 3600 * 1000000,
-                    max: domain.max as i64 * 24 * 3600 * 1000000,
-                }))),
-            }),
-
-            // identical types
-            (Domain::Boolean(_), DataType::Boolean)
-            | (Domain::String(_), DataType::String)
-            | (Domain::Timestamp(_), DataType::Timestamp)
-            | (Domain::Date(_), DataType::Date) => Domain::Nullable(NullableDomain {
+            (DataType::EmptyArray, DataType::Array(_)) => Some(Domain::Nullable(NullableDomain {
                 has_null: false,
                 value: Some(Box::new(domain.clone())),
-            }),
+            })),
+            (DataType::Array(inner_src_ty), DataType::Array(inner_dest_ty)) => {
+                let inner_domain = match domain.as_array().unwrap() {
+                    Some(inner_domain) => Some(Box::new(self.calculate_try_cast(
+                        span,
+                        inner_src_ty,
+                        inner_dest_ty,
+                        inner_domain,
+                    )?)),
+                    None => None,
+                };
+                Some(Domain::Nullable(NullableDomain {
+                    has_null: false,
+                    value: Some(Box::new(Domain::Array(inner_domain))),
+                }))
+            }
 
-            // failure cases
-            _ => Domain::Nullable(NullableDomain {
+            (DataType::Tuple(fields_src_ty), DataType::Tuple(fields_dest_ty)) => {
+                let fields_domain = domain.as_tuple().unwrap();
+                let new_fields_domain = fields_domain
+                    .iter()
+                    .zip(fields_src_ty)
+                    .zip(fields_dest_ty)
+                    .map(|((domain, src_ty), dest_ty)| {
+                        self.calculate_try_cast(span.clone(), src_ty, dest_ty, domain)
+                    })
+                    .collect::<Option<_>>()?;
+                Some(Domain::Tuple(new_fields_domain))
+            }
+
+            _ => Some(Domain::Nullable(NullableDomain {
                 has_null: true,
                 value: None,
-            }),
+            })),
         }
+    }
+
+    fn calculate_simple_cast(
+        &self,
+        span: Span,
+        src_type: &DataType,
+        dest_type: &DataType,
+        domain: &Domain,
+        cast_fn: &str,
+    ) -> Result<Option<Domain>> {
+        let (domain, ty) = calculate_function_domain(
+            span,
+            cast_fn,
+            [(domain.clone(), src_type.clone())],
+            self.tz,
+            self.fn_registry,
+        )?;
+        assert_eq!(&ty, dest_type);
+        Ok(domain)
     }
 }

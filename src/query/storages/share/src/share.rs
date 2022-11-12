@@ -52,8 +52,8 @@ pub async fn save_share_spec(
 }
 
 mod ext {
-    use common_storages_constants::database_storage_prefix;
-    use common_storages_constants::table_storage_prefix;
+    use common_storages_table_meta::table::database_storage_prefix;
+    use common_storages_table_meta::table::table_storage_prefix;
 
     use super::*;
 
@@ -163,7 +163,7 @@ mod ext {
             };
 
             let share_spec_ext = ShareSpecExt::from_share_spec(share_spec, &operator);
-            let spec_json_value = serde_json::to_value(&share_spec_ext).unwrap();
+            let spec_json_value = serde_json::to_value(share_spec_ext).unwrap();
 
             use serde_json::json;
 

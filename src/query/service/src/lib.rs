@@ -22,8 +22,8 @@
 #![feature(sync_unsafe_cell)]
 #![feature(option_get_or_insert_default)]
 #![feature(result_option_inspect)]
-#![feature(is_some_with)]
 #![feature(result_flattening)]
+#![feature(cursor_remaining)]
 
 extern crate core;
 

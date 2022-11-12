@@ -36,6 +36,7 @@ use common_expression::Column;
 use common_expression::Domain;
 use common_expression::Function;
 use common_expression::FunctionContext;
+use common_expression::FunctionDomain;
 use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
 use common_expression::FunctionSignature;
@@ -51,14 +52,14 @@ pub fn register(registry: &mut FunctionRegistry) {
         }
         Some(Arc::new(Function {
             signature: FunctionSignature {
-                name: "concat",
+                name: "concat".to_string(),
                 args_type: vec![DataType::String; args_type.len()],
                 return_type: DataType::String,
                 property: FunctionProperty::default(),
             },
             calc_domain: Box::new(|args_domain| {
                 let domain = args_domain[0].as_string().unwrap();
-                Some(Domain::String(StringDomain {
+                FunctionDomain::Domain(Domain::String(StringDomain {
                     min: domain.min.clone(),
                     max: None,
                 }))
@@ -74,12 +75,12 @@ pub fn register(registry: &mut FunctionRegistry) {
         }
         Some(Arc::new(Function {
             signature: FunctionSignature {
-                name: "concat",
+                name: "concat".to_string(),
                 args_type: vec![DataType::Nullable(Box::new(DataType::String)); args_type.len()],
                 return_type: DataType::Nullable(Box::new(DataType::String)),
                 property: FunctionProperty::default(),
             },
-            calc_domain: Box::new(|_| None),
+            calc_domain: Box::new(|_| FunctionDomain::NoThrow),
             eval: Box::new(wrap_nullable(concat_fn)),
         }))
     });
@@ -90,14 +91,14 @@ pub fn register(registry: &mut FunctionRegistry) {
         }
         Some(Arc::new(Function {
             signature: FunctionSignature {
-                name: "concat_ws",
+                name: "concat_ws".to_string(),
                 args_type: vec![DataType::String; args_type.len()],
                 return_type: DataType::String,
                 property: FunctionProperty::default(),
             },
             calc_domain: Box::new(|args_domain| {
                 let domain = args_domain[1].as_string().unwrap();
-                Some(Domain::String(StringDomain {
+                FunctionDomain::Domain(Domain::String(StringDomain {
                     min: domain.min.clone(),
                     max: None,
                 }))
@@ -157,12 +158,12 @@ pub fn register(registry: &mut FunctionRegistry) {
         }
         Some(Arc::new(Function {
             signature: FunctionSignature {
-                name: "concat_ws",
+                name: "concat_ws".to_string(),
                 args_type: vec![DataType::Nullable(Box::new(DataType::String)); args_type.len()],
                 return_type: DataType::Nullable(Box::new(DataType::String)),
                 property: FunctionProperty::default(),
             },
-            calc_domain: Box::new(|_| None),
+            calc_domain: Box::new(|_| FunctionDomain::NoThrow),
             eval: Box::new(|args, _| {
                 type T = NullableType<StringType>;
                 let len = args.iter().find_map(|arg| match arg {
@@ -250,12 +251,12 @@ pub fn register(registry: &mut FunctionRegistry) {
         }
         Some(Arc::new(Function {
             signature: FunctionSignature {
-                name: "char",
+                name: "char".to_string(),
                 args_type: vec![DataType::Number(NumberDataType::UInt8); args_type.len()],
                 return_type: DataType::String,
                 property: FunctionProperty::default(),
             },
-            calc_domain: Box::new(|_| None),
+            calc_domain: Box::new(|_| FunctionDomain::NoThrow),
             eval: Box::new(char_fn),
         }))
     });
@@ -267,7 +268,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         }
         Some(Arc::new(Function {
             signature: FunctionSignature {
-                name: "char",
+                name: "char".to_string(),
                 args_type: vec![
                     DataType::Nullable(Box::new(DataType::Number(
                         NumberDataType::UInt8
@@ -277,7 +278,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Nullable(Box::new(DataType::String)),
                 property: FunctionProperty::default(),
             },
-            calc_domain: Box::new(|_| None),
+            calc_domain: Box::new(|_| FunctionDomain::MayThrow),
             eval: Box::new(wrap_nullable(char_fn)),
         }))
     });
@@ -317,12 +318,12 @@ pub fn register(registry: &mut FunctionRegistry) {
 
         Some(Arc::new(Function {
             signature: FunctionSignature {
-                name: "regexp_instr",
+                name: "regexp_instr".to_string(),
                 args_type,
                 return_type: DataType::Number(NumberDataType::UInt64),
                 property: FunctionProperty::default(),
             },
-            calc_domain: Box::new(|_| None),
+            calc_domain: Box::new(|_| FunctionDomain::MayThrow),
             eval: Box::new(regexp_instr_fn),
         }))
     });
@@ -362,12 +363,12 @@ pub fn register(registry: &mut FunctionRegistry) {
 
         Some(Arc::new(Function {
             signature: FunctionSignature {
-                name: "regexp_instr",
+                name: "regexp_instr".to_string(),
                 args_type,
                 return_type: DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64))),
                 property: FunctionProperty::default(),
             },
-            calc_domain: Box::new(|_| None),
+            calc_domain: Box::new(|_| FunctionDomain::MayThrow),
             eval: Box::new(wrap_nullable(regexp_instr_fn)),
         }))
     });
@@ -382,12 +383,12 @@ pub fn register(registry: &mut FunctionRegistry) {
 
         Some(Arc::new(Function {
             signature: FunctionSignature {
-                name: "regexp_like",
+                name: "regexp_like".to_string(),
                 args_type,
                 return_type: DataType::Boolean,
                 property: FunctionProperty::default(),
             },
-            calc_domain: Box::new(|_| None),
+            calc_domain: Box::new(|_| FunctionDomain::MayThrow),
             eval: Box::new(regexp_like_fn),
         }))
     });
@@ -402,12 +403,12 @@ pub fn register(registry: &mut FunctionRegistry) {
 
         Some(Arc::new(Function {
             signature: FunctionSignature {
-                name: "regexp_like",
+                name: "regexp_like".to_string(),
                 args_type,
                 return_type: DataType::Nullable(Box::new(DataType::Boolean)),
                 property: FunctionProperty::default(),
             },
-            calc_domain: Box::new(|_| None),
+            calc_domain: Box::new(|_| FunctionDomain::MayThrow),
             eval: Box::new(wrap_nullable(regexp_like_fn)),
         }))
     });
@@ -442,12 +443,12 @@ pub fn register(registry: &mut FunctionRegistry) {
 
         Some(Arc::new(Function {
             signature: FunctionSignature {
-                name: "regexp_replace",
+                name: "regexp_replace".to_string(),
                 args_type,
                 return_type: DataType::String,
                 property: FunctionProperty::default(),
             },
-            calc_domain: Box::new(|_| None),
+            calc_domain: Box::new(|_| FunctionDomain::MayThrow),
             eval: Box::new(regexp_replace_fn),
         }))
     });
@@ -482,12 +483,12 @@ pub fn register(registry: &mut FunctionRegistry) {
 
         Some(Arc::new(Function {
             signature: FunctionSignature {
-                name: "regexp_replace",
+                name: "regexp_replace".to_string(),
                 args_type,
                 return_type: DataType::Nullable(Box::new(DataType::String)),
                 property: FunctionProperty::default(),
             },
-            calc_domain: Box::new(|_| None),
+            calc_domain: Box::new(|_| FunctionDomain::MayThrow),
             eval: Box::new(wrap_nullable(regexp_replace_fn)),
         }))
     });
@@ -519,12 +520,12 @@ pub fn register(registry: &mut FunctionRegistry) {
 
         Some(Arc::new(Function {
             signature: FunctionSignature {
-                name: "regexp_substr",
+                name: "regexp_substr".to_string(),
                 args_type,
                 return_type: DataType::Nullable(Box::new(DataType::String)),
                 property: FunctionProperty::default(),
             },
-            calc_domain: Box::new(|_| None),
+            calc_domain: Box::new(|_| FunctionDomain::MayThrow),
             eval: Box::new(regexp_substr_fn),
         }))
     });
@@ -556,12 +557,12 @@ pub fn register(registry: &mut FunctionRegistry) {
 
         Some(Arc::new(Function {
             signature: FunctionSignature {
-                name: "regexp_substr",
+                name: "regexp_substr".to_string(),
                 args_type,
                 return_type: DataType::Nullable(Box::new(DataType::String)),
                 property: FunctionProperty::default(),
             },
-            calc_domain: Box::new(|_| None),
+            calc_domain: Box::new(|_| FunctionDomain::MayThrow),
             eval: Box::new(wrap_nullable(regexp_substr_fn)),
         }))
     });

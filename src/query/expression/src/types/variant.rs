@@ -155,6 +155,8 @@ impl ArgType for VariantType {
         DataType::Variant
     }
 
+    fn full_domain() -> Self::Domain {}
+
     fn create_builder(capacity: usize, _: &GenericMap) -> Self::ColumnBuilder {
         StringColumnBuilder::with_capacity(capacity, 0)
     }
@@ -178,8 +180,8 @@ pub fn cast_scalar_to_variant(scalar: ScalarRef, tz: Tz, buf: &mut Vec<u8>) {
         },
         ScalarRef::Boolean(b) => common_jsonb::Value::Bool(b),
         ScalarRef::String(s) => common_jsonb::Value::String(String::from_utf8_lossy(s)),
-        ScalarRef::Timestamp(ts) => timestamp_to_string(ts, tz).into(),
-        ScalarRef::Date(d) => date_to_string(d, tz).into(),
+        ScalarRef::Timestamp(ts) => timestamp_to_string(ts, tz).to_string().into(),
+        ScalarRef::Date(d) => date_to_string(d, tz).to_string().into(),
         ScalarRef::Array(col) => {
             let items = cast_scalars_to_variants(col.iter(), tz);
             common_jsonb::build_array(items.iter(), buf).expect("failed to build jsonb array");

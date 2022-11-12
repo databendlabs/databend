@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod account;
+mod catalog;
 mod database;
 mod role;
 mod share;

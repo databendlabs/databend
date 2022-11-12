@@ -33,22 +33,26 @@ pub type Result<T> = std::result::Result<T, (crate::Span, String)>;
 mod chunk;
 
 pub mod converts;
+mod deserializations;
 mod evaluator;
 mod expression;
 mod function;
 mod kernels;
 mod property;
 mod register;
+pub mod serializations;
 pub mod type_check;
 pub mod types;
 pub mod utils;
 pub mod values;
 
 pub use crate::chunk::*;
+pub use crate::deserializations::TypeDeserializer;
 pub use crate::evaluator::*;
 pub use crate::expression::*;
 pub use crate::function::*;
 pub use crate::kernels::*;
 pub use crate::property::*;
 pub use crate::register::*;
+pub use crate::serializations::TypeSerializer;
 pub use crate::values::*;

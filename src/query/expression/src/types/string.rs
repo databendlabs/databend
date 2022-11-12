@@ -146,6 +146,13 @@ impl ArgType for StringType {
         DataType::String
     }
 
+    fn full_domain() -> Self::Domain {
+        StringDomain {
+            min: vec![],
+            max: None,
+        }
+    }
+
     fn create_builder(capacity: usize, _: &GenericMap) -> Self::ColumnBuilder {
         StringColumnBuilder::with_capacity(capacity, 0)
     }
@@ -273,6 +280,18 @@ impl StringColumnBuilder {
         self.data.extend_from_slice(item);
     }
 
+    pub fn put_char_iter(&mut self, iter: impl Iterator<Item = char>) {
+        for c in iter {
+            let mut buf = [0; 4];
+            let result = c.encode_utf8(&mut buf);
+            self.data.extend_from_slice(result.as_bytes());
+        }
+    }
+
+    pub fn put(&mut self, item: &[u8]) {
+        self.data.extend_from_slice(item);
+    }
+
     pub fn write_row<T>(&mut self, f: impl FnOnce(&mut Vec<u8>) -> T) -> T {
         let res = f(&mut self.data);
         self.commit_row();
@@ -321,6 +340,18 @@ impl StringColumnBuilder {
         let end = *self.offsets.get_unchecked(row + 1) as usize;
         // soundness: the invariant of the struct
         self.data.get_unchecked(start..end)
+    }
+
+    pub fn pop(&mut self) -> Option<Vec<u8>> {
+        if self.len() > 0 {
+            let index = self.len() - 1;
+            let start = unsafe { *self.offsets.get_unchecked(index) as usize };
+            self.offsets.pop();
+            let val = self.data.split_off(start);
+            Some(val)
+        } else {
+            None
+        }
     }
 }
 

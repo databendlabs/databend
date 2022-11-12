@@ -48,10 +48,33 @@ pub use self::number::NumberType;
 pub use self::string::StringType;
 pub use self::timestamp::TimestampType;
 pub use self::variant::VariantType;
+use crate::deserializations::BooleanDeserializer;
+use crate::deserializations::DateDeserializer;
+use crate::deserializations::EmptyArrayDeserializer;
+use crate::deserializations::NullDeserializer;
+use crate::deserializations::NullableDeserializer;
+use crate::deserializations::NumberDeserializer;
+use crate::deserializations::StringDeserializer;
+use crate::deserializations::TimestampDeserializer;
+use crate::deserializations::TypeDeserializer;
+use crate::deserializations::VariantDeserializer;
 use crate::property::Domain;
+use crate::serializations::ArraySerializer;
+use crate::serializations::BooleanSerializer;
+use crate::serializations::DateSerializer;
+use crate::serializations::EmptyArraySerializer;
+use crate::serializations::NullSerializer;
+use crate::serializations::NullableSerializer;
+use crate::serializations::NumberSerializer;
+use crate::serializations::StringSerializer;
+use crate::serializations::TimestampSerializer;
+use crate::serializations::TupleSerializer;
+use crate::serializations::TypeSerializer;
+use crate::serializations::VariantSerializer;
 use crate::utils::concat_array;
 use crate::values::Column;
 use crate::values::Scalar;
+use crate::with_number_mapped_type;
 use crate::ColumnBuilder;
 use crate::ScalarRef;
 
@@ -104,6 +127,53 @@ impl DataType {
     pub fn can_inside_nullable(&self) -> bool {
         !self.is_nullable_or_null()
     }
+
+    pub fn create_serializer(&self, column: Column) -> Result<Box<dyn TypeSerializer>, String> {
+        match self {
+            DataType::Null => Ok(Box::new(NullSerializer::try_create(column)?)),
+            DataType::Boolean => Ok(Box::new(BooleanSerializer::try_create(column)?)),
+            DataType::String => Ok(Box::new(StringSerializer::try_create(column)?)),
+            DataType::Number(num_ty) => {
+                with_number_mapped_type!(|NUM_TYPE| match num_ty {
+                    NumberDataType::NUM_TYPE =>
+                        Ok(Box::new(NumberSerializer::<NUM_TYPE>::try_create(column)?)),
+                })
+            }
+            DataType::Date => Ok(Box::new(DateSerializer::try_create(column)?)),
+            DataType::Timestamp => Ok(Box::new(TimestampSerializer::try_create(column)?)),
+            DataType::Nullable(inner_ty) => {
+                Ok(Box::new(NullableSerializer::try_create(column, inner_ty)?))
+            }
+            DataType::Array(inner_ty) => {
+                Ok(Box::new(ArraySerializer::try_create(column, inner_ty)?))
+            }
+            DataType::EmptyArray => Ok(Box::new(EmptyArraySerializer::try_create(column)?)),
+            DataType::Tuple(inner_tys) => {
+                Ok(Box::new(TupleSerializer::try_create(column, inner_tys)?))
+            }
+            DataType::Variant => Ok(Box::new(VariantSerializer::try_create(column)?)),
+            _ => unreachable!(),
+        }
+    }
+
+    pub fn create_deserializer(&self) -> Box<dyn TypeDeserializer> {
+        match self {
+            DataType::Null => Box::new(NullDeserializer::create()),
+            DataType::Boolean => Box::new(BooleanDeserializer::create()),
+            DataType::String => Box::new(StringDeserializer::create()),
+            DataType::Number(num_ty) => {
+                with_number_mapped_type!(|NUM_TYPE| match num_ty {
+                    NumberDataType::NUM_TYPE => Box::new(NumberDeserializer::<NUM_TYPE>::create()),
+                })
+            }
+            DataType::Date => Box::new(DateDeserializer::create()),
+            DataType::Timestamp => Box::new(TimestampDeserializer::create()),
+            DataType::Nullable(inner_ty) => Box::new(NullableDeserializer::create(inner_ty)),
+            DataType::EmptyArray => Box::new(EmptyArrayDeserializer::create()),
+            DataType::Variant => Box::new(VariantDeserializer::create()),
+            _ => todo!(),
+        }
+    }
 }
 
 pub trait ValueType: Debug + Clone + PartialEq + Sized + 'static {
@@ -112,7 +182,7 @@ pub trait ValueType: Debug + Clone + PartialEq + Sized + 'static {
     type Column: Debug + Clone + PartialEq;
     type Domain: Debug + Clone + PartialEq;
     type ColumnIterator<'a>: Iterator<Item = Self::ScalarRef<'a>> + TrustedLen;
-    type ColumnBuilder: Debug + Clone + PartialEq;
+    type ColumnBuilder: Debug + Clone;
 
     /// Upcast GAT type's lifetime.
     fn upcast_gat<'short, 'long: 'short>(long: Self::ScalarRef<'long>) -> Self::ScalarRef<'short>;
@@ -174,6 +244,7 @@ pub trait ValueType: Debug + Clone + PartialEq + Sized + 'static {
 
 pub trait ArgType: ValueType {
     fn data_type() -> DataType;
+    fn full_domain() -> Self::Domain;
     fn create_builder(capacity: usize, generics: &GenericMap) -> Self::ColumnBuilder;
 
     fn column_from_vec(vec: Vec<Self::Scalar>, generics: &GenericMap) -> Self::Column {

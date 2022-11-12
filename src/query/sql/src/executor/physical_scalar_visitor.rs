@@ -122,17 +122,12 @@ enum RecursionProcessing<'a> {
 }
 
 // This visitor is for recursively visiting expression tree and collects all columns.
+#[derive(Default)]
 pub struct RequireColumnsVisitor {
     pub required_columns: HashSet<usize>,
 }
 
 impl RequireColumnsVisitor {
-    pub fn default() -> Self {
-        Self {
-            required_columns: HashSet::new(),
-        }
-    }
-
     pub fn collect_columns_from_expr(expr: &PhysicalScalar) -> Result<HashSet<usize>> {
         let mut visitor = Self::default();
         visitor = expr.accept(visitor)?;

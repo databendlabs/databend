@@ -25,6 +25,7 @@ use common_expression::Evaluator;
 use common_expression::RemoteExpr;
 use common_expression::Value;
 use common_functions_v2::scalars::builtin_functions;
+use goldenfile::Mint;
 use itertools::Itertools;
 
 mod arithmetic;
@@ -51,14 +52,14 @@ pub fn run_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType, Co
         );
 
         let fn_registry = builtin_functions();
-        let (expr, output_ty) = type_check::check(&raw_expr, &fn_registry)?;
+        let expr = type_check::check(&raw_expr, &fn_registry)?;
 
         let input_domains = columns
             .iter()
             .map(|(_, _, col)| col.domain())
             .collect::<Vec<_>>();
 
-        let constant_folder = ConstantFolder::new(&input_domains, chrono_tz::UTC);
+        let constant_folder = ConstantFolder::new(&input_domains, chrono_tz::UTC, &fn_registry);
         let (optimized_expr, output_domain) = constant_folder.fold(&expr);
 
         let remote_expr = RemoteExpr::from_expr(optimized_expr);
@@ -77,7 +78,7 @@ pub fn run_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType, Co
             test_arrow_conversion(col);
         });
 
-        let evaluator = Evaluator::new(&chunk, chrono_tz::UTC);
+        let evaluator = Evaluator::new(&chunk, chrono_tz::UTC, &fn_registry);
         let result = evaluator.run(&expr);
         let optimized_result = evaluator.run(&optimized_expr);
         match &result {
@@ -93,7 +94,6 @@ pub fn run_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType, Co
             raw_expr,
             expr,
             input_domains,
-            output_ty,
             optimized_expr,
             output_domain
                 .as_ref()
@@ -104,7 +104,7 @@ pub fn run_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType, Co
     };
 
     match result {
-        Ok((raw_expr, expr, input_domains, output_ty, optimized_expr, output_domain, result)) => {
+        Ok((raw_expr, expr, input_domains, optimized_expr, output_domain, result)) => {
             writeln!(file, "ast            : {text}").unwrap();
             writeln!(file, "raw expr       : {raw_expr}").unwrap();
             writeln!(file, "checked expr   : {expr}").unwrap();
@@ -114,7 +114,7 @@ pub fn run_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType, Co
 
             match result {
                 Value::Scalar(output_scalar) => {
-                    writeln!(file, "output type    : {output_ty}").unwrap();
+                    writeln!(file, "output type    : {}", expr.data_type()).unwrap();
                     writeln!(file, "output domain  : {output_domain}").unwrap();
                     writeln!(file, "output         : {}", output_scalar.as_ref()).unwrap();
                 }
@@ -148,7 +148,7 @@ pub fn run_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType, Co
 
                     let mut type_row = vec!["Type".to_string()];
                     type_row.extend(columns.iter().map(|(_, ty, _)| ty.to_string()));
-                    type_row.push(output_ty.to_string());
+                    type_row.push(expr.data_type().to_string());
                     table.add_row(type_row);
 
                     let mut domain_row = vec!["Domain".to_string()];
@@ -197,4 +197,28 @@ fn test_arrow_conversion(col: &Column) {
     let arrow_col = col.as_arrow();
     let new_col = Column::from_arrow(&*arrow_col);
     assert_eq!(col, &new_col, "arrow conversion went wrong");
+}
+
+#[test]
+fn list_all_builtin_functions() {
+    let mut mint = Mint::new("tests/it/scalars/testdata");
+    let file = &mut mint.new_goldenfile("function_list.txt").unwrap();
+
+    writeln!(file, "Simple functions:").unwrap();
+
+    let fn_registry = builtin_functions();
+    for func in fn_registry
+        .funcs
+        .iter()
+        .sorted_by_key(|(name, _)| name.to_string())
+        .flat_map(|(_, funcs)| funcs)
+    {
+        writeln!(file, "{}", func.signature).unwrap();
+    }
+
+    writeln!(file, "\nFactory functions:").unwrap();
+
+    for func_name in fn_registry.factories.keys().sorted() {
+        writeln!(file, "{func_name}").unwrap();
+    }
 }

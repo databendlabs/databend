@@ -15,7 +15,12 @@
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
+use std::path::Path;
+use std::sync::Arc;
 
+use common_auth::RefreshableToken;
+use common_auth::TokenFile;
+use common_base::base::tokio::sync::RwLock;
 use common_base::base::Singleton;
 use once_cell::sync::OnceCell;
 use serde::Deserialize;
@@ -30,6 +35,23 @@ pub struct StorageConfig {
     pub allow_insecure: bool,
 
     pub params: StorageParams,
+}
+
+/// Config for cache backend.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CacheConfig {
+    pub num_cpus: u64,
+
+    pub params: StorageParams,
+}
+
+impl Default for CacheConfig {
+    fn default() -> Self {
+        Self {
+            num_cpus: 0,
+            params: StorageParams::Moka(StorageMokaConfig::default()),
+        }
+    }
 }
 
 /// Storage params which contains the detailed storage info.
@@ -63,44 +85,44 @@ impl Display for StorageParams {
         match self {
             StorageParams::Azblob(v) => write!(
                 f,
-                "azblob://container={},root={},endpoint={}",
+                "azblob | container={},root={},endpoint={}",
                 v.container, v.root, v.endpoint_url
             ),
-            StorageParams::Fs(v) => write!(f, "fs://root={}", v.root),
+            StorageParams::Fs(v) => write!(f, "fs | root={}", v.root),
             StorageParams::Ftp(v) => {
-                write!(f, "ftp://root={},endpoint={}", v.root, v.endpoint)
+                write!(f, "ftp | root={},endpoint={}", v.root, v.endpoint)
             }
             StorageParams::Gcs(v) => write!(
                 f,
-                "gcs://bucket={},root={},endpoint={}",
+                "gcs | bucket={},root={},endpoint={}",
                 v.bucket, v.root, v.endpoint_url
             ),
             #[cfg(feature = "storage-hdfs")]
             StorageParams::Hdfs(v) => {
-                write!(f, "hdfs://root={},name_node={}", v.root, v.name_node)
+                write!(f, "hdfs | root={},name_node={}", v.root, v.name_node)
             }
             StorageParams::Http(v) => {
-                write!(f, "http://endpoint={},paths={:?}", v.endpoint_url, v.paths)
+                write!(f, "http | endpoint={},paths={:?}", v.endpoint_url, v.paths)
             }
             StorageParams::Ipfs(c) => {
-                write!(f, "ipfs://endpoint={},root={}", c.endpoint_url, c.root)
+                write!(f, "ipfs | endpoint={},root={}", c.endpoint_url, c.root)
             }
-            StorageParams::Memory => write!(f, "memory://"),
-            StorageParams::Moka(_) => write!(f, "moka://"),
+            StorageParams::Memory => write!(f, "memory"),
+            StorageParams::Moka(_) => write!(f, "moka"),
             StorageParams::Obs(v) => write!(
                 f,
-                "obs://bucket={},root={},endpoint={}",
+                "obs | bucket={},root={},endpoint={}",
                 v.bucket, v.root, v.endpoint_url
             ),
             StorageParams::Oss(v) => write!(
                 f,
-                "oss://bucket={},root={},endpoint={}",
+                "oss | bucket={},root={},endpoint={}",
                 v.bucket, v.root, v.endpoint_url
             ),
             StorageParams::S3(v) => {
                 write!(
                     f,
-                    "s3://bucket={},root={},endpoint={}",
+                    "s3 | bucket={},root={},endpoint={}",
                     v.bucket, v.root, v.endpoint_url
                 )
             }
@@ -394,31 +416,55 @@ static SHARE_TABLE_CONFIG: OnceCell<Singleton<ShareTableConfig>> = OnceCell::new
 #[derive(Clone)]
 pub struct ShareTableConfig {
     pub share_endpoint_address: Option<String>,
+    pub share_endpoint_token: RefreshableToken,
 }
 
 impl ShareTableConfig {
     pub fn init(
         share_endpoint_address: &str,
+        token_file: &str,
+        default_token: String,
         v: Singleton<ShareTableConfig>,
     ) -> common_exception::Result<()> {
-        v.init(Self::try_create(share_endpoint_address)?)?;
+        v.init(Self::try_create(
+            share_endpoint_address,
+            token_file,
+            default_token,
+        )?)?;
 
         SHARE_TABLE_CONFIG.set(v).ok();
         Ok(())
     }
 
-    pub fn try_create(share_endpoint_address: &str) -> common_exception::Result<ShareTableConfig> {
+    pub fn try_create(
+        share_endpoint_address: &str,
+        token_file: &str,
+        default_token: String,
+    ) -> common_exception::Result<ShareTableConfig> {
+        let share_endpoint_address = if share_endpoint_address.is_empty() {
+            None
+        } else {
+            Some(share_endpoint_address.to_owned())
+        };
+        let share_endpoint_token = if token_file.is_empty() {
+            RefreshableToken::Direct(default_token)
+        } else {
+            let s = String::from(token_file);
+            let f = TokenFile::new(Path::new(&s))?;
+            RefreshableToken::File(Arc::new(RwLock::new(f)))
+        };
         Ok(ShareTableConfig {
-            share_endpoint_address: if share_endpoint_address.is_empty() {
-                None
-            } else {
-                Some(share_endpoint_address.to_owned())
-            },
+            share_endpoint_address,
+            share_endpoint_token,
         })
     }
 
     pub fn share_endpoint_address() -> Option<String> {
         ShareTableConfig::instance().share_endpoint_address
+    }
+
+    pub fn share_endpoint_token() -> RefreshableToken {
+        ShareTableConfig::instance().share_endpoint_token
     }
 
     pub fn instance() -> ShareTableConfig {

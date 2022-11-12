@@ -74,7 +74,7 @@ impl SessionContext {
 
     // Get abort status.
     pub fn get_abort(&self) -> bool {
-        self.abort.load(Ordering::Relaxed) as bool
+        self.abort.load(Ordering::Relaxed)
     }
 
     // Set abort status.

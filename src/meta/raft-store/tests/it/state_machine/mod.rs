@@ -54,13 +54,13 @@ async fn test_state_machine_apply_non_dup_incr_seq() -> anyhow::Result<()> {
     for i in 0..3 {
         // incr "foo"
 
-        let resp = sm.sm_tree.txn(true, |t| {
+        let resp = sm.sm_tree.txn(true, |mut t| {
             Ok(sm
                 .apply_cmd(
                     &Cmd::IncrSeq {
                         key: "foo".to_string(),
                     },
-                    &t,
+                    &mut t,
                     None,
                     0,
                 )
@@ -71,13 +71,13 @@ async fn test_state_machine_apply_non_dup_incr_seq() -> anyhow::Result<()> {
 
         // incr "bar"
 
-        let resp = sm.sm_tree.txn(true, |t| {
+        let resp = sm.sm_tree.txn(true, |mut t| {
             Ok(sm
                 .apply_cmd(
                     &Cmd::IncrSeq {
                         key: "bar".to_string(),
                     },
-                    &t,
+                    &mut t,
                     None,
                     0,
                 )
@@ -214,7 +214,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_upsert_get() -> anyhow::Res
         let mes = format!("{}-th: {}({:?})={:?}", i, c.key, c.seq, c.value);
 
         // write
-        let resp = sm.sm_tree.txn(true, |t| {
+        let resp = sm.sm_tree.txn(true, |mut t| {
             Ok(sm
                 .apply_cmd(
                     &Cmd::UpsertKV(UpsertKV {
@@ -223,7 +223,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_upsert_get() -> anyhow::Res
                         value: Some(c.value.clone()).into(),
                         value_meta: c.value_meta.clone(),
                     }),
-                    &t,
+                    &mut t,
                     None,
                     SeqV::<()>::now_ms(),
                 )
@@ -279,7 +279,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_value_meta() -> anyhow::Res
 
     info!("--- update meta of a nonexistent record");
 
-    let resp = sm.sm_tree.txn(true, |t| {
+    let resp = sm.sm_tree.txn(true, |mut t| {
         Ok(sm
             .apply_cmd(
                 &Cmd::UpsertKV(UpsertKV {
@@ -290,7 +290,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_value_meta() -> anyhow::Res
                         expire_at: Some(now + 10),
                     }),
                 }),
-                &t,
+                &mut t,
                 None,
                 0,
             )
@@ -306,7 +306,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_value_meta() -> anyhow::Res
     info!("--- update meta of a existent record");
 
     // add a record
-    sm.sm_tree.txn(true, |t| {
+    sm.sm_tree.txn(true, |mut t| {
         Ok(sm
             .apply_cmd(
                 &Cmd::UpsertKV(UpsertKV {
@@ -317,7 +317,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_value_meta() -> anyhow::Res
                         expire_at: Some(now + 10),
                     }),
                 }),
-                &t,
+                &mut t,
                 None,
                 0,
             )
@@ -325,7 +325,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_value_meta() -> anyhow::Res
     })?;
 
     // update the meta of the record
-    sm.sm_tree.txn(true, |t| {
+    sm.sm_tree.txn(true, |mut t| {
         Ok(sm
             .apply_cmd(
                 &Cmd::UpsertKV(UpsertKV {
@@ -336,7 +336,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_value_meta() -> anyhow::Res
                         expire_at: Some(now + 20),
                     }),
                 }),
-                &t,
+                &mut t,
                 None,
                 0,
             )
@@ -409,18 +409,23 @@ async fn test_state_machine_apply_non_dup_generic_kv_delete() -> anyhow::Result<
         let sm = StateMachine::open(&tc.raft_config, 1).await?;
 
         // prepare an record
-        sm.sm_tree.txn(true, |t| {
+        sm.sm_tree.txn(true, |mut t| {
             Ok(sm
-                .apply_cmd(&Cmd::UpsertKV(UpsertKV::update("foo", b"x")), &t, None, 0)
+                .apply_cmd(
+                    &Cmd::UpsertKV(UpsertKV::update("foo", b"x")),
+                    &mut t,
+                    None,
+                    0,
+                )
                 .unwrap())
         })?;
 
         // delete
-        let resp = sm.sm_tree.txn(true, |t| {
+        let resp = sm.sm_tree.txn(true, |mut t| {
             Ok(sm
                 .apply_cmd(
                     &Cmd::UpsertKV(UpsertKV::delete(&c.key).with(c.seq)),
-                    &t,
+                    &mut t,
                     None,
                     0,
                 )

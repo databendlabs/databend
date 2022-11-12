@@ -26,6 +26,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use super::ProbeState;
+use crate::pipelines::processors::transforms::hash_join::desc::MarkerKind;
 use crate::pipelines::processors::transforms::hash_join::row::RowPtr;
 use crate::pipelines::processors::HashJoinState;
 use crate::pipelines::processors::HashTable;
@@ -107,7 +108,7 @@ impl HashJoinState for JoinHashTable {
                         let mut self_row_ptrs = self.row_ptrs.write();
                         self_row_ptrs.push(ptr);
                     }
-                    match unsafe { $table.insert(key) } {
+                    match unsafe { $table.insert(*key) } {
                         Ok(entity) => {
                             entity.write(vec![ptr]);
                         }
@@ -281,7 +282,8 @@ impl HashJoinState for JoinHashTable {
             )?]);
         }
 
-        let input_block = self.rest_block_for_right_join(blocks)?;
+        let rest_block = self.rest_block()?;
+        let input_block = DataBlock::concat_blocks(&[blocks, &[rest_block]].concat())?;
 
         if unmatched_build_indexes.is_empty() && self.hash_join_desc.other_predicate.is_none() {
             return Ok(vec![input_block]);
@@ -349,7 +351,8 @@ impl HashJoinState for JoinHashTable {
             return Ok(vec![unmatched_build_block]);
         }
 
-        let input_block = self.rest_block_for_right_join(blocks)?;
+        let rest_block = self.rest_block()?;
+        let input_block = DataBlock::concat_blocks(&[blocks, &[rest_block]].concat())?;
 
         if input_block.is_empty() {
             return Ok(vec![]);
@@ -413,7 +416,7 @@ impl HashJoinState for JoinHashTable {
 
         // Right anti join with non-equi conditions
         {
-            let build_indexes = self.hash_join_desc.right_join_desc.build_indexes.read();
+            let build_indexes = self.hash_join_desc.join_state.build_indexes.read();
             for (idx, row_ptr) in build_indexes.iter().enumerate() {
                 if !bm.get(idx) {
                     row_state[row_ptr.chunk_index][row_ptr.row_index] -= 1;
@@ -424,6 +427,17 @@ impl HashJoinState for JoinHashTable {
         let unmatched_build_block = self.row_space.gather(&unmatched_build_indexes)?;
         Ok(vec![unmatched_build_block])
     }
+
+    fn left_join_blocks(&self, blocks: &[DataBlock]) -> Result<Vec<DataBlock>> {
+        // Get rest blocks
+        let mut input_blocks = blocks.to_vec();
+        let rest_block = self.rest_block()?;
+        if rest_block.is_empty() {
+            return Ok(input_blocks);
+        }
+        input_blocks.push(rest_block);
+        Ok(input_blocks)
+    }
 }
 
 impl JoinHashTable {
@@ -432,7 +446,7 @@ impl JoinHashTable {
         bm: &mut MutableBitmap,
         row_state: &mut [Vec<usize>],
     ) {
-        let build_indexes = self.hash_join_desc.right_join_desc.build_indexes.read();
+        let build_indexes = self.hash_join_desc.join_state.build_indexes.read();
         for (index, row) in build_indexes.iter().enumerate() {
             if row_state[row.chunk_index][row.row_index] == 1_usize {
                 if !bm.get(index) {
@@ -453,7 +467,7 @@ impl JoinHashTable {
         input: DataBlock,
         row_state: &mut [Vec<usize>],
     ) -> Result<DataBlock> {
-        let build_indexes = self.hash_join_desc.right_join_desc.build_indexes.read();
+        let build_indexes = self.hash_join_desc.join_state.build_indexes.read();
         for (index, row) in build_indexes.iter().enumerate() {
             if row_state[row.chunk_index][row.row_index] > 1_usize && !bm.get(index) {
                 row_state[row.chunk_index][row.row_index] -= 1;
@@ -467,5 +481,72 @@ impl JoinHashTable {
         }
         let predicate = BooleanColumn::from_arrow_data(bm.clone().into()).arc();
         DataBlock::filter_block(input, &predicate)
+    }
+
+    pub(crate) fn non_equi_conditions_for_left_join(
+        &self,
+        input_blocks: &[DataBlock],
+        probe_indexes_vec: &[Vec<u32>],
+        row_state: &mut [u32],
+    ) -> Result<Vec<DataBlock>> {
+        let mut output_blocks = Vec::with_capacity(input_blocks.len());
+        let mut begin = 0;
+        let probe_side_len = self.probe_schema.fields().len();
+        for (idx, input_block) in input_blocks.iter().enumerate() {
+            if self.interrupt.load(Ordering::Relaxed) {
+                return Err(ErrorCode::AbortedQuery(
+                    "Aborted query, because the server is shutting down or the query was killed.",
+                ));
+            }
+            // Process non-equi conditions
+            let (bm, all_true, all_false) = self.get_other_filters(
+                input_block,
+                self.hash_join_desc.other_predicate.as_ref().unwrap(),
+            )?;
+
+            if all_true {
+                output_blocks.push(input_block.clone());
+                continue;
+            }
+
+            let validity = match (bm, all_false) {
+                (Some(b), _) => b,
+                (None, true) => Bitmap::new_zeroed(input_block.num_rows()),
+                // must be one of above
+                _ => unreachable!(),
+            };
+
+            // probed_block contains probe side and build side.
+            let nullable_columns = input_block.columns()[probe_side_len..]
+                .iter()
+                .map(|c| Self::set_validity(c, &validity))
+                .collect::<Result<Vec<_>>>()?;
+
+            let nullable_build_block =
+                DataBlock::create(self.row_space.data_schema.clone(), nullable_columns.clone());
+
+            let probe_block = DataBlock::create(
+                self.probe_schema.clone(),
+                input_block.columns()[0..probe_side_len].to_vec(),
+            );
+
+            let merged_block = self.merge_eq_block(&nullable_build_block, &probe_block)?;
+            let mut bm = validity.into_mut().right().unwrap();
+            if self.hash_join_desc.join_type == JoinType::Full {
+                let mut build_indexes = self.hash_join_desc.join_state.build_indexes.write();
+                let build_indexes = &mut build_indexes[begin..(begin + bm.len())];
+                begin += bm.len();
+                for (idx, build_index) in build_indexes.iter_mut().enumerate() {
+                    if !bm.get(idx) {
+                        build_index.marker = Some(MarkerKind::False);
+                    }
+                }
+            }
+            self.fill_null_for_left_join(&mut bm, &probe_indexes_vec[idx], row_state);
+
+            let predicate = BooleanColumn::from_arrow_data(bm.into()).arc();
+            output_blocks.push(DataBlock::filter_block(merged_block, &predicate)?);
+        }
+        Ok(output_blocks)
     }
 }

@@ -20,9 +20,8 @@ common-datablocks = { path = "../../datablocks" }
 common-datavalues = { path = "../../datavalues" }
 common-exception = { path = "../../../common/exception" }
 common-functions = { path = "../../functions" }
-common-fuse-meta = { path = "../fuse-meta" }
-common-planner = { path = "../../planner" }
 common-sql = { path = "../../sql" }
+common-storages-table-meta = { path = "../table-meta" }
 
 xorfilter-rs = { git = "https://github.com/datafuse-extras/xorfilter", features = [
     "cbordata",

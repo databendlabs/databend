@@ -17,6 +17,7 @@ common-datavalues = { path = "../datavalues" }
 common-exception = { path = "../../common/exception" }
 common-hashtable = { path = "../../common/hashtable" }
 common-io = { path = "../../common/io" }
+common-jsonb = { path = "../../common/jsonb" }
 
 # Crates.io dependencies
 base64 = "0.13.0"
@@ -32,6 +33,7 @@ h3ron = "0.15.1"
 hex = "0.4.3"
 itertools = "0.10.5"
 md-5 = "0.10.5"
+memchr = "2.5.0"
 naive-cityhash = "0.2.0"
 num = "0.4.0"
 num-format = "0.4.0"
@@ -48,7 +50,6 @@ sha1 = "0.10.5"
 sha2 = "0.10.6"
 simdutf8 = "0.1.4"
 siphasher = "0.3"
-sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "7f246e3" }
 strength_reduce = "0.2.3"
 twox-hash = "1.6.3"
 uuid = { version = "1.1.2", features = ["v4"] }

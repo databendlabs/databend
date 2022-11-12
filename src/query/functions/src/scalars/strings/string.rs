@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use super::substring_utf8::SubstringUtf8Function;
+use super::StringUtf8LengthFunction;
 use crate::scalars::AsciiFunction;
 use crate::scalars::Base64DecodeFunction;
 use crate::scalars::Base64EncodeFunction;
@@ -120,5 +122,10 @@ impl StringFunction {
         factory.register("locate", LocateFunction::desc());
         factory.register("position", PositionFunction::desc());
         factory.register("instr", InstrFunction::desc());
+
+        // utf8 collation
+        factory.register("length_utf8", StringUtf8LengthFunction::desc());
+        factory.register("substring_utf8", SubstringUtf8Function::desc());
+        factory.register("substr_utf8", SubstringUtf8Function::desc());
     }
 }

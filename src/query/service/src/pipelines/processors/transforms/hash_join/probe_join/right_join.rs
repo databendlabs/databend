@@ -17,13 +17,13 @@ use std::sync::atomic::Ordering;
 
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
-use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_hashtable::HashtableEntryRefLike;
 use common_hashtable::HashtableLike;
 
+use crate::pipelines::processors::transforms::hash_join::desc::JOIN_MAX_BLOCK_SIZE;
 use crate::pipelines::processors::transforms::hash_join::row::RowPtr;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
 use crate::pipelines::processors::JoinHashTable;
@@ -39,17 +39,16 @@ impl JoinHashTable {
         input: &DataBlock,
     ) -> Result<Vec<DataBlock>>
     where
-        IT: Iterator<Item = H::KeyRef<'a>> + TrustedLen,
+        IT: Iterator<Item = &'a H::Key> + TrustedLen,
         H::Key: 'a,
     {
         let valids = &probe_state.valids;
         // The right join will return multiple data blocks of similar size
         let mut probed_blocks = vec![];
-        let block_size = self.ctx.get_settings().get_max_block_size()? as usize;
-        let mut local_probe_indexes = Vec::with_capacity(block_size);
-        let mut local_build_indexes = Vec::with_capacity(block_size);
-        let mut validity = MutableBitmap::with_capacity(block_size);
-        let mut build_indexes = self.hash_join_desc.right_join_desc.build_indexes.write();
+        let mut local_probe_indexes = Vec::with_capacity(JOIN_MAX_BLOCK_SIZE);
+        let mut local_build_indexes = Vec::with_capacity(JOIN_MAX_BLOCK_SIZE);
+        let mut validity = MutableBitmap::with_capacity(JOIN_MAX_BLOCK_SIZE);
+        let mut build_indexes = self.hash_join_desc.join_state.build_indexes.write();
         for (i, key) in keys_iter.enumerate() {
             let probe_result_ptr = self.probe_key(hash_table, key, valids, i);
 
@@ -137,16 +136,8 @@ impl JoinHashTable {
             probe_block = DataBlock::create(self.probe_schema.clone(), nullable_columns);
         }
 
-        let mut rest_build_indexes = self
-            .hash_join_desc
-            .right_join_desc
-            .rest_build_indexes
-            .write();
-        let mut rest_probe_blocks = self
-            .hash_join_desc
-            .right_join_desc
-            .rest_probe_blocks
-            .write();
+        let mut rest_build_indexes = self.hash_join_desc.join_state.rest_build_indexes.write();
+        let mut rest_probe_blocks = self.hash_join_desc.join_state.rest_probe_blocks.write();
         rest_probe_blocks.push(probe_block);
         rest_build_indexes.extend(local_build_indexes);
 

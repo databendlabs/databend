@@ -164,6 +164,13 @@ impl<Num: Number> ArgType for NumberType<Num> {
         DataType::Number(Num::data_type())
     }
 
+    fn full_domain() -> Self::Domain {
+        SimpleDomain {
+            min: Num::MIN,
+            max: Num::MAX,
+        }
+    }
+
     fn create_builder(capacity: usize, _generics: &GenericMap) -> Self::ColumnBuilder {
         Vec::with_capacity(capacity)
     }
@@ -342,6 +349,11 @@ impl NumberDataType {
     }
 
     pub const fn lossless_super_type(self, other: Self) -> Option<Self> {
+        if self.can_lossless_cast_to(other) {
+            return Some(other);
+        } else if other.can_lossless_cast_to(self) {
+            return Some(self);
+        }
         Some(match (self.is_float(), other.is_float()) {
             (true, true) => NumberDataType::new(
                 max_bit_with(self.bit_width(), other.bit_width()),
@@ -549,6 +561,17 @@ impl NumberColumnBuilder {
             NumberColumnBuilder::NUM_TYPE(builder) => NumberScalar::NUM_TYPE(builder[0]),
         })
     }
+
+    pub fn pop(&mut self) -> Option<NumberScalar> {
+        crate::with_number_type!(|NUM_TYPE| match self {
+            NumberColumnBuilder::NUM_TYPE(builder) => {
+                match builder.pop() {
+                    Some(num) => Some(NumberScalar::NUM_TYPE(num)),
+                    None => None,
+                }
+            }
+        })
+    }
 }
 
 impl<T: Number> SimpleDomain<T> {
@@ -685,7 +708,6 @@ pub trait Number:
     fn data_type() -> NumberDataType;
     fn try_downcast_scalar(scalar: &NumberScalar) -> Option<Self>;
     fn try_downcast_column(col: &NumberColumn) -> Option<Buffer<Self>>;
-    // TODO
     fn try_downcast_builder(col: &mut NumberColumnBuilder) -> Option<&mut Vec<Self>>;
     fn try_downcast_domain(domain: &NumberDomain) -> Option<SimpleDomain<Self>>;
     fn upcast_scalar(scalar: Self) -> NumberScalar;

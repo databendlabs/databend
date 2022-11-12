@@ -100,10 +100,12 @@ where
             _phantom: PhantomData,
         }
     }
+
     #[inline(always)]
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
+
     #[inline(always)]
     pub fn len(&self) -> usize {
         self.table0.len()
@@ -112,6 +114,7 @@ where
             + self.table3.len()
             + self.table4.len()
     }
+
     #[inline(always)]
     pub fn capacity(&self) -> usize {
         self.table0.capacity()
@@ -120,298 +123,7 @@ where
             + self.table3.capacity()
             + self.table4.capacity()
     }
-    #[inline(always)]
-    pub fn entry(&self, key: &K) -> Option<UnsizedHashtableEntryRef<'_, K, V>> {
-        let key = key.as_bytes();
-        match key.len() {
-            _ if key.last().copied() == Some(0) => unsafe {
-                self.table4
-                    .get(&FallbackKey::new(key))
-                    .map(|x| UnsizedHashtableEntryRef(UnsizedHashtableEntryRefInner::Table4(x)))
-            },
-            0 => self.table0.get([0, 0]).map(|x| {
-                UnsizedHashtableEntryRef(UnsizedHashtableEntryRefInner::Table0(x, PhantomData))
-            }),
-            1 => self.table0.get([key[0], 0]).map(|x| {
-                UnsizedHashtableEntryRef(UnsizedHashtableEntryRefInner::Table0(x, PhantomData))
-            }),
-            2 => self.table0.get([key[0], key[1]]).map(|x| {
-                UnsizedHashtableEntryRef(UnsizedHashtableEntryRefInner::Table0(x, PhantomData))
-            }),
-            3..=8 => unsafe {
-                let mut t = [0u64; 1];
-                t[0] = read_le(key.as_ptr(), key.len());
-                let t = std::mem::transmute::<_, InlineKey<0>>(t);
-                self.table1
-                    .get(&t)
-                    .map(|x| UnsizedHashtableEntryRef(UnsizedHashtableEntryRefInner::Table1(x)))
-            },
-            9..=16 => unsafe {
-                let mut t = [0u64; 2];
-                t[0] = (key.as_ptr() as *const u64).read_unaligned();
-                t[1] = read_le(key.as_ptr().offset(8), key.len() - 8);
-                let t = std::mem::transmute::<_, InlineKey<1>>(t);
-                self.table2
-                    .get(&t)
-                    .map(|x| UnsizedHashtableEntryRef(UnsizedHashtableEntryRefInner::Table2(x)))
-            },
-            17..=24 => unsafe {
-                let mut t = [0u64; 3];
-                t[0] = (key.as_ptr() as *const u64).read_unaligned();
-                t[1] = (key.as_ptr() as *const u64).offset(1).read_unaligned();
-                t[2] = read_le(key.as_ptr().offset(16), key.len() - 16);
-                let t = std::mem::transmute::<_, InlineKey<2>>(t);
-                self.table3
-                    .get(&t)
-                    .map(|x| UnsizedHashtableEntryRef(UnsizedHashtableEntryRefInner::Table3(x)))
-            },
-            _ => unsafe {
-                self.table4
-                    .get(&FallbackKey::new(key))
-                    .map(|x| UnsizedHashtableEntryRef(UnsizedHashtableEntryRefInner::Table4(x)))
-            },
-        }
-    }
-    #[inline(always)]
-    pub fn entry_mut(&mut self, key: &K) -> Option<UnsizedHashtableEntryMutRef<'_, K, V>> {
-        let key = key.as_bytes();
-        match key.len() {
-            _ if key.last().copied() == Some(0) => unsafe {
-                self.table4.get_mut(&FallbackKey::new(key)).map(|x| {
-                    UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table4(x))
-                })
-            },
-            0 => self.table0.get_mut([0, 0]).map(|x| {
-                UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table0(
-                    x,
-                    PhantomData,
-                ))
-            }),
-            1 => self.table0.get_mut([key[0], 0]).map(|x| {
-                UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table0(
-                    x,
-                    PhantomData,
-                ))
-            }),
-            2 => self.table0.get_mut([key[0], key[1]]).map(|x| {
-                UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table0(
-                    x,
-                    PhantomData,
-                ))
-            }),
-            3..=8 => unsafe {
-                let mut t = [0u64; 1];
-                t[0] = read_le(key.as_ptr(), key.len());
-                let t = std::mem::transmute::<_, InlineKey<0>>(t);
-                self.table1.get_mut(&t).map(|x| {
-                    UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table1(x))
-                })
-            },
-            9..=16 => unsafe {
-                let mut t = [0u64; 2];
-                t[0] = (key.as_ptr() as *const u64).read_unaligned();
-                t[1] = read_le(key.as_ptr().offset(8), key.len() - 8);
-                let t = std::mem::transmute::<_, InlineKey<1>>(t);
-                self.table2.get_mut(&t).map(|x| {
-                    UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table2(x))
-                })
-            },
-            17..=24 => unsafe {
-                let mut t = [0u64; 3];
-                t[0] = (key.as_ptr() as *const u64).read_unaligned();
-                t[1] = (key.as_ptr() as *const u64).offset(1).read_unaligned();
-                t[2] = read_le(key.as_ptr().offset(16), key.len() - 16);
-                let t = std::mem::transmute::<_, InlineKey<2>>(t);
-                self.table3.get_mut(&t).map(|x| {
-                    UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table3(x))
-                })
-            },
-            _ => unsafe {
-                self.table4.get_mut(&FallbackKey::new(key)).map(|x| {
-                    UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table4(x))
-                })
-            },
-        }
-    }
-    #[inline(always)]
-    pub fn get(&self, key: &K) -> Option<&V> {
-        self.entry(key).map(|e| e.get())
-    }
-    #[inline(always)]
-    pub fn get_mut(&mut self, key: &K) -> Option<&mut V> {
-        self.entry_mut(key)
-            .map(|e| unsafe { &mut *(e.get_mut_ptr() as *mut V) })
-    }
-    #[inline(always)]
-    pub fn contains(&self, key: &K) -> bool {
-        self.get(key).is_some()
-    }
-    /// # Safety
-    ///
-    /// The uninitialized value of returned entry should be written immediately.
-    #[inline(always)]
-    pub unsafe fn insert_and_entry(
-        &mut self,
-        key: &K,
-    ) -> Result<UnsizedHashtableEntryMutRef<'_, K, V>, UnsizedHashtableEntryMutRef<'_, K, V>> {
-        let key = key.as_bytes();
-        match key.len() {
-            _ if key.last().copied() == Some(0) => {
-                if unlikely((self.table4.len() + 1) * 2 > self.table4.capacity()) {
-                    if (self.table4.entries.len() >> 22) == 0 {
-                        self.table4.grow(2);
-                    } else {
-                        self.table4.grow(1);
-                    }
-                }
-                let s = self.arena.alloc_slice_copy(key);
-                self.table4
-                    .insert(FallbackKey::new(s))
-                    .map(|x| {
-                        UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table4(x))
-                    })
-                    .map_err(|x| {
-                        UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table4(x))
-                    })
-            }
-            0 => self
-                .table0
-                .insert([0, 0])
-                .map(|x| {
-                    UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table0(
-                        x,
-                        PhantomData,
-                    ))
-                })
-                .map_err(|x| {
-                    UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table0(
-                        x,
-                        PhantomData,
-                    ))
-                }),
-            1 => self
-                .table0
-                .insert([key[0], 0])
-                .map(|x| {
-                    UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table0(
-                        x,
-                        PhantomData,
-                    ))
-                })
-                .map_err(|x| {
-                    UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table0(
-                        x,
-                        PhantomData,
-                    ))
-                }),
-            2 => self
-                .table0
-                .insert([key[0], key[1]])
-                .map(|x| {
-                    UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table0(
-                        x,
-                        PhantomData,
-                    ))
-                })
-                .map_err(|x| {
-                    UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table0(
-                        x,
-                        PhantomData,
-                    ))
-                }),
-            3..=8 => {
-                if unlikely((self.table1.len() + 1) * 2 > self.table1.capacity()) {
-                    if (self.table1.entries.len() >> 22) == 0 {
-                        self.table1.grow(2);
-                    } else {
-                        self.table1.grow(1);
-                    }
-                }
-                let mut t = [0u64; 1];
-                t[0] = read_le(key.as_ptr(), key.len());
-                let t = std::mem::transmute::<_, InlineKey<0>>(t);
-                self.table1
-                    .insert(t)
-                    .map(|x| {
-                        UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table1(x))
-                    })
-                    .map_err(|x| {
-                        UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table1(x))
-                    })
-            }
-            9..=16 => {
-                if unlikely((self.table2.len() + 1) * 2 > self.table2.capacity()) {
-                    if (self.table2.entries.len() >> 22) == 0 {
-                        self.table2.grow(2);
-                    } else {
-                        self.table2.grow(1);
-                    }
-                }
-                let mut t = [0u64; 2];
-                t[0] = (key.as_ptr() as *const u64).read_unaligned();
-                t[1] = read_le(key.as_ptr().offset(8), key.len() - 8);
-                let t = std::mem::transmute::<_, InlineKey<1>>(t);
-                self.table2
-                    .insert(t)
-                    .map(|x| {
-                        UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table2(x))
-                    })
-                    .map_err(|x| {
-                        UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table2(x))
-                    })
-            }
-            17..=24 => {
-                if unlikely((self.table3.len() + 1) * 2 > self.table3.capacity()) {
-                    if (self.table3.entries.len() >> 22) == 0 {
-                        self.table3.grow(2);
-                    } else {
-                        self.table3.grow(1);
-                    }
-                }
-                let mut t = [0u64; 3];
-                t[0] = (key.as_ptr() as *const u64).read_unaligned();
-                t[1] = (key.as_ptr() as *const u64).offset(1).read_unaligned();
-                t[2] = read_le(key.as_ptr().offset(16), key.len() - 16);
-                let t = std::mem::transmute::<_, InlineKey<2>>(t);
-                self.table3
-                    .insert(t)
-                    .map(|x| {
-                        UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table3(x))
-                    })
-                    .map_err(|x| {
-                        UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table3(x))
-                    })
-            }
-            _ => {
-                if unlikely((self.table4.len() + 1) * 2 > self.table4.capacity()) {
-                    if (self.table4.entries.len() >> 22) == 0 {
-                        self.table4.grow(2);
-                    } else {
-                        self.table4.grow(1);
-                    }
-                }
-                let s = self.arena.alloc_slice_copy(key);
-                self.table4
-                    .insert(FallbackKey::new(s))
-                    .map(|x| {
-                        UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table4(x))
-                    })
-                    .map_err(|x| {
-                        UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table4(x))
-                    })
-            }
-        }
-    }
-    /// # Safety
-    ///
-    /// The uninitialized value of returned entry should be written immediately.
-    #[inline(always)]
-    pub unsafe fn insert(&mut self, key: &K) -> Result<&mut MaybeUninit<V>, &mut V> {
-        match self.insert_and_entry(key) {
-            Ok(e) => Ok(&mut *(e.get_mut_ptr() as *mut MaybeUninit<V>)),
-            Err(e) => Err(&mut *e.get_mut_ptr()),
-        }
-    }
+
     /// # Safety
     ///
     /// * The uninitialized value of returned entry should be written immediately.
@@ -576,27 +288,6 @@ where
         match self.insert_and_entry_borrowing(key) {
             Ok(e) => Ok(&mut *(e.get_mut_ptr() as *mut MaybeUninit<V>)),
             Err(e) => Err(&mut *e.get_mut_ptr()),
-        }
-    }
-    pub fn iter(&self) -> UnsizedHashtableIter<'_, K, V> {
-        UnsizedHashtableIter {
-            it_0: Some(self.table0.iter()),
-            it_1: Some(self.table1.iter()),
-            it_2: Some(self.table2.iter()),
-            it_3: Some(self.table3.iter()),
-            it_4: Some(self.table4.iter()),
-            _phantom: PhantomData,
-        }
-    }
-
-    pub fn iter_mut(&mut self) -> UnsizedHashtableIterMut<'_, K, V> {
-        UnsizedHashtableIterMut {
-            it_0: Some(self.table0.iter_mut()),
-            it_1: Some(self.table1.iter_mut()),
-            it_2: Some(self.table2.iter_mut()),
-            it_3: Some(self.table3.iter_mut()),
-            it_4: Some(self.table4.iter_mut()),
-            _phantom: PhantomData,
         }
     }
 }
@@ -1009,6 +700,13 @@ impl FallbackKey {
             hash: key.fast_hash(),
         }
     }
+
+    unsafe fn new_with_hash(key: &[u8], hash: u64) -> Self {
+        Self {
+            hash,
+            key: Some(NonNull::from(key)),
+        }
+    }
 }
 
 impl PartialEq for FallbackKey {
@@ -1057,10 +755,10 @@ impl<'a, K: UnsizedKeyable + ?Sized + 'a, V: 'a> EntryRefLike
 impl<'a, K: UnsizedKeyable + ?Sized + 'a, V: 'a> EntryMutRefLike
     for UnsizedHashtableEntryMutRef<'a, K, V>
 {
-    type KeyRef = &'a K;
+    type Key = K;
     type Value = V;
 
-    fn key(&self) -> Self::KeyRef {
+    fn key(&self) -> &Self::Key {
         self.key()
     }
     fn get(&self) -> &Self::Value {
@@ -1078,56 +776,476 @@ impl<V, A> HashtableLike for UnsizedHashtable<[u8], V, A>
 where A: Allocator + Clone + Default
 {
     type Key = [u8];
-    type KeyRef<'a> = &'a [u8] where Self::Key:'a;
     type Value = V;
 
-    type EntryRef<'a> = UnsizedHashtableEntryRef<'a, [u8], V> where Self:'a, V: 'a;
-    type EntryMutRef<'a> = UnsizedHashtableEntryMutRef<'a, [u8], V> where Self:'a, V: 'a;
+    type EntryRef<'a> = UnsizedHashtableEntryRef<'a, [u8], V> where Self: 'a, V: 'a;
+    type EntryMutRef<'a> = UnsizedHashtableEntryMutRef<'a, [u8], V> where Self: 'a, V: 'a;
 
-    type Iterator<'a> = UnsizedHashtableIter<'a, [u8], V> where Self:'a, V: 'a;
-    type IteratorMut<'a> = UnsizedHashtableIterMut<'a, [u8], V> where Self:'a, V: 'a;
+    type Iterator<'a> = UnsizedHashtableIter<'a, [u8], V> where Self: 'a, V: 'a;
+    type IteratorMut<'a> = UnsizedHashtableIterMut<'a, [u8], V> where Self: 'a, V: 'a;
 
-    fn entry<'a>(&self, key_ref: Self::KeyRef<'a>) -> Option<Self::EntryRef<'_>>
-    where Self::Key: 'a {
-        self.entry(key_ref)
-    }
-    fn entry_mut<'a>(&mut self, key_ref: Self::KeyRef<'a>) -> Option<Self::EntryMutRef<'_>>
-    where Self::Key: 'a {
-        self.entry_mut(key_ref)
+    fn len(&self) -> usize {
+        self.len()
     }
 
-    fn get<'a>(&self, key_ref: Self::KeyRef<'a>) -> Option<&Self::Value>
-    where Self::Key: 'a {
-        self.get(key_ref)
-    }
-    fn get_mut<'a>(&mut self, key_ref: Self::KeyRef<'a>) -> Option<&mut Self::Value>
-    where Self::Key: 'a {
-        self.get_mut(key_ref)
+    fn entry(&self, key: &Self::Key) -> Option<Self::EntryRef<'_>> {
+        let key = key.as_bytes();
+        match key.len() {
+            _ if key.last().copied() == Some(0) => unsafe {
+                self.table4
+                    .get(&FallbackKey::new(key))
+                    .map(|x| UnsizedHashtableEntryRef(UnsizedHashtableEntryRefInner::Table4(x)))
+            },
+            0 => self.table0.get([0, 0]).map(|x| {
+                UnsizedHashtableEntryRef(UnsizedHashtableEntryRefInner::Table0(x, PhantomData))
+            }),
+            1 => self.table0.get([key[0], 0]).map(|x| {
+                UnsizedHashtableEntryRef(UnsizedHashtableEntryRefInner::Table0(x, PhantomData))
+            }),
+            2 => self.table0.get([key[0], key[1]]).map(|x| {
+                UnsizedHashtableEntryRef(UnsizedHashtableEntryRefInner::Table0(x, PhantomData))
+            }),
+            3..=8 => unsafe {
+                let mut t = [0u64; 1];
+                t[0] = read_le(key.as_ptr(), key.len());
+                let t = std::mem::transmute::<_, InlineKey<0>>(t);
+                self.table1
+                    .get(&t)
+                    .map(|x| UnsizedHashtableEntryRef(UnsizedHashtableEntryRefInner::Table1(x)))
+            },
+            9..=16 => unsafe {
+                let mut t = [0u64; 2];
+                t[0] = (key.as_ptr() as *const u64).read_unaligned();
+                t[1] = read_le(key.as_ptr().offset(8), key.len() - 8);
+                let t = std::mem::transmute::<_, InlineKey<1>>(t);
+                self.table2
+                    .get(&t)
+                    .map(|x| UnsizedHashtableEntryRef(UnsizedHashtableEntryRefInner::Table2(x)))
+            },
+            17..=24 => unsafe {
+                let mut t = [0u64; 3];
+                t[0] = (key.as_ptr() as *const u64).read_unaligned();
+                t[1] = (key.as_ptr() as *const u64).offset(1).read_unaligned();
+                t[2] = read_le(key.as_ptr().offset(16), key.len() - 16);
+                let t = std::mem::transmute::<_, InlineKey<2>>(t);
+                self.table3
+                    .get(&t)
+                    .map(|x| UnsizedHashtableEntryRef(UnsizedHashtableEntryRefInner::Table3(x)))
+            },
+            _ => unsafe {
+                self.table4
+                    .get(&FallbackKey::new(key))
+                    .map(|x| UnsizedHashtableEntryRef(UnsizedHashtableEntryRefInner::Table4(x)))
+            },
+        }
     }
 
-    unsafe fn insert<'a>(
+    fn entry_mut(&mut self, key: &[u8]) -> Option<Self::EntryMutRef<'_>> {
+        match key.len() {
+            _ if key.last().copied() == Some(0) => unsafe {
+                self.table4.get_mut(&FallbackKey::new(key)).map(|x| {
+                    UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table4(x))
+                })
+            },
+            0 => self.table0.get_mut([0, 0]).map(|x| {
+                UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table0(
+                    x,
+                    PhantomData,
+                ))
+            }),
+            1 => self.table0.get_mut([key[0], 0]).map(|x| {
+                UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table0(
+                    x,
+                    PhantomData,
+                ))
+            }),
+            2 => self.table0.get_mut([key[0], key[1]]).map(|x| {
+                UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table0(
+                    x,
+                    PhantomData,
+                ))
+            }),
+            3..=8 => unsafe {
+                let mut t = [0u64; 1];
+                t[0] = read_le(key.as_ptr(), key.len());
+                let t = std::mem::transmute::<_, InlineKey<0>>(t);
+                self.table1.get_mut(&t).map(|x| {
+                    UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table1(x))
+                })
+            },
+            9..=16 => unsafe {
+                let mut t = [0u64; 2];
+                t[0] = (key.as_ptr() as *const u64).read_unaligned();
+                t[1] = read_le(key.as_ptr().offset(8), key.len() - 8);
+                let t = std::mem::transmute::<_, InlineKey<1>>(t);
+                self.table2.get_mut(&t).map(|x| {
+                    UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table2(x))
+                })
+            },
+            17..=24 => unsafe {
+                let mut t = [0u64; 3];
+                t[0] = (key.as_ptr() as *const u64).read_unaligned();
+                t[1] = (key.as_ptr() as *const u64).offset(1).read_unaligned();
+                t[2] = read_le(key.as_ptr().offset(16), key.len() - 16);
+                let t = std::mem::transmute::<_, InlineKey<2>>(t);
+                self.table3.get_mut(&t).map(|x| {
+                    UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table3(x))
+                })
+            },
+            _ => unsafe {
+                self.table4.get_mut(&FallbackKey::new(key)).map(|x| {
+                    UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table4(x))
+                })
+            },
+        }
+    }
+
+    fn get(&self, key: &Self::Key) -> Option<&Self::Value> {
+        self.entry(key).map(|e| e.get())
+    }
+
+    fn get_mut(&mut self, key: &Self::Key) -> Option<&mut Self::Value> {
+        self.entry_mut(key)
+            .map(|e| unsafe { &mut *(e.get_mut_ptr() as *mut V) })
+    }
+
+    unsafe fn insert(
         &mut self,
-        key_ref: Self::KeyRef<'a>,
-    ) -> Result<&mut MaybeUninit<Self::Value>, &mut Self::Value>
-    where
-        Self::Key: 'a,
-    {
-        self.insert(key_ref)
+        key: &Self::Key,
+    ) -> Result<&mut MaybeUninit<Self::Value>, &mut Self::Value> {
+        match self.insert_and_entry(key) {
+            Ok(e) => Ok(&mut *(e.get_mut_ptr() as *mut MaybeUninit<V>)),
+            Err(e) => Err(&mut *e.get_mut_ptr()),
+        }
     }
-    unsafe fn insert_and_entry<'a>(
+
+    #[inline(always)]
+    unsafe fn insert_and_entry(
         &mut self,
-        key_ref: Self::KeyRef<'a>,
-    ) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>>
-    where
-        Self::Key: 'a,
-    {
-        self.insert_and_entry(key_ref)
+        key: &Self::Key,
+    ) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>> {
+        let key = key.as_bytes();
+        match key.len() {
+            _ if key.last().copied() == Some(0) => {
+                if unlikely((self.table4.len() + 1) * 2 > self.table4.capacity()) {
+                    if (self.table4.entries.len() >> 22) == 0 {
+                        self.table4.grow(2);
+                    } else {
+                        self.table4.grow(1);
+                    }
+                }
+                let s = self.arena.alloc_slice_copy(key);
+                self.table4
+                    .insert(FallbackKey::new(s))
+                    .map(|x| {
+                        UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table4(x))
+                    })
+                    .map_err(|x| {
+                        UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table4(x))
+                    })
+            }
+            0 => self
+                .table0
+                .insert([0, 0])
+                .map(|x| {
+                    UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table0(
+                        x,
+                        PhantomData,
+                    ))
+                })
+                .map_err(|x| {
+                    UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table0(
+                        x,
+                        PhantomData,
+                    ))
+                }),
+            1 => self
+                .table0
+                .insert([key[0], 0])
+                .map(|x| {
+                    UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table0(
+                        x,
+                        PhantomData,
+                    ))
+                })
+                .map_err(|x| {
+                    UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table0(
+                        x,
+                        PhantomData,
+                    ))
+                }),
+            2 => self
+                .table0
+                .insert([key[0], key[1]])
+                .map(|x| {
+                    UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table0(
+                        x,
+                        PhantomData,
+                    ))
+                })
+                .map_err(|x| {
+                    UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table0(
+                        x,
+                        PhantomData,
+                    ))
+                }),
+            3..=8 => {
+                if unlikely((self.table1.len() + 1) * 2 > self.table1.capacity()) {
+                    if (self.table1.entries.len() >> 22) == 0 {
+                        self.table1.grow(2);
+                    } else {
+                        self.table1.grow(1);
+                    }
+                }
+                let mut t = [0u64; 1];
+                t[0] = read_le(key.as_ptr(), key.len());
+                let t = std::mem::transmute::<_, InlineKey<0>>(t);
+                self.table1
+                    .insert(t)
+                    .map(|x| {
+                        UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table1(x))
+                    })
+                    .map_err(|x| {
+                        UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table1(x))
+                    })
+            }
+            9..=16 => {
+                if unlikely((self.table2.len() + 1) * 2 > self.table2.capacity()) {
+                    if (self.table2.entries.len() >> 22) == 0 {
+                        self.table2.grow(2);
+                    } else {
+                        self.table2.grow(1);
+                    }
+                }
+                let mut t = [0u64; 2];
+                t[0] = (key.as_ptr() as *const u64).read_unaligned();
+                t[1] = read_le(key.as_ptr().offset(8), key.len() - 8);
+                let t = std::mem::transmute::<_, InlineKey<1>>(t);
+                self.table2
+                    .insert(t)
+                    .map(|x| {
+                        UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table2(x))
+                    })
+                    .map_err(|x| {
+                        UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table2(x))
+                    })
+            }
+            17..=24 => {
+                if unlikely((self.table3.len() + 1) * 2 > self.table3.capacity()) {
+                    if (self.table3.entries.len() >> 22) == 0 {
+                        self.table3.grow(2);
+                    } else {
+                        self.table3.grow(1);
+                    }
+                }
+                let mut t = [0u64; 3];
+                t[0] = (key.as_ptr() as *const u64).read_unaligned();
+                t[1] = (key.as_ptr() as *const u64).offset(1).read_unaligned();
+                t[2] = read_le(key.as_ptr().offset(16), key.len() - 16);
+                let t = std::mem::transmute::<_, InlineKey<2>>(t);
+                self.table3
+                    .insert(t)
+                    .map(|x| {
+                        UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table3(x))
+                    })
+                    .map_err(|x| {
+                        UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table3(x))
+                    })
+            }
+            _ => {
+                if unlikely((self.table4.len() + 1) * 2 > self.table4.capacity()) {
+                    if (self.table4.entries.len() >> 22) == 0 {
+                        self.table4.grow(2);
+                    } else {
+                        self.table4.grow(1);
+                    }
+                }
+                let s = self.arena.alloc_slice_copy(key);
+                self.table4
+                    .insert(FallbackKey::new(s))
+                    .map(|x| {
+                        UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table4(x))
+                    })
+                    .map_err(|x| {
+                        UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table4(x))
+                    })
+            }
+        }
+    }
+
+    #[inline(always)]
+    unsafe fn insert_and_entry_with_hash(
+        &mut self,
+        key: &Self::Key,
+        hash: u64,
+    ) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>> {
+        let key = key.as_bytes();
+        match key.len() {
+            _ if key.last().copied() == Some(0) => {
+                if unlikely((self.table4.len() + 1) * 2 > self.table4.capacity()) {
+                    if (self.table4.entries.len() >> 22) == 0 {
+                        self.table4.grow(2);
+                    } else {
+                        self.table4.grow(1);
+                    }
+                }
+                let s = self.arena.alloc_slice_copy(key);
+                self.table4
+                    .insert(FallbackKey::new_with_hash(s, hash))
+                    .map(|x| {
+                        UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table4(x))
+                    })
+                    .map_err(|x| {
+                        UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table4(x))
+                    })
+            }
+            0 => self
+                .table0
+                .insert([0, 0])
+                .map(|x| {
+                    UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table0(
+                        x,
+                        PhantomData,
+                    ))
+                })
+                .map_err(|x| {
+                    UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table0(
+                        x,
+                        PhantomData,
+                    ))
+                }),
+            1 => self
+                .table0
+                .insert([key[0], 0])
+                .map(|x| {
+                    UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table0(
+                        x,
+                        PhantomData,
+                    ))
+                })
+                .map_err(|x| {
+                    UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table0(
+                        x,
+                        PhantomData,
+                    ))
+                }),
+            2 => self
+                .table0
+                .insert([key[0], key[1]])
+                .map(|x| {
+                    UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table0(
+                        x,
+                        PhantomData,
+                    ))
+                })
+                .map_err(|x| {
+                    UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table0(
+                        x,
+                        PhantomData,
+                    ))
+                }),
+            3..=8 => {
+                if unlikely((self.table1.len() + 1) * 2 > self.table1.capacity()) {
+                    if (self.table1.entries.len() >> 22) == 0 {
+                        self.table1.grow(2);
+                    } else {
+                        self.table1.grow(1);
+                    }
+                }
+                let mut t = [0u64; 1];
+                t[0] = read_le(key.as_ptr(), key.len());
+                let t = std::mem::transmute::<_, InlineKey<0>>(t);
+                self.table1
+                    .insert(t)
+                    .map(|x| {
+                        UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table1(x))
+                    })
+                    .map_err(|x| {
+                        UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table1(x))
+                    })
+            }
+            9..=16 => {
+                if unlikely((self.table2.len() + 1) * 2 > self.table2.capacity()) {
+                    if (self.table2.entries.len() >> 22) == 0 {
+                        self.table2.grow(2);
+                    } else {
+                        self.table2.grow(1);
+                    }
+                }
+                let mut t = [0u64; 2];
+                t[0] = (key.as_ptr() as *const u64).read_unaligned();
+                t[1] = read_le(key.as_ptr().offset(8), key.len() - 8);
+                let t = std::mem::transmute::<_, InlineKey<1>>(t);
+                self.table2
+                    .insert(t)
+                    .map(|x| {
+                        UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table2(x))
+                    })
+                    .map_err(|x| {
+                        UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table2(x))
+                    })
+            }
+            17..=24 => {
+                if unlikely((self.table3.len() + 1) * 2 > self.table3.capacity()) {
+                    if (self.table3.entries.len() >> 22) == 0 {
+                        self.table3.grow(2);
+                    } else {
+                        self.table3.grow(1);
+                    }
+                }
+                let mut t = [0u64; 3];
+                t[0] = (key.as_ptr() as *const u64).read_unaligned();
+                t[1] = (key.as_ptr() as *const u64).offset(1).read_unaligned();
+                t[2] = read_le(key.as_ptr().offset(16), key.len() - 16);
+                let t = std::mem::transmute::<_, InlineKey<2>>(t);
+                self.table3
+                    .insert(t)
+                    .map(|x| {
+                        UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table3(x))
+                    })
+                    .map_err(|x| {
+                        UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table3(x))
+                    })
+            }
+            _ => {
+                if unlikely((self.table4.len() + 1) * 2 > self.table4.capacity()) {
+                    if (self.table4.entries.len() >> 22) == 0 {
+                        self.table4.grow(2);
+                    } else {
+                        self.table4.grow(1);
+                    }
+                }
+                let s = self.arena.alloc_slice_copy(key);
+                self.table4
+                    .insert(FallbackKey::new_with_hash(s, hash))
+                    .map(|x| {
+                        UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table4(x))
+                    })
+                    .map_err(|x| {
+                        UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table4(x))
+                    })
+            }
+        }
     }
 
     fn iter(&self) -> Self::Iterator<'_> {
-        self.iter()
+        UnsizedHashtableIter {
+            it_0: Some(self.table0.iter()),
+            it_1: Some(self.table1.iter()),
+            it_2: Some(self.table2.iter()),
+            it_3: Some(self.table3.iter()),
+            it_4: Some(self.table4.iter()),
+            _phantom: PhantomData,
+        }
     }
     fn iter_mut(&mut self) -> Self::IteratorMut<'_> {
-        self.iter_mut()
+        UnsizedHashtableIterMut {
+            it_0: Some(self.table0.iter_mut()),
+            it_1: Some(self.table1.iter_mut()),
+            it_2: Some(self.table2.iter_mut()),
+            it_3: Some(self.table3.iter_mut()),
+            it_4: Some(self.table4.iter_mut()),
+            _phantom: PhantomData,
+        }
     }
 }

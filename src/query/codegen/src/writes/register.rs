@@ -36,6 +36,7 @@ pub fn codegen_register() {
             
             use crate::Function;
             use crate::FunctionContext;
+            use crate::FunctionDomain;
             use crate::FunctionRegistry;
             use crate::FunctionSignature;
             use crate::property::Domain;
@@ -75,12 +76,12 @@ pub fn codegen_register() {
             "
                 pub fn register_{n_args}_arg<{arg_generics_bound} O: ArgType, F, G>(
                     &mut self,
-                    name: &'static str,
+                    name: &str,
                     property: FunctionProperty,
                     calc_domain: F,
                     func: G,
                 ) where
-                    F: Fn({arg_f_closure_sig}) -> Option<O::Domain> + 'static + Clone + Copy,
+                    F: Fn({arg_f_closure_sig}) -> FunctionDomain<O> + 'static + Clone + Copy,
                     G: Fn({arg_g_closure_sig} FunctionContext) -> O::Scalar + 'static + Clone + Copy,
                 {{
                     self.register_passthrough_nullable_{n_args}_arg::<{arg_generics} O, _, _>(
@@ -142,42 +143,17 @@ pub fn codegen_register() {
             .map(|n| format!("arg{n}.has_null"))
             .join("||");
 
-        let null_overloads = (0..n_args)
-            .map(|n| {
-                let null_types = (0..n_args)
-                    .map(|nth| {
-                        if nth == n {
-                            "NullType,".to_string()
-                        } else {
-                            format!("NullableType<I{}>,", nth + 1)
-                        }
-                    })
-                    .join("");
-                let n_widecards = "_,".repeat(n_args);
-                format!(
-                    "
-                        self.register_{n_args}_arg_core::<{null_types} NullType, _, _>(
-                            name,
-                            property.clone(),
-                            |{n_widecards}| Some(()),
-                            |{n_widecards} _| Ok(Value::Scalar(())),
-                        );
-                    "
-                )
-            })
-            .join("");
-
         writeln!(
             source,
             "
                 pub fn register_passthrough_nullable_{n_args}_arg<{arg_generics_bound} O: ArgType, F, G>(
                     &mut self,
-                    name: &'static str,
+                    name: &str,
                     property: FunctionProperty,
                     calc_domain: F,
                     func: G,
                 ) where
-                    F: Fn({arg_f_closure_sig}) -> Option<O::Domain> + 'static + Clone + Copy,
+                    F: Fn({arg_f_closure_sig}) -> FunctionDomain<O> + 'static + Clone + Copy,
                     G: for<'a> Fn({arg_g_closure_sig} FunctionContext) -> Result<Value<O>, String> + 'static + Clone + Copy,
                 {{
                     let has_nullable = &[{arg_sig_type} O::data_type()]
@@ -190,22 +166,30 @@ pub fn codegen_register() {
                         name
                     );
 
-                    {null_overloads}
-
                     self.register_{n_args}_arg_core::<{arg_generics} O, _, _>(name, property.clone(), calc_domain, func);
 
                     self.register_{n_args}_arg_core::<{arg_nullable_generics} NullableType<O>, _, _>(
                         name,
                         property,
                         move |{closure_args}| {{
-                            let value = match ({closure_args_value}) {{
-                                ({some_values}) => Some(calc_domain({values})?),
-                                _ => None,
-                            }};
-                            Some(NullableDomain {{
-                                has_null: {any_arg_has_null},
-                                value: value.map(Box::new),
-                            }})
+                            match ({closure_args_value}) {{
+                                ({some_values}) => {{
+                                    if let Some(domain) = calc_domain({values}).normalize() {{
+                                        FunctionDomain::Domain(NullableDomain {{
+                                            has_null: {any_arg_has_null},
+                                            value: Some(Box::new(domain)),
+                                        }})
+                                    }} else {{
+                                        FunctionDomain::MayThrow
+                                    }}
+                                }},
+                                _ => {{
+                                    FunctionDomain::Domain(NullableDomain {{
+                                        has_null: true,
+                                        value: None,
+                                    }})
+                                }},
+                            }}
                         }},
                         passthrough_nullable_{n_args}_arg(func),
                     );
@@ -257,43 +241,22 @@ pub fn codegen_register() {
             .map(|n| n + 1)
             .map(|n| format!("value{n}"))
             .join(",");
-        let n_widecards = "_,".repeat(n_args);
-
-        let null_overloads = (0..n_args)
-            .map(|n| {
-                let null_types = (0..n_args)
-                    .map(|nth| {
-                        if nth == n {
-                            "NullType,".to_string()
-                        } else {
-                            format!("NullableType<I{}>,", nth + 1)
-                        }
-                    })
-                    .join("");
-                format!(
-                    "
-                        self.register_{n_args}_arg_core::<{null_types} NullType, _, _>(
-                            name,
-                            property.clone(),
-                            |{n_widecards}| Some(()),
-                            |{n_widecards} _| Ok(Value::Scalar(())),
-                        );
-                    "
-                )
-            })
-            .join("");
+        let any_arg_has_null = (0..n_args)
+            .map(|n| n + 1)
+            .map(|n| format!("arg{n}.has_null"))
+            .join("||");
 
         writeln!(
             source,
             "
                 pub fn register_combine_nullable_{n_args}_arg<{arg_generics_bound} O: ArgType, F, G>(
                     &mut self,
-                    name: &'static str,
+                    name: &str,
                     property: FunctionProperty,
                     calc_domain: F,
                     func: G,
                 ) where
-                    F: Fn({arg_f_closure_sig}) -> Option<O::Domain> + 'static + Clone + Copy,
+                    F: Fn({arg_f_closure_sig}) -> FunctionDomain<NullableType<O>> + 'static + Clone + Copy,
                     G: for<'a> Fn({arg_g_closure_sig} FunctionContext) -> Result<Value<NullableType<O>>, String> + 'static + Clone + Copy,
                 {{
                     let has_nullable = &[{arg_sig_type} O::data_type()]
@@ -306,12 +269,10 @@ pub fn codegen_register() {
                         name
                     );
 
-                    {null_overloads}
-
                     self.register_{n_args}_arg_core::<{arg_generics} NullableType<O>, _, _>(
                         name,
                         property.clone(),
-                        |{n_widecards}| None,
+                        calc_domain,
                         func
                     );
 
@@ -319,14 +280,24 @@ pub fn codegen_register() {
                         name,
                         property,
                         move |{closure_args}| {{
-                            let value = match ({closure_args_value}) {{
-                                ({some_values}) => Some(calc_domain({values})?),
-                                _ => None,
-                            }};
-                            Some(NullableDomain {{
-                                has_null: true,
-                                value: value.map(Box::new),
-                            }})
+                            match ({closure_args_value}) {{
+                                ({some_values}) => {{
+                                    if let Some(domain) = calc_domain({values}).normalize() {{
+                                        FunctionDomain::Domain(NullableDomain {{
+                                            has_null: {any_arg_has_null} || domain.has_null,
+                                            value: domain.value,
+                                        }})
+                                    }} else {{
+                                        FunctionDomain::MayThrow
+                                    }}
+                                }}
+                                _ => {{
+                                    FunctionDomain::Domain(NullableDomain {{
+                                        has_null: true,
+                                        value: None,
+                                    }})
+                                }},
+                            }}
                         }},
                         combine_nullable_{n_args}_arg(func),
                     );
@@ -363,20 +334,20 @@ pub fn codegen_register() {
             "
                 pub fn register_{n_args}_arg_core<{arg_generics_bound} O: ArgType, F, G>(
                     &mut self,
-                    name: &'static str,
+                    name: &str,
                     property: FunctionProperty,
                     calc_domain: F,
                     func: G,
                 ) where
-                    F: Fn({arg_f_closure_sig}) -> Option<O::Domain> + 'static + Clone + Copy,
+                    F: Fn({arg_f_closure_sig}) -> FunctionDomain<O> + 'static + Clone + Copy,
                     G: for <'a> Fn({arg_g_closure_sig} FunctionContext) -> Result<Value<O>, String> + 'static + Clone + Copy,
                 {{
                     self.funcs
-                        .entry(name)
+                        .entry(name.to_string())
                         .or_insert_with(Vec::new)
                         .push(Arc::new(Function {{
                             signature: FunctionSignature {{
-                                name,
+                                name: name.to_string(),
                                 args_type: vec![{arg_sig_type}],
                                 return_type: O::data_type(),
                                 property,
@@ -820,8 +791,8 @@ pub fn codegen_register() {
             source,
             "
                 fn erase_calc_domain_generic_{n_args}_arg<{arg_generics_bound} O: ArgType>(
-                    func: impl Fn({arg_f_closure_sig}) -> Option<O::Domain>,
-                ) -> impl Fn(&[Domain]) -> Option<Domain> {{
+                    func: impl Fn({arg_f_closure_sig}) -> FunctionDomain<O>,
+                ) -> impl Fn(&[Domain]) -> FunctionDomain<AnyType> {{
                     move |args| {{
                         {let_args}
                         func({func_args}).map(O::upcast_domain)

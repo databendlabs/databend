@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::Display;
 use std::ops::Range;
 
 use chrono::DateTime;
@@ -177,6 +178,13 @@ impl ArgType for TimestampType {
         DataType::Timestamp
     }
 
+    fn full_domain() -> Self::Domain {
+        SimpleDomain {
+            min: TIMESTAMP_MIN,
+            max: TIMESTAMP_MAX,
+        }
+    }
+
     fn create_builder(capacity: usize, _generics: &GenericMap) -> Self::ColumnBuilder {
         Vec::with_capacity(capacity)
     }
@@ -218,6 +226,6 @@ pub fn string_to_timestamp(ts_str: impl AsRef<[u8]>, tz: Tz) -> Option<DateTime<
 }
 
 #[inline]
-pub fn timestamp_to_string(ts: i64, tz: Tz) -> String {
-    ts.to_timestamp(tz).format(TIMESTAMP_FORMAT).to_string()
+pub fn timestamp_to_string(ts: i64, tz: Tz) -> impl Display {
+    ts.to_timestamp(tz).format(TIMESTAMP_FORMAT)
 }

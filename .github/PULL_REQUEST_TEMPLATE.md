@@ -4,4 +4,4 @@ I hereby agree to the terms of the CLA available at: https://databend.rs/dev/pol
 
 Summary about this PR
 
-Fixes #issue
+Closes #issue

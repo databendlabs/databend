@@ -17,18 +17,17 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_catalog::catalog::CatalogManager;
-use common_catalog::catalog::CATALOG_DEFAULT;
+use common_catalog::catalog_kind::CATALOG_DEFAULT;
+use common_catalog::plan::Expression;
+use common_catalog::plan::PrewhereInfo;
+use common_catalog::plan::Projection;
+use common_catalog::plan::PushDownInfo;
 use common_catalog::table_context::TableContext;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::FunctionFactory;
-use common_planner::extras::Extras;
-use common_planner::extras::PrewhereInfo;
-use common_planner::extras::StageKind;
-use common_planner::plans::Projection;
-use common_planner::Expression;
 use itertools::Itertools;
 
 use super::AggregateFinal;
@@ -46,6 +45,7 @@ use crate::executor::util::check_physical;
 use crate::executor::ColumnID;
 use crate::executor::EvalScalar;
 use crate::executor::ExpressionBuilderWithoutRenaming;
+use crate::executor::FragmentKind;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalScalar;
 use crate::executor::SortDesc;
@@ -436,10 +436,10 @@ impl PhysicalPlanBuilder {
                             let mut builder = PhysicalScalarBuilder::new(&input_schema);
                             keys.push(builder.build(scalar)?);
                         }
-                        StageKind::Normal
+                        FragmentKind::Normal
                     }
-                    Exchange::Broadcast => StageKind::Expansive,
-                    Exchange::Merge => StageKind::Merge,
+                    Exchange::Broadcast => FragmentKind::Expansive,
+                    Exchange::Merge => FragmentKind::Merge,
                 };
                 Ok(PhysicalPlan::Exchange(PhysicalExchange {
                     input,
@@ -478,7 +478,7 @@ impl PhysicalPlanBuilder {
         scan: &PhysicalScan,
         table_schema: &DataSchemaRef,
         has_inner_column: bool,
-    ) -> Result<Extras> {
+    ) -> Result<PushDownInfo> {
         let metadata = self.metadata.read().clone();
 
         let projection =
@@ -592,12 +592,13 @@ impl PhysicalPlanBuilder {
             })
             .transpose()?;
 
-        Ok(Extras {
+        Ok(PushDownInfo {
             projection: Some(projection),
             filters: push_down_filters.unwrap_or_default(),
             prewhere: prewhere_info,
             limit: scan.limit,
             order_by: order_by.unwrap_or_default(),
+            stage: None,
         })
     }
 }

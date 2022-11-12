@@ -26,13 +26,13 @@ use crate::sql::executor::PhysicalPlan;
 #[allow(clippy::large_enum_variant)]
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub enum FragmentPayload {
-    PlanV2(PhysicalPlan),
+    Plan(PhysicalPlan),
 }
 
 impl Debug for FragmentPayload {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
-            FragmentPayload::PlanV2(plan) => write!(f, "PhysicalPlan({:?})", plan),
+            FragmentPayload::Plan(plan) => write!(f, "PhysicalPlan({:?})", plan),
         }
     }
 }
@@ -40,7 +40,7 @@ impl Debug for FragmentPayload {
 impl FragmentPayload {
     pub fn schema(&self) -> Result<DataSchemaRef> {
         match self {
-            FragmentPayload::PlanV2(plan) => plan.output_schema(),
+            FragmentPayload::Plan(plan) => plan.output_schema(),
         }
     }
 }

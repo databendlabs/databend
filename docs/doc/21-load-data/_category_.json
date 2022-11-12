@@ -1,7 +1,3 @@
- {
-   "label": "Load Data",
-   "link": {
-     "type": "generated-index",
-     "slug": "/load-data"
-   }
- }
+{
+  "label": "Load Data"
+}

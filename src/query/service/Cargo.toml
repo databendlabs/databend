@@ -37,10 +37,9 @@ common-datavalues = { path = "../datavalues" }
 common-exception = { path = "../../common/exception" }
 common-formats = { path = "../formats" }
 common-functions = { path = "../functions" }
-common-fuse-meta = { path = "../storages/fuse-meta" }
 common-grpc = { path = "../../common/grpc" }
 common-hashtable = { path = "../../common/hashtable" }
-common-hive-meta-store = { path = "../storages/hive-meta-store", optional = true }
+common-hive-meta-store = { path = "../storages/hive/hive-meta-store", optional = true }
 common-http = { path = "../../common/http" }
 common-io = { path = "../../common/io" }
 common-management = { path = "../management" }
@@ -54,19 +53,24 @@ common-pipeline-core = { path = "../pipeline/core" }
 common-pipeline-sinks = { path = "../pipeline/sinks" }
 common-pipeline-sources = { path = "../pipeline/sources" }
 common-pipeline-transforms = { path = "../pipeline/transforms" }
-common-planner = { path = "../planner" }
 common-settings = { path = "../settings" }
 common-sql = { path = "../sql" }
 common-storage = { path = "../../common/storage" }
 common-storages-cache = { path = "../storages/cache" }
-common-storages-constants = { path = "../storages/constants" }
 common-storages-factory = { path = "../storages/factory" }
-common-storages-fuse = { path = "../storages/fuse" }
-common-storages-hive = { path = "../storages/hive", optional = true }
+common-storages-fuse = { path = "../storages/fuse/fuse" }
+common-storages-fuse-result = { path = "../storages/fuse/fuse-result" }
+common-storages-hive = { path = "../storages/hive/hive", optional = true }
 common-storages-index = { path = "../storages/index" }
-common-storages-preludes = { path = "../storages/preludes" }
+common-storages-information-schema = { path = "../storages/information-schema" }
+common-storages-memory = { path = "../storages/memory" }
+common-storages-null = { path = "../storages/null" }
+common-storages-random = { path = "../storages/random" }
 common-storages-share = { path = "../storages/share" }
-common-streams = { path = "../streams" }
+common-storages-stage = { path = "../storages/stage" }
+common-storages-system = { path = "../storages/system" }
+common-storages-table-meta = { path = "../storages/table-meta" }
+common-storages-view = { path = "../storages/view" }
 common-tracing = { path = "../../common/tracing" }
 common-users = { path = "../users" }
 
@@ -80,11 +84,14 @@ async-recursion = "1.0.0"
 async-stream = "0.3.3"
 async-trait = { version = "0.1.57", package = "async-trait-fn" }
 backon = "0.2"
+base64 = "0.13.0"
+bstr = "1.0.1"
 bumpalo = "3.11.0"
 byteorder = "1.4.3"
 bytes = "1.2.1"
 chrono = "0.4.22"
 chrono-tz = "0.6.3"
+dashmap = "5.4"
 futures = "0.3.24"
 futures-util = "0.3.24"
 headers = "0.3.8"
@@ -100,6 +107,7 @@ opensrv-mysql = "0.2.0"
 openssl = { version = "0.10.41", features = ["vendored"] }
 parking_lot = "0.12.1"
 petgraph = "0.6.2"
+pin-project-lite = "0.2.9"
 poem = { version = "1", features = ["rustls", "multipart", "compression"] }
 primitive-types = "0.12.0"
 rand = "0.8.5"

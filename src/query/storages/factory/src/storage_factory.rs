@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 pub use common_catalog::catalog::StorageDescription;
@@ -20,13 +19,13 @@ use common_config::Config;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::TableInfo;
-use parking_lot::RwLock;
+use common_storages_memory::MemoryTable;
+use common_storages_null::NullTable;
+use common_storages_random::RandomTable;
+use common_storages_view::view_table::ViewTable;
+use dashmap::DashMap;
 
-use super::random::RandomTable;
 use crate::fuse::FuseTable;
-use crate::memory::MemoryTable;
-use crate::null::NullTable;
-use crate::view::ViewTable;
 use crate::Table;
 
 pub trait StorageCreator: Send + Sync {
@@ -64,12 +63,12 @@ pub struct Storage {
 
 #[derive(Default)]
 pub struct StorageFactory {
-    storages: RwLock<HashMap<String, Storage>>,
+    storages: DashMap<String, Storage>,
 }
 
 impl StorageFactory {
     pub fn create(conf: Config) -> Self {
-        let mut creators: HashMap<String, Storage> = Default::default();
+        let creators: DashMap<String, Storage> = Default::default();
 
         // Register memory table engine.
         if conf.query.table_engine_memory_enabled {
@@ -103,15 +102,12 @@ impl StorageFactory {
             descriptor: Arc::new(RandomTable::description),
         });
 
-        StorageFactory {
-            storages: RwLock::new(creators),
-        }
+        StorageFactory { storages: creators }
     }
 
     pub fn get_table(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
         let engine = table_info.engine().to_uppercase();
-        let lock = self.storages.read();
-        let factory = lock.get(&engine).ok_or_else(|| {
+        let factory = self.storages.get(&engine).ok_or_else(|| {
             ErrorCode::UnknownTableEngine(format!("Unknown table engine {}", engine))
         })?;
 
@@ -120,10 +116,10 @@ impl StorageFactory {
     }
 
     pub fn get_storage_descriptors(&self) -> Vec<StorageDescription> {
-        let lock = self.storages.read();
-        let mut descriptors = Vec::with_capacity(lock.len());
-        for value in lock.values() {
-            descriptors.push(value.descriptor.description())
+        let mut descriptors = Vec::with_capacity(self.storages.len());
+        let it = self.storages.iter();
+        for entry in it {
+            descriptors.push(entry.value().descriptor.description())
         }
         descriptors
     }
