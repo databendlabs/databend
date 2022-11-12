@@ -128,7 +128,7 @@ CREATE TABLE [IF NOT EXISTS] [db.]table_name
     ...
 
 's3://<bucket>/[<path>]' 
-CONNECTION = (AWS_KEY_ID = '<your_aws_key_id>' AWS_SECRECT_KEY = '<your_aws_secret_key>' ENDPOINT_URL = '<endpoint_url>');
+CONNECTION = (ACCESS_KEY_ID = '<your_aws_key_id>' SECRET_ACCESS_KEY = '<your_aws_secret_key>' ENDPOINT_URL = '<endpoint_url>' ENABLE_VIRTUAL_HOST_STYLE = 'true'|'false');
 ```
 
 | Parameter  | Description | Required |
