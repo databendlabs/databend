@@ -47,7 +47,7 @@ impl<T: PrimitiveType> KeysColumnIter<T> for FixedKeysColumnIter<T> {
     type Iterator<'a> = Iter<'a, T> where Self: 'a, T: 'a;
 
     fn iter(&self) -> Self::Iterator<'_> {
-        self.column.values().into_iter()
+        self.column.iter()
     }
 }
 

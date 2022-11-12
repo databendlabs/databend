@@ -453,6 +453,7 @@ pub trait HashtableLike {
         &mut self,
         key_ref: &Self::Key,
     ) -> Result<&mut MaybeUninit<Self::Value>, &mut Self::Value>;
+
     /// # Safety
     ///
     /// The uninitialized value of returned entry should be written immediately.
@@ -461,6 +462,9 @@ pub trait HashtableLike {
         key_ref: &Self::Key,
     ) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>>;
 
+    /// # Safety
+    ///
+    /// The uninitialized value of returned entry should be written immediately.
     unsafe fn insert_and_entry_with_hash(
         &mut self,
         key_ref: &Self::Key,

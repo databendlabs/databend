@@ -80,7 +80,7 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
             params,
             method,
             hash_table,
-            area: Some(Area::new()),
+            area: Some(Area::create()),
             is_generated: false,
             states_dropped: false,
         })

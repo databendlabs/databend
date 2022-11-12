@@ -254,19 +254,19 @@ where
     }
 
     fn entry(&self, key_ref: &Self::Key) -> Option<Self::EntryRef<'_>> {
-        self.entry(&key_ref)
+        self.entry(key_ref)
     }
 
     fn entry_mut(&mut self, key_ref: &Self::Key) -> Option<Self::EntryMutRef<'_>> {
-        self.entry_mut(&key_ref)
+        self.entry_mut(key_ref)
     }
 
     fn get(&self, key_ref: &Self::Key) -> Option<&Self::Value> {
-        self.get(&key_ref)
+        self.get(key_ref)
     }
 
     fn get_mut(&mut self, key_ref: &Self::Key) -> Option<&mut Self::Value> {
-        self.get_mut(&key_ref)
+        self.get_mut(key_ref)
     }
 
     unsafe fn insert(

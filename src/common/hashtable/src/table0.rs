@@ -364,7 +364,7 @@ impl<'a, K: Keyable, V> EntryMutRefLike for &'a mut Entry<K, V> {
     type Value = V;
 
     fn key(&self) -> &Self::Key {
-        unsafe { (*self).key.assume_init_ref() }
+        unsafe { self.key.assume_init_ref() }
     }
     fn get(&self) -> &Self::Value {
         unsafe { self.val.assume_init_ref() }

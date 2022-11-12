@@ -22,7 +22,7 @@ pub struct Area {
 }
 
 impl Area {
-    pub fn new() -> Area {
+    pub fn create() -> Area {
         Area { bump: Bump::new() }
     }
 

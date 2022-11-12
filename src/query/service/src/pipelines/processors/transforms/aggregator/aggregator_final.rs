@@ -76,7 +76,7 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
     FinalAggregator<HAS_AGG, Method>
 {
     pub fn create(method: Method, params: Arc<AggregatorParams>) -> Result<Self> {
-        let mut area = Area::new();
+        let mut area = Area::create();
         let hashtable = method.create_hash_table()?;
         let temp_place = if params.aggregate_functions.is_empty() {
             None
