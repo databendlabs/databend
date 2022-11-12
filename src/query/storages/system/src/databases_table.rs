@@ -16,9 +16,13 @@ use std::sync::Arc;
 
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_expression::Chunk;
+use common_expression::Column;
+use common_expression::DataField;
+use common_expression::DataSchemaRefExt;
+use common_expression::DataType;
+use common_expression::SchemaDataType;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -38,7 +42,7 @@ impl AsyncSystemTable for DatabasesTable {
         &self.table_info
     }
 
-    async fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
+    async fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<Chunk> {
         let tenant = ctx.get_tenant();
         let catalog = ctx.get_catalog(ctx.get_current_catalog().as_str())?;
         let databases = catalog.list_databases(tenant.as_str()).await?;
@@ -48,15 +52,17 @@ impl AsyncSystemTable for DatabasesTable {
             .map(|database| database.name().as_bytes())
             .collect();
 
-        Ok(DataBlock::create(self.table_info.schema(), vec![
-            Series::from_data(db_names),
-        ]))
+        let rows_len = db_names.len();
+        Ok(Chunk::new(
+            vec![(Value::Column(Column::from_data(db_names)), DataType::String)],
+            rows_len,
+        ))
     }
 }
 
 impl DatabasesTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
-        let schema = DataSchemaRefExt::create(vec![DataField::new("name", Vu8::to_data_type())]);
+        let schema = DataSchemaRefExt::create(vec![DataField::new("name", SchemaDataType::String)]);
 
         let table_info = TableInfo {
             desc: "'system'.'databases'".to_string(),

@@ -14,6 +14,7 @@
 
 use std::any::Any;
 use std::io::ErrorKind;
+use std::ops::Range;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -21,9 +22,9 @@ use backon::ExponentialBackoff;
 use backon::Retryable;
 use common_catalog::plan::StageTableInfo;
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::Chunk;
 use common_formats::output_format::OutputFormat;
 use common_formats::FileFormatOptionsExt;
 use common_pipeline_core::processors::port::InputPort;
@@ -37,8 +38,8 @@ use tracing::warn;
 #[derive(Debug)]
 enum State {
     None,
-    NeedSerialize(DataBlock),
-    NeedWrite(Vec<u8>, Option<DataBlock>),
+    NeedSerialize(Chunk),
+    NeedWrite(Vec<u8>, Option<Chunk>),
     Finished,
 }
 
@@ -50,7 +51,7 @@ pub struct StageTableSink {
 
     table_info: StageTableInfo,
     working_buffer: Vec<u8>,
-    working_datablocks: Vec<DataBlock>,
+    working_datablocks: Vec<Chunk>,
     output_format: Box<dyn OutputFormat>,
     write_header: bool,
 
@@ -206,7 +207,11 @@ impl Processor for StageTableSink {
                 if !self.single {
                     for i in (0..datablock.num_rows()).step_by(1024) {
                         let end = (i + 1024).min(datablock.num_rows());
-                        let small_block = datablock.slice(i, end - i);
+                        let range = Range {
+                            start: i,
+                            end: end - i,
+                        };
+                        let small_block = datablock.slice(range);
 
                         let bs = self.output_format.serialize_block(&small_block)?;
                         self.working_buffer.extend_from_slice(bs.as_slice());

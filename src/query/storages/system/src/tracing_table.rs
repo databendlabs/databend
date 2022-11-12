@@ -25,10 +25,15 @@ use common_catalog::plan::Partitions;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::Chunk;
+use common_expression::ColumnBuilder;
+use common_expression::DataField;
+use common_expression::DataSchemaRefExt;
+use common_expression::DataType;
+use common_expression::Scalar;
+use common_expression::SchemaDataType;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -51,7 +56,8 @@ pub struct TracingTable {
 
 impl TracingTable {
     pub fn create(table_id: u64) -> Self {
-        let schema = DataSchemaRefExt::create(vec![DataField::new("entry", Vu8::to_data_type())]);
+        let schema =
+            DataSchemaRefExt::create(vec![DataField::new("entry", SchemaDataType::String)]);
 
         let table_info = TableInfo {
             desc: "'system'.'tracing'".to_string(),
@@ -139,7 +145,7 @@ struct TracingSource {
     rows_pre_block: usize,
     schema: DataSchemaRef,
     tracing_files: VecDeque<String>,
-    data_blocks: VecDeque<DataBlock>,
+    data_blocks: VecDeque<Chunk>,
 }
 
 impl TracingSource {
@@ -162,7 +168,7 @@ impl TracingSource {
 impl SyncSource for TracingSource {
     const NAME: &'static str = "system.tracing";
 
-    fn generate(&mut self) -> Result<Option<DataBlock>> {
+    fn generate(&mut self) -> Result<Option<Chunk>> {
         loop {
             if let Some(data_block) = self.data_blocks.pop_front() {
                 return Ok(Some(data_block));
@@ -176,26 +182,24 @@ impl SyncSource for TracingSource {
                 let max_rows = self.rows_pre_block;
                 let buffer = BufReader::new(File::open(file_name.clone())?);
 
-                let mut entry_column = MutableStringColumn::with_capacity(max_rows);
-
+                let mut entry_column = ColumnBuilder::with_capacity(&DataType::String, max_rows);
                 for (index, line) in buffer.lines().enumerate() {
                     if index != 0 && index % max_rows == 0 {
-                        self.data_blocks
-                            .push_back(DataBlock::create(self.schema.clone(), vec![Arc::new(
-                                entry_column.finish(),
-                            )]));
+                        self.data_blocks.push_back(Chunk::new(
+                            vec![(Value::Column(entry_column.build()), DataType::String)],
+                            entry_column.len(),
+                        ));
 
-                        entry_column = MutableStringColumn::with_capacity(max_rows);
+                        entry_column = ColumnBuilder::with_capacity(&DataType::String, max_rows);
                     }
-
-                    entry_column.push(line.unwrap().as_bytes());
+                    entry_column.push(Scalar::String(line.unwrap().as_bytes().to_vec()).as_ref());
                 }
 
                 if !entry_column.is_empty() {
-                    self.data_blocks
-                        .push_back(DataBlock::create(self.schema.clone(), vec![Arc::new(
-                            entry_column.finish(),
-                        )]));
+                    self.data_blocks.push_back(Chunk::new(
+                        vec![(Value::Column(entry_column.build()), DataType::String)],
+                        entry_column.len(),
+                    ));
                 }
             }
         }

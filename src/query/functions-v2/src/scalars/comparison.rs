@@ -345,6 +345,82 @@ fn vectorize_regexp(
     }
 }
 
+#[inline]
+pub fn is_like_pattern_escape(c: u8) -> bool {
+    c == b'%' || c == b'_' || c == b'\\'
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+pub enum PatternType {
+    // e.g. 'Arrow'
+    OrdinalStr,
+    // e.g. 'A%row'
+    PatternStr,
+    // e.g. '%rrow'
+    StartOfPercent,
+    // e.g. 'Arro%'
+    EndOfPercent,
+}
+
+/// Check the like pattern type.
+///
+/// is_pruning: indicate whether to be called on range_filter for pruning.
+///
+/// For example:
+///
+/// 'a\\%row'
+/// '\\%' will be escaped to a percent. Need transform to `a%row`.
+///
+/// If is_pruning is true, will be called on range_filter:L379.
+/// OrdinalStr is returned, because the pattern can be transformed by range_filter:L382.
+///
+/// If is_pruning is false, will be called on like.rs:L74.
+/// PatternStr is returned, because the pattern cannot be used directly on like.rs:L76.
+#[inline]
+pub fn check_pattern_type(pattern: &[u8], is_pruning: bool) -> PatternType {
+    let len = pattern.len();
+    if len == 0 {
+        return PatternType::OrdinalStr;
+    }
+
+    let mut index = 0;
+    let start_percent = pattern[0] == b'%';
+    if start_percent {
+        if is_pruning {
+            return PatternType::PatternStr;
+        }
+        index += 1;
+    }
+
+    while index < len {
+        match pattern[index] {
+            b'_' => return PatternType::PatternStr,
+            b'%' => {
+                if index == len - 1 && !start_percent {
+                    return PatternType::EndOfPercent;
+                }
+                return PatternType::PatternStr;
+            }
+            b'\\' => {
+                if index < len - 1 {
+                    index += 1;
+                    if !is_pruning && is_like_pattern_escape(pattern[index]) {
+                        return PatternType::PatternStr;
+                    }
+                }
+            }
+            _ => {}
+        }
+        index += 1;
+    }
+
+    if start_percent {
+        PatternType::StartOfPercent
+    } else {
+        PatternType::OrdinalStr
+    }
+}
+
 /// Transform the like pattern to regex pattern.
 /// e.g. 'Hello\._World%\%' tranform to '^Hello\\\..World.*%$'.
 #[inline]

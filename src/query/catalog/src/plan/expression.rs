@@ -16,36 +16,35 @@ use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use common_datavalues::format_data_type_sql;
-use common_datavalues::DataField;
-use common_datavalues::DataTypeImpl;
-use common_datavalues::DataValue;
+use common_expression::DataField;
+use common_expression::Scalar;
+use common_expression::SchemaDataType;
 
 /// Serializable and desugared representation of `Scalar`.
 #[derive(Clone, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum Expression {
     IndexedVariable {
         name: String,
-        data_type: DataTypeImpl,
+        data_type: SchemaDataType,
     },
     Constant {
-        value: DataValue,
-        data_type: DataTypeImpl,
+        value: Scalar,
+        data_type: SchemaDataType,
     },
     Function {
         name: String,
         args: Vec<Expression>,
-        return_type: DataTypeImpl,
+        return_type: SchemaDataType,
     },
 
     Cast {
         input: Box<Expression>,
-        target: DataTypeImpl,
+        target: SchemaDataType,
     },
 }
 
 impl Expression {
-    pub fn data_type(&self) -> DataTypeImpl {
+    pub fn data_type(&self) -> SchemaDataType {
         match self {
             Expression::Constant { data_type, .. } => data_type.clone(),
             Expression::Function { return_type, .. } => return_type.clone(),
@@ -63,7 +62,7 @@ impl Expression {
     /// Display with readable variable name.
     pub fn column_name(&self) -> String {
         match self {
-            Expression::Constant { value, .. } => common_datavalues::format_datavalue_sql(value),
+            Expression::Constant { value, .. } => value.format_scalar_sql(),
             Expression::Function { name, args, .. } => match name.as_str() {
                 "+" | "-" | "*" | "/" | "%" | ">=" | "<=" | "=" | "!=" | ">" | "<" | "or"
                 | "and"
@@ -85,11 +84,9 @@ impl Expression {
                     format!("{}({})", name, args)
                 }
             },
-            Expression::Cast { input, target } => format!(
-                "CAST({} AS {})",
-                input.column_name(),
-                format_data_type_sql(target)
-            ),
+            Expression::Cast { input, target } => {
+                format!("CAST({} AS {})", input.column_name(), target.sql_name())
+            }
             Expression::IndexedVariable { name, .. } => name.clone(),
         }
     }
@@ -109,7 +106,7 @@ impl Display for Expression {
                     .join(", ")
             ),
             Expression::Cast { input, target } => {
-                write!(f, "CAST({} AS {})", input, format_data_type_sql(target))
+                write!(f, "CAST({} AS {})", input, target.sql_name())
             }
             Expression::IndexedVariable { name, .. } => write!(f, "${name}"),
         }
@@ -139,7 +136,7 @@ impl Debug for Expression {
                 }
             },
             Expression::Cast { input, target } => {
-                write!(f, "cast({:?} as {})", input, format_data_type_sql(target))
+                write!(f, "cast({:?} as {})", input, target.sql_name())
             }
             Expression::IndexedVariable { name, .. } => write!(f, "{:#}", name),
         }

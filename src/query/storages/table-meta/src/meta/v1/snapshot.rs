@@ -17,7 +17,7 @@ use std::ops::Add;
 use chrono::DateTime;
 use chrono::Utc;
 use common_base::base::uuid::Uuid;
-use common_datavalues::DataSchema;
+use common_expression::DataSchema;
 use serde::Deserialize;
 use serde::Serialize;
 

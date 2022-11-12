@@ -17,9 +17,13 @@ use std::sync::Arc;
 use common_catalog::catalog_kind::CATALOG_DEFAULT;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_expression::Chunk;
+use common_expression::Column;
+use common_expression::DataField;
+use common_expression::DataSchemaRefExt;
+use common_expression::DataType;
+use common_expression::SchemaDataType;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -39,7 +43,7 @@ impl AsyncSystemTable for ColumnsTable {
         &self.table_info
     }
 
-    async fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
+    async fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<Chunk> {
         let rows = self.dump_table_columns(ctx).await?;
         let mut names: Vec<Vec<u8>> = Vec::with_capacity(rows.len());
         let mut tables: Vec<Vec<u8>> = Vec::with_capacity(rows.len());
@@ -49,13 +53,13 @@ impl AsyncSystemTable for ColumnsTable {
         let mut default_exprs: Vec<Vec<u8>> = Vec::with_capacity(rows.len());
         let mut is_nullables: Vec<Vec<u8>> = Vec::with_capacity(rows.len());
         let mut comments: Vec<Vec<u8>> = Vec::with_capacity(rows.len());
+        let rows_len = rows.len();
         for (database_name, table_name, field) in rows.into_iter() {
             names.push(field.name().clone().into_bytes());
             tables.push(table_name.into_bytes());
             databases.push(database_name.into_bytes());
 
-            let non_null_type = remove_nullable(field.data_type());
-            let data_type = format_data_type_sql(&non_null_type);
+            let data_type = field.data_type().sql_name();
             data_types.push(data_type.into_bytes());
 
             let mut default_kind = "".to_string();
@@ -75,30 +79,48 @@ impl AsyncSystemTable for ColumnsTable {
             comments.push("".to_string().into_bytes());
         }
 
-        Ok(DataBlock::create(self.table_info.schema(), vec![
-            Series::from_data(names),
-            Series::from_data(databases),
-            Series::from_data(tables),
-            Series::from_data(data_types),
-            Series::from_data(default_kinds),
-            Series::from_data(default_exprs),
-            Series::from_data(is_nullables),
-            Series::from_data(comments),
-        ]))
+        Ok(Chunk::new(
+            vec![
+                (Value::Column(Column::from_data(names)), DataType::String),
+                (
+                    Value::Column(Column::from_data(databases)),
+                    DataType::String,
+                ),
+                (Value::Column(Column::from_data(tables)), DataType::String),
+                (
+                    Value::Column(Column::from_data(data_types)),
+                    DataType::String,
+                ),
+                (
+                    Value::Column(Column::from_data(default_kinds)),
+                    DataType::String,
+                ),
+                (
+                    Value::Column(Column::from_data(default_exprs)),
+                    DataType::String,
+                ),
+                (
+                    Value::Column(Column::from_data(is_nullables)),
+                    DataType::String,
+                ),
+                (Value::Column(Column::from_data(comments)), DataType::String),
+            ],
+            rows_len,
+        ))
     }
 }
 
 impl ColumnsTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
         let schema = DataSchemaRefExt::create(vec![
-            DataField::new("name", Vu8::to_data_type()),
-            DataField::new("database", Vu8::to_data_type()),
-            DataField::new("table", Vu8::to_data_type()),
-            DataField::new("type", Vu8::to_data_type()),
-            DataField::new("default_kind", Vu8::to_data_type()),
-            DataField::new("default_expression", Vu8::to_data_type()),
-            DataField::new("is_nullable", Vu8::to_data_type()),
-            DataField::new("comment", Vu8::to_data_type()),
+            DataField::new("name", SchemaDataType::String),
+            DataField::new("database", SchemaDataType::String),
+            DataField::new("table", SchemaDataType::String),
+            DataField::new("type", SchemaDataType::String),
+            DataField::new("default_kind", SchemaDataType::String),
+            DataField::new("default_expression", SchemaDataType::String),
+            DataField::new("is_nullable", SchemaDataType::String),
+            DataField::new("comment", SchemaDataType::String),
         ]);
 
         let table_info = TableInfo {

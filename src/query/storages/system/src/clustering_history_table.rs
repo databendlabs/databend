@@ -12,8 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_expression::ColumnBuilder;
+use common_expression::DataField;
+use common_expression::DataSchemaRefExt;
+use common_expression::NumberDataType;
+use common_expression::NumberScalar;
+use common_expression::Scalar;
+use common_expression::SchemaDataType;
 
 use crate::SystemLogElement;
 use crate::SystemLogQueue;
@@ -34,41 +40,47 @@ impl SystemLogElement for ClusteringHistoryLogElement {
 
     fn schema() -> DataSchemaRef {
         DataSchemaRefExt::create(vec![
-            DataField::new("start_time", TimestampType::new_impl()),
-            DataField::new("end_time", TimestampType::new_impl()),
-            DataField::new("database", Vu8::to_data_type()),
-            DataField::new("table", Vu8::to_data_type()),
-            DataField::new("reclustered_bytes", u64::to_data_type()),
-            DataField::new("reclustered_rows", u64::to_data_type()),
+            DataField::new("start_time", SchemaDataType::Timestamp),
+            DataField::new("end_time", SchemaDataType::Timestamp),
+            DataField::new("database", SchemaDataType::String),
+            DataField::new("table", SchemaDataType::String),
+            DataField::new(
+                "reclustered_bytes",
+                SchemaDataType::Number(NumberDataType::UInt64),
+            ),
+            DataField::new(
+                "reclustered_rows",
+                SchemaDataType::Number(NumberDataType::UInt64),
+            ),
         ])
     }
 
-    fn fill_to_data_block(&self, columns: &mut Vec<Box<dyn MutableColumn>>) -> Result<()> {
+    fn fill_to_data_block(&self, columns: &mut Vec<ColumnBuilder>) -> Result<()> {
         let mut columns = columns.iter_mut();
         columns
             .next()
             .unwrap()
-            .append_data_value(DataValue::Int64(self.start_time))?;
+            .push(Scalar::Timestamp(self.start_time).as_ref());
         columns
             .next()
             .unwrap()
-            .append_data_value(DataValue::Int64(self.end_time))?;
+            .push(Scalar::Timestamp(self.end_time).as_ref());
         columns
             .next()
             .unwrap()
-            .append_data_value(DataValue::String(self.database.as_bytes().to_vec()))?;
+            .push(Scalar::String(self.database.as_bytes().to_vec()).as_ref());
         columns
             .next()
             .unwrap()
-            .append_data_value(DataValue::String(self.table.as_bytes().to_vec()))?;
+            .push(Scalar::String(self.table.as_bytes().to_vec()).as_ref());
         columns
             .next()
             .unwrap()
-            .append_data_value(DataValue::UInt64(self.reclustered_bytes))?;
+            .push(Scalar::Number(NumberScalar::UInt64(self.reclustered_bytes)).as_ref());
         columns
             .next()
             .unwrap()
-            .append_data_value(DataValue::UInt64(self.reclustered_rows))
+            .push(Scalar::Number(NumberScalar::UInt64(self.reclustered_rows)).as_ref());
     }
 }
 

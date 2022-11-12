@@ -13,8 +13,14 @@
 // limitations under the License.
 
 use chrono::NaiveDateTime;
-use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_expression::ColumnBuilder;
+use common_expression::DataField;
+use common_expression::DataSchemaRefExt;
+use common_expression::NumberDataType;
+use common_expression::NumberScalar;
+use common_expression::Scalar;
+use common_expression::SchemaDataType;
 use serde::Serialize;
 use serde::Serializer;
 use serde_repr::Serialize_repr;
@@ -126,238 +132,274 @@ impl SystemLogElement for QueryLogElement {
     fn schema() -> DataSchemaRef {
         DataSchemaRefExt::create(vec![
             // Type.
-            DataField::new("log_type", i8::to_data_type()),
-            DataField::new("handler_type", Vu8::to_data_type()),
+            DataField::new("log_type", SchemaDataType::Number(NumberDataType::Int8)),
+            DataField::new("handler_type", SchemaDataType::String),
             // User.
-            DataField::new("tenant_id", Vu8::to_data_type()),
-            DataField::new("cluster_id", Vu8::to_data_type()),
-            DataField::new("sql_user", Vu8::to_data_type()),
-            DataField::new("sql_user_quota", Vu8::to_data_type()),
-            DataField::new("sql_user_privileges", Vu8::to_data_type()),
+            DataField::new("tenant_id", SchemaDataType::String),
+            DataField::new("cluster_id", SchemaDataType::String),
+            DataField::new("sql_user", SchemaDataType::String),
+            DataField::new("sql_user_quota", SchemaDataType::String),
+            DataField::new("sql_user_privileges", SchemaDataType::String),
             // Query.
-            DataField::new("query_id", Vu8::to_data_type()),
-            DataField::new("query_kind", Vu8::to_data_type()),
-            DataField::new("query_text", Vu8::to_data_type()),
-            DataField::new("event_date", DateType::new_impl()),
-            DataField::new("event_time", TimestampType::new_impl()),
-            DataField::new("query_start_time", TimestampType::new_impl()),
-            DataField::new("query_duration_ms", i64::to_data_type()),
+            DataField::new("query_id", SchemaDataType::String),
+            DataField::new("query_kind", SchemaDataType::String),
+            DataField::new("query_text", SchemaDataType::String),
+            DataField::new("event_date", SchemaDataType::Date),
+            DataField::new("event_time", SchemaDataType::Timestamp),
+            DataField::new("query_start_time", SchemaDataType::Timestamp),
+            DataField::new(
+                "query_duration_ms",
+                SchemaDataType::Number(NumberDataType::Int64),
+            ),
             // Schema.
-            DataField::new("current_database", Vu8::to_data_type()),
-            DataField::new("databases", Vu8::to_data_type()),
-            DataField::new("tables", Vu8::to_data_type()),
-            DataField::new("columns", Vu8::to_data_type()),
-            DataField::new("projections", Vu8::to_data_type()),
+            DataField::new("current_database", SchemaDataType::String),
+            DataField::new("databases", SchemaDataType::String),
+            DataField::new("tables", SchemaDataType::String),
+            DataField::new("columns", SchemaDataType::String),
+            DataField::new("projections", SchemaDataType::String),
             // Stats.
-            DataField::new("written_rows", u64::to_data_type()),
-            DataField::new("written_bytes", u64::to_data_type()),
-            DataField::new("written_io_bytes", u64::to_data_type()),
-            DataField::new("written_io_bytes_cost_ms", u64::to_data_type()),
-            DataField::new("scan_rows", u64::to_data_type()),
-            DataField::new("scan_bytes", u64::to_data_type()),
-            DataField::new("scan_io_bytes", u64::to_data_type()),
-            DataField::new("scan_io_bytes_cost_ms", u64::to_data_type()),
-            DataField::new("scan_partitions", u64::to_data_type()),
-            DataField::new("total_partitions", u64::to_data_type()),
-            DataField::new("result_rows", u64::to_data_type()),
-            DataField::new("result_bytes", u64::to_data_type()),
-            DataField::new("cpu_usage", u32::to_data_type()),
-            DataField::new("memory_usage", u64::to_data_type()),
+            DataField::new(
+                "written_rows",
+                SchemaDataType::Number(NumberDataType::UInt64),
+            ),
+            DataField::new(
+                "written_bytes",
+                SchemaDataType::Number(NumberDataType::UInt64),
+            ),
+            DataField::new(
+                "written_io_bytes",
+                SchemaDataType::Number(NumberDataType::UInt64),
+            ),
+            DataField::new(
+                "written_io_bytes_cost_ms",
+                SchemaDataType::Number(NumberDataType::UInt64),
+            ),
+            DataField::new("scan_rows", SchemaDataType::Number(NumberDataType::UInt64)),
+            DataField::new("scan_bytes", SchemaDataType::Number(NumberDataType::UInt64)),
+            DataField::new(
+                "scan_io_bytes",
+                SchemaDataType::Number(NumberDataType::UInt64),
+            ),
+            DataField::new(
+                "scan_io_bytes_cost_ms",
+                SchemaDataType::Number(NumberDataType::UInt64),
+            ),
+            DataField::new(
+                "scan_partitions",
+                SchemaDataType::Number(NumberDataType::UInt64),
+            ),
+            DataField::new(
+                "total_partitions",
+                SchemaDataType::Number(NumberDataType::UInt64),
+            ),
+            DataField::new(
+                "result_rows",
+                SchemaDataType::Number(NumberDataType::UInt64),
+            ),
+            DataField::new(
+                "result_bytes",
+                SchemaDataType::Number(NumberDataType::UInt64),
+            ),
+            DataField::new("cpu_usage", SchemaDataType::Number(NumberDataType::UInt32)),
+            DataField::new(
+                "memory_usage",
+                SchemaDataType::Number(NumberDataType::UInt64),
+            ),
             // Client.
-            DataField::new("client_info", Vu8::to_data_type()),
-            DataField::new("client_address", Vu8::to_data_type()),
+            DataField::new("client_info", SchemaDataType::String),
+            DataField::new("client_address", SchemaDataType::String),
             // Exception.
-            DataField::new("exception_code", i32::to_data_type()),
-            DataField::new("exception_text", Vu8::to_data_type()),
-            DataField::new("stack_trace", Vu8::to_data_type()),
+            DataField::new(
+                "exception_code",
+                SchemaDataType::Number(NumberDataType::Int32),
+            ),
+            DataField::new("exception_text", SchemaDataType::String),
+            DataField::new("stack_trace", SchemaDataType::String),
             // Server.
-            DataField::new("server_version", Vu8::to_data_type()),
+            DataField::new("server_version", SchemaDataType::String),
             // Session settings
-            DataField::new("session_settings", Vu8::to_data_type()),
+            DataField::new("session_settings", SchemaDataType::String),
             // Extra.
-            DataField::new("extra", Vu8::to_data_type()),
+            DataField::new("extra", SchemaDataType::String),
         ])
     }
 
-    fn fill_to_data_block(&self, columns: &mut Vec<Box<dyn MutableColumn>>) -> Result<()> {
+    fn fill_to_data_block(&self, columns: &mut Vec<ColumnBuilder>) -> Result<()> {
         let mut columns = columns.iter_mut();
         columns
             .next()
             .unwrap()
-            .append_data_value(DataValue::Int64(self.log_type as i64))?;
+            .push(Scalar::Number(NumberScalar::Int64(self.log_type as i64)).as_ref());
         columns
             .next()
             .unwrap()
-            .append_data_value(DataValue::String(self.handler_type.as_bytes().to_vec()))?;
+            .push(Scalar::String(self.handler_type.as_bytes().to_vec()).as_ref());
         // User.
         columns
             .next()
             .unwrap()
-            .append_data_value(DataValue::String(self.tenant_id.as_bytes().to_vec()))?;
+            .push(Scalar::String(self.tenant_id.as_bytes().to_vec()).as_ref());
 
         columns
             .next()
             .unwrap()
-            .append_data_value(DataValue::String(self.cluster_id.as_bytes().to_vec()))?;
+            .push(Scalar::String(self.cluster_id.as_bytes().to_vec()).as_ref());
         columns
             .next()
             .unwrap()
-            .append_data_value(DataValue::String(self.sql_user.as_bytes().to_vec()))?;
+            .push(Scalar::String(self.sql_user.as_bytes().to_vec()).as_ref());
         columns
             .next()
             .unwrap()
-            .append_data_value(DataValue::String(self.sql_user_quota.as_bytes().to_vec()))?;
+            .push(Scalar::String(self.sql_user_quota.as_bytes().to_vec()).as_ref());
         columns
             .next()
             .unwrap()
-            .append_data_value(DataValue::String(
-                self.sql_user_privileges.as_bytes().to_vec(),
-            ))?;
+            .push(Scalar::String(self.sql_user_privileges.as_bytes().to_vec()).as_ref());
         // Query.
         columns
             .next()
             .unwrap()
-            .append_data_value(DataValue::String(self.query_id.as_bytes().to_vec()))?;
+            .push(Scalar::String(self.query_id.as_bytes().to_vec()).as_ref());
         columns
             .next()
             .unwrap()
-            .append_data_value(DataValue::String(self.query_kind.as_bytes().to_vec()))?;
+            .push(Scalar::String(self.query_kind.as_bytes().to_vec()).as_ref());
         columns
             .next()
             .unwrap()
-            .append_data_value(DataValue::String(self.query_text.as_bytes().to_vec()))?;
+            .push(Scalar::String(self.query_text.as_bytes().to_vec()).as_ref());
         columns
             .next()
             .unwrap()
-            .append_data_value(DataValue::Int64(self.event_date as i64))?;
+            .push(Scalar::Date(self.event_date).as_ref());
         columns
             .next()
             .unwrap()
-            .append_data_value(DataValue::Int64(self.event_time))?;
+            .push(Scalar::Timestamp(self.event_time).as_ref());
         columns
             .next()
             .unwrap()
-            .append_data_value(DataValue::Int64(self.query_start_time))?;
+            .push(Scalar::Timestamp(self.query_start_time).as_ref());
         columns
             .next()
             .unwrap()
-            .append_data_value(DataValue::Int64(self.query_duration_ms))?;
+            .push(Scalar::Number(NumberScalar::Int64(self.query_duration_ms)).as_ref());
         // Schema.
         columns
             .next()
             .unwrap()
-            .append_data_value(DataValue::String(self.current_database.as_bytes().to_vec()))?;
+            .push(Scalar::String(self.current_database.as_bytes().to_vec()).as_ref());
         columns
             .next()
             .unwrap()
-            .append_data_value(DataValue::String(self.databases.as_bytes().to_vec()))?;
+            .push(Scalar::String(self.databases.as_bytes().to_vec()).as_ref());
         columns
             .next()
             .unwrap()
-            .append_data_value(DataValue::String(self.tables.as_bytes().to_vec()))?;
+            .push(Scalar::String(self.tables.as_bytes().to_vec()).as_ref());
         columns
             .next()
             .unwrap()
-            .append_data_value(DataValue::String(self.columns.as_bytes().to_vec()))?;
+            .push(Scalar::String(self.columns.as_bytes().to_vec()).as_ref());
         columns
             .next()
             .unwrap()
-            .append_data_value(DataValue::String(self.projections.as_bytes().to_vec()))?;
+            .push(Scalar::String(self.projections.as_bytes().to_vec()).as_ref());
         // Stats.
         columns
             .next()
             .unwrap()
-            .append_data_value(DataValue::UInt64(self.written_rows))?;
+            .push(Scalar::Number(NumberScalar::UInt64(self.written_rows)).as_ref());
         columns
             .next()
             .unwrap()
-            .append_data_value(DataValue::UInt64(self.written_bytes))?;
+            .push(Scalar::Number(NumberScalar::UInt64(self.written_bytes)).as_ref());
         columns
             .next()
             .unwrap()
-            .append_data_value(DataValue::UInt64(self.written_io_bytes))?;
+            .push(Scalar::Number(NumberScalar::UInt64(self.written_io_bytes)).as_ref());
         columns
             .next()
             .unwrap()
-            .append_data_value(DataValue::UInt64(self.written_io_bytes_cost_ms))?;
+            .push(Scalar::Number(NumberScalar::UInt64(self.written_io_bytes_cost_ms)).as_ref());
         columns
             .next()
             .unwrap()
-            .append_data_value(DataValue::UInt64(self.scan_rows))?;
+            .push(Scalar::Number(NumberScalar::UInt64(self.scan_rows)).as_ref());
         columns
             .next()
             .unwrap()
-            .append_data_value(DataValue::UInt64(self.scan_bytes))?;
+            .push(Scalar::Number(NumberScalar::UInt64(self.scan_bytes)).as_ref());
         columns
             .next()
             .unwrap()
-            .append_data_value(DataValue::UInt64(self.scan_io_bytes))?;
+            .push(Scalar::Number(NumberScalar::UInt64(self.scan_io_bytes)).as_ref());
         columns
             .next()
             .unwrap()
-            .append_data_value(DataValue::UInt64(self.scan_io_bytes_cost_ms))?;
+            .push(Scalar::Number(NumberScalar::UInt64(self.scan_io_bytes_cost_ms)).as_ref());
         columns
             .next()
             .unwrap()
-            .append_data_value(DataValue::UInt64(self.scan_partitions))?;
+            .push(Scalar::Number(NumberScalar::UInt64(self.scan_partitions)).as_ref());
         columns
             .next()
             .unwrap()
-            .append_data_value(DataValue::UInt64(self.total_partitions))?;
+            .push(Scalar::Number(NumberScalar::UInt64(self.total_partitions)).as_ref());
         columns
             .next()
             .unwrap()
-            .append_data_value(DataValue::UInt64(self.result_rows))?;
+            .push(Scalar::Number(NumberScalar::UInt64(self.result_rows)).as_ref());
         columns
             .next()
             .unwrap()
-            .append_data_value(DataValue::UInt64(self.result_bytes))?;
+            .push(Scalar::Number(NumberScalar::UInt64(self.result_bytes)).as_ref());
         columns
             .next()
             .unwrap()
-            .append_data_value(DataValue::UInt64(self.cpu_usage as u64))?;
+            .push(Scalar::Number(NumberScalar::UInt64(self.cpu_usage as u64)).as_ref());
         columns
             .next()
             .unwrap()
-            .append_data_value(DataValue::UInt64(self.memory_usage))?;
+            .push(Scalar::Number(NumberScalar::UInt64(self.memory_usage)).as_ref());
         // Client.
         columns
             .next()
             .unwrap()
-            .append_data_value(DataValue::String(self.client_info.as_bytes().to_vec()))?;
+            .push(Scalar::String(self.client_info.as_bytes().to_vec()).as_ref());
         columns
             .next()
             .unwrap()
-            .append_data_value(DataValue::String(self.client_address.as_bytes().to_vec()))?;
+            .push(Scalar::String(self.client_address.as_bytes().to_vec()).as_ref());
         // Exception.
         columns
             .next()
             .unwrap()
-            .append_data_value(DataValue::Int64(self.exception_code as i64))?;
+            .push(Scalar::Number(NumberScalar::Int64(self.exception_code as i64)).as_ref());
         columns
             .next()
             .unwrap()
-            .append_data_value(DataValue::String(self.exception_text.as_bytes().to_vec()))?;
+            .push(Scalar::String(self.exception_text.as_bytes().to_vec()).as_ref());
         columns
             .next()
             .unwrap()
-            .append_data_value(DataValue::String(self.stack_trace.as_bytes().to_vec()))?;
+            .push(Scalar::String(self.stack_trace.as_bytes().to_vec()).as_ref());
         // Server.
         columns
             .next()
             .unwrap()
-            .append_data_value(DataValue::String(self.server_version.as_bytes().to_vec()))?;
+            .push(Scalar::String(self.server_version.as_bytes().to_vec()).as_ref());
         // Session settings
         columns
             .next()
             .unwrap()
-            .append_data_value(DataValue::String(self.session_settings.as_bytes().to_vec()))?;
+            .push(Scalar::String(self.session_settings.as_bytes().to_vec()).as_ref());
         // Extra.
         columns
             .next()
             .unwrap()
-            .append_data_value(DataValue::String(self.extra.as_bytes().to_vec()))?;
-
+            .push(Scalar::String(self.extra.as_bytes().to_vec()).as_ref());
         Ok(())
     }
 }

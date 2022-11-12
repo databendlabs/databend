@@ -45,6 +45,7 @@ use crate::types::timestamp::timestamp_to_string;
 use crate::types::AnyType;
 use crate::types::DataType;
 use crate::types::ValueType;
+use crate::values::Scalar;
 use crate::values::ScalarRef;
 use crate::values::Value;
 use crate::values::ValueRef;
@@ -168,6 +169,49 @@ impl<'a> Display for ScalarRef<'a> {
                 let value = common_jsonb::to_string(s);
                 write!(f, "{value}")
             }
+        }
+    }
+}
+
+impl Display for Scalar {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        match self {
+            Scalar::Null => write!(f, "NULL"),
+            Scalar::EmptyArray => write!(f, "[]"),
+            Scalar::Number(n) => write!(f, "{}", n),
+            Scalar::Boolean(b) => write!(f, "{}", b),
+            Scalar::String(s) => match std::str::from_utf8(s) {
+                Ok(v) => write!(f, "{}", v),
+                Err(_e) => {
+                    for c in s {
+                        write!(f, "{:02x}", c)?;
+                    }
+                    Ok(())
+                }
+            },
+            Scalar::Timestamp(t) => write!(f, "{}", timestamp_to_string(*t, chrono_tz::Tz::UTC)),
+            Scalar::Date(d) => write!(f, "{}", date_to_string(*d as i64, chrono_tz::Tz::UTC)),
+            Scalar::Array(v) => {
+                write!(
+                    f,
+                    "[{}]",
+                    v.iter()
+                        .map(|v| v.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            }
+            Scalar::Tuple(v) => {
+                write!(
+                    f,
+                    "({})",
+                    v.iter()
+                        .map(|v| v.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            }
+            Scalar::Variant(v) => write!(f, "{}", common_jsonb::to_string(v)),
         }
     }
 }

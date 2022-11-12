@@ -16,9 +16,13 @@ use std::sync::Arc;
 
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_expression::Chunk;
+use common_expression::Column;
+use common_expression::DataField;
+use common_expression::DataSchemaRefExt;
+use common_expression::DataType;
+use common_expression::SchemaDataType;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -39,7 +43,7 @@ impl AsyncSystemTable for UsersTable {
         &self.table_info
     }
 
-    async fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
+    async fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<Chunk> {
         let tenant = ctx.get_tenant();
         let users = UserApiProvider::instance().get_users(&tenant).await?;
 
@@ -58,24 +62,40 @@ impl AsyncSystemTable for UsersTable {
             .map(|x| x.option.default_role().cloned().unwrap_or_default())
             .collect();
 
-        Ok(DataBlock::create(self.table_info.schema(), vec![
-            Series::from_data(names),
-            Series::from_data(hostnames),
-            Series::from_data(auth_types),
-            Series::from_data(auth_strings),
-            Series::from_data(default_roles),
-        ]))
+        let rows_len = names.len();
+        Ok(Chunk::new(
+            vec![
+                (Value::Column(Column::from_data(names)), DataType::String),
+                (
+                    Value::Column(Column::from_data(hostnames)),
+                    DataType::String,
+                ),
+                (
+                    Value::Column(Column::from_data(auth_types)),
+                    DataType::String,
+                ),
+                (
+                    Value::Column(Column::from_data(auth_strings)),
+                    DataType::String,
+                ),
+                (
+                    Value::Column(Column::from_data(default_roles)),
+                    DataType::String,
+                ),
+            ],
+            rows_len,
+        ))
     }
 }
 
 impl UsersTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
         let schema = DataSchemaRefExt::create(vec![
-            DataField::new("name", Vu8::to_data_type()),
-            DataField::new("hostname", Vu8::to_data_type()),
-            DataField::new("auth_type", Vu8::to_data_type()),
-            DataField::new("auth_string", Vu8::to_data_type()),
-            DataField::new("default_role", Vu8::to_data_type()),
+            DataField::new("name", SchemaDataType::String),
+            DataField::new("hostname", SchemaDataType::String),
+            DataField::new("auth_type", SchemaDataType::String),
+            DataField::new("auth_string", SchemaDataType::String),
+            DataField::new("default_role", SchemaDataType::String),
         ]);
 
         let table_info = TableInfo {

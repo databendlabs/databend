@@ -21,11 +21,13 @@ use common_arrow::arrow::datatypes::Schema as ArrowSchema;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::types::AnyType;
 use crate::types::DataType;
 use crate::types::NumberDataType;
 use crate::with_number_type;
 use crate::Result;
 use crate::TypeDeserializer;
+use crate::Value;
 use crate::ARROW_EXT_TYPE_EMPTY_ARRAY;
 use crate::ARROW_EXT_TYPE_VARIANT;
 
@@ -323,6 +325,57 @@ impl SchemaDataType {
             SchemaDataType::Nullable(ty) => (**ty).clone(),
             _ => self.clone(),
         }
+    }
+
+    pub fn sql_name(&self) -> String {
+        match self {
+            SchemaDataType::Null => "NULL".to_string(),
+            SchemaDataType::EmptyArray => "BOOLEAN".to_string(),
+            SchemaDataType::String => "VARCHAR".to_string(),
+            SchemaDataType::Number(num_ty) => match num_ty {
+                NumberDataType::UInt8 => "TINYINT UNSIGNED".to_string(),
+                NumberDataType::UInt16 => "SMALLINT UNSIGNED".to_string(),
+                NumberDataType::UInt32 => "INT UNSIGNED".to_string(),
+                NumberDataType::UInt64 => "BIGINT UNSIGNED".to_string(),
+                NumberDataType::Int8 => "TINYINT".to_string(),
+                NumberDataType::Int16 => "SMALLINT".to_string(),
+                NumberDataType::Int32 => "INT".to_string(),
+                NumberDataType::Int64 => "BIGINT".to_string(),
+                NumberDataType::Float32 => "FLOAT".to_string(),
+                NumberDataType::Float64 => "DOUBLE".to_string(),
+            },
+            SchemaDataType::Timestamp => "TIMESTAMP".to_string(),
+            SchemaDataType::Date => "DATE".to_string(),
+            SchemaDataType::Nullable(inner_ty) => format!("{} NULL", inner_ty.sql_name()),
+            SchemaDataType::Array(inner_ty) => format!("ARRAY({})", inner_ty.sql_name()),
+            SchemaDataType::Tuple {
+                fields_name,
+                fields_type,
+            } => {
+                let mut name = String::new();
+                name.push_str("TUPLE(");
+                for ((i, field_name), field_ty) in
+                    fields_name.iter().enumerate().zip(fields_type.iter())
+                {
+                    if i > 0 {
+                        name.push_str(", ");
+                    }
+                    name.push('`');
+                    name.push_str(field_name);
+                    name.push('`');
+                    name.push(' ');
+                    name.push_str(&field_ty.sql_name());
+                }
+                name.push(')');
+                name
+            }
+            SchemaDataType::Variant => "VARIANT".to_string(),
+            _ => unreachable!(),
+        }
+    }
+
+    pub fn create_random_column(&self, rows: usize) -> (Value<AnyType>, DataType) {
+        todo!("expression")
     }
 }
 

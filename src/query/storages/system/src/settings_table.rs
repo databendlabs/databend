@@ -16,9 +16,13 @@ use std::sync::Arc;
 
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_expression::Chunk;
+use common_expression::Column;
+use common_expression::DataField;
+use common_expression::DataSchemaRefExt;
+use common_expression::DataType;
+use common_expression::SchemaDataType;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -38,7 +42,7 @@ impl SyncSystemTable for SettingsTable {
         &self.table_info
     }
 
-    fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
+    fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<Chunk> {
         let settings = ctx.get_settings().get_setting_values();
 
         let mut names: Vec<String> = vec![];
@@ -74,26 +78,30 @@ impl SyncSystemTable for SettingsTable {
         let descs: Vec<&[u8]> = descs.iter().map(|x| x.as_bytes()).collect();
         let types: Vec<&[u8]> = types.iter().map(|x| x.as_bytes()).collect();
 
-        Ok(DataBlock::create(self.table_info.schema(), vec![
-            Series::from_data(names),
-            Series::from_data(values),
-            Series::from_data(defaults),
-            Series::from_data(levels),
-            Series::from_data(descs),
-            Series::from_data(types),
-        ]))
+        let rows_len = names.len();
+        Ok(Chunk::new(
+            vec![
+                (Value::Column(Column::from_data(names)), DataType::String),
+                (Value::Column(Column::from_data(values)), DataType::String),
+                (Value::Column(Column::from_data(defaults)), DataType::String),
+                (Value::Column(Column::from_data(levels)), DataType::String),
+                (Value::Column(Column::from_data(descs)), DataType::String),
+                (Value::Column(Column::from_data(types)), DataType::String),
+            ],
+            rows_len,
+        ))
     }
 }
 
 impl SettingsTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
         let schema = DataSchemaRefExt::create(vec![
-            DataField::new("name", Vu8::to_data_type()),
-            DataField::new("value", Vu8::to_data_type()),
-            DataField::new("default", Vu8::to_data_type()),
-            DataField::new("level", Vu8::to_data_type()),
-            DataField::new("description", Vu8::to_data_type()),
-            DataField::new("type", Vu8::to_data_type()),
+            DataField::new("name", SchemaDataType::String),
+            DataField::new("value", SchemaDataType::String),
+            DataField::new("default", SchemaDataType::String),
+            DataField::new("level", SchemaDataType::String),
+            DataField::new("description", SchemaDataType::String),
+            DataField::new("type", SchemaDataType::String),
         ]);
 
         let table_info = TableInfo {

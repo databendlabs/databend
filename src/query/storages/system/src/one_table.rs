@@ -19,9 +19,14 @@ use common_catalog::plan::Partitions;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_expression::Chunk;
+use common_expression::Column;
+use common_expression::DataField;
+use common_expression::DataSchemaRefExt;
+use common_expression::DataType;
+use common_expression::NumberDataType;
+use common_expression::SchemaDataType;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -41,10 +46,14 @@ impl SyncSystemTable for OneTable {
         &self.table_info
     }
 
-    fn get_full_data(&self, _ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
-        Ok(DataBlock::create(self.table_info.schema(), vec![
-            Series::from_data(vec![1u8]),
-        ]))
+    fn get_full_data(&self, _ctx: Arc<dyn TableContext>) -> Result<Chunk> {
+        Ok(Chunk::new(
+            vec![(
+                Value::Column(Column::from_data(vec![1u8])),
+                DataType::Number(NumberDataType::UInt8),
+            )],
+            1,
+        ))
     }
 
     fn get_partitions(
@@ -60,7 +69,10 @@ impl SyncSystemTable for OneTable {
 
 impl OneTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
-        let schema = DataSchemaRefExt::create(vec![DataField::new("dummy", u8::to_data_type())]);
+        let schema = DataSchemaRefExt::create(vec![DataField::new(
+            "dummy",
+            SchemaDataType::Number(NumberDataType::UInt8),
+        )]);
 
         let table_info = TableInfo {
             desc: "'system'.'one'".to_string(),

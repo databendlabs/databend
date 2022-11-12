@@ -16,9 +16,15 @@ use std::sync::Arc;
 
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_expression::Chunk;
+use common_expression::ColumnBuilder;
+use common_expression::DataField;
+use common_expression::DataSchemaRefExt;
+use common_expression::DataType;
+use common_expression::NumberDataType;
+use common_expression::NumberScalar;
+use common_expression::SchemaDataType;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -37,39 +43,48 @@ impl SyncSystemTable for ClustersTable {
         &self.table_info
     }
 
-    fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
+    fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<Chunk> {
         let cluster_nodes = ctx.get_cluster().nodes.clone();
 
-        let mut names = MutableStringColumn::with_capacity(cluster_nodes.len());
-        let mut addresses = MutableStringColumn::with_capacity(cluster_nodes.len());
-        let mut addresses_port = MutablePrimitiveColumn::<u16>::with_capacity(cluster_nodes.len());
-        let mut versions = MutableStringColumn::with_capacity(cluster_nodes.len());
+        let mut names = ColumnBuilder::with_capacity(&DataType::String, cluster_nodes.len());
+        let mut addresses = ColumnBuilder::with_capacity(&DataType::String, cluster_nodes.len());
+        let mut addresses_port = ColumnBuilder::with_capacity(
+            &DataType::Number(NumberDataType::UInt16),
+            cluster_nodes.len(),
+        );
+        let mut versions = ColumnBuilder::with_capacity(&DataType::String, cluster_nodes.len());
 
         for cluster_node in &cluster_nodes {
             let (ip, port) = cluster_node.ip_port()?;
 
-            names.append_value(cluster_node.id.as_bytes());
-            addresses.append_value(ip.as_bytes());
-            addresses_port.append_value(port);
-            versions.append_value(cluster_node.binary_version.as_bytes());
+            names.push(Scalar::String(cluster_node.as_bytes().to_vec()).as_ref());
+            addresses.push(Scalar::String(ip.as_bytes().to_vec()).as_ref());
+            addresses_port.push(Scalar::Number(NumberScalar::UInt16(port)).as_ref());
+            versions.push(Scalar::String(cluster_node.binary_version.as_bytes().to_vec()).as_ref());
         }
 
-        Ok(DataBlock::create(self.table_info.schema(), vec![
-            names.finish().arc(),
-            addresses.finish().arc(),
-            addresses_port.finish().arc(),
-            versions.finish().arc(),
-        ]))
+        Ok(Chunk::new(
+            vec![
+                (Value::Column(names.build()), DataType::String),
+                (Value::Column(addresses.build()), DataType::String),
+                (
+                    Value::Column(addresses_port.build()),
+                    DataType::Number(NumberDataType::UInt16),
+                ),
+                (Value::Column(versions.build()), DataType::String),
+            ],
+            cluster_nodes.len(),
+        ))
     }
 }
 
 impl ClustersTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
         let schema = DataSchemaRefExt::create(vec![
-            DataField::new("name", Vu8::to_data_type()),
-            DataField::new("host", Vu8::to_data_type()),
-            DataField::new("port", u16::to_data_type()),
-            DataField::new("version", Vu8::to_data_type()),
+            DataField::new("name", SchemaDataType::String),
+            DataField::new("host", SchemaDataType::String),
+            DataField::new("port", SchemaDataType::Number(NumberDataType::UInt16)),
+            DataField::new("version", SchemaDataType::String),
         ]);
 
         let table_info = TableInfo {

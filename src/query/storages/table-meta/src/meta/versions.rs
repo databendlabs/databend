@@ -14,7 +14,6 @@
 
 use std::marker::PhantomData;
 
-use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_expression::Chunk;
 
@@ -70,7 +69,7 @@ impl SnapshotVersion {
     }
 }
 
-impl Versioned<0> for DataBlock {}
+impl Versioned<0> for Chunk {}
 
 impl Versioned<2> for Chunk {}
 impl Versioned<3> for ChunkFilter {}

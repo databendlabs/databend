@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod columns_table;
-mod keywords_table;
-mod schemata_table;
-mod tables_table;
-mod views_table;
+use std::collections::HashMap;
+use std::sync::Arc;
 
-pub use columns_table::ColumnsTable;
-pub use keywords_table::KeywordsTable;
-pub use schemata_table::SchemataTable;
-pub use tables_table::TablesTable;
-pub use views_table::ViewsTable;
+use parking_lot::RwLock;
+
+use crate::Chunk;
+
+/// Shared store to support memory tables.
+///
+/// Indexed by table id etc.
+pub type InMemoryData<K> = HashMap<K, Arc<RwLock<Vec<Chunk>>>>;

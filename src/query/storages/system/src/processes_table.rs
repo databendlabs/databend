@@ -18,9 +18,13 @@ use std::time::Duration;
 
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_expression::Chunk;
+use common_expression::Column;
+use common_expression::DataField;
+use common_expression::DataSchemaRefExt;
+use common_expression::DataType;
+use common_expression::SchemaDataType;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -40,7 +44,7 @@ impl SyncSystemTable for ProcessesTable {
         &self.table_info
     }
 
-    fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
+    fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<Chunk> {
         let processes_info = ctx.get_processes_info();
 
         let mut processes_id = Vec::with_capacity(processes_info.len());
@@ -59,6 +63,7 @@ impl SyncSystemTable for ProcessesTable {
         let mut processes_time = Vec::with_capacity(processes_info.len());
         let mut processes_status = Vec::with_capacity(processes_info.len());
 
+        let rows_len = processes_info.len();
         for process_info in &processes_info {
             let data_metrics = &process_info.data_metrics;
             let scan_progress = process_info.scan_progress_value.clone().unwrap_or_default();
@@ -99,44 +104,113 @@ impl SyncSystemTable for ProcessesTable {
             }
         }
 
-        Ok(DataBlock::create(self.table_info.schema(), vec![
-            Series::from_data(processes_id),
-            Series::from_data(processes_type),
-            Series::from_data(processes_host),
-            Series::from_data(processes_user),
-            Series::from_data(processes_state),
-            Series::from_data(processes_database),
-            Series::from_data(processes_extra_info),
-            Series::from_data(processes_memory_usage),
-            Series::from_data(processes_data_read_bytes),
-            Series::from_data(processes_data_write_bytes),
-            Series::from_data(processes_scan_progress_read_rows),
-            Series::from_data(processes_scan_progress_read_bytes),
-            Series::from_data(processes_mysql_connection_id),
-            Series::from_data(processes_time),
-            Series::from_data(processes_status),
-        ]))
+        Ok(Chunk::new(
+            vec![
+                (
+                    Value::Column(Column::from_data(processes_id)),
+                    DataType::String,
+                ),
+                (
+                    Value::Column(Column::from_data(processes_type)),
+                    DataType::Nullable(Box::new(DataType::String)),
+                ),
+                (
+                    Value::Column(Column::from_data(processes_host)),
+                    DataType::String,
+                ),
+                (
+                    Value::Column(Column::from_data(processes_user)),
+                    DataType::String,
+                ),
+                (
+                    Value::Column(Column::from_data(processes_state)),
+                    DataType::String,
+                ),
+                (
+                    Value::Column(Column::from_data(processes_database)),
+                    DataType::String,
+                ),
+                (
+                    Value::Column(Column::from_data(processes_extra_info)),
+                    DataType::String,
+                ),
+                (
+                    Value::Column(Column::from_data(processes_memory_usage)),
+                    DataType::Number(NumberDataType::Int64),
+                ),
+                (
+                    Value::Column(Column::from_data(processes_data_read_bytes)),
+                    DataType::Number(NumberDataType::UInt64),
+                ),
+                (
+                    Value::Column(Column::from_data(processes_data_write_bytes)),
+                    DataType::Number(NumberDataType::UInt64),
+                ),
+                (
+                    Value::Column(Column::from_data(processes_scan_progress_read_rows)),
+                    DataType::Number(NumberDataType::UInt64),
+                ),
+                (
+                    Value::Column(Column::from_data(processes_scan_progress_read_bytes)),
+                    DataType::Number(NumberDataType::UInt64),
+                ),
+                (
+                    Value::Column(Column::from_data(processes_mysql_connection_id)),
+                    DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt32))),
+                ),
+                (
+                    Value::Column(Column::from_data(processes_time)),
+                    DataType::Number(NumberDataType::UInt64),
+                ),
+                (
+                    Value::Column(Column::from_data(processes_status)),
+                    DataType::String,
+                ),
+            ],
+            rows_len,
+        ))
     }
 }
 
 impl ProcessesTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
         let schema = DataSchemaRefExt::create(vec![
-            DataField::new("id", Vu8::to_data_type()),
-            DataField::new("type", Vu8::to_data_type()),
-            DataField::new_nullable("host", Vu8::to_data_type()),
-            DataField::new("user", Vu8::to_data_type()),
-            DataField::new("command", Vu8::to_data_type()),
-            DataField::new("database", Vu8::to_data_type()),
-            DataField::new("extra_info", Vu8::to_data_type()),
-            DataField::new("memory_usage", i64::to_data_type()),
-            DataField::new("data_read_bytes", u64::to_data_type()),
-            DataField::new("data_write_bytes", u64::to_data_type()),
-            DataField::new("scan_progress_read_rows", u64::to_data_type()),
-            DataField::new("scan_progress_read_bytes", u64::to_data_type()),
-            DataField::new_nullable("mysql_connection_id", u32::to_data_type()),
-            DataField::new("time", u64::to_data_type()),
-            DataField::new("status", Vu8::to_data_type()),
+            DataField::new("id", SchemaDataType::String),
+            DataField::new("type", SchemaDataType::String),
+            DataField::new(
+                "host",
+                SchemaDataType::Nullable(Box::new(SchemaDataType::String)),
+            ),
+            DataField::new("user", SchemaDataType::String),
+            DataField::new("command", SchemaDataType::String),
+            DataField::new("database", SchemaDataType::String),
+            DataField::new("extra_info", SchemaDataType::String),
+            DataField::new(
+                "memory_usage",
+                SchemaDataType::Number(NumberDataType::Int64),
+            ),
+            DataField::new(
+                "data_read_bytes",
+                SchemaDataType::Number(NumberDataType::UInt64),
+            ),
+            DataField::new(
+                "data_write_bytes",
+                SchemaDataType::Number(NumberDataType::UInt64),
+            ),
+            DataField::new(
+                "scan_progress_read_rows",
+                SchemaDataType::Number(NumberDataType::UInt64),
+            ),
+            DataField::new(
+                "scan_progress_read_bytes",
+                SchemaDataType::Number(NumberDataType::UInt64),
+            ),
+            DataField::new(
+                "mysql_connection_id",
+                SchemaDataType::Nullable(Box::new(SchemaDataType::Number(NumberDataType::UInt32))),
+            ),
+            DataField::new("time", SchemaDataType::Number(NumberDataType::UInt64)),
+            DataField::new("status", SchemaDataType::String),
         ]);
 
         let table_info = TableInfo {

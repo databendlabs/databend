@@ -18,9 +18,14 @@ use common_catalog::catalog::Catalog;
 use common_catalog::catalog_kind::CATALOG_DEFAULT;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_expression::Chunk;
+use common_expression::Column;
+use common_expression::DataField;
+use common_expression::DataSchemaRefExt;
+use common_expression::DataType;
+use common_expression::NumberDataType;
+use common_expression::SchemaDataType;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -79,7 +84,7 @@ where TablesTable<T>: HistoryAware
         &self.table_info
     }
 
-    async fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
+    async fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<Chunk> {
         let tenant = ctx.get_tenant();
         let catalog = ctx.get_catalog(CATALOG_DEFAULT)?;
         let databases = catalog.list_databases(tenant.as_str()).await?;
@@ -147,18 +152,46 @@ where TablesTable<T>: HistoryAware
             })
             .collect();
 
-        Ok(DataBlock::create(self.table_info.schema(), vec![
-            Series::from_data(databases),
-            Series::from_data(names),
-            Series::from_data(engines),
-            Series::from_data(cluster_bys),
-            Series::from_data(created_ons),
-            Series::from_data(dropped_ons),
-            Series::from_data(num_rows),
-            Series::from_data(data_size),
-            Series::from_data(data_compressed_size),
-            Series::from_data(index_size),
-        ]))
+        let rows_len = databases.len();
+        Ok(Chunk::new(
+            vec![
+                (
+                    Value::Column(Column::from_data(databases)),
+                    DataType::String,
+                ),
+                (Value::Column(Column::from_data(names)), DataType::String),
+                (Value::Column(Column::from_data(engines)), DataType::String),
+                (
+                    Value::Column(Column::from_data(cluster_bys)),
+                    DataType::String,
+                ),
+                (
+                    Value::Column(Column::from_data(created_ons)),
+                    DataType::String,
+                ),
+                (
+                    Value::Column(Column::from_data(dropped_ons)),
+                    DataType::String,
+                ),
+                (
+                    Value::Column(Column::from_data(num_rows)),
+                    DataType::Number(NumberDataType::UInt64),
+                ),
+                (
+                    Value::Column(Column::from_data(data_size)),
+                    DataType::Number(NumberDataType::UInt64),
+                ),
+                (
+                    Value::Column(Column::from_data(data_compressed_size)),
+                    DataType::Number(NumberDataType::UInt64),
+                ),
+                (
+                    Value::Column(Column::from_data(index_size)),
+                    DataType::Number(NumberDataType::UInt64),
+                ),
+            ],
+            rows_len,
+        ))
     }
 }
 
@@ -167,16 +200,19 @@ where TablesTable<T>: HistoryAware
 {
     pub fn schema() -> Arc<DataSchema> {
         DataSchemaRefExt::create(vec![
-            DataField::new("database", Vu8::to_data_type()),
-            DataField::new("name", Vu8::to_data_type()),
-            DataField::new("engine", Vu8::to_data_type()),
-            DataField::new("cluster_by", Vu8::to_data_type()),
-            DataField::new("created_on", Vu8::to_data_type()),
-            DataField::new("dropped_on", Vu8::to_data_type()),
-            DataField::new_nullable("num_rows", u64::to_data_type()),
-            DataField::new_nullable("data_size", u64::to_data_type()),
-            DataField::new_nullable("data_compressed_size", u64::to_data_type()),
-            DataField::new_nullable("index_size", u64::to_data_type()),
+            DataField::new("database", SchemaDataType::String),
+            DataField::new("name", SchemaDataType::String),
+            DataField::new("engine", SchemaDataType::String),
+            DataField::new("cluster_by", SchemaDataType::String),
+            DataField::new("created_on", SchemaDataType::String),
+            DataField::new("dropped_on", SchemaDataType::String),
+            DataField::new_nullable("num_rows", SchemaDataType::Number(NumberDataType::UInt64)),
+            DataField::new_nullable("data_size", SchemaDataType::Number(NumberDataType::UInt64)),
+            DataField::new_nullable(
+                "data_compressed_size",
+                SchemaDataType::Number(NumberDataType::UInt64),
+            ),
+            DataField::new_nullable("index_size", SchemaDataType::Number(NumberDataType::UInt64)),
         ])
     }
 
