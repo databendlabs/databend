@@ -27,6 +27,7 @@ use super::table0::Table0IterMut;
 use super::traits::HashtableLike;
 use super::traits::Keyable;
 use super::utils::ZeroEntry;
+use crate::FastHash;
 
 pub struct Hashtable<K, V, A = MmapAllocator<GlobalAllocator>>
 where
@@ -236,54 +237,100 @@ where K: Keyable
 
 impl<K, V, A> HashtableLike for Hashtable<K, V, A>
 where
-    K: Keyable,
+    K: Keyable + FastHash,
     A: Allocator + Clone + 'static,
 {
     type Key = K;
-    type KeyRef<'a> = K where K:'a;
     type Value = V;
 
-    type EntryRef<'a> = &'a Entry<K, V> where Self:'a, K:'a, V: 'a;
-    type EntryMutRef<'a> = &'a mut Entry<K, V> where Self:'a, K:'a, V: 'a;
+    type EntryRef<'a> = &'a Entry<K, V> where Self: 'a, K:'a, V: 'a;
+    type EntryMutRef<'a> = &'a mut Entry<K, V> where Self: 'a, K:'a, V: 'a;
 
-    type Iterator<'a> = HashtableIter<'a, K, V> where Self:'a, K:'a, V: 'a;
-    type IteratorMut<'a> = HashtableIterMut<'a, K, V> where Self:'a, K:'a, V: 'a;
+    type Iterator<'a> = HashtableIter<'a, K, V> where Self: 'a, K:'a, V: 'a;
+    type IteratorMut<'a> = HashtableIterMut<'a, K, V> where Self: 'a, K:'a, V: 'a;
 
-    fn entry<'a>(&self, key_ref: Self::KeyRef<'a>) -> Option<Self::EntryRef<'_>>
-    where K: 'a {
-        self.entry(&key_ref)
-    }
-    fn entry_mut<'a>(&mut self, key_ref: Self::KeyRef<'a>) -> Option<Self::EntryMutRef<'_>>
-    where K: 'a {
-        self.entry_mut(&key_ref)
+    fn len(&self) -> usize {
+        self.len()
     }
 
-    fn get<'a>(&self, key_ref: Self::KeyRef<'a>) -> Option<&Self::Value>
-    where K: 'a {
-        self.get(&key_ref)
-    }
-    fn get_mut<'a>(&mut self, key_ref: Self::KeyRef<'a>) -> Option<&mut Self::Value>
-    where K: 'a {
-        self.get_mut(&key_ref)
+    fn entry(&self, key_ref: &Self::Key) -> Option<Self::EntryRef<'_>> {
+        self.entry(key_ref)
     }
 
-    unsafe fn insert<'a>(
+    fn entry_mut(&mut self, key_ref: &Self::Key) -> Option<Self::EntryMutRef<'_>> {
+        self.entry_mut(key_ref)
+    }
+
+    fn get(&self, key_ref: &Self::Key) -> Option<&Self::Value> {
+        self.get(key_ref)
+    }
+
+    fn get_mut(&mut self, key_ref: &Self::Key) -> Option<&mut Self::Value> {
+        self.get_mut(key_ref)
+    }
+
+    unsafe fn insert(
         &mut self,
-        key_ref: Self::KeyRef<'a>,
-    ) -> Result<&mut MaybeUninit<Self::Value>, &mut Self::Value>
-    where
-        K: 'a,
-    {
-        self.insert(key_ref)
+        key: &Self::Key,
+    ) -> Result<&mut MaybeUninit<Self::Value>, &mut Self::Value> {
+        self.insert(*key)
     }
-    unsafe fn insert_and_entry<'a>(
+
+    #[inline(always)]
+    unsafe fn insert_and_entry(
         &mut self,
-        key_ref: Self::KeyRef<'a>,
-    ) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>>
-    where
-        K: 'a,
-    {
-        self.insert_and_entry(key_ref)
+        key: &Self::Key,
+    ) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>> {
+        if unlikely(K::equals_zero(key)) {
+            let res = self.zero.is_some();
+            if !res {
+                *self.zero = Some(MaybeUninit::zeroed().assume_init());
+            }
+            let zero = self.zero.as_mut().unwrap();
+            if res {
+                return Err(zero);
+            } else {
+                return Ok(zero);
+            }
+        }
+        if unlikely((self.table.len() + 1) * 2 > self.table.capacity()) {
+            if (self.table.entries.len() >> 22) == 0 {
+                self.table.grow(2);
+            } else {
+                self.table.grow(1);
+            }
+        }
+        self.table.insert(*key)
+    }
+
+    #[inline(always)]
+    unsafe fn insert_and_entry_with_hash(
+        &mut self,
+        key: &Self::Key,
+        hash: u64,
+    ) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>> {
+        if unlikely(K::equals_zero(key)) {
+            let res = self.zero.is_some();
+            if !res {
+                *self.zero = Some(MaybeUninit::zeroed().assume_init());
+            }
+            let zero = self.zero.as_mut().unwrap();
+            if res {
+                return Err(zero);
+            } else {
+                return Ok(zero);
+            }
+        }
+
+        if unlikely((self.table.len() + 1) * 2 > self.table.capacity()) {
+            if (self.table.entries.len() >> 22) == 0 {
+                self.table.grow(2);
+            } else {
+                self.table.grow(1);
+            }
+        }
+
+        self.table.insert_with_hash(*key, hash)
     }
 
     fn iter(&self) -> Self::Iterator<'_> {
