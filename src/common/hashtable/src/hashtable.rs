@@ -276,6 +276,7 @@ where
         self.insert(*key)
     }
 
+    #[inline(always)]
     unsafe fn insert_and_entry(
         &mut self,
         key: &Self::Key,
@@ -302,6 +303,7 @@ where
         self.table.insert(*key)
     }
 
+    #[inline(always)]
     unsafe fn insert_and_entry_with_hash(
         &mut self,
         key: &Self::Key,

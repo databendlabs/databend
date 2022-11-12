@@ -20,6 +20,7 @@ use common_datavalues::PrimitiveColumn;
 use common_datavalues::PrimitiveType;
 use common_datavalues::ScalarColumn;
 use common_datavalues::StringColumn;
+use common_datavalues::StringValueIter;
 use common_exception::Result;
 
 pub trait KeysColumnIter<T: ?Sized> {
@@ -87,35 +88,10 @@ impl SerializedKeysColumnIter {
     }
 }
 
-pub struct SerializedKeysIter<'a> {
-    data: &'a [u8],
-    offsets: &'a [i64],
-    pos: usize,
-}
-
-impl<'a> Iterator for SerializedKeysIter<'a> {
-    type Item = &'a [u8];
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.pos < (self.offsets.len() - 1) {
-            let offset = self.offsets[self.pos] as usize;
-            let offset_1 = self.offsets[self.pos + 1] as usize;
-            self.pos += 1;
-            return Some(&self.data[offset..offset_1]);
-        }
-
-        None
-    }
-}
-
 impl KeysColumnIter<[u8]> for SerializedKeysColumnIter {
-    type Iterator<'a> = SerializedKeysIter<'a> where Self: 'a;
+    type Iterator<'a> = StringValueIter<'a> where Self: 'a;
 
     fn iter(&self) -> Self::Iterator<'_> {
-        SerializedKeysIter {
-            pos: 0,
-            data: self.column.values(),
-            offsets: self.column.offsets(),
-        }
+        self.column.iter()
     }
 }

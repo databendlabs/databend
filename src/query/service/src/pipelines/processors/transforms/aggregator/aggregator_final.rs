@@ -141,12 +141,6 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
         let keys_column = block.column(aggregate_function_len);
         let keys_iter = self.method.keys_iter_from_column(keys_column)?;
 
-        // let group_by_two_level_threshold =
-        //     self.ctx.get_settings().get_group_by_two_level_threshold()? as usize;
-        // if !self.state.is_two_level() && self.hashtable.len() >= group_by_two_level_threshold {
-        //     self.state.convert_to_twolevel();
-        // }
-
         // first state places of current block
         let places = Self::lookup_state(
             &mut self.area,
@@ -245,12 +239,6 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
     fn consume(&mut self, block: DataBlock) -> Result<()> {
         let key_array = block.column(0);
         let keys_iter = self.method.keys_iter_from_column(key_array)?;
-
-        // let group_by_two_level_threshold =
-        //     self.ctx.get_settings().get_group_by_two_level_threshold()? as usize;
-        // if !self.state.is_two_level() && self.hashtable.len() >= group_by_two_level_threshold {
-        //     self.state.convert_to_twolevel();
-        // }
 
         unsafe {
             for keys_ref in keys_iter.iter() {

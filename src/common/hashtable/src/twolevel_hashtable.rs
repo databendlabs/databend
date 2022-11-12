@@ -79,6 +79,7 @@ impl<K: ?Sized + FastHash, V, Impl: HashtableLike<Key = K, Value = V>> Hashtable
         self.tables[index].insert(key)
     }
 
+    #[inline(always)]
     unsafe fn insert_and_entry(
         &mut self,
         key: &Self::Key,
@@ -88,6 +89,7 @@ impl<K: ?Sized + FastHash, V, Impl: HashtableLike<Key = K, Value = V>> Hashtable
         self.tables[index].insert_and_entry_with_hash(key, hash)
     }
 
+    #[inline(always)]
     unsafe fn insert_and_entry_with_hash(
         &mut self,
         key: &Self::Key,

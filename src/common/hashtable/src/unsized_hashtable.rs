@@ -919,6 +919,7 @@ where A: Allocator + Clone + Default
         }
     }
 
+    #[inline(always)]
     unsafe fn insert_and_entry(
         &mut self,
         key: &Self::Key,
@@ -1072,6 +1073,7 @@ where A: Allocator + Clone + Default
         }
     }
 
+    #[inline(always)]
     unsafe fn insert_and_entry_with_hash(
         &mut self,
         key: &Self::Key,
