@@ -1,9 +1,14 @@
+use std::time::Instant;
+
 use common_datablocks::DataBlock;
 use common_datablocks::HashMethod;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_hashtable::FastHash;
+use common_hashtable::HashtableEntryMutRefLike;
+use common_hashtable::HashtableEntryRefLike;
 use common_hashtable::HashtableLike;
+use tracing::info;
 
 use crate::pipelines::processors::transforms::aggregator::FinalAggregator;
 use crate::pipelines::processors::transforms::aggregator::PartialAggregator;
@@ -36,24 +41,47 @@ where
     Method: HashMethod + PolymorphicKeysHelper<Method> + Send,
     Method::HashKey: FastHash,
 {
-    type TwoLevelAggregator = PartialAggregator<true, TwoLevelHashMethod<Method>>;
+    const SUPPORT_TWO_LEVEL: bool = Method::SUPPORT_TWO_LEVEL;
 
-    const SUPPORT_TWO_LEVEL: bool = true;
+    type TwoLevelAggregator = PartialAggregator<true, TwoLevelHashMethod<Method>>;
 
     fn get_state_cardinality(&self) -> usize {
         self.hash_table.len()
     }
 
+    // PartialAggregator<true, Method> -> TwoLevelAggregator<PartialAggregator<true, Method>>
     fn convert_two_level(mut self) -> Result<TwoLevelAggregator<Self>> {
+        let instant = Instant::now();
+        let method = self.method.clone();
+        let two_level_method = TwoLevelHashMethod::create(method);
+        let mut two_level_hashtable = two_level_method.create_hash_table()?;
+
+        unsafe {
+            for item in self.hash_table.iter() {
+                match two_level_hashtable.insert_and_entry(item.key()) {
+                    Ok(mut entry) => {
+                        *entry.get_mut() = *item.get();
+                    }
+                    Err(mut entry) => {
+                        *entry.get_mut() = *item.get();
+                    }
+                };
+            }
+        }
+
+        info!(
+            "Convert to two level aggregator elapsed: {:?}",
+            instant.elapsed()
+        );
+
         Ok(TwoLevelAggregator::<Self> {
             inner: PartialAggregator::<true, TwoLevelHashMethod<Method>> {
-                ctx: self.ctx.clone(),
                 area: self.area.take(),
                 params: self.params.clone(),
                 is_generated: self.is_generated,
                 states_dropped: self.states_dropped,
-                method: unimplemented!(),
-                hash_table: unimplemented!(),
+                method: two_level_method,
+                hash_table: two_level_hashtable,
             },
         })
     }
@@ -64,24 +92,47 @@ where
     Method: HashMethod + PolymorphicKeysHelper<Method> + Send,
     Method::HashKey: FastHash,
 {
-    type TwoLevelAggregator = PartialAggregator<true, TwoLevelHashMethod<Method>>;
+    const SUPPORT_TWO_LEVEL: bool = Method::SUPPORT_TWO_LEVEL;
 
-    const SUPPORT_TWO_LEVEL: bool = true;
+    type TwoLevelAggregator = PartialAggregator<false, TwoLevelHashMethod<Method>>;
 
     fn get_state_cardinality(&self) -> usize {
         self.hash_table.len()
     }
 
+    // PartialAggregator<false, Method> -> TwoLevelAggregator<PartialAggregator<false, Method>>
     fn convert_two_level(mut self) -> Result<TwoLevelAggregator<Self>> {
+        let instant = Instant::now();
+        let method = self.method.clone();
+        let two_level_method = TwoLevelHashMethod::create(method);
+        let mut two_level_hashtable = two_level_method.create_hash_table()?;
+
+        unsafe {
+            for item in self.hash_table.iter() {
+                match two_level_hashtable.insert_and_entry(item.key()) {
+                    Ok(mut entry) => {
+                        *entry.get_mut() = *item.get();
+                    }
+                    Err(mut entry) => {
+                        *entry.get_mut() = *item.get();
+                    }
+                };
+            }
+        }
+
+        info!(
+            "Convert to two level aggregator elapsed: {:?}",
+            instant.elapsed()
+        );
+
         Ok(TwoLevelAggregator::<Self> {
-            inner: PartialAggregator::<true, TwoLevelHashMethod<Method>> {
-                ctx: self.ctx.clone(),
+            inner: PartialAggregator::<false, TwoLevelHashMethod<Method>> {
                 area: self.area.take(),
                 params: self.params.clone(),
                 is_generated: self.is_generated,
                 states_dropped: self.states_dropped,
-                method: unimplemented!(),
-                hash_table: unimplemented!(),
+                method: two_level_method,
+                hash_table: two_level_hashtable,
             },
         })
     }
@@ -115,6 +166,10 @@ where
     type TwoLevelAggregator = FinalAggregator<true, TwoLevelHashMethod<Method>>;
 }
 
+// Example: TwoLevelAggregator<PartialAggregator<true, Method>> ->
+//      TwoLevelAggregator {
+//          inner: PartialAggregator<true, TwoLevelMethod<Method>>
+//      }
 pub struct TwoLevelAggregator<T: TwoLevelAggregatorLike> {
     inner: T::TwoLevelAggregator,
 }

@@ -31,7 +31,7 @@ pub enum KeysState {
     U512(Vec<U512>),
 }
 
-pub trait HashMethod {
+pub trait HashMethod: Clone {
     type HashKey: ?Sized + Eq + Hash + Debug;
 
     type HashKeyIter<'a>: Iterator<Item = &'a Self::HashKey> + TrustedLen
@@ -173,6 +173,7 @@ impl HashMethod for HashMethodSerializer {
     }
 }
 
+#[derive(Clone)]
 pub struct HashMethodFixedKeys<T> {
     t: PhantomData<T>,
 }

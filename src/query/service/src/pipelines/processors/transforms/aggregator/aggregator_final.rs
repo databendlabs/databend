@@ -43,7 +43,6 @@ use crate::pipelines::processors::transforms::group_by::KeysColumnIter;
 use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
 use crate::pipelines::processors::transforms::transform_aggregator::Aggregator;
 use crate::pipelines::processors::AggregatorParams;
-use crate::sessions::QueryContext;
 
 pub type KeysU8FinalAggregator<const HAS_AGG: bool> = FinalAggregator<HAS_AGG, HashMethodKeysU8>;
 pub type KeysU16FinalAggregator<const HAS_AGG: bool> = FinalAggregator<HAS_AGG, HashMethodKeysU16>;
@@ -71,19 +70,14 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send
     params: Arc<AggregatorParams>,
     // used for deserialization only, so we can reuse it during the loop
     temp_place: Option<StateAddr>,
-    ctx: Arc<QueryContext>,
 }
 
 impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + Send>
     FinalAggregator<HAS_AGG, Method>
 {
-    pub fn create(
-        ctx: Arc<QueryContext>,
-        method: Method,
-        params: Arc<AggregatorParams>,
-    ) -> Result<Self> {
+    pub fn create(method: Method, params: Arc<AggregatorParams>) -> Result<Self> {
         let mut area = Area::new();
-        let hashtable = method.create_hash_table();
+        let hashtable = method.create_hash_table()?;
         let temp_place = if params.aggregate_functions.is_empty() {
             None
         } else {
@@ -93,7 +87,6 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
         Ok(Self {
             is_generated: false,
             states_dropped: false,
-            ctx,
             area,
             method,
             params,

@@ -8,11 +8,11 @@ const BUCKETS: usize = 256;
 const BUCKETS_LG2: u32 = 8;
 
 pub struct TwoLevelHashtable<Impl> {
-    tables: [Impl; BUCKETS],
+    tables: Vec<Impl>,
 }
 
 impl<Impl> TwoLevelHashtable<Impl> {
-    pub fn create(tables: [Impl; BUCKETS]) -> Self {
+    pub fn create(tables: Vec<Impl>) -> Self {
         TwoLevelHashtable::<Impl> { tables }
     }
 }

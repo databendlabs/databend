@@ -40,7 +40,6 @@ use crate::pipelines::processors::transforms::group_by::KeysColumnBuilder;
 use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
 use crate::pipelines::processors::transforms::transform_aggregator::Aggregator;
 use crate::pipelines::processors::AggregatorParams;
-use crate::sessions::QueryContext;
 
 pub type Keys8Grouper = PartialAggregator<false, HashMethodKeysU8>;
 pub type Keys16Grouper = PartialAggregator<false, HashMethodKeysU16>;
@@ -70,23 +69,21 @@ where Method: HashMethod + PolymorphicKeysHelper<Method>
     pub method: Method,
     pub hash_table: Method::HashTable,
     pub params: Arc<AggregatorParams>,
-    pub ctx: Arc<QueryContext>,
 }
 
 impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + Send>
     PartialAggregator<HAS_AGG, Method>
 {
-    pub fn create(ctx: Arc<QueryContext>, method: Method, params: Arc<AggregatorParams>) -> Self {
-        let hash_table = method.create_hash_table();
-        Self {
-            ctx,
+    pub fn create(method: Method, params: Arc<AggregatorParams>) -> Result<Self> {
+        let hash_table = method.create_hash_table()?;
+        Ok(Self {
             params,
             method,
             hash_table,
             area: Some(Area::new()),
             is_generated: false,
             states_dropped: false,
-        }
+        })
     }
 
     #[inline(always)]
@@ -240,12 +237,6 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
 
         let group_keys_iter = self.method.build_keys_iter(&group_keys_state)?;
 
-        // let group_by_two_level_threshold =
-        //     self.ctx.get_settings().get_group_by_two_level_threshold()? as usize;
-        // if !self.state.is_two_level() && self.hash_table.len() >= group_by_two_level_threshold {
-        //     // self.state.convert_to_twolevel();
-        // }
-
         let area = self.area.as_mut().unwrap();
         let places = Self::lookup_state(area, &self.params, group_keys_iter, &mut self.hash_table);
         Self::execute(&self.params, &block, &places)
@@ -269,12 +260,6 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
             .method
             .build_keys_state(&group_columns, block.num_rows())?;
         let group_keys_iter = self.method.build_keys_iter(&keys_state)?;
-
-        // let group_by_two_level_threshold =
-        //     self.ctx.get_settings().get_group_by_two_level_threshold()? as usize;
-        // if !self.state.is_two_level() && self.hash_table.len() >= group_by_two_level_threshold {
-        //     self.state.convert_to_twolevel();
-        // }
 
         Self::lookup_key(group_keys_iter, &mut self.hash_table);
         Ok(())

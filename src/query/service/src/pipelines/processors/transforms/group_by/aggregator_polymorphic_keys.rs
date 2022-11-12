@@ -22,6 +22,7 @@ use common_datablocks::HashMethodKeysU512;
 use common_datablocks::HashMethodSerializer;
 use common_datablocks::KeysState;
 use common_datavalues::prelude::*;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_hashtable::FastHash;
 use common_hashtable::HashMap;
@@ -82,8 +83,10 @@ use crate::pipelines::processors::AggregatorParams;
 // }
 //
 pub trait PolymorphicKeysHelper<Method: HashMethod> {
+    const SUPPORT_TWO_LEVEL: bool;
+
     type HashTable: HashtableLike<Key = Method::HashKey, Value = usize> + Send;
-    fn create_hash_table(&self) -> Self::HashTable;
+    fn create_hash_table(&self) -> Result<Self::HashTable>;
 
     type ColumnBuilder<'a>: KeysColumnBuilder<T = &'a Method::HashKey>
     where
@@ -109,10 +112,12 @@ pub trait PolymorphicKeysHelper<Method: HashMethod> {
 }
 
 impl PolymorphicKeysHelper<HashMethodFixedKeys<u8>> for HashMethodFixedKeys<u8> {
+    const SUPPORT_TWO_LEVEL: bool = false;
+
     type HashTable = LookupHashMap<u8, 256, usize>;
 
-    fn create_hash_table(&self) -> Self::HashTable {
-        LookupHashMap::create(Default::default())
+    fn create_hash_table(&self) -> Result<Self::HashTable> {
+        Ok(LookupHashMap::create(Default::default()))
     }
 
     type ColumnBuilder<'a> = FixedKeysColumnBuilder<'a, u8>;
@@ -137,10 +142,12 @@ impl PolymorphicKeysHelper<HashMethodFixedKeys<u8>> for HashMethodFixedKeys<u8> 
 }
 
 impl PolymorphicKeysHelper<HashMethodFixedKeys<u16>> for HashMethodFixedKeys<u16> {
+    const SUPPORT_TWO_LEVEL: bool = false;
+
     type HashTable = LookupHashMap<u16, 65536, usize>;
 
-    fn create_hash_table(&self) -> Self::HashTable {
-        LookupHashMap::create(Default::default())
+    fn create_hash_table(&self) -> Result<Self::HashTable> {
+        Ok(LookupHashMap::create(Default::default()))
     }
 
     type ColumnBuilder<'a> = FixedKeysColumnBuilder<'a, u16>;
@@ -165,10 +172,12 @@ impl PolymorphicKeysHelper<HashMethodFixedKeys<u16>> for HashMethodFixedKeys<u16
 }
 
 impl PolymorphicKeysHelper<HashMethodFixedKeys<u32>> for HashMethodFixedKeys<u32> {
+    const SUPPORT_TWO_LEVEL: bool = true;
+
     type HashTable = HashMap<u32, usize>;
 
-    fn create_hash_table(&self) -> Self::HashTable {
-        HashMap::new()
+    fn create_hash_table(&self) -> Result<Self::HashTable> {
+        Ok(HashMap::new())
     }
 
     type ColumnBuilder<'a> = FixedKeysColumnBuilder<'a, u32>;
@@ -193,10 +202,12 @@ impl PolymorphicKeysHelper<HashMethodFixedKeys<u32>> for HashMethodFixedKeys<u32
 }
 
 impl PolymorphicKeysHelper<HashMethodFixedKeys<u64>> for HashMethodFixedKeys<u64> {
+    const SUPPORT_TWO_LEVEL: bool = true;
+
     type HashTable = HashMap<u64, usize>;
 
-    fn create_hash_table(&self) -> Self::HashTable {
-        HashMap::new()
+    fn create_hash_table(&self) -> Result<Self::HashTable> {
+        Ok(HashMap::new())
     }
 
     type ColumnBuilder<'a> = FixedKeysColumnBuilder<'a, u64>;
@@ -221,10 +232,12 @@ impl PolymorphicKeysHelper<HashMethodFixedKeys<u64>> for HashMethodFixedKeys<u64
 }
 
 impl PolymorphicKeysHelper<HashMethodKeysU128> for HashMethodKeysU128 {
+    const SUPPORT_TWO_LEVEL: bool = true;
+
     type HashTable = HashMap<u128, usize>;
 
-    fn create_hash_table(&self) -> Self::HashTable {
-        HashMap::new()
+    fn create_hash_table(&self) -> Result<Self::HashTable> {
+        Ok(HashMap::new())
     }
 
     type ColumnBuilder<'a> = LargeFixedKeysColumnBuilder<'a, u128>;
@@ -251,10 +264,12 @@ impl PolymorphicKeysHelper<HashMethodKeysU128> for HashMethodKeysU128 {
 }
 
 impl PolymorphicKeysHelper<HashMethodKeysU256> for HashMethodKeysU256 {
+    const SUPPORT_TWO_LEVEL: bool = true;
+
     type HashTable = HashMap<U256, usize>;
 
-    fn create_hash_table(&self) -> Self::HashTable {
-        HashMap::new()
+    fn create_hash_table(&self) -> Result<Self::HashTable> {
+        Ok(HashMap::new())
     }
 
     type ColumnBuilder<'a> = LargeFixedKeysColumnBuilder<'a, U256>;
@@ -281,10 +296,12 @@ impl PolymorphicKeysHelper<HashMethodKeysU256> for HashMethodKeysU256 {
 }
 
 impl PolymorphicKeysHelper<HashMethodKeysU512> for HashMethodKeysU512 {
+    const SUPPORT_TWO_LEVEL: bool = true;
+
     type HashTable = HashMap<U512, usize>;
 
-    fn create_hash_table(&self) -> Self::HashTable {
-        HashMap::new()
+    fn create_hash_table(&self) -> Result<Self::HashTable> {
+        Ok(HashMap::new())
     }
 
     type ColumnBuilder<'a> = LargeFixedKeysColumnBuilder<'a, U512>;
@@ -311,10 +328,12 @@ impl PolymorphicKeysHelper<HashMethodKeysU512> for HashMethodKeysU512 {
 }
 
 impl PolymorphicKeysHelper<HashMethodSerializer> for HashMethodSerializer {
+    const SUPPORT_TWO_LEVEL: bool = true;
+
     type HashTable = UnsizedHashMap<[u8], usize>;
 
-    fn create_hash_table(&self) -> Self::HashTable {
-        UnsizedHashMap::new()
+    fn create_hash_table(&self) -> Result<Self::HashTable> {
+        Ok(UnsizedHashMap::new())
     }
 
     type ColumnBuilder<'a> = SerializedKeysColumnBuilder<'a>;
@@ -337,11 +356,18 @@ impl PolymorphicKeysHelper<HashMethodSerializer> for HashMethodSerializer {
     }
 }
 
-pub struct TwoLevelHashMethod<Method: HashMethod> {
+#[derive(Clone)]
+pub struct TwoLevelHashMethod<Method: HashMethod + Send> {
     method: Method,
 }
 
-impl<Method: HashMethod> HashMethod for TwoLevelHashMethod<Method> {
+impl<Method: HashMethod + Send> TwoLevelHashMethod<Method> {
+    pub fn create(method: Method) -> TwoLevelHashMethod<Method> {
+        TwoLevelHashMethod::<Method> { method }
+    }
+}
+
+impl<Method: HashMethod + Send> HashMethod for TwoLevelHashMethod<Method> {
     type HashKey = Method::HashKey;
     type HashKeyIter<'a> = Method::HashKeyIter<'a> where Self: 'a;
 
@@ -361,15 +387,22 @@ impl<Method: HashMethod> HashMethod for TwoLevelHashMethod<Method> {
 impl<Method> PolymorphicKeysHelper<TwoLevelHashMethod<Method>> for TwoLevelHashMethod<Method>
 where
     Self: HashMethod<HashKey = Method::HashKey>,
-    Method: HashMethod + PolymorphicKeysHelper<Method>,
+    Method: HashMethod + PolymorphicKeysHelper<Method> + Send,
     Method::HashKey: FastHash,
 {
+    // Two level cannot be recursive
+    const SUPPORT_TWO_LEVEL: bool = false;
+
     type HashTable = TwoLevelHashMap<Method::HashTable>;
 
-    fn create_hash_table(&self) -> Self::HashTable {
-        // let tables: [Method::HashTable; 256] = [self.method.create_hash_table(); 256];
-        // TwoLevelHashMap::create(tables)
-        unimplemented!()
+    fn create_hash_table(&self) -> Result<Self::HashTable> {
+        let mut tables = Vec::with_capacity(256);
+
+        for _index in 0..256 {
+            tables.push(self.method.create_hash_table()?);
+        }
+
+        Ok(TwoLevelHashMap::create(tables))
     }
 
     type ColumnBuilder<'a> = Method::ColumnBuilder<'a> where Self: 'a, TwoLevelHashMethod<Method>: 'a;
