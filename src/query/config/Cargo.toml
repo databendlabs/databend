@@ -36,6 +36,7 @@ serde = { workspace = true }
 serfig = "0.0.3"
 strum = "0.24.1"
 strum_macros = "0.24.1"
+tracing = "0.1.36"
 
 [build-dependencies]
 common-building = { path = "../../common/building" }

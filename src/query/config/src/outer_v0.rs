@@ -56,6 +56,8 @@ use super::inner::MetaType;
 use super::inner::QueryConfig as InnerQueryConfig;
 use crate::DATABEND_COMMIT_VERSION;
 
+const CATALOG_HIVE: &str = "hive";
+
 /// Outer config for `query`.
 ///
 /// We will use this config to handle
@@ -96,11 +98,24 @@ pub struct Config {
     #[clap(skip)]
     pub cache: CacheConfig,
 
-    // external catalog config.
-    // - Later, catalog information SHOULD be kept in KV Service
-    // - currently only supports HIVE (via hive meta store)
+    /// Note: Legacy Config API
+    ///
+    /// When setting its all feilds to empty strings, it will be ignored
+    ///
+    /// external catalog config.
+    /// - Later, catalog information SHOULD be kept in KV Service
+    /// - currently only supports HIVE (via hive meta store)
+    #[clap(flatten)]
     pub catalog: CatalogHiveConfig,
 
+    /// external catalog config.
+    ///
+    /// - Later, catalog information SHOULD be kept in KV Service
+    /// - currently only supports HIVE (via hive meta store)
+    ///
+    /// Note:
+    ///
+    /// when coverted from inner config, all catalog configurations will store in `catalogs`
     #[clap(skip)]
     pub catalogs: HashMap<String, CatalogConfig>,
 }
@@ -157,6 +172,7 @@ impl From<InnerConfig> for Config {
             meta: inner.meta.into(),
             storage: inner.storage.into(),
             cache: inner.cache.into(),
+            catalog: CatalogHiveConfig::empty(),
 
             catalogs: inner
                 .catalogs
@@ -171,11 +187,20 @@ impl TryInto<InnerConfig> for Config {
     type Error = ErrorCode;
 
     fn try_into(self) -> Result<InnerConfig> {
-        let mut catalogs = vec![];
+        let mut catalogs = HashMap::new();
         for (k, v) in self.catalogs.into_iter() {
             let catalog = v.try_into()?;
-            catalogs.push((k, catalog));
+            catalogs.insert(k, catalog);
         }
+        if !self.catalog.meta_store_address.is_empty() || !self.catalog.protocol.is_empty() {
+            tracing::warn!(
+                "`catalog` is planned to be deprecated, please add catalog in `catalogs` instead"
+            );
+            let hive = self.catalog.try_into()?;
+            let catalog = InnerCatalogConfig::Hive(hive);
+            catalogs.insert(CATALOG_HIVE.to_string(), catalog);
+        }
+
         Ok(InnerConfig {
             cmd: self.cmd,
             config_file: self.config_file,
@@ -320,33 +345,50 @@ impl TryInto<InnerStorageConfig> for StorageConfig {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "type")]
-pub enum CatalogConfig {
-    #[serde(alias = "hive")]
-    Hive(CatalogHiveConfig),
+pub struct CatalogConfig {
+    #[serde(rename = "type")]
+    ty: String,
+    #[serde(flatten)]
+    hive: CatalogHiveConfig,
 }
 
 impl Default for CatalogConfig {
     fn default() -> Self {
-        Self::Hive(CatalogHiveConfig::default())
+        Self {
+            ty: "hive".to_string(),
+            hive: CatalogHiveConfig::default(),
+        }
     }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
+#[serde(default = "CatalogHiveConfig::empty")]
 pub struct CatalogHiveConfig {
-    #[clap(long = "hive-meta-store-address", default_value = "127.0.0.1:9083")]
-    #[serde(alias = "meta_store_address")]
+    #[clap(long = "hive-meta-store-address", default_value_t)]
     pub meta_store_address: String,
-    #[clap(long = "hive-thrift-protocol", default_value = "binary")]
+    #[clap(long = "hive-thrift-protocol", default_value_t)]
     pub protocol: String,
+}
+
+impl CatalogHiveConfig {
+    pub fn empty() -> Self {
+        CatalogHiveConfig {
+            meta_store_address: "".to_string(),
+            protocol: "".to_string(),
+        }
+    }
 }
 
 impl TryInto<InnerCatalogConfig> for CatalogConfig {
     type Error = ErrorCode;
 
     fn try_into(self) -> Result<InnerCatalogConfig, Self::Error> {
-        match self {
-            CatalogConfig::Hive(v) => Ok(InnerCatalogConfig::Hive(v.try_into()?)),
+        match self.ty.as_str() {
+            "hive" => Ok(InnerCatalogConfig::Hive(self.hive.try_into()?)),
+            ty => Err(ErrorCode::CatalogNotSupported(format!(
+                "got unsupported catalog type in config: {}",
+                ty
+            ))),
         }
     }
 }
@@ -354,7 +396,10 @@ impl TryInto<InnerCatalogConfig> for CatalogConfig {
 impl From<InnerCatalogConfig> for CatalogConfig {
     fn from(inner: InnerCatalogConfig) -> Self {
         match inner {
-            InnerCatalogConfig::Hive(v) => Self::Hive(v.into()),
+            InnerCatalogConfig::Hive(v) => Self {
+                ty: "hive".to_string(),
+                hive: v.into(),
+            },
         }
     }
 }

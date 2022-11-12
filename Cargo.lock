@@ -1312,6 +1312,7 @@ dependencies = [
  "strum",
  "strum_macros",
  "thrift 0.17.0",
+ "tracing",
 ]
 
 [[package]]

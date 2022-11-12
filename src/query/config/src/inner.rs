@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::fmt;
 use std::fmt::Debug;
 use std::fmt::Display;
@@ -56,7 +57,7 @@ pub struct Config {
     // external catalog config.
     // - Later, catalog information SHOULD be kept in KV Service
     // - currently only supports HIVE (via hive meta store)
-    pub catalogs: Vec<(String, CatalogConfig)>,
+    pub catalogs: HashMap<String, CatalogConfig>,
 }
 
 impl Config {

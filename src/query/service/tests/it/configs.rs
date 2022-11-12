@@ -169,8 +169,8 @@ data_path = "_data"
 [cache.moka]
 
 [catalog]
-meta_store_address = "127.0.0.1:9083"
-protocol = "binary"
+meta_store_address = ""
+protocol = ""
 
 [catalogs]
 "#;
@@ -803,6 +803,10 @@ protocol = "binary"
             assert_eq!("access_key_id_from_env", cfg.storage.s3.access_key_id);
             assert_eq!("s3", cfg.storage.storage_type);
 
+            // config in `catalog` field will be moved to `catalogs` field
+            assert!(cfg.catalog.meta_store_address.is_empty());
+            assert!(cfg.catalog.protocol.is_empty());
+            assert!(cfg.catalogs.get("hive").is_some(), "catalogs is none!");
             assert!(cfg.catalogs.get("my_hive").is_some(), "catalogs is none!");
 
             let inner = cfg.catalogs["my_hive"].clone().try_into();
