@@ -134,7 +134,7 @@ CONNECTION = (ACCESS_KEY_ID = '<your_aws_key_id>' SECRET_ACCESS_KEY = '<your_aws
 | Parameter  | Description | Required |
 | ----------- | ----------- | --- |
 | `s3://<bucket>/[<path>]`  | Files are in the specified external location (S3-like bucket) | YES |
-| `AWS_KEY_ID = '<your_aws_key_id>' AWS_SECRECT_KEY = '<your_aws_secret_key>'`  | The credentials for connecting to AWS and accessing the private/protected S3 bucket where the files to load are staged. |  Optional |
+| `ACCESS_KEY_ID = '<your_aws_key_id>' SECRET_ACCESS_KEY = '<your_aws_secret_key>'`  | The credentials for connecting to AWS and accessing the private/protected S3 bucket where the files to load are staged. |  Optional |
 | `ENDPOINT_URL = '<endpoint_url>'`  | S3-compatible endpoint URL like MinIO. Default: `https://s3.amazonaws.com` |  Optional |
 
 ## Column Nullable
@@ -379,5 +379,5 @@ Amy
 -- Create a table named `mytable` and specify the location `s3://testbucket/admin/data/` for the data storage
 CREATE TABLE mytable(a int) 
 's3://testbucket/admin/data/' 
-connection=(aws_key_id='<your_aws_key_id>' aws_secret_key='<your_aws_secret_key>' endpoint_url='https://s3.amazonaws.com');
+connection=(ACCESS_KEY_ID='<your_aws_key_id>' SECRET_ACCESS_KEY='<your_aws_secret_key>' endpoint_url='https://s3.amazonaws.com');
 ```
