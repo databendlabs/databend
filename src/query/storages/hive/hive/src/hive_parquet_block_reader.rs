@@ -44,6 +44,7 @@ pub struct HiveParquetBlockReader {
     arrow_schema: Arc<Schema>,
     projected_schema: DataSchemaRef,
     hive_partition_filler: Option<HivePartitionFiller>,
+    chunk_size: usize,
 }
 
 pub struct DataBlockDeserializer {
@@ -100,6 +101,7 @@ impl HiveParquetBlockReader {
         schema: DataSchemaRef,
         projection: Vec<usize>,
         hive_partition_filler: Option<HivePartitionFiller>,
+        chunk_size: usize,
     ) -> Result<Arc<HiveParquetBlockReader>> {
         let projected_schema = DataSchemaRef::new(schema.project(&projection));
         let arrow_schema = schema.to_arrow();
@@ -109,6 +111,7 @@ impl HiveParquetBlockReader {
             projected_schema,
             arrow_schema: Arc::new(arrow_schema),
             hive_partition_filler,
+            chunk_size,
         }))
     }
 
@@ -117,6 +120,7 @@ impl HiveParquetBlockReader {
         chunk: Vec<u8>,
         rows: usize,
         field: Field,
+        chunk_size: usize,
     ) -> Result<ArrayIter<'static>> {
         let primitive_type = column_meta.descriptor().descriptor.primitive_type.clone();
         let pages = PageReader::new(
@@ -126,18 +130,6 @@ impl HiveParquetBlockReader {
             vec![],
             usize::MAX,
         );
-
-        let chunk_size = if let Ok(read_buffer_size_str) = std::env::var("CHUNK_SIZE") {
-            read_buffer_size_str.parse::<usize>().unwrap_or_else(|_|
-                {
-                    tracing::warn!(
-                    "invalid value of env var READ_BUFFER_SIZE {read_buffer_size_str}, using default value {rows}",
-                );
-                    rows
-                })
-        } else {
-            rows
-        };
 
         let decompressor = BasicDecompressor::new(pages, vec![]);
         Ok(column_iter_to_arrays(
@@ -256,6 +248,7 @@ impl HiveParquetBlockReader {
                 column_chunk,
                 row_group.num_rows(),
                 field,
+                self.chunk_size,
             )?);
         }
 
