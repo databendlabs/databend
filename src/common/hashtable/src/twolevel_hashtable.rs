@@ -13,6 +13,7 @@ pub struct TwoLevelHashtable<Impl> {
 
 impl<Impl> TwoLevelHashtable<Impl> {
     pub fn create(tables: Vec<Impl>) -> Self {
+        assert_eq!(tables.len(), BUCKETS);
         TwoLevelHashtable::<Impl> { tables }
     }
 }
@@ -70,7 +71,16 @@ impl<K: ?Sized + FastHash, V, Impl: HashtableLike<Key = K, Value = V>> Hashtable
     ) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>> {
         let hash = key.fast_hash();
         let index = hash as usize >> (64u32 - BUCKETS_LG2);
-        self.tables[index].insert_and_entry(key)
+        self.tables[index].insert_and_entry_with_hash(key, hash)
+    }
+
+    unsafe fn insert_and_entry_with_hash(
+        &mut self,
+        key: &Self::Key,
+        hash: u64,
+    ) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>> {
+        let index = hash as usize >> (64u32 - BUCKETS_LG2);
+        self.tables[index].insert_and_entry_with_hash(key, hash)
     }
 
     fn iter(&self) -> Self::Iterator<'_> {

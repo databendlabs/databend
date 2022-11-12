@@ -302,6 +302,35 @@ where
         self.table.insert(*key)
     }
 
+    unsafe fn insert_and_entry_with_hash(
+        &mut self,
+        key: &Self::Key,
+        hash: u64,
+    ) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>> {
+        if unlikely(K::equals_zero(key)) {
+            let res = self.zero.is_some();
+            if !res {
+                *self.zero = Some(MaybeUninit::zeroed().assume_init());
+            }
+            let zero = self.zero.as_mut().unwrap();
+            if res {
+                return Err(zero);
+            } else {
+                return Ok(zero);
+            }
+        }
+
+        if unlikely((self.table.len() + 1) * 2 > self.table.capacity()) {
+            if (self.table.entries.len() >> 22) == 0 {
+                self.table.grow(2);
+            } else {
+                self.table.grow(1);
+            }
+        }
+
+        self.table.insert_with_hash(*key, hash)
+    }
+
     fn iter(&self) -> Self::Iterator<'_> {
         self.iter()
     }

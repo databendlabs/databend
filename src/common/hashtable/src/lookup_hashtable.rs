@@ -110,6 +110,10 @@ macro_rules! lookup_impl {
                 }
             }
 
+            unsafe fn insert_and_entry_with_hash(&mut self, key: &$ty, _hash: u64) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>> {
+                self.insert_and_entry(key)
+            }
+
             fn iter(&self) -> Self::Iterator<'_> {
                 LookupTableIter::create(&self.flags, &self.data)
             }

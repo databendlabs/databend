@@ -329,12 +329,6 @@ impl FastHash for OrderedFloat<f64> {
     }
 }
 
-impl<'a> FastHash for &'a [u8] {
-    fn fast_hash(&self) -> u64 {
-        (*self).fast_hash()
-    }
-}
-
 impl FastHash for [u8] {
     #[inline(always)]
     fn fast_hash(&self) -> u64 {
@@ -465,6 +459,12 @@ pub trait HashtableLike {
     unsafe fn insert_and_entry(
         &mut self,
         key_ref: &Self::Key,
+    ) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>>;
+
+    unsafe fn insert_and_entry_with_hash(
+        &mut self,
+        key_ref: &Self::Key,
+        hash: u64,
     ) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>>;
 
     fn iter(&self) -> Self::Iterator<'_>;

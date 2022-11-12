@@ -22,7 +22,6 @@ use common_datablocks::HashMethodKeysU512;
 use common_datablocks::HashMethodSerializer;
 use common_datablocks::KeysState;
 use common_datavalues::prelude::*;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_hashtable::FastHash;
 use common_hashtable::HashMap;
