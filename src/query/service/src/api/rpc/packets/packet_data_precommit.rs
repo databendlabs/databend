@@ -23,7 +23,9 @@ use byteorder::WriteBytesExt;
 use common_datablocks::BlockMetaInfoPtr;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
+use common_exception::ErrorCode;
 use common_exception::Result;
+use common_exception::ToErrorCode;
 
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
@@ -39,7 +41,10 @@ impl PrecommitBlock {
 
     pub fn write<T: Write>(self, bytes: &mut T) -> Result<()> {
         let data_block = self.0;
-        let serialized_meta = serde_json::to_vec(&data_block.meta()?)?;
+        let serialized_meta = bincode::serialize(&data_block.meta()?).map_err_to_code(
+            ErrorCode::BadBytes,
+            || "precommit block serialize error when exchange",
+        )?;
 
         bytes.write_u64::<BigEndian>(serialized_meta.len() as u64)?;
         bytes.write_all(&serialized_meta)?;
@@ -51,7 +56,10 @@ impl PrecommitBlock {
         let mut meta = vec![0; meta_len];
 
         bytes.read_exact(&mut meta)?;
-        let block_meta = serde_json::from_slice::<Option<BlockMetaInfoPtr>>(&meta)?;
+        let block_meta: Option<BlockMetaInfoPtr> = bincode::deserialize(&meta).map_err_to_code(
+            ErrorCode::BadBytes,
+            || "precommit block deserialize error when exchange",
+        )?;
 
         Ok(PrecommitBlock(DataBlock::create_with_meta(
             DataSchemaRef::default(),
