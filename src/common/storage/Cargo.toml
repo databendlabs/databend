@@ -20,7 +20,6 @@ backon = "0.2"
 globiter = "0.1"
 once_cell = "1"
 opendal = { version = "0.19", features = [
-    "layers-retry",
     "layers-tracing",
     "layers-metrics",
     "services-ipfs",

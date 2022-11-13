@@ -31,7 +31,7 @@ common-storages-table-meta = { path = "../../table-meta" }
 async-recursion = "1.0.0"
 async-trait = "0.1.57"
 futures = "0.3.24"
-opendal = { version = "0.19", features = ["layers-retry"] }
+opendal = "0.19"
 serde = { workspace = true }
 thrift = { package = "databend-thrift", version = "0.17.0" }
 tracing = "0.1.36"
