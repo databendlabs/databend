@@ -174,6 +174,7 @@ impl Processor for CompactSink {
             }
             self.input_data
                 .push(cur_input.pull_data().unwrap()?.get_meta().unwrap().clone());
+            cur_input.set_need_data();
         }
         Ok(Event::NeedData)
     }
