@@ -53,102 +53,102 @@ impl TransformAggregator {
         match aggregator_params.aggregate_functions.is_empty() {
             true => match transform_params.method {
                 HashMethodKind::KeysU8(method) => AggregatorTransform::create(
-                    ctx,
+                    ctx.clone(),
                     transform_params.transform_input_port,
                     transform_params.transform_output_port,
-                    KeysU8FinalAggregator::<false>::create(method, aggregator_params)?,
+                    KeysU8FinalAggregator::<false>::create(ctx, method, aggregator_params)?,
                 ),
                 HashMethodKind::KeysU16(method) => AggregatorTransform::create(
-                    ctx,
+                    ctx.clone(),
                     transform_params.transform_input_port,
                     transform_params.transform_output_port,
-                    KeysU16FinalAggregator::<false>::create(method, aggregator_params)?,
+                    KeysU16FinalAggregator::<false>::create(ctx, method, aggregator_params)?,
                 ),
                 HashMethodKind::KeysU32(method) => AggregatorTransform::create(
-                    ctx,
+                    ctx.clone(),
                     transform_params.transform_input_port,
                     transform_params.transform_output_port,
-                    KeysU32FinalAggregator::<false>::create(method, aggregator_params)?,
+                    KeysU32FinalAggregator::<false>::create(ctx, method, aggregator_params)?,
                 ),
                 HashMethodKind::KeysU64(method) => AggregatorTransform::create(
-                    ctx,
+                    ctx.clone(),
                     transform_params.transform_input_port,
                     transform_params.transform_output_port,
-                    KeysU64FinalAggregator::<false>::create(method, aggregator_params)?,
+                    KeysU64FinalAggregator::<false>::create(ctx, method, aggregator_params)?,
                 ),
                 HashMethodKind::Serializer(method) => AggregatorTransform::create(
-                    ctx,
+                    ctx.clone(),
                     transform_params.transform_input_port,
                     transform_params.transform_output_port,
-                    SerializerFinalAggregator::<false>::create(method, aggregator_params)?,
+                    SerializerFinalAggregator::<false>::create(ctx, method, aggregator_params)?,
                 ),
                 HashMethodKind::KeysU128(method) => AggregatorTransform::create(
-                    ctx,
+                    ctx.clone(),
                     transform_params.transform_input_port,
                     transform_params.transform_output_port,
-                    KeysU128FinalAggregator::<false>::create(method, aggregator_params)?,
+                    KeysU128FinalAggregator::<false>::create(ctx, method, aggregator_params)?,
                 ),
                 HashMethodKind::KeysU256(method) => AggregatorTransform::create(
-                    ctx,
+                    ctx.clone(),
                     transform_params.transform_input_port,
                     transform_params.transform_output_port,
-                    KeysU256FinalAggregator::<false>::create(method, aggregator_params)?,
+                    KeysU256FinalAggregator::<false>::create(ctx, method, aggregator_params)?,
                 ),
                 HashMethodKind::KeysU512(method) => AggregatorTransform::create(
-                    ctx,
+                    ctx.clone(),
                     transform_params.transform_input_port,
                     transform_params.transform_output_port,
-                    KeysU512FinalAggregator::<false>::create(method, aggregator_params)?,
+                    KeysU512FinalAggregator::<false>::create(ctx, method, aggregator_params)?,
                 ),
             },
             false => match transform_params.method {
                 HashMethodKind::KeysU8(method) => AggregatorTransform::create(
-                    ctx,
+                    ctx.clone(),
                     transform_params.transform_input_port,
                     transform_params.transform_output_port,
-                    KeysU8FinalAggregator::<true>::create(method, aggregator_params)?,
+                    KeysU8FinalAggregator::<true>::create(ctx, method, aggregator_params)?,
                 ),
                 HashMethodKind::KeysU16(method) => AggregatorTransform::create(
-                    ctx,
+                    ctx.clone(),
                     transform_params.transform_input_port,
                     transform_params.transform_output_port,
-                    KeysU16FinalAggregator::<true>::create(method, aggregator_params)?,
+                    KeysU16FinalAggregator::<true>::create(ctx, method, aggregator_params)?,
                 ),
                 HashMethodKind::KeysU32(method) => AggregatorTransform::create(
-                    ctx,
+                    ctx.clone(),
                     transform_params.transform_input_port,
                     transform_params.transform_output_port,
-                    KeysU32FinalAggregator::<true>::create(method, aggregator_params)?,
+                    KeysU32FinalAggregator::<true>::create(ctx, method, aggregator_params)?,
                 ),
                 HashMethodKind::KeysU64(method) => AggregatorTransform::create(
-                    ctx,
+                    ctx.clone(),
                     transform_params.transform_input_port,
                     transform_params.transform_output_port,
-                    KeysU64FinalAggregator::<true>::create(method, aggregator_params)?,
+                    KeysU64FinalAggregator::<true>::create(ctx, method, aggregator_params)?,
                 ),
                 HashMethodKind::Serializer(method) => AggregatorTransform::create(
-                    ctx,
+                    ctx.clone(),
                     transform_params.transform_input_port,
                     transform_params.transform_output_port,
-                    SerializerFinalAggregator::<true>::create(method, aggregator_params)?,
+                    SerializerFinalAggregator::<true>::create(ctx, method, aggregator_params)?,
                 ),
                 HashMethodKind::KeysU128(method) => AggregatorTransform::create(
-                    ctx,
+                    ctx.clone(),
                     transform_params.transform_input_port,
                     transform_params.transform_output_port,
-                    KeysU128FinalAggregator::<true>::create(method, aggregator_params)?,
+                    KeysU128FinalAggregator::<true>::create(ctx, method, aggregator_params)?,
                 ),
                 HashMethodKind::KeysU256(method) => AggregatorTransform::create(
-                    ctx,
+                    ctx.clone(),
                     transform_params.transform_input_port,
                     transform_params.transform_output_port,
-                    KeysU256FinalAggregator::<true>::create(method, aggregator_params)?,
+                    KeysU256FinalAggregator::<true>::create(ctx, method, aggregator_params)?,
                 ),
                 HashMethodKind::KeysU512(method) => AggregatorTransform::create(
-                    ctx,
+                    ctx.clone(),
                     transform_params.transform_input_port,
                     transform_params.transform_output_port,
-                    KeysU512FinalAggregator::<true>::create(method, aggregator_params)?,
+                    KeysU512FinalAggregator::<true>::create(ctx, method, aggregator_params)?,
                 ),
             },
         }
@@ -280,7 +280,7 @@ pub trait Aggregator: Sized + Send {
     const NAME: &'static str;
 
     fn consume(&mut self, data: DataBlock) -> Result<()>;
-    fn generate(&mut self) -> Result<Option<DataBlock>>;
+    fn generate(&mut self) -> Result<Vec<DataBlock>>;
 }
 
 enum AggregatorTransform<TAggregator: Aggregator + TwoLevelAggregatorLike> {
@@ -319,17 +319,17 @@ impl<TAggregator: Aggregator + TwoLevelAggregatorLike + 'static> AggregatorTrans
             AggregatorTransform::ConsumeData(s) => {
                 Ok(AggregatorTransform::Generate(GenerateState {
                     inner: s.inner,
-                    is_finished: false,
+                    is_generated: false,
                     output_port: s.output_port,
-                    output_data_block: None,
+                    output_data_block: vec![],
                 }))
             }
             AggregatorTransform::TwoLevelConsumeData(s) => {
                 Ok(AggregatorTransform::TwoLevelGenerate(GenerateState {
                     inner: s.inner,
-                    is_finished: false,
+                    is_generated: false,
                     output_port: s.output_port,
-                    output_data_block: None,
+                    output_data_block: vec![],
                 }))
             }
             _ => Err(ErrorCode::Internal("")),
@@ -467,12 +467,12 @@ impl<TAggregator: Aggregator + TwoLevelAggregatorLike + 'static> AggregatorTrans
                 return Ok(Event::NeedConsume);
             }
 
-            if let Some(block) = state.output_data_block.take() {
+            if let Some(block) = state.output_data_block.pop() {
                 state.output_port.push_data(Ok(block));
                 return Ok(Event::NeedConsume);
             }
 
-            if state.is_finished {
+            if state.is_generated {
                 if !state.output_port.is_finished() {
                     state.output_port.finish();
                 }
@@ -496,12 +496,12 @@ impl<TAggregator: Aggregator + TwoLevelAggregatorLike + 'static> AggregatorTrans
                 return Ok(Event::NeedConsume);
             }
 
-            if let Some(block) = state.output_data_block.take() {
+            if let Some(block) = state.output_data_block.pop() {
                 state.output_port.push_data(Ok(block));
                 return Ok(Event::NeedConsume);
             }
 
-            if state.is_finished {
+            if state.is_generated {
                 if !state.output_port.is_finished() {
                     state.output_port.finish();
                 }
@@ -557,20 +557,18 @@ impl<TAggregator: Aggregator + TwoLevelAggregatorLike> TwoLevelConsumeState<TAgg
 
 struct GenerateState<TAggregator: Aggregator> {
     inner: TAggregator,
-    is_finished: bool,
+    is_generated: bool,
     output_port: Arc<OutputPort>,
-    output_data_block: Option<DataBlock>,
+    output_data_block: Vec<DataBlock>,
 }
 
 impl<TAggregator: Aggregator> GenerateState<TAggregator> {
     pub fn generate(&mut self) -> Result<()> {
-        let generate_data = self.inner.generate()?;
-
-        if generate_data.is_none() {
-            self.is_finished = true;
+        if !self.is_generated {
+            self.is_generated = true;
+            self.output_data_block = self.inner.generate()?;
         }
 
-        self.output_data_block = generate_data;
         Ok(())
     }
 }

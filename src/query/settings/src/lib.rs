@@ -421,6 +421,17 @@ impl Settings {
                 desc: "Enable hive parquet predict pushdown  by setting this variable to 1, default value: 1",
                 possible_values: None,
             },
+            #[cfg(feature = "hive")]
+            SettingValue {
+                default_value: UserSettingValue::UInt64(16384),
+                user_setting: UserSetting::create(
+                    "hive_parquet_chunk_size",
+                    UserSettingValue::UInt64(16384),
+                ),
+                level: ScopeLevel::Session,
+                desc: "the max number of rows each read from parquet to databend processor",
+                possible_values: None,
+            },
             SettingValue {
                 default_value: UserSettingValue::UInt64(1),
                 user_setting: UserSetting::create(
@@ -689,6 +700,11 @@ impl Settings {
 
     pub fn get_enable_hive_parquet_predict_pushdown(&self) -> Result<u64> {
         static KEY: &str = "enable_hive_parquet_predict_pushdown";
+        self.try_get_u64(KEY)
+    }
+
+    pub fn get_hive_parquet_chunk_size(&self) -> Result<u64> {
+        static KEY: &str = "hive_parquet_chunk_size";
         self.try_get_u64(KEY)
     }
 
