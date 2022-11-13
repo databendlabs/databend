@@ -152,11 +152,24 @@ checksum = "8da52d66c7071e2e3fa2a1e5c6d088fec47b593032b254f5e980de8ea54454d6"
 [[package]]
 name = "arrow-format"
 version = "0.7.0"
-source = "git+https://github.com/datafuse-extras/arrow-format?rev=78dacc1#78dacc16a1f995756384686ca86d79995a11a089"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8df5d25bc6d676271277120c41ef28760fe0a9f070677a58db621c0f983f9c20"
 dependencies = [
  "planus",
- "prost",
- "prost-derive",
+ "prost 0.10.4",
+ "prost-derive 0.10.1",
+ "serde",
+]
+
+[[package]]
+name = "arrow-format"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bb83ada98f9d252a3c3642d96c53a357684a87d2e9a753ddf2a30bae20b91790"
+dependencies = [
+ "planus",
+ "prost 0.11.0",
+ "prost-derive 0.11.0",
  "serde",
  "tonic",
 ]
@@ -167,7 +180,7 @@ version = "0.14.2"
 source = "git+https://github.com/jorgecarleitao/arrow2?rev=562de6a#562de6a6ed961eff46e7db752b384583886a5e5d"
 dependencies = [
  "ahash 0.7.6",
- "arrow-format",
+ "arrow-format 0.7.0",
  "base64",
  "bytemuck",
  "chrono",
@@ -1189,7 +1202,7 @@ dependencies = [
 name = "common-arrow"
 version = "0.1.0"
 dependencies = [
- "arrow-format",
+ "arrow-format 0.8.0",
  "arrow2",
  "futures",
  "parquet2",
@@ -1379,7 +1392,7 @@ dependencies = [
  "bincode 2.0.0-rc.2",
  "common-arrow",
  "paste",
- "prost",
+ "prost 0.11.0",
  "serde",
  "serde_json",
  "thiserror",
@@ -1682,7 +1695,7 @@ dependencies = [
  "futures",
  "once_cell",
  "parking_lot 0.12.1",
- "prost",
+ "prost 0.11.0",
  "rand 0.8.5",
  "semver 1.0.14",
  "serde",
@@ -1764,7 +1777,7 @@ version = "0.1.0"
 dependencies = [
  "anyerror",
  "common-exception",
- "prost",
+ "prost 0.11.0",
  "serde",
  "serde_json",
  "sled",
@@ -1802,7 +1815,7 @@ dependencies = [
  "num-traits",
  "once_cell",
  "openraft",
- "prost",
+ "prost 0.11.0",
  "prost-build",
  "regex",
  "serde",
@@ -1923,7 +1936,7 @@ version = "0.1.0"
 dependencies = [
  "num-derive",
  "num-traits",
- "prost",
+ "prost 0.11.0",
  "prost-build",
  "semver 1.0.14",
  "tonic",
@@ -2568,7 +2581,7 @@ version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e57ff02e8ad8e06ab9731d5dc72dc23bef9200778eae1a89d555d8c42e5d4a86"
 dependencies = [
- "prost",
+ "prost 0.11.0",
  "prost-types",
  "tonic",
  "tracing-core",
@@ -3033,7 +3046,7 @@ dependencies = [
  "once_cell",
  "poem",
  "pretty_assertions",
- "prost",
+ "prost 0.11.0",
  "regex",
  "reqwest",
  "semver 1.0.14",
@@ -5673,7 +5686,7 @@ dependencies = [
  "parking_lot 0.12.1",
  "percent-encoding",
  "pin-project",
- "prost",
+ "prost 0.11.0",
  "quick-xml 0.26.0",
  "redis",
  "reqsign",
@@ -6519,12 +6532,22 @@ dependencies = [
 
 [[package]]
 name = "prost"
+version = "0.10.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "71adf41db68aa0daaefc69bb30bcd68ded9b9abaad5d1fbb6304c4fb390e083e"
+dependencies = [
+ "bytes",
+ "prost-derive 0.10.1",
+]
+
+[[package]]
+name = "prost"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "399c3c31cdec40583bb68f0b18403400d01ec4289c383aa047560439952c4dd7"
 dependencies = [
  "bytes",
- "prost-derive",
+ "prost-derive 0.11.0",
 ]
 
 [[package]]
@@ -6540,11 +6563,24 @@ dependencies = [
  "log",
  "multimap",
  "petgraph",
- "prost",
+ "prost 0.11.0",
  "prost-types",
  "regex",
  "tempfile",
  "which",
+]
+
+[[package]]
+name = "prost-derive"
+version = "0.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7b670f45da57fb8542ebdbb6105a925fe571b67f9e7ed9f47a06a84e72b4e7cc"
+dependencies = [
+ "anyhow",
+ "itertools",
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
@@ -6567,7 +6603,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4dfaa718ad76a44b3415e6c4d53b17c8f99160dcb3a99b10470fce8ad43f6e3e"
 dependencies = [
  "bytes",
- "prost",
+ "prost 0.11.0",
 ]
 
 [[package]]
@@ -8260,8 +8296,8 @@ dependencies = [
  "hyper-timeout",
  "percent-encoding",
  "pin-project",
- "prost",
- "prost-derive",
+ "prost 0.11.0",
+ "prost-derive 0.11.0",
  "rustls-native-certs",
  "rustls-pemfile",
  "tokio",
@@ -8295,7 +8331,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0455f730d540a1484bffc3c55c94100b18a662597b982c2e9073f2c55c602616"
 dependencies = [
  "bytes",
- "prost",
+ "prost 0.11.0",
  "prost-types",
  "tokio",
  "tokio-stream",

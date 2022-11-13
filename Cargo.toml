@@ -139,4 +139,3 @@ rustc-demangle = { opt-level = 3 }
 # If there are dependencies that need patching, they can be listed below.
 # For example:
 # arrow-format = { git = "https://github.com/datafuse-extras/arrow-format", rev = "78dacc1" }
-arrow-format = { git = "https://github.com/datafuse-extras/arrow-format", rev = "78dacc1" }
