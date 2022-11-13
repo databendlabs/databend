@@ -16,7 +16,7 @@ use std::sync::Arc;
 use std::vec;
 
 use common_catalog::plan::Partitions;
-use common_datablocks::BlockCompactThresholds;
+use common_catalog::table_mutator::TableMutator;
 use common_exception::Result;
 use common_storages_table_meta::meta::Location;
 use common_storages_table_meta::meta::SegmentInfo;
@@ -25,33 +25,51 @@ use opendal::Operator;
 
 use super::compact_part::CompactPartInfo;
 use crate::io::SegmentsIO;
-use crate::io::TableMetaLocationGenerator;
 use crate::metrics::metrics_set_segments_memory_usage;
 use crate::operations::CompactOptions;
 use crate::statistics::reducers::merge_statistics_mut;
+use crate::Table;
 use crate::TableContext;
 
+#[derive(Clone)]
 pub struct BlockCompactMutator {
-    ctx: Arc<dyn TableContext>,
-    compact_params: CompactOptions,
-    data_accessor: Operator,
-    thresholds: BlockCompactThresholds,
-    location_generator: TableMetaLocationGenerator,
-    compact_tasks: Partitions,
-    // summarised statistics of all the unchanged segments
-    unchanged_segment_statistics: Statistics,
+    pub ctx: Arc<dyn TableContext>,
+    pub compact_params: CompactOptions,
+    pub operator: Operator,
+    pub compact_tasks: Partitions,
+    pub unchanged_segment_indices: Vec<usize>,
     // locations all the unchanged segments.
-    unchanged_segment_locations: Vec<Location>,
-    unchanged_segment_indecs: Vec<usize>,
+    pub unchanged_segment_locations: Vec<Location>,
+    // summarised statistics of all the unchanged segments
+    pub unchanged_segment_statistics: Statistics,
 }
 
 impl BlockCompactMutator {
+    pub fn new(
+        ctx: Arc<dyn TableContext>,
+        compact_params: CompactOptions,
+        operator: Operator,
+    ) -> Self {
+        Self {
+            ctx,
+            compact_params,
+            operator,
+            compact_tasks: Vec::new(),
+            unchanged_segment_indices: Vec::new(),
+            unchanged_segment_locations: Vec::new(),
+            unchanged_segment_statistics: Statistics::default(),
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl TableMutator for BlockCompactMutator {
     async fn target_select(&mut self) -> Result<bool> {
         let snapshot = self.compact_params.base_snapshot.clone();
         let segment_locations = &snapshot.segments;
 
         // Read all segments information in parallel.
-        let segments_io = SegmentsIO::create(self.ctx.clone(), self.data_accessor.clone());
+        let segments_io = SegmentsIO::create(self.ctx.clone(), self.operator.clone());
         let segments = segments_io
             .read_segments(segment_locations)
             .await?
@@ -80,7 +98,7 @@ impl BlockCompactMutator {
                 } else {
                     self.unchanged_segment_locations
                         .push(segment_locations[idx].clone());
-                    self.unchanged_segment_indecs.push(order);
+                    self.unchanged_segment_indices.push(order);
                     merge_statistics_mut(
                         &mut self.unchanged_segment_statistics,
                         &segments[idx].summary,
@@ -88,20 +106,20 @@ impl BlockCompactMutator {
                 }
                 order += 1;
             }
-            if compacted_segment_cnt >= limit {
+            if compacted_segment_cnt + builder.segments.len() >= limit {
                 end = idx + 1;
                 break;
             }
         }
 
-        if !builder.is_empty() {
+        if !builder.segments.is_empty() {
             let t = std::mem::take(&mut builder.segments);
             if CompactPartBuilder::check_for_compact(&t) {
                 self.compact_tasks.push(CompactPartInfo::create(t, order));
             } else {
                 self.unchanged_segment_locations
                     .push(segment_locations[end - 1].clone());
-                self.unchanged_segment_indecs.push(order);
+                self.unchanged_segment_indices.push(order);
                 merge_statistics_mut(
                     &mut self.unchanged_segment_statistics,
                     &segments[end - 1].summary,
@@ -118,13 +136,17 @@ impl BlockCompactMutator {
             for i in end..number_segments {
                 self.unchanged_segment_locations
                     .push(segment_locations[i].clone());
-                self.unchanged_segment_indecs.push(order);
+                self.unchanged_segment_indices.push(order);
                 merge_statistics_mut(&mut self.unchanged_segment_statistics, &segments[i].summary)?;
                 order += 1;
             }
         }
 
         Ok(true)
+    }
+
+    async fn try_commit(self: Box<Self>, _table: Arc<dyn Table>) -> Result<()> {
+        unimplemented!()
     }
 }
 
@@ -168,9 +190,5 @@ impl CompactPartBuilder {
         self.block_count = 0;
         self.segments.push(segment);
         vec![std::mem::take(&mut self.segments)]
-    }
-
-    fn is_empty(&self) -> bool {
-        self.segments.is_empty()
     }
 }

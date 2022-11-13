@@ -29,6 +29,7 @@ use common_storages_fuse::io::SegmentInfoReader;
 use common_storages_fuse::io::SegmentWriter;
 use common_storages_fuse::io::TableMetaLocationGenerator;
 use common_storages_fuse::operations::SegmentCompactor;
+use common_storages_fuse::statistics::gen_columns_statistics;
 use common_storages_fuse::statistics::reducers::merge_statistics_mut;
 use common_storages_fuse::statistics::BlockStatistics;
 use common_storages_fuse::statistics::StatisticsAccumulator;

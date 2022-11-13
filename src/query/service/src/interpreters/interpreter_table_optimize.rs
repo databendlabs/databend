@@ -92,7 +92,7 @@ impl Interpreter for OptimizeTableInterpreter {
                 .compact(ctx.clone(), CompactTarget::Blocks, limit_opt, &mut pipeline)
                 .await?;
 
-            if let Some(mutator) = mutator {
+            if mutator.is_some() {
                 let settings = ctx.get_settings();
                 pipeline.set_max_threads(settings.get_max_threads()? as usize);
                 let executor_settings = ExecutorSettings::try_create(&settings)?;
@@ -101,8 +101,6 @@ impl Interpreter for OptimizeTableInterpreter {
                 ctx.set_executor(Arc::downgrade(&executor.get_inner()));
                 executor.execute()?;
                 drop(executor);
-
-                mutator.try_commit(table.clone()).await?;
             }
 
             if do_purge {

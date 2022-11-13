@@ -36,6 +36,7 @@ use crate::operations::mutation::AbortOperation;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::Event;
+use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::Processor;
 use crate::statistics::reduce_block_statistics;
 use crate::statistics::reducers::reduce_block_metas;
@@ -58,7 +59,6 @@ enum State {
         location: String,
         segment: Arc<SegmentInfo>,
     },
-    Generated(DataBlock),
 }
 
 pub struct CompactTransform {
@@ -66,13 +66,39 @@ pub struct CompactTransform {
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
     scan_progress: Arc<Progress>,
+    output_data: Option<DataBlock>,
 
     block_reader: Arc<BlockReader>,
-    location_generator: TableMetaLocationGenerator,
+    location_gen: TableMetaLocationGenerator,
     dal: Operator,
 
     thresholds: BlockCompactThresholds,
     abort_operation: AbortOperation,
+}
+
+impl CompactTransform {
+    pub fn try_create(
+        input: Arc<InputPort>,
+        output: Arc<OutputPort>,
+        scan_progress: Arc<Progress>,
+        block_reader: Arc<BlockReader>,
+        location_gen: TableMetaLocationGenerator,
+        dal: Operator,
+        thresholds: BlockCompactThresholds,
+    ) -> Result<ProcessorPtr> {
+        Ok(ProcessorPtr::create(Box::new(CompactTransform {
+            state: State::Consume,
+            input,
+            output,
+            scan_progress,
+            output_data: None,
+            block_reader,
+            location_gen,
+            dal,
+            thresholds,
+            abort_operation: AbortOperation::default(),
+        })))
+    }
 }
 
 #[async_trait::async_trait]
@@ -104,6 +130,11 @@ impl Processor for CompactTransform {
             return Ok(Event::NeedConsume);
         }
 
+        if let Some(data_block) = self.output_data.take() {
+            self.output.push_data(Ok(data_block));
+            return Ok(Event::NeedConsume);
+        }
+
         if self.input.is_finished() {
             self.output.finish();
             return Ok(Event::Finished);
@@ -112,14 +143,6 @@ impl Processor for CompactTransform {
         if !self.input.has_data() {
             self.input.set_need_data();
             return Ok(Event::NeedData);
-        }
-
-        if matches!(self.state, State::Generated(_)) {
-            if let State::Generated(data_block) = std::mem::replace(&mut self.state, State::Consume)
-            {
-                self.output.push_data(Ok(data_block));
-                return Ok(Event::NeedConsume);
-            }
         }
 
         self.state = State::Compact(self.input.pull_data().unwrap()?);
@@ -131,7 +154,7 @@ impl Processor for CompactTransform {
             State::Generate { order, metas } => {
                 let stats = reduce_block_metas(&metas, self.thresholds)?;
                 let segment_info = SegmentInfo::new(metas, stats);
-                let location = self.location_generator.gen_segment_info_location();
+                let location = self.location_gen.gen_segment_info_location();
                 self.abort_operation.add_segment(location.clone());
                 self.state = State::Serialized {
                     order,
@@ -156,7 +179,7 @@ impl Processor for CompactTransform {
                     segment,
                     std::mem::take(&mut self.abort_operation),
                 );
-                self.state = State::Generated(DataBlock::empty_with_meta(meta));
+                self.output_data = Some(DataBlock::empty_with_meta(meta));
             }
             _ => return Err(ErrorCode::Internal("It's a bug.")),
         }
@@ -193,7 +216,7 @@ impl Processor for CompactTransform {
                     let new_block = DataBlock::concat_blocks(&blocks)?;
                     let col_stats = reduce_block_statistics(&stats_of_columns)?;
 
-                    let block_writer = BlockWriter::new(&self.dal, &self.location_generator);
+                    let block_writer = BlockWriter::new(&self.dal, &self.location_gen);
                     let new_meta = block_writer.write(new_block, col_stats, None).await?;
                     self.abort_operation.add_block(&new_meta);
                     new_metas.push(Arc::new(new_meta));

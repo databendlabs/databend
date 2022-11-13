@@ -28,6 +28,7 @@ use super::compact_part::CompactPartInfo;
 use super::compact_part::CompactTask;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::Event;
+use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::Processor;
 
 enum State {
@@ -41,10 +42,25 @@ enum State {
 }
 
 pub struct CompactSource {
-    ctx: Arc<dyn TableContext>,
     state: State,
+    ctx: Arc<dyn TableContext>,
     output: Arc<OutputPort>,
     thresholds: BlockCompactThresholds,
+}
+
+impl CompactSource {
+    pub fn try_create(
+        ctx: Arc<dyn TableContext>,
+        output: Arc<OutputPort>,
+        thresholds: BlockCompactThresholds,
+    ) -> Result<ProcessorPtr> {
+        Ok(ProcessorPtr::create(Box::new(CompactSource {
+            state: State::ReadData(None),
+            ctx,
+            output,
+            thresholds,
+        })))
+    }
 }
 
 #[async_trait::async_trait]

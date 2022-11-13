@@ -21,6 +21,7 @@ use common_catalog::table_context::TableContext;
 use common_datablocks::BlockMetaInfos;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_storages_table_meta::meta::Location;
 use common_storages_table_meta::meta::SegmentInfo;
 use common_storages_table_meta::meta::Statistics;
@@ -29,6 +30,7 @@ use common_storages_table_meta::meta::Versioned;
 use itertools::Itertools;
 use opendal::Operator;
 
+use super::BlockCompactMutator;
 use super::CompactSinkMeta;
 use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
@@ -65,7 +67,7 @@ pub struct CompactSink {
     dal: Operator,
     location_gen: TableMetaLocationGenerator,
 
-    table: Arc<dyn Table>,
+    table: Arc<FuseTable>,
     base_snapshot: Arc<TableSnapshot>,
     base_segments: Vec<Location>,
     base_statistics: Statistics,
@@ -80,6 +82,29 @@ pub struct CompactSink {
 }
 
 impl CompactSink {
+    pub fn try_create(
+        table: &FuseTable,
+        mutator: BlockCompactMutator,
+        inputs: Vec<Arc<InputPort>>,
+    ) -> Result<ProcessorPtr> {
+        Ok(ProcessorPtr::create(Box::new(CompactSink {
+            state: State::None,
+            ctx: mutator.ctx,
+            dal: mutator.operator,
+            location_gen: table.meta_location_generator.clone(),
+            table: Arc::new(table.clone()),
+            base_snapshot: mutator.compact_params.base_snapshot,
+            base_segments: mutator.unchanged_segment_locations,
+            base_statistics: mutator.unchanged_segment_statistics,
+            indices: mutator.unchanged_segment_indices,
+            retries: 0,
+            abort_operation: AbortOperation::default(),
+            inputs,
+            input_data: Vec::new(),
+            cur_input_index: 0,
+        })))
+    }
+
     fn get_current_input(&mut self) -> Option<Arc<InputPort>> {
         let mut finished = true;
         let mut index = self.cur_input_index;
@@ -258,16 +283,13 @@ impl Processor for CompactSink {
             }
             State::RefreshTable => {
                 let latest_table_ref = self.table.refresh(self.ctx.as_ref()).await?;
-                let latest_fuse_table = FuseTable::try_from_table(latest_table_ref.as_ref())?;
-                let latest_snapshot =
-                    latest_fuse_table
-                        .read_table_snapshot()
-                        .await?
-                        .ok_or_else(|| {
-                            ErrorCode::Internal(
-                                "mutation meets empty snapshot during conflict reconciliation",
-                            )
-                        })?;
+                self.table =
+                    Arc::new(FuseTable::try_from_table(latest_table_ref.as_ref())?.to_owned());
+                let latest_snapshot = self.table.read_table_snapshot().await?.ok_or_else(|| {
+                    ErrorCode::Internal(
+                        "mutation meets empty snapshot during conflict reconciliation",
+                    )
+                })?;
                 self.state = State::DetectConfilct(latest_snapshot);
             }
             State::AbortOperation => {
