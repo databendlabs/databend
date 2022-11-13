@@ -26,6 +26,7 @@ common-exception = { path = "../exception" }
 # Github dependencies
 
 # Crates.io dependencies
+async-channel = "1.7.1"
 async-trait = "0.1.57"
 ctrlc = { version = "3.2.3", features = ["termination"] }
 futures = "0.3.24"
