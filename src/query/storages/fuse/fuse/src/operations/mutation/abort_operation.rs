@@ -21,7 +21,7 @@ use opendal::Operator;
 
 use crate::io::Files;
 
-#[derive(Default, Debug, PartialEq, Eq)]
+#[derive(Clone, Default, Debug, PartialEq, Eq)]
 pub struct AbortOperation {
     pub segments: Vec<String>,
     pub blocks: Vec<String>,
@@ -29,6 +29,13 @@ pub struct AbortOperation {
 }
 
 impl AbortOperation {
+    pub fn merge(&mut self, rhs: &AbortOperation) {
+        self.segments.extend(rhs.segments.clone());
+        self.blocks.extend(rhs.blocks.clone());
+        self.bloom_filter_indexes
+            .extend(rhs.bloom_filter_indexes.clone());
+    }
+
     pub fn add_block(&mut self, block: &BlockMeta) {
         let block_location = block.location.clone();
         self.blocks.push(block_location.0);

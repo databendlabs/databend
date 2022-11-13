@@ -40,8 +40,9 @@ pub struct BlockCompactMutator {
     compact_tasks: Partitions,
     // summarised statistics of all the unchanged segments
     unchanged_segment_statistics: Statistics,
-    // locations all the unchanged segments, with index and location.
-    unchanged_segments_locations: Vec<(usize, Location)>,
+    // locations all the unchanged segments.
+    unchanged_segment_locations: Vec<Location>,
+    unchanged_segment_indecs: Vec<usize>,
 }
 
 impl BlockCompactMutator {
@@ -77,8 +78,9 @@ impl BlockCompactMutator {
                     compacted_segment_cnt += t.len();
                     self.compact_tasks.push(CompactPartInfo::create(t, order));
                 } else {
-                    self.unchanged_segments_locations
-                        .push((order, segment_locations[idx].clone()));
+                    self.unchanged_segment_locations
+                        .push(segment_locations[idx].clone());
+                    self.unchanged_segment_indecs.push(order);
                     merge_statistics_mut(
                         &mut self.unchanged_segment_statistics,
                         &segments[idx].summary,
@@ -97,8 +99,9 @@ impl BlockCompactMutator {
             if CompactPartBuilder::check_for_compact(&t) {
                 self.compact_tasks.push(CompactPartInfo::create(t, order));
             } else {
-                self.unchanged_segments_locations
-                    .push((order, segment_locations[end - 1].clone()));
+                self.unchanged_segment_locations
+                    .push(segment_locations[end - 1].clone());
+                self.unchanged_segment_indecs.push(order);
                 merge_statistics_mut(
                     &mut self.unchanged_segment_statistics,
                     &segments[end - 1].summary,
@@ -113,8 +116,9 @@ impl BlockCompactMutator {
 
         if end < number_segments {
             for i in end..number_segments {
-                self.unchanged_segments_locations
-                    .push((order, segment_locations[i].clone()));
+                self.unchanged_segment_locations
+                    .push(segment_locations[i].clone());
+                self.unchanged_segment_indecs.push(order);
                 merge_statistics_mut(&mut self.unchanged_segment_statistics, &segments[i].summary)?;
                 order += 1;
             }

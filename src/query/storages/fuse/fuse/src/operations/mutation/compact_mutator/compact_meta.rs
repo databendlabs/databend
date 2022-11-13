@@ -21,9 +21,8 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_storages_table_meta::meta::SegmentInfo;
 
-use crate::operations::mutation::AbortOperation;
-
 use super::compact_part::CompactTask;
+use crate::operations::mutation::AbortOperation;
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct CompactSourceMeta {

@@ -150,7 +150,12 @@ impl Processor for CompactTransform {
                     cache.put(location.clone(), segment.clone());
                 }
 
-                let meta = CompactSinkMeta::create(order, location, segment, std::mem::take(&mut self.abort_operation));
+                let meta = CompactSinkMeta::create(
+                    order,
+                    location,
+                    segment,
+                    std::mem::take(&mut self.abort_operation),
+                );
                 self.state = State::Generated(DataBlock::empty_with_meta(meta));
             }
             _ => return Err(ErrorCode::Internal("It's a bug.")),
