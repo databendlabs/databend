@@ -27,11 +27,16 @@ fn test_empty_primitive_column() {
 
 #[test]
 fn test_new_from_slice() {
-    let data_column: PrimitiveColumn<i32> = Int32Column::from_slice(&[1, 2]);
+    let values = &[1, 2];
+    let data_column: PrimitiveColumn<i32> = Int32Column::from_slice(values);
     let mut iter = data_column.iter();
     assert_eq!(Some(&1), iter.next());
     assert_eq!(Some(&2), iter.next());
     assert_eq!(None, iter.next());
+
+    data_column.for_each(|i, data| {
+        assert_eq!(DataValue::Int64(values[i] as i64), data);
+    })
 }
 
 #[test]
