@@ -18,4 +18,4 @@ common-exception = { path = "../../../common/exception" }
 common-storages-table-meta = { path = "../table-meta" }
 
 async-trait = { version = "0.1.57", package = "async-trait-fn" }
-opendal = { version = "0.19", features = ["layers-retry"] }
+opendal = "0.19"
