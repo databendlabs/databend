@@ -12,11 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
-
 use common_datavalues::prelude::*;
 use memchr::memmem;
-use regex::bytes::Regex as BytesRegex;
 
 use super::comparison::StringSearchCreator;
 use super::utils::StringSearchImpl;
@@ -34,24 +31,10 @@ impl StringSearchImpl for StringSearchLike {
         rhs: &StringColumn,
         op: impl Fn(bool) -> bool,
     ) -> BooleanColumn {
-        let mut map = HashMap::new();
-
         let mut builder: ColumnBuilder<bool> = ColumnBuilder::with_capacity(lhs.len());
 
         for (lhs_value, rhs_value) in lhs.scalar_iter().zip(rhs.scalar_iter()) {
-            let pattern = if let Some(pattern) = map.get(rhs_value) {
-                pattern
-            } else {
-                let pattern_str = simdutf8::basic::from_utf8(rhs_value)
-                    .expect("Unable to convert the LIKE pattern to string: {}");
-                let re_pattern = like_pattern_to_regex(pattern_str);
-                let re = BytesRegex::new(&re_pattern)
-                    .expect("Unable to build regex from LIKE pattern: {}");
-                map.insert(rhs_value, re);
-                map.get(rhs_value).unwrap()
-            };
-
-            builder.append(op(pattern.is_match(lhs_value)));
+            builder.append(op(like(lhs_value, rhs_value)));
         }
         builder.build_column()
     }
@@ -81,12 +64,8 @@ impl StringSearchImpl for StringSearchLike {
                     .split(|c: char| c == '%' || c == '_' || c == '\\')
                     .collect();
                 sub_strings.retain(|&substring| !substring.is_empty());
-                let is_empty = sub_strings.is_empty();
-                let re_pattern = like_pattern_to_regex(pattern);
-                let re = BytesRegex::new(&re_pattern)
-                    .expect("Unable to build regex from LIKE pattern: {}");
-                if std::intrinsics::unlikely(is_empty) {
-                    BooleanColumn::from_iterator(lhs.scalar_iter().map(|x| op(re.is_match(x))))
+                if std::intrinsics::unlikely(sub_strings.is_empty()) {
+                    BooleanColumn::from_iterator(lhs.scalar_iter().map(|x| op(like(x, rhs))))
                 } else {
                     let sub_string = sub_strings[0].as_bytes();
                     // This impl like position function
@@ -101,11 +80,10 @@ impl StringSearchImpl for StringSearchLike {
                         }))
                     } else {
                         BooleanColumn::from_iterator(lhs.scalar_iter().map(|x| {
-                            let contain = memmem::find(x, sub_string).is_none();
-                            if contain {
+                            if memmem::find(x, sub_string).is_none() {
                                 op(false)
                             } else {
-                                op(re.is_match(x))
+                                op(like(x, rhs))
                             }
                         }))
                     }
@@ -116,17 +94,8 @@ impl StringSearchImpl for StringSearchLike {
 }
 
 #[inline]
-fn search_sub_str(str: &[u8], substr: &[u8]) -> Option<usize> {
-    if substr.len() <= str.len() {
-        str.windows(substr.len()).position(|w| w == substr)
-    } else {
-        None
-    }
-}
-
-#[inline]
-fn is_like_pattern_escape(c: u8) -> bool {
-    c == b'%' || c == b'_' || c == b'\\'
+fn is_like_pattern_escape(c: char) -> bool {
+    c == '%' || c == '_' || c == '\\'
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
@@ -183,7 +152,7 @@ pub fn check_pattern_type(pattern: &[u8], is_pruning: bool) -> PatternType {
             b'\\' => {
                 if index < len - 1 {
                     index += 1;
-                    if !is_pruning && is_like_pattern_escape(pattern[index]) {
+                    if !is_pruning && is_like_pattern_escape(pattern[index] as char) {
                         return PatternType::PatternStr;
                     }
                 }
@@ -200,42 +169,78 @@ pub fn check_pattern_type(pattern: &[u8], is_pruning: bool) -> PatternType {
     }
 }
 
-/// Transform the like pattern to regex pattern.
-/// e.g. 'Hello\._World%\%' tranform to '^Hello\\\..World.*%$'.
 #[inline]
-pub fn like_pattern_to_regex(pattern: &str) -> String {
-    let mut regex = String::with_capacity(pattern.len() * 2);
-    regex.push('^');
-
-    let mut chars = pattern.chars().peekable();
-    while let Some(c) = chars.next() {
-        match c {
-            // Use double backslash to escape special character.
-            '^' | '$' | '(' | ')' | '*' | '+' | '.' | '[' | '?' | '{' | '|' => {
-                regex.push('\\');
-                regex.push(c);
-            }
-            '%' => regex.push_str("(?s:.)*"),
-            '_' => regex.push_str("(?s:.)"),
-            '\\' => match chars.peek().cloned() {
-                Some('%') => {
-                    regex.push('%');
-                    chars.next();
-                }
-                Some('_') => {
-                    regex.push('_');
-                    chars.next();
-                }
-                Some('\\') => {
-                    regex.push_str("\\\\");
-                    chars.next();
-                }
-                _ => regex.push_str("\\\\"),
-            },
-            _ => regex.push(c),
-        }
+fn search_sub_str(str: &[u8], substr: &[u8]) -> Option<usize> {
+    if substr.len() <= str.len() {
+        str.windows(substr.len()).position(|w| w == substr)
+    } else {
+        None
     }
+}
 
-    regex.push('$');
-    regex
+#[inline]
+fn decode_one(data: &[u8]) -> Option<(u8, usize)> {
+    if data.is_empty() {
+        None
+    } else {
+        Some((data[0], 1))
+    }
+}
+
+#[inline]
+/// Borrow from [tikv](https://github.com/tikv/tikv/blob/fe997db4db8a5a096f8a45c0db3eb3c2e5879262/components/tidb_query_expr/src/impl_like.rs)
+fn like(haystack: &[u8], pattern: &[u8]) -> bool {
+    // current search positions in pattern and target.
+    let (mut px, mut tx) = (0, 0);
+    // positions for backtrace.
+    let (mut next_px, mut next_tx) = (0, 0);
+    while px < pattern.len() || tx < haystack.len() {
+        if let Some((c, mut poff)) = decode_one(&pattern[px..]) {
+            let code: u32 = c.into();
+            if code == '_' as u32 {
+                if let Some((_, toff)) = decode_one(&haystack[tx..]) {
+                    px += poff;
+                    tx += toff;
+                    continue;
+                }
+            } else if code == '%' as u32 {
+                // update the backtrace point.
+                next_px = px;
+                px += poff;
+                next_tx = tx;
+                next_tx += if let Some((_, toff)) = decode_one(&haystack[tx..]) {
+                    toff
+                } else {
+                    1
+                };
+                continue;
+            } else {
+                if code == '\\' as u32 && px + poff < pattern.len() {
+                    px += poff;
+                    poff = if let Some((_, off)) = decode_one(&pattern[px..]) {
+                        off
+                    } else {
+                        break;
+                    }
+                }
+                if let Some((_, toff)) = decode_one(&haystack[tx..]) {
+                    if let std::cmp::Ordering::Equal =
+                        haystack[tx..tx + toff].cmp(&pattern[px..px + poff])
+                    {
+                        tx += toff;
+                        px += poff;
+                        continue;
+                    }
+                }
+            }
+        }
+        // mismatch and backtrace to last %.
+        if 0 < next_tx && next_tx <= haystack.len() {
+            px = next_px;
+            tx = next_tx;
+            continue;
+        }
+        return false;
+    }
+    true
 }

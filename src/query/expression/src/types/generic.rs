@@ -137,6 +137,10 @@ impl<const INDEX: usize> ArgType for GenericType<INDEX> {
         DataType::Generic(INDEX)
     }
 
+    fn full_domain() -> Self::Domain {
+        unreachable!()
+    }
+
     fn create_builder(capacity: usize, generics: &GenericMap) -> Self::ColumnBuilder {
         ColumnBuilder::with_capacity(&generics[INDEX], capacity)
     }

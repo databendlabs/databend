@@ -23,6 +23,7 @@ use common_datavalues::TypeDeserializerImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::StageFileFormatType;
+use common_meta_types::UserStageInfo;
 use common_pipeline_core::Pipeline;
 use common_settings::Settings;
 use opendal::io_util::DecompressDecoder;
@@ -34,7 +35,6 @@ use crate::processors::sources::input_formats::beyond_end_reader::BeyondEndReade
 use crate::processors::sources::input_formats::delimiter::RecordDelimiter;
 use crate::processors::sources::input_formats::impls::input_format_csv::CsvReaderState;
 use crate::processors::sources::input_formats::impls::input_format_xml::XmlReaderState;
-use crate::processors::sources::input_formats::input_context::CopyIntoPlan;
 use crate::processors::sources::input_formats::input_context::InputContext;
 use crate::processors::sources::input_formats::input_pipeline::AligningStateTrait;
 use crate::processors::sources::input_formats::input_pipeline::BlockBuilderTrait;
@@ -133,20 +133,21 @@ impl<T: InputFormatTextBase> InputFormat for InputFormatText<T> {
 
     async fn get_splits(
         &self,
-        plan: &CopyIntoPlan,
+        files: &[String],
+        stage_info: &UserStageInfo,
         op: &Operator,
         _settings: &Arc<Settings>,
         _schema: &DataSchemaRef,
     ) -> Result<Vec<Arc<SplitInfo>>> {
         let mut infos = vec![];
-        for path in &plan.files {
+        for path in files {
             let obj = op.object(path);
             let size = obj.metadata().await?.content_length() as usize;
             let compress_alg = InputContext::get_compression_alg_copy(
-                plan.stage_info.file_format_options.compression,
+                stage_info.file_format_options.compression,
                 path,
             )?;
-            let split_size = plan.stage_info.copy_options.split_size;
+            let split_size = stage_info.copy_options.split_size;
             if compress_alg.is_none() && T::is_splittable() && split_size > 0 {
                 let split_offsets = split_by_size(size, split_size);
                 let num_file_splits = split_offsets.len();

@@ -21,6 +21,7 @@ use common_expression::Column;
 use common_expression::ColumnBuilder;
 use common_expression::Domain;
 use common_expression::Function;
+use common_expression::FunctionDomain;
 use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
 use common_expression::FunctionSignature;
@@ -42,7 +43,9 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Tuple(args_type.clone()),
                 property: FunctionProperty::default(),
             },
-            calc_domain: Box::new(|args_domain| Some(Domain::Tuple(args_domain.to_vec()))),
+            calc_domain: Box::new(|args_domain| {
+                FunctionDomain::Domain(Domain::Tuple(args_domain.to_vec()))
+            }),
             eval: Box::new(move |args, _| {
                 let len = args.iter().find_map(|arg| match arg {
                     ValueRef::Column(col) => Some(col.len()),
@@ -94,7 +97,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 property: FunctionProperty::default(),
             },
             calc_domain: Box::new(move |args_domain| {
-                Some(args_domain[0].as_tuple().unwrap()[idx].clone())
+                FunctionDomain::Domain(args_domain[0].as_tuple().unwrap()[idx].clone())
             }),
             eval: Box::new(move |args, _| match &args[0] {
                 ValueRef::Scalar(ScalarRef::Tuple(fields)) => {
@@ -134,7 +137,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                     let fields = value.as_tuple().unwrap();
                     Box::new(fields[idx].clone())
                 });
-                Some(Domain::Nullable(NullableDomain {
+                FunctionDomain::Domain(Domain::Nullable(NullableDomain {
                     has_null: *has_null,
                     value,
                 }))

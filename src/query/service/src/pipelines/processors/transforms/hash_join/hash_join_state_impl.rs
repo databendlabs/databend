@@ -108,7 +108,7 @@ impl HashJoinState for JoinHashTable {
                         let mut self_row_ptrs = self.row_ptrs.write();
                         self_row_ptrs.push(ptr);
                     }
-                    match unsafe { $table.insert(key) } {
+                    match unsafe { $table.insert(*key) } {
                         Ok(entity) => {
                             entity.write(vec![ptr]);
                         }
