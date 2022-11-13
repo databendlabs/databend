@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
+use common_catalog::table_context::TableContext;
 use common_exception::Result;
 
 use super::JoinType;
@@ -78,6 +81,7 @@ impl PhysicalOperator for PhysicalHashJoin {
 
     fn compute_required_prop_child<'a>(
         &self,
+        ctx: Arc<dyn TableContext>,
         rel_expr: &RelExpr<'a>,
         child_index: usize,
         required: &RequiredProperty,
@@ -92,13 +96,16 @@ impl PhysicalOperator for PhysicalHashJoin {
         {
             // TODO(leiysky): we can enforce redistribution here
             required.distribution = Distribution::Serial;
-        } else {
-            // A simple heuristic, we will always enforce `Hash` distribution for join
+        } else if ctx.get_settings().get_join_distribution_type()? == "broadcast" {
             if child_index == 0 {
-                required.distribution = Distribution::Hash(self.probe_keys.clone());
+                required.distribution = Distribution::Broadcast;
             } else {
                 required.distribution = Distribution::Hash(self.build_keys.clone());
             }
+        } else if child_index == 0 {
+            required.distribution = Distribution::Hash(self.probe_keys.clone());
+        } else {
+            required.distribution = Distribution::Hash(self.build_keys.clone());
         }
 
         Ok(required)

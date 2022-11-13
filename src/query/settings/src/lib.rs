@@ -442,6 +442,16 @@ impl Settings {
                 desc: "If enable distributed eval index, default value: 1",
                 possible_values: None,
             },
+            SettingValue {
+                default_value: UserSettingValue::String("hash".to_owned()),
+                user_setting: UserSetting::create(
+                    "join_distribution_type",
+                    UserSettingValue::String("hash".to_owned()),
+                ),
+                level: ScopeLevel::Session,
+                desc: "Join distribution type, support \"hash\" \"broadcast\" default value: hash",
+                possible_values: Some(vec!["hash", "broadcast"]),
+            },
         ];
 
         let settings: Arc<DashMap<String, SettingValue>> = Arc::new(DashMap::default());
@@ -675,6 +685,17 @@ impl Settings {
         static KEY: &str = "enable_cbo";
         let v = u64::from(val);
         self.try_set_u64(KEY, v, false)
+    }
+
+    pub fn get_join_distribution_type(&self) -> Result<String> {
+        static KEY: &str = "join_distribution_type";
+        self.check_and_get_setting_value(KEY)
+            .and_then(|v| v.user_setting.value.as_string())
+    }
+
+    pub fn set_join_distribution_type(&self, val: String) -> Result<()> {
+        static KEY: &str = "join_distribution_type";
+        self.try_set_string(KEY, val, false)
     }
 
     pub fn get_sql_dialect(&self) -> Result<Dialect> {
