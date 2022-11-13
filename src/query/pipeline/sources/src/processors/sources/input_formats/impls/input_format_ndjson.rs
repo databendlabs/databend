@@ -13,6 +13,7 @@
 //  limitations under the License.
 
 use std::borrow::Cow;
+use std::sync::Arc;
 
 use bstr::ByteSlice;
 use common_datavalues::DataSchemaRef;
@@ -20,6 +21,9 @@ use common_datavalues::TypeDeserializer;
 use common_datavalues::TypeDeserializerImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_formats::FieldDecoder;
+use common_formats::FieldDecoderValues;
+use common_formats::FileFormatOptionsExt;
 use common_io::prelude::FormatSettings;
 use common_meta_types::StageFileFormatType;
 
@@ -74,6 +78,10 @@ impl InputFormatTextBase for InputFormatNDJson {
 
     fn is_splittable() -> bool {
         true
+    }
+
+    fn create_field_decoder(options: &FileFormatOptionsExt) -> Arc<dyn FieldDecoder> {
+        Arc::new(FieldDecoderValues::create(options))
     }
 
     fn default_field_delimiter() -> u8 {

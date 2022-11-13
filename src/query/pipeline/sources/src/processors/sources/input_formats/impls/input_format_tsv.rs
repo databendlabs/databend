@@ -13,14 +13,18 @@
 //  limitations under the License.
 
 use std::io::Cursor;
+use std::sync::Arc;
 
 use common_datavalues::DataSchemaRef;
 use common_datavalues::TypeDeserializer;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_formats::FieldDecoder;
+use common_formats::FieldDecoderRowBased;
+use common_formats::FieldDecoderTSV;
+use common_formats::FileFormatOptionsExt;
 use common_io::cursor_ext::*;
 use common_io::format_diagnostic::verbose_string;
-use common_io::prelude::FormatSettings;
 use common_meta_types::StageFileFormatType;
 
 use crate::processors::sources::input_formats::input_format_text::AligningState;
@@ -33,10 +37,10 @@ pub struct InputFormatTSV {}
 impl InputFormatTSV {
     #[allow(clippy::too_many_arguments)]
     fn read_row(
+        field_decoder: &FieldDecoderTSV,
         buf: &[u8],
         deserializers: &mut Vec<common_datavalues::TypeDeserializerImpl>,
         schema: &DataSchemaRef,
-        format_settings: &FormatSettings,
         path: &str,
         batch_id: usize,
         offset: usize,
@@ -56,9 +60,11 @@ impl InputFormatTSV {
                 } else {
                     let mut reader = Cursor::new(col_data);
                     reader.ignores(|c: u8| c == b' ');
-                    if let Err(e) =
-                        deserializers[column_index].de_text(&mut reader, format_settings)
-                    {
+                    if let Err(e) = field_decoder.read_field(
+                        &mut deserializers[column_index],
+                        &mut reader,
+                        true,
+                    ) {
                         err_msg = Some(format_column_error(
                             schema,
                             column_index,
@@ -126,6 +132,10 @@ impl InputFormatTextBase for InputFormatTSV {
         true
     }
 
+    fn create_field_decoder(options: &FileFormatOptionsExt) -> Arc<dyn FieldDecoder> {
+        Arc::new(FieldDecoderTSV::create(options))
+    }
+
     fn default_field_delimiter() -> u8 {
         b'\t'
     }
@@ -138,6 +148,11 @@ impl InputFormatTextBase for InputFormatTSV {
             batch.start_row,
             batch.offset
         );
+        let field_decoder = builder
+            .field_decoder
+            .as_any()
+            .downcast_ref::<FieldDecoderTSV>()
+            .expect("must success");
         let schema = &builder.ctx.schema;
         let columns = &mut builder.mutable_columns;
         let mut start = 0usize;
@@ -145,10 +160,10 @@ impl InputFormatTextBase for InputFormatTSV {
         for (i, end) in batch.row_ends.iter().enumerate() {
             let buf = &batch.data[start..*end]; // include \n
             Self::read_row(
+                field_decoder,
                 buf,
                 columns,
                 schema,
-                &builder.ctx.format_settings,
                 &batch.path,
                 batch.batch_id,
                 batch.offset + start,

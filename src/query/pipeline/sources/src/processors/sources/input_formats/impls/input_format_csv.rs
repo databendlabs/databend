@@ -21,9 +21,12 @@ use common_datavalues::DataSchemaRef;
 use common_datavalues::TypeDeserializer;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_formats::FieldDecoder;
+use common_formats::FieldDecoderCSV;
+use common_formats::FieldDecoderRowBased;
+use common_formats::FileFormatOptionsExt;
 use common_io::cursor_ext::*;
 use common_io::format_diagnostic::verbose_char;
-use common_io::prelude::FormatSettings;
 use common_meta_types::StageFileFormatType;
 use csv_core::ReadRecordResult;
 
@@ -39,11 +42,11 @@ pub struct InputFormatCSV {}
 
 impl InputFormatCSV {
     fn read_row(
+        field_decoder: &FieldDecoderCSV,
         buf: &[u8],
         deserializers: &mut [common_datavalues::TypeDeserializerImpl],
         schema: &DataSchemaRef,
         field_ends: &[usize],
-        format_settings: &FormatSettings,
         path: &str,
         row_index: usize,
     ) -> Result<()> {
@@ -55,8 +58,7 @@ impl InputFormatCSV {
             if reader.eof() {
                 deserializer.de_default();
             } else {
-                // todo(youngsofun): do not need escape, already done in csv-core
-                if let Err(e) = deserializer.de_text(&mut reader, format_settings) {
+                if let Err(e) = field_decoder.read_field(deserializer, &mut reader, true) {
                     let err_msg = format_column_error(schema, c, col_data, &e.message());
                     return Err(csv_error(&err_msg, path, row_index));
                 };
@@ -118,20 +120,29 @@ impl InputFormatTextBase for InputFormatCSV {
         b','
     }
 
+    fn create_field_decoder(options: &FileFormatOptionsExt) -> Arc<dyn FieldDecoder> {
+        Arc::new(FieldDecoderCSV::create(options))
+    }
+
     fn deserialize(builder: &mut BlockBuilder<Self>, batch: RowBatch) -> Result<()> {
         let columns = &mut builder.mutable_columns;
         let n_column = columns.len();
         let mut start = 0usize;
         let start_row = batch.start_row.expect("must success");
         let mut field_end_idx = 0;
+        let field_decoder = builder
+            .field_decoder
+            .as_any()
+            .downcast_ref::<FieldDecoderCSV>()
+            .expect("must success");
         for (i, end) in batch.row_ends.iter().enumerate() {
             let buf = &batch.data[start..*end];
             Self::read_row(
+                field_decoder,
                 buf,
                 columns,
                 &builder.ctx.schema,
                 &batch.field_ends[field_end_idx..field_end_idx + n_column],
-                &builder.ctx.format_settings,
                 &batch.path,
                 start_row + i,
             )?;

@@ -20,6 +20,10 @@ use common_datavalues::TypeDeserializer;
 use common_datavalues::TypeDeserializerImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_formats::FieldDecoder;
+use common_formats::FieldDecoderRowBased;
+use common_formats::FieldDecoderXML;
+use common_formats::FileFormatOptionsExt;
 use common_io::cursor_ext::*;
 use common_io::prelude::FormatSettings;
 use common_meta_types::StageFileFormatType;
@@ -37,6 +41,7 @@ pub struct InputFormatXML {}
 
 impl InputFormatXML {
     fn read_row(
+        field_decoder: &FieldDecoderXML,
         buf: &[u8],
         deserializers: &mut [TypeDeserializerImpl],
         schema: &DataSchemaRef,
@@ -65,7 +70,7 @@ impl InputFormatXML {
                 if reader.eof() {
                     deserializer.de_default();
                 } else {
-                    if let Err(e) = deserializer.de_text(&mut reader, format_settings) {
+                    if let Err(e) = field_decoder.read_field(deserializer, &mut reader, true) {
                         let value_str = format!("{:?}", value);
                         let err_msg = format!("{}. column={} value={}", e, field.name(), value_str);
                         return Err(xml_error(&err_msg, path, row_index));
@@ -90,6 +95,10 @@ impl InputFormatTextBase for InputFormatXML {
         StageFileFormatType::Xml
     }
 
+    fn create_field_decoder(options: &FileFormatOptionsExt) -> Arc<dyn FieldDecoder> {
+        Arc::new(FieldDecoderXML::create(options))
+    }
+
     fn default_field_delimiter() -> u8 {
         b','
     }
@@ -102,6 +111,11 @@ impl InputFormatTextBase for InputFormatXML {
             batch.start_row,
             batch.offset,
         );
+        let field_decoder = builder
+            .field_decoder
+            .as_any()
+            .downcast_ref::<FieldDecoderXML>()
+            .expect("must success");
         let columns = &mut builder.mutable_columns;
 
         let mut start = 0usize;
@@ -109,6 +123,7 @@ impl InputFormatTextBase for InputFormatXML {
         for (i, end) in batch.row_ends.iter().enumerate() {
             let buf = &batch.data[start..*end];
             Self::read_row(
+                field_decoder,
                 buf,
                 columns,
                 &builder.ctx.schema,
