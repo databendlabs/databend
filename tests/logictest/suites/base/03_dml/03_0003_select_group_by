@@ -150,12 +150,12 @@ statement ok
 INSERT INTO t_variant VALUES(1, parse_json('{"k":"v"}')),                            (2, parse_json('{"k":"v"}')),                            (3, parse_json('"abcd"')),                            (4, parse_json('"abcd"')),                            (5, parse_json('12')),                            (6, parse_json('12')),                            (7, parse_json('[1,2,3]')),                            (8, parse_json('[1,2,3]'));
 
 statement query IIT
-SELECT max(id), min(id), var FROM t_variant GROUP BY var ORDER BY var ASC;
+SELECT max(id) as n, min(id), var FROM t_variant GROUP BY var ORDER BY n ASC;
 
 ----
-6 5 12
-4 3 "abcd"
 2 1 {"k":"v"}
+4 3 "abcd"
+6 5 12
 8 7 [1,2,3]
 
 statement ok
