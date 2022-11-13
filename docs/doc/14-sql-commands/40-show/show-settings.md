@@ -35,6 +35,7 @@ SHOW SETTINGS;
 | format_skip_header             | 0          | 0          | SESSION | Whether to skip the input header, default value: 0.                                                                | UInt64 |
 | group_by_two_level_threshold   | 10000      | 10000      | SESSION | The threshold of keys to open two-level aggregation, default value: 10000.                                         | UInt64 |
 | input_read_buffer_size         | 1048576    | 1048576    | SESSION | The size of buffer in bytes for input with format. By default, it is 1MB.                                          | UInt64 |
+| join_distribution_type         | hash       | hash       | SESSION | Join distribution type, support "hash" "broadcast" default value: hash.
 | max_block_size                 | 65536      | 65536      | SESSION | Maximum block size for reading, default value: 65536.                                                              | UInt64 |
 | max_execute_time               | 0          | 0          | SESSION | The maximum query execution time. it means no limit if the value is zero. default value: 0.                        | UInt64 |
 | max_storage_io_requests        | 1000       | 1000       | SESSION | The maximum number of concurrent IO requests. By default, it is 1000.                                              | UInt64 |

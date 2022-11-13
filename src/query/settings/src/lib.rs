@@ -449,7 +449,7 @@ impl Settings {
                     UserSettingValue::String("hash".to_owned()),
                 ),
                 level: ScopeLevel::Session,
-                desc: "Join distribution type, support \"hash\" \"broadcast\" default value: hash",
+                desc: "Join distribution type, support \"hash\" \"broadcast\" default value: hash.",
                 possible_values: Some(vec!["hash", "broadcast"]),
             },
         ];

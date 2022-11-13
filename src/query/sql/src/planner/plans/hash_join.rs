@@ -97,10 +97,10 @@ impl PhysicalOperator for PhysicalHashJoin {
             // TODO(leiysky): we can enforce redistribution here
             required.distribution = Distribution::Serial;
         } else if ctx.get_settings().get_join_distribution_type()? == "broadcast" {
-            if child_index == 0 {
+            if child_index == 1 {
                 required.distribution = Distribution::Broadcast;
             } else {
-                required.distribution = Distribution::Hash(self.build_keys.clone());
+                required.distribution = Distribution::Hash(self.probe_keys.clone());
             }
         } else if child_index == 0 {
             required.distribution = Distribution::Hash(self.probe_keys.clone());
