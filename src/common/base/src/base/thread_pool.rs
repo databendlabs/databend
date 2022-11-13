@@ -3,13 +3,10 @@ use async_channel::Sender;
 use common_exception::Result;
 
 use crate::base::Thread;
-use crate::base::ThreadJoinHandle;
 
 // Simple thread pool implementation,
 // which can run more tasks on limited threads and wait for all tasks to finished.
 pub struct ThreadPool {
-    #[allow(dead_code)]
-    join_handles: Vec<ThreadJoinHandle<()>>,
     tx: Sender<Box<dyn FnOnce() + Send + 'static>>,
 }
 
@@ -29,20 +26,18 @@ impl<T: Send> TaskJoinHandler<T> {
 
 impl ThreadPool {
     pub fn create(threads: usize) -> Result<ThreadPool> {
-        let mut join_handles = Vec::with_capacity(threads);
-
         let (tx, rx) = async_channel::unbounded::<Box<dyn FnOnce() + Send + 'static>>();
 
         for _index in 0..threads {
             let thread_rx = rx.clone();
-            join_handles.push(Thread::spawn(move || {
+            Thread::spawn(move || {
                 while let Ok(task) = thread_rx.recv_blocking() {
                     task();
                 }
-            }));
+            });
         }
 
-        Ok(ThreadPool { tx, join_handles })
+        Ok(ThreadPool { tx })
     }
 
     pub fn execute<F, R>(&self, f: F) -> TaskJoinHandler<R>
