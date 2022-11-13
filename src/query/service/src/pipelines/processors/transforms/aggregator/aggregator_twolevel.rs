@@ -102,11 +102,12 @@ where
             instant.elapsed()
         );
 
+        self.states_dropped = true;
         Ok(TwoLevelAggregator::<Self> {
             inner: PartialAggregator::<true, TwoLevelHashMethod<Method>> {
                 area: self.area.take(),
                 params: self.params.clone(),
-                states_dropped: self.states_dropped,
+                states_dropped: false,
                 method: two_level_method,
                 hash_table: two_level_hashtable,
             },
@@ -201,11 +202,12 @@ where
             instant.elapsed()
         );
 
+        self.states_dropped = true;
         Ok(TwoLevelAggregator::<Self> {
             inner: PartialAggregator::<false, TwoLevelHashMethod<Method>> {
                 area: self.area.take(),
                 params: self.params.clone(),
-                states_dropped: self.states_dropped,
+                states_dropped: false,
                 method: two_level_method,
                 hash_table: two_level_hashtable,
             },
