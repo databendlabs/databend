@@ -11,10 +11,10 @@ doctest = false
 test = false
 
 [features]
-# Phony feature 
+# Phony feature
 #
-# Prevents the integration tests from running if "hive" not enabled 
-#   The integration tests need hive-meta-store service, which is not available 
+# Prevents the integration tests from running if "hive" not enabled
+#   The integration tests need hive-meta-store service, which is not available
 #   in the normal testing setup.
 hive-it = []
 
@@ -22,9 +22,9 @@ hive-it = []
 # Workspace dependencies
 
 # Github dependencies
-thrift = { git = "https://github.com/datafuse-extras/thrift", tag = "v0.17.0" }
 
 # Crates.io dependencies
+thrift = { package = "databend-thrift", version = "0.17.0", optional = true }
 
 [build-dependencies]
 which = "4.3.0"
