@@ -94,7 +94,7 @@ fn test_filter_column() {
     ];
 
     for test in tests {
-        let (res, deleted) = data_column.filter(&test.filter);
+        let res = data_column.filter(&test.filter);
         let iter = test.expect.into_iter();
         let bitmap: Bitmap = MutableBitmap::from_iter(iter).into();
         assert_eq!(
@@ -105,18 +105,19 @@ fn test_filter_column() {
             &bitmap
         );
 
-        assert_eq!(deleted.is_some(), test.deleted.is_some());
-        if let Some(deleted) = deleted {
-            let iter = test.deleted.unwrap().into_iter();
+        if let Some(deleted) = test.deleted {
+            let iter = deleted.into_iter();
             let bitmap: Bitmap = MutableBitmap::from_iter(iter).into();
+
+            let res = data_column.filter(&test.filter.neg());
+
             assert_eq!(
-                deleted
-                    .as_any()
+                res.as_any()
                     .downcast_ref::<BooleanColumn>()
                     .unwrap()
                     .values(),
                 &bitmap
-            )
+            );
         };
     }
 }

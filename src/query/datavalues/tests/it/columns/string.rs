@@ -106,7 +106,7 @@ fn test_string_column() {
     ];
 
     for test in tests {
-        let (res, deleted) = data_column.filter(&test.filter);
+        let res = data_column.filter(&test.filter);
         let values = res
             .as_any()
             .downcast_ref::<StringColumn>()
@@ -122,18 +122,16 @@ fn test_string_column() {
                 .values()
         );
 
-        assert_eq!(deleted.is_some(), test.deleted.is_some());
-        if let Some(deleted) = deleted {
-            let values = deleted
+        if let Some(deleted) = test.deleted {
+            let res = data_column.filter(&test.filter.neg());
+            let values = res
                 .as_any()
                 .downcast_ref::<StringColumn>()
                 .unwrap()
                 .values();
-
             assert_eq!(
                 values,
-                test.deleted
-                    .unwrap()
+                deleted
                     .as_any()
                     .downcast_ref::<StringColumn>()
                     .unwrap()

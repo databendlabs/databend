@@ -82,8 +82,7 @@ pub trait Column: Send + Sync {
     fn as_arrow_array(&self, logical_type: DataTypeImpl) -> ArrayRef;
     fn slice(&self, offset: usize, length: usize) -> ColumnRef;
 
-    /// filter() return (remain_columns, deleted_columns)
-    fn filter(&self, filter: &BooleanColumn) -> (ColumnRef, Option<ColumnRef>);
+    fn filter(&self, filter: &BooleanColumn) -> ColumnRef;
 
     /// scatter() partitions the input array into multiple arrays.
     /// indices: a slice whose length is the same as the array.

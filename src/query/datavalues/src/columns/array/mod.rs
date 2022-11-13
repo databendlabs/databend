@@ -172,8 +172,7 @@ impl Column for ArrayColumn {
         scatter_scalar_column(self, indices, scattered_size)
     }
 
-    /// filter() return (remain_columns, deleted_columns)
-    fn filter(&self, filter: &BooleanColumn) -> (ColumnRef, Option<ColumnRef>) {
+    fn filter(&self, filter: &BooleanColumn) -> ColumnRef {
         filter_scalar_column(self, filter)
     }
 

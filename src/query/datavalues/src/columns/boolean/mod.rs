@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use core::ops::Not;
 use std::sync::Arc;
 
 use common_arrow::arrow::array::*;
@@ -63,6 +64,10 @@ impl BooleanColumn {
     pub fn values(&self) -> &Bitmap {
         &self.values
     }
+
+    pub fn neg(&self) -> Self {
+        Self::from_arrow_data(Not::not(&self.values))
+    }
 }
 
 impl Column for BooleanColumn {
@@ -107,14 +112,13 @@ impl Column for BooleanColumn {
         }
     }
 
-    /// filter() return (remain_columns, deleted_columns)
-    fn filter(&self, filter: &BooleanColumn) -> (ColumnRef, Option<ColumnRef>) {
+    fn filter(&self, filter: &BooleanColumn) -> ColumnRef {
         if self.values().unset_bits() == 0 {
             let values = self
                 .values
                 .clone()
                 .slice(0, filter.len() - filter.values().unset_bits());
-            return (Arc::new(BooleanColumn::from_arrow_data(values)), None);
+            return Arc::new(BooleanColumn::from_arrow_data(values));
         }
         filter_scalar_column(self, filter)
     }

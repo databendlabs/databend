@@ -190,8 +190,7 @@ impl AggregateIfCombinator {
     ) -> (Vec<ColumnRef>, usize) {
         let mut remain_columns = vec![];
         columns.iter().for_each(|c| {
-            let (c, _) = c.filter(predicate);
-            remain_columns.push(c);
+            remain_columns.push(c.filter(predicate));
         });
 
         let rows = predicate.len() - predicate.values().unset_bits();

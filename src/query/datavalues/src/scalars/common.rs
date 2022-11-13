@@ -17,19 +17,14 @@ use common_arrow::arrow::bitmap::utils::BitChunksExact;
 
 use crate::prelude::*;
 
-/// filter() return (remain_columns, deleted_columns)
-pub fn filter_scalar_column<C: ScalarColumn>(
-    c: &C,
-    filter: &BooleanColumn,
-) -> (ColumnRef, Option<ColumnRef>) {
+pub fn filter_scalar_column<C: ScalarColumn>(c: &C, filter: &BooleanColumn) -> ColumnRef {
     let meta = c.column_meta();
     let length = filter.values().len() - filter.values().unset_bits();
     if length == c.len() {
-        return (c.convert_full_column(), None);
+        return c.convert_full_column();
     }
     const CHUNK_SIZE: usize = 64;
-    let mut builder = <<C as ScalarColumn>::Builder>::with_capacity_meta(c.len(), meta.clone());
-    let mut deleted_builder = <<C as ScalarColumn>::Builder>::with_capacity_meta(c.len(), meta);
+    let mut builder = <<C as ScalarColumn>::Builder>::with_capacity_meta(c.len(), meta);
 
     let (mut slice, offset, mut length) = filter.values().as_slice();
     let mut start_index: usize = 0;
@@ -46,8 +41,6 @@ pub fn filter_scalar_column<C: ScalarColumn>(
             .for_each(|(idx, is_selected)| {
                 if is_selected {
                     builder.push(c.get_data(idx));
-                } else {
-                    deleted_builder.push(c.get_data(idx));
                 }
             });
         slice = &slice[1..];
@@ -59,14 +52,12 @@ pub fn filter_scalar_column<C: ScalarColumn>(
     mask_chunks
         .by_ref()
         .enumerate()
-        .for_each(|(mask_index, mask)| {
-            for n in 0..CHUNK_SIZE {
+        .for_each(|(mask_index, mut mask)| {
+            while mask != 0 {
+                let n = mask.trailing_zeros() as usize;
                 let i = mask_index * CHUNK_SIZE + n + start_index;
-                if mask & 1 << n != 0 {
-                    builder.push(c.get_data(i));
-                } else {
-                    deleted_builder.push(c.get_data(i));
-                }
+                builder.push(c.get_data(i));
+                mask = mask & (mask - 1);
             }
         });
 
@@ -78,11 +69,9 @@ pub fn filter_scalar_column<C: ScalarColumn>(
             let i = mask_index + remainder_start + start_index;
             if is_selected {
                 builder.push(c.get_data(i));
-            } else {
-                deleted_builder.push(c.get_data(i));
             }
         });
-    (builder.to_column(), Some(deleted_builder.to_column()))
+    builder.to_column()
 }
 
 pub fn scatter_scalar_column<C: ScalarColumn>(

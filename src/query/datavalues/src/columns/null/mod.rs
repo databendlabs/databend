@@ -95,15 +95,9 @@ impl Column for NullColumn {
         Arc::new(Self { length })
     }
 
-    /// filter() return (remain_columns, deleted_columns)
-    fn filter(&self, filter: &BooleanColumn) -> (ColumnRef, Option<ColumnRef>) {
+    fn filter(&self, filter: &BooleanColumn) -> ColumnRef {
         let length = filter.values().len() - filter.values().unset_bits();
-        (
-            Arc::new(Self { length }),
-            Some(Arc::new(Self {
-                length: filter.values().unset_bits(),
-            })),
-        )
+        Arc::new(Self { length })
     }
 
     fn scatter(&self, indices: &[usize], scattered_size: usize) -> Vec<ColumnRef> {

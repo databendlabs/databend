@@ -122,7 +122,7 @@ fn test_filter_column() {
     });
 
     for test in tests {
-        let (res, deleted) = data_column.filter(&test.filter);
+        let res = data_column.filter(&test.filter);
         assert_eq!(
             res.as_any()
                 .downcast_ref::<PrimitiveColumn<i32>>()
@@ -131,15 +131,14 @@ fn test_filter_column() {
             test.expect
         );
 
-        assert_eq!(test.deleted.is_some(), deleted.is_some());
-        if let Some(deleted) = deleted {
+        if let Some(deleted) = test.deleted {
+            let res = data_column.filter(&test.filter.neg());
             assert_eq!(
-                deleted
-                    .as_any()
+                res.as_any()
                     .downcast_ref::<PrimitiveColumn<i32>>()
                     .unwrap()
                     .values(),
-                test.deleted.unwrap(),
+                deleted
             );
         }
     }
