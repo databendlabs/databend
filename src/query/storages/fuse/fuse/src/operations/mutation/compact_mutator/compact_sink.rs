@@ -18,7 +18,7 @@ use std::sync::Arc;
 use common_catalog::table::Table;
 use common_catalog::table::TableExt;
 use common_catalog::table_context::TableContext;
-use common_datablocks::MetaInfos;
+use common_datablocks::BlockMetaInfos;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_storages_table_meta::meta::Location;
@@ -75,7 +75,7 @@ pub struct CompactSink {
     abort_operation: AbortOperation,
 
     inputs: Vec<Arc<InputPort>>,
-    input_data: MetaInfos,
+    input_data: BlockMetaInfos,
     cur_input_index: usize,
 }
 
@@ -123,6 +123,24 @@ impl Processor for CompactSink {
     }
 
     fn event(&mut self) -> Result<Event> {
+        if matches!(&self.state, State::GatherSegment | State::DetectConfilct(_)) {
+            return Ok(Event::Sync);
+        }
+
+        if matches!(
+            &self.state,
+            State::GenerateSnapshot(_)
+                | State::TryCommit(_)
+                | State::RefreshTable
+                | State::AbortOperation
+        ) {
+            return Ok(Event::Async);
+        }
+
+        if matches!(self.state, State::Finish) {
+            return Ok(Event::Finished);
+        }
+
         let current_input = self.get_current_input();
         if let Some(cur_input) = current_input {
             if cur_input.is_finished() {
@@ -130,7 +148,7 @@ impl Processor for CompactSink {
                 return Ok(Event::Sync);
             }
             self.input_data
-                .push(cur_input.pull_data().unwrap()?.meta().unwrap().clone());
+                .push(cur_input.pull_data().unwrap()?.get_meta().unwrap().clone());
         }
         Ok(Event::NeedData)
     }

@@ -21,7 +21,7 @@ use opendal::Operator;
 
 use crate::io::Files;
 
-#[derive(Clone, Default, Debug, PartialEq, Eq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, PartialEq)]
 pub struct AbortOperation {
     pub segments: Vec<String>,
     pub blocks: Vec<String>,

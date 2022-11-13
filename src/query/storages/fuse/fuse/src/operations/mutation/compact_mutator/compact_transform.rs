@@ -167,7 +167,7 @@ impl Processor for CompactTransform {
     async fn async_process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Consume) {
             State::Compact(block) => {
-                let meta = block.meta().unwrap();
+                let meta = block.get_meta().unwrap();
                 let task_meta = CompactSourceMeta::from_meta(meta)?;
                 let mut new_metas = Vec::with_capacity(task_meta.tasks.len());
                 for task in &task_meta.tasks {
