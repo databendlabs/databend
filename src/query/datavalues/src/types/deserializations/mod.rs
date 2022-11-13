@@ -28,7 +28,6 @@ mod string;
 mod struct_;
 mod timestamp;
 mod variant;
-use std::io::Cursor;
 
 pub use array::*;
 pub use boolean::*;
@@ -62,20 +61,6 @@ pub trait TypeDeserializer: Send + Sync {
 
     fn de_null(&mut self, _format: &FormatSettings) -> bool {
         false
-    }
-
-    fn de_text<R: AsRef<[u8]>>(
-        &mut self,
-        reader: &mut Cursor<R>,
-        format: &FormatSettings,
-    ) -> Result<()>;
-
-    fn de_text_quoted<R: AsRef<[u8]>>(
-        &mut self,
-        reader: &mut Cursor<R>,
-        format: &FormatSettings,
-    ) -> Result<()> {
-        self.de_text(reader, format)
     }
 
     fn append_data_value(&mut self, value: DataValue, format: &FormatSettings) -> Result<()>;

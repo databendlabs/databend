@@ -12,11 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::io::Cursor;
-
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_io::cursor_ext::*;
 use common_io::prelude::FormatSettings;
 
 use crate::prelude::*;
@@ -86,27 +83,6 @@ impl TypeDeserializer for StructDeserializer {
             }
             _ => Err(ErrorCode::BadBytes("Incorrect json value, must be object")),
         }
-    }
-
-    fn de_text<R: AsRef<[u8]>>(
-        &mut self,
-        reader: &mut Cursor<R>,
-        format: &FormatSettings,
-    ) -> Result<()> {
-        reader.must_ignore_byte(b'(')?;
-        let mut values = Vec::with_capacity(self.inners.len());
-        for (idx, inner) in self.inners.iter_mut().enumerate() {
-            let _ = reader.ignore_white_spaces();
-            if idx != 0 {
-                reader.must_ignore_byte(b',')?;
-            }
-            let _ = reader.ignore_white_spaces();
-            inner.de_text_quoted(reader, format)?;
-            values.push(inner.pop_data_value()?);
-        }
-        reader.must_ignore_byte(b')')?;
-        self.builder.append_value(StructValue::new(values));
-        Ok(())
     }
 
     fn append_data_value(&mut self, value: DataValue, _format: &FormatSettings) -> Result<()> {

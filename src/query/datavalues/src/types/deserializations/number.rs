@@ -84,20 +84,6 @@ where
         false
     }
 
-    fn de_text<R: AsRef<[u8]>>(
-        &mut self,
-        reader: &mut Cursor<R>,
-        _format: &FormatSettings,
-    ) -> Result<()> {
-        let v: T = if !T::FLOATING {
-            reader.read_int_text()
-        } else {
-            reader.read_float_text()
-        }?;
-        self.builder.append_value(v);
-        Ok(())
-    }
-
     fn append_data_value(&mut self, value: DataValue, _format: &FormatSettings) -> Result<()> {
         self.builder.append_data_value(value)
     }

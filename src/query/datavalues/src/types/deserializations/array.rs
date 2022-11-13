@@ -12,11 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::io::Cursor;
-
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_io::cursor_ext::*;
 use common_io::prelude::BinaryRead;
 use common_io::prelude::FormatSettings;
 
@@ -85,34 +82,6 @@ impl TypeDeserializer for ArrayDeserializer {
             }
             _ => Err(ErrorCode::BadBytes("Incorrect json value, must be array")),
         }
-    }
-
-    fn de_text<R: AsRef<[u8]>>(
-        &mut self,
-        reader: &mut Cursor<R>,
-        format: &FormatSettings,
-    ) -> Result<()> {
-        reader.must_ignore_byte(b'[')?;
-        let mut idx = 0;
-        loop {
-            let _ = reader.ignore_white_spaces();
-            if reader.ignore_byte(b']') {
-                break;
-            }
-            if idx != 0 {
-                reader.must_ignore_byte(b',')?;
-            }
-            let _ = reader.ignore_white_spaces();
-            self.inner.de_text_quoted(reader, format)?;
-            idx += 1;
-        }
-        let mut values = Vec::with_capacity(idx);
-        for _ in 0..idx {
-            values.push(self.inner.pop_data_value()?);
-        }
-        values.reverse();
-        self.builder.append_value(ArrayValue::new(values));
-        Ok(())
     }
 
     fn append_data_value(&mut self, value: DataValue, _format: &FormatSettings) -> Result<()> {

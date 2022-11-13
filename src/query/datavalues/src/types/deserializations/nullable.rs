@@ -12,12 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::io::Cursor;
-
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_io::cursor_ext::*;
 use common_io::prelude::BinaryRead;
 use common_io::prelude::FormatSettings;
 
@@ -75,43 +72,6 @@ impl TypeDeserializer for NullableDeserializer {
                 self.inner.de_json(other, format)
             }
         }
-    }
-
-    fn de_text<R: AsRef<[u8]>>(
-        &mut self,
-        reader: &mut Cursor<R>,
-        format: &FormatSettings,
-    ) -> Result<()> {
-        if reader.eof() {
-            self.de_default();
-        } else {
-            if reader.ignore_insensitive_bytes(&format.null_bytes) {
-                let buffer = reader.remaining_slice();
-                if buffer.is_empty()
-                    || (buffer[0] == b'\r' || buffer[0] == b'\n' || buffer[0] == b'\t')
-                {
-                    self.de_default();
-                    return Ok(());
-                }
-            }
-            self.inner.de_text(reader, format)?;
-            self.bitmap.push(true);
-        }
-        Ok(())
-    }
-
-    fn de_text_quoted<R: AsRef<[u8]>>(
-        &mut self,
-        reader: &mut Cursor<R>,
-        format: &FormatSettings,
-    ) -> Result<()> {
-        if reader.ignore_insensitive_bytes(&format.null_bytes) {
-            self.de_default();
-        } else {
-            self.inner.de_text_quoted(reader, format)?;
-            self.bitmap.push(true);
-        }
-        Ok(())
     }
 
     fn de_null(&mut self, _format: &FormatSettings) -> bool {

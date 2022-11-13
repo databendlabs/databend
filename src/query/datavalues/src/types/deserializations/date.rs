@@ -85,36 +85,6 @@ where
         }
     }
 
-    fn de_text_quoted<R: AsRef<[u8]>>(
-        &mut self,
-        reader: &mut Cursor<R>,
-        format: &FormatSettings,
-    ) -> Result<()> {
-        reader.must_ignore_byte(b'\'')?;
-        let date = reader.read_date_text(&format.timezone);
-        reader.must_ignore_byte(b'\'')?;
-        if date.is_err() {
-            return Err(date.err().unwrap());
-        }
-        let days = uniform_date(date.unwrap());
-        check_date(days.as_i32())?;
-
-        self.builder.append_value(days);
-        Ok(())
-    }
-
-    fn de_text<R: AsRef<[u8]>>(
-        &mut self,
-        reader: &mut Cursor<R>,
-        format: &FormatSettings,
-    ) -> Result<()> {
-        let date = reader.read_date_text(&format.timezone)?;
-        let days = uniform_date(date);
-        check_date(days.as_i32())?;
-        self.builder.append_value(days);
-        Ok(())
-    }
-
     fn append_data_value(&mut self, value: DataValue, _format: &FormatSettings) -> Result<()> {
         let v = value.as_i64()? as i32;
         check_date(v)?;
