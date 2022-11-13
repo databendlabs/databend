@@ -24,7 +24,7 @@ hive-it = []
 # Github dependencies
 
 # Crates.io dependencies
-thrift = { package = "databend-thrift", version = "0.17.0", optional = true }
+thrift = { package = "databend-thrift", version = "0.17.0" }
 
 [build-dependencies]
 which = "4.3.0"
