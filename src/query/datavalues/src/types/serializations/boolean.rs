@@ -21,7 +21,7 @@ use crate::prelude::*;
 
 #[derive(Clone)]
 pub struct BooleanSerializer {
-    pub(crate) values: Bitmap,
+    pub values: Bitmap,
 }
 
 impl BooleanSerializer {
@@ -30,58 +30,9 @@ impl BooleanSerializer {
         let values = col.values().clone();
         Ok(Self { values })
     }
-
-    #[inline]
-    fn write_field_outer(&self, row_index: usize, buf: &mut Vec<u8>, format: &FormatSettings) {
-        let v = if self.values.get_bit(row_index) {
-            &format.true_bytes
-        } else {
-            &format.false_bytes
-        };
-        buf.extend_from_slice(v);
-    }
 }
 
 impl<'a> TypeSerializer<'a> for BooleanSerializer {
-    fn write_field_values(
-        &self,
-        row_index: usize,
-        buf: &mut Vec<u8>,
-        format: &FormatSettings,
-        _in_nested: bool,
-    ) {
-        let v = if self.values.get_bit(row_index) {
-            &format.nested.true_bytes
-        } else {
-            &format.nested.false_bytes
-        };
-        buf.extend_from_slice(v);
-    }
-
-    fn write_field_tsv(
-        &self,
-        row_index: usize,
-        buf: &mut Vec<u8>,
-        format: &FormatSettings,
-        _in_nested: bool,
-    ) {
-        self.write_field_outer(row_index, buf, format)
-    }
-
-    fn write_field_csv(&self, row_index: usize, buf: &mut Vec<u8>, format: &FormatSettings) {
-        self.write_field_outer(row_index, buf, format)
-    }
-
-    fn write_field_json(
-        &self,
-        row_index: usize,
-        buf: &mut Vec<u8>,
-        format: &FormatSettings,
-        _quote: bool,
-    ) {
-        self.write_field_outer(row_index, buf, format)
-    }
-
     fn serialize_json_values(&self, _format: &FormatSettings) -> Result<Vec<Value>> {
         let result: Vec<Value> = self
             .values

@@ -16,8 +16,8 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
 use common_hashtable::HashMap;
+use common_hashtable::HashtableLike;
 use common_hashtable::StackHashMap;
-use common_hashtable::TwolevelHashMap;
 use common_hashtable::UnsizedHashMap;
 use rand::Rng;
 
@@ -82,10 +82,10 @@ fn test_stack_hash_map() {
     simple_test!(StackHashMap);
 }
 
-#[test]
-fn test_twolevel_hash_map() {
-    simple_test!(TwolevelHashMap);
-}
+// #[test]
+// fn test_twolevel_hash_map() {
+//     simple_test!(NewTwoLevelHashMap);
+// }
 
 #[test]
 fn test_unsized_hash_map() {

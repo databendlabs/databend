@@ -178,6 +178,13 @@ impl ArgType for TimestampType {
         DataType::Timestamp
     }
 
+    fn full_domain() -> Self::Domain {
+        SimpleDomain {
+            min: TIMESTAMP_MIN,
+            max: TIMESTAMP_MAX,
+        }
+    }
+
     fn create_builder(capacity: usize, _generics: &GenericMap) -> Self::ColumnBuilder {
         Vec::with_capacity(capacity)
     }

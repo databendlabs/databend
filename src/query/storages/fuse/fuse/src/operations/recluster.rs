@@ -21,8 +21,11 @@ use common_catalog::plan::PushDownInfo;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_datablocks::SortColumnDescription;
+use common_datavalues::DataField;
+use common_datavalues::DataSchemaRefExt;
 use common_exception::Result;
 use common_pipeline_core::Pipeline;
+use common_pipeline_transforms::processors::transforms::try_add_multi_sort_merge;
 use common_pipeline_transforms::processors::transforms::BlockCompactor;
 use common_pipeline_transforms::processors::transforms::SortMergeCompactor;
 use common_pipeline_transforms::processors::transforms::TransformCompact;
@@ -31,6 +34,7 @@ use common_pipeline_transforms::processors::transforms::TransformSortPartial;
 use common_storages_table_meta::meta::BlockMeta;
 
 use crate::operations::FuseTableSink;
+use crate::operations::ReadDataKind;
 use crate::operations::ReclusterMutator;
 use crate::pruning::BlockPruner;
 use crate::FuseTable;
@@ -134,9 +138,13 @@ impl FuseTable {
 
         ctx.try_set_partitions(plan.parts.clone())?;
 
-        // It's easy to OOM if we set the max_io_request more than the max threads.
-        let max_threads = ctx.get_settings().get_max_threads()? as usize;
-        self.do_read_data(ctx.clone(), &plan, pipeline, max_threads)?;
+        // ReadDataKind to avoid OOM.
+        self.do_read_data(
+            ctx.clone(),
+            &plan,
+            pipeline,
+            ReadDataKind::OptimizeDataLessIORequests,
+        )?;
 
         let cluster_stats_gen = self.get_cluster_stats_gen(
             ctx.clone(),
@@ -172,14 +180,24 @@ impl FuseTable {
                 SortMergeCompactor::new(block_size, None, sort_descs.clone()),
             )
         })?;
-        pipeline.resize(1)?;
-        pipeline.add_transform(|transform_input_port, transform_output_port| {
-            TransformSortMerge::try_create(
-                transform_input_port,
-                transform_output_port,
-                SortMergeCompactor::new(block_size, None, sort_descs.clone()),
-            )
-        })?;
+
+        // construct output fields
+        let mut output_fields = plan.schema().fields().clone();
+        for expr in self.cluster_keys().iter() {
+            let cname = expr.column_name();
+            if !output_fields.iter().any(|x| x.name() == &cname) {
+                let field = DataField::new(&cname, expr.data_type());
+                output_fields.push(field);
+            }
+        }
+
+        try_add_multi_sort_merge(
+            pipeline,
+            DataSchemaRefExt::create(output_fields),
+            block_size,
+            None,
+            sort_descs,
+        )?;
 
         pipeline.add_transform(|transform_input_port, transform_output_port| {
             TransformCompact::try_create(

@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_datavalues::DataTypeImpl::Null;
+use common_datavalues::DataTypeImpl::Nullable;
 use common_datavalues::DataValue;
 use common_exception::Result;
 
@@ -77,7 +79,10 @@ impl Rule for RuleFoldCountAggregate {
         let is_simple_count = agg.group_items.is_empty()
             && agg.aggregate_functions.iter().all(|agg| match &agg.scalar {
                 Scalar::AggregateFunction(agg_func) => {
-                    agg_func.func_name == "count" && agg_func.args.is_empty() && !agg_func.distinct
+                    agg_func.func_name == "count"
+                        && (agg_func.args.is_empty()
+                            || !matches!(agg_func.args[0].data_type(), Nullable(_) | Null(_)))
+                        && !agg_func.distinct
                 }
                 _ => false,
             });

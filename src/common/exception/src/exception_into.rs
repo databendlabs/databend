@@ -157,12 +157,6 @@ impl From<std::convert::Infallible> for ErrorCode {
     }
 }
 
-impl From<sqlparser::parser::ParserError> for ErrorCode {
-    fn from(error: sqlparser::parser::ParserError) -> Self {
-        ErrorCode::SyntaxException(error.to_string())
-    }
-}
-
 impl From<std::io::Error> for ErrorCode {
     fn from(error: std::io::Error) -> Self {
         use std::io::ErrorKind;

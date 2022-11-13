@@ -364,6 +364,8 @@ fn test_like(file: &mut impl Write, columns: &[(&str, DataType, Column)]) {
     run_ast(file, "'1' like '2'", &[]);
     run_ast(file, "'hello\n' like 'h%'", &[]);
     run_ast(file, "'h\n' like 'h_'", &[]);
+    run_ast(file, r#"'%' like '\%'"#, &[]);
+    run_ast(file, r#"'v%xx' like '_\%%'"#, &[]);
 
     let like_columns = [(
         "lhs",

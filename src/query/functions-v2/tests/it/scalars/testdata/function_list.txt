@@ -82,6 +82,35 @@ char_length(String) :: UInt64
 char_length(String NULL) :: UInt64 NULL
 check_json(String) :: String NULL
 check_json(String NULL) :: String NULL
+contains(Array(UInt8), UInt8) :: Boolean
+contains(Array(UInt8) NULL, UInt8 NULL) :: Boolean NULL
+contains(Array(UInt16), UInt16) :: Boolean
+contains(Array(UInt16) NULL, UInt16 NULL) :: Boolean NULL
+contains(Array(UInt32), UInt32) :: Boolean
+contains(Array(UInt32) NULL, UInt32 NULL) :: Boolean NULL
+contains(Array(UInt64), UInt64) :: Boolean
+contains(Array(UInt64) NULL, UInt64 NULL) :: Boolean NULL
+contains(Array(Int8), Int8) :: Boolean
+contains(Array(Int8) NULL, Int8 NULL) :: Boolean NULL
+contains(Array(Int16), Int16) :: Boolean
+contains(Array(Int16) NULL, Int16 NULL) :: Boolean NULL
+contains(Array(Int32), Int32) :: Boolean
+contains(Array(Int32) NULL, Int32 NULL) :: Boolean NULL
+contains(Array(Int64), Int64) :: Boolean
+contains(Array(Int64) NULL, Int64 NULL) :: Boolean NULL
+contains(Array(Float32), Float32) :: Boolean
+contains(Array(Float32) NULL, Float32 NULL) :: Boolean NULL
+contains(Array(Float64), Float64) :: Boolean
+contains(Array(Float64) NULL, Float64 NULL) :: Boolean NULL
+contains(Array(Date), Date) :: Boolean
+contains(Array(Date) NULL, Date NULL) :: Boolean NULL
+contains(Array(Timestamp), Timestamp) :: Boolean
+contains(Array(Timestamp) NULL, Timestamp NULL) :: Boolean NULL
+contains(Array(Boolean), Boolean) :: Boolean
+contains(Array(Boolean) NULL, Boolean NULL) :: Boolean NULL
+contains(Array(String), String) :: Boolean
+contains(Array(String) NULL, String NULL) :: Boolean NULL
+contains(Array(T0), T0) :: Boolean
 cos(Float64) :: Float64
 cos(Float64 NULL) :: Float64 NULL
 cot(Float64) :: Float64
@@ -543,6 +572,8 @@ floor(Float64 NULL) :: Float64 NULL
 from_base64(String) :: String
 from_base64(String NULL) :: String NULL
 get(Array(Nothing) NULL, UInt64 NULL) :: NULL
+get(Array(T0 NULL), UInt64) :: T0 NULL
+get(Array(T0 NULL) NULL, UInt64 NULL) :: T0 NULL
 get(Array(T0), UInt64) :: T0 NULL
 get(Array(T0) NULL, UInt64 NULL) :: T0 NULL
 get(Variant, UInt64) :: Variant NULL

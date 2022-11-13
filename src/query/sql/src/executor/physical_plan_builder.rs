@@ -17,7 +17,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_catalog::catalog::CatalogManager;
-use common_catalog::catalog::CATALOG_DEFAULT;
+use common_catalog::catalog_kind::CATALOG_DEFAULT;
 use common_catalog::plan::Expression;
 use common_catalog::plan::PrewhereInfo;
 use common_catalog::plan::Projection;
@@ -598,6 +598,7 @@ impl PhysicalPlanBuilder {
             prewhere: prewhere_info,
             limit: scan.limit,
             order_by: order_by.unwrap_or_default(),
+            stage: None,
         })
     }
 }

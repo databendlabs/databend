@@ -14,27 +14,17 @@
 
 use std::fmt::Debug;
 use std::fmt::Formatter;
-use std::io::Read;
-use std::io::Write;
-use std::sync::Arc;
 
 use byteorder::BigEndian;
 use byteorder::ReadBytesExt;
 use byteorder::WriteBytesExt;
-use common_arrow::arrow::io::flight::deserialize_batch;
-use common_arrow::arrow::io::flight::serialize_batch;
-use common_arrow::arrow::io::ipc::write::default_ipc_fields;
-use common_arrow::arrow::io::ipc::write::WriteOptions;
-use common_arrow::arrow::io::ipc::IpcSchema;
 use common_arrow::arrow_format::flight::data::FlightData;
-use common_base::base::ProgressValues;
-use common_datablocks::DataBlock;
-use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use tracing::error;
 
-use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
+use crate::api::rpc::packets::ProgressInfo;
+use crate::api::PrecommitBlock;
 
 pub struct FragmentData {
     pub data: FlightData,
@@ -52,17 +42,6 @@ impl Debug for FragmentData {
     }
 }
 
-#[allow(clippy::enum_variant_names)]
-#[derive(Debug)]
-pub enum ProgressInfo {
-    ScanProgress(ProgressValues),
-    WriteProgress(ProgressValues),
-    ResultProgress(ProgressValues),
-}
-
-#[derive(Debug, Eq, PartialEq, Clone)]
-pub struct PrecommitBlock(pub DataBlock);
-
 #[derive(Debug)]
 pub enum DataPacket {
     ErrorCode(ErrorCode),
@@ -74,26 +53,13 @@ pub enum DataPacket {
     },
 }
 
-impl ProgressInfo {
-    pub fn inc(&self, ctx: &Arc<QueryContext>) {
-        match self {
-            ProgressInfo::ScanProgress(values) => ctx.get_scan_progress().incr(values),
-            ProgressInfo::WriteProgress(values) => ctx.get_write_progress().incr(values),
-            ProgressInfo::ResultProgress(values) => ctx.get_result_progress().incr(values),
-        };
-    }
-}
-
-impl PrecommitBlock {
-    pub fn precommit(&self, ctx: &Arc<QueryContext>) {
-        ctx.push_precommit_block(self.0.clone());
-    }
-}
-
 impl From<DataPacket> for FlightData {
     fn from(packet: DataPacket) -> Self {
         match packet {
-            DataPacket::ErrorCode(error) => FlightData::from(error),
+            DataPacket::ErrorCode(error) => {
+                error!("Got error code data packet: {:?}", error);
+                FlightData::from(error)
+            }
             DataPacket::FragmentData(fragment_data) => FlightData::from(fragment_data),
             DataPacket::FetchProgressAndPrecommit => FlightData {
                 app_metadata: vec![0x03],
@@ -113,22 +79,14 @@ impl From<DataPacket> for FlightData {
                     .write_u64::<BigEndian>(precommit.len() as u64)
                     .unwrap();
 
+                // Progress.
+                // TODO(winter): remove unwrap.
                 for progress_info in progress {
-                    let (info_type, values) = match progress_info {
-                        ProgressInfo::ScanProgress(values) => (1_u8, values),
-                        ProgressInfo::WriteProgress(values) => (2_u8, values),
-                        ProgressInfo::ResultProgress(values) => (3_u8, values),
-                    };
-
-                    data_body.write_u8(info_type).unwrap();
-                    data_body
-                        .write_u64::<BigEndian>(values.rows as u64)
-                        .unwrap();
-                    data_body
-                        .write_u64::<BigEndian>(values.bytes as u64)
-                        .unwrap();
+                    progress_info.write(&mut data_body).unwrap();
                 }
 
+                // Pre-commit.
+                // TODO(winter): remove unwrap.
                 for precommit_block in precommit {
                     precommit_block.write(&mut data_body).unwrap();
                 }
@@ -155,68 +113,6 @@ impl From<FragmentData> for FlightData {
     }
 }
 
-impl PrecommitBlock {
-    pub fn write<T: Write>(self, bytes: &mut T) -> Result<()> {
-        let data_block = self.0;
-        let data_schema = data_block.schema();
-        let serialized_schema = serde_json::to_vec(data_schema)?;
-        let arrow_schema = data_schema.to_arrow();
-
-        // schema_flight
-        let options = WriteOptions { compression: None };
-        let ipc_fields = default_ipc_fields(&arrow_schema.fields);
-        let chunks = data_block.try_into()?;
-        let (_dicts, data_flight) = serialize_batch(&chunks, &ipc_fields, &options)?;
-
-        bytes.write_u64::<BigEndian>(serialized_schema.len() as u64)?;
-        bytes.write_u64::<BigEndian>(data_flight.data_header.len() as u64)?;
-        bytes.write_u64::<BigEndian>(data_flight.data_body.len() as u64)?;
-
-        bytes.write_all(&serialized_schema)?;
-        bytes.write_all(&data_flight.data_header)?;
-        bytes.write_all(&data_flight.data_body)?;
-        Ok(())
-    }
-
-    pub fn read<T: Read>(bytes: &mut T) -> Result<PrecommitBlock> {
-        let schema_len = bytes.read_u64::<BigEndian>()? as usize;
-        let header_len = bytes.read_u64::<BigEndian>()? as usize;
-        let body_len = bytes.read_u64::<BigEndian>()? as usize;
-
-        let mut schema = vec![0; schema_len];
-        let mut flight_header = vec![0; header_len];
-        let mut flight_body = vec![0; body_len];
-
-        bytes.read_exact(&mut schema)?;
-        bytes.read_exact(&mut flight_header)?;
-        bytes.read_exact(&mut flight_body)?;
-        let data_schema = serde_json::from_slice::<DataSchema>(&schema)?;
-        let arrow_schema = data_schema.to_arrow();
-
-        let ipc_fields = default_ipc_fields(&arrow_schema.fields);
-        let ipc_schema = IpcSchema {
-            fields: ipc_fields,
-            is_little_endian: true,
-        };
-
-        let chunk = deserialize_batch(
-            &FlightData {
-                app_metadata: vec![],
-                data_header: flight_header,
-                data_body: flight_body,
-                flight_descriptor: None,
-            },
-            &arrow_schema.fields,
-            &ipc_schema,
-            &Default::default(),
-        )?;
-
-        let data_schema = Arc::new(DataSchema::from(arrow_schema));
-
-        Ok(PrecommitBlock(DataBlock::from_chunk(&data_schema, &chunk)?))
-    }
-}
-
 impl TryFrom<FlightData> for DataPacket {
     type Error = ErrorCode;
 
@@ -236,23 +132,13 @@ impl TryFrom<FlightData> for DataPacket {
                 let progress_size = bytes.read_u64::<BigEndian>()?;
                 let precommit_size = bytes.read_u64::<BigEndian>()?;
 
+                // Progress.
                 let mut progress_info = Vec::with_capacity(progress_size as usize);
                 for _index in 0..progress_size {
-                    let info_type = bytes.read_u8()?;
-                    let rows = bytes.read_u64::<BigEndian>()? as usize;
-                    let bytes = bytes.read_u64::<BigEndian>()? as usize;
-
-                    progress_info.push(match info_type {
-                        1 => Ok(ProgressInfo::ScanProgress(ProgressValues { rows, bytes })),
-                        2 => Ok(ProgressInfo::WriteProgress(ProgressValues { rows, bytes })),
-                        3 => Ok(ProgressInfo::ResultProgress(ProgressValues { rows, bytes })),
-                        _ => Err(ErrorCode::Unimplemented(format!(
-                            "Unimplemented progress info type, {}",
-                            info_type
-                        ))),
-                    }?);
+                    progress_info.push(ProgressInfo::read(&mut bytes)?);
                 }
 
+                // Pre-commit.
                 let mut precommit = Vec::with_capacity(precommit_size as usize);
                 for _index in 0..precommit_size {
                     precommit.push(PrecommitBlock::read(&mut bytes)?);

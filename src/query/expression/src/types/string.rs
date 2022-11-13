@@ -146,6 +146,13 @@ impl ArgType for StringType {
         DataType::String
     }
 
+    fn full_domain() -> Self::Domain {
+        StringDomain {
+            min: vec![],
+            max: None,
+        }
+    }
+
     fn create_builder(capacity: usize, _: &GenericMap) -> Self::ColumnBuilder {
         StringColumnBuilder::with_capacity(capacity, 0)
     }

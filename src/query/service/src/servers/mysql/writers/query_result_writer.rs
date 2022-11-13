@@ -21,9 +21,11 @@ use common_datavalues::DataSchemaRef;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_datavalues::DateConverter;
-use common_datavalues::TypeSerializer;
+use common_datavalues::TypeSerializerImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_formats::field_encoder::FieldEncoderRowBased;
+use common_formats::field_encoder::FieldEncoderValues;
 use common_io::prelude::FormatSettings;
 use futures_util::StreamExt;
 use opensrv_mysql::*;
@@ -68,6 +70,19 @@ pub struct DFQueryResultWriter<'a, W: AsyncWrite + Send + Unpin> {
     inner: Option<QueryResultWriter<'a, W>>,
 }
 
+fn write_field<'a, 'b, W: AsyncWrite + Unpin>(
+    row_writer: &mut RowWriter<'b, W>,
+    serializer: &TypeSerializerImpl<'a>,
+    encoder: &FieldEncoderValues,
+    buf: &mut Vec<u8>,
+    row_index: usize,
+) -> Result<()> {
+    buf.clear();
+    encoder.write_field(serializer, row_index, buf, true);
+    row_writer.write_col(&buf[..])?;
+    Ok(())
+}
+
 impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
     pub fn create(inner: QueryResultWriter<'a, W>) -> DFQueryResultWriter<'a, W> {
         DFQueryResultWriter::<'a, W> { inner: Some(inner) }
@@ -98,8 +113,12 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
             let blocks = &mut query_result.blocks;
             while let Some(block) = blocks.next().await {
                 if let Err(e) = block {
+                    error!("dataset write failed: {:?}", e);
                     dataset_writer
-                        .error(ErrorKind::ER_UNKNOWN_ERROR, &e.to_string().as_bytes())
+                        .error(
+                            ErrorKind::ER_UNKNOWN_ERROR,
+                            format!("dataset write failed: {}", e).as_bytes(),
+                        )
                         .await?;
 
                     return Ok(());
@@ -112,22 +131,22 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
 
         fn convert_field_type(field: &DataField) -> Result<ColumnType> {
             match remove_nullable(field.data_type()).data_type_id() {
-                TypeID::Int8 => Ok(ColumnType::MYSQL_TYPE_LONG),
-                TypeID::Int16 => Ok(ColumnType::MYSQL_TYPE_LONG),
+                TypeID::Int8 => Ok(ColumnType::MYSQL_TYPE_TINY),
+                TypeID::Int16 => Ok(ColumnType::MYSQL_TYPE_SHORT),
                 TypeID::Int32 => Ok(ColumnType::MYSQL_TYPE_LONG),
-                TypeID::Int64 => Ok(ColumnType::MYSQL_TYPE_LONG),
-                TypeID::UInt8 => Ok(ColumnType::MYSQL_TYPE_LONG),
-                TypeID::UInt16 => Ok(ColumnType::MYSQL_TYPE_LONG),
+                TypeID::Int64 => Ok(ColumnType::MYSQL_TYPE_LONGLONG),
+                TypeID::UInt8 => Ok(ColumnType::MYSQL_TYPE_TINY),
+                TypeID::UInt16 => Ok(ColumnType::MYSQL_TYPE_SHORT),
                 TypeID::UInt32 => Ok(ColumnType::MYSQL_TYPE_LONG),
-                TypeID::UInt64 => Ok(ColumnType::MYSQL_TYPE_LONG),
+                TypeID::UInt64 => Ok(ColumnType::MYSQL_TYPE_LONGLONG),
                 TypeID::Float32 => Ok(ColumnType::MYSQL_TYPE_FLOAT),
-                TypeID::Float64 => Ok(ColumnType::MYSQL_TYPE_FLOAT),
+                TypeID::Float64 => Ok(ColumnType::MYSQL_TYPE_DOUBLE),
                 TypeID::String => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
                 TypeID::Boolean => Ok(ColumnType::MYSQL_TYPE_SHORT),
                 TypeID::Date => Ok(ColumnType::MYSQL_TYPE_DATE),
                 TypeID::Timestamp => Ok(ColumnType::MYSQL_TYPE_DATETIME),
                 TypeID::Null => Ok(ColumnType::MYSQL_TYPE_NULL),
-                TypeID::Interval => Ok(ColumnType::MYSQL_TYPE_LONG),
+                TypeID::Interval => Ok(ColumnType::MYSQL_TYPE_LONGLONG),
                 TypeID::Array => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
                 TypeID::Struct => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
                 TypeID::Variant => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
@@ -163,10 +182,11 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
                 while let Some(block) = blocks.next().await {
                     let block = match block {
                         Err(e) => {
+                            error!("result row write failed: {:?}", e);
                             row_writer
                                 .finish_error(
                                     ErrorKind::ER_UNKNOWN_ERROR,
-                                    &e.to_string().as_bytes(),
+                                    &format!("result row write failed: {}", e).as_bytes(),
                                 )
                                 .await?;
                             return Ok(());
@@ -181,6 +201,8 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
                     match block.get_serializers() {
                         Ok(serializers) => {
                             let rows_size = block.column(0).len();
+                            let encoder = FieldEncoderValues::create_for_handler(format.timezone);
+                            let mut buf = Vec::<u8>::new();
                             for row_index in 0..rows_size {
                                 for (col_index, serializer) in serializers.iter().enumerate() {
                                     let val = block.column(col_index).get_checked(row_index)?;
@@ -200,45 +222,69 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
                                             let v = v as i32;
                                             row_writer.write_col(v.to_date(&tz).naive_local())?
                                         }
-                                        (TypeID::Timestamp, DataValue::Int64(_)) => row_writer
-                                            .write_col(
-                                                serializer.to_string_values(row_index, format)?,
-                                            )?,
+                                        (TypeID::Timestamp, DataValue::Int64(_)) => write_field(
+                                            &mut row_writer,
+                                            serializer,
+                                            &encoder,
+                                            &mut buf,
+                                            row_index,
+                                        )?,
                                         (TypeID::String, DataValue::String(v)) => {
                                             row_writer.write_col(v)?
                                         }
-                                        (TypeID::Array, DataValue::Array(_)) => row_writer
-                                            .write_col(
-                                                serializer.to_string_values(row_index, format)?,
-                                            )?,
-                                        (TypeID::Struct, DataValue::Struct(_)) => row_writer
-                                            .write_col(
-                                                serializer.to_string_values(row_index, format)?,
-                                            )?,
-                                        (TypeID::Variant, DataValue::Variant(_)) => row_writer
-                                            .write_col(
-                                                serializer.to_string_values(row_index, format)?,
-                                            )?,
-                                        (TypeID::VariantArray, DataValue::Variant(_)) => row_writer
-                                            .write_col(
-                                                serializer.to_string_values(row_index, format)?,
-                                            )?,
+                                        (TypeID::Array, DataValue::Array(_)) => write_field(
+                                            &mut row_writer,
+                                            serializer,
+                                            &encoder,
+                                            &mut buf,
+                                            row_index,
+                                        )?,
+                                        (TypeID::Struct, DataValue::Struct(_)) => write_field(
+                                            &mut row_writer,
+                                            serializer,
+                                            &encoder,
+                                            &mut buf,
+                                            row_index,
+                                        )?,
+                                        (TypeID::Variant, DataValue::Variant(_)) => write_field(
+                                            &mut row_writer,
+                                            serializer,
+                                            &encoder,
+                                            &mut buf,
+                                            row_index,
+                                        )?,
+                                        (TypeID::VariantArray, DataValue::Variant(_)) => {
+                                            write_field(
+                                                &mut row_writer,
+                                                serializer,
+                                                &encoder,
+                                                &mut buf,
+                                                row_index,
+                                            )?
+                                        }
                                         (TypeID::VariantObject, DataValue::Variant(_)) => {
-                                            row_writer.write_col(
-                                                serializer.to_string_values(row_index, format)?,
+                                            write_field(
+                                                &mut row_writer,
+                                                serializer,
+                                                &encoder,
+                                                &mut buf,
+                                                row_index,
                                             )?
                                         }
                                         (_, DataValue::Int64(v)) => row_writer.write_col(v)?,
 
                                         (_, DataValue::UInt64(v)) => row_writer.write_col(v)?,
 
-                                        (_, DataValue::Float64(_)) => row_writer
-                                            // mysql writer use a text protocol,
-                                            // it use format!() to serialize number,
-                                            // the result will be different with our serializer for floats
-                                            .write_col(
-                                                serializer.to_string_values(row_index, format)?,
-                                            )?,
+                                        (_, DataValue::Float64(_)) =>
+                                        // mysql writer use a text protocol,
+                                        // it use format!() to serialize number,
+                                        // the result will be different with our serializer for floats
+                                        {
+                                            buf.clear();
+                                            encoder
+                                                .write_field(serializer, row_index, &mut buf, true);
+                                            row_writer.write_col(&buf[..])?;
+                                        }
                                         (_, v) => {
                                             return Err(ErrorCode::BadDataValueType(format!(
                                                 "Unsupported column type:{:?}, expected type in schema: {:?}",
@@ -252,10 +298,11 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
                             }
                         }
                         Err(e) => {
+                            error!("result row write failed: {:?}", e);
                             row_writer
                                 .finish_error(
                                     ErrorKind::ER_UNKNOWN_ERROR,
-                                    &e.to_string().as_bytes(),
+                                    &format!("result row write failed: {}", e).as_bytes(),
                                 )
                                 .await?;
                             return Ok(());

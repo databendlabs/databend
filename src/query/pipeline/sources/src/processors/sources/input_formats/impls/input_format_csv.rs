@@ -12,6 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::io::Cursor;
 use std::io::Read;
 use std::mem;
 use std::sync::Arc;
@@ -20,10 +21,9 @@ use common_datavalues::DataSchemaRef;
 use common_datavalues::TypeDeserializer;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_io::cursor_ext::*;
 use common_io::format_diagnostic::verbose_char;
-use common_io::prelude::BufferReadExt;
 use common_io::prelude::FormatSettings;
-use common_io::prelude::NestedCheckpointReader;
 use common_meta_types::StageFileFormatType;
 use csv_core::ReadRecordResult;
 
@@ -51,8 +51,8 @@ impl InputFormatCSV {
         for (c, deserializer) in deserializers.iter_mut().enumerate() {
             let field_end = field_ends[c];
             let col_data = &buf[field_start..field_end];
-            let mut reader = NestedCheckpointReader::new(col_data);
-            if reader.eof().expect("must success") {
+            let mut reader = Cursor::new(col_data);
+            if reader.eof() {
                 deserializer.de_default(format_settings);
             } else {
                 // todo(youngsofun): do not need escape, already done in csv-core
@@ -63,7 +63,7 @@ impl InputFormatCSV {
                 let mut next = [0u8; 1];
                 let readn = reader.read(&mut next[..])?;
                 if readn > 0 {
-                    let remaining = col_data.len() - reader.pos + 1;
+                    let remaining = col_data.len() - reader.position() as usize + 1;
                     let err_msg = format!(
                         "bad field end, remain {} bytes, next char is {}",
                         remaining,
@@ -75,6 +75,35 @@ impl InputFormatCSV {
                 }
             }
             field_start = field_end;
+        }
+        Ok(())
+    }
+
+    fn check_num_field(
+        expect: usize,
+        actual: usize,
+        field_ends: &[usize],
+        path: &str,
+        rows: usize,
+    ) -> Result<()> {
+        if actual < expect {
+            return Err(csv_error(
+                &format!("expect {} fields, only found {} ", expect, actual),
+                path,
+                rows,
+            ));
+        } else if actual > expect + 1 {
+            return Err(csv_error(
+                &format!("too many fields, expect {}, got {}", expect, actual),
+                path,
+                rows,
+            ));
+        } else if actual == expect + 1 && field_ends[expect] != field_ends[expect - 1] {
+            return Err(csv_error(
+                "CSV allow ending with ',', but should not have data after it",
+                path,
+                rows,
+            ));
         }
         Ok(())
     }
@@ -138,45 +167,18 @@ impl InputFormatTextBase for InputFormatCSV {
                     return Ok(vec![]);
                 }
                 ReadRecordResult::OutputFull => {
-                    return Err(csv_error(
-                        "output more than input, in header",
-                        &state.path,
-                        state.rows,
-                    ));
+                    return Err(output_full_error(&state.path, state.rows));
                 }
                 ReadRecordResult::OutputEndsFull => {
-                    return Err(csv_error(
-                        &format!(
-                            "too many fields, expect {}, got more than {}",
-                            num_fields,
-                            field_ends.len()
-                        ),
+                    return Err(output_ends_full_error(
+                        num_fields,
+                        field_ends.len(),
                         &state.path,
                         state.rows,
                     ));
                 }
                 ReadRecordResult::Record => {
-                    if endlen < num_fields {
-                        return Err(csv_error(
-                            &format!("expect {} fields, only found {} ", num_fields, n_end),
-                            &state.path,
-                            state.rows,
-                        ));
-                    } else if endlen > num_fields + 1 {
-                        return Err(csv_error(
-                            &format!("too many fields, expect {}, got {}", num_fields, n_end),
-                            &state.path,
-                            state.rows,
-                        ));
-                    } else if endlen == num_fields + 1
-                        && field_ends[num_fields] != field_ends[num_fields - 1]
-                    {
-                        return Err(csv_error(
-                            "CSV allow ending with ',', but should not have data after it",
-                            &state.path,
-                            state.rows,
-                        ));
-                    }
+                    Self::check_num_field(num_fields, endlen, field_ends, &state.path, state.rows)?;
 
                     state.rows_to_skip -= 1;
                     tracing::debug!(
@@ -218,45 +220,27 @@ impl InputFormatTextBase for InputFormatCSV {
             match result {
                 ReadRecordResult::InputEmpty => break,
                 ReadRecordResult::OutputFull => {
-                    return Err(csv_error(
-                        "output more than input",
+                    return Err(output_full_error(
                         &state.path,
                         start_row + row_batch.row_ends.len(),
                     ));
                 }
                 ReadRecordResult::OutputEndsFull => {
-                    return Err(csv_error(
-                        &format!(
-                            "too many fields, expect {}, got more than {}",
-                            num_fields,
-                            field_ends.len()
-                        ),
+                    return Err(output_ends_full_error(
+                        num_fields,
+                        field_ends.len(),
                         &state.path,
                         start_row + row_batch.row_ends.len(),
                     ));
                 }
                 ReadRecordResult::Record => {
-                    if endlen < num_fields {
-                        return Err(csv_error(
-                            &format!("expect {} fields, only found {} ", num_fields, n_end),
-                            &state.path,
-                            start_row + row_batch.row_ends.len(),
-                        ));
-                    } else if endlen > num_fields + 1 {
-                        return Err(csv_error(
-                            &format!("too many fields, expect {}, got {}", num_fields, n_end),
-                            &state.path,
-                            start_row + row_batch.row_ends.len(),
-                        ));
-                    } else if endlen == num_fields + 1
-                        && field_ends[num_fields] != field_ends[num_fields - 1]
-                    {
-                        return Err(csv_error(
-                            "CSV allow ending with ',', but should not have data after it",
-                            &state.path,
-                            start_row + row_batch.row_ends.len(),
-                        ));
-                    }
+                    Self::check_num_field(
+                        num_fields,
+                        endlen,
+                        field_ends,
+                        &state.path,
+                        start_row + row_batch.row_ends.len(),
+                    )?;
                     row_batch
                         .field_ends
                         .extend_from_slice(&field_ends[..num_fields]);
@@ -266,7 +250,7 @@ impl InputFormatTextBase for InputFormatCSV {
                 }
                 ReadRecordResult::End => {
                     return Err(csv_error(
-                        "unexpect eof",
+                        "unexpect eof, should not happen",
                         &state.path,
                         start_row + row_batch.row_ends.len(),
                     ));
@@ -308,6 +292,69 @@ impl InputFormatTextBase for InputFormatCSV {
             Ok(vec![row_batch])
         }
     }
+
+    fn align_flush(state: &mut AligningState<Self>) -> Result<Vec<RowBatch>> {
+        let mut res = vec![];
+        let num_fields = state.num_fields;
+        let reader = state.csv_reader.as_mut().expect("must success");
+        let field_ends = &mut reader.field_ends[..];
+        let start_row = state.rows;
+
+        let in_tmp = Vec::new();
+        let mut out_tmp = vec![0u8; 1];
+        let mut endlen = reader.n_end;
+
+        let last_batch_remain_len = reader.out.len();
+
+        let (result, _, n_out, n_end) =
+            reader
+                .reader
+                .read_record(&in_tmp, &mut out_tmp, &mut field_ends[endlen..]);
+
+        endlen += n_end;
+
+        match result {
+            ReadRecordResult::InputEmpty => {
+                return Err(csv_error("unexpect eof", &state.path, start_row));
+            }
+            ReadRecordResult::OutputFull => {
+                return Err(output_full_error(&state.path, start_row));
+            }
+            ReadRecordResult::OutputEndsFull => {
+                return Err(output_ends_full_error(
+                    num_fields,
+                    field_ends.len(),
+                    &state.path,
+                    start_row,
+                ));
+            }
+            ReadRecordResult::Record => {
+                Self::check_num_field(num_fields, endlen, field_ends, &state.path, start_row)?;
+                let data = mem::take(&mut reader.out);
+
+                let row_batch = RowBatch {
+                    data,
+                    row_ends: vec![last_batch_remain_len + n_out],
+                    field_ends: field_ends[..num_fields].to_vec(),
+                    path: state.path.to_string(),
+                    batch_id: state.batch_id,
+                    offset: 0,
+                    start_row: Some(state.rows),
+                };
+                res.push(row_batch);
+
+                state.batch_id += 1;
+                state.rows += 1;
+
+                tracing::debug!(
+                    "csv aligner flush last row of {} bytes",
+                    last_batch_remain_len,
+                );
+            }
+            ReadRecordResult::End => {}
+        }
+        Ok(res)
+    }
 }
 
 pub struct CsvReaderState {
@@ -337,6 +384,26 @@ impl CsvReaderState {
             n_end: 0,
         }
     }
+}
+
+fn output_full_error(path: &str, row: usize) -> ErrorCode {
+    csv_error("output more than input", path, row)
+}
+
+fn output_ends_full_error(
+    num_fields_expect: usize,
+    num_fields_actual: usize,
+    path: &str,
+    row: usize,
+) -> ErrorCode {
+    csv_error(
+        &format!(
+            "too many fields, expect {}, got more than {}",
+            num_fields_expect, num_fields_actual
+        ),
+        path,
+        row,
+    )
 }
 
 fn csv_error(msg: &str, path: &str, row: usize) -> ErrorCode {

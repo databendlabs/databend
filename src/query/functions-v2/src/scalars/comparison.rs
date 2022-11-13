@@ -29,9 +29,11 @@ use common_expression::types::ALL_NUMERICS_TYPES;
 use common_expression::values::Value;
 use common_expression::with_number_mapped_type;
 use common_expression::FunctionContext;
+use common_expression::FunctionDomain;
 use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
 use common_expression::ValueRef;
+use memchr::memmem;
 use regex::bytes::Regex;
 
 use crate::scalars::string_multi_args::regexp;
@@ -50,37 +52,37 @@ where for<'a> T::ScalarRef<'a>: PartialOrd + PartialEq {
     registry.register_2_arg::<T, T, BooleanType, _, _>(
         "eq",
         FunctionProperty::default(),
-        |_, _| None,
+        |_, _| FunctionDomain::NoThrow,
         |lhs, rhs, _| T::upcast_gat(lhs) == T::upcast_gat(rhs),
     );
     registry.register_2_arg::<T, T, BooleanType, _, _>(
         "noteq",
         FunctionProperty::default(),
-        |_, _| None,
+        |_, _| FunctionDomain::NoThrow,
         |lhs, rhs, _| T::upcast_gat(lhs) != T::upcast_gat(rhs),
     );
     registry.register_2_arg::<T, T, BooleanType, _, _>(
         "gt",
         FunctionProperty::default(),
-        |_, _| None,
+        |_, _| FunctionDomain::NoThrow,
         |lhs, rhs, _| T::upcast_gat(lhs) > T::upcast_gat(rhs),
     );
     registry.register_2_arg::<T, T, BooleanType, _, _>(
         "gte",
         FunctionProperty::default(),
-        |_, _| None,
+        |_, _| FunctionDomain::NoThrow,
         |lhs, rhs, _| T::upcast_gat(lhs) >= T::upcast_gat(rhs),
     );
     registry.register_2_arg::<T, T, BooleanType, _, _>(
         "lt",
         FunctionProperty::default(),
-        |_, _| None,
+        |_, _| FunctionDomain::NoThrow,
         |lhs, rhs, _| T::upcast_gat(lhs) < T::upcast_gat(rhs),
     );
     registry.register_2_arg::<T, T, BooleanType, _, _>(
         "lte",
         FunctionProperty::default(),
-        |_, _| None,
+        |_, _| FunctionDomain::NoThrow,
         |lhs, rhs, _| T::upcast_gat(lhs) <= T::upcast_gat(rhs),
     );
 }
@@ -89,37 +91,37 @@ fn register_boolean_cmp(registry: &mut FunctionRegistry) {
     registry.register_2_arg::<BooleanType, BooleanType, BooleanType, _, _>(
         "eq",
         FunctionProperty::default(),
-        |_, _| None,
+        |_, _| FunctionDomain::NoThrow,
         |lhs, rhs, _| lhs == rhs,
     );
     registry.register_2_arg::<BooleanType, BooleanType, BooleanType, _, _>(
         "noteq",
         FunctionProperty::default(),
-        |_, _| None,
+        |_, _| FunctionDomain::NoThrow,
         |lhs, rhs, _| lhs != rhs,
     );
     registry.register_2_arg::<BooleanType, BooleanType, BooleanType, _, _>(
         "gt",
         FunctionProperty::default(),
-        |_, _| None,
+        |_, _| FunctionDomain::NoThrow,
         |lhs, rhs, _| lhs & !rhs,
     );
     registry.register_2_arg::<BooleanType, BooleanType, BooleanType, _, _>(
         "gte",
         FunctionProperty::default(),
-        |_, _| None,
+        |_, _| FunctionDomain::NoThrow,
         |lhs, rhs, _| (lhs & !rhs) || (lhs & rhs),
     );
     registry.register_2_arg::<BooleanType, BooleanType, BooleanType, _, _>(
         "lt",
         FunctionProperty::default(),
-        |_, _| None,
+        |_, _| FunctionDomain::NoThrow,
         |lhs, rhs, _| !lhs & rhs,
     );
     registry.register_2_arg::<BooleanType, BooleanType, BooleanType, _, _>(
         "lte",
         FunctionProperty::default(),
-        |_, _| None,
+        |_, _| FunctionDomain::NoThrow,
         |lhs, rhs, _| (!lhs & rhs) || (lhs & rhs),
     );
 }
@@ -132,42 +134,42 @@ fn register_number_cmp(registry: &mut FunctionRegistry) {
                     .register_2_arg::<NumberType<NUM_TYPE>, NumberType<NUM_TYPE>, BooleanType, _, _>(
                         "eq",
                         FunctionProperty::default(),
-                        |_, _| None,
+                        |_, _| FunctionDomain::NoThrow,
                         |lhs, rhs, _| lhs == rhs,
                     );
                 registry
                     .register_2_arg::<NumberType<NUM_TYPE>, NumberType<NUM_TYPE>, BooleanType, _, _>(
                         "noteq",
                         FunctionProperty::default(),
-                        |_, _| None,
+                        |_, _| FunctionDomain::NoThrow,
                         |lhs, rhs, _| lhs != rhs,
                     );
                 registry
                     .register_2_arg::<NumberType<NUM_TYPE>, NumberType<NUM_TYPE>, BooleanType, _, _>(
                         "gt",
                         FunctionProperty::default(),
-                        |_, _| None,
+                        |_, _| FunctionDomain::NoThrow,
                         |lhs, rhs, _| lhs > rhs,
                     );
                 registry
                     .register_2_arg::<NumberType<NUM_TYPE>, NumberType<NUM_TYPE>, BooleanType, _, _>(
                         "gte",
                         FunctionProperty::default(),
-                        |_, _| None,
+                        |_, _| FunctionDomain::NoThrow,
                         |lhs, rhs, _| lhs >= rhs,
                     );
                 registry
                     .register_2_arg::<NumberType<NUM_TYPE>, NumberType<NUM_TYPE>, BooleanType, _, _>(
                         "lt",
                         FunctionProperty::default(),
-                        |_, _| None,
+                        |_, _| FunctionDomain::NoThrow,
                         |lhs, rhs, _| lhs < rhs,
                     );
                 registry
                     .register_2_arg::<NumberType<NUM_TYPE>, NumberType<NUM_TYPE>, BooleanType, _, _>(
                         "lte",
                         FunctionProperty::default(),
-                        |_, _| None,
+                        |_, _| FunctionDomain::NoThrow,
                         |lhs, rhs, _| lhs <= rhs,
                     );
             }
@@ -179,7 +181,7 @@ fn register_variant_cmp(registry: &mut FunctionRegistry) {
     registry.register_2_arg::<VariantType, VariantType, BooleanType, _, _>(
         "eq",
         FunctionProperty::default(),
-        |_, _| None,
+        |_, _| FunctionDomain::NoThrow,
         |lhs, rhs, _| {
             common_jsonb::compare(lhs, rhs).expect("unable to parse jsonb value") == Ordering::Equal
         },
@@ -187,7 +189,7 @@ fn register_variant_cmp(registry: &mut FunctionRegistry) {
     registry.register_2_arg::<VariantType, VariantType, BooleanType, _, _>(
         "noteq",
         FunctionProperty::default(),
-        |_, _| None,
+        |_, _| FunctionDomain::NoThrow,
         |lhs, rhs, _| {
             common_jsonb::compare(lhs, rhs).expect("unable to parse jsonb value") != Ordering::Equal
         },
@@ -195,7 +197,7 @@ fn register_variant_cmp(registry: &mut FunctionRegistry) {
     registry.register_2_arg::<VariantType, VariantType, BooleanType, _, _>(
         "gt",
         FunctionProperty::default(),
-        |_, _| None,
+        |_, _| FunctionDomain::NoThrow,
         |lhs, rhs, _| {
             common_jsonb::compare(lhs, rhs).expect("unable to parse jsonb value")
                 == Ordering::Greater
@@ -204,7 +206,7 @@ fn register_variant_cmp(registry: &mut FunctionRegistry) {
     registry.register_2_arg::<VariantType, VariantType, BooleanType, _, _>(
         "gte",
         FunctionProperty::default(),
-        |_, _| None,
+        |_, _| FunctionDomain::NoThrow,
         |lhs, rhs, _| {
             common_jsonb::compare(lhs, rhs).expect("unable to parse jsonb value") != Ordering::Less
         },
@@ -212,7 +214,7 @@ fn register_variant_cmp(registry: &mut FunctionRegistry) {
     registry.register_2_arg::<VariantType, VariantType, BooleanType, _, _>(
         "lt",
         FunctionProperty::default(),
-        |_, _| None,
+        |_, _| FunctionDomain::NoThrow,
         |lhs, rhs, _| {
             common_jsonb::compare(lhs, rhs).expect("unable to parse jsonb value") == Ordering::Less
         },
@@ -220,7 +222,7 @@ fn register_variant_cmp(registry: &mut FunctionRegistry) {
     registry.register_2_arg::<VariantType, VariantType, BooleanType, _, _>(
         "lte",
         FunctionProperty::default(),
-        |_, _| None,
+        |_, _| FunctionDomain::NoThrow,
         |lhs, rhs, _| {
             common_jsonb::compare(lhs, rhs).expect("unable to parse jsonb value")
                 != Ordering::Greater
@@ -234,41 +236,40 @@ fn register_like(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_2_arg::<StringType, StringType, BooleanType, _, _>(
         "like",
         FunctionProperty::default(),
-        |_, _| None,
-        vectorize_regexp(|str, pat, _, map, string_map| {
-            let pattern = if let Some(pattern) = map.get(pat) {
-                pattern
-            } else {
-                let pattern_str = simdutf8::basic::from_utf8(pat).map_err(|err| {
-                    format!("unable to convert the LIKE pattern to string: {err}")
-                })?;
-
-                let mut sub_strings: Vec<&str> = pattern_str
-                    .split(|c: char| c == '%' || c == '_' || c == '\\')
-                    .collect();
-                sub_strings.retain(|&substring| !substring.is_empty());
-                if !sub_strings.is_empty() {
-                    string_map.insert(pat.to_vec(), sub_strings[0].to_string());
+        |_, _| FunctionDomain::NoThrow,
+        vectorize_like(|str, pat, _, pattern_type| {
+            match pattern_type {
+                PatternType::OrdinalStr => Ok(str == pat),
+                PatternType::EndOfPercent => {
+                    // fast path, can use starts_with
+                    let starts_with = &pat[..pat.len() - 1];
+                    Ok(str.starts_with(starts_with))
                 }
-
-                let re_pattern = like_pattern_to_regex(pattern_str);
-                let re = Regex::new(&re_pattern)
-                    .map_err(|err| format!("unable to build the LIKE pattern: {err}"))?;
-                map.insert(pat.to_vec(), re);
-                map.get(pat).unwrap()
-            };
-
-            if let Some(required_string) = string_map.get(pat) {
-                let lhs_str =
-                    std::str::from_utf8(str).expect("Unable to convert lhs value to string: {}");
-                let contain = lhs_str.find(required_string.as_str());
-                if contain.is_none() {
-                    Ok(false)
-                } else {
-                    Ok(pattern.is_match(str))
+                PatternType::StartOfPercent => {
+                    // fast path, can use ends_with
+                    let ends_with = &pat[1..];
+                    Ok(str.ends_with(ends_with))
                 }
-            } else {
-                Ok(pattern.is_match(str))
+                PatternType::PatternStr => {
+                    let pattern_str = simdutf8::basic::from_utf8(pat)
+                        .expect("Unable to convert the LIKE pattern to string: {}");
+                    let mut sub_strings: Vec<&str> = pattern_str
+                        .split(|c: char| c == '%' || c == '_' || c == '\\')
+                        .collect();
+                    sub_strings.retain(|&substring| !substring.is_empty());
+                    if std::intrinsics::unlikely(sub_strings.is_empty()) {
+                        Ok(like(str, pat))
+                    } else {
+                        let sub_string = sub_strings[0].as_bytes();
+                        if sub_strings.len() == 1 {
+                            Ok(search_sub_str(str, sub_string).is_some())
+                        } else if memmem::find(str, sub_string).is_none() {
+                            Ok(false)
+                        } else {
+                            Ok(like(str, pat))
+                        }
+                    }
+                }
             }
         }),
     );
@@ -276,7 +277,7 @@ fn register_like(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_2_arg::<StringType, StringType, BooleanType, _, _>(
         "regexp",
         FunctionProperty::default(),
-        |_, _| None,
+        |_, _| FunctionDomain::NoThrow,
         vectorize_regexp(|str, pat, _, map, _| {
             let pattern = if let Some(pattern) = map.get(pat) {
                 pattern
@@ -288,6 +289,50 @@ fn register_like(registry: &mut FunctionRegistry) {
             Ok(pattern.is_match(str))
         }),
     );
+}
+
+fn vectorize_like(
+    func: impl Fn(&[u8], &[u8], FunctionContext, PatternType) -> Result<bool, String> + Copy,
+) -> impl Fn(
+    ValueRef<StringType>,
+    ValueRef<StringType>,
+    FunctionContext,
+) -> Result<Value<BooleanType>, String>
++ Copy {
+    move |arg1, arg2, ctx| match (arg1, arg2) {
+        (ValueRef::Scalar(arg1), ValueRef::Scalar(arg2)) => {
+            let pattern_type = check_pattern_type(arg2, false);
+            Ok(Value::Scalar(func(arg1, arg2, ctx, pattern_type)?))
+        }
+        (ValueRef::Column(arg1), ValueRef::Scalar(arg2)) => {
+            let arg1_iter = StringType::iter_column(&arg1);
+            let mut builder = MutableBitmap::with_capacity(arg1.len());
+            let pattern_type = check_pattern_type(arg2, false);
+            for arg1 in arg1_iter {
+                builder.push(func(arg1, arg2, ctx, pattern_type)?);
+            }
+            Ok(Value::Column(builder.into()))
+        }
+        (ValueRef::Scalar(arg1), ValueRef::Column(arg2)) => {
+            let arg2_iter = StringType::iter_column(&arg2);
+            let mut builder = MutableBitmap::with_capacity(arg2.len());
+            for arg2 in arg2_iter {
+                let pattern_type = check_pattern_type(arg2, false);
+                builder.push(func(arg1, arg2, ctx, pattern_type)?);
+            }
+            Ok(Value::Column(builder.into()))
+        }
+        (ValueRef::Column(arg1), ValueRef::Column(arg2)) => {
+            let arg1_iter = StringType::iter_column(&arg1);
+            let arg2_iter = StringType::iter_column(&arg2);
+            let mut builder = MutableBitmap::with_capacity(arg2.len());
+            for (arg1, arg2) in arg1_iter.zip(arg2_iter) {
+                let pattern_type = check_pattern_type(arg2, false);
+                builder.push(func(arg1, arg2, ctx, pattern_type)?);
+            }
+            Ok(Value::Column(builder.into()))
+        }
+    }
 }
 
 fn vectorize_regexp(
@@ -345,42 +390,154 @@ fn vectorize_regexp(
     }
 }
 
-/// Transform the like pattern to regex pattern.
-/// e.g. 'Hello\._World%\%' tranform to '^Hello\\\..World.*%$'.
-#[inline]
-fn like_pattern_to_regex(pattern: &str) -> String {
-    let mut regex = String::with_capacity(pattern.len() * 2);
-    regex.push('^');
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+pub enum PatternType {
+    // e.g. 'Arrow'
+    OrdinalStr,
+    // e.g. 'A%row'
+    PatternStr,
+    // e.g. '%rrow'
+    StartOfPercent,
+    // e.g. 'Arro%'
+    EndOfPercent,
+}
 
-    let mut chars = pattern.chars().peekable();
-    while let Some(c) = chars.next() {
-        match c {
-            // Use double backslash to escape special character.
-            '^' | '$' | '(' | ')' | '*' | '+' | '.' | '[' | '?' | '{' | '|' => {
-                regex.push('\\');
-                regex.push(c);
-            }
-            '%' => regex.push_str("(?s:.)*"),
-            '_' => regex.push_str("(?s:.)"),
-            '\\' => match chars.peek().cloned() {
-                Some('%') => {
-                    regex.push('%');
-                    chars.next();
-                }
-                Some('_') => {
-                    regex.push('_');
-                    chars.next();
-                }
-                Some('\\') => {
-                    regex.push_str("\\\\");
-                    chars.next();
-                }
-                _ => regex.push_str("\\\\"),
-            },
-            _ => regex.push(c),
-        }
+#[inline]
+fn is_like_pattern_escape(c: char) -> bool {
+    c == '%' || c == '_' || c == '\\'
+}
+
+/// Check the like pattern type.
+///
+/// is_pruning: indicate whether to be called on range_filter for pruning.
+///
+/// For example:
+///
+/// 'a\\%row'
+/// '\\%' will be escaped to a percent. Need transform to `a%row`.
+///
+/// If is_pruning is true, will be called on range_filter:L379.
+/// OrdinalStr is returned, because the pattern can be transformed by range_filter:L382.
+///
+/// If is_pruning is false, will be called on like.rs:L74.
+/// PatternStr is returned, because the pattern cannot be used directly on like.rs:L76.
+#[inline]
+pub fn check_pattern_type(pattern: &[u8], is_pruning: bool) -> PatternType {
+    let len = pattern.len();
+    if len == 0 {
+        return PatternType::OrdinalStr;
     }
 
-    regex.push('$');
-    regex
+    let mut index = 0;
+    let start_percent = pattern[0] == b'%';
+    if start_percent {
+        if is_pruning {
+            return PatternType::PatternStr;
+        }
+        index += 1;
+    }
+
+    while index < len {
+        match pattern[index] {
+            b'_' => return PatternType::PatternStr,
+            b'%' => {
+                if index == len - 1 && !start_percent {
+                    return PatternType::EndOfPercent;
+                }
+                return PatternType::PatternStr;
+            }
+            b'\\' => {
+                if index < len - 1 {
+                    index += 1;
+                    if !is_pruning && is_like_pattern_escape(pattern[index] as char) {
+                        return PatternType::PatternStr;
+                    }
+                }
+            }
+            _ => {}
+        }
+        index += 1;
+    }
+
+    if start_percent {
+        PatternType::StartOfPercent
+    } else {
+        PatternType::OrdinalStr
+    }
+}
+
+#[inline]
+fn search_sub_str(str: &[u8], substr: &[u8]) -> Option<usize> {
+    if substr.len() <= str.len() {
+        str.windows(substr.len()).position(|w| w == substr)
+    } else {
+        None
+    }
+}
+
+#[inline]
+fn decode_one(data: &[u8]) -> Option<(u8, usize)> {
+    if data.is_empty() {
+        None
+    } else {
+        Some((data[0], 1))
+    }
+}
+
+#[inline]
+/// Borrow from [tikv](https://github.com/tikv/tikv/blob/fe997db4db8a5a096f8a45c0db3eb3c2e5879262/components/tidb_query_expr/src/impl_like.rs)
+fn like(haystack: &[u8], pattern: &[u8]) -> bool {
+    // current search positions in pattern and target.
+    let (mut px, mut tx) = (0, 0);
+    // positions for backtrace.
+    let (mut next_px, mut next_tx) = (0, 0);
+    while px < pattern.len() || tx < haystack.len() {
+        if let Some((c, mut poff)) = decode_one(&pattern[px..]) {
+            let code: u32 = c.into();
+            if code == '_' as u32 {
+                if let Some((_, toff)) = decode_one(&haystack[tx..]) {
+                    px += poff;
+                    tx += toff;
+                    continue;
+                }
+            } else if code == '%' as u32 {
+                // update the backtrace point.
+                next_px = px;
+                px += poff;
+                next_tx = tx;
+                next_tx += if let Some((_, toff)) = decode_one(&haystack[tx..]) {
+                    toff
+                } else {
+                    1
+                };
+                continue;
+            } else {
+                if code == '\\' as u32 && px + poff < pattern.len() {
+                    px += poff;
+                    poff = if let Some((_, off)) = decode_one(&pattern[px..]) {
+                        off
+                    } else {
+                        break;
+                    }
+                }
+                if let Some((_, toff)) = decode_one(&haystack[tx..]) {
+                    if let std::cmp::Ordering::Equal =
+                        haystack[tx..tx + toff].cmp(&pattern[px..px + poff])
+                    {
+                        tx += toff;
+                        px += poff;
+                        continue;
+                    }
+                }
+            }
+        }
+        // mismatch and backtrace to last %.
+        if 0 < next_tx && next_tx <= haystack.len() {
+            px = next_px;
+            tx = next_tx;
+            continue;
+        }
+        return false;
+    }
+    true
 }

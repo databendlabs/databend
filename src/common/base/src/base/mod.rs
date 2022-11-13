@@ -26,6 +26,7 @@ mod stop_handle;
 mod stoppable;
 mod string_func;
 mod thread;
+mod thread_pool;
 mod uniq_id;
 
 pub use catch_unwind::catch_unwind;
@@ -56,6 +57,8 @@ pub use string_func::replace_nth_char;
 pub use string_func::unescape_for_key;
 pub use thread::Thread;
 pub use thread::ThreadJoinHandle;
+pub use thread_pool::TaskJoinHandler;
+pub use thread_pool::ThreadPool;
 pub use tokio;
 pub use uniq_id::GlobalSequence;
 pub use uniq_id::GlobalUniqName;

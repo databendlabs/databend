@@ -108,7 +108,7 @@ impl HashJoinState for JoinHashTable {
                         let mut self_row_ptrs = self.row_ptrs.write();
                         self_row_ptrs.push(ptr);
                     }
-                    match unsafe { $table.insert(key) } {
+                    match unsafe { $table.insert(*key) } {
                         Ok(entity) => {
                             entity.write(vec![ptr]);
                         }
@@ -291,6 +291,9 @@ impl HashJoinState for JoinHashTable {
 
         if self.hash_join_desc.other_predicate.is_none() {
             let null_block = self.null_blocks_for_right_join(&unmatched_build_indexes)?;
+            if input_block.is_empty() {
+                return Ok(vec![null_block]);
+            }
             return Ok(vec![DataBlock::concat_blocks(&[input_block, null_block])?]);
         }
 

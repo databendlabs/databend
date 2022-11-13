@@ -94,13 +94,13 @@ unsafe impl Keyable for U256 {
 
 unsafe impl Keyable for U512 {
     #[inline(always)]
-    fn equals_zero(this: &Self) -> bool {
-        U512::is_zero(this)
+    fn is_zero(this: &MaybeUninit<Self>) -> bool {
+        U512::is_zero(unsafe { this.assume_init_ref() })
     }
 
     #[inline(always)]
-    fn is_zero(this: &MaybeUninit<Self>) -> bool {
-        U512::is_zero(unsafe { this.assume_init_ref() })
+    fn equals_zero(this: &Self) -> bool {
+        U512::is_zero(this)
     }
 
     #[inline(always)]
@@ -111,13 +111,13 @@ unsafe impl Keyable for U512 {
 
 unsafe impl Keyable for OrderedFloat<f32> {
     #[inline(always)]
-    fn equals_zero(this: &Self) -> bool {
-        *this == 0.0
+    fn is_zero(this: &MaybeUninit<Self>) -> bool {
+        unsafe { this.assume_init() == 0.0 }
     }
 
     #[inline(always)]
-    fn is_zero(this: &MaybeUninit<Self>) -> bool {
-        unsafe { this.assume_init() == 0.0 }
+    fn equals_zero(this: &Self) -> bool {
+        *this == 0.0
     }
 
     #[inline(always)]
@@ -128,13 +128,13 @@ unsafe impl Keyable for OrderedFloat<f32> {
 
 unsafe impl Keyable for OrderedFloat<f64> {
     #[inline(always)]
-    fn equals_zero(this: &Self) -> bool {
-        *this == 0.0
+    fn is_zero(this: &MaybeUninit<Self>) -> bool {
+        unsafe { this.assume_init() == 0.0 }
     }
 
     #[inline(always)]
-    fn is_zero(this: &MaybeUninit<Self>) -> bool {
-        unsafe { this.assume_init() == 0.0 }
+    fn equals_zero(this: &Self) -> bool {
+        *this == 0.0
     }
 
     #[inline(always)]
@@ -145,13 +145,13 @@ unsafe impl Keyable for OrderedFloat<f64> {
 
 unsafe impl<const N: usize> Keyable for [u8; N] {
     #[inline(always)]
-    fn equals_zero(this: &Self) -> bool {
-        *this == [0; N]
+    fn is_zero(this: &MaybeUninit<Self>) -> bool {
+        unsafe { this.assume_init() == [0; N] }
     }
 
     #[inline(always)]
-    fn is_zero(this: &MaybeUninit<Self>) -> bool {
-        unsafe { this.assume_init() == [0; N] }
+    fn equals_zero(this: &Self) -> bool {
+        *this == [0; N]
     }
 
     #[inline(always)]
@@ -402,27 +402,26 @@ pub trait EntryRefLike: Copy {
 }
 
 pub trait EntryMutRefLike {
-    type KeyRef;
+    type Key: ?Sized;
     type Value;
 
-    fn key(&self) -> Self::KeyRef;
+    fn key(&self) -> &Self::Key;
     fn get(&self) -> &Self::Value;
     fn get_mut(&mut self) -> &mut Self::Value;
     fn write(&mut self, value: Self::Value);
 }
 
+#[allow(clippy::len_without_is_empty)]
 pub trait HashtableLike {
-    type Key: ?Sized;
-    type KeyRef<'a>: Copy
-    where Self::Key: 'a;
+    type Key: ?Sized + FastHash;
     type Value;
 
-    type EntryRef<'a>: EntryRefLike<KeyRef = Self::KeyRef<'a>, ValueRef = &'a Self::Value>
+    type EntryRef<'a>: EntryRefLike<KeyRef = &'a Self::Key, ValueRef = &'a Self::Value>
     where
         Self: 'a,
         Self::Key: 'a,
         Self::Value: 'a;
-    type EntryMutRef<'a>: EntryMutRefLike<KeyRef = Self::KeyRef<'a>, Value = Self::Value>
+    type EntryMutRef<'a>: EntryMutRefLike<Key = Self::Key, Value = Self::Value>
     where
         Self: 'a,
         Self::Key: 'a,
@@ -439,34 +438,38 @@ pub trait HashtableLike {
         Self::Key: 'a,
         Self::Value: 'a;
 
-    fn entry<'a>(&self, key_ref: Self::KeyRef<'a>) -> Option<Self::EntryRef<'_>>
-    where Self::Key: 'a;
-    fn entry_mut<'a>(&mut self, key_ref: Self::KeyRef<'a>) -> Option<Self::EntryMutRef<'_>>
-    where Self::Key: 'a;
+    fn len(&self) -> usize;
 
-    fn get<'a>(&self, key_ref: Self::KeyRef<'a>) -> Option<&Self::Value>
-    where Self::Key: 'a;
-    fn get_mut<'a>(&mut self, key_ref: Self::KeyRef<'a>) -> Option<&mut Self::Value>
-    where Self::Key: 'a;
+    fn entry(&self, key_ref: &Self::Key) -> Option<Self::EntryRef<'_>>;
+    fn entry_mut(&mut self, key_ref: &Self::Key) -> Option<Self::EntryMutRef<'_>>;
+
+    fn get(&self, key_ref: &Self::Key) -> Option<&Self::Value>;
+    fn get_mut(&mut self, key_ref: &Self::Key) -> Option<&mut Self::Value>;
 
     /// # Safety
     ///
     /// The uninitialized value of returned entry should be written immediately.
-    unsafe fn insert<'a>(
+    unsafe fn insert(
         &mut self,
-        key_ref: Self::KeyRef<'a>,
-    ) -> Result<&mut MaybeUninit<Self::Value>, &mut Self::Value>
-    where
-        Self::Key: 'a;
+        key_ref: &Self::Key,
+    ) -> Result<&mut MaybeUninit<Self::Value>, &mut Self::Value>;
+
     /// # Safety
     ///
     /// The uninitialized value of returned entry should be written immediately.
-    unsafe fn insert_and_entry<'a>(
+    unsafe fn insert_and_entry(
         &mut self,
-        key_ref: Self::KeyRef<'a>,
-    ) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>>
-    where
-        Self::Key: 'a;
+        key_ref: &Self::Key,
+    ) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>>;
+
+    /// # Safety
+    ///
+    /// The uninitialized value of returned entry should be written immediately.
+    unsafe fn insert_and_entry_with_hash(
+        &mut self,
+        key_ref: &Self::Key,
+        hash: u64,
+    ) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>>;
 
     fn iter(&self) -> Self::Iterator<'_>;
     fn iter_mut(&mut self) -> Self::IteratorMut<'_>;

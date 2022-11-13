@@ -32,7 +32,7 @@ copy_from_stage_cases=(
   # copy xz csv
   "copy into ontime200 from @~ FILES = ('ontime_200.csv.xz') FILE_FORMAT = (type = 'CSV' field_delimiter = ',' compression = 'xz'  record_delimiter = '\n' skip_header = 1);"
   # copy auto csv
-  "copy into ontime200 from @~ FILES = ('ontime_200.csv.gz', 'ontime_200.csv.zst', 'ontime_200.csv.bz2', 'ontime_200.csv.xz') FILE_FORMAT = (type = 'CSV' field_delimiter = ',' compression = AUTO  record_delimiter = '\n' skip_header = 1);"
+  "copy into ontime200 from @~ FILES = ('ontime_200.csv.gz', 'ontime_200.csv.zst', 'ontime_200.csv.bz2', 'ontime_200.csv.xz') FILE_FORMAT = (type = 'CSV' field_delimiter = ',' compression = AUTO  record_delimiter = '\n' skip_header = 1) force = true;"
    # copy ndjson
   "copy into ontime200 from @~ PATTERN = 'ontime.*ndjson$' FILE_FORMAT = (type = 'ndjson');"
 )
