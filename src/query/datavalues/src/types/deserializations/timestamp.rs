@@ -23,6 +23,7 @@ use num::cast::AsPrimitive;
 use crate::columns::MutableColumn;
 use crate::prelude::*;
 pub struct TimestampDeserializer {
+    pub buffer: Vec<u8>,
     pub builder: MutablePrimitiveColumn<i64>,
 }
 

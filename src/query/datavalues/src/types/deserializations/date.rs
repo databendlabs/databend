@@ -28,6 +28,7 @@ use num::cast::AsPrimitive;
 use crate::prelude::*;
 
 pub struct DateDeserializer<T: PrimitiveType> {
+    pub buffer: Vec<u8>,
     pub builder: MutablePrimitiveColumn<T>,
 }
 
