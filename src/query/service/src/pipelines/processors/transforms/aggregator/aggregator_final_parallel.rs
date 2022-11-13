@@ -82,7 +82,13 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
 
     fn generate(&mut self) -> Result<Vec<DataBlock>> {
         let mut generate_blocks = Vec::new();
-        if self.buckets_blocks.len() == 1 || self.buckets_blocks.contains_key(&-1) {
+        let settings = self.query_ctx.get_settings();
+        let max_threads = settings.get_max_threads()? as usize;
+
+        if max_threads <= 1
+            || self.buckets_blocks.len() == 1
+            || self.buckets_blocks.contains_key(&-1)
+        {
             let mut data_blocks = vec![];
             for (_, bucket_blocks) in std::mem::take(&mut self.buckets_blocks) {
                 data_blocks.extend(bucket_blocks);
@@ -95,8 +101,6 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
         } else if self.buckets_blocks.len() > 1 {
             info!("Merge to final state using a parallel algorithm.");
 
-            let settings = self.query_ctx.get_settings();
-            let max_threads = settings.get_max_threads()? as usize;
             let thread_pool = ThreadPool::create(max_threads)?;
             let mut join_handles = Vec::with_capacity(self.buckets_blocks.len());
 

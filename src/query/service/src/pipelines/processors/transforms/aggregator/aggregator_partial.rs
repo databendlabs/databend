@@ -285,7 +285,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
 impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method>>
     PartialAggregator<HAS_AGG, Method>
 {
-    fn drop_states(&mut self) {
+    pub fn drop_states(&mut self) {
         if !self.states_dropped {
             let aggregator_params = self.params.as_ref();
             let aggregate_functions = &aggregator_params.aggregate_functions;
