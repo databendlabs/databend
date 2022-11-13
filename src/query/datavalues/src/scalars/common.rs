@@ -66,8 +66,8 @@ pub fn filter_scalar_column<C: ScalarColumn>(c: &C, filter: &BooleanColumn) -> C
         .remainder_iter()
         .enumerate()
         .for_each(|(mask_index, is_selected)| {
-            let i = mask_index + remainder_start + start_index;
             if is_selected {
+                let i = mask_index + remainder_start + start_index;
                 builder.push(c.get_data(i));
             }
         });

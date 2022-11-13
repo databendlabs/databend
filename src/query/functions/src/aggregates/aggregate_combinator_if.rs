@@ -188,14 +188,14 @@ impl AggregateIfCombinator {
         columns: &[ColumnRef],
         predicate: &BooleanColumn,
     ) -> (Vec<ColumnRef>, usize) {
-        let mut remain_columns = vec![];
-        columns.iter().for_each(|c| {
-            remain_columns.push(c.filter(predicate));
-        });
+        let columns = columns
+            .iter()
+            .map(|c| c.filter(predicate))
+            .collect::<Vec<_>>();
 
         let rows = predicate.len() - predicate.values().unset_bits();
 
-        (remain_columns, rows)
+        (columns, rows)
     }
 
     fn filter_place(places: &[StateAddr], predicate: &BooleanColumn) -> StateAddrs {
