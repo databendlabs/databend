@@ -114,18 +114,6 @@ overflow-checks = false
 [profile.dev]
 split-debuginfo = "unpacked"
 overflow-checks = false
-# Disable incremental compile before https://github.com/rust-lang/rust/pull/104164 merged
-incremental = false
-
-[profile.test]
-opt-level = 0
-debug = 0
-codegen-units = 16
-lto = false
-incremental = false
-debug-assertions = true
-overflow-checks = true
-rpath = false
 
 [profile.dev.package]
 addr2line = { opt-level = 3 }
@@ -134,6 +122,15 @@ gimli = { opt-level = 3 }
 miniz_oxide = { opt-level = 3 }
 object = { opt-level = 3 }
 rustc-demangle = { opt-level = 3 }
+
+[profile.test]
+opt-level = 0
+debug = 0
+codegen-units = 16
+lto = false
+debug-assertions = true
+overflow-checks = true
+rpath = false
 
 [patch.crates-io]
 # If there are dependencies that need patching, they can be listed below.
