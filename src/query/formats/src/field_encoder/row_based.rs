@@ -30,7 +30,7 @@ use micromarshal::Unmarshal;
 use num::cast::AsPrimitive;
 
 use crate::field_encoder::helpers::PrimitiveWithFormat;
-use crate::field_encoder::CommonSettings;
+use crate::CommonSettings;
 
 pub trait FieldEncoderRowBased {
     fn common_settings(&self) -> &CommonSettings;

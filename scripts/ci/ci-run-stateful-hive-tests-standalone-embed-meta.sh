@@ -6,7 +6,7 @@ set -e
 
 echo "HIVE integration tests"
 echo "Starting standalone DatabendQuery(debug profile)"
-./scripts/ci/deploy/databend-query-standalone-embedded-meta.sh
+./scripts/ci/deploy/databend-query-standalone-embedded-meta-hive.sh
 
 SCRIPT_PATH="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)"
 cd "$SCRIPT_PATH/../../tests" || exit

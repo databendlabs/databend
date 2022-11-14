@@ -14,7 +14,7 @@
 
 use std::num::FpCategory;
 
-use crate::field_encoder::helpers::CommonSettings;
+use crate::CommonSettings;
 
 // 30% faster lexical_core::write to tmp buf and extend_from_slice
 #[inline]

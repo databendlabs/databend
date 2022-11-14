@@ -12,8 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod json;
-mod number_helpers;
+mod csv;
+mod row_based;
+mod tsv;
+mod values;
+mod xml;
 
-pub use json::write_json_string;
-pub use number_helpers::PrimitiveWithFormat;
+use std::any::Any;
+
+pub use csv::FieldDecoderCSV;
+pub use row_based::FieldDecoderRowBased;
+pub use tsv::FieldDecoderTSV;
+pub use values::FieldDecoderValues;
+pub use xml::FieldDecoderXML;
+
+pub trait FieldDecoder: Send + Sync {
+    fn as_any(&self) -> &dyn Any;
+}

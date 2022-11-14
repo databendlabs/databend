@@ -28,6 +28,9 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_formats::parse_timezone;
+use common_formats::FieldDecoderRowBased;
+use common_formats::FieldDecoderValues;
 use common_io::cursor_ext::ReadBytesExt;
 use common_io::cursor_ext::ReadCheckPointExt;
 use common_io::prelude::FormatSettings;
@@ -317,6 +320,8 @@ impl ValueSource {
 
         let col_size = desers.len();
         let mut rows = 0;
+        let timezone = parse_timezone(&self.ctx.get_settings())?;
+        let field_decoder = FieldDecoderValues::create_for_insert(timezone);
 
         loop {
             let _ = reader.ignore_white_spaces();
@@ -329,6 +334,7 @@ impl ValueSource {
             }
 
             self.parse_next_row(
+                &field_decoder,
                 reader,
                 col_size,
                 &mut desers,
@@ -354,6 +360,7 @@ impl ValueSource {
     /// Parse single row value, like ('111', 222, 1 + 1)
     async fn parse_next_row<R: AsRef<[u8]>>(
         &self,
+        field_decoder: &FieldDecoderValues,
         reader: &mut Cursor<R>,
         col_size: usize,
         desers: &mut [TypeDeserializerImpl],
@@ -383,8 +390,8 @@ impl ValueSource {
                 .get_mut(col_idx)
                 .ok_or_else(|| ErrorCode::BadBytes("Deserializer is None"))?;
 
-            let (need_fallback, pop_count) = deser
-                .de_text_quoted(reader, &format)
+            let (need_fallback, pop_count) = field_decoder
+                .read_field(deser, reader, false)
                 .map(|_| {
                     let _ = reader.ignore_white_spaces();
                     let need_fallback = reader.ignore_byte(col_end).not();
