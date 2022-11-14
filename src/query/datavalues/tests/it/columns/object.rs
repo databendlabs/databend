@@ -35,6 +35,10 @@ fn test_new_from_slice() {
     assert_eq!(Some(&a), iter.next());
     assert_eq!(Some(&b), iter.next());
     assert_eq!(None, iter.next());
+
+    data_column.for_each(|i, data| {
+        assert_eq!(DataValue::Variant(v[i].to_owned()), data);
+    })
 }
 
 #[test]
