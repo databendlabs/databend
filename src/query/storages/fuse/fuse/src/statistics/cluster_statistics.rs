@@ -13,9 +13,9 @@
 //  limitations under the License.
 
 use common_exception::Result;
+use common_expression::types::DataType;
 use common_expression::Chunk;
 use common_expression::ChunkCompactThresholds;
-use common_expression::DataType;
 use common_expression::ScalarRef;
 use common_storages_table_meta::meta::ClusterStatistics;
 

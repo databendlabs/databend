@@ -26,11 +26,11 @@ use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::DataType;
 use common_expression::Chunk;
 use common_expression::ColumnBuilder;
 use common_expression::DataSchemaRef;
-use common_expression::DataType;
-use common_expression::SchemaDataType;
+use common_expression::Value;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -47,7 +47,7 @@ pub trait SystemLogElement: Send + Sync + Clone {
 
     fn schema() -> DataSchemaRef;
 
-    fn fill_to_data_block(&self, columns: &mut Vec<Box<ColumnBuilder>>) -> Result<()>;
+    fn fill_to_data_block(&self, columns: &mut Vec<ColumnBuilder>) -> Result<()>;
 }
 
 struct Data<Event: SystemLogElement> {
@@ -185,20 +185,20 @@ impl<Event: SystemLogElement + 'static> Table for SystemLogTable<Event> {
         for event in log_queue.data.read().event_queue.iter().flatten() {
             event.fill_to_data_block(&mut mutable_columns)?;
         }
+        let row_len = mutable_columns.first().map_or(0, |c| c.len());
 
         let mut columns = Vec::with_capacity(mutable_columns.len());
-        for (mut mutable_column, data_type) in mutable_columns.into_iter().zip(data_types.iter()) {
-            columns.push((mutable_column.build(), data_type));
+        for (mutable_column, data_type) in mutable_columns.into_iter().zip(data_types.iter()) {
+            columns.push((Value::Column(mutable_column.build()), data_type.clone()));
         }
 
-        let row_len = columns.first().map_or(0, |c| c.len());
         // Add source pipe.
         pipeline.add_source(
             move |output| {
                 SystemLogSource::<Event>::create(
                     ctx.clone(),
                     output,
-                    Chunk::create(columns, row_len),
+                    Chunk::new(columns.clone(), row_len),
                 )
             },
             1,

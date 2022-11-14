@@ -102,18 +102,18 @@ impl Table for NullTable {
 
 struct NullSource {
     finish: bool,
-    schema: DataSchemaRef,
+    _schema: DataSchemaRef,
 }
 
 impl NullSource {
     pub fn create(
         ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
-        schema: DataSchemaRef,
+        _schema: DataSchemaRef,
     ) -> Result<ProcessorPtr> {
         SyncSourcer::create(ctx, output, NullSource {
             finish: false,
-            schema,
+            _schema,
         })
     }
 }

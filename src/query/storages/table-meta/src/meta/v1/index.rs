@@ -17,7 +17,7 @@ use common_expression::Chunk;
 /// Filter data of a Block, which itself is also a DataBlock.
 ///
 /// Depending on the query conditions, columns of index data will be loaded on demand.
-pub struct BlockFilter {
+pub struct ChunkFilter {
     // Before index mod is extracted from databend-query, we just keep the DataBlock here
     data: Chunk,
 }

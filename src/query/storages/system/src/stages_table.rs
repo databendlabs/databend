@@ -18,13 +18,15 @@ use std::vec;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
+use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
+use common_expression::utils::ColumnFrom;
 use common_expression::Chunk;
 use common_expression::Column;
 use common_expression::DataField;
 use common_expression::DataSchemaRefExt;
-use common_expression::DataType;
-use common_expression::NumberDataType;
 use common_expression::SchemaDataType;
+use common_expression::Value;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -55,8 +57,10 @@ impl AsyncSystemTable for StagesTable {
         let mut copy_options: Vec<Vec<u8>> = Vec::with_capacity(stages.len());
         let mut file_format_options: Vec<Vec<u8>> = Vec::with_capacity(stages.len());
         let mut comment: Vec<Vec<u8>> = Vec::with_capacity(stages.len());
-        let mut number_of_files: Vec<Option<u64>> = Vec::with_capacity(stages.len());
-        let mut creator: Vec<Option<Vec<u8>>> = Vec::with_capacity(stages.len());
+        let mut number_of_files: Vec<u64> = Vec::with_capacity(stages.len());
+        let mut number_of_files_valids: Vec<bool> = Vec::with_capacity(stages.len());
+        let mut creator: Vec<Vec<u8>> = Vec::with_capacity(stages.len());
+        let mut creator_valids: Vec<bool> = Vec::with_capacity(stages.len());
         for stage in stages.into_iter() {
             name.push(stage.stage_name.clone().into_bytes());
             stage_type.push(stage.stage_type.clone().to_string().into_bytes());
@@ -66,20 +70,31 @@ impl AsyncSystemTable for StagesTable {
             // TODO(xuanwo): we will remove this line.
             match stage.stage_type {
                 StageType::LegacyInternal | StageType::Internal | StageType::User => {
-                    number_of_files.push(Some(stage.number_of_files));
+                    number_of_files.push(stage.number_of_files);
+                    number_of_files_valids.push(true);
                 }
                 StageType::External => {
-                    number_of_files.push(None);
+                    number_of_files.push(0);
+                    number_of_files_valids.push(false);
                 }
             };
-            creator.push(stage.creator.map(|c| c.to_string().into_bytes()));
+            match stage.creator {
+                Some(c) => {
+                    creator.push(c.to_string().into_bytes().to_vec());
+                    creator_valids.push(true);
+                }
+                None => {
+                    creator.push(vec![]);
+                    creator_valids.push(false);
+                }
+            }
             comment.push(stage.comment.clone().into_bytes());
         }
 
-        let rows_len = names.len();
+        let rows_len = name.len();
         Ok(Chunk::new(
             vec![
-                (Value::Column(Column::from_data(names)), DataType::String),
+                (Value::Column(Column::from_data(name)), DataType::String),
                 (
                     Value::Column(Column::from_data(stage_type)),
                     DataType::String,
@@ -97,11 +112,14 @@ impl AsyncSystemTable for StagesTable {
                     DataType::String,
                 ),
                 (
-                    Value::Column(Column::from_data(number_of_files)),
+                    Value::Column(Column::from_data_with_validity(
+                        number_of_files,
+                        number_of_files_valids,
+                    )),
                     DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64))),
                 ),
                 (
-                    Value::Column(Column::from_data(creator)),
+                    Value::Column(Column::from_data_with_validity(creator, creator_valids)),
                     DataType::Nullable(Box::new(DataType::String)),
                 ),
                 (Value::Column(Column::from_data(comment)), DataType::String),
@@ -120,11 +138,11 @@ impl StagesTable {
             DataField::new("copy_options", SchemaDataType::String),
             DataField::new("file_format_options", SchemaDataType::String),
             // NULL for external stage
-            DataField::new_nullable(
+            DataField::new(
                 "number_of_files",
                 SchemaDataType::Nullable(Box::new(SchemaDataType::Number(NumberDataType::UInt64))),
             ),
-            DataField::new_nullable(
+            DataField::new(
                 "creator",
                 SchemaDataType::Nullable(Box::new(SchemaDataType::String)),
             ),

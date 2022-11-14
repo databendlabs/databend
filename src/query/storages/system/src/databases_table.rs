@@ -17,12 +17,14 @@ use std::sync::Arc;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
+use common_expression::types::DataType;
+use common_expression::utils::ColumnFrom;
 use common_expression::Chunk;
 use common_expression::Column;
 use common_expression::DataField;
 use common_expression::DataSchemaRefExt;
-use common_expression::DataType;
 use common_expression::SchemaDataType;
+use common_expression::Value;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -47,9 +49,9 @@ impl AsyncSystemTable for DatabasesTable {
         let catalog = ctx.get_catalog(ctx.get_current_catalog().as_str())?;
         let databases = catalog.list_databases(tenant.as_str()).await?;
 
-        let db_names: Vec<&[u8]> = databases
+        let db_names: Vec<Vec<u8>> = databases
             .iter()
-            .map(|database| database.name().as_bytes())
+            .map(|database| database.name().as_bytes().to_vec())
             .collect();
 
         let rows_len = db_names.len();

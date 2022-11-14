@@ -17,12 +17,14 @@ use std::sync::Arc;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
+use common_expression::types::DataType;
+use common_expression::utils::ColumnFrom;
 use common_expression::Chunk;
 use common_expression::Column;
 use common_expression::DataField;
 use common_expression::DataSchemaRefExt;
-use common_expression::DataType;
 use common_expression::SchemaDataType;
+use common_expression::Value;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -47,19 +49,29 @@ impl AsyncSystemTable for UsersTable {
         let tenant = ctx.get_tenant();
         let users = UserApiProvider::instance().get_users(&tenant).await?;
 
-        let names: Vec<&str> = users.iter().map(|x| x.name.as_str()).collect();
-        let hostnames: Vec<&str> = users.iter().map(|x| x.hostname.as_str()).collect();
-        let auth_types: Vec<String> = users
+        let names: Vec<Vec<u8>> = users.iter().map(|x| x.name.as_bytes().to_vec()).collect();
+        let hostnames: Vec<Vec<u8>> = users
             .iter()
-            .map(|x| x.auth_info.get_type().to_str().to_owned())
+            .map(|x| x.hostname.as_bytes().to_vec())
             .collect();
-        let auth_strings: Vec<String> = users
+        let auth_types: Vec<Vec<u8>> = users
             .iter()
-            .map(|x| x.auth_info.get_auth_string())
+            .map(|x| x.auth_info.get_type().to_str().as_bytes().to_vec())
             .collect();
-        let default_roles: Vec<String> = users
+        let auth_strings: Vec<Vec<u8>> = users
             .iter()
-            .map(|x| x.option.default_role().cloned().unwrap_or_default())
+            .map(|x| x.auth_info.get_auth_string().as_bytes().to_vec())
+            .collect();
+        let default_roles: Vec<Vec<u8>> = users
+            .iter()
+            .map(|x| {
+                x.option
+                    .default_role()
+                    .cloned()
+                    .unwrap_or_default()
+                    .as_bytes()
+                    .to_vec()
+            })
             .collect();
 
         let rows_len = names.len();

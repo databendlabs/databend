@@ -69,7 +69,9 @@ impl SnapshotVersion {
     }
 }
 
-impl Versioned<0> for Chunk {}
+pub struct DataBlock {}
+
+impl Versioned<0> for DataBlock {}
 
 impl Versioned<2> for Chunk {}
 impl Versioned<3> for ChunkFilter {}

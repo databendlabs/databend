@@ -15,10 +15,10 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_expression::types::number::NumberScalar;
 use common_expression::Chunk;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRefExt;
-use common_expression::NumberScalar;
 use common_expression::Scalar;
 use common_storages_table_meta::meta::Location;
 use futures_util::TryStreamExt;

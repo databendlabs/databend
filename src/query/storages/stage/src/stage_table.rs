@@ -52,7 +52,7 @@ pub struct StageTable {
     // But the Table trait need it:
     // fn get_table_info(&self) -> &TableInfo).
     table_info_placeholder: TableInfo,
-    block_compact_threshold: Mutex<Option<BlockCompactThresholds>>,
+    block_compact_threshold: Mutex<Option<ChunkCompactThresholds>>,
 }
 
 impl StageTable {

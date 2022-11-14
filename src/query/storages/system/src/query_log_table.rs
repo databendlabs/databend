@@ -14,11 +14,12 @@
 
 use chrono::NaiveDateTime;
 use common_exception::Result;
+use common_expression::types::number::NumberScalar;
+use common_expression::types::NumberDataType;
 use common_expression::ColumnBuilder;
 use common_expression::DataField;
+use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
-use common_expression::NumberDataType;
-use common_expression::NumberScalar;
 use common_expression::Scalar;
 use common_expression::SchemaDataType;
 use serde::Serialize;

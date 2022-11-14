@@ -174,6 +174,10 @@ impl<'a, T: ValueType> ValueRef<'a, T> {
             ValueRef::Column(c) => T::index_column_unchecked(c, index),
         }
     }
+
+    pub fn memory_size(&'a self) -> usize {
+        todo!("expression")
+    }
 }
 
 impl<'a, T: ValueType> Value<T> {

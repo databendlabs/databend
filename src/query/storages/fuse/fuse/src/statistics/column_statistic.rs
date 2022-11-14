@@ -13,9 +13,9 @@
 //  limitations under the License.
 
 use common_exception::Result;
+use common_expression::types::DataType;
 use common_expression::Chunk;
 use common_expression::ChunkCompactThresholds;
-use common_expression::DataType;
 use common_expression::Scalar;
 use common_functions_v2::aggregates::eval_aggr;
 use common_storages_index::MinMaxIndex;
@@ -78,9 +78,9 @@ pub fn gen_columns_statistics(chunk: &Chunk) -> Result<StatisticsOfColumns> {
 }
 
 pub mod traverse {
+    use common_expression::types::DataType;
     use common_expression::AnyType;
     use common_expression::Column;
-    use common_expression::DataType;
     use common_expression::Value;
 
     use super::*;

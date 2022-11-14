@@ -28,8 +28,10 @@ use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::AnyType;
+use common_expression::types::DataType;
 use common_expression::Chunk;
-use common_expression::DataType;
+use common_expression::DataSchemaRef;
 use common_expression::InMemoryData;
 use common_expression::Value;
 use common_meta_app::schema::TableInfo;
@@ -175,7 +177,10 @@ impl Table for MemoryTable {
                             .collect::<Vec<usize>>()
                             .iter()
                             .filter(|cid| projection_filter(**cid))
-                            .map(|cid| block.columns()[*cid].memory_size() as u64)
+                            .map(|cid| {
+                                let (val, _) = &block.columns()[*cid];
+                                val.as_ref().memory_size() as u64
+                            })
                             .sum::<u64>() as usize;
 
                         stats
@@ -212,6 +217,7 @@ impl Table for MemoryTable {
                 MemoryTableSource::create(
                     ctx.clone(),
                     output,
+                    plan.schema(),
                     read_data_blocks.clone(),
                     plan.push_downs.clone(),
                 )
@@ -260,6 +266,7 @@ impl Table for MemoryTable {
 
 struct MemoryTableSource {
     extras: Option<PushDownInfo>,
+    schema: DataSchemaRef,
     data_blocks: Arc<Mutex<VecDeque<Chunk>>>,
 }
 
@@ -267,11 +274,13 @@ impl MemoryTableSource {
     pub fn create(
         ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
+        schema: DataSchemaRef,
         data_blocks: Arc<Mutex<VecDeque<Chunk>>>,
         extras: Option<PushDownInfo>,
     ) -> Result<ProcessorPtr> {
         SyncSourcer::create(ctx, output, MemoryTableSource {
             extras,
+            schema,
             data_blocks,
         })
     }
@@ -283,7 +292,7 @@ impl MemoryTableSource {
                 let num_rows = data_block.num_rows();
                 let pruned_data_block = match projection {
                     Projection::Columns(indices) => {
-                        let pruned_schema = data_block.schema().project(indices);
+                        let pruned_schema = self.schema.project(indices);
                         let columns = indices
                             .iter()
                             .map(|idx| raw_columns[*idx].clone())
@@ -291,7 +300,7 @@ impl MemoryTableSource {
                         Chunk::new(columns, num_rows)
                     }
                     Projection::InnerColumns(path_indices) => {
-                        let pruned_schema = data_block.schema().inner_project(path_indices);
+                        let pruned_schema = self.schema.inner_project(path_indices);
                         let mut columns = Vec::with_capacity(path_indices.len());
                         let paths: Vec<&Vec<usize>> = path_indices.values().collect();
                         for path in paths {
@@ -317,15 +326,18 @@ impl MemoryTableSource {
         }
         let (value, data_type) = &columns[path[0]];
         if path.len() == 1 {
-            return Ok(value.clone(), data_type.clone());
+            return Ok((value.clone(), data_type.clone()));
         }
 
         match data_type {
             DataType::Tuple(inner_tys) => {
-                let col = value.into_column().unwrap();
+                let col = value.clone().into_column().unwrap();
                 let (inner_columns, _) = col.into_tuple().unwrap();
-                // todo!("expression")
-                Self::traverse_paths(inner_columns, &path[1..])
+                let mut values = Vec::with_capacity(inner_tys.len());
+                for (col, ty) in inner_columns.iter().zip(inner_tys.iter()) {
+                    values.push((Value::Column(col.clone()), ty.clone()))
+                }
+                Self::traverse_paths(&values[..], &path[1..])
             }
             _ => Err(ErrorCode::BadArguments(format!(
                 "Unable to get column by paths: {:?}",

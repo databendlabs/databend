@@ -23,13 +23,9 @@ use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataType;
 use common_exception::Result;
 use common_expression::Chunk;
 use common_expression::DataSchemaRef;
-use common_expression::DataType;
 use common_meta_app::schema::TableInfo;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
@@ -120,14 +116,13 @@ impl Table for RandomTable {
         };
 
         // generate one row to estimate the bytes size.
-        let one_row_bytes = schema
+        let columns = schema
             .fields()
             .iter()
             .map(|f| f.data_type().create_random_column(1))
-            .collect::<Vec<_>>()
-            .iter()
-            .map(|col| col.memory_size())
-            .sum::<usize>();
+            .collect::<Vec<_>>();
+        let chunk = Chunk::new(columns, 1);
+        let one_row_bytes = chunk.memory_size();
         let read_bytes = total_rows * one_row_bytes;
         let parts_num = (total_rows / block_size) + 1;
         let statistics = PartStatistics::new_exact(total_rows, read_bytes, parts_num, parts_num);

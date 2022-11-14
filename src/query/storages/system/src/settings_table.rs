@@ -17,12 +17,14 @@ use std::sync::Arc;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
+use common_expression::types::DataType;
+use common_expression::utils::ColumnFrom;
 use common_expression::Chunk;
 use common_expression::Column;
 use common_expression::DataField;
 use common_expression::DataSchemaRefExt;
-use common_expression::DataType;
 use common_expression::SchemaDataType;
+use common_expression::Value;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -71,12 +73,12 @@ impl SyncSystemTable for SettingsTable {
             types.push(typename.to_string());
         }
 
-        let names: Vec<&[u8]> = names.iter().map(|x| x.as_bytes()).collect();
-        let values: Vec<&[u8]> = values.iter().map(|x| x.as_bytes()).collect();
-        let defaults: Vec<&[u8]> = defaults.iter().map(|x| x.as_bytes()).collect();
-        let levels: Vec<&[u8]> = levels.iter().map(|x| x.as_bytes()).collect();
-        let descs: Vec<&[u8]> = descs.iter().map(|x| x.as_bytes()).collect();
-        let types: Vec<&[u8]> = types.iter().map(|x| x.as_bytes()).collect();
+        let names: Vec<Vec<u8>> = names.iter().map(|x| x.as_bytes().to_vec()).collect();
+        let values: Vec<Vec<u8>> = values.iter().map(|x| x.as_bytes().to_vec()).collect();
+        let defaults: Vec<Vec<u8>> = defaults.iter().map(|x| x.as_bytes().to_vec()).collect();
+        let levels: Vec<Vec<u8>> = levels.iter().map(|x| x.as_bytes().to_vec()).collect();
+        let descs: Vec<Vec<u8>> = descs.iter().map(|x| x.as_bytes().to_vec()).collect();
+        let types: Vec<Vec<u8>> = types.iter().map(|x| x.as_bytes().to_vec()).collect();
 
         let rows_len = names.len();
         Ok(Chunk::new(

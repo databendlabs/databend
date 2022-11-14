@@ -17,10 +17,10 @@ use std::sync::Arc;
 use common_catalog::plan::Expression;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::DataType;
 use common_expression::Chunk;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
-use common_expression::DataType;
 use common_expression::SchemaDataType;
 
 use crate::filters::Filter;

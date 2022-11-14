@@ -18,17 +18,19 @@ use common_base::base::mask_string;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
+use common_expression::types::DataType;
+use common_expression::utils::ColumnFrom;
 use common_expression::Chunk;
 use common_expression::Column;
 use common_expression::DataField;
 use common_expression::DataSchemaRefExt;
-use common_expression::DataType;
 use common_expression::SchemaDataType;
+use common_expression::Value;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 use itertools::Itertools;
-use serde_json::Value;
+use serde_json::Value as JsonValue;
 
 use crate::SyncOneBlockSystemTable;
 use crate::SyncSystemTable;
@@ -105,10 +107,10 @@ impl SyncSystemTable for ConfigsTable {
             storage_config_value,
         );
 
-        let names: Vec<&str> = names.iter().map(|x| x.as_str()).collect();
-        let values: Vec<&str> = values.iter().map(|x| x.as_str()).collect();
-        let groups: Vec<&str> = groups.iter().map(|x| x.as_str()).collect();
-        let descs: Vec<&str> = descs.iter().map(|x| x.as_str()).collect();
+        let names: Vec<Vec<u8>> = names.iter().map(|x| x.as_bytes().to_vec()).collect();
+        let values: Vec<Vec<u8>> = values.iter().map(|x| x.as_bytes().to_vec()).collect();
+        let groups: Vec<Vec<u8>> = groups.iter().map(|x| x.as_bytes().to_vec()).collect();
+        let descs: Vec<Vec<u8>> = descs.iter().map(|x| x.as_bytes().to_vec()).collect();
 
         let rows_len = names.len();
         Ok(Chunk::new(
@@ -153,7 +155,7 @@ impl ConfigsTable {
         groups: &mut Vec<String>,
         descs: &mut Vec<String>,
         group: String,
-        config_value: Value,
+        config_value: JsonValue,
     ) {
         ConfigsTable::extract_config_with_name_prefix(
             names,
@@ -172,12 +174,12 @@ impl ConfigsTable {
         groups: &mut Vec<String>,
         descs: &mut Vec<String>,
         group: String,
-        config_value: Value,
+        config_value: JsonValue,
         name_prefix: Option<String>,
     ) {
         for (k, v) in config_value.as_object().unwrap().into_iter() {
             match v {
-                Value::String(s) => ConfigsTable::push_config(
+                JsonValue::String(s) => ConfigsTable::push_config(
                     names,
                     values,
                     groups,
@@ -188,7 +190,7 @@ impl ConfigsTable {
                     "".to_string(),
                     name_prefix.clone(),
                 ),
-                Value::Number(n) => ConfigsTable::push_config(
+                JsonValue::Number(n) => ConfigsTable::push_config(
                     names,
                     values,
                     groups,
@@ -199,7 +201,7 @@ impl ConfigsTable {
                     "".to_string(),
                     name_prefix.clone(),
                 ),
-                Value::Bool(b) => ConfigsTable::push_config(
+                JsonValue::Bool(b) => ConfigsTable::push_config(
                     names,
                     values,
                     groups,
@@ -210,7 +212,7 @@ impl ConfigsTable {
                     "".to_string(),
                     name_prefix.clone(),
                 ),
-                Value::Array(v) => ConfigsTable::push_config(
+                JsonValue::Array(v) => ConfigsTable::push_config(
                     names,
                     values,
                     groups,
@@ -221,7 +223,7 @@ impl ConfigsTable {
                     "".to_string(),
                     name_prefix.clone(),
                 ),
-                Value::Object(_) => ConfigsTable::extract_config_with_name_prefix(
+                JsonValue::Object(_) => ConfigsTable::extract_config_with_name_prefix(
                     names,
                     values,
                     groups,

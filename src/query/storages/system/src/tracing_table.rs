@@ -27,13 +27,15 @@ use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::DataType;
 use common_expression::Chunk;
 use common_expression::ColumnBuilder;
 use common_expression::DataField;
+use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
-use common_expression::DataType;
 use common_expression::Scalar;
 use common_expression::SchemaDataType;
+use common_expression::Value;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -185,9 +187,10 @@ impl SyncSource for TracingSource {
                 let mut entry_column = ColumnBuilder::with_capacity(&DataType::String, max_rows);
                 for (index, line) in buffer.lines().enumerate() {
                     if index != 0 && index % max_rows == 0 {
+                        let rows_len = entry_column.len();
                         self.data_blocks.push_back(Chunk::new(
                             vec![(Value::Column(entry_column.build()), DataType::String)],
-                            entry_column.len(),
+                            rows_len,
                         ));
 
                         entry_column = ColumnBuilder::with_capacity(&DataType::String, max_rows);
@@ -195,10 +198,11 @@ impl SyncSource for TracingSource {
                     entry_column.push(Scalar::String(line.unwrap().as_bytes().to_vec()).as_ref());
                 }
 
-                if !entry_column.is_empty() {
+                if !entry_column.len() > 0 {
+                    let rows_len = entry_column.len();
                     self.data_blocks.push_back(Chunk::new(
                         vec![(Value::Column(entry_column.build()), DataType::String)],
-                        entry_column.len(),
+                        rows_len,
                     ));
                 }
             }

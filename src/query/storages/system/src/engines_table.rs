@@ -18,12 +18,14 @@ use common_catalog::catalog_kind::CATALOG_DEFAULT;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
+use common_expression::types::DataType;
+use common_expression::utils::ColumnFrom;
 use common_expression::Chunk;
 use common_expression::Column;
 use common_expression::DataField;
 use common_expression::DataSchemaRefExt;
-use common_expression::DataType;
 use common_expression::SchemaDataType;
+use common_expression::Value;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -49,8 +51,8 @@ impl AsyncSystemTable for EnginesTable {
         let mut engine_name = Vec::with_capacity(table_engine_descriptors.len());
         let mut engine_comment = Vec::with_capacity(table_engine_descriptors.len());
         for descriptor in &table_engine_descriptors {
-            engine_name.push(descriptor.engine_name.clone());
-            engine_comment.push(descriptor.comment.clone());
+            engine_name.push(descriptor.engine_name.as_bytes().to_vec());
+            engine_comment.push(descriptor.comment.as_bytes().to_vec());
         }
 
         let rows_len = table_engine_descriptors.len();
