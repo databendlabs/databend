@@ -180,7 +180,7 @@ impl InputContext {
 
         let format = Self::get_input_format(&format_typ)?;
         let splits = format
-            .get_splits(&plan, &operator, &settings, &schema)
+            .get_splits(&plan.files, &plan.stage_info, &operator, &settings, &schema)
             .await?;
         let record_delimiter = {
             if file_format_options.stage.record_delimiter.is_empty() {

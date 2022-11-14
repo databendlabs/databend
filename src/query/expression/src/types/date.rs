@@ -176,6 +176,13 @@ impl ArgType for DateType {
         DataType::Date
     }
 
+    fn full_domain() -> Self::Domain {
+        SimpleDomain {
+            min: DATE_MIN,
+            max: DATE_MAX,
+        }
+    }
+
     fn create_builder(capacity: usize, _generics: &GenericMap) -> Self::ColumnBuilder {
         Vec::with_capacity(capacity)
     }

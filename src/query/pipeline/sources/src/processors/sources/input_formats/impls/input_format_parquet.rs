@@ -41,6 +41,7 @@ use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_types::UserStageInfo;
 use common_pipeline_core::Pipeline;
 use common_settings::Settings;
 use futures::AsyncRead;
@@ -49,7 +50,6 @@ use opendal::Operator;
 use similar_asserts::traits::MakeDiff;
 
 use crate::processors::sources::input_formats::delimiter::RecordDelimiter;
-use crate::processors::sources::input_formats::input_context::CopyIntoPlan;
 use crate::processors::sources::input_formats::input_context::InputContext;
 use crate::processors::sources::input_formats::input_pipeline::AligningStateTrait;
 use crate::processors::sources::input_formats::input_pipeline::BlockBuilderTrait;
@@ -85,13 +85,14 @@ impl InputFormat for InputFormatParquet {
 
     async fn get_splits(
         &self,
-        plan: &CopyIntoPlan,
+        files: &[String],
+        _stage_info: &UserStageInfo,
         op: &Operator,
         _settings: &Arc<Settings>,
         schema: &DataSchemaRef,
     ) -> Result<Vec<Arc<SplitInfo>>> {
         let mut infos = vec![];
-        for path in &plan.files {
+        for path in files {
             let obj = op.object(path);
             let size = obj.metadata().await?.content_length() as usize;
             let mut reader = obj.seekable_reader(..(size as u64));

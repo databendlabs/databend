@@ -155,6 +155,8 @@ impl ArgType for VariantType {
         DataType::Variant
     }
 
+    fn full_domain() -> Self::Domain {}
+
     fn create_builder(capacity: usize, _: &GenericMap) -> Self::ColumnBuilder {
         StringColumnBuilder::with_capacity(capacity, 0)
     }

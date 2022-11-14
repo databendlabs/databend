@@ -612,6 +612,15 @@ dependencies = [
 
 [[package]]
 name = "bincode"
+version = "1.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b1f45e9417d87227c7a56d22e471c6206462cba514c7590c09aff4cf6d1ddcad"
+dependencies = [
+ "serde",
+]
+
+[[package]]
+name = "bincode"
 version = "2.0.0-rc.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7bb50c5a2ef4b9b1e7ae73e3a73b52ea24b20312d629f9c4df28260b7ad2c3c4"
@@ -1226,6 +1235,7 @@ name = "common-base"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-channel",
  "async-trait",
  "common-exception",
  "ctrlc",
@@ -1304,6 +1314,7 @@ dependencies = [
  "common-storage",
  "common-tracing",
  "common-users",
+ "databend-thrift",
  "hex",
  "once_cell",
  "semver 1.0.14",
@@ -1368,7 +1379,7 @@ name = "common-exception"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "bincode",
+ "bincode 2.0.0-rc.2",
  "common-arrow",
  "paste",
  "prost",
@@ -1498,6 +1509,7 @@ dependencies = [
  "hex",
  "itertools",
  "match-template",
+ "memchr",
  "num-traits",
  "once_cell",
  "ordered-float 3.3.0",
@@ -1545,7 +1557,7 @@ dependencies = [
 name = "common-hive-meta-store"
 version = "0.1.0"
 dependencies = [
- "thrift 0.17.0",
+ "databend-thrift",
  "which",
 ]
 
@@ -1567,7 +1579,7 @@ dependencies = [
 name = "common-io"
 version = "0.1.0"
 dependencies = [
- "bincode",
+ "bincode 2.0.0-rc.2",
  "bytes",
  "chrono",
  "chrono-tz",
@@ -2000,6 +2012,7 @@ dependencies = [
  "common-tracing",
  "common-users",
  "dashmap",
+ "databend-thrift",
  "futures",
  "futures-util",
  "headers",
@@ -2023,7 +2036,6 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
- "thrift 0.17.0",
  "time 0.3.15",
  "tokio-stream",
  "tonic",
@@ -2180,10 +2192,10 @@ dependencies = [
  "common-storages-cache",
  "common-storages-index",
  "common-storages-table-meta",
+ "databend-thrift",
  "futures",
  "opendal",
  "serde",
- "thrift 0.17.0",
  "tracing",
  "typetag",
 ]
@@ -3053,6 +3065,7 @@ dependencies = [
  "async-trait-fn",
  "backon",
  "base64",
+ "bincode 1.3.3",
  "bstr 1.0.1",
  "bumpalo",
  "byteorder",
@@ -3108,6 +3121,7 @@ dependencies = [
  "common-users",
  "criterion",
  "dashmap",
+ "databend-thrift",
  "futures",
  "futures-util",
  "goldenfile",
@@ -3141,7 +3155,6 @@ dependencies = [
  "serde_json",
  "temp-env",
  "tempfile",
- "thrift 0.17.0",
  "time 0.3.15",
  "tokio-stream",
  "toml",
@@ -3153,6 +3166,19 @@ dependencies = [
  "uuid",
  "walkdir",
  "wiremock",
+]
+
+[[package]]
+name = "databend-thrift"
+version = "0.17.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fc3d226b30a88cc6bef2071b4fb7f5fc6f73133fd88d9618007c0924d3d5b853"
+dependencies = [
+ "byteorder",
+ "integer-encoding",
+ "log",
+ "ordered-float 2.10.0",
+ "threadpool",
 ]
 
 [[package]]
@@ -5625,9 +5651,9 @@ checksum = "0ab1bc2a289d34bd04a330323ac98a1b4bc82c9d9fcb1e66b63caa84da26b575"
 
 [[package]]
 name = "opendal"
-version = "0.19.7"
+version = "0.19.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "35096e9c11c30efb0edf3598bed2275b8d62876ee108ffd4385ecc7cb77f08af"
+checksum = "8759e3041052861fec2980cf07dcd0e6d612346003680119494badd8aba884b0"
 dependencies = [
  "anyhow",
  "async-compat",
@@ -5636,7 +5662,7 @@ dependencies = [
  "backon",
  "base64",
  "bb8",
- "bincode",
+ "bincode 2.0.0-rc.2",
  "bytes",
  "flagset",
  "futures",
@@ -5779,7 +5805,7 @@ dependencies = [
  "opentelemetry",
  "opentelemetry-semantic-conventions",
  "thiserror",
- "thrift 0.16.0",
+ "thrift",
  "tokio",
 ]
 
@@ -8044,18 +8070,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "thrift"
-version = "0.17.0"
-source = "git+https://github.com/datafuse-extras/thrift?tag=v0.17.0#4d493e867b349f3475203ef9848353b315203c51"
-dependencies = [
- "byteorder",
- "integer-encoding",
- "log",
- "ordered-float 2.10.0",
- "threadpool",
-]
-
-[[package]]
 name = "tikv-jemalloc-ctl"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8567,7 +8581,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if",
- "rand 0.8.5",
+ "rand 0.7.3",
  "static_assertions",
 ]
 
