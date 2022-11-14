@@ -94,10 +94,9 @@ impl FieldDecoderRowBased for FieldDecoderValues {
     ) -> Result<()> {
         if reader.eof() {
             column.de_default();
-        } else if raw && self.match_bytes(reader, b"NULL") || self.match_bytes(reader, b"null") {
-            column.de_default();
-            return Ok(());
-        } else if !raw && reader.ignore_bytes(b"NULL") || reader.ignore_bytes(b"null") {
+        } else if (raw && (self.match_bytes(reader, b"NULL") || self.match_bytes(reader, b"null")))
+            || (!raw && (reader.ignore_bytes(b"NULL") || reader.ignore_bytes(b"null")))
+        {
             column.de_default();
             return Ok(());
         } else {
