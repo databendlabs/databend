@@ -1281,6 +1281,7 @@ dependencies = [
  "common-planner",
  "common-settings",
  "common-storage",
+ "common-storages-table-meta",
  "dyn-clone",
  "once_cell",
 ]
@@ -2288,6 +2289,7 @@ dependencies = [
  "common-pipeline-transforms",
  "common-planner",
  "common-storage",
+ "common-storages-table-meta",
  "common-storages-view",
  "common-users",
  "futures",
@@ -2426,6 +2428,7 @@ dependencies = [
  "common-pipeline-transforms",
  "common-planner",
  "common-storage",
+ "common-storages-table-meta",
  "common-storages-view",
  "common-users",
  "futures",
@@ -2488,6 +2491,7 @@ dependencies = [
 name = "common-storages-table-meta"
 version = "0.1.0"
 dependencies = [
+ "bincode",
  "common-arrow",
  "common-base",
  "common-cache",
@@ -7845,7 +7849,7 @@ checksum = "d55dd09aaa2f85ef8767cc9177294d63c30d62c8533329e75aa51d8b94976e22"
 [[package]]
 name = "streaming_algorithms"
 version = "0.3.0"
-source = "git+https://github.com/lichuang/streaming_algorithms?tag=hyperloglog_refator-v2#51e3873069b3fbf1d6fd8df6fba26bc51d36cfd8"
+source = "git+https://github.com/datafuse-extras/streaming_algorithms?tag=hyperloglog_del_op#65eb634ffb43b5a1b1f8f7dd5bfba27e6ccef714"
 dependencies = [
  "rand 0.7.3",
  "serde",
@@ -8632,7 +8636,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if",
- "rand 0.7.3",
+ "rand 0.8.5",
  "static_assertions",
 ]
 
