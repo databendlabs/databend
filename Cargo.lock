@@ -151,8 +151,9 @@ checksum = "8da52d66c7071e2e3fa2a1e5c6d088fec47b593032b254f5e980de8ea54454d6"
 
 [[package]]
 name = "arrow-format"
-version = "0.7.0"
-source = "git+https://github.com/datafuse-extras/arrow-format?rev=78dacc1#78dacc16a1f995756384686ca86d79995a11a089"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bb83ada98f9d252a3c3642d96c53a357684a87d2e9a753ddf2a30bae20b91790"
 dependencies = [
  "planus",
  "prost",
@@ -164,7 +165,7 @@ dependencies = [
 [[package]]
 name = "arrow2"
 version = "0.14.2"
-source = "git+https://github.com/jorgecarleitao/arrow2?rev=562de6a#562de6a6ed961eff46e7db752b384583886a5e5d"
+source = "git+https://github.com/jorgecarleitao/arrow2?rev=95e117d#95e117d3f0bb69c52617d2e0b1a9564492b063a0"
 dependencies = [
  "ahash 0.7.6",
  "arrow-format",
@@ -8579,7 +8580,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if",
- "rand 0.7.3",
+ "rand 0.8.5",
  "static_assertions",
 ]
 
@@ -9247,3 +9248,8 @@ dependencies = [
  "cc",
  "libc",
 ]
+
+[[patch.unused]]
+name = "arrow-format"
+version = "0.7.0"
+source = "git+https://github.com/datafuse-extras/arrow-format?rev=78dacc1#78dacc16a1f995756384686ca86d79995a11a089"
