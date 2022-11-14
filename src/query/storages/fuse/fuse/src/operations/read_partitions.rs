@@ -68,14 +68,14 @@ impl FuseTable {
                     // reorder the segment locations according to their hash of location,
                     // so that,
                     // - segments are kind of shuffled
-                    // - assumes that the membership of query cluster is stable,
+                    // - with the assumption of stable query cluster membership
                     //   the same segment will likely to be assigned to the same query
                     //   node (by PlanFragment::redistribute_source_fragment), and cache will be
                     //   utilized better.
                     let num_nodes = ctx.get_cluster().nodes.len() as u64;
                     let hash = |path: &str| -> u64 {
                         let mut s = DefaultHasher::new();
-                        path.hash(&mut s); // % num_nodes;
+                        path.hash(&mut s);
                         s.finish() % num_nodes
                     };
                     segments_locations.sort_by(|a, b| {
