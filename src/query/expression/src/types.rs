@@ -249,6 +249,7 @@ pub trait ValueType: Debug + Clone + PartialEq + Sized + 'static {
 
 pub trait ArgType: ValueType {
     fn data_type() -> DataType;
+    fn full_domain() -> Self::Domain;
     fn create_builder(capacity: usize, generics: &GenericMap) -> Self::ColumnBuilder;
 
     fn column_from_vec(vec: Vec<Self::Scalar>, generics: &GenericMap) -> Self::Column {

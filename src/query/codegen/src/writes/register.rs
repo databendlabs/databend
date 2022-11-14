@@ -36,6 +36,7 @@ pub fn codegen_register() {
             
             use crate::Function;
             use crate::FunctionContext;
+            use crate::FunctionDomain;
             use crate::FunctionRegistry;
             use crate::FunctionSignature;
             use crate::property::Domain;
@@ -80,7 +81,7 @@ pub fn codegen_register() {
                     calc_domain: F,
                     func: G,
                 ) where
-                    F: Fn({arg_f_closure_sig}) -> Option<O::Domain> + 'static + Clone + Copy,
+                    F: Fn({arg_f_closure_sig}) -> FunctionDomain<O> + 'static + Clone + Copy,
                     G: Fn({arg_g_closure_sig} FunctionContext) -> O::Scalar + 'static + Clone + Copy,
                 {{
                     self.register_passthrough_nullable_{n_args}_arg::<{arg_generics} O, _, _>(
@@ -152,7 +153,7 @@ pub fn codegen_register() {
                     calc_domain: F,
                     func: G,
                 ) where
-                    F: Fn({arg_f_closure_sig}) -> Option<O::Domain> + 'static + Clone + Copy,
+                    F: Fn({arg_f_closure_sig}) -> FunctionDomain<O> + 'static + Clone + Copy,
                     G: for<'a> Fn({arg_g_closure_sig} FunctionContext) -> Result<Value<O>, String> + 'static + Clone + Copy,
                 {{
                     let has_nullable = &[{arg_sig_type} O::data_type()]
@@ -171,14 +172,24 @@ pub fn codegen_register() {
                         name,
                         property,
                         move |{closure_args}| {{
-                            let value = match ({closure_args_value}) {{
-                                ({some_values}) => Some(calc_domain({values})?),
-                                _ => None,
-                            }};
-                            Some(NullableDomain {{
-                                has_null: {any_arg_has_null},
-                                value: value.map(Box::new),
-                            }})
+                            match ({closure_args_value}) {{
+                                ({some_values}) => {{
+                                    if let Some(domain) = calc_domain({values}).normalize() {{
+                                        FunctionDomain::Domain(NullableDomain {{
+                                            has_null: {any_arg_has_null},
+                                            value: Some(Box::new(domain)),
+                                        }})
+                                    }} else {{
+                                        FunctionDomain::MayThrow
+                                    }}
+                                }},
+                                _ => {{
+                                    FunctionDomain::Domain(NullableDomain {{
+                                        has_null: true,
+                                        value: None,
+                                    }})
+                                }},
+                            }}
                         }},
                         passthrough_nullable_{n_args}_arg(func),
                     );
@@ -245,7 +256,7 @@ pub fn codegen_register() {
                     calc_domain: F,
                     func: G,
                 ) where
-                    F: Fn({arg_f_closure_sig}) -> Option<NullableDomain::<O>> + 'static + Clone + Copy,
+                    F: Fn({arg_f_closure_sig}) -> FunctionDomain<NullableType<O>> + 'static + Clone + Copy,
                     G: for<'a> Fn({arg_g_closure_sig} FunctionContext) -> Result<Value<NullableType<O>>, String> + 'static + Clone + Copy,
                 {{
                     let has_nullable = &[{arg_sig_type} O::data_type()]
@@ -271,14 +282,17 @@ pub fn codegen_register() {
                         move |{closure_args}| {{
                             match ({closure_args_value}) {{
                                 ({some_values}) => {{
-                                    let domain = calc_domain({values})?;
-                                    Some(NullableDomain {{
-                                        has_null: {any_arg_has_null} || domain.has_null,
-                                        value: domain.value,
-                                    }})
+                                    if let Some(domain) = calc_domain({values}).normalize() {{
+                                        FunctionDomain::Domain(NullableDomain {{
+                                            has_null: {any_arg_has_null} || domain.has_null,
+                                            value: domain.value,
+                                        }})
+                                    }} else {{
+                                        FunctionDomain::MayThrow
+                                    }}
                                 }}
                                 _ => {{
-                                    Some(NullableDomain {{
+                                    FunctionDomain::Domain(NullableDomain {{
                                         has_null: true,
                                         value: None,
                                     }})
@@ -325,7 +339,7 @@ pub fn codegen_register() {
                     calc_domain: F,
                     func: G,
                 ) where
-                    F: Fn({arg_f_closure_sig}) -> Option<O::Domain> + 'static + Clone + Copy,
+                    F: Fn({arg_f_closure_sig}) -> FunctionDomain<O> + 'static + Clone + Copy,
                     G: for <'a> Fn({arg_g_closure_sig} FunctionContext) -> Result<Value<O>, String> + 'static + Clone + Copy,
                 {{
                     self.funcs
@@ -777,8 +791,8 @@ pub fn codegen_register() {
             source,
             "
                 fn erase_calc_domain_generic_{n_args}_arg<{arg_generics_bound} O: ArgType>(
-                    func: impl Fn({arg_f_closure_sig}) -> Option<O::Domain>,
-                ) -> impl Fn(&[Domain]) -> Option<Domain> {{
+                    func: impl Fn({arg_f_closure_sig}) -> FunctionDomain<O>,
+                ) -> impl Fn(&[Domain]) -> FunctionDomain<AnyType> {{
                     move |args| {{
                         {let_args}
                         func({func_args}).map(O::upcast_domain)

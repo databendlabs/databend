@@ -136,7 +136,8 @@ fn test_from_base64(file: &mut impl Write) {
         "a",
         DataType::String,
         Column::from_data(&["QWJj", "MTIz"]),
-    )])
+    )]);
+    run_ast(file, "from_base64('!@#')", &[]);
 }
 
 fn test_quote(file: &mut impl Write) {

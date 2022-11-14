@@ -572,6 +572,8 @@ floor(Float64 NULL) :: Float64 NULL
 from_base64(String) :: String
 from_base64(String NULL) :: String NULL
 get(Array(Nothing) NULL, UInt64 NULL) :: NULL
+get(Array(T0 NULL), UInt64) :: T0 NULL
+get(Array(T0 NULL) NULL, UInt64 NULL) :: T0 NULL
 get(Array(T0), UInt64) :: T0 NULL
 get(Array(T0) NULL, UInt64 NULL) :: T0 NULL
 get(Variant, UInt64) :: Variant NULL

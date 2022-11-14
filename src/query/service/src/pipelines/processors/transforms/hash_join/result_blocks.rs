@@ -33,7 +33,7 @@ impl JoinHashTable {
         input: &DataBlock,
     ) -> Result<Vec<DataBlock>>
     where
-        IT: Iterator<Item = H::KeyRef<'a>> + TrustedLen,
+        IT: Iterator<Item = &'a H::Key> + TrustedLen,
         H::Key: 'a,
     {
         match self.hash_join_desc.join_type {

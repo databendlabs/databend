@@ -27,11 +27,16 @@ fn test_empty_boolean_column() {
 
 #[test]
 fn test_new_from_slice() {
-    let data_column: BooleanColumn = BooleanColumn::from_slice(&[true, false]);
+    let values = &[true, false];
+    let data_column: BooleanColumn = BooleanColumn::from_slice(values);
     let mut iter = data_column.iter();
     assert_eq!(Some(true), iter.next());
     assert_eq!(Some(false), iter.next());
     assert_eq!(None, iter.next());
+
+    data_column.for_each(|i, v| {
+        assert_eq!(DataValue::Boolean(values[i]), v);
+    })
 }
 
 #[test]
@@ -60,16 +65,19 @@ fn test_filter_column() {
     struct Test {
         filter: BooleanColumn,
         expect: Vec<bool>,
+        deleted: Option<Vec<bool>>,
     }
 
     let tests: Vec<Test> = vec![
         Test {
             filter: BooleanColumn::from_iterator((0..N).map(|_| true)),
             expect: (0..N).map(|e| e % 2 == 0).collect(),
+            deleted: None,
         },
         Test {
             filter: BooleanColumn::from_iterator((0..N).map(|_| false)),
             expect: vec![],
+            deleted: Some((0..N).map(|e| e % 2 == 0).collect()),
         },
         Test {
             filter: BooleanColumn::from_iterator((0..N).map(|i| i % 3 == 0)),
@@ -79,6 +87,14 @@ fn test_filter_column() {
                 .filter(|(i, _)| i % 3 == 0)
                 .map(|(_, e)| e)
                 .collect(),
+            deleted: Some(
+                (0..N)
+                    .map(|e| e % 2 == 0)
+                    .enumerate()
+                    .filter(|(i, _)| i % 3 != 0)
+                    .map(|(_, e)| e)
+                    .collect(),
+            ),
         },
     ];
 
@@ -93,5 +109,20 @@ fn test_filter_column() {
                 .values(),
             &bitmap
         );
+
+        if let Some(deleted) = test.deleted {
+            let iter = deleted.into_iter();
+            let bitmap: Bitmap = MutableBitmap::from_iter(iter).into();
+
+            let res = data_column.filter(&test.filter.neg());
+
+            assert_eq!(
+                res.as_any()
+                    .downcast_ref::<BooleanColumn>()
+                    .unwrap()
+                    .values(),
+                &bitmap
+            );
+        };
     }
 }

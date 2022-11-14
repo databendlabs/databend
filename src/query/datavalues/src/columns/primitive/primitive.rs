@@ -232,11 +232,9 @@ impl<T: PrimitiveType> Column for PrimitiveColumn<T> {
             length -= n;
             values = &values[n..];
         }
-
         const CHUNK_SIZE: usize = 64;
         let mut chunks = values.chunks_exact(CHUNK_SIZE);
         let mut mask_chunks = BitChunksExact::<u64>::new(slice, length);
-
         chunks
             .by_ref()
             .zip(mask_chunks.by_ref())
@@ -257,7 +255,6 @@ impl<T: PrimitiveType> Column for PrimitiveColumn<T> {
                     }
                 }
             });
-
         chunks
             .remainder()
             .iter()
