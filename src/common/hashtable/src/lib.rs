@@ -22,6 +22,7 @@
 mod container;
 mod hashtable;
 mod keys_ref;
+mod lookup_hashtable;
 mod stack_hashtable;
 mod table0;
 mod table1;
@@ -37,6 +38,10 @@ pub use traits::FastHash;
 pub use traits::HashtableLike;
 pub use traits::Keyable as HashtableKeyable;
 pub use traits::UnsizedKeyable as HashtableUnsizedKeyable;
+
+use crate::lookup_hashtable::LookupHashtable;
+use crate::lookup_hashtable::LookupTableIter;
+use crate::lookup_hashtable::LookupTableIterMut;
 
 pub type Hashed<K> = utils::Hashed<K>;
 
@@ -54,19 +59,8 @@ pub type StackHashSet<K, const N: usize = 16> = stack_hashtable::StackHashtable<
 pub type StackHashSetIter<'a, K> = stack_hashtable::StackHashtableIter<'a, K, ()>;
 pub type StackHashSetIterMut<'a, K> = stack_hashtable::StackHashtableIter<'a, K, ()>;
 
-pub type TwolevelHashMap<K, V> = twolevel_hashtable::TwolevelHashtable<K, V>;
-pub type TwolevelHashMapIter<'a, K, V> = twolevel_hashtable::TwolevelHashtableIter<'a, K, V>;
-pub type TwolevelHashMapIterMut<'a, K, V> = twolevel_hashtable::TwolevelHashtableIterMut<'a, K, V>;
-pub type TwolevelHashSet<K> = twolevel_hashtable::TwolevelHashtable<K, ()>;
-pub type TwolevelHashSetIter<'a, K> = twolevel_hashtable::TwolevelHashtableIter<'a, K, ()>;
-pub type TwolevelHashSetIterMut<'a, K> = twolevel_hashtable::TwolevelHashtableIterMut<'a, K, ()>;
-
-pub type HashMapKind<K, V> = twolevel_hashtable::HashtableKind<K, V>;
-pub type HashMapKindIter<'a, K, V> = twolevel_hashtable::HashtableKindIter<'a, K, V>;
-pub type HashMapKindIterMut<'a, K, V> = twolevel_hashtable::HashtableKindIterMut<'a, K, V>;
-pub type HashSetKind<K> = twolevel_hashtable::HashtableKind<K, ()>;
-pub type HashSetKindIter<'a, K> = twolevel_hashtable::HashtableKindIter<'a, K, ()>;
-pub type HashSetKindIterMut<'a, K> = twolevel_hashtable::HashtableKindIterMut<'a, K, ()>;
+pub type TwoLevelHashMap<Inner> = twolevel_hashtable::TwoLevelHashtable<Inner>;
+pub type TwoLevelHashMapIter<Inner> = twolevel_hashtable::TwoLevelHashtableIter<Inner>;
 
 pub type UnsizedHashMap<K, V> = unsized_hashtable::UnsizedHashtable<K, V>;
 pub type UnsizedHashMapIter<'a, K, V> = unsized_hashtable::UnsizedHashtableIter<'a, K, V>;
@@ -77,5 +71,10 @@ pub type UnsizedHashSetIterMut<'a, K> = unsized_hashtable::UnsizedHashtableIterM
 pub type UnsizedHashtableEntryRef<'a, K, V> = unsized_hashtable::UnsizedHashtableEntryRef<'a, K, V>;
 pub type UnsizedHashtableEntryMutRef<'a, K, V> =
     unsized_hashtable::UnsizedHashtableEntryMutRef<'a, K, V>;
+
+pub type LookupHashMap<K, const CAPACITY: usize, V> = LookupHashtable<K, CAPACITY, V>;
+pub type LookupHashMapIter<'a, K, const CAPACITY: usize, V> = LookupTableIter<'a, CAPACITY, K, V>;
+pub type LookupHashMapIterMut<'a, K, const CAPACITY: usize, V> =
+    LookupTableIterMut<'a, CAPACITY, K, V>;
 
 pub use keys_ref::KeysRef;

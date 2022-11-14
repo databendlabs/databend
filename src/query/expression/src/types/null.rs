@@ -152,6 +152,8 @@ impl ArgType for NullType {
         DataType::Null
     }
 
+    fn full_domain() -> Self::Domain {}
+
     fn create_builder(_capacity: usize, _generics: &GenericMap) -> Self::ColumnBuilder {
         0
     }

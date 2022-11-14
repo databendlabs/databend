@@ -2476,7 +2476,7 @@ raw expr       : to_yyyymm(to_date(18875_u16))
 checked expr   : to_yyyymm<Date>(to_date<Int64>(CAST(18875_u16 AS Int64)))
 optimized expr : 202109_u32
 output type    : UInt32
-output domain  : Unknown
+output domain  : {0..=4294967295}
 output         : 202109
 
 
@@ -2485,7 +2485,7 @@ raw expr       : to_yyyymmdd(to_date(18875_u16))
 checked expr   : to_yyyymmdd<Date>(to_date<Int64>(CAST(18875_u16 AS Int64)))
 optimized expr : 20210905_u32
 output type    : UInt32
-output domain  : Unknown
+output domain  : {0..=4294967295}
 output         : 20210905
 
 
@@ -2494,7 +2494,7 @@ raw expr       : to_yyyymmddhhmmss(to_date(18875_u16))
 checked expr   : to_yyyymmddhhmmss<Date>(to_date<Int64>(CAST(18875_u16 AS Int64)))
 optimized expr : 20210905000000_u64
 output type    : UInt64
-output domain  : Unknown
+output domain  : {0..=18446744073709551615}
 output         : 20210905000000
 
 
@@ -2503,7 +2503,7 @@ raw expr       : to_year(to_date(18875_u16))
 checked expr   : to_year<Date>(to_date<Int64>(CAST(18875_u16 AS Int64)))
 optimized expr : 2021_u16
 output type    : UInt16
-output domain  : Unknown
+output domain  : {0..=65535}
 output         : 2021
 
 
@@ -2512,7 +2512,7 @@ raw expr       : to_month(to_date(18875_u16))
 checked expr   : to_month<Date>(to_date<Int64>(CAST(18875_u16 AS Int64)))
 optimized expr : 9_u8
 output type    : UInt8
-output domain  : Unknown
+output domain  : {0..=255}
 output         : 9
 
 
@@ -2521,7 +2521,7 @@ raw expr       : to_day_of_year(to_date(18875_u16))
 checked expr   : to_day_of_year<Date>(to_date<Int64>(CAST(18875_u16 AS Int64)))
 optimized expr : 248_u16
 output type    : UInt16
-output domain  : Unknown
+output domain  : {0..=65535}
 output         : 248
 
 
@@ -2530,7 +2530,7 @@ raw expr       : to_day_of_month(to_date(18875_u16))
 checked expr   : to_day_of_month<Date>(to_date<Int64>(CAST(18875_u16 AS Int64)))
 optimized expr : 5_u8
 output type    : UInt8
-output domain  : Unknown
+output domain  : {0..=255}
 output         : 5
 
 
@@ -2539,7 +2539,7 @@ raw expr       : to_day_of_week(to_date(18875_u16))
 checked expr   : to_day_of_week<Date>(to_date<Int64>(CAST(18875_u16 AS Int64)))
 optimized expr : 7_u8
 output type    : UInt8
-output domain  : Unknown
+output domain  : {0..=255}
 output         : 7
 
 
@@ -2547,15 +2547,15 @@ ast            : to_yyyymm(a)
 raw expr       : to_yyyymm(ColumnRef(0)::Date)
 checked expr   : to_yyyymm<Date>(ColumnRef(0))
 evaluation:
-+--------+--------------+---------+
-|        | a            | Output  |
-+--------+--------------+---------+
-| Type   | Date         | UInt32  |
-| Domain | {-100..=100} | Unknown |
-| Row 0  | 1969-09-23   | 196909  |
-| Row 1  | 1970-01-01   | 197001  |
-| Row 2  | 1970-04-11   | 197004  |
-+--------+--------------+---------+
++--------+--------------+------------------+
+|        | a            | Output           |
++--------+--------------+------------------+
+| Type   | Date         | UInt32           |
+| Domain | {-100..=100} | {0..=4294967295} |
+| Row 0  | 1969-09-23   | 196909           |
+| Row 1  | 1970-01-01   | 197001           |
+| Row 2  | 1970-04-11   | 197004           |
++--------+--------------+------------------+
 evaluation (internal):
 +--------+----------------------------------+
 | Column | Data                             |
@@ -2569,15 +2569,15 @@ ast            : to_yyyymmdd(a)
 raw expr       : to_yyyymmdd(ColumnRef(0)::Date)
 checked expr   : to_yyyymmdd<Date>(ColumnRef(0))
 evaluation:
-+--------+--------------+----------+
-|        | a            | Output   |
-+--------+--------------+----------+
-| Type   | Date         | UInt32   |
-| Domain | {-100..=100} | Unknown  |
-| Row 0  | 1969-09-23   | 19690923 |
-| Row 1  | 1970-01-01   | 19700101 |
-| Row 2  | 1970-04-11   | 19700411 |
-+--------+--------------+----------+
++--------+--------------+------------------+
+|        | a            | Output           |
++--------+--------------+------------------+
+| Type   | Date         | UInt32           |
+| Domain | {-100..=100} | {0..=4294967295} |
+| Row 0  | 1969-09-23   | 19690923         |
+| Row 1  | 1970-01-01   | 19700101         |
+| Row 2  | 1970-04-11   | 19700411         |
++--------+--------------+------------------+
 evaluation (internal):
 +--------+----------------------------------------+
 | Column | Data                                   |
@@ -2591,15 +2591,15 @@ ast            : to_yyyymmddhhmmss(a)
 raw expr       : to_yyyymmddhhmmss(ColumnRef(0)::Date)
 checked expr   : to_yyyymmddhhmmss<Date>(ColumnRef(0))
 evaluation:
-+--------+--------------+----------------+
-|        | a            | Output         |
-+--------+--------------+----------------+
-| Type   | Date         | UInt64         |
-| Domain | {-100..=100} | Unknown        |
-| Row 0  | 1969-09-23   | 19690923000000 |
-| Row 1  | 1970-01-01   | 19700101000000 |
-| Row 2  | 1970-04-11   | 19700411000000 |
-+--------+--------------+----------------+
++--------+--------------+----------------------------+
+|        | a            | Output                     |
++--------+--------------+----------------------------+
+| Type   | Date         | UInt64                     |
+| Domain | {-100..=100} | {0..=18446744073709551615} |
+| Row 0  | 1969-09-23   | 19690923000000             |
+| Row 1  | 1970-01-01   | 19700101000000             |
+| Row 2  | 1970-04-11   | 19700411000000             |
++--------+--------------+----------------------------+
 evaluation (internal):
 +--------+----------------------------------------------------------+
 | Column | Data                                                     |
@@ -2613,15 +2613,15 @@ ast            : to_year(a)
 raw expr       : to_year(ColumnRef(0)::Date)
 checked expr   : to_year<Date>(ColumnRef(0))
 evaluation:
-+--------+--------------+---------+
-|        | a            | Output  |
-+--------+--------------+---------+
-| Type   | Date         | UInt16  |
-| Domain | {-100..=100} | Unknown |
-| Row 0  | 1969-09-23   | 1969    |
-| Row 1  | 1970-01-01   | 1970    |
-| Row 2  | 1970-04-11   | 1970    |
-+--------+--------------+---------+
++--------+--------------+-------------+
+|        | a            | Output      |
++--------+--------------+-------------+
+| Type   | Date         | UInt16      |
+| Domain | {-100..=100} | {0..=65535} |
+| Row 0  | 1969-09-23   | 1969        |
+| Row 1  | 1970-01-01   | 1970        |
+| Row 2  | 1970-04-11   | 1970        |
++--------+--------------+-------------+
 evaluation (internal):
 +--------+----------------------------+
 | Column | Data                       |
@@ -2635,15 +2635,15 @@ ast            : to_month(a)
 raw expr       : to_month(ColumnRef(0)::Date)
 checked expr   : to_month<Date>(ColumnRef(0))
 evaluation:
-+--------+--------------+---------+
-|        | a            | Output  |
-+--------+--------------+---------+
-| Type   | Date         | UInt8   |
-| Domain | {-100..=100} | Unknown |
-| Row 0  | 1969-09-23   | 9       |
-| Row 1  | 1970-01-01   | 1       |
-| Row 2  | 1970-04-11   | 4       |
-+--------+--------------+---------+
++--------+--------------+-----------+
+|        | a            | Output    |
++--------+--------------+-----------+
+| Type   | Date         | UInt8     |
+| Domain | {-100..=100} | {0..=255} |
+| Row 0  | 1969-09-23   | 9         |
+| Row 1  | 1970-01-01   | 1         |
+| Row 2  | 1970-04-11   | 4         |
++--------+--------------+-----------+
 evaluation (internal):
 +--------+------------------+
 | Column | Data             |
@@ -2657,15 +2657,15 @@ ast            : to_day_of_year(a)
 raw expr       : to_day_of_year(ColumnRef(0)::Date)
 checked expr   : to_day_of_year<Date>(ColumnRef(0))
 evaluation:
-+--------+--------------+---------+
-|        | a            | Output  |
-+--------+--------------+---------+
-| Type   | Date         | UInt16  |
-| Domain | {-100..=100} | Unknown |
-| Row 0  | 1969-09-23   | 266     |
-| Row 1  | 1970-01-01   | 1       |
-| Row 2  | 1970-04-11   | 101     |
-+--------+--------------+---------+
++--------+--------------+-------------+
+|        | a            | Output      |
++--------+--------------+-------------+
+| Type   | Date         | UInt16      |
+| Domain | {-100..=100} | {0..=65535} |
+| Row 0  | 1969-09-23   | 266         |
+| Row 1  | 1970-01-01   | 1           |
+| Row 2  | 1970-04-11   | 101         |
++--------+--------------+-------------+
 evaluation (internal):
 +--------+-----------------------+
 | Column | Data                  |
@@ -2679,15 +2679,15 @@ ast            : to_day_of_month(a)
 raw expr       : to_day_of_month(ColumnRef(0)::Date)
 checked expr   : to_day_of_month<Date>(ColumnRef(0))
 evaluation:
-+--------+--------------+---------+
-|        | a            | Output  |
-+--------+--------------+---------+
-| Type   | Date         | UInt8   |
-| Domain | {-100..=100} | Unknown |
-| Row 0  | 1969-09-23   | 23      |
-| Row 1  | 1970-01-01   | 1       |
-| Row 2  | 1970-04-11   | 11      |
-+--------+--------------+---------+
++--------+--------------+-----------+
+|        | a            | Output    |
++--------+--------------+-----------+
+| Type   | Date         | UInt8     |
+| Domain | {-100..=100} | {0..=255} |
+| Row 0  | 1969-09-23   | 23        |
+| Row 1  | 1970-01-01   | 1         |
+| Row 2  | 1970-04-11   | 11        |
++--------+--------------+-----------+
 evaluation (internal):
 +--------+--------------------+
 | Column | Data               |
@@ -2701,15 +2701,15 @@ ast            : to_day_of_week(a)
 raw expr       : to_day_of_week(ColumnRef(0)::Date)
 checked expr   : to_day_of_week<Date>(ColumnRef(0))
 evaluation:
-+--------+--------------+---------+
-|        | a            | Output  |
-+--------+--------------+---------+
-| Type   | Date         | UInt8   |
-| Domain | {-100..=100} | Unknown |
-| Row 0  | 1969-09-23   | 2       |
-| Row 1  | 1970-01-01   | 4       |
-| Row 2  | 1970-04-11   | 6       |
-+--------+--------------+---------+
++--------+--------------+-----------+
+|        | a            | Output    |
++--------+--------------+-----------+
+| Type   | Date         | UInt8     |
+| Domain | {-100..=100} | {0..=255} |
+| Row 0  | 1969-09-23   | 2         |
+| Row 1  | 1970-01-01   | 4         |
+| Row 2  | 1970-04-11   | 6         |
++--------+--------------+-----------+
 evaluation (internal):
 +--------+------------------+
 | Column | Data             |
@@ -2724,7 +2724,7 @@ raw expr       : to_yyyymm(to_timestamp(1630812366_u32))
 checked expr   : to_yyyymm<Timestamp>(to_timestamp<Int64>(CAST(1630812366_u32 AS Int64)))
 optimized expr : 202109_u32
 output type    : UInt32
-output domain  : Unknown
+output domain  : {0..=4294967295}
 output         : 202109
 
 
@@ -2733,7 +2733,7 @@ raw expr       : to_yyyymmdd(to_timestamp(1630812366_u32))
 checked expr   : to_yyyymmdd<Timestamp>(to_timestamp<Int64>(CAST(1630812366_u32 AS Int64)))
 optimized expr : 20210905_u32
 output type    : UInt32
-output domain  : Unknown
+output domain  : {0..=4294967295}
 output         : 20210905
 
 
@@ -2742,7 +2742,7 @@ raw expr       : to_yyyymmddhhmmss(to_timestamp(1630812366_u32))
 checked expr   : to_yyyymmddhhmmss<Timestamp>(to_timestamp<Int64>(CAST(1630812366_u32 AS Int64)))
 optimized expr : 20210905032606_u64
 output type    : UInt64
-output domain  : Unknown
+output domain  : {0..=18446744073709551615}
 output         : 20210905032606
 
 
@@ -2751,7 +2751,7 @@ raw expr       : to_year(to_timestamp(1630812366_u32))
 checked expr   : to_year<Timestamp>(to_timestamp<Int64>(CAST(1630812366_u32 AS Int64)))
 optimized expr : 2021_u16
 output type    : UInt16
-output domain  : Unknown
+output domain  : {0..=65535}
 output         : 2021
 
 
@@ -2760,7 +2760,7 @@ raw expr       : to_month(to_timestamp(1630812366_u32))
 checked expr   : to_month<Timestamp>(to_timestamp<Int64>(CAST(1630812366_u32 AS Int64)))
 optimized expr : 9_u8
 output type    : UInt8
-output domain  : Unknown
+output domain  : {0..=255}
 output         : 9
 
 
@@ -2769,7 +2769,7 @@ raw expr       : to_day_of_year(to_timestamp(1630812366_u32))
 checked expr   : to_day_of_year<Timestamp>(to_timestamp<Int64>(CAST(1630812366_u32 AS Int64)))
 optimized expr : 248_u16
 output type    : UInt16
-output domain  : Unknown
+output domain  : {0..=65535}
 output         : 248
 
 
@@ -2778,7 +2778,7 @@ raw expr       : to_day_of_month(to_timestamp(1630812366_u32))
 checked expr   : to_day_of_month<Timestamp>(to_timestamp<Int64>(CAST(1630812366_u32 AS Int64)))
 optimized expr : 5_u8
 output type    : UInt8
-output domain  : Unknown
+output domain  : {0..=255}
 output         : 5
 
 
@@ -2787,7 +2787,7 @@ raw expr       : to_day_of_week(to_timestamp(1630812366_u32))
 checked expr   : to_day_of_week<Timestamp>(to_timestamp<Int64>(CAST(1630812366_u32 AS Int64)))
 optimized expr : 7_u8
 output type    : UInt8
-output domain  : Unknown
+output domain  : {0..=255}
 output         : 7
 
 
@@ -2796,7 +2796,7 @@ raw expr       : to_hour(to_timestamp(1630812366_u32))
 checked expr   : to_hour<Timestamp>(to_timestamp<Int64>(CAST(1630812366_u32 AS Int64)))
 optimized expr : 3_u8
 output type    : UInt8
-output domain  : Unknown
+output domain  : {0..=255}
 output         : 3
 
 
@@ -2805,7 +2805,7 @@ raw expr       : to_minute(to_timestamp(1630812366_u32))
 checked expr   : to_minute<Timestamp>(to_timestamp<Int64>(CAST(1630812366_u32 AS Int64)))
 optimized expr : 26_u8
 output type    : UInt8
-output domain  : Unknown
+output domain  : {0..=255}
 output         : 26
 
 
@@ -2814,7 +2814,7 @@ raw expr       : to_second(to_timestamp(1630812366_u32))
 checked expr   : to_second<Timestamp>(to_timestamp<Int64>(CAST(1630812366_u32 AS Int64)))
 optimized expr : 6_u8
 output type    : UInt8
-output domain  : Unknown
+output domain  : {0..=255}
 output         : 6
 
 
@@ -2822,15 +2822,15 @@ ast            : to_yyyymm(a)
 raw expr       : to_yyyymm(ColumnRef(0)::Timestamp)
 checked expr   : to_yyyymm<Timestamp>(ColumnRef(0))
 evaluation:
-+--------+----------------------------+---------+
-|        | a                          | Output  |
-+--------+----------------------------+---------+
-| Type   | Timestamp                  | UInt32  |
-| Domain | {-100..=100}               | Unknown |
-| Row 0  | 1969-12-31 23:59:59.999900 | 196912  |
-| Row 1  | 1970-01-01 00:00:00.000000 | 197001  |
-| Row 2  | 1970-01-01 00:00:00.000100 | 197001  |
-+--------+----------------------------+---------+
++--------+----------------------------+------------------+
+|        | a                          | Output           |
++--------+----------------------------+------------------+
+| Type   | Timestamp                  | UInt32           |
+| Domain | {-100..=100}               | {0..=4294967295} |
+| Row 0  | 1969-12-31 23:59:59.999900 | 196912           |
+| Row 1  | 1970-01-01 00:00:00.000000 | 197001           |
+| Row 2  | 1970-01-01 00:00:00.000100 | 197001           |
++--------+----------------------------+------------------+
 evaluation (internal):
 +--------+----------------------------------+
 | Column | Data                             |
@@ -2844,15 +2844,15 @@ ast            : to_yyyymmdd(a)
 raw expr       : to_yyyymmdd(ColumnRef(0)::Timestamp)
 checked expr   : to_yyyymmdd<Timestamp>(ColumnRef(0))
 evaluation:
-+--------+----------------------------+----------+
-|        | a                          | Output   |
-+--------+----------------------------+----------+
-| Type   | Timestamp                  | UInt32   |
-| Domain | {-100..=100}               | Unknown  |
-| Row 0  | 1969-12-31 23:59:59.999900 | 19691231 |
-| Row 1  | 1970-01-01 00:00:00.000000 | 19700101 |
-| Row 2  | 1970-01-01 00:00:00.000100 | 19700101 |
-+--------+----------------------------+----------+
++--------+----------------------------+------------------+
+|        | a                          | Output           |
++--------+----------------------------+------------------+
+| Type   | Timestamp                  | UInt32           |
+| Domain | {-100..=100}               | {0..=4294967295} |
+| Row 0  | 1969-12-31 23:59:59.999900 | 19691231         |
+| Row 1  | 1970-01-01 00:00:00.000000 | 19700101         |
+| Row 2  | 1970-01-01 00:00:00.000100 | 19700101         |
++--------+----------------------------+------------------+
 evaluation (internal):
 +--------+----------------------------------------+
 | Column | Data                                   |
@@ -2866,15 +2866,15 @@ ast            : to_yyyymmddhhmmss(a)
 raw expr       : to_yyyymmddhhmmss(ColumnRef(0)::Timestamp)
 checked expr   : to_yyyymmddhhmmss<Timestamp>(ColumnRef(0))
 evaluation:
-+--------+----------------------------+----------------+
-|        | a                          | Output         |
-+--------+----------------------------+----------------+
-| Type   | Timestamp                  | UInt64         |
-| Domain | {-100..=100}               | Unknown        |
-| Row 0  | 1969-12-31 23:59:59.999900 | 19691231235959 |
-| Row 1  | 1970-01-01 00:00:00.000000 | 19700101000000 |
-| Row 2  | 1970-01-01 00:00:00.000100 | 19700101000000 |
-+--------+----------------------------+----------------+
++--------+----------------------------+----------------------------+
+|        | a                          | Output                     |
++--------+----------------------------+----------------------------+
+| Type   | Timestamp                  | UInt64                     |
+| Domain | {-100..=100}               | {0..=18446744073709551615} |
+| Row 0  | 1969-12-31 23:59:59.999900 | 19691231235959             |
+| Row 1  | 1970-01-01 00:00:00.000000 | 19700101000000             |
+| Row 2  | 1970-01-01 00:00:00.000100 | 19700101000000             |
++--------+----------------------------+----------------------------+
 evaluation (internal):
 +--------+----------------------------------------------------------+
 | Column | Data                                                     |
@@ -2888,15 +2888,15 @@ ast            : to_year(a)
 raw expr       : to_year(ColumnRef(0)::Timestamp)
 checked expr   : to_year<Timestamp>(ColumnRef(0))
 evaluation:
-+--------+----------------------------+---------+
-|        | a                          | Output  |
-+--------+----------------------------+---------+
-| Type   | Timestamp                  | UInt16  |
-| Domain | {-100..=100}               | Unknown |
-| Row 0  | 1969-12-31 23:59:59.999900 | 1969    |
-| Row 1  | 1970-01-01 00:00:00.000000 | 1970    |
-| Row 2  | 1970-01-01 00:00:00.000100 | 1970    |
-+--------+----------------------------+---------+
++--------+----------------------------+-------------+
+|        | a                          | Output      |
++--------+----------------------------+-------------+
+| Type   | Timestamp                  | UInt16      |
+| Domain | {-100..=100}               | {0..=65535} |
+| Row 0  | 1969-12-31 23:59:59.999900 | 1969        |
+| Row 1  | 1970-01-01 00:00:00.000000 | 1970        |
+| Row 2  | 1970-01-01 00:00:00.000100 | 1970        |
++--------+----------------------------+-------------+
 evaluation (internal):
 +--------+----------------------------+
 | Column | Data                       |
@@ -2910,15 +2910,15 @@ ast            : to_month(a)
 raw expr       : to_month(ColumnRef(0)::Timestamp)
 checked expr   : to_month<Timestamp>(ColumnRef(0))
 evaluation:
-+--------+----------------------------+---------+
-|        | a                          | Output  |
-+--------+----------------------------+---------+
-| Type   | Timestamp                  | UInt8   |
-| Domain | {-100..=100}               | Unknown |
-| Row 0  | 1969-12-31 23:59:59.999900 | 12      |
-| Row 1  | 1970-01-01 00:00:00.000000 | 1       |
-| Row 2  | 1970-01-01 00:00:00.000100 | 1       |
-+--------+----------------------------+---------+
++--------+----------------------------+-----------+
+|        | a                          | Output    |
++--------+----------------------------+-----------+
+| Type   | Timestamp                  | UInt8     |
+| Domain | {-100..=100}               | {0..=255} |
+| Row 0  | 1969-12-31 23:59:59.999900 | 12        |
+| Row 1  | 1970-01-01 00:00:00.000000 | 1         |
+| Row 2  | 1970-01-01 00:00:00.000100 | 1         |
++--------+----------------------------+-----------+
 evaluation (internal):
 +--------+-------------------+
 | Column | Data              |
@@ -2932,15 +2932,15 @@ ast            : to_day_of_year(a)
 raw expr       : to_day_of_year(ColumnRef(0)::Timestamp)
 checked expr   : to_day_of_year<Timestamp>(ColumnRef(0))
 evaluation:
-+--------+----------------------------+---------+
-|        | a                          | Output  |
-+--------+----------------------------+---------+
-| Type   | Timestamp                  | UInt16  |
-| Domain | {-100..=100}               | Unknown |
-| Row 0  | 1969-12-31 23:59:59.999900 | 365     |
-| Row 1  | 1970-01-01 00:00:00.000000 | 1       |
-| Row 2  | 1970-01-01 00:00:00.000100 | 1       |
-+--------+----------------------------+---------+
++--------+----------------------------+-------------+
+|        | a                          | Output      |
++--------+----------------------------+-------------+
+| Type   | Timestamp                  | UInt16      |
+| Domain | {-100..=100}               | {0..=65535} |
+| Row 0  | 1969-12-31 23:59:59.999900 | 365         |
+| Row 1  | 1970-01-01 00:00:00.000000 | 1           |
+| Row 2  | 1970-01-01 00:00:00.000100 | 1           |
++--------+----------------------------+-------------+
 evaluation (internal):
 +--------+---------------------+
 | Column | Data                |
@@ -2954,15 +2954,15 @@ ast            : to_day_of_month(a)
 raw expr       : to_day_of_month(ColumnRef(0)::Timestamp)
 checked expr   : to_day_of_month<Timestamp>(ColumnRef(0))
 evaluation:
-+--------+----------------------------+---------+
-|        | a                          | Output  |
-+--------+----------------------------+---------+
-| Type   | Timestamp                  | UInt8   |
-| Domain | {-100..=100}               | Unknown |
-| Row 0  | 1969-12-31 23:59:59.999900 | 31      |
-| Row 1  | 1970-01-01 00:00:00.000000 | 1       |
-| Row 2  | 1970-01-01 00:00:00.000100 | 1       |
-+--------+----------------------------+---------+
++--------+----------------------------+-----------+
+|        | a                          | Output    |
++--------+----------------------------+-----------+
+| Type   | Timestamp                  | UInt8     |
+| Domain | {-100..=100}               | {0..=255} |
+| Row 0  | 1969-12-31 23:59:59.999900 | 31        |
+| Row 1  | 1970-01-01 00:00:00.000000 | 1         |
+| Row 2  | 1970-01-01 00:00:00.000100 | 1         |
++--------+----------------------------+-----------+
 evaluation (internal):
 +--------+-------------------+
 | Column | Data              |
@@ -2976,15 +2976,15 @@ ast            : to_day_of_week(a)
 raw expr       : to_day_of_week(ColumnRef(0)::Timestamp)
 checked expr   : to_day_of_week<Timestamp>(ColumnRef(0))
 evaluation:
-+--------+----------------------------+---------+
-|        | a                          | Output  |
-+--------+----------------------------+---------+
-| Type   | Timestamp                  | UInt8   |
-| Domain | {-100..=100}               | Unknown |
-| Row 0  | 1969-12-31 23:59:59.999900 | 3       |
-| Row 1  | 1970-01-01 00:00:00.000000 | 4       |
-| Row 2  | 1970-01-01 00:00:00.000100 | 4       |
-+--------+----------------------------+---------+
++--------+----------------------------+-----------+
+|        | a                          | Output    |
++--------+----------------------------+-----------+
+| Type   | Timestamp                  | UInt8     |
+| Domain | {-100..=100}               | {0..=255} |
+| Row 0  | 1969-12-31 23:59:59.999900 | 3         |
+| Row 1  | 1970-01-01 00:00:00.000000 | 4         |
+| Row 2  | 1970-01-01 00:00:00.000100 | 4         |
++--------+----------------------------+-----------+
 evaluation (internal):
 +--------+------------------+
 | Column | Data             |
@@ -2998,15 +2998,15 @@ ast            : to_hour(a)
 raw expr       : to_hour(ColumnRef(0)::Timestamp)
 checked expr   : to_hour<Timestamp>(ColumnRef(0))
 evaluation:
-+--------+----------------------------+---------+
-|        | a                          | Output  |
-+--------+----------------------------+---------+
-| Type   | Timestamp                  | UInt8   |
-| Domain | {-100..=100}               | Unknown |
-| Row 0  | 1969-12-31 23:59:59.999900 | 23      |
-| Row 1  | 1970-01-01 00:00:00.000000 | 0       |
-| Row 2  | 1970-01-01 00:00:00.000100 | 0       |
-+--------+----------------------------+---------+
++--------+----------------------------+-----------+
+|        | a                          | Output    |
++--------+----------------------------+-----------+
+| Type   | Timestamp                  | UInt8     |
+| Domain | {-100..=100}               | {0..=255} |
+| Row 0  | 1969-12-31 23:59:59.999900 | 23        |
+| Row 1  | 1970-01-01 00:00:00.000000 | 0         |
+| Row 2  | 1970-01-01 00:00:00.000100 | 0         |
++--------+----------------------------+-----------+
 evaluation (internal):
 +--------+-------------------+
 | Column | Data              |
@@ -3020,15 +3020,15 @@ ast            : to_minute(a)
 raw expr       : to_minute(ColumnRef(0)::Timestamp)
 checked expr   : to_minute<Timestamp>(ColumnRef(0))
 evaluation:
-+--------+----------------------------+---------+
-|        | a                          | Output  |
-+--------+----------------------------+---------+
-| Type   | Timestamp                  | UInt8   |
-| Domain | {-100..=100}               | Unknown |
-| Row 0  | 1969-12-31 23:59:59.999900 | 59      |
-| Row 1  | 1970-01-01 00:00:00.000000 | 0       |
-| Row 2  | 1970-01-01 00:00:00.000100 | 0       |
-+--------+----------------------------+---------+
++--------+----------------------------+-----------+
+|        | a                          | Output    |
++--------+----------------------------+-----------+
+| Type   | Timestamp                  | UInt8     |
+| Domain | {-100..=100}               | {0..=255} |
+| Row 0  | 1969-12-31 23:59:59.999900 | 59        |
+| Row 1  | 1970-01-01 00:00:00.000000 | 0         |
+| Row 2  | 1970-01-01 00:00:00.000100 | 0         |
++--------+----------------------------+-----------+
 evaluation (internal):
 +--------+-------------------+
 | Column | Data              |
@@ -3042,15 +3042,15 @@ ast            : to_second(a)
 raw expr       : to_second(ColumnRef(0)::Timestamp)
 checked expr   : to_second<Timestamp>(ColumnRef(0))
 evaluation:
-+--------+----------------------------+---------+
-|        | a                          | Output  |
-+--------+----------------------------+---------+
-| Type   | Timestamp                  | UInt8   |
-| Domain | {-100..=100}               | Unknown |
-| Row 0  | 1969-12-31 23:59:59.999900 | 59      |
-| Row 1  | 1970-01-01 00:00:00.000000 | 0       |
-| Row 2  | 1970-01-01 00:00:00.000100 | 0       |
-+--------+----------------------------+---------+
++--------+----------------------------+-----------+
+|        | a                          | Output    |
++--------+----------------------------+-----------+
+| Type   | Timestamp                  | UInt8     |
+| Domain | {-100..=100}               | {0..=255} |
+| Row 0  | 1969-12-31 23:59:59.999900 | 59        |
+| Row 1  | 1970-01-01 00:00:00.000000 | 0         |
+| Row 2  | 1970-01-01 00:00:00.000100 | 0         |
++--------+----------------------------+-----------+
 evaluation (internal):
 +--------+-------------------+
 | Column | Data              |
@@ -3065,7 +3065,7 @@ raw expr       : to_start_of_second(to_timestamp(1630812366_u32))
 checked expr   : to_start_of_second<Timestamp>(to_timestamp<Int64>(CAST(1630812366_u32 AS Int64)))
 optimized expr : 1630812366000000
 output type    : Timestamp
-output domain  : Unknown
+output domain  : {-30610224000000000..=253402300799999999}
 output         : 2021-09-05 03:26:06.000000
 
 
@@ -3074,7 +3074,7 @@ raw expr       : to_start_of_minute(to_timestamp(1630812366_u32))
 checked expr   : to_start_of_minute<Timestamp>(to_timestamp<Int64>(CAST(1630812366_u32 AS Int64)))
 optimized expr : 1630812360000000
 output type    : Timestamp
-output domain  : Unknown
+output domain  : {-30610224000000000..=253402300799999999}
 output         : 2021-09-05 03:26:00.000000
 
 
@@ -3083,7 +3083,7 @@ raw expr       : to_start_of_five_minutes(to_timestamp(1630812366_u32))
 checked expr   : to_start_of_five_minutes<Timestamp>(to_timestamp<Int64>(CAST(1630812366_u32 AS Int64)))
 optimized expr : 1630812300000000
 output type    : Timestamp
-output domain  : Unknown
+output domain  : {-30610224000000000..=253402300799999999}
 output         : 2021-09-05 03:25:00.000000
 
 
@@ -3092,7 +3092,7 @@ raw expr       : to_start_of_ten_minutes(to_timestamp(1630812366_u32))
 checked expr   : to_start_of_ten_minutes<Timestamp>(to_timestamp<Int64>(CAST(1630812366_u32 AS Int64)))
 optimized expr : 1630812000000000
 output type    : Timestamp
-output domain  : Unknown
+output domain  : {-30610224000000000..=253402300799999999}
 output         : 2021-09-05 03:20:00.000000
 
 
@@ -3101,7 +3101,7 @@ raw expr       : to_start_of_fifteen_minutes(to_timestamp(1630812366_u32))
 checked expr   : to_start_of_fifteen_minutes<Timestamp>(to_timestamp<Int64>(CAST(1630812366_u32 AS Int64)))
 optimized expr : 1630811700000000
 output type    : Timestamp
-output domain  : Unknown
+output domain  : {-30610224000000000..=253402300799999999}
 output         : 2021-09-05 03:15:00.000000
 
 
@@ -3110,7 +3110,7 @@ raw expr       : to_start_of_hour(to_timestamp(1630812366_u32))
 checked expr   : to_start_of_hour<Timestamp>(to_timestamp<Int64>(CAST(1630812366_u32 AS Int64)))
 optimized expr : 1630810800000000
 output type    : Timestamp
-output domain  : Unknown
+output domain  : {-30610224000000000..=253402300799999999}
 output         : 2021-09-05 03:00:00.000000
 
 
@@ -3119,7 +3119,7 @@ raw expr       : to_start_of_day(to_timestamp(1630812366_u32))
 checked expr   : to_start_of_day<Timestamp>(to_timestamp<Int64>(CAST(1630812366_u32 AS Int64)))
 optimized expr : 1630800000000000
 output type    : Timestamp
-output domain  : Unknown
+output domain  : {-30610224000000000..=253402300799999999}
 output         : 2021-09-05 00:00:00.000000
 
 
@@ -3128,7 +3128,7 @@ raw expr       : time_slot(to_timestamp(1630812366_u32))
 checked expr   : time_slot<Timestamp>(to_timestamp<Int64>(CAST(1630812366_u32 AS Int64)))
 optimized expr : 1630810800000000
 output type    : Timestamp
-output domain  : Unknown
+output domain  : {-30610224000000000..=253402300799999999}
 output         : 2021-09-05 03:00:00.000000
 
 
@@ -3137,7 +3137,7 @@ raw expr       : to_monday(to_timestamp(1630812366_u32))
 checked expr   : to_monday<Timestamp>(to_timestamp<Int64>(CAST(1630812366_u32 AS Int64)))
 optimized expr : 18869
 output type    : Date
-output domain  : Unknown
+output domain  : {-354285..=2932896}
 output         : 2021-08-30
 
 
@@ -3146,7 +3146,7 @@ raw expr       : to_start_of_week(to_timestamp(1630812366_u32))
 checked expr   : to_start_of_week<Timestamp>(to_timestamp<Int64>(CAST(1630812366_u32 AS Int64)))
 optimized expr : 18875
 output type    : Date
-output domain  : Unknown
+output domain  : {-354285..=2932896}
 output         : 2021-09-05
 
 
@@ -3155,7 +3155,7 @@ raw expr       : to_start_of_week(to_timestamp(1630812366_u32))
 checked expr   : to_start_of_week<Timestamp>(to_timestamp<Int64>(CAST(1630812366_u32 AS Int64)))
 optimized expr : 18875
 output type    : Date
-output domain  : Unknown
+output domain  : {-354285..=2932896}
 output         : 2021-09-05
 
 
@@ -3164,7 +3164,7 @@ raw expr       : to_start_of_week(to_timestamp(1630812366_u32), 1_u8)
 checked expr   : to_start_of_week<Timestamp, Int64>(to_timestamp<Int64>(CAST(1630812366_u32 AS Int64)), CAST(1_u8 AS Int64))
 optimized expr : 18869
 output type    : Date
-output domain  : Unknown
+output domain  : {-354285..=2932896}
 output         : 2021-08-30
 
 
@@ -3173,7 +3173,7 @@ raw expr       : to_start_of_month(to_timestamp(1630812366_u32))
 checked expr   : to_start_of_month<Timestamp>(to_timestamp<Int64>(CAST(1630812366_u32 AS Int64)))
 optimized expr : 18871
 output type    : Date
-output domain  : Unknown
+output domain  : {-354285..=2932896}
 output         : 2021-09-01
 
 
@@ -3182,7 +3182,7 @@ raw expr       : to_start_of_quarter(to_timestamp(1630812366_u32))
 checked expr   : to_start_of_quarter<Timestamp>(to_timestamp<Int64>(CAST(1630812366_u32 AS Int64)))
 optimized expr : 18809
 output type    : Date
-output domain  : Unknown
+output domain  : {-354285..=2932896}
 output         : 2021-07-01
 
 
@@ -3191,7 +3191,7 @@ raw expr       : to_start_of_year(to_timestamp(1630812366_u32))
 checked expr   : to_start_of_year<Timestamp>(to_timestamp<Int64>(CAST(1630812366_u32 AS Int64)))
 optimized expr : 18628
 output type    : Date
-output domain  : Unknown
+output domain  : {-354285..=2932896}
 output         : 2021-01-01
 
 
@@ -3200,7 +3200,7 @@ raw expr       : to_start_of_iso_year(to_timestamp(1630812366_u32))
 checked expr   : to_start_of_iso_year<Timestamp>(to_timestamp<Int64>(CAST(1630812366_u32 AS Int64)))
 optimized expr : 18631
 output type    : Date
-output domain  : Unknown
+output domain  : {-354285..=2932896}
 output         : 2021-01-04
 
 
@@ -3209,7 +3209,7 @@ raw expr       : to_start_of_year(to_timestamp(1630812366_u32))
 checked expr   : to_start_of_year<Timestamp>(to_timestamp<Int64>(CAST(1630812366_u32 AS Int64)))
 optimized expr : 18628
 output type    : Date
-output domain  : Unknown
+output domain  : {-354285..=2932896}
 output         : 2021-01-01
 
 
@@ -3218,7 +3218,7 @@ raw expr       : to_start_of_quarter(to_timestamp(1630812366_u32))
 checked expr   : to_start_of_quarter<Timestamp>(to_timestamp<Int64>(CAST(1630812366_u32 AS Int64)))
 optimized expr : 18809
 output type    : Date
-output domain  : Unknown
+output domain  : {-354285..=2932896}
 output         : 2021-07-01
 
 
@@ -3227,7 +3227,7 @@ raw expr       : to_start_of_month(to_timestamp(1630812366_u32))
 checked expr   : to_start_of_month<Timestamp>(to_timestamp<Int64>(CAST(1630812366_u32 AS Int64)))
 optimized expr : 18871
 output type    : Date
-output domain  : Unknown
+output domain  : {-354285..=2932896}
 output         : 2021-09-01
 
 
@@ -3236,7 +3236,7 @@ raw expr       : to_start_of_day(to_timestamp(1630812366_u32))
 checked expr   : to_start_of_day<Timestamp>(to_timestamp<Int64>(CAST(1630812366_u32 AS Int64)))
 optimized expr : 1630800000000000
 output type    : Timestamp
-output domain  : Unknown
+output domain  : {-30610224000000000..=253402300799999999}
 output         : 2021-09-05 00:00:00.000000
 
 
@@ -3245,7 +3245,7 @@ raw expr       : to_start_of_hour(to_timestamp(1630812366_u32))
 checked expr   : to_start_of_hour<Timestamp>(to_timestamp<Int64>(CAST(1630812366_u32 AS Int64)))
 optimized expr : 1630810800000000
 output type    : Timestamp
-output domain  : Unknown
+output domain  : {-30610224000000000..=253402300799999999}
 output         : 2021-09-05 03:00:00.000000
 
 
@@ -3254,7 +3254,7 @@ raw expr       : to_start_of_minute(to_timestamp(1630812366_u32))
 checked expr   : to_start_of_minute<Timestamp>(to_timestamp<Int64>(CAST(1630812366_u32 AS Int64)))
 optimized expr : 1630812360000000
 output type    : Timestamp
-output domain  : Unknown
+output domain  : {-30610224000000000..=253402300799999999}
 output         : 2021-09-05 03:26:00.000000
 
 
@@ -3263,7 +3263,7 @@ raw expr       : to_start_of_second(to_timestamp(1630812366_u32))
 checked expr   : to_start_of_second<Timestamp>(to_timestamp<Int64>(CAST(1630812366_u32 AS Int64)))
 optimized expr : 1630812366000000
 output type    : Timestamp
-output domain  : Unknown
+output domain  : {-30610224000000000..=253402300799999999}
 output         : 2021-09-05 03:26:06.000000
 
 

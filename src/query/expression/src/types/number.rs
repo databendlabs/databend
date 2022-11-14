@@ -164,6 +164,13 @@ impl<Num: Number> ArgType for NumberType<Num> {
         DataType::Number(Num::data_type())
     }
 
+    fn full_domain() -> Self::Domain {
+        SimpleDomain {
+            min: Num::MIN,
+            max: Num::MAX,
+        }
+    }
+
     fn create_builder(capacity: usize, _generics: &GenericMap) -> Self::ColumnBuilder {
         Vec::with_capacity(capacity)
     }

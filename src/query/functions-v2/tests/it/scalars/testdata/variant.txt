@@ -153,7 +153,7 @@ raw expr       : try_parse_json("nuLL")
 checked expr   : try_parse_json<String>("nuLL")
 optimized expr : NULL
 output type    : Variant NULL
-output domain  : Unknown
+output domain  : Undefined ∪ {NULL}
 output         : NULL
 
 
@@ -162,7 +162,7 @@ raw expr       : try_parse_json("null")
 checked expr   : try_parse_json<String>("null")
 optimized expr : 0x2000000000000000
 output type    : Variant NULL
-output domain  : Unknown
+output domain  : Undefined ∪ {NULL}
 output         : null
 
 
@@ -171,7 +171,7 @@ raw expr       : try_parse_json("true")
 checked expr   : try_parse_json<String>("true")
 optimized expr : 0x2000000040000000
 output type    : Variant NULL
-output domain  : Unknown
+output domain  : Undefined ∪ {NULL}
 output         : true
 
 
@@ -180,7 +180,7 @@ raw expr       : try_parse_json("false")
 checked expr   : try_parse_json<String>("false")
 optimized expr : 0x2000000030000000
 output type    : Variant NULL
-output domain  : Unknown
+output domain  : Undefined ∪ {NULL}
 output         : false
 
 
@@ -189,7 +189,7 @@ raw expr       : try_parse_json("\"测试\"")
 checked expr   : try_parse_json<String>("\"测试\"")
 optimized expr : 0x2000000010000006e6b58be8af95
 output type    : Variant NULL
-output domain  : Unknown
+output domain  : Undefined ∪ {NULL}
 output         : "测试"
 
 
@@ -198,7 +198,7 @@ raw expr       : try_parse_json("1234")
 checked expr   : try_parse_json<String>("1234")
 optimized expr : 0x20000000200000035004d2
 output type    : Variant NULL
-output domain  : Unknown
+output domain  : Undefined ∪ {NULL}
 output         : 1234
 
 
@@ -207,7 +207,7 @@ raw expr       : try_parse_json("[1,2,3,4]")
 checked expr   : try_parse_json<String>("[1,2,3,4]")
 optimized expr : 0x80000004200000022000000220000002200000025001500250035004
 output type    : Variant NULL
-output domain  : Unknown
+output domain  : Undefined ∪ {NULL}
 output         : [1,2,3,4]
 
 
@@ -216,7 +216,7 @@ raw expr       : try_parse_json("{\"a\":\"b\",\"c\":\"d\"}")
 checked expr   : try_parse_json<String>("{\"a\":\"b\",\"c\":\"d\"}")
 optimized expr : 0x400000021000000110000001100000011000000161636264
 output type    : Variant NULL
-output domain  : Unknown
+output domain  : Undefined ∪ {NULL}
 output         : {"a":"b","c":"d"}
 
 
@@ -228,7 +228,7 @@ evaluation:
 |        | s                                                         | Output                |
 +--------+-----------------------------------------------------------+-----------------------+
 | Type   | String                                                    | Variant NULL          |
-| Domain | {"\"\\\\\\\"abc\\\\\\\"\""..="{\"k\":\"v\",\"a\":\"b\"}"} | Unknown               |
+| Domain | {"\"\\\\\\\"abc\\\\\\\"\""..="{\"k\":\"v\",\"a\":\"b\"}"} | Undefined ∪ {NULL}    |
 | Row 0  | "null"                                                    | null                  |
 | Row 1  | "true"                                                    | true                  |
 | Row 2  | "9223372036854775807"                                     | 9223372036854775807   |
@@ -253,16 +253,16 @@ ast            : try_parse_json(s)
 raw expr       : try_parse_json(ColumnRef(0)::String NULL)
 checked expr   : try_parse_json<String NULL>(ColumnRef(0))
 evaluation:
-+--------+-----------------------+--------------+
-|        | s                     | Output       |
-+--------+-----------------------+--------------+
-| Type   | String NULL           | Variant NULL |
-| Domain | {""..="ttt"} ∪ {NULL} | Unknown      |
-| Row 0  | "true"                | true         |
-| Row 1  | "ttt"                 | NULL         |
-| Row 2  | NULL                  | NULL         |
-| Row 3  | "1234"                | 1234         |
-+--------+-----------------------+--------------+
++--------+-----------------------+--------------------+
+|        | s                     | Output             |
++--------+-----------------------+--------------------+
+| Type   | String NULL           | Variant NULL       |
+| Domain | {""..="ttt"} ∪ {NULL} | Undefined ∪ {NULL} |
+| Row 0  | "true"                | true               |
+| Row 1  | "ttt"                 | NULL               |
+| Row 2  | NULL                  | NULL               |
+| Row 3  | "1234"                | 1234               |
++--------+-----------------------+--------------------+
 evaluation (internal):
 +--------+----------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                                           |
@@ -535,7 +535,7 @@ output         : NULL
 
 ast            : CAST(('a', 'b') AS VARIANT)['2']
 raw expr       : get(CAST(tuple("a", "b") AS Variant), "2")
-checked expr   : get<Variant, String>(CAST(tuple<String, String>("a", "b") AS Variant), "2")
+checked expr   : get<Variant, String>(to_variant<T0=(String, String)><T0>(tuple<String, String>("a", "b")), "2")
 optimized expr : 0x200000001000000162
 output type    : Variant NULL
 output domain  : Unknown
@@ -1085,18 +1085,18 @@ ast            : as_boolean(try_parse_json(s))
 raw expr       : as_boolean(try_parse_json(ColumnRef(0)::String))
 checked expr   : as_boolean<Variant>(CAST(try_parse_json<String>(ColumnRef(0)) AS Variant))
 evaluation:
-+--------+------------------------------+--------------+
-|        | s                            | Output       |
-+--------+------------------------------+--------------+
-| Type   | String                       | Boolean NULL |
-| Domain | {"\"ab\""..="{\"a\":\"b\"}"} | Unknown      |
-| Row 0  | "true"                       | true         |
-| Row 1  | "123"                        | NULL         |
-| Row 2  | "12.34"                      | NULL         |
-| Row 3  | "\"ab\""                     | NULL         |
-| Row 4  | "[1,2,3]"                    | NULL         |
-| Row 5  | "{\"a\":\"b\"}"              | NULL         |
-+--------+------------------------------+--------------+
++--------+------------------------------+------------------------+
+|        | s                            | Output                 |
++--------+------------------------------+------------------------+
+| Type   | String                       | Boolean NULL           |
+| Domain | {"\"ab\""..="{\"a\":\"b\"}"} | {FALSE, TRUE} ∪ {NULL} |
+| Row 0  | "true"                       | true                   |
+| Row 1  | "123"                        | NULL                   |
+| Row 2  | "12.34"                      | NULL                   |
+| Row 3  | "\"ab\""                     | NULL                   |
+| Row 4  | "[1,2,3]"                    | NULL                   |
+| Row 5  | "{\"a\":\"b\"}"              | NULL                   |
++--------+------------------------------+------------------------+
 evaluation (internal):
 +--------+-------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                          |
@@ -1135,18 +1135,18 @@ ast            : as_integer(try_parse_json(s))
 raw expr       : as_integer(try_parse_json(ColumnRef(0)::String))
 checked expr   : as_integer<Variant>(CAST(try_parse_json<String>(ColumnRef(0)) AS Variant))
 evaluation:
-+--------+------------------------------+------------+
-|        | s                            | Output     |
-+--------+------------------------------+------------+
-| Type   | String                       | Int64 NULL |
-| Domain | {"\"ab\""..="{\"a\":\"b\"}"} | Unknown    |
-| Row 0  | "true"                       | NULL       |
-| Row 1  | "123"                        | 123        |
-| Row 2  | "12.34"                      | NULL       |
-| Row 3  | "\"ab\""                     | NULL       |
-| Row 4  | "[1,2,3]"                    | NULL       |
-| Row 5  | "{\"a\":\"b\"}"              | NULL       |
-+--------+------------------------------+------------+
++--------+------------------------------+-------------------------------------------------------+
+|        | s                            | Output                                                |
++--------+------------------------------+-------------------------------------------------------+
+| Type   | String                       | Int64 NULL                                            |
+| Domain | {"\"ab\""..="{\"a\":\"b\"}"} | {-9223372036854775808..=9223372036854775807} ∪ {NULL} |
+| Row 0  | "true"                       | NULL                                                  |
+| Row 1  | "123"                        | 123                                                   |
+| Row 2  | "12.34"                      | NULL                                                  |
+| Row 3  | "\"ab\""                     | NULL                                                  |
+| Row 4  | "[1,2,3]"                    | NULL                                                  |
+| Row 5  | "{\"a\":\"b\"}"              | NULL                                                  |
++--------+------------------------------+-------------------------------------------------------+
 evaluation (internal):
 +--------+-------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                          |
@@ -1185,18 +1185,18 @@ ast            : as_float(try_parse_json(s))
 raw expr       : as_float(try_parse_json(ColumnRef(0)::String))
 checked expr   : as_float<Variant>(CAST(try_parse_json<String>(ColumnRef(0)) AS Variant))
 evaluation:
-+--------+------------------------------+--------------+
-|        | s                            | Output       |
-+--------+------------------------------+--------------+
-| Type   | String                       | Float64 NULL |
-| Domain | {"\"ab\""..="{\"a\":\"b\"}"} | Unknown      |
-| Row 0  | "true"                       | NULL         |
-| Row 1  | "123"                        | 123          |
-| Row 2  | "12.34"                      | 12.34        |
-| Row 3  | "\"ab\""                     | NULL         |
-| Row 4  | "[1,2,3]"                    | NULL         |
-| Row 5  | "{\"a\":\"b\"}"              | NULL         |
-+--------+------------------------------+--------------+
++--------+------------------------------+-----------------------+
+|        | s                            | Output                |
++--------+------------------------------+-----------------------+
+| Type   | String                       | Float64 NULL          |
+| Domain | {"\"ab\""..="{\"a\":\"b\"}"} | {-inf..=NaN} ∪ {NULL} |
+| Row 0  | "true"                       | NULL                  |
+| Row 1  | "123"                        | 123                   |
+| Row 2  | "12.34"                      | 12.34                 |
+| Row 3  | "\"ab\""                     | NULL                  |
+| Row 4  | "[1,2,3]"                    | NULL                  |
+| Row 5  | "{\"a\":\"b\"}"              | NULL                  |
++--------+------------------------------+-----------------------+
 evaluation (internal):
 +--------+-------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                          |
@@ -1235,18 +1235,18 @@ ast            : as_string(try_parse_json(s))
 raw expr       : as_string(try_parse_json(ColumnRef(0)::String))
 checked expr   : as_string<Variant>(CAST(try_parse_json<String>(ColumnRef(0)) AS Variant))
 evaluation:
-+--------+------------------------------+-------------+
-|        | s                            | Output      |
-+--------+------------------------------+-------------+
-| Type   | String                       | String NULL |
-| Domain | {"\"ab\""..="{\"a\":\"b\"}"} | Unknown     |
-| Row 0  | "true"                       | NULL        |
-| Row 1  | "123"                        | NULL        |
-| Row 2  | "12.34"                      | NULL        |
-| Row 3  | "\"ab\""                     | "ab"        |
-| Row 4  | "[1,2,3]"                    | NULL        |
-| Row 5  | "{\"a\":\"b\"}"              | NULL        |
-+--------+------------------------------+-------------+
++--------+------------------------------+-----------------+
+|        | s                            | Output          |
++--------+------------------------------+-----------------+
+| Type   | String                       | String NULL     |
+| Domain | {"\"ab\""..="{\"a\":\"b\"}"} | {""..} ∪ {NULL} |
+| Row 0  | "true"                       | NULL            |
+| Row 1  | "123"                        | NULL            |
+| Row 2  | "12.34"                      | NULL            |
+| Row 3  | "\"ab\""                     | "ab"            |
+| Row 4  | "[1,2,3]"                    | NULL            |
+| Row 5  | "{\"a\":\"b\"}"              | NULL            |
++--------+------------------------------+-----------------+
 evaluation (internal):
 +--------+-------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                          |
@@ -1285,18 +1285,18 @@ ast            : as_array(try_parse_json(s))
 raw expr       : as_array(try_parse_json(ColumnRef(0)::String))
 checked expr   : as_array<Variant>(CAST(try_parse_json<String>(ColumnRef(0)) AS Variant))
 evaluation:
-+--------+------------------------------+--------------+
-|        | s                            | Output       |
-+--------+------------------------------+--------------+
-| Type   | String                       | Variant NULL |
-| Domain | {"\"ab\""..="{\"a\":\"b\"}"} | Unknown      |
-| Row 0  | "true"                       | NULL         |
-| Row 1  | "123"                        | NULL         |
-| Row 2  | "12.34"                      | NULL         |
-| Row 3  | "\"ab\""                     | NULL         |
-| Row 4  | "[1,2,3]"                    | [1,2,3]      |
-| Row 5  | "{\"a\":\"b\"}"              | NULL         |
-+--------+------------------------------+--------------+
++--------+------------------------------+--------------------+
+|        | s                            | Output             |
++--------+------------------------------+--------------------+
+| Type   | String                       | Variant NULL       |
+| Domain | {"\"ab\""..="{\"a\":\"b\"}"} | Undefined ∪ {NULL} |
+| Row 0  | "true"                       | NULL               |
+| Row 1  | "123"                        | NULL               |
+| Row 2  | "12.34"                      | NULL               |
+| Row 3  | "\"ab\""                     | NULL               |
+| Row 4  | "[1,2,3]"                    | [1,2,3]            |
+| Row 5  | "{\"a\":\"b\"}"              | NULL               |
++--------+------------------------------+--------------------+
 evaluation (internal):
 +--------+------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                                       |
@@ -1335,18 +1335,18 @@ ast            : as_object(try_parse_json(s))
 raw expr       : as_object(try_parse_json(ColumnRef(0)::String))
 checked expr   : as_object<Variant>(CAST(try_parse_json<String>(ColumnRef(0)) AS Variant))
 evaluation:
-+--------+------------------------------+--------------+
-|        | s                            | Output       |
-+--------+------------------------------+--------------+
-| Type   | String                       | Variant NULL |
-| Domain | {"\"ab\""..="{\"a\":\"b\"}"} | Unknown      |
-| Row 0  | "true"                       | NULL         |
-| Row 1  | "123"                        | NULL         |
-| Row 2  | "12.34"                      | NULL         |
-| Row 3  | "\"ab\""                     | NULL         |
-| Row 4  | "[1,2,3]"                    | NULL         |
-| Row 5  | "{\"a\":\"b\"}"              | {"a":"b"}    |
-+--------+------------------------------+--------------+
++--------+------------------------------+--------------------+
+|        | s                            | Output             |
++--------+------------------------------+--------------------+
+| Type   | String                       | Variant NULL       |
+| Domain | {"\"ab\""..="{\"a\":\"b\"}"} | Undefined ∪ {NULL} |
+| Row 0  | "true"                       | NULL               |
+| Row 1  | "123"                        | NULL               |
+| Row 2  | "12.34"                      | NULL               |
+| Row 3  | "\"ab\""                     | NULL               |
+| Row 4  | "[1,2,3]"                    | NULL               |
+| Row 5  | "{\"a\":\"b\"}"              | {"a":"b"}          |
++--------+------------------------------+--------------------+
 evaluation (internal):
 +--------+-------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                      |

@@ -160,7 +160,8 @@ impl HiveTable {
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let push_downs = &plan.push_downs;
-        let block_reader = self.create_block_reader(push_downs)?;
+        let chunk_size = ctx.get_settings().get_hive_parquet_chunk_size()?;
+        let block_reader = self.create_block_reader(push_downs, chunk_size as usize)?;
 
         let parts_len = plan.parts.len();
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
@@ -257,6 +258,7 @@ impl HiveTable {
     fn create_block_reader(
         &self,
         push_downs: &Option<PushDownInfo>,
+        chunk_size: usize,
     ) -> Result<Arc<HiveParquetBlockReader>> {
         let projection = self.get_projections(push_downs)?;
         let (projection, partition_fields) =
@@ -275,6 +277,7 @@ impl HiveTable {
             table_schema,
             projection,
             hive_partition_filler,
+            chunk_size,
         )
     }
 
