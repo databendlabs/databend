@@ -75,6 +75,10 @@ impl CatalogManagerHelper for CatalogManager {
     }
 
     fn register_external_catalogs(&self, conf: &Config) -> Result<()> {
+        // currently, if the `hive` feature is not enabled
+        // the loop will quit after the first iteration.
+        // this is expected.
+        #[allow(clippy::never_loop)]
         for (name, ctl) in conf.catalogs.iter() {
             match ctl {
                 CatalogConfig::Hive(ctl) => {
