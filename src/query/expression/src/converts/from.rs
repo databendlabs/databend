@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+
 use common_datablocks::DataBlock;
 use common_datavalues::remove_nullable;
 use common_datavalues::ColumnRef;
@@ -156,11 +158,12 @@ pub fn convert_column(column: &ColumnRef, logical_type: &DataTypeImpl) -> Value<
 }
 
 pub fn from_block(datablock: &DataBlock) -> Chunk {
-    let columns: Vec<(Value<AnyType>, DataType)> = datablock
+    let columns: HashMap<usize, (Value<AnyType>, DataType)> = datablock
         .columns()
         .iter()
         .zip(datablock.schema().fields().iter())
         .map(|(c, f)| (convert_column(c, f.data_type()), from_type(f.data_type())))
+        .enumerate()
         .collect();
 
     Chunk::new(columns, datablock.num_rows())

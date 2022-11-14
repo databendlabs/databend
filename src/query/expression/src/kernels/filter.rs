@@ -70,11 +70,14 @@ impl Chunk {
                         let after_columns = self
                             .columns()
                             .iter()
-                            .map(|(value, ty)| match value {
-                                Value::Scalar(v) => (Value::Scalar(v.clone()), ty.clone()),
-                                Value::Column(c) => {
-                                    (Value::Column(Column::filter(c, &bitmap)), ty.clone())
+                            .map(|(col_id, (value, ty))| match value {
+                                Value::Scalar(v) => {
+                                    (*col_id, (Value::Scalar(v.clone()), ty.clone()))
                                 }
+                                Value::Column(c) => (
+                                    *col_id,
+                                    (Value::Column(Column::filter(c, &bitmap)), ty.clone()),
+                                ),
                             })
                             .collect();
                         Ok(Chunk::new(after_columns, self.num_rows() - count_zeros))

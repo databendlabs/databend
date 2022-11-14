@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::io::Write;
 
 use common_datavalues::ChunkRowIndex;
@@ -22,6 +23,7 @@ use common_expression::Chunk;
 use common_expression::Column;
 use common_expression::Value;
 use goldenfile::Mint;
+use itertools::Itertools;
 
 use crate::common::new_chunk;
 
@@ -127,7 +129,30 @@ pub fn test_pass() {
     );
 
     {
-        let mut chunks = Vec::with_capacity(3);
+        let chunks = (0..3)
+            .map(|i| {
+                let mut columns = HashMap::new();
+                columns.insert(
+                    0,
+                    (
+                        Value::Column(Column::from_data(vec![(i + 10) as u8; 4])),
+                        DataType::Number(NumberDataType::UInt8),
+                    ),
+                );
+                columns.insert(
+                    1,
+                    (
+                        Value::Column(Column::from_data_with_validity(
+                            vec![(i + 10) as u8; 4],
+                            vec![true, true, false, false],
+                        )),
+                        DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt8))),
+                    ),
+                );
+                Chunk::new(columns, 4)
+            })
+            .collect_vec();
+
         let indices = vec![
             (0, 0, 1),
             (1, 0, 1),
@@ -144,21 +169,6 @@ pub fn test_pass() {
             // repeat 3
             (0, 0, 3),
         ];
-        for i in 0..3 {
-            let mut columns = Vec::with_capacity(3);
-            columns.push((
-                Value::Column(Column::from_data(vec![(i + 10) as u8; 4])),
-                DataType::Number(NumberDataType::UInt8),
-            ));
-            columns.push((
-                Value::Column(Column::from_data_with_validity(
-                    vec![(i + 10) as u8; 4],
-                    vec![true, true, false, false],
-                )),
-                DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt8))),
-            ));
-            chunks.push(Chunk::new(columns, 4))
-        }
 
         run_take_chunk(&mut file, &indices, &chunks);
     }
