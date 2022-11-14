@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::types::Index;
 use common_exception::Result;
@@ -39,30 +41,34 @@ use crate::Value;
 
 impl Chunk {
     pub fn scatter<I: Index>(&self, indices: &[I], scatter_size: usize) -> Result<Vec<Self>> {
-        let scattered_columns: Vec<(Vec<Column>, &DataType)> = self
+        let scattered_columns: Vec<(usize, Vec<Column>, &DataType)> = self
             .columns()
             .iter()
-            .map(|(col, ty)| match col {
+            .map(|(col_id, (col, ty))| match col {
                 Value::Scalar(s) => (
+                    *col_id,
                     Column::scatter_repeat_scalars::<I>(s, ty, indices, scatter_size),
                     ty,
                 ),
-                Value::Column(c) => (c.scatter(ty, indices, scatter_size), ty),
+                Value::Column(c) => (*col_id, c.scatter(ty, indices, scatter_size), ty),
             })
             .collect();
 
         let scattered_chunks = (0..scatter_size)
             .map(|scatter_idx| {
-                let chunk_columns: Vec<(Value<AnyType>, DataType)> = scattered_columns
+                let chunk_columns: HashMap<usize, (Value<AnyType>, DataType)> = scattered_columns
                     .iter()
-                    .map(|(col_scatters, ty)| {
+                    .map(|(col_id, col_scatters, ty)| {
                         (
-                            Value::Column(col_scatters[scatter_idx].clone()),
-                            (*ty).clone(),
+                            *col_id,
+                            (
+                                Value::Column(col_scatters[scatter_idx].clone()),
+                                (*ty).clone(),
+                            ),
                         )
                     })
                     .collect();
-                let num_rows = chunk_columns[0].0.as_column().unwrap().len();
+                let num_rows = chunk_columns[&0].0.as_column().unwrap().len();
                 Chunk::new(chunk_columns, num_rows)
             })
             .collect();

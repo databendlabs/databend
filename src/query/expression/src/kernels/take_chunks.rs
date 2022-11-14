@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use itertools::Itertools;
+
 use crate::types::array::ArrayColumnBuilder;
 use crate::types::nullable::NullableColumn;
 use crate::types::number::NumberColumn;
@@ -33,67 +35,59 @@ use crate::ColumnBuilder;
 use crate::Scalar;
 use crate::Value;
 
-// chunk, row, size
+// Chunk idx, row idx in the chunk, times
 pub type ChunkRowIndex = (usize, usize, usize);
 
 impl Chunk {
     pub fn take_chunks(chunks: &[Chunk], indices: &[ChunkRowIndex]) -> Self {
         debug_assert!(!chunks.is_empty());
+        debug_assert!(chunks[0].num_columns() > 0);
+
         let result_size = indices.iter().map(|(_, _, c)| *c).sum();
 
-        let mut result_columns = Vec::with_capacity(chunks[0].num_columns());
+        let result_columns = chunks[0]
+            .columns()
+            .keys()
+            .map(|col_id| {
+                let columns = chunks
+                    .iter()
+                    .map(|chunk| (&chunk.columns()[col_id], chunk.num_rows()))
+                    .collect_vec();
 
-        for index in 0..chunks[0].num_columns() {
-            let mut columns = Vec::with_capacity(chunks.len());
+                let datatype = columns[0].0.1.clone();
+                if datatype.is_null() {
+                    return (*col_id, (Value::Scalar(Scalar::Null), datatype));
+                }
 
-            for chunk in chunks {
-                let c = &chunk.columns()[index];
-                columns.push((c.0.clone(), c.1.clone(), chunk.num_rows()));
-            }
+                // if they are all same scalars
+                if matches!(columns[0], ((Value::Scalar(_), _), _)) {
+                    let all_same_scalar = columns.iter().map(|((val, _), _)| val).all_equal();
+                    if all_same_scalar {
+                        return (*col_id, columns[0].0.clone());
+                    }
+                }
 
-            let datatype = columns[0].1.clone();
-            if datatype.is_null() {
-                result_columns.push((Value::Scalar(Scalar::Null), datatype));
-                continue;
-            }
-            // if they are all same scalars
-            if columns.iter().all(|c| matches!(&c.0, Value::Scalar(_))) {
-                let mut s = None;
-                let mut all_same_scalar = true;
-                for (value, _, _) in columns.iter() {
-                    if let Value::Scalar(scalar) = value {
-                        if s.is_none() {
-                            s = Some(scalar);
-                        } else if s != Some(scalar) {
-                            all_same_scalar = false;
+                let full_columns: Vec<Column> = columns
+                    .iter()
+                    .map(|((col, ty), rows)| match col {
+                        Value::Scalar(s) => {
+                            let builder = ColumnBuilder::repeat(&s.as_ref(), *rows, ty);
+                            builder.build()
                         }
-                    }
-                }
-                if all_same_scalar {
-                    result_columns.push((Value::Scalar(s.unwrap().clone()), datatype));
-                    continue;
-                }
-            }
+                        Value::Column(c) => c.clone(),
+                    })
+                    .collect();
 
-            let full_columns: Vec<Column> = columns
-                .iter()
-                .map(|(value, ty, rows)| match value {
-                    Value::Scalar(s) => {
-                        let builder = ColumnBuilder::repeat(&s.as_ref(), *rows, ty);
-                        builder.build()
-                    }
-                    Value::Column(c) => c.clone(),
-                })
-                .collect();
+                let column = Column::take_column_indices(
+                    &full_columns,
+                    datatype.clone(),
+                    indices,
+                    result_size,
+                );
 
-            let column = Column::take_column_indices(
-                &full_columns,
-                columns[0].1.clone(),
-                indices,
-                result_size,
-            );
-            result_columns.push((Value::Column(column), datatype));
-        }
+                (*col_id, (Value::Column(column), datatype))
+            })
+            .collect();
 
         Chunk::new(result_columns, result_size)
     }

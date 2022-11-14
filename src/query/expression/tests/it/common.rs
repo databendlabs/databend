@@ -21,7 +21,8 @@ pub fn new_chunk(columns: &[(DataType, Column)]) -> Chunk {
     let len = columns.get(0).map_or(1, |(_, c)| c.len());
     let columns = columns
         .iter()
-        .map(|(ty, c)| (Value::Column(c.clone()), ty.clone()))
+        .enumerate()
+        .map(|(col_id, (ty, c))| (col_id, (Value::Column(c.clone()), ty.clone())))
         .collect();
 
     Chunk::new(columns, len)

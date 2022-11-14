@@ -73,10 +73,12 @@ pub fn to_column(column: &Value<AnyType>, size: usize, data_type: &DataType) -> 
 }
 
 pub fn to_datablock(chunk: &Chunk, schema: DataSchemaRef) -> DataBlock {
-    let columns = chunk
-        .columns()
-        .iter()
-        .map(|(c, ty)| to_column(c, chunk.num_rows(), ty))
+    // Assume the chunk has col[0], col[1], ... till col[chunk.num_columns() - 1]
+    let columns = (0..chunk.columns().len())
+        .map(|col_id| {
+            let (col, ty) = &chunk.columns()[&col_id];
+            to_column(col, chunk.num_rows(), ty)
+        })
         .collect();
     DataBlock::create(schema, columns)
 }
