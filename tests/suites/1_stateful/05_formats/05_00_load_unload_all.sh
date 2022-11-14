@@ -24,7 +24,10 @@ insert_data() {
 
 test_format() {
 	echo "---${1}"
+	echo "truncate table test_load_unload" | $MYSQL_CLIENT_CONNECT
 	insert_data
+	rm -f /tmp/test_load_unload2.txt /tmp/test_load_unload.txt
+
 	curl -s -u root: -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}" \
 	-d "select * from test_load_unload FORMAT ${1}" > /tmp/test_load_unload.txt
 
@@ -40,8 +43,6 @@ test_format() {
 	-d "select * from test_load_unload FORMAT ${1}" > /tmp/test_load_unload2.txt
 
 	diff /tmp/test_load_unload2.txt /tmp/test_load_unload.txt
-	rm  /tmp/test_load_unload2.txt /tmp/test_load_unload.txt
-	echo "truncate table test_load_unload" | $MYSQL_CLIENT_CONNECT
 }
 
 test_format "CSV"

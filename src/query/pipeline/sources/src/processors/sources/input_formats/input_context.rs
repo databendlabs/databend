@@ -26,6 +26,7 @@ use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_formats::ClickhouseFormatType;
+use common_formats::FileFormatOptionsExt;
 use common_formats::FileFormatTypeExt;
 use common_io::prelude::FormatSettings;
 use common_meta_types::StageFileCompression;
@@ -111,6 +112,7 @@ pub struct InputContext {
     pub format: Arc<dyn InputFormat>,
     pub splits: Vec<Arc<SplitInfo>>,
 
+    pub format_options: FileFormatOptionsExt,
     // row format only
     pub rows_to_skip: usize,
     pub field_delimiter: u8,
@@ -215,6 +217,7 @@ impl InputContext {
             source: InputSource::Operator(operator),
             plan: InputPlan::CopyInto(plan),
             block_compact_thresholds,
+            format_options: file_format_options,
         })
     }
 
@@ -246,6 +249,7 @@ impl InputContext {
         let format = Self::get_input_format(&format_type)?;
         let format_settings = format_type.get_format_settings(&file_format_options, &settings)?;
         let read_batch_size = settings.get_input_read_buffer_size()? as usize;
+        let file_format_options_clone = file_format_options.clone();
         let field_delimiter = file_format_options.stage.field_delimiter;
         let field_delimiter = {
             if field_delimiter.is_empty() {
@@ -281,6 +285,7 @@ impl InputContext {
             plan: InputPlan::StreamingLoad(plan),
             splits: vec![],
             block_compact_thresholds,
+            format_options: file_format_options_clone,
         })
     }
 
