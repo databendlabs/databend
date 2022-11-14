@@ -56,6 +56,7 @@ enum State {
     },
 }
 
+// Gets a set of CompactTask, only merge but not split, generate a new segment.
 pub struct CompactTransform {
     state: State,
     input: Arc<InputPort>,
@@ -188,6 +189,7 @@ impl Processor for CompactTransform {
                 let mut new_metas = Vec::with_capacity(task_meta.tasks.len());
                 for task in &task_meta.tasks {
                     let metas = task.get_block_metas();
+                    // Only one block, no need to do a compact.
                     if metas.len() == 1 {
                         new_metas.push(metas[0].clone());
                         continue;

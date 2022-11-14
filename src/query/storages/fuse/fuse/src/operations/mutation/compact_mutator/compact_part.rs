@@ -24,7 +24,9 @@ use common_storages_table_meta::meta::SegmentInfo;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum CompactTask {
+    // Only one block, no need to do a compact.
     Trival(Arc<BlockMeta>),
+    // Multiple blocks, need to do compact.
     Normal(Vec<Arc<BlockMeta>>),
 }
 

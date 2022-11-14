@@ -60,6 +60,7 @@ enum State {
     Finish,
 }
 
+// Gathers all the segments and commits to the meta server.
 pub struct CompactSink {
     state: State,
 

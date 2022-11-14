@@ -29,6 +29,9 @@ use crate::operations::CompactOptions;
 use crate::statistics::reducers::merge_statistics_mut;
 use crate::TableContext;
 
+// BlockCompactMutator iterates through the segments and selects the segments
+// that need to be block compacted, set block_per_seg as the threshold,
+// select the segments whose block_count >= block_per_seg and block_count < 2*block_per_seg.
 #[derive(Clone)]
 pub struct BlockCompactMutator {
     pub ctx: Arc<dyn TableContext>,

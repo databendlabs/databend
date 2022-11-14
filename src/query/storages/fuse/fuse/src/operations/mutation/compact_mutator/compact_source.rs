@@ -42,6 +42,9 @@ enum State {
     Finish,
 }
 
+// Select the row_count >= min_rows_per_block or block_size >= max_bytes_per_block
+// as the perfect_block condition(N for short). CompactSource gets a set of segments,
+// iterates through the blocks, and finds the blocks >= N and < 2N as a CompactTask.
 pub struct CompactSource {
     state: State,
     ctx: Arc<dyn TableContext>,
