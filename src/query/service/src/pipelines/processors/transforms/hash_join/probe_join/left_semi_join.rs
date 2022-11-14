@@ -40,7 +40,7 @@ impl JoinHashTable {
         input: &DataBlock,
     ) -> Result<Vec<DataBlock>>
     where
-        IT: Iterator<Item = H::KeyRef<'a>> + TrustedLen,
+        IT: Iterator<Item = &'a H::Key> + TrustedLen,
         H::Key: 'a,
     {
         match self.hash_join_desc.other_predicate.is_none() {
@@ -64,7 +64,7 @@ impl JoinHashTable {
         input: &DataBlock,
     ) -> Result<Vec<DataBlock>>
     where
-        IT: Iterator<Item = H::KeyRef<'a>> + TrustedLen,
+        IT: Iterator<Item = &'a H::Key> + TrustedLen,
         H::Key: 'a,
     {
         match self.hash_join_desc.other_predicate.is_none() {
@@ -88,7 +88,7 @@ impl JoinHashTable {
         input: &DataBlock,
     ) -> Result<Vec<DataBlock>>
     where
-        IT: Iterator<Item = H::KeyRef<'a>> + TrustedLen,
+        IT: Iterator<Item = &'a H::Key> + TrustedLen,
         H::Key: 'a,
     {
         let valids = &probe_state.valids;
@@ -127,7 +127,7 @@ impl JoinHashTable {
         input: &DataBlock,
     ) -> Result<Vec<DataBlock>>
     where
-        IT: Iterator<Item = H::KeyRef<'a>> + TrustedLen,
+        IT: Iterator<Item = &'a H::Key> + TrustedLen,
         H::Key: 'a,
     {
         let valids = &probe_state.valids;

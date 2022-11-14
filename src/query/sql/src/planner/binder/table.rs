@@ -26,7 +26,7 @@ use common_ast::parser::tokenize_sql;
 use common_ast::Backtrace;
 use common_ast::Dialect;
 use common_ast::DisplayError;
-use common_catalog::catalog::CATALOG_DEFAULT;
+use common_catalog::catalog_kind::CATALOG_DEFAULT;
 use common_catalog::table::NavigationPoint;
 use common_catalog::table::Table;
 use common_catalog::table_function::TableFunction;
@@ -97,8 +97,8 @@ impl<'a> Binder {
             } => {
                 let table_name = normalize_identifier(table, &self.name_resolution_ctx).name;
                 // Check and bind common table expression
-                if let Some(cte_info) = bind_context.ctes_map.read().get(&table_name) {
-                    return self.bind_cte(bind_context, &table_name, alias, cte_info);
+                if let Some(cte_info) = bind_context.ctes_map.get(&table_name) {
+                    return self.bind_cte(bind_context, &table_name, alias, &cte_info);
                 }
                 // Get catalog name
                 let catalog = catalog

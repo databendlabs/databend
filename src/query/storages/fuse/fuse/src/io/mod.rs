@@ -34,6 +34,5 @@ pub use write::write_block;
 pub use write::write_data;
 pub use write::write_meta;
 pub use write::write_meta_bytes;
-pub use write::BlockCompactor;
 pub use write::BlockWriter;
 pub use write::SegmentWriter;

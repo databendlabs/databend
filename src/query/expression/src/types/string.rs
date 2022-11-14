@@ -146,6 +146,13 @@ impl ArgType for StringType {
         DataType::String
     }
 
+    fn full_domain() -> Self::Domain {
+        StringDomain {
+            min: vec![],
+            max: None,
+        }
+    }
+
     fn create_builder(capacity: usize, _: &GenericMap) -> Self::ColumnBuilder {
         StringColumnBuilder::with_capacity(capacity, 0)
     }
@@ -333,6 +340,18 @@ impl StringColumnBuilder {
         let end = *self.offsets.get_unchecked(row + 1) as usize;
         // soundness: the invariant of the struct
         self.data.get_unchecked(start..end)
+    }
+
+    pub fn pop(&mut self) -> Option<Vec<u8>> {
+        if self.len() > 0 {
+            let index = self.len() - 1;
+            let start = unsafe { *self.offsets.get_unchecked(index) as usize };
+            self.offsets.pop();
+            let val = self.data.split_off(start);
+            Some(val)
+        } else {
+            None
+        }
     }
 }
 

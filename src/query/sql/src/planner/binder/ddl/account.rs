@@ -23,15 +23,15 @@ use common_meta_types::AuthInfo;
 use common_meta_types::GrantObject;
 use common_meta_types::UserOption;
 use common_meta_types::UserPrivilegeSet;
-use common_planner::plans::AlterUserPlan;
-use common_planner::plans::CreateUserPlan;
-use common_planner::plans::GrantPrivilegePlan;
-use common_planner::plans::GrantRolePlan;
-use common_planner::plans::RevokePrivilegePlan;
-use common_planner::plans::RevokeRolePlan;
 use common_users::UserApiProvider;
 
+use crate::plans::AlterUserPlan;
+use crate::plans::CreateUserPlan;
+use crate::plans::GrantPrivilegePlan;
+use crate::plans::GrantRolePlan;
 use crate::plans::Plan;
+use crate::plans::RevokePrivilegePlan;
+use crate::plans::RevokeRolePlan;
 use crate::Binder;
 
 impl<'a> Binder {

@@ -18,9 +18,6 @@ use common_exception::Result;
 use common_io::prelude::FormatSettings;
 use serde_json::Value;
 
-use crate::serializations::write_csv_string;
-use crate::serializations::write_escaped_string;
-use crate::serializations::write_json_string;
 use crate::ColumnRef;
 use crate::DateConverter;
 use crate::PrimitiveColumn;
@@ -54,62 +51,6 @@ impl<'a> TimestampSerializer<'a> {
 }
 
 impl<'a> TypeSerializer<'a> for TimestampSerializer<'a> {
-    fn write_field_values(
-        &self,
-        row_index: usize,
-        buf: &mut Vec<u8>,
-        format: &FormatSettings,
-        in_nested: bool,
-    ) {
-        let s = self.to_string_micro(row_index, &format.timezone);
-        if in_nested {
-            buf.push(format.nested.quote_char);
-        }
-        write_escaped_string(s.as_bytes(), buf, format.nested.quote_char);
-        if in_nested {
-            buf.push(format.nested.quote_char);
-        }
-    }
-
-    fn write_field_tsv(
-        &self,
-        row_index: usize,
-        buf: &mut Vec<u8>,
-        format: &FormatSettings,
-        in_nested: bool,
-    ) {
-        let s = self.to_string_micro(row_index, &format.timezone);
-        if in_nested {
-            buf.push(format.quote_char);
-        }
-        write_escaped_string(s.as_bytes(), buf, format.quote_char);
-        if in_nested {
-            buf.push(format.quote_char);
-        }
-    }
-
-    fn write_field_csv(&self, row_index: usize, buf: &mut Vec<u8>, format: &FormatSettings) {
-        let s = self.to_string_micro(row_index, &format.timezone);
-        write_csv_string(s.as_bytes(), buf, format.quote_char);
-    }
-
-    fn write_field_json(
-        &self,
-        row_index: usize,
-        buf: &mut Vec<u8>,
-        format: &FormatSettings,
-        quote: bool,
-    ) {
-        let s = self.to_string_micro(row_index, &format.timezone);
-        if quote {
-            buf.push(b'\"');
-        }
-        write_json_string(s.as_bytes(), buf, format);
-        if quote {
-            buf.push(b'\"');
-        }
-    }
-
     fn serialize_json_values(&self, format: &FormatSettings) -> Result<Vec<Value>> {
         let result: Vec<Value> = self
             .values

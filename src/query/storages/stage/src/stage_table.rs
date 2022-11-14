@@ -13,12 +13,21 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::path::Path;
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 
 use common_base::base::uuid;
+use common_catalog::plan::DataSourcePlan;
+use common_catalog::plan::PartInfo;
+use common_catalog::plan::PartStatistics;
+use common_catalog::plan::Partitions;
+use common_catalog::plan::PushDownInfo;
+use common_catalog::plan::StageTableInfo;
+use common_catalog::table::AppendMode;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
+use common_datablocks::BlockCompactThresholds;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -26,21 +35,16 @@ use common_meta_app::schema::TableInfo;
 use common_meta_types::StageType;
 use common_meta_types::UserStageInfo;
 use common_pipeline_core::Pipeline;
-use common_pipeline_sources::processors::sources::input_formats::InputContext;
-use common_pipeline_transforms::processors::transforms::TransformLimit;
-use common_planner::extras::Extras;
-use common_planner::extras::Statistics;
-use common_planner::stage_table::StageTableInfo;
-use common_planner::Partitions;
-use common_planner::ReadDataSourcePlan;
 use common_storage::init_operator;
 use common_storages_table_meta::meta::ColumnNDVs;
 use opendal::layers::SubdirLayer;
 use opendal::Operator;
 use parking_lot::Mutex;
-use tracing::debug;
+use regex::Regex;
 
+use crate::list_file;
 use crate::stage_table_sink::StageTableSink;
+use crate::stat_file;
 
 /// TODO: we need to track the data metrics in stage table.
 pub struct StageTable {
@@ -49,7 +53,7 @@ pub struct StageTable {
     // But the Table trait need it:
     // fn get_table_info(&self) -> &TableInfo).
     table_info_placeholder: TableInfo,
-    input_context: Mutex<Option<Arc<InputContext>>>,
+    block_compact_threshold: Mutex<Option<BlockCompactThresholds>>,
 }
 
 impl StageTable {
@@ -59,13 +63,8 @@ impl StageTable {
         Ok(Arc::new(Self {
             table_info,
             table_info_placeholder,
-            input_context: Default::default(),
+            block_compact_threshold: Default::default(),
         }))
-    }
-
-    fn get_input_context(&self) -> Option<Arc<InputContext>> {
-        let guard = self.input_context.lock();
-        guard.clone()
     }
 
     /// Get operator with correctly prefix.
@@ -93,47 +92,64 @@ impl Table for StageTable {
     async fn read_partitions(
         &self,
         ctx: Arc<dyn TableContext>,
-        _push_downs: Option<Extras>,
-    ) -> Result<(Statistics, Partitions)> {
-        let operator = StageTable::get_op(&ctx, &self.table_info.stage_info)?;
-        let input_ctx = Arc::new(
-            InputContext::try_create_from_copy(
-                operator,
-                ctx.get_settings().clone(),
-                self.table_info.schema.clone(),
-                self.table_info.stage_info.clone(),
-                self.table_info.files.clone(),
-                ctx.get_scan_progress(),
-            )
-            .await?,
-        );
-        debug!("copy into {:?}", input_ctx);
-        let mut guard = self.input_context.lock();
-        *guard = Some(input_ctx);
-        Ok((Statistics::default(), vec![]))
+        push_downs: Option<PushDownInfo>,
+    ) -> Result<(PartStatistics, Partitions)> {
+        let pushdown = push_downs.ok_or_else(|| {
+            ErrorCode::Internal("stage_table: pushdown cannot be None(It's a bug)")
+        })?;
+        let stage_info = pushdown.stage.ok_or_else(|| {
+            ErrorCode::Internal("stage_table: pushdown.stage cannot be None(It's a bug)")
+        })?;
+
+        // User set the files.
+        let files = stage_info.files;
+
+        // 1. List all files.
+        let path = &stage_info.path;
+        let mut all_files = if !files.is_empty() {
+            let mut res = vec![];
+            for file in files {
+                // Here we add the path to the file: /path/to/path/file1.
+                let new_path = Path::new(path).join(file).to_string_lossy().to_string();
+                let info = stat_file(ctx.clone(), &new_path, &stage_info.user_stage_info).await?;
+                res.push(info);
+            }
+            res
+        } else {
+            list_file(ctx.clone(), path, &stage_info.user_stage_info).await?
+        };
+
+        // 2. Retain pattern match files.
+        {
+            let pattern = &stage_info.pattern;
+            if !pattern.is_empty() {
+                let regex = Regex::new(pattern).map_err(|e| {
+                    ErrorCode::SyntaxException(format!(
+                        "Pattern format invalid, got:{}, error:{:?}",
+                        pattern, e
+                    ))
+                })?;
+                all_files.retain(|v| regex.is_match(&v.path));
+            }
+        }
+
+        let partitions = all_files
+            .iter()
+            .map(|v| {
+                let part_info: Box<dyn PartInfo> = Box::new(v.clone());
+                Arc::new(part_info)
+            })
+            .collect::<Vec<_>>();
+        Ok((PartStatistics::default(), partitions))
     }
 
     fn read_data(
         &self,
-        _ctx: Arc<dyn TableContext>,
-        _plan: &ReadDataSourcePlan,
+        ctx: Arc<dyn TableContext>,
+        plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
-        let input_ctx = self.get_input_context().unwrap();
-        input_ctx.format.exec_copy(input_ctx.clone(), pipeline)?;
-
-        let limit = self.table_info.stage_info.copy_options.size_limit;
-        if limit > 0 {
-            pipeline.resize(1)?;
-            pipeline.add_transform(|transform_input_port, transform_output_port| {
-                TransformLimit::try_create(
-                    Some(limit),
-                    0,
-                    transform_input_port,
-                    transform_output_port,
-                )
-            })?;
-        }
+        let (_, _, _) = (ctx, plan, pipeline);
         Ok(())
     }
 
@@ -141,10 +157,11 @@ impl Table for StageTable {
         &self,
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
+        _: AppendMode,
         _: bool,
     ) -> Result<()> {
-        let single = self.table_info.stage_info.copy_options.single;
-        let op = StageTable::get_op(&ctx, &self.table_info.stage_info)?;
+        let single = self.table_info.user_stage_info.copy_options.single;
+        let op = StageTable::get_op(&ctx, &self.table_info.user_stage_info)?;
 
         let uuid = uuid::Uuid::new_v4().to_string();
         let group_id = AtomicUsize::new(0);
@@ -199,5 +216,15 @@ impl Table for StageTable {
         Err(ErrorCode::Unimplemented(
             "S3 external table truncate() unimplemented yet!",
         ))
+    }
+
+    fn get_block_compact_thresholds(&self) -> BlockCompactThresholds {
+        let guard = self.block_compact_threshold.lock();
+        (*guard).expect("must success")
+    }
+
+    fn set_block_compact_thresholds(&self, thresholds: BlockCompactThresholds) {
+        let mut guard = self.block_compact_threshold.lock();
+        (*guard) = Some(thresholds)
     }
 }

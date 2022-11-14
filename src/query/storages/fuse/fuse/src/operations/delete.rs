@@ -14,18 +14,17 @@
 
 use std::sync::Arc;
 
+use common_catalog::plan::Expression;
+use common_catalog::plan::Projection;
+use common_catalog::plan::PushDownInfo;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_datavalues::DataField;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planner::extras::Extras;
-use common_planner::plans::DeletePlan;
-use common_planner::Expression;
 use common_sql::ExpressionParser;
 use common_storages_table_meta::meta::TableSnapshot;
 use common_storages_table_meta::meta::TableSnapshotStatistics;
-use tracing::debug;
 use uuid::Uuid;
 
 use crate::operations::mutation::delete_from_block;
@@ -36,7 +35,12 @@ use crate::statistics::ClusterStatsGenerator;
 use crate::FuseTable;
 
 impl FuseTable {
-    pub async fn do_delete(&self, ctx: Arc<dyn TableContext>, plan: &DeletePlan) -> Result<()> {
+    pub async fn do_delete(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        projection: &Projection,
+        selection: &Option<String>,
+    ) -> Result<()> {
         let snapshot_opt = self.read_table_snapshot().await?;
         let prev_statistics_opt = self
             .read_table_snapshot_statistics(snapshot_opt.as_ref())
@@ -61,7 +65,7 @@ impl FuseTable {
         };
 
         // check if unconditional deletion
-        if let Some(filter) = &plan.selection {
+        if let Some(filter) = &selection {
             let table_meta = Arc::new(self.clone());
             let physical_scalars = ExpressionParser::parse_exprs(table_meta, filter)?;
             if physical_scalars.is_empty() {
@@ -74,16 +78,12 @@ impl FuseTable {
                 &snapshot,
                 &prev_statistics,
                 &physical_scalars[0],
-                plan,
+                projection,
             )
             .await
         } else {
             // deleting the whole table... just a truncate
             let purge = false;
-            debug!(
-                "unconditionally delete from table, {}.{}.{}",
-                plan.catalog_name, plan.database_name, plan.table_name
-            );
             self.do_truncate(ctx.clone(), purge).await
         }
     }
@@ -94,7 +94,7 @@ impl FuseTable {
         snapshot: &Arc<TableSnapshot>,
         statistics: &Arc<TableSnapshotStatistics>,
         filter: &Expression,
-        plan: &DeletePlan,
+        projection: &Projection,
     ) -> Result<()> {
         let cluster_stats_gen = self.cluster_stats_gen()?;
         let mut deletion_collector = DeletionMutator::try_create(
@@ -107,12 +107,13 @@ impl FuseTable {
         )?;
         let schema = self.table_info.schema();
         // TODO refine pruner
-        let extras = Extras {
-            projection: Some(plan.projection.clone()),
+        let extras = PushDownInfo {
+            projection: Some(projection.clone()),
             filters: vec![filter.clone()],
             prewhere: None, // TBD: if delete rows need prewhere optimization
             limit: None,
             order_by: vec![],
+            stage: None,
         };
         let push_downs = Some(extras);
         let segments_location = snapshot.segments.clone();
@@ -128,7 +129,7 @@ impl FuseTable {
         // delete block one by one.
         // this could be executed in a distributed manner (till new planner, pipeline settled down)
         for (seg_idx, block_meta) in block_metas {
-            let proj = plan.projection.clone();
+            let proj = projection.clone();
             match delete_from_block(self, &block_meta, &ctx, proj, filter).await? {
                 Deletion::NothingDeleted => {
                     // false positive, we should keep the whole block
@@ -200,7 +201,7 @@ impl FuseTable {
             cluster_key_index,
             extra_key_index,
             0,
-            self.get_block_compactor(),
+            self.get_block_compact_thresholds(),
         ))
     }
 }

@@ -30,7 +30,7 @@ use crate::meta::Statistics;
 use crate::meta::Versioned;
 
 /// A segment comprises one or more blocks
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub struct SegmentInfo {
     /// format version
     format_version: FormatVersion,
@@ -42,7 +42,7 @@ pub struct SegmentInfo {
 
 /// Meta information of a block
 /// Part of and kept inside the [SegmentInfo]
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct BlockMeta {
     pub row_count: u64,
     pub block_size: u64,
@@ -64,7 +64,7 @@ pub struct BlockMeta {
     /// `Lz4` is merely for backward compatibility, it will NO longer be
     /// used in the write path.
     #[serde(default = "Compression::legacy")]
-    compression: Compression,
+    pub compression: Compression,
 }
 
 impl BlockMeta {

@@ -14,17 +14,19 @@
 
 use std::sync::Arc;
 
+use common_catalog::plan::DataSourceInfo;
+use common_catalog::plan::DataSourcePlan;
 use common_catalog::table::CompactTarget;
 use common_exception::Result;
 use common_pipeline_core::Pipeline;
+use common_pipeline_transforms::processors::transforms::BlockCompactor;
 use common_pipeline_transforms::processors::transforms::TransformCompact;
-use common_planner::ReadDataSourcePlan;
-use common_planner::SourceInfo;
 use common_storages_table_meta::meta::TableSnapshot;
 
 use super::FuseTableSink;
 use crate::operations::mutation::SegmentCompactMutator;
 use crate::operations::FullCompactMutator;
+use crate::operations::ReadDataKind;
 use crate::statistics::ClusterStatsGenerator;
 use crate::FuseTable;
 use crate::Table;
@@ -101,13 +103,13 @@ impl FuseTable {
         pipeline: &mut Pipeline,
         options: CompactOptions,
     ) -> Result<Option<Box<dyn TableMutator>>> {
-        let block_compactor = self.get_block_compactor();
+        let block_compact_thresholds = self.get_block_compact_thresholds();
 
         let block_per_seg = options.block_per_seg;
         let mut mutator = FullCompactMutator::try_create(
             ctx.clone(),
             options,
-            block_compactor.clone(),
+            block_compact_thresholds,
             self.meta_location_generator().clone(),
             self.cluster_key_meta.is_some(),
             self.operator.clone(),
@@ -127,9 +129,9 @@ impl FuseTable {
         )?;
         let table_info = self.get_table_info();
         let description = statistics.get_description(table_info);
-        let plan = ReadDataSourcePlan {
+        let plan = DataSourcePlan {
             catalog: table_info.catalog().to_string(),
-            source_info: SourceInfo::TableSource(table_info.clone()),
+            source_info: DataSourceInfo::TableSource(table_info.clone()),
             scan_fields: None,
             parts,
             statistics,
@@ -140,15 +142,19 @@ impl FuseTable {
 
         ctx.try_set_partitions(plan.parts.clone())?;
 
-        // It's easy to OOM if we set the max_io_request more than the max threads.
-        let max_threads = ctx.get_settings().get_max_threads()? as usize;
-        self.do_read_data(ctx.clone(), &plan, pipeline, max_threads)?;
+        // ReadDataKind to avoid OOM.
+        self.do_read_data(
+            ctx.clone(),
+            &plan,
+            pipeline,
+            ReadDataKind::OptimizeDataLessIORequests,
+        )?;
 
         pipeline.add_transform(|transform_input_port, transform_output_port| {
             TransformCompact::try_create(
                 transform_input_port,
                 transform_output_port,
-                block_compactor.to_compactor(false),
+                BlockCompactor::new(block_compact_thresholds, false),
             )
         })?;
 

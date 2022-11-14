@@ -17,11 +17,11 @@ use std::sync::Arc;
 
 use common_base::base::tokio::sync::Mutex;
 use common_base::base::tokio::sync::Notify;
+use common_catalog::plan::PartInfoPtr;
+use common_catalog::plan::Projection;
 use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
 use common_exception::Result;
-use common_planner::plans::Projection;
-use common_planner::PartInfoPtr;
 use common_storages_fuse::io::BlockReader;
 
 use crate::ResultQueryInfo;

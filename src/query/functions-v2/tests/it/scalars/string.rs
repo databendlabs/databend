@@ -136,7 +136,8 @@ fn test_from_base64(file: &mut impl Write) {
         "a",
         DataType::String,
         Column::from_data(&["QWJj", "MTIz"]),
-    )])
+    )]);
+    run_ast(file, "from_base64('!@#')", &[]);
 }
 
 fn test_quote(file: &mut impl Write) {
@@ -561,7 +562,7 @@ fn test_pad(file: &mut impl Write) {
         (
             "b",
             DataType::Number(NumberDataType::UInt8),
-            Column::from_data(vec![0, 3, 5]),
+            Column::from_data(vec![0u8, 3, 5]),
         ),
         ("c", DataType::String, Column::from_data(&["?", "x", "bb"])),
     ];
@@ -641,7 +642,7 @@ fn test_locate(file: &mut impl Write) {
         (
             "c",
             DataType::Number(NumberDataType::UInt8),
-            Column::from_data(vec![1, 2, 0, 1]),
+            Column::from_data(vec![1u8, 2, 0, 1]),
         ),
     ];
     run_ast(file, "locate(a, b, c)", &table);
@@ -732,12 +733,12 @@ fn test_insert(file: &mut impl Write) {
         (
             "b",
             DataType::Number(NumberDataType::UInt8),
-            Column::from_data(vec![1, 4, 1, 1]),
+            Column::from_data(vec![1u8, 4, 1, 1]),
         ),
         (
             "c",
             DataType::Number(NumberDataType::UInt8),
-            Column::from_data(vec![3, 5, 1, 1]),
+            Column::from_data(vec![3u8, 5, 1, 1]),
         ),
         (
             "d",
@@ -757,12 +758,12 @@ fn test_insert(file: &mut impl Write) {
         (
             "y",
             DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt8))),
-            Column::from_data_with_validity(vec![1, 4, 1, 1], vec![true, true, false, true]),
+            Column::from_data_with_validity(vec![1u8, 4, 1, 1], vec![true, true, false, true]),
         ),
         (
             "z",
             DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt8))),
-            Column::from_data_with_validity(vec![3, 5, 1, 1], vec![true, false, true, true]),
+            Column::from_data_with_validity(vec![3u8, 5, 1, 1], vec![true, false, true, true]),
         ),
         (
             "u",

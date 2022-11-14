@@ -15,6 +15,11 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use common_catalog::plan::DataSourcePlan;
+use common_catalog::plan::PartInfo;
+use common_catalog::plan::PartStatistics;
+use common_catalog::plan::Partitions;
+use common_catalog::plan::PushDownInfo;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
@@ -29,11 +34,6 @@ use common_pipeline_sources::processors::sources::AsyncSourcer;
 use common_pipeline_sources::processors::sources::EmptySource;
 use common_pipeline_sources::processors::sources::SyncSource;
 use common_pipeline_sources::processors::sources::SyncSourcer;
-use common_planner::extras::Extras;
-use common_planner::extras::Statistics;
-use common_planner::PartInfo;
-use common_planner::Partitions;
-use common_planner::ReadDataSourcePlan;
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct SystemTablePart;
@@ -61,9 +61,9 @@ pub trait SyncSystemTable: Send + Sync {
     fn get_partitions(
         &self,
         _ctx: Arc<dyn TableContext>,
-        _push_downs: Option<Extras>,
-    ) -> Result<(Statistics, Partitions)> {
-        Ok((Statistics::default(), vec![Arc::new(Box::new(
+        _push_downs: Option<PushDownInfo>,
+    ) -> Result<(PartStatistics, Partitions)> {
+        Ok((PartStatistics::default(), vec![Arc::new(Box::new(
             SystemTablePart,
         ))]))
     }
@@ -96,15 +96,15 @@ impl<TTable: 'static + SyncSystemTable> Table for SyncOneBlockSystemTable<TTable
     async fn read_partitions(
         &self,
         ctx: Arc<dyn TableContext>,
-        push_downs: Option<Extras>,
-    ) -> Result<(Statistics, Partitions)> {
+        push_downs: Option<PushDownInfo>,
+    ) -> Result<(PartStatistics, Partitions)> {
         self.inner_table.get_partitions(ctx, push_downs)
     }
 
     fn read_data(
         &self,
         ctx: Arc<dyn TableContext>,
-        plan: &ReadDataSourcePlan,
+        plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         // avoid duplicate read in cluster mode.
@@ -180,9 +180,9 @@ pub trait AsyncSystemTable: Send + Sync {
     async fn get_partitions(
         &self,
         _ctx: Arc<dyn TableContext>,
-        _push_downs: Option<Extras>,
-    ) -> Result<(Statistics, Partitions)> {
-        Ok((Statistics::default(), vec![Arc::new(Box::new(
+        _push_downs: Option<PushDownInfo>,
+    ) -> Result<(PartStatistics, Partitions)> {
+        Ok((PartStatistics::default(), vec![Arc::new(Box::new(
             SystemTablePart,
         ))]))
     }
@@ -215,15 +215,15 @@ impl<TTable: 'static + AsyncSystemTable> Table for AsyncOneBlockSystemTable<TTab
     async fn read_partitions(
         &self,
         ctx: Arc<dyn TableContext>,
-        push_downs: Option<Extras>,
-    ) -> Result<(Statistics, Partitions)> {
+        push_downs: Option<PushDownInfo>,
+    ) -> Result<(PartStatistics, Partitions)> {
         self.inner_table.get_partitions(ctx, push_downs).await
     }
 
     fn read_data(
         &self,
         ctx: Arc<dyn TableContext>,
-        _: &ReadDataSourcePlan,
+        _: &DataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let output = OutputPort::create();

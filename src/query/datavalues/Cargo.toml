@@ -35,7 +35,6 @@ paste = "1.0.9"
 rand = { version = "0.8.5", features = ["small_rng"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
-smallvec = { version = "1.9.0", features = ["write"] }
 
 [dev-dependencies]
 criterion = "0.4"
@@ -56,8 +55,4 @@ harness = false
 
 [[bench]]
 name = "data_type"
-harness = false
-
-[[bench]]
-name = "output_format"
 harness = false

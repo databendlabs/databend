@@ -15,19 +15,22 @@
 use std::str::FromStr;
 use std::sync::Arc;
 
+use common_catalog::table::AppendMode;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
+use common_datablocks::BlockCompactThresholds;
 use common_datablocks::SortColumnDescription;
 use common_datavalues::DataField;
 use common_exception::Result;
 use common_pipeline_core::Pipeline;
+use common_pipeline_transforms::processors::transforms::transform_block_compact_no_split::BlockCompactorNoSplit;
+use common_pipeline_transforms::processors::transforms::BlockCompactor;
 use common_pipeline_transforms::processors::transforms::TransformCompact;
 use common_pipeline_transforms::processors::transforms::TransformSortPartial;
 use common_sql::evaluator::ChunkOperator;
 use common_sql::evaluator::CompoundChunkOperator;
 use common_sql::evaluator::Evaluator;
 
-use crate::io::BlockCompactor;
 use crate::operations::FuseTableSink;
 use crate::statistics::ClusterStatsGenerator;
 use crate::FuseTable;
@@ -39,22 +42,39 @@ impl FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
+        append_mode: AppendMode,
         need_output: bool,
     ) -> Result<()> {
         let block_per_seg =
             self.get_option(FUSE_OPT_KEY_BLOCK_PER_SEGMENT, DEFAULT_BLOCK_PER_SEGMENT);
 
-        let block_compactor = self.get_block_compactor();
-        pipeline.add_transform(|transform_input_port, transform_output_port| {
-            TransformCompact::try_create(
-                transform_input_port,
-                transform_output_port,
-                block_compactor.to_compactor(false),
-            )
-        })?;
+        let block_compact_thresholds = self.get_block_compact_thresholds();
+        match append_mode {
+            AppendMode::Normal => {
+                pipeline.add_transform(|transform_input_port, transform_output_port| {
+                    TransformCompact::try_create(
+                        transform_input_port,
+                        transform_output_port,
+                        BlockCompactor::new(block_compact_thresholds, true),
+                    )
+                })?;
+            }
+            AppendMode::Copy => {
+                let size = pipeline.output_len();
+                pipeline.resize(1)?;
+                pipeline.add_transform(|transform_input_port, transform_output_port| {
+                    TransformCompact::try_create(
+                        transform_input_port,
+                        transform_output_port,
+                        BlockCompactorNoSplit::new(block_compact_thresholds),
+                    )
+                })?;
+                pipeline.resize(size)?;
+            }
+        }
 
         let cluster_stats_gen =
-            self.get_cluster_stats_gen(ctx.clone(), pipeline, 0, block_compactor)?;
+            self.get_cluster_stats_gen(ctx.clone(), pipeline, 0, block_compact_thresholds)?;
 
         let cluster_keys = self.cluster_keys();
         if !cluster_keys.is_empty() {
@@ -112,7 +132,7 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
         level: i32,
-        block_compactor: BlockCompactor,
+        block_compactor: BlockCompactThresholds,
     ) -> Result<ClusterStatsGenerator> {
         let cluster_keys = self.cluster_keys();
         if cluster_keys.is_empty() {

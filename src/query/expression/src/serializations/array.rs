@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use common_arrow::arrow::buffer::Buffer;
-use common_exception::Result;
 use common_io::prelude::FormatSettings;
 
 use crate::types::DataType;

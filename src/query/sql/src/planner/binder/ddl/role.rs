@@ -13,9 +13,9 @@
 // limitations under the License.
 
 use common_exception::Result;
-use common_planner::plans::SetRolePlan;
 
 use crate::plans::Plan;
+use crate::plans::SetRolePlan;
 use crate::BindContext;
 use crate::Binder;
 

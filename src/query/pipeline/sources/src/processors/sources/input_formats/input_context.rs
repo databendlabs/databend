@@ -21,6 +21,7 @@ use std::sync::Mutex;
 
 use common_base::base::tokio::sync::mpsc::Receiver;
 use common_base::base::Progress;
+use common_datablocks::BlockCompactThresholds;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -44,9 +45,6 @@ use crate::processors::sources::input_formats::input_format_text::InputFormatTex
 use crate::processors::sources::input_formats::input_pipeline::StreamingReadBatch;
 use crate::processors::sources::input_formats::input_split::SplitInfo;
 use crate::processors::sources::input_formats::InputFormat;
-
-const MIN_ROW_PER_BLOCK: usize = 800 * 1000;
-const DEFAULT_BLOCK_SIZE_IN_MEM_SIZE_THRESHOLD: usize = 100 * 1024 * 1024;
 
 #[derive(Debug)]
 pub enum InputPlan {
@@ -123,8 +121,7 @@ pub struct InputContext {
     pub format_settings: FormatSettings,
 
     pub read_batch_size: usize,
-    pub rows_per_block: usize,
-    pub block_memory_size_threshold: usize,
+    pub block_compact_thresholds: BlockCompactThresholds,
 
     pub scan_progress: Arc<Progress>,
 }
@@ -137,7 +134,7 @@ impl Debug for InputContext {
             .field("field_delimiter", &self.field_delimiter)
             .field("record_delimiter", &self.record_delimiter)
             .field("format_settings", &self.format_settings)
-            .field("rows_per_block", &self.rows_per_block)
+            .field("block_compact_thresholds", &self.block_compact_thresholds)
             .field("read_batch_size", &self.read_batch_size)
             .field("num_splits", &self.splits.len())
             .finish()
@@ -168,6 +165,7 @@ impl InputContext {
         stage_info: UserStageInfo,
         files: Vec<String>,
         scan_progress: Arc<Progress>,
+        block_compact_thresholds: BlockCompactThresholds,
     ) -> Result<Self> {
         if files.is_empty() {
             return Err(ErrorCode::BadArguments("no file to copy"));
@@ -177,14 +175,13 @@ impl InputContext {
         let file_format_options = &plan.stage_info.file_format_options;
         let format_typ = file_format_options.format.clone();
         let file_format_options =
-            StageFileFormatType::get_ext_from_stage(file_format_options.clone());
+            StageFileFormatType::get_ext_from_stage(file_format_options.clone(), &settings)?;
         let file_format_options = format_typ.final_file_format_options(&file_format_options)?;
 
         let format = Self::get_input_format(&format_typ)?;
         let splits = format
-            .get_splits(&plan, &operator, &settings, &schema)
+            .get_splits(&plan.files, &plan.stage_info, &operator, &settings, &schema)
             .await?;
-        let rows_per_block = MIN_ROW_PER_BLOCK;
         let record_delimiter = {
             if file_format_options.stage.record_delimiter.is_empty() {
                 format.default_record_delimiter()
@@ -211,14 +208,13 @@ impl InputContext {
             settings,
             format_settings,
             record_delimiter,
-            rows_per_block,
             read_batch_size,
             rows_to_skip,
             field_delimiter,
             scan_progress,
             source: InputSource::Operator(operator),
             plan: InputPlan::CopyInto(plan),
-            block_memory_size_threshold: DEFAULT_BLOCK_SIZE_IN_MEM_SIZE_THRESHOLD,
+            block_compact_thresholds,
         })
     }
 
@@ -229,6 +225,7 @@ impl InputContext {
         schema: DataSchemaRef,
         scan_progress: Arc<Progress>,
         is_multi_part: bool,
+        block_compact_thresholds: BlockCompactThresholds,
     ) -> Result<Self> {
         let (format_name, rows_to_skip) = remove_clickhouse_format_suffix(format_name);
         let rows_to_skip = std::cmp::max(settings.get_format_skip_header()? as usize, rows_to_skip);
@@ -249,7 +246,6 @@ impl InputContext {
         let format = Self::get_input_format(&format_type)?;
         let format_settings = format_type.get_format_settings(&file_format_options, &settings)?;
         let read_batch_size = settings.get_input_read_buffer_size()? as usize;
-        let rows_per_block = MIN_ROW_PER_BLOCK;
         let field_delimiter = file_format_options.stage.field_delimiter;
         let field_delimiter = {
             if field_delimiter.is_empty() {
@@ -277,7 +273,6 @@ impl InputContext {
             settings,
             format_settings,
             record_delimiter,
-            rows_per_block,
             read_batch_size,
             field_delimiter,
             rows_to_skip,
@@ -285,7 +280,7 @@ impl InputContext {
             source: InputSource::Stream(Mutex::new(Some(stream_receiver))),
             plan: InputPlan::StreamingLoad(plan),
             splits: vec![],
-            block_memory_size_threshold: DEFAULT_BLOCK_SIZE_IN_MEM_SIZE_THRESHOLD,
+            block_compact_thresholds,
         })
     }
 

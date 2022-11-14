@@ -15,9 +15,9 @@ test = false
 common-exception = { path = "../../../common/exception" }
 common-meta-app = { path = "../../../meta/app" }
 common-storages-cache = { path = "../cache" }
-common-storages-constants = { path = "../constants" }
+common-storages-table-meta = { path = "../table-meta" }
 
-opendal = { version = "0.19", features = ["layers-retry"] }
+opendal = "0.19"
 serde = { workspace = true }
 serde_json = { workspace = true }
 

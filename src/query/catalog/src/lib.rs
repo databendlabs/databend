@@ -13,8 +13,10 @@
 // limitations under the License.
 
 pub mod catalog;
+pub mod catalog_kind;
 pub mod cluster_info;
 pub mod database;
+pub mod plan;
 pub mod table;
 pub mod table_args;
 pub mod table_context;

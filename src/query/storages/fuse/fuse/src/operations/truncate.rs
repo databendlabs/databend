@@ -22,10 +22,10 @@ use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_types::MatchSeq;
 use common_storages_table_meta::meta::TableSnapshot;
 use common_storages_table_meta::meta::Versioned;
+use common_storages_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use uuid::Uuid;
 
 use crate::FuseTable;
-use crate::OPT_KEY_SNAPSHOT_LOCATION;
 
 impl FuseTable {
     #[inline]

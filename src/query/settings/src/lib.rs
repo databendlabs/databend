@@ -30,8 +30,11 @@ use common_exception::Result;
 use common_meta_types::UserSetting;
 use common_meta_types::UserSettingValue;
 use common_users::UserApiProvider;
+use dashmap::DashMap;
 use itertools::Itertools;
-use parking_lot::RwLock;
+use sysinfo::CpuRefreshKind;
+use sysinfo::RefreshKind;
+use sysinfo::SystemExt;
 
 #[derive(Clone)]
 enum ScopeLevel {
@@ -65,7 +68,7 @@ pub struct SettingValue {
 
 #[derive(Clone)]
 pub struct Settings {
-    settings: Arc<RwLock<HashMap<String, SettingValue>>>,
+    settings: Arc<DashMap<String, SettingValue>>,
     // TODO verify this, will tenant change during the lifetime of a given session?
     //#[allow(dead_code)]
     // session_ctx: Arc<T>,
@@ -105,13 +108,26 @@ impl Settings {
         // Overwrite settings from conf or global set.
         {
             // Set max threads.
-            if ret.get_max_threads()? == 0 {
-                let cpus = if conf.query.num_cpus == 0 {
-                    num_cpus::get() as u64
-                } else {
-                    conf.query.num_cpus
-                };
-                ret.set_max_threads(cpus)?;
+            {
+                if ret.get_max_threads()? == 0 {
+                    let cpus = if conf.query.num_cpus == 0 {
+                        sysinfo::System::new_with_specifics(
+                            RefreshKind::new().with_cpu(CpuRefreshKind::everything()),
+                        )
+                        .cpus()
+                        .len() as u64
+                    } else {
+                        conf.query.num_cpus
+                    };
+                    ret.set_max_threads(cpus)?;
+                }
+            }
+            // Set max memory usage.
+            {
+                if ret.get_max_memory_usage()? == 0 {
+                    let max_usage = sysinfo::System::new_all().available_memory();
+                    ret.set_max_memory_usage(max_usage)?;
+                }
             }
         }
 
@@ -133,10 +149,18 @@ impl Settings {
             },
             // max_threads
             SettingValue {
-                default_value: UserSettingValue::UInt64(16),
-                user_setting: UserSetting::create("max_threads", UserSettingValue::UInt64(16)),
+                default_value: UserSettingValue::UInt64(0),
+                user_setting: UserSetting::create("max_threads", UserSettingValue::UInt64(0)),
                 level: ScopeLevel::Session,
-                desc: "The maximum number of threads to execute the request. By default, it is determined automatically.",
+                desc: "The maximum number of threads to execute the request. By default the value is 0 it means determined automatically.",
+                possible_values: None,
+            },
+            // max_memory_usage
+            SettingValue {
+                default_value: UserSettingValue::UInt64(0),
+                user_setting: UserSetting::create("max_memory_usage", UserSettingValue::UInt64(0)),
+                level: ScopeLevel::Session,
+                desc: "The maximum memory usage for processing single query, in bytes. By default the value is 0 it means determined automatically.",
                 possible_values: None,
             },
             // max_storage_io_requests
@@ -397,6 +421,17 @@ impl Settings {
                 desc: "Enable hive parquet predict pushdown  by setting this variable to 1, default value: 1",
                 possible_values: None,
             },
+            #[cfg(feature = "hive")]
+            SettingValue {
+                default_value: UserSettingValue::UInt64(16384),
+                user_setting: UserSetting::create(
+                    "hive_parquet_chunk_size",
+                    UserSettingValue::UInt64(16384),
+                ),
+                level: ScopeLevel::Session,
+                desc: "the max number of rows each read from parquet to databend processor",
+                possible_values: None,
+            },
             SettingValue {
                 default_value: UserSettingValue::UInt64(1),
                 user_setting: UserSetting::create(
@@ -409,15 +444,13 @@ impl Settings {
             },
         ];
 
-        let settings: Arc<RwLock<HashMap<String, SettingValue>>> =
-            Arc::new(RwLock::new(HashMap::default()));
+        let settings: Arc<DashMap<String, SettingValue>> = Arc::new(DashMap::default());
 
         // Initial settings.
         {
-            let mut settings_mut = settings.write();
             for value in values {
                 let name = value.user_setting.name.clone();
-                settings_mut.insert(name, value);
+                settings.insert(name, value);
             }
         }
 
@@ -442,6 +475,16 @@ impl Settings {
     // Set max_threads.
     pub fn set_max_threads(&self, val: u64) -> Result<()> {
         let key = "max_threads";
+        self.try_set_u64(key, val, false)
+    }
+
+    pub fn get_max_memory_usage(&self) -> Result<u64> {
+        let key = "max_memory_usage";
+        self.try_get_u64(key)
+    }
+
+    pub fn set_max_memory_usage(&self, val: u64) -> Result<()> {
+        let key = "max_memory_usage";
         self.try_set_u64(key, val, false)
     }
 
@@ -660,17 +703,22 @@ impl Settings {
         self.try_get_u64(KEY)
     }
 
+    pub fn get_hive_parquet_chunk_size(&self) -> Result<u64> {
+        static KEY: &str = "hive_parquet_chunk_size";
+        self.try_get_u64(KEY)
+    }
+
     pub fn has_setting(&self, key: &str) -> bool {
-        let settings = self.settings.read();
-        settings.get(key).is_some()
+        self.settings.get(key).is_some()
     }
 
     fn check_and_get_setting_value(&self, key: &str) -> Result<SettingValue> {
-        let settings = self.settings.read();
-        let setting = settings
+        let setting = self
+            .settings
             .get(key)
+            .map(|e| e.value().clone())
             .ok_or_else(|| ErrorCode::UnknownVariable(format!("Unknown variable: {:?}", key)))?;
-        Ok(setting.clone())
+        Ok(setting)
     }
 
     fn check_possible_values(&self, setting: &SettingValue, val: String) -> Result<String> {
@@ -696,8 +744,8 @@ impl Settings {
 
     // Set u64 value to settings map, if is_global will write to metasrv.
     fn try_set_u64(&self, key: &str, val: u64, is_global: bool) -> Result<()> {
-        let mut settings = self.settings.write();
-        let mut setting = settings
+        let mut setting = self
+            .settings
             .get_mut(key)
             .ok_or_else(|| ErrorCode::UnknownVariable(format!("Unknown variable: {:?}", key)))?;
         setting.user_setting.value = UserSettingValue::UInt64(val);
@@ -719,8 +767,8 @@ impl Settings {
     }
 
     fn try_set_string(&self, key: &str, val: String, is_global: bool) -> Result<()> {
-        let mut settings = self.settings.write();
-        let mut setting = settings
+        let mut setting = self
+            .settings
             .get_mut(key)
             .ok_or_else(|| ErrorCode::UnknownVariable(format!("Unknown variable: {:?}", key)))?;
         setting.user_setting.value = UserSettingValue::String(val);
@@ -742,8 +790,8 @@ impl Settings {
     }
 
     fn set_setting_level(&self, key: &str, is_global: bool) -> Result<()> {
-        let mut settings = self.settings.write();
-        let mut setting = settings
+        let mut setting = self
+            .settings
             .get_mut(key)
             .ok_or_else(|| ErrorCode::UnknownVariable(format!("Unknown variable: {:?}", key)))?;
 
@@ -756,41 +804,46 @@ impl Settings {
     pub fn get_setting_values(
         &self,
     ) -> Vec<(String, UserSettingValue, UserSettingValue, String, String)> {
-        let settings = self.settings.read();
-
-        let mut result = vec![];
-        for (k, v) in settings.iter().sorted_by_key(|&(k, _)| k) {
-            let res = (
-                // Name.
-                k.to_owned(),
-                // Value.
-                v.user_setting.value.clone(),
-                // Default Value.
-                v.default_value.clone(),
-                // Scope level.
-                format!("{:?}", v.level),
-                // Desc.
-                v.desc.to_owned(),
-            );
-            result.push(res);
-        }
-        result
+        let mut v = self
+            .settings
+            .iter()
+            .map(|e| {
+                let (k, v) = e.pair();
+                (
+                    // Name.
+                    k.to_owned(),
+                    // Value.
+                    v.user_setting.value.clone(),
+                    // Default Value.
+                    v.default_value.clone(),
+                    // Scope level.
+                    format!("{:?}", v.level),
+                    // Desc.
+                    v.desc.to_owned(),
+                )
+            })
+            .collect_vec();
+        v.sort_by(|a, b| a.0.cmp(&b.0));
+        v
     }
 
     pub fn get_changed_settings(&self) -> Settings {
-        let settings = self.settings.read();
         let mut values = vec![];
-        for (_k, v) in settings.iter().sorted_by_key(|&(k, _)| k) {
+        for v in self
+            .settings
+            .iter()
+            .sorted_by(|a, b| a.key().cmp(b.key()))
+            .map(|e| e.value().clone())
+        {
             if v.user_setting.value != v.default_value {
-                values.push(v.clone());
+                values.push(v);
             }
         }
-        let new_settings = Arc::new(RwLock::new(HashMap::default()));
+        let new_settings = Arc::new(DashMap::new());
         {
-            let mut new_settings_mut = new_settings.write();
             for value in values {
                 let name = value.user_setting.name.clone();
-                new_settings_mut.insert(name, value.clone());
+                new_settings.insert(name, value.clone());
             }
         }
         Settings {
@@ -800,11 +853,10 @@ impl Settings {
     }
 
     pub fn apply_changed_settings(&self, changed_settings: Arc<Settings>) -> Result<()> {
-        let mut settings = self.settings.write();
         let values = changed_settings.get_setting_values();
         for value in values.into_iter() {
             let key = value.0;
-            let mut val = settings.get_mut(&key).ok_or_else(|| {
+            let mut val = self.settings.get_mut(&key).ok_or_else(|| {
                 ErrorCode::UnknownVariable(format!("Unknown variable: {:?}", key))
             })?;
             val.user_setting.value = value.1.clone();
@@ -813,11 +865,10 @@ impl Settings {
     }
 
     pub fn get_setting_values_short(&self) -> BTreeMap<String, UserSettingValue> {
-        let settings = self.settings.read();
-
         let mut result = BTreeMap::new();
-        for (k, v) in settings.iter().sorted_by_key(|&(k, _)| k) {
-            result.insert(k.clone(), v.user_setting.value.clone());
+        for e in self.settings.iter().sorted_by(|a, b| a.key().cmp(b.key())) {
+            let (k, v) = e.pair();
+            result.insert(k.to_owned(), v.user_setting.value.clone());
         }
         result
     }

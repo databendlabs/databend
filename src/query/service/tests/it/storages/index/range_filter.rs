@@ -15,9 +15,9 @@
 use std::collections::HashMap;
 
 use common_base::base::tokio;
+use common_catalog::plan::Expression;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_planner::Expression;
 use common_sql::executor::add;
 use common_sql::executor::col;
 use common_sql::executor::func;

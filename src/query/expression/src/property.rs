@@ -19,8 +19,19 @@ use crate::types::nullable::NullableDomain;
 use crate::types::number::NumberDomain;
 use crate::types::number::NumberScalar;
 use crate::types::number::SimpleDomain;
+use crate::types::number::F32;
+use crate::types::number::F64;
 use crate::types::string::StringDomain;
 use crate::types::AnyType;
+use crate::types::ArgType;
+use crate::types::BooleanType;
+use crate::types::DataType;
+use crate::types::DateType;
+use crate::types::NumberDataType;
+use crate::types::NumberType;
+use crate::types::StringType;
+use crate::types::TimestampType;
+use crate::types::ValueType;
 use crate::with_number_type;
 use crate::Scalar;
 
@@ -36,6 +47,22 @@ impl FunctionProperty {
     }
 }
 
+/// Describe the behavior of a function to eliminate the runtime
+/// evaluation of the function if possible.
+#[derive(Debug, Clone, PartialEq, EnumAsInner)]
+pub enum FunctionDomain<T: ValueType> {
+    /// The function may return error.
+    MayThrow,
+    /// The function must not return error.
+    NoThrow,
+    /// The function must not return error, and have futher information
+    /// to restriction the range of the output value.
+    Domain(T::Domain),
+}
+
+/// The range of the possible values that a scalar or the scalars in a
+/// column can take. We can assume the values outside the range are not
+/// possible, but we cannot assume the values inside the range must exist.
 #[derive(Debug, Clone, PartialEq, EnumAsInner)]
 pub enum Domain {
     Number(NumberDomain),
@@ -44,12 +71,91 @@ pub enum Domain {
     Timestamp(SimpleDomain<i64>),
     Date(SimpleDomain<i32>),
     Nullable(NullableDomain<AnyType>),
+    /// `Array(None)` means that the array is empty, thus there is no inner domain information.
     Array(Option<Box<Domain>>),
     Tuple(Vec<Domain>),
+    /// For certain types, like `Variant`, the domain is useless therefore is not defined.
     Undefined,
 }
 
+impl<T: ValueType> FunctionDomain<T> {
+    pub fn map<U: ValueType>(self, f: impl FnOnce(T::Domain) -> U::Domain) -> FunctionDomain<U> {
+        match self {
+            FunctionDomain::MayThrow => FunctionDomain::MayThrow,
+            FunctionDomain::NoThrow => FunctionDomain::NoThrow,
+            FunctionDomain::Domain(domain) => FunctionDomain::Domain(f(domain)),
+        }
+    }
+}
+
+impl<T: ArgType> FunctionDomain<T> {
+    /// Return the range of the output value.
+    ///
+    /// Return `None` if the function may return error.
+    pub fn normalize(self) -> Option<T::Domain> {
+        match self {
+            FunctionDomain::MayThrow => None,
+            FunctionDomain::NoThrow => Some(T::full_domain()),
+            FunctionDomain::Domain(domain) => Some(domain),
+        }
+    }
+}
+
 impl Domain {
+    pub fn full(data_type: &DataType) -> Self {
+        match data_type {
+            DataType::Boolean => Domain::Boolean(BooleanType::full_domain()),
+            DataType::String => Domain::String(StringType::full_domain()),
+            DataType::Number(NumberDataType::UInt8) => {
+                Domain::Number(NumberDomain::UInt8(NumberType::<u8>::full_domain()))
+            }
+            DataType::Number(NumberDataType::UInt16) => {
+                Domain::Number(NumberDomain::UInt16(NumberType::<u16>::full_domain()))
+            }
+            DataType::Number(NumberDataType::UInt32) => {
+                Domain::Number(NumberDomain::UInt32(NumberType::<u32>::full_domain()))
+            }
+            DataType::Number(NumberDataType::UInt64) => {
+                Domain::Number(NumberDomain::UInt64(NumberType::<u64>::full_domain()))
+            }
+            DataType::Number(NumberDataType::Int8) => {
+                Domain::Number(NumberDomain::Int8(NumberType::<i8>::full_domain()))
+            }
+            DataType::Number(NumberDataType::Int16) => {
+                Domain::Number(NumberDomain::Int16(NumberType::<i16>::full_domain()))
+            }
+            DataType::Number(NumberDataType::Int32) => {
+                Domain::Number(NumberDomain::Int32(NumberType::<i32>::full_domain()))
+            }
+            DataType::Number(NumberDataType::Int64) => {
+                Domain::Number(NumberDomain::Int64(NumberType::<i64>::full_domain()))
+            }
+            DataType::Number(NumberDataType::Float32) => {
+                Domain::Number(NumberDomain::Float32(NumberType::<F32>::full_domain()))
+            }
+            DataType::Number(NumberDataType::Float64) => {
+                Domain::Number(NumberDomain::Float64(NumberType::<F64>::full_domain()))
+            }
+            DataType::Timestamp => Domain::Timestamp(TimestampType::full_domain()),
+            DataType::Date => Domain::Date(DateType::full_domain()),
+            DataType::Null => Domain::Nullable(NullableDomain {
+                has_null: true,
+                value: None,
+            }),
+            DataType::Nullable(ty) => Domain::Nullable(NullableDomain {
+                has_null: true,
+                value: Some(Box::new(Domain::full(ty))),
+            }),
+            DataType::Tuple(fields_ty) => {
+                Domain::Tuple(fields_ty.iter().map(Domain::full).collect())
+            }
+            DataType::EmptyArray => Domain::Array(None),
+            DataType::Array(ty) => Domain::Array(Some(Box::new(Domain::full(ty)))),
+            DataType::Map(_) | DataType::Variant => Domain::Undefined,
+            DataType::Generic(_) => unreachable!(),
+        }
+    }
+
     pub fn merge(&self, other: &Domain) -> Domain {
         match (self, other) {
             (Domain::Number(this), Domain::Number(other)) => {

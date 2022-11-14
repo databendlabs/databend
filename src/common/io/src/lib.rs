@@ -19,6 +19,8 @@
 #![feature(slice_internals)]
 #![feature(maybe_uninit_slice)]
 #![feature(new_uninit)]
+#![feature(cursor_remaining)]
+#![feature(buf_read_has_data_left)]
 
 pub mod consts;
 pub mod format_diagnostic;
@@ -28,6 +30,7 @@ mod binary_read;
 mod binary_write;
 
 mod buffer;
+pub mod cursor_ext;
 mod file_split;
 mod format_settings;
 mod options_deserializer;

@@ -24,13 +24,13 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::pretty_format_blocks;
-use crate::MetaInfoPtr;
+use crate::BlockMetaInfoPtr;
 
 #[derive(Clone, Eq, PartialEq)]
 pub struct DataBlock {
     schema: DataSchemaRef,
     columns: Vec<ColumnRef>,
-    meta: Option<MetaInfoPtr>,
+    meta: Option<BlockMetaInfoPtr>,
 }
 
 impl DataBlock {
@@ -59,7 +59,7 @@ impl DataBlock {
     pub fn create_with_meta(
         schema: DataSchemaRef,
         columns: Vec<ColumnRef>,
-        meta: Option<MetaInfoPtr>,
+        meta: Option<BlockMetaInfoPtr>,
     ) -> Self {
         debug_assert!(
             schema.fields().iter().zip(columns.iter()).all(|(f, c)| f
@@ -211,12 +211,17 @@ impl DataBlock {
     }
 
     #[inline]
-    pub fn add_meta(self, meta: Option<MetaInfoPtr>) -> Result<Self> {
+    pub fn add_meta(self, meta: Option<BlockMetaInfoPtr>) -> Result<Self> {
         Ok(Self {
             columns: self.columns.clone(),
             schema: self.schema.clone(),
             meta,
         })
+    }
+
+    #[inline]
+    pub fn get_meta(&self) -> &Option<BlockMetaInfoPtr> {
+        &self.meta
     }
 
     #[inline]
@@ -238,6 +243,11 @@ impl DataBlock {
             schema,
             meta: self.meta,
         })
+    }
+
+    #[inline]
+    pub fn meta(&self) -> Result<Option<BlockMetaInfoPtr>> {
+        Ok(self.meta.clone())
     }
 
     #[inline]

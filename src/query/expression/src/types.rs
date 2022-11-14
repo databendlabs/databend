@@ -48,6 +48,16 @@ pub use self::number::NumberType;
 pub use self::string::StringType;
 pub use self::timestamp::TimestampType;
 pub use self::variant::VariantType;
+use crate::deserializations::BooleanDeserializer;
+use crate::deserializations::DateDeserializer;
+use crate::deserializations::EmptyArrayDeserializer;
+use crate::deserializations::NullDeserializer;
+use crate::deserializations::NullableDeserializer;
+use crate::deserializations::NumberDeserializer;
+use crate::deserializations::StringDeserializer;
+use crate::deserializations::TimestampDeserializer;
+use crate::deserializations::TypeDeserializer;
+use crate::deserializations::VariantDeserializer;
 use crate::property::Domain;
 use crate::serializations::ArraySerializer;
 use crate::serializations::BooleanSerializer;
@@ -125,9 +135,8 @@ impl DataType {
             DataType::String => Ok(Box::new(StringSerializer::try_create(column)?)),
             DataType::Number(num_ty) => {
                 with_number_mapped_type!(|NUM_TYPE| match num_ty {
-                    NumberDataType::NUM_TYPE => Ok(Box::new(
-                        NumberSerializer::<NUM_TYPE>::try_create(column).unwrap()
-                    )),
+                    NumberDataType::NUM_TYPE =>
+                        Ok(Box::new(NumberSerializer::<NUM_TYPE>::try_create(column)?)),
                 })
             }
             DataType::Date => Ok(Box::new(DateSerializer::try_create(column)?)),
@@ -146,6 +155,25 @@ impl DataType {
             _ => unreachable!(),
         }
     }
+
+    pub fn create_deserializer(&self) -> Box<dyn TypeDeserializer> {
+        match self {
+            DataType::Null => Box::new(NullDeserializer::create()),
+            DataType::Boolean => Box::new(BooleanDeserializer::create()),
+            DataType::String => Box::new(StringDeserializer::create()),
+            DataType::Number(num_ty) => {
+                with_number_mapped_type!(|NUM_TYPE| match num_ty {
+                    NumberDataType::NUM_TYPE => Box::new(NumberDeserializer::<NUM_TYPE>::create()),
+                })
+            }
+            DataType::Date => Box::new(DateDeserializer::create()),
+            DataType::Timestamp => Box::new(TimestampDeserializer::create()),
+            DataType::Nullable(inner_ty) => Box::new(NullableDeserializer::create(inner_ty)),
+            DataType::EmptyArray => Box::new(EmptyArrayDeserializer::create()),
+            DataType::Variant => Box::new(VariantDeserializer::create()),
+            _ => todo!(),
+        }
+    }
 }
 
 pub trait ValueType: Debug + Clone + PartialEq + Sized + 'static {
@@ -154,7 +182,7 @@ pub trait ValueType: Debug + Clone + PartialEq + Sized + 'static {
     type Column: Debug + Clone + PartialEq;
     type Domain: Debug + Clone + PartialEq;
     type ColumnIterator<'a>: Iterator<Item = Self::ScalarRef<'a>> + TrustedLen;
-    type ColumnBuilder: Debug + Clone + PartialEq;
+    type ColumnBuilder: Debug + Clone;
 
     /// Upcast GAT type's lifetime.
     fn upcast_gat<'short, 'long: 'short>(long: Self::ScalarRef<'long>) -> Self::ScalarRef<'short>;
@@ -216,6 +244,7 @@ pub trait ValueType: Debug + Clone + PartialEq + Sized + 'static {
 
 pub trait ArgType: ValueType {
     fn data_type() -> DataType;
+    fn full_domain() -> Self::Domain;
     fn create_builder(capacity: usize, generics: &GenericMap) -> Self::ColumnBuilder;
 
     fn column_from_vec(vec: Vec<Self::Scalar>, generics: &GenericMap) -> Self::Column {

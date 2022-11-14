@@ -37,7 +37,6 @@ members = [
     "src/query/functions",
     "src/query/functions-v2",
     "src/query/management",
-    "src/query/planner",
     "src/query/pipeline/core",
     "src/query/pipeline/sinks",
     "src/query/pipeline/sources",
@@ -45,7 +44,6 @@ members = [
     "src/query/settings",
     "src/query/sql",
     "src/query/storages/cache",
-    "src/query/storages/constants",
     "src/query/storages/factory",
     "src/query/storages/fuse/fuse",
     "src/query/storages/fuse/fuse-result",
@@ -61,7 +59,6 @@ members = [
     "src/query/storages/stage",
     "src/query/storages/system",
     "src/query/storages/view",
-    "src/query/streams",
     "src/query/users",
     # databend-query
     "src/query/service",
@@ -79,9 +76,6 @@ members = [
     "src/meta/protos",
     # databend-meta
     "src/meta/service",
-    # Hack
-    # This crate is used to hack our cargo.lock to resovle CVEs and so on.
-    "src/workspace-hack",
 ]
 
 [workspace.dependencies]
@@ -120,13 +114,15 @@ overflow-checks = false
 [profile.dev]
 split-debuginfo = "unpacked"
 overflow-checks = false
+# Disable incremental compile before https://github.com/rust-lang/rust/pull/104164 merged
+incremental = false
 
 [profile.test]
 opt-level = 0
 debug = 0
 codegen-units = 16
 lto = false
-incremental = true
+incremental = false
 debug-assertions = true
 overflow-checks = true
 rpath = false

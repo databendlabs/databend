@@ -84,7 +84,7 @@ impl<'a> RelExpr<'a> {
             Ok(prop)
         } else {
             Err(ErrorCode::Internal(
-                "Cannot derive relational property from physical plan".to_string(),
+                "Cannot derive physical property from logical plan".to_string(),
             ))
         }
     }
@@ -117,7 +117,7 @@ impl<'a> RelExpr<'a> {
             Ok(prop)
         } else {
             Err(ErrorCode::Internal(
-                "Cannot derive relational property from physical plan".to_string(),
+                "Cannot compute required property for child from logical plan".to_string(),
             ))
         }
     }

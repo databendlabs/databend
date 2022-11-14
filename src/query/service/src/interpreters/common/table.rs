@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_base::base::GlobalIORuntime;
+use common_catalog::table::AppendMode;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_datavalues::DataSchemaRef;
@@ -53,6 +54,7 @@ pub fn append2table(
     build_res: &mut PipelineBuildResult,
     overwrite: bool,
     need_commit: bool,
+    append_mode: AppendMode,
 ) -> Result<()> {
     fill_missing_columns(
         ctx.clone(),
@@ -61,7 +63,12 @@ pub fn append2table(
         &mut build_res.main_pipeline,
     )?;
 
-    table.append_data(ctx.clone(), &mut build_res.main_pipeline, false)?;
+    table.append_data(
+        ctx.clone(),
+        &mut build_res.main_pipeline,
+        append_mode,
+        false,
+    )?;
 
     if need_commit {
         build_res.main_pipeline.set_on_finished(move |may_error| {

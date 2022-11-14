@@ -147,6 +147,10 @@ impl<T: ArgType> ArgType for ArrayType<T> {
         DataType::Array(Box::new(T::data_type()))
     }
 
+    fn full_domain() -> Self::Domain {
+        T::full_domain()
+    }
+
     fn create_builder(capacity: usize, generics: &GenericMap) -> Self::ColumnBuilder {
         ArrayColumnBuilder::with_capacity(capacity, 0, generics)
     }

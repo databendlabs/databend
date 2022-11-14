@@ -42,7 +42,6 @@ use crate::api::rpc::exchange::statistics_sender::StatisticsSender;
 use crate::api::rpc::flight_client::FlightExchange;
 use crate::api::rpc::flight_scatter_broadcast::BroadcastFlightScatter;
 use crate::api::rpc::flight_scatter_hash::HashFlightScatter;
-use crate::api::rpc::flight_scatter_hash_v2::HashFlightScatterV2;
 use crate::api::rpc::Packet;
 use crate::api::DataExchange;
 use crate::api::FlightClient;
@@ -493,7 +492,7 @@ impl QueryCoordinator {
                 return Ok(fragment_coordinator.pipeline_build_res.unwrap());
             }
 
-            let exchange_params = fragment_coordinator.create_exchange_params(ctx, info)?;
+            let exchange_params = fragment_coordinator.create_exchange_params(info)?;
             let mut build_res = fragment_coordinator.pipeline_build_res.unwrap();
 
             let data_exchange = fragment_coordinator.data_exchange.as_ref().unwrap();
@@ -538,7 +537,7 @@ impl QueryCoordinator {
 
         let mut params = Vec::with_capacity(self.fragments_coordinator.len());
         for coordinator in self.fragments_coordinator.values() {
-            params.push(coordinator.create_exchange_params(&info.query_ctx, info)?);
+            params.push(coordinator.create_exchange_params(info)?);
         }
 
         for ((_, coordinator), params) in self.fragments_coordinator.iter_mut().zip(params) {
@@ -614,11 +613,7 @@ impl FragmentCoordinator {
         })
     }
 
-    pub fn create_exchange_params(
-        &self,
-        ctx: &Arc<QueryContext>,
-        info: &QueryInfo,
-    ) -> Result<ExchangeParams> {
+    pub fn create_exchange_params(&self, info: &QueryInfo) -> Result<ExchangeParams> {
         match &self.data_exchange {
             None => Err(ErrorCode::Internal("Cannot find data exchange.")),
             Some(DataExchange::Merge(exchange)) => {
@@ -648,22 +643,7 @@ impl FragmentCoordinator {
                     query_id: info.query_id.to_string(),
                     executor_id: info.current_executor.to_string(),
                     destination_ids: exchange.destination_ids.to_owned(),
-                    shuffle_scatter: Arc::new(Box::new(HashFlightScatter::try_create(
-                        ctx.clone(),
-                        self.payload.schema()?,
-                        Some(exchange.exchange_expression.clone()),
-                        exchange.destination_ids.len(),
-                    )?)),
-                }))
-            }
-            Some(DataExchange::ShuffleDataExchangeV2(exchange)) => {
-                Ok(ExchangeParams::ShuffleExchange(ShuffleExchangeParams {
-                    schema: self.payload.schema()?,
-                    fragment_id: self.fragment_id,
-                    query_id: info.query_id.to_string(),
-                    executor_id: info.current_executor.to_string(),
-                    destination_ids: exchange.destination_ids.to_owned(),
-                    shuffle_scatter: Arc::new(HashFlightScatterV2::try_create(
+                    shuffle_scatter: Arc::new(HashFlightScatter::try_create(
                         info.query_ctx.try_get_function_context()?,
                         exchange.shuffle_keys.clone(),
                         exchange.destination_ids.len(),
@@ -678,7 +658,7 @@ impl FragmentCoordinator {
             self.initialized = true;
 
             match &self.payload {
-                FragmentPayload::PlanV2(plan) => {
+                FragmentPayload::Plan(plan) => {
                     let pipeline_ctx = QueryContext::create_from(ctx);
                     let pipeline_builder = PipelineBuilderV2::create(pipeline_ctx);
                     self.pipeline_build_res = Some(pipeline_builder.finalize(plan)?);

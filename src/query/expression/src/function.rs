@@ -29,6 +29,8 @@ use crate::utils::arrow::constant_bitmap;
 use crate::values::Value;
 use crate::values::ValueRef;
 use crate::Column;
+use crate::Expr;
+use crate::FunctionDomain;
 use crate::Scalar;
 
 #[derive(Debug, Clone)]
@@ -45,16 +47,6 @@ pub struct FunctionContext<'a> {
     pub num_rows: usize,
     pub tz: Tz,
 }
-
-// impl<'a> Default for FunctionContext<'a> {
-//     fn default() -> Self {
-//         Self {
-//             tz: "UTC".parse::<Tz>().unwrap(),
-//             generics: &[],
-//             num_rows: 0,
-//         }
-//     }
-// }
 
 /// `FunctionID` is a unique identifier for a function. It's used to construct
 /// the exactly same function from the remote execution nodes.
@@ -75,7 +67,7 @@ pub enum FunctionID {
 pub struct Function {
     pub signature: FunctionSignature,
     #[allow(clippy::type_complexity)]
-    pub calc_domain: Box<dyn Fn(&[Domain]) -> Option<Domain>>,
+    pub calc_domain: Box<dyn Fn(&[Domain]) -> FunctionDomain<AnyType>>,
     #[allow(clippy::type_complexity)]
     pub eval: Box<dyn Fn(&[ValueRef<AnyType>], FunctionContext) -> Result<Value<AnyType>, String>>,
 }
@@ -117,7 +109,7 @@ impl FunctionRegistry {
         &self,
         name: &str,
         params: &[usize],
-        args_type: &[DataType],
+        args: &[Expr],
     ) -> Vec<(FunctionID, Arc<Function>)> {
         let name = name.to_lowercase();
         let name = self
@@ -135,7 +127,7 @@ impl FunctionRegistry {
                         .enumerate()
                         .filter_map(|(id, func)| {
                             if func.signature.name == name
-                                && func.signature.args_type.len() == args_type.len()
+                                && func.signature.args_type.len() == args.len()
                             {
                                 Some((
                                     FunctionID::Builtin {
@@ -157,6 +149,11 @@ impl FunctionRegistry {
             }
         }
 
+        let args_type = args
+            .iter()
+            .map(Expr::data_type)
+            .cloned()
+            .collect::<Vec<_>>();
         self.factories
             .get(name)
             .map(|factories| {
@@ -164,13 +161,13 @@ impl FunctionRegistry {
                     .iter()
                     .enumerate()
                     .filter_map(|(id, factory)| {
-                        factory(params, args_type).map(|func| {
+                        factory(params, &args_type).map(|func| {
                             (
                                 FunctionID::Factory {
                                     name: name.to_string(),
                                     id,
                                     params: params.to_vec(),
-                                    args_type: args_type.to_vec(),
+                                    args_type: args_type.clone(),
                                 },
                                 func,
                             )

@@ -29,6 +29,7 @@ use crate::values::Value;
 use crate::values::ValueRef;
 use crate::Function;
 use crate::FunctionContext;
+use crate::FunctionDomain;
 use crate::FunctionRegistry;
 use crate::FunctionSignature;
 
@@ -40,7 +41,7 @@ impl FunctionRegistry {
         calc_domain: F,
         func: G,
     ) where
-        F: Fn(&I1::Domain) -> Option<O::Domain> + 'static + Clone + Copy,
+        F: Fn(&I1::Domain) -> FunctionDomain<O> + 'static + Clone + Copy,
         G: Fn(I1::ScalarRef<'_>, FunctionContext) -> O::Scalar + 'static + Clone + Copy,
     {
         self.register_passthrough_nullable_1_arg::<I1, O, _, _>(
@@ -58,7 +59,7 @@ impl FunctionRegistry {
         calc_domain: F,
         func: G,
     ) where
-        F: Fn(&I1::Domain, &I2::Domain) -> Option<O::Domain> + 'static + Clone + Copy,
+        F: Fn(&I1::Domain, &I2::Domain) -> FunctionDomain<O> + 'static + Clone + Copy,
         G: Fn(I1::ScalarRef<'_>, I2::ScalarRef<'_>, FunctionContext) -> O::Scalar
             + 'static
             + Clone
@@ -79,7 +80,7 @@ impl FunctionRegistry {
         calc_domain: F,
         func: G,
     ) where
-        F: Fn(&I1::Domain, &I2::Domain, &I3::Domain) -> Option<O::Domain> + 'static + Clone + Copy,
+        F: Fn(&I1::Domain, &I2::Domain, &I3::Domain) -> FunctionDomain<O> + 'static + Clone + Copy,
         G: Fn(
                 I1::ScalarRef<'_>,
                 I2::ScalarRef<'_>,
@@ -105,7 +106,7 @@ impl FunctionRegistry {
         calc_domain: F,
         func: G,
     ) where
-        F: Fn(&I1::Domain, &I2::Domain, &I3::Domain, &I4::Domain) -> Option<O::Domain>
+        F: Fn(&I1::Domain, &I2::Domain, &I3::Domain, &I4::Domain) -> FunctionDomain<O>
             + 'static
             + Clone
             + Copy,
@@ -144,7 +145,7 @@ impl FunctionRegistry {
         calc_domain: F,
         func: G,
     ) where
-        F: Fn(&I1::Domain, &I2::Domain, &I3::Domain, &I4::Domain, &I5::Domain) -> Option<O::Domain>
+        F: Fn(&I1::Domain, &I2::Domain, &I3::Domain, &I4::Domain, &I5::Domain) -> FunctionDomain<O>
             + 'static
             + Clone
             + Copy,
@@ -175,7 +176,7 @@ impl FunctionRegistry {
         calc_domain: F,
         func: G,
     ) where
-        F: Fn(&I1::Domain) -> Option<O::Domain> + 'static + Clone + Copy,
+        F: Fn(&I1::Domain) -> FunctionDomain<O> + 'static + Clone + Copy,
         G: for<'a> Fn(ValueRef<'a, I1>, FunctionContext) -> Result<Value<O>, String>
             + 'static
             + Clone
@@ -196,15 +197,21 @@ impl FunctionRegistry {
         self.register_1_arg_core::<NullableType<I1>, NullableType<O>, _, _>(
             name,
             property,
-            move |arg1| {
-                let value = match (&arg1.value) {
-                    (Some(value1)) => Some(calc_domain(value1)?),
-                    _ => None,
-                };
-                Some(NullableDomain {
-                    has_null: arg1.has_null,
-                    value: value.map(Box::new),
-                })
+            move |arg1| match (&arg1.value) {
+                (Some(value1)) => {
+                    if let Some(domain) = calc_domain(value1).normalize() {
+                        FunctionDomain::Domain(NullableDomain {
+                            has_null: arg1.has_null,
+                            value: Some(Box::new(domain)),
+                        })
+                    } else {
+                        FunctionDomain::MayThrow
+                    }
+                }
+                _ => FunctionDomain::Domain(NullableDomain {
+                    has_null: true,
+                    value: None,
+                }),
             },
             passthrough_nullable_1_arg(func),
         );
@@ -217,7 +224,7 @@ impl FunctionRegistry {
         calc_domain: F,
         func: G,
     ) where
-        F: Fn(&I1::Domain, &I2::Domain) -> Option<O::Domain> + 'static + Clone + Copy,
+        F: Fn(&I1::Domain, &I2::Domain) -> FunctionDomain<O> + 'static + Clone + Copy,
         G: for<'a> Fn(
                 ValueRef<'a, I1>,
                 ValueRef<'a, I2>,
@@ -242,15 +249,21 @@ impl FunctionRegistry {
         self.register_2_arg_core::<NullableType<I1>, NullableType<I2>, NullableType<O>, _, _>(
             name,
             property,
-            move |arg1, arg2| {
-                let value = match (&arg1.value, &arg2.value) {
-                    (Some(value1), Some(value2)) => Some(calc_domain(value1, value2)?),
-                    _ => None,
-                };
-                Some(NullableDomain {
-                    has_null: arg1.has_null || arg2.has_null,
-                    value: value.map(Box::new),
-                })
+            move |arg1, arg2| match (&arg1.value, &arg2.value) {
+                (Some(value1), Some(value2)) => {
+                    if let Some(domain) = calc_domain(value1, value2).normalize() {
+                        FunctionDomain::Domain(NullableDomain {
+                            has_null: arg1.has_null || arg2.has_null,
+                            value: Some(Box::new(domain)),
+                        })
+                    } else {
+                        FunctionDomain::MayThrow
+                    }
+                }
+                _ => FunctionDomain::Domain(NullableDomain {
+                    has_null: true,
+                    value: None,
+                }),
             },
             passthrough_nullable_2_arg(func),
         );
@@ -270,7 +283,7 @@ impl FunctionRegistry {
         calc_domain: F,
         func: G,
     ) where
-        F: Fn(&I1::Domain, &I2::Domain, &I3::Domain) -> Option<O::Domain> + 'static + Clone + Copy,
+        F: Fn(&I1::Domain, &I2::Domain, &I3::Domain) -> FunctionDomain<O> + 'static + Clone + Copy,
         G: for<'a> Fn(
                 ValueRef<'a, I1>,
                 ValueRef<'a, I2>,
@@ -302,14 +315,24 @@ impl FunctionRegistry {
                         name,
                         property,
                         move |arg1,arg2,arg3| {
-                            let value = match (&arg1.value,&arg2.value,&arg3.value) {
-                                (Some(value1),Some(value2),Some(value3)) => Some(calc_domain(value1,value2,value3)?),
-                                _ => None,
-                            };
-                            Some(NullableDomain {
-                                has_null: arg1.has_null||arg2.has_null||arg3.has_null,
-                                value: value.map(Box::new),
-                            })
+                            match (&arg1.value,&arg2.value,&arg3.value) {
+                                (Some(value1),Some(value2),Some(value3)) => {
+                                    if let Some(domain) = calc_domain(value1,value2,value3).normalize() {
+                                        FunctionDomain::Domain(NullableDomain {
+                                            has_null: arg1.has_null||arg2.has_null||arg3.has_null,
+                                            value: Some(Box::new(domain)),
+                                        })
+                                    } else {
+                                        FunctionDomain::MayThrow
+                                    }
+                                },
+                                _ => {
+                                    FunctionDomain::Domain(NullableDomain {
+                                        has_null: true,
+                                        value: None,
+                                    })
+                                },
+                            }
                         },
                         passthrough_nullable_3_arg(func),
                     );
@@ -330,7 +353,7 @@ impl FunctionRegistry {
         calc_domain: F,
         func: G,
     ) where
-        F: Fn(&I1::Domain, &I2::Domain, &I3::Domain, &I4::Domain) -> Option<O::Domain>
+        F: Fn(&I1::Domain, &I2::Domain, &I3::Domain, &I4::Domain) -> FunctionDomain<O>
             + 'static
             + Clone
             + Copy,
@@ -372,14 +395,24 @@ impl FunctionRegistry {
                         name,
                         property,
                         move |arg1,arg2,arg3,arg4| {
-                            let value = match (&arg1.value,&arg2.value,&arg3.value,&arg4.value) {
-                                (Some(value1),Some(value2),Some(value3),Some(value4)) => Some(calc_domain(value1,value2,value3,value4)?),
-                                _ => None,
-                            };
-                            Some(NullableDomain {
-                                has_null: arg1.has_null||arg2.has_null||arg3.has_null||arg4.has_null,
-                                value: value.map(Box::new),
-                            })
+                            match (&arg1.value,&arg2.value,&arg3.value,&arg4.value) {
+                                (Some(value1),Some(value2),Some(value3),Some(value4)) => {
+                                    if let Some(domain) = calc_domain(value1,value2,value3,value4).normalize() {
+                                        FunctionDomain::Domain(NullableDomain {
+                                            has_null: arg1.has_null||arg2.has_null||arg3.has_null||arg4.has_null,
+                                            value: Some(Box::new(domain)),
+                                        })
+                                    } else {
+                                        FunctionDomain::MayThrow
+                                    }
+                                },
+                                _ => {
+                                    FunctionDomain::Domain(NullableDomain {
+                                        has_null: true,
+                                        value: None,
+                                    })
+                                },
+                            }
                         },
                         passthrough_nullable_4_arg(func),
                     );
@@ -401,7 +434,7 @@ impl FunctionRegistry {
         calc_domain: F,
         func: G,
     ) where
-        F: Fn(&I1::Domain, &I2::Domain, &I3::Domain, &I4::Domain, &I5::Domain) -> Option<O::Domain>
+        F: Fn(&I1::Domain, &I2::Domain, &I3::Domain, &I4::Domain, &I5::Domain) -> FunctionDomain<O>
             + 'static
             + Clone
             + Copy,
@@ -445,14 +478,24 @@ impl FunctionRegistry {
                         name,
                         property,
                         move |arg1,arg2,arg3,arg4,arg5| {
-                            let value = match (&arg1.value,&arg2.value,&arg3.value,&arg4.value,&arg5.value) {
-                                (Some(value1),Some(value2),Some(value3),Some(value4),Some(value5)) => Some(calc_domain(value1,value2,value3,value4,value5)?),
-                                _ => None,
-                            };
-                            Some(NullableDomain {
-                                has_null: arg1.has_null||arg2.has_null||arg3.has_null||arg4.has_null||arg5.has_null,
-                                value: value.map(Box::new),
-                            })
+                            match (&arg1.value,&arg2.value,&arg3.value,&arg4.value,&arg5.value) {
+                                (Some(value1),Some(value2),Some(value3),Some(value4),Some(value5)) => {
+                                    if let Some(domain) = calc_domain(value1,value2,value3,value4,value5).normalize() {
+                                        FunctionDomain::Domain(NullableDomain {
+                                            has_null: arg1.has_null||arg2.has_null||arg3.has_null||arg4.has_null||arg5.has_null,
+                                            value: Some(Box::new(domain)),
+                                        })
+                                    } else {
+                                        FunctionDomain::MayThrow
+                                    }
+                                },
+                                _ => {
+                                    FunctionDomain::Domain(NullableDomain {
+                                        has_null: true,
+                                        value: None,
+                                    })
+                                },
+                            }
                         },
                         passthrough_nullable_5_arg(func),
                     );
@@ -465,7 +508,7 @@ impl FunctionRegistry {
         calc_domain: F,
         func: G,
     ) where
-        F: Fn(&I1::Domain) -> Option<NullableDomain<O>> + 'static + Clone + Copy,
+        F: Fn(&I1::Domain) -> FunctionDomain<NullableType<O>> + 'static + Clone + Copy,
         G: for<'a> Fn(ValueRef<'a, I1>, FunctionContext) -> Result<Value<NullableType<O>>, String>
             + 'static
             + Clone
@@ -484,7 +527,7 @@ impl FunctionRegistry {
         self.register_1_arg_core::<I1, NullableType<O>, _, _>(
             name,
             property.clone(),
-            |_| None,
+            calc_domain,
             func,
         );
 
@@ -493,13 +536,16 @@ impl FunctionRegistry {
             property,
             move |arg1| match (&arg1.value) {
                 (Some(value1)) => {
-                    let domain = calc_domain(value1)?;
-                    Some(NullableDomain {
-                        has_null: arg1.has_null || domain.has_null,
-                        value: domain.value,
-                    })
+                    if let Some(domain) = calc_domain(value1).normalize() {
+                        FunctionDomain::Domain(NullableDomain {
+                            has_null: arg1.has_null || domain.has_null,
+                            value: domain.value,
+                        })
+                    } else {
+                        FunctionDomain::MayThrow
+                    }
                 }
-                _ => Some(NullableDomain {
+                _ => FunctionDomain::Domain(NullableDomain {
                     has_null: true,
                     value: None,
                 }),
@@ -515,7 +561,7 @@ impl FunctionRegistry {
         calc_domain: F,
         func: G,
     ) where
-        F: Fn(&I1::Domain, &I2::Domain) -> Option<NullableDomain<O>> + 'static + Clone + Copy,
+        F: Fn(&I1::Domain, &I2::Domain) -> FunctionDomain<NullableType<O>> + 'static + Clone + Copy,
         G: for<'a> Fn(
                 ValueRef<'a, I1>,
                 ValueRef<'a, I2>,
@@ -538,7 +584,7 @@ impl FunctionRegistry {
         self.register_2_arg_core::<I1, I2, NullableType<O>, _, _>(
             name,
             property.clone(),
-            |_, _| None,
+            calc_domain,
             func,
         );
 
@@ -547,13 +593,16 @@ impl FunctionRegistry {
             property,
             move |arg1, arg2| match (&arg1.value, &arg2.value) {
                 (Some(value1), Some(value2)) => {
-                    let domain = calc_domain(value1, value2)?;
-                    Some(NullableDomain {
-                        has_null: arg1.has_null || arg2.has_null || domain.has_null,
-                        value: domain.value,
-                    })
+                    if let Some(domain) = calc_domain(value1, value2).normalize() {
+                        FunctionDomain::Domain(NullableDomain {
+                            has_null: arg1.has_null || arg2.has_null || domain.has_null,
+                            value: domain.value,
+                        })
+                    } else {
+                        FunctionDomain::MayThrow
+                    }
                 }
-                _ => Some(NullableDomain {
+                _ => FunctionDomain::Domain(NullableDomain {
                     has_null: true,
                     value: None,
                 }),
@@ -576,7 +625,7 @@ impl FunctionRegistry {
         calc_domain: F,
         func: G,
     ) where
-        F: Fn(&I1::Domain, &I2::Domain, &I3::Domain) -> Option<NullableDomain<O>>
+        F: Fn(&I1::Domain, &I2::Domain, &I3::Domain) -> FunctionDomain<NullableType<O>>
             + 'static
             + Clone
             + Copy,
@@ -608,7 +657,7 @@ impl FunctionRegistry {
         self.register_3_arg_core::<I1, I2, I3, NullableType<O>, _, _>(
             name,
             property.clone(),
-            |_, _, _| None,
+            calc_domain,
             func,
         );
 
@@ -618,14 +667,17 @@ impl FunctionRegistry {
                         move |arg1,arg2,arg3| {
                             match (&arg1.value,&arg2.value,&arg3.value) {
                                 (Some(value1),Some(value2),Some(value3)) => {
-                                    let domain = calc_domain(value1,value2,value3)?;
-                                    Some(NullableDomain {
-                                        has_null: arg1.has_null||arg2.has_null||arg3.has_null || domain.has_null,
-                                        value: domain.value,
-                                    })
+                                    if let Some(domain) = calc_domain(value1,value2,value3).normalize() {
+                                        FunctionDomain::Domain(NullableDomain {
+                                            has_null: arg1.has_null||arg2.has_null||arg3.has_null || domain.has_null,
+                                            value: domain.value,
+                                        })
+                                    } else {
+                                        FunctionDomain::MayThrow
+                                    }
                                 }
                                 _ => {
-                                    Some(NullableDomain {
+                                    FunctionDomain::Domain(NullableDomain {
                                         has_null: true,
                                         value: None,
                                     })
@@ -651,7 +703,12 @@ impl FunctionRegistry {
         calc_domain: F,
         func: G,
     ) where
-        F: Fn(&I1::Domain, &I2::Domain, &I3::Domain, &I4::Domain) -> Option<NullableDomain<O>>
+        F: Fn(
+                &I1::Domain,
+                &I2::Domain,
+                &I3::Domain,
+                &I4::Domain,
+            ) -> FunctionDomain<NullableType<O>>
             + 'static
             + Clone
             + Copy,
@@ -685,7 +742,7 @@ impl FunctionRegistry {
         self.register_4_arg_core::<I1, I2, I3, I4, NullableType<O>, _, _>(
             name,
             property.clone(),
-            |_, _, _, _| None,
+            calc_domain,
             func,
         );
 
@@ -695,14 +752,17 @@ impl FunctionRegistry {
                         move |arg1,arg2,arg3,arg4| {
                             match (&arg1.value,&arg2.value,&arg3.value,&arg4.value) {
                                 (Some(value1),Some(value2),Some(value3),Some(value4)) => {
-                                    let domain = calc_domain(value1,value2,value3,value4)?;
-                                    Some(NullableDomain {
-                                        has_null: arg1.has_null||arg2.has_null||arg3.has_null||arg4.has_null || domain.has_null,
-                                        value: domain.value,
-                                    })
+                                    if let Some(domain) = calc_domain(value1,value2,value3,value4).normalize() {
+                                        FunctionDomain::Domain(NullableDomain {
+                                            has_null: arg1.has_null||arg2.has_null||arg3.has_null||arg4.has_null || domain.has_null,
+                                            value: domain.value,
+                                        })
+                                    } else {
+                                        FunctionDomain::MayThrow
+                                    }
                                 }
                                 _ => {
-                                    Some(NullableDomain {
+                                    FunctionDomain::Domain(NullableDomain {
                                         has_null: true,
                                         value: None,
                                     })
@@ -735,7 +795,7 @@ impl FunctionRegistry {
                 &I3::Domain,
                 &I4::Domain,
                 &I5::Domain,
-            ) -> Option<NullableDomain<O>>
+            ) -> FunctionDomain<NullableType<O>>
             + 'static
             + Clone
             + Copy,
@@ -771,7 +831,7 @@ impl FunctionRegistry {
         self.register_5_arg_core::<I1, I2, I3, I4, I5, NullableType<O>, _, _>(
             name,
             property.clone(),
-            |_, _, _, _, _| None,
+            calc_domain,
             func,
         );
 
@@ -781,14 +841,17 @@ impl FunctionRegistry {
                         move |arg1,arg2,arg3,arg4,arg5| {
                             match (&arg1.value,&arg2.value,&arg3.value,&arg4.value,&arg5.value) {
                                 (Some(value1),Some(value2),Some(value3),Some(value4),Some(value5)) => {
-                                    let domain = calc_domain(value1,value2,value3,value4,value5)?;
-                                    Some(NullableDomain {
-                                        has_null: arg1.has_null||arg2.has_null||arg3.has_null||arg4.has_null||arg5.has_null || domain.has_null,
-                                        value: domain.value,
-                                    })
+                                    if let Some(domain) = calc_domain(value1,value2,value3,value4,value5).normalize() {
+                                        FunctionDomain::Domain(NullableDomain {
+                                            has_null: arg1.has_null||arg2.has_null||arg3.has_null||arg4.has_null||arg5.has_null || domain.has_null,
+                                            value: domain.value,
+                                        })
+                                    } else {
+                                        FunctionDomain::MayThrow
+                                    }
                                 }
                                 _ => {
-                                    Some(NullableDomain {
+                                    FunctionDomain::Domain(NullableDomain {
                                         has_null: true,
                                         value: None,
                                     })
@@ -806,7 +869,7 @@ impl FunctionRegistry {
         calc_domain: F,
         func: G,
     ) where
-        F: Fn() -> Option<O::Domain> + 'static + Clone + Copy,
+        F: Fn() -> FunctionDomain<O> + 'static + Clone + Copy,
         G: for<'a> Fn(FunctionContext) -> Result<Value<O>, String> + 'static + Clone + Copy,
     {
         self.funcs
@@ -831,7 +894,7 @@ impl FunctionRegistry {
         calc_domain: F,
         func: G,
     ) where
-        F: Fn(&I1::Domain) -> Option<O::Domain> + 'static + Clone + Copy,
+        F: Fn(&I1::Domain) -> FunctionDomain<O> + 'static + Clone + Copy,
         G: for<'a> Fn(ValueRef<'a, I1>, FunctionContext) -> Result<Value<O>, String>
             + 'static
             + Clone
@@ -859,7 +922,7 @@ impl FunctionRegistry {
         calc_domain: F,
         func: G,
     ) where
-        F: Fn(&I1::Domain, &I2::Domain) -> Option<O::Domain> + 'static + Clone + Copy,
+        F: Fn(&I1::Domain, &I2::Domain) -> FunctionDomain<O> + 'static + Clone + Copy,
         G: for<'a> Fn(
                 ValueRef<'a, I1>,
                 ValueRef<'a, I2>,
@@ -891,7 +954,7 @@ impl FunctionRegistry {
         calc_domain: F,
         func: G,
     ) where
-        F: Fn(&I1::Domain, &I2::Domain, &I3::Domain) -> Option<O::Domain> + 'static + Clone + Copy,
+        F: Fn(&I1::Domain, &I2::Domain, &I3::Domain) -> FunctionDomain<O> + 'static + Clone + Copy,
         G: for<'a> Fn(
                 ValueRef<'a, I1>,
                 ValueRef<'a, I2>,
@@ -934,7 +997,7 @@ impl FunctionRegistry {
         calc_domain: F,
         func: G,
     ) where
-        F: Fn(&I1::Domain, &I2::Domain, &I3::Domain, &I4::Domain) -> Option<O::Domain>
+        F: Fn(&I1::Domain, &I2::Domain, &I3::Domain, &I4::Domain) -> FunctionDomain<O>
             + 'static
             + Clone
             + Copy,
@@ -987,7 +1050,7 @@ impl FunctionRegistry {
         calc_domain: F,
         func: G,
     ) where
-        F: Fn(&I1::Domain, &I2::Domain, &I3::Domain, &I4::Domain, &I5::Domain) -> Option<O::Domain>
+        F: Fn(&I1::Domain, &I2::Domain, &I3::Domain, &I4::Domain, &I5::Domain) -> FunctionDomain<O>
             + 'static
             + Clone
             + Copy,
@@ -6028,14 +6091,14 @@ pub fn combine_nullable_5_arg<
 }
 
 fn erase_calc_domain_generic_0_arg<O: ArgType>(
-    func: impl Fn() -> Option<O::Domain>,
-) -> impl Fn(&[Domain]) -> Option<Domain> {
+    func: impl Fn() -> FunctionDomain<O>,
+) -> impl Fn(&[Domain]) -> FunctionDomain<AnyType> {
     move |args| func().map(O::upcast_domain)
 }
 
 fn erase_calc_domain_generic_1_arg<I1: ArgType, O: ArgType>(
-    func: impl Fn(&I1::Domain) -> Option<O::Domain>,
-) -> impl Fn(&[Domain]) -> Option<Domain> {
+    func: impl Fn(&I1::Domain) -> FunctionDomain<O>,
+) -> impl Fn(&[Domain]) -> FunctionDomain<AnyType> {
     move |args| {
         let arg1 = I1::try_downcast_domain(&args[0]).unwrap();
         func(&arg1).map(O::upcast_domain)
@@ -6043,8 +6106,8 @@ fn erase_calc_domain_generic_1_arg<I1: ArgType, O: ArgType>(
 }
 
 fn erase_calc_domain_generic_2_arg<I1: ArgType, I2: ArgType, O: ArgType>(
-    func: impl Fn(&I1::Domain, &I2::Domain) -> Option<O::Domain>,
-) -> impl Fn(&[Domain]) -> Option<Domain> {
+    func: impl Fn(&I1::Domain, &I2::Domain) -> FunctionDomain<O>,
+) -> impl Fn(&[Domain]) -> FunctionDomain<AnyType> {
     move |args| {
         let arg1 = I1::try_downcast_domain(&args[0]).unwrap();
         let arg2 = I2::try_downcast_domain(&args[1]).unwrap();
@@ -6053,8 +6116,8 @@ fn erase_calc_domain_generic_2_arg<I1: ArgType, I2: ArgType, O: ArgType>(
 }
 
 fn erase_calc_domain_generic_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgType>(
-    func: impl Fn(&I1::Domain, &I2::Domain, &I3::Domain) -> Option<O::Domain>,
-) -> impl Fn(&[Domain]) -> Option<Domain> {
+    func: impl Fn(&I1::Domain, &I2::Domain, &I3::Domain) -> FunctionDomain<O>,
+) -> impl Fn(&[Domain]) -> FunctionDomain<AnyType> {
     move |args| {
         let arg1 = I1::try_downcast_domain(&args[0]).unwrap();
         let arg2 = I2::try_downcast_domain(&args[1]).unwrap();
@@ -6070,8 +6133,8 @@ fn erase_calc_domain_generic_4_arg<
     I4: ArgType,
     O: ArgType,
 >(
-    func: impl Fn(&I1::Domain, &I2::Domain, &I3::Domain, &I4::Domain) -> Option<O::Domain>,
-) -> impl Fn(&[Domain]) -> Option<Domain> {
+    func: impl Fn(&I1::Domain, &I2::Domain, &I3::Domain, &I4::Domain) -> FunctionDomain<O>,
+) -> impl Fn(&[Domain]) -> FunctionDomain<AnyType> {
     move |args| {
         let arg1 = I1::try_downcast_domain(&args[0]).unwrap();
         let arg2 = I2::try_downcast_domain(&args[1]).unwrap();
@@ -6089,8 +6152,8 @@ fn erase_calc_domain_generic_5_arg<
     I5: ArgType,
     O: ArgType,
 >(
-    func: impl Fn(&I1::Domain, &I2::Domain, &I3::Domain, &I4::Domain, &I5::Domain) -> Option<O::Domain>,
-) -> impl Fn(&[Domain]) -> Option<Domain> {
+    func: impl Fn(&I1::Domain, &I2::Domain, &I3::Domain, &I4::Domain, &I5::Domain) -> FunctionDomain<O>,
+) -> impl Fn(&[Domain]) -> FunctionDomain<AnyType> {
     move |args| {
         let arg1 = I1::try_downcast_domain(&args[0]).unwrap();
         let arg2 = I2::try_downcast_domain(&args[1]).unwrap();

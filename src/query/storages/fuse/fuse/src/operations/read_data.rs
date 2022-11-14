@@ -15,15 +15,15 @@
 use std::sync::Arc;
 
 use common_base::base::Runtime;
+use common_catalog::plan::DataSourcePlan;
+use common_catalog::plan::PrewhereInfo;
+use common_catalog::plan::Projection;
+use common_catalog::plan::PushDownInfo;
 use common_catalog::table_context::TableContext;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_pipeline_core::Pipeline;
-use common_planner::extras::Extras;
-use common_planner::extras::PrewhereInfo;
-use common_planner::plans::Projection;
-use common_planner::ReadDataSourcePlan;
 use common_sql::evaluator::EvalNode;
 use common_sql::evaluator::Evaluator;
 use tracing::info;
@@ -33,14 +33,24 @@ use crate::io::BlockReader;
 use crate::operations::FuseTableSource;
 use crate::FuseTable;
 
+/// Read data kind to avoid OOM.
+pub enum ReadDataKind {
+    // Compact/Recluster data, need less io requests.
+    // io_requests = max_threads()
+    OptimizeDataLessIORequests,
+    // Read column block data, need adjust io requests.
+    // io requests = memory-size/avg(blocks-size)
+    BlockDataAdjustIORequests,
+}
+
 impl FuseTable {
     pub fn create_block_reader(&self, projection: Projection) -> Result<Arc<BlockReader>> {
         let table_schema = self.table_info.schema();
         BlockReader::create(self.operator.clone(), table_schema, projection)
     }
 
-    pub fn projection_of_push_downs(&self, push_downs: &Option<Extras>) -> Projection {
-        if let Some(Extras {
+    pub fn projection_of_push_downs(&self, push_downs: &Option<PushDownInfo>) -> Projection {
+        if let Some(PushDownInfo {
             projection: Some(prj),
             ..
         }) = push_downs
@@ -54,8 +64,8 @@ impl FuseTable {
         }
     }
 
-    fn prewhere_of_push_downs(&self, push_downs: &Option<Extras>) -> Option<PrewhereInfo> {
-        if let Some(Extras { prewhere, .. }) = push_downs {
+    fn prewhere_of_push_downs(&self, push_downs: &Option<PushDownInfo>) -> Option<PrewhereInfo> {
+        if let Some(PushDownInfo { prewhere, .. }) = push_downs {
             prewhere.clone()
         } else {
             None
@@ -63,7 +73,7 @@ impl FuseTable {
     }
 
     // Build the block reader.
-    fn build_block_reader(&self, plan: &ReadDataSourcePlan) -> Result<Arc<BlockReader>> {
+    fn build_block_reader(&self, plan: &DataSourcePlan) -> Result<Arc<BlockReader>> {
         match self.prewhere_of_push_downs(&plan.push_downs) {
             None => {
                 let projection = self.projection_of_push_downs(&plan.push_downs);
@@ -74,7 +84,7 @@ impl FuseTable {
     }
 
     // Build the prewhere reader.
-    fn build_prewhere_reader(&self, plan: &ReadDataSourcePlan) -> Result<Arc<BlockReader>> {
+    fn build_prewhere_reader(&self, plan: &DataSourcePlan) -> Result<Arc<BlockReader>> {
         match self.prewhere_of_push_downs(&plan.push_downs) {
             None => {
                 let projection = self.projection_of_push_downs(&plan.push_downs);
@@ -88,7 +98,7 @@ impl FuseTable {
     fn build_prewhere_filter_executor(
         &self,
         _ctx: Arc<dyn TableContext>,
-        plan: &ReadDataSourcePlan,
+        plan: &DataSourcePlan,
         schema: DataSchemaRef,
     ) -> Result<Arc<Option<EvalNode>>> {
         Ok(match self.prewhere_of_push_downs(&plan.push_downs) {
@@ -101,7 +111,7 @@ impl FuseTable {
     }
 
     // Build the remain reader.
-    fn build_remain_reader(&self, plan: &ReadDataSourcePlan) -> Result<Arc<Option<BlockReader>>> {
+    fn build_remain_reader(&self, plan: &DataSourcePlan) -> Result<Arc<Option<BlockReader>>> {
         Ok(match self.prewhere_of_push_downs(&plan.push_downs) {
             None => Arc::new(None),
             Some(v) => {
@@ -114,13 +124,40 @@ impl FuseTable {
         })
     }
 
+    fn adjust_io_request(
+        &self,
+        ctx: &Arc<dyn TableContext>,
+        projection: &Projection,
+        kind: ReadDataKind,
+    ) -> Result<usize> {
+        Ok(match kind {
+            ReadDataKind::OptimizeDataLessIORequests => {
+                ctx.get_settings().get_max_threads()? as usize
+            }
+            ReadDataKind::BlockDataAdjustIORequests => {
+                // Assume 160MB one block file.
+                let block_file_size = 160 * 1024 * 1024_usize;
+
+                let table_column_len = self.table_info.schema().fields().len();
+                let per_column_bytes = block_file_size / table_column_len;
+                let column_memory_usage = per_column_bytes * projection.len();
+                let max_memory_usage = ctx.get_settings().get_max_memory_usage()? as usize;
+
+                let setting_io_requests =
+                    ctx.get_settings().get_max_storage_io_requests()? as usize + 1;
+                let adjust_io_requests = (max_memory_usage / column_memory_usage) + 1;
+                std::cmp::min(adjust_io_requests, setting_io_requests)
+            }
+        })
+    }
+
     #[inline]
     pub fn do_read_data(
         &self,
         ctx: Arc<dyn TableContext>,
-        plan: &ReadDataSourcePlan,
+        plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
-        max_io_requests: usize,
+        read_kind: ReadDataKind,
     ) -> Result<()> {
         let mut lazy_init_segments = Vec::with_capacity(plan.parts.len());
 
@@ -167,6 +204,8 @@ impl FuseTable {
             });
         }
 
+        let projection = self.projection_of_push_downs(&plan.push_downs);
+        let max_io_requests = self.adjust_io_request(&ctx, &projection, read_kind)?;
         let block_reader = self.build_block_reader(plan)?;
         let prewhere_reader = self.build_prewhere_reader(plan)?;
         let prewhere_filter =

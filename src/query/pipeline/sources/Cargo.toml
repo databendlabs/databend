@@ -24,7 +24,6 @@ common-io = { path = "../../../common/io" }
 common-meta-types = { path = "../../../meta/types" }
 common-pipeline-core = { path = "../core" }
 common-settings = { path = "../../settings" }
-common-streams = { path = "../../streams" }
 
 async-trait = { version = "0.1.57", package = "async-trait-fn" }
 bstr = "1.0.1"
@@ -32,7 +31,7 @@ crossbeam-channel = "0.5.6"
 csv-core = "0.1.10"
 futures = "0.3.24"
 futures-util = "0.3.24"
-opendal = { version = "0.19", features = ["layers-retry", "compress"] }
+opendal = { version = "0.19", features = ["compress"] }
 parking_lot = "0.12.1"
 serde_json = { workspace = true }
 similar-asserts = "1.4.2"

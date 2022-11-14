@@ -35,8 +35,11 @@ management_mode = true
 
 
 [log]
-level = "INFO"
-dir = "./.databend/logs"
+
+[log.file]
+level = "DEBUG"
+format = "text"
+dir = "./.databend/logs_management_mode"
 
 [meta]
 # To enable embedded meta-store, set address to ""

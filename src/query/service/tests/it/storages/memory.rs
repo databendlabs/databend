@@ -13,21 +13,21 @@
 //  limitations under the License.
 
 use common_base::base::tokio;
+use common_catalog::plan::PartStatistics;
+use common_catalog::plan::Projection;
+use common_catalog::plan::PushDownInfo;
 use common_datablocks::assert_blocks_sorted_eq;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
-use common_planner::extras::Extras;
-use common_planner::extras::Statistics;
-use common_planner::plans::Projection;
 use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
+use common_sql::plans::TableOptions;
 use common_storages_memory::MemoryTable;
 use common_storages_table_meta::meta::ColumnNDVs;
 use databend_query::sessions::TableContext;
-use databend_query::sql::plans::create_table_v2::TableOptions;
-use databend_query::stream::DataBlockStream;
+use databend_query::stream::ReadDataBlockStream;
 use futures::TryStreamExt;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -75,18 +75,19 @@ async fn test_memorytable() -> Result<()> {
 
     // read tests
     {
-        let push_downs_vec: Vec<Option<Extras>> =
+        let push_downs_vec: Vec<Option<PushDownInfo>> =
             vec![Some(vec![0usize]), Some(vec![1usize]), None]
                 .into_iter()
                 .map(|x| {
                     x.map(|x| {
                         let proj = Projection::Columns(x);
-                        Extras {
+                        PushDownInfo {
                             projection: Some(proj),
                             filters: vec![],
                             limit: None,
                             order_by: vec![],
                             prewhere: None,
+                            stage: None,
                         }
                     })
                 })
@@ -124,9 +125,9 @@ async fn test_memorytable() -> Result<()> {
             ],
         ];
         let expected_statistics_vec = vec![
-            Statistics::new_estimated(4usize, 16usize, 0, 0),
-            Statistics::new_estimated(4usize, 32usize, 0, 0),
-            Statistics::new_exact(4usize, 48usize, 2, 2),
+            PartStatistics::new_estimated(4usize, 16usize, 0, 0),
+            PartStatistics::new_estimated(4usize, 32usize, 0, 0),
+            PartStatistics::new_exact(4usize, 48usize, 2, 2),
         ];
 
         for i in 0..push_downs_vec.len() {
