@@ -23,9 +23,9 @@ use common_pipeline_core::Pipe;
 use common_pipeline_core::Pipeline;
 use common_storages_table_meta::meta::TableSnapshot;
 
-use super::mutation::CompactSink;
 use crate::operations::mutation::all_the_columns_ids;
 use crate::operations::mutation::BlockCompactMutator;
+use crate::operations::mutation::CompactSink;
 use crate::operations::mutation::CompactSource;
 use crate::operations::mutation::CompactTransform;
 use crate::operations::mutation::SegmentCompactMutator;
@@ -108,6 +108,7 @@ impl FuseTable {
         pipeline: &mut Pipeline,
         options: CompactOptions,
     ) -> Result<bool> {
+        // skip cluster table.
         if self.cluster_key_meta.is_some() {
             return Ok(false);
         }

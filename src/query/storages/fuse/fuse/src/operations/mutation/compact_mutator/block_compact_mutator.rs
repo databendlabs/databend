@@ -35,6 +35,7 @@ pub struct BlockCompactMutator {
     pub compact_params: CompactOptions,
     pub operator: Operator,
     pub compact_tasks: Partitions,
+    // The order of the unchanged segments in snapshot.
     pub unchanged_segment_indices: Vec<usize>,
     // locations all the unchanged segments.
     pub unchanged_segment_locations: Vec<Location>,
@@ -86,9 +87,11 @@ impl BlockCompactMutator {
 
         for (idx, segment) in segments.iter().enumerate() {
             let tasks = builder.add(segment.clone());
-            for t in tasks {
+            for mut t in tasks {
                 if CompactPartBuilder::check_for_compact(&t) {
                     compacted_segment_cnt += t.len();
+                    // The order of the compact is old first and then new.
+                    t.reverse();
                     self.compact_tasks.push(CompactPartInfo::create(t, order));
                 } else {
                     self.unchanged_segment_locations
@@ -108,8 +111,9 @@ impl BlockCompactMutator {
         }
 
         if !builder.segments.is_empty() {
-            let t = std::mem::take(&mut builder.segments);
+            let mut t = std::mem::take(&mut builder.segments);
             if CompactPartBuilder::check_for_compact(&t) {
+                t.reverse();
                 self.compact_tasks.push(CompactPartInfo::create(t, order));
             } else {
                 self.unchanged_segment_locations
@@ -158,8 +162,8 @@ impl CompactPartBuilder {
 
     fn check_for_compact(segments: &Vec<Arc<SegmentInfo>>) -> bool {
         segments.len() != 1
-            || (segments[0].summary.perfect_block_count != segments[0].summary.block_count
-                && segments[0].summary.block_count > 1)
+            || (segments[0].summary.block_count > 1
+                && segments[0].summary.perfect_block_count != segments[0].summary.block_count)
     }
 
     fn add(&mut self, segment: Arc<SegmentInfo>) -> Vec<Vec<Arc<SegmentInfo>>> {

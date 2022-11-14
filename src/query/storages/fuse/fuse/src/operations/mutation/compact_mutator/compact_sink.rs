@@ -208,7 +208,6 @@ impl Processor for CompactSink {
                     latest_snapshot.as_ref(),
                 ) {
                     Conflict::Unresolvable => {
-                        // mutation conflicts, concurrent mutation detected while committing segment compaction operation
                         metrics_inc_commit_mutation_unresolvable_conflict();
                         self.state = State::AbortOperation;
                     }
