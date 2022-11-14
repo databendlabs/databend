@@ -151,9 +151,9 @@ checksum = "8da52d66c7071e2e3fa2a1e5c6d088fec47b593032b254f5e980de8ea54454d6"
 
 [[package]]
 name = "arrow-format"
-version = "0.7.0"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8df5d25bc6d676271277120c41ef28760fe0a9f070677a58db621c0f983f9c20"
+checksum = "bb83ada98f9d252a3c3642d96c53a357684a87d2e9a753ddf2a30bae20b91790"
 dependencies = [
  "planus",
  "prost 0.10.4",
@@ -162,22 +162,9 @@ dependencies = [
 ]
 
 [[package]]
-name = "arrow-format"
-version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bb83ada98f9d252a3c3642d96c53a357684a87d2e9a753ddf2a30bae20b91790"
-dependencies = [
- "planus",
- "prost 0.11.0",
- "prost-derive 0.11.0",
- "serde",
- "tonic",
-]
-
-[[package]]
 name = "arrow2"
 version = "0.14.2"
-source = "git+https://github.com/jorgecarleitao/arrow2?rev=562de6a#562de6a6ed961eff46e7db752b384583886a5e5d"
+source = "git+https://github.com/jorgecarleitao/arrow2?rev=95e117d#95e117d3f0bb69c52617d2e0b1a9564492b063a0"
 dependencies = [
  "ahash 0.7.6",
  "arrow-format 0.7.0",
@@ -1248,6 +1235,7 @@ name = "common-base"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-channel",
  "async-trait",
  "common-exception",
  "ctrlc",
@@ -5661,9 +5649,9 @@ checksum = "0ab1bc2a289d34bd04a330323ac98a1b4bc82c9d9fcb1e66b63caa84da26b575"
 
 [[package]]
 name = "opendal"
-version = "0.19.7"
+version = "0.19.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "35096e9c11c30efb0edf3598bed2275b8d62876ee108ffd4385ecc7cb77f08af"
+checksum = "8759e3041052861fec2980cf07dcd0e6d612346003680119494badd8aba884b0"
 dependencies = [
  "anyhow",
  "async-compat",
@@ -9282,3 +9270,8 @@ dependencies = [
  "cc",
  "libc",
 ]
+
+[[patch.unused]]
+name = "arrow-format"
+version = "0.7.0"
+source = "git+https://github.com/datafuse-extras/arrow-format?rev=78dacc1#78dacc16a1f995756384686ca86d79995a11a089"

@@ -32,6 +32,20 @@ impl<Impl> TwoLevelHashtable<Impl> {
     }
 }
 
+impl<Impl: HashtableLike> TwoLevelHashtable<Impl> {
+    pub fn two_level_iter(&self) -> Vec<(isize, Impl::Iterator<'_>)> {
+        let mut iters = Vec::with_capacity(self.tables.len());
+
+        for (bucket, table) in self.tables.iter().enumerate() {
+            if table.len() != 0 {
+                iters.push((bucket as isize, table.iter()));
+            }
+        }
+
+        iters
+    }
+}
+
 impl<K: ?Sized + FastHash, V, Impl: HashtableLike<Key = K, Value = V>> HashtableLike
     for TwoLevelHashtable<Impl>
 {

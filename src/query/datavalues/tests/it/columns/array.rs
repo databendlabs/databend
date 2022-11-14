@@ -39,6 +39,22 @@ fn test_new_from_data() {
 }
 
 #[test]
+fn test_for_each_array() {
+    let data_column: PrimitiveColumn<i32> = Int32Column::from_slice(&[1, 2, 3, 4, 5, 6]);
+    let offsets: Vec<i64> = vec![0, 3, 6];
+    let array_column: ArrayColumn =
+        ArrayColumn::from_data(Int32Type::new_impl(), offsets.into(), data_column.arc());
+
+    let v0 = DataValue::Array(vec![1i32.into(), 2i32.into(), 3i32.into()]);
+    let v1 = DataValue::Array(vec![4i32.into(), 5i32.into(), 6i32.into()]);
+    let result = &[v0, v1];
+
+    array_column.for_each(|i, v| {
+        assert_eq!(result[i], v);
+    })
+}
+
+#[test]
 fn test_mutable_array_column() {
     let mut builder = MutableArrayColumn::with_capacity_meta(16, ColumnMeta::Array {
         inner_type: Int32Type::new_impl(),

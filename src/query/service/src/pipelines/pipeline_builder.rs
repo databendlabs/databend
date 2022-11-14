@@ -434,6 +434,12 @@ impl PipelineBuilder {
             .collect();
 
         let block_size = self.ctx.get_settings().get_max_block_size()? as usize;
+
+        if self.main_pipeline.output_len() == 1 {
+            let _ = self
+                .main_pipeline
+                .resize(self.ctx.get_settings().get_max_threads()? as usize);
+        }
         // Sort
         self.main_pipeline.add_transform(|input, output| {
             TransformSortPartial::try_create(input, output, sort.limit, sort_desc.clone())

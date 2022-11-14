@@ -46,7 +46,6 @@ pub struct SingleStateAggregator<const FINAL: bool> {
     places: Vec<StateAddr>,
     // used for deserialization only, so we can reuse it during the loop
     temp_places: Vec<StateAddr>,
-    is_finished: bool,
     states_dropped: bool,
 }
 
@@ -80,7 +79,6 @@ impl<const FINAL: bool> SingleStateAggregator<FINAL> {
             arg_indices: params.aggregate_functions_arguments.clone(),
             schema: params.output_schema.clone(),
             temp_places,
-            is_finished: false,
             states_dropped: false,
         })
     }
@@ -124,12 +122,7 @@ impl Aggregator for SingleStateAggregator<true> {
         Ok(())
     }
 
-    fn generate(&mut self) -> Result<Option<DataBlock>> {
-        if self.is_finished {
-            return Ok(None);
-        }
-
-        self.is_finished = true;
+    fn generate(&mut self) -> Result<Vec<DataBlock>> {
         let mut aggr_values: Vec<Box<dyn MutableColumn>> = {
             let mut builders = vec![];
             for func in &self.funcs {
@@ -150,7 +143,7 @@ impl Aggregator for SingleStateAggregator<true> {
             columns.push(array.to_column());
         }
 
-        Ok(Some(DataBlock::create(self.schema.clone(), columns)))
+        Ok(vec![DataBlock::create(self.schema.clone(), columns)])
     }
 }
 
@@ -171,13 +164,7 @@ impl Aggregator for SingleStateAggregator<false> {
         Ok(())
     }
 
-    fn generate(&mut self) -> Result<Option<DataBlock>> {
-        if self.is_finished {
-            self.drop_states();
-            return Ok(None);
-        }
-
-        self.is_finished = true;
+    fn generate(&mut self) -> Result<Vec<DataBlock>> {
         let mut columns = Vec::with_capacity(self.funcs.len());
 
         for (idx, func) in self.funcs.iter().enumerate() {
@@ -190,7 +177,8 @@ impl Aggregator for SingleStateAggregator<false> {
         }
 
         // TODO: create with temp schema
-        Ok(Some(DataBlock::create(self.schema.clone(), columns)))
+        self.drop_states();
+        Ok(vec![DataBlock::create(self.schema.clone(), columns)])
     }
 }
 

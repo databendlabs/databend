@@ -208,7 +208,7 @@ where
 }
 
 pub struct HashtableIter<'a, K, V> {
-    inner: std::iter::Chain<std::option::Iter<'a, Entry<K, V>>, Table0Iter<'a, K, V>>,
+    pub inner: std::iter::Chain<std::option::Iter<'a, Entry<K, V>>, Table0Iter<'a, K, V>>,
 }
 
 impl<'a, K, V> Iterator for HashtableIter<'a, K, V>
