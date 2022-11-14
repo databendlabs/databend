@@ -47,21 +47,15 @@ pub fn register(registry: &mut FunctionRegistry) {
     register_like(registry);
 }
 
-#[inline(always)]
-fn all_true_domain() -> BooleanDomain {
-    BooleanDomain {
-        has_true: true,
-        has_false: false,
-    }
-}
+const ALL_TRUE_DOMAIN: BooleanDomain = BooleanDomain {
+    has_true: true,
+    has_false: false,
+};
 
-#[inline(always)]
-fn all_false_domain() -> BooleanDomain {
-    BooleanDomain {
-        has_true: false,
-        has_false: true,
-    }
-}
+const ALL_FALSE_DOMAIN: BooleanDomain = BooleanDomain {
+    has_true: false,
+    has_false: true,
+};
 
 fn register_string_cmp(registry: &mut FunctionRegistry) {
     registry.register_2_arg::<StringType, StringType, BooleanType, _, _>(
@@ -109,13 +103,7 @@ macro_rules! register_simple_domain_type_cmp {
             FunctionProperty::default(),
             |d1, d2| {
                 if d1.min > d2.max || d1.max < d2.min {
-                    FunctionDomain::Domain(all_false_domain())
-                } else if d1.min == d1.max && d2.min == d2.max {
-                    if d1.min == d2.min {
-                        FunctionDomain::Domain(all_true_domain())
-                    } else {
-                        FunctionDomain::Domain(all_false_domain())
-                    }
+                    FunctionDomain::Domain(ALL_FALSE_DOMAIN)
                 } else {
                     FunctionDomain::NoThrow
                 }
@@ -127,13 +115,7 @@ macro_rules! register_simple_domain_type_cmp {
             FunctionProperty::default(),
             |d1, d2| {
                 if d1.min > d2.max || d1.max < d2.min {
-                    FunctionDomain::Domain(all_true_domain())
-                } else if d1.min == d1.max && d2.min == d2.max {
-                    if d1.min == d2.min {
-                        FunctionDomain::Domain(all_false_domain())
-                    } else {
-                        FunctionDomain::Domain(all_true_domain())
-                    }
+                    FunctionDomain::Domain(ALL_TRUE_DOMAIN)
                 } else {
                     FunctionDomain::NoThrow
                 }
@@ -145,15 +127,9 @@ macro_rules! register_simple_domain_type_cmp {
             FunctionProperty::default(),
             |d1, d2| {
                 if d1.min > d2.max {
-                    FunctionDomain::Domain(all_true_domain())
-                } else if d1.max < d2.min {
-                    FunctionDomain::Domain(all_false_domain())
-                } else if d1.min == d1.max && d2.min == d2.max {
-                    if (d1.min > d2.min) {
-                        FunctionDomain::Domain(all_true_domain())
-                    } else {
-                        FunctionDomain::Domain(all_false_domain())
-                    }
+                    FunctionDomain::Domain(ALL_TRUE_DOMAIN)
+                } else if d1.max <= d2.min {
+                    FunctionDomain::Domain(ALL_FALSE_DOMAIN)
                 } else {
                     FunctionDomain::NoThrow
                 }
@@ -165,15 +141,9 @@ macro_rules! register_simple_domain_type_cmp {
             FunctionProperty::default(),
             |d1, d2| {
                 if d1.min >= d2.max {
-                    FunctionDomain::Domain(all_true_domain())
+                    FunctionDomain::Domain(ALL_TRUE_DOMAIN)
                 } else if d1.max < d2.min {
-                    FunctionDomain::Domain(all_false_domain())
-                } else if d1.min == d1.max && d2.min == d2.max {
-                    if (d1.min >= d2.min) {
-                        FunctionDomain::Domain(all_true_domain())
-                    } else {
-                        FunctionDomain::Domain(all_false_domain())
-                    }
+                    FunctionDomain::Domain(ALL_FALSE_DOMAIN)
                 } else {
                     FunctionDomain::NoThrow
                 }
@@ -185,15 +155,9 @@ macro_rules! register_simple_domain_type_cmp {
             FunctionProperty::default(),
             |d1, d2| {
                 if d1.max < d2.min {
-                    FunctionDomain::Domain(all_true_domain())
-                } else if d1.min > d2.max {
-                    FunctionDomain::Domain(all_false_domain())
-                } else if d1.min == d1.max && d2.min == d2.max {
-                    if (d1.min < d2.min) {
-                        FunctionDomain::Domain(all_true_domain())
-                    } else {
-                        FunctionDomain::Domain(all_false_domain())
-                    }
+                    FunctionDomain::Domain(ALL_TRUE_DOMAIN)
+                } else if d1.min >= d2.max {
+                    FunctionDomain::Domain(ALL_FALSE_DOMAIN)
                 } else {
                     FunctionDomain::NoThrow
                 }
@@ -205,15 +169,9 @@ macro_rules! register_simple_domain_type_cmp {
             FunctionProperty::default(),
             |d1, d2| {
                 if d1.max <= d2.min {
-                    FunctionDomain::Domain(all_true_domain())
+                    FunctionDomain::Domain(ALL_TRUE_DOMAIN)
                 } else if d1.min > d2.max {
-                    FunctionDomain::Domain(all_false_domain())
-                } else if d1.min == d1.max && d2.min == d2.max {
-                    if (d1.min <= d2.min) {
-                        FunctionDomain::Domain(all_true_domain())
-                    } else {
-                        FunctionDomain::Domain(all_false_domain())
-                    }
+                    FunctionDomain::Domain(ALL_FALSE_DOMAIN)
                 } else {
                     FunctionDomain::NoThrow
                 }
@@ -232,10 +190,10 @@ fn register_boolean_cmp(registry: &mut FunctionRegistry) {
         "eq",
         FunctionProperty::default(),
         |d1, d2| match (d1.has_true, d1.has_false, d2.has_true, d2.has_false) {
-            (true, false, true, false) => FunctionDomain::Domain(all_true_domain()),
-            (false, true, false, true) => FunctionDomain::Domain(all_true_domain()),
-            (true, false, false, true) => FunctionDomain::Domain(all_false_domain()),
-            (false, true, true, false) => FunctionDomain::Domain(all_false_domain()),
+            (true, false, true, false) => FunctionDomain::Domain(ALL_TRUE_DOMAIN),
+            (false, true, false, true) => FunctionDomain::Domain(ALL_TRUE_DOMAIN),
+            (true, false, false, true) => FunctionDomain::Domain(ALL_FALSE_DOMAIN),
+            (false, true, true, false) => FunctionDomain::Domain(ALL_FALSE_DOMAIN),
             _ => FunctionDomain::NoThrow,
         },
         |lhs, rhs, _| lhs == rhs,
@@ -244,10 +202,10 @@ fn register_boolean_cmp(registry: &mut FunctionRegistry) {
         "noteq",
         FunctionProperty::default(),
         |d1, d2| match (d1.has_true, d1.has_false, d2.has_true, d2.has_false) {
-            (true, false, true, false) => FunctionDomain::Domain(all_false_domain()),
-            (false, true, false, true) => FunctionDomain::Domain(all_false_domain()),
-            (true, false, false, true) => FunctionDomain::Domain(all_true_domain()),
-            (false, true, true, false) => FunctionDomain::Domain(all_true_domain()),
+            (true, false, true, false) => FunctionDomain::Domain(ALL_FALSE_DOMAIN),
+            (false, true, false, true) => FunctionDomain::Domain(ALL_FALSE_DOMAIN),
+            (true, false, false, true) => FunctionDomain::Domain(ALL_TRUE_DOMAIN),
+            (false, true, true, false) => FunctionDomain::Domain(ALL_TRUE_DOMAIN),
             _ => FunctionDomain::NoThrow,
         },
         |lhs, rhs, _| lhs != rhs,
@@ -256,8 +214,8 @@ fn register_boolean_cmp(registry: &mut FunctionRegistry) {
         "gt",
         FunctionProperty::default(),
         |d1, d2| match (d1.has_true, d1.has_false, d2.has_true, d2.has_false) {
-            (true, false, false, true) => FunctionDomain::Domain(all_true_domain()),
-            (false, true, _, _) => FunctionDomain::Domain(all_false_domain()),
+            (true, false, false, true) => FunctionDomain::Domain(ALL_TRUE_DOMAIN),
+            (false, true, _, _) => FunctionDomain::Domain(ALL_FALSE_DOMAIN),
             _ => FunctionDomain::NoThrow,
         },
         |lhs, rhs, _| lhs & !rhs,
@@ -266,9 +224,9 @@ fn register_boolean_cmp(registry: &mut FunctionRegistry) {
         "gte",
         FunctionProperty::default(),
         |d1, d2| match (d1.has_true, d1.has_false, d2.has_true, d2.has_false) {
-            (true, false, _, _) => FunctionDomain::Domain(all_true_domain()),
-            (_, _, false, true) => FunctionDomain::Domain(all_true_domain()),
-            (false, true, true, false) => FunctionDomain::Domain(all_false_domain()),
+            (true, false, _, _) => FunctionDomain::Domain(ALL_TRUE_DOMAIN),
+            (_, _, false, true) => FunctionDomain::Domain(ALL_TRUE_DOMAIN),
+            (false, true, true, false) => FunctionDomain::Domain(ALL_FALSE_DOMAIN),
             _ => FunctionDomain::NoThrow,
         },
         |lhs, rhs, _| (lhs & !rhs) || (lhs & rhs),
@@ -277,8 +235,8 @@ fn register_boolean_cmp(registry: &mut FunctionRegistry) {
         "lt",
         FunctionProperty::default(),
         |d1, d2| match (d1.has_true, d1.has_false, d2.has_true, d2.has_false) {
-            (false, true, true, false) => FunctionDomain::Domain(all_true_domain()),
-            (_, _, false, true) => FunctionDomain::Domain(all_false_domain()),
+            (false, true, true, false) => FunctionDomain::Domain(ALL_TRUE_DOMAIN),
+            (_, _, false, true) => FunctionDomain::Domain(ALL_FALSE_DOMAIN),
             _ => FunctionDomain::NoThrow,
         },
         |lhs, rhs, _| !lhs & rhs,
@@ -287,9 +245,9 @@ fn register_boolean_cmp(registry: &mut FunctionRegistry) {
         "lte",
         FunctionProperty::default(),
         |d1, d2| match (d1.has_true, d1.has_false, d2.has_true, d2.has_false) {
-            (false, true, _, _) => FunctionDomain::Domain(all_true_domain()),
-            (_, _, true, false) => FunctionDomain::Domain(all_true_domain()),
-            (true, false, false, true) => FunctionDomain::Domain(all_false_domain()),
+            (false, true, _, _) => FunctionDomain::Domain(ALL_TRUE_DOMAIN),
+            (_, _, true, false) => FunctionDomain::Domain(ALL_TRUE_DOMAIN),
+            (true, false, false, true) => FunctionDomain::Domain(ALL_FALSE_DOMAIN),
             _ => FunctionDomain::NoThrow,
         },
         |lhs, rhs, _| (!lhs & rhs) || (lhs & rhs),

@@ -30,7 +30,7 @@ raw expr       : eq(1_f64, 1_u8)
 checked expr   : eq<Float64, Float64>(1_f64, CAST(1_u8 AS Float64))
 optimized expr : true
 output type    : Boolean
-output domain  : {TRUE}
+output domain  : {FALSE, TRUE}
 output         : true
 
 
@@ -115,7 +115,7 @@ raw expr       : eq(1.1_f64, 1.1_f64)
 checked expr   : eq<Float64, Float64>(1.1_f64, 1.1_f64)
 optimized expr : true
 output type    : Boolean
-output domain  : {TRUE}
+output domain  : {FALSE, TRUE}
 output         : true
 
 
@@ -205,7 +205,7 @@ raw expr       : noteq(1.1_f64, 1.1_f64)
 checked expr   : noteq<Float64, Float64>(1.1_f64, 1.1_f64)
 optimized expr : false
 output type    : Boolean
-output domain  : {FALSE}
+output domain  : {FALSE, TRUE}
 output         : false
 
 
