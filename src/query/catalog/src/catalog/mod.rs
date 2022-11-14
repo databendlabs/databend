@@ -17,5 +17,7 @@ mod interface;
 /// the catalog manager implementation
 mod manager;
 
-pub use interface::*;
-pub use manager::*;
+pub use interface::Catalog;
+pub use interface::StorageDescription;
+pub use manager::CatalogManager;
+pub use manager::CATALOG_DEFAULT;
