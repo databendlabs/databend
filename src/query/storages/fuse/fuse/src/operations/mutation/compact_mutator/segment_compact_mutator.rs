@@ -110,10 +110,11 @@ impl TableMutator for SegmentCompactMutator {
             SegmentCompactor::new(self.compact_params.block_per_seg as u64, segment_writer);
 
         // 3. feed segments into accumulator, taking limit into account
-        let mut compact_end_at = number_segments;
-        for (idx, x) in base_segments.iter().enumerate() {
+        let mut compact_end_at = 0;
+        let num_segments = base_segments.len();
+        for (idx, x) in base_segments.iter().rev().enumerate() {
             compactor
-                .add(x, base_segment_locations[idx].clone())
+                .add(x, base_segment_locations[num_segments - idx].clone())
                 .await?;
             let compacted = compactor.num_compacted_segments();
             if compacted >= limit {
@@ -131,7 +132,7 @@ impl TableMutator for SegmentCompactMutator {
         if self.has_compaction() {
             // if some compaction occurred, the reminders
             // which are outside of the limit should also be collected
-            for idx in compact_end_at..number_segments {
+            for idx in 0..compact_end_at {
                 self.compaction
                     .segments_locations
                     .push(base_segment_locations[idx].clone());

@@ -563,7 +563,7 @@ impl CompactSegmentTestFixture {
             Self::gen_segments(&block_writer, &segment_writer, num_block_of_segments).await?;
         self.input_segments = segments;
         self.input_blocks = blocks;
-        for (seg, location) in &self.input_segments {
+        for (seg, location) in self.input_segments.iter().rev() {
             seg_acc.add(seg, location.clone()).await?;
         }
         Ok(seg_acc)
