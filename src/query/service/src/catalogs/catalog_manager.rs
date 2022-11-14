@@ -83,12 +83,12 @@ impl CatalogManagerHelper for CatalogManager {
                     {
                         return Err(ErrorCode::CatalogNotSupported(format!(
                             "Failed to create catalog {} to {}: Hive catalog is not enabled, please recompile with --features hive",
-                            name, ctl.meta_store_address
+                            name, ctl.address
                         )));
                     }
                     #[cfg(feature = "hive")]
                     {
-                        let hms_address = ctl.meta_store_address.clone();
+                        let hms_address = ctl.address.clone();
                         let hive_catalog = Arc::new(HiveCatalog::try_create(hms_address)?);
                         self.catalogs.insert(name.to_string(), hive_catalog);
                     }

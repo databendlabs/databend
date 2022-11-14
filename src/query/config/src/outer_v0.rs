@@ -365,6 +365,7 @@ impl Default for CatalogConfig {
 #[serde(default = "CatalogHiveConfig::empty")]
 pub struct CatalogHiveConfig {
     #[clap(long = "hive-meta-store-address", default_value_t)]
+    #[serde(rename = "address", alias = "meta_store_address")]
     pub meta_store_address: String,
     #[clap(long = "hive-thrift-protocol", default_value_t)]
     pub protocol: String,
@@ -408,7 +409,7 @@ impl TryInto<InnerCatalogHiveConfig> for CatalogHiveConfig {
     type Error = ErrorCode;
     fn try_into(self) -> Result<InnerCatalogHiveConfig, Self::Error> {
         Ok(InnerCatalogHiveConfig {
-            meta_store_address: self.meta_store_address,
+            address: self.meta_store_address,
             protocol: self.protocol.parse()?,
         })
     }
@@ -417,7 +418,7 @@ impl TryInto<InnerCatalogHiveConfig> for CatalogHiveConfig {
 impl From<InnerCatalogHiveConfig> for CatalogHiveConfig {
     fn from(inner: InnerCatalogHiveConfig) -> Self {
         Self {
-            meta_store_address: inner.meta_store_address,
+            meta_store_address: inner.address,
             protocol: inner.protocol.to_string(),
         }
     }

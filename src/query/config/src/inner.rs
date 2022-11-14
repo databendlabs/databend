@@ -348,10 +348,10 @@ pub enum CatalogConfig {
     Hive(CatalogHiveConfig),
 }
 
+// TODO: add compat protocol support
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ThriftProtocol {
     Binary,
-    // Compact,
 }
 
 impl FromStr for ThriftProtocol {
@@ -376,14 +376,14 @@ impl Display for ThriftProtocol {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CatalogHiveConfig {
-    pub meta_store_address: String,
+    pub address: String,
     pub protocol: ThriftProtocol,
 }
 
 impl Default for CatalogHiveConfig {
     fn default() -> Self {
         Self {
-            meta_store_address: "127.0.0.1:9083".to_string(),
+            address: "127.0.0.1:9083".to_string(),
             protocol: ThriftProtocol::Binary,
         }
     }

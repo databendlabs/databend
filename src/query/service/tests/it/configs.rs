@@ -169,7 +169,7 @@ data_path = "_data"
 [cache.moka]
 
 [catalog]
-meta_store_address = ""
+address = ""
 protocol = ""
 
 [catalogs]
@@ -775,12 +775,12 @@ bucket = ""
 root = ""
 
 [catalog]
-meta_store_address = "127.0.0.1:9083"
+address = "127.0.0.1:9083"
 protocol = "binary"
 
 [catalogs.my_hive]
 type = "hive"
-meta_store_address = "127.0.0.1:9083"
+address = "127.0.0.1:9083"
 protocol = "binary"
 "#
         .as_bytes(),
@@ -821,10 +821,7 @@ protocol = "binary"
             let cfg = inner.unwrap();
             match cfg {
                 CatalogConfig::Hive(cfg) => {
-                    assert_eq!(
-                        "127.0.0.1:9083", cfg.meta_store_address,
-                        "address incorrect"
-                    );
+                    assert_eq!("127.0.0.1:9083", cfg.address, "address incorrect");
                     assert_eq!("binary", cfg.protocol.to_string(), "protocol incorrect");
                 }
             }
