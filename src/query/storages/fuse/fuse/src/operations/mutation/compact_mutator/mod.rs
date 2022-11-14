@@ -18,7 +18,6 @@ mod compact_part;
 mod compact_sink;
 mod compact_source;
 mod compact_transform;
-mod full_compact_mutator;
 mod segment_compact_mutator;
 
 pub use block_compact_mutator::BlockCompactMutator;
@@ -26,7 +25,6 @@ pub use compact_meta::CompactSinkMeta;
 pub use compact_sink::CompactSink;
 pub use compact_source::CompactSource;
 pub use compact_transform::CompactTransform;
-pub use full_compact_mutator::FullCompactMutator;
 pub use segment_compact_mutator::SegmentCompactMutator;
 pub use segment_compact_mutator::SegmentCompactionState;
 pub use segment_compact_mutator::SegmentCompactor;

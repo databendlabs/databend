@@ -16,7 +16,6 @@ use std::sync::Arc;
 use std::vec;
 
 use common_catalog::plan::Partitions;
-use common_catalog::table_mutator::TableMutator;
 use common_exception::Result;
 use common_storages_table_meta::meta::Location;
 use common_storages_table_meta::meta::SegmentInfo;
@@ -28,7 +27,6 @@ use crate::io::SegmentsIO;
 use crate::metrics::metrics_set_segments_memory_usage;
 use crate::operations::CompactOptions;
 use crate::statistics::reducers::merge_statistics_mut;
-use crate::Table;
 use crate::TableContext;
 
 #[derive(Clone)]
@@ -60,11 +58,8 @@ impl BlockCompactMutator {
             unchanged_segment_statistics: Statistics::default(),
         }
     }
-}
 
-#[async_trait::async_trait]
-impl TableMutator for BlockCompactMutator {
-    async fn target_select(&mut self) -> Result<bool> {
+    pub async fn target_select(&mut self) -> Result<bool> {
         let snapshot = self.compact_params.base_snapshot.clone();
         let segment_locations = &snapshot.segments;
 
@@ -144,10 +139,6 @@ impl TableMutator for BlockCompactMutator {
 
         Ok(true)
     }
-
-    async fn try_commit(self: Box<Self>, _table: Arc<dyn Table>) -> Result<()> {
-        unimplemented!()
-    }
 }
 
 #[derive(Default)]
@@ -167,7 +158,8 @@ impl CompactPartBuilder {
 
     fn check_for_compact(segments: &Vec<Arc<SegmentInfo>>) -> bool {
         segments.len() != 1
-            || segments[0].summary.perfect_block_count != segments[0].summary.block_count
+            || (segments[0].summary.perfect_block_count != segments[0].summary.block_count
+                && segments[0].summary.block_count > 1)
     }
 
     fn add(&mut self, segment: Arc<SegmentInfo>) -> Vec<Vec<Arc<SegmentInfo>>> {

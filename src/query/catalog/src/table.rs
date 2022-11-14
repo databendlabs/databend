@@ -247,7 +247,7 @@ pub trait Table: Sync + Send {
         target: CompactTarget,
         limit: Option<usize>,
         pipeline: &mut Pipeline,
-    ) -> Result<Option<Box<dyn TableMutator>>> {
+    ) -> Result<bool> {
         let (_, _, _, _) = (ctx, target, limit, pipeline);
 
         Err(ErrorCode::Unimplemented(format!(

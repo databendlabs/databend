@@ -15,9 +15,9 @@
 use std::sync::Arc;
 
 use common_base::base::tokio;
-use common_catalog::table::CompactTarget;
 use common_catalog::table::Table;
 use common_catalog::table::TableExt;
+use common_catalog::table_mutator::TableMutator;
 use common_datablocks::DataBlock;
 use common_datablocks::SendableDataBlockStream;
 use common_exception::ErrorCode;
@@ -28,6 +28,8 @@ use common_storages_fuse::io::MetaReaders;
 use common_storages_fuse::io::SegmentInfoReader;
 use common_storages_fuse::io::SegmentWriter;
 use common_storages_fuse::io::TableMetaLocationGenerator;
+use common_storages_fuse::operations::CompactOptions;
+use common_storages_fuse::operations::SegmentCompactMutator;
 use common_storages_fuse::operations::SegmentCompactor;
 use common_storages_fuse::statistics::gen_columns_statistics;
 use common_storages_fuse::statistics::reducers::merge_statistics_mut;
@@ -73,10 +75,7 @@ async fn test_compact_segment_normal_case() -> Result<()> {
         .get_table(ctx.get_tenant().as_str(), "default", "t")
         .await?;
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-    let mut pipeline = common_pipeline_core::Pipeline::create();
-    let mutator = fuse_table
-        .compact(ctx.clone(), CompactTarget::Segments, None, &mut pipeline)
-        .await?;
+    let mutator = build_mutator(fuse_table, ctx.clone(), None).await?;
     assert!(mutator.is_some());
     let mutator = mutator.unwrap();
     mutator.try_commit(table.clone()).await?;
@@ -118,10 +117,7 @@ async fn test_compact_segment_resolvable_conflict() -> Result<()> {
         .get_table(ctx.get_tenant().as_str(), "default", "t")
         .await?;
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-    let mut pipeline = common_pipeline_core::Pipeline::create();
-    let mutator = fuse_table
-        .compact(ctx.clone(), CompactTarget::Segments, None, &mut pipeline)
-        .await?;
+    let mutator = build_mutator(fuse_table, ctx.clone(), None).await?;
     assert!(mutator.is_some());
     let mutator = mutator.unwrap();
 
@@ -178,10 +174,7 @@ async fn test_compact_segment_unresolvable_conflict() -> Result<()> {
         .get_table(ctx.get_tenant().as_str(), "default", "t")
         .await?;
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-    let mut pipeline = common_pipeline_core::Pipeline::create();
-    let mutator = fuse_table
-        .compact(ctx.clone(), CompactTarget::Segments, None, &mut pipeline)
-        .await?;
+    let mutator = build_mutator(fuse_table, ctx.clone(), None).await?;
     assert!(mutator.is_some());
     let mutator = mutator.unwrap();
 
@@ -213,12 +206,47 @@ async fn check_count(result_stream: SendableDataBlockStream) -> Result<u64> {
 
 async fn compact_segment(ctx: Arc<QueryContext>, table: &Arc<dyn Table>) -> Result<()> {
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-    let mut pipeline = common_pipeline_core::Pipeline::create();
-    let mutator = fuse_table
-        .compact(ctx, CompactTarget::Segments, None, &mut pipeline)
-        .await?
-        .unwrap();
+    let mutator = build_mutator(fuse_table, ctx.clone(), None).await?.unwrap();
     mutator.try_commit(table.clone()).await
+}
+
+async fn build_mutator(
+    tbl: &FuseTable,
+    ctx: Arc<dyn TableContext>,
+    limit: Option<usize>,
+) -> Result<Option<Box<dyn TableMutator>>> {
+    let snapshot_opt = tbl.read_table_snapshot().await?;
+    let base_snapshot = if let Some(val) = snapshot_opt {
+        val
+    } else {
+        // no snapshot, no compaction.
+        return Ok(None);
+    };
+
+    if base_snapshot.summary.block_count <= 1 {
+        return Ok(None);
+    }
+
+    let block_per_seg = tbl.get_option("block_per_segment", 1000);
+
+    let compact_params = CompactOptions {
+        base_snapshot,
+        block_per_seg,
+        limit,
+    };
+
+    let mut segment_mutator = SegmentCompactMutator::try_create(
+        ctx.clone(),
+        compact_params,
+        tbl.meta_location_generator().clone(),
+        tbl.get_operator(),
+    )?;
+
+    if segment_mutator.target_select().await? {
+        Ok(Some(Box::new(segment_mutator)))
+    } else {
+        Ok(None)
+    }
 }
 
 #[tokio::test]

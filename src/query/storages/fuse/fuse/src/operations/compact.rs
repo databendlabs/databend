@@ -51,17 +51,17 @@ impl FuseTable {
         target: CompactTarget,
         limit: Option<usize>,
         pipeline: &mut Pipeline,
-    ) -> Result<Option<Box<dyn TableMutator>>> {
+    ) -> Result<bool> {
         let snapshot_opt = self.read_table_snapshot().await?;
         let base_snapshot = if let Some(val) = snapshot_opt {
             val
         } else {
             // no snapshot, no compaction.
-            return Ok(None);
+            return Ok(false);
         };
 
         if base_snapshot.summary.block_count <= 1 {
-            return Ok(None);
+            return Ok(false);
         }
 
         let block_per_seg =
@@ -84,7 +84,7 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
         _pipeline: &mut Pipeline,
         options: CompactOptions,
-    ) -> Result<Option<Box<dyn TableMutator>>> {
+    ) -> Result<bool> {
         let mut segment_mutator = SegmentCompactMutator::try_create(
             ctx.clone(),
             options,
@@ -92,11 +92,14 @@ impl FuseTable {
             self.operator.clone(),
         )?;
 
-        if segment_mutator.target_select().await? {
-            Ok(Some(Box::new(segment_mutator)))
-        } else {
-            Ok(None)
+        if !segment_mutator.target_select().await? {
+            return Ok(false);
         }
+
+        let mutator = Box::new(segment_mutator);
+        mutator.try_commit(Arc::new(self.clone())).await?;
+
+        Ok(true)
     }
 
     async fn compact_blocks(
@@ -104,13 +107,13 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
         options: CompactOptions,
-    ) -> Result<Option<Box<dyn TableMutator>>> {
+    ) -> Result<bool> {
         let thresholds = self.get_block_compact_thresholds();
 
         let mut mutator = BlockCompactMutator::new(ctx.clone(), options, self.operator.clone());
         let need_compact = mutator.target_select().await?;
         if !need_compact {
-            return Ok(None);
+            return Ok(false);
         }
 
         ctx.try_set_partitions(mutator.compact_tasks.clone())?;
@@ -140,7 +143,7 @@ impl FuseTable {
 
         self.try_add_compact_sink(mutator.clone(), pipeline)?;
 
-        Ok(Some(Box::new(mutator)))
+        Ok(true)
     }
 
     pub fn try_add_compact_sink(

@@ -26,6 +26,7 @@ use common_storages_table_meta::meta::BlockMeta;
 use super::compact_meta::CompactSourceMeta;
 use super::compact_part::CompactPartInfo;
 use super::compact_part::CompactTask;
+use crate::metrics::metrics_set_selected_blocks_memory_usage;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::Event;
 use crate::pipelines::processors::processor::ProcessorPtr;
@@ -118,6 +119,9 @@ impl Processor for CompactSource {
                 let mut tasks = Vec::new();
                 for segment in part.segments.iter() {
                     for block in segment.blocks.iter() {
+                        // todo: add real metrics
+                        metrics_set_selected_blocks_memory_usage(0.0);
+
                         let res = builder.add(block, self.thresholds);
                         tasks.extend(res);
                     }

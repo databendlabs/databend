@@ -72,27 +72,25 @@ impl Interpreter for OptimizeTableInterpreter {
 
         if do_compact_segments_only {
             let mut pipeline = Pipeline::create();
-            if let Some(mutator) = table
+            table
                 .compact(
                     ctx.clone(),
                     CompactTarget::Segments,
                     limit_opt,
                     &mut pipeline,
                 )
-                .await?
-            {
-                mutator.try_commit(table).await?;
-                return Ok(PipelineBuildResult::create());
-            }
+                .await?;
+
+            return Ok(PipelineBuildResult::create());
         }
 
         if do_compact_blocks {
             let mut pipeline = Pipeline::create();
-            let mutator = table
-                .compact(ctx.clone(), CompactTarget::Blocks, limit_opt, &mut pipeline)
-                .await?;
 
-            if mutator.is_some() {
+            if table
+                .compact(ctx.clone(), CompactTarget::Blocks, limit_opt, &mut pipeline)
+                .await?
+            {
                 let settings = ctx.get_settings();
                 pipeline.set_max_threads(settings.get_max_threads()? as usize);
                 let executor_settings = ExecutorSettings::try_create(&settings)?;
