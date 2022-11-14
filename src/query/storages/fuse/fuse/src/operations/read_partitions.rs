@@ -12,7 +12,10 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
+use std::hash::Hash;
+use std::hash::Hasher;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -60,8 +63,30 @@ impl FuseTable {
                 if settings.get_enable_distributed_eval_index()? {
                     let mut segments = Vec::with_capacity(snapshot.segments.len());
 
-                    for segment_location in &snapshot.segments {
-                        segments.push(FuseLazyPartInfo::create(segment_location.clone()))
+                    let mut segments_locations = snapshot.segments.clone();
+
+                    // reorder the segment locations according to their hash of location,
+                    // so that,
+                    // - segments are kind of shuffled
+                    // - assumes that the membership of query cluster is stable,
+                    //   the same segment will likely to be assigned to the same query
+                    //   node (by PlanFragment::redistribute_source_fragment), and cache will be
+                    //   utilized better.
+                    let num_nodes = ctx.get_cluster().nodes.len() as u64;
+                    let hash = |path: &str| -> u64 {
+                        let mut s = DefaultHasher::new();
+                        path.hash(&mut s); // % num_nodes;
+                        s.finish() % num_nodes
+                    };
+                    segments_locations.sort_by(|a, b| {
+                        let hl = hash(&a.0);
+                        let hr = hash(&b.0);
+                        hl.cmp(&hr)
+                    });
+
+                    // build the PartInfos
+                    for segment_location in segments_locations {
+                        segments.push(FuseLazyPartInfo::create(segment_location))
                     }
 
                     return Ok((
