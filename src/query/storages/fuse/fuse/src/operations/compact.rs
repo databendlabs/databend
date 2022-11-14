@@ -108,6 +108,10 @@ impl FuseTable {
         pipeline: &mut Pipeline,
         options: CompactOptions,
     ) -> Result<bool> {
+        if self.cluster_key_meta.is_some() {
+            return Ok(false);
+        }
+
         let thresholds = self.get_block_compact_thresholds();
 
         let mut mutator = BlockCompactMutator::new(ctx.clone(), options, self.operator.clone());
