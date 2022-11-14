@@ -27,11 +27,16 @@ fn test_empty_boolean_column() {
 
 #[test]
 fn test_new_from_slice() {
-    let data_column: BooleanColumn = BooleanColumn::from_slice(&[true, false]);
+    let values = &[true, false];
+    let data_column: BooleanColumn = BooleanColumn::from_slice(values);
     let mut iter = data_column.iter();
     assert_eq!(Some(true), iter.next());
     assert_eq!(Some(false), iter.next());
     assert_eq!(None, iter.next());
+
+    data_column.for_each(|i, v| {
+        assert_eq!(DataValue::Boolean(values[i]), v);
+    })
 }
 
 #[test]

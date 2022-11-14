@@ -153,6 +153,15 @@ pub trait Column: Send + Sync {
         (0..self.len()).map(|i| self.get(i)).collect()
     }
 
+    /// Visit each row value of Column
+    fn for_each<F>(&self, f: F)
+    where
+        Self: Sized,
+        F: Fn(usize, DataValue),
+    {
+        (0..self.len()).for_each(|i| f(i, self.get(i)))
+    }
+
     /// Apply binary mode function to each element of the column.
     /// WARN: Can't use `&mut [Vec<u8>]` because it has performance drawback.
     /// Refer: https://github.com/rust-lang/rust-clippy/issues/8334
