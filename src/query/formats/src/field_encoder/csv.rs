@@ -20,9 +20,9 @@ use common_io::consts::NAN_BYTES_LOWER;
 use common_io::consts::NULL_BYTES_ESCAPE;
 use common_io::consts::TRUE_BYTES_LOWER;
 
-use crate::field_encoder::CommonSettings;
 use crate::field_encoder::FieldEncoderRowBased;
 use crate::field_encoder::FieldEncoderValues;
+use crate::CommonSettings;
 use crate::FileFormatOptionsExt;
 
 pub struct FieldEncoderCSV {

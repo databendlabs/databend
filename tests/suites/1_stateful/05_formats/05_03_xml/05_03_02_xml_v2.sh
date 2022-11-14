@@ -16,9 +16,9 @@ echo "CREATE TABLE test_xml (
 cat << EOF > /tmp/simple_v2.xml
 <?xml version="1.0"?>
 <data>
-    <row id="1" name='shuai\"ge' data='{\"我是\":\"帅哥\"}' create_time="2022-11-01 10:51:14"/>
-    <row id="2" name='\"mengnan\"' data='\"猛\"男' create_time="2022-11-01 10:51:14"/>
-    <row ID="3" NAME='\"mengnan\"' DATA='\"猛\"男' CREATE_TIME="2022-11-01 10:51:14" EMPTY="123"/>
+    <row id="1" name='shuai"ge' data='{"我是":"帅哥"}' create_time="2022-11-01 10:51:14"/>
+    <row id="2" name='"mengnan"' data='"猛"男' create_time="2022-11-01 10:51:14"/>
+    <row ID="3" NAME='"mengnan"' DATA='"猛"男' CREATE_TIME="2022-11-01 10:51:14" EMPTY="123"/>
 </data>
 EOF
 
@@ -26,9 +26,9 @@ EOF
 cat << EOF > /tmp/simple_v3.xml
 <?xml version="1.0"?>
 <data>
-    <databend id="1" name='shuai\"ge' data='{\"我是\":\"帅哥\"}' create_time="2022-11-01 10:51:14"/>
-    <databend id="2" name='\"mengnan\"' data='\"猛\"男' create_time="2022-11-01 10:51:14"/>
-    <databend ID="3" NAME='\"mengnan\"' DATA='\"猛\"男' CREATE_TIME="2022-11-01 10:51:14" EMPTY="123"/>
+    <databend id="1" name='shuai"ge' data='{"我是":"帅哥"}' create_time="2022-11-01 10:51:14"/>
+    <databend id="2" name='"mengnan"' data='"猛"男' create_time="2022-11-01 10:51:14"/>
+    <databend ID="3" NAME='"mengnan"' DATA='"猛"男' CREATE_TIME="2022-11-01 10:51:14" EMPTY="123"/>
 </data>
 EOF
 
