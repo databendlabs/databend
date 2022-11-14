@@ -24,6 +24,7 @@ use common_planner::extras::Statistics;
 use common_planner::plans::Projection;
 use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use common_storages_memory::MemoryTable;
+use common_storages_table_meta::meta::ColumnNDVs;
 use databend_query::sessions::TableContext;
 use databend_query::sql::plans::create_table_v2::TableOptions;
 use databend_query::stream::DataBlockStream;
@@ -63,7 +64,12 @@ async fn test_memorytable() -> Result<()> {
         let input_stream = futures::stream::iter::<Vec<Result<DataBlock>>>(blocks.clone());
         // with overwrite false
         table
-            .commit_insertion(ctx.clone(), input_stream.try_collect().await?, false)
+            .commit_insertion(
+                ctx.clone(),
+                input_stream.try_collect().await?,
+                vec![],
+                false,
+            )
             .await?;
     }
 
@@ -158,7 +164,7 @@ async fn test_memorytable() -> Result<()> {
         let input_stream = futures::stream::iter::<Vec<Result<DataBlock>>>(blocks.clone());
         // with overwrite = true
         table
-            .commit_insertion(ctx.clone(), input_stream.try_collect().await?, true)
+            .commit_insertion(ctx.clone(), input_stream.try_collect().await?, vec![], true)
             .await?;
     }
 

@@ -28,6 +28,7 @@ use common_exception::Result;
 use common_pipeline_core::processors::port::OutputPort;
 use common_storages_index::*;
 use common_storages_table_meta::caches::CacheManager;
+use common_storages_table_meta::meta::ColumnNDVs;
 use common_storages_table_meta::meta::Location;
 use common_storages_table_meta::meta::SegmentInfo;
 use common_storages_table_meta::meta::Statistics;
@@ -40,6 +41,7 @@ use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::processor::Event;
 use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::Processor;
+use crate::statistics::stat_data_blocks;
 use crate::statistics::BlockStatistics;
 use crate::statistics::ClusterStatsGenerator;
 use crate::statistics::StatisticsAccumulator;
@@ -85,6 +87,8 @@ pub struct FuseTableSink {
 
     // A dummy output port for distributed insert select to connect Exchange Sink.
     output: Option<Arc<OutputPort>>,
+
+    ndvs: ColumnNDVs,
 }
 
 impl FuseTableSink {
@@ -107,6 +111,7 @@ impl FuseTableSink {
             num_block_threshold: num_block_threshold as u64,
             cluster_stats_gen,
             output,
+            ndvs: ColumnNDVs::default(),
         })))
     }
 }
@@ -145,6 +150,7 @@ impl Processor for FuseTableSink {
                 output.finish();
             }
             self.state = State::Finished;
+            self.ctx.push_precommit_column_ndvs(self.ndvs.clone());
             return Ok(Event::Finished);
         }
 
@@ -163,6 +169,7 @@ impl Processor for FuseTableSink {
                 let (cluster_stats, block) =
                     self.cluster_stats_gen.gen_stats_for_append(&data_block)?;
 
+                stat_data_blocks(&data_block, &mut self.ndvs)?;
                 let (block_location, block_id) = self.meta_locations.gen_block_location();
 
                 let bloom_index_state = {

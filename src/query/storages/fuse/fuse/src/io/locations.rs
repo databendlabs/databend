@@ -27,6 +27,7 @@ use uuid::Uuid;
 use crate::constants::FUSE_TBL_BLOCK_PREFIX;
 use crate::constants::FUSE_TBL_SEGMENT_PREFIX;
 use crate::constants::FUSE_TBL_SNAPSHOT_PREFIX;
+use crate::constants::FUSE_TBL_SNAPSHOT_STATISTICS_PREFIX;
 use crate::FUSE_TBL_LAST_SNAPSHOT_HINT;
 use crate::FUSE_TBL_XOR_BLOOM_INDEX_PREFIX;
 
@@ -150,7 +151,7 @@ impl SnapshotLocationCreator for TableSnapshotStatisticsVersion {
         format!(
             "{}/{}/{}{}",
             prefix.as_ref(),
-            FUSE_TBL_SNAPSHOT_PREFIX,
+            FUSE_TBL_SNAPSHOT_STATISTICS_PREFIX,
             id.simple(),
             self.suffix(),
         )

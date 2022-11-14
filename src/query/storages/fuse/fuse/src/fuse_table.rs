@@ -43,6 +43,7 @@ use common_storage::ShareTableConfig;
 use common_storage::StorageMetrics;
 use common_storage::StorageMetricsLayer;
 use common_storages_table_meta::meta::ClusterKey;
+use common_storages_table_meta::meta::ColumnNDVs;
 use common_storages_table_meta::meta::ColumnStatistics as FuseColumnStatistics;
 use common_storages_table_meta::meta::Statistics as FuseStatistics;
 use common_storages_table_meta::meta::TableSnapshot;
@@ -56,7 +57,6 @@ use crate::io::MetaReaders;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::AppendOperationLogEntry;
 use crate::pipelines::Pipeline;
-use crate::statistics::calc_column_ndvs_of_data_blocks;
 use crate::table_storage_prefix;
 use crate::NavigationPoint;
 use crate::Table;
@@ -149,19 +149,19 @@ impl FuseTable {
         Ok(table_storage_prefix(db_id, table_id))
     }
 
-    pub fn table_snapshot_statitics_format_version(&self, location: &String) -> Result<u64> {
+    pub fn table_snapshot_statistics_format_version(&self, location: &String) -> Result<u64> {
         Ok(TableMetaLocationGenerator::snapshot_version(location))
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
-    pub(crate) async fn read_table_snapshot_statitics(
+    pub(crate) async fn read_table_snapshot_statistics(
         &self,
         snapshot: Option<&Arc<TableSnapshot>>,
     ) -> Result<Option<Arc<TableSnapshotStatistics>>> {
         match snapshot {
             Some(snapshot) => {
                 if let Some(loc) = &snapshot.statistics_location {
-                    let ver = self.table_snapshot_statitics_format_version(loc)?;
+                    let ver = self.table_snapshot_statistics_format_version(loc)?;
                     let reader = MetaReaders::table_snapshot_statistics_reader(self.get_operator());
                     Ok(Some(reader.read(loc.as_str(), None, ver).await?))
                 } else {
@@ -421,10 +421,10 @@ impl Table for FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
         operations: Vec<DataBlock>,
+        ndvs: Vec<ColumnNDVs>,
         overwrite: bool,
     ) -> Result<()> {
         self.check_mutable()?;
-        let ndvs = calc_column_ndvs_of_data_blocks(&operations)?;
         // only append operation supported currently
         let append_log_entries = operations
             .iter()

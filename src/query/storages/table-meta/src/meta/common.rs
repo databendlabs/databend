@@ -13,7 +13,6 @@
 //  limitations under the License.
 
 use std::collections::HashMap;
-use std::ops::AddAssign;
 use std::sync::Arc;
 
 use common_base::base::uuid::Uuid;
@@ -21,9 +20,7 @@ use common_datavalues::Column;
 use common_datavalues::DataValue;
 use serde::Deserialize;
 use serde::Serialize;
-use streaming_algorithms::HyperLogLogMagnitude;
-use streaming_algorithms::New;
-use streaming_algorithms::UnionAssign;
+use streaming_algorithms::HyperLogLog;
 pub type ColumnId = u32;
 pub type FormatVersion = u64;
 pub type SnapshotId = Uuid;
@@ -97,7 +94,7 @@ impl Compression {
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Default)]
 pub struct ColumnNDVs {
-    pub column_hll: HashMap<ColumnId, HyperLogLogMagnitude<DataValue>>,
+    pub column_hll: HashMap<ColumnId, HyperLogLog<DataValue>>,
 }
 
 impl ColumnNDVs {
@@ -106,42 +103,48 @@ impl ColumnNDVs {
     // 0.04         1057
     // 0.09         289
     // 0.11         161
-    const HLL_ERROR_RATE: &'static f64 = &0.11;
+    const HLL_ERROR_RATE: f64 = 0.11;
 
     pub fn merge_number_of_distinct_values(&mut self, other: &ColumnNDVs) {
         for (idx, other_hll) in other.column_hll.iter() {
             match self.column_hll.get_mut(idx) {
-                Some(hll) => hll.union_assign(other_hll),
+                Some(hll) => hll.union(other_hll),
                 None => {
-                    let mut hll = HyperLogLogMagnitude::new(ColumnNDVs::HLL_ERROR_RATE);
-                    hll.union_assign(other_hll);
-                    self.column_hll.insert(*idx, hll);
+                    self.column_hll.insert(*idx, other_hll.clone());
                 }
             }
         }
     }
 
-    pub fn calc_number_of_distinct_values(&mut self, idx: u32, col: &Arc<dyn Column>) {
+    pub fn add_column(&mut self, idx: u32, col: &Arc<dyn Column>) {
         match self.column_hll.get_mut(&idx) {
             Some(hll) => {
                 col.to_values().iter().for_each(|value| {
-                    hll.add_assign(value);
+                    hll.push(value);
                 });
             }
             None => {
-                let mut hll = HyperLogLogMagnitude::new(ColumnNDVs::HLL_ERROR_RATE);
+                let mut hll = HyperLogLog::new_with_counters(ColumnNDVs::HLL_ERROR_RATE);
                 col.to_values().iter().for_each(|value| {
-                    hll.add_assign(value);
+                    hll.push(value);
                 });
                 self.column_hll.insert(idx, hll);
             }
         }
     }
 
+    pub fn delete_column(&mut self, idx: u32, col: &Arc<dyn Column>) {
+        if let Some(hll) = self.column_hll.get_mut(&idx) {
+            col.to_values().iter().for_each(|value| {
+                hll.delete(value);
+            });
+        }
+    }
+
     pub fn get_number_of_distinct_values(&self) -> HashMap<ColumnId, u64> {
         let mut map = HashMap::new();
         for (idx, hll) in self.column_hll.iter() {
-            map.insert(*idx, hll.0.len() as u64);
+            map.insert(*idx, hll.len() as u64);
         }
 
         map

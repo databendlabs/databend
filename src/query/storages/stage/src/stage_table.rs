@@ -34,6 +34,7 @@ use common_planner::stage_table::StageTableInfo;
 use common_planner::Partitions;
 use common_planner::ReadDataSourcePlan;
 use common_storage::init_operator;
+use common_storages_table_meta::meta::ColumnNDVs;
 use opendal::layers::SubdirLayer;
 use opendal::Operator;
 use parking_lot::Mutex;
@@ -187,6 +188,7 @@ impl Table for StageTable {
         &self,
         _ctx: Arc<dyn TableContext>,
         _operations: Vec<DataBlock>,
+        _ndvs: Vec<ColumnNDVs>,
         _overwrite: bool,
     ) -> Result<()> {
         Ok(())

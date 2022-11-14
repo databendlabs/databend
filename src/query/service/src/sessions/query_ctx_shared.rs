@@ -32,6 +32,7 @@ use common_settings::Settings;
 use common_storage::DataOperator;
 use common_storage::StorageMetrics;
 use common_storage::StorageParams;
+use common_storages_table_meta::meta::ColumnNDVs;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 use uuid::Uuid;
@@ -81,6 +82,7 @@ pub struct QueryContextShared {
     pub(in crate::sessions) executor: Arc<RwLock<Weak<PipelineExecutor>>>,
     pub(in crate::sessions) precommit_blocks: Arc<RwLock<Vec<DataBlock>>>,
     pub(in crate::sessions) created_time: SystemTime,
+    pub(in crate::sessions) precommit_ndvs: Arc<RwLock<Vec<ColumnNDVs>>>,
 }
 
 impl QueryContextShared {
@@ -111,6 +113,7 @@ impl QueryContextShared {
             executor: Arc::new(RwLock::new(Weak::new())),
             precommit_blocks: Arc::new(RwLock::new(vec![])),
             created_time: SystemTime::now(),
+            precommit_ndvs: Arc::new(RwLock::new(vec![])),
         }))
     }
 
@@ -325,6 +328,19 @@ impl QueryContextShared {
         let mut swaped_precommit_blocks = vec![];
         std::mem::swap(&mut *blocks, &mut swaped_precommit_blocks);
         swaped_precommit_blocks
+    }
+
+    pub fn push_precommit_column_ndvs(&self, ndv: ColumnNDVs) {
+        let mut ndvs = self.precommit_ndvs.write();
+        ndvs.push(ndv);
+    }
+
+    pub fn consume_precommit_column_ndvs(&self) -> Vec<ColumnNDVs> {
+        let mut ndvs = self.precommit_ndvs.write();
+
+        let mut swaped_precommit_ndvs = vec![];
+        std::mem::swap(&mut *ndvs, &mut swaped_precommit_ndvs);
+        swaped_precommit_ndvs
     }
 
     pub fn get_created_time(&self) -> SystemTime {

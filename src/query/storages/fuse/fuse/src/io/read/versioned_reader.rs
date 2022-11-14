@@ -48,7 +48,10 @@ impl VersionedReader<TableSnapshotStatistics> for TableSnapshotStatisticsVersion
     async fn read<R>(&self, reader: R) -> Result<TableSnapshotStatistics>
     where R: AsyncRead + Unpin + Send {
         let r = match self {
-            TableSnapshotStatisticsVersion::V0(v) => load_by_version(reader, v).await?,
+            TableSnapshotStatisticsVersion::V0(v) => {
+                let (data, _bytes) = load_bytes_by_version(reader, v).await?;
+                TableSnapshotStatistics::deserialize(&data)?
+            }
         };
         Ok(r)
     }
@@ -75,4 +78,15 @@ where
     use futures::AsyncReadExt;
     reader.read_to_end(&mut buffer).await?;
     Ok(from_slice::<T>(&buffer)?)
+}
+
+async fn load_bytes_by_version<R, T>(mut reader: R, _v: &PhantomData<T>) -> Result<(Vec<u8>, usize)>
+where
+    T: DeserializeOwned,
+    R: AsyncRead + Unpin + Send,
+{
+    let mut buffer: Vec<u8> = vec![];
+    use futures::AsyncReadExt;
+    let bytes = reader.read_to_end(&mut buffer).await?;
+    Ok((buffer, bytes))
 }

@@ -49,6 +49,7 @@ use tracing::warn;
 use uuid::Uuid;
 
 use crate::io::write_meta;
+use crate::io::write_meta_bytes;
 use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
 use crate::metrics::metrics_inc_commit_mutation_resolvable_conflict;
@@ -75,7 +76,7 @@ impl FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
         operation_log: TableOperationLog,
-        ndvs: ColumnNDVs,
+        ndvs: Vec<ColumnNDVs>,
         overwrite: bool,
     ) -> Result<()> {
         let mut tbl = self;
@@ -105,10 +106,15 @@ impl FuseTable {
             .with_max_elapsed_time(Some(max_elapsed))
             .build();
 
+        let mut mut_ndvs = ColumnNDVs::default();
+        for ndv in ndvs.iter() {
+            merge_column_ndvs(&mut mut_ndvs, ndv);
+        }
+
         let transient = self.transient();
         loop {
             match tbl
-                .try_commit(ctx.clone(), &operation_log, &ndvs, overwrite)
+                .try_commit(ctx.clone(), &operation_log, &mut_ndvs, overwrite)
                 .await
             {
                 Ok(_) => {
@@ -182,7 +188,7 @@ impl FuseTable {
         overwrite: bool,
     ) -> Result<()> {
         let prev = self.read_table_snapshot().await?;
-        let prev_statistics = self.read_table_snapshot_statitics(prev.as_ref()).await?;
+        let prev_statistics = self.read_table_snapshot_statistics(prev.as_ref()).await?;
         let prev_version = self.snapshot_format_version().await?;
         let prev_timestamp = prev.as_ref().and_then(|v| v.timestamp);
         let prev_ndvs = prev_statistics.as_ref().map(|v| &v.column_ndvs);
@@ -321,7 +327,12 @@ impl FuseTable {
         let snapshot_statistics_location = snapshot.statistics_location.clone();
         if let Some(snapshot_statistics_location) = &snapshot_statistics_location {
             if let Some(ref snapshot_statistics) = snapshot_statistics {
-                write_meta(operator, snapshot_statistics_location, snapshot_statistics).await?;
+                write_meta_bytes(
+                    operator,
+                    snapshot_statistics_location,
+                    &snapshot_statistics.serialize()?,
+                )
+                .await?;
             }
         }
 

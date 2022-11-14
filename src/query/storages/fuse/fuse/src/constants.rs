@@ -22,6 +22,7 @@ pub const FUSE_TBL_BLOCK_INDEX_PREFIX: &str = "_i";
 pub const FUSE_TBL_XOR_BLOOM_INDEX_PREFIX: &str = "_i_b_v2";
 pub const FUSE_TBL_SEGMENT_PREFIX: &str = "_sg";
 pub const FUSE_TBL_SNAPSHOT_PREFIX: &str = "_ss";
+pub const FUSE_TBL_SNAPSHOT_STATISTICS_PREFIX: &str = "_ts";
 pub const FUSE_TBL_LAST_SNAPSHOT_HINT: &str = "last_snapshot_location_hint";
 
 pub const DEFAULT_BLOCK_PER_SEGMENT: usize = 1000;

@@ -216,17 +216,13 @@ impl Trim for DataValue {
     }
 }
 
-pub fn calc_column_ndvs_of_data_blocks(data_blocks: &Vec<DataBlock>) -> Result<ColumnNDVs> {
-    let mut ndvs = ColumnNDVs::default();
-
-    for block in data_blocks {
-        let leaves = traverse::traverse_columns_dfs(block.columns())?;
-        for (idx, col) in leaves.iter().enumerate() {
-            ndvs.calc_number_of_distinct_values(idx as u32, col);
-        }
+pub fn stat_data_blocks(data_block: &DataBlock, ndvs: &mut ColumnNDVs) -> Result<()> {
+    let leaves = traverse::traverse_columns_dfs(data_block.columns())?;
+    for (idx, col) in leaves.iter().enumerate() {
+        ndvs.add_column(idx as u32, col);
     }
 
-    Ok(ndvs)
+    Ok(())
 }
 
 pub fn merge_column_ndvs(ndvs: &mut ColumnNDVs, other: &ColumnNDVs) {

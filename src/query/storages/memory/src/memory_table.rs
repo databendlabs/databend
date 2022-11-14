@@ -42,6 +42,7 @@ use common_planner::plans::Projection;
 use common_planner::Partitions;
 use common_planner::ReadDataSourcePlan;
 use common_storage::StorageMetrics;
+use common_storages_table_meta::meta::ColumnNDVs;
 use once_cell::sync::Lazy;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
@@ -235,6 +236,7 @@ impl Table for MemoryTable {
         &self,
         _: Arc<dyn TableContext>,
         operations: Vec<DataBlock>,
+        _ndvs: Vec<ColumnNDVs>,
         overwrite: bool,
     ) -> Result<()> {
         let written_bytes: usize = operations.iter().map(|b| b.memory_size()).sum();

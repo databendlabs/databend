@@ -328,8 +328,9 @@ impl CopyInterpreterV2 {
                 return GlobalIORuntime::instance().block_on(async move {
                     // Commit
                     let operations = ctx.consume_precommit_blocks();
+                    let ndvs = ctx.consume_precommit_column_ndvs();
                     to_table
-                        .commit_insertion(ctx.clone(), operations, false)
+                        .commit_insertion(ctx.clone(), operations, ndvs, false)
                         .await?;
 
                     // Purge

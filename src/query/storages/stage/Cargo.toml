@@ -30,6 +30,7 @@ common-planner = { path = "../../planner" }
 common-storage = { path = "../../../common/storage" }
 common-storages-view = { path = "../view" }
 common-users = { path = "../../users" }
+common-storages-table-meta = { path = "../table-meta" }
 
 async-trait = { version = "0.1.57", package = "async-trait-fn" }
 backon = "0.2"

@@ -14,6 +14,7 @@
 
 use std::collections::HashMap;
 
+use common_exception::Result;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -57,5 +58,16 @@ impl TableSnapshotStatistics {
 
     pub fn get_column_counts(&self) -> HashMap<ColumnId, u64> {
         self.column_ndvs.get_number_of_distinct_values()
+    }
+
+    pub fn serialize(&self) -> Result<Vec<u8>> {
+        let data = bincode::serde::encode_to_vec(self, bincode::config::standard())?;
+        Ok(data)
+    }
+
+    pub fn deserialize(data: &Vec<u8>) -> Result<Self> {
+        let (t, _) =
+            bincode::serde::decode_from_slice(data.as_slice(), bincode::config::standard())?;
+        Ok(t)
     }
 }

@@ -47,6 +47,7 @@ use common_settings::Settings;
 use common_storage::DataOperator;
 use common_storage::StorageMetrics;
 use common_storages_stage::StageTable;
+use common_storages_table_meta::meta::ColumnNDVs;
 use parking_lot::RwLock;
 use tracing::debug;
 
@@ -320,6 +321,15 @@ impl TableContext for QueryContext {
     fn consume_precommit_blocks(&self) -> Vec<DataBlock> {
         self.shared.consume_precommit_blocks()
     }
+
+    fn push_precommit_column_ndvs(&self, ndv: ColumnNDVs) {
+        self.shared.push_precommit_column_ndvs(ndv);
+    }
+
+    fn consume_precommit_column_ndvs(&self) -> Vec<ColumnNDVs> {
+        self.shared.consume_precommit_column_ndvs()
+    }
+
     fn try_get_function_context(&self) -> Result<FunctionContext> {
         let tz = self.get_settings().get_timezone()?;
         let tz = tz.parse::<Tz>().map_err(|_| {

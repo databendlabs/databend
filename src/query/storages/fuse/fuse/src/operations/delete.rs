@@ -24,7 +24,9 @@ use common_planner::plans::DeletePlan;
 use common_planner::Expression;
 use common_sql::ExpressionParser;
 use common_storages_table_meta::meta::TableSnapshot;
+use common_storages_table_meta::meta::TableSnapshotStatistics;
 use tracing::debug;
+use uuid::Uuid;
 
 use crate::operations::mutation::delete_from_block;
 use crate::operations::mutation::deletion_mutator::Deletion;
@@ -36,6 +38,9 @@ use crate::FuseTable;
 impl FuseTable {
     pub async fn do_delete(&self, ctx: Arc<dyn TableContext>, plan: &DeletePlan) -> Result<()> {
         let snapshot_opt = self.read_table_snapshot().await?;
+        let prev_statistics_opt = self
+            .read_table_snapshot_statistics(snapshot_opt.as_ref())
+            .await?;
 
         // check if table is empty
         let snapshot = if let Some(val) = snapshot_opt {
@@ -50,6 +55,11 @@ impl FuseTable {
             return Ok(());
         }
 
+        let prev_statistics = match prev_statistics_opt {
+            Some(prev_statistics) => prev_statistics,
+            None => Arc::new(TableSnapshotStatistics::new_empty(Uuid::new_v4())),
+        };
+
         // check if unconditional deletion
         if let Some(filter) = &plan.selection {
             let table_meta = Arc::new(self.clone());
@@ -59,8 +69,14 @@ impl FuseTable {
                     "expression should be valid, but not",
                 ));
             }
-            self.delete_rows(ctx.clone(), &snapshot, &physical_scalars[0], plan)
-                .await
+            self.delete_rows(
+                ctx.clone(),
+                &snapshot,
+                &prev_statistics,
+                &physical_scalars[0],
+                plan,
+            )
+            .await
         } else {
             // deleting the whole table... just a truncate
             let purge = false;
@@ -76,6 +92,7 @@ impl FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
         snapshot: &Arc<TableSnapshot>,
+        statistics: &Arc<TableSnapshotStatistics>,
         filter: &Expression,
         plan: &DeletePlan,
     ) -> Result<()> {
@@ -85,6 +102,7 @@ impl FuseTable {
             self.get_operator(),
             self.meta_location_generator.clone(),
             snapshot.clone(),
+            statistics.clone(),
             cluster_stats_gen,
         )?;
         let schema = self.table_info.schema();

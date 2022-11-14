@@ -34,6 +34,7 @@ use common_planner::Expression;
 use common_planner::Partitions;
 use common_planner::ReadDataSourcePlan;
 use common_storage::StorageMetrics;
+use common_storages_table_meta::meta::ColumnNDVs;
 
 use crate::table::column_stats_provider_impls::DummyColumnStatisticsProvider;
 use crate::table_context::TableContext;
@@ -176,9 +177,10 @@ pub trait Table: Sync + Send {
         &self,
         ctx: Arc<dyn TableContext>,
         operations: Vec<DataBlock>,
+        ndvs: Vec<ColumnNDVs>,
         overwrite: bool,
     ) -> Result<()> {
-        let (_, _, _) = (ctx, operations, overwrite);
+        let (_, _, _, _) = (ctx, operations, ndvs, overwrite);
 
         Ok(())
     }

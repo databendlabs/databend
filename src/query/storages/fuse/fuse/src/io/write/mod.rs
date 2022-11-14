@@ -22,4 +22,5 @@ pub use block_writer::write_block;
 pub use block_writer::write_data;
 pub use block_writer::BlockWriter;
 pub use meta_writer::write_meta;
+pub use meta_writer::write_meta_bytes;
 pub use segment_writer::SegmentWriter;

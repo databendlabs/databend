@@ -22,6 +22,7 @@ common-pipeline-core = { path = "../pipeline/core" }
 common-planner = { path = "../planner" }
 common-settings = { path = "../settings" }
 common-storage = { path = "../../common/storage" }
+common-storages-table-meta = { path = "../storages/table-meta" }
 
 async-trait = "0.1.57"
 dyn-clone = "1.0.9"

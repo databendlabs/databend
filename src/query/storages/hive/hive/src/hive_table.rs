@@ -46,6 +46,7 @@ use common_planner::RequireColumnsVisitor;
 use common_storage::init_operator;
 use common_storage::DataOperator;
 use common_storages_index::RangeFilter;
+use common_storages_table_meta::meta::ColumnNDVs;
 use futures::TryStreamExt;
 use opendal::ObjectMode;
 use opendal::Operator;
@@ -490,6 +491,7 @@ impl Table for HiveTable {
         &self,
         _ctx: Arc<dyn TableContext>,
         _operations: Vec<DataBlock>,
+        _ndvs: Vec<ColumnNDVs>,
         _overwrite: bool,
     ) -> Result<()> {
         Err(ErrorCode::Unimplemented(format!(

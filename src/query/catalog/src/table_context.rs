@@ -32,6 +32,7 @@ use common_planner::ReadDataSourcePlan;
 use common_settings::Settings;
 use common_storage::DataOperator;
 use common_storage::StorageMetrics;
+use common_storages_table_meta::meta::ColumnNDVs;
 
 use crate::catalog::Catalog;
 use crate::cluster_info::Cluster;
@@ -93,6 +94,8 @@ pub trait TableContext: Send + Sync {
     fn get_data_operator(&self) -> Result<DataOperator>;
     fn push_precommit_block(&self, block: DataBlock);
     fn consume_precommit_blocks(&self) -> Vec<DataBlock>;
+    fn push_precommit_column_ndvs(&self, ndv: ColumnNDVs);
+    fn consume_precommit_column_ndvs(&self) -> Vec<ColumnNDVs>;
     fn try_get_function_context(&self) -> Result<FunctionContext>;
     fn get_connection_id(&self) -> String;
     fn get_settings(&self) -> Arc<Settings>;

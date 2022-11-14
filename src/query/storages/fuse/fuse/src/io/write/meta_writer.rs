@@ -39,3 +39,23 @@ where T: Serialize {
         .await?;
     Ok(())
 }
+
+pub async fn write_meta_bytes(
+    data_accessor: &Operator,
+    location: &str,
+    data: &Vec<u8>,
+) -> Result<()> {
+    let object = data_accessor.object(location);
+    { || object.write(data.as_slice()) }
+        .retry(ExponentialBackoff::default().with_jitter())
+        .when(|err| err.kind() == ErrorKind::Interrupted)
+        .notify(|err, dur| {
+            warn!(
+                "stage table sink write retry after {}s for error {:?}",
+                dur.as_secs(),
+                err
+            )
+        })
+        .await?;
+    Ok(())
+}

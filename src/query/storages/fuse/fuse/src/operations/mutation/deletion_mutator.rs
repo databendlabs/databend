@@ -21,6 +21,7 @@ use common_storages_table_meta::meta::ClusterStatistics;
 use common_storages_table_meta::meta::Location;
 use common_storages_table_meta::meta::Statistics;
 use common_storages_table_meta::meta::TableSnapshot;
+use common_storages_table_meta::meta::TableSnapshotStatistics;
 use opendal::Operator;
 
 use super::AbortOperation;
@@ -37,6 +38,7 @@ pub enum Deletion {
 pub struct DeletionMutator {
     base_mutator: BaseMutator,
     cluster_stats_gen: ClusterStatsGenerator,
+    table_statistics: Arc<TableSnapshotStatistics>,
 }
 
 impl DeletionMutator {
@@ -45,12 +47,14 @@ impl DeletionMutator {
         op: Operator,
         location_generator: TableMetaLocationGenerator,
         base_snapshot: Arc<TableSnapshot>,
+        table_statistics: Arc<TableSnapshotStatistics>,
         cluster_stats_gen: ClusterStatsGenerator,
     ) -> Result<Self> {
         let base_mutator = BaseMutator::try_create(ctx, op, location_generator, base_snapshot)?;
         Ok(Self {
             base_mutator,
             cluster_stats_gen,
+            table_statistics,
         })
     }
 
