@@ -39,6 +39,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 typetag = "0.2.3"
 futures = "0.3.24"
+rand = { version = "0.8.5", features = ["small_rng"] }
 
 [dev-dependencies]
 common-ast = { path = "../ast" }

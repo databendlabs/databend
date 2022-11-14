@@ -403,7 +403,7 @@ pub enum PatternType {
 }
 
 #[inline]
-fn is_like_pattern_escape(c: char) -> bool {
+pub fn is_like_pattern_escape(c: char) -> bool {
     c == '%' || c == '_' || c == '\\'
 }
 
