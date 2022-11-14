@@ -30,6 +30,7 @@ use common_expression::types::ValueType;
 use common_expression::Column;
 use common_expression::Function;
 use common_expression::FunctionContext;
+use common_expression::FunctionDomain;
 use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
 use common_expression::FunctionSignature;
@@ -83,7 +84,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_4_arg::<NumberType<F64>, NumberType<F64>, NumberType<F64>, NumberType<F64>,NumberType<F32>,_, _>(
         "geo_distance",
         FunctionProperty::default(),
-        |_,_,_,_|None,
+        |_,_,_,_|FunctionDomain::NoThrow,
         |lon1:F64,lat1:F64,lon2:F64,lat2:F64,_| {
             F32::from(distance(lon1.0 as f32, lat1.0 as f32, lon2.0 as f32, lat2.0 as f32, GeoMethod::Wgs84Meters))
         },
@@ -93,7 +94,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_4_arg::<NumberType<F64>, NumberType<F64>, NumberType<F64>, NumberType<F64>,NumberType<F32>,_, _>(
         "great_circle_angle",
         FunctionProperty::default(),
-        |_,_,_,_|None,
+        |_,_,_,_|FunctionDomain::NoThrow,
         |lon1:F64,lat1:F64,lon2:F64,lat2:F64,_| {
             F32::from(distance(lon1.0 as f32, lat1.0 as f32, lon2.0 as f32, lat2.0 as f32, GeoMethod::SphereDegrees))
         },
@@ -103,7 +104,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_4_arg::<NumberType<F64>, NumberType<F64>, NumberType<F64>, NumberType<F64>,NumberType<F32>,_, _>(
         "great_circle_distance",
         FunctionProperty::default(),
-        |_,_,_,_|None,
+        |_,_,_,_|FunctionDomain::NoThrow,
         |lon1:F64,lat1:F64,lon2:F64,lat2:F64,_| {
             F32::from(distance(lon1.0 as f32, lat1.0 as f32, lon2.0 as f32, lat2.0 as f32, GeoMethod::SphereMeters))
         },
@@ -120,7 +121,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Number(NumberDataType::UInt8),
                 property: Default::default(),
             },
-            calc_domain: Box::new(|_| None),
+            calc_domain: Box::new(|_| FunctionDomain::NoThrow),
             eval: Box::new(point_in_ellipses_fn),
         }))
     });
