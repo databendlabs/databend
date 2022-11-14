@@ -1323,6 +1323,7 @@ dependencies = [
  "serfig",
  "strum",
  "strum_macros",
+ "tracing",
 ]
 
 [[package]]

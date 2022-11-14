@@ -27,6 +27,7 @@ mod inner;
 mod outer_v0;
 mod version;
 
+pub use inner::CatalogConfig;
 pub use inner::Config;
 pub use inner::MetaType;
 pub use inner::QueryConfig;
