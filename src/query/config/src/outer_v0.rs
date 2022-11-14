@@ -106,7 +106,7 @@ pub struct Config {
     /// - Later, catalog information SHOULD be kept in KV Service
     /// - currently only supports HIVE (via hive meta store)
     #[clap(flatten)]
-    pub catalog: LegacyCatalogHiveConfig,
+    pub catalog: HiveCatalogConfig,
 
     /// external catalog config.
     ///
@@ -172,7 +172,7 @@ impl From<InnerConfig> for Config {
             meta: inner.meta.into(),
             storage: inner.storage.into(),
             cache: inner.cache.into(),
-            catalog: LegacyCatalogHiveConfig::empty(),
+            catalog: HiveCatalogConfig::empty(),
 
             catalogs: inner
                 .catalogs
@@ -349,29 +349,30 @@ pub struct CatalogConfig {
     #[serde(rename = "type")]
     ty: String,
     #[serde(flatten)]
-    hive: CatalogHiveConfig,
+    hive: CatalogsHiveConfig,
 }
 
 impl Default for CatalogConfig {
     fn default() -> Self {
         Self {
             ty: "hive".to_string(),
-            hive: CatalogHiveConfig::default(),
+            hive: CatalogsHiveConfig::default(),
         }
     }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
-pub struct CatalogHiveConfig {
+pub struct CatalogsHiveConfig {
     #[serde(alias = "meta_store_address")]
     pub address: String,
     pub protocol: String,
 }
 
+/// this is the legacy version of external catalog configuration
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
-#[serde(default = "LegacyCatalogHiveConfig::empty")]
-pub struct LegacyCatalogHiveConfig {
+#[serde(default = "HiveCatalogConfig::empty")]
+pub struct HiveCatalogConfig {
     #[clap(long = "hive-meta-store-address", default_value_t)]
     #[serde(rename = "address", alias = "meta_store_address")]
     pub meta_store_address: String,
@@ -404,7 +405,7 @@ impl From<InnerCatalogConfig> for CatalogConfig {
     }
 }
 
-impl TryInto<InnerCatalogHiveConfig> for CatalogHiveConfig {
+impl TryInto<InnerCatalogHiveConfig> for CatalogsHiveConfig {
     type Error = ErrorCode;
     fn try_into(self) -> Result<InnerCatalogHiveConfig, Self::Error> {
         Ok(InnerCatalogHiveConfig {
@@ -414,7 +415,7 @@ impl TryInto<InnerCatalogHiveConfig> for CatalogHiveConfig {
     }
 }
 
-impl From<InnerCatalogHiveConfig> for CatalogHiveConfig {
+impl From<InnerCatalogHiveConfig> for CatalogsHiveConfig {
     fn from(inner: InnerCatalogHiveConfig) -> Self {
         Self {
             address: inner.address,
@@ -423,13 +424,13 @@ impl From<InnerCatalogHiveConfig> for CatalogHiveConfig {
     }
 }
 
-impl Default for CatalogHiveConfig {
+impl Default for CatalogsHiveConfig {
     fn default() -> Self {
         InnerCatalogHiveConfig::default().into()
     }
 }
 
-impl TryInto<InnerCatalogHiveConfig> for LegacyCatalogHiveConfig {
+impl TryInto<InnerCatalogHiveConfig> for HiveCatalogConfig {
     type Error = ErrorCode;
     fn try_into(self) -> Result<InnerCatalogHiveConfig, Self::Error> {
         Ok(InnerCatalogHiveConfig {
@@ -439,7 +440,7 @@ impl TryInto<InnerCatalogHiveConfig> for LegacyCatalogHiveConfig {
     }
 }
 
-impl From<InnerCatalogHiveConfig> for LegacyCatalogHiveConfig {
+impl From<InnerCatalogHiveConfig> for HiveCatalogConfig {
     fn from(inner: InnerCatalogHiveConfig) -> Self {
         Self {
             meta_store_address: inner.address,
@@ -448,15 +449,15 @@ impl From<InnerCatalogHiveConfig> for LegacyCatalogHiveConfig {
     }
 }
 
-impl Default for LegacyCatalogHiveConfig {
+impl Default for HiveCatalogConfig {
     fn default() -> Self {
         InnerCatalogHiveConfig::default().into()
     }
 }
 
-impl LegacyCatalogHiveConfig {
+impl HiveCatalogConfig {
     pub fn empty() -> Self {
-        LegacyCatalogHiveConfig {
+        HiveCatalogConfig {
             meta_store_address: "".to_string(),
             protocol: "".to_string(),
         }
