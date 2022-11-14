@@ -69,20 +69,24 @@ fn test_filter_column() {
     struct Test {
         filter: BooleanColumn,
         expect: Vec<i32>,
+        deleted: Option<Vec<i32>>,
     }
 
     let mut tests: Vec<Test> = vec![
         Test {
             filter: BooleanColumn::from_iterator((0..N).map(|_| true)),
             expect: (0..N).map(|i| i as i32).collect(),
+            deleted: None,
         },
         Test {
             filter: BooleanColumn::from_iterator((0..N).map(|_| false)),
             expect: vec![],
+            deleted: Some((0..N).map(|i| i as i32).collect()),
         },
         Test {
             filter: BooleanColumn::from_iterator((0..N).map(|i| i % 10 == 0)),
             expect: (0..N).map(|i| i as i32).filter(|i| i % 10 == 0).collect(),
+            deleted: Some((0..N).map(|i| i as i32).filter(|i| i % 10 != 0).collect()),
         },
         Test {
             filter: BooleanColumn::from_iterator((0..N).map(|i| !(100..=800).contains(&i))),
@@ -90,6 +94,12 @@ fn test_filter_column() {
                 .map(|i| i as i32)
                 .filter(|&i| !(100..=800).contains(&i))
                 .collect(),
+            deleted: Some(
+                (0..N)
+                    .map(|i| i as i32)
+                    .filter(|&i| (100..=800).contains(&i))
+                    .collect(),
+            ),
         },
     ];
 
@@ -108,6 +118,12 @@ fn test_filter_column() {
             .map(|i| i as i32)
             .filter(|&i| !(100..=800).contains(&i))
             .collect(),
+        deleted: Some(
+            (0..N)
+                .map(|i| i as i32)
+                .filter(|&i| (100..=800).contains(&i))
+                .collect(),
+        ),
     });
 
     for test in tests {
@@ -119,5 +135,16 @@ fn test_filter_column() {
                 .values(),
             test.expect
         );
+
+        if let Some(deleted) = test.deleted {
+            let res = data_column.filter(&test.filter.neg());
+            assert_eq!(
+                res.as_any()
+                    .downcast_ref::<PrimitiveColumn<i32>>()
+                    .unwrap()
+                    .values(),
+                deleted
+            );
+        }
     }
 }

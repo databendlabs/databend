@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use core::ops::Not;
 use std::sync::Arc;
 
 use common_arrow::arrow::array::*;
@@ -62,6 +63,10 @@ impl BooleanColumn {
 
     pub fn values(&self) -> &Bitmap {
         &self.values
+    }
+
+    pub fn neg(&self) -> Self {
+        Self::from_arrow_data(Not::not(&self.values))
     }
 }
 
