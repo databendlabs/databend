@@ -12,12 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::io::Cursor;
 use std::io::Read;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_io::cursor_ext::*;
 use common_io::prelude::BinaryRead;
 use common_io::prelude::FormatSettings;
 
@@ -57,7 +55,7 @@ impl TypeDeserializer for StringDeserializer {
         Ok(())
     }
 
-    fn de_default(&mut self, _format: &FormatSettings) {
+    fn de_default(&mut self) {
         self.builder.append_value("");
     }
 
@@ -83,33 +81,6 @@ impl TypeDeserializer for StringDeserializer {
             }
             _ => Err(ErrorCode::BadBytes("Incorrect json value, must be string")),
         }
-    }
-
-    fn de_whole_text(&mut self, reader: &[u8], _format: &FormatSettings) -> Result<()> {
-        self.builder.append_value(reader);
-        Ok(())
-    }
-
-    fn de_text<R: AsRef<[u8]>>(
-        &mut self,
-        reader: &mut Cursor<R>,
-        _format: &FormatSettings,
-    ) -> Result<()> {
-        self.buffer.clear();
-        reader.read_escaped_string_text(&mut self.buffer)?;
-        self.builder.append_value(self.buffer.as_slice());
-        Ok(())
-    }
-
-    fn de_text_quoted<R: AsRef<[u8]>>(
-        &mut self,
-        reader: &mut Cursor<R>,
-        _format: &FormatSettings,
-    ) -> Result<()> {
-        self.buffer.clear();
-        reader.read_quoted_text(&mut self.buffer, b'\'')?;
-        self.builder.append_value(self.buffer.as_slice());
-        Ok(())
     }
 
     fn append_data_value(&mut self, value: DataValue, _format: &FormatSettings) -> Result<()> {

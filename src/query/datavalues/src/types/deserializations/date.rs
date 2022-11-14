@@ -28,6 +28,7 @@ use num::cast::AsPrimitive;
 use crate::prelude::*;
 
 pub struct DateDeserializer<T: PrimitiveType> {
+    pub buffer: Vec<u8>,
     pub builder: MutablePrimitiveColumn<T>,
 }
 
@@ -50,7 +51,7 @@ where
         Ok(())
     }
 
-    fn de_default(&mut self, _format: &FormatSettings) {
+    fn de_default(&mut self) {
         self.builder.append_value(T::default());
     }
 
@@ -75,68 +76,13 @@ where
             serde_json::Value::String(v) => {
                 let mut reader = Cursor::new(v.as_bytes());
                 let date = reader.read_date_text(&format.timezone)?;
-                let days = uniform(date);
+                let days = uniform_date(date);
                 check_date(days.as_i32())?;
                 self.builder.append_value(days);
                 Ok(())
             }
             _ => Err(ErrorCode::BadBytes("Incorrect boolean value")),
         }
-    }
-
-    fn de_whole_text(&mut self, reader: &[u8], format: &FormatSettings) -> Result<()> {
-        let mut reader = Cursor::new(reader);
-        let date = reader.read_date_text(&format.timezone)?;
-        let days = uniform(date);
-        check_date(days.as_i32())?;
-        reader.must_eof()?;
-        self.builder.append_value(days);
-        Ok(())
-    }
-
-    fn de_text_quoted<R: AsRef<[u8]>>(
-        &mut self,
-        reader: &mut Cursor<R>,
-        format: &FormatSettings,
-    ) -> Result<()> {
-        reader.must_ignore_byte(b'\'')?;
-        let date = reader.read_date_text(&format.timezone);
-        reader.must_ignore_byte(b'\'')?;
-        if date.is_err() {
-            return Err(date.err().unwrap());
-        }
-        let days = uniform(date.unwrap());
-        check_date(days.as_i32())?;
-
-        self.builder.append_value(days);
-        Ok(())
-    }
-
-    fn de_text<R: AsRef<[u8]>>(
-        &mut self,
-        reader: &mut Cursor<R>,
-        format: &FormatSettings,
-    ) -> Result<()> {
-        let date = reader.read_date_text(&format.timezone)?;
-        let days = uniform(date);
-        check_date(days.as_i32())?;
-        self.builder.append_value(days);
-        Ok(())
-    }
-
-    fn de_text_json<R: AsRef<[u8]>>(
-        &mut self,
-        reader: &mut Cursor<R>,
-        format: &FormatSettings,
-    ) -> Result<()> {
-        reader.must_ignore_byte(b'"')?;
-        let date = reader.read_date_text(&format.timezone)?;
-        let days = uniform(date);
-        check_date(days.as_i32())?;
-        reader.must_ignore_byte(b'"')?;
-
-        self.builder.append_value(days);
-        Ok(())
     }
 
     fn append_data_value(&mut self, value: DataValue, _format: &FormatSettings) -> Result<()> {
@@ -156,7 +102,7 @@ where
 }
 
 #[inline]
-fn uniform<T>(date: NaiveDate) -> T
+pub fn uniform_date<T>(date: NaiveDate) -> T
 where
     i32: AsPrimitive<T>,
     T: PrimitiveType,

@@ -28,7 +28,6 @@ mod string;
 mod struct_;
 mod timestamp;
 mod variant;
-use std::io::Cursor;
 
 pub use array::*;
 pub use boolean::*;
@@ -48,7 +47,7 @@ pub trait TypeDeserializer: Send + Sync {
 
     fn de_binary(&mut self, reader: &mut &[u8], format: &FormatSettings) -> Result<()>;
 
-    fn de_default(&mut self, format: &FormatSettings);
+    fn de_default(&mut self);
 
     fn de_fixed_binary_batch(
         &mut self,
@@ -62,30 +61,6 @@ pub trait TypeDeserializer: Send + Sync {
 
     fn de_null(&mut self, _format: &FormatSettings) -> bool {
         false
-    }
-
-    fn de_whole_text(&mut self, reader: &[u8], format: &FormatSettings) -> Result<()>;
-
-    fn de_text<R: AsRef<[u8]>>(
-        &mut self,
-        reader: &mut Cursor<R>,
-        format: &FormatSettings,
-    ) -> Result<()>;
-
-    fn de_text_json<R: AsRef<[u8]>>(
-        &mut self,
-        reader: &mut Cursor<R>,
-        format: &FormatSettings,
-    ) -> Result<()> {
-        self.de_text(reader, format)
-    }
-
-    fn de_text_quoted<R: AsRef<[u8]>>(
-        &mut self,
-        reader: &mut Cursor<R>,
-        format: &FormatSettings,
-    ) -> Result<()> {
-        self.de_text(reader, format)
     }
 
     fn append_data_value(&mut self, value: DataValue, format: &FormatSettings) -> Result<()>;

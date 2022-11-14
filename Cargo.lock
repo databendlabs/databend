@@ -1421,6 +1421,7 @@ dependencies = [
 name = "common-formats"
 version = "0.1.0"
 dependencies = [
+ "bstr 1.0.1",
  "chrono-tz",
  "common-arrow",
  "common-datablocks",
@@ -1434,6 +1435,7 @@ dependencies = [
  "num",
  "once_cell",
  "pretty_assertions",
+ "serde_json",
 ]
 
 [[package]]
@@ -9248,8 +9250,3 @@ dependencies = [
  "cc",
  "libc",
 ]
-
-[[patch.unused]]
-name = "arrow-format"
-version = "0.7.0"
-source = "git+https://github.com/datafuse-extras/arrow-format?rev=78dacc1#78dacc16a1f995756384686ca86d79995a11a089"
