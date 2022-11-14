@@ -1,32 +1,64 @@
 ---
-title: What are Databend Stages
+title: Stage
 sidebar_position: 1
 slug: ./
 ---
 
-## What are Databend Stages?
+A stage stores data files that can be loaded into tables.
 
-Databend can both store data locally(Fuse engine) and access data stored in other storage systems, the location where data is saved or from is known as a **Stage**.
+## Stage Types
 
-## What are the Types of Databend Stages? 
+Databend supports the following stage types:
 
-Databend's data can be stored internally or externally, based on this, the Databend Stages are categorized into two types:
+* [User Stage](#usage-stage)
+* [Named Internal / External Stage](#named-internal--external-stage)
 
-* Internal Stages
-* External Stages 
+### User Stage
 
-### Internal Stages
+In Databend, each user comes with a default stage called User Stage. Data files uploaded to a user stage are stored in `/<bucket_name>/<tenant_id>/stage/user/<user_name>`. To reference the user stage, use `@~`. See the examples below:
 
-In Internal Databend Stages, the data is stored internally, the data location likes: 
-`/<bucket>/<tenant_id>/stage/<stage_name>/<stage_file>`
+```sql
+-- Lists the staged files in the user stage
+LIST @~;
 
-:::tip
-Databend table data path:
-`/<bucket>/<tenant_id>/<database_id>/<table_id>/`
-:::
+-- Deletes all the files from the user stage
+REMOVE @~;
+```
 
-### External Stages
+The following limitations apply when you work with the user stage:
 
-**External Stages** are storage in another external location that is not part of the Databend, this might be Amazon S3 Storage or MySQL/HDFS. 
+- The user stage is available out of the box. There is no need to create it before use, and you cannot change or drop it.
 
+- Data files stored in your user stage are not accessible to other users.
 
+- You cannot set format options for the user stage. Instead, you can set them in the [COPY INTO](./../../10-dml/dml-copy-into-table.md) command when you load data.
+
+### Named Internal / External Stage
+
+In addition to the [User Stage](#user-stage), you can create named stages to store data files. Named stages give you more control over the data loading:
+
+- Named stages enable other users with appropriate privileges to access the staged data files and load them into tables.
+
+- A named stage can be internal or external:
+
+    - Internal stages store data files in `/<bucket_name>/<tenant_id>/stage/internal/<stage_name>`.
+    - When you create an external stage with the command [CREATE STAGE](01-ddl-create-stage.md), you specify the stage location in the command.
+
+## Managing Stages
+
+Use the following commands to manage stages in Databend:
+
+- [CREATE STAGE](01-ddl-create-stage.md): Creates a stage. 
+- [DROP STAGE](02-ddl-drop-stage.md): Removes a stage.
+- [DESC STAGE](03-ddl-desc-stage.md): Shows the properties of a stage.
+- [LIST FILES](04-ddl-list-stage.md): Returns a list of the staged files in a stage.
+- [REMOVE FILES](05-ddl-remove-stage.md): Removes staged files from a stage.
+- [SHOW STAGES](06-ddl-show-stages.md): Returns a list of the created stages.
+
+Some of the commands above do not apply to the [User Stage](#user-stage). See the table below for details:
+
+| Stage          | CREATE STAGE | DROP STAGE | DESC STAGE | LIST FILES | REMOVE FILES | SHOW STAGES |
+|----------------|--------------|------------|------------|------------|--------------|-------------|
+| User Stage     | No           | No         | Yes        | Yes        | Yes          | No          |
+| Named Internal | Yes          | Yes        | Yes        | Yes        | Yes          | Yes         |
+| Named External | Yes          | Yes        | Yes        | Yes        | Yes          | Yes         |
