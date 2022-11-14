@@ -128,14 +128,23 @@ CREATE TABLE [IF NOT EXISTS] [db.]table_name
     ...
 
 's3://<bucket>/[<path>]' 
-CONNECTION = (ACCESS_KEY_ID = '<your_aws_key_id>' SECRET_ACCESS_KEY = '<your_aws_secret_key>' ENDPOINT_URL = '<endpoint_url>' ENABLE_VIRTUAL_HOST_STYLE = 'true'|'false');
+ONNECTION = (
+        ENDPOINT_URL = 'https://<endpoint-URL>'
+        ACCESS_KEY_ID = '<your-access-key-ID>'
+        SECRET_ACCESS_KEY = '<your-secret-access-key>'
+        REGION = '<region-name>'
+        ENABLE_VIRTUAL_HOST_STYLE = 'true'|'false'
+  );
 ```
 
 | Parameter  | Description | Required |
 | ----------- | ----------- | --- |
 | `s3://<bucket>/[<path>]`  | Files are in the specified external location (S3-like bucket) | YES |
-| `ACCESS_KEY_ID = '<your_aws_key_id>' SECRET_ACCESS_KEY = '<your_aws_secret_key>'`  | The credentials for connecting to AWS and accessing the private/protected S3 bucket where the files to load are staged. |  Optional |
-| `ENDPOINT_URL = '<endpoint_url>'`  | S3-compatible endpoint URL like MinIO. Default: `https://s3.amazonaws.com` |  Optional |
+| ENDPOINT_URL              	| The bucket endpoint URL starting with "https://". To use a URL starting with "http://", set `allow_insecure` to `true` in the [storage] block of the file `databend-query-node.toml`.                                  	| Optional 	|
+| ACCESS_KEY_ID             	| Your access key ID for connecting the AWS S3 compatible object storage. If not provided, Databend will access the bucket anonymously.    	| Optional 	|
+| SECRET_ACCESS_KEY         	| Your secret access key for connecting the AWS S3 compatible object storage. 	| Optional 	|
+| REGION                    	| AWS region name. For example, us-east-1.                                    	| Optional 	|
+| ENABLE_VIRTUAL_HOST_STYLE 	| If you use virtual hosting to address the bucket, set it to "true".                               	| Optional 	|
 
 ## Column Nullable
 
