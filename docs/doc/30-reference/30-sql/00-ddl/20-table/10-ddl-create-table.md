@@ -128,7 +128,7 @@ CREATE TABLE [IF NOT EXISTS] [db.]table_name
     ...
 
 's3://<bucket>/[<path>]' 
-ONNECTION = (
+CONNECTION = (
         ENDPOINT_URL = 'https://<endpoint-URL>'
         ACCESS_KEY_ID = '<your-access-key-ID>'
         SECRET_ACCESS_KEY = '<your-secret-access-key>'
