@@ -44,18 +44,13 @@ use crate::statistics::reducers::reduce_block_metas;
 enum State {
     Consume,
     Compact(DataBlock),
-    Generate {
-        order: usize,
-        metas: Vec<Arc<BlockMeta>>,
-    },
+    Generate(Vec<Arc<BlockMeta>>),
     Serialized {
-        order: usize,
         data: Vec<u8>,
         location: String,
         segment: Arc<SegmentInfo>,
     },
     Output {
-        order: usize,
         location: String,
         segment: Arc<SegmentInfo>,
     },
@@ -72,6 +67,7 @@ pub struct CompactTransform {
     location_gen: TableMetaLocationGenerator,
     dal: Operator,
 
+    order: usize,
     thresholds: BlockCompactThresholds,
     abort_operation: AbortOperation,
 }
@@ -95,6 +91,7 @@ impl CompactTransform {
             block_reader,
             location_gen,
             dal,
+            order: 0,
             thresholds,
             abort_operation: AbortOperation::default(),
         })))
@@ -151,30 +148,25 @@ impl Processor for CompactTransform {
 
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Consume) {
-            State::Generate { order, metas } => {
+            State::Generate(metas) => {
                 let stats = reduce_block_metas(&metas, self.thresholds)?;
                 let segment_info = SegmentInfo::new(metas, stats);
                 let location = self.location_gen.gen_segment_info_location();
                 self.abort_operation.add_segment(location.clone());
                 self.state = State::Serialized {
-                    order,
                     data: serde_json::to_vec(&segment_info)?,
                     location,
                     segment: Arc::new(segment_info),
                 };
             }
-            State::Output {
-                order,
-                location,
-                segment,
-            } => {
+            State::Output { location, segment } => {
                 if let Some(segment_cache) = CacheManager::instance().get_table_segment_cache() {
                     let cache = &mut segment_cache.write();
                     cache.put(location.clone(), segment.clone());
                 }
 
                 let meta = CompactSinkMeta::create(
-                    order,
+                    self.order,
                     location,
                     segment,
                     std::mem::take(&mut self.abort_operation),
@@ -192,6 +184,7 @@ impl Processor for CompactTransform {
             State::Compact(block) => {
                 let meta = block.get_meta().unwrap();
                 let task_meta = CompactSourceMeta::from_meta(meta)?;
+                self.order = task_meta.order;
                 let mut new_metas = Vec::with_capacity(task_meta.tasks.len());
                 for task in &task_meta.tasks {
                     let metas = task.get_block_metas();
@@ -221,23 +214,15 @@ impl Processor for CompactTransform {
                     self.abort_operation.add_block(&new_meta);
                     new_metas.push(Arc::new(new_meta));
                 }
-                self.state = State::Generate {
-                    order: task_meta.order,
-                    metas: new_metas,
-                };
+                self.state = State::Generate(new_metas);
             }
             State::Serialized {
-                order,
                 data,
                 location,
                 segment,
             } => {
                 self.dal.object(&location).write(data).await?;
-                self.state = State::Output {
-                    order,
-                    location,
-                    segment,
-                };
+                self.state = State::Output { location, segment };
             }
             _ => return Err(ErrorCode::Internal("It's a bug.")),
         }
