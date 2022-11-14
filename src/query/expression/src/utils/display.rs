@@ -60,7 +60,7 @@ impl Debug for Chunk {
 
         table.set_header(vec!["Column ID", "Column Data"]);
 
-        for (i, (col, _)) in self.columns().iter().sorted_by_key(|(id, _)| **id) {
+        for (i, (col, _)) in self.columns().iter().enumerate() {
             table.add_row(vec![i.to_string(), format!("{:?}", col)]);
         }
 
@@ -73,19 +73,13 @@ impl Display for Chunk {
         let mut table = Table::new();
         table.load_preset("||--+-++|    ++++++");
 
-        table.set_header(
-            self.columns()
-                .keys()
-                .sorted()
-                .map(|idx| format!("Column {idx}")),
-        );
+        table.set_header((0..self.num_columns()).map(|idx| format!("Column {idx}")));
 
         for index in 0..self.num_rows() {
             let row: Vec<_> = self
                 .columns()
                 .iter()
-                .sorted_by_key(|(id, _)| **id)
-                .map(|(_, (val, _))| val.as_ref().index(index).unwrap().to_string())
+                .map(|(val, _)| val.as_ref().index(index).unwrap().to_string())
                 .map(Cell::new)
                 .collect();
             table.add_row(row);

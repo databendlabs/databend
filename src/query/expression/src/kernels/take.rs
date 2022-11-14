@@ -40,12 +40,9 @@ impl Chunk {
         let after_columns = self
             .columns()
             .iter()
-            .map(|(col_id, (col, ty))| match col {
-                Value::Scalar(v) => (*col_id, (Value::Scalar(v.clone()), ty.clone())),
-                Value::Column(c) => (
-                    *col_id,
-                    (Value::Column(Column::take(c, indices)), ty.clone()),
-                ),
+            .map(|(col, ty)| match col {
+                Value::Scalar(v) => (Value::Scalar(v.clone()), ty.clone()),
+                Value::Column(c) => (Value::Column(Column::take(c, indices)), ty.clone()),
             })
             .collect();
 

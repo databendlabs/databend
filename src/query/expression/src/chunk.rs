@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::ops::Range;
 
 use crate::types::AnyType;
@@ -25,14 +24,14 @@ use crate::Value;
 /// Chunk is a lightweight container for a group of columns.
 #[derive(Clone)]
 pub struct Chunk {
-    columns: HashMap<usize, (Value<AnyType>, DataType)>,
+    columns: Vec<(Value<AnyType>, DataType)>,
     num_rows: usize,
 }
 
 impl Chunk {
     #[inline]
-    pub fn new(columns: HashMap<usize, (Value<AnyType>, DataType)>, num_rows: usize) -> Self {
-        debug_assert!(columns.values().all(|(col, _)| match col {
+    pub fn new(columns: Vec<(Value<AnyType>, DataType)>, num_rows: usize) -> Self {
+        debug_assert!(columns.iter().all(|(col, _)| match col {
             Value::Scalar(_) => true,
             Value::Column(c) => c.len() == num_rows,
         }));
@@ -41,11 +40,11 @@ impl Chunk {
 
     #[inline]
     pub fn empty() -> Self {
-        Chunk::new(HashMap::new(), 0)
+        Chunk::new(vec![], 0)
     }
 
     #[inline]
-    pub fn columns(&self) -> &HashMap<usize, (Value<AnyType>, DataType)> {
+    pub fn columns(&self) -> &[(Value<AnyType>, DataType)] {
         &self.columns
     }
 
@@ -65,17 +64,17 @@ impl Chunk {
     }
 
     #[inline]
-    pub fn domains(&self) -> HashMap<usize, Domain> {
+    pub fn domains(&self) -> Vec<Domain> {
         self.columns
             .iter()
-            .map(|(col_id, (value, _))| (*col_id, value.as_ref().domain()))
+            .map(|(value, _)| value.as_ref().domain())
             .collect()
     }
 
     #[inline]
     pub fn memory_size(&self) -> usize {
         self.columns()
-            .values()
+            .iter()
             .map(|(col, _)| match col {
                 Value::Scalar(s) => std::mem::size_of_val(s) * self.num_rows,
                 Value::Column(c) => c.memory_size(),
@@ -87,13 +86,13 @@ impl Chunk {
         let columns = self
             .columns()
             .iter()
-            .map(|(col_id, (col, ty))| match col {
+            .map(|(col, ty)| match col {
                 Value::Scalar(s) => {
                     let builder = ColumnBuilder::repeat(&s.as_ref(), self.num_rows, ty);
                     let col = builder.build();
-                    (*col_id, (Value::Column(col), ty.clone()))
+                    (Value::Column(col), ty.clone())
                 }
-                Value::Column(c) => (*col_id, (Value::Column(c.clone()), ty.clone())),
+                Value::Column(c) => (Value::Column(c.clone()), ty.clone()),
             })
             .collect();
         Self {
@@ -106,9 +105,9 @@ impl Chunk {
         let columns = self
             .columns()
             .iter()
-            .map(|(col_id, (col, ty))| match col {
-                Value::Scalar(s) => (*col_id, (Value::Scalar(s.clone()), ty.clone())),
-                Value::Column(c) => (*col_id, (Value::Column(c.slice(range.clone())), ty.clone())),
+            .map(|(col, ty)| match col {
+                Value::Scalar(s) => (Value::Scalar(s.clone()), ty.clone()),
+                Value::Column(c) => (Value::Column(c.slice(range.clone())), ty.clone()),
             })
             .collect();
         Self {
@@ -117,17 +116,16 @@ impl Chunk {
         }
     }
 
-    pub fn get_serializers(&self) -> Result<HashMap<usize, Box<dyn TypeSerializer>>, String> {
-        self.columns()
-            .iter()
-            .map(|(col_id, (col, ty))| {
-                let column = match col {
-                    Value::Scalar(s) => ColumnBuilder::repeat(&s.as_ref(), 1, ty).build(),
-                    Value::Column(c) => c.clone(),
-                };
-                let serializer = ty.create_serializer(column)?;
-                Ok((*col_id, serializer))
-            })
-            .try_collect()
+    pub fn get_serializers(&self) -> Result<Vec<Box<dyn TypeSerializer>>, String> {
+        let mut serializers = Vec::with_capacity(self.num_columns());
+        for (value, data_type) in self.columns() {
+            let column = match value {
+                Value::Scalar(s) => ColumnBuilder::repeat(&s.as_ref(), 1, data_type).build(),
+                Value::Column(c) => c.clone(),
+            };
+            let serializer = data_type.create_serializer(column)?;
+            serializers.push(serializer);
+        }
+        Ok(serializers)
     }
 }

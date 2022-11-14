@@ -64,8 +64,7 @@ pub fn run_agg_ast(
         columns
             .iter()
             .map(|(_, ty, col)| (Value::Column(col.clone()), ty.clone()))
-            .enumerate()
-            .collect(),
+            .collect::<Vec<_>>(),
         num_rows,
     );
 
