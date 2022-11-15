@@ -12,15 +12,15 @@ Databend's Time Travel feature relies on historical data. If you purge historica
 
 Snapshot, segment, and block are the concepts Databend uses for data storage. Databend uses them to construct a hierarchical structure for storing table data.
 
-![](../../../../../public/img/sql/storage-structure.PNG)
+![](../../../../public/img/sql/storage-structure.PNG)
 
 Databend automatically creates snapshots of a table when data updates occur, so a snapshot represents a version of the table's data. When working with Databend, you're most likely to access a snapshot with the snapshot ID when you retrieve and query a previous version of the table' data with the [AT](../../20-query-syntax/dml-at.md) clause. 
 
-A snapshot is a JSON file that does not save the table's data but indicate the segments the snapshot links to. If you run [FUSE_SNAPSHOT](../../../20-functions/111-system-functions/fuse_snapshot.md) against a table, you can find the saved snapshots for the table. 
+A snapshot is a JSON file that does not save the table's data but indicate the segments the snapshot links to. If you run [FUSE_SNAPSHOT](../../../30-reference/20-functions/111-system-functions/fuse_snapshot.md) against a table, you can find the saved snapshots for the table. 
 
-A segment is a JSON file that organizes the storage blocks (at least 1, at most 1,000) where the data is stored. If you run [FUSE_SEGMENT](../../../20-functions/111-system-functions/fuse_segment.md) against a snapshot with the snapshot ID, you can find which segments are referenced by the snapshot.
+A segment is a JSON file that organizes the storage blocks (at least 1, at most 1,000) where the data is stored. If you run [FUSE_SEGMENT](../../../30-reference/20-functions/111-system-functions/fuse_segment.md) against a snapshot with the snapshot ID, you can find which segments are referenced by the snapshot.
 
-Databends saves actual table data in parquet files and considers each parquet file as a block. If you run [FUSE_BLOCK](../../../20-functions/111-system-functions/fuse_block.md) against a snapshot with the snapshot ID, you can find which blocks are referenced by the snapshot.
+Databends saves actual table data in parquet files and considers each parquet file as a block. If you run [FUSE_BLOCK](../../../30-reference/20-functions/111-system-functions/fuse_block.md) against a snapshot with the snapshot ID, you can find which blocks are referenced by the snapshot.
 
 Databend creates a unique ID for each database and table for storing the snapshot, segment, and block files and saves them to your object storage in the path `<bucket_name>/[root]/<db_id>/<table_id>/`. Each snapshot, segment, and block file is named with a UUID (32-character lowercase hexadecimal string).
 
@@ -38,7 +38,7 @@ Consider optimizing a table regularly if the table receives frequent updates. Da
 
 If the blocks of a table meets all of the following conditions, the table requires an optimization:
 
-1. The number of blocks is greater than four times the [max_threads](../../../30-sql/70-system-tables/system-settings.md#max_threads) value.
+1. The number of blocks is greater than four times the [max_threads](../../../13-sql-reference/70-system-tables/system-settings.md#max_threads) value.
 
 ```sql
 select count(*) from fuse_block('<your_database>','<your_table>');
@@ -67,7 +67,7 @@ select count(*),avg(block_count),if(avg(block_count)<500,'The table needs segmen
 
 Optimizing a table could be time-consuming, especially for large ones. Databend does not recommend optimizing a table too frequently. Before you optimize a table, make sure the table fully satisfies the conditions described in [When to Optimize](#when-to-optimize).
 
-Databend does not compact a table if the number of its blocks is less than two times the [max_threads](../../../30-sql/70-system-tables/system-settings.md#max_threads) value. Databend will not do anything for such tables even though you run the optimization commands on them.
+Databend does not compact a table if the number of its blocks is less than two times the [max_threads](../../../13-sql-reference/70-system-tables/system-settings.md#max_threads) value. Databend will not do anything for such tables even though you run the optimization commands on them.
 
 ## Syntax
 

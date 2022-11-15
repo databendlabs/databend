@@ -26,7 +26,7 @@ SELECT snapshot_id,
 FROM   fuse_snapshot('<database_name>', '<table_name>'); 
 ```
 
-For more information about the FUSE_SNAPSHOT function,see [FUSE_SNAPSHOT](../../20-functions/111-system-functions/fuse_snapshot.md).
+For more information about the FUSE_SNAPSHOT function,see [FUSE_SNAPSHOT](../../30-reference/20-functions/111-system-functions/fuse_snapshot.md).
 
 ## Examples
 

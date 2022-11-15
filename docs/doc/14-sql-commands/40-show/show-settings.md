@@ -2,7 +2,7 @@
 title: SHOW SETTINGS
 ---
 
-Shows the databend's [system settings](../70-system-tables/system-settings.md).
+Shows the databend's [system settings](../../13-sql-reference/70-system-tables/system-settings.md).
 
 You can change it by set command, like `set max_threads = 1`.
 
