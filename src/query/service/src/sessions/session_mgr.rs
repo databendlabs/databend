@@ -43,6 +43,9 @@ use crate::sessions::SessionContext;
 use crate::sessions::SessionManagerStatus;
 use crate::sessions::SessionType;
 
+static METRIC_SESSION_CONNECT_NUMBERS: &str = "session_connect_numbers";
+static METRIC_SESSION_CLOSE_NUMBERS: &str = "session_close_numbers";
+
 pub struct SessionManager {
     pub(in crate::sessions) conf: Config,
     pub(in crate::sessions) max_sessions: usize,
@@ -130,7 +133,7 @@ impl SessionManager {
         let mut sessions = self.active_sessions.write();
         if sessions.len() < self.max_sessions {
             label_counter(
-                super::metrics::METRIC_SESSION_CONNECT_NUMBERS,
+                METRIC_SESSION_CONNECT_NUMBERS,
                 &config.query.tenant_id,
                 &config.query.cluster_id,
             );
@@ -160,7 +163,7 @@ impl SessionManager {
     pub fn destroy_session(&self, session_id: &String) {
         let config = self.get_conf();
         label_counter(
-            super::metrics::METRIC_SESSION_CLOSE_NUMBERS,
+            METRIC_SESSION_CLOSE_NUMBERS,
             &config.query.tenant_id,
             &config.query.cluster_id,
         );
