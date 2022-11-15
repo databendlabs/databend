@@ -128,6 +128,7 @@ impl DataType for TimestampType {
 
     fn create_deserializer(&self, capacity: usize) -> TypeDeserializerImpl {
         TimestampDeserializer {
+            buffer: vec![],
             builder: MutablePrimitiveColumn::<i64>::with_capacity(capacity),
         }
         .into()

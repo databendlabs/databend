@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,8 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod json;
-mod number_helpers;
+/// catalog_interface is the module defining `Catalog` trait
+mod interface;
+/// the catalog manager implementation
+mod manager;
 
-pub use json::write_json_string;
-pub use number_helpers::PrimitiveWithFormat;
+pub use interface::Catalog;
+pub use interface::StorageDescription;
+pub use manager::CatalogManager;
+pub use manager::CATALOG_DEFAULT;

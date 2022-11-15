@@ -12,10 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::env::temp_dir;
 use std::fs;
 use std::io::Write;
 
+use common_config::CatalogConfig;
 use common_config::Config;
 use common_exception::Result;
 use pretty_assertions::assert_eq;
@@ -168,12 +170,15 @@ data_path = "_data"
 [cache.moka]
 
 [catalog]
-meta_store_address = "127.0.0.1:9083"
-protocol = "binary"
+address = ""
+protocol = ""
+
+[catalogs]
 "#;
 
     let tom_actual = toml::to_string(&actual.into_outer()).unwrap();
     assert_eq!(tom_expect, tom_actual);
+
     Ok(())
 }
 
@@ -284,6 +289,7 @@ fn test_env_config_s3() -> Result<()> {
                 1024 * 1024 * 1024,
                 configured.query.table_cache_bloom_index_data_bytes
             );
+            assert_eq!(HashMap::new(), configured.catalogs);
         },
     );
 
@@ -771,7 +777,12 @@ bucket = ""
 root = ""
 
 [catalog]
-meta_store_address = "127.0.0.1:9083"
+address = "127.0.0.1:9083"
+protocol = "binary"
+
+[catalogs.my_hive]
+type = "hive"
+address = "127.0.0.1:9083"
 protocol = "binary"
 "#
         .as_bytes(),
@@ -793,6 +804,29 @@ protocol = "binary"
             assert_eq!("tenant_id_from_env", cfg.query.tenant_id);
             assert_eq!("access_key_id_from_env", cfg.storage.s3.access_key_id);
             assert_eq!("s3", cfg.storage.storage_type);
+
+            // NOTE:
+            //
+            // after the config conversion procedure:
+            // Outer -> Inner -> Outer
+            //
+            // config in `catalog` field will be moved to `catalogs` field
+            assert!(cfg.catalog.meta_store_address.is_empty());
+            assert!(cfg.catalog.protocol.is_empty());
+            // config in `catalog` field, with name of "hive"
+            assert!(cfg.catalogs.get("hive").is_some(), "catalogs is none!");
+            // config in `catalogs` field, with name of "my_hive"
+            assert!(cfg.catalogs.get("my_hive").is_some(), "catalogs is none!");
+
+            let inner = cfg.catalogs["my_hive"].clone().try_into();
+            assert!(inner.is_ok(), "casting must success");
+            let cfg = inner.unwrap();
+            match cfg {
+                CatalogConfig::Hive(cfg) => {
+                    assert_eq!("127.0.0.1:9083", cfg.address, "address incorrect");
+                    assert_eq!("binary", cfg.protocol.to_string(), "protocol incorrect");
+                }
+            }
         },
     );
 

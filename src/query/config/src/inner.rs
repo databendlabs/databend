@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::fmt;
 use std::fmt::Debug;
 use std::fmt::Display;
@@ -56,7 +57,7 @@ pub struct Config {
     // external catalog config.
     // - Later, catalog information SHOULD be kept in KV Service
     // - currently only supports HIVE (via hive meta store)
-    pub catalog: HiveCatalogConfig,
+    pub catalogs: HashMap<String, CatalogConfig>,
 }
 
 impl Config {
@@ -224,47 +225,6 @@ impl QueryConfig {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum ThriftProtocol {
-    Binary,
-    // Compact,
-}
-
-impl FromStr for ThriftProtocol {
-    type Err = ErrorCode;
-
-    fn from_str(s: &str) -> Result<ThriftProtocol> {
-        let s = s.to_lowercase();
-        match s.as_str() {
-            "binary" => Ok(ThriftProtocol::Binary),
-            _ => Err(ErrorCode::StorageOther("invalid thrift protocol spec")),
-        }
-    }
-}
-
-impl Display for ThriftProtocol {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Binary => write!(f, "binary"),
-        }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct HiveCatalogConfig {
-    pub meta_store_address: String,
-    pub protocol: ThriftProtocol,
-}
-
-impl Default for HiveCatalogConfig {
-    fn default() -> Self {
-        Self {
-            meta_store_address: "127.0.0.1:9083".to_string(),
-            protocol: ThriftProtocol::Binary,
-        }
-    }
-}
-
 #[derive(
     serde::Serialize,
     serde::Deserialize,
@@ -383,5 +343,51 @@ impl Debug for MetaConfig {
                 &self.rpc_tls_meta_service_domain_name,
             )
             .finish()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum CatalogConfig {
+    Hive(CatalogHiveConfig),
+}
+
+// TODO: add compat protocol support
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ThriftProtocol {
+    Binary,
+}
+
+impl FromStr for ThriftProtocol {
+    type Err = ErrorCode;
+
+    fn from_str(s: &str) -> Result<ThriftProtocol> {
+        let s = s.to_lowercase();
+        match s.as_str() {
+            "binary" => Ok(ThriftProtocol::Binary),
+            _ => Err(ErrorCode::StorageOther("invalid thrift protocol spec")),
+        }
+    }
+}
+
+impl Display for ThriftProtocol {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Binary => write!(f, "binary"),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CatalogHiveConfig {
+    pub address: String,
+    pub protocol: ThriftProtocol,
+}
+
+impl Default for CatalogHiveConfig {
+    fn default() -> Self {
+        Self {
+            address: "127.0.0.1:9083".to_string(),
+            protocol: ThriftProtocol::Binary,
+        }
     }
 }

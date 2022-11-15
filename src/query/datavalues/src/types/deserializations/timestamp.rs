@@ -23,6 +23,7 @@ use num::cast::AsPrimitive;
 use crate::columns::MutableColumn;
 use crate::prelude::*;
 pub struct TimestampDeserializer {
+    pub buffer: Vec<u8>,
     pub builder: MutablePrimitiveColumn<i64>,
 }
 
@@ -38,7 +39,7 @@ impl TypeDeserializer for TimestampDeserializer {
         Ok(())
     }
 
-    fn de_default(&mut self, _format: &FormatSettings) {
+    fn de_default(&mut self) {
         self.builder.append_value(i64::default());
     }
 
@@ -72,60 +73,6 @@ impl TypeDeserializer for TimestampDeserializer {
             }
             _ => Err(ErrorCode::BadBytes("Incorrect boolean value")),
         }
-    }
-
-    fn de_text_quoted<R: AsRef<[u8]>>(
-        &mut self,
-        reader: &mut Cursor<R>,
-        format: &FormatSettings,
-    ) -> Result<()> {
-        reader.must_ignore_byte(b'\'')?;
-        let ts = reader.read_timestamp_text(&format.timezone);
-        reader.must_ignore_byte(b'\'')?;
-        if ts.is_err() {
-            return Err(ts.err().unwrap());
-        }
-        let micros = ts.unwrap().timestamp_micros();
-        check_timestamp(micros)?;
-        self.builder.append_value(micros.as_());
-        Ok(())
-    }
-
-    fn de_whole_text(&mut self, reader: &[u8], format: &FormatSettings) -> Result<()> {
-        let mut reader = Cursor::new(reader);
-        let ts = reader.read_timestamp_text(&format.timezone)?;
-        let micros = ts.timestamp_micros();
-        check_timestamp(micros)?;
-        reader.must_eof()?;
-        self.builder.append_value(micros.as_());
-        Ok(())
-    }
-
-    fn de_text<R: AsRef<[u8]>>(
-        &mut self,
-        reader: &mut Cursor<R>,
-        format: &FormatSettings,
-    ) -> Result<()> {
-        let ts = reader.read_timestamp_text(&format.timezone)?;
-        let micros = ts.timestamp_micros();
-        check_timestamp(micros)?;
-        self.builder.append_value(micros.as_());
-        Ok(())
-    }
-
-    fn de_text_json<R: AsRef<[u8]>>(
-        &mut self,
-        reader: &mut Cursor<R>,
-        format: &FormatSettings,
-    ) -> Result<()> {
-        reader.must_ignore_byte(b'"')?;
-        let ts = reader.read_timestamp_text(&format.timezone)?;
-        let micros = ts.timestamp_micros();
-        check_timestamp(micros)?;
-        reader.must_ignore_byte(b'"')?;
-
-        self.builder.append_value(micros.as_());
-        Ok(())
     }
 
     fn append_data_value(&mut self, value: DataValue, _format: &FormatSettings) -> Result<()> {

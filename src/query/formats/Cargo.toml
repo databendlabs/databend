@@ -11,10 +11,12 @@ doctest = false
 test = false
 
 [dependencies] # In alphabetical order
+bstr = "1.0.1"
 chrono-tz = "0.6.3"
 lexical-core = "0.8.5"
 micromarshal = "0.2.0"
 num = "0.4.0"
+serde_json = { workspace = true }
 
 # Workspace dependencies
 common-datablocks = { path = "../datablocks" }
