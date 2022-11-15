@@ -211,7 +211,7 @@ EvalScalar
         └── TableScan
             ├── table: default.default.t
             ├── read rows: 2
-            ├── read bytes: 290
+            ├── read bytes: 31
             ├── partitions total: 1
             ├── partitions scanned: 1
             └── push downs: [filters: [(b = 2)], limit: NONE]

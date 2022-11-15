@@ -16,6 +16,7 @@ use std::collections::hash_map::RandomState;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use common_datablocks::BlockCompactThresholds;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_storages_table_meta::caches::CacheManager;
@@ -49,6 +50,7 @@ pub struct BaseMutator {
     pub(crate) location_generator: TableMetaLocationGenerator,
     pub(crate) data_accessor: Operator,
     pub(crate) base_snapshot: Arc<TableSnapshot>,
+    pub(crate) thresholds: BlockCompactThresholds,
 }
 
 impl BaseMutator {
@@ -57,6 +59,7 @@ impl BaseMutator {
         op: Operator,
         location_generator: TableMetaLocationGenerator,
         base_snapshot: Arc<TableSnapshot>,
+        thresholds: BlockCompactThresholds,
     ) -> Result<Self> {
         Ok(Self {
             mutations: HashMap::new(),
@@ -64,6 +67,7 @@ impl BaseMutator {
             location_generator,
             data_accessor: op,
             base_snapshot,
+            thresholds,
         })
     }
 
@@ -132,7 +136,7 @@ impl BaseMutator {
                         ))
                     })?;
                 if let Some(block_meta) = replacement.new_block_meta {
-                    abort_operation = abort_operation.add_block(&block_meta);
+                    abort_operation.add_block(&block_meta);
                     block_editor.insert(*position, Arc::new(block_meta));
                 } else {
                     block_editor.remove(position);
@@ -146,12 +150,12 @@ impl BaseMutator {
                 segments_editor.remove(&seg_idx);
             } else {
                 // re-calculate the segment statistics
-                let new_summary = reduce_block_metas(&new_segment.blocks)?;
+                let new_summary = reduce_block_metas(&new_segment.blocks, self.thresholds)?;
                 new_segment.summary = new_summary;
                 // write down new segment
                 let new_segment_location = seg_writer.write_segment(new_segment).await?;
                 segments_editor.insert(seg_idx, new_segment_location.clone());
-                abort_operation = abort_operation.add_segment(new_segment_location.0);
+                abort_operation.add_segment(new_segment_location.0);
             }
         }
 

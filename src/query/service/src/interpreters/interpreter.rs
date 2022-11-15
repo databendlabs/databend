@@ -23,6 +23,7 @@ use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use crate::interpreters::InterpreterMetrics;
 use crate::interpreters::InterpreterQueryLog;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
@@ -49,17 +50,20 @@ pub trait Interpreter: Sync + Send {
 
     /// The core of the databend processor which will execute the logical plan and get the DataBlock
     async fn execute(&self, ctx: Arc<QueryContext>) -> Result<SendableDataBlockStream> {
+        InterpreterMetrics::record_query_start(&ctx);
         log_query_start(&ctx);
 
         let mut build_res = match self.execute2().await {
             Ok(build_res) => build_res,
             Err(build_error) => {
+                InterpreterMetrics::record_query_error(&ctx);
                 log_query_finished(&ctx, Some(build_error.clone()));
                 return Err(build_error);
             }
         };
 
         if build_res.main_pipeline.pipes.is_empty() {
+            InterpreterMetrics::record_query_finished(&ctx, None);
             log_query_finished(&ctx, None);
 
             return Ok(Box::pin(DataBlockStream::create(
@@ -71,6 +75,7 @@ pub trait Interpreter: Sync + Send {
 
         let query_ctx = ctx.clone();
         build_res.main_pipeline.set_on_finished(move |may_error| {
+            InterpreterMetrics::record_query_finished(&query_ctx, may_error.clone());
             log_query_finished(&query_ctx, may_error.clone());
 
             match may_error {

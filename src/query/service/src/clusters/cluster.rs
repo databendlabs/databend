@@ -203,7 +203,7 @@ impl ClusterDiscovery {
             Err(cause) => {
                 label_counter_with_val_and_labels(
                     super::metrics::METRIC_CLUSTER_ERROR_COUNT,
-                    vec![
+                    &vec![
                         (
                             super::metrics::METRIC_LABEL_LOCAL_ID,
                             String::from(&self.local_id),
@@ -280,7 +280,7 @@ impl ClusterDiscovery {
             Err(cause) => {
                 label_counter_with_val_and_labels(
                     super::metrics::METRIC_CLUSTER_ERROR_COUNT,
-                    vec![
+                    &vec![
                         (
                             super::metrics::METRIC_LABEL_LOCAL_ID,
                             String::from(&self.local_id),
@@ -456,7 +456,7 @@ impl ClusterHeartbeat {
                         if let Err(failure) = heartbeat.await {
                             label_counter_with_val_and_labels(
                                 super::metrics::METRIC_CLUSTER_HEARTBEAT_COUNT,
-                                vec![
+                                &vec![
                                     (
                                         super::metrics::METRIC_LABEL_LOCAL_ID,
                                         String::from(&node.id),

@@ -18,8 +18,6 @@ mod column_from;
 pub mod date_helper;
 pub mod display;
 
-use std::collections::HashMap;
-
 use chrono_tz::Tz;
 use common_arrow::arrow::bitmap::Bitmap;
 
@@ -56,7 +54,7 @@ pub fn eval_function(
                     id,
                     data_type: ty.clone(),
                 },
-                (id, (val, ty)),
+                (val, ty),
             )
         })
         .unzip();
@@ -80,7 +78,7 @@ pub fn calculate_function_domain(
     tz: Tz,
     fn_registry: &FunctionRegistry,
 ) -> Result<(Option<Domain>, DataType)> {
-    let (args, args_domain): (Vec<_>, HashMap<_, _>) = args
+    let (args, args_domain): (Vec<_>, Vec<_>) = args
         .into_iter()
         .enumerate()
         .map(|(id, (domain, ty))| {
@@ -90,7 +88,7 @@ pub fn calculate_function_domain(
                     id,
                     data_type: ty,
                 },
-                (id, domain),
+                domain,
             )
         })
         .unzip();
@@ -101,7 +99,7 @@ pub fn calculate_function_domain(
         args,
     };
     let expr = crate::type_check::check(&raw_expr, fn_registry)?;
-    let constant_folder = ConstantFolder::new(args_domain, tz, fn_registry);
+    let constant_folder = ConstantFolder::new(&args_domain, tz, fn_registry);
     let (_, output_domain) = constant_folder.fold(&expr);
     Ok((output_domain, expr.data_type().clone()))
 }

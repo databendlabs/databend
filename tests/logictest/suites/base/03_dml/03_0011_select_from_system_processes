@@ -1,6 +1,7 @@
-statement query TT
-select command, database from system.processes;
+-- https://github.com/datafuselabs/databend/issues/8792
+-- statement query TT
+-- select command, database from system.processes;
 
-----
-Query default
+-- ----
+-- Query default
 

@@ -11,12 +11,20 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//
 
-mod full_compact_mutator;
+mod block_compact_mutator;
+mod compact_meta;
+mod compact_part;
+mod compact_sink;
+mod compact_source;
+mod compact_transform;
 mod segment_compact_mutator;
 
-pub use full_compact_mutator::FullCompactMutator;
+pub use block_compact_mutator::BlockCompactMutator;
+pub use compact_meta::CompactSinkMeta;
+pub use compact_sink::CompactSink;
+pub use compact_source::CompactSource;
+pub use compact_transform::CompactTransform;
 pub use segment_compact_mutator::SegmentCompactMutator;
 pub use segment_compact_mutator::SegmentCompactionState;
 pub use segment_compact_mutator::SegmentCompactor;

@@ -15,9 +15,9 @@
 use std::sync::Arc;
 
 use common_base::base::tokio;
-use common_catalog::table::CompactTarget;
 use common_catalog::table::Table;
 use common_catalog::table::TableExt;
+use common_catalog::table_mutator::TableMutator;
 use common_datablocks::DataBlock;
 use common_datablocks::SendableDataBlockStream;
 use common_exception::ErrorCode;
@@ -28,7 +28,10 @@ use common_storages_fuse::io::MetaReaders;
 use common_storages_fuse::io::SegmentInfoReader;
 use common_storages_fuse::io::SegmentWriter;
 use common_storages_fuse::io::TableMetaLocationGenerator;
+use common_storages_fuse::operations::CompactOptions;
+use common_storages_fuse::operations::SegmentCompactMutator;
 use common_storages_fuse::operations::SegmentCompactor;
+use common_storages_fuse::statistics::gen_columns_statistics;
 use common_storages_fuse::statistics::reducers::merge_statistics_mut;
 use common_storages_fuse::statistics::BlockStatistics;
 use common_storages_fuse::statistics::StatisticsAccumulator;
@@ -72,10 +75,7 @@ async fn test_compact_segment_normal_case() -> Result<()> {
         .get_table(ctx.get_tenant().as_str(), "default", "t")
         .await?;
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-    let mut pipeline = common_pipeline_core::Pipeline::create();
-    let mutator = fuse_table
-        .compact(ctx.clone(), CompactTarget::Segments, None, &mut pipeline)
-        .await?;
+    let mutator = build_mutator(fuse_table, ctx.clone(), None).await?;
     assert!(mutator.is_some());
     let mutator = mutator.unwrap();
     mutator.try_commit(table.clone()).await?;
@@ -117,10 +117,7 @@ async fn test_compact_segment_resolvable_conflict() -> Result<()> {
         .get_table(ctx.get_tenant().as_str(), "default", "t")
         .await?;
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-    let mut pipeline = common_pipeline_core::Pipeline::create();
-    let mutator = fuse_table
-        .compact(ctx.clone(), CompactTarget::Segments, None, &mut pipeline)
-        .await?;
+    let mutator = build_mutator(fuse_table, ctx.clone(), None).await?;
     assert!(mutator.is_some());
     let mutator = mutator.unwrap();
 
@@ -177,10 +174,7 @@ async fn test_compact_segment_unresolvable_conflict() -> Result<()> {
         .get_table(ctx.get_tenant().as_str(), "default", "t")
         .await?;
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-    let mut pipeline = common_pipeline_core::Pipeline::create();
-    let mutator = fuse_table
-        .compact(ctx.clone(), CompactTarget::Segments, None, &mut pipeline)
-        .await?;
+    let mutator = build_mutator(fuse_table, ctx.clone(), None).await?;
     assert!(mutator.is_some());
     let mutator = mutator.unwrap();
 
@@ -212,12 +206,47 @@ async fn check_count(result_stream: SendableDataBlockStream) -> Result<u64> {
 
 async fn compact_segment(ctx: Arc<QueryContext>, table: &Arc<dyn Table>) -> Result<()> {
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-    let mut pipeline = common_pipeline_core::Pipeline::create();
-    let mutator = fuse_table
-        .compact(ctx, CompactTarget::Segments, None, &mut pipeline)
-        .await?
-        .unwrap();
+    let mutator = build_mutator(fuse_table, ctx.clone(), None).await?.unwrap();
     mutator.try_commit(table.clone()).await
+}
+
+async fn build_mutator(
+    tbl: &FuseTable,
+    ctx: Arc<dyn TableContext>,
+    limit: Option<usize>,
+) -> Result<Option<Box<dyn TableMutator>>> {
+    let snapshot_opt = tbl.read_table_snapshot().await?;
+    let base_snapshot = if let Some(val) = snapshot_opt {
+        val
+    } else {
+        // no snapshot, no compaction.
+        return Ok(None);
+    };
+
+    if base_snapshot.summary.block_count <= 1 {
+        return Ok(None);
+    }
+
+    let block_per_seg = tbl.get_option("block_per_segment", 1000);
+
+    let compact_params = CompactOptions {
+        base_snapshot,
+        block_per_seg,
+        limit,
+    };
+
+    let mut segment_mutator = SegmentCompactMutator::try_create(
+        ctx.clone(),
+        compact_params,
+        tbl.meta_location_generator().clone(),
+        tbl.get_operator(),
+    )?;
+
+    if segment_mutator.target_select().await? {
+        Ok(Some(Box::new(segment_mutator)))
+    } else {
+        Ok(None)
+    }
 }
 
 #[tokio::test]
@@ -549,12 +578,13 @@ impl CompactSegmentTestFixture {
         let mut collected_blocks = vec![];
         for num_blocks in block_num_of_segments {
             let blocks = TestFixture::gen_sample_blocks_ex(*num_blocks, 1, 1);
-            let mut stats_acc = StatisticsAccumulator::new();
+            let mut stats_acc = StatisticsAccumulator::default();
             for block in blocks {
                 let block = block?;
+                let col_stats = gen_columns_statistics(&block)?;
 
                 let mut block_statistics = BlockStatistics::from(&block, "".to_owned(), None)?;
-                let block_meta = block_writer.write(block, None).await?;
+                let block_meta = block_writer.write(block, col_stats, None).await?;
                 block_statistics.block_file_location = block_meta.location.0.clone();
 
                 collected_blocks.push(block_meta.clone());
@@ -564,6 +594,7 @@ impl CompactSegmentTestFixture {
             let segment_info = SegmentInfo::new(stats_acc.blocks_metas, Statistics {
                 row_count: stats_acc.summary_row_count,
                 block_count: stats_acc.summary_block_count,
+                perfect_block_count: stats_acc.perfect_block_count,
                 uncompressed_byte_size: stats_acc.in_memory_size,
                 compressed_byte_size: stats_acc.file_size,
                 index_size: stats_acc.index_size,

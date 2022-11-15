@@ -25,7 +25,6 @@
 #![feature(const_mut_refs)]
 #![feature(generic_const_exprs)]
 #![allow(incomplete_features)]
-#![feature(iterator_try_collect)]
 #![feature(core_intrinsics)]
 #![feature(iter_order_by)]
 

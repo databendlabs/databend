@@ -55,13 +55,13 @@ use crate::utils::arrow::deserialize_arrow_array;
 use crate::utils::arrow::serialize_arrow_array;
 use crate::with_number_type;
 
-#[derive(Debug, Clone, PartialEq, EnumAsInner)]
+#[derive(Debug, Clone, EnumAsInner)]
 pub enum Value<T: ValueType> {
     Scalar(T::Scalar),
     Column(T::Column),
 }
 
-#[derive(Debug, Clone, PartialEq, EnumAsInner)]
+#[derive(Debug, Clone, EnumAsInner)]
 pub enum ValueRef<'a, T: ValueType> {
     Scalar(T::ScalarRef<'a>),
     Column(T::Column),

@@ -18,8 +18,6 @@ extern crate criterion;
 #[path = "../tests/it/scalars/parser.rs"]
 mod parser;
 
-use std::collections::HashMap;
-
 use common_expression::type_check;
 use common_expression::Chunk;
 use common_expression::Evaluator;
@@ -44,7 +42,7 @@ fn bench(c: &mut Criterion) {
         });
 
         let expr = type_check::check(&raw_expr, &fn_registry).unwrap();
-        let chunk = Chunk::new(HashMap::new(), 1);
+        let chunk = Chunk::new(vec![], 1);
         let evaluator = Evaluator::new(&chunk, chrono_tz::UTC, &fn_registry);
 
         group.bench_function(format!("eval/{n}"), |b| b.iter(|| evaluator.run(&expr)));

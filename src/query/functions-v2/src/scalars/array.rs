@@ -59,7 +59,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_0_arg_core::<EmptyArrayType, _, _>(
         "array",
         FunctionProperty::default(),
-        || FunctionDomain::NoThrow,
+        || FunctionDomain::Full,
         |_| Ok(Value::Scalar(())),
     );
 
@@ -119,14 +119,14 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_1_arg::<ArrayType<GenericType<0>>, NumberType<u64>, _, _>(
         "length",
         FunctionProperty::default(),
-        |_| FunctionDomain::NoThrow,
+        |_| FunctionDomain::Full,
         |arr, _| arr.len() as u64,
     );
 
     registry.register_2_arg_core::<NullableType<EmptyArrayType>, NullableType<UInt64Type>, NullType, _, _>(
         "get",
         FunctionProperty::default(),
-        |_, _| FunctionDomain::NoThrow,
+        |_, _| FunctionDomain::Full,
         |_, _, _| Ok(Value::Scalar(())),
     );
 
@@ -177,7 +177,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_3_arg::<EmptyArrayType, UInt64Type, UInt64Type, EmptyArrayType, _, _>(
         "slice",
         FunctionProperty::default(),
-        |_, _, _| FunctionDomain::NoThrow,
+        |_, _, _| FunctionDomain::Full,
         vectorize_with_builder_3_arg::<EmptyArrayType, UInt64Type, UInt64Type, EmptyArrayType>(
             |_, _, _, output, _| {
                 *output += 1;
@@ -218,7 +218,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_1_arg::<EmptyArrayType, EmptyArrayType, _, _>(
         "remove_first",
         FunctionProperty::default(),
-        |_| FunctionDomain::NoThrow,
+        |_| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<EmptyArrayType, EmptyArrayType>(|_, output, _| {
             *output += 1;
             Ok(())
@@ -246,7 +246,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_1_arg::<EmptyArrayType, EmptyArrayType, _, _>(
         "remove_last",
         FunctionProperty::default(),
-        |_| FunctionDomain::NoThrow,
+        |_| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<EmptyArrayType, EmptyArrayType>(|_, output, _| {
             *output += 1;
             Ok(())
@@ -410,7 +410,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "contains",
         FunctionProperty::default(),
         |_, _| {
-            FunctionDomain::NoThrow
+            FunctionDomain::Full
         },
         |lhs, rhs, _| {
             match lhs {
@@ -453,7 +453,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_2_arg_core::<ArrayType<GenericType<0>>, GenericType<0>, BooleanType, _, _>(
         "contains",
         FunctionProperty::default(),
-        |_, _| FunctionDomain::NoThrow,
+        |_, _| FunctionDomain::Full,
         vectorize_2_arg::<ArrayType<GenericType<0>>, GenericType<0>, BooleanType>(|lhs, rhs, _| {
             lhs.iter().contains(&rhs)
         }),

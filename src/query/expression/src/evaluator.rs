@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 #[cfg(debug_assertions)]
 use std::sync::Mutex;
 
@@ -60,7 +59,7 @@ impl<'a> Evaluator<'a> {
     pub fn run(&self, expr: &Expr) -> Result<Value<AnyType>> {
         let result = match expr {
             Expr::Constant { scalar, .. } => Ok(Value::Scalar(scalar.clone())),
-            Expr::ColumnRef { id, .. } => Ok(self.input_columns.columns()[id].0.clone()),
+            Expr::ColumnRef { id, .. } => Ok(self.input_columns.columns()[*id].0.clone()),
             Expr::FunctionCall {
                 span,
                 function,
@@ -109,7 +108,7 @@ impl<'a> Evaluator<'a> {
             if !*RECURSING.lock().unwrap() {
                 *RECURSING.lock().unwrap() = true;
                 assert_eq!(
-                    ConstantFolder::new(self.input_columns.domains(), self.tz, self.fn_registry)
+                    ConstantFolder::new(&self.input_columns.domains(), self.tz, self.fn_registry)
                         .fold(expr)
                         .1,
                     None,
@@ -410,17 +409,13 @@ impl<'a> Evaluator<'a> {
 }
 
 pub struct ConstantFolder<'a> {
-    input_domains: HashMap<usize, Domain>,
+    input_domains: &'a [Domain],
     tz: Tz,
     fn_registry: &'a FunctionRegistry,
 }
 
 impl<'a> ConstantFolder<'a> {
-    pub fn new(
-        input_domains: HashMap<usize, Domain>,
-        tz: Tz,
-        fn_registry: &'a FunctionRegistry,
-    ) -> Self {
+    pub fn new(input_domains: &'a [Domain], tz: Tz, fn_registry: &'a FunctionRegistry) -> Self {
         ConstantFolder {
             input_domains,
             tz,
@@ -436,7 +431,7 @@ impl<'a> ConstantFolder<'a> {
                 id,
                 data_type,
             } => {
-                let domain = &self.input_domains[id];
+                let domain = &self.input_domains[*id];
                 let expr = domain
                     .as_singleton()
                     .map(|scalar| Expr::Constant {
@@ -531,7 +526,7 @@ impl<'a> ConstantFolder<'a> {
                 let func_domain =
                     args_domain.and_then(|domains| match (function.calc_domain)(&domains) {
                         FunctionDomain::MayThrow => None,
-                        FunctionDomain::NoThrow => Some(Domain::full(return_type)),
+                        FunctionDomain::Full => Some(Domain::full(return_type)),
                         FunctionDomain::Domain(domain) => Some(domain),
                     });
                 let all_args_is_scalar = args_expr.iter().all(|arg| arg.as_constant().is_some());

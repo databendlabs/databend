@@ -97,13 +97,18 @@ impl FuseTableSink {
         cluster_stats_gen: ClusterStatsGenerator,
         output: Option<Arc<OutputPort>>,
     ) -> Result<ProcessorPtr> {
+        let thresholds = if cluster_stats_gen.is_cluster() {
+            None
+        } else {
+            Some(cluster_stats_gen.block_compact_thresholds())
+        };
         Ok(ProcessorPtr::create(Box::new(FuseTableSink {
             ctx,
             input,
             data_accessor,
             meta_locations,
             state: State::None,
-            accumulator: Default::default(),
+            accumulator: StatisticsAccumulator::new(thresholds),
             num_block_threshold: num_block_threshold as u64,
             cluster_stats_gen,
             output,
@@ -207,6 +212,7 @@ impl Processor for FuseTableSink {
                 let segment_info = SegmentInfo::new(acc.blocks_metas, Statistics {
                     row_count: acc.summary_row_count,
                     block_count: acc.summary_block_count,
+                    perfect_block_count: acc.perfect_block_count,
                     uncompressed_byte_size: acc.in_memory_size,
                     compressed_byte_size: acc.file_size,
                     index_size: acc.index_size,
