@@ -161,7 +161,7 @@ impl BlockFilter {
     pub fn find(
         &self,
         column_name: &str,
-        target: Scalar,
+        target: &Scalar,
         typ: &SchemaDataType,
     ) -> Result<FilterEvalResult> {
         todo!("expression");
@@ -174,10 +174,10 @@ impl BlockFilter {
         //     return Ok(FilterEvalResult::NotApplicable);
         // }
 
-        // let index = filter_schema.index_of(filter_column)?;
+        // let index = self.filter_schema.index_of(&filter_column)?;
         // let filter_bytes = self.filter_block.first(index)?.as_string()?;
         // let (filter, _size) = Xor8Filter::from_bytes(&filter_bytes)?;
-        // if filter.contains(&target) {
+        // if filter.contains(target) {
         //     Ok(FilterEvalResult::Maybe)
         // } else {
         //     Ok(FilterEvalResult::False)
@@ -218,24 +218,31 @@ impl BlockFilter {
         left: &Expression,
         right: &Expression,
     ) -> Result<FilterEvalResult> {
-        todo!("expression");
-        // let schema: &DataSchemaRef = &self.source_schema;
+        let schema: &DataSchemaRef = &self.source_schema;
 
-        // // For now only support single column like "name = 'Alice'"
-        // match (left, right) {
-        //     // match the expression of 'column_name = literal constant'
-        //     (Expression::IndexedVariable { name, .. }, Expression::Constant { value, .. })
-        //     | (Expression::Constant { value, .. }, Expression::IndexedVariable { name, .. }) => {
-        //         // find the corresponding column from source table
-        //         let data_field = schema.field_with_name(name)?;
-        //         let data_type = data_field.data_type();
+        // For now only support single column like "name = 'Alice'"
+        match (left, right) {
+            // match the expression of 'column_name = literal constant'
+            (Expression::IndexedVariable { name, .. }, Expression::Constant { value, .. })
+            | (Expression::Constant { value, .. }, Expression::IndexedVariable { name, .. }) => {
+                // find the corresponding column from source table
+                let data_field = schema.field_with_name(name).map_err(|(_, e)| {
+                    ErrorCode::BadArguments(format!("Cannot find column {}", name))
+                })?;
+                let data_type = data_field.data_type();
 
-        //         // check if cast needed
-        //         // todo!("expression")
-        //         self.find(name, value, data_type)
-        //     }
-        //     _ => Ok(FilterEvalResult::NotApplicable),
-        // }
+                // check if cast needed
+                todo!("expression");
+                // let value = if &value.data_type() != data_type {
+                //     let col = value.as_const_column(data_type, 1)?;
+                //     col.get_checked(0)?
+                // } else {
+                //     value.clone()
+                // };
+                self.find(name, value, data_type)
+            }
+            _ => Ok(FilterEvalResult::NotApplicable),
+        }
     }
 
     // Evaluate the logical and expression
