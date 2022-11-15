@@ -83,10 +83,10 @@ impl DataBlockDeserializer {
             let chunk: Chunk = Chunk::from_arrow_chunk(&arrow_chunk, schema)?;
             return if let Some(filler) = &filler {
                 let num_rows = self.deserializer.num_rows();
-                let filled = filler.fill_data(block, part_info, num_rows)?;
+                let filled = filler.fill_data(chunk, part_info, num_rows)?;
                 Ok(Some(filled))
             } else {
-                Ok(Some(block))
+                Ok(Some(chunk))
             };
         }
 
@@ -261,7 +261,7 @@ impl HiveParquetBlockReader {
         &self,
         row_group_iterator: &mut DataBlockDeserializer,
         part: HivePartInfo,
-    ) -> Result<Option<DataBlock>> {
+    ) -> Result<Option<Chunk>> {
         row_group_iterator
             .next_block(&self.projected_schema, &self.hive_partition_filler, &part)
             .map_err(|e| e.add_message(format!(" filename of hive part {}", part.filename)))

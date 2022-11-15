@@ -22,14 +22,12 @@ use common_expression::types::NumberDataType;
 use common_expression::with_number_mapped_type;
 use common_expression::with_number_type;
 use common_expression::Chunk;
-use common_expression::ColumnRef;
-use common_expression::ConstColumn;
 use common_expression::DataField;
 use common_expression::Scalar;
 use common_expression::Value;
 
 use crate::hive_partition::HivePartInfo;
-use crate::utils::str_field_to_scalar;
+use crate::utils::str_field_to_column;
 
 #[derive(Debug, Clone)]
 pub struct HivePartitionFiller {
@@ -47,8 +45,8 @@ impl HivePartitionFiller {
         value: String,
         field: &DataField,
     ) -> Result<Value<AnyType>> {
-        let scalar = str_field_to_scalar(value.as_str(), field.data_type())?;
-        Ok(Value::Scalar(scalar))
+        let column = str_field_to_column(num_rows, value, field.data_type())?;
+        Ok(Value::Column(column))
     }
 
     fn extract_partition_values(&self, hive_part: &HivePartInfo) -> Result<Vec<String>> {
