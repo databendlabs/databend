@@ -316,7 +316,9 @@ impl ExchangeSource {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum FragmentKind {
+    // Partitioned by hash
     Normal,
+    // Broadcast
     Expansive,
     Merge,
 }
