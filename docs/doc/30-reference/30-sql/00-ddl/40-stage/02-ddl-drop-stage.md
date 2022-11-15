@@ -2,7 +2,7 @@
 title: DROP STAGE
 ---
 
-Drop a user stage.
+Removes a stage.
 
 ## Syntax
 

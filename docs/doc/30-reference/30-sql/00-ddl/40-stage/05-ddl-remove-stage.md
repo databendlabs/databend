@@ -1,13 +1,14 @@
 ---
-title: REMOVE { internalStage | externalStage }
+title: REMOVE STAGE FILES
 sidebar_label: REMOVE STAGE FILES
 ---
 
-Removes files from an external (cloud storage) or internal stage.
+Removes files from a stage.
+
 ## Syntax
 
 ```sql
-REMOVE { internalStage | externalStage } [ PATTERN = '<regex_pattern>' ]
+REMOVE { userStage | internalStage | externalStage } [ PATTERN = '<regex_pattern>' ]
 ```
 Where:
 
