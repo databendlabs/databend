@@ -17,18 +17,28 @@ use std::mem::size_of;
 use std::sync::Arc;
 
 use chrono::NaiveDateTime;
+use chrono::TimeZone;
+use chrono::Utc;
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table::TableStatistics;
-use common_datablocks::DataBlock;
-use common_datavalues::chrono::TimeZone;
-use common_datavalues::chrono::Utc;
-use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::number::NumberScalar;
+use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
+use common_expression::utils::ColumnFrom;
+use common_expression::Chunk;
+use common_expression::Column;
+use common_expression::DataField;
+use common_expression::DataSchemaRef;
+use common_expression::DataSchemaRefExt;
+use common_expression::Scalar;
+use common_expression::SchemaDataType;
+use common_expression::Value;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -89,7 +99,7 @@ impl NumbersTable {
             meta: TableMeta {
                 schema: DataSchemaRefExt::create(vec![DataField::new(
                     "number",
-                    u64::to_data_type(),
+                    SchemaDataType::Number(NumberDataType::UInt64),
                 )]),
                 engine: engine.to_string(),
                 // Assuming that created_on is unnecessary for function table,
@@ -160,8 +170,8 @@ impl Table for NumbersTable {
         Ok((statistics, parts))
     }
 
-    fn table_args(&self) -> Option<Vec<DataValue>> {
-        Some(vec![DataValue::UInt64(self.total)])
+    fn table_args(&self) -> Option<Vec<Scalar>> {
+        Some(vec![Scalar::Number(NumberScalar::UInt64(self.total))])
     }
 
     fn read_data(
@@ -241,7 +251,7 @@ impl NumbersSource {
 impl SyncSource for NumbersSource {
     const NAME: &'static str = "NumbersSourceTransform";
 
-    fn generate(&mut self) -> Result<Option<DataBlock>> {
+    fn generate(&mut self) -> Result<Option<Chunk>> {
         let source_remain_size = self.end - self.begin;
 
         match source_remain_size {
@@ -251,10 +261,13 @@ impl SyncSource for NumbersSource {
                 let column_data = (self.begin..self.begin + step).collect();
 
                 self.begin += step;
-                let column = UInt64Column::new_from_vec(column_data);
-                Ok(Some(DataBlock::create(self.schema.clone(), vec![
-                    Arc::new(column),
-                ])))
+                Ok(Chunk::new(
+                    vec![(
+                        Value::Column(Column::from_data(column_data)),
+                        DataType::Number(NumberDataType::UInt64),
+                    )],
+                    step,
+                ))
             }
         }
     }

@@ -19,12 +19,15 @@ use std::time::Instant;
 use common_base::base::tokio::io::AsyncWrite;
 use common_base::base::TrySpawn;
 use common_config::DATABEND_COMMIT_VERSION;
-use common_datablocks::DataBlock;
-use common_datablocks::SendableDataBlockStream;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
+use common_expression::Chunk;
+use common_expression::DataSchemaRef;
 use common_io::prelude::*;
+use common_pipeline_sources::processors::sources::stream_source::SendableChunkStream;
+use common_sql::plans::Plan;
+use common_sql::Planner;
 use common_users::CertifiedInfo;
 use common_users::UserApiProvider;
 use futures_util::StreamExt;
@@ -52,8 +55,6 @@ use crate::servers::mysql::MYSQL_VERSION;
 use crate::sessions::QueryContext;
 use crate::sessions::Session;
 use crate::sessions::TableContext;
-use crate::sql::plans::Plan;
-use crate::sql::Planner;
 use crate::stream::DataBlockStream;
 
 fn has_result_set_by_plan(plan: &Plan) -> bool {
@@ -305,7 +306,7 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
 
     // Check the query is a federated or driver setup command.
     // Here we fake some values for the command which Databend not supported.
-    fn federated_server_command_check(&self, query: &str) -> Option<DataBlock> {
+    fn federated_server_command_check(&self, query: &str) -> Option<(DataSchemaRef, Chunk)> {
         let federated = MySQLFederated::create();
         federated.check(query)
     }
@@ -313,15 +314,14 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
     #[tracing::instrument(level = "debug", skip(self))]
     async fn do_query(&mut self, query: &str) -> Result<QueryResult> {
         match self.federated_server_command_check(query) {
-            Some(data_block) => {
+            Some((schema, chunk)) => {
                 info!("Federated query: {}", query);
-                if data_block.num_rows() > 0 {
-                    info!("Federated response: {:?}", data_block);
+                if chunk.num_rows() > 0 {
+                    info!("Federated response: {:?}", chunk);
                 }
-                let has_result = data_block.num_rows() > 0;
-                let schema = data_block.schema().clone();
+                let has_result = chunk.num_rows() > 0;
                 Ok(QueryResult::create(
-                    DataBlockStream::create(schema.clone(), None, vec![data_block]).boxed(),
+                    DataBlockStream::create(None, vec![chunk]).boxed(),
                     None,
                     has_result,
                     schema,
@@ -372,7 +372,7 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
         interpreter: Arc<dyn Interpreter>,
         context: &Arc<QueryContext>,
     ) -> Result<(
-        SendableDataBlockStream,
+        SendableChunkStream,
         Option<Box<dyn ProgressReporter + Send>>,
     )> {
         let instant = Instant::now();

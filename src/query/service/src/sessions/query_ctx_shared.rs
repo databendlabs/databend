@@ -23,9 +23,9 @@ use std::time::SystemTime;
 use common_base::base::Progress;
 use common_base::base::Runtime;
 use common_config::Config;
-use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::Chunk;
 use common_meta_types::RoleInfo;
 use common_meta_types::UserInfo;
 use common_settings::Settings;
@@ -79,7 +79,7 @@ pub struct QueryContextShared {
     pub(in crate::sessions) catalog_manager: Arc<CatalogManager>,
     pub(in crate::sessions) data_operator: DataOperator,
     pub(in crate::sessions) executor: Arc<RwLock<Weak<PipelineExecutor>>>,
-    pub(in crate::sessions) precommit_blocks: Arc<RwLock<Vec<DataBlock>>>,
+    pub(in crate::sessions) precommit_blocks: Arc<RwLock<Vec<Chunk>>>,
     pub(in crate::sessions) created_time: SystemTime,
 }
 
@@ -314,17 +314,17 @@ impl QueryContextShared {
         *executor = weak_ptr;
     }
 
-    pub fn push_precommit_block(&self, block: DataBlock) {
-        let mut blocks = self.precommit_blocks.write();
-        blocks.push(block);
+    pub fn push_precommit_block(&self, chunk: Chunk) {
+        let mut chunks = self.precommit_blocks.write();
+        chunks.push(chunk);
     }
 
-    pub fn consume_precommit_blocks(&self) -> Vec<DataBlock> {
-        let mut blocks = self.precommit_blocks.write();
+    pub fn consume_precommit_blocks(&self) -> Vec<Chunk> {
+        let mut chunks = self.precommit_blocks.write();
 
-        let mut swaped_precommit_blocks = vec![];
-        std::mem::swap(&mut *blocks, &mut swaped_precommit_blocks);
-        swaped_precommit_blocks
+        let mut swaped_precommit_chunks = vec![];
+        std::mem::swap(&mut *chunks, &mut swaped_precommit_chunks);
+        swaped_precommit_chunks
     }
 
     pub fn get_created_time(&self) -> SystemTime {

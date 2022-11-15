@@ -22,7 +22,7 @@ use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::serialize_chunks;
 use common_expression::Chunk;
-use common_expression::SendableChunkStream;
+use common_pipeline_sources::processors::sources::stream_source::SendableChunkStream;
 use common_storages_fuse::statistics::BlockStatistics;
 use common_storages_fuse::statistics::StatisticsAccumulator;
 use common_storages_fuse::FuseTable;

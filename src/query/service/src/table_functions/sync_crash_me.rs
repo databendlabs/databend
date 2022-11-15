@@ -19,15 +19,17 @@ use std::task::Context;
 use std::task::Poll;
 
 use chrono::NaiveDateTime;
+use chrono::TimeZone;
+use chrono::Utc;
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PushDownInfo;
-use common_datablocks::DataBlock;
-use common_datavalues::chrono::TimeZone;
-use common_datavalues::chrono::Utc;
-use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_expression::types::number::NumberScalar;
+use common_expression::Chunk;
+use common_expression::DataSchema;
+use common_expression::Scalar;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -110,8 +112,8 @@ impl Table for SyncCrashMeTable {
         Ok((PartStatistics::new_exact(1, 1, 1, 1), vec![]))
     }
 
-    fn table_args(&self) -> Option<Vec<DataValue>> {
-        Some(vec![DataValue::UInt64(0)])
+    fn table_args(&self) -> Option<Vec<Scalar>> {
+        Some(vec![Scalar::Number(NumberScalar::UInt64(0))])
     }
 
     fn read_data(
@@ -152,7 +154,7 @@ impl SyncCrashMeSource {
 impl SyncSource for SyncCrashMeSource {
     const NAME: &'static str = "sync_crash_me";
 
-    fn generate(&mut self) -> Result<Option<DataBlock>> {
+    fn generate(&mut self) -> Result<Option<Chunk>> {
         match &self.message {
             None => panic!("sync crash me panic"),
             Some(message) => panic!("{}", message),
@@ -176,7 +178,7 @@ struct SyncCrashMeStream {
 }
 
 impl Stream for SyncCrashMeStream {
-    type Item = Result<DataBlock>;
+    type Item = Result<Chunk>;
 
     fn poll_next(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         match &self.message {

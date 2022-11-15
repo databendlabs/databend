@@ -17,10 +17,10 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use common_base::base::tokio;
-use common_datavalues::DataSchema;
-use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::DataSchema;
+use common_expression::DataSchemaRef;
 use common_io::prelude::FormatSettings;
 use common_storages_fuse_result::BlockBuffer;
 use serde_json::Value as JsonValue;

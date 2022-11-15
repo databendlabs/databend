@@ -24,10 +24,12 @@ use common_base::base::GlobalIORuntime;
 use common_base::base::ProgressValues;
 use common_base::base::Thread;
 use common_base::base::TrySpawn;
-use common_datablocks::SendableDataBlockStream;
-use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::DataSchemaRef;
+use common_pipeline_sources::processors::sources::stream_source::SendableChunkStream;
+use common_sql::plans::Plan;
+use common_sql::Planner;
 use common_storages_fuse_result::BlockBuffer;
 use common_storages_fuse_result::BlockBufferWriterMemOnly;
 use common_storages_fuse_result::BlockBufferWriterWithResultTable;
@@ -52,8 +54,6 @@ use crate::sessions::QueryAffect;
 use crate::sessions::QueryContext;
 use crate::sessions::Session;
 use crate::sessions::TableContext;
-use crate::sql::plans::Plan;
-use crate::sql::Planner;
 use crate::stream::DataBlockStream;
 
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Eq)]
@@ -345,7 +345,7 @@ impl HttpQueryHandle {
         ctx: Arc<QueryContext>,
         mut build_res: PipelineBuildResult,
         result_schema: DataSchemaRef,
-    ) -> Result<SendableDataBlockStream> {
+    ) -> Result<SendableChunkStream> {
         let executor = self.executor.clone();
         let block_buffer = self.block_buffer.clone();
 
@@ -409,10 +409,6 @@ impl HttpQueryHandle {
                 }
             }
         });
-        Ok(Box::pin(DataBlockStream::create(
-            result_schema,
-            None,
-            vec![],
-        )))
+        Ok(Box::pin(DataBlockStream::create(None, vec![])))
     }
 }

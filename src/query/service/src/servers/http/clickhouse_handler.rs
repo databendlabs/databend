@@ -20,16 +20,19 @@ use common_base::base::tokio;
 use common_base::base::tokio::sync::mpsc::Sender;
 use common_base::base::tokio::task::JoinHandle;
 use common_base::base::TrySpawn;
-use common_datablocks::DataBlock;
-use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
+use common_expression::Chunk;
+use common_expression::DataSchemaRef;
 use common_formats::ClickhouseFormatType;
 use common_formats::FileFormatOptionsExt;
 use common_formats::FileFormatTypeExt;
 use common_pipeline_sources::processors::sources::input_formats::InputContext;
 use common_pipeline_sources::processors::sources::input_formats::StreamingReadBatch;
+use common_sql::plans::InsertInputSource;
+use common_sql::plans::Plan;
+use common_sql::Planner;
 use futures::StreamExt;
 use http::HeaderMap;
 use naive_cityhash::cityhash128;
@@ -57,9 +60,6 @@ use crate::servers::http::ClickHouseFederated;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionType;
 use crate::sessions::TableContext;
-use crate::sql::plans::InsertInputSource;
-use crate::sql::plans::Plan;
-use crate::sql::Planner;
 
 // accept all clickhouse params, so they do not go to settings.
 #[derive(Serialize, Deserialize)]
@@ -363,7 +363,7 @@ fn compress_block(input: Vec<u8>) -> Result<Vec<u8>> {
 
 fn serialize_one_block(
     ctx: Arc<QueryContext>,
-    block: DataBlock,
+    block: Chunk,
     sql: &str,
     params: &StatementHandlerParams,
     default_format: ClickhouseFormatType,

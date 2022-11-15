@@ -15,13 +15,12 @@
 use std::sync::Arc;
 
 use bstr::ByteSlice;
-use common_datablocks::DataBlock;
-use common_datavalues::DataSchema;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataType;
-use common_datavalues::TypeSerializer;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::Chunk;
+use common_expression::DataSchema;
+use common_expression::DataSchemaRef;
+use common_expression::TypeSerializer;
 use common_formats::field_encoder::FieldEncoderRowBased;
 use common_formats::field_encoder::FieldEncoderValues;
 use common_io::prelude::FormatSettings;
@@ -36,25 +35,22 @@ pub struct JsonBlock {
 pub type JsonBlockRef = Arc<JsonBlock>;
 
 pub fn block_to_json_value_columns(
-    block: &DataBlock,
+    chunk: &Chunk,
     format: &FormatSettings,
 ) -> Result<Vec<Vec<JsonValue>>> {
-    if block.is_empty() {
+    if chunk.is_empty() {
         return Ok(vec![]);
     }
     let mut col_table = Vec::new();
-    let columns_size = block.columns().len();
+    let columns_size = chunk.num_columns();
     for col_index in 0..columns_size {
-        let column = block.column(col_index);
-        let column = column.convert_full_column();
-        let field = block.schema().field(col_index);
-        let data_type = field.data_type();
-        let serializer = data_type.create_serializer(&column)?;
+        let (value, data_type) = chunk.column(col_index);
+        let column = value.into_column()?;
+        let serializer = data_type.create_serializer(column)?;
         col_table.push(serializer.serialize_json_values(format).map_err(|e| {
             ErrorCode::Internal(format!(
-                "fail to serialize filed {}, error = {}",
-                field.name(),
-                e
+                "fail to serialize filed {} error = {}",
+                col_index, e
             ))
         })?);
     }
@@ -62,39 +58,36 @@ pub fn block_to_json_value_columns(
 }
 
 pub fn block_to_json_value(
-    block: &DataBlock,
+    chunk: &Chunk,
     format: &FormatSettings,
     string_fields: bool,
 ) -> Result<Vec<Vec<JsonValue>>> {
     if string_fields {
-        block_to_json_value_string_fields(block, format)
+        block_to_json_value_string_fields(chunk, format)
     } else {
-        block_to_json_value_ast(block, format)
+        block_to_json_value_ast(chunk, format)
     }
 }
 
-fn block_to_json_value_ast(
-    block: &DataBlock,
-    format: &FormatSettings,
-) -> Result<Vec<Vec<JsonValue>>> {
-    let cols = block_to_json_value_columns(block, format)?;
+fn block_to_json_value_ast(chunk: &Chunk, format: &FormatSettings) -> Result<Vec<Vec<JsonValue>>> {
+    let cols = block_to_json_value_columns(chunk, format)?;
     Ok(transpose(cols))
 }
 
 fn block_to_json_value_string_fields(
-    block: &DataBlock,
+    chunk: &Chunk,
     format: &FormatSettings,
 ) -> Result<Vec<Vec<JsonValue>>> {
-    if block.is_empty() {
+    if chunk.is_empty() {
         return Ok(vec![]);
     }
-    let rows_size = block.column(0).len();
+    let rows_size = chunk.num_rows();
     let mut res = Vec::new();
-    let serializers = block.get_serializers()?;
+    let serializers = chunk.get_serializers()?;
     let encoder = FieldEncoderValues::create_for_handler(format.timezone);
     let mut buf = vec![];
     for row_index in 0..rows_size {
-        let mut row: Vec<JsonValue> = Vec::with_capacity(block.num_columns());
+        let mut row: Vec<JsonValue> = Vec::with_capacity(chunk.num_columns());
         for serializer in serializers.iter() {
             buf.clear();
             encoder.write_field(serializer, row_index, &mut buf, true);
@@ -116,10 +109,15 @@ impl JsonBlock {
         }
     }
 
-    pub fn new(block: &DataBlock, format: &FormatSettings, string_fields: bool) -> Result<Self> {
+    pub fn new(
+        schema: DataSchemaRef,
+        chunk: &Chunk,
+        format: &FormatSettings,
+        string_fields: bool,
+    ) -> Result<Self> {
         Ok(JsonBlock {
-            data: block_to_json_value(block, format, string_fields)?,
-            schema: block.schema().clone(),
+            data: block_to_json_value(chunk, format, string_fields)?,
+            schema: schema.clone(),
         })
     }
 

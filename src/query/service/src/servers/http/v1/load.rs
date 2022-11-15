@@ -25,6 +25,9 @@ use common_exception::Result;
 use common_io::prelude::parse_escape_string;
 use common_pipeline_sources::processors::sources::input_formats::InputContext;
 use common_pipeline_sources::processors::sources::input_formats::StreamingReadBatch;
+use common_sql::plans::InsertInputSource;
+use common_sql::plans::Plan;
+use common_sql::Planner;
 use futures::StreamExt;
 use poem::error::BadRequest;
 use poem::error::InternalServerError;
@@ -42,9 +45,6 @@ use crate::interpreters::InterpreterFactory;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionType;
 use crate::sessions::TableContext;
-use crate::sql::plans::InsertInputSource;
-use crate::sql::plans::Plan;
-use crate::sql::Planner;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct LoadResponse {
