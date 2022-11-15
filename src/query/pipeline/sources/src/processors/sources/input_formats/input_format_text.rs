@@ -22,6 +22,8 @@ use common_datavalues::TypeDeserializer;
 use common_datavalues::TypeDeserializerImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_formats::FieldDecoder;
+use common_formats::FileFormatOptionsExt;
 use common_meta_types::StageFileFormatType;
 use common_meta_types::UserStageInfo;
 use common_pipeline_core::Pipeline;
@@ -54,6 +56,8 @@ pub trait InputFormatTextBase: Sized + Send + Sync + 'static {
     fn default_record_delimiter() -> RecordDelimiter {
         RecordDelimiter::Crlf
     }
+
+    fn create_field_decoder(options: &FileFormatOptionsExt) -> Arc<dyn FieldDecoder>;
 
     fn default_field_delimiter() -> u8;
 
@@ -374,6 +378,7 @@ impl<T: InputFormatTextBase> AligningStateTrait for AligningState<T> {
 }
 
 pub struct BlockBuilder<T> {
+    pub field_decoder: Arc<dyn FieldDecoder>,
     pub ctx: Arc<InputContext>,
     pub mutable_columns: Vec<TypeDeserializerImpl>,
     pub num_rows: usize,
@@ -407,11 +412,13 @@ impl<T: InputFormatTextBase> BlockBuilderTrait for BlockBuilder<T> {
         let columns = ctx
             .schema
             .create_deserializers(ctx.block_compact_thresholds.min_rows_per_block);
+        let field_decoder = T::create_field_decoder(&ctx.format_options);
         BlockBuilder {
             ctx,
             mutable_columns: columns,
             num_rows: 0,
             phantom: Default::default(),
+            field_decoder,
         }
     }
 

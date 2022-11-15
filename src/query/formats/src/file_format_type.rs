@@ -445,7 +445,7 @@ fn format_setting_parquet(options: &FileFormatOptionsExt, timezone: Tz) -> Forma
     format_setting_csv(options, timezone)
 }
 
-fn parse_timezone(settings: &Settings) -> Result<Tz> {
+pub fn parse_timezone(settings: &Settings) -> Result<Tz> {
     let tz = settings.get_timezone()?;
     tz.parse::<Tz>()
         .map_err(|_| ErrorCode::InvalidTimezone("Timezone has been checked and should be valid"))

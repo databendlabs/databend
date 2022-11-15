@@ -140,6 +140,7 @@ impl DataType for IntervalType {
 
     fn create_deserializer(&self, capacity: usize) -> TypeDeserializerImpl {
         DateDeserializer::<i64> {
+            buffer: vec![],
             builder: MutablePrimitiveColumn::<i64>::with_capacity(capacity),
         }
         .into()

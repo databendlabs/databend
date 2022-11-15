@@ -22,8 +22,8 @@ use common_io::consts::NAN_BYTES_LOWER;
 use common_io::consts::NULL_BYTES_UPPER;
 use common_io::consts::TRUE_BYTES_NUM;
 
-use crate::field_encoder::CommonSettings;
 use crate::field_encoder::FieldEncoderRowBased;
+use crate::CommonSettings;
 use crate::FileFormatOptionsExt;
 
 pub struct FieldEncoderValues {

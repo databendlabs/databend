@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::io::Cursor;
-
 use common_exception::Result;
 use common_io::prelude::FormatSettings;
 
@@ -37,7 +35,7 @@ impl TypeDeserializer for NullDeserializer {
         Ok(())
     }
 
-    fn de_default(&mut self, _format: &FormatSettings) {
+    fn de_default(&mut self) {
         self.builder.append_default();
     }
 
@@ -55,20 +53,6 @@ impl TypeDeserializer for NullDeserializer {
     }
 
     fn de_json(&mut self, _value: &serde_json::Value, _format: &FormatSettings) -> Result<()> {
-        self.builder.append_default();
-        Ok(())
-    }
-
-    fn de_whole_text(&mut self, _reader: &[u8], _format: &FormatSettings) -> Result<()> {
-        self.builder.append_default();
-        Ok(())
-    }
-
-    fn de_text<R: AsRef<[u8]>>(
-        &mut self,
-        _reader: &mut Cursor<R>,
-        _format: &FormatSettings,
-    ) -> Result<()> {
         self.builder.append_default();
         Ok(())
     }
