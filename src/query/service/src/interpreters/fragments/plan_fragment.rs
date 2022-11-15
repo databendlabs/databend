@@ -36,7 +36,7 @@ pub enum FragmentType {
 
     /// Intermediate fragment of a query plan,
     /// doesn't contain any `TableScan` operator.
-    Intermidiate,
+    Intermediate,
 
     /// Leaf fragment of a query plan, which contains
     /// a `TableScan` operator.
@@ -79,7 +79,7 @@ impl PlanFragment {
                 }
                 actions.add_fragment_actions(fragment_actions)?;
             }
-            FragmentType::Intermidiate => {
+            FragmentType::Intermediate => {
                 if self
                     .source_fragments
                     .iter()
