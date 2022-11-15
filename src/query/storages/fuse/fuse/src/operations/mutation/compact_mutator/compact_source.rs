@@ -44,7 +44,7 @@ enum State {
 
 // Select the row_count >= min_rows_per_block or block_size >= max_bytes_per_block
 // as the perfect_block condition(N for short). CompactSource gets a set of segments,
-// iterates through the blocks, and finds the blocks >= N and < 2N as a CompactTask.
+// iterates through the blocks, and finds the blocks >= N and blocks < 2N as a CompactTask.
 pub struct CompactSource {
     state: State,
     ctx: Arc<dyn TableContext>,
@@ -120,7 +120,8 @@ impl Processor for CompactSource {
                 let part = CompactPartInfo::from_part(&part)?;
                 let mut builder = CompactTaskBuilder::default();
                 let mut tasks = Vec::new();
-                for segment in part.segments.iter() {
+                // The order of the compact is from old to new.
+                for segment in part.segments.iter().rev() {
                     for block in segment.blocks.iter() {
                         // todo: add real metrics
                         metrics_set_selected_blocks_memory_usage(0.0);
@@ -170,11 +171,13 @@ impl CompactTaskBuilder {
         self.total_size += block.block_size as usize;
 
         if !thresholds.check_large_enough(self.total_rows, self.total_size) {
+            // blocks < N
             self.blocks.push(block.clone());
             return vec![];
         }
 
         let tasks = if !thresholds.check_for_compact(self.total_rows, self.total_size) {
+            // blocks > 2N
             let trival_task = CompactTask::Trival(block.clone());
             if !self.blocks.is_empty() {
                 let compact_task = Self::create_task(std::mem::take(&mut self.blocks));
@@ -183,6 +186,7 @@ impl CompactTaskBuilder {
                 vec![trival_task]
             }
         } else {
+            // N <= blocks < 2N
             self.blocks.push(block.clone());
             vec![Self::create_task(std::mem::take(&mut self.blocks))]
         };

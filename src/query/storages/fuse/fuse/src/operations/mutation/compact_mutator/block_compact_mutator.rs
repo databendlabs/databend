@@ -91,11 +91,9 @@ impl BlockCompactMutator {
 
         for (idx, segment) in segments.iter().enumerate() {
             let tasks = builder.add(segment.clone());
-            for mut t in tasks {
+            for t in tasks {
                 if CompactPartBuilder::check_for_compact(&t) {
                     compacted_segment_cnt += t.len();
-                    // The order of the compact is old first and then new.
-                    t.reverse();
                     self.compact_tasks.push(CompactPartInfo::create(t, order));
                 } else {
                     self.unchanged_segment_locations
@@ -115,9 +113,8 @@ impl BlockCompactMutator {
         }
 
         if !builder.segments.is_empty() {
-            let mut t = std::mem::take(&mut builder.segments);
+            let t = std::mem::take(&mut builder.segments);
             if CompactPartBuilder::check_for_compact(&t) {
-                t.reverse();
                 self.compact_tasks.push(CompactPartInfo::create(t, order));
             } else {
                 self.unchanged_segment_locations
