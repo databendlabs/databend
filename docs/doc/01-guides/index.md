@@ -1,5 +1,5 @@
 ---
-title: Tutorials
+title: Getting Started Tutorials
 ---
 
 These tutorials are intended to help you get started with Databend:
@@ -9,6 +9,8 @@ These tutorials are intended to help you get started with Databend:
 * [Understanding Deployment Modes](../10-deploy/00-understanding-deployment-modes.md)
 * [Deploying a Standalone Databend](../10-deploy/02-deploying-databend.md)
 * [Expanding a Standalone Databend](../10-deploy/03-expanding-to-a-databend-cluster.md)
+* [Deploying a Query Cluster on Kubernetes](../10-deploy/04-deploying-databend-on-kubernetes.md)
+* [Deploying a Local Databend (for Non-Production Use)](../10-deploy/05-deploying-local.md)
 * [Databend Cloud (Beta)](../02-cloud/index.md)
 
 ## Connecting to Databend
