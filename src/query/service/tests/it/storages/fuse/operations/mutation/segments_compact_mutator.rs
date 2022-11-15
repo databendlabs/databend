@@ -281,19 +281,23 @@ async fn test_segment_compactor() -> Result<()> {
     }
 
     {
-        let case_name = "greedy compact, but not too greedy(1)";
+        let case_name = "greedy compact, but not too greedy(1), right assoc";
         let threshold = 10;
         let case = CompactCase {
             // - 4 segments
-            blocks_number_of_input_segments: vec![2, 8, 1, 8],
+            blocks_number_of_input_segments: vec![1, 8, 2, 8],
             // - these segments should be compacted into 2 new segments
             expected_number_of_output_segments: 2,
+            // compaction is right-assoc
             // -  (2 + 8) meets threshold 10
             //    they should be compacted into one new segment.
             //    although the next segment contains only 1 segment, it should NOT
             //    be compacted (the not too greedy rule)
-            // - (1 + 8) should be compacted into one new segment
-            expected_block_number_of_new_segments: vec![2 + 8, 1 + 8],
+            // - (1 + 8) should be compacted into another new segment
+            //
+            // To let the case more readable, we specify the block numbers of new
+            // segments in the order of input segments
+            expected_block_number_of_new_segments: vec![1 + 8, 2 + 8],
             case_name,
         };
         // run & verify
@@ -301,11 +305,11 @@ async fn test_segment_compactor() -> Result<()> {
     }
 
     {
-        let case_name = "greedy compact, but not too greedy (2)";
+        let case_name = "greedy compact, but not too greedy (2), right-assoc";
         let threshold = 10;
         let case = CompactCase {
             // 4 segments
-            blocks_number_of_input_segments: vec![2, 3, 6, 5],
+            blocks_number_of_input_segments: vec![5, 2, 3, 6],
             // these segments should be compacted into 2 segments
             expected_number_of_output_segments: 2,
             // (2 + 3 + 6) exceeds the threshold 10
@@ -329,16 +333,16 @@ async fn test_segment_compactor() -> Result<()> {
     {
         // case: fragmented segments, with barrier
 
-        let case_name = "barrier(1)";
+        let case_name = "barrier(1), right-assoc";
         let threshold = 10;
         let case = CompactCase {
             // input segments
-            blocks_number_of_input_segments: vec![2, 10, 6, 11, 5],
+            blocks_number_of_input_segments: vec![5, 6, 11, 2, 10],
             // these segments should be compacted into 2 new segments, 1 segment unchanged
-            // new segments: (2 + 10), (6 + 11)
-            // unchanged: (5)
+            // unchanged: (10)
+            // new segments: (11 + 2), ( 5 + 6)
             expected_number_of_output_segments: 2 + 1,
-            expected_block_number_of_new_segments: vec![2 + 10, 6 + 11],
+            expected_block_number_of_new_segments: vec![5 + 6, 11 + 2],
             case_name,
         };
 
@@ -355,7 +359,6 @@ async fn test_segment_compactor() -> Result<()> {
             blocks_number_of_input_segments: vec![10, 10, 1, 2, 10],
             // these segments should be compacted into
             // (10), (10), (1 + 2 + 10)
-            // the first two segments kept unchanged, and the last 3, compacted into one
             expected_number_of_output_segments: 3,
             expected_block_number_of_new_segments: vec![(1 + 2 + 10)],
             case_name,
@@ -424,8 +427,23 @@ async fn test_segment_compactor() -> Result<()> {
             blocks_number_of_input_segments: vec![7, 2],
             // inputs will not be compacted ( 7 > 2 * 3)
             expected_number_of_output_segments: 2,
-            // now new segment should be generated
+            // no new segment should be generated
             expected_block_number_of_new_segments: vec![],
+            case_name,
+        };
+
+        case.run_and_verify(&ctx, threshold).await?;
+    }
+
+    {
+        let case_name = "right assoc";
+        let threshold = 10;
+        let case = CompactCase {
+            // input segments
+            blocks_number_of_input_segments: vec![6, 5, 7],
+            expected_number_of_output_segments: 2,
+            // one new segment should be generated, since (5 + 7) < 2 * 10
+            expected_block_number_of_new_segments: vec![5 + 7],
             case_name,
         };
 
@@ -439,7 +457,7 @@ async fn test_segment_compactor() -> Result<()> {
         let threshold = 3;
         let mut rng = thread_rng();
 
-        // let rounds = 200; use this setting at home
+        // let rounds = 200; // use this setting at home
         let rounds = 20;
         for _ in 0..rounds {
             let num_segments: usize = rng.gen_range(0..10);
@@ -457,6 +475,11 @@ async fn test_segment_compactor() -> Result<()> {
             for _ in 0..num_segments {
                 let block_num: usize = rng.gen_range(0..20);
                 blocks_number_of_input_segments.push(block_num);
+            }
+
+            // traverse the input segments in reversed order (to let the compaction "right-assoc")
+            for item in blocks_number_of_input_segments.iter().rev() {
+                let block_num = *item;
                 if block_num != 0 {
                     let s = block_num + num_accumulated_blocks;
                     if s < threshold {
@@ -511,6 +534,11 @@ async fn test_segment_compactor() -> Result<()> {
                 expected_number_of_output_segments += 1;
             }
 
+            // To make the non-random test cases more readable, paths of newly created segments are
+            // specified in the order of original(Input) order.
+            // But during this simulated compaction, the paths are kept in reversed order,
+            // so here we reverse the paths, to make the test verifications followed pass.
+            expected_block_number_of_new_segments.reverse();
             let case = CompactCase {
                 blocks_number_of_input_segments,
                 expected_number_of_output_segments,
@@ -614,12 +642,13 @@ impl CompactSegmentTestFixture {
         expected_num_blocks: &[usize],
         segment_reader: &SegmentInfoReader,
     ) -> Result<()> {
-        for (idx, x) in new_segment_paths.iter().enumerate() {
+        // traverse the paths of new segments  in reversed order
+        for (idx, x) in new_segment_paths.iter().rev().enumerate() {
             let seg = segment_reader.read(x, None, SegmentInfo::VERSION).await?;
             assert_eq!(
                 seg.blocks.len(),
                 expected_num_blocks[idx],
-                "case name :{}",
+                "case name :{}, verify_block_number_of_new_segments",
                 case_name
             );
         }
@@ -657,7 +686,7 @@ impl CompactCase {
             self.blocks_number_of_input_segments,
         );
 
-        // 2. number of segments is as expected (segments not changed and newly generated segments)
+        // 2. number of segments is as expected (including both of the segments that not changed and newly generated segments)
         assert_eq!(
             r.segments_locations.len(),
             self.expected_number_of_output_segments,
@@ -680,13 +709,19 @@ impl CompactCase {
         let mut block_num_of_output_segments = vec![];
 
         // 4. input blocks should be there and in the original order
-        for location in &r.segments_locations {
+        for location in r.segments_locations.iter().rev() {
             let segment = segment_reader.read(&location.0, None, location.1).await?;
             merge_statistics_mut(&mut statistics_of_input_segments, &segment.summary)?;
             block_num_of_output_segments.push(segment.blocks.len());
+
             for x in &segment.blocks {
                 let original_block_meta = &case_fixture.input_blocks[idx];
-                assert_eq!(original_block_meta, x.as_ref(), "case : {}", self.case_name);
+                assert_eq!(
+                    original_block_meta,
+                    x.as_ref(),
+                    "case : {}, verify block order",
+                    self.case_name
+                );
                 idx += 1;
             }
         }

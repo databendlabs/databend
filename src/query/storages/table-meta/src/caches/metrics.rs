@@ -20,7 +20,7 @@ const CACHE_READ_BYTES_FROM_REMOTE: &str = "cache_read_bytes_from_remote";
 const CACHE_READ_BYTES_FROM_LOCAL: &str = "cache_read_bytes_from_local";
 const CACHE_ACCESS_COUNT: &str = "cache_access_count";
 const CACHE_ACCESS_HIT_COUNT: &str = "cache_access_hit_count";
-const LABEL_KEY_CACHE_CATEGORY: &str = "cache_category";
+const LABEL_KEY_CACHE_CATEGORY: &str = "category";
 
 #[derive(Clone)]
 pub struct TenantLabel {
