@@ -171,7 +171,7 @@ impl ClientHandle {
             req: req.into(),
         };
 
-        label_increment_gauge_with_val_and_labels(META_GRPC_CLIENT_REQUEST_INFLIGHT, vec![], 1.0);
+        label_increment_gauge_with_val_and_labels(META_GRPC_CLIENT_REQUEST_INFLIGHT, &vec![], 1.0);
 
         let res = self.req_tx.send(req).await.map_err(|e| {
             let cli_err = MetaClientError::ClientRuntimeError(
@@ -183,7 +183,7 @@ impl ClientHandle {
         if let Err(err) = res {
             label_decrement_gauge_with_val_and_labels(
                 META_GRPC_CLIENT_REQUEST_INFLIGHT,
-                vec![],
+                &vec![],
                 1.0,
             );
 
@@ -193,7 +193,7 @@ impl ClientHandle {
         let res = rx.await.map_err(|e| {
             label_decrement_gauge_with_val_and_labels(
                 META_GRPC_CLIENT_REQUEST_INFLIGHT,
-                vec![],
+                &vec![],
                 1.0,
             );
 
@@ -202,7 +202,7 @@ impl ClientHandle {
             )
         })?;
 
-        label_decrement_gauge_with_val_and_labels(META_GRPC_CLIENT_REQUEST_INFLIGHT, vec![], 1.0);
+        label_decrement_gauge_with_val_and_labels(META_GRPC_CLIENT_REQUEST_INFLIGHT, &vec![], 1.0);
         let res: Result<Resp, E> = res
             .try_into()
             .map_err(|e| format!("expect: {}, got: {}", std::any::type_name::<Resp>(), e))
@@ -406,7 +406,7 @@ impl MetaGrpcClient {
                 let elapsed = start.elapsed().as_millis() as f64;
                 label_histogram_with_val(
                     META_GRPC_CLIENT_REQUEST_DURATION_MS,
-                    vec![
+                    &vec![
                         (LABEL_ENDPOINT, current_endpoint.to_string()),
                         (LABEL_REQUEST, req_name.to_string()),
                     ],
@@ -422,7 +422,7 @@ impl MetaGrpcClient {
                 if let Some(err) = resp.err() {
                     label_counter_with_val_and_labels(
                         META_GRPC_CLIENT_REQUEST_FAILED,
-                        vec![
+                        &vec![
                             (LABEL_ENDPOINT, current_endpoint.to_string()),
                             (LABEL_ERROR, err.to_string()),
                             (LABEL_REQUEST, req_name.to_string()),
@@ -433,7 +433,7 @@ impl MetaGrpcClient {
                 } else {
                     label_counter_with_val_and_labels(
                         META_GRPC_CLIENT_REQUEST_SUCCESS,
-                        vec![
+                        &vec![
                             (LABEL_ENDPOINT, current_endpoint.to_string()),
                             (LABEL_REQUEST, req_name.to_string()),
                         ],
@@ -541,7 +541,7 @@ impl MetaGrpcClient {
                 );
                 label_counter_with_val_and_labels(
                     META_GRPC_MAKE_CLIENT_FAILED,
-                    vec![(LABEL_ENDPOINT, addr.to_string())],
+                    &vec![(LABEL_ENDPOINT, addr.to_string())],
                     1,
                 );
                 Err(e)
