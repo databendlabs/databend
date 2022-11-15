@@ -425,12 +425,11 @@ impl SchemaDataType {
                 let mut rng = SmallRng::from_entropy();
                 with_number_mapped_type!(|NUM_TYPE| match num_ty {
                     NumberDataType::NUM_TYPE => {
-                        todo!("expression");
-                        // let data = (0..len).map(|_| rng.gen()).collect::<Vec<NUM_TYPE>>();
-                        // (
-                        //     Value::Column(Column::from_data(data)),
-                        //     DataType::Number(*num_ty),
-                        // )
+                        let data = (0..len).map(|_| rng.gen()).collect::<Vec<NUM_TYPE>>();
+                        (
+                            Value::Column(Column::from_data(data)),
+                            DataType::Number(*num_ty),
+                        )
                     }
                 })
             }
