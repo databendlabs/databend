@@ -50,7 +50,7 @@ The stage is the location where your data is stored. You can upload your local C
 
 ### Worksheets
 
-Worksheets is a powerful SQL editor where you can run SQL queries. For example, you can now do [Conversion Funnel Analysis](../90-learn/04-analyze-funnel-with-databend.md) online.
+Worksheets is a powerful SQL editor where you can run SQL queries. For example, you can now do [Conversion Funnel Analysis](../21-use-cases/04-analyze-funnel-with-databend.md) online.
 
 <img src="/img/cloud/databend_cloud_worksheet_demo.png"/>
 

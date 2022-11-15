@@ -8,8 +8,8 @@ description:
 ## Before You Begin
 
 * **Databend :** Make sure Databend is running and accessible, see [How to deploy Databend](/doc/deploy).
-* [How to Create User](../30-reference/30-sql/00-ddl/30-user/01-user-create-user.md)
-* [How to Grant Privileges to User](../30-reference/30-sql/00-ddl/30-user/10-grant-privileges.md)
+* [How to Create User](../14-sql-commands/00-ddl/30-user/01-user-create-user.md)
+* [How to Grant Privileges to User](../14-sql-commands/00-ddl/30-user/10-grant-privileges.md)
  
 ## Create Databend User
 
