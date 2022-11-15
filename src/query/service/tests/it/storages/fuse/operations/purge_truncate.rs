@@ -52,7 +52,7 @@ async fn test_fuse_truncate_purge_stmt() -> Result<()> {
         &fixture,
         "truncate_after_purge_check_file_items",
         1,
-        1,
+        0,
         0,
         0,
         0,
