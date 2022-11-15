@@ -19,6 +19,10 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataSchemaRef;
 use common_expression::TypeDeserializer;
+use common_formats::FieldDecoder;
+use common_formats::FieldDecoderRowBased;
+use common_formats::FieldDecoderXML;
+use common_formats::FileFormatOptionsExt;
 use common_io::cursor_ext::*;
 use common_io::prelude::FormatSettings;
 use common_meta_types::StageFileFormatType;
@@ -36,6 +40,7 @@ pub struct InputFormatXML {}
 
 impl InputFormatXML {
     fn read_row(
+        field_decoder: &FieldDecoderXML,
         buf: &[u8],
         deserializers: &mut [Box<dyn TypeDeserializer>],
         schema: &DataSchemaRef,
@@ -59,27 +64,7 @@ impl InputFormatXML {
                 raw_data.get(&field.name().to_lowercase())
             };
 
-            if let Some(value) = value {
-                let mut reader = Cursor::new(&**value);
-                if reader.eof() {
-                    deserializer.de_default(format_settings);
-                } else {
-                    todo!("expression")
-                    // if let Err(e) = deserializer.de_text(&mut reader, format_settings) {
-                    //     let value_str = format!("{:?}", value);
-                    //     let err_msg = format!("{}. column={} value={}", e, field.name(), value_str);
-                    //     return Err(xml_error(&err_msg, path, row_index));
-                    // };
-                    // if reader.must_eof().is_err() {
-                    //     let value_str = format!("{:?}", value);
-                    //     let err_msg =
-                    //         format!("bad field end. column={} value={}", field.name(), value_str);
-                    //     return Err(xml_error(&err_msg, path, row_index));
-                    // }
-                }
-            } else {
-                deserializer.de_default(format_settings);
-            }
+            todo!("expression");
         }
         Ok(())
     }
@@ -88,6 +73,10 @@ impl InputFormatXML {
 impl InputFormatTextBase for InputFormatXML {
     fn format_type() -> StageFileFormatType {
         StageFileFormatType::Xml
+    }
+
+    fn create_field_decoder(options: &FileFormatOptionsExt) -> Arc<dyn FieldDecoder> {
+        Arc::new(FieldDecoderXML::create(options))
     }
 
     fn default_field_delimiter() -> u8 {
@@ -102,6 +91,11 @@ impl InputFormatTextBase for InputFormatXML {
             batch.start_row,
             batch.offset,
         );
+        let field_decoder = builder
+            .field_decoder
+            .as_any()
+            .downcast_ref::<FieldDecoderXML>()
+            .expect("must success");
         let columns = &mut builder.mutable_columns;
 
         let mut start = 0usize;
@@ -109,6 +103,7 @@ impl InputFormatTextBase for InputFormatXML {
         for (i, end) in batch.row_ends.iter().enumerate() {
             let buf = &batch.data[start..*end];
             Self::read_row(
+                field_decoder,
                 buf,
                 columns,
                 &builder.ctx.schema,

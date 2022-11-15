@@ -13,14 +13,18 @@
 //  limitations under the License.
 
 use std::io::Cursor;
+use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataSchemaRef;
 use common_expression::TypeDeserializer;
+use common_formats::FieldDecoder;
+use common_formats::FieldDecoderRowBased;
+use common_formats::FieldDecoderTSV;
+use common_formats::FileFormatOptionsExt;
 use common_io::cursor_ext::*;
 use common_io::format_diagnostic::verbose_string;
-use common_io::prelude::FormatSettings;
 use common_meta_types::StageFileFormatType;
 
 use crate::processors::sources::input_formats::input_format_text::AligningState;
@@ -33,10 +37,10 @@ pub struct InputFormatTSV {}
 impl InputFormatTSV {
     #[allow(clippy::too_many_arguments)]
     fn read_row(
+        field_decoder: &FieldDecoderTSV,
         buf: &[u8],
         deserializers: &mut Vec<Box<dyn TypeDeserializer>>,
         schema: &DataSchemaRef,
-        format_settings: &FormatSettings,
         path: &str,
         batch_id: usize,
         offset: usize,
@@ -48,46 +52,9 @@ impl InputFormatTSV {
         let mut pos = 0;
         let mut err_msg = None;
         let buf_len = buf.len();
-        while pos <= buf_len {
-            if pos == buf_len || buf[pos] == b'\t' {
-                let col_data = &buf[field_start..pos];
-                if col_data.is_empty() {
-                    deserializers[column_index].de_default(format_settings);
-                } else {
-                    let mut reader = Cursor::new(col_data);
-                    reader.ignores(|c: u8| c == b' ');
-                    todo!("expression")
-                    // if let Err(e) =
-                    //     deserializers[column_index].de_text(&mut reader, format_settings)
-                    // {
-                    //     err_msg = Some(format_column_error(
-                    //         schema,
-                    //         column_index,
-                    //         col_data,
-                    //         &e.message(),
-                    //     ));
-                    //     break;
-                    // };
-                    // reader.ignore_white_spaces();
-                    // if reader.must_eof().is_err() {
-                    //     err_msg = Some(format_column_error(
-                    //         schema,
-                    //         column_index,
-                    //         col_data,
-                    //         "bad field end",
-                    //     ));
-                    //     break;
-                    // }
-                }
-                column_index += 1;
-                field_start = pos + 1;
-                if column_index > num_columns {
-                    err_msg = Some("too many columns".to_string());
-                    break;
-                }
-            }
-            pos += 1;
-        }
+
+        todo!("expression");
+
         if err_msg.is_none() && column_index < num_columns {
             // todo(youngsofun): allow it optionally (set default)
             err_msg = Some(format!(
@@ -127,6 +94,10 @@ impl InputFormatTextBase for InputFormatTSV {
         true
     }
 
+    fn create_field_decoder(options: &FileFormatOptionsExt) -> Arc<dyn FieldDecoder> {
+        Arc::new(FieldDecoderTSV::create(options))
+    }
+
     fn default_field_delimiter() -> u8 {
         b'\t'
     }
@@ -139,6 +110,11 @@ impl InputFormatTextBase for InputFormatTSV {
             batch.start_row,
             batch.offset
         );
+        let field_decoder = builder
+            .field_decoder
+            .as_any()
+            .downcast_ref::<FieldDecoderTSV>()
+            .expect("must success");
         let schema = &builder.ctx.schema;
         let columns = &mut builder.mutable_columns;
         let mut start = 0usize;
@@ -146,10 +122,10 @@ impl InputFormatTextBase for InputFormatTSV {
         for (i, end) in batch.row_ends.iter().enumerate() {
             let buf = &batch.data[start..*end]; // include \n
             Self::read_row(
+                field_decoder,
                 buf,
                 columns,
                 schema,
-                &builder.ctx.format_settings,
                 &batch.path,
                 batch.batch_id,
                 batch.offset + start,

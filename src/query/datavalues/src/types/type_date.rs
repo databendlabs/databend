@@ -100,6 +100,7 @@ impl DataType for DateType {
 
     fn create_deserializer(&self, capacity: usize) -> TypeDeserializerImpl {
         DateDeserializer::<i32> {
+            buffer: vec![],
             builder: MutablePrimitiveColumn::<i32>::with_capacity(capacity),
         }
         .into()

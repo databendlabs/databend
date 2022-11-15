@@ -21,6 +21,8 @@ use common_exception::Result;
 use common_expression::Chunk;
 use common_expression::DataSchemaRef;
 use common_expression::TypeDeserializer;
+use common_formats::FieldDecoder;
+use common_formats::FileFormatOptionsExt;
 use common_meta_types::StageFileFormatType;
 use common_meta_types::UserStageInfo;
 use common_pipeline_core::Pipeline;
@@ -53,6 +55,8 @@ pub trait InputFormatTextBase: Sized + Send + Sync + 'static {
     fn default_record_delimiter() -> RecordDelimiter {
         RecordDelimiter::Crlf
     }
+
+    fn create_field_decoder(options: &FileFormatOptionsExt) -> Arc<dyn FieldDecoder>;
 
     fn default_field_delimiter() -> u8;
 
@@ -373,6 +377,7 @@ impl<T: InputFormatTextBase> AligningStateTrait for AligningState<T> {
 }
 
 pub struct ChunkBuilder<T> {
+    pub field_decoder: Arc<dyn FieldDecoder>,
     pub ctx: Arc<InputContext>,
     pub mutable_columns: Vec<Box<dyn TypeDeserializer>>,
     pub num_rows: usize,
@@ -407,11 +412,14 @@ impl<T: InputFormatTextBase> ChunkBuilderTrait for ChunkBuilder<T> {
         let columns = ctx
             .schema
             .create_deserializers(ctx.chunk_compact_thresholds.min_rows_per_chunk);
+        let field_decoder = T::create_field_decoder(&ctx.format_options);
+
         ChunkBuilder {
             ctx,
             mutable_columns: columns,
             num_rows: 0,
-            phantom: Default::default(),
+            field_decoder,
+            phantom: PhantomData,
         }
     }
 
