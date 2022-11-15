@@ -19,11 +19,8 @@ use anyerror::AnyError;
 use cbordata::Cbor;
 use cbordata::FromCbor;
 use cbordata::IntoCbor;
-use common_datavalues::prelude::TypeID;
-use common_datavalues::remove_nullable;
-use common_datavalues::DataType;
-use common_datavalues::DataTypeImpl;
 use common_exception::ErrorCode;
+use common_expression::SchemaDataType;
 use xorfilter::Xor8;
 
 use crate::filters::Filter;
@@ -118,21 +115,12 @@ impl Filter for Xor8Filter {
 }
 
 impl SupportedType for Xor8Filter {
-    fn is_supported_type(data_type: &DataTypeImpl) -> bool {
+    fn is_supported_type(data_type: &SchemaDataType) -> bool {
         // Bloom index only enabled for String and Integral types for now
-        let inner_type = remove_nullable(data_type);
-        let data_type_id = inner_type.data_type_id();
+        let inner_type = data_type.remove_nullable();
         matches!(
-            data_type_id,
-            TypeID::String
-                | TypeID::UInt8
-                | TypeID::UInt16
-                | TypeID::UInt32
-                | TypeID::UInt64
-                | TypeID::Int8
-                | TypeID::Int16
-                | TypeID::Int32
-                | TypeID::Int64
+            inner_type,
+            SchemaDataType::Number(_) | SchemaDataType::String
         )
     }
 }

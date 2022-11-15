@@ -14,6 +14,7 @@
 
 use std::any::Any;
 use std::io::ErrorKind;
+use std::ops::Range;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -21,9 +22,9 @@ use backon::ExponentialBackoff;
 use backon::Retryable;
 use common_catalog::plan::StageTableInfo;
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::Chunk;
 use common_formats::output_format::OutputFormat;
 use common_formats::FileFormatOptionsExt;
 use common_pipeline_core::processors::port::InputPort;
@@ -37,8 +38,8 @@ use tracing::warn;
 #[derive(Debug)]
 enum State {
     None,
-    NeedSerialize(DataBlock),
-    NeedWrite(Vec<u8>, Option<DataBlock>),
+    NeedSerialize(Chunk),
+    NeedWrite(Vec<u8>, Option<Chunk>),
     Finished,
 }
 
@@ -50,7 +51,7 @@ pub struct StageTableSink {
 
     table_info: StageTableInfo,
     working_buffer: Vec<u8>,
-    working_datablocks: Vec<DataBlock>,
+    working_datablocks: Vec<Chunk>,
     output_format: Box<dyn OutputFormat>,
     write_header: bool,
 
@@ -74,39 +75,7 @@ impl StageTableSink {
         uuid: String,
         group_id: usize,
     ) -> Result<ProcessorPtr> {
-        let output_format = FileFormatOptionsExt::get_output_format_from_options(
-            table_info.schema(),
-            table_info.user_stage_info.file_format_options.clone(),
-            &ctx.get_settings(),
-        )?;
-
-        let mut max_file_size = table_info.user_stage_info.copy_options.max_file_size;
-        if max_file_size == 0 {
-            // 64M per file by default
-            max_file_size = 64 * 1024 * 1024;
-        }
-
-        let single = table_info.user_stage_info.copy_options.single;
-
-        Ok(ProcessorPtr::create(Box::new(StageTableSink {
-            input,
-            data_accessor,
-            table_info,
-            state: State::None,
-            output,
-            single,
-            output_format,
-            working_buffer: Vec::with_capacity(
-                (max_file_size.min(256 * 1024) as f64 * 1.2) as usize,
-            ),
-            working_datablocks: vec![],
-            write_header: false,
-
-            uuid,
-            group_id,
-            batch_id: 0,
-            max_file_size,
-        })))
+        todo!("expression")
     }
 
     pub fn unload_path(&self) -> String {
@@ -195,54 +164,7 @@ impl Processor for StageTableSink {
     }
 
     fn process(&mut self) -> Result<()> {
-        match std::mem::replace(&mut self.state, State::None) {
-            State::NeedSerialize(datablock) => {
-                if !self.write_header {
-                    let prefix = self.output_format.serialize_prefix()?;
-                    self.working_buffer.extend_from_slice(&prefix);
-                    self.write_header = true;
-                }
-
-                if !self.single {
-                    for i in (0..datablock.num_rows()).step_by(1024) {
-                        let end = (i + 1024).min(datablock.num_rows());
-                        let small_block = datablock.slice(i, end - i);
-
-                        let bs = self.output_format.serialize_block(&small_block)?;
-                        self.working_buffer.extend_from_slice(bs.as_slice());
-
-                        if self.working_buffer.len() + self.output_format.buffer_size()
-                            >= self.max_file_size
-                        {
-                            let bs = self.output_format.finalize()?;
-                            self.working_buffer.extend_from_slice(&bs);
-
-                            let data = std::mem::take(&mut self.working_buffer);
-                            self.working_datablocks.clear();
-                            if end != datablock.num_rows() {
-                                let remain = datablock.slice(end, datablock.num_rows() - end);
-                                self.state = State::NeedWrite(data, Some(remain));
-                            } else {
-                                self.state = State::NeedWrite(data, None);
-                            }
-                            return Ok(());
-                        }
-                    }
-                } else {
-                    let bs = self.output_format.serialize_block(&datablock)?;
-                    self.working_buffer.extend_from_slice(bs.as_slice());
-                }
-
-                // hold this datablock
-                if self.output.is_some() {
-                    self.working_datablocks.push(datablock);
-                }
-            }
-            _state => {
-                return Err(ErrorCode::Internal("Unknown state for stage table sink."));
-            }
-        }
-        Ok(())
+        todo!("expression")
     }
 
     async fn async_process(&mut self) -> Result<()> {

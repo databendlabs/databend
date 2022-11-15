@@ -23,7 +23,7 @@ use std::mem;
 use std::sync::Arc;
 
 use common_arrow::arrow::array::Array;
-use common_arrow::arrow::chunk::Chunk;
+use common_arrow::arrow::chunk::Chunk as ArrowChunk;
 use common_arrow::arrow::datatypes::Field;
 use common_arrow::arrow::io::parquet::read;
 use common_arrow::arrow::io::parquet::read::read_columns;
@@ -35,12 +35,11 @@ use common_arrow::parquet::metadata::FileMetaData;
 use common_arrow::parquet::metadata::RowGroupMetaData;
 use common_arrow::parquet::read::read_metadata;
 use common_arrow::read_columns_async;
-use common_datablocks::DataBlock;
-use common_datavalues::remove_nullable;
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::Chunk;
+use common_expression::DataField;
+use common_expression::DataSchemaRef;
 use common_meta_types::UserStageInfo;
 use common_pipeline_core::Pipeline;
 use common_settings::Settings;
@@ -52,7 +51,7 @@ use similar_asserts::traits::MakeDiff;
 use crate::processors::sources::input_formats::delimiter::RecordDelimiter;
 use crate::processors::sources::input_formats::input_context::InputContext;
 use crate::processors::sources::input_formats::input_pipeline::AligningStateTrait;
-use crate::processors::sources::input_formats::input_pipeline::BlockBuilderTrait;
+use crate::processors::sources::input_formats::input_pipeline::ChunkBuilderTrait;
 use crate::processors::sources::input_formats::input_pipeline::InputFormatPipe;
 use crate::processors::sources::input_formats::input_pipeline::ReadBatchTrait;
 use crate::processors::sources::input_formats::input_pipeline::RowBatchTrait;
@@ -153,7 +152,7 @@ impl InputFormatPipe for ParquetFormatPipe {
     type ReadBatch = ReadBatch;
     type RowBatch = RowGroupInMemory;
     type AligningState = AligningState;
-    type BlockBuilder = ParquetBlockBuilder;
+    type ChunkBuilder = ParquetChunkBuilder;
 
     async fn read_split(
         ctx: Arc<InputContext>,
@@ -242,7 +241,7 @@ impl RowGroupInMemory {
         })
     }
 
-    fn get_arrow_chunk(&mut self) -> Result<Chunk<Box<dyn Array>>> {
+    fn get_arrow_chunk(&mut self) -> Result<ArrowChunk<Box<dyn Array>>> {
         let mut column_chunks = vec![];
         let field_arrays = mem::take(&mut self.field_arrays);
         for (f, datas) in field_arrays.into_iter().enumerate() {
@@ -297,22 +296,22 @@ impl ReadBatchTrait for ReadBatch {
     }
 }
 
-pub struct ParquetBlockBuilder {
+pub struct ParquetChunkBuilder {
     ctx: Arc<InputContext>,
 }
 
-impl BlockBuilderTrait for ParquetBlockBuilder {
+impl ChunkBuilderTrait for ParquetChunkBuilder {
     type Pipe = ParquetFormatPipe;
 
     fn create(ctx: Arc<InputContext>) -> Self {
-        ParquetBlockBuilder { ctx }
+        ParquetChunkBuilder { ctx }
     }
 
-    fn deserialize(&mut self, mut batch: Option<RowGroupInMemory>) -> Result<Vec<DataBlock>> {
+    fn deserialize(&mut self, mut batch: Option<RowGroupInMemory>) -> Result<Vec<Chunk>> {
         if let Some(rg) = batch.as_mut() {
-            let chunk = rg.get_arrow_chunk()?;
-            let block = DataBlock::from_chunk(&self.ctx.schema, &chunk)?;
-            Ok(vec![block])
+            let arrow_chunk = rg.get_arrow_chunk()?;
+            let chunk = Chunk::from_arrow_chunk(&arrow_chunk, &self.ctx.schema)?;
+            Ok(vec![chunk])
         } else {
             Ok(vec![])
         }
@@ -384,7 +383,7 @@ fn get_fields(file_meta: &FileMetaData, schema: &DataSchemaRef) -> Result<Vec<Fi
             .last()
         {
             let tf = DataField::from(m);
-            if remove_nullable(tf.data_type()) != remove_nullable(f.data_type()) {
+            if tf.data_type().remove_nullable() != f.data_type().remove_nullable() {
                 let pair = (f, m);
                 let diff = pair.make_diff("expected_field", "infer_field");
                 // TODO(xuanwo): return a more accurate error code here.

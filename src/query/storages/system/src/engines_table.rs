@@ -17,9 +17,15 @@ use std::sync::Arc;
 use common_catalog::catalog_kind::CATALOG_DEFAULT;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_expression::types::DataType;
+use common_expression::utils::ColumnFrom;
+use common_expression::Chunk;
+use common_expression::Column;
+use common_expression::DataField;
+use common_expression::DataSchemaRefExt;
+use common_expression::SchemaDataType;
+use common_expression::Value;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -39,28 +45,38 @@ impl AsyncSystemTable for EnginesTable {
         &self.table_info
     }
 
-    async fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
+    async fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<Chunk> {
         // TODO passin catalog name
         let table_engine_descriptors = ctx.get_catalog(CATALOG_DEFAULT)?.get_table_engines();
         let mut engine_name = Vec::with_capacity(table_engine_descriptors.len());
         let mut engine_comment = Vec::with_capacity(table_engine_descriptors.len());
         for descriptor in &table_engine_descriptors {
-            engine_name.push(descriptor.engine_name.clone());
-            engine_comment.push(descriptor.comment.clone());
+            engine_name.push(descriptor.engine_name.as_bytes().to_vec());
+            engine_comment.push(descriptor.comment.as_bytes().to_vec());
         }
 
-        Ok(DataBlock::create(self.table_info.schema(), vec![
-            Series::from_data(engine_name),
-            Series::from_data(engine_comment),
-        ]))
+        let rows_len = table_engine_descriptors.len();
+        Ok(Chunk::new(
+            vec![
+                (
+                    Value::Column(Column::from_data(engine_name)),
+                    DataType::String,
+                ),
+                (
+                    Value::Column(Column::from_data(engine_comment)),
+                    DataType::String,
+                ),
+            ],
+            rows_len,
+        ))
     }
 }
 
 impl EnginesTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
         let schema = DataSchemaRefExt::create(vec![
-            DataField::new("Engine", Vu8::to_data_type()),
-            DataField::new("Comment", Vu8::to_data_type()),
+            DataField::new("Engine", SchemaDataType::String),
+            DataField::new("Comment", SchemaDataType::String),
         ]);
 
         let table_info = TableInfo {

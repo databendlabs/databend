@@ -174,6 +174,10 @@ impl<'a, T: ValueType> ValueRef<'a, T> {
             ValueRef::Column(c) => T::index_column_unchecked(c, index),
         }
     }
+
+    pub fn memory_size(&'a self) -> usize {
+        todo!("expression")
+    }
 }
 
 impl<'a, T: ValueType> Value<T> {
@@ -224,6 +228,11 @@ impl Scalar {
             Scalar::Tuple(fields) => ScalarRef::Tuple(fields.iter().map(Scalar::as_ref).collect()),
             Scalar::Variant(s) => ScalarRef::Variant(s.as_slice()),
         }
+    }
+
+    /// SQL style format
+    pub fn format_scalar_sql(&self) -> String {
+        todo!("expression")
     }
 }
 

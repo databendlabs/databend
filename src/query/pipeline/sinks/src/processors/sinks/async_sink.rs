@@ -37,7 +37,7 @@ pub trait AsyncSink: Send {
     }
 
     #[unboxed_simple]
-    async fn consume(&mut self, data_block: Chunk) -> Result<()>;
+    async fn consume(&mut self, chunk: Chunk) -> Result<()>;
 }
 
 pub struct AsyncSinker<T: AsyncSink + 'static> {
@@ -102,8 +102,8 @@ impl<T: AsyncSink + 'static> Processor for AsyncSinker<T> {
         if !self.called_on_start {
             self.called_on_start = true;
             self.inner.on_start().await?;
-        } else if let Some(data_block) = self.input_data.take() {
-            self.inner.consume(data_block).await?;
+        } else if let Some(chunk) = self.input_data.take() {
+            self.inner.consume(chunk).await?;
         } else if !self.called_on_finish {
             self.called_on_finish = true;
             self.inner.on_finish().await?;

@@ -20,14 +20,15 @@ use std::sync::Arc;
 use common_catalog::plan::Expression;
 use common_catalog::plan::RequireColumnsVisitor;
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_functions::scalars::check_pattern_type;
-use common_functions::scalars::FunctionContext;
-use common_functions::scalars::FunctionFactory;
-use common_functions::scalars::PatternType;
+use common_expression::Chunk;
+use common_expression::DataSchemaRef;
+use common_expression::FunctionContext;
+use common_expression::SchemaDataType;
+use common_functions_v2::scalars::check_pattern_type;
+use common_functions_v2::scalars::is_like_pattern_escape;
+use common_functions_v2::scalars::PatternType;
 use common_sql::evaluator::EvalNode;
 use common_sql::evaluator::Evaluator;
 use common_sql::evaluator::ExpressionMonotonicityVisitor;
@@ -88,42 +89,12 @@ impl RangeFilter {
                 "Constant folding requires the args are constant",
             ));
         }
-
-        let input_fields = vec![DataField::new("_dummy", u8::to_data_type())];
-        let input_schema = Arc::new(DataSchema::new(input_fields));
-        let const_col = ConstColumn::new(Series::from_data(vec![1u8]), 1);
-        let dummy_columns = vec![Arc::new(const_col) as ColumnRef];
-        let data_block = DataBlock::create(input_schema, dummy_columns);
-
-        let executed_data_block = self.executor.eval(&self.func_ctx, &data_block)?;
-
-        match executed_data_block.vector.get(0) {
-            DataValue::Null => Ok(false),
-            other => other.as_bool(),
-        }
+        todo!("expression")
     }
 
     #[tracing::instrument(level = "debug", name = "range_filter_eval", skip_all)]
     pub fn eval(&self, stats: &StatisticsOfColumns, row_count: u64) -> Result<bool> {
-        let mut columns = Vec::with_capacity(self.stat_columns.len());
-        for col in self.stat_columns.iter() {
-            if col.stat_type == StatType::RowCount {
-                columns.push(Series::from_data(vec![row_count]));
-            } else {
-                let val_opt = col.apply_stat_value(stats, self.origin.clone())?;
-                if val_opt.is_none() {
-                    return Ok(true);
-                }
-                columns.push(val_opt.unwrap());
-            }
-        }
-        let data_block = DataBlock::create(self.schema.clone(), columns);
-        let executed_data_block = self.executor.eval(&self.func_ctx, &data_block)?;
-
-        match executed_data_block.vector.get(0) {
-            DataValue::Null => Ok(false),
-            other => other.as_bool(),
-        }
+        todo!("expression")
     }
 }
 
@@ -135,8 +106,8 @@ pub fn build_verifiable_expr(
     stat_columns: &mut StatColumns,
 ) -> Expression {
     let unhandled = Expression::Constant {
-        value: DataValue::Boolean(true),
-        data_type: bool::to_data_type(),
+        value: Scalar::Boolean(true),
+        data_type: DataType::Boolean,
     };
 
     let (exprs, op) = match expr {
@@ -241,7 +212,7 @@ impl StatColumn {
     ) -> Self {
         let column_new = format!("{}_{}", stat_type, field.name());
         let data_type = if matches!(stat_type, StatType::Nulls | StatType::RowCount) {
-            u64::to_data_type()
+            SchemaDataType::Number(NumberDataType::UInt64)
         } else {
             field.data_type().clone()
         };
@@ -665,10 +636,6 @@ impl<'a> VerifiableExprBuilder<'a> {
     }
 }
 
-fn is_like_pattern_escape(c: u8) -> bool {
-    c == b'%' || c == b'_' || c == b'\\'
-}
-
 pub fn left_bound_for_like_pattern(pattern: &[u8]) -> Vec<u8> {
     let mut index = 0;
     let len = pattern.len();
@@ -708,18 +675,7 @@ pub fn right_bound_for_like_pattern(prefix: Vec<u8>) -> Vec<u8> {
 }
 
 fn get_maybe_monotonic(op: &str, args: &Vec<Expression>) -> Result<bool> {
-    let factory = FunctionFactory::instance();
-    let function_features = factory.get_features(op)?;
-    if !function_features.maybe_monotonic {
-        return Ok(false);
-    }
-
-    for arg in args {
-        if !check_maybe_monotonic(arg)? {
-            return Ok(false);
-        }
-    }
-    Ok(true)
+    todo!("expression")
 }
 
 pub fn check_maybe_monotonic(expr: &Expression) -> Result<bool> {

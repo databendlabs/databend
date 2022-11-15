@@ -28,6 +28,7 @@ use crate::Column;
 use crate::ColumnBuilder;
 use crate::DataSchemaRef;
 use crate::Domain;
+use crate::Scalar;
 use crate::TypeSerializer;
 use crate::Value;
 
@@ -153,6 +154,22 @@ impl Chunk {
 
         // Return chunk directly, because we don't support decimal yet.
         self.clone()
+    }
+
+    /// Take the first Scalar of the column.
+    #[inline]
+    pub fn first(&self, index: usize) -> Result<Scalar> {
+        let (_value, _) = self.column(index);
+        // value.get_checked(0)
+        todo!("expression")
+    }
+
+    /// Take the last Scalar of the column.
+    #[inline]
+    pub fn last(&self, index: usize) -> Result<Scalar> {
+        let (_value, _) = self.column(index);
+        // value.get_checked(column.len() - 1)
+        todo!("expression")
     }
 
     pub fn slice(&self, range: Range<usize>) -> Self {

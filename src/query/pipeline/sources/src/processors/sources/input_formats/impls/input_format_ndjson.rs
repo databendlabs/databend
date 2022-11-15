@@ -15,16 +15,15 @@
 use std::borrow::Cow;
 
 use bstr::ByteSlice;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::TypeDeserializer;
-use common_datavalues::TypeDeserializerImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::DataSchemaRef;
+use common_expression::TypeDeserializer;
 use common_io::prelude::FormatSettings;
 use common_meta_types::StageFileFormatType;
 
 use crate::processors::sources::input_formats::input_format_text::AligningState;
-use crate::processors::sources::input_formats::input_format_text::BlockBuilder;
+use crate::processors::sources::input_formats::input_format_text::ChunkBuilder;
 use crate::processors::sources::input_formats::input_format_text::InputFormatTextBase;
 use crate::processors::sources::input_formats::input_format_text::RowBatch;
 
@@ -33,7 +32,7 @@ pub struct InputFormatNDJson {}
 impl InputFormatNDJson {
     fn read_row(
         buf: &[u8],
-        deserializers: &mut [TypeDeserializerImpl],
+        deserializers: &mut [Box<dyn TypeDeserializer>],
         format_settings: &FormatSettings,
         schema: &DataSchemaRef,
     ) -> Result<()> {
@@ -53,15 +52,16 @@ impl InputFormatNDJson {
                 &json[f.name().to_lowercase()]
             };
 
-            deser.de_json(value, format_settings).map_err(|e| {
-                let value_str = format!("{:?}", value);
-                ErrorCode::BadBytes(format!(
-                    "{}. column={} value={}",
-                    e,
-                    f.name(),
-                    maybe_truncated(&value_str, 1024),
-                ))
-            })?;
+            todo!("expression")
+            // deser.de_json(value, format_settings).map_err(|e| {
+            //     let value_str = format!("{:?}", value);
+            //     ErrorCode::BadBytes(format!(
+            //         "{}. column={} value={}",
+            //         e,
+            //         f.name(),
+            //         maybe_truncated(&value_str, 1024),
+            //     ))
+            // })?;
         }
         Ok(())
     }
@@ -80,7 +80,7 @@ impl InputFormatTextBase for InputFormatNDJson {
         b','
     }
 
-    fn deserialize(builder: &mut BlockBuilder<Self>, batch: RowBatch) -> Result<()> {
+    fn deserialize(builder: &mut ChunkBuilder<Self>, batch: RowBatch) -> Result<()> {
         let columns = &mut builder.mutable_columns;
         let mut start = 0usize;
         let start_row = batch.start_row;

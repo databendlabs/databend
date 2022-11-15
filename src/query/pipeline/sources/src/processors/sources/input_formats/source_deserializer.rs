@@ -17,15 +17,15 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 
 use common_base::base::ProgressValues;
-use common_datablocks::DataBlock;
 use common_exception::Result;
+use common_expression::Chunk;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 
 use crate::processors::sources::input_formats::input_context::InputContext;
-use crate::processors::sources::input_formats::input_pipeline::BlockBuilderTrait;
+use crate::processors::sources::input_formats::input_pipeline::ChunkBuilderTrait;
 use crate::processors::sources::input_formats::input_pipeline::InputFormatPipe;
 use crate::processors::sources::input_formats::input_pipeline::RowBatchTrait;
 
@@ -34,11 +34,11 @@ pub struct DeserializeSource<I: InputFormatPipe> {
     ctx: Arc<InputContext>,
     output: Arc<OutputPort>,
 
-    block_builder: I::BlockBuilder,
+    chunk_builder: I::ChunkBuilder,
     input_rx: async_channel::Receiver<I::RowBatch>,
     input_buffer: Option<I::RowBatch>,
     input_finished: bool,
-    output_buffer: VecDeque<DataBlock>,
+    output_buffer: VecDeque<Chunk>,
 }
 
 impl<I: InputFormatPipe> DeserializeSource<I> {
@@ -50,7 +50,7 @@ impl<I: InputFormatPipe> DeserializeSource<I> {
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(Self {
             ctx: ctx.clone(),
-            block_builder: I::BlockBuilder::create(ctx),
+            chunk_builder: I::ChunkBuilder::create(ctx),
             output,
             input_rx: rx,
             input_buffer: Default::default(),
@@ -79,10 +79,9 @@ impl<I: InputFormatPipe> Processor for DeserializeSource<I> {
             Ok(Event::NeedConsume)
         } else {
             match self.output_buffer.pop_front() {
-                Some(data_block) => {
-                    tracing::info!("DeserializeSource push rows {}", data_block.num_rows());
-                    todo!("expression");
-                    // self.output.push_data(Ok(data_block));
+                Some(chunk) => {
+                    tracing::info!("DeserializeSource push rows {}", chunk.num_rows());
+                    self.output.push_data(Ok(chunk));
                     Ok(Event::NeedConsume)
                 }
                 None => {
@@ -110,9 +109,9 @@ impl<I: InputFormatPipe> Processor for DeserializeSource<I> {
             };
             self.ctx.scan_progress.incr(&process_values)
         }
-        let blocks = self.block_builder.deserialize(self.input_buffer.take())?;
-        for b in blocks.into_iter() {
-            self.output_buffer.push_back(b)
+        let chunks = self.chunk_builder.deserialize(self.input_buffer.take())?;
+        for c in chunks.into_iter() {
+            self.output_buffer.push_back(c)
         }
         Ok(())
     }

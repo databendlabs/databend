@@ -22,12 +22,12 @@ use common_expression::utils::ColumnFrom;
 use common_expression::Chunk;
 use common_expression::Column;
 use common_expression::SortColumnDescription;
-use common_expression::Value;
-use itertools::Itertools;
+
+use crate::common::new_chunk;
 
 #[test]
 fn test_chunk_sort() -> Result<()> {
-    let cols = vec![
+    let chunk = new_chunk(&[
         (
             DataType::Number(NumberDataType::Int64),
             Column::from_data(vec![6i64, 4, 3, 2, 1, 1, 7]),
@@ -36,14 +36,7 @@ fn test_chunk_sort() -> Result<()> {
             DataType::String,
             Column::from_data(vec!["b1", "b2", "b3", "b4", "b5", "b6", "b7"]),
         ),
-    ];
-
-    let cols = cols
-        .into_iter()
-        .map(|(t, col)| (Value::Column(col), t))
-        .collect_vec();
-
-    let chunk = Chunk::new(cols, 7);
+    ]);
 
     // test cast:
     // - sort descriptions
@@ -126,46 +119,29 @@ fn test_chunk_sort() -> Result<()> {
 
 #[test]
 fn test_chunks_merge_sort() -> Result<()> {
-    let cols = vec![
-        (
-            DataType::Number(NumberDataType::Int64),
-            Column::from_data(vec![4i64, 6]),
-        ),
-        (DataType::String, Column::from_data(vec!["b2", "b1"])),
+    let chunks = vec![
+        new_chunk(&[
+            (
+                DataType::Number(NumberDataType::Int64),
+                Column::from_data(vec![4i64, 6]),
+            ),
+            (DataType::String, Column::from_data(vec!["b2", "b1"])),
+        ]),
+        new_chunk(&[
+            (
+                DataType::Number(NumberDataType::Int64),
+                Column::from_data(vec![2i64, 3]),
+            ),
+            (DataType::String, Column::from_data(vec!["b4", "b3"])),
+        ]),
+        new_chunk(&[
+            (
+                DataType::Number(NumberDataType::Int64),
+                Column::from_data(vec![1i64, 1]),
+            ),
+            (DataType::String, Column::from_data(vec!["b6", "b5"])),
+        ]),
     ];
-    let cols = cols
-        .into_iter()
-        .map(|(t, col)| (Value::Column(col), t))
-        .collect_vec();
-    let chunk1 = Chunk::new(cols, 2);
-
-    let cols = vec![
-        (
-            DataType::Number(NumberDataType::Int64),
-            Column::from_data(vec![2i64, 3]),
-        ),
-        (DataType::String, Column::from_data(vec!["b4", "b3"])),
-    ];
-    let cols = cols
-        .into_iter()
-        .map(|(t, col)| (Value::Column(col), t))
-        .collect_vec();
-    let chunk2 = Chunk::new(cols, 2);
-
-    let cols = vec![
-        (
-            DataType::Number(NumberDataType::Int64),
-            Column::from_data(vec![1i64, 1]),
-        ),
-        (DataType::String, Column::from_data(vec!["b6", "b5"])),
-    ];
-    let cols = cols
-        .into_iter()
-        .map(|(t, col)| (Value::Column(col), t))
-        .collect_vec();
-    let chunk3 = Chunk::new(cols, 2);
-
-    let chunks = vec![chunk1, chunk2, chunk3];
 
     // test cast:
     // - name

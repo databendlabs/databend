@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::DataSchema;
+use common_expression::DataSchema;
 use serde::Deserialize;
 use serde::Serialize;
 

@@ -133,6 +133,13 @@ impl DataType {
         !self.is_nullable_or_null()
     }
 
+    pub fn remove_nullable(&self) -> Self {
+        match self {
+            DataType::Nullable(ty) => (**ty).clone(),
+            _ => self.clone(),
+        }
+    }
+
     pub fn create_serializer(&self, column: Column) -> Result<Box<dyn TypeSerializer>, String> {
         match self {
             DataType::Null => Ok(Box::new(NullSerializer::try_create(column)?)),

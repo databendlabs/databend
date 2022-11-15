@@ -15,13 +15,13 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_datablocks::DataBlock;
 use serde::Deserialize;
 use serde::Serialize;
 
 use crate::meta::common::FormatVersion;
 use crate::meta::v0::common::ClusterStatistics;
 use crate::meta::v0::common::ColumnStatistics;
+use crate::meta::versions::DataBlock;
 use crate::meta::ColumnId;
 use crate::meta::ColumnMeta;
 use crate::meta::Compression;

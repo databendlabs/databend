@@ -18,9 +18,17 @@ use common_catalog::catalog::Catalog;
 use common_catalog::catalog_kind::CATALOG_DEFAULT;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
+use common_expression::utils::ColumnFrom;
+use common_expression::Chunk;
+use common_expression::Column;
+use common_expression::DataField;
+use common_expression::DataSchema;
+use common_expression::DataSchemaRefExt;
+use common_expression::SchemaDataType;
+use common_expression::Value;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -79,7 +87,7 @@ where TablesTable<T>: HistoryAware
         &self.table_info
     }
 
-    async fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
+    async fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<Chunk> {
         let tenant = ctx.get_tenant();
         let catalog = ctx.get_catalog(CATALOG_DEFAULT)?;
         let databases = catalog.list_databases(tenant.as_str()).await?;
@@ -93,27 +101,70 @@ where TablesTable<T>: HistoryAware
             }
         }
 
-        let mut num_rows: Vec<Option<u64>> = Vec::new();
-        let mut data_size: Vec<Option<u64>> = Vec::new();
-        let mut data_compressed_size: Vec<Option<u64>> = Vec::new();
-        let mut index_size: Vec<Option<u64>> = Vec::new();
+        let mut num_rows: Vec<u64> = Vec::new();
+        let mut num_rows_valids: Vec<bool> = Vec::new();
+        let mut data_size: Vec<u64> = Vec::new();
+        let mut data_size_valids: Vec<bool> = Vec::new();
+        let mut data_compressed_size: Vec<u64> = Vec::new();
+        let mut data_compressed_size_valids: Vec<bool> = Vec::new();
+        let mut index_size: Vec<u64> = Vec::new();
+        let mut index_size_valids: Vec<bool> = Vec::new();
 
         for (_, tbl) in &database_tables {
             let stats = tbl.table_statistics()?;
-            num_rows.push(stats.as_ref().and_then(|v| v.num_rows));
-            data_size.push(stats.as_ref().and_then(|v| v.data_size));
-            data_compressed_size.push(stats.as_ref().and_then(|v| v.data_size_compressed));
-            index_size.push(stats.and_then(|v| v.index_size));
+            match stats.as_ref().and_then(|v| v.num_rows) {
+                Some(v) => {
+                    num_rows.push(v);
+                    num_rows_valids.push(true);
+                }
+                None => {
+                    num_rows.push(0);
+                    num_rows_valids.push(false);
+                }
+            }
+            match stats.as_ref().and_then(|v| v.data_size) {
+                Some(v) => {
+                    data_size.push(v);
+                    data_size_valids.push(true);
+                }
+                None => {
+                    data_size.push(0);
+                    data_size_valids.push(false);
+                }
+            }
+            match stats.as_ref().and_then(|v| v.data_size_compressed) {
+                Some(v) => {
+                    data_compressed_size.push(v);
+                    data_compressed_size_valids.push(true);
+                }
+                None => {
+                    data_compressed_size.push(0);
+                    data_compressed_size_valids.push(false);
+                }
+            }
+            match stats.as_ref().and_then(|v| v.index_size) {
+                Some(v) => {
+                    index_size.push(v);
+                    index_size_valids.push(true);
+                }
+                None => {
+                    index_size.push(0);
+                    index_size_valids.push(false);
+                }
+            }
         }
 
-        let databases: Vec<&[u8]> = database_tables.iter().map(|(d, _)| d.as_bytes()).collect();
-        let names: Vec<&[u8]> = database_tables
+        let databases: Vec<Vec<u8>> = database_tables
             .iter()
-            .map(|(_, v)| v.name().as_bytes())
+            .map(|(d, _)| d.as_bytes().to_vec())
             .collect();
-        let engines: Vec<&[u8]> = database_tables
+        let names: Vec<Vec<u8>> = database_tables
             .iter()
-            .map(|(_, v)| v.engine().as_bytes())
+            .map(|(_, v)| v.name().as_bytes().to_vec())
+            .collect();
+        let engines: Vec<Vec<u8>> = database_tables
+            .iter()
+            .map(|(_, v)| v.engine().as_bytes().to_vec())
             .collect();
         let created_ons: Vec<String> = database_tables
             .iter()
@@ -125,6 +176,7 @@ where TablesTable<T>: HistoryAware
                     .to_string()
             })
             .collect();
+        let created_ons: Vec<Vec<u8>> = created_ons.iter().map(|s| s.as_bytes().to_vec()).collect();
         let dropped_ons: Vec<String> = database_tables
             .iter()
             .map(|(_, v)| {
@@ -135,7 +187,7 @@ where TablesTable<T>: HistoryAware
                     .unwrap_or_else(|| "NULL".to_owned())
             })
             .collect();
-        let created_ons: Vec<&[u8]> = created_ons.iter().map(|s| s.as_bytes()).collect();
+        let dropped_ons: Vec<Vec<u8>> = dropped_ons.iter().map(|s| s.as_bytes().to_vec()).collect();
         let cluster_bys: Vec<String> = database_tables
             .iter()
             .map(|(_, v)| {
@@ -146,19 +198,54 @@ where TablesTable<T>: HistoryAware
                     .unwrap_or_else(|| "".to_owned())
             })
             .collect();
+        let cluster_bys: Vec<Vec<u8>> = cluster_bys.iter().map(|s| s.as_bytes().to_vec()).collect();
 
-        Ok(DataBlock::create(self.table_info.schema(), vec![
-            Series::from_data(databases),
-            Series::from_data(names),
-            Series::from_data(engines),
-            Series::from_data(cluster_bys),
-            Series::from_data(created_ons),
-            Series::from_data(dropped_ons),
-            Series::from_data(num_rows),
-            Series::from_data(data_size),
-            Series::from_data(data_compressed_size),
-            Series::from_data(index_size),
-        ]))
+        let rows_len = databases.len();
+        Ok(Chunk::new(
+            vec![
+                (
+                    Value::Column(Column::from_data(databases)),
+                    DataType::String,
+                ),
+                (Value::Column(Column::from_data(names)), DataType::String),
+                (Value::Column(Column::from_data(engines)), DataType::String),
+                (
+                    Value::Column(Column::from_data(cluster_bys)),
+                    DataType::String,
+                ),
+                (
+                    Value::Column(Column::from_data(created_ons)),
+                    DataType::String,
+                ),
+                (
+                    Value::Column(Column::from_data(dropped_ons)),
+                    DataType::String,
+                ),
+                (
+                    Value::Column(Column::from_data_with_validity(num_rows, num_rows_valids)),
+                    DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64))),
+                ),
+                (
+                    Value::Column(Column::from_data_with_validity(data_size, data_size_valids)),
+                    DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64))),
+                ),
+                (
+                    Value::Column(Column::from_data_with_validity(
+                        data_compressed_size,
+                        data_compressed_size_valids,
+                    )),
+                    DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64))),
+                ),
+                (
+                    Value::Column(Column::from_data_with_validity(
+                        index_size,
+                        index_size_valids,
+                    )),
+                    DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64))),
+                ),
+            ],
+            rows_len,
+        ))
     }
 }
 
@@ -167,16 +254,28 @@ where TablesTable<T>: HistoryAware
 {
     pub fn schema() -> Arc<DataSchema> {
         DataSchemaRefExt::create(vec![
-            DataField::new("database", Vu8::to_data_type()),
-            DataField::new("name", Vu8::to_data_type()),
-            DataField::new("engine", Vu8::to_data_type()),
-            DataField::new("cluster_by", Vu8::to_data_type()),
-            DataField::new("created_on", Vu8::to_data_type()),
-            DataField::new("dropped_on", Vu8::to_data_type()),
-            DataField::new_nullable("num_rows", u64::to_data_type()),
-            DataField::new_nullable("data_size", u64::to_data_type()),
-            DataField::new_nullable("data_compressed_size", u64::to_data_type()),
-            DataField::new_nullable("index_size", u64::to_data_type()),
+            DataField::new("database", SchemaDataType::String),
+            DataField::new("name", SchemaDataType::String),
+            DataField::new("engine", SchemaDataType::String),
+            DataField::new("cluster_by", SchemaDataType::String),
+            DataField::new("created_on", SchemaDataType::String),
+            DataField::new("dropped_on", SchemaDataType::String),
+            DataField::new(
+                "num_rows",
+                SchemaDataType::Nullable(Box::new(SchemaDataType::Number(NumberDataType::UInt64))),
+            ),
+            DataField::new(
+                "data_size",
+                SchemaDataType::Nullable(Box::new(SchemaDataType::Number(NumberDataType::UInt64))),
+            ),
+            DataField::new(
+                "data_compressed_size",
+                SchemaDataType::Nullable(Box::new(SchemaDataType::Number(NumberDataType::UInt64))),
+            ),
+            DataField::new(
+                "index_size",
+                SchemaDataType::Nullable(Box::new(SchemaDataType::Number(NumberDataType::UInt64))),
+            ),
         ])
     }
 

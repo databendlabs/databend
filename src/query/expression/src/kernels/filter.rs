@@ -39,6 +39,20 @@ use crate::Scalar;
 use crate::Value;
 
 impl Chunk {
+    // check if the predicate has any valid row
+    pub fn filter_exists(predicate: &Value<AnyType>) -> Result<bool> {
+        let predicate = Self::cast_to_nonull_boolean(predicate).ok_or_else(|| {
+            ErrorCode::BadDataValueType(format!(
+                "Filter predict column does not support type '{:?}'",
+                predicate
+            ))
+        })?;
+        match predicate {
+            Value::Scalar(s) => Ok(s),
+            Value::Column(bitmap) => Ok(bitmap.len() != bitmap.unset_bits()),
+        }
+    }
+
     pub fn filter(self, predicate: &Value<AnyType>) -> Result<Chunk> {
         if self.num_columns() == 0 || self.num_rows() == 0 {
             return Ok(self);

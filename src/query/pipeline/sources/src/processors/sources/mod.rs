@@ -13,10 +13,10 @@
 //  limitations under the License.
 
 pub mod async_source;
-pub mod blocks_source;
+pub mod chunks_source;
 pub mod empty_source;
 pub mod input_formats;
-mod one_block_source;
+mod one_chunk_source;
 pub mod stream_source;
 pub mod sync_source;
 pub mod sync_source_receiver;
@@ -24,9 +24,9 @@ pub mod sync_source_receiver;
 pub use async_source::AsyncSource;
 pub use async_source::AsyncSourcer;
 pub use async_source::*;
-pub use blocks_source::BlocksSource;
+pub use chunks_source::ChunksSource;
 pub use empty_source::EmptySource;
-pub use one_block_source::OneBlockSource;
+pub use one_chunk_source::OneChunkSource;
 pub use stream_source::StreamSource;
 pub use stream_source::StreamSourceNoSkipEmpty;
 pub use sync_source::SyncSource;
@@ -51,19 +51,16 @@ mod source_example {
 
     struct ExampleSyncSource {
         pos: usize,
-        data_blocks: Vec<Chunk>,
+        chunks: Vec<Chunk>,
     }
 
     impl ExampleSyncSource {
         pub fn create(
             ctx: Arc<dyn TableContext>,
-            data_blocks: Vec<Chunk>,
+            chunks: Vec<Chunk>,
             outputs: Arc<OutputPort>,
         ) -> Result<ProcessorPtr> {
-            SyncSourcer::create(ctx, outputs, ExampleSyncSource {
-                pos: 0,
-                data_blocks,
-            })
+            SyncSourcer::create(ctx, outputs, ExampleSyncSource { pos: 0, chunks })
         }
     }
 
@@ -72,8 +69,8 @@ mod source_example {
 
         fn generate(&mut self) -> Result<Option<Chunk>> {
             self.pos += 1;
-            match self.data_blocks.len() >= self.pos {
-                true => Ok(Some(self.data_blocks[self.pos - 1].clone())),
+            match self.chunks.len() >= self.pos {
+                true => Ok(Some(self.chunks[self.pos - 1].clone())),
                 false => Ok(None),
             }
         }
@@ -81,19 +78,16 @@ mod source_example {
 
     struct ExampleAsyncSource {
         pos: usize,
-        data_blocks: Vec<Chunk>,
+        chunks: Vec<Chunk>,
     }
 
     impl ExampleAsyncSource {
         pub fn create(
             ctx: Arc<dyn TableContext>,
-            data_blocks: Vec<Chunk>,
+            chunks: Vec<Chunk>,
             output: Arc<OutputPort>,
         ) -> Result<ProcessorPtr> {
-            AsyncSourcer::create(ctx, output, ExampleAsyncSource {
-                pos: 0,
-                data_blocks,
-            })
+            AsyncSourcer::create(ctx, output, ExampleAsyncSource { pos: 0, chunks })
         }
     }
 
@@ -104,8 +98,8 @@ mod source_example {
         #[async_trait::unboxed_simple]
         async fn generate(&mut self) -> Result<Option<Chunk>> {
             self.pos += 1;
-            match self.data_blocks.len() >= self.pos {
-                true => Ok(Some(self.data_blocks[self.pos - 1].clone())),
+            match self.chunks.len() >= self.pos {
+                true => Ok(Some(self.chunks[self.pos - 1].clone())),
                 false => Ok(None),
             }
         }

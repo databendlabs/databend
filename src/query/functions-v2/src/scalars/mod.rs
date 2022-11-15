@@ -28,6 +28,10 @@ mod comparison;
 mod string;
 mod string_multi_args;
 
+pub use comparison::check_pattern_type;
+pub use comparison::is_like_pattern_escape;
+pub use comparison::PatternType;
+
 pub fn builtin_functions() -> FunctionRegistry {
     let mut registry = FunctionRegistry::new();
     arithmetic::register(&mut registry);

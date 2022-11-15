@@ -22,24 +22,24 @@ use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 
-pub struct OneBlockSource {
+pub struct OneChunkSource {
     output: Arc<OutputPort>,
-    data_block: Option<Chunk>,
+    chunk: Option<Chunk>,
 }
 
-impl OneBlockSource {
-    pub fn create(output: Arc<OutputPort>, data_block: Chunk) -> Result<ProcessorPtr> {
-        Ok(ProcessorPtr::create(Box::new(OneBlockSource {
+impl OneChunkSource {
+    pub fn create(output: Arc<OutputPort>, chunk: Chunk) -> Result<ProcessorPtr> {
+        Ok(ProcessorPtr::create(Box::new(OneChunkSource {
             output,
-            data_block: Some(data_block),
+            chunk: Some(chunk),
         })))
     }
 }
 
 #[async_trait::async_trait]
-impl Processor for OneBlockSource {
+impl Processor for OneChunkSource {
     fn name(&self) -> String {
-        "BlockSource".to_string()
+        "ChunkSource".to_string()
     }
 
     fn as_any(&mut self) -> &mut dyn Any {
@@ -55,8 +55,8 @@ impl Processor for OneBlockSource {
             return Ok(Event::NeedConsume);
         }
 
-        if let Some(data_block) = self.data_block.take() {
-            self.output.push_data(Ok(data_block));
+        if let Some(chunk) = self.chunk.take() {
+            self.output.push_data(Ok(chunk));
             return Ok(Event::NeedConsume);
         }
 

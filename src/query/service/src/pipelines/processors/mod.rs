@@ -27,7 +27,7 @@ pub use sinks::SubqueryReceiveSink;
 pub use sinks::SyncSenderSink;
 pub use sources::AsyncSource;
 pub use sources::AsyncSourcer;
-pub use sources::BlocksSource;
+pub use sources::ChunksSource;
 pub use sources::EmptySource;
 pub use sources::StreamSource;
 pub use sources::SyncSource;

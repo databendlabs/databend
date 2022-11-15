@@ -37,8 +37,8 @@ impl SyncSenderSink {
 impl Sink for SyncSenderSink {
     const NAME: &'static str = "SyncSenderSink";
 
-    fn consume(&mut self, data_block: Chunk) -> Result<()> {
-        self.sender.blocking_send(Ok(data_block)).unwrap();
+    fn consume(&mut self, chunk: Chunk) -> Result<()> {
+        self.sender.blocking_send(Ok(chunk)).unwrap();
         Ok(())
     }
 }

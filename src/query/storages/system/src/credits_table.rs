@@ -16,9 +16,15 @@ use std::sync::Arc;
 
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_expression::types::DataType;
+use common_expression::utils::ColumnFrom;
+use common_expression::Chunk;
+use common_expression::Column;
+use common_expression::DataField;
+use common_expression::DataSchemaRefExt;
+use common_expression::SchemaDataType;
+use common_expression::Value;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -37,33 +43,38 @@ impl SyncSystemTable for CreditsTable {
         &self.table_info
     }
 
-    fn get_full_data(&self, _: Arc<dyn TableContext>) -> Result<DataBlock> {
-        let names: Vec<&[u8]> = env!("DATABEND_CREDITS_NAMES")
+    fn get_full_data(&self, _: Arc<dyn TableContext>) -> Result<Chunk> {
+        let names: Vec<Vec<u8>> = env!("DATABEND_CREDITS_NAMES")
             .split_terminator(',')
-            .map(|x| x.trim().as_bytes())
+            .map(|x| x.trim().as_bytes().to_vec())
             .collect();
-        let versions: Vec<&[u8]> = env!("DATABEND_CREDITS_VERSIONS")
+        let versions: Vec<Vec<u8>> = env!("DATABEND_CREDITS_VERSIONS")
             .split_terminator(',')
-            .map(|x| x.trim().as_bytes())
+            .map(|x| x.trim().as_bytes().to_vec())
             .collect();
-        let licenses: Vec<&[u8]> = env!("DATABEND_CREDITS_LICENSES")
+        let licenses: Vec<Vec<u8>> = env!("DATABEND_CREDITS_LICENSES")
             .split_terminator(',')
-            .map(|x| x.trim().as_bytes())
+            .map(|x| x.trim().as_bytes().to_vec())
             .collect();
-        Ok(DataBlock::create(self.table_info.schema(), vec![
-            Series::from_data(names),
-            Series::from_data(versions),
-            Series::from_data(licenses),
-        ]))
+
+        let rows_len = names.len();
+        Ok(Chunk::new(
+            vec![
+                (Value::Column(Column::from_data(names)), DataType::String),
+                (Value::Column(Column::from_data(versions)), DataType::String),
+                (Value::Column(Column::from_data(licenses)), DataType::String),
+            ],
+            rows_len,
+        ))
     }
 }
 
 impl CreditsTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
         let schema = DataSchemaRefExt::create(vec![
-            DataField::new("name", Vu8::to_data_type()),
-            DataField::new("version", Vu8::to_data_type()),
-            DataField::new("license", Vu8::to_data_type()),
+            DataField::new("name", SchemaDataType::String),
+            DataField::new("version", SchemaDataType::String),
+            DataField::new("license", SchemaDataType::String),
         ]);
 
         let table_info = TableInfo {

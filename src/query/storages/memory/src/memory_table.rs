@@ -26,15 +26,14 @@ use common_catalog::plan::PushDownInfo;
 use common_catalog::table::AppendMode;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
-use common_datablocks::InMemoryData;
-use common_datavalues::ColumnRef;
-use common_datavalues::DataType;
-use common_datavalues::Series;
-use common_datavalues::StructColumn;
-use common_datavalues::TypeID;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::AnyType;
+use common_expression::types::DataType;
+use common_expression::Chunk;
+use common_expression::DataSchemaRef;
+use common_expression::InMemoryData;
+use common_expression::Value;
 use common_meta_app::schema::TableInfo;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
@@ -54,7 +53,7 @@ static IN_MEMORY_DATA: Lazy<Arc<RwLock<InMemoryData<u64>>>> =
 
 pub struct MemoryTable {
     table_info: TableInfo,
-    blocks: Arc<RwLock<Vec<DataBlock>>>,
+    blocks: Arc<RwLock<Vec<Chunk>>>,
 
     data_metrics: Arc<StorageMetrics>,
 }
@@ -91,7 +90,7 @@ impl MemoryTable {
         }
     }
 
-    fn get_read_data_blocks(&self) -> Arc<Mutex<VecDeque<DataBlock>>> {
+    fn get_read_data_blocks(&self) -> Arc<Mutex<VecDeque<Chunk>>> {
         let data_blocks = self.blocks.read();
         let mut read_data_blocks = VecDeque::with_capacity(data_blocks.len());
 
@@ -178,7 +177,10 @@ impl Table for MemoryTable {
                             .collect::<Vec<usize>>()
                             .iter()
                             .filter(|cid| projection_filter(**cid))
-                            .map(|cid| block.columns()[*cid].memory_size() as u64)
+                            .map(|cid| {
+                                let (val, _) = &block.columns()[*cid];
+                                val.as_ref().memory_size() as u64
+                            })
                             .sum::<u64>() as usize;
 
                         stats
@@ -215,6 +217,7 @@ impl Table for MemoryTable {
                 MemoryTableSource::create(
                     ctx.clone(),
                     output,
+                    plan.schema(),
                     read_data_blocks.clone(),
                     plan.push_downs.clone(),
                 )
@@ -236,7 +239,7 @@ impl Table for MemoryTable {
     async fn commit_insertion(
         &self,
         _: Arc<dyn TableContext>,
-        operations: Vec<DataBlock>,
+        operations: Vec<Chunk>,
         overwrite: bool,
     ) -> Result<()> {
         let written_bytes: usize = operations.iter().map(|b| b.memory_size()).sum();
@@ -263,44 +266,48 @@ impl Table for MemoryTable {
 
 struct MemoryTableSource {
     extras: Option<PushDownInfo>,
-    data_blocks: Arc<Mutex<VecDeque<DataBlock>>>,
+    schema: DataSchemaRef,
+    data_blocks: Arc<Mutex<VecDeque<Chunk>>>,
 }
 
 impl MemoryTableSource {
     pub fn create(
         ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
-        data_blocks: Arc<Mutex<VecDeque<DataBlock>>>,
+        schema: DataSchemaRef,
+        data_blocks: Arc<Mutex<VecDeque<Chunk>>>,
         extras: Option<PushDownInfo>,
     ) -> Result<ProcessorPtr> {
         SyncSourcer::create(ctx, output, MemoryTableSource {
             extras,
+            schema,
             data_blocks,
         })
     }
 
-    fn projection(&self, data_block: DataBlock) -> Result<Option<DataBlock>> {
+    fn projection(&self, data_block: Chunk) -> Result<Option<Chunk>> {
         if let Some(extras) = &self.extras {
             if let Some(projection) = &extras.projection {
                 let raw_columns = data_block.columns();
+                let num_rows = data_block.num_rows();
                 let pruned_data_block = match projection {
                     Projection::Columns(indices) => {
-                        let pruned_schema = data_block.schema().project(indices);
+                        let pruned_schema = self.schema.project(indices);
                         let columns = indices
                             .iter()
                             .map(|idx| raw_columns[*idx].clone())
                             .collect();
-                        DataBlock::create(Arc::new(pruned_schema), columns)
+                        Chunk::new(columns, num_rows)
                     }
                     Projection::InnerColumns(path_indices) => {
-                        let pruned_schema = data_block.schema().inner_project(path_indices);
+                        let pruned_schema = self.schema.inner_project(path_indices);
                         let mut columns = Vec::with_capacity(path_indices.len());
                         let paths: Vec<&Vec<usize>> = path_indices.values().collect();
                         for path in paths {
                             let column = Self::traverse_paths(raw_columns, path)?;
                             columns.push(column);
                         }
-                        DataBlock::create(Arc::new(pruned_schema), columns)
+                        Chunk::new(columns, num_rows)
                     }
                 };
                 return Ok(Some(pruned_data_block));
@@ -310,30 +317,40 @@ impl MemoryTableSource {
         Ok(Some(data_block))
     }
 
-    fn traverse_paths(columns: &[ColumnRef], path: &[usize]) -> Result<ColumnRef> {
+    fn traverse_paths(
+        columns: &[(Value<AnyType>, DataType)],
+        path: &[usize],
+    ) -> Result<(Value<AnyType>, DataType)> {
         if path.is_empty() {
             return Err(ErrorCode::BadArguments("path should not be empty"));
         }
-        let column = &columns[path[0]];
+        let (value, data_type) = &columns[path[0]];
         if path.len() == 1 {
-            return Ok(column.clone());
+            return Ok((value.clone(), data_type.clone()));
         }
-        if column.data_type().data_type_id() == TypeID::Struct {
-            let struct_column: &StructColumn = Series::check_get(column)?;
-            let inner_columns = struct_column.values();
-            return Self::traverse_paths(inner_columns, &path[1..]);
+
+        match data_type {
+            DataType::Tuple(inner_tys) => {
+                let col = value.clone().into_column().unwrap();
+                let (inner_columns, _) = col.into_tuple().unwrap();
+                let mut values = Vec::with_capacity(inner_tys.len());
+                for (col, ty) in inner_columns.iter().zip(inner_tys.iter()) {
+                    values.push((Value::Column(col.clone()), ty.clone()))
+                }
+                Self::traverse_paths(&values[..], &path[1..])
+            }
+            _ => Err(ErrorCode::BadArguments(format!(
+                "Unable to get column by paths: {:?}",
+                path
+            ))),
         }
-        Err(ErrorCode::BadArguments(format!(
-            "Unable to get column by paths: {:?}",
-            path
-        )))
     }
 }
 
 impl SyncSource for MemoryTableSource {
     const NAME: &'static str = "MemoryTable";
 
-    fn generate(&mut self) -> Result<Option<DataBlock>> {
+    fn generate(&mut self) -> Result<Option<Chunk>> {
         let mut blocks_guard = self.data_blocks.lock();
         match blocks_guard.pop_front() {
             None => Ok(None),

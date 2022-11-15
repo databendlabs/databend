@@ -25,28 +25,28 @@ use parking_lot::Mutex;
 use crate::processors::sources::SyncSource;
 use crate::processors::sources::SyncSourcer;
 
-pub struct BlocksSource {
-    data_blocks: Arc<Mutex<VecDeque<Chunk>>>,
+pub struct ChunksSource {
+    chunks: Arc<Mutex<VecDeque<Chunk>>>,
 }
 
-impl BlocksSource {
+impl ChunksSource {
     pub fn create(
         ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
-        data_blocks: Arc<Mutex<VecDeque<Chunk>>>,
+        chunks: Arc<Mutex<VecDeque<Chunk>>>,
     ) -> Result<ProcessorPtr> {
-        SyncSourcer::create(ctx, output, BlocksSource { data_blocks })
+        SyncSourcer::create(ctx, output, ChunksSource { chunks })
     }
 }
 
-impl SyncSource for BlocksSource {
-    const NAME: &'static str = "BlocksSource";
+impl SyncSource for ChunksSource {
+    const NAME: &'static str = "ChunksSource";
 
     fn generate(&mut self) -> Result<Option<Chunk>> {
-        let mut blocks_guard = self.data_blocks.lock();
-        match blocks_guard.pop_front() {
+        let mut chunks_guard = self.chunks.lock();
+        match chunks_guard.pop_front() {
             None => Ok(None),
-            Some(data_block) => Ok(Some(data_block)),
+            Some(chunk) => Ok(Some(chunk)),
         }
     }
 }

@@ -35,7 +35,7 @@ pub trait Sink: Send {
 
     fn interrupt(&self) {}
 
-    fn consume(&mut self, data_block: Chunk) -> Result<()>;
+    fn consume(&mut self, chunk: Chunk) -> Result<()>;
 }
 
 pub struct Sinker<T: Sink + 'static> {
@@ -104,8 +104,8 @@ impl<T: Sink + 'static> Processor for Sinker<T> {
         if !self.called_on_start {
             self.called_on_start = true;
             self.inner.on_start()?;
-        } else if let Some(data_block) = self.input_data.take() {
-            self.inner.consume(data_block)?;
+        } else if let Some(chunk) = self.input_data.take() {
+            self.inner.consume(chunk)?;
         } else if !self.called_on_finish {
             self.called_on_finish = true;
             self.inner.on_finish()?;

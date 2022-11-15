@@ -16,7 +16,7 @@ mod index;
 mod segment;
 mod snapshot;
 
-pub use index::BlockFilter;
+pub use index::ChunkFilter;
 pub use segment::BlockMeta;
 pub use segment::SegmentInfo;
 pub use snapshot::TableSnapshot;

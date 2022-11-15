@@ -15,10 +15,13 @@
 use std::sync::Arc;
 
 use common_catalog::plan::Expression;
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::DataType;
+use common_expression::Chunk;
+use common_expression::DataSchema;
+use common_expression::DataSchemaRef;
+use common_expression::SchemaDataType;
 
 use crate::filters::Filter;
 use crate::filters::FilterBuilder;
@@ -55,7 +58,7 @@ pub struct BlockFilter {
     pub filter_schema: DataSchemaRef,
 
     /// Data block of filters;
-    pub filter_block: DataBlock,
+    pub filter_block: Chunk,
 }
 
 /// FilterExprEvalResult represents the evaluation result of an expression by a filter.
@@ -77,6 +80,7 @@ impl BlockFilter {
     pub fn build_filter_column_name(column_name: &str) -> String {
         format!("Bloom({})", column_name)
     }
+
     pub fn build_filter_schema(data_schema: &DataSchema) -> DataSchema {
         let mut filter_fields = vec![];
         let fields = data_schema.fields();
@@ -85,7 +89,7 @@ impl BlockFilter {
                 // create field for applicable ones
 
                 let column_name = Self::build_filter_column_name(field.name());
-                let filter_field = DataField::new(&column_name, Vu8::to_data_type());
+                let filter_field = DataField::new(&column_name, SchemaDataType::String);
 
                 filter_fields.push(filter_field);
             }
@@ -98,11 +102,12 @@ impl BlockFilter {
     #[tracing::instrument(level = "debug", skip_all)]
     pub fn from_filter_block(
         source_table_schema: DataSchemaRef,
-        filter_block: DataBlock,
+        filter_schema: DataSchemaRef,
+        filter_block: Chunk,
     ) -> Result<Self> {
         Ok(Self {
             source_schema: source_table_schema,
-            filter_schema: filter_block.schema().clone(),
+            filter_schema,
             filter_block,
         })
     }
@@ -110,12 +115,11 @@ impl BlockFilter {
     /// Create a filter block from source data.
     ///
     /// All input blocks should belong to a Parquet file, e.g. the block array represents the parquet file in memory.
-    pub fn try_create(blocks: &[&DataBlock]) -> Result<Self> {
+    pub fn try_create(source_schema: DataSchemaRef, blocks: &[&Chunk]) -> Result<Self> {
         if blocks.is_empty() {
             return Err(ErrorCode::BadArguments("data blocks is empty"));
         }
 
-        let source_schema = blocks[0].schema().clone();
         let mut filter_columns = vec![];
 
         let fields = source_schema.fields();
@@ -126,7 +130,8 @@ impl BlockFilter {
 
                 // ingest the same column data from all blocks
                 for block in blocks.iter() {
-                    let col = block.column(i);
+                    let (col, _) = block.column(i);
+                    // todo!("expression")
                     filter_builder.add_keys(&col.to_values());
                 }
 
@@ -135,16 +140,14 @@ impl BlockFilter {
                 // create filter column
 
                 let serialized_bytes = filter.to_bytes()?;
-                let filter_value = DataValue::String(serialized_bytes);
+                let filter_value = Value::Scalar(Scalar::String(serialized_bytes));
 
-                let filter_column: ColumnRef =
-                    filter_value.as_const_column(&StringType::new_impl(), 1)?;
-                filter_columns.push(filter_column);
+                filter_columns.push((filter_value, DataType::String));
             }
         }
 
         let filter_schema = Arc::new(Self::build_filter_schema(source_schema.as_ref()));
-        let filter_block = DataBlock::create(filter_schema.clone(), filter_columns);
+        let filter_block = Chunk::new(filter_columns, 1);
         Ok(Self {
             source_schema,
             filter_schema,
@@ -155,11 +158,11 @@ impl BlockFilter {
     pub fn find(
         &self,
         column_name: &str,
-        target: DataValue,
-        typ: &DataTypeImpl,
+        target: Scalar,
+        typ: &SchemaDataType,
     ) -> Result<FilterEvalResult> {
         let filter_column = Self::build_filter_column_name(column_name);
-        if !self.filter_block.schema().has_field(&filter_column)
+        if !self.filter_schema.has_field(&filter_column)
             || !Xor8Filter::is_supported_type(typ)
             || target.is_null()
         {
@@ -167,7 +170,8 @@ impl BlockFilter {
             return Ok(FilterEvalResult::NotApplicable);
         }
 
-        let filter_bytes = self.filter_block.first(&filter_column)?.as_string()?;
+        let index = filter_schema.index_of(filter_column)?;
+        let filter_bytes = self.filter_block.first(index)?.as_string()?;
         let (filter, _size) = Xor8Filter::from_bytes(&filter_bytes)?;
         if filter.contains(&target) {
             Ok(FilterEvalResult::Maybe)
@@ -222,12 +226,7 @@ impl BlockFilter {
                 let data_type = data_field.data_type();
 
                 // check if cast needed
-                let value = if &value.data_type() != data_type {
-                    let col = value.as_const_column(data_type, 1)?;
-                    col.get_checked(0)?
-                } else {
-                    value.clone()
-                };
+                // todo!("expression")
                 self.find(name, value, data_type)
             }
             _ => Ok(FilterEvalResult::NotApplicable),

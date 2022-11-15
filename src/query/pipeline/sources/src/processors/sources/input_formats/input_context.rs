@@ -21,10 +21,10 @@ use std::sync::Mutex;
 
 use common_base::base::tokio::sync::mpsc::Receiver;
 use common_base::base::Progress;
-use common_datablocks::BlockCompactThresholds;
-use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::ChunkCompactThresholds;
+use common_expression::DataSchemaRef;
 use common_formats::ClickhouseFormatType;
 use common_formats::FileFormatTypeExt;
 use common_io::prelude::FormatSettings;
@@ -121,7 +121,7 @@ pub struct InputContext {
     pub format_settings: FormatSettings,
 
     pub read_batch_size: usize,
-    pub block_compact_thresholds: BlockCompactThresholds,
+    pub chunk_compact_thresholds: ChunkCompactThresholds,
 
     pub scan_progress: Arc<Progress>,
 }
@@ -134,7 +134,7 @@ impl Debug for InputContext {
             .field("field_delimiter", &self.field_delimiter)
             .field("record_delimiter", &self.record_delimiter)
             .field("format_settings", &self.format_settings)
-            .field("block_compact_thresholds", &self.block_compact_thresholds)
+            .field("chunk_compact_thresholds", &self.chunk_compact_thresholds)
             .field("read_batch_size", &self.read_batch_size)
             .field("num_splits", &self.splits.len())
             .finish()
@@ -165,7 +165,7 @@ impl InputContext {
         stage_info: UserStageInfo,
         files: Vec<String>,
         scan_progress: Arc<Progress>,
-        block_compact_thresholds: BlockCompactThresholds,
+        chunk_compact_thresholds: ChunkCompactThresholds,
     ) -> Result<Self> {
         if files.is_empty() {
             return Err(ErrorCode::BadArguments("no file to copy"));
@@ -214,7 +214,7 @@ impl InputContext {
             scan_progress,
             source: InputSource::Operator(operator),
             plan: InputPlan::CopyInto(plan),
-            block_compact_thresholds,
+            chunk_compact_thresholds,
         })
     }
 
@@ -225,7 +225,7 @@ impl InputContext {
         schema: DataSchemaRef,
         scan_progress: Arc<Progress>,
         is_multi_part: bool,
-        block_compact_thresholds: BlockCompactThresholds,
+        chunk_compact_thresholds: ChunkCompactThresholds,
     ) -> Result<Self> {
         let (format_name, rows_to_skip) = remove_clickhouse_format_suffix(format_name);
         let rows_to_skip = std::cmp::max(settings.get_format_skip_header()? as usize, rows_to_skip);
@@ -280,7 +280,7 @@ impl InputContext {
             source: InputSource::Stream(Mutex::new(Some(stream_receiver))),
             plan: InputPlan::StreamingLoad(plan),
             splits: vec![],
-            block_compact_thresholds,
+            chunk_compact_thresholds,
         })
     }
 

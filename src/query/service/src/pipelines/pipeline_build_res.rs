@@ -17,7 +17,7 @@ use common_exception::Result;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::Pipeline;
 use common_pipeline_core::SourcePipeBuilder;
-use common_pipeline_sources::processors::sources::OneBlockSource;
+use common_pipeline_sources::processors::sources::OneChunkSource;
 
 pub struct PipelineBuildResult {
     pub main_pipeline: Pipeline,
@@ -38,7 +38,7 @@ impl PipelineBuildResult {
 
         for data_block in blocks {
             let output = OutputPort::create();
-            source_builder.add_source(output.clone(), OneBlockSource::create(output, data_block)?);
+            source_builder.add_source(output.clone(), OneChunkSource::create(output, data_block)?);
         }
 
         let mut main_pipeline = Pipeline::create();

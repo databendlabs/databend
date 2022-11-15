@@ -14,14 +14,14 @@
 
 use std::collections::HashMap;
 
-use common_datavalues::DataValue;
+use common_expression::Scalar;
 
 use crate::meta::ColumnId;
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct ColumnStatistics {
-    pub min: DataValue,
-    pub max: DataValue,
+    pub min: Scalar,
+    pub max: Scalar,
     // A non-backward compatible change has been introduced by [PR#6067](https://github.com/datafuselabs/databend/pull/6067/files#diff-20030750809780d6492d2fe215a8eb80294aa6a8a5af2cf1bebe17eb740cae35)
     // , please also see [issue#6556](https://github.com/datafuselabs/databend/issues/6556)
     // therefore, we alias `null_count` with `unset_bits`, to make subsequent versions backward compatible again
@@ -34,8 +34,8 @@ pub struct ColumnStatistics {
 pub struct ClusterStatistics {
     #[serde(default = "default_cluster_key_id")]
     pub cluster_key_id: u32,
-    pub min: Vec<DataValue>,
-    pub max: Vec<DataValue>,
+    pub min: Vec<Scalar>,
+    pub max: Vec<Scalar>,
     // The number of times the data in that block has been clustered. New blocks has zero level.
     #[serde(default = "default_level")]
     pub level: i32,

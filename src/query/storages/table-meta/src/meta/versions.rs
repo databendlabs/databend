@@ -14,7 +14,6 @@
 
 use std::marker::PhantomData;
 
-use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_expression::Chunk;
 
@@ -69,6 +68,8 @@ impl SnapshotVersion {
         V
     }
 }
+
+pub struct DataBlock {}
 
 impl Versioned<0> for DataBlock {}
 

@@ -15,8 +15,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_expression::converts::from_scalar;
-use common_expression::converts::to_schema;
 use common_expression::Chunk;
 use common_expression::DataSchema;
 use serde::Deserialize;
@@ -157,16 +155,14 @@ impl From<(v0::BlockMeta, &DataSchema)> for BlockMeta {
     fn from(s: (v0::BlockMeta, &DataSchema)) -> Self {
         let schema = s.1;
         let s = s.0;
-        let to_schema = to_schema(schema);
 
         let col_stats = s
             .col_stats
             .iter()
             .map(|(k, v)| {
-                let f = to_schema.field(*k as usize);
                 let stats = ColumnStatistics {
-                    min: from_scalar(&v.min, f.data_type()),
-                    max: from_scalar(&v.max, f.data_type()),
+                    min: v.min.clone(),
+                    max: v.max.clone(),
                     null_count: v.null_count,
                     in_memory_size: v.in_memory_size,
                 };
@@ -194,16 +190,14 @@ impl From<(&v1::BlockMeta, &DataSchema)> for BlockMeta {
     fn from(s: (&v1::BlockMeta, &DataSchema)) -> Self {
         let schema = s.1;
         let s = s.0;
-        let to_schema = to_schema(schema);
 
         let col_stats = s
             .col_stats
             .iter()
             .map(|(k, v)| {
-                let f = to_schema.field(*k as usize);
                 let stats = ColumnStatistics {
-                    min: from_scalar(&v.min, f.data_type()),
-                    max: from_scalar(&v.max, f.data_type()),
+                    min: v.min.clone(),
+                    max: v.max.clone(),
                     null_count: v.null_count,
                     in_memory_size: v.in_memory_size,
                 };

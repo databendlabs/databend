@@ -29,15 +29,15 @@ pub type SendableChunkStream =
     std::pin::Pin<Box<dyn futures::stream::Stream<Item = Result<Chunk>> + Send>>;
 
 /// AsyncSource backed by a stream
-pub struct AsyncStreamSource<const SKIP_EMPTY_DATA_BLOCK: bool> {
+pub struct AsyncStreamSource<const SKIP_EMPTY_CHUNK: bool> {
     stream: Option<SendableChunkStream>,
 }
 
-/// AsyncSource backed by a stream, and will skip empty data blocks
+/// AsyncSource backed by a stream, and will skip empty data chunks
 pub type StreamSource = AsyncStreamSource<true>;
 
-/// AsyncSource backed by a stream, which will NOT skip empty data blocks.
-/// Needed in situations where an empty block with schema should be returned
+/// AsyncSource backed by a stream, which will NOT skip empty data chunks.
+/// Needed in situations where an empty chunk with schema should be returned
 pub type StreamSourceNoSkipEmpty = AsyncStreamSource<false>;
 
 impl<const T: bool> AsyncStreamSource<T> {
@@ -57,7 +57,7 @@ impl<const T: bool> AsyncStreamSource<T> {
 #[async_trait::async_trait]
 impl<const T: bool> AsyncSource for AsyncStreamSource<T> {
     const NAME: &'static str = "stream source";
-    const SKIP_EMPTY_DATA_BLOCK: bool = T;
+    const SKIP_EMPTY_CHUNK: bool = T;
 
     #[async_trait::unboxed_simple]
     async fn generate(&mut self) -> Result<Option<Chunk>> {
@@ -68,7 +68,7 @@ impl<const T: bool> AsyncSource for AsyncStreamSource<T> {
             .next()
             .await
         {
-            Some(Ok(block)) => Ok(Some(block)),
+            Some(Ok(chunk)) => Ok(Some(chunk)),
             Some(Err(e)) => Err(e),
             None => Ok(None),
         }

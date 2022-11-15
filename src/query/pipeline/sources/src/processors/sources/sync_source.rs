@@ -87,8 +87,8 @@ impl<T: 'static + SyncSource> Processor for SyncSourcer<T> {
 
         match self.generated_data.take() {
             None => Ok(Event::Sync),
-            Some(data_block) => {
-                self.output.push_data(Ok(data_block));
+            Some(chunk) => {
+                self.output.push_data(Ok(chunk));
                 Ok(Event::NeedConsume)
             }
         }
@@ -97,13 +97,13 @@ impl<T: 'static + SyncSource> Processor for SyncSourcer<T> {
     fn process(&mut self) -> Result<()> {
         match self.inner.generate()? {
             None => self.is_finish = true,
-            Some(data_block) => {
+            Some(chunk) => {
                 let progress_values = ProgressValues {
-                    rows: data_block.num_rows(),
-                    bytes: data_block.memory_size(),
+                    rows: chunk.num_rows(),
+                    bytes: chunk.memory_size(),
                 };
                 self.scan_progress.incr(&progress_values);
-                self.generated_data = Some(data_block)
+                self.generated_data = Some(chunk)
             }
         };
 

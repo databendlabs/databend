@@ -17,10 +17,16 @@ use std::sync::Arc;
 
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::DataType;
+use common_expression::utils::ColumnFrom;
+use common_expression::Chunk;
+use common_expression::Column;
+use common_expression::DataField;
+use common_expression::DataSchemaRefExt;
+use common_expression::SchemaDataType;
+use common_expression::Value;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -40,7 +46,7 @@ impl SyncSystemTable for MetricsTable {
         &self.table_info
     }
 
-    fn get_full_data(&self, _: Arc<dyn TableContext>) -> Result<DataBlock> {
+    fn get_full_data(&self, _: Arc<dyn TableContext>) -> Result<Chunk> {
         let prometheus_handle = common_metrics::try_handle().ok_or_else(|| {
             ErrorCode::InitPrometheusFailure("Prometheus recorder is not initialized yet.")
         })?;
@@ -50,6 +56,7 @@ impl SyncSystemTable for MetricsTable {
         let mut labels: Vec<Vec<u8>> = Vec::with_capacity(samples.len());
         let mut kinds: Vec<Vec<u8>> = Vec::with_capacity(samples.len());
         let mut values: Vec<Vec<u8>> = Vec::with_capacity(samples.len());
+        let rows_len = samples.len();
         for sample in samples.into_iter() {
             metrics.push(sample.name.clone().into_bytes());
             kinds.push(sample.kind.clone().into_bytes());
@@ -57,22 +64,25 @@ impl SyncSystemTable for MetricsTable {
             values.push(self.display_sample_value(&sample.value)?.into_bytes());
         }
 
-        Ok(DataBlock::create(self.table_info.schema(), vec![
-            Series::from_data(metrics),
-            Series::from_data(kinds),
-            Series::from_data(labels),
-            Series::from_data(values),
-        ]))
+        Ok(Chunk::new(
+            vec![
+                (Value::Column(Column::from_data(metrics)), DataType::String),
+                (Value::Column(Column::from_data(kinds)), DataType::String),
+                (Value::Column(Column::from_data(labels)), DataType::String),
+                (Value::Column(Column::from_data(values)), DataType::String),
+            ],
+            rows_len,
+        ))
     }
 }
 
 impl MetricsTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
         let schema = DataSchemaRefExt::create(vec![
-            DataField::new("metric", Vu8::to_data_type()),
-            DataField::new("kind", Vu8::to_data_type()),
-            DataField::new("labels", Vu8::to_data_type()),
-            DataField::new("value", Vu8::to_data_type()),
+            DataField::new("metric", SchemaDataType::String),
+            DataField::new("kind", SchemaDataType::String),
+            DataField::new("labels", SchemaDataType::String),
+            DataField::new("value", SchemaDataType::String),
         ]);
 
         let table_info = TableInfo {

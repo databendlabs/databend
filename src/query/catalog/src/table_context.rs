@@ -22,7 +22,7 @@ use common_base::base::ProgressValues;
 use common_config::Config;
 use common_exception::Result;
 use common_expression::Chunk;
-use common_functions::scalars::FunctionContext;
+use common_expression::FunctionContext;
 use common_io::prelude::FormatSettings;
 use common_meta_types::RoleInfo;
 use common_meta_types::UserInfo;
