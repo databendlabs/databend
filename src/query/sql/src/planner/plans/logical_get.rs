@@ -12,11 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+
+use common_catalog::table::ColumnStatistics;
 use common_catalog::table::TableStatistics;
 use common_exception::Result;
 use itertools::Itertools;
 
 use crate::optimizer::ColumnSet;
+use crate::optimizer::ColumnStat;
+use crate::optimizer::ColumnStatSet;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
 use crate::plans::LogicalOperator;
@@ -49,6 +54,8 @@ pub struct LogicalGet {
 
     // statistics will be ignored in comparison and hashing
     pub statistics: Option<TableStatistics>,
+    // statistics will be ignored in comparison and hashing
+    pub col_stats: HashMap<IndexType, Option<ColumnStatistics>>,
 }
 
 impl PartialEq for LogicalGet {
@@ -105,6 +112,16 @@ impl LogicalOperator for LogicalGet {
             used_columns.extend(prewhere.prewhere_columns.iter());
         }
 
+        let mut column_stats: ColumnStatSet = Default::default();
+        for (k, v) in &self.col_stats {
+            if let Some(col_stat) = v {
+                let column_stat = ColumnStat {
+                    distinct_count: col_stat.number_of_distinct_values,
+                    null_count: col_stat.null_count,
+                };
+                column_stats.insert(*k as IndexType, column_stat);
+            }
+        }
         Ok(RelationalProperty {
             output_columns: self.columns.clone(),
             outer_columns: Default::default(),
@@ -114,8 +131,7 @@ impl LogicalOperator for LogicalGet {
                 .as_ref()
                 .map_or(0.0, |stat| stat.num_rows.map_or(0.0, |num| num as f64)),
             precise_cardinality: self.statistics.as_ref().and_then(|stat| stat.num_rows),
-
-            column_stats: Default::default(),
+            column_stats,
         })
     }
 

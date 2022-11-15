@@ -97,6 +97,7 @@ impl UnusedColumnPruner {
                     limit: p.limit,
                     order_by: p.order_by.clone(),
                     statistics: p.statistics,
+                    col_stats: p.col_stats.clone(),
                     prewhere,
                 })))
             }

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::collections::HashSet;
 
 use common_datavalues::type_coercion::compare_coercion;
@@ -409,6 +410,7 @@ impl SubqueryRewriter {
                     limit: None,
                     order_by: None,
                     statistics: None,
+                    col_stats: HashMap::new(),
                     prewhere: None,
                 }
                 .into(),

@@ -37,6 +37,8 @@ pub use optimizer::OptimizerConfig;
 pub use optimizer::OptimizerContext;
 pub use pattern_extractor::PatternExtractor;
 pub use property::ColumnSet;
+pub use property::ColumnStat;
+pub use property::ColumnStatSet;
 pub use property::Distribution;
 pub use property::PhysicalProperty;
 pub use property::RelExpr;
