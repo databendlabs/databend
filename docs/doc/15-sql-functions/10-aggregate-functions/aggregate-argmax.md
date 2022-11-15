@@ -14,8 +14,8 @@ ARG_MAX(arg, val)
 
 | Arguments   | Description |
 | ----------- | ----------- |
-| arg | Argument of [any data type that Databend supports](../../10-data-types/index.md) |
-| val | Value of [any data type that Databend supports](../../10-data-types/index.md)|
+| arg | Argument of [any data type that Databend supports](../../13-sql-reference/10-data-types/index.md) |
+| val | Value of [any data type that Databend supports](../../13-sql-reference/10-data-types/index.md)|
 
 ## Return Type
 
@@ -52,4 +52,3 @@ SELECT arg_max(user, salary)  FROM (SELECT sum(number) AS salary, number%3 AS us
 +-----------------------+
 
 ```
-

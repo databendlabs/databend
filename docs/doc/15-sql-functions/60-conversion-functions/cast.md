@@ -20,7 +20,7 @@ CAST( <expr> AS <type>)
 
 :::tip
 
-[Databend Data Types](../../10-data-types/index.md)
+[Databend Data Types](../../13-sql-reference/10-data-types/index.md)
 
 :::
 
