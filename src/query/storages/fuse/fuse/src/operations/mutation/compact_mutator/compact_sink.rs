@@ -68,10 +68,13 @@ pub struct CompactSink {
     dal: Operator,
     location_gen: TableMetaLocationGenerator,
 
-    table: Arc<FuseTable>,
+    table: Arc<dyn Table>,
     base_snapshot: Arc<TableSnapshot>,
-    base_segments: Vec<Location>,
-    base_statistics: Statistics,
+    // locations all the merged segments.
+    merged_segments: Vec<Location>,
+    // summarised statistics of all the merged segments.
+    merged_statistics: Statistics,
+    // The order of the base segments in snapshot.
     indices: Vec<usize>,
 
     retries: u64,
@@ -95,8 +98,8 @@ impl CompactSink {
             location_gen: table.meta_location_generator.clone(),
             table: Arc::new(table.clone()),
             base_snapshot: mutator.compact_params.base_snapshot,
-            base_segments: mutator.unchanged_segment_locations,
-            base_statistics: mutator.unchanged_segment_statistics,
+            merged_segments: mutator.unchanged_segment_locations,
+            merged_statistics: mutator.unchanged_segment_statistics,
             indices: mutator.unchanged_segment_indices,
             retries: 0,
             abort_operation: AbortOperation::default(),
@@ -184,16 +187,16 @@ impl Processor for CompactSink {
         match std::mem::replace(&mut self.state, State::None) {
             State::GatherSegment => {
                 let metas = std::mem::take(&mut self.input_data);
-                let mut base_segments = std::mem::take(&mut self.base_segments);
+                let mut merged_segments = std::mem::take(&mut self.merged_segments);
                 for v in metas.iter() {
                     let meta = CompactSinkMeta::from_meta(v)?;
                     self.abort_operation.merge(&meta.abort_operation);
-                    base_segments.push((meta.segment_location.clone(), SegmentInfo::VERSION));
+                    merged_segments.push((meta.segment_location.clone(), SegmentInfo::VERSION));
                     self.indices.push(meta.order);
-                    merge_statistics_mut(&mut self.base_statistics, &meta.segment_info.summary)?;
+                    merge_statistics_mut(&mut self.merged_statistics, &meta.segment_info.summary)?;
                 }
 
-                self.base_segments = base_segments
+                self.merged_segments = merged_segments
                     .into_iter()
                     .zip(self.indices.iter())
                     .sorted_by_key(|&(_, r)| *r)
@@ -236,9 +239,9 @@ impl Processor for CompactSink {
             State::GenerateSnapshot(appended_segments) => {
                 let mut new_snapshot = TableSnapshot::from_previous(&self.base_snapshot);
                 if !appended_segments.is_empty() {
-                    self.base_segments = appended_segments
+                    self.merged_segments = appended_segments
                         .iter()
-                        .chain(self.base_segments.iter())
+                        .chain(self.merged_segments.iter())
                         .cloned()
                         .collect();
                     let segments_io = SegmentsIO::create(self.ctx.clone(), self.dal.clone());
@@ -246,11 +249,14 @@ impl Processor for CompactSink {
                         segments_io.read_segments(&appended_segments).await?;
                     for result in append_segment_infos.into_iter() {
                         let appended_segment = result?;
-                        merge_statistics_mut(&mut self.base_statistics, &appended_segment.summary)?;
+                        merge_statistics_mut(
+                            &mut self.merged_statistics,
+                            &appended_segment.summary,
+                        )?;
                     }
                 }
-                new_snapshot.segments = self.base_segments.clone();
-                new_snapshot.summary = self.base_statistics.clone();
+                new_snapshot.segments = self.merged_segments.clone();
+                new_snapshot.summary = self.merged_statistics.clone();
                 self.state = State::TryCommit(new_snapshot);
             }
             State::TryCommit(new_snapshot) => {
@@ -283,10 +289,9 @@ impl Processor for CompactSink {
                 };
             }
             State::RefreshTable => {
-                let latest_table_ref = self.table.refresh(self.ctx.as_ref()).await?;
-                self.table =
-                    Arc::new(FuseTable::try_from_table(latest_table_ref.as_ref())?.to_owned());
-                let latest_snapshot = self.table.read_table_snapshot().await?.ok_or_else(|| {
+                self.table = self.table.refresh(self.ctx.as_ref()).await?;
+                let fuse_table = FuseTable::try_from_table(self.table.as_ref())?.to_owned();
+                let latest_snapshot = fuse_table.read_table_snapshot().await?.ok_or_else(|| {
                     ErrorCode::Internal(
                         "mutation meets empty snapshot during conflict reconciliation",
                     )

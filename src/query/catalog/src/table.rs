@@ -241,6 +241,7 @@ pub trait Table: Sync + Send {
         unimplemented!()
     }
 
+    // return false if the table does not need to be compacted.
     async fn compact(
         &self,
         ctx: Arc<dyn TableContext>,

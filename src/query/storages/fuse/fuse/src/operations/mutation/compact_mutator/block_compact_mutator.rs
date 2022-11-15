@@ -37,6 +37,7 @@ pub struct BlockCompactMutator {
     pub ctx: Arc<dyn TableContext>,
     pub compact_params: CompactOptions,
     pub operator: Operator,
+    // A set of Parts.
     pub compact_tasks: Partitions,
     // The order of the unchanged segments in snapshot.
     pub unchanged_segment_indices: Vec<usize>,
