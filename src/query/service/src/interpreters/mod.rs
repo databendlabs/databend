@@ -98,7 +98,7 @@ pub use interpreter_database_rename::RenameDatabaseInterpreter;
 pub use interpreter_database_show_create::ShowCreateDatabaseInterpreter;
 pub use interpreter_database_undrop::UndropDatabaseInterpreter;
 pub use interpreter_delete::DeleteInterpreter;
-pub use interpreter_explain_v2::ExplainInterpreterV2;
+pub use interpreter_explain_v2::ExplainInterpreter;
 pub use interpreter_factory::InterpreterFactory;
 pub use interpreter_insert_v2::InsertInterpreterV2;
 pub use interpreter_kill::KillInterpreter;
