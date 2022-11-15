@@ -308,6 +308,12 @@ impl PartialOrd for Scalar {
     }
 }
 
+impl Ord for Scalar {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.partial_cmp(other).unwrap_or(Ordering::Equal)
+    }
+}
+
 impl PartialEq for Scalar {
     fn eq(&self, other: &Self) -> bool {
         self.partial_cmp(other) == Some(Ordering::Equal)

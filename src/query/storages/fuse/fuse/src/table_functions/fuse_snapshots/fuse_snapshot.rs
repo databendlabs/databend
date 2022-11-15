@@ -15,8 +15,16 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
 use common_expression::Chunk;
+use common_expression::Column;
+use common_expression::ColumnFrom;
+use common_expression::DataField;
 use common_expression::DataSchema;
+use common_expression::DataSchemaRefExt;
+use common_expression::SchemaDataType;
+use common_expression::Value;
 use common_storages_table_meta::meta::TableSnapshotLite;
 
 use crate::io::SnapshotsIO;
@@ -101,36 +109,88 @@ impl<'a> FuseSnapshot<'a> {
             current_snapshot_version = ver;
         }
 
-        todo!("expression");
-        // Ok(DataBlock::create(FuseSnapshot::schema(), vec![
-        //     Series::from_data(snapshot_ids),
-        //     Series::from_data(snapshot_locations),
-        //     Series::from_data(format_versions),
-        //     Series::from_data(prev_snapshot_ids),
-        //     Series::from_data(segment_count),
-        //     Series::from_data(block_count),
-        //     Series::from_data(row_count),
-        //     Series::from_data(uncompressed),
-        //     Series::from_data(compressed),
-        //     Series::from_data(index_size),
-        //     Series::from_data(timestamps),
-        // ]))
+        Ok(Chunk::new(
+            vec![
+                (
+                    Value::Column(Column::from_data(snapshot_ids)),
+                    DataType::String,
+                ),
+                (
+                    Value::Column(Column::from_data(snapshot_locations)),
+                    DataType::String,
+                ),
+                (
+                    Value::Column(Column::from_data(format_versions)),
+                    DataType::Number(NumberDataType::UInt64),
+                ),
+                (
+                    Value::Column(Column::from_data(prev_snapshot_ids)),
+                    DataType::String.wrap_nullable(),
+                ),
+                (
+                    Value::Column(Column::from_data(segment_count)),
+                    DataType::Number(NumberDataType::UInt64),
+                ),
+                (
+                    Value::Column(Column::from_data(block_count)),
+                    DataType::Number(NumberDataType::UInt64),
+                ),
+                (
+                    Value::Column(Column::from_data(row_count)),
+                    DataType::Number(NumberDataType::UInt64),
+                ),
+                (
+                    Value::Column(Column::from_data(uncompressed)),
+                    DataType::Number(NumberDataType::UInt64),
+                ),
+                (
+                    Value::Column(Column::from_data(compressed)),
+                    DataType::Number(NumberDataType::UInt64),
+                ),
+                (
+                    Value::Column(Column::from_data(index_size)),
+                    DataType::Number(NumberDataType::UInt64),
+                ),
+                (
+                    Value::Column(Column::from_data(timestamps)),
+                    DataType::Timestamp.wrap_nullable(),
+                ),
+            ],
+            len,
+        ))
     }
 
     pub fn schema() -> Arc<DataSchema> {
-        todo!("expression");
-        // DataSchemaRefExt::create(vec![
-        //     DataField::new("snapshot_id", Vu8::to_data_type()),
-        //     DataField::new("snapshot_location", Vu8::to_data_type()),
-        //     DataField::new("format_version", u64::to_data_type()),
-        //     DataField::new_nullable("previous_snapshot_id", Vu8::to_data_type()),
-        //     DataField::new("segment_count", u64::to_data_type()),
-        //     DataField::new("block_count", u64::to_data_type()),
-        //     DataField::new("row_count", u64::to_data_type()),
-        //     DataField::new("bytes_uncompressed", u64::to_data_type()),
-        //     DataField::new("bytes_compressed", u64::to_data_type()),
-        //     DataField::new("index_size", u64::to_data_type()),
-        //     DataField::new_nullable("timestamp", TimestampType::new_impl()),
-        // ])
+        DataSchemaRefExt::create(vec![
+            DataField::new("snapshot_id", SchemaDataType::String),
+            DataField::new("snapshot_location", SchemaDataType::String),
+            DataField::new(
+                "format_version",
+                SchemaDataType::Number(NumberDataType::UInt64),
+            ),
+            DataField::new(
+                "previous_snapshot_id",
+                SchemaDataType::String.wrap_nullable(),
+            ),
+            DataField::new(
+                "segment_count",
+                SchemaDataType::Number(NumberDataType::UInt64),
+            ),
+            DataField::new(
+                "block_count",
+                SchemaDataType::Number(NumberDataType::UInt64),
+            ),
+            DataField::new("row_count", SchemaDataType::Number(NumberDataType::UInt64)),
+            DataField::new(
+                "bytes_uncompressed",
+                SchemaDataType::Number(NumberDataType::UInt64),
+            ),
+            DataField::new(
+                "bytes_compressed",
+                SchemaDataType::Number(NumberDataType::UInt64),
+            ),
+            DataField::new("index_size", SchemaDataType::Number(NumberDataType::UInt64)),
+            DataField::new("timestamp", SchemaDataType::Timestamp.wrap_nullable()),
+        ])
     }
 }

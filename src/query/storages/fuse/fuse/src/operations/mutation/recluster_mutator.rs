@@ -20,6 +20,7 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_expression::ChunkCompactThresholds;
+use common_expression::Scalar;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::SegmentInfo;
 use common_storages_table_meta::meta::TableSnapshot;
@@ -85,121 +86,119 @@ impl ReclusterMutator {
 #[async_trait::async_trait]
 impl TableMutator for ReclusterMutator {
     async fn target_select(&mut self) -> Result<bool> {
-        todo!("expression");
-        // let blocks_map = self.blocks_map.clone();
-        // for (level, block_metas) in blocks_map.into_iter() {
-        //     if block_metas.len() <= 1 {
-        //         continue;
-        //     }
+        let blocks_map = self.blocks_map.clone();
+        for (level, block_metas) in blocks_map.into_iter() {
+            if block_metas.len() <= 1 {
+                continue;
+            }
 
-        //     let mut total_rows = 0;
-        //     let mut total_bytes = 0;
-        //     let mut points_map: BTreeMap<Vec<DataValue>, (Vec<usize>, Vec<usize>)> =
-        //         BTreeMap::new();
-        //     for (i, (_, meta)) in block_metas.iter().enumerate() {
-        //         let stats = meta.cluster_stats.clone().unwrap();
-        //         points_map
-        //             .entry(stats.min.clone())
-        //             .and_modify(|v| v.0.push(i))
-        //             .or_insert((vec![i], vec![]));
-        //         points_map
-        //             .entry(stats.max.clone())
-        //             .and_modify(|v| v.1.push(i))
-        //             .or_insert((vec![], vec![i]));
+            let mut total_rows = 0;
+            let mut total_bytes = 0;
+            let mut points_map: BTreeMap<Vec<Scalar>, (Vec<usize>, Vec<usize>)> = BTreeMap::new();
+            for (i, (_, meta)) in block_metas.iter().enumerate() {
+                let stats = meta.cluster_stats.clone().unwrap();
+                points_map
+                    .entry(stats.min.clone())
+                    .and_modify(|v| v.0.push(i))
+                    .or_insert((vec![i], vec![]));
+                points_map
+                    .entry(stats.max.clone())
+                    .and_modify(|v| v.1.push(i))
+                    .or_insert((vec![], vec![i]));
 
-        //         total_rows += meta.row_count;
-        //         total_bytes += meta.block_size;
-        //     }
+                total_rows += meta.row_count;
+                total_bytes += meta.block_size;
+            }
 
-        //     // If the statistics of blocks are too small, just merge them into one block.
-        //     if self
-        //         .chunk_compactor
-        //         .check_for_recluster(total_rows as usize, total_bytes as usize)
-        //     {
-        //         self.selected_blocks = block_metas
-        //             .into_iter()
-        //             .map(|(seg_idx, block_meta)| {
-        //                 self.base_mutator
-        //                     .add_mutation(seg_idx, block_meta.location.clone(), None);
-        //                 block_meta
-        //             })
-        //             .collect::<Vec<_>>();
-        //         self.level = level;
+            // If the statistics of blocks are too small, just merge them into one block.
+            if self
+                .chunk_compactor
+                .check_for_recluster(total_rows as usize, total_bytes as usize)
+            {
+                self.selected_blocks = block_metas
+                    .into_iter()
+                    .map(|(seg_idx, block_meta)| {
+                        self.base_mutator
+                            .add_mutation(seg_idx, block_meta.location.clone(), None);
+                        block_meta
+                    })
+                    .collect::<Vec<_>>();
+                self.level = level;
 
-        //         return Ok(true);
-        //     }
+                return Ok(true);
+            }
 
-        //     let mut max_depth = 0;
-        //     let mut block_depths = Vec::new();
-        //     let mut point_overlaps: Vec<Vec<usize>> = Vec::new();
-        //     let mut unfinished_parts: HashMap<usize, usize> = HashMap::new();
-        //     for (start, end) in points_map.values() {
-        //         // block1: [1, 2], block2: [2, 3]. The depth of point '2' is 1.
-        //         let point_depth =
-        //             if unfinished_parts.len() == 1 && start.len() == 1 && end.len() == 1 {
-        //                 1
-        //             } else {
-        //                 unfinished_parts.len() + start.len()
-        //             };
+            let mut max_depth = 0;
+            let mut block_depths = Vec::new();
+            let mut point_overlaps: Vec<Vec<usize>> = Vec::new();
+            let mut unfinished_parts: HashMap<usize, usize> = HashMap::new();
+            for (start, end) in points_map.values() {
+                // block1: [1, 2], block2: [2, 3]. The depth of point '2' is 1.
+                let point_depth =
+                    if unfinished_parts.len() == 1 && start.len() == 1 && end.len() == 1 {
+                        1
+                    } else {
+                        unfinished_parts.len() + start.len()
+                    };
 
-        //         if point_depth > max_depth {
-        //             max_depth = point_depth;
-        //         }
+                if point_depth > max_depth {
+                    max_depth = point_depth;
+                }
 
-        //         for (_, val) in unfinished_parts.iter_mut() {
-        //             *val = cmp::max(*val, point_depth);
-        //         }
+                for (_, val) in unfinished_parts.iter_mut() {
+                    *val = cmp::max(*val, point_depth);
+                }
 
-        //         start.iter().for_each(|&idx| {
-        //             unfinished_parts.insert(idx, point_depth);
-        //         });
+                start.iter().for_each(|&idx| {
+                    unfinished_parts.insert(idx, point_depth);
+                });
 
-        //         point_overlaps.push(unfinished_parts.keys().cloned().collect());
+                point_overlaps.push(unfinished_parts.keys().cloned().collect());
 
-        //         end.iter().for_each(|&idx| {
-        //             let stat = unfinished_parts.remove(&idx).unwrap();
-        //             block_depths.push(stat);
-        //         });
-        //     }
-        //     assert_eq!(unfinished_parts.len(), 0);
+                end.iter().for_each(|&idx| {
+                    let stat = unfinished_parts.remove(&idx).unwrap();
+                    block_depths.push(stat);
+                });
+            }
+            assert_eq!(unfinished_parts.len(), 0);
 
-        //     let sum_depth: usize = block_depths.iter().sum();
-        //     // round the float to 4 decimal places.
-        //     let average_depth =
-        //         (10000.0 * sum_depth as f64 / block_depths.len() as f64).round() / 10000.0;
-        //     if average_depth <= self.threshold {
-        //         continue;
-        //     }
+            let sum_depth: usize = block_depths.iter().sum();
+            // round the float to 4 decimal places.
+            let average_depth =
+                (10000.0 * sum_depth as f64 / block_depths.len() as f64).round() / 10000.0;
+            if average_depth <= self.threshold {
+                continue;
+            }
 
-        //     // find the max point, gather the blocks.
-        //     let mut selected_idx = HashSet::new();
-        //     let mut find = false;
-        //     for overlap in point_overlaps {
-        //         if overlap.len() == max_depth {
-        //             overlap.iter().for_each(|&idx| {
-        //                 selected_idx.insert(idx);
-        //             });
-        //             find = true;
-        //         } else if find {
-        //             break;
-        //         }
-        //     }
+            // find the max point, gather the blocks.
+            let mut selected_idx = HashSet::new();
+            let mut find = false;
+            for overlap in point_overlaps {
+                if overlap.len() == max_depth {
+                    overlap.iter().for_each(|&idx| {
+                        selected_idx.insert(idx);
+                    });
+                    find = true;
+                } else if find {
+                    break;
+                }
+            }
 
-        //     self.selected_blocks = selected_idx
-        //         .iter()
-        //         .take(MAX_BLOCK_COUNT)
-        //         .map(|idx| {
-        //             let (seg_idx, block_meta) = block_metas[*idx].clone();
-        //             self.base_mutator
-        //                 .add_mutation(seg_idx, block_meta.location.clone(), None);
-        //             block_meta
-        //         })
-        //         .collect::<Vec<_>>();
-        //     self.level = level;
-        //     return Ok(true);
-        // }
+            self.selected_blocks = selected_idx
+                .iter()
+                .take(MAX_BLOCK_COUNT)
+                .map(|idx| {
+                    let (seg_idx, block_meta) = block_metas[*idx].clone();
+                    self.base_mutator
+                        .add_mutation(seg_idx, block_meta.location.clone(), None);
+                    block_meta
+                })
+                .collect::<Vec<_>>();
+            self.level = level;
+            return Ok(true);
+        }
 
-        // Ok(false)
+        Ok(false)
     }
 
     async fn try_commit(self: Box<Self>, table: Arc<dyn Table>) -> Result<()> {
@@ -216,30 +215,29 @@ impl TableMutator for ReclusterMutator {
         let (merged_segments, merged_summary) =
             FuseTable::merge_append_operations(&append_log_entries)?;
 
-        todo!("expression");
-        // for entry in append_log_entries {
-        //     for block in &entry.segment_info.blocks {
-        //         abort_operation = abort_operation.add_block(block);
-        //     }
-        //     abort_operation = abort_operation.add_segment(entry.segment_location);
-        // }
+        for entry in append_log_entries {
+            for block in &entry.segment_info.blocks {
+                abort_operation = abort_operation.add_block(block);
+            }
+            abort_operation = abort_operation.add_segment(entry.segment_location);
+        }
 
-        // segments.extend(
-        //     merged_segments
-        //         .into_iter()
-        //         .map(|loc| (loc, SegmentInfo::VERSION)),
-        // );
-        // summary = merge_statistics(&summary, &merged_summary)?;
+        segments.extend(
+            merged_segments
+                .into_iter()
+                .map(|loc| (loc, SegmentInfo::VERSION)),
+        );
+        summary = merge_statistics(&summary, &merged_summary)?;
 
-        // let table = FuseTable::try_from_table(table.as_ref())?;
-        // table
-        //     .commit_mutation(
-        //         ctx,
-        //         self.base_mutator.base_snapshot,
-        //         segments,
-        //         summary,
-        //         abort_operation,
-        //     )
-        //     .await
+        let table = FuseTable::try_from_table(table.as_ref())?;
+        table
+            .commit_mutation(
+                ctx,
+                self.base_mutator.base_snapshot,
+                segments,
+                summary,
+                abort_operation,
+            )
+            .await
     }
 }

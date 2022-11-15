@@ -87,7 +87,7 @@ impl BlockFilter {
         let mut filter_fields = vec![];
         let fields = data_schema.fields();
         for field in fields.iter() {
-            if Xor8Filter::is_supported_type(field.data_type()) {
+            if Xor8Filter::is_supported_schema_type(field.data_type()) {
                 // create field for applicable ones
 
                 let column_name = Self::build_filter_column_name(field.name());

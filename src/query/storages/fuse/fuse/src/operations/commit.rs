@@ -336,11 +336,10 @@ impl FuseTable {
     pub fn merge_append_operations(
         append_log_entries: &[AppendOperationLogEntry],
     ) -> Result<(Vec<String>, Statistics)> {
-        todo!("expression");
-        // let iter = append_log_entries
-        //     .iter()
-        //     .map(|entry| (&entry.segment_location, entry.segment_info.as_ref()));
-        // FuseTable::merge_segments(iter)
+        let iter = append_log_entries
+            .iter()
+            .map(|entry| (&entry.segment_location, entry.segment_info.as_ref()));
+        FuseTable::merge_segments(iter)
     }
 
     pub fn merge_segments<'a, T>(
@@ -589,21 +588,20 @@ mod utils {
         operator: Operator,
         operation_log: TableOperationLog,
     ) -> Result<()> {
-        todo!("expression");
-        // metrics_inc_commit_mutation_aborts();
-        // for entry in operation_log {
-        //     for block in &entry.segment_info.blocks {
-        //         let block_location = &block.location.0;
-        //         // if deletion operation failed (after DAL retried)
-        //         // we just left them there, and let the "major GC" collect them
-        //         let _ = operator.object(block_location).delete().await;
-        //         if let Some(index) = &block.bloom_filter_index_location {
-        //             let _ = operator.object(&index.0).delete().await;
-        //         }
-        //     }
-        //     let _ = operator.object(&entry.segment_location).delete().await;
-        // }
-        // Ok(())
+        metrics_inc_commit_mutation_aborts();
+        for entry in operation_log {
+            for block in &entry.segment_info.blocks {
+                let block_location = &block.location.0;
+                // if deletion operation failed (after DAL retried)
+                // we just left them there, and let the "major GC" collect them
+                let _ = operator.object(block_location).delete().await;
+                if let Some(index) = &block.bloom_filter_index_location {
+                    let _ = operator.object(&index.0).delete().await;
+                }
+            }
+            let _ = operator.object(&entry.segment_location).delete().await;
+        }
+        Ok(())
     }
 
     #[inline]

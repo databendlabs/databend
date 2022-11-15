@@ -15,12 +15,19 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_expression::types::number::NumberColumnBuilder;
+use common_expression::types::number::NumberScalar;
+use common_expression::types::string::StringColumnBuilder;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::Chunk;
+use common_expression::Column;
+use common_expression::DataField;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRefExt;
 use common_expression::Scalar;
+use common_expression::SchemaDataType;
+use common_expression::Value;
 use common_storages_table_meta::meta::TableSnapshot;
 use futures_util::TryStreamExt;
 
@@ -54,7 +61,7 @@ impl<'a> FuseBlock<'a> {
         let maybe_snapshot = tbl.read_table_snapshot().await?;
         if let Some(snapshot) = maybe_snapshot {
             if self.snapshot_id.is_none() {
-                return self.to_block(snapshot).await;
+                return self.to_chunk(snapshot).await;
             }
 
             // prepare the stream of snapshot
@@ -72,7 +79,7 @@ impl<'a> FuseBlock<'a> {
             // find the element by snapshot_id in stream
             while let Some(snapshot) = snapshot_stream.try_next().await? {
                 if snapshot.snapshot_id.simple().to_string() == self.snapshot_id.clone().unwrap() {
-                    return self.to_block(snapshot).await;
+                    return self.to_chunk(snapshot).await;
                 }
             }
         }
@@ -80,98 +87,97 @@ impl<'a> FuseBlock<'a> {
         Ok(Chunk::empty())
     }
 
-    async fn to_block(&self, snapshot: Arc<TableSnapshot>) -> Result<Chunk> {
-        todo!("expression");
-        //     let len = snapshot.summary.block_count as usize;
-        //     let snapshot_id = snapshot.snapshot_id.simple().to_string().into_bytes();
-        //     let timestamp = snapshot.timestamp.map(|dt| (dt.timestamp_micros()));
-        //     let mut block_location = StringColumnBuilder::with_capacity(len, len);
-        //     let mut block_size = NumberColumnBuilder::with_capacity(NumberDataType::UInt64, len);
-        //     let mut file_size = NumberColumnBuilder::with_capacity(NumberDataType::UInt64, len);
-        //     let mut row_count = NumberColumnBuilder::with_capacity(NumberDataType::UInt64, len);
-        //     let mut bloom_filter_location = StringColumnBuilder::with_capacity(len, len);
-        //     let mut bloom_filter_size = NumberColumnBuilder::with_capacity(NumberDataType::UInt64, len);
+    async fn to_chunk(&self, snapshot: Arc<TableSnapshot>) -> Result<Chunk> {
+        let len = snapshot.summary.block_count as usize;
+        let snapshot_id = snapshot.snapshot_id.simple().to_string().into_bytes();
+        let timestamp = snapshot.timestamp.unwrap_or_default().timestamp_micros();
+        let mut block_location = StringColumnBuilder::with_capacity(len, len);
+        let mut block_size = NumberColumnBuilder::with_capacity(&NumberDataType::UInt64, len);
+        let mut file_size = NumberColumnBuilder::with_capacity(&NumberDataType::UInt64, len);
+        let mut row_count = NumberColumnBuilder::with_capacity(&NumberDataType::UInt64, len);
+        let mut bloom_filter_location = StringColumnBuilder::with_capacity(len, len);
+        let mut bloom_filter_size =
+            NumberColumnBuilder::with_capacity(&NumberDataType::UInt64, len);
 
-        //     let segments_io = SegmentsIO::create(self.ctx.clone(), self.table.operator.clone());
-        //     let segments = segments_io.read_segments(&snapshot.segments).await?;
-        //     for segment in segments {
-        //         let segment = segment?;
-        //         segment.blocks.iter().for_each(|block| {
-        //             let block = block.as_ref();
-        //             block_location.put_slice(block.location.0.clone().into_bytes());
-        //             block_location.commit_row();
-        //             block_size.push(NumberScalar::UInt64(block.block_size));
-        //             file_size.push(NumberScalar::UInt64(block.file_size));
-        //             row_count.push(NumberScalar::UInt64(block.row_count));
-        //             bloom_filter_location.put_slice(
-        //                 block
-        //                     .bloom_filter_index_location
-        //                     .as_ref()
-        //                     .map(|(s, _)| s.to_owned().into_bytes()),
-        //             );
-        //             bloom_filter_location.commit_row();
-        //             bloom_filter_size.push(NumberScalar::UInt64(block.bloom_filter_index_size));
-        //         });
-        //     }
+        let segments_io = SegmentsIO::create(self.ctx.clone(), self.table.operator.clone());
+        let segments = segments_io.read_segments(&snapshot.segments).await?;
+        for segment in segments {
+            let segment = segment?;
+            segment.blocks.iter().for_each(|block| {
+                let block = block.as_ref();
+                block_location.put_slice(block.location.0.as_bytes());
+                block_location.commit_row();
+                block_size.push(NumberScalar::UInt64(block.block_size));
+                file_size.push(NumberScalar::UInt64(block.file_size));
+                row_count.push(NumberScalar::UInt64(block.row_count));
+                bloom_filter_location.put_slice(
+                    block
+                        .bloom_filter_index_location
+                        .as_ref()
+                        .unwrap()
+                        .0
+                        .as_bytes(),
+                );
+                bloom_filter_location.commit_row();
+                bloom_filter_size.push(NumberScalar::UInt64(block.bloom_filter_index_size));
+            });
+        }
 
-        //     Ok(Chunk::new(
-        //         vec![
-        //             (
-        //                 Value::Scalar(Scalar::String(snapshot_id.to_vec())),
-        //                 DataType::String,
-        //             ),
-        //             (
-        //                 Value::Scalar(Scalar::Timestamp(timestamp)),
-        //                 DataType::Nullable(Box::new(DataType::Timestamp)),
-        //             ),
-        //             (
-        //                 Value::Column(Column::String(block_location.build())),
-        //                 DataType::String,
-        //             ),
-        //             (
-        //                 Value::Column(Column::Number(block_size.build())),
-        //                 DataType::Number(NumberDataType::UInt64),
-        //             ),
-        //             (
-        //                 Value::Column(Column::Number(file_size.build())),
-        //                 DataType::Number(NumberDataType::UInt64),
-        //             ),
-        //             (
-        //                 Value::Column(Column::Number(row_count.build())),
-        //                 DataType::Number(NumberDataType::UInt64),
-        //             ),
-        //             (
-        //                 Value::Column(Column::String(bloom_filter_location.build())),
-        //                 DataType::String,
-        //             ),
-        //             (
-        //                 Value::Column(Column::Number(bloom_filter_size.build())),
-        //                 DataType::Number(NumberDataType::UInt64),
-        //             ),
-        //         ],
-        //         len,
-        //     ))
-        // }
+        Ok(Chunk::new(
+            vec![
+                (
+                    Value::Scalar(Scalar::String(snapshot_id.to_vec())),
+                    DataType::String,
+                ),
+                (
+                    Value::Scalar(Scalar::Timestamp(timestamp)),
+                    DataType::Nullable(Box::new(DataType::Timestamp)),
+                ),
+                (
+                    Value::Column(Column::String(block_location.build())),
+                    DataType::String,
+                ),
+                (
+                    Value::Column(Column::Number(block_size.build())),
+                    DataType::Number(NumberDataType::UInt64),
+                ),
+                (
+                    Value::Column(Column::Number(file_size.build())),
+                    DataType::Number(NumberDataType::UInt64),
+                ),
+                (
+                    Value::Column(Column::Number(row_count.build())),
+                    DataType::Number(NumberDataType::UInt64),
+                ),
+                (
+                    Value::Column(Column::String(bloom_filter_location.build())),
+                    DataType::String,
+                ),
+                (
+                    Value::Column(Column::Number(bloom_filter_size.build())),
+                    DataType::Number(NumberDataType::UInt64),
+                ),
+            ],
+            len,
+        ))
+    }
 
-        // pub fn schema() -> Arc<DataSchema> {
-        //     DataSchemaRefExt::create(vec![
-        //         DataField::new("snapshot_id", SchemaDataType::String),
-        //         DataField::new(
-        //             "timestamp",
-        //             SchemaDataType::Nullable(Box::new(SchemaDataType::Timestamp)),
-        //         ),
-        //         DataField::new("block_location", SchemaDataType::String),
-        //         DataField::new("block_size", SchemaDataType::Number(NumberDataType::UInt64)),
-        //         DataField::new("file_size", SchemaDataType::Number(NumberDataType::UInt64)),
-        //         DataField::new("row_count", SchemaDataType::Number(NumberDataType::UInt64)),
-        //         DataField::new(
-        //             "bloom_filter_location",
-        //             SchemaDataType::Nullable(Box::new(SchemaDataType::String)),
-        //         ),
-        //         DataField::new(
-        //             "bloom_filter_size",
-        //             SchemaDataType::Number(NumberDataType::UInt64),
-        //         ),
-        //     ])
+    pub fn schema() -> Arc<DataSchema> {
+        DataSchemaRefExt::create(vec![
+            DataField::new("snapshot_id", SchemaDataType::String),
+            DataField::new("timestamp", SchemaDataType::Timestamp.wrap_nullable()),
+            DataField::new("block_location", SchemaDataType::String),
+            DataField::new("block_size", SchemaDataType::Number(NumberDataType::UInt64)),
+            DataField::new("file_size", SchemaDataType::Number(NumberDataType::UInt64)),
+            DataField::new("row_count", SchemaDataType::Number(NumberDataType::UInt64)),
+            DataField::new(
+                "bloom_filter_location",
+                SchemaDataType::String.wrap_nullable(),
+            ),
+            DataField::new(
+                "bloom_filter_size",
+                SchemaDataType::Number(NumberDataType::UInt64),
+            ),
+        ])
     }
 }

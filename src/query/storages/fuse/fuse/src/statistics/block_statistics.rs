@@ -35,13 +35,12 @@ impl BlockStatistics {
         location: String,
         cluster_stats: Option<ClusterStatistics>,
     ) -> common_exception::Result<BlockStatistics> {
-        todo!("expression");
-        // Ok(BlockStatistics {
-        //     block_file_location: location,
-        //     block_rows_size: chunk.num_rows() as u64,
-        //     block_bytes_size: chunk.memory_size() as u64,
-        //     block_column_statistics: column_statistic::gen_columns_statistics(data_block)?,
-        //     block_cluster_statistics: cluster_stats,
-        // })
+        Ok(BlockStatistics {
+            block_file_location: location,
+            block_rows_size: chunk.num_rows() as u64,
+            block_bytes_size: chunk.memory_size() as u64,
+            block_column_statistics: column_statistic::gen_columns_statistics(chunk)?,
+            block_cluster_statistics: cluster_stats,
+        })
     }
 }

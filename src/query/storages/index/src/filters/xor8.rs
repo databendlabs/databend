@@ -20,6 +20,7 @@ use cbordata::Cbor;
 use cbordata::FromCbor;
 use cbordata::IntoCbor;
 use common_exception::ErrorCode;
+use common_expression::types::DataType;
 use common_expression::SchemaDataType;
 use xorfilter::Xor8;
 
@@ -115,7 +116,7 @@ impl Filter for Xor8Filter {
 }
 
 impl SupportedType for Xor8Filter {
-    fn is_supported_type(data_type: &SchemaDataType) -> bool {
+    fn is_supported_schema_type(data_type: &SchemaDataType) -> bool {
         // Bloom index only enabled for String and Integral types for now
         let inner_type = data_type.remove_nullable();
         matches!(

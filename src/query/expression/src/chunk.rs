@@ -198,6 +198,19 @@ impl Chunk {
     }
 
     #[inline]
+    pub fn remove_column_index(self, idx: usize) -> Result<Self> {
+        let mut columns = self.columns.clone();
+
+        columns.remove(idx);
+
+        Ok(Self {
+            columns,
+            num_rows: self.num_rows,
+            meta: self.meta,
+        })
+    }
+
+    #[inline]
     pub fn add_meta(self, meta: Option<ChunkMetaInfoPtr>) -> Result<Self> {
         Ok(Self {
             columns: self.columns.clone(),

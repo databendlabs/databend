@@ -29,16 +29,15 @@ pub type TableOperationLog = Vec<AppendOperationLogEntry>;
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct AppendOperationLogEntry {
     pub segment_location: String,
-    // pub segment_info: Arc<SegmentInfo>, todo!("expression");
+    pub segment_info: Arc<SegmentInfo>,
 }
 
 impl AppendOperationLogEntry {
     pub fn new(segment_location: String, segment_info: Arc<SegmentInfo>) -> Self {
-        todo!("expression");
-        // Self {
-        //     segment_location,
-        //     segment_info,
-        // }
+        Self {
+            segment_location,
+            segment_info,
+        }
     }
 }
 

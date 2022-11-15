@@ -60,29 +60,28 @@ impl ClusteringInformationTable {
         table_id: u64,
         table_args: TableArgs,
     ) -> Result<Arc<dyn TableFunction>> {
-        todo!("expression");
-        // let (arg_database_name, arg_table_name) = parse_func_table_args(&table_args)?;
+        let (arg_database_name, arg_table_name) = parse_func_table_args(&table_args)?;
 
-        // let engine = FUSE_FUNC_CLUSTERING.to_owned();
+        let engine = FUSE_FUNC_CLUSTERING.to_owned();
 
-        // let table_info = TableInfo {
-        //     ident: TableIdent::new(table_id, 0),
-        //     desc: format!("'{}'.'{}'", database_name, table_func_name),
-        //     name: table_func_name.to_string(),
-        //     meta: TableMeta {
-        //         schema: ClusteringInformation::schema(),
-        //         engine,
-        //         ..Default::default()
-        //     },
-        //     ..Default::default()
-        // };
+        let table_info = TableInfo {
+            ident: TableIdent::new(table_id, 0),
+            desc: format!("'{}'.'{}'", database_name, table_func_name),
+            name: table_func_name.to_string(),
+            meta: TableMeta {
+                schema: ClusteringInformation::schema(),
+                engine,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
 
-        // Ok(Arc::new(Self {
-        //     table_info,
-        //     arg_database_name,
-        //     arg_table_name,
-        //     arg_cluster_keys: "".to_string(),
-        // }))
+        Ok(Arc::new(Self {
+            table_info,
+            arg_database_name,
+            arg_table_name,
+            arg_cluster_keys: "".to_string(),
+        }))
     }
 }
 

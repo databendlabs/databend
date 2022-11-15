@@ -100,11 +100,10 @@ impl Table for FuseSnapshotTable {
     }
 
     fn table_args(&self) -> Option<Vec<Scalar>> {
-        todo!("expression");
-        // Some(vec![
-        //     string_literal(self.arg_database_name.as_str()),
-        //     string_literal(self.arg_table_name.as_str()),
-        // ])
+        Some(vec![
+            string_literal(self.arg_database_name.as_str()),
+            string_literal(self.arg_table_name.as_str()),
+        ])
     }
 
     fn read_data(

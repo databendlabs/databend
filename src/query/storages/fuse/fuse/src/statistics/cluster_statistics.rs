@@ -51,15 +51,14 @@ impl ClusterStatsGenerator {
         &self,
         chunk: &Chunk,
     ) -> Result<(Option<ClusterStatistics>, Chunk)> {
-        todo!("expression");
-        // let cluster_stats = self.clusters_statistics(chunk, self.level)?;
-        // let mut block = chunk.clone();
+        let cluster_stats = self.clusters_statistics(chunk, self.level)?;
+        let mut block = chunk.clone();
 
-        // for id in self.extra_key_index.iter() {
-        //     block = block.remove_column_index(*id)?;
-        // }
+        for id in self.extra_key_index.iter() {
+            block = block.remove_column_index(*id)?;
+        }
 
-        // Ok((cluster_stats, block))
+        Ok((cluster_stats, block))
     }
 
     // This can be used in deletion, for an existing block.
@@ -68,78 +67,76 @@ impl ClusterStatsGenerator {
         chunk: &Chunk,
         origin_stats: Option<ClusterStatistics>,
     ) -> Result<Option<ClusterStatistics>> {
-        todo!("expression");
-        // if origin_stats.is_none() {
-        //     return Ok(None);
-        // }
+        if origin_stats.is_none() {
+            return Ok(None);
+        }
 
-        // let origin_stats = origin_stats.unwrap();
-        // if origin_stats.cluster_key_id != self.cluster_key_id {
-        //     return Ok(None);
-        // }
+        let origin_stats = origin_stats.unwrap();
+        if origin_stats.cluster_key_id != self.cluster_key_id {
+            return Ok(None);
+        }
 
-        // let mut block = chunk.clone();
+        let mut chunk = chunk.clone();
 
-        // for id in self.extra_key_index.iter() {
-        //     block = block.remove_column_index(*id)?;
-        // }
+        for id in self.extra_key_index.iter() {
+            chunk = chunk.remove_column_index(*id)?;
+        }
 
-        // if !self.cluster_key_index.is_empty() {
-        //     let indices = vec![0u32, block.num_rows() as u32 - 1];
-        //     block = Chunk::take_chunks(&block, &indices)?;
-        // }
+        if !self.cluster_key_index.is_empty() {
+            let indices = vec![0u32, chunk.num_rows() as u32 - 1];
+            chunk = chunk.take(&indices)?;
+        }
 
-        // self.clusters_statistics(&block, origin_stats.level)
+        self.clusters_statistics(&chunk, origin_stats.level)
     }
 
     fn clusters_statistics(&self, chunk: &Chunk, level: i32) -> Result<Option<ClusterStatistics>> {
-        todo!("expression");
-        // if self.cluster_key_index.is_empty() {
-        //     return Ok(None);
-        // }
+        if self.cluster_key_index.is_empty() {
+            return Ok(None);
+        }
 
-        // let mut min = Vec::with_capacity(self.cluster_key_index.len());
-        // let mut max = Vec::with_capacity(self.cluster_key_index.len());
+        let mut min = Vec::with_capacity(self.cluster_key_index.len());
+        let mut max = Vec::with_capacity(self.cluster_key_index.len());
 
-        // for key in self.cluster_key_index.iter() {
-        //     let (val, data_type) = chunk.column(*key);
-        //     let val_ref = val.as_ref();
-        //     let mut left = unsafe { val_ref.index_unchecked(0) };
-        //     // To avoid high cardinality, for the string column,
-        //     // cluster statistics uses only the first 5 bytes.
-        //     if data_type == DataType::String {
-        //         let v = val_ref.into_string().unwrap();
-        //         let l = v.len();
-        //         let e = if l < 5 { l } else { 5 };
-        //         left = ScalarRef::String(&v[0..e]);
-        //     }
-        //     min.push(left.to_owned());
+        for key in self.cluster_key_index.iter() {
+            let (val, data_type) = chunk.column(*key);
+            let val_ref = val.as_ref();
+            let mut left = unsafe { val_ref.index_unchecked(0) };
+            // To avoid high cardinality, for the string column,
+            // cluster statistics uses only the first 5 bytes.
+            if data_type == &DataType::String {
+                let v = left.into_string().unwrap();
+                let l = v.len();
+                let e = if l < 5 { l } else { 5 };
+                left = ScalarRef::String(&v[0..e]);
+            }
+            min.push(left.to_owned());
 
-        //     let mut right = unsafe { val_ref.index_unchecked(val_ref.len() - 1) };
-        //     if data_type == DataType::String {
-        //         let v = val_ref.into_string().unwrap();
-        //         let l = v.len();
-        //         let e = if l < 5 { l } else { 5 };
-        //         right = ScalarRef::String(&v[0..e]);
-        //     }
-        //     max.push(right);
-        // }
+            let mut right = unsafe { val_ref.index_unchecked(val_ref.len() - 1) };
+            if data_type == &DataType::String {
+                let v = right.into_string().unwrap();
+                let l = v.len();
+                let e = if l < 5 { l } else { 5 };
+                right = ScalarRef::String(&v[0..e]);
+            }
+            max.push(right.to_owned());
+        }
 
-        // let level = if min == max
-        //     && self
-        //         .chunk_compact_thresholds
-        //         .check_perfect_block(chunk.num_rows(), chunk.memory_size())
-        // {
-        //     -1
-        // } else {
-        //     level
-        // };
+        let level = if min == max
+            && self
+                .chunk_compact_thresholds
+                .check_perfect_chunk(chunk.num_rows(), chunk.memory_size())
+        {
+            -1
+        } else {
+            level
+        };
 
-        // Ok(Some(ClusterStatistics {
-        //     cluster_key_id: self.cluster_key_id,
-        //     min,
-        //     max,
-        //     level,
-        // }))
+        Ok(Some(ClusterStatistics {
+            cluster_key_id: self.cluster_key_id,
+            min,
+            max,
+            level,
+        }))
     }
 }

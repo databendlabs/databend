@@ -29,6 +29,7 @@ use common_expression::DataSchema;
 use common_expression::DataSchemaRefExt;
 use common_expression::Scalar;
 use common_expression::SchemaDataType;
+use common_expression::Value;
 use common_storages_table_meta::meta::BlockMeta;
 use serde_json::json;
 use serde_json::Value as JsonValue;
@@ -103,40 +104,43 @@ impl<'a> ClusteringInformation<'a> {
             .join(", ");
         let cluster_by_keys = format!("({})", names);
 
-        todo!("expression");
-        // Ok(Chunk::new(
-        //     vec![
-        //         (
-        //             Value::Scalar(Scalar::String(cluster_by_keys.to_vec())),
-        //             DataType::String,
-        //         ),
-        //         (
-        //             Value::Scalar(Scalar::Number(NumberScalar::UInt64(info.total_block_count))),
-        //             DataType::Number(NumberDataType::UInt64),
-        //         ),
-        //         (
-        //             Value::Scalar(Scalar::Number(NumberScalar::UInt64(
-        //                 info.total_constant_block_count,
-        //             ))),
-        //             DataType::Number(NumberDataType::UInt64),
-        //         ),
-        //         (
-        //             Value::Scalar(Scalar::Number(NumberScalar::Float64(info.average_overlaps))),
-        //             DataType::Number(NumberDataType::Float64),
-        //         ),
-        //         (
-        //             Value::Scalar(Scalar::Number(NumberScalar::Float64(info.average_depth))),
-        //             DataType::Number(NumberDataType::Float64),
-        //         ),
-        //         (
-        //             Value::Scalar(Scalar::Variant(
-        //                 info.block_depth_histogram.to_string().as_bytes().to_vec(),
-        //             )),
-        //             DataType::Variant,
-        //         ),
-        //     ],
-        //     1,
-        // ))
+        Ok(Chunk::new(
+            vec![
+                (
+                    Value::Scalar(Scalar::String(cluster_by_keys.as_bytes().to_vec())),
+                    DataType::String,
+                ),
+                (
+                    Value::Scalar(Scalar::Number(NumberScalar::UInt64(info.total_block_count))),
+                    DataType::Number(NumberDataType::UInt64),
+                ),
+                (
+                    Value::Scalar(Scalar::Number(NumberScalar::UInt64(
+                        info.total_constant_block_count,
+                    ))),
+                    DataType::Number(NumberDataType::UInt64),
+                ),
+                (
+                    Value::Scalar(Scalar::Number(NumberScalar::Float64(
+                        info.average_overlaps.into(),
+                    ))),
+                    DataType::Number(NumberDataType::Float64),
+                ),
+                (
+                    Value::Scalar(Scalar::Number(NumberScalar::Float64(
+                        info.average_depth.into(),
+                    ))),
+                    DataType::Number(NumberDataType::Float64),
+                ),
+                (
+                    Value::Scalar(Scalar::Variant(
+                        info.block_depth_histogram.to_string().as_bytes().to_vec(),
+                    )),
+                    DataType::Variant,
+                ),
+            ],
+            1,
+        ))
     }
 
     fn get_min_max_stats(&self, block: &BlockMeta) -> Result<(Vec<Scalar>, Vec<Scalar>)> {
@@ -159,89 +163,88 @@ impl<'a> ClusteringInformation<'a> {
         &self,
         blocks: impl Iterator<Item = &'b Arc<BlockMeta>>,
     ) -> Result<ClusteringStatistics> {
-        todo!("expression");
         // Gather all cluster statistics points to a sorted Map.
         // Key: The cluster statistics points.
         // Value: 0: The block indexes with key as min value;
         //        1: The block indexes with key as max value;
-        //     let mut points_map: BTreeMap<Vec<Scalar>, (Vec<usize>, Vec<usize>)> = BTreeMap::new();
-        //     let mut total_constant_block_count = 0;
-        //     let mut total_block_count = 0;
-        //     for (i, block) in blocks.enumerate() {
-        //         let (min, max) = self.get_min_max_stats(block.as_ref())?;
-        //         if min.eq(&max) {
-        //             total_constant_block_count += 1;
-        //         }
+        let mut points_map: BTreeMap<Vec<Scalar>, (Vec<usize>, Vec<usize>)> = BTreeMap::new();
+        let mut total_constant_block_count = 0;
+        let mut total_block_count = 0;
+        for (i, block) in blocks.enumerate() {
+            let (min, max) = self.get_min_max_stats(block.as_ref())?;
+            if min.eq(&max) {
+                total_constant_block_count += 1;
+            }
 
-        //         points_map
-        //             .entry(min.clone())
-        //             .and_modify(|v| v.0.push(i))
-        //             .or_insert((vec![i], vec![]));
+            points_map
+                .entry(min.clone())
+                .and_modify(|v| v.0.push(i))
+                .or_insert((vec![i], vec![]));
 
-        //         points_map
-        //             .entry(max.clone())
-        //             .and_modify(|v| v.1.push(i))
-        //             .or_insert((vec![], vec![i]));
-        //         total_block_count += 1;
-        //     }
+            points_map
+                .entry(max.clone())
+                .and_modify(|v| v.1.push(i))
+                .or_insert((vec![], vec![i]));
+            total_block_count += 1;
+        }
 
-        //     // calculate overlaps and depth.
-        //     let mut statis = Vec::new();
-        //     // key: the block index.
-        //     // value: (overlaps, depth).
-        //     let mut unfinished_parts: HashMap<usize, (usize, usize)> = HashMap::new();
-        //     for (start, end) in points_map.values() {
-        //         let point_depth = unfinished_parts.len() + start.len();
+        // calculate overlaps and depth.
+        let mut statis = Vec::new();
+        // key: the block index.
+        // value: (overlaps, depth).
+        let mut unfinished_parts: HashMap<usize, (usize, usize)> = HashMap::new();
+        for (start, end) in points_map.values() {
+            let point_depth = unfinished_parts.len() + start.len();
 
-        //         for (_, val) in unfinished_parts.iter_mut() {
-        //             val.0 += start.len();
-        //             val.1 = cmp::max(val.1, point_depth);
-        //         }
+            for (_, val) in unfinished_parts.iter_mut() {
+                val.0 += start.len();
+                val.1 = cmp::max(val.1, point_depth);
+            }
 
-        //         start.iter().for_each(|&idx| {
-        //             unfinished_parts.insert(idx, (point_depth - 1, point_depth));
-        //         });
+            start.iter().for_each(|&idx| {
+                unfinished_parts.insert(idx, (point_depth - 1, point_depth));
+            });
 
-        //         end.iter().for_each(|&idx| {
-        //             let stat = unfinished_parts.remove(&idx).unwrap();
-        //             statis.push(stat);
-        //         });
-        //     }
-        //     assert_eq!(unfinished_parts.len(), 0);
+            end.iter().for_each(|&idx| {
+                let stat = unfinished_parts.remove(&idx).unwrap();
+                statis.push(stat);
+            });
+        }
+        assert_eq!(unfinished_parts.len(), 0);
 
-        //     let mut sum_overlap = 0;
-        //     let mut sum_depth = 0;
-        //     let length = statis.len();
-        //     let mp = statis
-        //         .into_iter()
-        //         .fold(BTreeMap::new(), |mut acc, (overlap, depth)| {
-        //             sum_overlap += overlap;
-        //             sum_depth += depth;
+        let mut sum_overlap = 0;
+        let mut sum_depth = 0;
+        let length = statis.len();
+        let mp = statis
+            .into_iter()
+            .fold(BTreeMap::new(), |mut acc, (overlap, depth)| {
+                sum_overlap += overlap;
+                sum_depth += depth;
 
-        //             let bucket = get_buckets(depth);
-        //             acc.entry(bucket).and_modify(|v| *v += 1).or_insert(1u32);
-        //             acc
-        //         });
-        //     // round the float to 4 decimal places.
-        //     let average_depth = (10000.0 * sum_depth as f64 / length as f64).round() / 10000.0;
-        //     let average_overlaps = (10000.0 * sum_overlap as f64 / length as f64).round() / 10000.0;
+                let bucket = get_buckets(depth);
+                acc.entry(bucket).and_modify(|v| *v += 1).or_insert(1u32);
+                acc
+            });
+        // round the float to 4 decimal places.
+        let average_depth = (10000.0 * sum_depth as f64 / length as f64).round() / 10000.0;
+        let average_overlaps = (10000.0 * sum_overlap as f64 / length as f64).round() / 10000.0;
 
-        //     let objects = mp.iter().fold(
-        //         serde_json::Map::with_capacity(mp.len()),
-        //         |mut acc, (bucket, count)| {
-        //             acc.insert(format!("{:05}", bucket), json!(count));
-        //             acc
-        //         },
-        //     );
-        //     let block_depth_histogram = serde_json::Value::Object(objects);
+        let objects = mp.iter().fold(
+            serde_json::Map::with_capacity(mp.len()),
+            |mut acc, (bucket, count)| {
+                acc.insert(format!("{:05}", bucket), json!(count));
+                acc
+            },
+        );
+        let block_depth_histogram = serde_json::Value::Object(objects);
 
-        //     Ok(ClusteringStatistics {
-        //         total_block_count,
-        //         total_constant_block_count,
-        //         average_overlaps,
-        //         average_depth,
-        //         block_depth_histogram,
-        //     })
+        Ok(ClusteringStatistics {
+            total_block_count,
+            total_constant_block_count,
+            average_overlaps,
+            average_depth,
+            block_depth_histogram,
+        })
     }
 
     pub fn schema() -> Arc<DataSchema> {

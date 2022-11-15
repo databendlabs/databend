@@ -16,13 +16,17 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_expression::types::number::NumberScalar;
+use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::Chunk;
+use common_expression::Column;
+use common_expression::ColumnFrom;
 use common_expression::DataField;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRefExt;
 use common_expression::Scalar;
 use common_expression::SchemaDataType;
+use common_expression::Value;
 use common_storages_table_meta::meta::Location;
 use futures_util::TryStreamExt;
 
@@ -66,7 +70,7 @@ impl<'a> FuseSegment<'a> {
             // find the element by snapshot_id in stream
             while let Some(snapshot) = snapshot_stream.try_next().await? {
                 if snapshot.snapshot_id.simple().to_string() == self.snapshot_id {
-                    return self.to_block(&snapshot.segments).await;
+                    return self.to_chunk(&snapshot.segments).await;
                 }
             }
         }
@@ -74,7 +78,7 @@ impl<'a> FuseSegment<'a> {
         Ok(Chunk::empty())
     }
 
-    async fn to_block(&self, segment_locations: &[Location]) -> Result<Chunk> {
+    async fn to_chunk(&self, segment_locations: &[Location]) -> Result<Chunk> {
         let len = segment_locations.len();
         let mut format_versions: Vec<u64> = Vec::with_capacity(len);
         let mut block_count: Vec<u64> = Vec::with_capacity(len);
@@ -94,36 +98,35 @@ impl<'a> FuseSegment<'a> {
             uncompressed.push(segment.summary.uncompressed_byte_size);
             file_location.push(segment_locations[idx].0.clone().into_bytes());
         }
-        todo!("expression");
-        // Ok(Chunk::new(
-        //     vec![
-        //         (
-        //             Value::Scalar(Scalar::String(file_location.to_vec())),
-        //             DataType::String,
-        //         ),
-        //         (
-        //             Value::Scalar(Scalar::Number(NumberScalar::UInt64(format_versions))),
-        //             DataType::Number(NumberDataType::UInt64),
-        //         ),
-        //         (
-        //             Value::Scalar(Scalar::Number(NumberScalar::UInt64(block_count))),
-        //             DataType::Number(NumberDataType::UInt64),
-        //         ),
-        //         (
-        //             Value::Scalar(Scalar::Number(NumberScalar::UInt64(row_count))),
-        //             DataType::Number(NumberDataType::UInt64),
-        //         ),
-        //         (
-        //             Value::Scalar(Scalar::Number(NumberScalar::UInt64(uncompressed))),
-        //             DataType::Number(NumberDataType::UInt64),
-        //         ),
-        //         (
-        //             Value::Scalar(Scalar::Number(NumberScalar::UInt64(compressed))),
-        //             DataType::Number(NumberDataType::UInt64),
-        //         ),
-        //     ],
-        //     1,
-        // ))
+        Ok(Chunk::new(
+            vec![
+                (
+                    Value::Column(Column::from_data(file_location)),
+                    DataType::String,
+                ),
+                (
+                    Value::Column(Column::from_data(format_versions)),
+                    DataType::Number(NumberDataType::UInt64),
+                ),
+                (
+                    Value::Column(Column::from_data(block_count)),
+                    DataType::Number(NumberDataType::UInt64),
+                ),
+                (
+                    Value::Column(Column::from_data(row_count)),
+                    DataType::Number(NumberDataType::UInt64),
+                ),
+                (
+                    Value::Column(Column::from_data(uncompressed)),
+                    DataType::Number(NumberDataType::UInt64),
+                ),
+                (
+                    Value::Column(Column::from_data(compressed)),
+                    DataType::Number(NumberDataType::UInt64),
+                ),
+            ],
+            len,
+        ))
     }
 
     pub fn schema() -> Arc<DataSchema> {
