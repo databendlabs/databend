@@ -17,6 +17,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use common_base::base::tokio;
+use common_datablocks::DataBlock;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
@@ -119,8 +120,26 @@ impl PageManager {
         }
     }
 
-    async fn collect_new_page(&mut self, tp: &Wait) -> Result<(JsonBlock, bool)> {
+    fn append_block(
+        &mut self,
+        rows: &mut Vec<Vec<JsonValue>>,
+        block: DataBlock,
+        remain: usize,
+    ) -> Result<()> {
         let format_settings = &self.format_settings;
+        if self.schema.fields().is_empty() {
+            self.schema = block.schema().clone();
+        }
+        let mut iter = block_to_json_value(&block, format_settings, self.string_fields)?
+            .into_iter()
+            .peekable();
+        let chunk: Vec<_> = iter.by_ref().take(remain).collect();
+        rows.extend(chunk);
+        self.row_buffer = iter.by_ref().collect();
+        Ok(())
+    }
+
+    async fn collect_new_page(&mut self, tp: &Wait) -> Result<(JsonBlock, bool)> {
         let mut res: Vec<Vec<JsonValue>> = Vec::with_capacity(self.max_rows_per_page);
         while res.len() < self.max_rows_per_page {
             if let Some(row) = self.row_buffer.pop_front() {
@@ -136,18 +155,10 @@ impl PageManager {
                 break;
             }
             let (block, done) = self.block_buffer.pop().await?;
+
             match block {
                 Some(block) => {
-                    if self.schema.fields().is_empty() {
-                        self.schema = block.schema().clone();
-                    }
-                    let mut iter =
-                        block_to_json_value(&block, format_settings, self.string_fields)?
-                            .into_iter()
-                            .peekable();
-                    let chunk: Vec<_> = iter.by_ref().take(remain).collect();
-                    res.extend(chunk);
-                    self.row_buffer = iter.by_ref().collect();
+                    self.append_block(&mut res, block, remain)?;
                     if done {
                         self.block_end = true;
                         break;
