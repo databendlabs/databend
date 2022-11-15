@@ -19,7 +19,7 @@ use common_catalog::plan::Expression;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::DataSchemaRef;
-use common_sql::executor::ExpressionOp;
+// use common_sql::executor::ExpressionOp;
 use common_storages_index::BlockFilter;
 use common_storages_table_meta::meta::Location;
 use opendal::Operator;
@@ -107,39 +107,40 @@ pub fn new_filter_pruner(
     schema: &DataSchemaRef,
     dal: Operator,
 ) -> Result<Option<Arc<dyn Pruner + Send + Sync>>> {
-    if let Some(exprs) = filter_exprs {
-        if exprs.is_empty() {
-            return Ok(None);
-        }
-        // check if there were applicable filter conditions
-        let expr = exprs
-            .iter()
-            .fold(None, |acc: Option<Expression>, item| match acc {
-                Some(acc) => Some(acc.and(item).unwrap()),
-                None => Some(item.clone()),
-            })
-            .unwrap();
+    todo!("expression");
+    // if let Some(exprs) = filter_exprs {
+    //     if exprs.is_empty() {
+    //         return Ok(None);
+    //     }
+    //     // check if there were applicable filter conditions
+    //     let expr = exprs
+    //         .iter()
+    //         .fold(None, |acc: Option<Expression>, item| match acc {
+    //             Some(acc) => Some(acc.and(item).unwrap()),
+    //             None => Some(item.clone()),
+    //         })
+    //         .unwrap();
 
-        let point_query_cols = columns_of_eq_expressions(&expr)?;
-        if !point_query_cols.is_empty() {
-            // convert to filter column names
-            let filter_block_cols = point_query_cols
-                .iter()
-                .map(|n| BlockFilter::build_filter_column_name(n))
-                .collect();
+    //     let point_query_cols = columns_of_eq_expressions(&expr)?;
+    //     if !point_query_cols.is_empty() {
+    //         // convert to filter column names
+    //         let filter_block_cols = point_query_cols
+    //             .iter()
+    //             .map(|n| BlockFilter::build_filter_column_name(n))
+    //             .collect();
 
-            return Ok(Some(Arc::new(FilterPruner::new(
-                ctx.clone(),
-                filter_block_cols,
-                expr,
-                dal,
-                schema.clone(),
-            ))));
-        } else {
-            tracing::debug!("no point filters found, using NonPruner");
-        }
-    }
-    Ok(None)
+    //         return Ok(Some(Arc::new(FilterPruner::new(
+    //             ctx.clone(),
+    //             filter_block_cols,
+    //             expr,
+    //             dal,
+    //             schema.clone(),
+    //         ))));
+    //     } else {
+    //         tracing::debug!("no point filters found, using NonPruner");
+    //     }
+    // }
+    // Ok(None)
 }
 
 mod util {
@@ -148,7 +149,7 @@ mod util {
     use common_exception::ErrorCode;
 
     use super::*;
-    #[tracing::instrument(level = "debug", skip_all)]
+    // #[tracing::instrument(level = "debug", skip_all)] todo!("expression");
     pub async fn should_keep_by_filter(
         ctx: Arc<dyn TableContext>,
         dal: Operator,
@@ -163,18 +164,19 @@ mod util {
             .read_filter(ctx.clone(), dal, filter_col_names, index_length)
             .await;
 
-        match maybe_filter {
-            // figure it out
-            Ok(filter) => BlockFilter::from_filter_block(schema.clone(), filter.into_data())?
-                .maybe_true(filter_expr),
-            Err(e) if e.code() == ErrorCode::DEPRECATED_INDEX_FORMAT => {
-                // In case that the index is no longer supported, just return ture to indicate
-                // that the block being pruned should be kept. (Although the caller of this method
-                // "FilterPruner::should_keep",  will ignore any exceptions returned)
-                Ok(true)
-            }
-            Err(e) => Err(e),
-        }
+        todo!("expression");
+        // match maybe_filter {
+        //     // figure it out
+        //     Ok(filter) => BlockFilter::from_filter_block(schema.clone(), filter.into_data())?
+        //         .maybe_true(filter_expr),
+        //     Err(e) if e.code() == ErrorCode::DEPRECATED_INDEX_FORMAT => {
+        //         // In case that the index is no longer supported, just return ture to indicate
+        //         // that the block being pruned should be kept. (Although the caller of this method
+        //         // "FilterPruner::should_keep",  will ignore any exceptions returned)
+        //         Ok(true)
+        //     }
+        //     Err(e) => Err(e),
+        // }
     }
 
     struct PointQueryVisitor {

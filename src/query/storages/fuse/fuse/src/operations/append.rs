@@ -27,10 +27,10 @@ use common_pipeline_transforms::processors::transforms::transform_chunk_compact_
 use common_pipeline_transforms::processors::transforms::ChunkCompactor;
 use common_pipeline_transforms::processors::transforms::TransformCompact;
 use common_pipeline_transforms::processors::transforms::TransformSortPartial;
-use common_sql::evaluator::ChunkOperator;
-use common_sql::evaluator::CompoundChunkOperator;
-use common_sql::evaluator::Evaluator;
 
+// use common_sql::evaluator::ChunkOperator;
+// use common_sql::evaluator::CompoundChunkOperator;
+// use common_sql::evaluator::Evaluator;
 use crate::operations::FuseTableSink;
 use crate::statistics::ClusterStatsGenerator;
 use crate::FuseTable;
@@ -79,24 +79,25 @@ impl FuseTable {
         let cluster_keys = self.cluster_keys();
         if !cluster_keys.is_empty() {
             // sort
-            let sort_descs: Vec<SortColumnDescription> = cluster_keys
-                .iter()
-                .map(|expr| SortColumnDescription {
-                    // todo(sundy): use index instead
-                    column_name: expr.column_name(),
-                    asc: true,
-                    nulls_first: false,
-                })
-                .collect();
+            todo!("expression");
+            // let sort_descs: Vec<SortColumnDescription> = cluster_keys
+            //     .iter()
+            //     .map(|expr| SortColumnDescription {
+            //         // todo(sundy): use index instead
+            //         column_name: expr.column_name(),
+            //         asc: true,
+            //         nulls_first: false,
+            //     })
+            //     .collect();
 
-            pipeline.add_transform(|transform_input_port, transform_output_port| {
-                TransformSortPartial::try_create(
-                    transform_input_port,
-                    transform_output_port,
-                    None,
-                    sort_descs.clone(),
-                )
-            })?;
+            // pipeline.add_transform(|transform_input_port, transform_output_port| {
+            //     TransformSortPartial::try_create(
+            //         transform_input_port,
+            //         transform_output_port,
+            //         None,
+            //         sort_descs.clone(),
+            //     )
+            // })?;
         }
 
         if need_output {
@@ -132,60 +133,61 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
         level: i32,
-        block_compactor: BlockCompactThresholds,
+        block_compactor: ChunkCompactThresholds,
     ) -> Result<ClusterStatsGenerator> {
-        let cluster_keys = self.cluster_keys();
-        if cluster_keys.is_empty() {
-            return Ok(ClusterStatsGenerator::default());
-        }
+        todo!("expression");
+        // let cluster_keys = self.cluster_keys();
+        // if cluster_keys.is_empty() {
+        //     return Ok(ClusterStatsGenerator::default());
+        // }
 
-        let input_schema = self.table_info.schema();
-        let mut merged = input_schema.fields().clone();
+        // let input_schema = self.table_info.schema();
+        // let mut merged = input_schema.fields().clone();
 
-        let mut cluster_key_index = Vec::with_capacity(cluster_keys.len());
-        let mut extra_key_index = Vec::with_capacity(cluster_keys.len());
+        // let mut cluster_key_index = Vec::with_capacity(cluster_keys.len());
+        // let mut extra_key_index = Vec::with_capacity(cluster_keys.len());
 
-        let mut operators = Vec::with_capacity(cluster_keys.len());
+        // let mut operators = Vec::with_capacity(cluster_keys.len());
 
-        for expr in &cluster_keys {
-            let cname = expr.column_name();
+        // for expr in &cluster_keys {
+        //     let cname = expr.column_name();
 
-            let index = match merged.iter().position(|x| x.name() == &cname) {
-                None => {
-                    let field = DataField::new(&cname, expr.data_type());
-                    operators.push(ChunkOperator::Map {
-                        eval: Evaluator::eval_expression(expr, &input_schema)?,
-                        name: field.name().to_string(),
-                    });
-                    merged.push(field);
+        //     let index = match merged.iter().position(|x| x.name() == &cname) {
+        //         None => {
+        //             let field = DataField::new(&cname, expr.data_type());
+        //             operators.push(ChunkOperator::Map {
+        //                 eval: Evaluator::eval_expression(expr, &input_schema)?,
+        //                 name: field.name().to_string(),
+        //             });
+        //             merged.push(field);
 
-                    extra_key_index.push(merged.len() - 1);
-                    merged.len() - 1
-                }
-                Some(idx) => idx,
-            };
-            cluster_key_index.push(index);
-        }
+        //             extra_key_index.push(merged.len() - 1);
+        //             merged.len() - 1
+        //         }
+        //         Some(idx) => idx,
+        //     };
+        //     cluster_key_index.push(index);
+        // }
 
-        if !operators.is_empty() {
-            let func_ctx = ctx.try_get_function_context()?;
-            pipeline.add_transform(move |input, output| {
-                Ok(CompoundChunkOperator::create(
-                    input,
-                    output,
-                    func_ctx.clone(),
-                    operators.clone(),
-                ))
-            })?;
-        }
+        // if !operators.is_empty() {
+        //     let func_ctx = ctx.try_get_function_context()?;
+        //     pipeline.add_transform(move |input, output| {
+        //         Ok(CompoundChunkOperator::create(
+        //             input,
+        //             output,
+        //             func_ctx.clone(),
+        //             operators.clone(),
+        //         ))
+        //     })?;
+        // }
 
-        Ok(ClusterStatsGenerator::new(
-            self.cluster_key_meta.as_ref().unwrap().0,
-            cluster_key_index,
-            extra_key_index,
-            level,
-            block_compactor,
-        ))
+        // Ok(ClusterStatsGenerator::new(
+        //     self.cluster_key_meta.as_ref().unwrap().0,
+        //     cluster_key_index,
+        //     extra_key_index,
+        //     level,
+        //     block_compactor,
+        // ))
     }
 
     pub fn get_option<T: FromStr>(&self, opt_key: &str, default: T) -> T {

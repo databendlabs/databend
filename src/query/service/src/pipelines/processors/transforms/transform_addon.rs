@@ -20,9 +20,9 @@ use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataType;
 use common_exception::Result;
-use common_sql::evaluator::ChunkOperator;
-use common_sql::evaluator::CompoundChunkOperator;
 
+// use common_sql::evaluator::ChunkOperator;
+// use common_sql::evaluator::CompoundChunkOperator;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::ProcessorPtr;
@@ -35,7 +35,7 @@ pub struct TransformAddOn {
     default_expr_fields: Vec<DataField>,
     default_nonexpr_fields: Vec<DataField>,
 
-    expression_transform: CompoundChunkOperator,
+    // expression_transform: CompoundChunkOperator, todo!("expression");
     output_schema: DataSchemaRef,
 }
 
@@ -69,18 +69,19 @@ where Self: Transform
             }
         }
 
-        let func_ctx = ctx.try_get_function_context()?;
-        let expression_transform = CompoundChunkOperator {
-            ctx: func_ctx,
-            operators: default_exprs,
-        };
+        todo!("expression");
+        // let func_ctx = ctx.try_get_function_context()?;
+        // let expression_transform = CompoundChunkOperator {
+        //     ctx: func_ctx,
+        //     operators: default_exprs,
+        // };
 
-        Ok(Transformer::create(input, output, Self {
-            default_expr_fields,
-            default_nonexpr_fields,
-            expression_transform,
-            output_schema,
-        }))
+        // Ok(Transformer::create(input, output, Self {
+        //     default_expr_fields,
+        //     default_nonexpr_fields,
+        //     expression_transform,
+        //     output_schema,
+        // }))
     }
 }
 

@@ -44,6 +44,6 @@ pub mod table_functions;
 
 mod global_services;
 
-pub use common_sql as sql;
+// pub use common_sql as sql;
 pub use common_storages_factory as storages;
 pub use global_services::GlobalServices;

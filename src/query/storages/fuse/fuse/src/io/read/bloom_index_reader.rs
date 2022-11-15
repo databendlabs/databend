@@ -61,7 +61,7 @@ impl BlockFilterReader for Location {
     ) -> Result<ChunkFilter> {
         let index_version = BlockBloomFilterIndexVersion::try_from(self.1)?;
         match index_version {
-            BlockBloomFilterIndexVersion::V2(_) => {
+            BlockBloomFilterIndexVersion::V3(_) => {
                 let block =
                     load_bloom_filter_by_columns(ctx, dal, columns, &self.0, index_length).await?;
                 Ok(ChunkFilter::new(block))

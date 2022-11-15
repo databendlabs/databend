@@ -24,8 +24,8 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataSchemaRef;
 use common_pipeline_core::Pipeline;
-use common_sql::evaluator::EvalNode;
-use common_sql::evaluator::Evaluator;
+// use common_sql::evaluator::EvalNode;
+// use common_sql::evaluator::Evaluator;
 use tracing::info;
 
 use crate::fuse_lazy_part::FuseLazyPartInfo;
@@ -100,14 +100,16 @@ impl FuseTable {
         _ctx: Arc<dyn TableContext>,
         plan: &DataSourcePlan,
         schema: DataSchemaRef,
-    ) -> Result<Arc<Option<EvalNode>>> {
-        Ok(match self.prewhere_of_push_downs(&plan.push_downs) {
-            None => Arc::new(None),
-            Some(v) => {
-                let executor = Evaluator::eval_expression(&v.filter, schema.as_ref())?;
-                Arc::new(Some(executor))
-            }
-        })
+    ) // -> Result<Arc<Option<EvalNode>>>
+    {
+        todo!("expression");
+        // Ok(match self.prewhere_of_push_downs(&plan.push_downs) {
+        //     None => Arc::new(None),
+        //     Some(v) => {
+        //         let executor = Evaluator::eval_expression(&v.filter, schema.as_ref())?;
+        //         Arc::new(Some(executor))
+        //     }
+        // })
     }
 
     // Build the remain reader.
@@ -204,38 +206,39 @@ impl FuseTable {
             });
         }
 
-        let projection = self.projection_of_push_downs(&plan.push_downs);
-        let max_io_requests = self.adjust_io_request(&ctx, &projection, read_kind)?;
-        let block_reader = self.build_block_reader(plan)?;
-        let prewhere_reader = self.build_prewhere_reader(plan)?;
-        let prewhere_filter =
-            self.build_prewhere_filter_executor(ctx.clone(), plan, prewhere_reader.schema())?;
-        let remain_reader = self.build_remain_reader(plan)?;
+        todo!("expression");
+        // let projection = self.projection_of_push_downs(&plan.push_downs);
+        // let max_io_requests = self.adjust_io_request(&ctx, &projection, read_kind)?;
+        // let block_reader = self.build_block_reader(plan)?;
+        // let prewhere_reader = self.build_prewhere_reader(plan)?;
+        // let prewhere_filter =
+        //     self.build_prewhere_filter_executor(ctx.clone(), plan, prewhere_reader.schema())?;
+        // let remain_reader = self.build_remain_reader(plan)?;
 
-        info!("read block data adjust max io requests:{}", max_io_requests);
+        // info!("read block data adjust max io requests:{}", max_io_requests);
 
         // Add source pipe.
-        pipeline.add_source(
-            |output| {
-                FuseTableSource::create(
-                    ctx.clone(),
-                    output,
-                    block_reader.clone(),
-                    prewhere_reader.clone(),
-                    prewhere_filter.clone(),
-                    remain_reader.clone(),
-                )
-            },
-            max_io_requests,
-        )?;
+        // pipeline.add_source(
+        //     |output| {
+        //         FuseTableSource::create(
+        //             ctx.clone(),
+        //             output,
+        //             block_reader.clone(),
+        //             prewhere_reader.clone(),
+        //             prewhere_filter.clone(),
+        //             remain_reader.clone(),
+        //         )
+        //     },
+        //     max_io_requests,
+        // )?;
 
-        // Resize pipeline to max threads.
-        let max_threads = ctx.get_settings().get_max_threads()? as usize;
-        let resize_to = std::cmp::min(max_threads, max_io_requests);
-        info!(
-            "read block pipeline resize from:{} to:{}",
-            max_io_requests, resize_to
-        );
-        pipeline.resize(resize_to)
+        // // Resize pipeline to max threads.
+        // let max_threads = ctx.get_settings().get_max_threads()? as usize;
+        // let resize_to = std::cmp::min(max_threads, max_io_requests);
+        // info!(
+        //     "read block pipeline resize from:{} to:{}",
+        //     max_io_requests, resize_to
+        // );
+        // pipeline.resize(resize_to)
     }
 }

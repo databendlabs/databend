@@ -22,7 +22,7 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataField;
-use common_sql::ExpressionParser;
+// use common_sql::ExpressionParser;
 use common_storages_table_meta::meta::TableSnapshot;
 
 use crate::operations::mutation::delete_from_block;
@@ -57,14 +57,15 @@ impl FuseTable {
         // check if unconditional deletion
         if let Some(filter) = &selection {
             let table_meta = Arc::new(self.clone());
-            let physical_scalars = ExpressionParser::parse_exprs(table_meta, filter)?;
-            if physical_scalars.is_empty() {
-                return Err(ErrorCode::IndexOutOfBounds(
-                    "expression should be valid, but not",
-                ));
-            }
-            self.delete_rows(ctx.clone(), &snapshot, &physical_scalars[0], projection)
-                .await
+            todo!("expression");
+            // let physical_scalars = ExpressionParser::parse_exprs(table_meta, filter)?;
+            // if physical_scalars.is_empty() {
+            //     return Err(ErrorCode::IndexOutOfBounds(
+            //         "expression should be valid, but not",
+            //     ));
+            // }
+            // self.delete_rows(ctx.clone(), &snapshot, &physical_scalars[0], projection)
+            //     .await
         } else {
             // deleting the whole table... just a truncate
             let purge = false;

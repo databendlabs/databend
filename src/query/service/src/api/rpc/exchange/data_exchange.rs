@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_sql::executor::PhysicalScalar;
+// use common_sql::executor::PhysicalScalar;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum DataExchange {

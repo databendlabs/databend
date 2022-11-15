@@ -27,7 +27,7 @@ use common_meta_types::UserInfo;
 use common_meta_types::UserOption;
 use common_meta_types::UserQuota;
 use common_metrics::init_default_metrics_recorder;
-use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
+// use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use common_storage::StorageParams;
 use common_storage::StorageS3Config;
 use common_storages_system::CatalogsTable;

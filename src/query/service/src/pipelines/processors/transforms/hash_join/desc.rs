@@ -16,8 +16,8 @@ use common_arrow::arrow::bitmap::MutableBitmap;
 use common_datablocks::DataBlock;
 use common_exception::Result;
 use common_functions::scalars::FunctionFactory;
-use common_sql::executor::PhysicalScalar;
-use common_sql::IndexType;
+// use common_sql::executor::PhysicalScalar;
+// use common_sql::IndexType;
 use parking_lot::RwLock;
 
 use crate::pipelines::processors::transforms::hash_join::row::RowPtr;
@@ -36,7 +36,7 @@ pub enum MarkerKind {
 }
 
 pub struct MarkJoinDesc {
-    pub(crate) marker_index: Option<IndexType>,
+    // pub(crate) marker_index: Option<IndexType>,  todo!("expression");
     pub(crate) has_null: RwLock<bool>,
 }
 
@@ -73,44 +73,45 @@ pub struct HashJoinDesc {
 
 impl HashJoinDesc {
     pub fn create(join: &HashJoin) -> Result<HashJoinDesc> {
-        let predicate = Self::join_predicate(&join.non_equi_conditions)?;
+        todo!("expression");
+        // let predicate = Self::join_predicate(&join.non_equi_conditions)?;
 
-        Ok(HashJoinDesc {
-            join_type: join.join_type.clone(),
-            build_keys: Evaluator::eval_physical_scalars(&join.build_keys)?,
-            probe_keys: Evaluator::eval_physical_scalars(&join.probe_keys)?,
-            other_predicate: predicate
-                .as_ref()
-                .map(Evaluator::eval_physical_scalar)
-                .transpose()?,
-            marker_join_desc: MarkJoinDesc {
-                has_null: RwLock::new(false),
-                marker_index: join.marker_index,
-            },
-            from_correlated_subquery: join.from_correlated_subquery,
-            join_state: JoinState::create()?,
-        })
+        // Ok(HashJoinDesc {
+        //     join_type: join.join_type.clone(),
+        //     build_keys: Evaluator::eval_physical_scalars(&join.build_keys)?,
+        //     probe_keys: Evaluator::eval_physical_scalars(&join.probe_keys)?,
+        //     other_predicate: predicate
+        //         .as_ref()
+        //         .map(Evaluator::eval_physical_scalar)
+        //         .transpose()?,
+        //     marker_join_desc: MarkJoinDesc {
+        //         has_null: RwLock::new(false),
+        //         marker_index: join.marker_index,
+        //     },
+        //     from_correlated_subquery: join.from_correlated_subquery,
+        //     join_state: JoinState::create()?,
+        // })
     }
 
-    fn join_predicate(non_equi_conditions: &[PhysicalScalar]) -> Result<Option<PhysicalScalar>> {
-        if non_equi_conditions.is_empty() {
-            return Ok(None);
-        }
+    // fn join_predicate(non_equi_conditions: &[PhysicalScalar]) -> Result<Option<PhysicalScalar>> {
+    //     if non_equi_conditions.is_empty() {
+    //         return Ok(None);
+    //     }
 
-        let mut condition = non_equi_conditions[0].clone();
+    //     let mut condition = non_equi_conditions[0].clone();
 
-        for other_condition in non_equi_conditions.iter().skip(1) {
-            let left_type = condition.data_type();
-            let right_type = other_condition.data_type();
-            let data_types = vec![&left_type, &right_type];
-            let func = FunctionFactory::instance().get("and", &data_types)?;
-            condition = PhysicalScalar::Function {
-                name: "and".to_string(),
-                args: vec![condition, other_condition.clone()],
-                return_type: func.return_type(),
-            };
-        }
+    //     for other_condition in non_equi_conditions.iter().skip(1) {
+    //         let left_type = condition.data_type();
+    //         let right_type = other_condition.data_type();
+    //         let data_types = vec![&left_type, &right_type];
+    //         let func = FunctionFactory::instance().get("and", &data_types)?;
+    //         condition = PhysicalScalar::Function {
+    //             name: "and".to_string(),
+    //             args: vec![condition, other_condition.clone()],
+    //             return_type: func.return_type(),
+    //         };
+    //     }
 
-        Ok(Some(condition))
-    }
+    //     Ok(Some(condition))
+    // }
 }

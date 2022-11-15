@@ -35,8 +35,10 @@ common-config = { path = "../config" }
 common-datablocks = { path = "../datablocks" }
 common-datavalues = { path = "../datavalues" }
 common-exception = { path = "../../common/exception" }
+common-expression = { path = "../expression" }
 common-formats = { path = "../formats" }
 common-functions = { path = "../functions" }
+common-functions-v2 = { path = "../functions-v2" }
 common-grpc = { path = "../../common/grpc" }
 common-hashtable = { path = "../../common/hashtable" }
 common-hive-meta-store = { path = "../storages/hive/hive-meta-store", optional = true }
@@ -54,7 +56,7 @@ common-pipeline-sinks = { path = "../pipeline/sinks" }
 common-pipeline-sources = { path = "../pipeline/sources" }
 common-pipeline-transforms = { path = "../pipeline/transforms" }
 common-settings = { path = "../settings" }
-common-sql = { path = "../sql" }
+# common-sql = { path = "../sql" }
 common-storage = { path = "../../common/storage" }
 common-storages-cache = { path = "../storages/cache" }
 common-storages-factory = { path = "../storages/factory" }

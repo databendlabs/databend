@@ -17,8 +17,9 @@ use common_exception::Result;
 use common_expression::Scalar;
 
 pub fn string_value(value: &Scalar) -> Result<String> {
-    String::from_utf8(value.into_string()?)
-        .map_err(|e| ErrorCode::BadArguments(format!("invalid string. {}", e)))
+    todo!("expression");
+    // String::from_utf8(value.into_string()?)
+    //     .map_err(|e| ErrorCode::BadArguments(format!("invalid string. {}", e)))
 }
 
 pub fn string_literal(val: &str) -> Scalar {

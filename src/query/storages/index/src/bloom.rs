@@ -19,8 +19,10 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::Chunk;
+use common_expression::DataField;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
+use common_expression::Scalar;
 use common_expression::SchemaDataType;
 
 use crate::filters::Filter;
@@ -116,43 +118,44 @@ impl BlockFilter {
     ///
     /// All input blocks should belong to a Parquet file, e.g. the block array represents the parquet file in memory.
     pub fn try_create(source_schema: DataSchemaRef, blocks: &[&Chunk]) -> Result<Self> {
-        if blocks.is_empty() {
-            return Err(ErrorCode::BadArguments("data blocks is empty"));
-        }
+        todo!("expression");
+        // if blocks.is_empty() {
+        //     return Err(ErrorCode::BadArguments("data blocks is empty"));
+        // }
 
-        let mut filter_columns = vec![];
+        // let mut filter_columns = vec![];
 
-        let fields = source_schema.fields();
-        for (i, field) in fields.iter().enumerate() {
-            if Xor8Filter::is_supported_type(field.data_type()) {
-                // create filter per column
-                let mut filter_builder = Xor8Builder::create();
+        // let fields = source_schema.fields();
+        // for (i, field) in fields.iter().enumerate() {
+        //     if Xor8Filter::is_supported_type(field.data_type()) {
+        //         // create filter per column
+        //         let mut filter_builder = Xor8Builder::create();
 
-                // ingest the same column data from all blocks
-                for block in blocks.iter() {
-                    let (col, _) = block.column(i);
-                    // todo!("expression")
-                    filter_builder.add_keys(&col.to_values());
-                }
+        //         // ingest the same column data from all blocks
+        //         for block in blocks.iter() {
+        //             let (col, _) = block.column(i);
+        //             // todo!("expression")
+        //             filter_builder.add_keys(&col.to_values());
+        //         }
 
-                let filter = filter_builder.build()?;
+        //         let filter = filter_builder.build()?;
 
-                // create filter column
+        //         // create filter column
 
-                let serialized_bytes = filter.to_bytes()?;
-                let filter_value = Value::Scalar(Scalar::String(serialized_bytes));
+        //         let serialized_bytes = filter.to_bytes()?;
+        //         let filter_value = Value::Scalar(Scalar::String(serialized_bytes));
 
-                filter_columns.push((filter_value, DataType::String));
-            }
-        }
+        //         filter_columns.push((filter_value, DataType::String));
+        //     }
+        // }
 
-        let filter_schema = Arc::new(Self::build_filter_schema(source_schema.as_ref()));
-        let filter_block = Chunk::new(filter_columns, 1);
-        Ok(Self {
-            source_schema,
-            filter_schema,
-            filter_block,
-        })
+        // let filter_schema = Arc::new(Self::build_filter_schema(source_schema.as_ref()));
+        // let filter_block = Chunk::new(filter_columns, 1);
+        // Ok(Self {
+        //     source_schema,
+        //     filter_schema,
+        //     filter_block,
+        // })
     }
 
     pub fn find(
@@ -161,23 +164,24 @@ impl BlockFilter {
         target: Scalar,
         typ: &SchemaDataType,
     ) -> Result<FilterEvalResult> {
-        let filter_column = Self::build_filter_column_name(column_name);
-        if !self.filter_schema.has_field(&filter_column)
-            || !Xor8Filter::is_supported_type(typ)
-            || target.is_null()
-        {
-            // The column doesn't a filter
-            return Ok(FilterEvalResult::NotApplicable);
-        }
+        todo!("expression");
+        // let filter_column = Self::build_filter_column_name(column_name);
+        // if !self.filter_schema.has_field(&filter_column)
+        //     || !Xor8Filter::is_supported_type(typ)
+        //     || target.is_null()
+        // {
+        //     // The column doesn't a filter
+        //     return Ok(FilterEvalResult::NotApplicable);
+        // }
 
-        let index = filter_schema.index_of(filter_column)?;
-        let filter_bytes = self.filter_block.first(index)?.as_string()?;
-        let (filter, _size) = Xor8Filter::from_bytes(&filter_bytes)?;
-        if filter.contains(&target) {
-            Ok(FilterEvalResult::Maybe)
-        } else {
-            Ok(FilterEvalResult::False)
-        }
+        // let index = filter_schema.index_of(filter_column)?;
+        // let filter_bytes = self.filter_block.first(index)?.as_string()?;
+        // let (filter, _size) = Xor8Filter::from_bytes(&filter_bytes)?;
+        // if filter.contains(&target) {
+        //     Ok(FilterEvalResult::Maybe)
+        // } else {
+        //     Ok(FilterEvalResult::False)
+        // }
     }
 
     /// Returns false when the expression must be false, otherwise true.
@@ -214,23 +218,24 @@ impl BlockFilter {
         left: &Expression,
         right: &Expression,
     ) -> Result<FilterEvalResult> {
-        let schema: &DataSchemaRef = &self.source_schema;
+        todo!("expression");
+        // let schema: &DataSchemaRef = &self.source_schema;
 
-        // For now only support single column like "name = 'Alice'"
-        match (left, right) {
-            // match the expression of 'column_name = literal constant'
-            (Expression::IndexedVariable { name, .. }, Expression::Constant { value, .. })
-            | (Expression::Constant { value, .. }, Expression::IndexedVariable { name, .. }) => {
-                // find the corresponding column from source table
-                let data_field = schema.field_with_name(name)?;
-                let data_type = data_field.data_type();
+        // // For now only support single column like "name = 'Alice'"
+        // match (left, right) {
+        //     // match the expression of 'column_name = literal constant'
+        //     (Expression::IndexedVariable { name, .. }, Expression::Constant { value, .. })
+        //     | (Expression::Constant { value, .. }, Expression::IndexedVariable { name, .. }) => {
+        //         // find the corresponding column from source table
+        //         let data_field = schema.field_with_name(name)?;
+        //         let data_type = data_field.data_type();
 
-                // check if cast needed
-                // todo!("expression")
-                self.find(name, value, data_type)
-            }
-            _ => Ok(FilterEvalResult::NotApplicable),
-        }
+        //         // check if cast needed
+        //         // todo!("expression")
+        //         self.find(name, value, data_type)
+        //     }
+        //     _ => Ok(FilterEvalResult::NotApplicable),
+        // }
     }
 
     // Evaluate the logical and expression

@@ -26,67 +26,68 @@ use common_storages_table_meta::meta::StatisticsOfColumns;
 pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
     stats_of_columns: &[T],
 ) -> Result<StatisticsOfColumns> {
-    // Combine statistics of a column into `Vec`, that is:
-    // from : `&[HashMap<ColumnId, ColumnStatistics>]`
-    // to   : `HashMap<ColumnId, Vec<&ColumnStatistics>)>`
-    let col_to_stats_lit = stats_of_columns.iter().fold(HashMap::new(), |acc, item| {
-        item.borrow().iter().fold(
-            acc,
-            |mut acc: HashMap<ColumnId, Vec<&ColumnStatistics>>, (col_id, col_stats)| {
-                acc.entry(*col_id).or_default().push(col_stats);
-                acc
-            },
-        )
-    });
+    todo!("expression");
+    // // Combine statistics of a column into `Vec`, that is:
+    // // from : `&[HashMap<ColumnId, ColumnStatistics>]`
+    // // to   : `HashMap<ColumnId, Vec<&ColumnStatistics>)>`
+    // let col_to_stats_lit = stats_of_columns.iter().fold(HashMap::new(), |acc, item| {
+    //     item.borrow().iter().fold(
+    //         acc,
+    //         |mut acc: HashMap<ColumnId, Vec<&ColumnStatistics>>, (col_id, col_stats)| {
+    //             acc.entry(*col_id).or_default().push(col_stats);
+    //             acc
+    //         },
+    //     )
+    // });
 
-    // Reduce the `Vec<&ColumnStatistics` into ColumnStatistics`, i.e.:
-    // from : `HashMap<ColumnId, Vec<&ColumnStatistics>)>`
-    // to   : `type BlockStatistics = HashMap<ColumnId, ColumnStatistics>`
-    let len = stats_of_columns.len();
-    col_to_stats_lit
-        .iter()
-        .try_fold(HashMap::with_capacity(len), |mut acc, (id, stats)| {
-            let mut min_stats = Vec::with_capacity(stats.len());
-            let mut max_stats = Vec::with_capacity(stats.len());
-            let mut null_count = 0;
-            let mut in_memory_size = 0;
+    // // Reduce the `Vec<&ColumnStatistics` into ColumnStatistics`, i.e.:
+    // // from : `HashMap<ColumnId, Vec<&ColumnStatistics>)>`
+    // // to   : `type BlockStatistics = HashMap<ColumnId, ColumnStatistics>`
+    // let len = stats_of_columns.len();
+    // col_to_stats_lit
+    //     .iter()
+    //     .try_fold(HashMap::with_capacity(len), |mut acc, (id, stats)| {
+    //         let mut min_stats = Vec::with_capacity(stats.len());
+    //         let mut max_stats = Vec::with_capacity(stats.len());
+    //         let mut null_count = 0;
+    //         let mut in_memory_size = 0;
 
-            for col_stats in stats {
-                min_stats.push(col_stats.min.clone());
-                max_stats.push(col_stats.max.clone());
+    //         for col_stats in stats {
+    //             min_stats.push(col_stats.min.clone());
+    //             max_stats.push(col_stats.max.clone());
 
-                null_count += col_stats.null_count;
-                in_memory_size += col_stats.in_memory_size;
-            }
+    //             null_count += col_stats.null_count;
+    //             in_memory_size += col_stats.in_memory_size;
+    //         }
 
-            // TODO:
+    //         // TODO:
 
-            // In accumulator.rs, we use aggregation functions to get the min/max of `DataValue`s,
-            // like this:
-            //   `let maxs = eval_aggr("max", vec![], &[column_field], rows)?`
-            // we should unify these logics, or at least, ensure the ways they compares do NOT diverge
-            let min = min_stats
-                .iter()
-                .filter(|s| !s.is_null())
-                .min_by(|&x, &y| x.cmp(y))
-                .cloned()
-                .unwrap_or(Scalar::Null);
+    //         // In accumulator.rs, we use aggregation functions to get the min/max of `DataValue`s,
+    //         // like this:
+    //         //   `let maxs = eval_aggr("max", vec![], &[column_field], rows)?`
+    //         // we should unify these logics, or at least, ensure the ways they compares do NOT diverge
+    //         let min = min_stats
+    //             .iter()
+    //             .filter(|s| !s.is_null())
+    //             .min_by(|&x, &y| x.cmp(y))
+    //             .cloned()
+    //             .unwrap_or(Scalar::Null);
 
-            let max = max_stats
-                .iter()
-                .filter(|s| !s.is_null())
-                .max_by(|&x, &y| x.cmp(y))
-                .cloned()
-                .unwrap_or(Scalar::Null);
+    //         let max = max_stats
+    //             .iter()
+    //             .filter(|s| !s.is_null())
+    //             .max_by(|&x, &y| x.cmp(y))
+    //             .cloned()
+    //             .unwrap_or(Scalar::Null);
 
-            acc.insert(*id, ColumnStatistics {
-                min,
-                max,
-                null_count,
-                in_memory_size,
-            });
-            Ok(acc)
-        })
+    //         acc.insert(*id, ColumnStatistics {
+    //             min,
+    //             max,
+    //             null_count,
+    //             in_memory_size,
+    //         });
+    //         Ok(acc)
+    //     })
 }
 
 pub fn merge_statistics(l: &Statistics, r: &Statistics) -> Result<Statistics> {

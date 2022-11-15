@@ -16,7 +16,7 @@ use common_base::base::tokio;
 use common_catalog::plan::PushDownInfo;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
+// use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::SessionManager;
 use databend_query::sessions::SessionType;

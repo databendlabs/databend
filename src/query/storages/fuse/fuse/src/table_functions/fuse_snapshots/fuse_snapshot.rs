@@ -14,9 +14,9 @@
 
 use std::sync::Arc;
 
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_expression::Chunk;
+use common_expression::DataSchema;
 use common_storages_table_meta::meta::TableSnapshotLite;
 
 use crate::io::SnapshotsIO;
@@ -34,7 +34,7 @@ impl<'a> FuseSnapshot<'a> {
         Self { ctx, table }
     }
 
-    pub async fn get_snapshots(self, limit: Option<usize>) -> Result<DataBlock> {
+    pub async fn get_snapshots(self, limit: Option<usize>) -> Result<Chunk> {
         let meta_location_generator = self.table.meta_location_generator.clone();
         let snapshot_location = self.table.snapshot_loc().await?;
         let snapshot = self.table.read_table_snapshot().await?;
@@ -54,17 +54,17 @@ impl<'a> FuseSnapshot<'a> {
                     &|_| {},
                 )
                 .await?;
-            return self.to_block(&meta_location_generator, &snapshots, snapshot_version);
+            return self.to_chunk(&meta_location_generator, &snapshots, snapshot_version);
         }
-        Ok(DataBlock::empty_with_schema(FuseSnapshot::schema()))
+        Ok(Chunk::empty())
     }
 
-    fn to_block(
+    fn to_chunk(
         &self,
         location_generator: &TableMetaLocationGenerator,
         snapshots: &[TableSnapshotLite],
         latest_snapshot_version: u64,
-    ) -> Result<DataBlock> {
+    ) -> Result<Chunk> {
         let len = snapshots.len();
         let mut snapshot_ids: Vec<Vec<u8>> = Vec::with_capacity(len);
         let mut snapshot_locations: Vec<Vec<u8>> = Vec::with_capacity(len);
@@ -101,34 +101,36 @@ impl<'a> FuseSnapshot<'a> {
             current_snapshot_version = ver;
         }
 
-        Ok(DataBlock::create(FuseSnapshot::schema(), vec![
-            Series::from_data(snapshot_ids),
-            Series::from_data(snapshot_locations),
-            Series::from_data(format_versions),
-            Series::from_data(prev_snapshot_ids),
-            Series::from_data(segment_count),
-            Series::from_data(block_count),
-            Series::from_data(row_count),
-            Series::from_data(uncompressed),
-            Series::from_data(compressed),
-            Series::from_data(index_size),
-            Series::from_data(timestamps),
-        ]))
+        todo!("expression");
+        // Ok(DataBlock::create(FuseSnapshot::schema(), vec![
+        //     Series::from_data(snapshot_ids),
+        //     Series::from_data(snapshot_locations),
+        //     Series::from_data(format_versions),
+        //     Series::from_data(prev_snapshot_ids),
+        //     Series::from_data(segment_count),
+        //     Series::from_data(block_count),
+        //     Series::from_data(row_count),
+        //     Series::from_data(uncompressed),
+        //     Series::from_data(compressed),
+        //     Series::from_data(index_size),
+        //     Series::from_data(timestamps),
+        // ]))
     }
 
     pub fn schema() -> Arc<DataSchema> {
-        DataSchemaRefExt::create(vec![
-            DataField::new("snapshot_id", Vu8::to_data_type()),
-            DataField::new("snapshot_location", Vu8::to_data_type()),
-            DataField::new("format_version", u64::to_data_type()),
-            DataField::new_nullable("previous_snapshot_id", Vu8::to_data_type()),
-            DataField::new("segment_count", u64::to_data_type()),
-            DataField::new("block_count", u64::to_data_type()),
-            DataField::new("row_count", u64::to_data_type()),
-            DataField::new("bytes_uncompressed", u64::to_data_type()),
-            DataField::new("bytes_compressed", u64::to_data_type()),
-            DataField::new("index_size", u64::to_data_type()),
-            DataField::new_nullable("timestamp", TimestampType::new_impl()),
-        ])
+        todo!("expression");
+        // DataSchemaRefExt::create(vec![
+        //     DataField::new("snapshot_id", Vu8::to_data_type()),
+        //     DataField::new("snapshot_location", Vu8::to_data_type()),
+        //     DataField::new("format_version", u64::to_data_type()),
+        //     DataField::new_nullable("previous_snapshot_id", Vu8::to_data_type()),
+        //     DataField::new("segment_count", u64::to_data_type()),
+        //     DataField::new("block_count", u64::to_data_type()),
+        //     DataField::new("row_count", u64::to_data_type()),
+        //     DataField::new("bytes_uncompressed", u64::to_data_type()),
+        //     DataField::new("bytes_compressed", u64::to_data_type()),
+        //     DataField::new("index_size", u64::to_data_type()),
+        //     DataField::new_nullable("timestamp", TimestampType::new_impl()),
+        // ])
     }
 }

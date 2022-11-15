@@ -29,15 +29,16 @@ pub type TableOperationLog = Vec<AppendOperationLogEntry>;
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct AppendOperationLogEntry {
     pub segment_location: String,
-    pub segment_info: Arc<SegmentInfo>,
+    // pub segment_info: Arc<SegmentInfo>, todo!("expression");
 }
 
 impl AppendOperationLogEntry {
     pub fn new(segment_location: String, segment_info: Arc<SegmentInfo>) -> Self {
-        Self {
-            segment_location,
-            segment_info,
-        }
+        todo!("expression");
+        // Self {
+        //     segment_location,
+        //     segment_info,
+        // }
     }
 }
 
@@ -57,7 +58,7 @@ impl TryFrom<&Chunk> for AppendOperationLogEntry {
     fn try_from(chunk: &Chunk) -> Result<Self, Self::Error> {
         let err = ErrorCode::Internal(format!(
             "invalid data block meta of AppendOperation log, {:?}",
-            block.meta()
+            chunk.meta()
         ));
 
         if let Some(meta) = chunk.meta()? {

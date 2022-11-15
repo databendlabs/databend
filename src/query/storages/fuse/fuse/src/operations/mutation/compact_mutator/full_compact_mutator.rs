@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use common_datablocks::BlockCompactThresholds;
 use common_exception::Result;
 use common_expression::ChunkCompactThresholds;
 use common_storages_table_meta::caches::CacheManager;
@@ -129,16 +128,17 @@ impl TableMutator for FullCompactMutator {
                 let mut remains = Vec::new();
 
                 segments[i].blocks.iter().for_each(|b| {
-                    if self.is_cluster
-                        || self
-                            .chunk_compactor
-                            .check_perfect_block(b.row_count as usize, b.block_size as usize)
-                    {
-                        remains.push(b.clone());
-                    } else {
-                        self.selected_blocks.push(b.clone());
-                        need_merge = true;
-                    }
+                    todo!("expression");
+                    // if self.is_cluster
+                    //     || self
+                    //         .chunk_compactor
+                    //         .check_perfect_block(b.row_count as usize, b.block_size as usize)
+                    // {
+                    //     remains.push(b.clone());
+                    // } else {
+                    //     self.selected_blocks.push(b.clone());
+                    //     need_merge = true;
+                    // }
                 });
 
                 // todo: add real metrics
@@ -219,29 +219,30 @@ impl TableMutator for FullCompactMutator {
         let (merged_segments, merged_summary) =
             FuseTable::merge_append_operations(&append_log_entries)?;
 
-        for entry in append_log_entries {
-            for block in &entry.segment_info.blocks {
-                abort_operation = abort_operation.add_block(block);
-            }
-            abort_operation = abort_operation.add_segment(entry.segment_location);
-        }
+        todo!("expression");
+        // for entry in append_log_entries {
+        //     for block in &entry.segment_info.blocks {
+        //         abort_operation = abort_operation.add_block(block);
+        //     }
+        //     abort_operation = abort_operation.add_segment(entry.segment_location);
+        // }
 
-        segments.extend(
-            merged_segments
-                .into_iter()
-                .map(|loc| (loc, SegmentInfo::VERSION)),
-        );
-        summary = merge_statistics(&summary, &merged_summary)?;
+        // segments.extend(
+        //     merged_segments
+        //         .into_iter()
+        //         .map(|loc| (loc, SegmentInfo::VERSION)),
+        // );
+        // summary = merge_statistics(&summary, &merged_summary)?;
 
-        let table = FuseTable::try_from_table(table.as_ref())?;
-        table
-            .commit_mutation(
-                &self.ctx,
-                self.compact_params.base_snapshot,
-                segments,
-                summary,
-                abort_operation,
-            )
-            .await
+        // let table = FuseTable::try_from_table(table.as_ref())?;
+        // table
+        //     .commit_mutation(
+        //         &self.ctx,
+        //         self.compact_params.base_snapshot,
+        //         segments,
+        //         summary,
+        //         abort_operation,
+        //     )
+        //     .await
     }
 }

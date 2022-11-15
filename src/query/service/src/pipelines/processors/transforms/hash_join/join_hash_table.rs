@@ -31,7 +31,7 @@ use common_exception::Result;
 use common_hashtable::HashMap;
 use common_hashtable::HashtableKeyable;
 use common_hashtable::UnsizedHashMap;
-use common_sql::executor::PhysicalScalar;
+// use common_sql::executor::PhysicalScalar;
 use parking_lot::RwLock;
 use primitive_types::U256;
 use primitive_types::U512;
@@ -85,96 +85,97 @@ pub struct JoinHashTable {
 impl JoinHashTable {
     pub fn create_join_state(
         ctx: Arc<QueryContext>,
-        build_keys: &[PhysicalScalar],
+        // build_keys: &[PhysicalScalar],  todo!("expression");
         build_schema: DataSchemaRef,
         probe_schema: DataSchemaRef,
         hash_join_desc: HashJoinDesc,
     ) -> Result<Arc<JoinHashTable>> {
-        let hash_key_types: Vec<DataTypeImpl> =
-            build_keys.iter().map(|expr| expr.data_type()).collect();
-        let method = DataBlock::choose_hash_method_with_types(&hash_key_types)?;
-        Ok(match method {
-            HashMethodKind::Serializer(_) => Arc::new(JoinHashTable::try_create(
-                ctx,
-                HashTable::SerializerHashTable(SerializerHashTable {
-                    hash_table: UnsizedHashMap::<[u8], Vec<RowPtr>>::new(),
-                    hash_method: HashMethodSerializer::default(),
-                }),
-                build_schema,
-                probe_schema,
-                hash_join_desc,
-            )?),
-            HashMethodKind::KeysU8(hash_method) => Arc::new(JoinHashTable::try_create(
-                ctx,
-                HashTable::KeyU8HashTable(FixedKeyHashTable {
-                    hash_table: HashMap::<u8, Vec<RowPtr>>::new(),
-                    hash_method,
-                }),
-                build_schema,
-                probe_schema,
-                hash_join_desc,
-            )?),
-            HashMethodKind::KeysU16(hash_method) => Arc::new(JoinHashTable::try_create(
-                ctx,
-                HashTable::KeyU16HashTable(FixedKeyHashTable {
-                    hash_table: HashMap::<u16, Vec<RowPtr>>::new(),
-                    hash_method,
-                }),
-                build_schema,
-                probe_schema,
-                hash_join_desc,
-            )?),
-            HashMethodKind::KeysU32(hash_method) => Arc::new(JoinHashTable::try_create(
-                ctx,
-                HashTable::KeyU32HashTable(FixedKeyHashTable {
-                    hash_table: HashMap::<u32, Vec<RowPtr>>::new(),
-                    hash_method,
-                }),
-                build_schema,
-                probe_schema,
-                hash_join_desc,
-            )?),
-            HashMethodKind::KeysU64(hash_method) => Arc::new(JoinHashTable::try_create(
-                ctx,
-                HashTable::KeyU64HashTable(FixedKeyHashTable {
-                    hash_table: HashMap::<u64, Vec<RowPtr>>::new(),
-                    hash_method,
-                }),
-                build_schema,
-                probe_schema,
-                hash_join_desc,
-            )?),
-            HashMethodKind::KeysU128(hash_method) => Arc::new(JoinHashTable::try_create(
-                ctx,
-                HashTable::KeyU128HashTable(FixedKeyHashTable {
-                    hash_table: HashMap::<u128, Vec<RowPtr>>::new(),
-                    hash_method,
-                }),
-                build_schema,
-                probe_schema,
-                hash_join_desc,
-            )?),
-            HashMethodKind::KeysU256(hash_method) => Arc::new(JoinHashTable::try_create(
-                ctx,
-                HashTable::KeyU256HashTable(FixedKeyHashTable {
-                    hash_table: HashMap::<U256, Vec<RowPtr>>::new(),
-                    hash_method,
-                }),
-                build_schema,
-                probe_schema,
-                hash_join_desc,
-            )?),
-            HashMethodKind::KeysU512(hash_method) => Arc::new(JoinHashTable::try_create(
-                ctx,
-                HashTable::KeyU512HashTable(FixedKeyHashTable {
-                    hash_table: HashMap::<U512, Vec<RowPtr>>::new(),
-                    hash_method,
-                }),
-                build_schema,
-                probe_schema,
-                hash_join_desc,
-            )?),
-        })
+        todo!("expression");
+        // let hash_key_types: Vec<DataTypeImpl> =
+        //     build_keys.iter().map(|expr| expr.data_type()).collect();
+        // let method = DataBlock::choose_hash_method_with_types(&hash_key_types)?;
+        // Ok(match method {
+        //     HashMethodKind::Serializer(_) => Arc::new(JoinHashTable::try_create(
+        //         ctx,
+        //         HashTable::SerializerHashTable(SerializerHashTable {
+        //             hash_table: UnsizedHashMap::<[u8], Vec<RowPtr>>::new(),
+        //             hash_method: HashMethodSerializer::default(),
+        //         }),
+        //         build_schema,
+        //         probe_schema,
+        //         hash_join_desc,
+        //     )?),
+        //     HashMethodKind::KeysU8(hash_method) => Arc::new(JoinHashTable::try_create(
+        //         ctx,
+        //         HashTable::KeyU8HashTable(FixedKeyHashTable {
+        //             hash_table: HashMap::<u8, Vec<RowPtr>>::new(),
+        //             hash_method,
+        //         }),
+        //         build_schema,
+        //         probe_schema,
+        //         hash_join_desc,
+        //     )?),
+        //     HashMethodKind::KeysU16(hash_method) => Arc::new(JoinHashTable::try_create(
+        //         ctx,
+        //         HashTable::KeyU16HashTable(FixedKeyHashTable {
+        //             hash_table: HashMap::<u16, Vec<RowPtr>>::new(),
+        //             hash_method,
+        //         }),
+        //         build_schema,
+        //         probe_schema,
+        //         hash_join_desc,
+        //     )?),
+        //     HashMethodKind::KeysU32(hash_method) => Arc::new(JoinHashTable::try_create(
+        //         ctx,
+        //         HashTable::KeyU32HashTable(FixedKeyHashTable {
+        //             hash_table: HashMap::<u32, Vec<RowPtr>>::new(),
+        //             hash_method,
+        //         }),
+        //         build_schema,
+        //         probe_schema,
+        //         hash_join_desc,
+        //     )?),
+        //     HashMethodKind::KeysU64(hash_method) => Arc::new(JoinHashTable::try_create(
+        //         ctx,
+        //         HashTable::KeyU64HashTable(FixedKeyHashTable {
+        //             hash_table: HashMap::<u64, Vec<RowPtr>>::new(),
+        //             hash_method,
+        //         }),
+        //         build_schema,
+        //         probe_schema,
+        //         hash_join_desc,
+        //     )?),
+        //     HashMethodKind::KeysU128(hash_method) => Arc::new(JoinHashTable::try_create(
+        //         ctx,
+        //         HashTable::KeyU128HashTable(FixedKeyHashTable {
+        //             hash_table: HashMap::<u128, Vec<RowPtr>>::new(),
+        //             hash_method,
+        //         }),
+        //         build_schema,
+        //         probe_schema,
+        //         hash_join_desc,
+        //     )?),
+        //     HashMethodKind::KeysU256(hash_method) => Arc::new(JoinHashTable::try_create(
+        //         ctx,
+        //         HashTable::KeyU256HashTable(FixedKeyHashTable {
+        //             hash_table: HashMap::<U256, Vec<RowPtr>>::new(),
+        //             hash_method,
+        //         }),
+        //         build_schema,
+        //         probe_schema,
+        //         hash_join_desc,
+        //     )?),
+        //     HashMethodKind::KeysU512(hash_method) => Arc::new(JoinHashTable::try_create(
+        //         ctx,
+        //         HashTable::KeyU512HashTable(FixedKeyHashTable {
+        //             hash_table: HashMap::<U512, Vec<RowPtr>>::new(),
+        //             hash_method,
+        //         }),
+        //         build_schema,
+        //         probe_schema,
+        //         hash_join_desc,
+        //     )?),
+        // })
     }
 
     pub fn try_create(

@@ -16,7 +16,7 @@ use std::marker::PhantomData;
 
 use common_exception::Result;
 use common_expression::Chunk;
-use common_storages_table_meta::meta::BlockFilter;
+use common_storages_table_meta::meta::ChunkFilter;
 use common_storages_table_meta::meta::Location;
 use common_storages_table_meta::meta::SegmentInfo;
 use common_storages_table_meta::meta::SnapshotVersion;

@@ -102,8 +102,9 @@ impl ResultTableWriter {
         let location = self.locations.gen_block_location();
         let mut data = Vec::with_capacity(100 * 1024 * 1024);
         let block_statistics = BlockStatistics::from(&block, location.clone(), None)?;
-        let schema = block.schema().clone();
-        let (size, meta_data) = serialize_chunks(vec![block], &schema, &mut data)?;
+        todo!("expression");
+        // let schema = block.schema().clone();
+        // let (size, meta_data) = serialize_chunks(vec![block], &schema, &mut data)?;
 
         let object = self.data_accessor.object(&location);
         { || object.write(data.as_slice()) }
@@ -117,9 +118,10 @@ impl ResultTableWriter {
                 )
             })
             .await?;
-        self.accumulator
-            .add_block(size, meta_data, block_statistics, None, 0)?;
-        Ok(self.get_last_part_info())
+        todo!("expression");
+        // self.accumulator
+        //     .add_block(size, meta_data, block_statistics, None, 0)?;
+        // Ok(self.get_last_part_info())
     }
 
     pub async fn write_stream(&mut self, mut stream: SendableChunkStream) -> Result<()> {

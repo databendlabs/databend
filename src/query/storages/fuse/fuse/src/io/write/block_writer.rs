@@ -99,21 +99,22 @@ impl<'a> BlockWriter<'a> {
         block: &Chunk,
         block_id: Uuid,
     ) -> Result<(u64, Location)> {
-        let bloom_index = BlockFilter::try_create(&[block])?;
-        let index_block = bloom_index.filter_block;
-        let location = self
-            .location_generator
-            .block_bloom_index_location(&block_id);
-        let mut data = Vec::with_capacity(DEFAULT_BLOOM_INDEX_WRITE_BUFFER_SIZE);
-        let index_block_schema = &bloom_index.filter_schema;
-        let (size, _) = serialize_chunks_with_compression(
-            vec![index_block],
-            index_block_schema,
-            &mut data,
-            CompressionOptions::Uncompressed,
-        )?;
-        write_data(&data, data_accessor, &location.0).await?;
-        Ok((size, location))
+        todo!("expression");
+        // let bloom_index = BlockFilter::try_create(&[block])?;
+        // let index_block = bloom_index.filter_block;
+        // let location = self
+        //     .location_generator
+        //     .block_bloom_index_location(&block_id);
+        // let mut data = Vec::with_capacity(DEFAULT_BLOOM_INDEX_WRITE_BUFFER_SIZE);
+        // let index_block_schema = &bloom_index.filter_schema;
+        // let (size, _) = serialize_chunks_with_compression(
+        //     vec![index_block],
+        //     index_block_schema,
+        //     &mut data,
+        //     CompressionOptions::Uncompressed,
+        // )?;
+        // write_data(&data, data_accessor, &location.0).await?;
+        // Ok((size, location))
     }
 }
 
@@ -122,11 +123,12 @@ pub async fn write_block(
     data_accessor: &Operator,
     location: &str,
 ) -> Result<(u64, ThriftFileMetaData)> {
-    let mut buf = Vec::with_capacity(DEFAULT_BLOCK_WRITE_BUFFER_SIZE);
-    let schema = block.schema().clone();
-    let result = serialize_chunks(vec![block], &schema, &mut buf)?;
-    write_data(&buf, data_accessor, location).await?;
-    Ok(result)
+    todo!("expression");
+    // let mut buf = Vec::with_capacity(DEFAULT_BLOCK_WRITE_BUFFER_SIZE);
+    // let schema = block.schema().clone();
+    // let result = serialize_chunks(vec![block], &schema, &mut buf)?;
+    // write_data(&buf, data_accessor, location).await?;
+    // Ok(result)
 }
 
 pub async fn write_data(data: &[u8], data_accessor: &Operator, location: &str) -> Result<()> {

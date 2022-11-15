@@ -23,7 +23,6 @@ pub use sinks::ContextSink;
 pub use sinks::EmptySink;
 pub use sinks::Sink;
 pub use sinks::Sinker;
-pub use sinks::SubqueryReceiveSink;
 pub use sinks::SyncSenderSink;
 pub use sources::AsyncSource;
 pub use sources::AsyncSourcer;

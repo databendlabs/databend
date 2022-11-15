@@ -18,8 +18,8 @@ use common_catalog::plan::Expression;
 use common_catalog::table::Table;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_sql::ExpressionParser;
 
+// use common_sql::ExpressionParser;
 use crate::table_functions::string_value;
 use crate::table_functions::TableArgs;
 use crate::FuseTable;
@@ -40,19 +40,20 @@ pub fn parse_func_table_args(table_args: &TableArgs) -> Result<(String, String)>
 }
 
 pub fn get_cluster_keys(table: &FuseTable, definition: &str) -> Result<Vec<Expression>> {
-    let cluster_keys = if !definition.is_empty() {
-        let table_meta = Arc::new(table.clone());
-        ExpressionParser::parse_exprs(table_meta, definition)?
-    } else {
-        table.cluster_keys()
-    };
+    todo!("expression");
+    // let cluster_keys = if !definition.is_empty() {
+    //     let table_meta = Arc::new(table.clone());
+    //     ExpressionParser::parse_exprs(table_meta, definition)?
+    // } else {
+    //     table.cluster_keys()
+    // };
 
-    if cluster_keys.is_empty() {
-        return Err(ErrorCode::InvalidClusterKeys(format!(
-            "Invalid clustering keys or table {} is not clustered",
-            table.name()
-        )));
-    }
+    // if cluster_keys.is_empty() {
+    //     return Err(ErrorCode::InvalidClusterKeys(format!(
+    //         "Invalid clustering keys or table {} is not clustered",
+    //         table.name()
+    //     )));
+    // }
 
-    Ok(cluster_keys)
+    // Ok(cluster_keys)
 }

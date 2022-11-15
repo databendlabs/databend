@@ -24,62 +24,63 @@ use common_storages_table_meta::meta::ColumnStatistics;
 use common_storages_table_meta::meta::StatisticsOfColumns;
 
 pub fn gen_columns_statistics(chunk: &Chunk) -> Result<StatisticsOfColumns> {
-    let mut statistics = StatisticsOfColumns::new();
+    todo!("expression");
+    // let mut statistics = StatisticsOfColumns::new();
 
-    let leaves = traverse::traverse_columns_dfs(chunk.columns())?;
+    // let leaves = traverse::traverse_columns_dfs(chunk.columns())?;
 
-    for (idx, (column, data_type)) in leaves.iter().enumerate() {
-        if !MinMaxIndex::is_supported_type(&data_type) {
-            continue;
-        }
+    // for (idx, (column, data_type)) in leaves.iter().enumerate() {
+    //     if !MinMaxIndex::is_supported_type(&data_type) {
+    //         continue;
+    //     }
 
-        // later, during the evaluation of expressions, name of field does not matter
-        let mut min = Scalar::Null;
-        let mut max = Scalar::Null;
-        let rows = col.len();
+    //     // later, during the evaluation of expressions, name of field does not matter
+    //     let mut min = Scalar::Null;
+    //     let mut max = Scalar::Null;
+    //     let rows = col.len();
 
-        let mins = eval_aggr("min", vec![], &[column.clone()], &[data_type.cloen()], rows)?;
-        let maxs = eval_aggr("max", vec![], &[column], &[data_type], rows)?;
+    //     let mins = eval_aggr("min", vec![], &[column.clone()], &[data_type.cloen()], rows)?;
+    //     let maxs = eval_aggr("max", vec![], &[column], &[data_type], rows)?;
 
-        if mins.len() > 0 {
-            min = if let Some(v) = mins.index(0) {
-                v.into_owned().trim_min()
-            } else {
-                continue;
-            }
-        }
+    //     if mins.len() > 0 {
+    //         min = if let Some(v) = mins.index(0) {
+    //             v.into_owned().trim_min()
+    //         } else {
+    //             continue;
+    //         }
+    //     }
 
-        if maxs.len() > 0 {
-            max = if let Some(v) = maxs.index(0) {
-                v.into_owned().trim_max()
-            } else {
-                continue;
-            }
-        }
+    //     if maxs.len() > 0 {
+    //         max = if let Some(v) = maxs.index(0) {
+    //             v.into_owned().trim_max()
+    //         } else {
+    //             continue;
+    //         }
+    //     }
 
-        let (is_all_null, bitmap) = col.validity();
-        let unset_bits = match (is_all_null, bitmap) {
-            (true, _) => rows,
-            (false, Some(bitmap)) => bitmap.unset_bits(),
-            (false, None) => 0,
-        };
+    //     let (is_all_null, bitmap) = col.validity();
+    //     let unset_bits = match (is_all_null, bitmap) {
+    //         (true, _) => rows,
+    //         (false, Some(bitmap)) => bitmap.unset_bits(),
+    //         (false, None) => 0,
+    //     };
 
-        let in_memory_size = col.memory_size() as u64;
-        let col_stats = ColumnStatistics {
-            min,
-            max,
-            null_count: unset_bits as u64,
-            in_memory_size,
-        };
+    //     let in_memory_size = col.memory_size() as u64;
+    //     let col_stats = ColumnStatistics {
+    //         min,
+    //         max,
+    //         null_count: unset_bits as u64,
+    //         in_memory_size,
+    //     };
 
-        statistics.insert(idx as u32, col_stats);
-    }
-    Ok(statistics)
+    //     statistics.insert(idx as u32, col_stats);
+    // }
+    // Ok(statistics)
 }
 
 pub mod traverse {
+    use common_expression::types::AnyType;
     use common_expression::types::DataType;
-    use common_expression::AnyType;
     use common_expression::Column;
     use common_expression::Value;
 
@@ -89,12 +90,13 @@ pub mod traverse {
     pub fn traverse_columns_dfs(
         columns: &[(Value<AnyType>, DataType)],
     ) -> Result<Vec<(Column, DataType)>> {
-        let mut leaves = vec![];
-        for (value, data_type) in columns {
-            let column = value.into_column().unwrap();
-            traverse_recursive(column, data_type, &mut leaves)?;
-        }
-        Ok(leaves)
+        todo!("expression");
+        // let mut leaves = vec![];
+        // for (value, data_type) in columns {
+        //     let column = value.into_column().unwrap();
+        //     traverse_recursive(column, data_type, &mut leaves)?;
+        // }
+        // Ok(leaves)
     }
 
     fn traverse_recursive(
@@ -102,20 +104,21 @@ pub mod traverse {
         data_type: DataType,
         leaves: &mut Vec<(Value<AnyType>, DataType)>,
     ) -> Result<()> {
-        match data_type {
-            DataType::Tuple(inner_data_types) => {
-                let (inner_columns, _) = col.into_tuple().unwrap();
-                for (inner_column, inner_data_type) in
-                    inner_columns.iter().zip(inner_data_types.iter())
-                {
-                    traverse_recursive(inner_column, inner_data_type, leaves)?;
-                }
-            }
-            _ => {
-                leaves.push((column, data_type));
-            }
-        }
-        Ok(())
+        todo!("expression");
+        // match data_type {
+        //     DataType::Tuple(inner_data_types) => {
+        //         let (inner_columns, _) = col.into_tuple().unwrap();
+        //         for (inner_column, inner_data_type) in
+        //             inner_columns.iter().zip(inner_data_types.iter())
+        //         {
+        //             traverse_recursive(inner_column, inner_data_type, leaves)?;
+        //         }
+        //     }
+        //     _ => {
+        //         leaves.push((column, data_type));
+        //     }
+        // }
+        // Ok(())
     }
 }
 

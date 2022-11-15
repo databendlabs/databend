@@ -46,60 +46,61 @@ impl TopNPrunner {
         &self,
         metas: Vec<(usize, Arc<BlockMeta>)>,
     ) -> Result<Vec<(usize, Arc<BlockMeta>)>> {
-        if self.sort.len() != 1 {
-            return Ok(metas);
-        }
+        todo!("expression");
+        // if self.sort.len() != 1 {
+        //     return Ok(metas);
+        // }
 
-        if self.limit >= metas.len() {
-            return Ok(metas);
-        }
+        // if self.limit >= metas.len() {
+        //     return Ok(metas);
+        // }
 
-        let (sort, asc, nulls_first) = &self.sort[0];
-        // Currently, we only support topn on single-column sort.
-        // TODO: support monadic + multi expression + order by cluster key sort.
+        // let (sort, asc, nulls_first) = &self.sort[0];
+        // // Currently, we only support topn on single-column sort.
+        // // TODO: support monadic + multi expression + order by cluster key sort.
 
-        // Currently, we only support topn on single-column sort.
-        // TODO: support monadic + multi expression + order by cluster key sort.
-        let column = if let Expression::IndexedVariable { name, .. } = sort {
-            name
-        } else {
-            return Ok(metas);
-        };
+        // // Currently, we only support topn on single-column sort.
+        // // TODO: support monadic + multi expression + order by cluster key sort.
+        // let column = if let Expression::IndexedVariable { name, .. } = sort {
+        //     name
+        // } else {
+        //     return Ok(metas);
+        // };
 
-        let sort_idx = if let Ok(index) = self.schema.index_of(column.as_str()) {
-            index as u32
-        } else {
-            return Ok(metas);
-        };
+        // let sort_idx = if let Ok(index) = self.schema.index_of(column.as_str()) {
+        //     index as u32
+        // } else {
+        //     return Ok(metas);
+        // };
 
-        let mut id_stats = metas
-            .iter()
-            .map(|(id, meta)| {
-                let stat = meta.col_stats.get(&sort_idx).ok_or_else(|| {
-                    ErrorCode::UnknownException(format!(
-                        "Unable to get the colStats by ColumnId: {}",
-                        sort_idx
-                    ))
-                })?;
-                Ok((*id, stat.clone(), meta.clone()))
-            })
-            .collect::<Result<Vec<(usize, ColumnStatistics, Arc<BlockMeta>)>>>()?;
+        // let mut id_stats = metas
+        //     .iter()
+        //     .map(|(id, meta)| {
+        //         let stat = meta.col_stats.get(&sort_idx).ok_or_else(|| {
+        //             ErrorCode::UnknownException(format!(
+        //                 "Unable to get the colStats by ColumnId: {}",
+        //                 sort_idx
+        //             ))
+        //         })?;
+        //         Ok((*id, stat.clone(), meta.clone()))
+        //     })
+        //     .collect::<Result<Vec<(usize, ColumnStatistics, Arc<BlockMeta>)>>>()?;
 
-        id_stats.sort_by(|a, b| {
-            if a.1.null_count + b.1.null_count != 0 && *nulls_first {
-                return a.1.null_count.cmp(&b.1.null_count).reverse();
-            }
-            // no nulls
-            if *asc {
-                a.1.min.cmp(&b.1.min)
-            } else {
-                a.1.max.cmp(&b.1.max).reverse()
-            }
-        });
-        Ok(id_stats
-            .iter()
-            .map(|s| (s.0, s.2.clone()))
-            .take(self.limit)
-            .collect())
+        // id_stats.sort_by(|a, b| {
+        //     if a.1.null_count + b.1.null_count != 0 && *nulls_first {
+        //         return a.1.null_count.cmp(&b.1.null_count).reverse();
+        //     }
+        //     // no nulls
+        //     if *asc {
+        //         a.1.min.cmp(&b.1.min)
+        //     } else {
+        //         a.1.max.cmp(&b.1.max).reverse()
+        //     }
+        // });
+        // Ok(id_stats
+        //     .iter()
+        //     .map(|s| (s.0, s.2.clone()))
+        //     .take(self.limit)
+        //     .collect())
     }
 }
