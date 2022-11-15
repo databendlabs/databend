@@ -80,7 +80,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Nullable(Box::new(DataType::String)),
                 property: FunctionProperty::default(),
             },
-            calc_domain: Box::new(|_| FunctionDomain::NoThrow),
+            calc_domain: Box::new(|_| FunctionDomain::Full),
             eval: Box::new(wrap_nullable(concat_fn)),
         }))
     });
@@ -163,7 +163,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Nullable(Box::new(DataType::String)),
                 property: FunctionProperty::default(),
             },
-            calc_domain: Box::new(|_| FunctionDomain::NoThrow),
+            calc_domain: Box::new(|_| FunctionDomain::Full),
             eval: Box::new(|args, _| {
                 type T = NullableType<StringType>;
                 let len = args.iter().find_map(|arg| match arg {
@@ -256,7 +256,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::String,
                 property: FunctionProperty::default(),
             },
-            calc_domain: Box::new(|_| FunctionDomain::NoThrow),
+            calc_domain: Box::new(|_| FunctionDomain::Full),
             eval: Box::new(char_fn),
         }))
     });
