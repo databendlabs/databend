@@ -199,6 +199,20 @@ impl SnapshotsIO {
         Ok((snapshot_chain, segment_locations))
     }
 
+    // Read all the snapshots statistic files by the root file.
+    pub async fn read_snapshot_statistic_files(
+        &self,
+        root_snapshot_statistic_file: &str,
+    ) -> Result<Vec<String>> {
+        // Get all file list.
+        let mut snapshot_statistic_files = vec![];
+        if let Some(prefix) = Self::get_s3_prefix_from_file(root_snapshot_statistic_file) {
+            snapshot_statistic_files = self.get_files(&prefix, None).await?;
+        }
+
+        Ok(snapshot_statistic_files)
+    }
+
     async fn get_files(&self, prefix: &str, limit: Option<usize>) -> Result<Vec<String>> {
         let data_accessor = self.operator.clone();
 

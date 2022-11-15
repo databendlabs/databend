@@ -13,6 +13,7 @@
 //  limitations under the License.
 
 use common_datablocks::DataBlock;
+use common_datavalues::BooleanColumn;
 use common_datavalues::ColumnWithField;
 use common_datavalues::DataField;
 use common_datavalues::DataValue;
@@ -216,10 +217,23 @@ impl Trim for DataValue {
     }
 }
 
-pub fn stat_data_blocks(data_block: &DataBlock, ndvs: &mut ColumnNDVs) -> Result<()> {
+pub fn stat_add_columns_from_block(data_block: &DataBlock, ndvs: &mut ColumnNDVs) -> Result<()> {
     let leaves = traverse::traverse_columns_dfs(data_block.columns())?;
     for (idx, col) in leaves.iter().enumerate() {
         ndvs.add_column(idx as u32, col);
+    }
+
+    Ok(())
+}
+
+pub fn stat_delete_columns_from_block(
+    data_block: &DataBlock,
+    filter: &BooleanColumn,
+    ndvs: &mut ColumnNDVs,
+) -> Result<()> {
+    let leaves = traverse::traverse_columns_dfs(data_block.columns())?;
+    for (idx, data_column) in leaves.iter().enumerate() {
+        ndvs.delete_column(idx as u32, &data_column.filter(&filter.neg()));
     }
 
     Ok(())

@@ -25,7 +25,6 @@ use common_exception::Result;
 use common_sql::ExpressionParser;
 use common_storages_table_meta::meta::TableSnapshot;
 use common_storages_table_meta::meta::TableSnapshotStatistics;
-use uuid::Uuid;
 
 use crate::operations::mutation::delete_from_block;
 use crate::operations::mutation::deletion_mutator::Deletion;
@@ -59,10 +58,8 @@ impl FuseTable {
             return Ok(());
         }
 
-        let prev_statistics = match prev_statistics_opt {
-            Some(prev_statistics) => prev_statistics,
-            None => Arc::new(TableSnapshotStatistics::new_empty(Uuid::new_v4())),
-        };
+        let prev_statistics =
+            prev_statistics_opt.map(|prev_statistics| prev_statistics.as_ref().clone());
 
         // check if unconditional deletion
         if let Some(filter) = &selection {
@@ -76,7 +73,7 @@ impl FuseTable {
             self.delete_rows(
                 ctx.clone(),
                 &snapshot,
-                &prev_statistics,
+                prev_statistics,
                 &physical_scalars[0],
                 projection,
             )
@@ -92,7 +89,7 @@ impl FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
         snapshot: &Arc<TableSnapshot>,
-        statistics: &Arc<TableSnapshotStatistics>,
+        statistics: Option<TableSnapshotStatistics>,
         filter: &Expression,
         projection: &Projection,
     ) -> Result<()> {
@@ -102,7 +99,7 @@ impl FuseTable {
             self.get_operator(),
             self.meta_location_generator.clone(),
             snapshot.clone(),
-            statistics.clone(),
+            statistics,
             cluster_stats_gen,
         )?;
         let schema = self.table_info.schema();
@@ -130,7 +127,16 @@ impl FuseTable {
         // this could be executed in a distributed manner (till new planner, pipeline settled down)
         for (seg_idx, block_meta) in block_metas {
             let proj = projection.clone();
-            match delete_from_block(self, &block_meta, &ctx, proj, filter).await? {
+            match delete_from_block(
+                self,
+                &block_meta,
+                &ctx,
+                proj,
+                filter,
+                &mut deletion_collector.table_statistics,
+            )
+            .await?
+            {
                 Deletion::NothingDeleted => {
                     // false positive, we should keep the whole block
                     continue;
@@ -165,6 +171,7 @@ impl FuseTable {
             del_holder.base_snapshot(),
             segments,
             summary,
+            del_holder.table_statistics,
             abort_operation,
         )
         .await

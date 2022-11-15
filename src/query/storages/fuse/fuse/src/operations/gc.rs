@@ -55,6 +55,11 @@ impl FuseTable {
             Ok(v) => v,
         };
 
+        let last_snapshot_statistic_file = match snapshot_opt {
+            Some(ref snapshot) => snapshot.statistics_location.clone(),
+            None => None,
+        };
+
         // 1. Root snapshot.
         let mut segments_referenced_by_root = HashSet::new();
         let mut locations_referenced_by_root = Default::default();
@@ -69,17 +74,17 @@ impl FuseTable {
 
         // 2. Get all snapshot(including root snapshot).
         let mut all_snapshot_lites = vec![];
+        let mut all_snapshot_statistics_files = vec![];
         let mut all_segment_locations = HashSet::new();
 
         let mut status_snapshot_scan_count = 0;
         let mut status_snapshot_scan_cost = 0;
+        let snapshots_io = SnapshotsIO::create(
+            ctx.clone(),
+            self.operator.clone(),
+            self.snapshot_format_version().await?,
+        );
         if let Some(root_snapshot_location) = self.snapshot_loc().await? {
-            let snapshots_io = SnapshotsIO::create(
-                ctx.clone(),
-                self.operator.clone(),
-                self.snapshot_format_version().await?,
-            );
-
             let start = Instant::now();
             (all_snapshot_lites, all_segment_locations) = snapshots_io
                 .read_snapshot_lites(root_snapshot_location, None, true, root_snapshot_ts, |x| {
@@ -90,9 +95,17 @@ impl FuseTable {
             status_snapshot_scan_count += all_snapshot_lites.len();
             status_snapshot_scan_cost += start.elapsed().as_secs();
         }
+        if let Some(ref root_statistics_location) = last_snapshot_statistic_file {
+            let start = Instant::now();
+            all_snapshot_statistics_files = snapshots_io
+                .read_snapshot_statistic_files(root_statistics_location)
+                .await?;
+            status_snapshot_scan_cost += start.elapsed().as_secs();
+        }
 
         // 3. Find.
         let mut snapshots_to_be_purged = HashSet::new();
+        let mut snapshot_statistic_files_to_be_purged = HashSet::new();
         let mut segments_to_be_purged = HashSet::new();
 
         // 3.1 Find all the snapshots need to be deleted.
@@ -114,6 +127,17 @@ impl FuseTable {
                     continue;
                 }
                 segments_to_be_purged.insert(segment.clone());
+            }
+        }
+
+        // 3.3 Find all the snapshot statistics need to be deleted.
+        if let Some(last_snapshot_statistic_file) = last_snapshot_statistic_file {
+            for snapshot_statistic_file in all_snapshot_statistics_files {
+                // Skip the root snapshot if the keep_last_snapshot is true.
+                if keep_last_snapshot && snapshot_statistic_file == last_snapshot_statistic_file {
+                    continue;
+                }
+                snapshot_statistic_files_to_be_purged.insert(snapshot_statistic_file);
             }
         }
 
@@ -216,6 +240,37 @@ impl FuseTable {
                     status_purged_count += chunk.len();
                     let status = format!(
                         "gc: snapshots need to be purged:{}, have purged:{}, take:{} sec",
+                        status_need_purged_count,
+                        status_purged_count,
+                        start.elapsed().as_secs()
+                    );
+                    self.data_metrics.set_status(&status);
+                    info!(status);
+                }
+            }
+        }
+
+        // 6. Purge snapshot statitic files by chunk size(max_storage_io_requests).
+        {
+            let mut status_purged_count = 0;
+            let status_need_purged_count = snapshot_statistic_files_to_be_purged.len();
+
+            let snapshots_to_be_purged_vec = Vec::from_iter(snapshot_statistic_files_to_be_purged);
+
+            let start = Instant::now();
+            for chunk in snapshots_to_be_purged_vec.chunks(chunk_size) {
+                let mut snapshot_locations_to_be_purged = HashSet::new();
+                for file in chunk {
+                    snapshot_locations_to_be_purged.insert(file.clone());
+                }
+                self.try_purge_location_files(ctx.clone(), snapshot_locations_to_be_purged)
+                    .await?;
+
+                // Refresh status.
+                {
+                    status_purged_count += chunk.len();
+                    let status = format!(
+                        "gc: snapshot statistics need to be purged:{}, have purged:{}, take:{} sec",
                         status_need_purged_count,
                         status_purged_count,
                         start.elapsed().as_secs()

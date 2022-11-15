@@ -24,8 +24,10 @@ use common_datavalues::Series;
 use common_exception::Result;
 use common_sql::evaluator::Evaluator;
 use common_storages_table_meta::meta::BlockMeta;
+use common_storages_table_meta::meta::TableSnapshotStatistics;
 
 use crate::operations::mutation::deletion_mutator::Deletion;
+use crate::statistics::stat_delete_columns_from_block;
 use crate::FuseTable;
 
 pub async fn delete_from_block(
@@ -34,6 +36,7 @@ pub async fn delete_from_block(
     ctx: &Arc<dyn TableContext>,
     filter_column_proj: Projection,
     filter_expr: &Expression,
+    statistics: &mut Option<TableSnapshotStatistics>,
 ) -> Result<Deletion> {
     let mut filtering_whole_block = false;
 
@@ -94,6 +97,11 @@ pub async fn delete_from_block(
         let whole_block_reader = table.create_block_reader(whole_table_proj)?;
         whole_block_reader.read_with_block_meta(block_meta).await?
     };
+
+    // add statistics of filter deleted rows
+    if let Some(statistics) = statistics {
+        stat_delete_columns_from_block(&whole_block, &filter, &mut statistics.column_ndvs)?;
+    }
 
     // filter out rows
     let data_block = DataBlock::filter_block_with_bool_column(whole_block, &filter)?;

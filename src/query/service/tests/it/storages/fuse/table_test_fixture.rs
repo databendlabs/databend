@@ -48,6 +48,7 @@ use databend_query::storages::fuse::table_functions::FuseSnapshotTable;
 use databend_query::storages::fuse::FUSE_TBL_BLOCK_PREFIX;
 use databend_query::storages::fuse::FUSE_TBL_SEGMENT_PREFIX;
 use databend_query::storages::fuse::FUSE_TBL_SNAPSHOT_PREFIX;
+use databend_query::storages::fuse::FUSE_TBL_SNAPSHOT_STATISTICS_PREFIX;
 use databend_query::storages::Table;
 use databend_query::stream::ReadDataBlockStream;
 use databend_query::table_functions::TableArgs;
@@ -456,6 +457,7 @@ pub async fn check_data_dir(
     fixture: &TestFixture,
     case_name: &str,
     snapshot_count: u32,
+    snapshot_statistics_count: u32,
     segment_count: u32,
     block_count: u32,
     index_count: u32,
@@ -466,10 +468,12 @@ pub async fn check_data_dir(
     };
     let root = data_path.as_str();
     let mut ss_count = 0;
+    let mut ts_count = 0;
     let mut sg_count = 0;
     let mut b_count = 0;
     let mut i_count = 0;
     let prefix_snapshot = FUSE_TBL_SNAPSHOT_PREFIX;
+    let prefix_snapshot_statistics = FUSE_TBL_SNAPSHOT_STATISTICS_PREFIX;
     let prefix_segment = FUSE_TBL_SEGMENT_PREFIX;
     let prefix_block = FUSE_TBL_BLOCK_PREFIX;
     let prefix_index = FUSE_TBL_XOR_BLOOM_INDEX_PREFIX;
@@ -488,6 +492,8 @@ pub async fn check_data_dir(
                 b_count += 1;
             } else if path.starts_with(prefix_index) {
                 i_count += 1;
+            } else if path.starts_with(prefix_snapshot_statistics) {
+                ts_count += 1;
             }
         }
     }
@@ -495,6 +501,11 @@ pub async fn check_data_dir(
     assert_eq!(
         ss_count, snapshot_count,
         "case [{}], check snapshot count",
+        case_name
+    );
+    assert_eq!(
+        ts_count, snapshot_statistics_count,
+        "case [{}], check snapshot statistics count",
         case_name
     );
     assert_eq!(

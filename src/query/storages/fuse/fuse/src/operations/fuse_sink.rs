@@ -41,7 +41,7 @@ use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::processor::Event;
 use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::Processor;
-use crate::statistics::stat_data_blocks;
+use crate::statistics::stat_add_columns_from_block;
 use crate::statistics::BlockStatistics;
 use crate::statistics::ClusterStatsGenerator;
 use crate::statistics::StatisticsAccumulator;
@@ -169,7 +169,7 @@ impl Processor for FuseTableSink {
                 let (cluster_stats, block) =
                     self.cluster_stats_gen.gen_stats_for_append(&data_block)?;
 
-                stat_data_blocks(&data_block, &mut self.ndvs)?;
+                stat_add_columns_from_block(&data_block, &mut self.ndvs)?;
                 let (block_location, block_id) = self.meta_locations.gen_block_location();
 
                 let bloom_index_state = {

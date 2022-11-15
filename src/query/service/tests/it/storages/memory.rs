@@ -25,7 +25,6 @@ use common_meta_app::schema::TableMeta;
 use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use common_sql::plans::TableOptions;
 use common_storages_memory::MemoryTable;
-use common_storages_table_meta::meta::ColumnNDVs;
 use databend_query::sessions::TableContext;
 use databend_query::stream::ReadDataBlockStream;
 use futures::TryStreamExt;

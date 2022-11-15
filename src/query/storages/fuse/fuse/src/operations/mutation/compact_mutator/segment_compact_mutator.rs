@@ -165,6 +165,7 @@ impl TableMutator for SegmentCompactMutator {
                 self.compact_params.base_snapshot,
                 self.compaction.segments_locations,
                 self.compaction.statistics,
+                None,
                 abort_action,
             )
             .await

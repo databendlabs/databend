@@ -38,7 +38,7 @@ pub enum Deletion {
 pub struct DeletionMutator {
     base_mutator: BaseMutator,
     cluster_stats_gen: ClusterStatsGenerator,
-    table_statistics: Arc<TableSnapshotStatistics>,
+    pub table_statistics: Option<TableSnapshotStatistics>,
 }
 
 impl DeletionMutator {
@@ -47,7 +47,7 @@ impl DeletionMutator {
         op: Operator,
         location_generator: TableMetaLocationGenerator,
         base_snapshot: Arc<TableSnapshot>,
-        table_statistics: Arc<TableSnapshotStatistics>,
+        table_statistics: Option<TableSnapshotStatistics>,
         cluster_stats_gen: ClusterStatsGenerator,
     ) -> Result<Self> {
         let base_mutator = BaseMutator::try_create(ctx, op, location_generator, base_snapshot)?;
@@ -58,8 +58,8 @@ impl DeletionMutator {
         })
     }
 
-    pub fn base_snapshot(self) -> Arc<TableSnapshot> {
-        self.base_mutator.base_snapshot
+    pub fn base_snapshot(&self) -> Arc<TableSnapshot> {
+        self.base_mutator.base_snapshot.clone()
     }
 
     pub async fn generate_segments(&self) -> Result<(Vec<Location>, Statistics, AbortOperation)> {

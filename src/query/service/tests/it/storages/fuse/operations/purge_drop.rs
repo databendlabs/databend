@@ -52,8 +52,9 @@ async fn test_fuse_snapshot_truncate_in_drop_all_stmt() -> Result<()> {
 
     check_data_dir(
         &fixture,
-        "drop table: there should be 1 snapshot, 0 segment/block",
+        "drop table: there should be 1 snapshot, 1 snapshot statistics, 0 segment/block",
         1, // 1 snapshot
+        1, // 1 snapshot statistics
         0, // 0 segments
         0, // 0 blocks
         0, // 0 index

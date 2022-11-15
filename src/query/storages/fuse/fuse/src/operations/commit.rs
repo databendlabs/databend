@@ -323,16 +323,14 @@ impl FuseTable {
 
         // 1. write down snapshot
         write_meta(operator, &snapshot_location, &snapshot).await?;
-        let snapshot_statistics_location = snapshot.statistics_location.clone();
-        if let Some(snapshot_statistics_location) = &snapshot_statistics_location {
-            if let Some(ref snapshot_statistics) = snapshot_statistics {
-                write_meta_bytes(
-                    operator,
-                    snapshot_statistics_location,
-                    &snapshot_statistics.serialize()?,
-                )
-                .await?;
-            }
+        if let Some(ref snapshot_statistics) = snapshot_statistics {
+            assert!(snapshot.statistics_location.is_some());
+            write_meta_bytes(
+                operator,
+                snapshot.statistics_location.as_ref().unwrap(),
+                &snapshot_statistics.serialize()?,
+            )
+            .await?;
         }
 
         // 2. prepare table meta
@@ -376,17 +374,18 @@ impl FuseTable {
                 // upsert snapshot cache
                 if let Some(snapshot_cache) = CacheManager::instance().get_table_snapshot_cache() {
                     let cache = &mut snapshot_cache.write();
-                    cache.put(snapshot_location.clone(), Arc::new(snapshot));
+                    cache.put(snapshot_location.clone(), Arc::new(snapshot.to_owned()));
                 }
                 // upsert snapshot stastics cache
-                if let Some(snapshot_statistics_location) = snapshot_statistics_location {
-                    if let Some(snapshot_statistics) = snapshot_statistics {
-                        if let Some(mut_snapshot_statistics) =
-                            CacheManager::instance().get_table_snapshot_statistics_cache()
-                        {
-                            let cache = &mut mut_snapshot_statistics.write();
-                            cache.put(snapshot_statistics_location, Arc::new(snapshot_statistics));
-                        }
+                if let Some(snapshot_statistics) = snapshot_statistics {
+                    if let Some(mut_snapshot_statistics) =
+                        CacheManager::instance().get_table_snapshot_statistics_cache()
+                    {
+                        let cache = &mut mut_snapshot_statistics.write();
+                        cache.put(
+                            snapshot.statistics_location.unwrap(),
+                            Arc::new(snapshot_statistics),
+                        );
                     }
                 }
 
@@ -495,6 +494,7 @@ impl FuseTable {
         base_snapshot: Arc<TableSnapshot>,
         base_segments: Vec<Location>,
         base_summary: Statistics,
+        snapshot_statistics: Option<TableSnapshotStatistics>,
         abort_operation: AbortOperation,
     ) -> Result<()> {
         let mut retries = 0;
@@ -511,6 +511,13 @@ impl FuseTable {
         while retries < MAX_RETRIES {
             let mut snapshot_tobe_committed =
                 TableSnapshot::from_previous(latest_snapshot.as_ref());
+            // Update column ndvs
+            if let Some(ref snapshot_statistics) = snapshot_statistics {
+                snapshot_tobe_committed.column_counts =
+                    Some(snapshot_statistics.get_column_counts());
+            }
+
+            let snapshot_statistics_tobe_committed = snapshot_statistics.clone();
 
             let (segments_tobe_committed, statistics_tobe_committed) = Self::merge_with_base(
                 ctx.clone(),
@@ -522,13 +529,23 @@ impl FuseTable {
             .await?;
             snapshot_tobe_committed.segments = segments_tobe_committed;
             snapshot_tobe_committed.summary = statistics_tobe_committed;
+            if let Some(ref snapshot_statistics_tobe_committed) = snapshot_statistics_tobe_committed
+            {
+                snapshot_tobe_committed.statistics_location = Some(
+                    self.meta_location_generator
+                        .snapshot_statistics_location_from_uuid(
+                            &snapshot_statistics_tobe_committed.snapshot_id,
+                            snapshot_statistics_tobe_committed.format_version(),
+                        )?,
+                );
+            }
 
             match Self::commit_to_meta_server(
                 ctx.as_ref(),
                 latest_table_info,
                 &self.meta_location_generator,
                 snapshot_tobe_committed,
-                None,
+                snapshot_statistics_tobe_committed,
                 &self.operator,
             )
             .await

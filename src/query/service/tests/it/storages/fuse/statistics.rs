@@ -30,12 +30,15 @@ use common_storages_fuse::statistics::STATS_REPLACEMENT_CHAR;
 use common_storages_fuse::statistics::STATS_STRING_PREFIX_LEN;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::ClusterStatistics;
+use common_storages_table_meta::meta::ColumnNDVs;
 use common_storages_table_meta::meta::ColumnStatistics;
 use common_storages_table_meta::meta::Statistics;
 use databend_query::storages::fuse::io::BlockWriter;
 use databend_query::storages::fuse::io::TableMetaLocationGenerator;
 use databend_query::storages::fuse::statistics::gen_columns_statistics;
 use databend_query::storages::fuse::statistics::reducers;
+use databend_query::storages::fuse::statistics::stat_add_columns_from_block;
+use databend_query::storages::fuse::statistics::stat_delete_columns_from_block;
 use databend_query::storages::fuse::statistics::BlockStatistics;
 use databend_query::storages::fuse::statistics::ClusterStatsGenerator;
 use databend_query::storages::fuse::statistics::StatisticsAccumulator;
@@ -53,6 +56,39 @@ fn test_ft_stats_block_stats() -> common_exception::Result<()> {
     let col_stats = r.get(&0).unwrap();
     assert_eq!(col_stats.min, DataValue::Int64(1));
     assert_eq!(col_stats.max, DataValue::Int64(3));
+    Ok(())
+}
+
+#[test]
+fn test_ft_stats_column_ndv_stats() -> common_exception::Result<()> {
+    let schema = DataSchemaRefExt::create(vec![DataField::new("a", i32::to_data_type())]);
+    let block = DataBlock::create(schema, vec![Series::from_data(vec![1, 2, 3, 3])]);
+
+    let mut ndvs = ColumnNDVs::default();
+    stat_add_columns_from_block(&block, &mut ndvs)?;
+    let mut result = HashMap::new();
+    result.insert(0, 3);
+    assert_eq!(ndvs.get_number_of_distinct_values(), result.clone());
+
+    // delete only one `3`
+    let filter: BooleanColumn = BooleanColumn::from_slice(&[true, true, true, false]);
+    stat_delete_columns_from_block(&block, &filter, &mut ndvs)?;
+    assert_eq!(ndvs.get_number_of_distinct_values(), result.clone());
+
+    // delete two `3`
+    let filter: BooleanColumn = BooleanColumn::from_slice(&[true, true, false, false]);
+    stat_delete_columns_from_block(&block, &filter, &mut ndvs)?;
+    result.clear();
+    result.insert(0, 2);
+    assert_eq!(ndvs.get_number_of_distinct_values(), result.clone());
+
+    // delete two `3` and `2`
+    let filter: BooleanColumn = BooleanColumn::from_slice(&[true, false, false, false]);
+    stat_delete_columns_from_block(&block, &filter, &mut ndvs)?;
+    result.clear();
+    result.insert(0, 1);
+    assert_eq!(ndvs.get_number_of_distinct_values(), result.clone());
+
     Ok(())
 }
 

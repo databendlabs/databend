@@ -41,8 +41,9 @@ impl FuseTable {
                 Default::default(),
                 vec![],
                 self.cluster_key_meta.clone(),
-                prev_snapshot.column_counts.clone(),
-                prev_snapshot.statistics_location.clone(),
+                // truncate should truncate column ndv data
+                None,
+                None,
             );
             let loc = self.meta_location_generator();
             let new_snapshot_loc =

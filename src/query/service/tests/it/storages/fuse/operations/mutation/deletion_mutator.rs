@@ -100,6 +100,7 @@ async fn test_deletion_mutator_multiple_empty_segments() -> Result<()> {
         data_accessor.clone(),
         location_generator,
         Arc::new(base_snapshot),
+        None,
         ClusterStatsGenerator::default(),
     )?;
 

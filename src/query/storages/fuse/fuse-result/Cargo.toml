@@ -49,5 +49,4 @@ typetag = "0.2.3"
 uuid = { version = "1.1.2", features = ["serde", "v4"] }
 walkdir = "2.3.2"
 
-
 [build-dependencies]

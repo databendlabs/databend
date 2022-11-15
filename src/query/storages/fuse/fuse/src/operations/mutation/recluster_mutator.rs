@@ -237,6 +237,7 @@ impl TableMutator for ReclusterMutator {
                 self.base_mutator.base_snapshot,
                 segments,
                 summary,
+                None,
                 abort_operation,
             )
             .await

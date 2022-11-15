@@ -239,6 +239,7 @@ impl TableMutator for FullCompactMutator {
                 self.compact_params.base_snapshot,
                 segments,
                 summary,
+                None,
                 abort_operation,
             )
             .await
