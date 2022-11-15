@@ -150,7 +150,7 @@ impl FuseTable {
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
-    pub(crate) async fn read_table_snapshot(&self) -> Result<Option<Arc<TableSnapshot>>> {
+    pub async fn read_table_snapshot(&self) -> Result<Option<Arc<TableSnapshot>>> {
         if let Some(loc) = self.snapshot_loc().await? {
             let reader = MetaReaders::table_snapshot_reader(self.get_operator());
             let ver = self.snapshot_format_version().await?;
@@ -451,7 +451,7 @@ impl Table for FuseTable {
         target: CompactTarget,
         limit: Option<usize>,
         pipeline: &mut Pipeline,
-    ) -> Result<Option<Box<dyn TableMutator>>> {
+    ) -> Result<bool> {
         self.do_compact(ctx, target, limit, pipeline).await
     }
 

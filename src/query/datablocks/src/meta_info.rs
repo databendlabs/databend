@@ -39,3 +39,4 @@ impl PartialEq for Box<dyn BlockMetaInfo> {
 }
 
 pub type BlockMetaInfoPtr = Arc<Box<dyn BlockMetaInfo>>;
+pub type BlockMetaInfos = Vec<BlockMetaInfoPtr>;
