@@ -6,7 +6,7 @@ description: How to do user retention analysis with simplicity and high performa
 
 User retention helps you analyze how many users return to your product or service. Let's go through an example and see how to analyze it in Databend.
 
-It's **easy** and **performance** to use [Databend Retention Function](../30-reference/20-functions/10-aggregate-functions/aggregate-retention.md) to do the user retention analysis.
+It's **easy** and **performance** to use [Databend Retention Function](../15-sql-functions/10-aggregate-functions/aggregate-retention.md) to do the user retention analysis.
 
 ## Step 1. Databend
 
@@ -33,7 +33,7 @@ Grant privileges for the user:
 GRANT ALL ON *.* TO user1;
 ```
 
-See also [How To Create User](../30-reference/30-sql/00-ddl/30-user/01-user-create-user.md).
+See also [How To Create User](../14-sql-commands/00-ddl/30-user/01-user-create-user.md).
 
 ### 1.3 Create a Table
 

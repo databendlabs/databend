@@ -10,7 +10,7 @@ description: How to do conversion funnel analysis with simplicity and high perfo
 
 Funnel analysis measures the number of unique users who has performed a set of actions, and we use it to see drop-off and conversion in multi-step processes.
 
-In Databend, it's **easy** and **performance** to do it using [WINDOW_FUNNEL FUNCTION](../30-reference/20-functions/10-aggregate-functions/aggregate-windowfunnel.md).
+In Databend, it's **easy** and **performance** to do it using [WINDOW_FUNNEL FUNCTION](../15-sql-functions/10-aggregate-functions/aggregate-windowfunnel.md).
 
 ## Step 1. Databend
 
@@ -37,7 +37,7 @@ Grant privileges for the user:
 GRANT ALL ON *.* TO user1;
 ```
 
-See also [How To Create User](../30-reference/30-sql/00-ddl/30-user/01-user-create-user.md).
+See also [How To Create User](../14-sql-commands/00-ddl/30-user/01-user-create-user.md).
 
 ### 1.3 Create a Table
 

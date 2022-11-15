@@ -10,7 +10,7 @@ description: Use Databend analyzing Nginx access logs step by step.
 
 Systems are producing all kinds metrics and logs time by time, do you want to gather them and analyze the logs in real time? 
 
-Databend provides [integration with Vector](../40-integrations/10-data-tool/00-vector.md), easy to do it now!
+Databend provides [integration with Vector](../11-integrations/10-data-tool/00-vector.md), easy to do it now!
 
 Lets ingesting Nginx access logs into Databend from Vector step by step.
 
