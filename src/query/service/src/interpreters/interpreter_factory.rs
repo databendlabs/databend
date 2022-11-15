@@ -62,25 +62,21 @@ impl InterpreterFactory {
                 *s_expr.clone(),
                 metadata.clone(),
             )?)),
-            Plan::Explain { kind, plan } => Ok(Arc::new(ExplainInterpreterV2::try_create(
+            Plan::Explain { kind, plan } => Ok(Arc::new(ExplainInterpreter::try_create(
                 ctx,
                 *plan.clone(),
                 kind.clone(),
             )?)),
-            Plan::ExplainAst { formatted_string } => {
-                Ok(Arc::new(ExplainInterpreterV2::try_create(
-                    ctx,
-                    plan.clone(),
-                    ExplainKind::Ast(formatted_string.clone()),
-                )?))
-            }
-            Plan::ExplainSyntax { formatted_sql } => {
-                Ok(Arc::new(ExplainInterpreterV2::try_create(
-                    ctx,
-                    plan.clone(),
-                    ExplainKind::Syntax(formatted_sql.clone()),
-                )?))
-            }
+            Plan::ExplainAst { formatted_string } => Ok(Arc::new(ExplainInterpreter::try_create(
+                ctx,
+                plan.clone(),
+                ExplainKind::Ast(formatted_string.clone()),
+            )?)),
+            Plan::ExplainSyntax { formatted_sql } => Ok(Arc::new(ExplainInterpreter::try_create(
+                ctx,
+                plan.clone(),
+                ExplainKind::Syntax(formatted_sql.clone()),
+            )?)),
 
             Plan::Call(plan) => Ok(Arc::new(CallInterpreter::try_create(ctx, *plan.clone())?)),
 

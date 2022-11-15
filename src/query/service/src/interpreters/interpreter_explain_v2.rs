@@ -33,7 +33,7 @@ use crate::sql::executor::PhysicalPlanBuilder;
 use crate::sql::optimizer::SExpr;
 use crate::sql::plans::Plan;
 
-pub struct ExplainInterpreterV2 {
+pub struct ExplainInterpreter {
     ctx: Arc<QueryContext>,
     schema: DataSchemaRef,
     kind: ExplainKind,
@@ -41,7 +41,7 @@ pub struct ExplainInterpreterV2 {
 }
 
 #[async_trait::async_trait]
-impl Interpreter for ExplainInterpreterV2 {
+impl Interpreter for ExplainInterpreter {
     fn name(&self) -> &str {
         "ExplainInterpreterV2"
     }
@@ -58,7 +58,11 @@ impl Interpreter for ExplainInterpreterV2 {
                 Plan::Query {
                     s_expr, metadata, ..
                 } => {
-                    let builder = PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone());
+                    let ctx = self.ctx.clone();
+                    let settings = ctx.get_settings();
+                    settings.set_enable_distributed_eval_index(false)?;
+
+                    let builder = PhysicalPlanBuilder::new(metadata.clone(), ctx);
                     let plan = builder.build(s_expr).await?;
                     self.explain_physical_plan(&plan, metadata)?
                 }
@@ -108,11 +112,11 @@ impl Interpreter for ExplainInterpreterV2 {
     }
 }
 
-impl ExplainInterpreterV2 {
+impl ExplainInterpreter {
     pub fn try_create(ctx: Arc<QueryContext>, plan: Plan, kind: ExplainKind) -> Result<Self> {
         let data_field = DataField::new("explain", DataTypeImpl::String(StringType::default()));
         let schema = DataSchemaRefExt::create(vec![data_field]);
-        Ok(ExplainInterpreterV2 {
+        Ok(ExplainInterpreter {
             ctx,
             schema,
             plan,

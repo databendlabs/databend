@@ -21,7 +21,7 @@ raw expr       : eq(1_u8, 2_u8)
 checked expr   : eq<UInt8, UInt8>(1_u8, 2_u8)
 optimized expr : false
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {FALSE}
 output         : false
 
 
@@ -48,7 +48,7 @@ raw expr       : eq(true, false)
 checked expr   : eq<Boolean, Boolean>(true, false)
 optimized expr : false
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {FALSE}
 output         : false
 
 
@@ -57,7 +57,7 @@ raw expr       : eq(false, false)
 checked expr   : eq<Boolean, Boolean>(false, false)
 optimized expr : true
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {TRUE}
 output         : true
 
 
@@ -66,7 +66,7 @@ raw expr       : eq(true, true)
 checked expr   : eq<Boolean, Boolean>(true, true)
 optimized expr : true
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {TRUE}
 output         : true
 
 
@@ -75,7 +75,7 @@ raw expr       : eq(to_timestamp(minus(315360000000000_u64)), to_timestamp(minus
 checked expr   : eq<Timestamp, Timestamp>(to_timestamp<Int64>(minus<UInt64>(315360000000000_u64)), to_timestamp<Int64>(CAST(minus<UInt8>(100_u8) AS Int64)))
 optimized expr : false
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {FALSE}
 output         : false
 
 
@@ -196,7 +196,7 @@ raw expr       : noteq(1_u8, 2_u8)
 checked expr   : noteq<UInt8, UInt8>(1_u8, 2_u8)
 optimized expr : true
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {TRUE}
 output         : true
 
 
@@ -214,7 +214,7 @@ raw expr       : noteq(true, true)
 checked expr   : noteq<Boolean, Boolean>(true, true)
 optimized expr : false
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {FALSE}
 output         : false
 
 
@@ -232,7 +232,7 @@ raw expr       : noteq(true, false)
 checked expr   : noteq<Boolean, Boolean>(true, false)
 optimized expr : true
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {TRUE}
 output         : true
 
 
@@ -241,7 +241,7 @@ raw expr       : noteq(to_timestamp(minus(315360000000000_u64)), to_timestamp(mi
 checked expr   : noteq<Timestamp, Timestamp>(to_timestamp<Int64>(minus<UInt64>(315360000000000_u64)), to_timestamp<Int64>(CAST(minus<UInt8>(100_u8) AS Int64)))
 optimized expr : true
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {TRUE}
 output         : true
 
 
@@ -316,7 +316,7 @@ raw expr       : lt(3_u8, 2_u8)
 checked expr   : lt<UInt8, UInt8>(3_u8, 2_u8)
 optimized expr : false
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {FALSE}
 output         : false
 
 
@@ -325,7 +325,7 @@ raw expr       : lt(1.1_f64, 1.1_f64)
 checked expr   : lt<Float64, Float64>(1.1_f64, 1.1_f64)
 optimized expr : false
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {FALSE}
 output         : false
 
 
@@ -352,7 +352,7 @@ raw expr       : lt(true, false)
 checked expr   : lt<Boolean, Boolean>(true, false)
 optimized expr : false
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {FALSE}
 output         : false
 
 
@@ -361,7 +361,7 @@ raw expr       : lt(to_timestamp(minus(315360000000000_u64)), to_timestamp(minus
 checked expr   : lt<Timestamp, Timestamp>(to_timestamp<Int64>(minus<UInt64>(315360000000000_u64)), to_timestamp<Int64>(CAST(minus<UInt8>(100_u8) AS Int64)))
 optimized expr : true
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {TRUE}
 output         : true
 
 
@@ -442,7 +442,7 @@ raw expr       : lte(1_u8, 2_u8)
 checked expr   : lte<UInt8, UInt8>(1_u8, 2_u8)
 optimized expr : true
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {TRUE}
 output         : true
 
 
@@ -451,7 +451,7 @@ raw expr       : lte(1.1_f64, 2.1_f64)
 checked expr   : lte<Float64, Float64>(1.1_f64, 2.1_f64)
 optimized expr : true
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {TRUE}
 output         : true
 
 
@@ -460,7 +460,7 @@ raw expr       : lte(true, true)
 checked expr   : lte<Boolean, Boolean>(true, true)
 optimized expr : true
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {TRUE}
 output         : true
 
 
@@ -478,7 +478,7 @@ raw expr       : lte(true, false)
 checked expr   : lte<Boolean, Boolean>(true, false)
 optimized expr : false
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {FALSE}
 output         : false
 
 
@@ -496,7 +496,7 @@ raw expr       : lte(to_timestamp(minus(315360000000000_u64)), to_timestamp(minu
 checked expr   : lte<Timestamp, Timestamp>(to_timestamp<Int64>(minus<UInt64>(315360000000000_u64)), to_timestamp<Int64>(CAST(minus<UInt8>(100_u8) AS Int64)))
 optimized expr : true
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {TRUE}
 output         : true
 
 
@@ -505,7 +505,7 @@ raw expr       : lte(to_timestamp(minus(315360000000000_u64)), to_timestamp(minu
 checked expr   : lte<Timestamp, Timestamp>(to_timestamp<Int64>(minus<UInt64>(315360000000000_u64)), to_timestamp<Int64>(minus<UInt64>(315360000000000_u64)))
 optimized expr : true
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {TRUE}
 output         : true
 
 
@@ -569,7 +569,7 @@ raw expr       : gt(1_u8, 2_u8)
 checked expr   : gt<UInt8, UInt8>(1_u8, 2_u8)
 optimized expr : false
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {FALSE}
 output         : false
 
 
@@ -578,7 +578,7 @@ raw expr       : gt(1.2_f64, 1.1_f64)
 checked expr   : gt<Float64, Float64>(1.2_f64, 1.1_f64)
 optimized expr : true
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {TRUE}
 output         : true
 
 
@@ -605,7 +605,7 @@ raw expr       : gt(true, false)
 checked expr   : gt<Boolean, Boolean>(true, false)
 optimized expr : true
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {TRUE}
 output         : true
 
 
@@ -614,7 +614,7 @@ raw expr       : gt(to_timestamp(minus(315360000000000_u64)), to_timestamp(minus
 checked expr   : gt<Timestamp, Timestamp>(to_timestamp<Int64>(minus<UInt64>(315360000000000_u64)), to_timestamp<Int64>(CAST(minus<UInt8>(100_u8) AS Int64)))
 optimized expr : false
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {FALSE}
 output         : false
 
 
@@ -623,7 +623,7 @@ raw expr       : gt(to_timestamp(minus(315360000000000_u64)), to_timestamp(minus
 checked expr   : gt<Timestamp, Timestamp>(to_timestamp<Int64>(minus<UInt64>(315360000000000_u64)), to_timestamp<Int64>(minus<UInt64>(315360000000000_u64)))
 optimized expr : false
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {FALSE}
 output         : false
 
 
@@ -700,7 +700,7 @@ raw expr       : gte(1_u8, 2_u8)
 checked expr   : gte<UInt8, UInt8>(1_u8, 2_u8)
 optimized expr : false
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {FALSE}
 output         : false
 
 
@@ -709,7 +709,7 @@ raw expr       : gte(1.1_f64, 1.1_f64)
 checked expr   : gte<Float64, Float64>(1.1_f64, 1.1_f64)
 optimized expr : true
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {TRUE}
 output         : true
 
 
@@ -718,7 +718,7 @@ raw expr       : gte(true, true)
 checked expr   : gte<Boolean, Boolean>(true, true)
 optimized expr : true
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {TRUE}
 output         : true
 
 
@@ -736,7 +736,7 @@ raw expr       : gte(true, false)
 checked expr   : gte<Boolean, Boolean>(true, false)
 optimized expr : true
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {TRUE}
 output         : true
 
 
@@ -745,7 +745,7 @@ raw expr       : gte(to_timestamp(minus(315360000000000_u64)), to_timestamp(minu
 checked expr   : gte<Timestamp, Timestamp>(to_timestamp<Int64>(minus<UInt64>(315360000000000_u64)), to_timestamp<Int64>(CAST(minus<UInt8>(100_u8) AS Int64)))
 optimized expr : false
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {FALSE}
 output         : false
 
 
@@ -754,7 +754,7 @@ raw expr       : gte(to_timestamp(minus(315360000000000_u64)), to_timestamp(minu
 checked expr   : gte<Timestamp, Timestamp>(to_timestamp<Int64>(minus<UInt64>(315360000000000_u64)), to_timestamp<Int64>(minus<UInt64>(315360000000000_u64)))
 optimized expr : true
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {TRUE}
 output         : true
 
 
