@@ -20,6 +20,7 @@ mod result_table_source;
 mod writer;
 
 pub use block_buffer::BlockBuffer;
+pub use block_buffer::BlockBufferWriter;
 pub use block_buffer::BlockBufferWriterMemOnly;
 pub use block_buffer::BlockBufferWriterWithResultTable;
 pub use result_table::ResultQueryInfo;

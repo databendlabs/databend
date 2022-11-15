@@ -29,8 +29,8 @@ use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_storages_fuse_result::BlockBuffer;
+use common_storages_fuse_result::BlockBufferWriter;
 use common_storages_fuse_result::BlockBufferWriterMemOnly;
-use common_storages_fuse_result::BlockBufferWriterWithResultTable;
 use common_storages_fuse_result::ResultQueryInfo;
 use common_storages_fuse_result::ResultTableSink;
 use futures::StreamExt;
@@ -52,7 +52,6 @@ use crate::sessions::QueryAffect;
 use crate::sessions::QueryContext;
 use crate::sessions::Session;
 use crate::sessions::TableContext;
-use crate::sql::plans::Plan;
 use crate::sql::Planner;
 use crate::stream::DataBlockStream;
 
@@ -232,51 +231,36 @@ impl ExecuteState {
         let (plan, _, _) = planner.plan_sql(sql).await?;
         ctx.attach_query_str(plan.to_string(), sql);
 
-        let is_select = matches!(&plan, Plan::Query { .. });
         let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await?;
+        let running_state = ExecuteRunning {
+            session,
+            ctx: ctx.clone(),
+        };
 
-        if is_select {
-            let running_state = ExecuteRunning {
-                session,
-                ctx: ctx.clone(),
-            };
-            ctx.attach_http_query(HttpQueryHandle {
-                executor: executor.clone(),
-                block_buffer,
-            });
-            interpreter.execute(ctx).await?;
-            Ok(running_state)
-        } else {
-            let running_state = ExecuteRunning {
-                session,
-                ctx: ctx.clone(),
-            };
+        let executor_clone = executor.clone();
+        let ctx_clone = ctx.clone();
+        let block_buffer_clone = block_buffer.clone();
 
-            let executor_clone = executor.clone();
-            let ctx_clone = ctx.clone();
-            let block_buffer_clone = block_buffer.clone();
-
-            ctx.try_spawn(async move {
-                let res = execute(interpreter, ctx_clone, block_buffer, executor_clone.clone());
-                match AssertUnwindSafe(res).catch_unwind().await {
-                    Ok(Err(err)) => {
-                        Executor::stop(&executor_clone, Err(err), false).await;
-                        block_buffer_clone.stop_push().await.unwrap();
-                    }
-                    Err(_) => {
-                        Executor::stop(
-                            &executor_clone,
-                            Err(ErrorCode::PanicError("interpreter panic!")),
-                            false,
-                        )
-                        .await;
-                        block_buffer_clone.stop_push().await.unwrap();
-                    }
-                    _ => {}
+        ctx.try_spawn(async move {
+            let res = execute(interpreter, ctx_clone, block_buffer, executor_clone.clone());
+            match AssertUnwindSafe(res).catch_unwind().await {
+                Ok(Err(err)) => {
+                    Executor::stop(&executor_clone, Err(err), false).await;
+                    block_buffer_clone.stop_push().await.unwrap();
                 }
-            })?;
-            Ok(running_state)
-        }
+                Err(_) => {
+                    Executor::stop(
+                        &executor_clone,
+                        Err(ErrorCode::PanicError("interpreter panic!")),
+                        false,
+                    )
+                    .await;
+                    block_buffer_clone.stop_push().await.unwrap();
+                }
+                _ => {}
+            }
+        })?;
+        Ok(running_state)
     }
 }
 
@@ -287,7 +271,6 @@ async fn execute(
     executor: Arc<RwLock<Executor>>,
 ) -> Result<()> {
     let mut data_stream = interpreter.execute(ctx.clone()).await?;
-    let use_result_cache = !ctx.get_config().query.management_mode;
 
     match data_stream.next().await {
         None => {
@@ -299,21 +282,7 @@ async fn execute(
             block_buffer.stop_push().await?;
         }
         Some(Ok(block)) => {
-            let mut block_writer = if use_result_cache {
-                BlockBufferWriterWithResultTable::create(
-                    block_buffer.clone(),
-                    ctx.clone(),
-                    ResultQueryInfo {
-                        query_id: ctx.get_id(),
-                        schema: block.schema().clone(),
-                        user: ctx.get_current_user()?.identity(),
-                    },
-                )
-                .await?
-            } else {
-                Box::new(BlockBufferWriterMemOnly(block_buffer))
-            };
-
+            let mut block_writer = Box::new(BlockBufferWriterMemOnly(block_buffer));
             block_writer.push(block).await?;
             while let Some(block_r) = data_stream.next().await {
                 match block_r {
