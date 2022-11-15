@@ -41,7 +41,7 @@ In addition to the [User Stage](#user-stage), you can create named stages to sto
 
 - A named stage can be internal or external:
 
-    - Internal stages store data files in the object storage you specify in `databend-query.toml`.
+    - Internal stages store data files in the storage backend you specify in `databend-query.toml`.
     - When you create an external stage with the command [CREATE STAGE](01-ddl-create-stage.md), you specify the stage location in the command.
 
 ## Managing Stages
