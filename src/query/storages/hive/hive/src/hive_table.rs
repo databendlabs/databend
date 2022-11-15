@@ -19,6 +19,7 @@ use std::time::Instant;
 use async_recursion::async_recursion;
 use common_base::base::tokio;
 use common_base::base::tokio::sync::Semaphore;
+use common_catalog::catalog_kind::CATALOG_HIVE;
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::Expression;
 use common_catalog::plan::PartStatistics;
@@ -58,7 +59,6 @@ use crate::hive_partition_filler::HivePartitionFiller;
 use crate::hive_table_source::HiveTableSource;
 use crate::HiveBlockFilter;
 use crate::HiveFileSplitter;
-use crate::CATALOG_HIVE;
 
 pub const HIVE_TABLE_ENGIE: &str = "hive";
 
@@ -161,7 +161,8 @@ impl HiveTable {
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let push_downs = &plan.push_downs;
-        let block_reader = self.create_block_reader(push_downs)?;
+        let chunk_size = ctx.get_settings().get_hive_parquet_chunk_size()?;
+        let block_reader = self.create_block_reader(push_downs, chunk_size as usize)?;
 
         let parts_len = plan.parts.len();
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
@@ -258,6 +259,7 @@ impl HiveTable {
     fn create_block_reader(
         &self,
         push_downs: &Option<PushDownInfo>,
+        chunk_size: usize,
     ) -> Result<Arc<HiveParquetBlockReader>> {
         let projection = self.get_projections(push_downs)?;
         let (projection, partition_fields) =
@@ -276,6 +278,7 @@ impl HiveTable {
             table_schema,
             projection,
             hive_partition_filler,
+            chunk_size,
         )
     }
 

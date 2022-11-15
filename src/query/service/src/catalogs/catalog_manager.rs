@@ -17,7 +17,8 @@ use std::sync::Arc;
 use common_base::base::Singleton;
 use common_catalog::catalog::Catalog;
 pub use common_catalog::catalog::CatalogManager;
-use common_catalog::catalog::CATALOG_DEFAULT;
+use common_catalog::catalog_kind::CATALOG_DEFAULT;
+use common_config::CatalogConfig;
 use common_config::Config;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -25,8 +26,6 @@ use common_meta_app::schema::CatalogType;
 use common_meta_app::schema::CreateCatalogReq;
 #[cfg(feature = "hive")]
 use common_storages_hive::HiveCatalog;
-#[cfg(feature = "hive")]
-use common_storages_hive::CATALOG_HIVE;
 use dashmap::DashMap;
 
 use crate::catalogs::DatabaseCatalog;
@@ -76,19 +75,28 @@ impl CatalogManagerHelper for CatalogManager {
     }
 
     fn register_external_catalogs(&self, conf: &Config) -> Result<()> {
-        let hms_address = &conf.catalog.meta_store_address;
-        if !hms_address.is_empty() {
-            // register hive catalog
-            #[cfg(not(feature = "hive"))]
-            {
-                return Err(ErrorCode::CatalogNotSupported(
-                    "Hive catalog is not enabled, please recompile with --features hive",
-                ));
-            }
-            #[cfg(feature = "hive")]
-            {
-                let hive_catalog = Arc::new(HiveCatalog::try_create(hms_address)?);
-                self.catalogs.insert(CATALOG_HIVE.to_owned(), hive_catalog);
+        // currently, if the `hive` feature is not enabled
+        // the loop will quit after the first iteration.
+        // this is expected.
+        #[allow(clippy::never_loop)]
+        for (name, ctl) in conf.catalogs.iter() {
+            match ctl {
+                CatalogConfig::Hive(ctl) => {
+                    // register hive catalog
+                    #[cfg(not(feature = "hive"))]
+                    {
+                        return Err(ErrorCode::CatalogNotSupported(format!(
+                            "Failed to create catalog {} to {}: Hive catalog is not enabled, please recompile with --features hive",
+                            name, ctl.address
+                        )));
+                    }
+                    #[cfg(feature = "hive")]
+                    {
+                        let hms_address = ctl.address.clone();
+                        let hive_catalog = Arc::new(HiveCatalog::try_create(hms_address)?);
+                        self.catalogs.insert(name.to_string(), hive_catalog);
+                    }
+                }
             }
         }
         Ok(())

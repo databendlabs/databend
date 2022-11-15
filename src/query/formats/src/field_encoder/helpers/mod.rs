@@ -15,15 +15,5 @@
 mod json;
 mod number_helpers;
 
-use chrono_tz::Tz;
 pub use json::write_json_string;
 pub use number_helpers::PrimitiveWithFormat;
-
-pub struct CommonSettings {
-    pub true_bytes: Vec<u8>,
-    pub false_bytes: Vec<u8>,
-    pub null_bytes: Vec<u8>,
-    pub nan_bytes: Vec<u8>,
-    pub inf_bytes: Vec<u8>,
-    pub timezone: Tz,
-}

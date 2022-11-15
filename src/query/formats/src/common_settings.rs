@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,5 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub static METRIC_SESSION_CONNECT_NUMBERS: &str = "session.connect_numbers";
-pub static METRIC_SESSION_CLOSE_NUMBERS: &str = "session.close_numbers";
+use chrono_tz::Tz;
+
+#[derive(Clone)]
+pub struct CommonSettings {
+    pub true_bytes: Vec<u8>,
+    pub false_bytes: Vec<u8>,
+    pub null_bytes: Vec<u8>,
+    pub nan_bytes: Vec<u8>,
+    pub inf_bytes: Vec<u8>,
+    pub timezone: Tz,
+}

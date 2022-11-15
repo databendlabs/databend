@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use common_expression::types::array::ArrayColumnBuilder;
 use common_expression::types::boolean::BooleanDomain;
+use common_expression::types::nullable::NullableDomain;
 use common_expression::types::number::SimpleDomain;
 use common_expression::types::number::UInt64Type;
 use common_expression::types::ArgType;
@@ -42,6 +43,7 @@ use common_expression::with_number_mapped_type;
 use common_expression::Column;
 use common_expression::Domain;
 use common_expression::Function;
+use common_expression::FunctionDomain;
 use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
 use common_expression::FunctionSignature;
@@ -57,7 +59,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_0_arg_core::<EmptyArrayType, _, _>(
         "array",
         FunctionProperty::default(),
-        || Some(()),
+        || FunctionDomain::Full,
         |_| Ok(Value::Scalar(())),
     );
 
@@ -70,7 +72,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 property: FunctionProperty::default(),
             },
             calc_domain: Box::new(|args_domain| {
-                Some(args_domain.iter().fold(Domain::Array(None), |acc, x| {
+                FunctionDomain::Domain(args_domain.iter().fold(Domain::Array(None), |acc, x| {
                     acc.merge(&Domain::Array(Some(Box::new(x.clone()))))
                 }))
             }),
@@ -110,28 +112,53 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_1_arg::<EmptyArrayType, NumberType<u8>, _, _>(
         "length",
         FunctionProperty::default(),
-        |_| Some(SimpleDomain { min: 0, max: 0 }),
+        |_| FunctionDomain::Domain(SimpleDomain { min: 0, max: 0 }),
         |_, _| 0u8,
     );
 
     registry.register_1_arg::<ArrayType<GenericType<0>>, NumberType<u64>, _, _>(
         "length",
         FunctionProperty::default(),
-        |_| None,
+        |_| FunctionDomain::Full,
         |arr, _| arr.len() as u64,
     );
 
     registry.register_2_arg_core::<NullableType<EmptyArrayType>, NullableType<UInt64Type>, NullType, _, _>(
         "get",
         FunctionProperty::default(),
-        |_, _| Some(()),
+        |_, _| FunctionDomain::Full,
         |_, _, _| Ok(Value::Scalar(())),
+    );
+
+    registry.register_combine_nullable_2_arg::<ArrayType<NullableType<GenericType<0>>>, UInt64Type, GenericType<0>, _, _>(
+        "get",
+        FunctionProperty::default(),
+        |domain, _| FunctionDomain::Domain(NullableDomain {
+            has_null: true,
+            value: domain.value.clone(),
+        }),
+        vectorize_with_builder_2_arg::<ArrayType<NullableType<GenericType<0>>>, UInt64Type, NullableType<GenericType<0>>>(
+            |arr, idx, output, _| {
+                if idx == 0 {
+                    output.push_null();
+                } else {
+                    match arr.index(idx as usize - 1) {
+                        Some(Some(item)) => output.push(item),
+                        _ => output.push_null(),
+                    }
+                }
+                Ok(())
+            }
+        ),
     );
 
     registry.register_combine_nullable_2_arg::<ArrayType<GenericType<0>>, UInt64Type, GenericType<0>, _, _>(
         "get",
         FunctionProperty::default(),
-        |_, _| None,
+        |domain, _| FunctionDomain::Domain(NullableDomain {
+            has_null: true,
+            value: Some(Box::new(domain.clone()))
+        }),
         vectorize_with_builder_2_arg::<ArrayType<GenericType<0>>, UInt64Type, NullableType<GenericType<0>>>(
             |arr, idx, output, _| {
                 if idx == 0 {
@@ -150,7 +177,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_3_arg::<EmptyArrayType, UInt64Type, UInt64Type, EmptyArrayType, _, _>(
         "slice",
         FunctionProperty::default(),
-        |_, _, _| None,
+        |_, _, _| FunctionDomain::Full,
         vectorize_with_builder_3_arg::<EmptyArrayType, UInt64Type, UInt64Type, EmptyArrayType>(
             |_, _, _, output, _| {
                 *output += 1;
@@ -162,7 +189,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_3_arg::<ArrayType<GenericType<0>>, UInt64Type, UInt64Type, ArrayType<GenericType<0>>, _, _>(
         "slice",
         FunctionProperty::default(),
-        |_, _, _| None,
+        |domain,_, _| FunctionDomain::Domain(domain.clone()),
         vectorize_with_builder_3_arg::<ArrayType<GenericType<0>>, UInt64Type, UInt64Type, ArrayType<GenericType<0>>>(
             |arr, start, end, output, _| {
                 let start = if start > 0 {
@@ -191,7 +218,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_1_arg::<EmptyArrayType, EmptyArrayType, _, _>(
         "remove_first",
         FunctionProperty::default(),
-        |_| None,
+        |_| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<EmptyArrayType, EmptyArrayType>(|_, output, _| {
             *output += 1;
             Ok(())
@@ -201,7 +228,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_1_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, _, _>(
         "remove_first",
         FunctionProperty::default(),
-        |_| None,
+        |domain| FunctionDomain::Domain(domain.clone()),
         vectorize_with_builder_1_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>>(
             |arr, output, _| {
                 if arr.len() <= 1 {
@@ -219,7 +246,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_1_arg::<EmptyArrayType, EmptyArrayType, _, _>(
         "remove_last",
         FunctionProperty::default(),
-        |_| None,
+        |_| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<EmptyArrayType, EmptyArrayType>(|_, output, _| {
             *output += 1;
             Ok(())
@@ -229,7 +256,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_1_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, _, _>(
         "remove_last",
         FunctionProperty::default(),
-        |_| None,
+        |domain| FunctionDomain::Domain(domain.clone()),
         vectorize_with_builder_1_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>>(
             |arr, output, _| {
                 if arr.len() <= 1 {
@@ -296,7 +323,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                     "contains",
                     FunctionProperty::default(),
                     |lhs, rhs| {
-                        Some(BooleanDomain {
+                        FunctionDomain::Domain(BooleanDomain {
                             has_false: true,
                             has_true: (lhs.min..=lhs.max).contains(&rhs.min)
                                 || (lhs.min..=lhs.max).contains(&rhs.max),
@@ -313,7 +340,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             "contains",
             FunctionProperty::default(),
             |lhs, rhs| {
-                Some(BooleanDomain {
+                FunctionDomain::Domain(BooleanDomain {
                     has_false: true,
                     has_true: (lhs.min..=lhs.max).contains(&rhs.min)
                         || (lhs.min..=lhs.max).contains(&rhs.max),
@@ -326,7 +353,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             "contains",
             FunctionProperty::default(),
             |lhs, rhs| {
-                Some(BooleanDomain {
+                FunctionDomain::Domain(BooleanDomain {
                     has_false: true,
                     has_true: (lhs.min..=lhs.max).contains(&rhs.min)
                         || (lhs.min..=lhs.max).contains(&rhs.max),
@@ -339,7 +366,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "contains",
         FunctionProperty::default(),
         |lhs, rhs| {
-            Some(BooleanDomain {
+            FunctionDomain::Domain(BooleanDomain {
                 has_false:  (lhs.has_false && rhs.has_true) || (lhs.has_true && rhs.has_false),
                 has_true:   (lhs.has_false && rhs.has_false) || (lhs.has_true && rhs.has_true),
             })
@@ -383,10 +410,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "contains",
         FunctionProperty::default(),
         |_, _| {
-            Some(BooleanDomain {
-                has_false: true,
-                has_true: true,
-            })
+            FunctionDomain::Full
         },
         |lhs, rhs, _| {
             match lhs {
@@ -429,12 +453,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_2_arg_core::<ArrayType<GenericType<0>>, GenericType<0>, BooleanType, _, _>(
         "contains",
         FunctionProperty::default(),
-        |_, _| {
-            Some(BooleanDomain {
-                has_false: true,
-                has_true: true,
-            })
-        },
+        |_, _| FunctionDomain::Full,
         vectorize_2_arg::<ArrayType<GenericType<0>>, GenericType<0>, BooleanType>(|lhs, rhs, _| {
             lhs.iter().contains(&rhs)
         }),

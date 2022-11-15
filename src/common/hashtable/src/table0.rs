@@ -70,6 +70,7 @@ where
     A: Allocator + Clone,
 {
     pub(crate) len: usize,
+    #[allow(dead_code)]
     pub(crate) allocator: A,
     pub(crate) entries: C,
     pub(crate) dropped: bool,
@@ -347,11 +348,11 @@ where K: Keyable
 }
 
 impl<'a, K: Keyable, V: 'a> EntryRefLike for &'a Entry<K, V> {
-    type KeyRef = K;
+    type KeyRef = &'a K;
     type ValueRef = &'a V;
 
     fn key(&self) -> Self::KeyRef {
-        *(*self).key()
+        unsafe { self.key.assume_init_ref() }
     }
     fn get(&self) -> Self::ValueRef {
         (*self).get()
@@ -359,11 +360,11 @@ impl<'a, K: Keyable, V: 'a> EntryRefLike for &'a Entry<K, V> {
 }
 
 impl<'a, K: Keyable, V> EntryMutRefLike for &'a mut Entry<K, V> {
-    type KeyRef = K;
+    type Key = K;
     type Value = V;
 
-    fn key(&self) -> Self::KeyRef {
-        unsafe { self.key.assume_init() }
+    fn key(&self) -> &Self::Key {
+        unsafe { self.key.assume_init_ref() }
     }
     fn get(&self) -> &Self::Value {
         unsafe { self.val.assume_init_ref() }

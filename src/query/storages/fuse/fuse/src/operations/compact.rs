@@ -14,20 +14,21 @@
 
 use std::sync::Arc;
 
-use common_catalog::plan::DataSourceInfo;
-use common_catalog::plan::DataSourcePlan;
+use common_catalog::plan::Projection;
 use common_catalog::table::CompactTarget;
+use common_exception::ErrorCode;
 use common_exception::Result;
+use common_pipeline_core::processors::port::InputPort;
+use common_pipeline_core::Pipe;
 use common_pipeline_core::Pipeline;
-use common_pipeline_transforms::processors::transforms::BlockCompactor;
-use common_pipeline_transforms::processors::transforms::TransformCompact;
 use common_storages_table_meta::meta::TableSnapshot;
 
-use super::FuseTableSink;
+use crate::operations::mutation::all_the_columns_ids;
+use crate::operations::mutation::BlockCompactMutator;
+use crate::operations::mutation::CompactSink;
+use crate::operations::mutation::CompactSource;
+use crate::operations::mutation::CompactTransform;
 use crate::operations::mutation::SegmentCompactMutator;
-use crate::operations::FullCompactMutator;
-use crate::operations::ReadDataKind;
-use crate::statistics::ClusterStatsGenerator;
 use crate::FuseTable;
 use crate::Table;
 use crate::TableContext;
@@ -35,6 +36,7 @@ use crate::TableMutator;
 use crate::DEFAULT_BLOCK_PER_SEGMENT;
 use crate::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 
+#[derive(Clone)]
 pub struct CompactOptions {
     // the snapshot that compactor working on, it never changed during phases compaction.
     pub base_snapshot: Arc<TableSnapshot>,
@@ -49,17 +51,17 @@ impl FuseTable {
         target: CompactTarget,
         limit: Option<usize>,
         pipeline: &mut Pipeline,
-    ) -> Result<Option<Box<dyn TableMutator>>> {
+    ) -> Result<bool> {
         let snapshot_opt = self.read_table_snapshot().await?;
         let base_snapshot = if let Some(val) = snapshot_opt {
             val
         } else {
             // no snapshot, no compaction.
-            return Ok(None);
+            return Ok(false);
         };
 
         if base_snapshot.summary.block_count <= 1 {
-            return Ok(None);
+            return Ok(false);
         }
 
         let block_per_seg =
@@ -82,7 +84,7 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
         _pipeline: &mut Pipeline,
         options: CompactOptions,
-    ) -> Result<Option<Box<dyn TableMutator>>> {
+    ) -> Result<bool> {
         let mut segment_mutator = SegmentCompactMutator::try_create(
             ctx.clone(),
             options,
@@ -90,86 +92,97 @@ impl FuseTable {
             self.operator.clone(),
         )?;
 
-        if segment_mutator.target_select().await? {
-            Ok(Some(Box::new(segment_mutator)))
-        } else {
-            Ok(None)
+        if !segment_mutator.target_select().await? {
+            return Ok(false);
         }
+
+        let mutator = Box::new(segment_mutator);
+        mutator.try_commit(Arc::new(self.clone())).await?;
+
+        Ok(true)
     }
 
+    // The flow of Pipeline is as follows:
+    //+--------------+        +-----------------+
+    //|CompactSource1|  --->  |CompactTransform1|  ------
+    //+--------------+        +-----------------+        |      +-----------+
+    //|    ...       |  ...   |       ...       |  ...   | ---> |CompactSink|
+    //+--------------+        +-----------------+        |      +-----------+
+    //|CompactSourceN|  --->  |CompactTransformN|  ------
+    //+--------------+        +-----------------+
     async fn compact_blocks(
         &self,
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
         options: CompactOptions,
-    ) -> Result<Option<Box<dyn TableMutator>>> {
-        let block_compact_thresholds = self.get_block_compact_thresholds();
-
-        let block_per_seg = options.block_per_seg;
-        let mut mutator = FullCompactMutator::try_create(
-            ctx.clone(),
-            options,
-            block_compact_thresholds,
-            self.meta_location_generator().clone(),
-            self.cluster_key_meta.is_some(),
-            self.operator.clone(),
-        )?;
-        let need_compact = mutator.target_select().await?;
-        if !need_compact {
-            return Ok(None);
+    ) -> Result<bool> {
+        // skip cluster table.
+        if self.cluster_key_meta.is_some() {
+            return Ok(false);
         }
 
-        let partitions_total = mutator.partitions_total();
-        let (statistics, parts) = self.read_partitions_with_metas(
-            ctx.clone(),
-            self.table_info.schema(),
-            None,
-            mutator.selected_blocks(),
-            partitions_total,
-        )?;
-        let table_info = self.get_table_info();
-        let description = statistics.get_description(table_info);
-        let plan = DataSourcePlan {
-            catalog: table_info.catalog().to_string(),
-            source_info: DataSourceInfo::TableSource(table_info.clone()),
-            scan_fields: None,
-            parts,
-            statistics,
-            description,
-            tbl_args: self.table_args(),
-            push_downs: None,
-        };
+        let thresholds = self.get_block_compact_thresholds();
 
-        ctx.try_set_partitions(plan.parts.clone())?;
+        let mut mutator = BlockCompactMutator::new(ctx.clone(), options, self.operator.clone());
+        let need_compact = mutator.target_select().await?;
+        if !need_compact {
+            return Ok(false);
+        }
 
-        // ReadDataKind to avoid OOM.
-        self.do_read_data(
-            ctx.clone(),
-            &plan,
-            pipeline,
-            ReadDataKind::OptimizeDataLessIORequests,
+        ctx.try_set_partitions(mutator.compact_tasks.clone())?;
+
+        let max_threads = ctx.get_settings().get_max_threads()? as usize;
+        // Add source pipe.
+        pipeline.add_source(
+            |output| CompactSource::try_create(ctx.clone(), output, thresholds),
+            max_threads,
         )?;
 
-        pipeline.add_transform(|transform_input_port, transform_output_port| {
-            TransformCompact::try_create(
-                transform_input_port,
-                transform_output_port,
-                BlockCompactor::new(block_compact_thresholds, false),
-            )
-        })?;
+        let all_col_ids = all_the_columns_ids(self);
+        let projection = Projection::Columns(all_col_ids);
+        let block_reader = self.create_block_reader(projection)?;
 
-        pipeline.add_sink(|input| {
-            FuseTableSink::try_create(
+        pipeline.add_transform(|input, output| {
+            CompactTransform::try_create(
                 input,
-                ctx.clone(),
-                block_per_seg,
-                mutator.get_storage_operator(),
+                output,
+                ctx.get_scan_progress(),
+                block_reader.clone(),
                 self.meta_location_generator().clone(),
-                ClusterStatsGenerator::default(),
-                None,
+                self.operator.clone(),
+                thresholds,
             )
         })?;
 
-        Ok(Some(Box::new(mutator)))
+        self.try_add_compact_sink(mutator.clone(), pipeline)?;
+
+        Ok(true)
+    }
+
+    pub fn try_add_compact_sink(
+        &self,
+        mutator: BlockCompactMutator,
+        pipeline: &mut Pipeline,
+    ) -> Result<()> {
+        match pipeline.pipes.last() {
+            None => Err(ErrorCode::Internal("Cannot resize empty pipe.")),
+            Some(pipe) if pipe.output_size() == 0 => {
+                Err(ErrorCode::Internal("Cannot resize empty pipe."))
+            }
+            Some(pipe) => {
+                let input_size = pipe.output_size();
+                let mut inputs_port = Vec::with_capacity(input_size);
+                for _ in 0..input_size {
+                    inputs_port.push(InputPort::create());
+                }
+                let processor = CompactSink::try_create(self, mutator, inputs_port.clone())?;
+                pipeline.pipes.push(Pipe::ResizePipe {
+                    inputs_port,
+                    outputs_port: vec![],
+                    processor,
+                });
+                Ok(())
+            }
+        }
     }
 }

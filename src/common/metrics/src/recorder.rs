@@ -32,35 +32,39 @@ pub const LABEL_KEY_TENANT: &str = "tenant";
 pub const LABEL_KEY_CLUSTER: &str = "cluster_name";
 
 #[inline]
-pub fn label_histogram_with_val(name: &'static str, labels: Vec<(&'static str, String)>, val: f64) {
-    histogram!(name, val, &labels);
+pub fn label_histogram_with_val(
+    name: &'static str,
+    labels: &Vec<(&'static str, String)>,
+    val: f64,
+) {
+    histogram!(name, val, labels);
 }
 
 #[inline]
 pub fn label_counter_with_val_and_labels(
     name: &'static str,
-    labels: Vec<(&'static str, String)>,
+    labels: &Vec<(&'static str, String)>,
     val: u64,
 ) {
-    counter!(name, val, &labels);
+    counter!(name, val, labels);
 }
 
 #[inline]
 pub fn label_increment_gauge_with_val_and_labels(
     name: &'static str,
-    labels: Vec<(&'static str, String)>,
+    labels: &Vec<(&'static str, String)>,
     val: f64,
 ) {
-    increment_gauge!(name, val, &labels);
+    increment_gauge!(name, val, labels);
 }
 
 #[inline]
 pub fn label_decrement_gauge_with_val_and_labels(
     name: &'static str,
-    labels: Vec<(&'static str, String)>,
+    labels: &Vec<(&'static str, String)>,
     val: f64,
 ) {
-    decrement_gauge!(name, val, &labels);
+    decrement_gauge!(name, val, labels);
 }
 
 #[inline]

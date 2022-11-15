@@ -27,7 +27,6 @@ use crate::optimizer::cascades::CascadesOptimizer;
 use crate::optimizer::distributed::optimize_distributed_query;
 use crate::optimizer::heuristic::RuleList;
 use crate::optimizer::util::contains_local_table_scan;
-use crate::optimizer::util::validate_distributed_query;
 use crate::optimizer::HeuristicOptimizer;
 use crate::optimizer::SExpr;
 use crate::optimizer::DEFAULT_REWRITE_RULES;
@@ -156,7 +155,7 @@ pub fn optimize_query(
     // with reading data from local tales(e.g. system tables).
     let enable_distributed_query =
         opt_ctx.config.enable_distributed_optimization && !contains_local_table_scan;
-    if enable_distributed_query && validate_distributed_query(&result) {
+    if enable_distributed_query {
         result = optimize_distributed_query(&result)?;
     }
 

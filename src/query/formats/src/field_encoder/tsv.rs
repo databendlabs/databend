@@ -12,63 +12,48 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chrono_tz::Tz;
 use common_datavalues::serializations::write_escaped_string;
 use common_datavalues::serializations::ArraySerializer;
 use common_datavalues::serializations::StructSerializer;
 use common_io::consts::FALSE_BYTES_NUM;
 use common_io::consts::INF_BYTES_LOWER;
 use common_io::consts::NAN_BYTES_LOWER;
-use common_io::consts::NULL_BYTES_UPPER;
+use common_io::consts::NULL_BYTES_ESCAPE;
 use common_io::consts::TRUE_BYTES_NUM;
 
-use crate::field_encoder::CommonSettings;
 use crate::field_encoder::FieldEncoderRowBased;
+use crate::CommonSettings;
 use crate::FileFormatOptionsExt;
 
-pub struct FieldEncoderValues {
+pub struct FieldEncoderTSV {
     pub common_settings: CommonSettings,
     pub quote_char: u8,
 }
 
-impl FieldEncoderValues {
+impl FieldEncoderTSV {
     pub fn create(options: &FileFormatOptionsExt) -> Self {
-        FieldEncoderValues {
+        FieldEncoderTSV {
             common_settings: CommonSettings {
                 true_bytes: TRUE_BYTES_NUM.as_bytes().to_vec(),
                 false_bytes: FALSE_BYTES_NUM.as_bytes().to_vec(),
-                null_bytes: NULL_BYTES_UPPER.as_bytes().to_vec(),
+                null_bytes: NULL_BYTES_ESCAPE.as_bytes().to_vec(),
                 nan_bytes: NAN_BYTES_LOWER.as_bytes().to_vec(),
                 inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
                 timezone: options.timezone,
             },
-            quote_char: b'\'',
-        }
-    }
-
-    pub fn create_for_handler(timezone: Tz) -> Self {
-        FieldEncoderValues {
-            common_settings: CommonSettings {
-                true_bytes: TRUE_BYTES_NUM.as_bytes().to_vec(),
-                false_bytes: FALSE_BYTES_NUM.as_bytes().to_vec(),
-                null_bytes: NULL_BYTES_UPPER.as_bytes().to_vec(),
-                nan_bytes: NAN_BYTES_LOWER.as_bytes().to_vec(),
-                inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
-                timezone,
-            },
-            quote_char: b'\'',
+            quote_char: options.get_quote_char(),
         }
     }
 }
 
-impl FieldEncoderRowBased for FieldEncoderValues {
+impl FieldEncoderRowBased for FieldEncoderTSV {
     fn common_settings(&self) -> &CommonSettings {
         &self.common_settings
     }
 
     fn write_string_inner(&self, in_buf: &[u8], out_buf: &mut Vec<u8>, raw: bool) {
         if raw {
-            out_buf.extend_from_slice(in_buf);
+            write_escaped_string(in_buf, out_buf, self.quote_char);
         } else {
             out_buf.push(self.quote_char);
             write_escaped_string(in_buf, out_buf, self.quote_char);

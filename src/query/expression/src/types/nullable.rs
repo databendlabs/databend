@@ -172,6 +172,13 @@ impl<T: ArgType> ArgType for NullableType<T> {
         DataType::Nullable(Box::new(T::data_type()))
     }
 
+    fn full_domain() -> Self::Domain {
+        NullableDomain {
+            has_null: true,
+            value: Some(Box::new(T::full_domain())),
+        }
+    }
+
     fn create_builder(capacity: usize, generics: &GenericMap) -> Self::ColumnBuilder {
         NullableColumnBuilder::with_capacity(capacity, generics)
     }

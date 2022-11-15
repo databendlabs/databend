@@ -21,7 +21,7 @@ use opendal::Operator;
 
 use crate::io::Files;
 
-#[derive(Default)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, PartialEq)]
 pub struct AbortOperation {
     pub segments: Vec<String>,
     pub blocks: Vec<String>,
@@ -29,18 +29,23 @@ pub struct AbortOperation {
 }
 
 impl AbortOperation {
-    pub fn add_block(mut self, block: &BlockMeta) -> Self {
+    pub fn merge(&mut self, rhs: &AbortOperation) {
+        self.segments.extend(rhs.segments.clone());
+        self.blocks.extend(rhs.blocks.clone());
+        self.bloom_filter_indexes
+            .extend(rhs.bloom_filter_indexes.clone());
+    }
+
+    pub fn add_block(&mut self, block: &BlockMeta) {
         let block_location = block.location.clone();
         self.blocks.push(block_location.0);
         if let Some(index) = block.bloom_filter_index_location.clone() {
             self.bloom_filter_indexes.push(index.0);
         }
-        self
     }
 
-    pub fn add_segment(mut self, segment: String) -> Self {
+    pub fn add_segment(&mut self, segment: String) {
         self.segments.push(segment);
-        self
     }
 
     pub async fn abort(self, ctx: Arc<dyn TableContext>, operator: Operator) -> Result<()> {

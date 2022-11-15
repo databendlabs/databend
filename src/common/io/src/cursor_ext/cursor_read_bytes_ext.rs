@@ -122,7 +122,7 @@ where T: AsRef<[u8]>
     fn ignore_bytes(&mut self, bs: &[u8]) -> bool {
         let available = self.remaining_slice();
         let len = bs.len();
-        if available.len() <= len {
+        if available.len() < len {
             return false;
         }
         let eq = available[..len].iter().zip(bs).all(|(x, y)| x == y);

@@ -14,6 +14,7 @@
 use std::sync::Arc;
 
 use common_ast::ast::ExplainKind;
+use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
@@ -22,6 +23,7 @@ use common_sql::MetadataRef;
 
 use super::fragments::Fragmenter;
 use super::QueryFragmentsActions;
+use crate::interpreters::plan_schedulers::schedule_query_v2;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::PipelineBuilder;
@@ -31,7 +33,7 @@ use crate::sql::executor::PhysicalPlanBuilder;
 use crate::sql::optimizer::SExpr;
 use crate::sql::plans::Plan;
 
-pub struct ExplainInterpreterV2 {
+pub struct ExplainInterpreter {
     ctx: Arc<QueryContext>,
     schema: DataSchemaRef,
     kind: ExplainKind,
@@ -39,7 +41,7 @@ pub struct ExplainInterpreterV2 {
 }
 
 #[async_trait::async_trait]
-impl Interpreter for ExplainInterpreterV2 {
+impl Interpreter for ExplainInterpreter {
     fn name(&self) -> &str {
         "ExplainInterpreterV2"
     }
@@ -56,7 +58,11 @@ impl Interpreter for ExplainInterpreterV2 {
                 Plan::Query {
                     s_expr, metadata, ..
                 } => {
-                    let builder = PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone());
+                    let ctx = self.ctx.clone();
+                    let settings = ctx.get_settings();
+                    settings.set_enable_distributed_eval_index(false)?;
+
+                    let builder = PhysicalPlanBuilder::new(metadata.clone(), ctx);
                     let plan = builder.build(s_expr).await?;
                     self.explain_physical_plan(&plan, metadata)?
                 }
@@ -106,11 +112,11 @@ impl Interpreter for ExplainInterpreterV2 {
     }
 }
 
-impl ExplainInterpreterV2 {
+impl ExplainInterpreter {
     pub fn try_create(ctx: Arc<QueryContext>, plan: Plan, kind: ExplainKind) -> Result<Self> {
         let data_field = DataField::new("explain", DataTypeImpl::String(StringType::default()));
         let schema = DataSchemaRefExt::create(vec![data_field]);
-        Ok(ExplainInterpreterV2 {
+        Ok(ExplainInterpreter {
             ctx,
             schema,
             plan,
@@ -149,7 +155,11 @@ impl ExplainInterpreterV2 {
         let plan = builder.build(&s_expr).await?;
 
         let pipeline_builder = PipelineBuilder::create(self.ctx.clone());
-        let build_res = pipeline_builder.finalize(&plan)?;
+        let build_res = if self.ctx.get_cluster().is_empty() {
+            pipeline_builder.finalize(&plan)?
+        } else {
+            schedule_query_v2(self.ctx.clone(), &[], &plan).await?
+        };
 
         let mut blocks = vec![];
         // Format root pipeline

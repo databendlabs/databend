@@ -33,21 +33,21 @@ HashJoin
 │   ├── TableScan(Build)
 │   │   ├── table: default.join_reorder.t
 │   │   ├── read rows: 1
-│   │   ├── read bytes: 197
+│   │   ├── read bytes: 31
 │   │   ├── partitions total: 1
 │   │   ├── partitions scanned: 1
 │   │   └── push downs: [filters: [], limit: NONE]
 │   └── TableScan(Probe)
 │       ├── table: default.join_reorder.t1
 │       ├── read rows: 10
-│       ├── read bytes: 243
+│       ├── read bytes: 68
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
 │       └── push downs: [filters: [], limit: NONE]
 └── TableScan(Probe)
     ├── table: default.join_reorder.t2
     ├── read rows: 100
-    ├── read bytes: 610
+    ├── read bytes: 431
     ├── partitions total: 1
     ├── partitions scanned: 1
     └── push downs: [filters: [], limit: NONE]
@@ -64,7 +64,7 @@ HashJoin
 ├── TableScan(Build)
 │   ├── table: default.join_reorder.t1
 │   ├── read rows: 10
-│   ├── read bytes: 243
+│   ├── read bytes: 68
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
 │   └── push downs: [filters: [], limit: NONE]
@@ -76,14 +76,14 @@ HashJoin
     ├── TableScan(Build)
     │   ├── table: default.join_reorder.t
     │   ├── read rows: 1
-    │   ├── read bytes: 197
+    │   ├── read bytes: 31
     │   ├── partitions total: 1
     │   ├── partitions scanned: 1
     │   └── push downs: [filters: [], limit: NONE]
     └── TableScan(Probe)
         ├── table: default.join_reorder.t2
         ├── read rows: 100
-        ├── read bytes: 610
+        ├── read bytes: 431
         ├── partitions total: 1
         ├── partitions scanned: 1
         └── push downs: [filters: [], limit: NONE]
@@ -105,21 +105,21 @@ HashJoin
 │   ├── TableScan(Build)
 │   │   ├── table: default.join_reorder.t
 │   │   ├── read rows: 1
-│   │   ├── read bytes: 197
+│   │   ├── read bytes: 31
 │   │   ├── partitions total: 1
 │   │   ├── partitions scanned: 1
 │   │   └── push downs: [filters: [], limit: NONE]
 │   └── TableScan(Probe)
 │       ├── table: default.join_reorder.t1
 │       ├── read rows: 10
-│       ├── read bytes: 243
+│       ├── read bytes: 68
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
 │       └── push downs: [filters: [], limit: NONE]
 └── TableScan(Probe)
     ├── table: default.join_reorder.t2
     ├── read rows: 100
-    ├── read bytes: 610
+    ├── read bytes: 431
     ├── partitions total: 1
     ├── partitions scanned: 1
     └── push downs: [filters: [], limit: NONE]
@@ -141,21 +141,21 @@ HashJoin
 │   ├── TableScan(Build)
 │   │   ├── table: default.join_reorder.t
 │   │   ├── read rows: 1
-│   │   ├── read bytes: 197
+│   │   ├── read bytes: 31
 │   │   ├── partitions total: 1
 │   │   ├── partitions scanned: 1
 │   │   └── push downs: [filters: [], limit: NONE]
 │   └── TableScan(Probe)
 │       ├── table: default.join_reorder.t1
 │       ├── read rows: 10
-│       ├── read bytes: 243
+│       ├── read bytes: 68
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
 │       └── push downs: [filters: [], limit: NONE]
 └── TableScan(Probe)
     ├── table: default.join_reorder.t2
     ├── read rows: 100
-    ├── read bytes: 610
+    ├── read bytes: 431
     ├── partitions total: 1
     ├── partitions scanned: 1
     └── push downs: [filters: [], limit: NONE]
@@ -177,21 +177,21 @@ HashJoin
 │   ├── TableScan(Build)
 │   │   ├── table: default.join_reorder.t
 │   │   ├── read rows: 1
-│   │   ├── read bytes: 197
+│   │   ├── read bytes: 31
 │   │   ├── partitions total: 1
 │   │   ├── partitions scanned: 1
 │   │   └── push downs: [filters: [], limit: NONE]
 │   └── TableScan(Probe)
 │       ├── table: default.join_reorder.t1
 │       ├── read rows: 10
-│       ├── read bytes: 243
+│       ├── read bytes: 68
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
 │       └── push downs: [filters: [], limit: NONE]
 └── TableScan(Probe)
     ├── table: default.join_reorder.t2
     ├── read rows: 100
-    ├── read bytes: 610
+    ├── read bytes: 431
     ├── partitions total: 1
     ├── partitions scanned: 1
     └── push downs: [filters: [], limit: NONE]
@@ -208,7 +208,7 @@ HashJoin
 ├── TableScan(Build)
 │   ├── table: default.join_reorder.t1
 │   ├── read rows: 10
-│   ├── read bytes: 243
+│   ├── read bytes: 68
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
 │   └── push downs: [filters: [], limit: NONE]
@@ -220,14 +220,14 @@ HashJoin
     ├── TableScan(Build)
     │   ├── table: default.join_reorder.t
     │   ├── read rows: 1
-    │   ├── read bytes: 197
+    │   ├── read bytes: 31
     │   ├── partitions total: 1
     │   ├── partitions scanned: 1
     │   └── push downs: [filters: [], limit: NONE]
     └── TableScan(Probe)
         ├── table: default.join_reorder.t2
         ├── read rows: 100
-        ├── read bytes: 610
+        ├── read bytes: 431
         ├── partitions total: 1
         ├── partitions scanned: 1
         └── push downs: [filters: [], limit: NONE]
@@ -244,14 +244,14 @@ HashJoin
 ├── TableScan(Build)
 │   ├── table: default.join_reorder.t
 │   ├── read rows: 1
-│   ├── read bytes: 197
+│   ├── read bytes: 31
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
 │   └── push downs: [filters: [], limit: NONE]
 └── TableScan(Probe)
     ├── table: default.join_reorder.t1
     ├── read rows: 10
-    ├── read bytes: 243
+    ├── read bytes: 68
     ├── partitions total: 1
     ├── partitions scanned: 1
     └── push downs: [filters: [], limit: NONE]
@@ -268,14 +268,14 @@ HashJoin
 ├── TableScan(Build)
 │   ├── table: default.join_reorder.t
 │   ├── read rows: 1
-│   ├── read bytes: 197
+│   ├── read bytes: 31
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
 │   └── push downs: [filters: [], limit: NONE]
 └── TableScan(Probe)
     ├── table: default.join_reorder.t1
     ├── read rows: 10
-    ├── read bytes: 243
+    ├── read bytes: 68
     ├── partitions total: 1
     ├── partitions scanned: 1
     └── push downs: [filters: [], limit: NONE]
@@ -292,14 +292,14 @@ HashJoin
 ├── TableScan(Build)
 │   ├── table: default.join_reorder.t
 │   ├── read rows: 1
-│   ├── read bytes: 197
+│   ├── read bytes: 31
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
 │   └── push downs: [filters: [], limit: NONE]
 └── TableScan(Probe)
     ├── table: default.join_reorder.t1
     ├── read rows: 10
-    ├── read bytes: 243
+    ├── read bytes: 68
     ├── partitions total: 1
     ├── partitions scanned: 1
     └── push downs: [filters: [], limit: NONE]
@@ -316,14 +316,14 @@ HashJoin
 ├── TableScan(Build)
 │   ├── table: default.join_reorder.t
 │   ├── read rows: 1
-│   ├── read bytes: 197
+│   ├── read bytes: 31
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
 │   └── push downs: [filters: [], limit: NONE]
 └── TableScan(Probe)
     ├── table: default.join_reorder.t1
     ├── read rows: 10
-    ├── read bytes: 243
+    ├── read bytes: 68
     ├── partitions total: 1
     ├── partitions scanned: 1
     └── push downs: [filters: [], limit: NONE]
@@ -340,14 +340,14 @@ HashJoin
 ├── TableScan(Build)
 │   ├── table: default.join_reorder.t
 │   ├── read rows: 1
-│   ├── read bytes: 197
+│   ├── read bytes: 31
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
 │   └── push downs: [filters: [], limit: NONE]
 └── TableScan(Probe)
     ├── table: default.join_reorder.t1
     ├── read rows: 10
-    ├── read bytes: 243
+    ├── read bytes: 68
     ├── partitions total: 1
     ├── partitions scanned: 1
     └── push downs: [filters: [], limit: NONE]
@@ -364,14 +364,14 @@ HashJoin
 ├── TableScan(Build)
 │   ├── table: default.join_reorder.t
 │   ├── read rows: 1
-│   ├── read bytes: 197
+│   ├── read bytes: 31
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
 │   └── push downs: [filters: [], limit: NONE]
 └── TableScan(Probe)
     ├── table: default.join_reorder.t1
     ├── read rows: 10
-    ├── read bytes: 243
+    ├── read bytes: 68
     ├── partitions total: 1
     ├── partitions scanned: 1
     └── push downs: [filters: [], limit: NONE]

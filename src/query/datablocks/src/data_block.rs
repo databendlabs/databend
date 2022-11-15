@@ -100,6 +100,15 @@ impl DataBlock {
     }
 
     #[inline]
+    pub fn empty_with_meta(meta: BlockMetaInfoPtr) -> Self {
+        DataBlock {
+            schema: Arc::new(DataSchema::empty()),
+            columns: vec![],
+            meta: Some(meta),
+        }
+    }
+
+    #[inline]
     pub fn is_empty(&self) -> bool {
         self.num_columns() == 0 || self.num_rows() == 0
     }
@@ -217,6 +226,11 @@ impl DataBlock {
             schema: self.schema.clone(),
             meta,
         })
+    }
+
+    #[inline]
+    pub fn get_meta(&self) -> Option<&BlockMetaInfoPtr> {
+        self.meta.as_ref()
     }
 
     #[inline]

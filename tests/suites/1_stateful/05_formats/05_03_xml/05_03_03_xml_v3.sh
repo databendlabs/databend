@@ -8,20 +8,20 @@ cat << EOF > /tmp/simple_v3.xml
 <data>
     <row>
         <field name="id">1</field>
-        <field name="name">shuai\"ge</field>
-        <field name="data">{\"我是\":\"帅哥\"}</field>
+        <field name="name">shuai"ge</field>
+        <field name="data">{"我是":"帅哥"}</field>
         <field name="create_time">2022-11-01 10:51:14</field>
     </row>
     <row>
         <field name="id">2</field>
-        <field name="name">\"mengnan\"</field>
-        <field name="data">\"猛\"男</field>
+        <field name="name">"mengnan"</field>
+        <field name="data">"猛"男</field>
         <field name="create_time">2022-11-01 10:51:14</field>
     </row>
     <row>
         <field name="ID">3</field>
-        <field name="NAME">\"mengnan\"</field>
-        <field name="DATA">\"猛\"男</field>
+        <field name="NAME">"mengnan"</field>
+        <field name="DATA">"猛"男</field>
         <field name="CREATE_TIME">2022-11-01 10:51:14</field>
         <field name="EMPTY">123</field>
     </row>
@@ -34,20 +34,20 @@ cat << EOF > /tmp/simple_v4.xml
 <data>
     <databend>
         <field name="id">1</field>
-        <field name="name">shuai\"ge</field>
-        <field name="data">{\"我是\":\"帅哥\"}</field>
+        <field name="name">shuai"ge</field>
+        <field name="data">{"我是":"帅哥"}</field>
         <field name="create_time">2022-11-01 10:51:14</field>
     </databend>
     <databend>
         <field name="id">2</field>
-        <field name="name">\"mengnan\"</field>
-        <field name="data">\"猛\"男</field>
+        <field name="name">"mengnan"</field>
+        <field name="data">"猛"男</field>
         <field name="create_time">2022-11-01 10:51:14</field>
     </databend>
     <databend>
         <field name="ID">3</field>
-        <field name="NAME">\"mengnan\"</field>
-        <field name="DATA">\"猛\"男</field>
+        <field name="NAME">"mengnan"</field>
+        <field name="DATA">"猛"男</field>
         <field name="CREATE_TIME">2022-11-01 10:51:14</field>
         <field name="EMPTY">123</field>
     </databend>

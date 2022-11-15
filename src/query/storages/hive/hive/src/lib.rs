@@ -28,8 +28,6 @@ mod hive_table;
 mod hive_table_options;
 mod hive_table_source;
 
-pub const CATALOG_HIVE: &str = "hive";
-
 pub use hive_block_filter::HiveBlockFilter;
 pub use hive_blocks::HiveBlocks;
 pub use hive_catalog::HiveCatalog;

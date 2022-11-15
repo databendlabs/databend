@@ -12,7 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datablocks::HashMethod;
+use std::marker::PhantomData;
+
 use common_datablocks::HashMethodFixedKeys;
 use common_datavalues::Column;
 use common_datavalues::ColumnRef;
@@ -33,17 +34,17 @@ pub trait GroupColumnsBuilder {
     fn finish(self) -> Result<Vec<ColumnRef>>;
 }
 
-pub struct FixedKeysGroupColumnsBuilder<T> {
+pub struct FixedKeysGroupColumnsBuilder<'a, T> {
+    _t: PhantomData<&'a ()>,
     data: Vec<T>,
     group_column_indices: Vec<usize>,
     group_data_types: Vec<DataTypeImpl>,
 }
 
-impl<T> FixedKeysGroupColumnsBuilder<T>
-where for<'a> HashMethodFixedKeys<T>: HashMethod<HashKey = T>
-{
+impl<'a, T> FixedKeysGroupColumnsBuilder<'a, T> {
     pub fn create(capacity: usize, params: &AggregatorParams) -> Self {
         Self {
+            _t: Default::default(),
             data: Vec::with_capacity(capacity),
             group_column_indices: params.group_columns.clone(),
             group_data_types: params.group_data_types.clone(),
@@ -51,14 +52,14 @@ where for<'a> HashMethodFixedKeys<T>: HashMethod<HashKey = T>
     }
 }
 
-impl<T: Copy + Send + Sync + 'static> GroupColumnsBuilder for FixedKeysGroupColumnsBuilder<T>
-where for<'a> HashMethodFixedKeys<T>: HashMethod<HashKey = T>
+impl<'a, T: Copy + Send + Sync + 'static> GroupColumnsBuilder
+    for FixedKeysGroupColumnsBuilder<'a, T>
 {
-    type T = T;
+    type T = &'a T;
 
     #[inline]
-    fn append_value(&mut self, v: T) {
-        self.data.push(v);
+    fn append_value(&mut self, v: Self::T) {
+        self.data.push(*v);
     }
 
     #[inline]

@@ -27,11 +27,16 @@ fn test_empty_primitive_column() {
 
 #[test]
 fn test_new_from_slice() {
-    let data_column: PrimitiveColumn<i32> = Int32Column::from_slice(&[1, 2]);
+    let values = &[1, 2];
+    let data_column: PrimitiveColumn<i32> = Int32Column::from_slice(values);
     let mut iter = data_column.iter();
     assert_eq!(Some(&1), iter.next());
     assert_eq!(Some(&2), iter.next());
     assert_eq!(None, iter.next());
+
+    data_column.for_each(|i, data| {
+        assert_eq!(DataValue::Int64(values[i] as i64), data);
+    })
 }
 
 #[test]
@@ -64,20 +69,24 @@ fn test_filter_column() {
     struct Test {
         filter: BooleanColumn,
         expect: Vec<i32>,
+        deleted: Option<Vec<i32>>,
     }
 
     let mut tests: Vec<Test> = vec![
         Test {
             filter: BooleanColumn::from_iterator((0..N).map(|_| true)),
             expect: (0..N).map(|i| i as i32).collect(),
+            deleted: None,
         },
         Test {
             filter: BooleanColumn::from_iterator((0..N).map(|_| false)),
             expect: vec![],
+            deleted: Some((0..N).map(|i| i as i32).collect()),
         },
         Test {
             filter: BooleanColumn::from_iterator((0..N).map(|i| i % 10 == 0)),
             expect: (0..N).map(|i| i as i32).filter(|i| i % 10 == 0).collect(),
+            deleted: Some((0..N).map(|i| i as i32).filter(|i| i % 10 != 0).collect()),
         },
         Test {
             filter: BooleanColumn::from_iterator((0..N).map(|i| !(100..=800).contains(&i))),
@@ -85,6 +94,12 @@ fn test_filter_column() {
                 .map(|i| i as i32)
                 .filter(|&i| !(100..=800).contains(&i))
                 .collect(),
+            deleted: Some(
+                (0..N)
+                    .map(|i| i as i32)
+                    .filter(|&i| (100..=800).contains(&i))
+                    .collect(),
+            ),
         },
     ];
 
@@ -103,6 +118,12 @@ fn test_filter_column() {
             .map(|i| i as i32)
             .filter(|&i| !(100..=800).contains(&i))
             .collect(),
+        deleted: Some(
+            (0..N)
+                .map(|i| i as i32)
+                .filter(|&i| (100..=800).contains(&i))
+                .collect(),
+        ),
     });
 
     for test in tests {
@@ -114,5 +135,16 @@ fn test_filter_column() {
                 .values(),
             test.expect
         );
+
+        if let Some(deleted) = test.deleted {
+            let res = data_column.filter(&test.filter.neg());
+            assert_eq!(
+                res.as_any()
+                    .downcast_ref::<PrimitiveColumn<i32>>()
+                    .unwrap()
+                    .values(),
+                deleted
+            );
+        }
     }
 }

@@ -15,40 +15,41 @@
 use common_datavalues::serializations::ArraySerializer;
 use common_datavalues::serializations::StructSerializer;
 use common_io::consts::FALSE_BYTES_LOWER;
-use common_io::consts::INF_BYTES_LOWER;
-use common_io::consts::NAN_BYTES_LOWER;
-use common_io::consts::NULL_BYTES_ESCAPE;
+use common_io::consts::NULL_BYTES_LOWER;
 use common_io::consts::TRUE_BYTES_LOWER;
 
-use crate::field_encoder::CommonSettings;
+use crate::field_encoder::helpers::write_json_string;
 use crate::field_encoder::FieldEncoderRowBased;
 use crate::field_encoder::FieldEncoderValues;
+use crate::CommonSettings;
 use crate::FileFormatOptionsExt;
 
-pub struct FieldEncoderCSV {
+pub struct FieldEncoderJSON {
     pub nested: FieldEncoderValues,
     pub common_settings: CommonSettings,
-    pub quote_char: u8,
+    pub quote_denormals: bool,
+    pub escape_forward_slashes: bool,
 }
 
-impl FieldEncoderCSV {
+impl FieldEncoderJSON {
     pub fn create(options: &FileFormatOptionsExt) -> Self {
-        FieldEncoderCSV {
+        FieldEncoderJSON {
             nested: FieldEncoderValues::create(options),
             common_settings: CommonSettings {
                 true_bytes: TRUE_BYTES_LOWER.as_bytes().to_vec(),
                 false_bytes: FALSE_BYTES_LOWER.as_bytes().to_vec(),
-                null_bytes: NULL_BYTES_ESCAPE.as_bytes().to_vec(),
-                nan_bytes: NAN_BYTES_LOWER.as_bytes().to_vec(),
-                inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
+                nan_bytes: NULL_BYTES_LOWER.as_bytes().to_vec(),
+                inf_bytes: NULL_BYTES_LOWER.as_bytes().to_vec(),
+                null_bytes: NULL_BYTES_LOWER.as_bytes().to_vec(),
                 timezone: options.timezone,
             },
-            quote_char: options.quote.as_bytes()[0],
+            quote_denormals: false,
+            escape_forward_slashes: true,
         }
     }
 }
 
-impl FieldEncoderRowBased for FieldEncoderCSV {
+impl FieldEncoderRowBased for FieldEncoderJSON {
     fn common_settings(&self) -> &CommonSettings {
         &self.common_settings
     }
@@ -57,7 +58,14 @@ impl FieldEncoderRowBased for FieldEncoderCSV {
         if raw {
             out_buf.extend_from_slice(in_buf);
         } else {
-            write_csv_string(in_buf, out_buf, self.quote_char);
+            out_buf.push(b'\"');
+            write_json_string(
+                in_buf,
+                out_buf,
+                self.quote_denormals,
+                self.escape_forward_slashes,
+            );
+            out_buf.push(b'\"');
         }
     }
 
@@ -84,25 +92,4 @@ impl FieldEncoderRowBased for FieldEncoderCSV {
         self.nested.write_struct(column, row_index, &mut buf, false);
         self.write_string_inner(&buf, out_buf, raw)
     }
-}
-
-pub fn write_csv_string(bytes: &[u8], buf: &mut Vec<u8>, quote: u8) {
-    buf.push(quote);
-    let mut start = 0;
-
-    for (i, &byte) in bytes.iter().enumerate() {
-        if byte == quote {
-            if start < i {
-                buf.extend_from_slice(&bytes[start..i]);
-            }
-            buf.push(quote);
-            buf.push(quote);
-            start = i + 1;
-        }
-    }
-
-    if start != bytes.len() {
-        buf.extend_from_slice(&bytes[start..]);
-    }
-    buf.push(quote);
 }

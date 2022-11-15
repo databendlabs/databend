@@ -43,7 +43,7 @@ where
         Ok(())
     }
 
-    fn de_default(&mut self, _format: &FormatSettings) {
+    fn de_default(&mut self) {
         self.builder.append_value(T::default());
     }
 
@@ -82,33 +82,6 @@ where
 
     fn de_null(&mut self, _format: &FormatSettings) -> bool {
         false
-    }
-
-    fn de_whole_text(&mut self, reader: &[u8], _format: &FormatSettings) -> Result<()> {
-        let mut reader = Cursor::new(reader);
-        let v: T = if !T::FLOATING {
-            reader.read_int_text()
-        } else {
-            reader.read_float_text()
-        }?;
-        reader.must_eof()?;
-
-        self.builder.append_value(v);
-        Ok(())
-    }
-
-    fn de_text<R: AsRef<[u8]>>(
-        &mut self,
-        reader: &mut Cursor<R>,
-        _format: &FormatSettings,
-    ) -> Result<()> {
-        let v: T = if !T::FLOATING {
-            reader.read_int_text()
-        } else {
-            reader.read_float_text()
-        }?;
-        self.builder.append_value(v);
-        Ok(())
     }
 
     fn append_data_value(&mut self, value: DataValue, _format: &FormatSettings) -> Result<()> {

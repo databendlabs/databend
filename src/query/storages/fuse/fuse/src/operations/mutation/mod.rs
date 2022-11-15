@@ -21,8 +21,12 @@ pub mod recluster_mutator;
 
 pub use abort_operation::AbortOperation;
 pub use base_mutator::BaseMutator;
+pub use block_filter::all_the_columns_ids;
 pub use block_filter::delete_from_block;
-pub use compact_mutator::FullCompactMutator;
+pub use compact_mutator::BlockCompactMutator;
+pub use compact_mutator::CompactSink;
+pub use compact_mutator::CompactSource;
+pub use compact_mutator::CompactTransform;
 pub use compact_mutator::SegmentCompactMutator;
 pub use compact_mutator::SegmentCompactionState;
 pub use compact_mutator::SegmentCompactor;

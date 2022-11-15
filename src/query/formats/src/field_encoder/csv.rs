@@ -12,52 +12,52 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::serializations::write_escaped_string;
 use common_datavalues::serializations::ArraySerializer;
 use common_datavalues::serializations::StructSerializer;
-use common_io::consts::FALSE_BYTES_NUM;
+use common_io::consts::FALSE_BYTES_LOWER;
 use common_io::consts::INF_BYTES_LOWER;
 use common_io::consts::NAN_BYTES_LOWER;
 use common_io::consts::NULL_BYTES_ESCAPE;
-use common_io::consts::TRUE_BYTES_NUM;
+use common_io::consts::TRUE_BYTES_LOWER;
 
-use crate::field_encoder::CommonSettings;
 use crate::field_encoder::FieldEncoderRowBased;
+use crate::field_encoder::FieldEncoderValues;
+use crate::CommonSettings;
 use crate::FileFormatOptionsExt;
 
-pub struct FieldEncoderTSV {
+pub struct FieldEncoderCSV {
+    pub nested: FieldEncoderValues,
     pub common_settings: CommonSettings,
     pub quote_char: u8,
 }
 
-impl FieldEncoderTSV {
+impl FieldEncoderCSV {
     pub fn create(options: &FileFormatOptionsExt) -> Self {
-        FieldEncoderTSV {
+        FieldEncoderCSV {
+            nested: FieldEncoderValues::create(options),
             common_settings: CommonSettings {
-                true_bytes: TRUE_BYTES_NUM.as_bytes().to_vec(),
-                false_bytes: FALSE_BYTES_NUM.as_bytes().to_vec(),
+                true_bytes: TRUE_BYTES_LOWER.as_bytes().to_vec(),
+                false_bytes: FALSE_BYTES_LOWER.as_bytes().to_vec(),
                 null_bytes: NULL_BYTES_ESCAPE.as_bytes().to_vec(),
                 nan_bytes: NAN_BYTES_LOWER.as_bytes().to_vec(),
                 inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
                 timezone: options.timezone,
             },
-            quote_char: options.get_quote_char(),
+            quote_char: options.quote.as_bytes()[0],
         }
     }
 }
 
-impl FieldEncoderRowBased for FieldEncoderTSV {
+impl FieldEncoderRowBased for FieldEncoderCSV {
     fn common_settings(&self) -> &CommonSettings {
         &self.common_settings
     }
 
     fn write_string_inner(&self, in_buf: &[u8], out_buf: &mut Vec<u8>, raw: bool) {
         if raw {
-            write_escaped_string(in_buf, out_buf, self.quote_char);
+            out_buf.extend_from_slice(in_buf);
         } else {
-            out_buf.push(self.quote_char);
-            write_escaped_string(in_buf, out_buf, self.quote_char);
-            out_buf.push(self.quote_char);
+            write_csv_string(in_buf, out_buf, self.quote_char);
         }
     }
 
@@ -66,19 +66,11 @@ impl FieldEncoderRowBased for FieldEncoderTSV {
         column: &ArraySerializer<'a>,
         row_index: usize,
         out_buf: &mut Vec<u8>,
-        _raw: bool,
+        raw: bool,
     ) {
-        let start = column.offsets[row_index] as usize;
-        let end = column.offsets[row_index + 1] as usize;
-        out_buf.push(b'[');
-        let inner = &column.inner;
-        for i in start..end {
-            if i != start {
-                out_buf.extend_from_slice(b",");
-            }
-            self.write_field(inner, i, out_buf, false);
-        }
-        out_buf.push(b']');
+        let mut buf = vec![];
+        self.nested.write_array(column, row_index, &mut buf, false);
+        self.write_string_inner(&buf, out_buf, raw)
     }
 
     fn write_struct<'a>(
@@ -86,18 +78,31 @@ impl FieldEncoderRowBased for FieldEncoderTSV {
         column: &StructSerializer<'a>,
         row_index: usize,
         out_buf: &mut Vec<u8>,
-        _raw: bool,
+        raw: bool,
     ) {
-        out_buf.push(b'(');
-        let mut first = true;
-
-        for inner in &column.inners {
-            if !first {
-                out_buf.extend_from_slice(b",");
-            }
-            first = false;
-            self.write_field(inner, row_index, out_buf, false);
-        }
-        out_buf.push(b')');
+        let mut buf = vec![];
+        self.nested.write_struct(column, row_index, &mut buf, false);
+        self.write_string_inner(&buf, out_buf, raw)
     }
+}
+
+pub fn write_csv_string(bytes: &[u8], buf: &mut Vec<u8>, quote: u8) {
+    buf.push(quote);
+    let mut start = 0;
+
+    for (i, &byte) in bytes.iter().enumerate() {
+        if byte == quote {
+            if start < i {
+                buf.extend_from_slice(&bytes[start..i]);
+            }
+            buf.push(quote);
+            buf.push(quote);
+            start = i + 1;
+        }
+    }
+
+    if start != bytes.len() {
+        buf.extend_from_slice(&bytes[start..]);
+    }
+    buf.push(quote);
 }
