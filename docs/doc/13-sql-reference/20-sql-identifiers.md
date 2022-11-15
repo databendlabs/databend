@@ -1,5 +1,6 @@
 ---
 title: SQL IDENTIFIERS
+sidebar_label: SQL Identifiers
 ---
 
 SQL identifiers is the name of the database objects.
@@ -77,7 +78,7 @@ By default, Databend applies the following rules for storing identifiers (at cre
 
 * When an identifier is double-quoted, it is stored and resolved exactly as entered, including case.
 
-If want to preserve the case of characters when use `unquoted identifier`, need set [unquoted_ident_case_sensitive](../30-sql/70-system-tables/system-settings.md) = 1.
+If want to preserve the case of characters when use `unquoted identifier`, need set [unquoted_ident_case_sensitive](70-system-tables/system-settings.md) = 1.
 
 Examples:
 
@@ -105,7 +106,7 @@ databend :) desc tt;
 
 ```
 
-If do not want to preserve the case of characters when use `double identifier`, need set [quoted_ident_case_sensitive](../30-sql/70-system-tables/system-settings.md) = 0.
+If do not want to preserve the case of characters when use `double identifier`, need set [quoted_ident_case_sensitive](70-system-tables/system-settings.md) = 0.
 
 Examples:
 

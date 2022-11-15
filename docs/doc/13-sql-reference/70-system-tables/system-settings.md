@@ -4,8 +4,6 @@ title: system.settings
 
 Contains information about databend system settings.
 
-Query all settings can use [show settings](../40-show/show-settings.md)
-
 ## compression
 
 Format compression. Commonly used in stream load scenarios, default values is None. Now support:
