@@ -55,7 +55,7 @@ For detailed explanations about the COPY INTO command and its options, see [COPY
 
 ### Streaming Load API
 
-The Streaming Load API can read data from your local data files and load it into Databend. For more information about the Streaming Load API, see [Streaming Load API](../30-reference/00-api/03-streaming-load.md).
+The Streaming Load API can read data from your local data files and load it into Databend. For more information about the Streaming Load API, see [Streaming Load API](../11-integrations/00-api/03-streaming-load.md).
 
 ## Data Loading Considerations
 

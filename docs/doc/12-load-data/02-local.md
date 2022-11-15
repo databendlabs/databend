@@ -5,7 +5,7 @@ description:
   Load data from local file system.
 ---
 
-In this tutorial, you will load data from a local sample file into Databend with the [Streaming Load API](../30-reference/00-api/03-streaming-load.md).
+In this tutorial, you will load data from a local sample file into Databend with the [Streaming Load API](../11-integrations/00-api/03-streaming-load.md).
 
 ## Tutorial 1 - Load from a CSV File
 
