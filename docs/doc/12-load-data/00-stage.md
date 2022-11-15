@@ -7,7 +7,7 @@ description:
 
 ![image](../../public/img/load/load-data-from-stage.png)
 
-In this tutorial, you will create an internal stage, stage a sample file, and then load data from the file into Databend with the [COPY INTO](../30-reference/30-sql/10-dml/dml-copy-into-table.md) command.
+In this tutorial, you will create an internal stage, stage a sample file, and then load data from the file into Databend with the [COPY INTO](../14-sql-commands/10-dml/dml-copy-into-table.md) command.
 
 ### Step 1. Create Stage Object
 
@@ -149,7 +149,7 @@ CREATE TABLE books
 
 ### Step 5. Copy Data into the Target Tables
 
-Execute [COPY](../30-reference/30-sql/10-dml/dml-copy-into-table.md) to load staged files to the target table.
+Execute [COPY](../14-sql-commands/10-dml/dml-copy-into-table.md) to load staged files to the target table.
 
 <Tabs groupId="sample-data">
 

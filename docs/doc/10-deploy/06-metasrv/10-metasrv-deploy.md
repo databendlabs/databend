@@ -43,7 +43,7 @@ or a cluster of 3 or 5 nodes for production use.
 
 ## 1. Download
 
-You can find the latest binaries on the [github release](https://github.com/datafuselabs/databend/releases) page or [build from source](../../60-contributing/00-building-from-source.md).
+You can find the latest binaries on the [github release](https://github.com/datafuselabs/databend/releases) page or [build from source](../../90-contributing/00-building-from-source.md).
 
 ```shell
 mkdir databend && cd databend

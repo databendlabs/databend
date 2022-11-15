@@ -51,7 +51,7 @@ Databend recommends using the COPY INTO command to load data from files in a sta
 
 The COPY INTO command can load data from files in a stage, bucket, or remote server. You can tell Databend how to load your data by including the options of the COPY INTO command. The COPY INTO command has many options that allow you to specify how your data will be loaded. 
 
-For detailed explanations about the COPY INTO command and its options, see [COPY INTO](../30-reference/30-sql/10-dml/dml-copy-into-table.md).
+For detailed explanations about the COPY INTO command and its options, see [COPY INTO](../14-sql-commands/10-dml/dml-copy-into-table.md).
 
 ### Streaming Load API
 

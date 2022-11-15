@@ -54,7 +54,7 @@ Grant privileges for the user:
 GRANT ALL PRIVILEGES ON airbyte.* TO user1;
 ```
 
-See also [How To Create User](../../30-reference/30-sql/00-ddl/30-user/01-user-create-user.md).
+See also [How To Create User](../../14-sql-commands/00-ddl/30-user/01-user-create-user.md).
 
 ## Configure Airbyte
 

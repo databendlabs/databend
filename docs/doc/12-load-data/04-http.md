@@ -5,7 +5,7 @@ description:
   Load data from remote files.
 ---
 
-In this tutorial, you will load data from a remote sample file into Databend with the [COPY INTO](../30-reference/30-sql/10-dml/dml-copy-into-table.md) command.
+In this tutorial, you will load data from a remote sample file into Databend with the [COPY INTO](../14-sql-commands/10-dml/dml-copy-into-table.md) command.
 
 This tutorial uses this remote sample file: [books.csv](https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/data/books.csv). The sample contains the following records:
 
@@ -37,7 +37,7 @@ COPY INTO books FROM 'https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/d
 
 :::tip
 
-The command can also load data from multiple files that are sequentially named. See [COPY INTO `<table>`](../30-reference/30-sql/10-dml/dml-copy-into-table.md) for details.
+The command can also load data from multiple files that are sequentially named. See [COPY INTO `<table>`](../14-sql-commands/10-dml/dml-copy-into-table.md) for details.
 
 :::
 

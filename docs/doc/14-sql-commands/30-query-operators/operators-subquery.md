@@ -156,7 +156,7 @@ WHERE  t1.a NOT IN (SELECT *
 
 You can use ANY (or SOME) to check whether a comparison is true for any of the values returned by a subquery.
 
-- The keyword ANY (or SOME) must follow a [comparison operator](../../30-reference/20-functions/02-comparisons-operators/index.md).
+- The keyword ANY (or SOME) must follow a [comparison operator](../../15-sql-functions/02-comparisons-operators/index.md).
 - If the subquery doesn't return any values, the comparison evaluates to false.
 - SOME works the same way as ANY.
 
@@ -203,7 +203,7 @@ WHERE  t1.a < ANY (SELECT *
 
 You can use ALL to check whether a comparison is true for all of the values returned by a subquery.
 
-- The keyword ALL must follow a [comparison operator](../../30-reference/20-functions/02-comparisons-operators/index.md).
+- The keyword ALL must follow a [comparison operator](../../15-sql-functions/02-comparisons-operators/index.md).
 - If the subquery doesn't return any values, the comparison evaluates to true.
 
 ### Syntax
