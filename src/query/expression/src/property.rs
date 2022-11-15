@@ -53,10 +53,11 @@ impl FunctionProperty {
 pub enum FunctionDomain<T: ValueType> {
     /// The function may return error.
     MayThrow,
-    /// The function must not return error.
-    NoThrow,
+    /// The function must not return error, and the return value any valid
+    /// value the type can represent.
+    Full,
     /// The function must not return error, and have futher information
-    /// to restriction the range of the output value.
+    /// to restrict the range of the output value.
     Domain(T::Domain),
 }
 
@@ -82,7 +83,7 @@ impl<T: ValueType> FunctionDomain<T> {
     pub fn map<U: ValueType>(self, f: impl FnOnce(T::Domain) -> U::Domain) -> FunctionDomain<U> {
         match self {
             FunctionDomain::MayThrow => FunctionDomain::MayThrow,
-            FunctionDomain::NoThrow => FunctionDomain::NoThrow,
+            FunctionDomain::Full => FunctionDomain::Full,
             FunctionDomain::Domain(domain) => FunctionDomain::Domain(f(domain)),
         }
     }
@@ -95,7 +96,7 @@ impl<T: ArgType> FunctionDomain<T> {
     pub fn normalize(self) -> Option<T::Domain> {
         match self {
             FunctionDomain::MayThrow => None,
-            FunctionDomain::NoThrow => Some(T::full_domain()),
+            FunctionDomain::Full => Some(T::full_domain()),
             FunctionDomain::Domain(domain) => Some(domain),
         }
     }

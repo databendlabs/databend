@@ -75,7 +75,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_combine_nullable_1_arg::<StringType, VariantType, _, _>(
         "try_parse_json",
         FunctionProperty::default(),
-        |_| FunctionDomain::NoThrow,
+        |_| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<StringType, NullableType<VariantType>>(|s, output, _| {
             if s.trim().is_empty() {
                 output.push(JSONB_NULL);
@@ -113,7 +113,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_combine_nullable_1_arg::<VariantType, UInt32Type, _, _>(
         "length",
         FunctionProperty::default(),
-        |_| FunctionDomain::NoThrow,
+        |_| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<VariantType, NullableType<UInt32Type>>(|v, output, _| {
             if v.is_empty() {
                 output.push_null();
@@ -130,7 +130,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_combine_nullable_1_arg::<VariantType, VariantType, _, _>(
         "object_keys",
         FunctionProperty::default(),
-        |_| FunctionDomain::NoThrow,
+        |_| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<VariantType, NullableType<VariantType>>(|v, output, _| {
             if v.is_empty() {
                 output.push_null()
@@ -147,7 +147,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_combine_nullable_2_arg::<VariantType, UInt64Type, VariantType, _, _>(
         "get",
         FunctionProperty::default(),
-        |_, _| FunctionDomain::NoThrow,
+        |_, _| FunctionDomain::Full,
         vectorize_with_builder_2_arg::<VariantType, UInt64Type, NullableType<VariantType>>(
             |s, idx, output, _| {
                 if s.is_empty() {
@@ -279,7 +279,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_combine_nullable_1_arg::<VariantType, BooleanType, _, _>(
         "as_boolean",
         FunctionProperty::default(),
-        |_| FunctionDomain::NoThrow,
+        |_| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<VariantType, NullableType<BooleanType>>(|v, output, _| {
             if v.is_empty() {
                 output.push_null();
@@ -296,7 +296,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_combine_nullable_1_arg::<VariantType, Int64Type, _, _>(
         "as_integer",
         FunctionProperty::default(),
-        |_| FunctionDomain::NoThrow,
+        |_| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<VariantType, NullableType<Int64Type>>(|v, output, _| {
             if v.is_empty() {
                 output.push_null();
@@ -313,7 +313,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_combine_nullable_1_arg::<VariantType, Float64Type, _, _>(
         "as_float",
         FunctionProperty::default(),
-        |_| FunctionDomain::NoThrow,
+        |_| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<VariantType, NullableType<Float64Type>>(|v, output, _| {
             if v.is_empty() {
                 output.push_null();
@@ -330,7 +330,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_combine_nullable_1_arg::<VariantType, StringType, _, _>(
         "as_string",
         FunctionProperty::default(),
-        |_| FunctionDomain::NoThrow,
+        |_| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<VariantType, NullableType<StringType>>(|v, output, _| {
             if v.is_empty() {
                 output.push_null();
@@ -347,7 +347,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_combine_nullable_1_arg::<VariantType, VariantType, _, _>(
         "as_array",
         FunctionProperty::default(),
-        |_| FunctionDomain::NoThrow,
+        |_| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<VariantType, NullableType<VariantType>>(|v, output, _| {
             if v.is_empty() {
                 output.push_null()
@@ -363,7 +363,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_combine_nullable_1_arg::<VariantType, VariantType, _, _>(
         "as_object",
         FunctionProperty::default(),
-        |_| FunctionDomain::NoThrow,
+        |_| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<VariantType, NullableType<VariantType>>(|v, output, _| {
             if v.is_empty() {
                 output.push_null()
@@ -379,7 +379,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_1_arg::<GenericType<0>, VariantType, _, _>(
         "to_variant",
         FunctionProperty::default(),
-        |_| FunctionDomain::NoThrow,
+        |_| FunctionDomain::Full,
         |val, ctx| match val {
             ValueRef::Scalar(scalar) => {
                 let mut buf = Vec::new();

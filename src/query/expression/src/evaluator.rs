@@ -526,7 +526,7 @@ impl<'a> ConstantFolder<'a> {
                 let func_domain =
                     args_domain.and_then(|domains| match (function.calc_domain)(&domains) {
                         FunctionDomain::MayThrow => None,
-                        FunctionDomain::NoThrow => Some(Domain::full(return_type)),
+                        FunctionDomain::Full => Some(Domain::full(return_type)),
                         FunctionDomain::Domain(domain) => Some(domain),
                     });
                 let all_args_is_scalar = args_expr.iter().all(|arg| arg.as_constant().is_some());
