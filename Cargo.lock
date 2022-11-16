@@ -1295,6 +1295,7 @@ dependencies = [
  "common-storage",
  "dashmap",
  "dyn-clone",
+ "goldenfile",
  "once_cell",
  "serde",
  "serde_json",

@@ -13,12 +13,9 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::fmt::Formatter;
-use std::hash::Hash;
-use std::hash::Hasher;
 use std::sync::Arc;
 
 use common_exception::Result;
@@ -88,54 +85,42 @@ impl Partitions {
     }
 
     pub fn reshuffle(&self, executors: Vec<String>) -> Result<HashMap<String, Partitions>> {
-        let executor_nums = executors.len();
-        match self.kind {
-            PartitionsShuffleKind::None => {
-                let mut executor_part = HashMap::default();
+        let mut executors_sort = executors;
+        executors_sort.sort();
 
-                let parts_per_node = self.partitions.len() / executor_nums;
-                for (idx, executor) in executors.iter().enumerate() {
-                    let begin = parts_per_node * idx;
-                    let end = parts_per_node * (idx + 1);
-                    let mut parts = self.partitions[begin..end].to_vec();
-
-                    if idx == executor_nums - 1 {
-                        // For some irregular partitions, we assign them to the last node
-                        let begin = parts_per_node * executor_nums;
-                        parts.extend_from_slice(&self.partitions[begin..]);
-                    }
-                    executor_part.insert(
-                        executor.clone(),
-                        Partitions::create(PartitionsShuffleKind::None, parts.to_vec()),
-                    );
-                }
-                Ok(executor_part)
-            }
+        let executor_nums = executors_sort.len();
+        let partitions = match self.kind {
+            PartitionsShuffleKind::None => self.partitions.clone(),
             PartitionsShuffleKind::Mod => {
-                // Build mod partition chunk.
-                let mut partition_slice = Vec::with_capacity(executor_nums);
-                for _i in 0..executor_nums {
-                    partition_slice.push(Partitions::default());
-                }
-                for part in &self.partitions {
-                    let idx = part.hash() as usize % executor_nums;
-                    partition_slice[idx].partitions.push(part.clone());
-                }
-
-                // Bind partitions always to the certain executor by executor_id = hash(executor)%executor_nums.
-                let mut executor_part = HashMap::default();
-                for (i, executor) in executors.iter().enumerate() {
-                    let mut s = DefaultHasher::new();
-                    executor.hash(&mut s);
-                    let executor_idx = (s.finish() as usize) % executor_nums;
-
-                    // Always bind to the same executor.
-                    executor_part
-                        .insert(executors[executor_idx].clone(), partition_slice[i].clone());
-                }
-                Ok(executor_part)
+                // Sort by hash%executor_nums.
+                let mut parts = self.partitions.clone();
+                parts.sort_by(|a, b| {
+                    let hl = a.hash() % executor_nums as u64;
+                    let hr = b.hash() % executor_nums as u64;
+                    hl.cmp(&hr)
+                });
+                parts
             }
+        };
+
+        let mut executor_part = HashMap::default();
+        let parts_per_node = partitions.len() / executor_nums;
+        for (idx, executor) in executors_sort.iter().enumerate() {
+            let begin = parts_per_node * idx;
+            let end = parts_per_node * (idx + 1);
+            let mut parts = partitions[begin..end].to_vec();
+
+            if idx == executor_nums - 1 {
+                // For some irregular partitions, we assign them to the last node
+                let begin = parts_per_node * executor_nums;
+                parts.extend_from_slice(&partitions[begin..]);
+            }
+            executor_part.insert(
+                executor.clone(),
+                Partitions::create(PartitionsShuffleKind::None, parts.to_vec()),
+            );
         }
+        Ok(executor_part)
     }
 }
 
