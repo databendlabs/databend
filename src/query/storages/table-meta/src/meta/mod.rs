@@ -12,7 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-mod common;
+mod statistics;
 
 /// Re-exports meta data structures of current version, i.e. v1
 mod current;
@@ -20,18 +20,18 @@ mod v0;
 mod v1;
 mod versions;
 
-pub use common::ClusterKey;
-pub use common::ClusterStatistics;
-pub use common::ColumnId;
-pub use common::ColumnNDVs;
-pub use common::ColumnStatistics;
-pub use common::Compression;
-pub use common::Location;
-pub use common::SnapshotId;
-pub use common::Statistics;
-pub use common::StatisticsOfColumns;
-pub use common::Versioned;
 pub use current::*;
+pub use statistics::ClusterKey;
+pub use statistics::ClusterStatistics;
+pub use statistics::ColumnId;
+pub use statistics::ColumnNDVs;
+pub use statistics::ColumnStatistics;
+pub use statistics::Compression;
+pub use statistics::Location;
+pub use statistics::SnapshotId;
+pub use statistics::Statistics;
+pub use statistics::StatisticsOfColumns;
+pub use statistics::Versioned;
 pub use versions::BlockBloomFilterIndexVersion;
 pub use versions::SegmentInfoVersion;
 pub use versions::SnapshotVersion;

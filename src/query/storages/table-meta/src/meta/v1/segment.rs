@@ -19,9 +19,9 @@ use common_datablocks::DataBlock;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::meta::common::ClusterStatistics;
-use crate::meta::common::ColumnStatistics;
-use crate::meta::common::FormatVersion;
+use crate::meta::statistics::ClusterStatistics;
+use crate::meta::statistics::ColumnStatistics;
+use crate::meta::statistics::FormatVersion;
 use crate::meta::ColumnId;
 use crate::meta::ColumnMeta;
 use crate::meta::Compression;

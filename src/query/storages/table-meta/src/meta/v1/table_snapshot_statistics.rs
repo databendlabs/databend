@@ -18,7 +18,7 @@ use common_exception::Result;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::meta::common::FormatVersion;
+use crate::meta::statistics::FormatVersion;
 use crate::meta::ColumnId;
 use crate::meta::ColumnNDVs;
 use crate::meta::SnapshotId;

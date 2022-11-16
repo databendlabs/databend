@@ -14,7 +14,7 @@
 
 use std::collections::HashMap;
 
-use crate::meta::common::ColumnStatistics;
+use crate::meta::statistics::ColumnStatistics;
 use crate::meta::ColumnId;
 use crate::meta::Statistics;
 

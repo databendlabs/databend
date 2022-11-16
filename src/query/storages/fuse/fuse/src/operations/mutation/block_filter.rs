@@ -38,7 +38,6 @@ pub async fn delete_from_block(
     filter_expr: &Expression,
     statistics: &mut Option<TableSnapshotStatistics>,
 ) -> Result<Deletion> {
-    println!("in delete 7");
     let mut filtering_whole_block = false;
 
     // extract the columns that are going to be filtered on
@@ -99,7 +98,6 @@ pub async fn delete_from_block(
         whole_block_reader.read_with_block_meta(block_meta).await?
     };
 
-    println!("in delete 8");
     // add statistics of filter deleted rows
     if let Some(statistics) = statistics {
         stat_delete_columns_from_block(&whole_block, &filter, &mut statistics.column_ndvs)?;

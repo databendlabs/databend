@@ -22,7 +22,7 @@ use common_datavalues::DataSchema;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::meta::common::FormatVersion;
+use crate::meta::statistics::FormatVersion;
 use crate::meta::ClusterKey;
 use crate::meta::ColumnId;
 use crate::meta::Location;

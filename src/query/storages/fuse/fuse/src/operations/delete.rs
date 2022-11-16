@@ -40,26 +40,21 @@ impl FuseTable {
         projection: &Projection,
         selection: &Option<String>,
     ) -> Result<()> {
-        println!("in delete ...");
         let snapshot_opt = self.read_table_snapshot().await?;
-        println!("in delete 2");
         let prev_statistics_opt = self
             .read_table_snapshot_statistics(snapshot_opt.as_ref())
             .await?;
 
-        println!("in delete 3");
         // check if table is empty
         let snapshot = if let Some(val) = snapshot_opt {
             val
         } else {
             // no snapshot, no deletion
-            println!("in delete 2");
             return Ok(());
         };
 
         if snapshot.summary.row_count == 0 {
             // empty snapshot, no deletion
-            println!("in delete 3");
             return Ok(());
         }
 
@@ -84,7 +79,6 @@ impl FuseTable {
             )
             .await
         } else {
-            println!("in delete 4");
             // deleting the whole table... just a truncate
             let purge = false;
             self.do_truncate(ctx.clone(), purge).await
@@ -99,7 +93,6 @@ impl FuseTable {
         filter: &Expression,
         projection: &Projection,
     ) -> Result<()> {
-        println!("in delete 5");
         let cluster_stats_gen = self.cluster_stats_gen()?;
         let mut deletion_collector = DeletionMutator::try_create(
             ctx.clone(),
@@ -130,7 +123,6 @@ impl FuseTable {
         )
         .await?;
 
-        println!("in delete 6");
         // delete block one by one.
         // this could be executed in a distributed manner (till new planner, pipeline settled down)
         for (seg_idx, block_meta) in block_metas {

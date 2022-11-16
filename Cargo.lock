@@ -7832,7 +7832,7 @@ checksum = "d55dd09aaa2f85ef8767cc9177294d63c30d62c8533329e75aa51d8b94976e22"
 [[package]]
 name = "streaming_algorithms"
 version = "0.3.0"
-source = "git+https://github.com/datafuse-extras/streaming_algorithms?tag=hyperloglog_del_op#65eb634ffb43b5a1b1f8f7dd5bfba27e6ccef714"
+source = "git+https://github.com/datafuse-extras/streaming_algorithms?tag=hyperloglog_del_op_fix_overflow_bug#e07d26324e3d5f42bd233231e80522b2659fce5e"
 dependencies = [
  "rand 0.7.3",
  "serde",

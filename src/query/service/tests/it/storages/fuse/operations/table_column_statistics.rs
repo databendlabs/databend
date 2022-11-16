@@ -24,6 +24,8 @@ use common_exception::Result;
 use common_storages_fuse::FuseTable;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
+use databend_query::sql::plans::Plan;
+use databend_query::sql::Planner;
 use futures_util::TryStreamExt;
 
 use crate::storages::fuse::table_test_fixture::execute_command;
@@ -68,6 +70,21 @@ async fn test_table_modify_column_ndv_statistics() -> Result<()> {
     let result = get_column_ndv_statistics(table.clone(), ctx.clone()).await?;
     assert_eq!(result, expected);
 
+    // delete
+    let query = "delete from default.t where c=1";
+    let mut planner = Planner::new(ctx.clone());
+    let (plan, _, _) = planner.plan_sql(query).await?;
+    if let Plan::Delete(delete) = plan {
+        table
+            .delete(ctx.clone(), &delete.projection, &delete.selection)
+            .await?;
+    }
+
+    // check count
+    let expected = Some(HashMap::from([(0, num_inserts as u64 - 1)]));
+    let result = get_column_ndv_statistics(table.clone(), ctx.clone()).await?;
+    assert_eq!(result, expected);
+
     Ok(())
 }
 
@@ -94,5 +111,9 @@ async fn append_rows(ctx: Arc<QueryContext>, n: usize) -> Result<()> {
 
 async fn check_count(result_stream: SendableDataBlockStream) -> Result<u64> {
     let blocks: Vec<DataBlock> = result_stream.try_collect().await?;
-    blocks[0].column(0).get_u64(0)
+    let mut count: u64 = 0;
+    for block in blocks {
+        count += block.column(0).get_u64(0)?;
+    }
+    Ok(count)
 }

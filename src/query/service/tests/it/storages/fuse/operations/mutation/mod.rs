@@ -12,7 +12,6 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-mod append;
 mod deletion_mutator;
 mod full_compact_mutator;
 mod recluster_mutator;
