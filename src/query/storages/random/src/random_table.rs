@@ -73,7 +73,7 @@ impl RandomTable {
                 partitions.push(RandomPartInfo::create(rows));
             }
         }
-        Partitions::create(PartitionsShuffleKind::None, partitions)
+        Partitions::create(PartitionsShuffleKind::Seq, partitions)
     }
 }
 

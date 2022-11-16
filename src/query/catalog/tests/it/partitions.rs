@@ -80,12 +80,12 @@ fn test_partition_reshuffle() {
 
     // None.
     {
-        let partitions = gen_parts(PartitionsShuffleKind::None, 11);
+        let partitions = gen_parts(PartitionsShuffleKind::Seq, 11);
         let shuffle = partitions.reshuffle(executors_3.clone()).unwrap();
 
         writeln!(
             file,
-            "PartitionsShuffleKind::None: 11 partitions of 3 executors"
+            "PartitionsShuffleKind::Seq : 11 partitions of 3 executors"
         )
         .unwrap();
         let e1_parts = shuffle.get(&executors_3[0]).unwrap();
@@ -100,12 +100,12 @@ fn test_partition_reshuffle() {
 
     // None.
     {
-        let partitions = gen_parts(PartitionsShuffleKind::None, 2);
+        let partitions = gen_parts(PartitionsShuffleKind::Seq, 2);
         let shuffle = partitions.reshuffle(executors_3.clone()).unwrap();
 
         writeln!(
             file,
-            "PartitionsShuffleKind::None: 2 partitions of 3 executors"
+            "PartitionsShuffleKind::Seq : 2 partitions of 3 executors"
         )
         .unwrap();
         let e1_parts = shuffle.get(&executors_3[0]).unwrap();
@@ -153,5 +153,22 @@ fn test_partition_reshuffle() {
 
         let e2_parts = shuffle.get(&executors_2[1]).unwrap();
         writeln!(file, "{:?}", e2_parts).unwrap();
+    }
+
+    // Rand.
+    {
+        let partitions = gen_parts(PartitionsShuffleKind::Rand, 11);
+        let shuffle = partitions.reshuffle(executors_2.clone()).unwrap();
+
+        writeln!(
+            file,
+            "PartitionsShuffleKind::Rand: 11 partitions of 2 executors"
+        )
+        .unwrap();
+        let e1_parts = shuffle.get(&executors_2[0]).unwrap();
+        writeln!(file, "{:?}", e1_parts.len()).unwrap();
+
+        let e2_parts = shuffle.get(&executors_2[1]).unwrap();
+        writeln!(file, "{:?}", e2_parts.len()).unwrap();
     }
 }

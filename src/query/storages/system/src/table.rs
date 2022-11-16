@@ -70,7 +70,7 @@ pub trait SyncSystemTable: Send + Sync {
     ) -> Result<(PartStatistics, Partitions)> {
         Ok((
             PartStatistics::default(),
-            Partitions::create(PartitionsShuffleKind::None, vec![Arc::new(Box::new(
+            Partitions::create(PartitionsShuffleKind::Seq, vec![Arc::new(Box::new(
                 SystemTablePart,
             ))]),
         ))
@@ -192,7 +192,7 @@ pub trait AsyncSystemTable: Send + Sync {
     ) -> Result<(PartStatistics, Partitions)> {
         Ok((
             PartStatistics::default(),
-            Partitions::create(PartitionsShuffleKind::None, vec![Arc::new(Box::new(
+            Partitions::create(PartitionsShuffleKind::Seq, vec![Arc::new(Box::new(
                 SystemTablePart,
             ))]),
         ))

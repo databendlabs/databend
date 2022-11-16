@@ -445,7 +445,7 @@ impl HiveTable {
 
         Ok((
             Default::default(),
-            Partitions::create(PartitionsShuffleKind::None, partitions),
+            Partitions::create(PartitionsShuffleKind::Seq, partitions),
         ))
     }
 }

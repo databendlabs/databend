@@ -39,5 +39,5 @@ pub fn generate_numbers_parts(start: u64, workers: u64, total: u64) -> Partition
         }
     }
 
-    Partitions::create(PartitionsShuffleKind::None, partitions)
+    Partitions::create(PartitionsShuffleKind::Seq, partitions)
 }

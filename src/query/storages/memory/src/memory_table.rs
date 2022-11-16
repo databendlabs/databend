@@ -125,7 +125,7 @@ impl MemoryTable {
             }
         }
 
-        Partitions::create(PartitionsShuffleKind::None, partitions)
+        Partitions::create(PartitionsShuffleKind::Seq, partitions)
     }
 }
 

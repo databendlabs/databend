@@ -19,6 +19,8 @@ use std::fmt::Formatter;
 use std::sync::Arc;
 
 use common_exception::Result;
+use rand::prelude::SliceRandom;
+use rand::thread_rng;
 
 #[typetag::serde(tag = "type")]
 pub trait PartInfo: Send + Sync {
@@ -60,10 +62,12 @@ pub type PartInfoPtr = Arc<Box<dyn PartInfo>>;
 /// Under PartitionsShuffleKind::Mod, the same partition is always routed to the same executor.
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
 pub enum PartitionsShuffleKind {
-    // Bind the Partition by chunk range.
-    None,
-    // Bind the Partition always to a same executor.
+    // Bind the Partition to executor one by one with order.
+    Seq,
+    // Bind the Partition to executor by partition.hash()%executor_nums order.
     Mod,
+    // Bind the Partition to executor by partition.rand() order.
+    Rand,
 }
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
 pub struct Partitions {
@@ -90,7 +94,7 @@ impl Partitions {
 
         let executor_nums = executors_sort.len();
         let partitions = match self.kind {
-            PartitionsShuffleKind::None => self.partitions.clone(),
+            PartitionsShuffleKind::Seq => self.partitions.clone(),
             PartitionsShuffleKind::Mod => {
                 // Sort by hash%executor_nums.
                 let mut parts = self.partitions.clone();
@@ -99,6 +103,12 @@ impl Partitions {
                     let hr = b.hash() % executor_nums as u64;
                     hl.cmp(&hr)
                 });
+                parts
+            }
+            PartitionsShuffleKind::Rand => {
+                let mut rng = thread_rng();
+                let mut parts = self.partitions.clone();
+                parts.shuffle(&mut rng);
                 parts
             }
         };
@@ -117,7 +127,7 @@ impl Partitions {
             }
             executor_part.insert(
                 executor.clone(),
-                Partitions::create(PartitionsShuffleKind::None, parts.to_vec()),
+                Partitions::create(PartitionsShuffleKind::Seq, parts.to_vec()),
             );
         }
         Ok(executor_part)
@@ -127,7 +137,7 @@ impl Partitions {
 impl Default for Partitions {
     fn default() -> Self {
         Self {
-            kind: PartitionsShuffleKind::None,
+            kind: PartitionsShuffleKind::Seq,
             partitions: vec![],
         }
     }
