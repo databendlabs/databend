@@ -336,8 +336,6 @@ impl ExchangeTransform {
             ))),
         }?;
 
-        // println!("deserialized meta {:?}", meta);
-
         self.output_data = Some(OutputData {
             serialized_blocks: vec![],
             has_serialized_blocks: false,

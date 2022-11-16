@@ -179,7 +179,6 @@ impl ExchangeSourceTransform {
             )),
         }?;
 
-        // println!("deserialized meta {:?}", meta);
         self.output_data = Some(DataBlock::from_chunk(schema, &batch)?.add_meta(meta)?);
 
         Ok(())
