@@ -17,9 +17,9 @@ use std::iter::TrustedLen;
 use std::sync::atomic::Ordering;
 
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::Chunk;
 use common_hashtable::HashtableEntryRefLike;
 use common_hashtable::HashtableLike;
 
@@ -34,15 +34,15 @@ impl JoinHashTable {
         hash_table: &H,
         probe_state: &mut ProbeState,
         keys_iter: IT,
-        input: &DataBlock,
-    ) -> Result<Vec<DataBlock>>
+        input: &Chunk,
+    ) -> Result<Vec<Chunk>>
     where
         IT: Iterator<Item = &'a H::Key> + TrustedLen,
         H::Key: 'a,
     {
         let valids = &probe_state.valids;
-        // The inner join will return multiple data blocks of similar size
-        let mut probed_blocks = vec![];
+        // The inner join will return multiple data chunks of similar size
+        let mut probed_chunks = vec![];
         let mut probe_indexes = Vec::with_capacity(JOIN_MAX_CHUNK_SIZE);
         let mut build_indexes = Vec::with_capacity(JOIN_MAX_CHUNK_SIZE);
 
@@ -82,9 +82,9 @@ impl JoinHashTable {
                             build_indexes.extend_from_slice(&probed_rows[index..new_index]);
                             probe_indexes.extend(repeat(i as u32).take(addition));
 
-                            probed_blocks.push(self.merge_eq_block(
+                            probed_chunks.push(self.merge_eq_chunk(
                                 &self.row_space.gather(&build_indexes)?,
-                                &DataBlock::block_take_by_indices(input, &probe_indexes)?,
+                                &Chunk::take(input, &probe_indexes)?,
                             )?);
 
                             index = new_index;
@@ -98,33 +98,34 @@ impl JoinHashTable {
             }
         }
 
-        probed_blocks.push(self.merge_eq_block(
+        probed_chunks.push(self.merge_eq_chunk(
             &self.row_space.gather(&build_indexes)?,
-            &DataBlock::block_take_by_indices(input, &probe_indexes)?,
+            &Chunk::take(input, &probe_indexes)?,
         )?);
 
         match &self.hash_join_desc.other_predicate {
-            None => Ok(probed_blocks),
+            None => Ok(probed_chunks),
             Some(other_predicate) => {
                 let func_ctx = self.ctx.try_get_function_context()?;
-                let mut filtered_blocks = Vec::with_capacity(probed_blocks.len());
+                let mut filtered_chunks = Vec::with_capacity(probed_chunks.len());
 
-                for probed_block in probed_blocks {
+                for probed_chunk in probed_chunks {
                     if self.interrupt.load(Ordering::Relaxed) {
                         return Err(ErrorCode::AbortedQuery(
                             "Aborted query, because the server is shutting down or the query was killed.",
                         ));
                     }
 
-                    let predicate = other_predicate.eval(&func_ctx, &probed_block)?;
-                    let res = DataBlock::filter_block(probed_block, predicate.vector())?;
+                    todo!("expression");
+                    // let predicate = other_predicate.eval(&func_ctx, &probed_chunk)?;
+                    // let res = Chunk::filter(probed_chunk, predicate.vector())?;
 
-                    if !res.is_empty() {
-                        filtered_blocks.push(res);
-                    }
+                    // if !res.is_empty() {
+                    //     filtered_chunks.push(res);
+                    // }
                 }
 
-                Ok(filtered_blocks)
+                Ok(filtered_chunks)
             }
         }
     }

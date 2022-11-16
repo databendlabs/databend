@@ -42,7 +42,7 @@ pub struct MarkJoinDesc {
 
 pub struct JoinState {
     /// Record rows in build side that are matched with rows in probe side.
-    /// It's order-sensitive, aligned with the order of rows in merged block.
+    /// It's order-sensitive, aligned with the order of rows in merged chunk.
     pub(crate) build_indexes: RwLock<Vec<RowPtr>>,
     pub(crate) rest_build_indexes: RwLock<Vec<RowPtr>>,
     pub(crate) rest_probe_chunks: RwLock<Vec<Chunk>>,

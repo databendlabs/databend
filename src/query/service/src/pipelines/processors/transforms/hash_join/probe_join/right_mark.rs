@@ -17,11 +17,9 @@ use std::iter::TrustedLen;
 use std::sync::atomic::Ordering;
 
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
-use common_datavalues::BooleanViewer;
-use common_datavalues::ScalarViewer;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::Chunk;
 use common_hashtable::HashtableEntryRefLike;
 use common_hashtable::HashtableLike;
 
@@ -37,8 +35,8 @@ impl JoinHashTable {
         hash_table: &H,
         probe_state: &mut ProbeState,
         keys_iter: IT,
-        input: &DataBlock,
-    ) -> Result<Vec<DataBlock>>
+        input: &Chunk,
+    ) -> Result<Vec<Chunk>>
     where
         IT: Iterator<Item = &'a H::Key> + TrustedLen,
         H::Key: 'a,
@@ -57,7 +55,7 @@ impl JoinHashTable {
             }
         }
 
-        Ok(vec![self.merge_eq_block(
+        Ok(vec![self.merge_eq_chunk(
             &self.create_marker_chunk(has_null, markers.clone())?,
             input,
         )?])
@@ -72,8 +70,8 @@ impl JoinHashTable {
         hash_table: &H,
         probe_state: &mut ProbeState,
         keys_iter: IT,
-        input: &DataBlock,
-    ) -> Result<Vec<DataBlock>>
+        input: &Chunk,
+    ) -> Result<Vec<Chunk>>
     where
         IT: Iterator<Item = &'a H::Key> + TrustedLen,
         H::Key: 'a,
@@ -122,56 +120,56 @@ impl JoinHashTable {
                             build_indexes.extend_from_slice(&probed_rows[index..new_index]);
                             probe_indexes.extend(repeat(i as u32).take(addition));
 
-                            let probe_block =
-                                DataBlock::block_take_by_indices(input, &probe_indexes)?;
-                            let build_block = self.row_space.gather(&build_indexes)?;
-                            let merged_block = self.merge_eq_block(&build_block, &probe_block)?;
+                            let probe_chunk = Chunk::take(input, &probe_indexes)?;
+                            let build_chunk = self.row_space.gather(&build_indexes)?;
+                            let merged_chunk = self.merge_eq_chunk(&build_chunk, &probe_chunk)?;
+                            todo!("expression");
+                            // let type_vector = other_predicate.eval(&func_ctx, &merged_chunk)?;
+                            // let filter_column = type_vector.vector();
+                            // let filter_viewer = BooleanViewer::try_create(filter_column)?;
 
-                            let type_vector = other_predicate.eval(&func_ctx, &merged_block)?;
-                            let filter_column = type_vector.vector();
-                            let filter_viewer = BooleanViewer::try_create(filter_column)?;
+                            // for idx in 0..filter_viewer.len() {
+                            //     let marker = &mut markers[probe_indexes[idx] as usize];
+                            //     if !filter_viewer.valid_at(idx) {
+                            //         if *marker == MarkerKind::False {
+                            //             *marker = MarkerKind::Null;
+                            //         }
+                            //     } else if filter_viewer.value_at(idx) {
+                            //         *marker = MarkerKind::True;
+                            //     }
+                            // }
 
-                            for idx in 0..filter_viewer.len() {
-                                let marker = &mut markers[probe_indexes[idx] as usize];
-                                if !filter_viewer.valid_at(idx) {
-                                    if *marker == MarkerKind::False {
-                                        *marker = MarkerKind::Null;
-                                    }
-                                } else if filter_viewer.value_at(idx) {
-                                    *marker = MarkerKind::True;
-                                }
-                            }
+                            // index = new_index;
+                            // remain -= addition;
 
-                            index = new_index;
-                            remain -= addition;
-
-                            build_indexes.clear();
-                            probe_indexes.clear();
+                            // build_indexes.clear();
+                            // probe_indexes.clear();
                         }
                     }
                 }
             }
         }
 
-        let probe_block = DataBlock::block_take_by_indices(input, &probe_indexes)?;
-        let build_block = self.row_space.gather(&build_indexes)?;
-        let merged_block = self.merge_eq_block(&build_block, &probe_block)?;
-        let type_vector = other_predicate.eval(&func_ctx, &merged_block)?;
-        let filter_column = type_vector.vector();
-        let filter_viewer = BooleanViewer::try_create(filter_column)?;
+        let probe_chunk = Chunk::take(input, &probe_indexes)?;
+        let build_chunk = self.row_space.gather(&build_indexes)?;
+        let merged_chunk = self.merge_eq_chunk(&build_chunk, &probe_chunk)?;
+        todo!("expression");
+        // let type_vector = other_predicate.eval(&func_ctx, &merged_chunk)?;
+        // let filter_column = type_vector.vector();
+        // let filter_viewer = BooleanViewer::try_create(filter_column)?;
 
-        for idx in 0..filter_viewer.len() {
-            let marker = &mut markers[probe_indexes[idx] as usize];
-            if !filter_viewer.valid_at(idx) {
-                if *marker == MarkerKind::False {
-                    *marker = MarkerKind::Null;
-                }
-            } else if filter_viewer.value_at(idx) {
-                *marker = MarkerKind::True;
-            }
-        }
+        // for idx in 0..filter_viewer.len() {
+        //     let marker = &mut markers[probe_indexes[idx] as usize];
+        //     if !filter_viewer.valid_at(idx) {
+        //         if *marker == MarkerKind::False {
+        //             *marker = MarkerKind::Null;
+        //         }
+        //     } else if filter_viewer.value_at(idx) {
+        //         *marker = MarkerKind::True;
+        //     }
+        // }
 
-        Ok(vec![self.merge_eq_block(
+        Ok(vec![self.merge_eq_chunk(
             &self.create_marker_chunk(has_null, markers)?,
             input,
         )?])

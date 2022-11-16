@@ -25,7 +25,7 @@ use crate::pipelines::processors::transforms::hash_join::row::RowPtr;
 use crate::sql::planner::plans::JoinType;
 
 impl JoinHashTable {
-    pub(crate) fn result_blocks<'a, H: HashtableLike<Value = Vec<RowPtr>>, IT>(
+    pub(crate) fn result_chunks<'a, H: HashtableLike<Value = Vec<RowPtr>>, IT>(
         &self,
         hash_table: &H,
         probe_state: &mut ProbeState,

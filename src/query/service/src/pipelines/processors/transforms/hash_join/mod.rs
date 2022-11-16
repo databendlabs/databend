@@ -19,7 +19,7 @@ mod hash_join_state_impl;
 mod join_hash_table;
 mod probe_join;
 mod probe_state;
-mod result_blocks;
+mod result_chunks;
 pub(crate) mod row;
 mod util;
 
@@ -30,4 +30,4 @@ pub use join_hash_table::HashTable;
 pub use join_hash_table::JoinHashTable;
 pub use join_hash_table::SerializerHashTable;
 pub use probe_state::ProbeState;
-pub use result_blocks::*;
+pub use result_chunks::*;

@@ -17,9 +17,9 @@ use std::sync::atomic::Ordering;
 
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
-use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::Chunk;
 use common_hashtable::HashtableEntryRefLike;
 use common_hashtable::HashtableLike;
 
@@ -36,15 +36,15 @@ impl JoinHashTable {
         hash_table: &H,
         probe_state: &mut ProbeState,
         keys_iter: IT,
-        input: &DataBlock,
-    ) -> Result<Vec<DataBlock>>
+        input: &Chunk,
+    ) -> Result<Vec<Chunk>>
     where
         IT: Iterator<Item = &'a H::Key> + TrustedLen,
         H::Key: 'a,
     {
         let valids = &probe_state.valids;
-        // The right join will return multiple data blocks of similar size
-        let mut probed_blocks = vec![];
+        // The right join will return multiple data chunks of similar size
+        let mut probed_chunks = vec![];
         let mut local_probe_indexes = Vec::with_capacity(JOIN_MAX_CHUNK_SIZE);
         let mut local_build_indexes = Vec::with_capacity(JOIN_MAX_CHUNK_SIZE);
         let mut validity = MutableBitmap::with_capacity(JOIN_MAX_CHUNK_SIZE);
@@ -88,26 +88,24 @@ impl JoinHashTable {
                             local_build_indexes.extend_from_slice(&probed_rows[index..new_index]);
                             validity.extend_constant(addition, true);
 
-                            let build_block = self.row_space.gather(&local_build_indexes)?;
-                            let mut probe_block =
-                                DataBlock::block_take_by_indices(input, &local_probe_indexes)?;
+                            let build_chunk = self.row_space.gather(&local_build_indexes)?;
+                            let mut probe_chunk = Chunk::take(input, &local_probe_indexes)?;
 
                             // If join type is right join, need to wrap nullable for probe side
-                            // If join type is semi/anti right join, directly merge `build_block` and `probe_block`
+                            // If join type is semi/anti right join, directly merge `build_chunk` and `probe_chunk`
                             if self.hash_join_desc.join_type == JoinType::Right {
                                 let validity: Bitmap = validity.into();
-                                let nullable_columns = probe_block
+                                let nullable_columns = probe_chunk
                                     .columns()
                                     .iter()
                                     .map(|c| Self::set_validity(c, &validity))
-                                    .collect::<Result<Vec<_>>>()?;
-                                probe_block =
-                                    DataBlock::create(self.probe_schema.clone(), nullable_columns);
+                                    .collect::<Vec<_>>();
+                                probe_chunk = Chunk::new(nullable_columns, validity.len());
                             }
 
-                            if !probe_block.is_empty() {
-                                probed_blocks
-                                    .push(self.merge_eq_block(&build_block, &probe_block)?);
+                            if !probe_chunk.is_empty() {
+                                probed_chunks
+                                    .push(self.merge_eq_chunk(&build_chunk, &probe_chunk)?);
                             }
 
                             index = new_index;
@@ -122,25 +120,25 @@ impl JoinHashTable {
             }
         }
 
-        let mut probe_block = DataBlock::block_take_by_indices(input, &local_probe_indexes)?;
+        let mut probe_chunk = Chunk::take(input, &local_probe_indexes)?;
 
         // If join type is right join, need to wrap nullable for probe side
-        // If join type is semi/anti right join, directly merge `build_block` and `probe_block`
+        // If join type is semi/anti right join, directly merge `build_chunk` and `probe_chunk`
         if self.hash_join_desc.join_type == JoinType::Right {
             let validity: Bitmap = validity.into();
-            let nullable_columns = probe_block
+            let nullable_columns = probe_chunk
                 .columns()
                 .iter()
                 .map(|c| Self::set_validity(c, &validity))
-                .collect::<Result<Vec<_>>>()?;
-            probe_block = DataBlock::create(self.probe_schema.clone(), nullable_columns);
+                .collect::<Vec<_>>();
+            probe_chunk = Chunk::new(nullable_columns, validity.len());
         }
 
         let mut rest_build_indexes = self.hash_join_desc.join_state.rest_build_indexes.write();
-        let mut rest_probe_blocks = self.hash_join_desc.join_state.rest_probe_chunks.write();
-        rest_probe_blocks.push(probe_block);
+        let mut rest_probe_chunks = self.hash_join_desc.join_state.rest_probe_chunks.write();
+        rest_probe_chunks.push(probe_chunk);
         rest_build_indexes.extend(local_build_indexes);
 
-        Ok(probed_blocks)
+        Ok(probed_chunks)
     }
 }

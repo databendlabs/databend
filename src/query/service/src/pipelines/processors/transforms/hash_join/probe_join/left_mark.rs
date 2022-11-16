@@ -17,11 +17,11 @@ use std::iter::TrustedLen;
 use std::sync::atomic::Ordering;
 
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
 use common_datavalues::BooleanViewer;
 use common_datavalues::ScalarViewer;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::Chunk;
 use common_hashtable::HashtableEntryRefLike;
 use common_hashtable::HashtableLike;
 
@@ -37,14 +37,14 @@ impl JoinHashTable {
         hash_table: &H,
         probe_state: &mut ProbeState,
         keys_iter: IT,
-        input: &DataBlock,
-    ) -> Result<Vec<DataBlock>>
+        input: &Chunk,
+    ) -> Result<Vec<Chunk>>
     where
         IT: Iterator<Item = &'a H::Key> + TrustedLen,
         H::Key: 'a,
     {
         let valids = &probe_state.valids;
-        let mut block_size = JOIN_MAX_CHUNK_SIZE;
+        let mut chunk_size = JOIN_MAX_CHUNK_SIZE;
         // `probe_column` is the subquery result column.
         // For sql: select * from t1 where t1.a in (select t2.a from t2); t2.a is the `probe_column`,
         let probe_column = input.column(0);
@@ -58,8 +58,8 @@ impl JoinHashTable {
         let mut self_row_ptrs = self.row_ptrs.write();
 
         for (i, key) in keys_iter.enumerate() {
-            if (i & block_size) == 0 {
-                block_size <<= 1;
+            if (i & chunk_size) == 0 {
+                chunk_size <<= 1;
 
                 if self.interrupt.load(Ordering::Relaxed) {
                     return Err(ErrorCode::AbortedQuery(
@@ -84,7 +84,7 @@ impl JoinHashTable {
             }
         }
 
-        Ok(vec![DataBlock::empty()])
+        Ok(vec![Chunk::empty()])
     }
 
     pub(crate) fn probe_left_mark_join_with_conjunct<
@@ -96,8 +96,8 @@ impl JoinHashTable {
         hash_table: &H,
         probe_state: &mut ProbeState,
         keys_iter: IT,
-        input: &DataBlock,
-    ) -> Result<Vec<DataBlock>>
+        input: &Chunk,
+    ) -> Result<Vec<Chunk>>
     where
         IT: Iterator<Item = &'a H::Key> + TrustedLen,
         H::Key: 'a,
@@ -154,12 +154,11 @@ impl JoinHashTable {
                             build_indexes.extend_from_slice(&probed_rows[index..new_index]);
                             probe_indexes.extend(repeat(i as u32).take(addition));
 
-                            let probe_block =
-                                DataBlock::block_take_by_indices(input, &probe_indexes)?;
-                            let build_block = self.row_space.gather(&build_indexes)?;
-                            let merged_block = self.merge_eq_block(&build_block, &probe_block)?;
+                            let probe_chunk = Chunk::take(input, &probe_indexes)?;
+                            let build_chunk = self.row_space.gather(&build_indexes)?;
+                            let merged_chunk = self.merge_eq_chunk(&build_chunk, &probe_chunk)?;
 
-                            let type_vector = other_predicate.eval(&func_ctx, &merged_block)?;
+                            let type_vector = other_predicate.eval(&func_ctx, &merged_chunk)?;
                             let filter_column = type_vector.vector();
                             let filter_viewer = BooleanViewer::try_create(filter_column)?;
 
@@ -186,11 +185,11 @@ impl JoinHashTable {
             }
         }
 
-        let probe_block = DataBlock::block_take_by_indices(input, &probe_indexes)?;
-        let build_block = self.row_space.gather(&build_indexes)?;
-        let merged_block = self.merge_eq_block(&build_block, &probe_block)?;
+        let probe_chunk = Chunk::take(input, &probe_indexes)?;
+        let build_chunk = self.row_space.gather(&build_indexes)?;
+        let merged_chunk = self.merge_eq_chunk(&build_chunk, &probe_chunk)?;
 
-        let type_vector = other_predicate.eval(&func_ctx, &merged_block)?;
+        let type_vector = other_predicate.eval(&func_ctx, &merged_chunk)?;
         let filter_column = type_vector.vector();
         let filter_viewer = BooleanViewer::try_create(filter_column)?;
 
@@ -206,12 +205,12 @@ impl JoinHashTable {
         }
 
         if self.hash_join_desc.from_correlated_subquery {
-            // Must be correlated ANY subquery, we won't need to check `has_null` in `mark_join_blocks`.
+            // Must be correlated ANY subquery, we won't need to check `has_null` in `mark_join_chunks`.
             // In the following, if value is Null and Marker is False, we'll set the marker to Null
             let mut has_null = self.hash_join_desc.marker_join_desc.has_null.write();
             *has_null = false;
         }
 
-        Ok(vec![DataBlock::empty()])
+        Ok(vec![Chunk::empty()])
     }
 }

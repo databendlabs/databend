@@ -17,11 +17,11 @@ use std::iter::TrustedLen;
 use std::sync::atomic::Ordering;
 
 use common_arrow::arrow::bitmap::MutableBitmap;
-use common_datablocks::DataBlock;
 use common_datavalues::BooleanColumn;
 use common_datavalues::Column;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::Chunk;
 use common_hashtable::HashtableEntryRefLike;
 use common_hashtable::HashtableLike;
 
@@ -37,8 +37,8 @@ impl JoinHashTable {
         hash_table: &H,
         probe_state: &mut ProbeState,
         keys_iter: IT,
-        input: &DataBlock,
-    ) -> Result<Vec<DataBlock>>
+        input: &Chunk,
+    ) -> Result<Vec<Chunk>>
     where
         IT: Iterator<Item = &'a H::Key> + TrustedLen,
         H::Key: 'a,
@@ -61,8 +61,8 @@ impl JoinHashTable {
         hash_table: &H,
         probe_state: &mut ProbeState,
         keys_iter: IT,
-        input: &DataBlock,
-    ) -> Result<Vec<DataBlock>>
+        input: &Chunk,
+    ) -> Result<Vec<Chunk>>
     where
         IT: Iterator<Item = &'a H::Key> + TrustedLen,
         H::Key: 'a,
@@ -85,8 +85,8 @@ impl JoinHashTable {
         hash_table: &H,
         probe_state: &mut ProbeState,
         keys_iter: IT,
-        input: &DataBlock,
-    ) -> Result<Vec<DataBlock>>
+        input: &Chunk,
+    ) -> Result<Vec<Chunk>>
     where
         IT: Iterator<Item = &'a H::Key> + TrustedLen,
         H::Key: 'a,
@@ -108,10 +108,7 @@ impl JoinHashTable {
                 _ => {}
             }
         }
-        Ok(vec![DataBlock::block_take_by_indices(
-            input,
-            &probe_indexes,
-        )?])
+        Ok(vec![Chunk::take(input, &probe_indexes)?])
     }
 
     fn left_semi_anti_join_with_other_conjunct<
@@ -124,15 +121,15 @@ impl JoinHashTable {
         hash_table: &H,
         probe_state: &mut ProbeState,
         keys_iter: IT,
-        input: &DataBlock,
-    ) -> Result<Vec<DataBlock>>
+        input: &Chunk,
+    ) -> Result<Vec<Chunk>>
     where
         IT: Iterator<Item = &'a H::Key> + TrustedLen,
         H::Key: 'a,
     {
         let valids = &probe_state.valids;
-        // The semi join will return multiple data blocks of similar size
-        let mut probed_blocks = vec![];
+        // The semi join will return multiple data chunks of similar size
+        let mut probed_chunks = vec![];
         let mut probe_indexes = Vec::with_capacity(JOIN_MAX_CHUNK_SIZE);
         let mut build_indexes = Vec::with_capacity(JOIN_MAX_CHUNK_SIZE);
 
@@ -188,14 +185,14 @@ impl JoinHashTable {
                         build_indexes.extend_from_slice(&probed_rows[index..new_index]);
                         probe_indexes.extend(repeat(i as u32).take(addition));
 
-                        let probe_block = DataBlock::block_take_by_indices(input, &probe_indexes)?;
-                        let build_block = self.row_space.gather(&build_indexes)?;
-                        let merged_block = self.merge_eq_block(&build_block, &probe_block)?;
+                        let probe_chunk = Chunk::take(input, &probe_indexes)?;
+                        let build_chunk = self.row_space.gather(&build_indexes)?;
+                        let merged_chunk = self.merge_eq_chunk(&build_chunk, &probe_chunk)?;
 
-                        let mut bm = match self.get_other_filters(&merged_block, other_predicate)? {
+                        let mut bm = match self.get_other_filters(&merged_chunk, other_predicate)? {
                             (Some(b), _, _) => b.into_mut().right().unwrap(),
-                            (_, true, _) => MutableBitmap::from_len_set(merged_block.num_rows()),
-                            (_, _, true) => MutableBitmap::from_len_zeroed(merged_block.num_rows()),
+                            (_, true, _) => MutableBitmap::from_len_set(merged_chunk.num_rows()),
+                            (_, _, true) => MutableBitmap::from_len_zeroed(merged_chunk.num_rows()),
                             _ => unreachable!(),
                         };
 
@@ -206,10 +203,11 @@ impl JoinHashTable {
                         }
 
                         let predicate = BooleanColumn::from_arrow_data(bm.into()).arc();
-                        let probed_data_block = DataBlock::filter_block(probe_block, &predicate)?;
+                        let probed_data_chunk =
+                            Chunk::filter_chunk_with_bool_column(probe_chunk, &bm.into())?;
 
-                        if !probed_data_block.is_empty() {
-                            probed_blocks.push(probed_data_block);
+                        if !probed_data_chunk.is_empty() {
+                            probed_chunks.push(probed_data_chunk);
                         }
 
                         index = new_index;
@@ -228,14 +226,14 @@ impl JoinHashTable {
             ));
         }
 
-        let probe_block = DataBlock::block_take_by_indices(input, &probe_indexes)?;
-        let build_block = self.row_space.gather(&build_indexes)?;
-        let merged_block = self.merge_eq_block(&build_block, &probe_block)?;
+        let probe_chunk = Chunk::take(input, &probe_indexes)?;
+        let build_chunk = self.row_space.gather(&build_indexes)?;
+        let merged_chunk = self.merge_eq_chunk(&build_chunk, &probe_chunk)?;
 
-        let mut bm = match self.get_other_filters(&merged_block, other_predicate)? {
+        let mut bm = match self.get_other_filters(&merged_chunk, other_predicate)? {
             (Some(b), _, _) => b.into_mut().right().unwrap(),
-            (_, true, _) => MutableBitmap::from_len_set(merged_block.num_rows()),
-            (_, _, true) => MutableBitmap::from_len_zeroed(merged_block.num_rows()),
+            (_, true, _) => MutableBitmap::from_len_set(merged_chunk.num_rows()),
+            (_, _, true) => MutableBitmap::from_len_zeroed(merged_chunk.num_rows()),
             _ => unreachable!(),
         };
 
@@ -245,14 +243,13 @@ impl JoinHashTable {
             self.fill_null_for_anti_join(&mut bm, &probe_indexes, &mut row_state);
         }
 
-        let predicate = BooleanColumn::from_arrow_data(bm.into()).arc();
-        let probed_data_block = DataBlock::filter_block(probe_block, &predicate)?;
+        let probed_data_chunk = Chunk::filter_chunk_with_bool_column(probe_chunk, &bm.into())?;
 
-        if !probed_data_block.is_empty() {
-            probed_blocks.push(probed_data_block);
+        if !probed_data_chunk.is_empty() {
+            probed_chunks.push(probed_data_chunk);
         }
 
-        Ok(probed_blocks)
+        Ok(probed_chunks)
     }
 
     // modify the bm by the value row_state

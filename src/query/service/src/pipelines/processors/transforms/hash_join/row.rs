@@ -95,7 +95,7 @@ impl RowSpace {
         let data_chunks = self.data_chunks();
         let num_rows = data_chunks
             .iter()
-            .fold(0, |acc, block| acc + block.num_rows());
+            .fold(0, |acc, chunk| acc + chunk.num_rows());
         let mut indices = Vec::with_capacity(row_ptrs.len());
 
         for row_ptr in row_ptrs.iter() {

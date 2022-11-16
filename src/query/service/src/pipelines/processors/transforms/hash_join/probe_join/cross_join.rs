@@ -12,11 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datablocks::DataBlock;
-use common_datavalues::Column;
-use common_datavalues::ConstColumn;
-use common_datavalues::DataSchemaRefExt;
 use common_exception::Result;
+use common_expression::Chunk;
 
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
 use crate::pipelines::processors::JoinHashTable;
@@ -24,50 +21,39 @@ use crate::pipelines::processors::JoinHashTable;
 impl JoinHashTable {
     pub(crate) fn probe_cross_join(
         &self,
-        input: &DataBlock,
+        input: &Chunk,
         _probe_state: &mut ProbeState,
-    ) -> Result<Vec<DataBlock>> {
-        let build_blocks = self.row_space.data_chunks();
-        let num_rows = build_blocks
+    ) -> Result<Vec<Chunk>> {
+        let build_chunks = self.row_space.data_chunks();
+        let num_rows = build_chunks
             .iter()
-            .fold(0, |acc, block| acc + block.num_rows());
-        if build_blocks.is_empty() || num_rows == 0 {
-            let mut fields = input.schema().fields().to_vec();
-            fields.extend(self.row_space.schema().fields().clone());
-            return Ok(vec![DataBlock::empty_with_schema(
-                DataSchemaRefExt::create(fields.clone()),
-            )]);
+            .fold(0, |acc, chunk| acc + chunk.num_rows());
+        if build_chunks.is_empty() || num_rows == 0 {
+            return Ok(vec![Chunk::empty()]);
         }
-        let build_block = DataBlock::concat_blocks(&build_blocks)?;
-        let mut results: Vec<DataBlock> = Vec::with_capacity(input.num_rows());
+        let build_chunk = Chunk::concat(&build_chunks)?;
+        let mut results = Vec::with_capacity(input.num_rows());
         for i in 0..input.num_rows() {
-            let probe_block = DataBlock::block_take_by_indices(input, &[i as u32])?;
-            results.push(self.merge_with_constant_block(&build_block, &probe_block)?);
+            let probe_chunk = Chunk::take(input, &[i as u32])?;
+            results.push(self.merge_with_constant_chunk(&build_chunk, &probe_chunk)?);
         }
         Ok(results)
     }
 
-    // Merge build block and probe block (1 row block)
-    pub(crate) fn merge_with_constant_block(
+    // Merge build chunk and probe chunk (1 row chunk)
+    pub(crate) fn merge_with_constant_chunk(
         &self,
-        build_block: &DataBlock,
-        probe_block: &DataBlock,
-    ) -> Result<DataBlock> {
-        let mut replicated_probe_block = DataBlock::empty();
-        for (i, col) in probe_block.columns().iter().enumerate() {
-            let replicated_col = ConstColumn::new(col.clone(), build_block.num_rows()).arc();
-
-            replicated_probe_block = replicated_probe_block
-                .add_column(replicated_col, probe_block.schema().field(i).clone())?;
+        build_chunk: &Chunk,
+        probe_chunk: &Chunk,
+    ) -> Result<Chunk> {
+        let columns = Vec::with_capacity(build_chunk.num_columns() + probe_chunk.num_columns());
+        let mut replicated_probe_chunk = Chunk::new(columns, build_chunk.num_rows());
+        for (col, ty) in probe_chunk.columns().iter() {
+            replicated_probe_chunk = replicated_probe_chunk.add_column(col.clone(), ty.clone())?;
         }
-        for (col, field) in build_block
-            .columns()
-            .iter()
-            .zip(build_block.schema().fields().iter())
-        {
-            replicated_probe_block =
-                replicated_probe_block.add_column(col.clone(), field.clone())?;
+        for ((col, ty)) in build_chunk.columns().iter() {
+            replicated_probe_chunk = replicated_probe_chunk.add_column(col.clone(), ty.clone())?;
         }
-        Ok(replicated_probe_block)
+        Ok(replicated_probe_chunk)
     }
 }

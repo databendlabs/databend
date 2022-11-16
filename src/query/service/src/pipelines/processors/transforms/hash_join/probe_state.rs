@@ -23,10 +23,10 @@ pub struct ProbeState {
     pub(crate) probe_indexs: Vec<u32>,
     pub(crate) build_indexs: Vec<RowPtr>,
     pub(crate) valids: Option<Bitmap>,
-    // In the probe phase, the probe block with N rows could join result into M rows
+    // In the probe phase, the probe chunk with N rows could join result into M rows
     // e.g.: [0, 1, 2, 3]  results into [0, 1, 2, 2, 3]
-    // probe_indexs: the result index to the probe block row -> [0, 1, 2, 2, 3]
-    // row_state:  the state (counter) of the probe block row -> [1, 1, 2, 1]
+    // probe_indexs: the result index to the probe chunk row -> [0, 1, 2, 2, 3]
+    // row_state:  the state (counter) of the probe chunk row -> [1, 1, 2, 1]
     pub(crate) row_state: Vec<u32>,
     pub(crate) markers: Option<Vec<MarkerKind>>,
 }

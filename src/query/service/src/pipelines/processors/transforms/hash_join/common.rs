@@ -140,30 +140,41 @@ impl JoinHashTable {
         validity: &Bitmap,
     ) -> (Value<AnyType>, DataType) {
         let (value, data_type) = column;
-        let col = value.as_column().unwrap();
 
-        if col.is_null() {
-            column.clone()
-        } else if column.is_nullable() {
-            let col = col.as_nullable().unwrap();
-            // It's possible validity is longer than col.
-            let diff_len = validity.len() - col.validity.len();
-            let mut new_validity = MutableBitmap::with_capacity(validity.len());
-            for (b1, b2) in validity.iter().zip(col.validity.iter()) {
-                new_validity.push(b1 & b2);
+        match value {
+            Value::Scalar(s) => {
+                let valid = validity.get_bit(0);
+                if valid {
+                    (Value::Scalar(s.clone()), data_type.wrap_nullable())
+                } else {
+                    (Value::Scalar(Scalar::Null), data_type.wrap_nullable())
+                }
             }
-            new_validity.extend_constant(diff_len, false);
-            let col = Column::Nullable(NullableColumn {
-                column: col.column.clone(),
-                validity: new_validity.into(),
-            });
-            (Value::Column(col), data_type.clone())
-        } else {
-            let col = Column::Nullable(NullableColumn {
-                column: column.clone(),
-                validity: validity.clone(),
-            });
-            (Value::Column(col), data_type.clone())
+            Value::Column(col) => {
+                if col.is_null() {
+                    column.clone()
+                } else if col.is_nullable() {
+                    let col = col.as_nullable().unwrap();
+                    // It's possible validity is longer than col.
+                    let diff_len = validity.len() - col.validity.len();
+                    let mut new_validity = MutableBitmap::with_capacity(validity.len());
+                    for (b1, b2) in validity.iter().zip(col.validity.iter()) {
+                        new_validity.push(b1 & b2);
+                    }
+                    new_validity.extend_constant(diff_len, false);
+                    let col = Column::Nullable(NullableColumn {
+                        column: col.column.clone(),
+                        validity: new_validity.into(),
+                    });
+                    (Value::Column(col), data_type.clone())
+                } else {
+                    let col = Column::Nullable(NullableColumn {
+                        column: column.clone(),
+                        validity: validity.clone(),
+                    });
+                    (Value::Column(col), data_type.clone())
+                }
+            }
         }
     }
 
@@ -177,7 +188,7 @@ impl JoinHashTable {
         // `predicate_column` contains a column, which is a boolean column.
         let filter_vector = filter.eval(&func_ctx, merged_chunk)?;
         todo!("expression");
-        // let predict_boolean_nonull = DataBlock::cast_to_nonull_boolean(filter_vector.vector())?;
+        // let predict_boolean_nonull = Chunk::cast_to_nonull_boolean(filter_vector.vector())?;
 
         // // faster path for constant filter
         // if predict_boolean_nonull.is_const() {
