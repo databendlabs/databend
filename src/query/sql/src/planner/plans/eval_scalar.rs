@@ -114,6 +114,7 @@ impl LogicalOperator for EvalScalar {
             precise_cardinality,
 
             column_stats: Default::default(),
+            is_accurate: input_prop.is_accurate,
         })
     }
 

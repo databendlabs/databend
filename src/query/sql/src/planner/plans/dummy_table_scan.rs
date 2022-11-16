@@ -59,6 +59,7 @@ impl LogicalOperator for DummyTableScan {
             precise_cardinality: Some(1),
 
             column_stats: Default::default(),
+            is_accurate: false,
         })
     }
 

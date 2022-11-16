@@ -412,6 +412,7 @@ impl SubqueryRewriter {
                     statistics: None,
                     col_stats: HashMap::new(),
                     prewhere: None,
+                    is_accurate: false,
                 }
                 .into(),
             );

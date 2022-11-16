@@ -105,6 +105,7 @@ impl LogicalOperator for Filter {
             precise_cardinality: None,
 
             column_stats: Default::default(),
+            is_accurate: false,
         })
     }
 

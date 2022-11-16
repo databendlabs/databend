@@ -85,6 +85,7 @@ impl LogicalOperator for Limit {
             precise_cardinality: None,
 
             column_stats: Default::default(),
+            is_accurate: false,
         })
     }
 

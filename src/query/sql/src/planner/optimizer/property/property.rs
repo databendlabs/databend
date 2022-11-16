@@ -51,6 +51,8 @@ pub struct RelationalProperty {
 
     /// Statistics of columns, column index -> column stat
     pub column_stats: ColumnStatSet,
+    /// Statistics info is accurate
+    pub is_accurate: bool,
 }
 
 #[derive(Default, Clone)]

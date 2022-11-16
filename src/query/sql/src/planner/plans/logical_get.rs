@@ -56,6 +56,7 @@ pub struct LogicalGet {
     pub statistics: Option<TableStatistics>,
     // statistics will be ignored in comparison and hashing
     pub col_stats: HashMap<IndexType, Option<ColumnStatistics>>,
+    pub is_accurate: bool,
 }
 
 impl PartialEq for LogicalGet {
@@ -132,6 +133,7 @@ impl LogicalOperator for LogicalGet {
                 .map_or(0.0, |stat| stat.num_rows.map_or(0.0, |num| num as f64)),
             precise_cardinality: self.statistics.as_ref().and_then(|stat| stat.num_rows),
             column_stats,
+            is_accurate: self.is_accurate,
         })
     }
 

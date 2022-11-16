@@ -112,13 +112,13 @@ impl Rule for RuleFoldCountAggregate {
                 eval_scalar.into(),
                 SExpr::create_leaf(dummy_table_scan.into()),
             ));
-        } else if let (true, column_stats, Some(table_card)) = (
+        } else if let (true, true, column_stats, Some(table_card)) = (
             simple_nullable_count,
+            input_prop.is_accurate,
             input_prop.column_stats,
             input_prop.precise_cardinality,
         ) {
             let mut scalars = agg.aggregate_functions;
-            // Now count function must only have one arg.
             for item in scalars.iter_mut() {
                 if let Scalar::AggregateFunction(agg_func) = item.scalar.clone() {
                     let col_set = agg_func.args[0].used_columns();

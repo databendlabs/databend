@@ -94,6 +94,7 @@ impl LogicalOperator for UnionAll {
             precise_cardinality,
 
             column_stats: Default::default(),
+            is_accurate: left_prop.is_accurate && right_prop.is_accurate,
         })
     }
 

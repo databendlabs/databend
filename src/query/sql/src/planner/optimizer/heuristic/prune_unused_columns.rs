@@ -99,6 +99,7 @@ impl UnusedColumnPruner {
                     statistics: p.statistics,
                     col_stats: p.col_stats.clone(),
                     prewhere,
+                    is_accurate: p.is_accurate,
                 })))
             }
             RelOperator::LogicalInnerJoin(p) => {

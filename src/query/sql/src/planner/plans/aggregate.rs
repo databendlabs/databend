@@ -162,7 +162,8 @@ impl LogicalOperator for Aggregate {
             cardinality,
             precise_cardinality,
 
-            column_stats: Default::default(),
+            column_stats: input_prop.column_stats,
+            is_accurate: input_prop.is_accurate,
         })
     }
 
