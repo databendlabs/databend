@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
@@ -157,6 +158,67 @@ impl Expr {
             Expr::ColumnRef { data_type, .. } => data_type,
             Expr::Cast { dest_type, .. } => dest_type,
             Expr::FunctionCall { return_type, .. } => return_type,
+        }
+    }
+
+    pub fn column_refs(&self) -> HashSet<usize> {
+        fn walk(expr: &Expr, buf: &mut HashSet<usize>) {
+            match expr {
+                Expr::ColumnRef { id, .. } => {
+                    buf.insert(*id);
+                }
+                Expr::Cast { expr, .. } => walk(expr, buf),
+                Expr::FunctionCall { args, .. } => args.iter().for_each(|expr| walk(expr, buf)),
+                Expr::Constant { .. } => (),
+            }
+        }
+
+        let mut buf = HashSet::new();
+        walk(self, &mut buf);
+        buf
+    }
+
+    pub fn project_column_ref(&self, map: &HashMap<usize, usize>) -> Expr {
+        match self {
+            Expr::Constant { .. } => self.clone(),
+            Expr::ColumnRef {
+                span,
+                id,
+                data_type,
+            } => Expr::ColumnRef {
+                span: span.clone(),
+                id: map[id],
+                data_type: data_type.clone(),
+            },
+            Expr::Cast {
+                span,
+                is_try,
+                expr,
+                dest_type,
+            } => Expr::Cast {
+                span: span.clone(),
+                is_try: *is_try,
+                expr: Box::new(expr.project_column_ref(map)),
+                dest_type: dest_type.clone(),
+            },
+            Expr::FunctionCall {
+                span,
+                id,
+                function,
+                generics,
+                args,
+                return_type,
+            } => Expr::FunctionCall {
+                span: span.clone(),
+                id: id.clone(),
+                function: function.clone(),
+                generics: generics.clone(),
+                args: args
+                    .iter()
+                    .map(|expr| expr.project_column_ref(map))
+                    .collect(),
+                return_type: return_type.clone(),
+            },
         }
     }
 }
