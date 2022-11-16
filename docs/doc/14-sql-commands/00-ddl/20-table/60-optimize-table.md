@@ -36,17 +36,11 @@ Consider optimizing a table regularly if the table receives frequent updates. Da
 
 ### When to Optimize
 
-If the blocks of a table meets all of the following conditions, the table requires an optimization:
+If the blocks of a table meets the following conditions, the table requires an optimization:
 
-1. The number of blocks is greater than four times the [max_threads](../../../13-sql-reference/70-system-tables/system-settings.md#max_threads) value.
+1. The number of blocks that meet the following conditions is greater than 100:
 
-```sql
-select count(*) from fuse_block('<your_database>','<your_table>');
-```
-
-2. The number of blocks that meet the following conditions is greater than 100:
-
-- The block size is greater than 100M.
+- The block size is less than 100M.
 - The number of the rows in the block is less than 800,000.
 
 ```sql
@@ -66,8 +60,6 @@ select count(*),avg(block_count),if(avg(block_count)<500,'The table needs segmen
 ### When NOT to Optimize
 
 Optimizing a table could be time-consuming, especially for large ones. Databend does not recommend optimizing a table too frequently. Before you optimize a table, make sure the table fully satisfies the conditions described in [When to Optimize](#when-to-optimize).
-
-Databend does not compact a table if the number of its blocks is less than two times the [max_threads](../../../13-sql-reference/70-system-tables/system-settings.md#max_threads) value. Databend will not do anything for such tables even though you run the optimization commands on them.
 
 ## Syntax
 
