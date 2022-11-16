@@ -108,11 +108,11 @@ impl Fragmenter {
     }
 
     fn resolve_fragment_connection(fragment: &mut PlanFragment) {
-        for input in fragment.source_fragments.iter_mut() {
+        for source_fragment in fragment.source_fragments.iter_mut() {
             if let PhysicalPlan::ExchangeSink(ExchangeSink {
                 destination_fragment_id,
                 ..
-            }) = &mut input.plan
+            }) = &mut source_fragment.plan
             {
                 // Fill the destination_fragment_id with parent fragment id.
                 *destination_fragment_id = fragment.fragment_id;
@@ -175,7 +175,7 @@ impl PhysicalPlanReplacer for Fragmenter {
             self.visiting_source_pipeline = false;
             FragmentType::Source
         } else {
-            FragmentType::Intermidiate
+            FragmentType::Intermediate
         };
         let exchange = Self::get_exchange(
             self.ctx.clone(),

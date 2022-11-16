@@ -62,6 +62,8 @@ fn default_level() -> i32 {
 pub struct Statistics {
     pub row_count: u64,
     pub block_count: u64,
+    #[serde(default)]
+    pub perfect_block_count: u64,
 
     pub uncompressed_byte_size: u64,
     pub compressed_byte_size: u64,

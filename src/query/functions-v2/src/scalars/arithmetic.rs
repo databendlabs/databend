@@ -91,7 +91,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                                             max: lm.checked_add(rm)?,
                                         }))
                                     })()
-                                    .unwrap_or(FunctionDomain::NoThrow)
+                                    .unwrap_or(FunctionDomain::Full)
                                 },
                                 |a, b, _| (a.as_() : T) + (b.as_() : T),
                             );
@@ -114,7 +114,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                                             max: lm.checked_sub(rn)?,
                                         }))
                                     })()
-                                    .unwrap_or(FunctionDomain::NoThrow)
+                                    .unwrap_or(FunctionDomain::Full)
                                 },
                                 |a, b, _| (a.as_() : T) - (b.as_() : T),
                             );
@@ -142,7 +142,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                                             max: x.max(y).max(m).max(n),
                                         }))
                                     })()
-                                    .unwrap_or(FunctionDomain::NoThrow)
+                                    .unwrap_or(FunctionDomain::Full)
                                 },
                                 |a, b, _| (a.as_() : T) * (b.as_() : T),
                             );

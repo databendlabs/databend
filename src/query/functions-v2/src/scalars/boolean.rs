@@ -105,14 +105,14 @@ pub fn register(registry: &mut FunctionRegistry) {
                     has_false: a.has_false || b.has_false,
                     has_true: a.has_true && b.has_true,
                     })),
-                    _ => return FunctionDomain::NoThrow,
+                    _ => return FunctionDomain::Full,
                 };
                 FunctionDomain::Domain(NullableDomain::<BooleanType> {
                     has_null: false,
                     value: bools,
                 })
             } else {
-                FunctionDomain::NoThrow
+                FunctionDomain::Full
             }
         },
         // value = lhs & rhs,  valid = (lhs_v & rhs_v) | (!lhs & lhs_v) | (!rhs & rhs_v))
@@ -136,14 +136,14 @@ pub fn register(registry: &mut FunctionRegistry) {
                         has_false: a.has_false && b.has_false,
                         has_true: a.has_true || b.has_true,
                     })),
-                    _ => return FunctionDomain::NoThrow,
+                    _ => return FunctionDomain::Full,
                 };
                 FunctionDomain::Domain(NullableDomain::<BooleanType> {
                     has_null: false,
                     value: bools,
                 })
             } else {
-                FunctionDomain::NoThrow
+                FunctionDomain::Full
             }
         },
         // value = lhs | rhs,  valid = (lhs_v & rhs_v) | (lhs_v & lhs) | (rhs_v & rhs)

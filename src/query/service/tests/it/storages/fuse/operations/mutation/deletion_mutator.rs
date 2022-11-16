@@ -18,6 +18,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_base::base::tokio;
+use common_datablocks::BlockCompactThresholds;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
@@ -99,6 +100,7 @@ async fn test_deletion_mutator_multiple_empty_segments() -> Result<()> {
         location_generator,
         Arc::new(base_snapshot),
         ClusterStatsGenerator::default(),
+        BlockCompactThresholds::default(),
     )?;
 
     // clear half of the segments

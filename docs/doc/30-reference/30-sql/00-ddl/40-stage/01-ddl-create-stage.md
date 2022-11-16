@@ -2,7 +2,7 @@
 title: CREATE STAGE
 ---
 
-Creates a user stage.
+Creates a stage.
 
 ## Syntax
 

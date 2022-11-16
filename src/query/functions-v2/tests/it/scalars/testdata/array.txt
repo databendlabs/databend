@@ -360,7 +360,7 @@ raw expr       : or(eq(false, false), eq(false, true))
 checked expr   : or<Boolean, Boolean>(eq<Boolean, Boolean>(false, false), eq<Boolean, Boolean>(false, true))
 optimized expr : true
 output type    : Boolean
-output domain  : {FALSE, TRUE}
+output domain  : {TRUE}
 output         : true
 
 

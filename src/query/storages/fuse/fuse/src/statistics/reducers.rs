@@ -15,6 +15,11 @@
 use std::borrow::Borrow;
 use std::collections::HashMap;
 
+<<<<<<< HEAD
+=======
+use common_datablocks::BlockCompactThresholds;
+use common_datavalues::DataValue;
+>>>>>>> main
 use common_exception::Result;
 use common_expression::Scalar;
 use common_storages_table_meta::meta::BlockMeta;
@@ -93,6 +98,7 @@ pub fn merge_statistics(l: &Statistics, r: &Statistics) -> Result<Statistics> {
     let s = Statistics {
         row_count: l.row_count + r.row_count,
         block_count: l.block_count + r.block_count,
+        perfect_block_count: l.perfect_block_count + r.perfect_block_count,
         uncompressed_byte_size: l.uncompressed_byte_size + r.uncompressed_byte_size,
         compressed_byte_size: l.compressed_byte_size + r.compressed_byte_size,
         index_size: l.index_size + r.index_size,
@@ -119,12 +125,16 @@ pub fn reduce_statistics<T: Borrow<Statistics>>(stats: &[T]) -> Result<Statistic
     Ok(statistics)
 }
 
-pub fn reduce_block_metas<T: Borrow<BlockMeta>>(block_metas: &[T]) -> Result<Statistics> {
+pub fn reduce_block_metas<T: Borrow<BlockMeta>>(
+    block_metas: &[T],
+    thresholds: BlockCompactThresholds,
+) -> Result<Statistics> {
     let mut row_count: u64 = 0;
     let mut block_count: u64 = 0;
     let mut uncompressed_byte_size: u64 = 0;
     let mut compressed_byte_size: u64 = 0;
     let mut index_size: u64 = 0;
+    let mut perfect_block_count: u64 = 0;
 
     block_metas.iter().for_each(|b| {
         let b = b.borrow();
@@ -133,6 +143,9 @@ pub fn reduce_block_metas<T: Borrow<BlockMeta>>(block_metas: &[T]) -> Result<Sta
         uncompressed_byte_size += b.block_size;
         compressed_byte_size += b.file_size;
         index_size += b.bloom_filter_index_size;
+        if thresholds.check_large_enough(b.row_count as usize, b.block_size as usize) {
+            perfect_block_count += 1;
+        }
     });
 
     let stats = block_metas
@@ -144,6 +157,7 @@ pub fn reduce_block_metas<T: Borrow<BlockMeta>>(block_metas: &[T]) -> Result<Sta
     Ok(Statistics {
         row_count,
         block_count,
+        perfect_block_count,
         uncompressed_byte_size,
         compressed_byte_size,
         index_size,

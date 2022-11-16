@@ -18,6 +18,7 @@ use std::sync::Arc;
 use common_arrow::parquet::metadata::ThriftFileMetaData;
 use common_exception::Result;
 use common_expression::Chunk;
+use common_expression::ChunkCompactThresholds;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::ColumnMeta;
 use common_storages_table_meta::meta::Location;
@@ -36,11 +37,17 @@ pub struct StatisticsAccumulator {
     pub in_memory_size: u64,
     pub file_size: u64,
     pub index_size: u64,
+
+    pub perfect_block_count: u64,
+    pub thresholds: Option<ChunkCompactThresholds>,
 }
 
 impl StatisticsAccumulator {
-    pub fn new() -> Self {
-        Default::default()
+    pub fn new(thresholds: Option<ChunkCompactThresholds>) -> Self {
+        Self {
+            thresholds,
+            ..Default::default()
+        }
     }
 
     pub fn add_block(
@@ -105,6 +112,12 @@ impl StatisticsAccumulator {
         let col_stats = block_statistics.block_column_statistics.clone();
         let data_location = (block_statistics.block_file_location, Chunk::VERSION);
         let cluster_stats = block_statistics.block_cluster_statistics;
+
+        if let Some(thresholds) = self.thresholds {
+            if thresholds.check_large_enough(row_count as usize, block_size as usize) {
+                self.perfect_block_count += 1;
+            }
+        }
 
         self.blocks_metas.push(Arc::new(BlockMeta::new(
             row_count,

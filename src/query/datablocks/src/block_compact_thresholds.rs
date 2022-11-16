@@ -12,11 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[derive(Clone, Copy, Default, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct BlockCompactThresholds {
     pub max_rows_per_block: usize,
     pub min_rows_per_block: usize,
     pub max_bytes_per_block: usize,
+}
+
+impl Default for BlockCompactThresholds {
+    fn default() -> Self {
+        Self {
+            // DEFAULT_ROW_PER_BLOCK
+            max_rows_per_block: 1000 * 1000,
+            // 0.8 * DEFAULT_ROW_PER_BLOCK
+            min_rows_per_block: 800 * 1000,
+            // DEFAULT_BLOCK_SIZE_IN_MEM_SIZE_THRESHOLD
+            max_bytes_per_block: 100 * 1024 * 1024,
+        }
+    }
 }
 
 impl BlockCompactThresholds {
@@ -42,10 +55,13 @@ impl BlockCompactThresholds {
         row_count >= self.min_rows_per_block || block_size >= self.max_bytes_per_block
     }
 
+    #[inline]
+    pub fn check_for_compact(&self, row_count: usize, block_size: usize) -> bool {
+        row_count < 2 * self.min_rows_per_block && block_size < 2 * self.max_bytes_per_block
+    }
+
+    #[inline]
     pub fn check_for_recluster(&self, total_rows: usize, total_bytes: usize) -> bool {
-        if total_rows <= self.min_rows_per_block && total_bytes <= self.max_bytes_per_block {
-            return true;
-        }
-        false
+        total_rows <= self.min_rows_per_block && total_bytes <= self.max_bytes_per_block
     }
 }

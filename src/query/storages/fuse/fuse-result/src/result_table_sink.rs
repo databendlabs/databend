@@ -125,6 +125,7 @@ impl ResultTableSink {
         let segment_info = SegmentInfo::new(acc.blocks_metas, FuseMetaStatistics {
             row_count: acc.summary_row_count,
             block_count: acc.summary_block_count,
+            perfect_block_count: acc.perfect_block_count,
             uncompressed_byte_size: acc.in_memory_size,
             compressed_byte_size: acc.file_size,
             col_stats,

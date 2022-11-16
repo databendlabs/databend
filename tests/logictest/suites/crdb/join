@@ -1150,14 +1150,14 @@ HashJoin
 ├── TableScan(Build)
 │   ├── table: default.default.twocolumn
 │   ├── read rows: 4
-│   ├── read bytes: 309
+│   ├── read bytes: 79
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
 │   └── push downs: [filters: [(x > 42)], limit: NONE]
 └── TableScan(Probe)
     ├── table: default.default.onecolumn
     ├── read rows: 4
-    ├── read bytes: 376
+    ├── read bytes: 62
     ├── partitions total: 2
     ├── partitions scanned: 2
     └── push downs: [filters: [], limit: NONE]
@@ -1174,14 +1174,14 @@ HashJoin
 ├── TableScan(Build)
 │   ├── table: default.default.twocolumn
 │   ├── read rows: 4
-│   ├── read bytes: 309
+│   ├── read bytes: 79
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
 │   └── push downs: [filters: [((x > 44) or (x < 43))], limit: NONE]
 └── TableScan(Probe)
     ├── table: default.default.onecolumn
     ├── read rows: 4
-    ├── read bytes: 376
+    ├── read bytes: 62
     ├── partitions total: 2
     ├── partitions scanned: 2
     └── push downs: [filters: [], limit: NONE]
@@ -1199,14 +1199,14 @@ HashJoin
 ├── TableScan(Build)                                                     
 │   ├── table: default.default.twocolumn                                 
 │   ├── read rows: 4                                                     
-│   ├── read bytes: 309
+│   ├── read bytes: 79
 │   ├── partitions total: 1                                              
 │   ├── partitions scanned: 1                                            
 │   └── push downs: [filters: [(x > 42), (x < 45)], limit: NONE]         
 └── TableScan(Probe)                                                     
     ├── table: default.default.onecolumn                                 
     ├── read rows: 4                                                     
-    ├── read bytes: 376                                                   
+    ├── read bytes: 62
     ├── partitions total: 2                                              
     ├── partitions scanned: 2                                            
     └── push downs: [filters: [], limit: NONE]                           
@@ -1227,14 +1227,14 @@ Filter
     ├── TableScan(Build)                                   
     │   ├── table: default.default.twocolumn               
     │   ├── read rows: 4                                   
-    │   ├── read bytes: 309
+    │   ├── read bytes: 79
     │   ├── partitions total: 1                            
     │   ├── partitions scanned: 1                          
     │   └── push downs: [filters: [], limit: NONE]         
     └── TableScan(Probe)                                   
         ├── table: default.default.onecolumn               
         ├── read rows: 4                                   
-        ├── read bytes: 376                                 
+        ├── read bytes: 62
         ├── partitions total: 2                            
         ├── partitions scanned: 2                          
         └── push downs: [filters: [], limit: NONE]         
@@ -1251,14 +1251,14 @@ HashJoin
 ├── TableScan(Build)                                                     
 │   ├── table: default.default.twocolumn                                 
 │   ├── read rows: 4                                                     
-│   ├── read bytes: 309
+│   ├── read bytes: 79
 │   ├── partitions total: 1                                              
 │   ├── partitions scanned: 1                                            
 │   └── push downs: [filters: [(x > 42), (x < 45)], limit: NONE]         
 └── TableScan(Probe)                                                     
     ├── table: default.default.onecolumn                                 
     ├── read rows: 4                                                     
-    ├── read bytes: 376                                                   
+    ├── read bytes: 62
     ├── partitions total: 2                                              
     ├── partitions scanned: 2                                            
     └── push downs: [filters: [], limit: NONE]                           

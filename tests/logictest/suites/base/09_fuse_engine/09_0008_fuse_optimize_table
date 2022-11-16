@@ -28,38 +28,22 @@ select * from t order by a;
 7
 
 statement ok
-set max_threads=2;
-
-statement ok
-optimize table t compact;
+optimize table t compact limit 2;
 
 statement query II
 select segment_count,block_count from fuse_snapshot('db_09_0008', 't') limit 1;
 
 ----
-3 3
+2 2
 
 statement ok
-set max_threads=1;
-
-statement ok
-optimize table t compact;
-
-statement query I
-select * from t order by a;
-
-----
-5
-6
-7
+optimize table t compact limit 2;
 
 statement query II
 select segment_count,block_count from fuse_snapshot('db_09_0008', 't') limit 1;
 
 ----
 1 1
-
-
 
 statement ok
 optimize table `t` purge;
@@ -69,8 +53,6 @@ select count(*)=1 from fuse_snapshot('db_09_0008', 't');
 
 ----
 1
-
-
 
 statement query I
 select * from t order by a;
@@ -226,10 +208,7 @@ select segment_count, block_count from fuse_snapshot('db_09_0008', 't2') limit 1
 4 4
 
 statement ok
-set max_threads=2;
-
-statement ok
-optimize table t2 compact limit 2;
+optimize table t2 compact /* two compact task because of the block_per_segment is 2 */;
 
 statement query II
 select segment_count, block_count from fuse_snapshot('db_09_0008', 't2') limit 1;

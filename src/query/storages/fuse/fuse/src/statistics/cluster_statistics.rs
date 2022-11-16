@@ -45,6 +45,14 @@ impl ClusterStatsGenerator {
         }
     }
 
+    pub fn is_cluster(&self) -> bool {
+        !self.cluster_key_index.is_empty()
+    }
+
+    pub fn block_compact_thresholds(&self) -> BlockCompactThresholds {
+        self.block_compact_thresholds
+    }
+
     // This can be used in block append.
     // The input block contains the cluster key block.
     pub fn gen_stats_for_append(
