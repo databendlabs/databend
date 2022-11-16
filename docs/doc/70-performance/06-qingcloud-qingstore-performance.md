@@ -12,7 +12,7 @@ description:
 * Databend: [v0.7.32-nightly](https://github.com/datafuselabs/databend/releases/tag/v0.7.32-nightly)
 * No Local Caching(Data Caching/Query Result Caching)
 * Databend is automatic performance optimization with **no manual tuning** required.
-* [Analyzing OnTime Datasets with Databend on QingCloud QingStore](../90-learn/01-analyze-ontime-with-databend-on-ec2-and-s3.md)
+* [Analyzing OnTime Datasets with Databend on QingCloud QingStore](../21-use-cases/01-analyze-ontime-with-databend-on-ec2-and-s3.md)
 :::
 
 ## Q1 (0.180 sec., 339.31 million rows/sec., 1.02 GB/sec.)
