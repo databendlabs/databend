@@ -14,12 +14,11 @@
 
 use std::sync::Arc;
 
-use common_datablocks::DataBlock;
-use common_datavalues::ColumnWithField;
-use common_datavalues::DataSchemaRef;
 use common_exception::Result;
-use common_functions::scalars::Function;
-use common_functions::scalars::FunctionContext;
+use common_expression::Chunk;
+use common_expression::DataSchemaRef;
+use common_expression::Function;
+use common_expression::FunctionContext;
 
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
@@ -29,7 +28,7 @@ use crate::pipelines::processors::transforms::transform::Transformer;
 
 pub struct TransformCastSchema {
     output_schema: DataSchemaRef,
-    functions: Vec<Box<dyn Function>>,
+    functions: Vec<Function>,
     func_ctx: FunctionContext,
 }
 
@@ -40,7 +39,7 @@ where Self: Transform
         input_port: Arc<InputPort>,
         output_port: Arc<OutputPort>,
         output_schema: DataSchemaRef,
-        functions: Vec<Box<dyn Function>>,
+        functions: Vec<Function>,
         func_ctx: FunctionContext,
     ) -> Result<ProcessorPtr> {
         Ok(Transformer::create(input_port, output_port, Self {
@@ -54,18 +53,13 @@ where Self: Transform
 impl Transform for TransformCastSchema {
     const NAME: &'static str = "CastSchemaTransform";
 
-    fn transform(&mut self, data: DataBlock) -> Result<DataBlock> {
+    fn transform(&mut self, data: Chunk) -> Result<Chunk> {
         let rows = data.num_rows();
-        let iter = self
-            .functions
-            .iter()
-            .zip(data.schema().fields())
-            .zip(data.columns());
         let mut columns = Vec::with_capacity(data.num_columns());
-        for ((cast_func, input_field), column) in iter {
-            let column = ColumnWithField::new(column.clone(), input_field.clone());
-            columns.push(cast_func.eval(self.func_ctx.clone(), &[column], rows)?);
+        for (cast_func, (value, ty)) in self.functions.iter().zip(data.columns()) {
+            let v = (cast_func.eval)(&[value.as_ref()], &self.func_ctx)?;
+            columns.push((v, ty.clone()));
         }
-        Ok(DataBlock::create(self.output_schema.clone(), columns))
+        Ok(Chunk::new(columns, rows))
     }
 }

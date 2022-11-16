@@ -70,7 +70,7 @@ impl Interpreter for ShowCreateDatabaseInterpreter {
             }
         }
 
-        PipelineBuildResult::from_blocks(vec![DataBlock::create(self.plan.schema(), vec![
+        PipelineBuildResult::from_chunks(vec![DataBlock::create(self.plan.schema(), vec![
             Series::from_data(vec![name.as_bytes()]),
             Series::from_data(vec![info.into_bytes()]),
         ])])

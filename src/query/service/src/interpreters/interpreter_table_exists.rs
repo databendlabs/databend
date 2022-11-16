@@ -52,7 +52,7 @@ impl Interpreter for ExistsTableInterpreter {
             false => 0u8,
         };
 
-        PipelineBuildResult::from_blocks(vec![DataBlock::create(self.plan.schema(), vec![
+        PipelineBuildResult::from_chunks(vec![DataBlock::create(self.plan.schema(), vec![
             Series::from_data(vec![result]),
         ])])
     }

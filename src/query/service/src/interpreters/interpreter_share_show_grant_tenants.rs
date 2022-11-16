@@ -77,6 +77,6 @@ impl Interpreter for ShowGrantTenantsOfShareInterpreter {
             Series::from_data(accounts),
         ]);
 
-        PipelineBuildResult::from_blocks(vec![block])
+        PipelineBuildResult::from_chunks(vec![block])
     }
 }

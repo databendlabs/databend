@@ -82,7 +82,7 @@ impl Interpreter for DescShareInterpreter {
             shared_ons.push(entry.grant_on.to_string());
         }
 
-        PipelineBuildResult::from_blocks(vec![DataBlock::create(self.plan.schema(), vec![
+        PipelineBuildResult::from_chunks(vec![DataBlock::create(self.plan.schema(), vec![
             Series::from_data(kinds),
             Series::from_data(names),
             Series::from_data(shared_ons),

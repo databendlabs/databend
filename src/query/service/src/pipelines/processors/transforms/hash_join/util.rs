@@ -12,16 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataSchemaRefExt;
+use common_expression::DataField;
+use common_expression::DataSchemaRef;
+use common_expression::DataSchemaRefExt;
 
 pub(crate) fn build_schema_wrap_nullable(build_schema: &DataSchemaRef) -> DataSchemaRef {
     let mut nullable_field = Vec::with_capacity(build_schema.fields().len());
     for field in build_schema.fields() {
-        nullable_field.push(DataField::new_nullable(
+        nullable_field.push(DataField::new(
             field.name(),
-            field.data_type().clone(),
+            field.data_type().wrap_nullable(),
         ));
     }
     DataSchemaRefExt::create(nullable_field)
@@ -30,9 +30,9 @@ pub(crate) fn build_schema_wrap_nullable(build_schema: &DataSchemaRef) -> DataSc
 pub(crate) fn probe_schema_wrap_nullable(probe_schema: &DataSchemaRef) -> DataSchemaRef {
     let mut nullable_field = Vec::with_capacity(probe_schema.fields().len());
     for field in probe_schema.fields() {
-        nullable_field.push(DataField::new_nullable(
+        nullable_field.push(DataField::new(
             field.name(),
-            field.data_type().clone(),
+            field.data_type().wrap_nullable(),
         ));
     }
     DataSchemaRefExt::create(nullable_field)

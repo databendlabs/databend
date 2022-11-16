@@ -15,23 +15,17 @@
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
-use common_datavalues::combine_validities_3;
-use common_datavalues::BooleanColumn;
-use common_datavalues::BooleanType;
-use common_datavalues::Column;
-use common_datavalues::ColumnRef;
-use common_datavalues::ConstColumn;
-use common_datavalues::DataField;
-use common_datavalues::DataSchema;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataType;
-use common_datavalues::DataValue;
-use common_datavalues::NullableColumn;
-use common_datavalues::NullableType;
-use common_datavalues::Series;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::arrow::combine_validities_3;
+use common_expression::types::nullable::NullableColumn;
+use common_expression::types::nullable::NullableColumnBuilder;
+use common_expression::types::AnyType;
+use common_expression::types::DataType;
+use common_expression::Chunk;
+use common_expression::Column;
+use common_expression::Scalar;
+use common_expression::Value;
 use common_hashtable::HashtableLike;
 
 use crate::pipelines::processors::transforms::hash_join::desc::MarkerKind;
@@ -42,21 +36,18 @@ use crate::sql::plans::JoinType;
 
 /// Some common methods for hash join.
 impl JoinHashTable {
-    // Merge build block and probe block that have the same number of rows
-    pub(crate) fn merge_eq_block(
-        &self,
-        build_block: &DataBlock,
-        probe_block: &DataBlock,
-    ) -> Result<DataBlock> {
-        let mut probe_block = probe_block.clone();
-        for (col, field) in build_block
-            .columns()
-            .iter()
-            .zip(build_block.schema().fields().iter())
-        {
-            probe_block = probe_block.add_column(col.clone(), field.clone())?;
-        }
-        Ok(probe_block)
+    // Merge build chunk and probe chunk that have the same number of rows
+    pub(crate) fn merge_eq_chunk(&self, build_chunk: &Chunk, probe_chunk: &Chunk) -> Result<Chunk> {
+        todo!("expression");
+        // let mut probe_chunk = probe_chunk.clone();
+        // for (col, field) in build_chunk
+        //     .columns()
+        //     .iter()
+        //     .zip(build_chunk.schema().fields().iter())
+        // {
+        //     probe_chunk = probe_chunk.add_column(col.clone(), field.clone())?;
+        // }
+        // Ok(probe_chunk)
     }
 
     #[inline]
@@ -73,11 +64,11 @@ impl JoinHashTable {
         None
     }
 
-    pub(crate) fn create_marker_block(
+    pub(crate) fn create_marker_chunk(
         &self,
         has_null: bool,
         markers: Vec<MarkerKind>,
-    ) -> Result<DataBlock> {
+    ) -> Result<Chunk> {
         let mut validity = MutableBitmap::with_capacity(markers.len());
         let mut boolean_bit_map = MutableBitmap::with_capacity(markers.len());
 
@@ -98,38 +89,38 @@ impl JoinHashTable {
                 boolean_bit_map.push(false);
             }
         }
-        let boolean_column = BooleanColumn::from_arrow_data(boolean_bit_map.into());
-        let marker_column = Self::set_validity(&boolean_column.arc(), &validity.into())?;
-        let marker_schema = DataSchema::new(vec![DataField::new(
-            &self
-                .hash_join_desc
-                .marker_join_desc
-                .marker_index
-                .ok_or_else(|| ErrorCode::Internal("Invalid mark join"))?
-                .to_string(),
-            NullableType::new_impl(BooleanType::new_impl()),
-        )]);
-        Ok(DataBlock::create(DataSchemaRef::from(marker_schema), vec![
-            marker_column,
-        ]))
+        let num_rows = validity.len();
+        let boolean_column = Column::Boolean(boolean_bit_map.into());
+        let marker_column = Column::Nullable(Box::new(NullableColumn {
+            column: boolean_column,
+            validity: validity.into(),
+        }));
+        Ok(Chunk::new(vec![Value::Column(marker_column)], num_rows))
     }
 
-    pub(crate) fn init_markers(cols: &[ColumnRef], num_rows: usize) -> Vec<MarkerKind> {
+    pub(crate) fn init_markers(cols: &[Column], num_rows: usize) -> Vec<MarkerKind> {
         let mut markers = vec![MarkerKind::False; num_rows];
         if cols.iter().any(|c| c.is_nullable() || c.is_null()) {
             let mut valids = None;
             for col in cols.iter() {
-                let (is_all_null, tmp_valids_option) = col.validity();
-                if !is_all_null {
-                    if let Some(tmp_valids) = tmp_valids_option.as_ref() {
-                        if tmp_valids.unset_bits() == 0 {
+                match col {
+                    Column::Nullable(c) => {
+                        let bitmap = &c.validity;
+                        if bitmap.unset_bits() == 0 {
                             let mut m = MutableBitmap::with_capacity(num_rows);
                             m.extend_constant(num_rows, true);
                             valids = Some(m.into());
                             break;
                         } else {
-                            valids = combine_validities_3(valids, tmp_valids_option.cloned());
+                            valids = combine_validities_3(valids, Some(bitmap.clone()));
                         }
+                    }
+                    Column::Null { .. } => {}
+                    c => {
+                        let mut m = MutableBitmap::with_capacity(num_rows);
+                        m.extend_constant(num_rows, true);
+                        valids = Some(m.into());
+                        break;
                     }
                 }
             }
@@ -144,57 +135,65 @@ impl JoinHashTable {
         markers
     }
 
-    pub(crate) fn set_validity(column: &ColumnRef, validity: &Bitmap) -> Result<ColumnRef> {
-        if column.is_null() {
-            Ok(column.clone())
-        } else if column.is_const() {
-            let col: &ConstColumn = Series::check_get(column)?;
-            let validity = validity.clone();
-            let inner = Self::set_validity(col.inner(), &validity.slice(0, 1))?;
-            Ok(ConstColumn::new(inner, col.len()).arc())
+    pub(crate) fn set_validity(
+        column: &(Value<AnyType>, DataType),
+        validity: &Bitmap,
+    ) -> (Value<AnyType>, DataType) {
+        let (value, data_type) = column;
+        let col = value.as_column().unwrap();
+
+        if col.is_null() {
+            column.clone()
         } else if column.is_nullable() {
-            let col: &NullableColumn = Series::check_get(column)?;
+            let col = col.as_nullable().unwrap();
             // It's possible validity is longer than col.
-            let diff_len = validity.len() - col.ensure_validity().len();
+            let diff_len = validity.len() - col.validity.len();
             let mut new_validity = MutableBitmap::with_capacity(validity.len());
-            for (b1, b2) in validity.iter().zip(col.ensure_validity().iter()) {
+            for (b1, b2) in validity.iter().zip(col.validity.iter()) {
                 new_validity.push(b1 & b2);
             }
             new_validity.extend_constant(diff_len, false);
-            let col = NullableColumn::wrap_inner(col.inner().clone(), Some(new_validity.into()));
-            Ok(col)
+            let col = Column::Nullable(NullableColumn {
+                column: col.column.clone(),
+                validity: new_validity.into(),
+            });
+            (Value::Column(col), data_type.clone())
         } else {
-            let col = NullableColumn::wrap_inner(column.clone(), Some(validity.clone()));
-            Ok(col)
+            let col = Column::Nullable(NullableColumn {
+                column: column.clone(),
+                validity: validity.clone(),
+            });
+            (Value::Column(col), data_type.clone())
         }
     }
 
     // return an (option bitmap, all_true, all_false)
     pub(crate) fn get_other_filters(
         &self,
-        merged_block: &DataBlock,
+        merged_chunk: &Chunk,
         filter: &EvalNode,
     ) -> Result<(Option<Bitmap>, bool, bool)> {
         let func_ctx = self.ctx.try_get_function_context()?;
         // `predicate_column` contains a column, which is a boolean column.
-        let filter_vector = filter.eval(&func_ctx, merged_block)?;
-        let predict_boolean_nonull = DataBlock::cast_to_nonull_boolean(filter_vector.vector())?;
+        let filter_vector = filter.eval(&func_ctx, merged_chunk)?;
+        todo!("expression");
+        // let predict_boolean_nonull = DataBlock::cast_to_nonull_boolean(filter_vector.vector())?;
 
-        // faster path for constant filter
-        if predict_boolean_nonull.is_const() {
-            let v = predict_boolean_nonull.get_bool(0)?;
-            return Ok((None, v, !v));
-        }
+        // // faster path for constant filter
+        // if predict_boolean_nonull.is_const() {
+        //     let v = predict_boolean_nonull.get_bool(0)?;
+        //     return Ok((None, v, !v));
+        // }
 
-        let boolean_col: &BooleanColumn = Series::check_get(&predict_boolean_nonull)?;
-        let rows = boolean_col.len();
-        let count_zeros = boolean_col.values().unset_bits();
+        // let boolean_col: &BooleanColumn = Series::check_get(&predict_boolean_nonull)?;
+        // let rows = boolean_col.len();
+        // let count_zeros = boolean_col.values().unset_bits();
 
-        Ok((
-            Some(boolean_col.values().clone()),
-            count_zeros == 0,
-            rows == count_zeros,
-        ))
+        // Ok((
+        //     Some(boolean_col.values().clone()),
+        //     count_zeros == 0,
+        //     rows == count_zeros,
+        // ))
     }
 
     pub(crate) fn find_unmatched_build_indexes(
@@ -214,15 +213,16 @@ impl JoinHashTable {
         Ok(unmatched_build_indexes)
     }
 
-    // For unmatched build index, the method will produce null probe block
-    // Then merge null_probe_block with unmatched_build_block
-    pub(crate) fn null_blocks_for_right_join(
+    // For unmatched build index, the method will produce null probe chunk
+    // Then merge null_probe_chunk with unmatched_build_chunk
+    pub(crate) fn null_chunks_for_right_join(
         &self,
         unmatched_build_indexes: &Vec<RowPtr>,
-    ) -> Result<DataBlock> {
-        let mut unmatched_build_block = self.row_space.gather(unmatched_build_indexes)?;
+    ) -> Result<Chunk> {
+        let mut unmatched_build_chunk = self.row_space.gather(unmatched_build_indexes)?;
+        let num_rows = unmatched_build_chunk.num_rows();
         if self.hash_join_desc.join_type == JoinType::Full {
-            let nullable_unmatched_build_columns = unmatched_build_block
+            let nullable_unmatched_build_columns = unmatched_build_chunk
                 .columns()
                 .iter()
                 .map(|c| {
@@ -231,24 +231,19 @@ impl JoinHashTable {
                     let probe_validity: Bitmap = probe_validity.into();
                     Self::set_validity(c, &probe_validity)
                 })
-                .collect::<Result<Vec<_>>>()?;
-            unmatched_build_block =
-                DataBlock::create(self.row_space.schema(), nullable_unmatched_build_columns);
+                .collect::<Vec<_>>();
+            unmatched_build_chunk = Chunk::new(nullable_unmatched_build_columns, num_rows);
         };
-        // Create null block for unmatched rows in probe side
-        let null_probe_block = DataBlock::create(
-            self.probe_schema.clone(),
+        // Create null chunk for unmatched rows in probe side
+        let null_proble_chunk = Chunk::new(
             self.probe_schema
                 .fields()
                 .iter()
-                .map(|df| {
-                    df.data_type()
-                        .clone()
-                        .create_constant_column(&DataValue::Null, unmatched_build_indexes.len())
-                })
-                .collect::<Result<Vec<_>>>()?,
+                .map(|df| (Value::Scalar(Scalar::Null), df.data_type().clone().into()))
+                .collect(),
+            unmatched_build_indexes.len(),
         );
-        self.merge_eq_block(&unmatched_build_block, &null_probe_block)
+        self.merge_eq_chunk(&unmatched_build_chunk, &null_probe_chunk)
     }
 
     // Final row_state for right join
@@ -276,41 +271,38 @@ impl JoinHashTable {
         Ok(row_state)
     }
 
-    pub(crate) fn rest_block(&self) -> Result<DataBlock> {
-        let rest_probe_blocks = self.hash_join_desc.join_state.rest_probe_blocks.read();
-        if rest_probe_blocks.is_empty() {
-            return Ok(DataBlock::empty());
+    pub(crate) fn rest_chunk(&self) -> Result<Chunk> {
+        let rest_probe_chunks = self.hash_join_desc.join_state.rest_probe_chunks.read();
+        if rest_probe_chunks.is_empty() {
+            return Ok(Chunk::empty());
         }
-        let probe_block = DataBlock::concat_blocks(&rest_probe_blocks)?;
+        let probe_chunk = Chunk::concat(&rest_probe_chunks)?;
         let rest_build_indexes = self.hash_join_desc.join_state.rest_build_indexes.read();
-        let mut build_block = self.row_space.gather(&rest_build_indexes)?;
-        // For left join, wrap nullable for build block
+        let mut build_chunk = self.row_space.gather(&rest_build_indexes)?;
+        // For left join, wrap nullable for build chunk
         if matches!(
             self.hash_join_desc.join_type,
             JoinType::Left | JoinType::Single | JoinType::Full
         ) {
             let validity = self.hash_join_desc.join_state.validity.read();
             let validity = (*validity).clone().into();
-            let nullable_columns = if self.row_space.datablocks().is_empty() {
-                build_block
+            let num_rows = validity.len();
+            let nullable_columns = if self.row_space.data_chunks().is_empty() {
+                build_chunk
                     .columns()
                     .iter()
-                    .map(|c| {
-                        c.data_type()
-                            .create_constant_column(&DataValue::Null, rest_build_indexes.len())
-                    })
-                    .collect::<Result<Vec<_>>>()?
+                    .map(|(_, ty)| (Value::Scalar(Scalar::Null), ty.clone()))
+                    .collect::<Vec<_>>()
             } else {
-                build_block
+                build_chunk
                     .columns()
                     .iter()
                     .map(|c| Self::set_validity(c, &validity))
-                    .collect::<Result<Vec<_>>>()?
+                    .collect::<Vec<_>>()
             };
-            build_block =
-                DataBlock::create(self.row_space.data_schema.clone(), nullable_columns.clone());
+            build_chunk = Chunk::new(nullable_columns, num_rows);
         }
 
-        self.merge_eq_block(&build_block, &probe_block)
+        self.merge_eq_chunk(&build_chunk, &probe_chunk)
     }
 }

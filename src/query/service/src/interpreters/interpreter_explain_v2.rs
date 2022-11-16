@@ -108,7 +108,7 @@ impl Interpreter for ExplainInterpreter {
             }
         };
 
-        PipelineBuildResult::from_blocks(blocks)
+        PipelineBuildResult::from_chunks(blocks)
     }
 }
 

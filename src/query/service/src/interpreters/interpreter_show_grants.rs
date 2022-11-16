@@ -84,7 +84,7 @@ impl Interpreter for ShowGrantsInterpreter {
             .map(|e| format!("{} TO {}", e, identity).into_bytes())
             .collect::<Vec<_>>();
 
-        PipelineBuildResult::from_blocks(vec![DataBlock::create(self.plan.schema(), vec![
+        PipelineBuildResult::from_chunks(vec![DataBlock::create(self.plan.schema(), vec![
             Series::from_data(grant_list),
         ])])
     }

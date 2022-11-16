@@ -14,9 +14,9 @@
 
 use std::iter::TrustedLen;
 
-use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::Chunk;
 use common_hashtable::HashtableLike;
 
 use super::JoinHashTable;
@@ -30,8 +30,8 @@ impl JoinHashTable {
         hash_table: &H,
         probe_state: &mut ProbeState,
         keys_iter: IT,
-        input: &DataBlock,
-    ) -> Result<Vec<DataBlock>>
+        input: &Chunk,
+    ) -> Result<Vec<Chunk>>
     where
         IT: Iterator<Item = &'a H::Key> + TrustedLen,
         H::Key: 'a,

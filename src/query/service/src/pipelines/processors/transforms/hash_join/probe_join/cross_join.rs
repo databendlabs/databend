@@ -27,7 +27,7 @@ impl JoinHashTable {
         input: &DataBlock,
         _probe_state: &mut ProbeState,
     ) -> Result<Vec<DataBlock>> {
-        let build_blocks = self.row_space.datablocks();
+        let build_blocks = self.row_space.data_chunks();
         let num_rows = build_blocks
             .iter()
             .fold(0, |acc, block| acc + block.num_rows());

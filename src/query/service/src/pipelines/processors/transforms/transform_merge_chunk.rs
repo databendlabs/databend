@@ -16,38 +16,38 @@ use std::any::Any;
 use std::sync::Arc;
 
 use async_channel::Receiver;
-use common_datablocks::DataBlock;
-use common_datavalues::DataSchemaRef;
 use common_exception::Result;
+use common_expression::Chunk;
+use common_expression::DataSchemaRef;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 
-pub struct TransformMergeBlock {
+pub struct TransformMergeChunk {
     finished: bool,
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
 
-    input_data: Option<DataBlock>,
-    output_data: Option<DataBlock>,
+    input_data: Option<Chunk>,
+    output_data: Option<Chunk>,
     schema: DataSchemaRef,
     pairs: Vec<(String, String)>,
 
-    receiver: Receiver<DataBlock>,
-    receiver_result: Option<DataBlock>,
+    receiver: Receiver<Chunk>,
+    receiver_result: Option<Chunk>,
 }
 
-impl TransformMergeBlock {
+impl TransformMergeChunk {
     pub fn try_create(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         schema: DataSchemaRef,
         pairs: Vec<(String, String)>,
-        receiver: Receiver<DataBlock>,
+        receiver: Receiver<Chunk>,
     ) -> Result<ProcessorPtr> {
-        Ok(ProcessorPtr::create(Box::new(TransformMergeBlock {
+        Ok(ProcessorPtr::create(Box::new(TransformMergeChunk {
             finished: false,
             input,
             output,
@@ -60,26 +60,27 @@ impl TransformMergeBlock {
         })))
     }
 
-    fn project_block(&self, block: DataBlock, is_left: bool) -> Result<DataBlock> {
+    fn project_chunk(&self, chunk: Chunk, is_left: bool) -> Result<Chunk> {
+        let num_rows = chunk.num_rows();
         let columns = self
             .pairs
             .iter()
             .map(|(left, right)| {
                 if is_left {
-                    Ok(block.try_column_by_name(left)?.clone())
+                    Ok(chunk.column(self.schema.index_of(left)?).clone())
                 } else {
-                    Ok(block.try_column_by_name(right)?.clone())
+                    Ok(chunk.column(self.schema.index_of(right)?).clone())
                 }
             })
             .collect::<Result<Vec<_>>>()?;
-        Ok(DataBlock::create(self.schema.clone(), columns))
+        Ok(Chunk::new(columns, num_rows))
     }
 }
 
 #[async_trait::async_trait]
-impl Processor for TransformMergeBlock {
+impl Processor for TransformMergeChunk {
     fn name(&self) -> String {
-        "TransformMergeBlock".to_string()
+        "TransformMergeChunk".to_string()
     }
 
     fn as_any(&mut self) -> &mut dyn Any {
@@ -131,15 +132,15 @@ impl Processor for TransformMergeBlock {
     fn process(&mut self) -> Result<()> {
         if let Some(input_data) = self.input_data.take() {
             if let Some(receiver_result) = self.receiver_result.take() {
-                self.output_data = Some(DataBlock::concat_blocks(&[
-                    self.project_block(input_data, true)?,
-                    self.project_block(receiver_result, false)?,
+                self.output_data = Some(Chunk::concat(&[
+                    self.project_chunk(input_data, true)?,
+                    self.project_chunk(receiver_result, false)?,
                 ])?);
             } else {
-                self.output_data = Some(self.project_block(input_data, true)?);
+                self.output_data = Some(self.project_chunk(input_data, true)?);
             }
         } else if let Some(receiver_result) = self.receiver_result.take() {
-            self.output_data = Some(self.project_block(receiver_result, false)?);
+            self.output_data = Some(self.project_chunk(receiver_result, false)?);
         }
 
         Ok(())

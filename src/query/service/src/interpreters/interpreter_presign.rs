@@ -86,6 +86,6 @@ impl Interpreter for PresignInterpreter {
             Series::from_data(vec![presigned_req.uri().to_string()]),
         ]);
 
-        PipelineBuildResult::from_blocks(vec![block])
+        PipelineBuildResult::from_chunks(vec![block])
     }
 }

@@ -17,13 +17,9 @@ use std::sync::atomic::Ordering;
 
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
-use common_datablocks::DataBlock;
-use common_datablocks::HashMethod;
-use common_datavalues::BooleanColumn;
-use common_datavalues::Column;
-use common_datavalues::ColumnRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::Chunk;
 
 use super::ProbeState;
 use crate::pipelines::processors::transforms::hash_join::desc::MarkerKind;
@@ -36,18 +32,19 @@ use crate::sql::planner::plans::JoinType;
 
 #[async_trait::async_trait]
 impl HashJoinState for JoinHashTable {
-    fn build(&self, input: DataBlock) -> Result<()> {
-        let func_ctx = self.ctx.try_get_function_context()?;
-        let build_cols = self
-            .hash_join_desc
-            .build_keys
-            .iter()
-            .map(|expr| Ok(expr.eval(&func_ctx, &input)?.vector().clone()))
-            .collect::<Result<Vec<ColumnRef>>>()?;
-        self.row_space.push_cols(input, build_cols)
+    fn build(&self, input: Chunk) -> Result<()> {
+        todo!("expression");
+        // let func_ctx = self.ctx.try_get_function_context()?;
+        // let build_cols = self
+        //     .hash_join_desc
+        //     .build_keys
+        //     .iter()
+        //     .map(|expr| Ok(expr.eval(&func_ctx, &input)?.vector().clone()))
+        //     .collect::<Result<Vec<ColumnRef>>>()?;
+        // self.row_space.push_cols(input, build_cols)
     }
 
-    fn probe(&self, input: &DataBlock, probe_state: &mut ProbeState) -> Result<Vec<DataBlock>> {
+    fn probe(&self, input: &Chunk, probe_state: &mut ProbeState) -> Result<Vec<Chunk>> {
         match self.hash_join_desc.join_type {
             JoinType::Inner
             | JoinType::LeftSemi
@@ -259,126 +256,118 @@ impl HashJoinState for JoinHashTable {
         Ok(())
     }
 
-    fn mark_join_blocks(&self) -> Result<Vec<DataBlock>> {
+    fn mark_join_chunks(&self) -> Result<Vec<Chunk>> {
         let row_ptrs = self.row_ptrs.read();
         let has_null = self.hash_join_desc.marker_join_desc.has_null.read();
 
         let markers = row_ptrs.iter().map(|r| r.marker.unwrap()).collect();
-        let marker_block = self.create_marker_block(*has_null, markers)?;
-        let build_block = self.row_space.gather(&row_ptrs)?;
-        Ok(vec![self.merge_eq_block(&marker_block, &build_block)?])
+        let marker_chunk = self.create_marker_chunk(*has_null, markers)?;
+        let build_chunk = self.row_space.gather(&row_ptrs)?;
+        Ok(vec![self.merge_eq_chunk(&marker_chunk, &build_chunk)?])
     }
 
-    fn right_join_blocks(&self, blocks: &[DataBlock]) -> Result<Vec<DataBlock>> {
+    fn right_join_chunks(&self, chunks: &[Chunk]) -> Result<Vec<Chunk>> {
         let mut row_state = self.row_state_for_right_join()?;
         let unmatched_build_indexes = self.find_unmatched_build_indexes(&row_state)?;
 
         // Don't need process non-equi conditions for full join in the method
         // Because non-equi conditions have been processed in left probe join
         if self.hash_join_desc.join_type == JoinType::Full {
-            let null_block = self.null_blocks_for_right_join(&unmatched_build_indexes)?;
-            return Ok(vec![DataBlock::concat_blocks(
-                &[blocks, &[null_block]].concat(),
-            )?]);
+            let null_chunk = self.null_chunks_for_right_join(&unmatched_build_indexes)?;
+            return Ok(vec![Chunk::concat(&[chunks, &[null_chunk]].concat())?]);
         }
 
-        let rest_block = self.rest_block()?;
-        let input_block = DataBlock::concat_blocks(&[blocks, &[rest_block]].concat())?;
+        let rest_chunk = self.rest_chunk()?;
+        let input_chunk = Chunk::concat(&[chunks, &[rest_chunk]].concat())?;
+        let num_rows = input_chunk.num_rows();
 
         if unmatched_build_indexes.is_empty() && self.hash_join_desc.other_predicate.is_none() {
-            return Ok(vec![input_block]);
+            return Ok(vec![input_chunk]);
         }
 
         if self.hash_join_desc.other_predicate.is_none() {
-            let null_block = self.null_blocks_for_right_join(&unmatched_build_indexes)?;
-            if input_block.is_empty() {
-                return Ok(vec![null_block]);
+            let null_chunk = self.null_chunks_for_right_join(&unmatched_build_indexes)?;
+            if input_chunk.is_empty() {
+                return Ok(vec![null_chunk]);
             }
-            return Ok(vec![DataBlock::concat_blocks(&[input_block, null_block])?]);
+            return Ok(vec![Chunk::concat(&[input_chunk, null_chunk])?]);
         }
 
-        if input_block.is_empty() {
+        if input_chunk.is_empty() {
             return Ok(vec![]);
         }
 
         let (bm, all_true, all_false) = self.get_other_filters(
-            &input_block,
+            &input_chunk,
             self.hash_join_desc.other_predicate.as_ref().unwrap(),
         )?;
 
         if all_true {
-            let null_block = self.null_blocks_for_right_join(&unmatched_build_indexes)?;
-            return Ok(vec![DataBlock::concat_blocks(&[input_block, null_block])?]);
+            let null_chunk = self.null_chunks_for_right_join(&unmatched_build_indexes)?;
+            return Ok(vec![Chunk::concat(&[input_chunk, null_chunk])?]);
         }
 
         let validity = match (bm, all_false) {
             (Some(b), _) => b,
-            (None, true) => Bitmap::new_zeroed(input_block.num_rows()),
+            (None, true) => Bitmap::new_zeroed(num_rows),
             // must be one of above
             _ => unreachable!(),
         };
         let probe_column_len = self.probe_schema.fields().len();
-        let probe_columns = input_block.columns()[0..probe_column_len]
+        let probe_columns = input_chunk.columns()[0..probe_column_len]
             .iter()
             .map(|c| Self::set_validity(c, &validity))
-            .collect::<Result<Vec<_>>>()?;
-        let probe_block = DataBlock::create(self.probe_schema.clone(), probe_columns);
-        let build_block = DataBlock::create(
-            self.row_space.data_schema.clone(),
-            input_block.columns()[probe_column_len..].to_vec(),
-        );
-        let merged_block = self.merge_eq_block(&build_block, &probe_block)?;
+            .collect::<Vec<_>>();
+        let probe_chunk = Chunk::new(robe_columns, num_rows);
+        let build_chunk = Chunk::new(input_chunk.columns()[probe_column_len..].to_vec(), num_rows);
+        let merged_chunk = self.merge_eq_chunk(&build_chunk, &probe_chunk)?;
 
         // If build_indexes size will greater build table size, we need filter the redundant rows for build side.
         let mut bm = validity.into_mut().right().unwrap();
         self.filter_rows_for_right_join(&mut bm, &mut row_state);
-        let predicate = BooleanColumn::from_arrow_data(bm.into()).arc();
-        let filtered_block = DataBlock::filter_block(merged_block, &predicate)?;
+        let filtered_chunk = Chunk::filter_chunk_with_bool_column(merged_chunk, &bm.into())?;
 
-        // Concat null blocks
-        let null_block = self.null_blocks_for_right_join(&unmatched_build_indexes)?;
-        Ok(vec![DataBlock::concat_blocks(&[
-            filtered_block,
-            null_block,
-        ])?])
+        // Concat null chunks
+        let null_chunk = self.null_chunks_for_right_join(&unmatched_build_indexes)?;
+        Ok(vec![Chunk::concat(&[filtered_chunk, null_chunk])?])
     }
 
-    fn right_semi_join_blocks(&self, blocks: &[DataBlock]) -> Result<Vec<DataBlock>> {
+    fn right_semi_join_chunks(&self, chunks: &[Chunk]) -> Result<Vec<Chunk>> {
         let mut row_state = self.row_state_for_right_join()?;
         // Fast path for right anti join with non-equi conditions
         if self.hash_join_desc.other_predicate.is_none()
             && self.hash_join_desc.join_type == JoinType::RightAnti
         {
             let unmatched_build_indexes = self.find_unmatched_build_indexes(&row_state)?;
-            let unmatched_build_block = self.row_space.gather(&unmatched_build_indexes)?;
-            return Ok(vec![unmatched_build_block]);
+            let unmatched_build_chunk = self.row_space.gather(&unmatched_build_indexes)?;
+            return Ok(vec![unmatched_build_chunk]);
         }
 
-        let rest_block = self.rest_block()?;
-        let input_block = DataBlock::concat_blocks(&[blocks, &[rest_block]].concat())?;
+        let rest_chunk = self.rest_chunk()?;
+        let input_chunk = Chunk::concat(&[chunks, &[rest_chunk]].concat())?;
 
-        if input_block.is_empty() {
+        if input_chunk.is_empty() {
             return Ok(vec![]);
         }
 
         let probe_fields_len = self.probe_schema.fields().len();
-        let build_columns = input_block.columns()[probe_fields_len..].to_vec();
-        let build_block = DataBlock::create(self.row_space.data_schema.clone(), build_columns);
+        let build_columns = input_chunk.columns()[probe_fields_len..].to_vec();
+        let build_chunk = Chunk::new(build_columns, input_chunk.num_rows());
 
         // Fast path for right semi join with non-equi conditions
         if self.hash_join_desc.other_predicate.is_none()
             && self.hash_join_desc.join_type == JoinType::RightSemi
         {
             let mut bm = MutableBitmap::new();
-            bm.extend_constant(build_block.num_rows(), true);
-            let filtered_block =
-                self.filter_rows_for_right_semi_join(&mut bm, build_block, &mut row_state)?;
-            return Ok(vec![filtered_block]);
+            bm.extend_constant(build_chunk.num_rows(), true);
+            let filtered_chunk =
+                self.filter_rows_for_right_semi_join(&mut bm, build_chunk, &mut row_state)?;
+            return Ok(vec![filtered_chunk]);
         }
 
         // Right anti/semi join with non-equi conditions
         let (bm, all_true, all_false) = self.get_other_filters(
-            &input_block,
+            &input_chunk,
             self.hash_join_desc.other_predicate.as_ref().unwrap(),
         )?;
 
@@ -386,25 +375,23 @@ impl HashJoinState for JoinHashTable {
         if all_true {
             return if self.hash_join_desc.join_type == JoinType::RightSemi {
                 let mut bm = MutableBitmap::new();
-                bm.extend_constant(build_block.num_rows(), true);
-                let filtered_block =
-                    self.filter_rows_for_right_semi_join(&mut bm, build_block, &mut row_state)?;
-                return Ok(vec![filtered_block]);
+                bm.extend_constant(build_chunk.num_rows(), true);
+                let filtered_chunk =
+                    self.filter_rows_for_right_semi_join(&mut bm, build_chunk, &mut row_state)?;
+                return Ok(vec![filtered_chunk]);
             } else {
                 let unmatched_build_indexes = self.find_unmatched_build_indexes(&row_state)?;
-                let unmatched_build_block = self.row_space.gather(&unmatched_build_indexes)?;
-                Ok(vec![unmatched_build_block])
+                let unmatched_build_chunk = self.row_space.gather(&unmatched_build_indexes)?;
+                Ok(vec![unmatched_build_chunk])
             };
         }
 
         // Fast path for all non-equi conditions are false
         if all_false {
             return if self.hash_join_desc.join_type == JoinType::RightSemi {
-                Ok(vec![DataBlock::empty_with_schema(
-                    self.row_space.data_schema.clone(),
-                )])
+                Ok(vec![Chunk::empty()])
             } else {
-                Ok(self.row_space.datablocks())
+                Ok(self.row_space.data_chunks())
             };
         }
 
@@ -412,9 +399,9 @@ impl HashJoinState for JoinHashTable {
 
         // Right semi join with non-equi conditions
         if self.hash_join_desc.join_type == JoinType::RightSemi {
-            let filtered_block =
-                self.filter_rows_for_right_semi_join(&mut bm, build_block, &mut row_state)?;
-            return Ok(vec![filtered_block]);
+            let filtered_chunk =
+                self.filter_rows_for_right_semi_join(&mut bm, build_chunk, &mut row_state)?;
+            return Ok(vec![filtered_chunk]);
         }
 
         // Right anti join with non-equi conditions
@@ -427,19 +414,19 @@ impl HashJoinState for JoinHashTable {
             }
         }
         let unmatched_build_indexes = self.find_unmatched_build_indexes(&row_state)?;
-        let unmatched_build_block = self.row_space.gather(&unmatched_build_indexes)?;
-        Ok(vec![unmatched_build_block])
+        let unmatched_build_chunk = self.row_space.gather(&unmatched_build_indexes)?;
+        Ok(vec![unmatched_build_chunk])
     }
 
-    fn left_join_blocks(&self, blocks: &[DataBlock]) -> Result<Vec<DataBlock>> {
-        // Get rest blocks
-        let mut input_blocks = blocks.to_vec();
-        let rest_block = self.rest_block()?;
-        if rest_block.is_empty() {
-            return Ok(input_blocks);
+    fn left_join_chunks(&self, chunks: &[Chunk]) -> Result<Vec<Chunk>> {
+        // Get rest chunks
+        let mut input_chunks = chunks.to_vec();
+        let rest_chunk = self.rest_chunk()?;
+        if rest_chunk.is_empty() {
+            return Ok(input_chunks);
         }
-        input_blocks.push(rest_block);
-        Ok(input_blocks)
+        input_chunks.push(rest_chunk);
+        Ok(input_chunks)
     }
 }
 
@@ -467,9 +454,9 @@ impl JoinHashTable {
     pub(crate) fn filter_rows_for_right_semi_join(
         &self,
         bm: &mut MutableBitmap,
-        input: DataBlock,
+        input: Chunk,
         row_state: &mut [Vec<usize>],
-    ) -> Result<DataBlock> {
+    ) -> Result<Chunk> {
         let build_indexes = self.hash_join_desc.join_state.build_indexes.read();
         for (index, row) in build_indexes.iter().enumerate() {
             if row_state[row.chunk_index][row.row_index] > 1_usize && !bm.get(index) {
@@ -482,20 +469,19 @@ impl JoinHashTable {
                 row_state[row.chunk_index][row.row_index] -= 1;
             }
         }
-        let predicate = BooleanColumn::from_arrow_data(bm.clone().into()).arc();
-        DataBlock::filter_block(input, &predicate)
+        Chunk::filter_chunk_with_bool_column(input, &bm.clone().into())
     }
 
     pub(crate) fn non_equi_conditions_for_left_join(
         &self,
-        input_blocks: &[DataBlock],
+        input_chunks: &[Chunk],
         probe_indexes_vec: &[Vec<u32>],
         row_state: &mut [u32],
-    ) -> Result<Vec<DataBlock>> {
-        let mut output_blocks = Vec::with_capacity(input_blocks.len());
+    ) -> Result<Vec<Chunk>> {
+        let mut output_chunks = Vec::with_capacity(input_chunks.len());
         let mut begin = 0;
         let probe_side_len = self.probe_schema.fields().len();
-        for (idx, input_block) in input_blocks.iter().enumerate() {
+        for (idx, input_chunk) in input_chunks.iter().enumerate() {
             if self.interrupt.load(Ordering::Relaxed) {
                 return Err(ErrorCode::AbortedQuery(
                     "Aborted query, because the server is shutting down or the query was killed.",
@@ -503,37 +489,36 @@ impl JoinHashTable {
             }
             // Process non-equi conditions
             let (bm, all_true, all_false) = self.get_other_filters(
-                input_block,
+                input_chunk,
                 self.hash_join_desc.other_predicate.as_ref().unwrap(),
             )?;
 
             if all_true {
-                output_blocks.push(input_block.clone());
+                output_chunks.push(input_chunk.clone());
                 continue;
             }
 
+            let num_rows = input_chunk.num_rows();
+
             let validity = match (bm, all_false) {
                 (Some(b), _) => b,
-                (None, true) => Bitmap::new_zeroed(input_block.num_rows()),
+                (None, true) => Bitmap::new_zeroed(num_rows),
                 // must be one of above
                 _ => unreachable!(),
             };
 
-            // probed_block contains probe side and build side.
-            let nullable_columns = input_block.columns()[probe_side_len..]
+            // probed_chunk contains probe side and build side.
+            let nullable_columns = input_chunk.columns()[probe_side_len..]
                 .iter()
                 .map(|c| Self::set_validity(c, &validity))
-                .collect::<Result<Vec<_>>>()?;
+                .collect::<Vec<_>>();
 
-            let nullable_build_block =
-                DataBlock::create(self.row_space.data_schema.clone(), nullable_columns.clone());
+            let nullable_build_chunk = Chunk::new(nullable_columns.clone(), num_rows);
 
-            let probe_block = DataBlock::create(
-                self.probe_schema.clone(),
-                input_block.columns()[0..probe_side_len].to_vec(),
-            );
+            let probe_chunk =
+                Chunk::new(input_chunk.columns()[0..probe_side_len].to_vec(), num_rows);
 
-            let merged_block = self.merge_eq_block(&nullable_build_block, &probe_block)?;
+            let merged_chunk = self.merge_eq_chunk(&nullable_build_chunk, &probe_chunk)?;
             let mut bm = validity.into_mut().right().unwrap();
             if self.hash_join_desc.join_type == JoinType::Full {
                 let mut build_indexes = self.hash_join_desc.join_state.build_indexes.write();
@@ -547,9 +532,11 @@ impl JoinHashTable {
             }
             self.fill_null_for_left_join(&mut bm, &probe_indexes_vec[idx], row_state);
 
-            let predicate = BooleanColumn::from_arrow_data(bm.into()).arc();
-            output_blocks.push(DataBlock::filter_block(merged_block, &predicate)?);
+            output_chunks.push(Chunk::filter_chunk_with_bool_column(
+                merged_chunk,
+                &bm.into(),
+            )?);
         }
-        Ok(output_blocks)
+        Ok(output_chunks)
     }
 }

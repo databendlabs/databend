@@ -130,6 +130,6 @@ impl Interpreter for ShowCreateTableInterpreter {
         ]);
         debug!("Show create table executor result: {:?}", block);
 
-        PipelineBuildResult::from_blocks(vec![block])
+        PipelineBuildResult::from_chunks(vec![block])
     }
 }

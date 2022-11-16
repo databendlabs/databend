@@ -25,7 +25,7 @@ mod transform_mark_join;
 
 pub mod group_by;
 mod transform_left_join;
-mod transform_merge_block;
+mod transform_merge_chunk;
 mod transform_right_join;
 mod transform_right_semi_anti_join;
 
@@ -59,7 +59,7 @@ pub use transform_left_join::TransformLeftJoin;
 pub use transform_limit::TransformLimit;
 pub use transform_mark_join::MarkJoinCompactor;
 pub use transform_mark_join::TransformMarkJoin;
-pub use transform_merge_block::TransformMergeBlock;
+pub use transform_merge_chunk::TransformMergeChunk;
 pub use transform_right_join::RightJoinCompactor;
 pub use transform_right_join::TransformRightJoin;
 pub use transform_right_semi_anti_join::RightSemiAntiJoinCompactor;

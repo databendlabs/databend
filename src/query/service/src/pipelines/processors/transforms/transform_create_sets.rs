@@ -16,11 +16,14 @@ use std::any::Any;
 use std::sync::Arc;
 
 use common_base::base::tokio::sync::broadcast::Receiver;
-use common_datablocks::DataBlock;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataType;
-use common_datavalues::DataValue;
 use common_exception::Result;
+use common_expression::Chunk;
+use common_expression::Column;
+use common_expression::ColumnBuilder;
+use common_expression::DataSchemaRef;
+use common_expression::Scalar;
+use common_expression::SchemaDataType;
+use common_expression::Value;
 
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
@@ -29,8 +32,8 @@ use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::Processor;
 
 pub enum SubqueryReceiver {
-    Subquery(Receiver<DataValue>),
-    ScalarSubquery(Receiver<DataValue>),
+    Subquery(Receiver<Scalar>),
+    ScalarSubquery(Receiver<Scalar>),
 }
 
 impl SubqueryReceiver {
@@ -50,10 +53,10 @@ pub struct TransformCreateSets {
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
 
-    input_data: Option<DataBlock>,
-    output_data: Option<DataBlock>,
+    input_data: Option<Chunk>,
+    output_data: Option<Chunk>,
 
-    sub_queries_result: Vec<DataValue>,
+    sub_queries_result: Vec<Scalar>,
     sub_queries_receiver: Vec<SubqueryReceiver>,
 }
 
@@ -133,11 +136,11 @@ impl Processor for TransformCreateSets {
 
             for (index, result) in self.sub_queries_result.iter().enumerate() {
                 let data_type = self.schema.field(start_index + index).data_type();
-                let col = data_type.create_constant_column(result, num_rows)?;
+                let col = (Value::Scalar(result.clone()), data_type.into());
                 new_columns.push(col);
             }
 
-            self.output_data = Some(DataBlock::create(self.schema.clone(), new_columns));
+            self.output_data = Some(Chunk::new(new_columns, num_rows));
         }
 
         Ok(())

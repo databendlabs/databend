@@ -91,7 +91,7 @@ impl Interpreter for ShowSharesInterpreter {
             comments.push(entry.comment.unwrap_or_default());
         }
 
-        PipelineBuildResult::from_blocks(vec![DataBlock::create(self.plan.schema(), vec![
+        PipelineBuildResult::from_chunks(vec![DataBlock::create(self.plan.schema(), vec![
             Series::from_data(created_ons),
             Series::from_data(kinds),
             Series::from_data(names),

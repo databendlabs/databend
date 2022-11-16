@@ -16,14 +16,14 @@ use std::sync::Arc;
 
 use async_channel::Receiver;
 use common_catalog::table::AppendMode;
-use common_datablocks::DataBlock;
-use common_datablocks::SortColumnDescription;
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataSchemaRefExt;
-use common_datavalues::DataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::Chunk;
+use common_expression::DataField;
+use common_expression::DataSchemaRef;
+use common_expression::DataSchemaRefExt;
+use common_expression::SchemaDataType;
+use common_expression::SortColumnDescription;
 use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::aggregates::AggregateFunctionRef;
 use common_functions::scalars::CastFunction;
@@ -42,7 +42,7 @@ use crate::pipelines::processors::transforms::HashJoinDesc;
 use crate::pipelines::processors::transforms::RightSemiAntiJoinCompactor;
 use crate::pipelines::processors::transforms::TransformLeftJoin;
 use crate::pipelines::processors::transforms::TransformMarkJoin;
-use crate::pipelines::processors::transforms::TransformMergeBlock;
+use crate::pipelines::processors::transforms::TransformMergeChunk;
 use crate::pipelines::processors::transforms::TransformRightJoin;
 use crate::pipelines::processors::transforms::TransformRightSemiAntiJoin;
 use crate::pipelines::processors::AggregatorParams;
@@ -424,17 +424,21 @@ impl PipelineBuilder {
 
     fn build_sort(&mut self, sort: &Sort) -> Result<()> {
         self.build_pipeline(&sort.input)?;
-        let sort_desc: Vec<SortColumnDescription> = sort
+        let schema = sort.output_schema()?;
+        let sort_desc = sort
             .order_by
             .iter()
-            .map(|desc| SortColumnDescription {
-                column_name: desc.order_by.clone(),
-                asc: desc.asc,
-                nulls_first: desc.nulls_first,
+            .map(|desc| {
+                let index = schema.index_of(&desc.order_by)?;
+                SortColumnDescription {
+                    index,
+                    asc: desc.asc,
+                    nulls_first: desc.nulls_first,
+                }
             })
-            .collect();
+            .collect::<Result<Vec<_>>>()?;
 
-        let block_size = self.ctx.get_settings().get_max_block_size()? as usize;
+        let chunk_size = self.ctx.get_settings().get_max_block_size()? as usize;
 
         if self.main_pipeline.output_len() == 1 {
             let _ = self
@@ -451,15 +455,15 @@ impl PipelineBuilder {
             TransformSortMerge::try_create(
                 input,
                 output,
-                SortMergeCompactor::new(block_size, sort.limit, sort_desc.clone()),
+                SortMergeCompactor::new(chunk_size, sort.limit, sort_desc.clone()),
             )
         })?;
 
         // Concat merge in single thread
         try_add_multi_sort_merge(
             &mut self.main_pipeline,
-            sort.output_schema()?,
-            block_size,
+            schema.clone(),
+            chunk_size,
             sort.limit,
             sort_desc,
         )
@@ -556,7 +560,7 @@ impl PipelineBuilder {
         self.build_pipeline(&exchange_sink.input)
     }
 
-    fn expand_union_all(&mut self, plan: &PhysicalPlan) -> Result<Receiver<DataBlock>> {
+    fn expand_union_all(&mut self, plan: &PhysicalPlan) -> Result<Receiver<Chunk>> {
         let union_ctx = QueryContext::create_from(self.ctx.clone());
         let pipeline_builder = PipelineBuilder::create(union_ctx);
         let mut build_res = pipeline_builder.finalize(plan)?;
@@ -590,7 +594,7 @@ impl PipelineBuilder {
         let union_all_receiver = self.expand_union_all(&union_all.right)?;
         self.main_pipeline
             .add_transform(|transform_input_port, transform_output_port| {
-                TransformMergeBlock::try_create(
+                TransformMergeChunk::try_create(
                     transform_input_port,
                     transform_output_port,
                     union_all.output_schema()?,

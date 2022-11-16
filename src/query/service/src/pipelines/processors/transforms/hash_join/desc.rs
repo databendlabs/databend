@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use common_arrow::arrow::bitmap::MutableBitmap;
-use common_datablocks::DataBlock;
 use common_exception::Result;
+use common_expression::Chunk;
 use common_functions::scalars::FunctionFactory;
 // use common_sql::executor::PhysicalScalar;
 // use common_sql::IndexType;
@@ -26,7 +26,7 @@ use crate::sql::evaluator::Evaluator;
 use crate::sql::executor::HashJoin;
 use crate::sql::plans::JoinType;
 
-pub const JOIN_MAX_BLOCK_SIZE: usize = 65535;
+pub const JOIN_MAX_CHUNK_SIZE: usize = 65535;
 
 #[derive(Clone, Copy, Eq, PartialEq, Debug, Hash)]
 pub enum MarkerKind {
@@ -45,17 +45,17 @@ pub struct JoinState {
     /// It's order-sensitive, aligned with the order of rows in merged block.
     pub(crate) build_indexes: RwLock<Vec<RowPtr>>,
     pub(crate) rest_build_indexes: RwLock<Vec<RowPtr>>,
-    pub(crate) rest_probe_blocks: RwLock<Vec<DataBlock>>,
+    pub(crate) rest_probe_chunks: RwLock<Vec<Chunk>>,
     pub(crate) validity: RwLock<MutableBitmap>,
 }
 
 impl JoinState {
     pub fn create() -> Result<Self> {
         Ok(JoinState {
-            build_indexes: RwLock::new(Vec::with_capacity(JOIN_MAX_BLOCK_SIZE)),
-            rest_build_indexes: RwLock::new(Vec::with_capacity(JOIN_MAX_BLOCK_SIZE)),
-            rest_probe_blocks: RwLock::new(Vec::with_capacity(JOIN_MAX_BLOCK_SIZE)),
-            validity: RwLock::new(MutableBitmap::with_capacity(JOIN_MAX_BLOCK_SIZE)),
+            build_indexes: RwLock::new(Vec::with_capacity(JOIN_MAX_CHUNK_SIZE)),
+            rest_build_indexes: RwLock::new(Vec::with_capacity(JOIN_MAX_CHUNK_SIZE)),
+            rest_probe_chunks: RwLock::new(Vec::with_capacity(JOIN_MAX_CHUNK_SIZE)),
+            validity: RwLock::new(MutableBitmap::with_capacity(JOIN_MAX_CHUNK_SIZE)),
         })
     }
 }
@@ -93,25 +93,25 @@ impl HashJoinDesc {
         // })
     }
 
-    // fn join_predicate(non_equi_conditions: &[PhysicalScalar]) -> Result<Option<PhysicalScalar>> {
-    //     if non_equi_conditions.is_empty() {
-    //         return Ok(None);
-    //     }
+    fn join_predicate(non_equi_conditions: &[PhysicalScalar]) -> Result<Option<PhysicalScalar>> {
+        if non_equi_conditions.is_empty() {
+            return Ok(None);
+        }
 
-    //     let mut condition = non_equi_conditions[0].clone();
+        let mut condition = non_equi_conditions[0].clone();
 
-    //     for other_condition in non_equi_conditions.iter().skip(1) {
-    //         let left_type = condition.data_type();
-    //         let right_type = other_condition.data_type();
-    //         let data_types = vec![&left_type, &right_type];
-    //         let func = FunctionFactory::instance().get("and", &data_types)?;
-    //         condition = PhysicalScalar::Function {
-    //             name: "and".to_string(),
-    //             args: vec![condition, other_condition.clone()],
-    //             return_type: func.return_type(),
-    //         };
-    //     }
+        for other_condition in non_equi_conditions.iter().skip(1) {
+            let left_type = condition.data_type();
+            let right_type = other_condition.data_type();
+            let data_types = vec![&left_type, &right_type];
+            let func = FunctionFactory::instance().get("and", &data_types)?;
+            condition = PhysicalScalar::Function {
+                name: "and".to_string(),
+                args: vec![condition, other_condition.clone()],
+                return_type: func.return_type(),
+            };
+        }
 
-    //     Ok(Some(condition))
-    // }
+        Ok(Some(condition))
+    }
 }

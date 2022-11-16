@@ -21,9 +21,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use common_base::base::Thread;
-use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::Chunk;
 use parking_lot::Condvar;
 use parking_lot::Mutex;
 use tracing::warn;
@@ -92,11 +92,11 @@ impl State {
 pub struct PipelinePullingExecutor {
     state: Arc<State>,
     executor: Arc<PipelineExecutor>,
-    receiver: Receiver<DataBlock>,
+    receiver: Receiver<Chunk>,
 }
 
 impl PipelinePullingExecutor {
-    fn wrap_pipeline(pipeline: &mut Pipeline, tx: SyncSender<DataBlock>) -> Result<()> {
+    fn wrap_pipeline(pipeline: &mut Pipeline, tx: SyncSender<Chunk>) -> Result<()> {
         if pipeline.is_pushing_pipeline()? || !pipeline.is_pulling_pipeline()? {
             return Err(ErrorCode::Internal(
                 "Logical error, PipelinePullingExecutor can only work on pulling pipeline.",
@@ -173,10 +173,10 @@ impl PipelinePullingExecutor {
         self.executor.finish(cause);
     }
 
-    pub fn pull_data(&mut self) -> Result<Option<DataBlock>> {
+    pub fn pull_data(&mut self) -> Result<Option<Chunk>> {
         loop {
             return match self.receiver.recv_timeout(Duration::from_millis(100)) {
-                Ok(data_block) => Ok(Some(data_block)),
+                Ok(chunk) => Ok(Some(chunk)),
                 Err(RecvTimeoutError::Timeout) => {
                     if self.state.is_catch_error() {
                         return Err(self.state.get_catch_error());
@@ -211,11 +211,11 @@ impl Drop for PipelinePullingExecutor {
 }
 
 struct PullingSink {
-    sender: Option<SyncSender<DataBlock>>,
+    sender: Option<SyncSender<Chunk>>,
 }
 
 impl PullingSink {
-    pub fn create(tx: SyncSender<DataBlock>, input: Arc<InputPort>) -> ProcessorPtr {
+    pub fn create(tx: SyncSender<Chunk>, input: Arc<InputPort>) -> ProcessorPtr {
         Sinker::create(input, PullingSink { sender: Some(tx) })
     }
 }
@@ -228,9 +228,9 @@ impl Sink for PullingSink {
         Ok(())
     }
 
-    fn consume(&mut self, data_block: DataBlock) -> Result<()> {
+    fn consume(&mut self, chunk: Chunk) -> Result<()> {
         if let Some(sender) = &self.sender {
-            if let Err(cause) = sender.send(data_block) {
+            if let Err(cause) = sender.send(chunk) {
                 return Err(ErrorCode::Internal(format!(
                     "Logical error, cannot push data into SyncSender, cause {:?}",
                     cause

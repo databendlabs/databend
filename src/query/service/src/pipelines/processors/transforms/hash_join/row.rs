@@ -16,25 +16,23 @@ use std::hash::Hash;
 use std::hash::Hasher;
 use std::sync::RwLock;
 
-use common_datablocks::DataBlock;
-use common_datablocks::KeysState;
-use common_datavalues::ColumnRef;
-use common_datavalues::DataSchemaRef;
 use common_exception::Result;
+use common_expression::Chunk as DataChunk;
+use common_expression::DataSchemaRef;
 
 use crate::pipelines::processors::transforms::hash_join::desc::MarkerKind;
 
 pub type ColumnVector = Vec<ColumnRef>;
 
 pub struct Chunk {
-    pub data_block: DataBlock,
+    pub chunk: DataChunk,
     pub cols: ColumnVector,
     pub keys_state: Option<KeysState>,
 }
 
 impl Chunk {
     pub fn num_rows(&self) -> usize {
-        self.data_block.num_rows()
+        self.chunk.num_rows()
     }
 }
 
@@ -72,9 +70,9 @@ impl RowSpace {
         self.data_schema.clone()
     }
 
-    pub fn push_cols(&self, data_block: DataBlock, cols: ColumnVector) -> Result<()> {
+    pub fn push_cols(&self, data_chunk: DataChunk, cols: ColumnVector) -> Result<()> {
         let chunk = Chunk {
-            data_block,
+            chunk: data_chunk,
             cols,
             keys_state: None,
         };
@@ -88,14 +86,14 @@ impl RowSpace {
         Ok(())
     }
 
-    pub fn datablocks(&self) -> Vec<DataBlock> {
+    pub fn data_chunks(&self) -> Vec<DataChunk> {
         let chunks = self.chunks.read().unwrap();
-        chunks.iter().map(|c| c.data_block.clone()).collect()
+        chunks.iter().map(|c| c.chunk.clone()).collect()
     }
 
-    pub fn gather(&self, row_ptrs: &[RowPtr]) -> Result<DataBlock> {
-        let data_blocks = self.datablocks();
-        let num_rows = data_blocks
+    pub fn gather(&self, row_ptrs: &[RowPtr]) -> Result<DataChunk> {
+        let data_chunks = self.data_chunks();
+        let num_rows = data_chunks
             .iter()
             .fold(0, |acc, block| acc + block.num_rows());
         let mut indices = Vec::with_capacity(row_ptrs.len());
@@ -104,12 +102,11 @@ impl RowSpace {
             indices.push((row_ptr.chunk_index, row_ptr.row_index, 1usize));
         }
 
-        if !data_blocks.is_empty() && num_rows != 0 {
-            let data_block =
-                DataBlock::block_take_by_chunk_indices(&data_blocks, indices.as_slice())?;
-            Ok(data_block)
+        if !data_chunks.is_empty() && num_rows != 0 {
+            let data_chunk = DataChunk::take_chunks(&data_chunks, indices.as_slice());
+            Ok(data_chunk)
         } else {
-            Ok(DataBlock::empty_with_schema(self.data_schema.clone()))
+            Ok(DataChunk::empty())
         }
     }
 }

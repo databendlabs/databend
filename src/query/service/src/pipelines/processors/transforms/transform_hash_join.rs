@@ -16,9 +16,9 @@ use std::any::Any;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use common_datablocks::DataBlock;
-use common_datavalues::DataSchemaRef;
 use common_exception::Result;
+use common_expression::Chunk;
+use common_expression::DataSchemaRef;
 
 use super::hash_join::ProbeState;
 use crate::pipelines::processors::port::InputPort;
@@ -53,8 +53,8 @@ impl Sink for SinkBuildHashTable {
         self.join_state.interrupt()
     }
 
-    fn consume(&mut self, data_block: DataBlock) -> Result<()> {
-        self.join_state.build(data_block)
+    fn consume(&mut self, chunk: Chunk) -> Result<()> {
+        self.join_state.build(chunk)
     }
 }
 
@@ -64,8 +64,8 @@ enum HashJoinStep {
 }
 
 pub struct TransformHashJoinProbe {
-    input_data: Option<DataBlock>,
-    output_data_blocks: VecDeque<DataBlock>,
+    input_data: Option<Chunk>,
+    output_chunks: VecDeque<Chunk>,
 
     input_port: Arc<InputPort>,
     output_port: Arc<OutputPort>,
@@ -82,22 +82,22 @@ impl TransformHashJoinProbe {
         join_state: Arc<dyn HashJoinState>,
         _output_schema: DataSchemaRef,
     ) -> Result<ProcessorPtr> {
-        let default_block_size = ctx.get_settings().get_max_block_size()?;
+        let default_chunk_size = ctx.get_settings().get_max_block_size()?;
         Ok(ProcessorPtr::create(Box::new(TransformHashJoinProbe {
             input_data: None,
-            output_data_blocks: VecDeque::new(),
+            output_chunks: VecDeque::new(),
             input_port,
             output_port,
             step: HashJoinStep::Build,
             join_state,
-            probe_state: ProbeState::with_capacity(default_block_size as usize),
+            probe_state: ProbeState::with_capacity(default_chunk_size as usize),
         })))
     }
 
-    fn probe(&mut self, block: &DataBlock) -> Result<()> {
+    fn probe(&mut self, chunk: &Chunk) -> Result<()> {
         self.probe_state.clear();
-        self.output_data_blocks
-            .extend(self.join_state.probe(block, &mut self.probe_state)?);
+        self.output_chunks
+            .extend(self.join_state.probe(chunk, &mut self.probe_state)?);
         Ok(())
     }
 }
@@ -126,8 +126,8 @@ impl Processor for TransformHashJoinProbe {
                     return Ok(Event::NeedConsume);
                 }
 
-                if !self.output_data_blocks.is_empty() {
-                    let data = self.output_data_blocks.pop_front().unwrap();
+                if !self.output_chunks.is_empty() {
+                    let data = self.output_chunks.pop_front().unwrap();
                     self.output_port.push_data(Ok(data));
                     return Ok(Event::NeedConsume);
                 }

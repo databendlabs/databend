@@ -88,7 +88,7 @@ impl Interpreter for ListInterpreter {
             .map(|file| file.creator.as_ref().map(|c| c.to_string().into_bytes()))
             .collect();
 
-        PipelineBuildResult::from_blocks(vec![DataBlock::create(self.plan.schema(), vec![
+        PipelineBuildResult::from_chunks(vec![DataBlock::create(self.plan.schema(), vec![
             Series::from_data(names),
             Series::from_data(sizes),
             Series::from_data(md5s),

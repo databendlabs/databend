@@ -15,11 +15,13 @@
 use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataType;
 use common_exception::Result;
+use common_expression::Chunk;
+use common_expression::DataField;
+use common_expression::DataSchemaRef;
+
+// use common_sql::evaluator::ChunkOperator;
+// use common_sql::evaluator::CompoundChunkOperator;
 
 // use common_sql::evaluator::ChunkOperator;
 // use common_sql::evaluator::CompoundChunkOperator;
@@ -88,13 +90,14 @@ where Self: Transform
 impl Transform for TransformAddOn {
     const NAME: &'static str = "AddOnTransform";
 
-    fn transform(&mut self, mut block: DataBlock) -> Result<DataBlock> {
-        let num_rows = block.num_rows();
-        let expr_block = self.expression_transform.transform(block.clone())?;
+    fn transform(&mut self, mut chunk: Chunk) -> Result<Chunk> {
+        let num_rows = chunk.num_rows();
+        let expr_chunk = self.expression_transform.transform(chunk.clone())?;
 
         for f in self.default_expr_fields.iter() {
-            block =
-                block.add_column(expr_block.try_column_by_name(f.name())?.clone(), f.clone())?;
+            let index = self.output_schema.index_of(f.name())?;
+            let (value, ty) = expr_chunk.column(index);
+            chunk = chunk.add_column(value.clone(), ty.clone())
         }
 
         for f in &self.default_nonexpr_fields {
@@ -103,8 +106,8 @@ impl Transform for TransformAddOn {
                 .data_type()
                 .create_constant_column(&default_value, num_rows)?;
 
-            block = block.add_column(column, f.clone())?;
+            chunk = chunk.add_column(column, f.clone())?;
         }
-        block.resort(self.output_schema.clone())
+        chunk.resort(self.output_schema.clone())
     }
 }

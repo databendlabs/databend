@@ -101,7 +101,7 @@ impl Interpreter for DescribeTableInterpreter {
             extras.push("".to_string());
         }
 
-        PipelineBuildResult::from_blocks(vec![DataBlock::create(self.plan.schema(), vec![
+        PipelineBuildResult::from_chunks(vec![DataBlock::create(self.plan.schema(), vec![
             Series::from_data(names),
             Series::from_data(types),
             Series::from_data(nulls),

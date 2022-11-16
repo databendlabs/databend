@@ -70,7 +70,7 @@ impl Interpreter for ShowObjectGrantPrivilegesInterpreter {
             created_ons.push(privilege.grant_on.to_string());
         }
 
-        PipelineBuildResult::from_blocks(vec![DataBlock::create(self.plan.schema(), vec![
+        PipelineBuildResult::from_chunks(vec![DataBlock::create(self.plan.schema(), vec![
             Series::from_data(created_ons),
             Series::from_data(privileges),
             Series::from_data(share_names),

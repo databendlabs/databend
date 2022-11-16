@@ -99,3 +99,30 @@ pub fn column_to_arrow_array(
         Value::Column(c) => c.as_arrow(),
     }
 }
+
+pub fn combine_validities(lhs: Option<&Bitmap>, rhs: Option<&Bitmap>) -> Option<Bitmap> {
+    match (lhs, rhs) {
+        (Some(lhs), None) => Some(lhs.clone()),
+        (None, Some(rhs)) => Some(rhs.clone()),
+        (None, None) => None,
+        (Some(lhs), Some(rhs)) => Some(lhs & rhs),
+    }
+}
+
+pub fn combine_validities_2(lhs: Option<Bitmap>, rhs: Option<Bitmap>) -> Option<Bitmap> {
+    match (lhs, rhs) {
+        (Some(lhs), None) => Some(lhs),
+        (None, Some(rhs)) => Some(rhs),
+        (None, None) => None,
+        (Some(lhs), Some(rhs)) => Some((&lhs) & (&rhs)),
+    }
+}
+
+pub fn combine_validities_3(lhs: Option<Bitmap>, rhs: Option<Bitmap>) -> Option<Bitmap> {
+    match (lhs, rhs) {
+        (Some(lhs), None) => Some(lhs),
+        (None, Some(rhs)) => Some(rhs),
+        (None, None) => None,
+        (Some(lhs), Some(rhs)) => Some((&lhs) | (&rhs)),
+    }
+}
