@@ -54,7 +54,7 @@ use crate::interpreters::QueryFragmentsActions;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::PipelineBuildResult;
-use crate::pipelines::PipelineBuilder as PipelineBuilderV2;
+use crate::pipelines::PipelineBuilder;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
@@ -660,7 +660,7 @@ impl FragmentCoordinator {
             match &self.payload {
                 FragmentPayload::Plan(plan) => {
                     let pipeline_ctx = QueryContext::create_from(ctx);
-                    let pipeline_builder = PipelineBuilderV2::create(pipeline_ctx);
+                    let pipeline_builder = PipelineBuilder::create(pipeline_ctx);
                     self.pipeline_build_res = Some(pipeline_builder.finalize(plan)?);
                 }
             };
