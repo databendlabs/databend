@@ -194,7 +194,7 @@ impl FuseTable {
         limit: usize,
     ) -> (PartStatistics, Partitions) {
         let mut statistics = PartStatistics::default_exact();
-        let mut partitions = Partitions::default();
+        let mut partitions = Partitions::create(PartitionsShuffleKind::Mod, vec![]);
 
         if limit == 0 {
             return (statistics, partitions);

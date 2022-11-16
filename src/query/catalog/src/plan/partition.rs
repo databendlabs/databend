@@ -13,9 +13,12 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::fmt::Formatter;
+use std::hash::Hash;
+use std::hash::Hasher;
 use std::sync::Arc;
 
 use common_exception::Result;
@@ -85,11 +88,11 @@ impl Partitions {
     }
 
     pub fn reshuffle(&self, executors: Vec<String>) -> Result<HashMap<String, Partitions>> {
-        let cluster_nodes = executors.len();
+        let executor_nums = executors.len();
         match self.kind {
             PartitionsShuffleKind::None => {
                 let mut executor_part = HashMap::default();
-                for (i, chunk) in self.partitions.chunks(cluster_nodes).enumerate() {
+                for (i, chunk) in self.partitions.chunks(executor_nums).enumerate() {
                     executor_part.insert(
                         executors[i].clone(),
                         Partitions::create(PartitionsShuffleKind::None, chunk.to_vec()),
@@ -99,18 +102,25 @@ impl Partitions {
             }
             PartitionsShuffleKind::Mod => {
                 // Build mod partition chunk.
-                let mut partition_slice = Vec::with_capacity(cluster_nodes);
-                for _i in 0..cluster_nodes {
+                let mut partition_slice = Vec::with_capacity(executor_nums);
+                for _i in 0..executor_nums {
                     partition_slice.push(Partitions::default());
                 }
                 for part in &self.partitions {
-                    let idx = part.hash() as usize % cluster_nodes;
+                    let idx = part.hash() as usize % executor_nums;
                     partition_slice[idx].partitions.push(part.clone());
                 }
 
+                // Bind partitions always to the certain executor by executor_id = hash(executor)%executor_nums.
                 let mut executor_part = HashMap::default();
-                for (i, partitions) in partition_slice.iter().enumerate() {
-                    executor_part.insert(executors[i].clone(), partitions.clone());
+                for (i, executor) in executors.iter().enumerate() {
+                    let mut s = DefaultHasher::new();
+                    executor.hash(&mut s);
+                    let executor_idx = (s.finish() as usize) % executor_nums;
+
+                    // Always bind to the same executor.
+                    executor_part
+                        .insert(executors[executor_idx].clone(), partition_slice[i].clone());
                 }
                 Ok(executor_part)
             }
