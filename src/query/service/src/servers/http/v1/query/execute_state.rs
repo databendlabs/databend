@@ -24,13 +24,12 @@ use common_base::base::GlobalIORuntime;
 use common_base::base::ProgressValues;
 use common_base::base::Thread;
 use common_base::base::TrySpawn;
+use common_datablocks::DataBlock;
 use common_datablocks::SendableDataBlockStream;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_storages_fuse_result::BlockBuffer;
-use common_storages_fuse_result::BlockBufferWriter;
-use common_storages_fuse_result::BlockBufferWriterMemOnly;
 use common_storages_fuse_result::ResultQueryInfo;
 use common_storages_fuse_result::ResultTableSink;
 use futures::StreamExt;
@@ -48,6 +47,7 @@ use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::Pipe;
 use crate::pipelines::PipelineBuildResult;
+use crate::servers::http::v1::query::sized_spsc::SizedChannelSender;
 use crate::sessions::QueryAffect;
 use crate::sessions::QueryContext;
 use crate::sessions::Session;
@@ -225,7 +225,7 @@ impl ExecuteState {
         sql: &str,
         session: Arc<Session>,
         ctx: Arc<QueryContext>,
-        block_buffer: Arc<BlockBuffer>,
+        block_sender: SizedChannelSender<DataBlock>,
     ) -> Result<ExecuteRunning> {
         let mut planner = Planner::new(ctx.clone());
         let (plan, _, _) = planner.plan_sql(sql).await?;
@@ -239,14 +239,14 @@ impl ExecuteState {
 
         let executor_clone = executor.clone();
         let ctx_clone = ctx.clone();
-        let block_buffer_clone = block_buffer.clone();
+        let block_sender_closer = block_sender.closer();
 
         ctx.try_spawn(async move {
-            let res = execute(interpreter, ctx_clone, block_buffer, executor_clone.clone());
+            let res = execute(interpreter, ctx_clone, block_sender, executor_clone.clone());
             match AssertUnwindSafe(res).catch_unwind().await {
                 Ok(Err(err)) => {
                     Executor::stop(&executor_clone, Err(err), false).await;
-                    block_buffer_clone.stop_push().await.unwrap();
+                    block_sender_closer.close();
                 }
                 Err(_) => {
                     Executor::stop(
@@ -255,7 +255,7 @@ impl ExecuteState {
                         false,
                     )
                     .await;
-                    block_buffer_clone.stop_push().await.unwrap();
+                    block_sender_closer.close();
                 }
                 _ => {}
             }
@@ -267,7 +267,7 @@ impl ExecuteState {
 async fn execute(
     interpreter: Arc<dyn Interpreter>,
     ctx: Arc<QueryContext>,
-    block_buffer: Arc<BlockBuffer>,
+    block_sender: SizedChannelSender<DataBlock>,
     executor: Arc<RwLock<Executor>>,
 ) -> Result<()> {
     let mut data_stream = interpreter.execute(ctx.clone()).await?;
@@ -275,28 +275,28 @@ async fn execute(
     match data_stream.next().await {
         None => {
             Executor::stop(&executor, Ok(()), false).await;
-            block_buffer.stop_push().await?;
+            block_sender.close()
         }
         Some(Err(err)) => {
             Executor::stop(&executor, Err(err), false).await;
-            block_buffer.stop_push().await?;
+            block_sender.close()
         }
         Some(Ok(block)) => {
-            let mut block_writer = Box::new(BlockBufferWriterMemOnly(block_buffer));
-            block_writer.push(block).await?;
+            let size = block.num_rows();
+            block_sender.send(block, size).await;
             while let Some(block_r) = data_stream.next().await {
                 match block_r {
                     Ok(block) => {
-                        block_writer.push(block.clone()).await?;
+                        block_sender.send(block.clone(), block.num_rows()).await;
                     }
                     Err(err) => {
-                        block_writer.stop_push(true).await?;
+                        block_sender.close();
                         return Err(err);
                     }
                 };
             }
             Executor::stop(&executor, Ok(()), false).await;
-            block_writer.stop_push(false).await?;
+            block_sender.close();
         }
     }
     Ok(())
