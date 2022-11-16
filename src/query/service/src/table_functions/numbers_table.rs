@@ -170,7 +170,7 @@ impl Table for NumbersTable {
         plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
-        if plan.parts.is_empty() {
+        if plan.parts.partitions.is_empty() {
             let output = OutputPort::create();
             pipeline.add_pipe(Pipe::SimplePipe {
                 inputs_port: vec![],
@@ -192,7 +192,7 @@ impl Table for NumbersTable {
                 NumbersSource::create(
                     source_output_port,
                     source_ctx,
-                    &plan.parts[part_index],
+                    &plan.parts.partitions[part_index],
                     self.schema(),
                 )?,
             );

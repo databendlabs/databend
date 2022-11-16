@@ -24,6 +24,7 @@ use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::Expression;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
+use common_catalog::plan::PartitionsShuffleKind;
 use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::plan::RequireColumnsVisitor;
@@ -442,7 +443,10 @@ impl HiveTable {
             start.elapsed()
         );
 
-        Ok((Default::default(), partitions))
+        Ok((
+            Default::default(),
+            Partitions::create(PartitionsShuffleKind::None, partitions),
+        ))
     }
 }
 

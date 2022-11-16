@@ -22,6 +22,7 @@ use std::time::Instant;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
+use common_catalog::plan::PartitionsShuffleKind;
 use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table_context::TableContext;
@@ -96,7 +97,8 @@ impl FuseTable {
                             snapshot.segments.len(),
                             snapshot.segments.len(),
                         ),
-                        segments,
+                        // TODO(bohu): change the shuffle kind.
+                        Partitions::create(PartitionsShuffleKind::None, segments),
                     ));
                 }
 
@@ -113,7 +115,7 @@ impl FuseTable {
                 )
                 .await
             }
-            None => Ok((PartStatistics::default(), vec![])),
+            None => Ok((PartStatistics::default(), Partitions::default())),
         }
     }
 
@@ -229,7 +231,9 @@ impl FuseTable {
 
         for block_meta in metas {
             let rows = block_meta.row_count as usize;
-            partitions.push(Self::all_columns_part(block_meta));
+            partitions
+                .partitions
+                .push(Self::all_columns_part(block_meta));
             statistics.read_rows += rows;
             statistics.read_bytes += block_meta.block_size as usize;
 
@@ -263,7 +267,11 @@ impl FuseTable {
         let mut remaining = limit;
 
         for block_meta in metas {
-            partitions.push(Self::projection_part(block_meta, column_leaves, projection));
+            partitions.partitions.push(Self::projection_part(
+                block_meta,
+                column_leaves,
+                projection,
+            ));
             let rows = block_meta.row_count as usize;
 
             statistics.read_rows += rows;
@@ -365,7 +373,7 @@ impl FuseTable {
                     partitions_total: summary.block_count as usize,
                     is_exact: true,
                 };
-                Some((stats, vec![]))
+                Some((stats, Partitions::default()))
             }
             _ => None,
         })

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_catalog::plan::Partitions;
+use common_catalog::plan::PartitionsShuffleKind;
 
 use crate::table_functions::numbers_part::NumbersPartInfo;
 
@@ -38,5 +39,5 @@ pub fn generate_numbers_parts(start: u64, workers: u64, total: u64) -> Partition
         }
     }
 
-    partitions
+    Partitions::create(PartitionsShuffleKind::None, partitions)
 }

@@ -48,4 +48,37 @@ impl PartialEq for Box<dyn PartInfo> {
 
 #[allow(dead_code)]
 pub type PartInfoPtr = Arc<Box<dyn PartInfo>>;
-pub type Partitions = Vec<PartInfoPtr>;
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
+pub enum PartitionsShuffleKind {
+    None,
+    Mod,
+}
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
+pub struct Partitions {
+    pub kind: PartitionsShuffleKind,
+    pub partitions: Vec<PartInfoPtr>,
+}
+
+impl Partitions {
+    pub fn create(kind: PartitionsShuffleKind, partitions: Vec<PartInfoPtr>) -> Self {
+        Partitions { kind, partitions }
+    }
+
+    pub fn len(&self) -> usize {
+        self.partitions.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.partitions.is_empty()
+    }
+}
+
+impl Default for Partitions {
+    fn default() -> Self {
+        Self {
+            kind: PartitionsShuffleKind::None,
+            partitions: vec![],
+        }
+    }
+}

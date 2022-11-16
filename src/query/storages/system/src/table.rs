@@ -19,6 +19,7 @@ use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartInfo;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
+use common_catalog::plan::PartitionsShuffleKind;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
@@ -63,9 +64,12 @@ pub trait SyncSystemTable: Send + Sync {
         _ctx: Arc<dyn TableContext>,
         _push_downs: Option<PushDownInfo>,
     ) -> Result<(PartStatistics, Partitions)> {
-        Ok((PartStatistics::default(), vec![Arc::new(Box::new(
-            SystemTablePart,
-        ))]))
+        Ok((
+            PartStatistics::default(),
+            Partitions::create(PartitionsShuffleKind::None, vec![Arc::new(Box::new(
+                SystemTablePart,
+            ))]),
+        ))
     }
 }
 
@@ -108,7 +112,7 @@ impl<TTable: 'static + SyncSystemTable> Table for SyncOneBlockSystemTable<TTable
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         // avoid duplicate read in cluster mode.
-        if plan.parts.is_empty() {
+        if plan.parts.partitions.is_empty() {
             let output = OutputPort::create();
             pipeline.add_pipe(Pipe::SimplePipe {
                 inputs_port: vec![],
@@ -182,9 +186,12 @@ pub trait AsyncSystemTable: Send + Sync {
         _ctx: Arc<dyn TableContext>,
         _push_downs: Option<PushDownInfo>,
     ) -> Result<(PartStatistics, Partitions)> {
-        Ok((PartStatistics::default(), vec![Arc::new(Box::new(
-            SystemTablePart,
-        ))]))
+        Ok((
+            PartStatistics::default(),
+            Partitions::create(PartitionsShuffleKind::None, vec![Arc::new(Box::new(
+                SystemTablePart,
+            ))]),
+        ))
     }
 }
 
