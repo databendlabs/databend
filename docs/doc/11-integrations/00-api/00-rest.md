@@ -96,7 +96,7 @@ QueryRequest
 | session_id    | string       | No       |         | used only when reuse server-side session         |
 | session       | SessionState | No       |         |                                                  |
 | pagination    | Pagination   | No       |         | a uniq query_id for this POST request            |
-| string_fields | bool         | No       | false   | all field value in data is represented in string |
+| string_fields | bool         | No       | true    | all field value in data is represented in string |
 
 SessionState
 
