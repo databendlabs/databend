@@ -92,10 +92,21 @@ impl Partitions {
         match self.kind {
             PartitionsShuffleKind::None => {
                 let mut executor_part = HashMap::default();
-                for (i, chunk) in self.partitions.chunks(executor_nums).enumerate() {
+
+                let parts_per_node = self.partitions.len() / executor_nums;
+                for (idx, executor) in executors.iter().enumerate() {
+                    let begin = parts_per_node * idx;
+                    let end = parts_per_node * (idx + 1);
+                    let mut parts = self.partitions[begin..end].to_vec();
+
+                    if idx == executor_nums - 1 {
+                        // For some irregular partitions, we assign them to the last node
+                        let begin = parts_per_node * executor_nums;
+                        parts.extend_from_slice(&self.partitions[begin..]);
+                    }
                     executor_part.insert(
-                        executors[i].clone(),
-                        Partitions::create(PartitionsShuffleKind::None, chunk.to_vec()),
+                        executor.clone(),
+                        Partitions::create(PartitionsShuffleKind::None, parts.to_vec()),
                     );
                 }
                 Ok(executor_part)
