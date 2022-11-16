@@ -96,7 +96,7 @@ impl PhysicalOperator for PhysicalHashJoin {
         {
             // TODO(leiysky): we can enforce redistribution here
             required.distribution = Distribution::Serial;
-        } else if ctx.get_settings().get_join_distribution_type()? == "broadcast" {
+        } else if ctx.get_settings().get_prefer_broadcast_join()? {
             if child_index == 1 {
                 required.distribution = Distribution::Broadcast;
             } else {
