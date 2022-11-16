@@ -25,17 +25,17 @@ fn test_util_generate_parts() -> Result<()> {
 
         assert_eq!(3, ps.len());
 
-        let numbers_part = NumbersPartInfo::from_part(&ps[0])?;
+        let numbers_part = NumbersPartInfo::from_part(&ps.partitions[0])?;
         assert_eq!(numbers_part.part_start, 0);
         assert_eq!(numbers_part.part_end, 3);
         assert_eq!(numbers_part.total, 11);
 
-        let numbers_part = NumbersPartInfo::from_part(&ps[1])?;
+        let numbers_part = NumbersPartInfo::from_part(&ps.partitions[1])?;
         assert_eq!(numbers_part.part_start, 3);
         assert_eq!(numbers_part.part_end, 6);
         assert_eq!(numbers_part.total, 11);
 
-        let numbers_part = NumbersPartInfo::from_part(&ps[2])?;
+        let numbers_part = NumbersPartInfo::from_part(&ps.partitions[2])?;
         assert_eq!(numbers_part.part_start, 6);
         assert_eq!(numbers_part.part_end, 11);
         assert_eq!(numbers_part.total, 11);
@@ -46,7 +46,7 @@ fn test_util_generate_parts() -> Result<()> {
         let ps = generate_numbers_parts(0, 3, 0);
 
         assert_eq!(1, ps.len());
-        let numbers_part = NumbersPartInfo::from_part(&ps[0])?;
+        let numbers_part = NumbersPartInfo::from_part(&ps.partitions[0])?;
         assert_eq!(numbers_part.part_start, 0);
         assert_eq!(numbers_part.part_end, 0);
         assert_eq!(numbers_part.total, 0);
@@ -56,7 +56,7 @@ fn test_util_generate_parts() -> Result<()> {
         let ps = generate_numbers_parts(0, 3, 2);
 
         assert_eq!(1, ps.len());
-        let numbers_part = NumbersPartInfo::from_part(&ps[0])?;
+        let numbers_part = NumbersPartInfo::from_part(&ps.partitions[0])?;
         assert_eq!(numbers_part.part_start, 0);
         assert_eq!(numbers_part.part_end, 2);
         assert_eq!(numbers_part.total, 2);

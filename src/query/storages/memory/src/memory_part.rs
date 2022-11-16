@@ -39,6 +39,10 @@ impl PartInfo for MemoryPartInfo {
             Some(other) => self == other,
         }
     }
+
+    fn hash(&self) -> u64 {
+        0
+    }
 }
 
 impl MemoryPartInfo {

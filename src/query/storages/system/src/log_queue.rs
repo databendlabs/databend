@@ -160,7 +160,7 @@ impl<Event: SystemLogElement + 'static> Table for SystemLogTable<Event> {
         _: Arc<dyn TableContext>,
         _: Option<PushDownInfo>,
     ) -> Result<(PartStatistics, Partitions)> {
-        Ok((PartStatistics::default(), vec![]))
+        Ok((PartStatistics::default(), Partitions::default()))
     }
 
     fn read_data(
