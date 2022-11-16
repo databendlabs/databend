@@ -17,6 +17,8 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
+use common_exception::Result;
+
 #[typetag::serde(tag = "type")]
 pub trait PartInfo: Send + Sync {
     fn as_any(&self) -> &dyn Any;
@@ -52,9 +54,14 @@ impl PartialEq for Box<dyn PartInfo> {
 #[allow(dead_code)]
 pub type PartInfoPtr = Arc<Box<dyn PartInfo>>;
 
+/// For cache affinity, we consider some strategies when reshuffle partitions.
+/// For example:
+/// Under PartitionsShuffleKind::Mod, the same partition is always routed to the same executor.
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
 pub enum PartitionsShuffleKind {
+    // Bind the Partition by chunk range.
     None,
+    // Bind the Partition always to a same executor.
     Mod,
 }
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
@@ -74,6 +81,33 @@ impl Partitions {
 
     pub fn is_empty(&self) -> bool {
         self.partitions.is_empty()
+    }
+
+    pub fn reshuffle(&self, cluster_nodes: usize) -> Result<Vec<Partitions>> {
+        match self.kind {
+            PartitionsShuffleKind::None => {
+                let mut partition_slice = vec![];
+                for chunk in self.partitions.chunks(cluster_nodes) {
+                    partition_slice.push(Partitions::create(
+                        PartitionsShuffleKind::None,
+                        chunk.to_vec(),
+                    ))
+                }
+                Ok(partition_slice)
+            }
+            PartitionsShuffleKind::Mod => {
+                let mut partition_slice = Vec::with_capacity(cluster_nodes);
+                for _i in 0..cluster_nodes {
+                    partition_slice.push(Partitions::default());
+                }
+
+                for part in &self.partitions {
+                    let idx = part.hash() as usize % cluster_nodes;
+                    partition_slice[idx].partitions.push(part.clone());
+                }
+                Ok(partition_slice)
+            }
+        }
     }
 }
 
