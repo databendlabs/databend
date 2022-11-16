@@ -18,9 +18,9 @@ use std::sync::Arc;
 use common_catalog::table::Table;
 use common_catalog::table::TableExt;
 use common_catalog::table_context::TableContext;
-use common_datablocks::BlockMetaInfos;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::ChunkMetaInfos;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_storages_table_meta::meta::Location;
 use common_storages_table_meta::meta::SegmentInfo;
@@ -81,7 +81,7 @@ pub struct CompactSink {
     abort_operation: AbortOperation,
 
     inputs: Vec<Arc<InputPort>>,
-    input_data: BlockMetaInfos,
+    input_data: ChunkMetaInfos,
     cur_input_index: usize,
 }
 

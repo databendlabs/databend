@@ -49,8 +49,8 @@ impl ClusterStatsGenerator {
         !self.cluster_key_index.is_empty()
     }
 
-    pub fn block_compact_thresholds(&self) -> BlockCompactThresholds {
-        self.block_compact_thresholds
+    pub fn block_compact_thresholds(&self) -> ChunkCompactThresholds {
+        self.chunk_compact_thresholds
     }
 
     // This can be used in block append.

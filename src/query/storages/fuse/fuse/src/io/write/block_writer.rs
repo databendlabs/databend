@@ -55,7 +55,7 @@ impl<'a> BlockWriter<'a> {
 
     pub async fn write(
         &self,
-        block: DataBlock,
+        block: Chunk,
         col_stats: StatisticsOfColumns,
         cluster_stats: Option<ClusterStatistics>,
     ) -> Result<BlockMeta> {

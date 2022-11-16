@@ -16,9 +16,9 @@ use std::collections::hash_map::RandomState;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_datablocks::BlockCompactThresholds;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::ChunkCompactThresholds;
 use common_storages_table_meta::caches::CacheManager;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::Location;
@@ -50,7 +50,7 @@ pub struct BaseMutator {
     pub(crate) location_generator: TableMetaLocationGenerator,
     pub(crate) data_accessor: Operator,
     pub(crate) base_snapshot: Arc<TableSnapshot>,
-    pub(crate) thresholds: BlockCompactThresholds,
+    pub(crate) thresholds: ChunkCompactThresholds,
 }
 
 impl BaseMutator {
@@ -59,7 +59,7 @@ impl BaseMutator {
         op: Operator,
         location_generator: TableMetaLocationGenerator,
         base_snapshot: Arc<TableSnapshot>,
-        thresholds: BlockCompactThresholds,
+        thresholds: ChunkCompactThresholds,
     ) -> Result<Self> {
         Ok(Self {
             mutations: HashMap::new(),

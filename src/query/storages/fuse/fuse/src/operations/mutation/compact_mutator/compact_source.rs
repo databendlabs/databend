@@ -17,10 +17,10 @@ use std::sync::Arc;
 
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::table_context::TableContext;
-use common_datablocks::BlockCompactThresholds;
-use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::Chunk;
+use common_expression::ChunkCompactThresholds;
 use common_storages_table_meta::meta::BlockMeta;
 
 use super::compact_meta::CompactSourceMeta;
@@ -38,7 +38,7 @@ enum State {
         order: usize,
         tasks: Vec<CompactTask>,
     },
-    Output(Option<PartInfoPtr>, DataBlock),
+    Output(Option<PartInfoPtr>, Chunk),
     Finish,
 }
 
@@ -49,14 +49,14 @@ pub struct CompactSource {
     state: State,
     ctx: Arc<dyn TableContext>,
     output: Arc<OutputPort>,
-    thresholds: BlockCompactThresholds,
+    thresholds: ChunkCompactThresholds,
 }
 
 impl CompactSource {
     pub fn try_create(
         ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
-        thresholds: BlockCompactThresholds,
+        thresholds: ChunkCompactThresholds,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(CompactSource {
             state: State::ReadData(None),
@@ -142,7 +142,7 @@ impl Processor for CompactSource {
             State::Generate { order, tasks } => {
                 let meta = CompactSourceMeta::create(order, tasks);
                 let new_part = self.ctx.try_get_part();
-                self.state = State::Output(new_part, DataBlock::empty_with_meta(meta));
+                self.state = State::Output(new_part, Chunk::empty_with_meta(meta));
             }
             _ => return Err(ErrorCode::Internal("It's a bug.")),
         }
@@ -165,7 +165,7 @@ impl CompactTaskBuilder {
     fn add(
         &mut self,
         block: &Arc<BlockMeta>,
-        thresholds: BlockCompactThresholds,
+        thresholds: ChunkCompactThresholds,
     ) -> Vec<CompactTask> {
         self.total_rows += block.row_count as usize;
         self.total_size += block.block_size as usize;
