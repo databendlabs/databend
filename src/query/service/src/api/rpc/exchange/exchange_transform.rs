@@ -228,6 +228,13 @@ impl Processor for ExchangeTransform {
                     output_data.data_block = Some(data_block);
                     output_data.serialized_blocks.push(None);
                 } else {
+                    let meta = match bincode::serialize(&data_block.meta()?) {
+                        Ok(bytes) => Ok(bytes),
+                        Err(_) => Err(ErrorCode::BadBytes(
+                            "block meta serialize error when exchange",
+                        )),
+                    }?;
+
                     let chunks = data_block.try_into()?;
                     let options = &self.serialize_params.options;
                     let ipc_fields = &self.serialize_params.ipc_fields;
@@ -240,7 +247,7 @@ impl Processor for ExchangeTransform {
                     }
 
                     output_data.has_serialized_blocks = true;
-                    let data = FragmentData::create(values);
+                    let data = FragmentData::create(meta, values);
                     output_data
                         .serialized_blocks
                         .push(Some(DataPacket::FragmentData(data)));
@@ -321,10 +328,20 @@ impl ExchangeTransform {
             &Default::default(),
         )?;
 
+        let meta = match bincode::deserialize(fragment_data.get_meta()) {
+            Ok(meta) => Ok(meta),
+            Err(cause) => Err(ErrorCode::BadBytes(format!(
+                "block meta deserialize error when exchange, {:?}",
+                cause
+            ))),
+        }?;
+
+        // println!("deserialized meta {:?}", meta);
+
         self.output_data = Some(OutputData {
             serialized_blocks: vec![],
             has_serialized_blocks: false,
-            data_block: Some(DataBlock::from_chunk(schema, &batch)?),
+            data_block: Some(DataBlock::from_chunk(schema, &batch)?.add_meta(meta)?),
         });
 
         Ok(())
