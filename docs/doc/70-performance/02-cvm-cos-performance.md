@@ -12,7 +12,7 @@ description:
 * Databend: [v0.6.100-nightly](https://github.com/datafuselabs/databend/releases/tag/v0.6.100-nightly)
 * No Local Caching(Data Caching/Query Result Caching)
 * Databend is automatic performance optimization with **no manual tuning** required.
-* [Analyzing OnTime Datasets with Databend on Tencent Cloud COS](../90-learn/01-analyze-ontime-with-databend-on-ec2-and-s3.md)
+* [Analyzing OnTime Datasets with Databend on Tencent Cloud COS](../21-use-cases/01-analyze-ontime-with-databend-on-ec2-and-s3.md)
 :::
 
 ## Q1 (0.434 sec., 140.64 million rows/sec., 421.93 MB/sec.)

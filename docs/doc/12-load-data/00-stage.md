@@ -11,7 +11,7 @@ In this tutorial, you will create an internal stage, stage a sample file, and th
 
 ### Step 1. Create Stage Object
 
-Execute [CREATE STAGE](/doc/reference/sql/ddl/stage/ddl-create-stage) to create a named internal stage.
+Execute [CREATE STAGE](../14-sql-commands/00-ddl/40-stage/01-ddl-create-stage.md) to create a named internal stage.
 
 ```shell
 mysql -h127.0.0.1 -uroot -P3307 
