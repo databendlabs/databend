@@ -23,6 +23,9 @@ pub trait PartInfo: Send + Sync {
 
     #[allow(clippy::borrowed_box)]
     fn equals(&self, info: &Box<dyn PartInfo>) -> bool;
+
+    /// Used for partition distributed.
+    fn hash(&self) -> u64;
 }
 
 impl Debug for Box<dyn PartInfo> {

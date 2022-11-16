@@ -51,6 +51,10 @@ impl PartInfo for SystemTablePart {
             Some(other) => self == other,
         }
     }
+
+    fn hash(&self) -> u64 {
+        0
+    }
 }
 
 pub trait SyncSystemTable: Send + Sync {
