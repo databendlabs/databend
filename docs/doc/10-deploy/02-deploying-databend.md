@@ -572,7 +572,7 @@ CREATE USER eric IDENTIFIED BY 'databend';
 GRANT ALL ON default.* TO eric;
 ```
 
-For more information about creating new users, see [CREATE USER](../30-reference/30-sql/00-ddl/30-user/01-user-create-user.md).
+For more information about creating new users, see [CREATE USER](../14-sql-commands/00-ddl/30-user/01-user-create-user.md).
 
 :::
 
