@@ -198,6 +198,18 @@ impl<T: ArgType> Value<T> {
     }
 }
 
+impl Value<AnyType> {
+    pub fn convert_to_full_column(&self, ty: &DataType, num_rows: usize) -> Column {
+        match self {
+            Value::Scalar(s) => {
+                let builder = ColumnBuilder::repeat(&s.as_ref(), num_rows, ty);
+                builder.build()
+            }
+            Value::Column(c) => c.clone(),
+        }
+    }
+}
+
 impl<'a> ValueRef<'a, AnyType> {
     pub fn try_downcast<T: ValueType>(&self) -> Option<ValueRef<'_, T>> {
         Some(match self {

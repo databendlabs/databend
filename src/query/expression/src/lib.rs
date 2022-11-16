@@ -26,6 +26,7 @@
 #![feature(generic_const_exprs)]
 #![allow(incomplete_features)]
 #![feature(core_intrinsics)]
+#![feature(trusted_len)]
 #![feature(iter_order_by)]
 
 pub type Result<T> = std::result::Result<T, (crate::Span, String)>;

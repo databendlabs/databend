@@ -15,9 +15,10 @@
 mod concat;
 mod filter;
 mod scatter;
-mod sort;
 mod take;
 mod take_chunks;
+mod group_by_hash;
+mod group_by;
 
-pub use sort::SortColumnDescription;
-pub use take_chunks::*;
+pub use group_by_hash::*;
+pub use group_by::*;

@@ -19,7 +19,6 @@ pub struct ChunkCompactThresholds {
     pub max_bytes_per_chunk: usize,
 }
 
-
 impl Default for ChunkCompactThresholds {
     fn default() -> ChunkCompactThresholds {
         ChunkCompactThresholds {
@@ -46,7 +45,6 @@ impl ChunkCompactThresholds {
         }
     }
 
-   
     #[inline]
     pub fn check_perfect_chunk(&self, row_count: usize, block_size: usize) -> bool {
         row_count <= self.max_rows_per_chunk && self.check_large_enough(row_count, block_size)

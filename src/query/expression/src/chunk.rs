@@ -124,13 +124,9 @@ impl Chunk {
         let columns = self
             .columns()
             .iter()
-            .map(|(col, ty)| match col {
-                Value::Scalar(s) => {
-                    let builder = ColumnBuilder::repeat(&s.as_ref(), self.num_rows, ty);
-                    let col = builder.build();
-                    (Value::Column(col), ty.clone())
-                }
-                Value::Column(c) => (Value::Column(c.clone()), ty.clone()),
+            .map(|(col, ty)| {
+                let col = col.convert_to_full_column(ty, self.num_rows());
+                (Value::Column(col), ty.clone())
             })
             .collect();
         Self {

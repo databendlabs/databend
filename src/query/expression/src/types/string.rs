@@ -223,6 +223,7 @@ impl<'a> Iterator for StringIterator<'a> {
 }
 
 unsafe impl<'a> TrustedLen for StringIterator<'a> {}
+unsafe impl<'a> std::iter::TrustedLen for StringIterator<'a> {}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StringColumnBuilder {

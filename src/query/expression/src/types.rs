@@ -97,6 +97,13 @@ pub enum DataType {
     Generic(usize),
 }
 
+pub const ALL_UNSIGNED_INTEGER_TYPES: &[NumberDataType; 4] = &[
+    NumberDataType::UInt8,
+    NumberDataType::UInt16,
+    NumberDataType::UInt32,
+    NumberDataType::UInt64,
+];
+
 pub const ALL_INTEGER_TYPES: &[NumberDataType; 8] = &[
     NumberDataType::UInt8,
     NumberDataType::UInt16,
@@ -140,6 +147,63 @@ impl DataType {
         }
     }
 
+    pub fn is_unsigned_numeric(&self) -> bool {
+        match self {
+            DataType::Number(ty) => ALL_UNSIGNED_INTEGER_TYPES.contains(ty),
+            _ => false,
+        }
+    }
+    
+    pub fn is_numeric(&self) -> bool {
+        match self {
+            DataType::Number(ty) => ALL_NUMERICS_TYPES.contains(ty),
+            _ => false,
+        }
+    }
+
+    #[inline]
+    pub fn is_integer(&self) -> bool {
+        match self {
+            DataType::Number(ty) => ALL_INTEGER_TYPES.contains(ty),
+            _ => false,
+        }
+    }
+
+    #[inline]
+    pub fn is_floating(&self) -> bool {
+        match self {
+            DataType::Number(ty) => ALL_FLOAT_TYPES.contains(ty),
+            _ => false,
+        }
+    }
+
+    #[inline]
+    pub fn is_date_or_date_time(&self) -> bool {
+        matches!(self, DataType::Timestamp | DataType::Date)
+    }
+
+    pub fn numeric_byte_size(&self) -> Result<usize, String> {
+        match self {
+            DataType::Number(NumberDataType::UInt8) | DataType::Number(NumberDataType::Int8) => {
+                Ok(1)
+            }
+            DataType::Number(NumberDataType::UInt16) | DataType::Number(NumberDataType::Int16) => {
+                Ok(2)
+            }
+            DataType::Date
+            | DataType::Number(NumberDataType::UInt32)
+            | DataType::Number(NumberDataType::Float32)
+            | DataType::Number(NumberDataType::Int32) => Ok(4),
+            DataType::Timestamp
+            | DataType::Number(NumberDataType::UInt64)
+            | DataType::Number(NumberDataType::Float64)
+            | DataType::Number(NumberDataType::Int64) => Ok(8),
+            _ => Result::Err(format!(
+                "Function number_byte_size argument must be numeric types, but got {:?}",
+                self
+            )),
+        }
+    }
     pub fn create_serializer(&self, column: Column) -> Result<Box<dyn TypeSerializer>, String> {
         match self {
             DataType::Null => Ok(Box::new(NullSerializer::try_create(column)?)),
