@@ -18,10 +18,10 @@ use std::sync::Arc;
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
 use common_cache::Cache;
-use common_datablocks::BlockCompactThresholds;
-use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::Chunk;
+use common_expression::ChunkCompactThresholds;
 use common_storages_table_meta::caches::CacheManager;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::SegmentInfo;
@@ -43,7 +43,7 @@ use crate::statistics::reducers::reduce_block_metas;
 
 enum State {
     Consume,
-    Compact(DataBlock),
+    Compact(Chunk),
     Generate(Vec<Arc<BlockMeta>>),
     Serialized {
         data: Vec<u8>,
@@ -62,14 +62,14 @@ pub struct CompactTransform {
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
     scan_progress: Arc<Progress>,
-    output_data: Option<DataBlock>,
+    output_data: Option<Chunk>,
 
     block_reader: Arc<BlockReader>,
     location_gen: TableMetaLocationGenerator,
     dal: Operator,
 
     order: usize,
-    thresholds: BlockCompactThresholds,
+    thresholds: ChunkCompactThresholds,
     abort_operation: AbortOperation,
 }
 
@@ -81,7 +81,7 @@ impl CompactTransform {
         block_reader: Arc<BlockReader>,
         location_gen: TableMetaLocationGenerator,
         dal: Operator,
-        thresholds: BlockCompactThresholds,
+        thresholds: ChunkCompactThresholds,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(CompactTransform {
             state: State::Consume,
@@ -172,7 +172,7 @@ impl Processor for CompactTransform {
                     segment,
                     std::mem::take(&mut self.abort_operation),
                 );
-                self.output_data = Some(DataBlock::empty_with_meta(meta));
+                self.output_data = Some(Chunk::empty_with_meta(meta));
             }
             _ => return Err(ErrorCode::Internal("It's a bug.")),
         }
@@ -208,7 +208,7 @@ impl Processor for CompactTransform {
                         self.scan_progress.incr(&progress_values);
                         blocks.push(block);
                     }
-                    let new_block = DataBlock::concat_blocks(&blocks)?;
+                    let new_block = Chunk::concat(&blocks)?;
                     let col_stats = reduce_block_statistics(&stats_of_columns)?;
 
                     let block_writer = BlockWriter::new(&self.dal, &self.location_gen);

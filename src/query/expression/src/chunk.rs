@@ -77,6 +77,11 @@ impl Chunk {
     }
 
     #[inline]
+    pub fn empty_with_meta(meta: ChunkMetaInfoPtr) -> Self {
+        Chunk::new_with_meta(vec![], 0, Some(meta))
+    }
+
+    #[inline]
     pub fn columns(&self) -> &[(Value<AnyType>, DataType)] {
         &self.columns
     }
@@ -213,6 +218,11 @@ impl Chunk {
             num_rows: self.num_rows,
             meta,
         })
+    }
+
+    #[inline]
+    pub fn get_meta(&self) -> Option<&ChunkMetaInfoPtr> {
+        self.meta.as_ref()
     }
 
     #[inline]

@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::Chunk;
+use common_expression::ChunkCompactThresholds;
 use common_storages_table_meta::meta::ClusterStatistics;
 use common_storages_table_meta::meta::Location;
 use common_storages_table_meta::meta::Statistics;
@@ -47,7 +48,7 @@ impl DeletionMutator {
         location_generator: TableMetaLocationGenerator,
         base_snapshot: Arc<TableSnapshot>,
         cluster_stats_gen: ClusterStatsGenerator,
-        thresholds: BlockCompactThresholds,
+        thresholds: ChunkCompactThresholds,
     ) -> Result<Self> {
         let base_mutator =
             BaseMutator::try_create(ctx, op, location_generator, base_snapshot, thresholds)?;

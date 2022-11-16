@@ -53,6 +53,7 @@ impl ReclusterMutator {
         location_generator: TableMetaLocationGenerator,
         base_snapshot: Arc<TableSnapshot>,
         threshold: f64,
+        thresholds: ChunkCompactThresholds,
         blocks_map: BTreeMap<i32, Vec<(usize, Arc<BlockMeta>)>>,
         data_accessor: Operator,
     ) -> Result<Self> {

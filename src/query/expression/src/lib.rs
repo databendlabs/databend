@@ -53,6 +53,7 @@ pub mod values;
 
 pub use meta_info::ChunkMetaInfo;
 pub use meta_info::ChunkMetaInfoPtr;
+pub use meta_info::ChunkMetaInfos;
 
 pub use crate::chunk::*;
 pub use crate::chunk_compact_thresholds::ChunkCompactThresholds;
