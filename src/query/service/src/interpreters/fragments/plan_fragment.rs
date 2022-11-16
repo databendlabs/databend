@@ -15,8 +15,6 @@
 use std::sync::Arc;
 
 use common_catalog::plan::DataSourcePlan;
-use common_catalog::plan::Partitions;
-use common_catalog::plan::PartitionsShuffleKind;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -133,22 +131,12 @@ impl PlanFragment {
         // Redistribute partitions of ReadDataSourcePlan.
         let mut fragment_actions = QueryFragmentActions::create(true, self.fragment_id);
 
-        let partitions = &read_source.parts.partitions;
-        let parts_per_node = partitions.len() / executors.len();
+        let partitions = &read_source.parts;
+        let partition_reshuffle = partitions.reshuffle(executors)?;
 
-        for (index, executor) in executors.iter().enumerate() {
-            let begin = parts_per_node * index;
-            let end = parts_per_node * (index + 1);
-            let mut parts = partitions[begin..end].to_vec();
-
-            if index == executors.len() - 1 {
-                // For some irregular partitions, we assign them to the last node
-                let begin = parts_per_node * executors.len();
-                parts.extend_from_slice(&partitions[begin..]);
-            }
-
+        for (executor, parts) in partition_reshuffle.iter() {
             let mut new_read_source = read_source.clone();
-            new_read_source.parts = Partitions::create(PartitionsShuffleKind::None, parts);
+            new_read_source.parts = parts.clone();
             let mut plan = self.plan.clone();
 
             // Replace `ReadDataSourcePlan` with rewritten one and generate new fragment for it.

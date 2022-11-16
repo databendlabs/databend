@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
@@ -83,29 +84,35 @@ impl Partitions {
         self.partitions.is_empty()
     }
 
-    pub fn reshuffle(&self, cluster_nodes: usize) -> Result<Vec<Partitions>> {
+    pub fn reshuffle(&self, executors: Vec<String>) -> Result<HashMap<String, Partitions>> {
+        let cluster_nodes = executors.len();
         match self.kind {
             PartitionsShuffleKind::None => {
-                let mut partition_slice = vec![];
-                for chunk in self.partitions.chunks(cluster_nodes) {
-                    partition_slice.push(Partitions::create(
-                        PartitionsShuffleKind::None,
-                        chunk.to_vec(),
-                    ))
+                let mut executor_part = HashMap::default();
+                for (i, chunk) in self.partitions.chunks(cluster_nodes).enumerate() {
+                    executor_part.insert(
+                        executors[i].clone(),
+                        Partitions::create(PartitionsShuffleKind::None, chunk.to_vec()),
+                    );
                 }
-                Ok(partition_slice)
+                Ok(executor_part)
             }
             PartitionsShuffleKind::Mod => {
+                // Build mod partition chunk.
                 let mut partition_slice = Vec::with_capacity(cluster_nodes);
                 for _i in 0..cluster_nodes {
                     partition_slice.push(Partitions::default());
                 }
-
                 for part in &self.partitions {
                     let idx = part.hash() as usize % cluster_nodes;
                     partition_slice[idx].partitions.push(part.clone());
                 }
-                Ok(partition_slice)
+
+                let mut executor_part = HashMap::default();
+                for (i, partitions) in partition_slice.iter().enumerate() {
+                    executor_part.insert(executors[i].clone(), partitions.clone());
+                }
+                Ok(executor_part)
             }
         }
     }
