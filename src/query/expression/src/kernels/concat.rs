@@ -48,25 +48,28 @@ impl Chunk {
             return Ok(chunks[0].clone());
         }
 
-        let num_rows = chunks.iter().map(|c| c.num_rows()).sum();
-        let mut concat_columns = Vec::with_capacity(chunks[0].num_columns());
-        for i in 0..chunks[0].num_columns() {
-            let columns = chunks
-                .iter()
-                .map(|chunk| {
-                    let (col, ty) = &chunk.columns()[i];
-                    match col {
-                        Value::Scalar(s) => {
-                            ColumnBuilder::repeat(&s.as_ref(), chunk.num_rows(), ty).build()
+        let concat_columns = (0..chunks[0].num_columns())
+            .map(|i| {
+                let columns = chunks
+                    .iter()
+                    .map(|chunk| {
+                        let (col, ty) = &chunk.columns()[i];
+                        match col {
+                            Value::Scalar(s) => {
+                                ColumnBuilder::repeat(&s.as_ref(), chunk.num_rows(), ty).build()
+                            }
+                            Value::Column(c) => c.clone(),
                         }
-                        Value::Column(c) => c.clone(),
-                    }
-                })
-                .collect::<Vec<_>>();
-            let ty = chunks[0].columns()[i].1.clone();
-            let c = Column::concat(&columns);
-            concat_columns.push((Value::Column(c), ty));
-        }
+                    })
+                    .collect::<Vec<_>>();
+                let ty = chunks[0].columns()[i].1.clone();
+                let col = Column::concat(&columns);
+                (Value::Column(col), ty)
+            })
+            .collect();
+
+        let num_rows = chunks.iter().map(|c| c.num_rows()).sum();
+
         Ok(Chunk::new(concat_columns, num_rows))
     }
 }

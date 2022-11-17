@@ -125,7 +125,11 @@ impl Settings {
             // Set max memory usage.
             {
                 if ret.get_max_memory_usage()? == 0 {
-                    let max_usage = sysinfo::System::new_all().available_memory();
+                    let max_usage = if conf.query.max_memory_usage == 0 {
+                        sysinfo::System::new_all().available_memory()
+                    } else {
+                        conf.query.max_memory_usage
+                    };
                     ret.set_max_memory_usage(max_usage)?;
                 }
             }

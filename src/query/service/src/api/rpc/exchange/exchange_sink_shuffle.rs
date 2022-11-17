@@ -121,6 +121,13 @@ impl Processor for ExchangePublisherSink {
                     continue;
                 }
 
+                let meta = match bincode::serialize(&data_block.meta()?) {
+                    Ok(bytes) => Ok(bytes),
+                    Err(_) => Err(ErrorCode::BadBytes(
+                        "block meta serialize error when exchange",
+                    )),
+                }?;
+
                 let chunks = data_block.try_into()?;
                 let options = &self.serialize_params.options;
                 let ipc_fields = &self.serialize_params.ipc_fields;
@@ -133,7 +140,7 @@ impl Processor for ExchangePublisherSink {
                 }
 
                 output_data.has_serialized_data = true;
-                let data = FragmentData::create(values);
+                let data = FragmentData::create(meta, values);
                 output_data
                     .serialized_blocks
                     .push(Some(DataPacket::FragmentData(data)));

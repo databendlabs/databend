@@ -1106,6 +1106,7 @@ pub async fn download(ep: &EndpointType, query_id: &str) -> Response {
     get_uri(ep, &uri).await
 }
 
+#[ignore]
 #[tokio::test(flavor = "current_thread")]
 async fn test_download_csv_with_names() -> Result<()> {
     let _guard = TestGlobalServices::setup(ConfigBuilder::create().build()).await?;
@@ -1128,6 +1129,7 @@ async fn test_download_csv_with_names() -> Result<()> {
     Ok(())
 }
 
+#[ignore]
 #[tokio::test(flavor = "current_thread")]
 async fn test_download() -> Result<()> {
     let _guard = TestGlobalServices::setup(ConfigBuilder::create().build()).await?;
@@ -1189,6 +1191,7 @@ async fn test_download() -> Result<()> {
     Ok(())
 }
 
+#[ignore]
 #[tokio::test(flavor = "current_thread")]
 async fn test_download_running() -> Result<()> {
     let _guard = TestGlobalServices::setup(ConfigBuilder::create().build()).await?;
@@ -1222,6 +1225,7 @@ async fn test_download_running() -> Result<()> {
     Ok(())
 }
 
+#[ignore]
 #[tokio::test(flavor = "current_thread")]
 async fn test_download_non_select() -> Result<()> {
     let _guard = TestGlobalServices::setup(ConfigBuilder::create().build()).await?;
@@ -1265,6 +1269,7 @@ async fn test_download_failed() -> Result<()> {
     Ok(())
 }
 
+#[ignore]
 #[tokio::test(flavor = "current_thread")]
 async fn test_download_killed() -> Result<()> {
     let _guard = TestGlobalServices::setup(ConfigBuilder::create().build()).await?;

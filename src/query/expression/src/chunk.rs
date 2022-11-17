@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::ops::Range;
 
 use crate::types::AnyType;
@@ -64,10 +65,11 @@ impl Chunk {
     }
 
     #[inline]
-    pub fn domains(&self) -> Vec<Domain> {
+    pub fn domains(&self) -> HashMap<usize, Domain> {
         self.columns
             .iter()
             .map(|(value, _)| value.as_ref().domain())
+            .enumerate()
             .collect()
     }
 
