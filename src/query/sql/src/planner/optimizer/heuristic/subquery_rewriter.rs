@@ -388,6 +388,7 @@ impl SubqueryRewriter {
                     agg_func.return_type()?,
                     None,
                     None,
+                    None,
                 );
 
                 let agg = Aggregate {
@@ -501,6 +502,7 @@ impl SubqueryRewriter {
                     self.metadata.write().add_column(
                         "marker".to_string(),
                         NullableType::new_impl(BooleanType::new_impl()),
+                        None,
                         None,
                         None,
                     )

@@ -93,10 +93,17 @@ impl Metadata {
         data_type: DataTypeImpl,
         table_index: Option<IndexType>,
         path_indices: Option<Vec<IndexType>>,
+        leaf_id: Option<IndexType>,
     ) -> IndexType {
         let column_index = self.columns.len();
-        let column_entry =
-            ColumnEntry::new(name, data_type, column_index, table_index, path_indices);
+        let column_entry = ColumnEntry::new(
+            name,
+            data_type,
+            column_index,
+            table_index,
+            path_indices,
+            leaf_id,
+        );
         self.columns.push(column_entry);
         column_index
     }
@@ -117,21 +124,39 @@ impl Metadata {
             table: table_meta.clone(),
         };
         self.tables.push(table_entry);
-        let mut struct_fields = VecDeque::new();
+        let mut fields = VecDeque::new();
         for (i, field) in table_meta.schema().fields().iter().enumerate() {
+            fields.push_back((vec![i], field.clone()));
+        }
+
+        // build leaf id in DFS order for primitive columns.
+        let mut leaf_id = 0;
+        while !fields.is_empty() {
+            let (indices, field) = fields.pop_front().unwrap();
+            let path_indices = if indices.len() > 1 {
+                Some(indices.clone())
+            } else {
+                None
+            };
+
+            if field.data_type().data_type_id() != TypeID::Struct {
+                self.add_column(
+                    field.name().clone(),
+                    field.data_type().clone(),
+                    Some(table_index),
+                    path_indices,
+                    Some(leaf_id),
+                );
+                leaf_id += 1;
+                continue;
+            }
             self.add_column(
                 field.name().clone(),
                 field.data_type().clone(),
                 Some(table_index),
+                path_indices,
                 None,
             );
-            if field.data_type().data_type_id() == TypeID::Struct {
-                struct_fields.push_back((vec![i], field.clone()));
-            }
-        }
-        // add inner columns of struct column
-        while !struct_fields.is_empty() {
-            let (path_indices, field) = struct_fields.pop_front().unwrap();
             let struct_type: StructType = field.data_type().clone().try_into().unwrap();
 
             let inner_types = struct_type.types();
@@ -144,22 +169,17 @@ impl Metadata {
                     .map(|i| format!("{}:{}", field.name(), i + 1))
                     .collect::<Vec<_>>(),
             };
-            for ((i, inner_name), inner_type) in
-                inner_names.into_iter().enumerate().zip(inner_types.iter())
+            let mut i = inner_types.len() - 1;
+            for (inner_name, inner_type) in
+                inner_names.into_iter().rev().zip(inner_types.iter().rev())
             {
-                let mut inner_path_indices = path_indices.clone();
-                inner_path_indices.push(i);
+                let mut inner_indices = indices.clone();
+                inner_indices.push(i);
 
-                self.add_column(
-                    inner_name.clone(),
-                    inner_type.clone(),
-                    Some(table_index),
-                    Some(inner_path_indices.clone()),
-                );
-                if inner_type.data_type_id() == TypeID::Struct {
-                    let inner_field = DataField::new(&inner_name, inner_type.clone());
-                    struct_fields.push_back((inner_path_indices, inner_field));
-                }
+                let inner_field = DataField::new(&inner_name, inner_type.clone());
+                fields.push_front((inner_indices, inner_field));
+
+                i -= 1;
             }
         }
         table_index
@@ -268,6 +288,9 @@ pub struct ColumnEntry {
     table_index: Option<IndexType>,
     /// Path indices for inner column of struct data type.
     path_indices: Option<Vec<IndexType>>,
+    /// Leaf id is the column index of Parquet schema, constructed in DFS order.
+    /// None if the data type of this column is struct.
+    leaf_id: Option<IndexType>,
 }
 
 impl ColumnEntry {
@@ -277,6 +300,7 @@ impl ColumnEntry {
         column_index: IndexType,
         table_index: Option<IndexType>,
         path_indices: Option<Vec<IndexType>>,
+        leaf_id: Option<IndexType>,
     ) -> Self {
         ColumnEntry {
             column_index,
@@ -284,6 +308,7 @@ impl ColumnEntry {
             data_type,
             table_index,
             path_indices,
+            leaf_id,
         }
     }
 
@@ -312,9 +337,14 @@ impl ColumnEntry {
         self.path_indices.as_deref()
     }
 
-    /// Check if this column entry contains path_indices
+    /// Check if this column entry contains path_indices.
     pub fn has_path_indices(&self) -> bool {
         self.path_indices.is_some()
+    }
+
+    /// Get the leaf id of this column entry.
+    pub fn leaf_id(&self) -> Option<IndexType> {
+        self.leaf_id
     }
 }
 
