@@ -1022,7 +1022,11 @@ impl TryInto<InnerStorageOssConfig> for OssStorageConfig {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
-pub struct MokaStorageConfig {}
+pub struct MokaStorageConfig {
+    pub max_capacity: u64,
+    pub time_to_live: i64,
+    pub time_to_idle: i64,
+}
 
 impl Default for MokaStorageConfig {
     fn default() -> Self {
@@ -1031,8 +1035,12 @@ impl Default for MokaStorageConfig {
 }
 
 impl From<InnerStorageMokaConfig> for MokaStorageConfig {
-    fn from(_: InnerStorageMokaConfig) -> Self {
-        Self {}
+    fn from(v: InnerStorageMokaConfig) -> Self {
+        Self {
+            max_capacity: v.max_capacity,
+            time_to_live: v.time_to_live,
+            time_to_idle: v.time_to_idle,
+        }
     }
 }
 
@@ -1040,7 +1048,11 @@ impl TryInto<InnerStorageMokaConfig> for MokaStorageConfig {
     type Error = ErrorCode;
 
     fn try_into(self) -> Result<InnerStorageMokaConfig> {
-        Ok(InnerStorageMokaConfig::default())
+        Ok(InnerStorageMokaConfig {
+            max_capacity: self.max_capacity,
+            time_to_live: self.time_to_live,
+            time_to_idle: self.time_to_idle,
+        })
     }
 }
 

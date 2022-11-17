@@ -20,7 +20,7 @@ async-trait = "0.1"
 backon = "0.2"
 globiter = "0.1"
 once_cell = "1"
-opendal = { version = "0.19", features = [
+opendal = { version = "0.20", features = [
     "layers-tracing",
     "layers-metrics",
     "services-ipfs",

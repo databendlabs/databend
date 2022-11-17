@@ -278,8 +278,12 @@ fn init_oss_operator(cfg: &StorageOssConfig) -> Result<Operator> {
 }
 
 /// init_moka_operator will init a moka operator.
-fn init_moka_operator(_: &StorageMokaConfig) -> Result<Operator> {
+fn init_moka_operator(v: &StorageMokaConfig) -> Result<Operator> {
     let mut builder = moka::Builder::default();
+
+    builder.max_capacity(v.max_capacity);
+    builder.time_to_live(std::time::Duration::from_secs(v.time_to_live as u64));
+    builder.time_to_idle(std::time::Duration::from_secs(v.time_to_idle as u64));
 
     Ok(Operator::new(builder.build()?))
 }

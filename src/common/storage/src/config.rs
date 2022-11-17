@@ -109,7 +109,7 @@ impl Display for StorageParams {
                 write!(f, "ipfs | endpoint={},root={}", c.endpoint_url, c.root)
             }
             StorageParams::Memory => write!(f, "memory"),
-            StorageParams::Moka(_) => write!(f, "moka"),
+            StorageParams::Moka(v) => write!(f, "moka | max_capacity={}", v.max_capacity),
             StorageParams::Obs(v) => write!(
                 f,
                 "obs | bucket={},root={},endpoint={}",
@@ -416,8 +416,25 @@ impl Debug for StorageOssConfig {
 }
 
 /// config for Moka Object Storage Service
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct StorageMokaConfig {}
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StorageMokaConfig {
+    pub max_capacity: u64,
+    pub time_to_live: i64,
+    pub time_to_idle: i64,
+}
+
+impl Default for StorageMokaConfig {
+    fn default() -> Self {
+        Self {
+            // Use 1G as default.
+            max_capacity: 1024 * 1024 * 1024,
+            // Use 1 hour as default time to live
+            time_to_live: 3600,
+            // Use 10 minutes as default time to idle.
+            time_to_idle: 600,
+        }
+    }
+}
 
 /// config for Redis Storage Service
 #[derive(Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
