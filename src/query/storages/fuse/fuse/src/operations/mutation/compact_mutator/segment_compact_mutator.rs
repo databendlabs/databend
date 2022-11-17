@@ -188,14 +188,19 @@ impl<'a> SegmentCompactor<'a> {
         limit: usize,
     ) -> Result<SegmentCompactionState> {
         // 1. feed segments into accumulator, taking limit into account
+        //
         // traverse the segment in reversed order, so that newly created unmergeable fragmented segment
         // will be left at the "top", and likely to be merged in the next compaction; instead of leaving
         // an unmergeable fragmented segment in the middle.
         let num_segments = segments.len();
         let mut compact_end_at = 0;
-        for (idx, x) in segments.iter().rev().enumerate() {
-            self.add(x, locations[num_segments - idx - 1].clone())
-                .await?;
+        for (idx, (segment, location)) in segments
+            .iter()
+            .rev()
+            .zip(locations.iter().rev())
+            .enumerate()
+        {
+            self.add(segment, location.clone()).await?;
             let compacted = self.num_fragments_compacted();
             compact_end_at = idx;
             if compacted >= limit {
@@ -207,19 +212,21 @@ impl<'a> SegmentCompactor<'a> {
         }
         let mut compaction = self.finalize().await?;
 
-        // 2. combine with the unprocessed segments (which are outside the limit)
+        // 2. combine with the unprocessed segments (which are outside of the limit)
         let fragments_compacted = !compaction.new_segment_paths.is_empty();
         if fragments_compacted {
             // if some compaction occurred, the reminders
             // which are outside of the limit should also be collected
-            for idx in 0..num_segments - compact_end_at - 1 {
-                compaction.segments_locations.push(locations[idx].clone());
-                merge_statistics_mut(&mut compaction.statistics, &segments[idx].summary)?;
+            let range = 0..num_segments - compact_end_at - 1;
+            let segment_slice = segments[range.clone()].iter().rev();
+            let location_slice = locations[range].iter().rev();
+            for (segment, location) in segment_slice.zip(location_slice) {
+                compaction.segments_locations.push(location.clone());
+                merge_statistics_mut(&mut compaction.statistics, &segment.summary)?;
             }
-
-            // reverse the segments locations, since segments are traversed reversely during compaction
-            compaction.segments_locations.reverse();
         }
+        // reverse the segments back
+        compaction.segments_locations.reverse();
 
         Ok(compaction)
     }
