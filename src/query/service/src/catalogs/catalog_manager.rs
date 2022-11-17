@@ -24,6 +24,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::CatalogType;
 use common_meta_app::schema::CreateCatalogReq;
+use common_meta_app::schema::DropCatalogReq;
 #[cfg(feature = "hive")]
 use common_storages_hive::HiveCatalog;
 use dashmap::DashMap;
@@ -41,6 +42,8 @@ pub trait CatalogManagerHelper {
     fn register_external_catalogs(&self, conf: &Config) -> Result<()>;
 
     fn create_user_defined_catalog(&self, req: CreateCatalogReq) -> Result<()>;
+
+    fn drop_user_defined_catalog(&self, req: DropCatalogReq) -> Result<()>;
 }
 
 #[async_trait::async_trait]
@@ -130,6 +133,26 @@ impl CatalogManagerHelper for CatalogManager {
                     self.insert_catalog(ctl_name, catalog, if_not_exists)
                 }
             }
+        }
+    }
+
+    fn drop_user_defined_catalog(&self, req: DropCatalogReq) -> Result<()> {
+        let name = req.name_ident.catalog_name;
+        if name == CATALOG_DEFAULT {
+            return Err(ErrorCode::CatalogNotSupported(
+                "Dropping the DEFAULT catalog is not allowed",
+            ));
+        }
+
+        match self.catalogs.remove(&name) {
+            Some(_) => Ok(()),
+
+            None if req.if_exists => Ok(()),
+
+            None => Err(ErrorCode::CatalogNotFound(format!(
+                "Catalog {} has to be exists",
+                name
+            ))),
         }
     }
 }

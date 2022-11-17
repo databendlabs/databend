@@ -17,15 +17,16 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use common_base::base::tokio;
+use common_datablocks::DataBlock;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::FormatSettings;
-use common_storages_fuse_result::BlockBuffer;
 use serde_json::Value as JsonValue;
 
 use crate::servers::http::v1::json_block::block_to_json_value;
+use crate::servers::http::v1::query::sized_spsc::SizedChannelReceiver;
 use crate::servers::http::v1::JsonBlock;
 
 #[derive(Debug, PartialEq, Eq)]
@@ -54,7 +55,7 @@ pub struct PageManager {
     schema: DataSchemaRef,
     last_page: Option<Page>,
     row_buffer: VecDeque<Vec<JsonValue>>,
-    block_buffer: Arc<BlockBuffer>,
+    block_receiver: SizedChannelReceiver<DataBlock>,
     string_fields: bool,
     format_settings: FormatSettings,
 }
@@ -62,7 +63,7 @@ pub struct PageManager {
 impl PageManager {
     pub fn new(
         max_rows_per_page: usize,
-        block_buffer: Arc<BlockBuffer>,
+        block_receiver: SizedChannelReceiver<DataBlock>,
         string_fields: bool,
         format_settings: FormatSettings,
     ) -> PageManager {
@@ -74,7 +75,7 @@ impl PageManager {
             block_end: false,
             row_buffer: Default::default(),
             schema: Arc::new(DataSchema::empty()),
-            block_buffer,
+            block_receiver,
             max_rows_per_page,
             string_fields,
             format_settings,
@@ -119,8 +120,26 @@ impl PageManager {
         }
     }
 
-    async fn collect_new_page(&mut self, tp: &Wait) -> Result<(JsonBlock, bool)> {
+    fn append_block(
+        &mut self,
+        rows: &mut Vec<Vec<JsonValue>>,
+        block: DataBlock,
+        remain: usize,
+    ) -> Result<()> {
         let format_settings = &self.format_settings;
+        if self.schema.fields().is_empty() {
+            self.schema = block.schema().clone();
+        }
+        let mut iter = block_to_json_value(&block, format_settings, self.string_fields)?
+            .into_iter()
+            .peekable();
+        let chunk: Vec<_> = iter.by_ref().take(remain).collect();
+        rows.extend(chunk);
+        self.row_buffer = iter.by_ref().collect();
+        Ok(())
+    }
+
+    async fn collect_new_page(&mut self, tp: &Wait) -> Result<(JsonBlock, bool)> {
         let mut res: Vec<Vec<JsonValue>> = Vec::with_capacity(self.max_rows_per_page);
         while res.len() < self.max_rows_per_page {
             if let Some(row) = self.row_buffer.pop_front() {
@@ -135,61 +154,39 @@ impl PageManager {
             if remain == 0 {
                 break;
             }
-            let (block, done) = self.block_buffer.pop().await?;
-            match block {
-                Some(block) => {
-                    if self.schema.fields().is_empty() {
-                        self.schema = block.schema().clone();
-                    }
-                    let mut iter =
-                        block_to_json_value(&block, format_settings, self.string_fields)?
-                            .into_iter()
-                            .peekable();
-                    let chunk: Vec<_> = iter.by_ref().take(remain).collect();
-                    res.extend(chunk);
-                    self.row_buffer = iter.by_ref().collect();
-                    if done {
-                        self.block_end = true;
+            match tp {
+                Wait::Async => match self.block_receiver.try_recv() {
+                    Some(block) => self.append_block(&mut res, block, remain)?,
+                    None => break,
+                },
+                Wait::Deadline(t) => {
+                    let now = Instant::now();
+                    let d = *t - now;
+                    if let Ok(Some(block)) =
+                        tokio::time::timeout(d, self.block_receiver.recv()).await
+                    {
+                        self.append_block(&mut res, block, remain)?;
+                    } else {
                         break;
                     }
-                }
-                None => {
-                    if done {
-                        self.block_end = true;
-                        break;
-                    }
-                    match tp {
-                        Wait::Async => break,
-                        Wait::Deadline(t) => {
-                            let now = Instant::now();
-                            let d = *t - now;
-                            if d.is_zero()
-                                || tokio::time::timeout(
-                                    d,
-                                    self.block_buffer.block_notify.notified(),
-                                )
-                                .await
-                                .is_err()
-                            {
-                                break;
-                            }
-                        }
-                    };
                 }
             }
         }
+
         let block = JsonBlock {
             schema: self.schema.clone(),
             data: res,
         };
+
+        // try to report 'no more data' earlier to client to avoid unnecessary http call
         if !self.block_end {
-            self.block_end = self.block_buffer.is_pop_done().await;
+            self.block_end = self.block_receiver.is_empty();
         }
         let end = self.block_end && self.row_buffer.is_empty();
         Ok((block, end))
     }
 
     pub async fn detach(&self) {
-        self.block_buffer.stop_pop().await;
+        self.block_receiver.close();
     }
 }

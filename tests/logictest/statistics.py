@@ -3,6 +3,7 @@
 
 
 class LogicTestStatistics:
+
     def __init__(self) -> None:
         self._failed_map = dict()
         self._perf_map = dict()
@@ -19,12 +20,10 @@ class LogicTestStatistics:
             self._perf_map[runner] = dict()
         if suite_name not in self._perf_map[runner]:
             self._perf_map[runner][suite_name] = list()
-        self._perf_map[runner][suite_name].append(
-            {
-                "statement": statement,
-                "time_cost": time_cost,
-            }
-        )
+        self._perf_map[runner][suite_name].append({
+            "statement": statement,
+            "time_cost": time_cost,
+        })
 
     def __str__(self):
         failure_output = "Following failed statements:\n"
@@ -57,8 +56,7 @@ class LogicTestStatistics:
             summary_output += (
                 f"Runner {runner} test {suite_count} suites, "
                 f"total time cost {suite_cost} seconds, "
-                f"avg time cost {round(suite_cost/suite_count*1000, 2)} ms\n"
-            )
+                f"avg time cost {round(suite_cost/suite_count*1000, 2)} ms\n")
             summary_output += (
                 f"Runner {runner} test {statement_count} statements, "
                 f"total time cost {statement_cost} seconds, "

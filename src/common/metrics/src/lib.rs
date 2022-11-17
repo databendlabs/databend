@@ -33,3 +33,5 @@ pub use recorder::label_decrement_gauge_with_val_and_labels;
 pub use recorder::label_histogram_with_val;
 pub use recorder::label_increment_gauge_with_val_and_labels;
 pub use recorder::try_handle;
+pub use recorder::LABEL_KEY_CLUSTER;
+pub use recorder::LABEL_KEY_TENANT;

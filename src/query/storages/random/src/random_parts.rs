@@ -37,6 +37,10 @@ impl PartInfo for RandomPartInfo {
             Some(other) => self == other,
         }
     }
+
+    fn hash(&self) -> u64 {
+        0
+    }
 }
 
 impl RandomPartInfo {
