@@ -124,7 +124,7 @@ impl FuseTable {
                     // located at `block_meta.location`, of segment indexed by `seg_idx`, with a new block `r`
                     deletion_collector
                         .replace_with(
-                            seg_idx,
+                            seg_idx.0,
                             block_meta.location.clone(),
                             block_meta.cluster_stats.clone(),
                             r,

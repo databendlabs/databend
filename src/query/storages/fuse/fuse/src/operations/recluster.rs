@@ -82,7 +82,7 @@ impl FuseTable {
                     blocks_map
                         .entry(stats.level)
                         .or_default()
-                        .push((*idx, b.clone()));
+                        .push((idx.0, b.clone()));
                 }
             }
         });

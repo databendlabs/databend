@@ -42,8 +42,8 @@ use crate::pruning::range_pruner;
 use crate::pruning::range_pruner::RangePruner;
 use crate::pruning::topn_pruner;
 
-type SegmentIndex = usize;
-type SegmentPruningJoinHandles = Vec<JoinHandle<Result<Vec<(SegmentIndex, Arc<BlockMeta>)>>>>;
+pub type BlockIndex = (usize, usize);
+type SegmentPruningJoinHandles = Vec<JoinHandle<Result<Vec<(BlockIndex, Arc<BlockMeta>)>>>>;
 
 struct PruningContext {
     limiter: LimiterPruner,
@@ -63,7 +63,7 @@ impl BlockPruner {
         schema: DataSchemaRef,
         push_down: &Option<PushDownInfo>,
         segment_locs: Vec<Location>,
-    ) -> Result<Vec<(SegmentIndex, Arc<BlockMeta>)>> {
+    ) -> Result<Vec<(BlockIndex, Arc<BlockMeta>)>> {
         if segment_locs.is_empty() {
             return Ok(vec![]);
         };
@@ -170,9 +170,9 @@ impl BlockPruner {
         permit: OwnedSemaphorePermit,
         dal: Operator,
         pruning_ctx: Arc<PruningContext>,
-        segment_idx: SegmentIndex,
+        segment_idx: usize,
         segment_location: Location,
-    ) -> Result<Vec<(SegmentIndex, Arc<BlockMeta>)>> {
+    ) -> Result<Vec<(BlockIndex, Arc<BlockMeta>)>> {
         let segment_reader = MetaReaders::segment_info_reader(dal.clone());
 
         let (path, ver) = segment_location;
@@ -203,9 +203,9 @@ impl BlockPruner {
     async fn prune_blocks(
         pruning_ctx: &Arc<PruningContext>,
         filter_pruner: &Arc<dyn Pruner + Send + Sync>,
-        segment_idx: SegmentIndex,
+        segment_idx: usize,
         segment_info: &SegmentInfo,
-    ) -> Result<Vec<(SegmentIndex, Arc<BlockMeta>)>> {
+    ) -> Result<Vec<(BlockIndex, Arc<BlockMeta>)>> {
         let mut blocks = segment_info.blocks.iter().enumerate();
         let pruning_runtime = &pruning_ctx.rt;
         let semaphore = &pruning_ctx.semaphore;
@@ -263,7 +263,7 @@ impl BlockPruner {
             let (block_idx, keep) = item;
             if keep {
                 let block = segment_info.blocks[block_idx].clone();
-                result.push((segment_idx, block))
+                result.push(((segment_idx, block_idx), block))
             }
         }
         Ok(result)
@@ -271,11 +271,11 @@ impl BlockPruner {
 
     fn prune_blocks_sync(
         pruning_ctx: &Arc<PruningContext>,
-        segment_idx: SegmentIndex,
+        segment_idx: usize,
         segment_info: &SegmentInfo,
-    ) -> Vec<(SegmentIndex, Arc<BlockMeta>)> {
+    ) -> Vec<(BlockIndex, Arc<BlockMeta>)> {
         let mut result = Vec::with_capacity(segment_info.blocks.len());
-        for block_meta in &segment_info.blocks {
+        for (block_idx, block_meta) in segment_info.blocks.iter().enumerate() {
             // check limit speculatively
             if pruning_ctx.limiter.exceeded() {
                 break;
@@ -286,7 +286,7 @@ impl BlockPruner {
                 .should_keep(&block_meta.col_stats, row_count)
                 && pruning_ctx.limiter.within_limit(row_count)
             {
-                result.push((segment_idx, block_meta.clone()))
+                result.push(((segment_idx, block_idx), block_meta.clone()))
             }
         }
         result
@@ -296,13 +296,13 @@ impl BlockPruner {
     #[tracing::instrument(level = "debug", skip_all)]
     async fn join_flatten_result(
         join_handlers: SegmentPruningJoinHandles,
-    ) -> Result<Vec<(SegmentIndex, Arc<BlockMeta>)>> {
+    ) -> Result<Vec<(BlockIndex, Arc<BlockMeta>)>> {
         let joint = future::try_join_all(join_handlers)
             .instrument(tracing::debug_span!("join_all_filter_segment"))
             .await
             .map_err(|e| ErrorCode::StorageOther(format!("block pruning failure, {}", e)))?;
 
-        let metas: Result<Vec<(SegmentIndex, Arc<BlockMeta>)>> =
+        let metas: Result<Vec<(BlockIndex, Arc<BlockMeta>)>> =
             tracing::debug_span!("collect_result").in_scope(|| {
                 // flatten the collected block metas
                 let metas = joint
