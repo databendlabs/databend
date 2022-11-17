@@ -93,7 +93,7 @@ impl Metadata {
         data_type: DataTypeImpl,
         table_index: Option<IndexType>,
         path_indices: Option<Vec<IndexType>>,
-        leaf_id: Option<IndexType>,
+        leaf_index: Option<IndexType>,
     ) -> IndexType {
         let column_index = self.columns.len();
         let column_entry = ColumnEntry::new(
@@ -102,7 +102,7 @@ impl Metadata {
             column_index,
             table_index,
             path_indices,
-            leaf_id,
+            leaf_index,
         );
         self.columns.push(column_entry);
         column_index
@@ -129,8 +129,8 @@ impl Metadata {
             fields.push_back((vec![i], field.clone()));
         }
 
-        // build leaf id in DFS order for primitive columns.
-        let mut leaf_id = 0;
+        // build leaf index in DFS order for primitive columns.
+        let mut leaf_index = 0;
         while !fields.is_empty() {
             let (indices, field) = fields.pop_front().unwrap();
             let path_indices = if indices.len() > 1 {
@@ -145,9 +145,9 @@ impl Metadata {
                     field.data_type().clone(),
                     Some(table_index),
                     path_indices,
-                    Some(leaf_id),
+                    Some(leaf_index),
                 );
-                leaf_id += 1;
+                leaf_index += 1;
                 continue;
             }
             self.add_column(
@@ -287,9 +287,9 @@ pub struct ColumnEntry {
     table_index: Option<IndexType>,
     /// Path indices for inner column of struct data type.
     path_indices: Option<Vec<IndexType>>,
-    /// Leaf id is the column index of Parquet schema, constructed in DFS order.
-    /// None if the data type of this column is struct.
-    leaf_id: Option<IndexType>,
+    /// Leaf index is the primitive column index in Parquet, constructed in DFS order.
+    /// None if the data type of column is struct.
+    leaf_index: Option<IndexType>,
 }
 
 impl ColumnEntry {
@@ -299,7 +299,7 @@ impl ColumnEntry {
         column_index: IndexType,
         table_index: Option<IndexType>,
         path_indices: Option<Vec<IndexType>>,
-        leaf_id: Option<IndexType>,
+        leaf_index: Option<IndexType>,
     ) -> Self {
         ColumnEntry {
             column_index,
@@ -307,7 +307,7 @@ impl ColumnEntry {
             data_type,
             table_index,
             path_indices,
-            leaf_id,
+            leaf_index,
         }
     }
 
@@ -341,9 +341,9 @@ impl ColumnEntry {
         self.path_indices.is_some()
     }
 
-    /// Get the leaf id of this column entry.
-    pub fn leaf_id(&self) -> Option<IndexType> {
-        self.leaf_id
+    /// Get the leaf index of this column entry.
+    pub fn leaf_index(&self) -> Option<IndexType> {
+        self.leaf_index
     }
 }
 
