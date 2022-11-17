@@ -40,6 +40,7 @@ use common_meta_app::schema::TableInfo;
 use common_sharing::create_share_table_operator;
 use common_sql::ExpressionParser;
 use common_storage::init_operator;
+use common_storage::CacheOperator;
 use common_storage::DataOperator;
 use common_storage::ShareTableConfig;
 use common_storage::StorageMetrics;
@@ -53,6 +54,8 @@ use common_storages_table_meta::table::table_storage_prefix;
 use common_storages_table_meta::table::OPT_KEY_DATABASE_ID;
 use common_storages_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
 use common_storages_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
+use opendal::layers::ContentCacheLayer;
+use opendal::layers::ContentCacheStrategy;
 use opendal::Operator;
 use uuid::Uuid;
 
@@ -111,7 +114,12 @@ impl FuseTable {
             }
         };
         let data_metrics = Arc::new(StorageMetrics::default());
-        operator = operator.layer(StorageMetricsLayer::new(data_metrics.clone()));
+        operator = operator
+            .layer(StorageMetricsLayer::new(data_metrics.clone()))
+            .layer(ContentCacheLayer::new(
+                CacheOperator::instance().inner(),
+                ContentCacheStrategy::Fixed(1024 * 1024),
+            ));
 
         Ok(Box::new(FuseTable {
             table_info,

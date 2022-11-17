@@ -465,6 +465,7 @@ impl HiveCatalogConfig {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct CacheConfig {
     #[serde(rename = "type")]
     pub cache_type: String,

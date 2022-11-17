@@ -27,6 +27,7 @@ use opendal::ops::OpWrite;
 use opendal::Accessor;
 use opendal::BytesReader;
 use opendal::Layer;
+use opendal::ObjectReader;
 use parking_lot::RwLock;
 
 /// StorageMetrics represents the metrics of storage (all bytes metrics are compressed size).
@@ -180,10 +181,12 @@ impl Accessor for StorageMetricsAccessor {
         Some(self.inner.clone())
     }
 
-    async fn read(&self, path: &str, args: OpRead) -> Result<BytesReader> {
+    async fn read(&self, path: &str, args: OpRead) -> Result<ObjectReader> {
         let metric = self.metrics.clone();
 
         self.inner.read(path, args).await.map(|r| {
+            let (meta, r) = r.into_parts();
+
             let mut last_pending = None;
             let r = observe_read(r, move |e| {
                 let start = match last_pending {
@@ -202,7 +205,7 @@ impl Accessor for StorageMetricsAccessor {
                 metric.inc_read_bytes_cost(start.elapsed().as_millis() as u64);
             });
 
-            Box::new(r) as BytesReader
+            ObjectReader::new(Box::new(r)).with_meta(meta)
         })
     }
 

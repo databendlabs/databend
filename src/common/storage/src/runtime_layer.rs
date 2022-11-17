@@ -27,6 +27,7 @@ use opendal::Accessor;
 use opendal::BytesReader;
 use opendal::Layer;
 use opendal::ObjectMetadata;
+use opendal::ObjectReader;
 use opendal::ObjectStreamer;
 
 /// # TODO
@@ -78,7 +79,7 @@ impl Accessor for RuntimeAccessor {
             .expect("join must success")
     }
 
-    async fn read(&self, path: &str, args: OpRead) -> Result<BytesReader> {
+    async fn read(&self, path: &str, args: OpRead) -> Result<ObjectReader> {
         let op = self.inner.clone();
         let path = path.to_string();
         self.runtime

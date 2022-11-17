@@ -32,7 +32,6 @@ use opendal::http_util::parse_last_modified;
 use opendal::http_util::AsyncBody;
 use opendal::http_util::ErrorResponse;
 use opendal::http_util::HttpClient;
-use opendal::ops::BytesRange;
 use opendal::ops::OpRead;
 use opendal::ops::OpStat;
 use opendal::ops::Operation;
@@ -40,10 +39,10 @@ use opendal::ops::PresignedRequest;
 use opendal::Accessor;
 use opendal::AccessorCapability;
 use opendal::AccessorMetadata;
-use opendal::BytesReader;
 use opendal::Layer;
 use opendal::ObjectMetadata;
 use opendal::ObjectMode;
+use opendal::ObjectReader;
 use opendal::Operator;
 use opendal::Scheme;
 use reqwest::header::RANGE;
@@ -132,24 +131,28 @@ impl Accessor for SharedAccessor {
         meta
     }
 
-    async fn read(&self, path: &str, args: OpRead) -> Result<BytesReader> {
+    async fn read(&self, path: &str, args: OpRead) -> Result<ObjectReader> {
         let req: PresignedRequest = self
             .signer
             .fetch(path, Operation::Read)
             .await
             .map_err(|err| Error::new(ErrorKind::Other, err))?;
 
+        let br = args.range();
         let mut req: Request<AsyncBody> = req.into();
         req.headers_mut().insert(
             RANGE,
-            BytesRange::new(args.offset(), args.size())
-                .to_string()
+            br.to_header()
                 .parse()
                 .map_err(|err| Error::new(ErrorKind::Other, err))?,
         );
 
         let resp = self.client.send_async(req).await?;
-        Ok(resp.into_body().reader())
+        let content_length = parse_content_length(resp.headers())
+            .unwrap()
+            .expect("content_length must be valid");
+        Ok(ObjectReader::new(resp.into_body().reader())
+            .with_meta(ObjectMetadata::new(ObjectMode::FILE).with_content_length(content_length)))
     }
 
     async fn stat(&self, path: &str, _args: OpStat) -> Result<ObjectMetadata> {
