@@ -22,6 +22,7 @@ use common_exception::Result;
 use common_storages_table_meta::caches::CacheManager;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::Location;
+use common_storages_table_meta::meta::SegmentDesc;
 use common_storages_table_meta::meta::SegmentInfo;
 use common_storages_table_meta::meta::Statistics;
 use common_storages_table_meta::meta::TableSnapshot;
@@ -86,7 +87,9 @@ impl BaseMutator {
             });
     }
 
-    pub async fn generate_segments(&self) -> Result<(Vec<Location>, Statistics, AbortOperation)> {
+    pub async fn generate_segments(
+        &self,
+    ) -> Result<(Vec<SegmentDesc>, Statistics, AbortOperation)> {
         let mut abort_operation = AbortOperation::default();
         let segments = self.base_snapshot.segments.clone();
         let mut segments_editor =
@@ -104,7 +107,7 @@ impl BaseMutator {
         // apply mutations
         for (seg_idx, replacements) in self.mutations.clone() {
             let segment = {
-                let (path, version) = &segments[seg_idx];
+                let ((path, version), _) = &segments[seg_idx];
                 segment_reader.read(&path, None, *version).await?
             };
 
@@ -151,10 +154,11 @@ impl BaseMutator {
             } else {
                 // re-calculate the segment statistics
                 let new_summary = reduce_block_metas(&new_segment.blocks, self.thresholds)?;
+                let num_blocks = new_summary.block_count as u64;
                 new_segment.summary = new_summary;
                 // write down new segment
                 let new_segment_location = seg_writer.write_segment(new_segment).await?;
-                segments_editor.insert(seg_idx, new_segment_location.clone());
+                segments_editor.insert(seg_idx, (new_segment_location.clone(), Some(num_blocks)));
                 abort_operation.add_segment(new_segment_location.0);
             }
         }
@@ -163,7 +167,7 @@ impl BaseMutator {
         let new_segments = segments_editor.into_values().collect::<Vec<_>>();
 
         let mut new_segment_summaries = Vec::with_capacity(new_segments.len());
-        for (loc, ver) in &new_segments {
+        for (((loc, ver), _)) in &new_segments {
             let seg = segment_reader.read(loc, None, *ver).await?;
             new_segment_summaries.push(seg.summary.clone())
         }

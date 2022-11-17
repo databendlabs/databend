@@ -36,6 +36,7 @@ use common_meta_types::MatchSeq;
 use common_storages_table_meta::caches::CacheManager;
 use common_storages_table_meta::meta::ClusterKey;
 use common_storages_table_meta::meta::Location;
+use common_storages_table_meta::meta::SegmentDesc;
 use common_storages_table_meta::meta::SegmentInfo;
 use common_storages_table_meta::meta::Statistics;
 use common_storages_table_meta::meta::TableSnapshot;
@@ -233,7 +234,7 @@ impl FuseTable {
         schema: &DataSchema,
         previous: Option<Arc<TableSnapshot>>,
         prev_version: u64,
-        mut new_segments: Vec<Location>,
+        mut new_segments: Vec<SegmentDesc>,
         statistics: Statistics,
         cluster_key_meta: Option<ClusterKey>,
     ) -> Result<TableSnapshot> {
@@ -335,23 +336,15 @@ impl FuseTable {
 
     pub fn merge_append_operations(
         append_log_entries: &[AppendOperationLogEntry],
-    ) -> Result<(Vec<String>, Statistics)> {
-        let iter = append_log_entries
+    ) -> Result<(Vec<(String, u64)>, Statistics)> {
+        let mut segments = append_log_entries
             .iter()
             .map(|entry| (&entry.segment_location, entry.segment_info.as_ref()));
-        FuseTable::merge_segments(iter)
-    }
-
-    pub fn merge_segments<'a, T>(
-        mut segments: impl Iterator<Item = (&'a T, &'a SegmentInfo)>,
-    ) -> Result<(Vec<T>, Statistics)>
-    where T: Clone + 'a {
-        let len_hint = segments
-            .size_hint()
-            .1
-            .unwrap_or_else(|| segments.size_hint().0);
         let (s, seg_locs) = segments.try_fold(
-            (Statistics::default(), Vec::with_capacity(len_hint)),
+            (
+                Statistics::default(),
+                Vec::with_capacity(append_log_entries.len()),
+            ),
             |(mut acc, mut seg_acc), (location, segment_info)| {
                 let stats = &segment_info.summary;
                 acc.row_count += stats.row_count;
@@ -364,13 +357,42 @@ impl FuseTable {
                 } else {
                     statistics::reduce_block_statistics(&[&acc.col_stats, &stats.col_stats])?
                 };
-                seg_acc.push(location.clone());
+                seg_acc.push((location.clone(), stats.block_count));
                 Ok::<_, ErrorCode>((acc, seg_acc))
             },
         )?;
-
         Ok((seg_locs, s))
     }
+
+    //  pub fn merge_segments<'a, T>(
+    //      mut segments: impl Iterator<Item = (&'a T, &'a SegmentInfo)>,
+    //  ) -> Result<(Vec<T>, Statistics)>
+    //  where T: Clone + 'a {
+    //      let len_hint = segments
+    //          .size_hint()
+    //          .1
+    //          .unwrap_or_else(|| segments.size_hint().0);
+    //      let (s, seg_locs) = segments.try_fold(
+    //          (Statistics::default(), Vec::with_capacity(len_hint)),
+    //          |(mut acc, mut seg_acc), (location, segment_info)| {
+    //              let stats = &segment_info.summary;
+    //              acc.row_count += stats.row_count;
+    //              acc.block_count += stats.block_count;
+    //              acc.uncompressed_byte_size += stats.uncompressed_byte_size;
+    //              acc.compressed_byte_size += stats.compressed_byte_size;
+    //              acc.index_size = stats.index_size;
+    //              acc.col_stats = if acc.col_stats.is_empty() {
+    //                  stats.col_stats.clone()
+    //              } else {
+    //                  statistics::reduce_block_statistics(&[&acc.col_stats, &stats.col_stats])?
+    //              };
+    //              seg_acc.push((location.clone(), stats.block_count));
+    //              Ok::<_, ErrorCode>((acc, seg_acc))
+    //          },
+    //      )?;
+
+    //      Ok((seg_locs, s))
+    //  }
 
     // Left a hint file which indicates the location of the latest snapshot
     async fn write_last_snapshot_hint(
@@ -415,7 +437,7 @@ impl FuseTable {
         &self,
         ctx: &Arc<dyn TableContext>,
         base_snapshot: Arc<TableSnapshot>,
-        base_segments: Vec<Location>,
+        base_segments: Vec<SegmentDesc>,
         base_summary: Statistics,
         abort_operation: AbortOperation,
     ) -> Result<()> {
@@ -428,7 +450,7 @@ impl FuseTable {
         let mut latest_table_ref: Arc<dyn Table>;
 
         // potentially concurrently appended segments, init it to empty
-        let mut concurrently_appended_segment_locations: &[Location] = &[];
+        let mut concurrently_appended_segment_locations: &[SegmentDesc] = &[];
 
         while retries < MAX_RETRIES {
             let mut snapshot_tobe_committed =
@@ -515,10 +537,10 @@ impl FuseTable {
     async fn merge_with_base(
         ctx: Arc<dyn TableContext>,
         operator: Operator,
-        base_segments: &[Location],
+        base_segments: &[SegmentDesc],
         base_summary: &Statistics,
-        concurrently_appended_segment_locations: &[Location],
-    ) -> Result<(Vec<Location>, Statistics)> {
+        concurrently_appended_segment_locations: &[SegmentDesc],
+    ) -> Result<(Vec<SegmentDesc>, Statistics)> {
         if concurrently_appended_segment_locations.is_empty() {
             Ok((base_segments.to_owned(), base_summary.clone()))
         } else {

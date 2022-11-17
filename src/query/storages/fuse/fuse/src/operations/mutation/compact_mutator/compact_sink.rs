@@ -23,6 +23,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_storages_table_meta::meta::Location;
+use common_storages_table_meta::meta::SegmentDesc;
 use common_storages_table_meta::meta::SegmentInfo;
 use common_storages_table_meta::meta::Statistics;
 use common_storages_table_meta::meta::TableSnapshot;
@@ -52,7 +53,7 @@ const MAX_RETRIES: u64 = 10;
 enum State {
     None,
     GatherSegment,
-    GenerateSnapshot(Vec<Location>),
+    GenerateSnapshot(Vec<SegmentDesc>),
     RefreshTable,
     DetectConfilct(Arc<TableSnapshot>),
     TryCommit(TableSnapshot),
@@ -71,7 +72,7 @@ pub struct CompactSink {
     table: Arc<dyn Table>,
     base_snapshot: Arc<TableSnapshot>,
     // locations all the merged segments.
-    merged_segments: Vec<Location>,
+    merged_segments: Vec<SegmentDesc>,
     // summarised statistics of all the merged segments.
     merged_statistics: Statistics,
     // The order of the base segments in snapshot.
@@ -191,7 +192,12 @@ impl Processor for CompactSink {
                 for v in metas.iter() {
                     let meta = CompactSinkMeta::from_meta(v)?;
                     self.abort_operation.merge(&meta.abort_operation);
-                    merged_segments.push((meta.segment_location.clone(), SegmentInfo::VERSION));
+                    // TODO fixme
+                    let num_blocks = None;
+                    merged_segments.push((
+                        (meta.segment_location.clone(), SegmentInfo::VERSION),
+                        num_blocks,
+                    ));
                     self.indices.push(meta.order);
                     merge_statistics_mut(&mut self.merged_statistics, &meta.segment_info.summary)?;
                 }

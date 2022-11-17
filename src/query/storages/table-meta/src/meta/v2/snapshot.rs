@@ -23,11 +23,14 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use crate::meta::common::FormatVersion;
+use crate::meta::v1;
 use crate::meta::ClusterKey;
 use crate::meta::Location;
 use crate::meta::SnapshotId;
 use crate::meta::Statistics;
 use crate::meta::Versioned;
+
+pub type SegmentDesc = (Location, Option<u64>);
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct TableSnapshot {
@@ -54,7 +57,7 @@ pub struct TableSnapshot {
     ///
     /// We rely on background merge tasks to keep merging segments, so that
     /// this the size of this vector could be kept reasonable
-    pub segments: Vec<(Location, Option<u64>)>,
+    pub segments: Vec<SegmentDesc>,
 
     // The metadata of the cluster keys.
     pub cluster_key_meta: Option<ClusterKey>,
@@ -67,7 +70,7 @@ impl TableSnapshot {
         prev_snapshot_id: Option<(SnapshotId, FormatVersion)>,
         schema: DataSchema,
         summary: Statistics,
-        segments: Vec<(Location, u64)>,
+        segments: Vec<SegmentDesc>,
         cluster_key_meta: Option<ClusterKey>,
     ) -> Self {
         let now = Utc::now();
@@ -85,12 +88,13 @@ impl TableSnapshot {
             prev_snapshot_id,
             schema,
             summary,
-            segments: segments.into_iter().map(|(l, s)| (l, Some(s))).collect(),
+            segments,
             cluster_key_meta,
         }
     }
 
     pub fn from_previous(previous: &TableSnapshot) -> Self {
+        // TODO revert back
         let id = Uuid::new_v4();
         let mut clone = previous.clone();
         let now = Utc::now();
@@ -123,6 +127,21 @@ impl From<v0::TableSnapshot> for TableSnapshot {
             schema: s.schema,
             summary: s.summary,
             segments: s.segments.into_iter().map(|l| ((l, 0), None)).collect(),
+            cluster_key_meta: None,
+        }
+    }
+}
+
+impl From<v1::TableSnapshot> for TableSnapshot {
+    fn from(s: v1::TableSnapshot) -> Self {
+        Self {
+            format_version: TableSnapshot::VERSION,
+            snapshot_id: s.snapshot_id,
+            timestamp: s.timestamp,
+            prev_snapshot_id: s.prev_snapshot_id,
+            schema: s.schema,
+            summary: s.summary,
+            segments: s.segments.into_iter().map(|l| (l, None)).collect(),
             cluster_key_meta: None,
         }
     }

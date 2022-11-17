@@ -22,6 +22,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_storages_table_meta::caches::CacheManager;
 use common_storages_table_meta::meta::Location;
+use common_storages_table_meta::meta::SegmentDesc;
 use common_storages_table_meta::meta::SnapshotId;
 use tracing::info;
 use tracing::warn;
@@ -244,7 +245,7 @@ impl FuseTable {
     async fn get_block_locations(
         &self,
         ctx: Arc<dyn TableContext>,
-        segment_locations: &[Location],
+        segment_locations: &[SegmentDesc],
     ) -> Result<LocationTuple> {
         let mut blocks = HashSet::new();
         let mut blooms = HashSet::new();
@@ -259,7 +260,7 @@ impl FuseTable {
                     // concurrent gc: someone else has already collected this segment, ignore it
                     warn!(
                         "concurrent gc: segment of location {} already collected. table: {}, ident {}",
-                        location.0, self.table_info.desc, self.table_info.ident,
+                        location.0.0, self.table_info.desc, self.table_info.ident,
                     );
                     continue;
                 }

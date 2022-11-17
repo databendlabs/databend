@@ -21,10 +21,11 @@ use std::sync::Arc;
 use common_catalog::plan::PartInfo;
 use common_catalog::plan::PartInfoPtr;
 use common_storages_table_meta::meta::Location;
+use common_storages_table_meta::meta::SegmentDesc;
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct FuseLazyPartInfo {
-    pub segment_location: Location,
+    pub segment_location: SegmentDesc,
 }
 
 #[typetag::serde(name = "fuse_lazy")]
@@ -48,7 +49,7 @@ impl PartInfo for FuseLazyPartInfo {
 }
 
 impl FuseLazyPartInfo {
-    pub fn create(segment_location: Location) -> PartInfoPtr {
+    pub fn create(segment_location: SegmentDesc) -> PartInfoPtr {
         Arc::new(Box::new(FuseLazyPartInfo { segment_location }))
     }
 }

@@ -27,6 +27,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::Location;
+use common_storages_table_meta::meta::SegmentDesc;
 use common_storages_table_meta::meta::SegmentInfo;
 use futures::future;
 use opendal::Operator;
@@ -62,7 +63,7 @@ impl BlockPruner {
         dal: Operator,
         schema: DataSchemaRef,
         push_down: &Option<PushDownInfo>,
-        segment_locs: Vec<Location>,
+        segment_locs: Vec<SegmentDesc>,
     ) -> Result<Vec<(SegmentIndex, Arc<BlockMeta>)>> {
         if segment_locs.is_empty() {
             return Ok(vec![]);
@@ -171,11 +172,11 @@ impl BlockPruner {
         dal: Operator,
         pruning_ctx: Arc<PruningContext>,
         segment_idx: SegmentIndex,
-        segment_location: Location,
+        segment_location: SegmentDesc,
     ) -> Result<Vec<(SegmentIndex, Arc<BlockMeta>)>> {
         let segment_reader = MetaReaders::segment_info_reader(dal.clone());
 
-        let (path, ver) = segment_location;
+        let ((path, ver), _) = segment_location;
         let segment_info = segment_reader.read(path, None, ver).await?;
 
         // IO job of reading segment done, release the permit, allows more concurrent pruners

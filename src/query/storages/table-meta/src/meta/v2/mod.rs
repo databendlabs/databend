@@ -15,4 +15,5 @@
 
 mod snapshot;
 
+pub use snapshot::SegmentDesc;
 pub use snapshot::TableSnapshot;

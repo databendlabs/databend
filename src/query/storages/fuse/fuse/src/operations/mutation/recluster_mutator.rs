@@ -230,7 +230,7 @@ impl TableMutator for ReclusterMutator {
         segments.extend(
             merged_segments
                 .into_iter()
-                .map(|loc| (loc, SegmentInfo::VERSION)),
+                .map(|(path, num_blocks)| ((path, SegmentInfo::VERSION), Some(num_blocks))),
         );
         summary = merge_statistics(&summary, &merged_summary)?;
 

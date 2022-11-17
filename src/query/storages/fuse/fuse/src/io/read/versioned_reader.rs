@@ -34,7 +34,8 @@ impl VersionedReader<TableSnapshot> for SnapshotVersion {
     async fn read<R>(&self, reader: R) -> Result<TableSnapshot>
     where R: AsyncRead + Unpin + Send {
         let r = match self {
-            SnapshotVersion::V1(v) => load_by_version(reader, v).await?,
+            SnapshotVersion::V2(v) => load_by_version(reader, v).await?,
+            SnapshotVersion::V1(v) => load_by_version(reader, v).await?.into(),
             SnapshotVersion::V0(v) => load_by_version(reader, v).await?.into(),
         };
         Ok(r)

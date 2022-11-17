@@ -20,6 +20,7 @@ use common_datablocks::DataBlock;
 use common_exception::Result;
 use common_storages_table_meta::meta::ClusterStatistics;
 use common_storages_table_meta::meta::Location;
+use common_storages_table_meta::meta::SegmentDesc;
 use common_storages_table_meta::meta::Statistics;
 use common_storages_table_meta::meta::TableSnapshot;
 use opendal::Operator;
@@ -62,7 +63,9 @@ impl DeletionMutator {
         self.base_mutator.base_snapshot
     }
 
-    pub async fn generate_segments(&self) -> Result<(Vec<Location>, Statistics, AbortOperation)> {
+    pub async fn generate_segments(
+        &self,
+    ) -> Result<(Vec<SegmentDesc>, Statistics, AbortOperation)> {
         self.base_mutator.generate_segments().await
     }
 

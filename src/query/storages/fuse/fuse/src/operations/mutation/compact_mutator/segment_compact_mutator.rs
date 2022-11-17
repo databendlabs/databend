@@ -19,6 +19,7 @@ use common_catalog::table::Table;
 use common_exception::Result;
 use common_storages_table_meta::caches::CacheManager;
 use common_storages_table_meta::meta::Location;
+use common_storages_table_meta::meta::SegmentDesc;
 use common_storages_table_meta::meta::SegmentInfo;
 use common_storages_table_meta::meta::Statistics;
 use metrics::gauge;
@@ -39,7 +40,7 @@ pub struct SegmentCompactionState {
     // summarised statistics of all the accumulated segments(compacted, and unchanged)
     pub statistics: Statistics,
     // locations of all the segments(compacted, and unchanged)
-    pub segments_locations: Vec<Location>,
+    pub segments_locations: Vec<SegmentDesc>,
     // paths of all the newly created segments (which are compacted), need this to rollback the compaction
     pub new_segment_paths: Vec<String>,
     // number of fragmented segments compacted
@@ -160,7 +161,7 @@ pub struct SegmentCompactor<'a> {
     // within R, smaller one is preferred
     threshold: u64,
     // fragmented segment collected so far, it will be reset to empty if compaction occurs
-    fragmented_segments: Vec<(&'a SegmentInfo, Location)>,
+    fragmented_segments: Vec<(&'a SegmentInfo, SegmentDesc)>,
     // state which keep the number of blocks of all the fragmented segment collected so far,
     // it will be reset to 0 if compaction occurs
     accumulated_num_blocks: u64,
@@ -183,7 +184,7 @@ impl<'a> SegmentCompactor<'a> {
     pub async fn compact(
         mut self,
         segments: &'a [Arc<SegmentInfo>],
-        locations: &'a [Location],
+        locations: &'a [SegmentDesc],
         limit: usize,
     ) -> Result<SegmentCompactionState> {
         // 1. feed segments into accumulator, taking limit into account
@@ -231,7 +232,11 @@ impl<'a> SegmentCompactor<'a> {
     }
 
     // accumulate one segment
-    pub async fn add(&mut self, segment_info: &'a SegmentInfo, location: Location) -> Result<()> {
+    pub async fn add(
+        &mut self,
+        segment_info: &'a SegmentInfo,
+        location: SegmentDesc,
+    ) -> Result<()> {
         let num_blocks_current_segment = segment_info.blocks.len() as u64;
 
         if num_blocks_current_segment == 0 {
@@ -301,11 +306,14 @@ impl<'a> SegmentCompactor<'a> {
 
         // 2.2 write down new segment
         let new_segment = SegmentInfo::new(blocks, new_statistics);
+        let num_blocks = new_segment.blocks.len();
         let location = self.segment_writer.write_segment(new_segment).await?;
         self.compacted_state
             .new_segment_paths
             .push(location.0.clone());
-        self.compacted_state.segments_locations.push(location);
+        self.compacted_state
+            .segments_locations
+            .push((location, Some(num_blocks as u64)));
         Ok(())
     }
 

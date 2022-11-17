@@ -20,6 +20,7 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_storages_table_meta::meta::Location;
+use common_storages_table_meta::meta::SegmentDesc;
 use common_storages_table_meta::meta::SegmentInfo;
 use futures_util::future;
 use itertools::Itertools;
@@ -55,7 +56,7 @@ impl SegmentsIO {
     #[tracing::instrument(level = "debug", skip_all)]
     pub async fn read_segments(
         &self,
-        segment_locations: &[Location],
+        segment_locations: &[SegmentDesc],
     ) -> Result<Vec<Result<Arc<SegmentInfo>>>> {
         if segment_locations.is_empty() {
             return Ok(vec![]);
@@ -68,7 +69,7 @@ impl SegmentsIO {
         // 1.1 combine all the tasks.
         let mut iter = segment_locations.iter().enumerate();
         let tasks = std::iter::from_fn(move || {
-            if let Some((idx, location)) = iter.next() {
+            if let Some((idx, (location, _))) = iter.next() {
                 let location = location.clone();
                 Some(
                     Self::read_segment(self.operator.clone(), location, idx)

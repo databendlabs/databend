@@ -28,6 +28,7 @@ use common_exception::Result;
 use common_meta_app::schema::TableInfo;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::Location;
+use common_storages_table_meta::meta::SegmentDesc;
 use common_storages_table_meta::meta::TableSnapshot;
 use opendal::Operator;
 use tracing::debug;
@@ -99,7 +100,7 @@ impl FuseTable {
         dal: Operator,
         push_downs: Option<PushDownInfo>,
         table_info: TableInfo,
-        segments_location: Vec<Location>,
+        segments_location: Vec<SegmentDesc>,
         summary: usize,
     ) -> Result<(PartStatistics, Partitions)> {
         let start = Instant::now();

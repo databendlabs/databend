@@ -18,6 +18,7 @@ use std::vec;
 use common_catalog::plan::Partitions;
 use common_exception::Result;
 use common_storages_table_meta::meta::Location;
+use common_storages_table_meta::meta::SegmentDesc;
 use common_storages_table_meta::meta::SegmentInfo;
 use common_storages_table_meta::meta::Statistics;
 use opendal::Operator;
@@ -42,7 +43,7 @@ pub struct BlockCompactMutator {
     // The order of the unchanged segments in snapshot.
     pub unchanged_segment_indices: Vec<usize>,
     // locations all the unchanged segments.
-    pub unchanged_segment_locations: Vec<Location>,
+    pub unchanged_segment_locations: Vec<SegmentDesc>,
     // summarised statistics of all the unchanged segments
     pub unchanged_segment_statistics: Statistics,
 }

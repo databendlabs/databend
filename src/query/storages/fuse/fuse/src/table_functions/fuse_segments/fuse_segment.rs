@@ -18,6 +18,7 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_storages_table_meta::meta::Location;
+use common_storages_table_meta::meta::SegmentDesc;
 use futures_util::TryStreamExt;
 
 use crate::io::MetaReaders;
@@ -68,7 +69,7 @@ impl<'a> FuseSegment<'a> {
         Ok(DataBlock::empty_with_schema(Self::schema()))
     }
 
-    async fn to_block(&self, segment_locations: &[Location]) -> Result<DataBlock> {
+    async fn to_block(&self, segment_locations: &[SegmentDesc]) -> Result<DataBlock> {
         let len = segment_locations.len();
         let mut format_versions: Vec<u64> = Vec::with_capacity(len);
         let mut block_count: Vec<u64> = Vec::with_capacity(len);
@@ -81,12 +82,12 @@ impl<'a> FuseSegment<'a> {
         let segments = segments_io.read_segments(segment_locations).await?;
         for (idx, segment) in segments.iter().enumerate() {
             let segment = segment.clone()?;
-            format_versions.push(segment_locations[idx].1);
+            format_versions.push(segment_locations[idx].0.1);
             block_count.push(segment.summary.block_count);
             row_count.push(segment.summary.row_count);
             compressed.push(segment.summary.compressed_byte_size);
             uncompressed.push(segment.summary.uncompressed_byte_size);
-            file_location.push(segment_locations[idx].0.clone().into_bytes());
+            file_location.push(segment_locations[idx].0.0.clone().into_bytes());
         }
 
         Ok(DataBlock::create(FuseSegment::schema(), vec![

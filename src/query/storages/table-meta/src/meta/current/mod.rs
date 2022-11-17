@@ -17,6 +17,7 @@ pub use v1::BlockFilter;
 pub use v1::BlockMeta;
 pub use v1::SegmentInfo;
 pub use v1::TableSnapshotLite;
+pub use v2::SegmentDesc;
 pub use v2::TableSnapshot;
 
 use super::v0;
