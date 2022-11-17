@@ -1591,6 +1591,7 @@ dependencies = [
  "common-exception",
  "lexical-core",
  "micromarshal",
+ "ordered-float 3.3.0",
  "rand 0.8.5",
  "serde",
 ]
@@ -5173,9 +5174,12 @@ dependencies = [
 
 [[package]]
 name = "micromarshal"
-version = "0.2.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3bd3b9ec8f748e0dcdddca567c3ef5331327db1d770d8a46eab2fc27d9a34fab"
+checksum = "855e0476963a94b79a463e92f16c3132bc9ad3bf0cfdec03ab34b60fe4c2d259"
+dependencies = [
+ "ordered-float 3.3.0",
+]
 
 [[package]]
 name = "mime"
