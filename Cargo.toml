@@ -114,6 +114,8 @@ overflow-checks = false
 [profile.dev]
 split-debuginfo = "unpacked"
 overflow-checks = false
+# wait until https://github.com/rust-lang/rust/issues/100142 fixed
+incremental = false
 
 [profile.dev.package]
 addr2line = { opt-level = 3 }

@@ -24,6 +24,7 @@ use super::interpreter_share_desc::DescShareInterpreter;
 use super::interpreter_user_stage_drop::DropUserStageInterpreter;
 use super::*;
 use crate::interpreters::access::Accessor;
+use crate::interpreters::interpreter_catalog_drop::DropCatalogInterpreter;
 use crate::interpreters::interpreter_copy_v2::CopyInterpreterV2;
 use crate::interpreters::interpreter_presign::PresignInterpreter;
 use crate::interpreters::interpreter_role_show::ShowRolesInterpreter;
@@ -90,7 +91,9 @@ impl InterpreterFactory {
                 ctx,
                 *plan.clone(),
             )?)),
-            Plan::DropCatalog(_) => todo!(),
+            Plan::DropCatalog(plan) => {
+                Ok(Arc::new(DropCatalogInterpreter::create(ctx, *plan.clone())))
+            }
 
             // Databases
             Plan::ShowCreateDatabase(show_create_database) => Ok(Arc::new(

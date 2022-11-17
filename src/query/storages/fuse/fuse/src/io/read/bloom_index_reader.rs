@@ -218,6 +218,7 @@ mod util_v1 {
 
                     let mut metrics = CacheDeferMetrics {
                         tenant_label: bloom_index_cache.label(),
+                        name: "BLOOM_INDEX_DATA_CACHE",
                         cache_hit: false,
                         read_bytes: 0,
                     };
