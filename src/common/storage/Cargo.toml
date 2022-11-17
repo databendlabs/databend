@@ -14,7 +14,6 @@ common-auth = { path = "../auth" }
 common-base = { path = "../base" }
 common-exception = { path = "../exception" }
 
-time = "0.3"
 anyhow = { workspace = true }
 async-trait = "0.1"
 backon = "0.2"
@@ -33,3 +32,4 @@ opendal = { version = "0.20", features = [
 parking_lot = "0.12.1"
 percent-encoding = "2"
 serde = { workspace = true }
+time = "0.3"
