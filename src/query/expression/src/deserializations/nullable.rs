@@ -40,16 +40,60 @@ impl TypeDeserializer for NullableDeserializer {
         self.inner.memory_size() + self.validity.as_slice().len()
     }
 
-    fn de_default(&mut self, format: &FormatSettings) {
-        self.inner.de_default(format);
+    fn de_binary(&mut self, reader: &mut &[u8], format: &FormatSettings) -> Result<(), String> {
+        let valid: bool = reader.read_scalar()?;
+        if valid {
+            self.inner.de_binary(reader, format)?;
+        } else {
+            self.inner.de_default();
+        }
+        self.validity.push(valid);
+        Ok(())
+    }
+
+    fn de_default(&mut self) {
+        self.inner.de_default();
         self.validity.push(false);
+    }
+
+    fn de_fixed_binary_batch(
+        &mut self,
+        _reader: &[u8],
+        _step: usize,
+        _rows: usize,
+        _format: &FormatSettings,
+    ) -> Result<(), String> {
+        Err("unreachable".to_string())
+    }
+
+    fn de_json(
+        &mut self,
+        value: &serde_json::Value,
+        format: &FormatSettings,
+    ) -> Result<(), String> {
+        match value {
+            serde_json::Value::Null => {
+                self.de_null(format);
+                Ok(())
+            }
+            other => {
+                self.validity.push(true);
+                self.inner.de_json(other, format)
+            }
+        }
+    }
+
+    fn de_null(&mut self, _format: &FormatSettings) -> bool {
+        self.inner.de_default();
+        self.validity.push(false);
+        true
     }
 
     fn append_data_value(&mut self, value: Scalar, format: &FormatSettings) -> Result<(), String> {
         match value {
             Scalar::Null => {
                 self.validity.push(false);
-                self.inner.de_default(format);
+                self.inner.de_default();
             }
             _ => {
                 self.validity.push(true);
@@ -59,15 +103,9 @@ impl TypeDeserializer for NullableDeserializer {
         Ok(())
     }
 
-    fn pop_data_value(&mut self) -> Result<Scalar, String> {
+    fn pop_data_value(&mut self) -> Result<(), String> {
         match self.validity.pop() {
-            Some(v) => {
-                if v {
-                    self.inner.pop_data_value()
-                } else {
-                    Ok(Scalar::Null)
-                }
-            }
+            Some(_) => Ok(()),
             None => Err("Nullable column is empty when pop data value".to_string()),
         }
     }

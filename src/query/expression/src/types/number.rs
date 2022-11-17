@@ -704,6 +704,8 @@ pub trait Number:
 {
     const MIN: Self;
     const MAX: Self;
+    
+    const FLOATING: bool;
 
     fn data_type() -> NumberDataType;
     fn try_downcast_scalar(scalar: &NumberScalar) -> Option<Self>;
@@ -718,6 +720,7 @@ pub trait Number:
 impl Number for u8 {
     const MIN: Self = u8::MIN;
     const MAX: Self = u8::MAX;
+    const FLOATING:bool = false;
 
     fn data_type() -> NumberDataType {
         NumberDataType::UInt8
@@ -755,6 +758,8 @@ impl Number for u8 {
 impl Number for u16 {
     const MIN: Self = u16::MIN;
     const MAX: Self = u16::MAX;
+    const FLOATING:bool = false;
+    
 
     fn data_type() -> NumberDataType {
         NumberDataType::UInt16
@@ -792,6 +797,7 @@ impl Number for u16 {
 impl Number for u32 {
     const MIN: Self = u32::MIN;
     const MAX: Self = u32::MAX;
+    const FLOATING:bool = false;
 
     fn data_type() -> NumberDataType {
         NumberDataType::UInt32
@@ -829,6 +835,7 @@ impl Number for u32 {
 impl Number for u64 {
     const MIN: Self = u64::MIN;
     const MAX: Self = u64::MAX;
+    const FLOATING:bool = false;
 
     fn data_type() -> NumberDataType {
         NumberDataType::UInt64
@@ -866,6 +873,7 @@ impl Number for u64 {
 impl Number for i8 {
     const MIN: Self = i8::MIN;
     const MAX: Self = i8::MAX;
+    const FLOATING:bool = false;
 
     fn data_type() -> NumberDataType {
         NumberDataType::Int8
@@ -903,6 +911,7 @@ impl Number for i8 {
 impl Number for i16 {
     const MIN: Self = i16::MIN;
     const MAX: Self = i16::MAX;
+    const FLOATING:bool = false;
 
     fn data_type() -> NumberDataType {
         NumberDataType::Int16
@@ -940,6 +949,7 @@ impl Number for i16 {
 impl Number for i32 {
     const MIN: Self = i32::MIN;
     const MAX: Self = i32::MAX;
+    const FLOATING:bool = false;
 
     fn data_type() -> NumberDataType {
         NumberDataType::Int32
@@ -977,6 +987,7 @@ impl Number for i32 {
 impl Number for i64 {
     const MIN: Self = i64::MIN;
     const MAX: Self = i64::MAX;
+    const FLOATING:bool = false;
 
     fn data_type() -> NumberDataType {
         NumberDataType::Int64
@@ -1014,6 +1025,7 @@ impl Number for i64 {
 impl Number for F32 {
     const MIN: Self = OrderedFloat(f32::NEG_INFINITY);
     const MAX: Self = OrderedFloat(f32::NAN);
+    const FLOATING:bool = true;
 
     fn data_type() -> NumberDataType {
         NumberDataType::Float32
@@ -1051,6 +1063,7 @@ impl Number for F32 {
 impl Number for F64 {
     const MIN: Self = OrderedFloat(f64::NEG_INFINITY);
     const MAX: Self = OrderedFloat(f64::NAN);
+    const FLOATING:bool = true;
 
     fn data_type() -> NumberDataType {
         NumberDataType::Float64

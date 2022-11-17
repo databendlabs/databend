@@ -83,6 +83,12 @@ impl From<std::num::ParseIntError> for ErrorCode {
     }
 }
 
+impl From<String> for ErrorCode {
+    fn from(error: String) -> Self {
+        ErrorCode::from_string(error)
+    }
+}
+
 impl From<std::num::ParseFloatError> for ErrorCode {
     fn from(error: std::num::ParseFloatError) -> Self {
         ErrorCode::from_std_error(error)

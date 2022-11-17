@@ -14,28 +14,46 @@
 
 use common_io::prelude::*;
 
+use crate::types::NullType;
 use crate::Column;
 use crate::Scalar;
 use crate::TypeDeserializer;
 
-#[derive(Debug, Default)]
-pub struct NullDeserializer {
-    pub len: usize,
-}
-
-impl NullDeserializer {
-    pub fn create() -> Self {
-        Self { len: 0 }
-    }
-}
-
-impl TypeDeserializer for NullDeserializer {
+impl TypeDeserializer for usize {
     fn memory_size(&self) -> usize {
-        self.len
+        std::mem::size_of::<usize>()
+    }
+
+    fn de_binary(&mut self, _reader: &mut &[u8], _format: &FormatSettings) -> Result<()> {
+        *self += 1;
+        Ok(())
     }
 
     fn de_default(&mut self, _format: &FormatSettings) {
-        self.len += 1;
+        *self += 1;
+        Ok(())
+    }
+
+    fn de_fixed_binary_batch(
+        &mut self,
+        _reader: &[u8],
+        _step: usize,
+        rows: usize,
+        _format: &FormatSettings,
+    ) -> Result<(), String> {
+        for _ in 0..rows {
+            *self += 1;
+        }
+        Ok(())
+    }
+
+    fn de_json(
+        &mut self,
+        _value: &serde_json::Value,
+        _format: &FormatSettings,
+    ) -> Result<(), String> {
+        *self += 1;
+        Ok(())
     }
 
     fn append_data_value(
@@ -43,13 +61,13 @@ impl TypeDeserializer for NullDeserializer {
         _value: Scalar,
         _format: &FormatSettings,
     ) -> Result<(), String> {
-        self.len += 1;
+        *self += 1;
         Ok(())
     }
 
     fn pop_data_value(&mut self) -> Result<Scalar, String> {
-        if self.len > 0 {
-            self.len -= 1;
+        if *self > 0 {
+            *self -= 1;
             Ok(Scalar::Null)
         } else {
             Err("Null column is empty when pop data value".to_string())
@@ -57,6 +75,6 @@ impl TypeDeserializer for NullDeserializer {
     }
 
     fn finish_to_column(&mut self) -> Column {
-        Column::Null { len: self.len }
+        Column::Null { len: *self }
     }
 }

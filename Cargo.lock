@@ -1412,6 +1412,7 @@ dependencies = [
  "itertools",
  "lexical-core",
  "match-template",
+ "micromarshal",
  "num-traits",
  "ordered-float 3.3.0",
  "rand 0.8.5",

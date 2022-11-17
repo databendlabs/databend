@@ -12,7 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io::Cursor;
+
+use chrono::Datelike;
+use chrono::NaiveDate;
+use common_io::cursor_ext::BufferReadDateTimeExt;
+use common_io::cursor_ext::*;
+use common_io::prelude::BinaryRead;
+use common_io::prelude::FormatSettings;
+use common_io::prelude::StatBuffer;
 use common_io::prelude::*;
+use lexical_core::FromLexical;
 
 use crate::types::date::check_date;
 use crate::Column;
@@ -36,8 +46,49 @@ impl TypeDeserializer for DateDeserializer {
         self.builder.len() * std::mem::size_of::<i32>()
     }
 
+    fn de_binary(&mut self, reader: &mut &[u8], _format: &FormatSettings) -> Result<(), String> {
+        let value: i32 = reader.read_scalar()?;
+        check_date(value)?;
+        self.builder.push(value);
+        Ok(())
+    }
+
     fn de_default(&mut self, _format: &FormatSettings) {
         self.builder.push(i32::default());
+    }
+
+    fn de_fixed_binary_batch(
+        &mut self,
+        reader: &[u8],
+        step: usize,
+        rows: usize,
+        _format: &FormatSettings,
+    ) -> Result<(), String> {
+        for row in 0..rows {
+            let mut reader = &reader[step * row..];
+            let value: i32 = reader.read_scalar()?;
+            check_date(value)?;
+            self.builder.push(value);
+        }
+        Ok(())
+    }
+
+    fn de_json(
+        &mut self,
+        value: &serde_json::Value,
+        format: &FormatSettings,
+    ) -> Result<(), String> {
+        match value {
+            serde_json::Value::String(v) => {
+                let mut reader = Cursor::new(v.as_bytes());
+                let date = reader.read_date_text(&format.timezone)?;
+                let days = uniform_date(date);
+                check_date(days)?;
+                self.builder.push(days);
+                Ok(())
+            }
+            _ => Err(ErrorCode::BadBytes("Incorrect boolean value")),
+        }
     }
 
     fn append_data_value(&mut self, value: Scalar, _format: &FormatSettings) -> Result<(), String> {
@@ -49,9 +100,9 @@ impl TypeDeserializer for DateDeserializer {
         Ok(())
     }
 
-    fn pop_data_value(&mut self) -> Result<Scalar, String> {
+    fn pop_data_value(&mut self) -> Result<(), String> {
         match self.builder.pop() {
-            Some(v) => Ok(Scalar::Date(v)),
+            Some(_) => Ok(()),
             None => Err("Date column is empty when pop data value".to_string()),
         }
     }
@@ -60,4 +111,11 @@ impl TypeDeserializer for DateDeserializer {
         self.builder.shrink_to_fit();
         Column::Date(std::mem::take(&mut self.builder).into())
     }
+}
+
+pub const EPOCH_DAYS_FROM_CE: i32 = 719_163;
+
+#[inline]
+pub fn uniform_date(date: NaiveDate) -> i32 {
+    date.num_days_from_ce() - EPOCH_DAYS_FROM_CE
 }
