@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 #[cfg(debug_assertions)]
 use std::sync::Mutex;
 
@@ -108,7 +109,7 @@ impl<'a> Evaluator<'a> {
             if !*RECURSING.lock().unwrap() {
                 *RECURSING.lock().unwrap() = true;
                 assert_eq!(
-                    ConstantFolder::new(&self.input_columns.domains(), self.tz, self.fn_registry)
+                    ConstantFolder::new(self.input_columns.domains(), self.tz, self.fn_registry)
                         .fold(expr)
                         .1,
                     None,
@@ -409,13 +410,17 @@ impl<'a> Evaluator<'a> {
 }
 
 pub struct ConstantFolder<'a> {
-    input_domains: &'a [Domain],
+    input_domains: HashMap<usize, Domain>,
     tz: Tz,
     fn_registry: &'a FunctionRegistry,
 }
 
 impl<'a> ConstantFolder<'a> {
-    pub fn new(input_domains: &'a [Domain], tz: Tz, fn_registry: &'a FunctionRegistry) -> Self {
+    pub fn new(
+        input_domains: HashMap<usize, Domain>,
+        tz: Tz,
+        fn_registry: &'a FunctionRegistry,
+    ) -> Self {
         ConstantFolder {
             input_domains,
             tz,
@@ -431,7 +436,7 @@ impl<'a> ConstantFolder<'a> {
                 id,
                 data_type,
             } => {
-                let domain = &self.input_domains[*id];
+                let domain = &self.input_domains[id];
                 let expr = domain
                     .as_singleton()
                     .map(|scalar| Expr::Constant {

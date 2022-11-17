@@ -27,12 +27,17 @@ use crate::api::rpc::packets::ProgressInfo;
 use crate::api::PrecommitBlock;
 
 pub struct FragmentData {
+    meta: Vec<u8>,
     pub data: FlightData,
 }
 
 impl FragmentData {
-    pub fn create(data: FlightData) -> FragmentData {
-        FragmentData { data }
+    pub fn get_meta(&self) -> &[u8] {
+        &self.meta[0..self.meta.len() - 1]
+    }
+
+    pub fn create(meta: Vec<u8>, data: FlightData) -> FragmentData {
+        FragmentData { meta, data }
     }
 }
 
@@ -103,9 +108,10 @@ impl From<DataPacket> for FlightData {
 }
 
 impl From<FragmentData> for FlightData {
-    fn from(data: FragmentData) -> Self {
+    fn from(mut data: FragmentData) -> Self {
+        data.meta.push(0x01);
         FlightData {
-            app_metadata: vec![0x01],
+            app_metadata: data.meta,
             data_body: data.data.data_body,
             data_header: data.data.data_header,
             flight_descriptor: None,
@@ -121,7 +127,7 @@ impl TryFrom<FlightData> for DataPacket {
             return Err(ErrorCode::BadBytes("Flight data app metadata is empty."));
         }
 
-        match flight_data.app_metadata[0] {
+        match flight_data.app_metadata.last().unwrap() {
             0x01 => Ok(DataPacket::FragmentData(FragmentData::try_from(
                 flight_data,
             )?)),
@@ -158,7 +164,7 @@ impl TryFrom<FlightData> for FragmentData {
     type Error = ErrorCode;
 
     fn try_from(flight_data: FlightData) -> Result<Self> {
-        Ok(FragmentData::create(FlightData {
+        Ok(FragmentData::create(flight_data.app_metadata, FlightData {
             app_metadata: vec![],
             flight_descriptor: None,
             data_body: flight_data.data_body,

@@ -68,8 +68,20 @@ impl Table for DummyTable {
 #[test]
 fn test_format() {
     let mut metadata = Metadata::default();
-    let col1 = metadata.add_column("col1".to_string(), BooleanType::new_impl(), None, None);
-    let col2 = metadata.add_column("col2".to_string(), BooleanType::new_impl(), None, None);
+    let col1 = metadata.add_column(
+        "col1".to_string(),
+        BooleanType::new_impl(),
+        None,
+        None,
+        None,
+    );
+    let col2 = metadata.add_column(
+        "col2".to_string(),
+        BooleanType::new_impl(),
+        None,
+        None,
+        None,
+    );
     let tab1 = metadata.add_table(
         "catalog".to_string(),
         "database".to_string(),

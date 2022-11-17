@@ -68,7 +68,7 @@ impl Table for NullTable {
         _ctx: Arc<dyn TableContext>,
         _push_downs: Option<PushDownInfo>,
     ) -> Result<(PartStatistics, Partitions)> {
-        Ok((PartStatistics::default(), vec![]))
+        Ok((PartStatistics::default(), Partitions::default()))
     }
 
     fn read_data(

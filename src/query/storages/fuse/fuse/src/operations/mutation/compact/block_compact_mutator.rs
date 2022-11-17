@@ -57,7 +57,7 @@ impl BlockCompactMutator {
             ctx,
             compact_params,
             operator,
-            compact_tasks: Vec::new(),
+            compact_tasks: Partitions::default(),
             unchanged_segment_indices: Vec::new(),
             unchanged_segment_locations: Vec::new(),
             unchanged_segment_statistics: Statistics::default(),
@@ -94,7 +94,9 @@ impl BlockCompactMutator {
             for t in tasks {
                 if CompactPartBuilder::check_for_compact(&t) {
                     compacted_segment_cnt += t.len();
-                    self.compact_tasks.push(CompactPartInfo::create(t, order));
+                    self.compact_tasks
+                        .partitions
+                        .push(CompactPartInfo::create(t, order));
                 } else {
                     self.unchanged_segment_locations
                         .push(segment_locations[idx].clone());
@@ -106,8 +108,8 @@ impl BlockCompactMutator {
                 }
                 order += 1;
             }
+            end = idx + 1;
             if compacted_segment_cnt + builder.segments.len() >= limit {
-                end = idx + 1;
                 break;
             }
         }
@@ -115,7 +117,9 @@ impl BlockCompactMutator {
         if !builder.segments.is_empty() {
             let t = std::mem::take(&mut builder.segments);
             if CompactPartBuilder::check_for_compact(&t) {
-                self.compact_tasks.push(CompactPartInfo::create(t, order));
+                self.compact_tasks
+                    .partitions
+                    .push(CompactPartInfo::create(t, order));
             } else {
                 self.unchanged_segment_locations
                     .push(segment_locations[end - 1].clone());
@@ -128,7 +132,7 @@ impl BlockCompactMutator {
             order += 1;
         }
 
-        if self.compact_tasks.is_empty() {
+        if self.compact_tasks.partitions.is_empty() {
             return Ok(false);
         }
 

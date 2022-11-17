@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
+use common_catalog::plan::PartitionsShuffleKind;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
@@ -52,9 +53,12 @@ impl SyncSystemTable for OneTable {
         _ctx: Arc<dyn TableContext>,
         _push_downs: Option<PushDownInfo>,
     ) -> Result<(PartStatistics, Partitions)> {
-        Ok((PartStatistics::new_exact(1, 1, 1, 1), vec![Arc::new(
-            Box::new(SystemTablePart),
-        )]))
+        Ok((
+            PartStatistics::new_exact(1, 1, 1, 1),
+            Partitions::create(PartitionsShuffleKind::Seq, vec![Arc::new(Box::new(
+                SystemTablePart,
+            ))]),
+        ))
     }
 }
 

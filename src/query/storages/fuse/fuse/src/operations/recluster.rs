@@ -215,6 +215,7 @@ impl FuseTable {
                 self.operator.clone(),
                 self.meta_location_generator().clone(),
                 cluster_stats_gen.clone(),
+                block_compact_thresholds,
                 None,
             )
         })?;

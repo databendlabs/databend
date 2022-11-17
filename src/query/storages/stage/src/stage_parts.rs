@@ -13,6 +13,9 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::Hash;
+use std::hash::Hasher;
 
 use chrono::DateTime;
 use chrono::Utc;
@@ -47,5 +50,11 @@ impl PartInfo for StageFilePartition {
             None => false,
             Some(other) => self == other,
         }
+    }
+
+    fn hash(&self) -> u64 {
+        let mut s = DefaultHasher::new();
+        self.path.hash(&mut s);
+        s.finish()
     }
 }

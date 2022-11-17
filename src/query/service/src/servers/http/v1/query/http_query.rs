@@ -23,7 +23,6 @@ use common_base::base::tokio::sync::RwLock;
 use common_base::base::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_storages_fuse_result::BlockBuffer;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -35,6 +34,7 @@ use crate::servers::http::v1::query::execute_state::Progresses;
 use crate::servers::http::v1::query::expirable::Expirable;
 use crate::servers::http::v1::query::expirable::ExpiringState;
 use crate::servers::http::v1::query::http_query_manager::HttpQueryConfig;
+use crate::servers::http::v1::query::sized_spsc::sized_spsc;
 use crate::servers::http::v1::query::ExecuteState;
 use crate::servers::http::v1::query::ExecuteStateKind;
 use crate::servers::http::v1::query::Executor;
@@ -223,16 +223,16 @@ impl HttpQuery {
         let sql = &request.sql;
         tracing::info!("run query_id={id} in session_id={session_id}, sql='{sql}'");
 
-        let block_buffer = BlockBuffer::new(request.pagination.max_rows_in_buffer);
+        let (block_sender, block_receiver) = sized_spsc(request.pagination.max_rows_in_buffer);
         let start_time = Instant::now();
         let state = Arc::new(RwLock::new(Executor {
             query_id: id.clone(),
             start_time,
             state: ExecuteState::Starting(ExecuteStarting { ctx: ctx.clone() }),
         }));
+        let block_sender_closer = block_sender.closer();
         let state_clone = state.clone();
         let ctx_clone = ctx.clone();
-        let block_buffer_clone = block_buffer.clone();
         let sql = request.sql.clone();
         let query_id = id.clone();
         ctx.try_spawn(async move {
@@ -242,7 +242,7 @@ impl HttpQuery {
                 &sql,
                 session,
                 ctx_clone.clone(),
-                block_buffer_clone.clone(),
+                block_sender,
             )
             .await;
             match running_state {
@@ -264,7 +264,7 @@ impl HttpQuery {
                         e
                     );
                     Executor::start_to_stop(&state_clone, ExecuteState::Stopped(state)).await;
-                    block_buffer_clone.stop_push().await.unwrap();
+                    block_sender_closer.close();
                 }
             }
         })?;
@@ -272,7 +272,7 @@ impl HttpQuery {
         let format_settings = ctx.get_format_settings()?;
         let data = Arc::new(TokioMutex::new(PageManager::new(
             request.pagination.max_rows_per_page,
-            block_buffer,
+            block_receiver,
             request.string_fields,
             format_settings,
         )));

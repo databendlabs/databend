@@ -305,7 +305,7 @@ impl CopyInterpreterV2 {
 
         // All files info.
         let mut all_source_file_infos = vec![];
-        for part in &read_source_plan.parts {
+        for part in &read_source_plan.parts.partitions {
             if let Some(stage_file_info) = part.as_any().downcast_ref::<StageFilePartition>() {
                 all_source_file_infos.push(stage_file_info.clone());
             }

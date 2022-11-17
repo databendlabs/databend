@@ -25,6 +25,7 @@
 #![feature(const_mut_refs)]
 #![feature(generic_const_exprs)]
 #![allow(incomplete_features)]
+#![feature(iterator_try_collect)]
 #![feature(core_intrinsics)]
 #![feature(iter_order_by)]
 
@@ -40,7 +41,6 @@ mod function;
 mod kernels;
 mod property;
 mod register;
-pub mod serializations;
 pub mod type_check;
 pub mod types;
 pub mod utils;
@@ -54,5 +54,4 @@ pub use crate::function::*;
 pub use crate::kernels::*;
 pub use crate::property::*;
 pub use crate::register::*;
-pub use crate::serializations::TypeSerializer;
 pub use crate::values::*;

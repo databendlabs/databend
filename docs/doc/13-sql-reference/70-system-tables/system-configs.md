@@ -15,6 +15,7 @@ SELECT * FROM system.configs;
 | mysql_handler_host                   | 127.0.0.1        | query |             |
 | mysql_handler_port                   | 3307             | query |             |
 | max_active_sessions                  | 256              | query |             |
+| max_memory_usage                     | 0                | query |             |
 | clickhouse_handler_host              | 127.0.0.1        | query |             |
 | clickhouse_handler_port              | 9000             | query |             |
 | http_handler_host                    | 127.0.0.1        | query |             |

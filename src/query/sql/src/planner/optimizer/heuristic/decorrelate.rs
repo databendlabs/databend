@@ -285,6 +285,7 @@ impl SubqueryRewriter {
                         NullableType::new_impl(BooleanType::new_impl()),
                         None,
                         None,
+                        None,
                     )
                 };
                 let join_plan = LogicalInnerJoin {
@@ -337,6 +338,7 @@ impl SubqueryRewriter {
                     self.metadata.write().add_column(
                         "marker".to_string(),
                         NullableType::new_impl(BooleanType::new_impl()),
+                        None,
                         None,
                         None,
                     )
@@ -393,6 +395,7 @@ impl SubqueryRewriter {
                                 column_entry.data_type().clone(),
                             ))
                         },
+                        None,
                         None,
                         None,
                     ),

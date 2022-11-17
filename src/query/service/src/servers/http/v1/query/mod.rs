@@ -19,6 +19,7 @@ mod http_query;
 mod http_query_context;
 mod http_query_manager;
 mod page_manager;
+pub mod sized_spsc;
 
 pub(crate) use execute_state::ExecuteState;
 pub use execute_state::ExecuteStateKind;

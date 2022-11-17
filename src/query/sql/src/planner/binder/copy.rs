@@ -26,6 +26,7 @@ use common_ast::Backtrace;
 use common_ast::Dialect;
 use common_catalog::plan::DataSourceInfo;
 use common_catalog::plan::DataSourcePlan;
+use common_catalog::plan::Partitions;
 use common_catalog::plan::StageTableInfo;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
@@ -237,7 +238,7 @@ impl<'a> Binder {
                 files: vec![],
             }),
             scan_fields: None,
-            parts: vec![],
+            parts: Partitions::default(),
             statistics: Default::default(),
             description: "".to_string(),
             tbl_args: None,
@@ -296,7 +297,7 @@ impl<'a> Binder {
                 files: vec![],
             }),
             scan_fields: None,
-            parts: vec![],
+            parts: Partitions::default(),
             statistics: Default::default(),
             description: "".to_string(),
             tbl_args: None,

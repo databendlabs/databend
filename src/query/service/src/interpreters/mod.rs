@@ -19,6 +19,7 @@ mod fragments;
 mod interpreter;
 mod interpreter_call;
 mod interpreter_catalog_create;
+mod interpreter_catalog_drop;
 mod interpreter_cluster_key_alter;
 mod interpreter_cluster_key_drop;
 mod interpreter_clustering_history;
