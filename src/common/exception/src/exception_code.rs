@@ -200,10 +200,10 @@ build_exceptions! {
     /// - having the same name as a already exist, like `default`
     /// - and without `IF NOT EXISTS`
     CatalogAlreadyExists(2319),
-    /// `UnknownCatalog` should be raised when trying to drop a catalog that is:
+    /// `CatalogNotFound` should be raised when trying to drop a catalog that is:
     /// - not exists.
     /// - and without `IF EXISTS`
-    UnknownCatalog(2320),
+    CatalogNotFound(2320),
 
     // Cluster error codes.
     ClusterUnknownNode(2401),

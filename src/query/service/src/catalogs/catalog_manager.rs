@@ -149,7 +149,7 @@ impl CatalogManagerHelper for CatalogManager {
 
             None if req.if_exists => Ok(()),
 
-            None => Err(ErrorCode::UnknownCatalog(format!(
+            None => Err(ErrorCode::CatalogNotFound(format!(
                 "Catalog {} has to be exists",
                 name
             ))),
