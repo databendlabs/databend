@@ -33,6 +33,76 @@ use crate::statistics::ClusterStatsGenerator;
 use crate::FuseTable;
 
 impl FuseTable {
+    pub async fn do_delete2(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        projection: &Projection,
+        selection: &Option<String>,
+    ) -> Result<()> {
+        let snapshot_opt = self.read_table_snapshot().await?;
+
+        // check if table is empty
+        let snapshot = if let Some(val) = snapshot_opt {
+            val
+        } else {
+            // no snapshot, no deletion
+            return Ok(());
+        };
+
+        if snapshot.summary.row_count == 0 {
+            // empty snapshot, no deletion
+            return Ok(());
+        }
+
+        // check if unconditional deletion
+        if selection.is_none() {
+            // deleting the whole table... just a truncate
+            let purge = false;
+            return self.do_truncate(ctx.clone(), purge).await;
+        }
+todo!()
+    }
+
+    async fn generate_parts(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        snapshot: Arc<TableSnapshot>,
+        projection: &Projection,
+        selection: &str,
+    ) -> Result<()> {
+        let table_meta = Arc::new(self.clone());
+        let physical_scalars = ExpressionParser::parse_exprs(table_meta, selection)?;
+        if physical_scalars.is_empty() {
+            return Err(ErrorCode::IndexOutOfBounds(
+                "expression should be valid, but not",
+            ));
+        }
+
+        let filter = &physical_scalars[0];
+
+        let schema = self.table_info.schema();
+        // TODO refine pruner
+        let extras = PushDownInfo {
+            projection: Some(projection.clone()),
+            filters: vec![filter.clone()],
+            prewhere: None, // TBD: if delete rows need prewhere optimization
+            limit: None,
+            order_by: vec![],
+            stage: None,
+        };
+        let push_downs = Some(extras);
+        let segments_location = snapshot.segments.clone();
+        let block_metas = BlockPruner::prune(
+            &ctx,
+            self.operator.clone(),
+            schema,
+            &push_downs,
+            segments_location,
+        )
+        .await?;
+        todo!()
+    }
+
     pub async fn do_delete(
         &self,
         ctx: Arc<dyn TableContext>,

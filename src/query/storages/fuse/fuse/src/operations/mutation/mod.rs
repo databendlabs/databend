@@ -16,6 +16,7 @@ pub mod abort_operation;
 pub mod base_mutator;
 pub mod block_filter;
 mod compact;
+mod deletion_mutation;
 pub mod deletion_mutator;
 pub mod recluster_mutator;
 
