@@ -20,6 +20,7 @@ use common_exception::ErrorCode;
 use crate::meta::v0;
 use crate::meta::v1;
 use crate::meta::v1::BlockFilter;
+use crate::meta::v2;
 use crate::meta::Versioned;
 
 // Here versions of meta are tagged with numeric values
@@ -44,10 +45,12 @@ pub enum SegmentInfoVersion {
 
 impl Versioned<0> for v0::TableSnapshot {}
 impl Versioned<1> for v1::TableSnapshot {}
+impl Versioned<2> for v2::TableSnapshot {}
 
 pub enum SnapshotVersion {
     V0(PhantomData<v0::TableSnapshot>),
     V1(PhantomData<v1::TableSnapshot>),
+    V2(PhantomData<v2::TableSnapshot>),
 }
 
 impl SnapshotVersion {
@@ -55,6 +58,7 @@ impl SnapshotVersion {
         match self {
             SnapshotVersion::V0(a) => Self::ver(a),
             SnapshotVersion::V1(a) => Self::ver(a),
+            SnapshotVersion::V2(a) => Self::ver(a),
         }
     }
 
@@ -98,6 +102,7 @@ mod converters {
             match value {
                 0 => Ok(SnapshotVersion::V0(ver_eq::<_, 0>(PhantomData))),
                 1 => Ok(SnapshotVersion::V1(ver_eq::<_, 1>(PhantomData))),
+                2 => Ok(SnapshotVersion::V2(ver_eq::<_, 2>(PhantomData))),
                 _ => Err(ErrorCode::Internal(format!(
                     "unknown snapshot segment version {value}, versions supported: 0, 1"
                 ))),
@@ -122,7 +127,7 @@ mod converters {
         }
     }
 
-    /// Statically check that if T implements Versoined<U> where U equals V
+    /// Statically check that if T implements Versioned<U> where U equals V
     #[inline]
     fn ver_eq<T, const V: u64>(t: PhantomData<T>) -> PhantomData<T>
     where T: Versioned<V> {

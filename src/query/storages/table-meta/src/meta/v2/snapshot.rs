@@ -92,16 +92,18 @@ impl TableSnapshot {
 
     pub fn from_previous(previous: &TableSnapshot) -> Self {
         let id = Uuid::new_v4();
-        let clone = previous.clone();
-        Self::new(
-            id,
-            &clone.timestamp,
-            Some((clone.snapshot_id, clone.format_version)),
-            clone.schema,
-            clone.summary,
-            clone.segments,
-            clone.cluster_key_meta,
-        )
+        let mut clone = previous.clone();
+        let now = Utc::now();
+        // make snapshot timestamp monotonically increased
+        let adjusted_timestamp = util::monotonically_increased_timestamp(now, &clone.timestamp);
+        // trim timestamp to micro seconds
+        let trimmed_timestamp = util::trim_timestamp_to_micro_second(adjusted_timestamp);
+        let timestamp = Some(trimmed_timestamp);
+        clone.snapshot_id = id;
+        clone.prev_snapshot_id = Some((clone.snapshot_id, clone.format_version));
+        clone.timestamp = timestamp;
+
+        clone
     }
 
     pub fn format_version(&self) -> u64 {
@@ -120,7 +122,7 @@ impl From<v0::TableSnapshot> for TableSnapshot {
             prev_snapshot_id: s.prev_snapshot_id.map(|id| (id, 0)),
             schema: s.schema,
             summary: s.summary,
-            segments: s.segments.into_iter().map(|l| (l, 0)).collect(),
+            segments: s.segments.into_iter().map(|l| ((l, 0), None)).collect(),
             cluster_key_meta: None,
         }
     }

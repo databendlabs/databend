@@ -14,3 +14,5 @@
 //
 
 mod snapshot;
+
+pub use snapshot::TableSnapshot;
