@@ -15,14 +15,12 @@
 use std::alloc::Layout;
 use std::sync::Arc;
 
-use common_datablocks::DataBlock;
-use common_datablocks::HashMethodKind;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataTypeImpl;
+use common_datavalues::DataType;
 use common_exception::Result;
-use common_functions::aggregates::get_layout_offsets;
-use common_functions::aggregates::AggregateFunctionRef;
-use common_functions::aggregates::StateAddr;
+use common_expression::DataSchemaRef;
+use common_functions_v2::aggregates::get_layout_offsets;
+use common_functions_v2::aggregates::AggregateFunctionRef;
+use common_functions_v2::aggregates::StateAddr;
 
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
@@ -32,7 +30,7 @@ pub struct AggregatorParams {
     pub output_schema: DataSchemaRef,
     pub input_schema: DataSchemaRef,
     pub group_columns: Vec<usize>,
-    pub group_data_types: Vec<DataTypeImpl>,
+    pub group_data_types: Vec<DataType>,
 
     pub aggregate_functions: Vec<AggregateFunctionRef>,
     pub aggregate_functions_column_name: Vec<String>,

@@ -14,14 +14,13 @@
 
 use std::slice::Iter;
 
-use common_datavalues::Column;
-use common_datavalues::LargePrimitive;
-use common_datavalues::PrimitiveColumn;
-use common_datavalues::PrimitiveType;
-use common_datavalues::ScalarColumn;
-use common_datavalues::StringColumn;
-use common_datavalues::StringValueIter;
+use common_arrow::arrow::buffer::Buffer;
 use common_exception::Result;
+use common_expression::large_number::LargeNumber;
+use common_expression::types::number::Number;
+use common_expression::types::string::StringColumn;
+use common_expression::types::string::StringIterator;
+use common_expression::types::NumberType;
 
 pub trait KeysColumnIter<T: ?Sized> {
     type Iterator<'a>: Iterator<Item = &'a T>
@@ -32,19 +31,19 @@ pub trait KeysColumnIter<T: ?Sized> {
     fn iter(&self) -> Self::Iterator<'_>;
 }
 
-pub struct FixedKeysColumnIter<T: PrimitiveType> {
-    column: PrimitiveColumn<T>,
+pub struct FixedKeysColumnIter<T: Number> {
+    column: Buffer<T>,
 }
 
-impl<T: PrimitiveType> FixedKeysColumnIter<T> {
-    pub fn create(column: &PrimitiveColumn<T>) -> Result<Self> {
+impl<T: Number> FixedKeysColumnIter<T> {
+    pub fn create(column: &Buffer<T>) -> Result<Self> {
         Ok(Self {
             column: column.clone(),
         })
     }
 }
 
-impl<T: PrimitiveType> KeysColumnIter<T> for FixedKeysColumnIter<T> {
+impl<T: Number> KeysColumnIter<T> for FixedKeysColumnIter<T> {
     type Iterator<'a> = Iter<'a, T> where Self: 'a, T: 'a;
 
     fn iter(&self) -> Self::Iterator<'_> {
@@ -52,15 +51,15 @@ impl<T: PrimitiveType> KeysColumnIter<T> for FixedKeysColumnIter<T> {
     }
 }
 
-pub struct LargeFixedKeysColumnIter<T: LargePrimitive> {
+pub struct LargeFixedKeysColumnIter<T: LargeNumber> {
     holder: Vec<T>,
 }
 
-impl<T: LargePrimitive> LargeFixedKeysColumnIter<T> {
+impl<T: LargeNumber> LargeFixedKeysColumnIter<T> {
     pub fn create(inner: &StringColumn) -> Result<Self> {
         let mut array = Vec::with_capacity(inner.len());
 
-        for bs in inner.scalar_iter() {
+        for bs in inner.iter() {
             array.push(T::from_bytes(bs)?);
         }
 
@@ -68,7 +67,7 @@ impl<T: LargePrimitive> LargeFixedKeysColumnIter<T> {
     }
 }
 
-impl<T: LargePrimitive> KeysColumnIter<T> for LargeFixedKeysColumnIter<T> {
+impl<T: LargeNumber> KeysColumnIter<T> for LargeFixedKeysColumnIter<T> {
     type Iterator<'a> = Iter<'a, T> where Self: 'a, T: 'a;
 
     fn iter(&self) -> Self::Iterator<'_> {
@@ -89,7 +88,7 @@ impl SerializedKeysColumnIter {
 }
 
 impl KeysColumnIter<[u8]> for SerializedKeysColumnIter {
-    type Iterator<'a> = StringValueIter<'a> where Self: 'a;
+    type Iterator<'a> = StringIterator<'a> where Self: 'a;
 
     fn iter(&self) -> Self::Iterator<'_> {
         self.column.iter()
