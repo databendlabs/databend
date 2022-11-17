@@ -169,17 +169,16 @@ impl Metadata {
                     .map(|i| format!("{}:{}", field.name(), i + 1))
                     .collect::<Vec<_>>(),
             };
-            let mut i = inner_types.len() - 1;
+            let mut i = inner_types.len();
             for (inner_name, inner_type) in
                 inner_names.into_iter().rev().zip(inner_types.iter().rev())
             {
+                i -= 1;
                 let mut inner_indices = indices.clone();
                 inner_indices.push(i);
 
                 let inner_field = DataField::new(&inner_name, inner_type.clone());
                 fields.push_front((inner_indices, inner_field));
-
-                i -= 1;
             }
         }
         table_index
