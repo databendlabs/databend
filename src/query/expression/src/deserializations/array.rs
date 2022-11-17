@@ -49,7 +49,7 @@ impl ArrayDeserializer {
 
 impl TypeDeserializer for ArrayDeserializer {
     fn memory_size(&self) -> usize {
-        self.inner.memory_size()
+        self.inner.memory_size() + self.offsets.len() * std::mem::size_of::<u64>()
     }
 
     fn de_binary(&mut self, reader: &mut &[u8], format: &FormatSettings) -> Result<()> {
@@ -108,7 +108,7 @@ impl TypeDeserializer for ArrayDeserializer {
     fn pop_data_value(&mut self) -> Result<()> {
         let size = self.pop_offset()?;
         for _ in 0..size {
-            let _ = self.inner.pop_data_value()?;
+            self.inner.pop_data_value()?;
         }
         Ok(())
     }

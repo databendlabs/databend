@@ -55,7 +55,7 @@ impl TypeDeserializer for TupleDeserializer {
 
     fn de_json(&mut self, value: &serde_json::Value, format: &FormatSettings) -> Result<()> {
         match value {
-            serde_json::Value::Object(obj) => {
+            serde_json::Value::Array(obj) => {
                 if self.inners.len() != obj.len() {
                     return Err(ErrorCode::from_string(format!(
                         "Incorrect json value, expect {} values, but get {} values",
@@ -63,13 +63,12 @@ impl TypeDeserializer for TupleDeserializer {
                         obj.len()
                     )));
                 }
-                for (inner, item) in self.inners.iter_mut().zip(obj.iter()) {
-                    let (_, val) = item;
+                for (inner, val) in self.inners.iter_mut().zip(obj.iter()) {
                     inner.de_json(val, format)?;
                 }
                 Ok(())
             }
-            _ => Err(ErrorCode::from("Incorrect boolean value")),
+            _ => Err(ErrorCode::from("Incorrect tuple value")),
         }
     }
 
@@ -92,7 +91,7 @@ impl TypeDeserializer for TupleDeserializer {
     fn append_data_value(&mut self, value: Scalar, format: &FormatSettings) -> Result<()> {
         let v = value
             .as_tuple()
-            .ok_or_else(|| ErrorCode::from("Unable to get timestamp value"))?;
+            .ok_or_else(|| ErrorCode::from("Unable to get tuple value"))?;
 
         for (v, inner) in v.iter().zip(self.inners.iter_mut()) {
             inner.append_data_value(v.clone(), format)?;

@@ -78,7 +78,7 @@ impl TypeDeserializer for DateDeserializer {
                 self.builder.push(days);
                 Ok(())
             }
-            _ => Err(ErrorCode::from("Incorrect boolean value")),
+            _ => Err(ErrorCode::from("Incorrect string value")),
         }
     }
 
@@ -86,7 +86,7 @@ impl TypeDeserializer for DateDeserializer {
         let v = value
             .as_date()
             .ok_or_else(|| "Unable to get date value".to_string())?;
-        check_date(*v as i64).map_err(|err| ErrorCode::from_string(err))?;
+        check_date(*v as i64).map_err(ErrorCode::from_string)?;
         self.builder.push(*v);
         Ok(())
     }

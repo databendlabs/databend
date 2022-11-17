@@ -65,7 +65,7 @@ impl TypeDeserializer for TimestampDeserializer {
                 self.builder.push(micros);
                 Ok(())
             }
-            _ => Err(ErrorCode::from("Incorrect boolean value")),
+            _ => Err(ErrorCode::from("Incorrect timestamp value")),
         }
     }
 
