@@ -2493,6 +2493,7 @@ dependencies = [
  "common-datavalues",
  "common-exception",
  "common-metrics",
+ "metrics",
  "once_cell",
  "parking_lot 0.12.1",
  "serde",
