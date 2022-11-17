@@ -168,6 +168,17 @@ num_cpus = 0
 data_path = "_data"
 
 [cache.moka]
+max_capacity = 1073741824
+time_to_live = 3600
+time_to_idle = 600
+
+[cache.redis]
+endpoint_url = ""
+username = ""
+password = ""
+root = ""
+db = 0
+default_ttl = 0
 
 [catalog]
 address = ""
