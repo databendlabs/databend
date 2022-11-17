@@ -39,11 +39,11 @@ pub fn gen_columns_statistics(data_block: &DataBlock) -> Result<StatisticsOfColu
         let column_field = ColumnWithField::new(col.clone(), data_field);
         let mut min = DataValue::Null;
         let mut max = DataValue::Null;
+        let mut distinct_of_values: u64 = 0;
 
         let rows = col.len();
 
         let mins = eval_aggr("min", vec![], &[column_field.clone()], rows)?;
-        let maxs = eval_aggr("max", vec![], &[column_field], rows)?;
 
         if mins.len() > 0 {
             min = if let Some(v) = mins.get(0).trim_min() {
@@ -53,12 +53,18 @@ pub fn gen_columns_statistics(data_block: &DataBlock) -> Result<StatisticsOfColu
             }
         }
 
+        let maxs = eval_aggr("max", vec![], &[column_field.clone()], rows)?;
         if maxs.len() > 0 {
             max = if let Some(v) = maxs.get(0).trim_max() {
                 v
             } else {
                 continue;
             }
+        }
+
+        let distinct_values = eval_aggr("distinct_counts", vec![], &[column_field], rows)?;
+        if distinct_values.len() > 0 {
+            distinct_of_values = distinct_values.get(0).as_u64()?;
         }
 
         let (is_all_null, bitmap) = col.validity();
@@ -74,6 +80,7 @@ pub fn gen_columns_statistics(data_block: &DataBlock) -> Result<StatisticsOfColu
             max,
             null_count: unset_bits as u64,
             in_memory_size,
+            distinct_of_values: Some(distinct_of_values),
         };
 
         statistics.insert(idx as u32, col_stats);

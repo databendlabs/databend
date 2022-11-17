@@ -51,6 +51,7 @@ pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
             let mut max_stats = Vec::with_capacity(stats.len());
             let mut null_count = 0;
             let mut in_memory_size = 0;
+            let mut distinct_of_values = 0;
 
             for col_stats in stats {
                 min_stats.push(col_stats.min.clone());
@@ -58,6 +59,9 @@ pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
 
                 null_count += col_stats.null_count;
                 in_memory_size += col_stats.in_memory_size;
+                if let Some(num) = col_stats.distinct_of_values {
+                    distinct_of_values += num;
+                }
             }
 
             // TODO:
@@ -85,6 +89,7 @@ pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
                 max,
                 null_count,
                 in_memory_size,
+                distinct_of_values: Some(distinct_of_values),
             });
             Ok(acc)
         })

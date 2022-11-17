@@ -124,6 +124,7 @@ fn test_reduce_block_statistics_in_memory_size() -> common_exception::Result<()>
                 max: DataValue::Null,
                 null_count: 1,
                 in_memory_size: 1,
+                distinct_of_values: Some(1),
             }))
         })
     };
@@ -143,6 +144,7 @@ fn test_reduce_block_statistics_in_memory_size() -> common_exception::Result<()>
         assert_eq!(col_stats.in_memory_size, 2);
         // for each column, the reduced value of null_count should be 1 + 1
         assert_eq!(col_stats.null_count, 2);
+        assert_eq!(col_stats.distinct_of_values, Some(2));
     }
     Ok(())
 }
