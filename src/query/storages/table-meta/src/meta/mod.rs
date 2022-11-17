@@ -18,6 +18,7 @@ mod common;
 mod current;
 mod v0;
 mod v1;
+mod v2;
 mod versions;
 
 pub use common::ClusterKey;
