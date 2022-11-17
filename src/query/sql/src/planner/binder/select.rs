@@ -466,6 +466,7 @@ impl<'a> Binder {
                     coercion_types[idx].clone(),
                     None,
                     None,
+                    None,
                 );
                 let column_binding = ColumnBinding {
                     database_name: None,
@@ -499,6 +500,7 @@ impl<'a> Binder {
                 let new_column_index = self.metadata.write().add_column(
                     right_col.column_name.clone(),
                     coercion_types[idx].clone(),
+                    None,
                     None,
                     None,
                 );
