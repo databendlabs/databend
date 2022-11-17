@@ -71,6 +71,7 @@ pub enum StorageParams {
     Obs(StorageObsConfig),
     Oss(StorageOssConfig),
     S3(StorageS3Config),
+    Redis(StorageRedisConfig),
 }
 
 impl Default for StorageParams {
@@ -126,6 +127,13 @@ impl Display for StorageParams {
                     v.bucket, v.root, v.endpoint_url
                 )
             }
+            StorageParams::Redis(v) => {
+                write!(
+                    f,
+                    "redis | db={},root={},endpoint={}",
+                    v.db, v.root, v.endpoint_url
+                )
+            }
         }
     }
 }
@@ -149,6 +157,7 @@ impl StorageParams {
             StorageParams::Oss(v) => v.endpoint_url.starts_with("https://"),
             StorageParams::S3(v) => v.endpoint_url.starts_with("https://"),
             StorageParams::Gcs(v) => v.endpoint_url.starts_with("https://"),
+            StorageParams::Redis(_) => false,
         }
     }
 }
@@ -409,6 +418,38 @@ impl Debug for StorageOssConfig {
 /// config for Moka Object Storage Service
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StorageMokaConfig {}
+
+/// config for Redis Storage Service
+#[derive(Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StorageRedisConfig {
+    pub endpoint_url: String,
+    pub username: Option<String>,
+    pub password: Option<String>,
+    pub root: String,
+    pub db: i64,
+    /// TTL in seconds
+    pub default_ttl: Option<i64>,
+}
+
+impl Debug for StorageRedisConfig {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut d = f.debug_struct("StorageRedisConfig");
+
+        d.field("endpoint_url", &self.endpoint_url)
+            .field("db", &self.db)
+            .field("root", &self.root)
+            .field("default_ttl", &self.default_ttl);
+
+        if let Some(username) = &self.username {
+            d.field("username", &mask_string(username, 3));
+        }
+        if let Some(password) = &self.password {
+            d.field("usernpasswordame", &mask_string(password, 3));
+        }
+
+        d.finish()
+    }
+}
 
 static SHARE_TABLE_CONFIG: OnceCell<Singleton<ShareTableConfig>> = OnceCell::new();
 
