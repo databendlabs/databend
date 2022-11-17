@@ -180,7 +180,6 @@ impl<'a> SegmentCompactor<'a> {
         }
     }
 
-    // accumulate one segment
     pub async fn compact(
         mut self,
         segments: &'a [Arc<SegmentInfo>],
