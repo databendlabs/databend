@@ -44,6 +44,7 @@ pub use property::PhysicalProperty;
 pub use property::RelExpr;
 pub use property::RelationalProperty;
 pub use property::RequiredProperty;
+pub use property::Statistics;
 pub use rule::RuleFactory;
 pub use rule::RuleID;
 pub use rule::RuleSet;

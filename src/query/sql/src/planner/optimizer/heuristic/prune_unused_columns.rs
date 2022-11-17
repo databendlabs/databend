@@ -23,6 +23,7 @@ use crate::plans::Aggregate;
 use crate::plans::EvalScalar;
 use crate::plans::LogicalGet;
 use crate::plans::RelOperator;
+use crate::plans::Statistics;
 use crate::MetadataRef;
 use crate::ScalarExpr;
 
@@ -96,10 +97,12 @@ impl UnusedColumnPruner {
                     push_down_predicates: p.push_down_predicates.clone(),
                     limit: p.limit,
                     order_by: p.order_by.clone(),
-                    statistics: p.statistics,
-                    col_stats: p.col_stats.clone(),
+                    statistics: Statistics {
+                        statistics: p.statistics.statistics,
+                        col_stats: p.statistics.col_stats.clone(),
+                        is_accurate: p.statistics.is_accurate,
+                    },
                     prewhere,
-                    is_accurate: p.is_accurate,
                 })))
             }
             RelOperator::LogicalInnerJoin(p) => {

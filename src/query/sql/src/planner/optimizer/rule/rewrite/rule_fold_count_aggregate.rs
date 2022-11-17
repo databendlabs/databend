@@ -98,7 +98,7 @@ impl Rule for RuleFoldCountAggregate {
                 _ => false,
             });
 
-        if let (true, Some(card)) = (is_simple_count, input_prop.precise_cardinality) {
+        if let (true, Some(card)) = (is_simple_count, input_prop.statistics.precise_cardinality) {
             let mut scalars = agg.aggregate_functions;
             for item in scalars.iter_mut() {
                 item.scalar = Scalar::ConstantExpr(ConstantExpr {
@@ -114,9 +114,9 @@ impl Rule for RuleFoldCountAggregate {
             ));
         } else if let (true, true, column_stats, Some(table_card)) = (
             simple_nullable_count,
-            input_prop.is_accurate,
-            input_prop.column_stats,
-            input_prop.precise_cardinality,
+            input_prop.statistics.is_accurate,
+            input_prop.statistics.column_stats,
+            input_prop.statistics.precise_cardinality,
         ) {
             let mut scalars = agg.aggregate_functions;
             for item in scalars.iter_mut() {

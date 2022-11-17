@@ -32,6 +32,17 @@ impl RequiredProperty {
 }
 
 #[derive(Default, Clone, Debug)]
+pub struct Statistics {
+    // We can get the precise row count of a table in databend,
+    // which information is useful to optimize some queries like `COUNT(*)`.
+    pub precise_cardinality: Option<u64>,
+    /// Statistics of columns, column index -> column stat
+    pub column_stats: ColumnStatSet,
+    /// Statistics info is accurate
+    pub is_accurate: bool,
+}
+
+#[derive(Default, Clone, Debug)]
 pub struct RelationalProperty {
     /// Output columns of a relational expression
     pub output_columns: ColumnSet,
@@ -45,14 +56,7 @@ pub struct RelationalProperty {
     // TODO(leiysky): introduce upper bound of cardinality to
     // reduce error in estimation.
     pub cardinality: f64,
-    // We can get the precise row count of a table in databend,
-    // which information is useful to optimize some queries like `COUNT(*)`.
-    pub precise_cardinality: Option<u64>,
-
-    /// Statistics of columns, column index -> column stat
-    pub column_stats: ColumnStatSet,
-    /// Statistics info is accurate
-    pub is_accurate: bool,
+    pub statistics: Statistics,
 }
 
 #[derive(Default, Clone)]

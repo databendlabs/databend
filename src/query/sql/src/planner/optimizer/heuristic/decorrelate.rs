@@ -52,6 +52,7 @@ use crate::plans::RelOp;
 use crate::plans::RelOperator;
 use crate::plans::Scalar;
 use crate::plans::ScalarItem;
+use crate::plans::Statistics;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
 use crate::ColumnBinding;
@@ -409,10 +410,12 @@ impl SubqueryRewriter {
                     push_down_predicates: None,
                     limit: None,
                     order_by: None,
-                    statistics: None,
-                    col_stats: HashMap::new(),
+                    statistics: Statistics {
+                        statistics: None,
+                        col_stats: HashMap::new(),
+                        is_accurate: false,
+                    },
                     prewhere: None,
-                    is_accurate: false,
                 }
                 .into(),
             );

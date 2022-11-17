@@ -28,3 +28,4 @@ pub use property::Distribution;
 pub use property::PhysicalProperty;
 pub use property::RelationalProperty;
 pub use property::RequiredProperty;
+pub use property::Statistics;

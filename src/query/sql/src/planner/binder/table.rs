@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_ast::ast::Indirection;
@@ -50,8 +49,8 @@ use crate::planner::semantic::TypeChecker;
 use crate::plans::ConstantExpr;
 use crate::plans::LogicalGet;
 use crate::plans::Scalar;
+use crate::plans::Statistics;
 use crate::BindContext;
-use crate::ColumnSet;
 use crate::IndexType;
 
 impl<'a> Binder {
@@ -305,7 +304,6 @@ impl<'a> Binder {
         let columns = self.metadata.read().columns_by_table_index(table_index);
         let table = self.metadata.read().table(table_index).clone();
 
-        let mut column_indexs: ColumnSet = HashSet::new();
         let mut has_path_indices = false;
         let mut col_stats: HashMap<IndexType, Option<ColumnStatistics>> = HashMap::new();
         for column in columns.iter() {
@@ -322,7 +320,6 @@ impl<'a> Binder {
                 },
             };
             bind_context.add_column_binding(column_binding);
-            column_indexs.insert(column.index());
             if !has_path_indices {
                 // create table t (c0 tuple(int, int), c1 string null) in planner col index is : (0: c0, 1: c1, 2: c0:2 3: c0:2)
                 // in storage column (0: PrimitiveColumn, 1: PrimitiveColumn, 2: NullableColumn)
@@ -346,10 +343,12 @@ impl<'a> Binder {
                     push_down_predicates: None,
                     limit: None,
                     order_by: None,
-                    statistics: stat,
+                    statistics: Statistics {
+                        statistics: stat,
+                        col_stats,
+                        is_accurate,
+                    },
                     prewhere: None,
-                    col_stats,
-                    is_accurate,
                 }
                 .into(),
             ),

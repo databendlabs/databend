@@ -20,6 +20,7 @@ use crate::optimizer::PhysicalProperty;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
 use crate::optimizer::RequiredProperty;
+use crate::optimizer::Statistics;
 use crate::plans::LogicalOperator;
 use crate::plans::Operator;
 use crate::plans::PhysicalOperator;
@@ -75,11 +76,16 @@ impl LogicalOperator for UnionAll {
 
         let cardinality = left_prop.cardinality + right_prop.cardinality;
 
-        let precise_cardinality = left_prop.precise_cardinality.and_then(|left_cardinality| {
-            right_prop
+        let precise_cardinality =
+            left_prop
+                .statistics
                 .precise_cardinality
-                .map(|right_cardinality| left_cardinality + right_cardinality)
-        });
+                .and_then(|left_cardinality| {
+                    right_prop
+                        .statistics
+                        .precise_cardinality
+                        .map(|right_cardinality| left_cardinality + right_cardinality)
+                });
 
         // Derive used columns
         let mut used_columns = self.used_columns()?;
@@ -91,10 +97,11 @@ impl LogicalOperator for UnionAll {
             outer_columns,
             used_columns,
             cardinality,
-            precise_cardinality,
-
-            column_stats: Default::default(),
-            is_accurate: left_prop.is_accurate && right_prop.is_accurate,
+            statistics: Statistics {
+                precise_cardinality,
+                column_stats: Default::default(),
+                is_accurate: left_prop.statistics.is_accurate && right_prop.statistics.is_accurate,
+            },
         })
     }
 

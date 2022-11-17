@@ -19,6 +19,7 @@ use crate::optimizer::PhysicalProperty;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
 use crate::optimizer::RequiredProperty;
+use crate::optimizer::Statistics;
 use crate::plans::LogicalOperator;
 use crate::plans::Operator;
 use crate::plans::PhysicalOperator;
@@ -100,8 +101,8 @@ impl LogicalOperator for EvalScalar {
 
         // Derive cardinality
         let cardinality = input_prop.cardinality;
-        let precise_cardinality = input_prop.precise_cardinality;
-
+        let precise_cardinality = input_prop.statistics.precise_cardinality;
+        let is_accurate = input_prop.statistics.is_accurate;
         // Derive used columns
         let mut used_columns = self.used_columns()?;
         used_columns.extend(input_prop.used_columns);
@@ -111,10 +112,11 @@ impl LogicalOperator for EvalScalar {
             outer_columns,
             used_columns,
             cardinality,
-            precise_cardinality,
-
-            column_stats: Default::default(),
-            is_accurate: input_prop.is_accurate,
+            statistics: Statistics {
+                precise_cardinality,
+                column_stats: Default::default(),
+                is_accurate,
+            },
         })
     }
 

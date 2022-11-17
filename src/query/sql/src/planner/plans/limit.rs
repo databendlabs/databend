@@ -20,6 +20,7 @@ use crate::optimizer::PhysicalProperty;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
 use crate::optimizer::RequiredProperty;
+use crate::optimizer::Statistics;
 use crate::plans::LogicalOperator;
 use crate::plans::Operator;
 use crate::plans::PhysicalOperator;
@@ -82,10 +83,11 @@ impl LogicalOperator for Limit {
                 Some(limit) if (limit as f64) < input_prop.cardinality => limit as f64,
                 _ => input_prop.cardinality,
             },
-            precise_cardinality: None,
-
-            column_stats: Default::default(),
-            is_accurate: false,
+            statistics: Statistics {
+                precise_cardinality: None,
+                column_stats: Default::default(),
+                is_accurate: false,
+            },
         })
     }
 
