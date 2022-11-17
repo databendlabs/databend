@@ -106,44 +106,12 @@ impl TableMutator for SegmentCompactMutator {
             &segment_info_cache,
         );
 
-        let mut compactor =
+        let compactor =
             SegmentCompactor::new(self.compact_params.block_per_seg as u64, segment_writer);
 
-        // 3. feed segments into accumulator, taking limit into account
-        // traverse the segment in reversed order, so that newly created unmergeable fragmented segment
-        // will be left at the "top", and likely to be merged in the next compaction; instead of leaving
-        // an unmergeable fragmented segment in the middle.
-        let mut compact_end_at = 0;
-        for (idx, x) in base_segments.iter().rev().enumerate() {
-            compactor
-                .add(x, base_segment_locations[num_segments - idx - 1].clone())
-                .await?;
-            let compacted = compactor.num_fragments_compacted();
-            compact_end_at = idx;
-            if compacted >= limit {
-                // break if number of compacted segments reach the limit
-                // note that during the finalization of compaction, there might be some extra
-                // fragmented segments also need to be compacted, we just let it go
-                break;
-            }
-        }
-        let compacted_state = compactor.finalize().await?;
-        self.compaction = compacted_state;
-
-        // 3. combine with the unprocessed segments (which are outside the limit)
-        if self.has_compaction() {
-            // if some compaction occurred, the reminders
-            // which are outside of the limit should also be collected
-            for idx in 0..num_segments - compact_end_at - 1 {
-                self.compaction
-                    .segments_locations
-                    .push(base_segment_locations[idx].clone());
-                merge_statistics_mut(&mut self.compaction.statistics, &base_segments[idx].summary)?;
-            }
-
-            // reverse the segments locations, since segments are traversed reversely during compaction
-            self.compaction.segments_locations.reverse();
-        }
+        self.compaction = compactor
+            .compact(&base_segments, base_segment_locations, limit)
+            .await?;
 
         gauge!(
             "fuse_compact_segments_select_duration_second",
@@ -210,6 +178,50 @@ impl<'a> SegmentCompactor<'a> {
             segment_writer,
             compacted_state: Default::default(),
         }
+    }
+
+    // accumulate one segment
+    pub async fn compact(
+        mut self,
+        segments: &'a [Arc<SegmentInfo>],
+        locations: &'a [Location],
+        limit: usize,
+    ) -> Result<SegmentCompactionState> {
+        // 1. feed segments into accumulator, taking limit into account
+        // traverse the segment in reversed order, so that newly created unmergeable fragmented segment
+        // will be left at the "top", and likely to be merged in the next compaction; instead of leaving
+        // an unmergeable fragmented segment in the middle.
+        let num_segments = segments.len();
+        let mut compact_end_at = 0;
+        for (idx, x) in segments.iter().rev().enumerate() {
+            self.add(x, locations[num_segments - idx - 1].clone())
+                .await?;
+            let compacted = self.num_fragments_compacted();
+            compact_end_at = idx;
+            if compacted >= limit {
+                // break if number of compacted segments reach the limit
+                // note that during the finalization of compaction, there might be some extra
+                // fragmented segments also need to be compacted, we just let it go
+                break;
+            }
+        }
+        let mut compaction = self.finalize().await?;
+
+        // 2. combine with the unprocessed segments (which are outside the limit)
+        let fragments_compacted = !compaction.new_segment_paths.is_empty();
+        if fragments_compacted {
+            // if some compaction occurred, the reminders
+            // which are outside of the limit should also be collected
+            for idx in 0..num_segments - compact_end_at - 1 {
+                compaction.segments_locations.push(locations[idx].clone());
+                merge_statistics_mut(&mut compaction.statistics, &segments[idx].summary)?;
+            }
+
+            // reverse the segments locations, since segments are traversed reversely during compaction
+            compaction.segments_locations.reverse();
+        }
+
+        Ok(compaction)
     }
 
     // accumulate one segment
