@@ -14,6 +14,8 @@
 
 use std::fmt::Debug;
 
+use ordered_float::OrderedFloat;
+
 pub trait StatBuffer {
     type Buffer: AsMut<[u8]> + AsRef<[u8]> + Copy + Sync + Debug;
     fn buffer() -> Self::Buffer;
@@ -92,6 +94,22 @@ impl StatBuffer for f32 {
 }
 
 impl StatBuffer for f64 {
+    type Buffer = [u8; 8];
+
+    fn buffer() -> Self::Buffer {
+        [0; 8]
+    }
+}
+
+impl StatBuffer for OrderedFloat<f32> {
+    type Buffer = [u8; 4];
+
+    fn buffer() -> Self::Buffer {
+        [0; 4]
+    }
+}
+
+impl StatBuffer for OrderedFloat<f64> {
     type Buffer = [u8; 8];
 
     fn buffer() -> Self::Buffer {

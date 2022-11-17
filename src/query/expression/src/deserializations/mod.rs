@@ -22,9 +22,11 @@ mod nullable;
 mod number;
 mod string;
 mod timestamp;
+mod tuple;
 mod variant;
 
 pub use boolean::*;
+use common_exception::Result;
 pub use date::*;
 pub use null::*;
 pub use nullable::*;
@@ -32,15 +34,15 @@ pub use number::*;
 use serde_json::Value;
 pub use string::*;
 pub use timestamp::*;
+pub use tuple::*;
 pub use variant::*;
 
 use crate::Column;
 use crate::Scalar;
-
 pub trait TypeDeserializer: Send + Sync {
     fn memory_size(&self) -> usize;
 
-    fn de_binary(&mut self, reader: &mut &[u8], format: &FormatSettings) -> Result<(), String>;
+    fn de_binary(&mut self, reader: &mut &[u8], format: &FormatSettings) -> Result<()>;
 
     fn de_default(&mut self);
 
@@ -50,18 +52,18 @@ pub trait TypeDeserializer: Send + Sync {
         step: usize,
         rows: usize,
         format: &FormatSettings,
-    ) -> Result<(), String>;
+    ) -> Result<()>;
 
-    fn de_json(&mut self, reader: &Value, format: &FormatSettings) -> Result<(), String>;
+    fn de_json(&mut self, reader: &Value, format: &FormatSettings) -> Result<()>;
 
     fn de_null(&mut self, _format: &FormatSettings) -> bool {
         false
     }
 
-    fn append_data_value(&mut self, value: Scalar, format: &FormatSettings) -> Result<(), String>;
+    fn append_data_value(&mut self, value: Scalar, format: &FormatSettings) -> Result<()>;
 
     /// Note this method will return err only when inner builder is empty.
-    fn pop_data_value(&mut self) -> Result<Scalar, String>;
+    fn pop_data_value(&mut self) -> Result<()>;
 
     fn finish_to_column(&mut self) -> Column;
 }

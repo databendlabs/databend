@@ -16,13 +16,11 @@ use std::io::Cursor;
 
 use chrono::Datelike;
 use chrono::NaiveDate;
+use common_exception::ErrorCode;
+use common_exception::Result;
 use common_io::cursor_ext::BufferReadDateTimeExt;
-use common_io::cursor_ext::*;
 use common_io::prelude::BinaryRead;
 use common_io::prelude::FormatSettings;
-use common_io::prelude::StatBuffer;
-use common_io::prelude::*;
-use lexical_core::FromLexical;
 
 use crate::types::date::check_date;
 use crate::Column;
@@ -34,9 +32,9 @@ pub struct DateDeserializer {
 }
 
 impl DateDeserializer {
-    pub fn create() -> Self {
+    pub fn with_capacity(capacity: usize) -> Self {
         Self {
-            builder: Vec::new(),
+            builder: Vec::with_capacity(capacity),
         }
     }
 }
@@ -46,14 +44,13 @@ impl TypeDeserializer for DateDeserializer {
         self.builder.len() * std::mem::size_of::<i32>()
     }
 
-    fn de_binary(&mut self, reader: &mut &[u8], _format: &FormatSettings) -> Result<(), String> {
+    fn de_binary(&mut self, reader: &mut &[u8], _format: &FormatSettings) -> Result<()> {
         let value: i32 = reader.read_scalar()?;
-        check_date(value)?;
         self.builder.push(value);
         Ok(())
     }
 
-    fn de_default(&mut self, _format: &FormatSettings) {
+    fn de_default(&mut self) {
         self.builder.push(i32::default());
     }
 
@@ -63,47 +60,41 @@ impl TypeDeserializer for DateDeserializer {
         step: usize,
         rows: usize,
         _format: &FormatSettings,
-    ) -> Result<(), String> {
+    ) -> Result<()> {
         for row in 0..rows {
             let mut reader = &reader[step * row..];
             let value: i32 = reader.read_scalar()?;
-            check_date(value)?;
             self.builder.push(value);
         }
         Ok(())
     }
 
-    fn de_json(
-        &mut self,
-        value: &serde_json::Value,
-        format: &FormatSettings,
-    ) -> Result<(), String> {
+    fn de_json(&mut self, value: &serde_json::Value, format: &FormatSettings) -> Result<()> {
         match value {
             serde_json::Value::String(v) => {
                 let mut reader = Cursor::new(v.as_bytes());
                 let date = reader.read_date_text(&format.timezone)?;
                 let days = uniform_date(date);
-                check_date(days)?;
                 self.builder.push(days);
                 Ok(())
             }
-            _ => Err(ErrorCode::BadBytes("Incorrect boolean value")),
+            _ => Err(ErrorCode::from("Incorrect boolean value")),
         }
     }
 
-    fn append_data_value(&mut self, value: Scalar, _format: &FormatSettings) -> Result<(), String> {
+    fn append_data_value(&mut self, value: Scalar, _format: &FormatSettings) -> Result<()> {
         let v = value
             .as_date()
             .ok_or_else(|| "Unable to get date value".to_string())?;
-        check_date(*v as i64)?;
+        check_date(*v as i64).map_err(|err| ErrorCode::from_string(err))?;
         self.builder.push(*v);
         Ok(())
     }
 
-    fn pop_data_value(&mut self) -> Result<(), String> {
+    fn pop_data_value(&mut self) -> Result<()> {
         match self.builder.pop() {
             Some(_) => Ok(()),
-            None => Err("Date column is empty when pop data value".to_string()),
+            None => Err(ErrorCode::from("Date column is empty when pop data value")),
         }
     }
 

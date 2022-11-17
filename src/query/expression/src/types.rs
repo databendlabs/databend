@@ -29,6 +29,7 @@ pub mod variant;
 use std::fmt::Debug;
 use std::ops::Range;
 
+use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::trusted_len::TrustedLen;
 use enum_as_inner::EnumAsInner;
 use serde::Deserialize;
@@ -45,24 +46,23 @@ pub use self::null::NullType;
 pub use self::nullable::NullableType;
 pub use self::number::NumberDataType;
 pub use self::number::NumberType;
+use self::number::F32;
+use self::number::F64;
+use self::string::StringColumnBuilder;
 pub use self::string::StringType;
 pub use self::timestamp::TimestampType;
 pub use self::variant::VariantType;
-use crate::deserializations::BooleanDeserializer;
 use crate::deserializations::DateDeserializer;
-use crate::deserializations::EmptyArrayDeserializer;
-use crate::deserializations::NullDeserializer;
 use crate::deserializations::NullableDeserializer;
 use crate::deserializations::NumberDeserializer;
-use crate::deserializations::StringDeserializer;
 use crate::deserializations::TimestampDeserializer;
+use crate::deserializations::TupleDeserializer;
 use crate::deserializations::TypeDeserializer;
 use crate::deserializations::VariantDeserializer;
 use crate::property::Domain;
 use crate::utils::concat_array;
 use crate::values::Column;
 use crate::values::Scalar;
-use crate::with_number_mapped_type;
 use crate::ColumnBuilder;
 use crate::ScalarRef;
 
@@ -116,22 +116,55 @@ impl DataType {
         !self.is_nullable_or_null()
     }
 
-    pub fn create_deserializer(&self) -> Box<dyn TypeDeserializer> {
+    pub fn create_deserializer(&self, capacity: usize) -> Box<dyn TypeDeserializer> {
         match self {
-            DataType::Null => Box::new(NullDeserializer::create()),
-            DataType::Boolean => Box::new(BooleanDeserializer::create()),
-            DataType::String => Box::new(StringDeserializer::create()),
-            DataType::Number(num_ty) => {
-                with_number_mapped_type!(|NUM_TYPE| match num_ty {
-                    NumberDataType::NUM_TYPE => Box::new(NumberDeserializer::<NUM_TYPE>::create()),
-                })
+            DataType::Null => Box::new(0),
+            DataType::Boolean => Box::new(MutableBitmap::with_capacity(capacity)),
+            DataType::String => {
+                Box::new(StringColumnBuilder::with_capacity(capacity, capacity * 4))
             }
-            DataType::Date => Box::new(DateDeserializer::create()),
-            DataType::Timestamp => Box::new(TimestampDeserializer::create()),
-            DataType::Nullable(inner_ty) => Box::new(NullableDeserializer::create(inner_ty)),
-            DataType::EmptyArray => Box::new(EmptyArrayDeserializer::create()),
-            DataType::Variant => Box::new(VariantDeserializer::create()),
-            _ => todo!(),
+            DataType::Number(num_ty) => match num_ty {
+                NumberDataType::UInt8 => {
+                    Box::new(NumberDeserializer::<u8, u8>::with_capacity(capacity))
+                }
+                NumberDataType::UInt16 => {
+                    Box::new(NumberDeserializer::<u16, u16>::with_capacity(capacity))
+                }
+                NumberDataType::UInt32 => {
+                    Box::new(NumberDeserializer::<u32, u32>::with_capacity(capacity))
+                }
+                NumberDataType::UInt64 => {
+                    Box::new(NumberDeserializer::<u64, u64>::with_capacity(capacity))
+                }
+                NumberDataType::Int8 => {
+                    Box::new(NumberDeserializer::<i8, i8>::with_capacity(capacity))
+                }
+                NumberDataType::Int16 => {
+                    Box::new(NumberDeserializer::<i16, i16>::with_capacity(capacity))
+                }
+                NumberDataType::Int32 => {
+                    Box::new(NumberDeserializer::<i32, i32>::with_capacity(capacity))
+                }
+                NumberDataType::Int64 => {
+                    Box::new(NumberDeserializer::<i64, i64>::with_capacity(capacity))
+                }
+                NumberDataType::Float32 => {
+                    Box::new(NumberDeserializer::<F32, f32>::with_capacity(capacity))
+                }
+                NumberDataType::Float64 => {
+                    Box::new(NumberDeserializer::<F64, f64>::with_capacity(capacity))
+                }
+            },
+            DataType::Date => Box::new(DateDeserializer::with_capacity(capacity)),
+            DataType::Timestamp => Box::new(TimestampDeserializer::with_capacity(capacity)),
+            DataType::Nullable(inner_ty) => Box::new(NullableDeserializer::with_capacity(
+                capacity,
+                inner_ty.as_ref(),
+            )),
+            DataType::Variant => Box::new(VariantDeserializer::with_capacity(capacity)),
+            DataType::Tuple(types) => Box::new(TupleDeserializer::with_capacity(capacity, types)),
+
+            _ => unimplemented!(),
         }
     }
 }

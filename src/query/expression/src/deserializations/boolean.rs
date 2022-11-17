@@ -13,9 +13,10 @@
 // limitations under the License.
 
 use common_arrow::arrow::bitmap::MutableBitmap;
+use common_exception::ErrorCode;
+use common_exception::Result;
 use common_io::prelude::BinaryRead;
 use common_io::prelude::FormatSettings;
-use common_io::prelude::*;
 
 use crate::Column;
 use crate::Scalar;
@@ -26,13 +27,13 @@ impl TypeDeserializer for MutableBitmap {
         self.len()
     }
 
-    fn de_binary(&mut self, reader: &mut &[u8], format: &FormatSettings) -> Result<(), String> {
+    fn de_binary(&mut self, reader: &mut &[u8], _format: &FormatSettings) -> Result<()> {
         let value: bool = reader.read_scalar()?;
         self.push(value);
         Ok(())
     }
 
-    fn de_default(&mut self, _format: &FormatSettings) {
+    fn de_default(&mut self) {
         self.push(false);
     }
 
@@ -41,8 +42,8 @@ impl TypeDeserializer for MutableBitmap {
         reader: &[u8],
         step: usize,
         rows: usize,
-        format: &FormatSettings,
-    ) -> Result<(), String> {
+        _format: &FormatSettings,
+    ) -> Result<()> {
         for row in 0..rows {
             let mut reader = &reader[step * row..];
             let value: bool = reader.read_scalar()?;
@@ -51,35 +52,34 @@ impl TypeDeserializer for MutableBitmap {
         Ok(())
     }
 
-    fn de_json(
-        &mut self,
-        reader: &serde_json::Value,
-        format: &FormatSettings,
-    ) -> Result<(), String> {
+    fn de_json(&mut self, value: &serde_json::Value, _format: &FormatSettings) -> Result<()> {
         match value {
             serde_json::Value::Bool(v) => self.push(*v),
-            _ => return Err("Incorrect boolean value".to_string()),
+            _ => return Err(ErrorCode::from("Incorrect boolean value")),
         }
         Ok(())
     }
 
-    fn append_data_value(&mut self, value: Scalar, _format: &FormatSettings) -> Result<(), String> {
+    fn append_data_value(&mut self, value: Scalar, _format: &FormatSettings) -> Result<()> {
         let v = value
             .as_boolean()
-            .ok_or_else(|| "Unable to get boolean value".to_string())?;
+            .ok_or_else(|| ErrorCode::from("Unable to get boolean value"))?;
         self.push(*v);
         Ok(())
     }
 
     fn pop_data_value(&mut self) -> Result<()> {
         match self.pop() {
-            Some(v) => Ok(()),
-            None => Err("Boolean column is empty when pop data value".to_string()),
+            Some(_) => Ok(()),
+            None => Err(ErrorCode::from(
+                "Boolean column is empty when pop data value",
+            )),
         }
     }
 
     fn finish_to_column(&mut self) -> Column {
         self.shrink_to_fit();
-        Column::Boolean(std::mem::take(&mut self).into())
+        let bitmap = std::mem::replace(self, Self::with_capacity(0));
+        Column::Boolean(bitmap.into())
     }
 }

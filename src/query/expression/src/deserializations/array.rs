@@ -12,13 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::bitmap::MutableBitmap;
+use common_exception::ErrorCode;
+use common_exception::Result;
 use common_io::prelude::BinaryRead;
 use common_io::prelude::FormatSettings;
-use common_io::prelude::*;
 
 use crate::types::array::ArrayColumn;
-use crate::types::array::ArrayColumnBuilder;
 use crate::types::AnyType;
 use crate::types::ValueType;
 use crate::Column;
@@ -35,15 +34,16 @@ impl ArrayDeserializer {
         if self.offsets.is_empty() {
             self.offsets.push(0);
         }
-        self.offsets.push(self.offsets.last().unwrap() + size);
+        self.offsets
+            .push(*self.offsets.last().unwrap() + size as u64);
     }
 
-    fn pop_offset(&mut self) -> Result<usize, String> {
+    fn pop_offset(&mut self) -> Result<usize> {
         if self.offsets.len() <= 1 {
-            return Err("Array is empty".to_string());
+            return Err(ErrorCode::BadDataValueType("Array is empty".to_string()));
         }
         let total = self.offsets.pop().unwrap();
-        Ok(total - self.offsets.last().unwrap())
+        Ok((total - *self.offsets.last().unwrap()) as usize)
     }
 }
 
@@ -52,18 +52,16 @@ impl TypeDeserializer for ArrayDeserializer {
         self.inner.memory_size()
     }
 
-    fn de_binary(&mut self, reader: &mut &[u8], format: &FormatSettings) -> Result<(), String> {
+    fn de_binary(&mut self, reader: &mut &[u8], format: &FormatSettings) -> Result<()> {
         let size = reader.read_uvarint()?;
         for _i in 0..size {
-            self.inner.de_binary(reader, _format)?;
+            self.inner.de_binary(reader, format)?;
         }
-
-        self.add_offset(size);
-
+        self.add_offset(size as usize);
         Ok(())
     }
 
-    fn de_default(&mut self, _format: &FormatSettings) {
+    fn de_default(&mut self) {
         self.add_offset(0);
     }
 
@@ -73,24 +71,19 @@ impl TypeDeserializer for ArrayDeserializer {
         step: usize,
         rows: usize,
         format: &FormatSettings,
-    ) -> Result<(), String> {
+    ) -> Result<()> {
         for row in 0..rows {
             let mut reader = &reader[step * row..];
             let size = reader.read_uvarint()?;
-            let mut values = Vec::with_capacity(size as usize);
             for _i in 0..size {
                 self.inner.de_binary(&mut reader, format)?;
             }
-            self.add_offset(size);
+            self.add_offset(size as usize);
         }
         Ok(())
     }
 
-    fn de_json(
-        &mut self,
-        value: &serde_json::Value,
-        format: &FormatSettings,
-    ) -> Result<(), String> {
+    fn de_json(&mut self, value: &serde_json::Value, format: &FormatSettings) -> Result<()> {
         match value {
             serde_json::Value::Array(vals) => {
                 for val in vals {
@@ -103,7 +96,7 @@ impl TypeDeserializer for ArrayDeserializer {
         }
     }
 
-    fn append_data_value(&mut self, value: Scalar, format: &FormatSettings) -> Result<(), String> {
+    fn append_data_value(&mut self, value: Scalar, format: &FormatSettings) -> Result<()> {
         let value = value.as_array().unwrap();
         for val in AnyType::iter_column(value) {
             self.inner.append_data_value(val.to_owned(), format)?;
@@ -112,7 +105,7 @@ impl TypeDeserializer for ArrayDeserializer {
         Ok(())
     }
 
-    fn pop_data_value(&mut self) -> Result<(), String> {
+    fn pop_data_value(&mut self) -> Result<()> {
         let size = self.pop_offset()?;
         for _ in 0..size {
             let _ = self.inner.pop_data_value()?;
@@ -121,8 +114,7 @@ impl TypeDeserializer for ArrayDeserializer {
     }
 
     fn finish_to_column(&mut self) -> Column {
-        let value = self.inner.finish_to_column();
-
+        let values = self.inner.finish_to_column();
         let offsets = std::mem::take(&mut self.offsets);
         Column::Array(Box::new(ArrayColumn {
             values,

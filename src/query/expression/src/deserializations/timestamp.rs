@@ -12,7 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_io::prelude::*;
+use std::io::Cursor;
+
+use common_exception::ErrorCode;
+use common_exception::Result;
+use common_io::cursor_ext::*;
+use common_io::prelude::BinaryRead;
+use common_io::prelude::FormatSettings;
 
 use crate::types::timestamp::check_timestamp;
 use crate::Column;
@@ -24,9 +30,9 @@ pub struct TimestampDeserializer {
 }
 
 impl TimestampDeserializer {
-    pub fn create() -> Self {
+    pub fn with_capacity(capacity: usize) -> Self {
         Self {
-            builder: Vec::new(),
+            builder: Vec::with_capacity(capacity),
         }
     }
 }
@@ -36,23 +42,63 @@ impl TypeDeserializer for TimestampDeserializer {
         self.builder.len() * std::mem::size_of::<i64>()
     }
 
-    fn de_default(&mut self, _format: &FormatSettings) {
+    fn de_binary(&mut self, reader: &mut &[u8], _format: &FormatSettings) -> Result<()> {
+        let value: i64 = reader.read_scalar()?;
+        check_timestamp(value)?;
+        self.builder.push(value);
+        Ok(())
+    }
+
+    fn de_default(&mut self) {
         self.builder.push(i64::default());
     }
 
-    fn append_data_value(&mut self, value: Scalar, _format: &FormatSettings) -> Result<(), String> {
+    fn de_json(&mut self, value: &serde_json::Value, format: &FormatSettings) -> Result<()> {
+        match value {
+            serde_json::Value::String(v) => {
+                let v = v.clone();
+                let mut reader = Cursor::new(v.as_bytes());
+                let ts = reader.read_timestamp_text(&format.timezone)?;
+
+                let micros = ts.timestamp_micros();
+                check_timestamp(micros)?;
+                self.builder.push(micros);
+                Ok(())
+            }
+            _ => Err(ErrorCode::from("Incorrect boolean value")),
+        }
+    }
+
+    fn de_fixed_binary_batch(
+        &mut self,
+        reader: &[u8],
+        step: usize,
+        rows: usize,
+        _format: &FormatSettings,
+    ) -> Result<()> {
+        for row in 0..rows {
+            let mut reader = &reader[step * row..];
+            let value: i64 = reader.read_scalar()?;
+            self.builder.push(value);
+        }
+        Ok(())
+    }
+
+    fn append_data_value(&mut self, value: Scalar, _format: &FormatSettings) -> Result<()> {
         let v = value
             .as_timestamp()
-            .ok_or_else(|| "Unable to get timestamp value".to_string())?;
+            .ok_or_else(|| ErrorCode::from("Unable to get timestamp value"))?;
         check_timestamp(*v)?;
         self.builder.push(*v);
         Ok(())
     }
 
-    fn pop_data_value(&mut self) -> Result<Scalar, String> {
+    fn pop_data_value(&mut self) -> Result<()> {
         match self.builder.pop() {
-            Some(v) => Ok(Scalar::Timestamp(v)),
-            None => Err("Timestamp column is empty when pop data value".to_string()),
+            Some(_) => Ok(()),
+            None => Err(ErrorCode::from(
+                "Timestamp column is empty when pop data value",
+            )),
         }
     }
 

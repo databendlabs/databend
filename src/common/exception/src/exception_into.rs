@@ -68,12 +68,7 @@ impl From<anyhow::Error> for ErrorCode {
 
 impl From<&str> for ErrorCode {
     fn from(error: &str) -> Self {
-        ErrorCode::create(
-            1002,
-            error.to_string(),
-            None,
-            Some(ErrorCodeBacktrace::Origin(Arc::new(Backtrace::capture()))),
-        )
+        ErrorCode::from_string(error.to_string())
     }
 }
 

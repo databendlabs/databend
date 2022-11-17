@@ -13,6 +13,8 @@
 // limitations under the License.
 
 use common_arrow::arrow::bitmap::MutableBitmap;
+use common_exception::ErrorCode;
+use common_exception::Result;
 use common_io::prelude::*;
 
 use crate::types::nullable::NullableColumn;
@@ -27,10 +29,10 @@ pub struct NullableDeserializer {
 }
 
 impl NullableDeserializer {
-    pub fn create(inner_ty: &DataType) -> Self {
+    pub fn with_capacity(capacity: usize, inner_ty: &DataType) -> Self {
         Self {
             validity: MutableBitmap::new(),
-            inner: inner_ty.create_deserializer(),
+            inner: inner_ty.create_deserializer(capacity),
         }
     }
 }
@@ -40,7 +42,7 @@ impl TypeDeserializer for NullableDeserializer {
         self.inner.memory_size() + self.validity.as_slice().len()
     }
 
-    fn de_binary(&mut self, reader: &mut &[u8], format: &FormatSettings) -> Result<(), String> {
+    fn de_binary(&mut self, reader: &mut &[u8], format: &FormatSettings) -> Result<()> {
         let valid: bool = reader.read_scalar()?;
         if valid {
             self.inner.de_binary(reader, format)?;
@@ -62,15 +64,11 @@ impl TypeDeserializer for NullableDeserializer {
         _step: usize,
         _rows: usize,
         _format: &FormatSettings,
-    ) -> Result<(), String> {
-        Err("unreachable".to_string())
+    ) -> Result<()> {
+        Err(ErrorCode::from("unreachable"))
     }
 
-    fn de_json(
-        &mut self,
-        value: &serde_json::Value,
-        format: &FormatSettings,
-    ) -> Result<(), String> {
+    fn de_json(&mut self, value: &serde_json::Value, format: &FormatSettings) -> Result<()> {
         match value {
             serde_json::Value::Null => {
                 self.de_null(format);
@@ -89,7 +87,7 @@ impl TypeDeserializer for NullableDeserializer {
         true
     }
 
-    fn append_data_value(&mut self, value: Scalar, format: &FormatSettings) -> Result<(), String> {
+    fn append_data_value(&mut self, value: Scalar, format: &FormatSettings) -> Result<()> {
         match value {
             Scalar::Null => {
                 self.validity.push(false);
@@ -103,10 +101,12 @@ impl TypeDeserializer for NullableDeserializer {
         Ok(())
     }
 
-    fn pop_data_value(&mut self) -> Result<(), String> {
+    fn pop_data_value(&mut self) -> Result<()> {
         match self.validity.pop() {
             Some(_) => Ok(()),
-            None => Err("Nullable column is empty when pop data value".to_string()),
+            None => Err(ErrorCode::from(
+                "Nullable column is empty when pop data value",
+            )),
         }
     }
 
