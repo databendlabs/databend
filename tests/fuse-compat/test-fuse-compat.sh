@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 set -o errexit
 SCRIPT_PATH="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)"
@@ -88,19 +88,16 @@ git_partial_clone() {
 
 }
 
-
 # Run specified tests found in logic test suite dir
-run_logictest()
-{
+run_logictest() {
     local pattern="$1"
-
     (
         cd "tests/logictest"
-        python3 main.py --suites "$SCRIPT_PATH/compat-logictest" "$pattern"
+        # Only run test on mysql handler
+        python3 main.py "$pattern" --handlers mysql --suites "$SCRIPT_PATH/compat-logictest"
     )
 
 }
-
 
 kill_proc() {
     local name="$1"
@@ -136,7 +133,6 @@ run_test() {
     local query_new="./bins/current/databend-query"
     local metasrv="./bins/current/databend-meta"
 
-
     echo " === metasrv version:"
     # TODO remove --single
     "$metasrv" --single --cmd ver || echo " === no version yet"
@@ -149,7 +145,6 @@ run_test() {
 
     sleep 1
 
-
     kill_proc databend-query
     kill_proc databend-meta
 
@@ -158,19 +153,12 @@ run_test() {
 
     rm nohup.out || echo "no nohup.out"
 
-
     echo ' === Start databend-meta...'
 
     export RUST_BACKTRACE=1
 
     nohup "$metasrv" --single --log-level=DEBUG &
     python3 scripts/ci/wait_tcp.py --timeout 5 --port 9191
-
-
-    # Only run test on mysql handler
-    export DISABLE_HTTP_LOGIC_TEST=true
-    export DISABLE_CLICKHOUSE_LOGIC_TEST=true
-
 
     echo ' === Start old databend-query...'
 
@@ -179,7 +167,6 @@ run_test() {
     # )
     # config_path="old_config/$query_old_ver/$query_config_path"
     config_path="./bins/$query_old_ver/configs/databend-query.toml"
-
 
     # TODO clean up data?
     echo " === bring up $query_old"
@@ -193,9 +180,7 @@ run_test() {
     # run_logictest old_logictest/$query_old_ver fuse_compat_write
     run_logictest fuse_compat_write
 
-
     kill_proc databend-query
-
 
     echo " === bring up new query "
 
@@ -203,7 +188,6 @@ run_test() {
 
     nohup "$query_new" -c "$config_path" --log-level DEBUG --meta-endpoints "0.0.0.0:9191" >query-current.log &
     python3 scripts/ci/wait_tcp.py --timeout 5 --port 3307
-
 
     echo " === Run test: fuse_compat_read with current query"
 
@@ -216,7 +200,6 @@ run_test() {
 # The previous version to assert compatibility with
 # e.g. old_query_ver="0.7.151"
 old_query_ver="$1"
-
 
 chmod +x ./bins/current/*
 

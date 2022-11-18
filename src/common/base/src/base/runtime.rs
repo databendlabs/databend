@@ -104,11 +104,17 @@ impl Runtime {
         let join_handler = thread::spawn(move || {
             // We ignore channel is closed.
             let _ = runtime.block_on(recv_stop);
-            let instant = Instant::now();
-            // We wait up to 3 seconds to complete the runtime shutdown.
-            runtime.shutdown_timeout(Duration::from_secs(3));
 
-            instant.elapsed() >= Duration::from_secs(3)
+            match !cfg!(debug_assertions) {
+                true => false,
+                false => {
+                    let instant = Instant::now();
+                    // We wait up to 3 seconds to complete the runtime shutdown.
+                    runtime.shutdown_timeout(Duration::from_secs(3));
+
+                    instant.elapsed() >= Duration::from_secs(3)
+                }
+            }
         });
 
         Ok(Runtime {

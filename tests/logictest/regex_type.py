@@ -2,9 +2,9 @@ import re
 from log import log
 
 regex_type_map = {
-    'ANYTHING': '.*',  # empty space will make problem
-    'DATE': '\d\d\d\d-\d\d-\d\d \d\d:\d\d:\d\d[.]\d\d\d [+-]\d\d\d\d',
-    'DATE_IN_SHARE': '\d\d\d\d-\d\d-\d\d \d\d:\d\d:\d\d[.]\d+ UTC'
+    "ANYTHING": r".*",  # empty space will make problem
+    "DATE": r"\d\d\d\d-\d\d-\d\d \d\d:\d\d:\d\d[.]\d\d\d [+-]\d\d\d\d",
+    "DATE_IN_SHARE": r"\d\d\d\d-\d\d-\d\d \d\d:\d\d:\d\d[.]\d+ UTC",
 }
 
 # save regex pattern compile from reg_type_map
@@ -21,14 +21,14 @@ def init_pattern():
         regex_pattern_map[key] = re.compile(val)
 
         empty_space_list = []
-        item = ''
+        item = ""
         for word in val:
-            if word != ' ':
+            if word != " ":
                 if len(item) != 0:
                     empty_space_list.append(item)
-                    item = ''
+                    item = ""
                 continue
-            item = item + ' '
+            item = item + " "
         regex_space_info[key] = empty_space_list
     log.debug(
         f"regex pattern init, expression: {regex_type_map}, space list: {regex_space_info}"
@@ -50,9 +50,9 @@ def check_reg(name, actual):
 def compare_result_with_reg(test_expect, test_result):
     index = 0  # for list of test_result which split from result string
     for col in test_expect:
-        if col.startswith('$'):
+        if col.startswith("$"):
             name = col[1:]
-            if not name in regex_type_map:
+            if name not in regex_type_map:
                 raise Exception("Not such regex expression name")
             item = ""  # save column record
             empty_space_list = regex_space_info[name]
@@ -79,12 +79,56 @@ def compare_result_with_reg(test_expect, test_result):
 
 init_pattern()
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # example
-    test_expect = ['db1', 't1', 'FUSE', '$ANYTHING', '$DATE', 'NULL', '0', '0', '0', '0',\
-        'db2', 't2', 'FUSE', '$ANYTHING', '$DATE', 'NULL', '0', '0', '0', '0']
-    test_result =  ['db1', 't1', 'FUSE', '(a)', '2022-08-22', '03:34:42.338', '+0000', 'NULL', '0', '0', '0', '0',\
-         'db2', 't2', 'FUSE', '(b)', '2021-08-21', '04:34:41.653', '-0000', 'NULL', '0', '0', '0', '0']
+    test_expect = [
+        "db1",
+        "t1",
+        "FUSE",
+        "$ANYTHING",
+        "$DATE",
+        "NULL",
+        "0",
+        "0",
+        "0",
+        "0",
+        "db2",
+        "t2",
+        "FUSE",
+        "$ANYTHING",
+        "$DATE",
+        "NULL",
+        "0",
+        "0",
+        "0",
+        "0",
+    ]
+    test_result = [
+        "db1",
+        "t1",
+        "FUSE",
+        "(a)",
+        "2022-08-22",
+        "03:34:42.338",
+        "+0000",
+        "NULL",
+        "0",
+        "0",
+        "0",
+        "0",
+        "db2",
+        "t2",
+        "FUSE",
+        "(b)",
+        "2021-08-21",
+        "04:34:41.653",
+        "-0000",
+        "NULL",
+        "0",
+        "0",
+        "0",
+        "0",
+    ]
     compare_result_with_reg(test_expect, test_result)
     # print(check_reg("ANYTHING", "xxxx"))
     # print(check_reg("DATE", "2022-08-19 05:42:43.593 #0000"))

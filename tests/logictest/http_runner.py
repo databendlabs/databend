@@ -6,7 +6,6 @@ from mysql.connector.errors import Error
 
 
 class TestHttp(logictest.SuiteRunner, ABC):
-
     def __init__(self, kind, args):
         super().__init__(kind, args)
         self._http = None

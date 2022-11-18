@@ -5,7 +5,7 @@ import sys
 import signal
 
 CURDIR = os.path.dirname(os.path.realpath(__file__))
-sys.path.insert(0, os.path.join(CURDIR, '../../../helpers'))
+sys.path.insert(0, os.path.join(CURDIR, "../../../helpers"))
 
 from native_client import NativeClient
 from native_client import prompt
@@ -13,7 +13,7 @@ from native_client import prompt
 log = None
 endpoint_url = os.environ.get("STORAGE_S3_ENDPOINT_URL")
 
-with NativeClient(name='client1>') as client1:
+with NativeClient(name="client1>") as client1:
     client1.expect(prompt)
 
     client1.send("drop table if exists ontime200;")
@@ -22,8 +22,8 @@ with NativeClient(name='client1>') as client1:
     client1.send("drop stage if exists named_external_stage;")
     client1.expect(prompt)
 
-    create_sql_f = os.path.join(CURDIR, '../ddl/ontime.sql')
-    read = open(create_sql_f, 'r')
+    create_sql_f = os.path.join(CURDIR, "../ddl/ontime.sql")
+    read = open(create_sql_f, "r")
     create_sql = read.read().replace("ontime", "ontime200")
     read.close()
 
@@ -35,7 +35,7 @@ with NativeClient(name='client1>') as client1:
     )
     client1.expect(prompt)
 
-    client1.send('SET max_block_size = 50;')
+    client1.send("SET max_block_size = 50;")
     client1.expect(prompt)
 
     client1.send(

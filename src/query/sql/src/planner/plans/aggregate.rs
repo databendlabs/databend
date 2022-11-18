@@ -23,6 +23,7 @@ use crate::optimizer::PhysicalProperty;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
 use crate::optimizer::RequiredProperty;
+use crate::optimizer::Statistics;
 use crate::plans::LogicalOperator;
 use crate::plans::Operator;
 use crate::plans::PhysicalOperator;
@@ -158,15 +159,19 @@ impl LogicalOperator for Aggregate {
         // Derive used columns
         let mut used_columns = self.used_columns()?;
         used_columns.extend(input_prop.used_columns);
+        let column_stats = input_prop.statistics.column_stats;
+        let is_accurate = input_prop.statistics.is_accurate;
 
         Ok(RelationalProperty {
             output_columns,
             outer_columns,
             used_columns,
             cardinality,
-            precise_cardinality,
-
-            column_stats: Default::default(),
+            statistics: Statistics {
+                precise_cardinality,
+                column_stats,
+                is_accurate,
+            },
         })
     }
 

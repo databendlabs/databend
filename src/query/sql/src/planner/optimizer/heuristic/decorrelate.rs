@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::collections::HashSet;
 
 use common_datavalues::type_coercion::compare_coercion;
@@ -51,6 +52,7 @@ use crate::plans::RelOp;
 use crate::plans::RelOperator;
 use crate::plans::Scalar;
 use crate::plans::ScalarItem;
+use crate::plans::Statistics;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
 use crate::ColumnBinding;
@@ -408,7 +410,11 @@ impl SubqueryRewriter {
                     push_down_predicates: None,
                     limit: None,
                     order_by: None,
-                    statistics: None,
+                    statistics: Statistics {
+                        statistics: None,
+                        col_stats: HashMap::new(),
+                        is_accurate: false,
+                    },
                     prewhere: None,
                 }
                 .into(),
