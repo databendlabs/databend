@@ -27,16 +27,15 @@ use super::aggregate_function_factory::AggregateFunctionDescription;
 use super::StateAddr;
 use crate::aggregates::aggregator_common::assert_variadic_arguments;
 
+/// Use Hyperloglog to estimate distinct of values
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct AggregateApproximateDistinctCountState {
     hll: HyperLogLog<DataValue>,
-    input_rows: u64,
 }
 
 #[derive(Clone)]
 pub struct AggregateApproximateDistinctCountFunction {
     display_name: String,
-    nullable: bool,
 }
 
 impl AggregateApproximateDistinctCountFunction {
@@ -48,7 +47,6 @@ impl AggregateApproximateDistinctCountFunction {
         assert_variadic_arguments(display_name, arguments.len(), (0, 1))?;
         Ok(Arc::new(AggregateApproximateDistinctCountFunction {
             display_name: display_name.to_string(),
-            nullable: false,
         }))
     }
 
@@ -73,7 +71,6 @@ impl AggregateFunction for AggregateApproximateDistinctCountFunction {
     fn init_state(&self, place: StateAddr) {
         place.write(|| AggregateApproximateDistinctCountState {
             hll: HyperLogLog::new(0.04),
-            input_rows: 0,
         });
     }
 
@@ -86,22 +83,19 @@ impl AggregateFunction for AggregateApproximateDistinctCountFunction {
         place: StateAddr,
         columns: &[ColumnRef],
         validity: Option<&Bitmap>,
-        input_rows: usize,
+        _input_rows: usize,
     ) -> Result<()> {
         let state = place.get::<AggregateApproximateDistinctCountState>();
 
-        if self.nullable {
-            let (_, bm) = columns[0].validity();
+        for column in columns {
+            let (_, bm) = column.validity();
             let nulls = match combine_validities(bm, validity) {
                 Some(b) => b.unset_bits(),
                 None => 0,
             };
-            state.input_rows += (input_rows - nulls) as u64;
-        } else {
-            state.input_rows += input_rows as u64;
-        }
-
-        for column in columns {
+            if column.len() == nulls {
+                continue;
+            }
             column.to_values().iter().for_each(|value| {
                 state.hll.push(value);
             });
@@ -110,14 +104,13 @@ impl AggregateFunction for AggregateApproximateDistinctCountFunction {
         Ok(())
     }
 
-    fn accumulate_row(&self, place: StateAddr, columns: &[ColumnRef], row: usize) -> Result<()> {
+    fn accumulate_row(&self, place: StateAddr, columns: &[ColumnRef], _row: usize) -> Result<()> {
         let state = place.get::<AggregateApproximateDistinctCountState>();
         for column in columns {
             column.to_values().iter().for_each(|value| {
                 state.hll.push(value);
             });
         }
-        state.input_rows += row as u64;
         Ok(())
     }
 
@@ -136,7 +129,6 @@ impl AggregateFunction for AggregateApproximateDistinctCountFunction {
         let state = place.get::<AggregateApproximateDistinctCountState>();
         let rhs = rhs.get::<AggregateApproximateDistinctCountState>();
         state.hll.union(&rhs.hll);
-        state.input_rows += rhs.input_rows;
 
         Ok(())
     }
@@ -144,27 +136,9 @@ impl AggregateFunction for AggregateApproximateDistinctCountFunction {
     fn merge_result(&self, place: StateAddr, array: &mut dyn MutableColumn) -> Result<()> {
         let builder: &mut MutablePrimitiveColumn<u64> = Series::check_get_mutable_column(array)?;
         let state = place.get::<AggregateApproximateDistinctCountState>();
-        let input_rows = state.input_rows as f64;
-        let len = state.hll.len();
-        if state.input_rows == 0 {
-            builder.append_value(0);
-        } else if input_rows > len {
-            builder.append_value(len as u64);
-        } else {
-            builder.append_value((len / input_rows) as u64);
-        }
-        Ok(())
-    }
+        builder.append_value(state.hll.len() as u64);
 
-    fn get_own_null_adaptor(
-        &self,
-        _nested_function: super::AggregateFunctionRef,
-        _params: Vec<DataValue>,
-        _arguments: Vec<DataField>,
-    ) -> Result<Option<super::AggregateFunctionRef>> {
-        let mut f = self.clone();
-        f.nullable = true;
-        Ok(Some(Arc::new(f)))
+        Ok(())
     }
 }
 
