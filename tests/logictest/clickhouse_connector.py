@@ -9,13 +9,7 @@ default_database = "default"
 
 
 class ClickhouseConnector(object):
-
-    def connect(self,
-                host,
-                port,
-                user="root",
-                password="",
-                database=default_database):
+    def connect(self, host, port, user="root", password="", database=default_database):
 
         protocol = os.getenv("QUERY_CLICKHOUSE_HANDLER_PROTOCAL")
         if protocol is None:
@@ -36,8 +30,7 @@ class ClickhouseConnector(object):
 
     def query_with_session(self, statement):
         if self._session is None:
-            engine = create_engine(self._uri,
-                                   connect_args=self._additonal_headers)
+            engine = create_engine(self._uri, connect_args=self._additonal_headers)
             self._session = make_session(engine)
         log.debug(statement)
         return self._session.execute(statement)

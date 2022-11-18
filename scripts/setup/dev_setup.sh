@@ -347,7 +347,7 @@ EOF
 		cat <<EOF
 Development tools (since -d was provided):
   * mysql client
-  * python3 (boto3, yapf, yamllint, ...)
+  * python3 (boto3, black, yamllint, ...)
   * python database drivers (mysql-connector-python, pymysql, sqlalchemy, clickhouse_driver)
   * sqllogic test dependencies (PyHamcrest, environs, fire, ...)
   * fuzz test dependencies (fuzzingbook)
@@ -549,7 +549,7 @@ if [[ "$INSTALL_DEV_TOOLS" == "true" ]]; then
 		install_pkg py3-pip "$PACKAGE_MANAGER"
 		install_pkg libffi-dev "$PACKAGE_MANAGER"
 	fi
-	python3 -m pip install --quiet boto3 "moto[all]" yapf shfmt-py toml yamllint
+	python3 -m pip install --quiet boto3 "moto[all]" black shfmt-py toml yamllint
 	# drivers
 	python3 -m pip install --quiet pymysql sqlalchemy clickhouse_driver
 	# sqllogic dependencies
