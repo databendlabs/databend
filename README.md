@@ -162,9 +162,9 @@ docker run --net=host  datafuselabs/databend
 
 ### Managing User-Defined Functions
 
-- [How to Create a User-Defined Function](http://databend.rs/doc/reference/sql/ddl/udf/ddl-create-function)
-- [How to Drop a User-Defined Function](http://databend.rs/doc/reference/sql/ddl/udf/ddl-drop-function)
-- [How to Alter a User-Defined Function](http://databend.rs/doc/reference/sql/ddl/udf/ddl-alter-function)
+- [How to Create a User-Defined Function](https://databend.rs/doc/sql-commands/ddl/udf/ddl-create-function)
+- [How to Drop a User-Defined Function](https://databend.rs/doc/sql-commands/ddl/udf/ddl-drop-function)
+- [How to Alter a User-Defined Function](https://databend.rs/doc/sql-commands/ddl/udf/ddl-alter-function)
 
 ### Backup & Restore
 
