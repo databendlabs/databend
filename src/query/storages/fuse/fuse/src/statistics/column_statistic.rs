@@ -62,7 +62,7 @@ pub fn gen_columns_statistics(data_block: &DataBlock) -> Result<StatisticsOfColu
             }
         }
 
-        let distinct_values = eval_aggr("distinct_counts", vec![], &[column_field], rows)?;
+        let distinct_values = eval_aggr("approx_count_distinct", vec![], &[column_field], rows)?;
         if distinct_values.len() > 0 {
             distinct_of_values = distinct_values.get(0).as_u64()?;
         }

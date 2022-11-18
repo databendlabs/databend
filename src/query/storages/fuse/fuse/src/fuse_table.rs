@@ -413,12 +413,13 @@ impl Table for FuseTable {
     async fn column_statistics_provider(&self) -> Result<Box<dyn ColumnStatisticsProvider>> {
         let provider = if let Some(snapshot) = self.read_table_snapshot().await? {
             let stats = &snapshot.summary.col_stats;
-            FuseColumnStatisticsProvider {
+            FakedColumnStatisticsProvider {
                 column_stats: stats.clone(),
-                row_count: snapshot.summary.row_count,
+                // save row count first
+                distinct_count: snapshot.summary.row_count,
             }
         } else {
-            FuseColumnStatisticsProvider::default()
+            FakedColumnStatisticsProvider::default()
         };
         Ok(Box::new(provider))
     }
@@ -476,19 +477,21 @@ impl Table for FuseTable {
 }
 
 #[derive(Default)]
-struct FuseColumnStatisticsProvider {
+struct FakedColumnStatisticsProvider {
     column_stats: HashMap<ColumnId, FuseColumnStatistics>,
-    row_count: u64,
+    distinct_count: u64,
 }
 
-impl ColumnStatisticsProvider for FuseColumnStatisticsProvider {
+impl ColumnStatisticsProvider for FakedColumnStatisticsProvider {
     fn column_statistics(&self, column_id: ColumnId) -> Option<ColumnStatistics> {
         let col_stats = &self.column_stats.get(&column_id);
         col_stats.map(|s| ColumnStatistics {
             min: s.min.clone(),
             max: s.max.clone(),
             null_count: s.null_count,
-            number_of_distinct_values: s.distinct_of_values.map_or_else(|| self.row_count, |n| n),
+            number_of_distinct_values: s
+                .distinct_of_values
+                .map_or_else(|| self.distinct_count, |n| n),
         })
     }
 }

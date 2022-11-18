@@ -26,7 +26,7 @@ use super::aggregate_function_factory::AggregateFunctionDescription;
 use super::StateAddr;
 use crate::aggregates::aggregator_common::assert_variadic_arguments;
 
-pub struct AggregateCountState {
+pub struct AggregateApproximateDistinctCountState {
     count: u64,
 }
 
@@ -68,11 +68,11 @@ impl AggregateFunction for AggregateCountFunction {
     }
 
     fn init_state(&self, place: StateAddr) {
-        place.write(|| AggregateCountState { count: 0 });
+        place.write(|| AggregateApproximateDistinctCountState { count: 0 });
     }
 
     fn state_layout(&self) -> Layout {
-        Layout::new::<AggregateCountState>()
+        Layout::new::<AggregateApproximateDistinctCountState>()
     }
 
     fn accumulate(
@@ -82,7 +82,7 @@ impl AggregateFunction for AggregateCountFunction {
         validity: Option<&Bitmap>,
         input_rows: usize,
     ) -> Result<()> {
-        let state = place.get::<AggregateCountState>();
+        let state = place.get::<AggregateApproximateDistinctCountState>();
 
         if self.nullable {
             let (_, bm) = columns[0].validity();
@@ -120,14 +120,18 @@ impl AggregateFunction for AggregateCountFunction {
             Some(v) => {
                 for (valid, place) in v.iter().zip(places.iter()) {
                     if valid {
-                        let state = place.next(offset).get::<AggregateCountState>();
+                        let state = place
+                            .next(offset)
+                            .get::<AggregateApproximateDistinctCountState>();
                         state.count += 1;
                     }
                 }
             }
             None => {
                 for place in places {
-                    let state = place.next(offset).get::<AggregateCountState>();
+                    let state = place
+                        .next(offset)
+                        .get::<AggregateApproximateDistinctCountState>();
                     state.count += 1;
                 }
             }
@@ -137,25 +141,25 @@ impl AggregateFunction for AggregateCountFunction {
     }
 
     fn accumulate_row(&self, place: StateAddr, _columns: &[ColumnRef], _row: usize) -> Result<()> {
-        let state = place.get::<AggregateCountState>();
+        let state = place.get::<AggregateApproximateDistinctCountState>();
         state.count += 1;
         Ok(())
     }
 
     fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
-        let state = place.get::<AggregateCountState>();
+        let state = place.get::<AggregateApproximateDistinctCountState>();
         serialize_into_buf(writer, &state.count)
     }
 
     fn deserialize(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
-        let state = place.get::<AggregateCountState>();
+        let state = place.get::<AggregateApproximateDistinctCountState>();
         state.count = deserialize_from_slice(reader)?;
         Ok(())
     }
 
     fn merge(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
-        let state = place.get::<AggregateCountState>();
-        let rhs = rhs.get::<AggregateCountState>();
+        let state = place.get::<AggregateApproximateDistinctCountState>();
+        let rhs = rhs.get::<AggregateApproximateDistinctCountState>();
         state.count += rhs.count;
 
         Ok(())
@@ -163,7 +167,7 @@ impl AggregateFunction for AggregateCountFunction {
 
     fn merge_result(&self, place: StateAddr, array: &mut dyn MutableColumn) -> Result<()> {
         let builder: &mut MutablePrimitiveColumn<u64> = Series::check_get_mutable_column(array)?;
-        let state = place.get::<AggregateCountState>();
+        let state = place.get::<AggregateApproximateDistinctCountState>();
         builder.append_value(state.count);
         Ok(())
     }
