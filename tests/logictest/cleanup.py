@@ -25,23 +25,27 @@ def pick_create_statement(statement):
         return
     global need_cleanup_set
     statement_lower = statement.lower()
-    if 'create' not in statement_lower:
+    if "create" not in statement_lower:
         return
-    statement_words = statement_lower.strip(';').split()
+    statement_words = statement_lower.strip(";").split()
 
     create_type_index = 1
     create_name_index = 2
-    if 'if' in statement_lower and 'not' in statement_lower and 'exists' in statement_lower:
+    if (
+        "if" in statement_lower
+        and "not" in statement_lower
+        and "exists" in statement_lower
+    ):
         create_type_index = 5
-    elif 'if' in statement_lower and 'exists' in statement_lower:
+    elif "if" in statement_lower and "exists" in statement_lower:
         create_type_index = 4
     else:
         create_type_index = 2
 
-    if 'transient' in statement_lower:
+    if "transient" in statement_lower:
         create_type_index += 1
         create_name_index += 1
 
     create_type = statement_words[1]
     create_name = statement_words[create_name_index]
-    need_cleanup_set.add((create_type, create_name.split('(')[0]))
+    need_cleanup_set.add((create_type, create_name.split("(")[0]))

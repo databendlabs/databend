@@ -68,34 +68,45 @@ def get_all_cases():
     def collect_subdirs_with_pattern(cur_dir_path, pattern):
         return list(
             # Make sure all sub-dir name starts with [0-9]+_*.
-            filter(lambda fullpath: os.path.isdir(fullpath) and \
-                   re.search(pattern, fullpath.split("/")[-1]),
-                   map(lambda _dir: os.path.join(cur_dir_path, _dir),
-                       os.listdir(cur_dir_path))))
+            filter(
+                lambda fullpath: os.path.isdir(fullpath)
+                and re.search(pattern, fullpath.split("/")[-1]),
+                map(
+                    lambda _dir: os.path.join(cur_dir_path, _dir),
+                    os.listdir(cur_dir_path),
+                ),
+            )
+        )
 
     def collect_files_with_pattern(cur_dir_path, patterns):
         return list(
             filter(
-                lambda fullpath: os.path.isfile(fullpath) and os.path.splitext(
-                    fullpath)[1] in patterns.split("|"),
-                map(lambda _dir: os.path.join(cur_dir_path, _dir),
-                    os.listdir(cur_dir_path))))
+                lambda fullpath: os.path.isfile(fullpath)
+                and os.path.splitext(fullpath)[1] in patterns.split("|"),
+                map(
+                    lambda _dir: os.path.join(cur_dir_path, _dir),
+                    os.listdir(cur_dir_path),
+                ),
+            )
+        )
 
     def get_all_tests_under_dir_recursive(suite_dir):
-        all_tests = copy.deepcopy(
-            collect_files_with_pattern(suite_dir, ".sql|.sh|.py"))
+        all_tests = copy.deepcopy(collect_files_with_pattern(suite_dir, ".sql|.sh|.py"))
         # Collect files in depth 0 directory.
         sub_dir_paths = copy.deepcopy(
-            collect_subdirs_with_pattern(suite_dir, "^[0-9]+"))
+            collect_subdirs_with_pattern(suite_dir, "^[0-9]+")
+        )
         # Recursively get files from sub-directories.
         while len(sub_dir_paths) > 0:
             cur_sub_dir_path = sub_dir_paths.pop(0)
 
             all_tests += copy.deepcopy(
-                collect_files_with_pattern(cur_sub_dir_path, ".sql|.sh|.py"))
+                collect_files_with_pattern(cur_sub_dir_path, ".sql|.sh|.py")
+            )
 
             sub_dir_paths += copy.deepcopy(
-                collect_subdirs_with_pattern(cur_sub_dir_path, "^[0-9]+"))
+                collect_subdirs_with_pattern(cur_sub_dir_path, "^[0-9]+")
+            )
         return all_tests
 
     return get_all_tests_under_dir_recursive(suite_path)
@@ -129,8 +140,7 @@ def parse_cases(sql_file):
             )
         return ret
 
-    target_dir = os.path.dirname(
-        str.replace(sql_file, suite_path, logictest_path))
+    target_dir = os.path.dirname(str.replace(sql_file, suite_path, logictest_path))
     case_name = os.path.splitext(os.path.basename(sql_file))[0]
     target_file = os.path.join(target_dir, case_name)
 
@@ -141,7 +151,7 @@ def parse_cases(sql_file):
     log.info(f"Write test case to path: {target_dir}, case name is {case_name}")
 
     content_output = ""
-    f = open(sql_file, encoding='UTF-8')
+    f = open(sql_file, encoding="UTF-8")
     sql_content = ""
     for line in f.readlines():
         if is_empty_line(line):
@@ -152,7 +162,7 @@ def parse_cases(sql_file):
 
         # multi line sql
         sql_content = sql_content + line.rstrip()
-        if ';' not in line:
+        if ";" not in line:
             continue
 
         statement = sql_content.strip()
@@ -160,10 +170,11 @@ def parse_cases(sql_file):
 
         # error statement
         errorStatment = get_error_statment(statement)
-        if errorStatment != None:
+        if errorStatment is not None:
             content_output = content_output + STATEMENT_ERROR.format(
                 error_id=errorStatment.group("expectError"),
-                statement=errorStatment.group("statement"))
+                statement=errorStatment.group("statement"),
+            )
             continue
 
         if str.lower(first_word(statement)) in query_statment_first_words:
@@ -172,7 +183,7 @@ def parse_cases(sql_file):
             try:
                 http_results = format_result(http_client.fetch_all(statement))
                 query_options = http_client.get_query_option()
-            except Exception as err:
+            except Exception:
                 exception_sqls.append(statement)
                 log.error(f"Exception SQL: {statement}")
                 continue
@@ -182,7 +193,8 @@ def parse_cases(sql_file):
                     f"statement: {statement} type query could not get query_option change to ok statement"
                 )
                 content_output = content_output + STATEMENT_OK.format(
-                    statement=statement)
+                    statement=statement
+                )
                 continue
 
             mysql_results = mysql_fetch_results(statement)
@@ -194,42 +206,46 @@ def parse_cases(sql_file):
 
             if http_results is not None and mysql_results != http_results:
                 case_results = RESULTS_TEMPLATE.format(
-                    results_string=mysql_results, label_separate="----")
+                    results_string=mysql_results, label_separate="----"
+                )
 
-                case_results = case_results + "\n" + RESULTS_TEMPLATE.format(
-                    results_string=http_results, label_separate="---- http")
+                case_results = (
+                    case_results
+                    + "\n"
+                    + RESULTS_TEMPLATE.format(
+                        results_string=http_results, label_separate="---- http"
+                    )
+                )
 
                 query_options_with_labels = f"{query_options} label(http)"
             else:
                 case_results = RESULTS_TEMPLATE.format(
-                    results_string=mysql_results, label_separate="----")
+                    results_string=mysql_results, label_separate="----"
+                )
 
             content_output = content_output + STATEMENT_QUERY.format(
                 query_options_with_labels=query_options_with_labels,
                 statement=statement,
-                results=case_results)
+                results=case_results,
+            )
         else:
             # ok statement
             try:
                 # insert,drop,create does not need to execute by different handlers
-                if str.lower(statement).split()[0] not in [
-                        "insert", "drop", "create"
-                ]:
+                if str.lower(statement).split()[0] not in ["insert", "drop", "create"]:
                     http_client.query_with_session(statement)
                 mysql_client.execute(statement)
             except Exception as err:
-                log.warning(
-                    f"statement {statement} execute error,msg {str(err)}")
+                log.warning(f"statement {statement} execute error,msg {str(err)}")
                 pass
 
-            content_output = content_output + STATEMENT_OK.format(
-                statement=statement)
+            content_output = content_output + STATEMENT_OK.format(statement=statement)
 
     f.close()
     if not os.path.exists(target_dir):
         os.makedirs(target_dir)
 
-    caseFile = open(target_file, 'w', encoding="UTF-8")
+    caseFile = open(target_file, "w", encoding="UTF-8")
     caseFile.write(content_output)
     caseFile.close()
 
@@ -257,7 +273,7 @@ def main(pattern=".*"):
         log.info(f"Test file {file} match pattern {pattern}")
 
         # .result will be ignore
-        if '.result' in file or '.result_filter' in file:
+        if ".result" in file or ".result_filter" in file:
             continue
 
         # .py .sh will be ignore, need log
@@ -272,7 +288,7 @@ def main(pattern=".*"):
     output()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     log.info(
         f"Start generate sqllogictest suites from path: {suite_path} to path: {logictest_path}"
     )
