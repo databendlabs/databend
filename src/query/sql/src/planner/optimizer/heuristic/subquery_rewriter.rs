@@ -40,7 +40,7 @@ use crate::plans::Filter;
 use crate::plans::FunctionCall;
 use crate::plans::JoinType;
 use crate::plans::Limit;
-use crate::plans::LogicalInnerJoin;
+use crate::plans::LogicalJoin;
 use crate::plans::OrExpr;
 use crate::plans::RelOperator;
 use crate::plans::Scalar;
@@ -118,13 +118,11 @@ impl SubqueryRewriter {
                 Ok(SExpr::create_unary(plan.into(), input))
             }
 
-            RelOperator::LogicalInnerJoin(_) | RelOperator::UnionAll(_) => {
-                Ok(SExpr::create_binary(
-                    s_expr.plan().clone(),
-                    self.rewrite(s_expr.child(0)?)?,
-                    self.rewrite(s_expr.child(1)?)?,
-                ))
-            }
+            RelOperator::LogicalJoin(_) | RelOperator::UnionAll(_) => Ok(SExpr::create_binary(
+                s_expr.plan().clone(),
+                self.rewrite(s_expr.child(0)?)?,
+                self.rewrite(s_expr.child(1)?)?,
+            )),
 
             RelOperator::Limit(_) | RelOperator::Sort(_) => Ok(SExpr::create_unary(
                 s_expr.plan().clone(),
@@ -357,7 +355,7 @@ impl SubqueryRewriter {
     ) -> Result<(SExpr, UnnestResult)> {
         match subquery.typ {
             SubqueryType::Scalar => {
-                let join_plan = LogicalInnerJoin {
+                let join_plan = LogicalJoin {
                     left_conditions: vec![],
                     right_conditions: vec![],
                     non_equi_conditions: vec![],
@@ -448,7 +446,7 @@ impl SubqueryRewriter {
                     filter.into(),
                     SExpr::create_unary(agg.into(), subquery_expr),
                 );
-                let cross_join = LogicalInnerJoin {
+                let cross_join = LogicalJoin {
                     left_conditions: vec![],
                     right_conditions: vec![],
                     non_equi_conditions: vec![],
@@ -510,7 +508,7 @@ impl SubqueryRewriter {
                 // Consider the sql: select * from t1 where t1.a = any(select t2.a from t2);
                 // Will be transferred to:select t1.a, t2.a, marker_index from t1, t2 where t2.a = t1.a;
                 // Note that subquery is the right table, and it'll be the build side.
-                let mark_join = LogicalInnerJoin {
+                let mark_join = LogicalJoin {
                     left_conditions: right_conditions,
                     right_conditions: left_conditions,
                     non_equi_conditions,
