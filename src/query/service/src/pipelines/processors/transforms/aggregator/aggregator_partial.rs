@@ -151,8 +151,6 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
     #[inline(always)]
     #[allow(clippy::ptr_arg)] // &[StateAddr] slower than &StateAddrs ~20%
     fn execute(params: &Arc<AggregatorParams>, chunk: &Chunk, places: &StateAddrs) -> Result<()> {
-        let chunk = chunk.convert_to_full();
-
         let aggregate_functions = &params.aggregate_functions;
         let offsets_aggregate_states = &params.offsets_aggregate_states;
         let aggregate_arguments_columns = Self::aggregate_arguments(&chunk, params)?;
@@ -236,8 +234,13 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
     const NAME: &'static str = "GroupByPartialTransform";
 
     fn consume(&mut self, chunk: Chunk) -> Result<()> {
+        let chunk = chunk.convert_to_full();
         // 1.1 and 1.2.
         let group_columns = Self::group_columns(&self.params.group_columns, &chunk);
+        let group_columns = group_columns
+            .iter()
+            .map(|(c, ty)| (c.as_column().unwrap(), ty.clone()))
+            .collect::<Vec<_>>();
         let group_keys_state = self
             .method
             .build_keys_state(&group_columns, chunk.num_rows())?;
@@ -260,8 +263,13 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
     const NAME: &'static str = "GroupByPartialTransform";
 
     fn consume(&mut self, chunk: Chunk) -> Result<()> {
+        let chunk = chunk.convert_to_full();
         // 1.1 and 1.2.
         let group_columns = Self::group_columns(&self.params.group_columns, &chunk);
+        let group_columns = group_columns
+            .iter()
+            .map(|(c, ty)| (c.as_column().unwrap(), ty.clone()))
+            .collect::<Vec<_>>();
 
         let keys_state = self
             .method

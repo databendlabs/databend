@@ -28,6 +28,7 @@ use micromarshal::Marshal;
 use primitive_types::U256;
 use primitive_types::U512;
 
+use crate::types::boolean::BooleanType;
 use crate::types::nullable::NullableColumn;
 use crate::types::number::Number;
 use crate::types::number::NumberColumn;
@@ -35,7 +36,6 @@ use crate::types::number::NumberScalar;
 use crate::types::string::StringColumnBuilder;
 use crate::types::string::StringIterator;
 use crate::types::AnyType;
-use crate::types::BooleanType;
 use crate::types::DataType;
 use crate::types::NumberDataType;
 use crate::types::NumberType;
@@ -61,7 +61,7 @@ pub trait HashMethod: Clone {
 
     fn build_keys_state(
         &self,
-        group_columns: &[(Column, DataType)],
+        group_columns: &[(&Column, DataType)],
         rows: usize,
     ) -> Result<KeysState>;
 
@@ -130,10 +130,10 @@ impl HashMethod for HashMethodSerializer {
 
     fn build_keys_state(
         &self,
-        group_columns: &[(Column, DataType)],
+        group_columns: &[(&Column, DataType)],
         rows: usize,
     ) -> Result<KeysState> {
-        if group_columns.len() == 1 && group_columns[0].1 == DataType::String {
+        if group_columns.len() == 1 && group_columns[0].1.is_string() {
             return Ok(KeysState::Column(group_columns[0].0.clone()));
         }
 
@@ -182,7 +182,7 @@ where T: Clone + Default
 {
     fn build_keys_vec<'a>(
         &self,
-        group_columns: &[(Column, DataType)],
+        group_columns: &[(&Column, DataType)],
         rows: usize,
     ) -> Result<Vec<T>> {
         let step = std::mem::size_of::<T>();
@@ -325,7 +325,7 @@ macro_rules! impl_hash_method_fixed_keys {
 
             fn build_keys_state(
                 &self,
-                group_columns: &[(Column, DataType)],
+                group_columns: &[(&Column, DataType)],
                 rows: usize,
             ) -> Result<KeysState> {
                 // faster path for single fixed keys
@@ -371,7 +371,7 @@ macro_rules! impl_hash_method_fixed_large_keys {
 
             fn build_keys_state(
                 &self,
-                group_columns: &[(Column, DataType)],
+                group_columns: &[(&Column, DataType)],
                 rows: usize,
             ) -> Result<KeysState> {
                 let keys = self.build_keys_vec(group_columns, rows)?;

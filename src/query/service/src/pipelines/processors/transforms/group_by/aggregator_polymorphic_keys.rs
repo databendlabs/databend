@@ -18,6 +18,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::number::*;
 use common_expression::types::string::StringColumnBuilder;
+use common_expression::types::DataType;
 use common_expression::types::StringType;
 use common_expression::types::ValueType;
 use common_expression::Column;
@@ -394,7 +395,11 @@ impl<Method: HashMethod + Send> HashMethod for TwoLevelHashMethod<Method> {
         format!("TwoLevel{}", self.method.name())
     }
 
-    fn build_keys_state(&self, group_columns: &[&Column], rows: usize) -> Result<KeysState> {
+    fn build_keys_state(
+        &self,
+        group_columns: &[(&Column, DataType)],
+        rows: usize,
+    ) -> Result<KeysState> {
         self.method.build_keys_state(group_columns, rows)
     }
 

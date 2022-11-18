@@ -61,16 +61,17 @@ fn test_group_by_hash() -> Result<()> {
     {
         for col in columns {
             let index = schema.index_of(col).unwrap();
-            group_columns.push(chunk.column(index));
+            let (col, ty) = chunk.column(index);
+            let col = col.as_column().unwrap();
+            group_columns.push((col, ty.clone()));
         }
     }
 
-    todo!("expression");
-    // let state = hash.build_keys_state(group_columns.as_slice(), chunk.num_rows())?;
-    // let keys_iter = hash.build_keys_iter(&state)?;
-    // let keys: Vec<u32> = keys_iter.copied().collect();
-    // assert_eq!(keys, vec![
-    //     0x10101, 0x10101, 0x20202, 0x10101, 0x20202, 0x30303
-    // ]);
+    let state = hash.build_keys_state(group_columns.as_slice(), chunk.num_rows())?;
+    let keys_iter = hash.build_keys_iter(&state)?;
+    let keys: Vec<u32> = keys_iter.copied().collect();
+    assert_eq!(keys, vec![
+        0x10101, 0x10101, 0x20202, 0x10101, 0x20202, 0x30303
+    ]);
     Ok(())
 }
