@@ -19,6 +19,7 @@ use common_catalog::catalog::StorageDescription;
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
+use common_catalog::plan::PartitionsShuffleKind;
 use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table::Table;
@@ -71,7 +72,7 @@ impl RandomTable {
                 partitions.push(RandomPartInfo::create(rows));
             }
         }
-        partitions
+        Partitions::create(PartitionsShuffleKind::Seq, partitions)
     }
 }
 
@@ -165,7 +166,7 @@ impl Table for RandomTable {
 
         for index in 0..plan.parts.len() {
             let output = OutputPort::create();
-            let parts = RandomPartInfo::from_part(&plan.parts[index])?;
+            let parts = RandomPartInfo::from_part(&plan.parts.partitions[index])?;
             builder.add_source(
                 output.clone(),
                 RandomSource::create(ctx.clone(), output, output_schema.clone(), parts.rows)?,

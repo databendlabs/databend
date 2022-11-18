@@ -19,6 +19,7 @@ use common_datavalues::DataSchemaRef;
 use common_meta_app::schema::CatalogMeta;
 use common_meta_app::schema::CatalogNameIdent;
 use common_meta_app::schema::CreateCatalogReq;
+use common_meta_app::schema::DropCatalogReq;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateCatalogPlan {
@@ -70,6 +71,30 @@ pub struct DropCatalogPlan {
 impl DropCatalogPlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::empty())
+    }
+}
+
+impl From<DropCatalogPlan> for DropCatalogReq {
+    fn from(value: DropCatalogPlan) -> DropCatalogReq {
+        DropCatalogReq {
+            if_exists: value.if_exists,
+            name_ident: CatalogNameIdent {
+                tenant: value.tenant,
+                catalog_name: value.catalog,
+            },
+        }
+    }
+}
+
+impl From<&DropCatalogPlan> for DropCatalogReq {
+    fn from(value: &DropCatalogPlan) -> DropCatalogReq {
+        DropCatalogReq {
+            if_exists: value.if_exists,
+            name_ident: CatalogNameIdent {
+                tenant: value.tenant.clone(),
+                catalog_name: value.catalog.clone(),
+            },
+        }
     }
 }
 

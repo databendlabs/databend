@@ -13,7 +13,7 @@ description:
 * Databend: [v0.7.88-nightly](https://github.com/datafuselabs/databend/releases/tag/v0.7.32-nightly)
 * No Local Caching(Data Caching/Query Result Caching)
 * Databend is automatic performance optimization with **no manual tuning** required.
-* [Analyzing OnTime Datasets with Databend on Volcengine TOS](../90-learn/01-analyze-ontime-with-databend-on-ec2-and-s3.md)
+* [Analyzing OnTime Datasets with Databend on Volcengine TOS](../21-use-cases/01-analyze-ontime-with-databend-on-ec2-and-s3.md)
 
 :::
 

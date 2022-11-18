@@ -25,6 +25,7 @@
 #![feature(const_mut_refs)]
 #![feature(generic_const_exprs)]
 #![allow(incomplete_features)]
+#![feature(iterator_try_collect)]
 #![feature(core_intrinsics)]
 #![feature(trusted_len)]
 #![feature(iter_order_by)]
@@ -46,7 +47,6 @@ mod meta_info;
 mod property;
 mod register;
 pub mod schema;
-pub mod serializations;
 pub mod type_check;
 pub mod types;
 pub mod utils;
@@ -67,6 +67,5 @@ pub use crate::memory::InMemoryData;
 pub use crate::property::*;
 pub use crate::register::*;
 pub use crate::schema::*;
-pub use crate::serializations::TypeSerializer;
 pub use crate::utils::*;
 pub use crate::values::*;

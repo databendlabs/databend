@@ -109,7 +109,7 @@ impl Table for SyncCrashMeTable {
         _: Option<PushDownInfo>,
     ) -> Result<(PartStatistics, Partitions)> {
         // dummy statistics
-        Ok((PartStatistics::new_exact(1, 1, 1, 1), vec![]))
+        Ok((PartStatistics::new_exact(1, 1, 1, 1), Partitions::default()))
     }
 
     fn table_args(&self) -> Option<Vec<Scalar>> {

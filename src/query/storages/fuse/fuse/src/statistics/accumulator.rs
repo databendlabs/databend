@@ -39,13 +39,13 @@ pub struct StatisticsAccumulator {
     pub index_size: u64,
 
     pub perfect_block_count: u64,
-    pub thresholds: Option<ChunkCompactThresholds>,
+    pub thresholds: ChunkCompactThresholds
 }
 
 impl StatisticsAccumulator {
-    pub fn new(thresholds: Option<ChunkCompactThresholds>) -> Self {
+     pub fn new(thresholds: ChunkCompactThresholds) -> Self {
         Self {
-            thresholds,
+            thresholds: Some(thresholds),
             ..Default::default()
         }
     }
@@ -113,10 +113,11 @@ impl StatisticsAccumulator {
         let data_location = (block_statistics.block_file_location, Chunk::VERSION);
         let cluster_stats = block_statistics.block_cluster_statistics;
 
-        if let Some(thresholds) = self.thresholds {
-            if thresholds.check_large_enough(row_count as usize, block_size as usize) {
-                self.perfect_block_count += 1;
-            }
+        if self
+            .thresholds
+            .check_large_enough(row_count as usize, block_size as usize)
+        {
+            self.perfect_block_count += 1;
         }
 
         self.blocks_metas.push(Arc::new(BlockMeta::new(

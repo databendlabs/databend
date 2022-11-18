@@ -163,7 +163,7 @@ impl FuseTable {
     ) -> Result<()> {
         let mut lazy_init_segments = Vec::with_capacity(plan.parts.len());
 
-        for part in &plan.parts {
+        for part in &plan.parts.partitions {
             if let Some(lazy_part_info) = part.as_any().downcast_ref::<FuseLazyPartInfo>() {
                 lazy_init_segments.push(lazy_part_info.segment_location.clone());
             }

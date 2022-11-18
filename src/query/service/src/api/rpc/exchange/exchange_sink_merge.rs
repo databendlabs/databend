@@ -100,6 +100,13 @@ impl Processor for ExchangeMergeSink {
                 return Ok(());
             }
 
+            let meta = match bincode::serialize(&data_block.meta()?) {
+                Ok(bytes) => Ok(bytes),
+                Err(_) => Err(ErrorCode::BadBytes(
+                    "block meta serialize error when exchange",
+                )),
+            }?;
+
             let chunks = data_block.try_into()?;
             let options = &self.serialize_params.options;
             let ipc_fields = &self.serialize_params.ipc_fields;
@@ -112,7 +119,7 @@ impl Processor for ExchangeMergeSink {
             }
 
             // FlightData
-            let data = FragmentData::create(values);
+            let data = FragmentData::create(meta, values);
             self.output_data = Some(DataPacket::FragmentData(data));
         }
 

@@ -19,5 +19,4 @@ mod common;
 mod convert;
 mod group_by;
 mod kernel;
-mod serializations;
 mod sort;

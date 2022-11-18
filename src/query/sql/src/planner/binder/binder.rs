@@ -369,10 +369,13 @@ impl<'a> Binder {
         column_name: String,
         data_type: DataTypeImpl,
     ) -> ColumnBinding {
-        let index =
-            self.metadata
-                .write()
-                .add_column(column_name.clone(), data_type.clone(), None, None);
+        let index = self.metadata.write().add_column(
+            column_name.clone(),
+            data_type.clone(),
+            None,
+            None,
+            None,
+        );
         ColumnBinding {
             database_name,
             table_name,

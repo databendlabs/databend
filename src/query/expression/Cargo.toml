@@ -32,6 +32,7 @@ hex = "0.4.3"
 itertools = "0.10"
 lexical-core = "0.8.5"
 match-template = "0.0.1"
+micromarshal = "0.2.1"
 num-traits = "0.2.15"
 ordered-float = { version = "3.1.0", features = ["serde", "rand"] }
 parking_lot = "0.12.1"

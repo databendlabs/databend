@@ -183,7 +183,15 @@ impl FlightScatter for OneHashKeyFlightScatter {
     fn execute(&self, data_block: &DataBlock, _num: usize) -> Result<Vec<DataBlock>> {
         let indices = self.indices_scalar.eval(&self.func_ctx, data_block)?;
         let indices = Self::get_hash_values(indices.vector())?;
-        DataBlock::scatter_block(data_block, &indices, self.scatter_size)
+        let data_blocks = DataBlock::scatter_block(data_block, &indices, self.scatter_size)?;
+
+        let block_meta = data_block.meta()?;
+        let mut res = Vec::with_capacity(data_blocks.len());
+        for data_block in data_blocks {
+            res.push(data_block.add_meta(block_meta.clone())?);
+        }
+
+        Ok(res)
     }
 }
 
@@ -199,6 +207,15 @@ impl FlightScatter for HashFlightScatter {
             .iter()
             .map(|c| (*c as usize) % self.scatter_size)
             .collect();
-        DataBlock::scatter_block(data_block, &indices, self.scatter_size)
+
+        let block_meta = data_block.meta()?;
+        let data_blocks = DataBlock::scatter_block(data_block, &indices, self.scatter_size)?;
+
+        let mut res = Vec::with_capacity(data_blocks.len());
+        for data_block in data_blocks {
+            res.push(data_block.add_meta(block_meta.clone())?);
+        }
+
+        Ok(res)
     }
 }

@@ -68,18 +68,19 @@ impl From<anyhow::Error> for ErrorCode {
 
 impl From<&str> for ErrorCode {
     fn from(error: &str) -> Self {
-        ErrorCode::create(
-            1002,
-            error.to_string(),
-            None,
-            Some(ErrorCodeBacktrace::Origin(Arc::new(Backtrace::capture()))),
-        )
+        ErrorCode::from_string(error.to_string())
     }
 }
 
 impl From<std::num::ParseIntError> for ErrorCode {
     fn from(error: std::num::ParseIntError) -> Self {
         ErrorCode::from_std_error(error)
+    }
+}
+
+impl From<String> for ErrorCode {
+    fn from(error: String) -> Self {
+        ErrorCode::from_string(error)
     }
 }
 

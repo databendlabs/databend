@@ -99,7 +99,7 @@ impl Table for FuseSegmentTable {
         _ctx: Arc<dyn TableContext>,
         _push_downs: Option<PushDownInfo>,
     ) -> Result<(PartStatistics, Partitions)> {
-        Ok((PartStatistics::default(), vec![]))
+        Ok((PartStatistics::default(), Partitions::default()))
     }
 
     fn table_args(&self) -> Option<Vec<Scalar>> {

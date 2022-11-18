@@ -1057,6 +1057,9 @@ pub struct QueryConfig {
     #[clap(long, default_value = "256")]
     pub max_active_sessions: u64,
 
+    #[clap(long, default_value = "0")]
+    pub max_memory_usage: u64,
+
     #[deprecated(note = "clickhouse tcp support is deprecated")]
     #[clap(long, default_value = "127.0.0.1")]
     pub clickhouse_handler_host: String,
@@ -1218,6 +1221,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             mysql_handler_host: self.mysql_handler_host,
             mysql_handler_port: self.mysql_handler_port,
             max_active_sessions: self.max_active_sessions,
+            max_memory_usage: self.max_memory_usage,
             clickhouse_http_handler_host: self.clickhouse_http_handler_host,
             clickhouse_http_handler_port: self.clickhouse_http_handler_port,
             http_handler_host: self.http_handler_host,
@@ -1272,6 +1276,7 @@ impl From<InnerQueryConfig> for QueryConfig {
             mysql_handler_host: inner.mysql_handler_host,
             mysql_handler_port: inner.mysql_handler_port,
             max_active_sessions: inner.max_active_sessions,
+            max_memory_usage: inner.max_memory_usage,
 
             // clickhouse tcp is deprecated
             clickhouse_handler_host: "127.0.0.1".to_string(),

@@ -22,6 +22,7 @@ use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartInfo;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
+use common_catalog::plan::PartitionsShuffleKind;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::plan::StageTableInfo;
 use common_catalog::table::AppendMode;
@@ -139,7 +140,10 @@ impl Table for StageTable {
                 Arc::new(part_info)
             })
             .collect::<Vec<_>>();
-        Ok((PartStatistics::default(), partitions))
+        Ok((
+            PartStatistics::default(),
+            Partitions::create(PartitionsShuffleKind::Seq, partitions),
+        ))
     }
 
     fn read_data(

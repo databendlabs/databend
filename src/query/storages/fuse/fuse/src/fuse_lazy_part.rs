@@ -13,6 +13,9 @@
 //  limitations under the License.
 
 use std::any::Any;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::Hash;
+use std::hash::Hasher;
 use std::sync::Arc;
 
 use common_catalog::plan::PartInfo;
@@ -35,6 +38,12 @@ impl PartInfo for FuseLazyPartInfo {
             None => false,
             Some(other) => self == other,
         }
+    }
+
+    fn hash(&self) -> u64 {
+        let mut s = DefaultHasher::new();
+        self.segment_location.0.hash(&mut s);
+        s.finish()
     }
 }
 

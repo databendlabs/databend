@@ -194,6 +194,15 @@ impl ErrorCode {
         }
     }
 
+    pub fn from_string(error: String) -> Self {
+        ErrorCode {
+            code: 1001,
+            display_text: error,
+            cause: None,
+            backtrace: Some(ErrorCodeBacktrace::Origin(Arc::new(Backtrace::capture()))),
+        }
+    }
+
     pub fn create(
         code: u16,
         display_text: String,

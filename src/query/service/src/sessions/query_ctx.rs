@@ -242,7 +242,7 @@ impl TableContext for QueryContext {
         let mut partition_queue = self.partition_queue.write();
 
         partition_queue.clear();
-        for part in partitions {
+        for part in partitions.partitions {
             partition_queue.push_back(part);
         }
         Ok(())

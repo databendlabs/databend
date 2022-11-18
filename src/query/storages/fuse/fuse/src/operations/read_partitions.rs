@@ -12,16 +12,14 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
-use std::hash::Hash;
-use std::hash::Hasher;
 use std::sync::Arc;
 use std::time::Instant;
 
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
+use common_catalog::plan::PartitionsShuffleKind;
 use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table_context::TableContext;
@@ -62,31 +60,8 @@ impl FuseTable {
 
                 if settings.get_enable_distributed_eval_index()? {
                     let mut segments = Vec::with_capacity(snapshot.segments.len());
-
-                    let mut segments_locations = snapshot.segments.clone();
-
-                    // reorder the segment locations according to their hash of location,
-                    // so that,
-                    // - segments are kind of shuffled
-                    // - with the assumption of stable query cluster membership
-                    //   the same segment will likely to be assigned to the same query
-                    //   node (by PlanFragment::redistribute_source_fragment), and cache will be
-                    //   utilized better.
-                    let num_nodes = ctx.get_cluster().nodes.len() as u64;
-                    let hash = |path: &str| -> u64 {
-                        let mut s = DefaultHasher::new();
-                        path.hash(&mut s);
-                        s.finish() % num_nodes
-                    };
-                    segments_locations.sort_by(|a, b| {
-                        let hl = hash(&a.0);
-                        let hr = hash(&b.0);
-                        hl.cmp(&hr)
-                    });
-
-                    // build the PartInfos
-                    for segment_location in segments_locations {
-                        segments.push(FuseLazyPartInfo::create(segment_location))
+                    for segment_location in &snapshot.segments {
+                        segments.push(FuseLazyPartInfo::create(segment_location.clone()))
                     }
 
                     return Ok((
@@ -96,7 +71,7 @@ impl FuseTable {
                             snapshot.segments.len(),
                             snapshot.segments.len(),
                         ),
-                        segments,
+                        Partitions::create(PartitionsShuffleKind::Mod, segments),
                     ));
                 }
 
@@ -113,7 +88,7 @@ impl FuseTable {
                 )
                 .await
             }
-            None => Ok((PartStatistics::default(), vec![])),
+            None => Ok((PartStatistics::default(), Partitions::default())),
         }
     }
 
@@ -219,7 +194,7 @@ impl FuseTable {
         limit: usize,
     ) -> (PartStatistics, Partitions) {
         let mut statistics = PartStatistics::default_exact();
-        let mut partitions = Partitions::default();
+        let mut partitions = Partitions::create(PartitionsShuffleKind::Mod, vec![]);
 
         if limit == 0 {
             return (statistics, partitions);
@@ -229,7 +204,9 @@ impl FuseTable {
 
         for block_meta in metas {
             let rows = block_meta.row_count as usize;
-            partitions.push(Self::all_columns_part(block_meta));
+            partitions
+                .partitions
+                .push(Self::all_columns_part(block_meta));
             statistics.read_rows += rows;
             statistics.read_bytes += block_meta.block_size as usize;
 
@@ -263,7 +240,11 @@ impl FuseTable {
         let mut remaining = limit;
 
         for block_meta in metas {
-            partitions.push(Self::projection_part(block_meta, column_leaves, projection));
+            partitions.partitions.push(Self::projection_part(
+                block_meta,
+                column_leaves,
+                projection,
+            ));
             let rows = block_meta.row_count as usize;
 
             statistics.read_rows += rows;
@@ -365,7 +346,7 @@ impl FuseTable {
                     partitions_total: summary.block_count as usize,
                     is_exact: true,
                 };
-                Some((stats, vec![]))
+                Some((stats, Partitions::default()))
             }
             _ => None,
         })

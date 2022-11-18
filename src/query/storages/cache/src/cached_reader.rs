@@ -61,6 +61,7 @@ where L: Loader<T>
 
                 let mut metrics = CacheDeferMetrics {
                     tenant_label: labeled_cache.label(),
+                    name: &self.name,
                     cache_hit: false,
                     read_bytes: 0,
                 };

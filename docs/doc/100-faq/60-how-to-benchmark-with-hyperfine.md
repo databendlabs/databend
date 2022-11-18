@@ -111,4 +111,4 @@ The final result in databend-hyperfine.md is as follows.
 
 ## Follow up
 
-- Refer [Analyzing OnTime Datasets with Databend on AWS EC2 and S3](../learn/analyze-ontime-with-databend-on-ec2-and-s3) to run benchmarks for the ontime dataset or your own dataset.
+- Refer [Analyzing OnTime Datasets with Databend on AWS EC2 and S3](../21-use-cases/01-analyze-ontime-with-databend-on-ec2-and-s3.md) to run benchmarks for the ontime dataset or your own dataset.

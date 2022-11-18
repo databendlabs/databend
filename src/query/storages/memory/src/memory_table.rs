@@ -21,6 +21,7 @@ use common_catalog::catalog::StorageDescription;
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
+use common_catalog::plan::PartitionsShuffleKind;
 use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table::AppendMode;
@@ -123,7 +124,7 @@ impl MemoryTable {
             }
         }
 
-        partitions
+        Partitions::create(PartitionsShuffleKind::Seq, partitions)
     }
 }
 
