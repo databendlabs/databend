@@ -160,17 +160,27 @@ impl Chunk {
     /// Take the first Scalar of the column.
     #[inline]
     pub fn first(&self, index: usize) -> Result<Scalar> {
-        let (_value, _) = self.column(index);
-        // value.get_checked(0)
-        todo!("expression")
+        if self.num_rows == 0 {
+            return Err(ErrorCode::EmptyData("Chunk is empty"));
+        }
+        let (value, _) = self.column(index);
+        match value {
+            Value::Scalar(s) => Ok(s.clone()),
+            Value::Column(c) => Ok(unsafe { c.index_unchecked(0).to_owned() }),
+        }
     }
 
     /// Take the last Scalar of the column.
     #[inline]
     pub fn last(&self, index: usize) -> Result<Scalar> {
-        let (_value, _) = self.column(index);
-        // value.get_checked(column.len() - 1)
-        todo!("expression")
+        if self.num_rows == 0 {
+            return Err(ErrorCode::EmptyData("Chunk is empty"));
+        }
+        let (value, _) = self.column(index);
+        match value {
+            Value::Scalar(s) => Ok(s.clone()),
+            Value::Column(c) => Ok(unsafe { c.index_unchecked(self.num_rows - 1).to_owned() }),
+        }
     }
 
     pub fn slice(&self, range: Range<usize>) -> Self {

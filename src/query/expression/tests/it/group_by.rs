@@ -30,20 +30,20 @@ fn test_group_by_hash() -> Result<()> {
 
     let chunk = new_chunk(&vec![
         (
-            DataType::Int8,
-            Column::from_data(from_data(vec![1i8, 1, 2, 1, 2, 3])),
+            DataType::Number(NumberDataType::Int8),
+            Column::from_data(vec![1i8, 1, 2, 1, 2, 3]),
         ),
         (
-            DataType::Int8,
-            Column::from_data(from_data(vec![1i8, 1, 2, 1, 2, 3])),
+            DataType::Number(NumberDataType::Int8),
+            Column::from_data(vec![1i8, 1, 2, 1, 2, 3]),
         ),
         (
-            DataType::Int8,
-            Column::from_data(from_data(vec![1i8, 1, 2, 1, 2, 3])),
+            DataType::Number(NumberDataType::Int8),
+            Column::from_data(vec![1i8, 1, 2, 1, 2, 3]),
         ),
         (
             DataType::String,
-            Column::from_data(from_data(vec!["x1", "x1", "x2", "x1", "x2", "x3"])),
+            Column::from_data(vec!["x1", "x1", "x2", "x1", "x2", "x3"]),
         ),
     ]);
 
@@ -60,16 +60,17 @@ fn test_group_by_hash() -> Result<()> {
     let mut group_columns = Vec::with_capacity(columns.len());
     {
         for col in columns {
-            let index = schema.index_of(col)?;
-            group_columns.push(chunk.column(index)?);
+            let index = schema.index_of(col).unwrap();
+            group_columns.push(chunk.column(index));
         }
     }
 
-    let state = hash.build_keys_state(&group_columns, chunk.num_rows())?;
-    let keys_iter = hash.build_keys_iter(&state)?;
-    let keys: Vec<u32> = keys_iter.copied().collect();
-    assert_eq!(keys, vec![
-        0x10101, 0x10101, 0x20202, 0x10101, 0x20202, 0x30303
-    ]);
+    todo!("expression");
+    // let state = hash.build_keys_state(group_columns.as_slice(), chunk.num_rows())?;
+    // let keys_iter = hash.build_keys_iter(&state)?;
+    // let keys: Vec<u32> = keys_iter.copied().collect();
+    // assert_eq!(keys, vec![
+    //     0x10101, 0x10101, 0x20202, 0x10101, 0x20202, 0x30303
+    // ]);
     Ok(())
 }

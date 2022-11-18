@@ -73,28 +73,7 @@ impl Chunk {
                     Ok(self.slice(0..0))
                 }
             }
-            Value::Column(bitmap) => {
-                let count_zeros = bitmap.unset_bits();
-                match count_zeros {
-                    0 => Ok(self),
-                    _ => {
-                        if count_zeros == self.num_rows() {
-                            return Ok(self.slice(0..0));
-                        }
-                        let after_columns = self
-                            .columns()
-                            .iter()
-                            .map(|(value, ty)| match value {
-                                Value::Scalar(v) => (Value::Scalar(v.clone()), ty.clone()),
-                                Value::Column(c) => {
-                                    (Value::Column(Column::filter(c, &bitmap)), ty.clone())
-                                }
-                            })
-                            .collect();
-                        Ok(Chunk::new(after_columns, self.num_rows() - count_zeros))
-                    }
-                }
-            }
+            Value::Column(bitmap) => Self::filter_chunk_with_bitmap(self, &bitmap),
         }
     }
 
@@ -157,8 +136,25 @@ impl Chunk {
         }
     }
 
-    pub fn filter_chunk_with_bitmap(_chunk: Chunk, _filter: &Bitmap) -> Result<Chunk> {
-        todo!("expression")
+    pub fn filter_chunk_with_bitmap(chunk: Chunk, bitmap: &Bitmap) -> Result<Chunk> {
+        let count_zeros = bitmap.unset_bits();
+        match count_zeros {
+            0 => Ok(chunk),
+            _ => {
+                if count_zeros == chunk.num_rows() {
+                    return Ok(chunk.slice(0..0));
+                }
+                let after_columns = chunk
+                    .columns()
+                    .iter()
+                    .map(|(value, ty)| match value {
+                        Value::Scalar(v) => (Value::Scalar(v.clone()), ty.clone()),
+                        Value::Column(c) => (Value::Column(Column::filter(c, &bitmap)), ty.clone()),
+                    })
+                    .collect();
+                Ok(Chunk::new(after_columns, chunk.num_rows() - count_zeros))
+            }
+        }
     }
 }
 
