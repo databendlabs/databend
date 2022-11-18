@@ -81,6 +81,7 @@ git_partial_clone() {
     git clone \
         -b "$branch" \
         --depth 1 \
+        --quiet \
         --filter=blob:none \
         --sparse \
         "$repo_url" \
