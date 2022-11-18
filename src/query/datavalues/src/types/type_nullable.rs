@@ -39,7 +39,11 @@ impl NullableType {
     }
 
     pub fn create(inner: DataTypeImpl) -> Self {
-        debug_assert!(inner.can_inside_nullable());
+        debug_assert!(
+            inner.can_inside_nullable(),
+            "{} can't be inside of nullable.",
+            inner.name()
+        );
         NullableType {
             inner: Box::new(inner),
         }
