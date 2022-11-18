@@ -31,7 +31,7 @@ use crate::plans::Filter;
 use crate::plans::JoinType;
 use crate::plans::Limit;
 use crate::plans::LogicalGet;
-use crate::plans::LogicalInnerJoin;
+use crate::plans::LogicalJoin;
 use crate::plans::PhysicalHashJoin;
 use crate::plans::PhysicalScan;
 use crate::plans::RelOperator;
@@ -69,7 +69,7 @@ impl Display for FormatContext {
                 rel_operator,
             } => match rel_operator.as_ref() {
                 RelOperator::LogicalGet(_) => write!(f, "LogicalGet"),
-                RelOperator::LogicalInnerJoin(op) => format_logical_inner_join(f, metadata, op),
+                RelOperator::LogicalJoin(op) => format_logical_join(f, metadata, op),
                 RelOperator::PhysicalScan(_) => write!(f, "PhysicalScan"),
                 RelOperator::PhysicalHashJoin(op) => format_hash_join(f, metadata, op),
                 RelOperator::EvalScalar(_) => write!(f, "EvalScalar"),
@@ -142,10 +142,10 @@ pub fn format_scalar(_metadata: &MetadataRef, scalar: &Scalar) -> String {
     }
 }
 
-pub fn format_logical_inner_join(
+pub fn format_logical_join(
     f: &mut std::fmt::Formatter<'_>,
     _metadata: &MetadataRef,
-    op: &LogicalInnerJoin,
+    op: &LogicalJoin,
 ) -> std::fmt::Result {
     write!(f, "LogicalJoin: {}", op.join_type)
 }
@@ -204,9 +204,7 @@ fn to_format_tree(
 ) -> FormatTreeNode<FormatContext> {
     match &rel_operator {
         RelOperator::PhysicalScan(op) => physical_scan_to_format_tree(op, metadata, children),
-        RelOperator::LogicalInnerJoin(op) => {
-            logical_inner_join_to_format_tree(op, metadata, children)
-        }
+        RelOperator::LogicalJoin(op) => logical_join_to_format_tree(op, metadata, children),
         RelOperator::PhysicalHashJoin(op) => {
             physical_hash_join_to_format_tree(op, metadata, children)
         }
@@ -344,8 +342,8 @@ fn logical_get_to_format_tree(
     )
 }
 
-pub fn logical_inner_join_to_format_tree(
-    op: &LogicalInnerJoin,
+pub fn logical_join_to_format_tree(
+    op: &LogicalJoin,
     metadata: MetadataRef,
     children: Vec<FormatTreeNode<FormatContext>>,
 ) -> FormatTreeNode<FormatContext> {

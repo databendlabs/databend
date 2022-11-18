@@ -100,7 +100,7 @@ impl UnusedColumnPruner {
                     prewhere,
                 })))
             }
-            RelOperator::LogicalInnerJoin(p) => {
+            RelOperator::LogicalJoin(p) => {
                 // Include columns referenced in left conditions
                 let left = p.left_conditions.iter().fold(required.clone(), |acc, v| {
                     acc.union(&v.used_columns()).cloned().collect()
@@ -115,7 +115,7 @@ impl UnusedColumnPruner {
                 });
 
                 Ok(SExpr::create_binary(
-                    RelOperator::LogicalInnerJoin(p.clone()),
+                    RelOperator::LogicalJoin(p.clone()),
                     self.keep_required_columns(
                         expr.child(0)?,
                         left.union(&others).cloned().collect(),
