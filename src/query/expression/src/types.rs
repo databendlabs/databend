@@ -141,7 +141,7 @@ impl DataType {
             _ => false,
         }
     }
-    
+
     pub fn is_numeric(&self) -> bool {
         match self {
             DataType::Number(ty) => ALL_NUMERICS_TYPES.contains(ty),

@@ -16,20 +16,20 @@ use std::borrow::BorrowMut;
 use std::sync::Arc;
 
 use bumpalo::Bump;
-use common_datablocks::DataBlock;
-use common_datavalues::ColumnRef;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataType;
-use common_datavalues::MutableColumn;
-use common_datavalues::MutableStringColumn;
-use common_datavalues::ScalarColumn;
-use common_datavalues::ScalarColumnBuilder;
-use common_datavalues::Series;
-use common_datavalues::StringColumn;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_functions::aggregates::AggregateFunctionRef;
-use common_functions::aggregates::StateAddr;
+use common_expression::types::string::StringColumnBuilder;
+use common_expression::types::AnyType;
+use common_expression::types::DataType;
+use common_expression::types::StringType;
+use common_expression::Chunk;
+use common_expression::Column;
+use common_expression::ColumnBuilder;
+use common_expression::DataSchemaRef;
+use common_expression::Scalar;
+use common_expression::Value;
+use common_functions_v2::aggregates::AggregateFunctionRef;
+use common_functions_v2::aggregates::StateAddr;
 
 use crate::pipelines::processors::transforms::transform_aggregator::Aggregator;
 use crate::pipelines::processors::AggregatorParams;
@@ -105,14 +105,17 @@ impl<const FINAL: bool> SingleStateAggregator<FINAL> {
 impl Aggregator for SingleStateAggregator<true> {
     const NAME: &'static str = "AggregatorFinalTransform";
 
-    fn consume(&mut self, block: DataBlock) -> Result<()> {
+    fn consume(&mut self, chunk: Chunk) -> Result<()> {
+        let chunk = chunk.convert_to_full();
         for (index, func) in self.funcs.iter().enumerate() {
             let place = self.places[index];
 
-            let binary_array = block.column(index);
-            let binary_array: &StringColumn = Series::check_get(binary_array)?;
+            let binary_array = chunk.column(index).0.as_column().unwrap();
+            let binary_array = binary_array.as_string().ok_or(ErrorCode::IllegalDataType(
+                "binary array should be string type",
+            ))?;
 
-            let mut data = binary_array.get_data(0);
+            let mut data = unsafe { binary_array.index_unchecked(0) };
 
             let temp_addr = self.temp_places[index];
             func.deserialize(temp_addr, &mut data)?;
@@ -122,40 +125,44 @@ impl Aggregator for SingleStateAggregator<true> {
         Ok(())
     }
 
-    fn generate(&mut self) -> Result<Vec<DataBlock>> {
-        let mut aggr_values: Vec<Box<dyn MutableColumn>> = {
+    fn generate(&mut self) -> Result<Vec<Chunk>> {
+        let mut aggr_values = {
             let mut builders = vec![];
             for func in &self.funcs {
                 let data_type = func.return_type()?;
-                builders.push(data_type.create_mutable(1024));
+                builders.push((ColumnBuilder::with_capacity(&data_type, 1024), data_type));
             }
             builders
         };
 
         for (index, func) in self.funcs.iter().enumerate() {
             let place = self.places[index];
-            let array: &mut dyn MutableColumn = aggr_values[index].borrow_mut();
-            func.merge_result(place, array)?;
+            let (builder, _) = aggr_values[index].borrow_mut();
+            func.merge_result(place, builder)?;
         }
 
-        let mut columns: Vec<ColumnRef> = Vec::with_capacity(self.funcs.len());
-        for mut array in aggr_values {
-            columns.push(array.to_column());
+        let mut num_rows = 0;
+        let mut columns: Vec<(Value<AnyType>, DataType)> = Vec::with_capacity(self.funcs.len());
+        for (builder, ty) in aggr_values {
+            num_rows = builder.len();
+            let col = builder.build();
+            columns.push((Value::Column(col), ty));
         }
 
-        Ok(vec![DataBlock::create(self.schema.clone(), columns)])
+        Ok(vec![Chunk::new(columns, num_rows)])
     }
 }
 
 impl Aggregator for SingleStateAggregator<false> {
     const NAME: &'static str = "AggregatorPartialTransform";
 
-    fn consume(&mut self, block: DataBlock) -> Result<()> {
-        let rows = block.num_rows();
+    fn consume(&mut self, chunk: Chunk) -> Result<()> {
+        let chunk = chunk.convert_to_full();
+        let rows = chunk.num_rows();
         for (idx, func) in self.funcs.iter().enumerate() {
             let mut arg_columns = vec![];
             for index in self.arg_indices[idx].iter() {
-                arg_columns.push(block.column(*index).clone());
+                arg_columns.push(chunk.column(*index).clone());
             }
             let place = self.places[idx];
             func.accumulate(place, &arg_columns, None, rows)?;
@@ -164,21 +171,20 @@ impl Aggregator for SingleStateAggregator<false> {
         Ok(())
     }
 
-    fn generate(&mut self) -> Result<Vec<DataBlock>> {
+    fn generate(&mut self) -> Result<Vec<Chunk>> {
         let mut columns = Vec::with_capacity(self.funcs.len());
 
         for (idx, func) in self.funcs.iter().enumerate() {
             let place = self.places[idx];
 
-            let mut array_builder = MutableStringColumn::with_capacity(4);
-            func.serialize(place, array_builder.values_mut())?;
-            array_builder.commit_row();
-            columns.push(array_builder.to_column());
+            let mut data = Vec::with_capacity(4);
+            func.serialize(place, &mut data)?;
+            columns.push((Value::Scalar(Scalar::String(data)), DataType::String));
         }
 
         // TODO: create with temp schema
         self.drop_states();
-        Ok(vec![DataBlock::create(self.schema.clone(), columns)])
+        Ok(vec![Chunk::new(columns, 1)])
     }
 }
 

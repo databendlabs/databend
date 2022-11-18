@@ -11,14 +11,15 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-use common_datablocks::HashMethodKeysU128;
-use common_datablocks::HashMethodKeysU16;
-use common_datablocks::HashMethodKeysU256;
-use common_datablocks::HashMethodKeysU32;
-use common_datablocks::HashMethodKeysU512;
-use common_datablocks::HashMethodKeysU64;
-use common_datablocks::HashMethodKeysU8;
-use common_datablocks::HashMethodSerializer;
+
+use common_expression::HashMethodKeysU128;
+use common_expression::HashMethodKeysU16;
+use common_expression::HashMethodKeysU256;
+use common_expression::HashMethodKeysU32;
+use common_expression::HashMethodKeysU512;
+use common_expression::HashMethodKeysU64;
+use common_expression::HashMethodKeysU8;
+use common_expression::HashMethodSerializer;
 
 use crate::pipelines::processors::transforms::aggregator::aggregator_final_parallel::ParallelFinalAggregator;
 

@@ -20,12 +20,11 @@ use super::group_by_hash::HashMethodKeysU64;
 use super::group_by_hash::HashMethodKeysU8;
 use super::group_by_hash::HashMethodKind;
 use super::group_by_hash::HashMethodSerializer;
+use crate::types::DataType;
 use crate::Chunk;
 use crate::HashMethodKeysU128;
 use crate::HashMethodKeysU256;
 use crate::HashMethodKeysU512;
-use crate::types::DataType;
-
 
 impl Chunk {
     pub fn choose_hash_method(chunk: &Chunk, indices: &[usize]) -> Result<HashMethodKind> {
@@ -41,16 +40,12 @@ impl Chunk {
         Self::choose_hash_method_with_types(&hash_key_types)
     }
 
-    pub fn choose_hash_method_with_types(
-        hash_key_types: &[DataType],
-    ) -> Result<HashMethodKind> {
+    pub fn choose_hash_method_with_types(hash_key_types: &[DataType]) -> Result<HashMethodKind> {
         let mut group_key_len = 0;
         for typ in hash_key_types {
             let not_null_type = typ.remove_nullable();
 
-            if not_null_type.is_numeric()
-                || not_null_type.is_date_or_date_time()
-            {
+            if not_null_type.is_numeric() || not_null_type.is_date_or_date_time() {
                 group_key_len += not_null_type.numeric_byte_size().unwrap();
 
                 // extra one byte for null flag

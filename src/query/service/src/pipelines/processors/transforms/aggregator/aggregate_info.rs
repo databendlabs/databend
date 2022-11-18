@@ -15,8 +15,8 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use common_datablocks::BlockMetaInfo;
-use common_datablocks::BlockMetaInfoPtr;
+use common_expression::ChunkMetaInfo;
+use common_expression::ChunkMetaInfoPtr;
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq)]
 pub struct AggregateInfo {
@@ -24,18 +24,18 @@ pub struct AggregateInfo {
 }
 
 impl AggregateInfo {
-    pub fn create(bucket: isize) -> BlockMetaInfoPtr {
+    pub fn create(bucket: isize) -> ChunkMetaInfoPtr {
         Arc::new(Box::new(AggregateInfo { bucket }))
     }
 }
 
 #[typetag::serde(name = "aggregate_info")]
-impl BlockMetaInfo for AggregateInfo {
+impl ChunkMetaInfo for AggregateInfo {
     fn as_any(&self) -> &dyn Any {
         self
     }
 
-    fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
+    fn equals(&self, info: &Box<dyn ChunkMetaInfo>) -> bool {
         match info.as_any().downcast_ref::<AggregateInfo>() {
             None => false,
             Some(other) => self == other,

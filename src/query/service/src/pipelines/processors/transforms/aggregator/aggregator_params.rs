@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use common_datavalues::DataType;
 use common_exception::Result;
+use common_expression::Chunk;
 use common_expression::DataSchemaRef;
 use common_functions_v2::aggregates::get_layout_offsets;
 use common_functions_v2::aggregates::AggregateFunctionRef;
@@ -103,8 +104,8 @@ impl AggregatorTransformParams {
     ) -> Result<AggregatorTransformParams> {
         let group_cols = &aggregator_params.group_columns;
         let schema_before_group_by = aggregator_params.input_schema.clone();
-        let sample_block = DataBlock::empty_with_schema(schema_before_group_by);
-        let method = DataBlock::choose_hash_method(&sample_block, group_cols)?;
+        let sample_chunk = Chunk::empty();
+        let method = Chunk::choose_hash_method(&sample_chunk, group_cols)?;
 
         Ok(AggregatorTransformParams {
             method,

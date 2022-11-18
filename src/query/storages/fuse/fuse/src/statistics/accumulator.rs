@@ -39,11 +39,11 @@ pub struct StatisticsAccumulator {
     pub index_size: u64,
 
     pub perfect_block_count: u64,
-    pub thresholds: ChunkCompactThresholds
+    pub thresholds: ChunkCompactThresholds,
 }
 
 impl StatisticsAccumulator {
-     pub fn new(thresholds: ChunkCompactThresholds) -> Self {
+    pub fn new(thresholds: ChunkCompactThresholds) -> Self {
         Self {
             thresholds: Some(thresholds),
             ..Default::default()

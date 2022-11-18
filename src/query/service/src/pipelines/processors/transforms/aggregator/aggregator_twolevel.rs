@@ -14,14 +14,16 @@
 
 use std::time::Instant;
 
-use common_datablocks::DataBlock;
-use common_datablocks::HashMethod;
-use common_datavalues::ColumnRef;
-use common_datavalues::MutableColumn;
-use common_datavalues::MutableStringColumn;
-use common_datavalues::ScalarColumnBuilder;
+use common_exception::Column;
 use common_exception::ErrorCode;
+use common_exception::HashMethod;
 use common_exception::Result;
+use common_expression::types::string::StringColumnBuilder;
+use common_expression::types::AnyType;
+use common_expression::types::DataType;
+use common_expression::Chunk;
+use common_expression::Column;
+use common_expression::Value;
 use common_functions::aggregates::StateAddr;
 use common_hashtable::FastHash;
 use common_hashtable::HashtableEntryMutRefLike;
@@ -56,7 +58,7 @@ where Self: Aggregator + Send
         )))
     }
 
-    fn convert_two_level_block(_agg: &mut Self::TwoLevelAggregator) -> Result<Vec<DataBlock>> {
+    fn convert_two_level_chunk(_agg: &mut Self::TwoLevelAggregator) -> Result<Vec<Chunk>> {
         Err(ErrorCode::Unimplemented(format!(
             "Two level aggregator is unimplemented for {}",
             Self::NAME
@@ -114,8 +116,8 @@ where
         })
     }
 
-    fn convert_two_level_block(agg: &mut Self::TwoLevelAggregator) -> Result<Vec<DataBlock>> {
-        let mut data_blocks = Vec::with_capacity(256);
+    fn convert_two_level_chunk(agg: &mut Self::TwoLevelAggregator) -> Result<Vec<Chunk>> {
+        let mut chunks = Vec::with_capacity(256);
         for (bucket, iterator) in agg.hash_table.two_level_iter() {
             let (capacity, _) = iterator.size_hint();
 
@@ -125,8 +127,8 @@ where
             let offsets_aggregate_states = &aggregator_params.offsets_aggregate_states;
 
             // Builders.
-            let mut state_builders: Vec<MutableStringColumn> = (0..aggr_len)
-                .map(|_| MutableStringColumn::with_capacity(capacity * 4))
+            let mut state_builders: Vec<StringColumnBuilder> = (0..aggr_len)
+                .map(|_| StringColumnBuilder::with_capacity(capacity, capacity * 4))
                 .collect();
 
             let mut group_key_builder = agg.method.keys_column_builder(capacity);
@@ -136,7 +138,7 @@ where
 
                 for (idx, func) in funcs.iter().enumerate() {
                     let arg_place = place.next(offsets_aggregate_states[idx]);
-                    func.serialize(arg_place, state_builders[idx].values_mut())?;
+                    func.serialize(arg_place, &mut state_builders[idx].data)?;
                     state_builders[idx].commit_row();
                 }
 
@@ -144,23 +146,30 @@ where
             }
 
             let schema = &agg.params.output_schema;
-            let mut columns: Vec<ColumnRef> = Vec::with_capacity(schema.fields().len());
-
+            let mut columns: Vec<(Value<AnyType, DataType>)> =
+                Vec::with_capacity(schema.fields().len());
+            let mut num_rows = 0;
             for mut builder in state_builders {
-                columns.push(builder.to_column());
+                let col = builder.build();
+                num_rows = col.len();
+                columns.push((Value::Column(Column::String(col)), DataType::String));
             }
 
-            columns.push(group_key_builder.finish());
+            let col = group_key_builder.finish();
+            columns.push((
+                Value::Column(col),
+                schema.fields().last().unwrap().data_type().into(),
+            ));
 
-            data_blocks.push(DataBlock::create_with_meta(
-                agg.params.output_schema.clone(),
+            chunks.push(Chunk::new_with_meta(
                 columns,
+                num_rows,
                 Some(AggregateInfo::create(bucket)),
             ));
         }
 
         agg.drop_states();
-        Ok(data_blocks)
+        Ok(chunks)
     }
 }
 
@@ -214,8 +223,8 @@ where
         })
     }
 
-    fn convert_two_level_block(agg: &mut Self::TwoLevelAggregator) -> Result<Vec<DataBlock>> {
-        let mut data_blocks = Vec::with_capacity(256);
+    fn convert_two_level_chunk(agg: &mut Self::TwoLevelAggregator) -> Result<Vec<Chunk>> {
+        let mut chunks = Vec::with_capacity(256);
         for (bucket, iterator) in agg.hash_table.two_level_iter() {
             let (capacity, _) = iterator.size_hint();
             let mut keys_column_builder = agg.method.keys_column_builder(capacity);
@@ -224,17 +233,22 @@ where
                 keys_column_builder.append_value(group_entity.key());
             }
 
-            let columns = keys_column_builder.finish();
+            let column = keys_column_builder.finish();
+            let column = (
+                Value::Column(column),
+                agg.params.output_schema.field(0).data_type().into(),
+            );
+            let num_rows = column.len();
 
-            data_blocks.push(DataBlock::create_with_meta(
-                agg.params.output_schema.clone(),
-                vec![columns],
+            chunks.push(Chunk::new_with_meta(
+                vec![column],
+                num_rows,
                 Some(AggregateInfo::create(bucket)),
             ));
         }
 
         agg.drop_states();
-        Ok(data_blocks)
+        Ok(chunks)
     }
 }
 
@@ -278,12 +292,12 @@ impl<T: TwoLevelAggregatorLike> Aggregator for TwoLevelAggregator<T> {
     const NAME: &'static str = "TwoLevelAggregator";
 
     #[inline(always)]
-    fn consume(&mut self, data: DataBlock) -> Result<()> {
+    fn consume(&mut self, data: Chunk) -> Result<()> {
         self.inner.consume(data)
     }
 
     #[inline(always)]
-    fn generate(&mut self) -> Result<Vec<DataBlock>> {
-        T::convert_two_level_block(&mut self.inner)
+    fn generate(&mut self) -> Result<Vec<Chunk>> {
+        T::convert_two_level_chunk(&mut self.inner)
     }
 }

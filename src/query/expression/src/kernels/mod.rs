@@ -14,11 +14,11 @@
 
 mod concat;
 mod filter;
+mod group_by;
+mod group_by_hash;
 mod scatter;
 mod take;
 mod take_chunks;
-mod group_by_hash;
-mod group_by;
 
-pub use group_by_hash::*;
 pub use group_by::*;
+pub use group_by_hash::*;

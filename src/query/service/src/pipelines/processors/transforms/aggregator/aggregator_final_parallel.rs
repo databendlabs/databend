@@ -19,14 +19,11 @@ use std::sync::Arc;
 
 use common_base::base::ThreadPool;
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
-use common_datablocks::HashMethod;
-use common_datavalues::DataType;
-use common_datavalues::MutableColumn;
-use common_datavalues::ScalarColumn;
-use common_datavalues::Series;
-use common_datavalues::StringColumn;
+use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::Chunk;
+use common_expression::HashMethod;
+use common_expression::Value;
 use common_functions::aggregates::StateAddr;
 use common_functions::aggregates::StateAddrs;
 use common_hashtable::HashtableEntryMutRefLike;
@@ -49,7 +46,7 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
     method: Method,
     query_ctx: Arc<QueryContext>,
     params: Arc<AggregatorParams>,
-    buckets_blocks: HashMap<isize, Vec<DataBlock>>,
+    buckets_chunks: HashMap<isize, Vec<Chunk>>,
 }
 
 impl<Method, const HAS_AGG: bool> ParallelFinalAggregator<HAS_AGG, Method>
@@ -64,7 +61,7 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
             params,
             method,
             query_ctx: ctx,
-            buckets_blocks: HashMap::new(),
+            buckets_chunks: HashMap::new(),
         })
     }
 }
@@ -74,66 +71,66 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
 {
     const NAME: &'static str = "GroupByFinalTransform";
 
-    fn consume(&mut self, block: DataBlock) -> Result<()> {
+    fn consume(&mut self, chunk: Chunk) -> Result<()> {
         let mut bucket = -1;
-        if let Some(meta_info) = block.get_meta() {
+        if let Some(meta_info) = chunk.get_meta() {
             if let Some(meta_info) = meta_info.as_any().downcast_ref::<AggregateInfo>() {
                 bucket = meta_info.bucket;
             }
         }
 
-        match self.buckets_blocks.entry(bucket) {
+        match self.buckets_chunks.entry(bucket) {
             Entry::Vacant(v) => {
-                v.insert(vec![block]);
+                v.insert(vec![chunk]);
                 Ok(())
             }
             Entry::Occupied(mut v) => {
-                v.get_mut().push(block);
+                v.get_mut().push(chunk);
                 Ok(())
             }
         }
     }
 
-    fn generate(&mut self) -> Result<Vec<DataBlock>> {
-        let mut generate_blocks = Vec::new();
+    fn generate(&mut self) -> Result<Vec<Chunk>> {
+        let mut generate_chunks = Vec::new();
         let settings = self.query_ctx.get_settings();
         let max_threads = settings.get_max_threads()? as usize;
 
         if max_threads <= 1
-            || self.buckets_blocks.len() == 1
-            || self.buckets_blocks.contains_key(&-1)
+            || self.buckets_chunks.len() == 1
+            || self.buckets_chunks.contains_key(&-1)
         {
-            let mut data_blocks = vec![];
-            for (_, bucket_blocks) in std::mem::take(&mut self.buckets_blocks) {
-                data_blocks.extend(bucket_blocks);
+            let mut chunks = vec![];
+            for (_, bucket_chunks) in std::mem::take(&mut self.buckets_chunks) {
+                chunks.extend(bucket_chunks);
             }
 
             let method = self.method.clone();
             let params = self.params.clone();
             let mut bucket_aggregator = BucketAggregator::<HAS_AGG, _>::create(method, params)?;
-            generate_blocks = bucket_aggregator.merge_blocks(data_blocks)?;
-        } else if self.buckets_blocks.len() > 1 {
+            generate_chunks = bucket_aggregator.merge_chunks(chunks)?;
+        } else if self.buckets_chunks.len() > 1 {
             info!("Merge to final state using a parallel algorithm.");
 
             let thread_pool = ThreadPool::create(max_threads)?;
-            let mut join_handles = Vec::with_capacity(self.buckets_blocks.len());
+            let mut join_handles = Vec::with_capacity(self.buckets_chunks.len());
 
-            for (_, bucket_blocks) in std::mem::take(&mut self.buckets_blocks) {
+            for (_, bucket_chunks) in std::mem::take(&mut self.buckets_chunks) {
                 let method = self.method.clone();
                 let params = self.params.clone();
                 let mut bucket_aggregator = BucketAggregator::<HAS_AGG, _>::create(method, params)?;
                 join_handles.push(
-                    thread_pool.execute(move || bucket_aggregator.merge_blocks(bucket_blocks)),
+                    thread_pool.execute(move || bucket_aggregator.merge_chunks(bucket_chunks)),
                 );
             }
 
-            generate_blocks.reserve(join_handles.len());
+            generate_chunks.reserve(join_handles.len());
             for join_handle in join_handles {
-                generate_blocks.extend(join_handle.join()?);
+                generate_chunks.extend(join_handle.join()?);
             }
         }
 
-        Ok(generate_blocks)
+        Ok(generate_chunks)
     }
 }
 
@@ -169,11 +166,12 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
         })
     }
 
-    pub fn merge_blocks(&mut self, blocks: Vec<DataBlock>) -> Result<Vec<DataBlock>> {
-        for data_block in blocks {
+    pub fn merge_chunks(&mut self, chunks: Vec<Chunk>) -> Result<Vec<Chunk>> {
+        for chunk in chunks {
+            let chunk = chunk.convert_to_full();
             // 1.1 and 1.2.
             let aggregate_function_len = self.params.aggregate_functions.len();
-            let keys_column = data_block.column(aggregate_function_len);
+            let keys_column = chunk.column(aggregate_function_len).0.as_column().unwrap();
             let keys_iter = self.method.keys_iter_from_column(keys_column)?;
 
             if !HAS_AGG {
@@ -183,16 +181,21 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
                     }
                 }
             } else {
-                // first state places of current block
+                // first state places of current chunk
                 let places = self.lookup_state(&keys_iter);
 
                 let states_columns = (0..aggregate_function_len)
-                    .map(|i| data_block.column(i))
+                    .map(|i| chunk.column(i))
                     .collect::<Vec<_>>();
                 let mut states_binary_columns = Vec::with_capacity(states_columns.len());
 
                 for agg in states_columns.iter().take(aggregate_function_len) {
-                    let aggr_column: &StringColumn = Series::check_get(agg)?;
+                    let aggr_column = agg.0.as_column().unwrap().as_string().ok_or(
+                        ErrorCode::IllegalDataType(format!(
+                            "Aggregation column should be StringType, but got {:?}",
+                            agg.1
+                        )),
+                    )?;
                     states_binary_columns.push(aggr_column);
                 }
 
@@ -204,7 +207,8 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
                             let final_place = place.next(offsets_aggregate_states[idx]);
                             let state_place = temp_place.next(offsets_aggregate_states[idx]);
 
-                            let mut data = states_binary_columns[idx].get_data(row);
+                            let mut data =
+                                unsafe { states_binary_columns[idx].index_unchecked(row) };
                             aggregate_function.deserialize(state_place, &mut data)?;
                             aggregate_function.merge(final_place, state_place)?;
                         }
@@ -223,10 +227,17 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
             }
 
             let columns = group_columns_builder.finish()?;
-            Ok(vec![DataBlock::create(
-                self.params.output_schema.clone(),
-                columns,
-            )])
+            let mut num_rows = 0;
+            let columns = columns
+                .into_iter()
+                .zip(self.params.output_schema.fields())
+                .map(|(col, f)| {
+                    num_rows = col.len();
+                    (Value::Column(col), f.data_type().into())
+                })
+                .collect();
+
+            Ok(vec![Chunk::new(columns, num_rows)])
         } else {
             let aggregate_functions = &self.params.aggregate_functions;
             let offsets_aggregate_states = &self.params.offsets_aggregate_states;
@@ -253,19 +264,27 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
                 group_columns_builder.append_value(group_entity.key());
             }
 
-            // Build final state block.
-            let fields_len = self.params.output_schema.fields().len();
-            let mut columns = Vec::with_capacity(fields_len);
+            // Build final state chunk.
+            let fields = self.params.output_schema.fields();
+            let mut num_rows = 0;
+            let columns = aggregates_column_builder
+                .into_iter()
+                .zip(fields)
+                .map(|(builder, f)| {
+                    let col = builder.build();
+                    num_rows = col.len();
+                    (Value::Column(col), f.data_type().into())
+                })
+                .collect::<Vec<_>>();
 
-            for mut array in aggregates_column_builder {
-                columns.push(array.to_column());
-            }
-
-            columns.extend_from_slice(&group_columns_builder.finish()?);
-            Ok(vec![DataBlock::create(
-                self.params.output_schema.clone(),
-                columns,
-            )])
+            let group_columns = group_columns_builder.finish()?;
+            let group_columns = group_columns
+                .into_iter()
+                .zip(fields.iter().skip(columns.len()))
+                .map(|(col, f)| (Value::Column(col), f.data_type().into()))
+                .collect::<Vec<_>>();
+            columns.extend_from_slice(&group_columns);
+            Ok(vec![Chunk::new(columns, num_rows)])
         }
     }
 

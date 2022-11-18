@@ -25,18 +25,18 @@ use common_io::prelude::FormatSettings;
 use primitive_types::U256;
 use primitive_types::U512;
 
-use crate::Column;
-use crate::DataField;
-use crate::SchemaDataType;
-use crate::Value;
+use crate::types::number::Number;
+use crate::types::string::StringIterator;
 use crate::types::AnyType;
 use crate::types::DataType;
 use crate::types::NumberDataType;
 use crate::types::NumberType;
 use crate::types::StringType;
 use crate::types::ValueType;
-use crate::types::number::Number;
-use crate::types::string::StringIterator;
+use crate::Column;
+use crate::DataField;
+use crate::SchemaDataType;
+use crate::Value;
 
 pub enum KeysState {
     Column(Column),
@@ -53,7 +53,11 @@ pub trait HashMethod: Clone {
 
     fn name(&self) -> String;
 
-    fn build_keys_state(&self, group_columns: &[(Column, DataType)], rows: usize) -> Result<KeysState>;
+    fn build_keys_state(
+        &self,
+        group_columns: &[(Column, DataType)],
+        rows: usize,
+    ) -> Result<KeysState>;
 
     fn build_keys_iter<'a>(&self, keys_state: &'a KeysState) -> Result<Self::HashKeyIter<'a>>;
 }
@@ -96,10 +100,12 @@ impl HashMethodKind {
         match self {
             HashMethodKind::Serializer(_) => DataType::String,
             HashMethodKind::KeysU8(_) => DataType::Number(NumberDataType::UInt8),
-            HashMethodKind::KeysU16(_) =>  DataType::Number(NumberDataType::UInt16),
-            HashMethodKind::KeysU32(_) =>  DataType::Number(NumberDataType::UInt32),
-            HashMethodKind::KeysU64(_) =>  DataType::Number(NumberDataType::UInt64),
-            HashMethodKind::KeysU128(_) |   HashMethodKind::KeysU256(_) |  HashMethodKind::KeysU512(_) => DataType::String,
+            HashMethodKind::KeysU16(_) => DataType::Number(NumberDataType::UInt16),
+            HashMethodKind::KeysU32(_) => DataType::Number(NumberDataType::UInt32),
+            HashMethodKind::KeysU64(_) => DataType::Number(NumberDataType::UInt64),
+            HashMethodKind::KeysU128(_)
+            | HashMethodKind::KeysU256(_)
+            | HashMethodKind::KeysU512(_) => DataType::String,
         }
     }
 }
@@ -116,8 +122,12 @@ impl HashMethod for HashMethodSerializer {
         "Serializer".to_string()
     }
 
-    fn build_keys_state(&self, group_columns: &[(Column, DataType)], rows: usize) -> Result<KeysState> {
-        if group_columns.len() == 1 && group_columns[0].1 == DataType::String  {
+    fn build_keys_state(
+        &self,
+        group_columns: &[(Column, DataType)],
+        rows: usize,
+    ) -> Result<KeysState> {
+        if group_columns.len() == 1 && group_columns[0].1 == DataType::String {
             return Ok(KeysState::Column(group_columns[0].0.clone()));
         }
 
@@ -147,37 +157,39 @@ where T: Number
 {
     #[inline]
     pub fn get_key(&self, column: &Buffer<T>, row: usize) -> T {
-        column[row] 
+        column[row]
     }
 }
 
 impl<T> HashMethodFixedKeys<T>
 where T: Clone + Default
 {
-    fn build_keys_vec<'a>(&self, group_columns: &[(Column, DataType)], rows: usize) -> Result<Vec<T>> {
+    fn build_keys_vec<'a>(
+        &self,
+        group_columns: &[(Column, DataType)],
+        rows: usize,
+    ) -> Result<Vec<T>> {
         let step = std::mem::size_of::<T>();
         let mut group_keys: Vec<T> = vec![T::default(); rows];
         let ptr = group_keys.as_mut_ptr() as *mut u8;
         let mut offsize = 0;
         let mut null_offsize = group_columns
             .iter()
-            .map(| (_, t)| {
-                t.remove_nullable().numeric_byte_size().unwrap()
-            })
+            .map(|(_, t)| t.remove_nullable().numeric_byte_size().unwrap())
             .sum::<usize>();
 
         let mut group_columns = group_columns.to_vec();
         group_columns.sort_by(|a, b| {
             let ta = a.1.remove_nullable();
             let tb = b.1.remove_nullable();
-            
+
             tb.numeric_byte_size()
                 .unwrap()
                 .cmp(&ta.numeric_byte_size().unwrap())
         });
 
         for (col, ty) in group_columns.iter() {
-            build(&mut offsize, &mut null_offsize,  col, ty , ptr, step)?;
+            build(&mut offsize, &mut null_offsize, col, ty, ptr, step)?;
         }
 
         Ok(group_keys)
@@ -213,7 +225,6 @@ where T: Clone
             Vec::from_raw_parts(mutptr, length, capacity)
         };
 
-
         todo!("expression");
     }
 }
@@ -234,9 +245,7 @@ macro_rules! impl_hash_method_fixed_keys {
                 rows: usize,
             ) -> Result<KeysState> {
                 // faster path for single fixed keys
-                if group_columns.len() == 1
-                    &&  group_columns[0].1.is_unsigned_numeric()
-                {
+                if group_columns.len() == 1 && group_columns[0].1.is_unsigned_numeric() {
                     return Ok(KeysState::Column(group_columns[0].0.clone()));
                 }
                 let keys = self.build_keys_vec(group_columns, rows)?;
@@ -260,7 +269,6 @@ macro_rules! impl_hash_method_fixed_keys {
         }
     };
 }
-
 
 impl_hash_method_fixed_keys! {u8}
 impl_hash_method_fixed_keys! {u16}
@@ -325,7 +333,7 @@ fn build(
     } else {
         None
     };
-    
+
     todo!("expression");
     // Series::fixed_hash(col, writer, step, nulls)?;
     *offsize += size;

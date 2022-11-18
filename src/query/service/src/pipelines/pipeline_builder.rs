@@ -380,7 +380,7 @@ impl PipelineBuilder {
         input_schema: DataSchemaRef,
         output_schema: DataSchemaRef,
         group_by: &[ColumnID],
-        // agg_funcs: &[AggregateFunctionDesc], todo!("expression");
+        agg_funcs: &[AggregateFunctionDesc],
     ) -> Result<Arc<AggregatorParams>> {
         let before_schema = input_schema.clone();
         let group_columns = group_by
