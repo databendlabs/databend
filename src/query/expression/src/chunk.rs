@@ -26,7 +26,6 @@ use crate::types::AnyType;
 use crate::types::DataType;
 use crate::ChunkMetaInfoPtr;
 use crate::Column;
-use crate::ColumnBuilder;
 use crate::DataSchemaRef;
 use crate::Domain;
 use crate::Scalar;
