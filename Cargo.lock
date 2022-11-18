@@ -2064,7 +2064,6 @@ dependencies = [
  "parking_lot 0.12.1",
  "percent-encoding",
  "serde",
- "time 0.3.15",
 ]
 
 [[package]]
@@ -5658,8 +5657,7 @@ checksum = "0ab1bc2a289d34bd04a330323ac98a1b4bc82c9d9fcb1e66b63caa84da26b575"
 [[package]]
 name = "opendal"
 version = "0.20.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cde4e791ec0b18aa6ba6a833c21d5fb6790c24a3b4914a588a0fab471d8d1fcb"
+source = "git+https://github.com/datafuselabs/opendal?rev=ad29eec#ad29eec7e65cc146983bc63aaf5250d6450d441f"
 dependencies = [
  "anyhow",
  "async-compat",

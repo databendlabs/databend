@@ -15,6 +15,7 @@
 use std::env;
 use std::io::Result;
 use std::ops::Deref;
+use std::time::Duration;
 
 use backon::ExponentialBackoff;
 use common_base::base::GlobalIORuntime;
@@ -39,7 +40,6 @@ use opendal::services::oss;
 use opendal::services::redis;
 use opendal::services::s3;
 use opendal::Operator;
-use time::Duration;
 
 use super::StorageAzblobConfig;
 use super::StorageFsConfig;
@@ -296,7 +296,7 @@ fn init_redis_operator(v: &StorageRedisConfig) -> Result<Operator> {
     builder.root(&v.root);
     builder.db(v.db);
     if let Some(v) = v.default_ttl {
-        builder.default_ttl(Duration::seconds(v));
+        builder.default_ttl(Duration::from_secs(v as u64));
     }
     if let Some(v) = &v.username {
         builder.username(v);
