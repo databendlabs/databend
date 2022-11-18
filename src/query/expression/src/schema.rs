@@ -252,11 +252,11 @@ impl DataSchema {
         ArrowSchema::from(fields).with_metadata(self.metadata.clone())
     }
 
-    pub fn create_deserializers(&self, _capacity: usize) -> Vec<Box<dyn TypeDeserializer>> {
+    pub fn create_deserializers(&self, capacity: usize) -> Vec<Box<dyn TypeDeserializer>> {
         let mut deserializers = Vec::with_capacity(self.num_fields());
         for field in self.fields() {
             let data_type: DataType = field.data_type().into();
-            deserializers.push(data_type.create_deserializer());
+            deserializers.push(data_type.create_deserializer(capacity));
         }
         deserializers
     }

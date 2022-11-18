@@ -30,7 +30,6 @@ use crate::ColumnBuilder;
 use crate::DataSchemaRef;
 use crate::Domain;
 use crate::Scalar;
-use crate::TypeSerializer;
 use crate::Value;
 
 /// Chunk is a lightweight container for a group of columns.
@@ -230,19 +229,6 @@ impl Chunk {
     #[inline]
     pub fn meta(&self) -> Result<Option<ChunkMetaInfoPtr>> {
         Ok(self.meta.clone())
-    }
-
-    pub fn get_serializers(&self) -> Result<Vec<Box<dyn TypeSerializer>>, String> {
-        let mut serializers = Vec::with_capacity(self.num_columns());
-        for (value, data_type) in self.columns() {
-            let column = match value {
-                Value::Scalar(s) => ColumnBuilder::repeat(&s.as_ref(), 1, data_type).build(),
-                Value::Column(c) => c.clone(),
-            };
-            let serializer = data_type.create_serializer(column)?;
-            serializers.push(serializer);
-        }
-        Ok(serializers)
     }
 
     pub fn from_arrow_chunk<A: AsRef<dyn Array>>(
