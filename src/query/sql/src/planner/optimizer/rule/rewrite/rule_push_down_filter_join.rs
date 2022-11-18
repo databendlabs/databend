@@ -270,6 +270,14 @@ impl RulePushDownFilterJoin {
         result = SExpr::create_unary(filter.into(), result);
         Ok(result)
     }
+
+    fn rewrite_predicates(&self, s_expr: &SExpr) -> Result<(Vec<Scalar>)> {
+        let mut filter: Filter = s_expr.plan().clone().try_into()?;
+        let mut predicate = filter.predicates;
+        let mut join: LogicalInnerJoin = s_expr.child(0)?.plan().clone().try_into()?;
+
+        Ok()
+    }
 }
 
 impl Rule for RulePushDownFilterJoin {
@@ -282,6 +290,11 @@ impl Rule for RulePushDownFilterJoin {
         let mut s_expr = self.convert_outer_to_inner_join(s_expr)?;
         // Second, check if can convert mark join to semi join
         s_expr = self.convert_mark_to_semi_join(&s_expr)?;
+        // Third, extract OR clauses from predicates and push down them to join
+        // For example: `select * from t1, t2 where (t1.a=1 and t2.b=2) or (t1.a=2 and t2.b=1)`
+        // The predicate will be rewritten to `((t1.a=1 and t2.b=2) or (t1.a=2 and t2.b=1)) and (t1.a=1 or t1.a=1) and (t2.b=2 or t2.b=1)`
+        // So `(t1.a=1 or t1.a=1), (t2.b=2 or t2.b=1)` may be pushed down join and reduce rows between join
+        let rewritten_predicates = self.rewrite_predicates(&s_expr)?;
 
         let filter: Filter = s_expr.plan().clone().try_into()?;
         if filter.predicates.is_empty() {
