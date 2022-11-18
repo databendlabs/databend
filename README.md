@@ -137,7 +137,7 @@ docker run --net=host  datafuselabs/databend
 - [How to Grant Privileges to a User](https://databend.rs/doc/sql-commands/ddl/user/grant-privileges)
 - [How to Revoke Privileges from a User](https://databend.rs/doc/sql-commands/ddl/user/revoke-privileges)
 - [How to Create a Role](https://databend.rs/doc/sql-commands/ddl/user/user-create-role)
-- [How to Grant Privileges to a Role](https://databend.rs/doc/reference/sql/ddl/user/grant-privileges)
+- [How to Grant Privileges to a Role](https://databend.rs/doc/sql-commands/ddl/user/grant-privileges)
 - [How to Grant Role to a User](https://databend.rs/doc/sql-commands/ddl/user/grant-role)
 - [How to Revoke Role from a User](https://databend.rs/doc/sql-commands/ddl/user/revoke-role)
  
