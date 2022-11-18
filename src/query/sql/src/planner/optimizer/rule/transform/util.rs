@@ -17,11 +17,11 @@ use common_functions::scalars::FunctionFactory;
 
 use crate::plans::ComparisonExpr;
 use crate::plans::ComparisonOp;
-use crate::plans::LogicalInnerJoin;
+use crate::plans::LogicalJoin;
 use crate::plans::Scalar;
 use crate::ScalarExpr;
 
-pub fn get_join_predicates(join: &LogicalInnerJoin) -> Result<Vec<Scalar>> {
+pub fn get_join_predicates(join: &LogicalJoin) -> Result<Vec<Scalar>> {
     Ok(join
         .left_conditions
         .iter()
