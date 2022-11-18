@@ -387,6 +387,7 @@ INSTALL_DEV_TOOLS=false
 INSTALL_PROFILE=false
 INSTALL_CODEGEN=false
 INSTALL_TPCH_DATA=false
+TPCH_SCALE_FACTOR=$2
 
 # parse args
 while getopts "ybcdpstv" arg; do
@@ -581,18 +582,19 @@ fi
 
 if [[ "$INSTALL_TPCH_DATA" == "true" ]]; then
 	# Construct a docker imagine to generate tpch-data
-	if [[ -z $2 ]]; then
+	if [[ -z ${TPCH_SCALE_FACTOR} ]]; then
 		docker build -f scripts/setup/tpchdata.dockerfile -t databend:latest .
 	else
-		docker build -f scripts/setup/tpchdata.dockerfile -t databend:latest --build-arg scale_factor=$2 .
+		docker build -f scripts/setup/tpchdata.dockerfile -t databend:latest \
+			--build-arg scale_factor="${TPCH_SCALE_FACTOR}" .
 	fi
 	# Generate data into the ./data directory if it does not already exist
 	FILE=benchmark/tpch/data/customer.tbl
 	if test -f "$FILE"; then
 		echo "$FILE exists."
 	else
-		mkdir $(pwd)/benchmark/tpch/data 2>/dev/null
-		docker run -v $(pwd)/benchmark/tpch/data:/data --rm databend:latest
+		mkdir "$(pwd)/benchmark/tpch/data" 2>/dev/null
+		docker run -v "$(pwd)/benchmark/tpch/data:/data" --rm databend:latest
 	fi
 fi
 
