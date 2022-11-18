@@ -446,6 +446,16 @@ impl Settings {
                 desc: "If enable distributed eval index, default value: 1",
                 possible_values: None,
             },
+            SettingValue {
+                default_value: UserSettingValue::UInt64(0),
+                user_setting: UserSetting::create(
+                    "prefer_broadcast_join",
+                    UserSettingValue::UInt64(0),
+                ),
+                level: ScopeLevel::Session,
+                desc: "If enable broadcast join, default value: 0",
+                possible_values: None,
+            },
         ];
 
         let settings: Arc<DashMap<String, SettingValue>> = Arc::new(DashMap::default());
@@ -677,6 +687,18 @@ impl Settings {
 
     pub fn set_enable_cbo(&self, val: bool) -> Result<()> {
         static KEY: &str = "enable_cbo";
+        let v = u64::from(val);
+        self.try_set_u64(KEY, v, false)
+    }
+
+    pub fn get_prefer_broadcast_join(&self) -> Result<bool> {
+        static KEY: &str = "prefer_broadcast_join";
+        let v = self.try_get_u64(KEY)?;
+        Ok(v != 0)
+    }
+
+    pub fn set_prefer_broadcast_join(&self, val: bool) -> Result<()> {
+        static KEY: &str = "join_distribution_type";
         let v = u64::from(val);
         self.try_set_u64(KEY, v, false)
     }

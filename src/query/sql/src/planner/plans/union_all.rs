@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
+use common_catalog::table_context::TableContext;
 use common_exception::Result;
 
 use crate::optimizer::ColumnSet;
@@ -116,6 +119,7 @@ impl PhysicalOperator for UnionAll {
 
     fn compute_required_prop_child<'a>(
         &self,
+        _ctx: Arc<dyn TableContext>,
         _rel_expr: &RelExpr<'a>,
         _child_index: usize,
         required: &RequiredProperty,
