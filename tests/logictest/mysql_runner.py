@@ -75,11 +75,7 @@ class TestMySQL(logictest.SuiteRunner, ABC):
                             f"Expected float, got type {type(v)} in query {statement.text} row {ri} col {i} value {v}"
                         )
                 elif query_type[i] == "T":
-                    if not (
-                        isinstance(v, str)
-                        or isinstance(v, datetime)
-                        or isinstance(v, date)
-                    ):
+                    if not (isinstance(v, str) or isinstance(v, datetime) or isinstance(v, date)):
                         log.debug(
                             f"Expected string, got type {type(v)} in query { statement.text} row {ri} col {i} value {v}"
                         )

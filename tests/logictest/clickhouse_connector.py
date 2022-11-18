@@ -1,7 +1,5 @@
 import environs
 import os
-from clickhouse_sqlalchemy import make_session
-from sqlalchemy import create_engine
 
 from log import log
 
@@ -17,7 +15,9 @@ class ClickhouseConnector(object):
                 protocol = "https"
             else:
                 protocol = "http"
-        self._uri = f"clickhouse+http://{user}:{password}@{host}:{port}/{database}?protocol={protocol}"
+        self._uri = (
+            f"clickhouse+http://{user}:{password}@{host}:{port}/{database}?protocol={protocol}"
+        )
         log.debug(self._uri)
         e = environs.Env()
         self._additonal_headers = dict()
@@ -29,6 +29,9 @@ class ClickhouseConnector(object):
         self._session = None
 
     def query_with_session(self, statement):
+        from clickhouse_sqlalchemy import make_session  # type: ignore
+        from sqlalchemy import create_engine  # type: ignore
+
         if self._session is None:
             engine = create_engine(self._uri, connect_args=self._additonal_headers)
             self._session = make_session(engine)

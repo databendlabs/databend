@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 set -o errexit
 SCRIPT_PATH="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)"
@@ -120,7 +120,7 @@ kill_proc() {
     echo " === Kill $name ..."
 
     killall "$name" || {
-        echo " === no "$name" to kill"
+        echo " === no $name to kill"
         return
     }
 
@@ -128,7 +128,7 @@ kill_proc() {
 
     if test -n "$(pgrep $name)"; then
         echo " === The $name is not killed. force killing."
-        killall -9 $name || echo " === no $Name to killall-9"
+        killall -9 $name || echo " === no $name to killall-9"
     fi
 
     echo " === Done kill $name"
@@ -136,8 +136,7 @@ kill_proc() {
 
 # Find path in old and new location.
 # Databend release once changed binary path from `./` to `./bin`.
-find_binary_path()
-{
+find_binary_path() {
     local base="$1"
     local binary_name="$2"
 
@@ -207,13 +206,10 @@ run_test() {
 
     echo " === Run metasrv related test: 05_ddl"
 
-    # Only run test on mysql handler
-    export DISABLE_HTTP_LOGIC_TEST=true
-    export DISABLE_CLICKHOUSE_LOGIC_TEST=true
-
     if [ "$query_ver" = "current" ]; then
         cd "$SCRIPT_PATH/../../tests/logictest" || exit
-        python3 main.py "_ddl_"
+        # Only run test on mysql handler
+        python3 main.py "_ddl_" --handlers mysql
         cd -
     else
         (

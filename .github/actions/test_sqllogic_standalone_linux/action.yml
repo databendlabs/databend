@@ -13,6 +13,10 @@ inputs:
     description: "logic test suites dirs"
     required: true
     default: ""
+  handlers:
+    description: "logic test handlers, mysql,http,clickhouse"
+    required: false
+    default: ""
 runs:
   using: "composite"
   steps:
@@ -25,10 +29,13 @@ runs:
 
     - name: Run sqllogic Tests with Standalone mode
       shell: bash
+      env:
+        TEST_HANDLERS: ${{ inputs.handlers }}
       run: |
         docker run --rm --tty --net=host \
           --user $(id -u):$(id -g) \
           --env BUILD_PROFILE \
+          --env TEST_HANDLERS \
           --ulimit nofile=65535:65535 \
           --ulimit stack=16777216:16777216 \
           --volume "${PWD}:/workspace" \

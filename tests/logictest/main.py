@@ -11,52 +11,45 @@ from argparse import ArgumentParser
 from config import mysql_config, http_config, clickhouse_config
 
 
+TEST_CLASSES = {
+    "mysql": TestMySQL,
+    "http": TestHttp,
+    "clickhouse": TestClickhouse,
+}
+
+TEST_CONFIGS = {
+    "mysql": mysql_config,
+    "http": http_config,
+    "clickhouse": clickhouse_config,
+}
+
+
 def run(args):
     """
     Run tests
     """
-    if not args.disable_mysql_test:
-        mysql_test = TestMySQL("mysql", args)
-        mysql_test.set_driver(mysql_config)
-        mysql_test.set_label("mysql")
-        mysql_test.run_sql_suite()
 
-    if not args.disable_http_test:
-        http = TestHttp("http", args)
-        http.set_driver(http_config)
-        http.set_label("http")
-        http.run_sql_suite()
-
-    if not args.disable_clickhouse_test:
-        http = TestClickhouse("clickhouse", args)
-        http.set_driver(clickhouse_config)
-        http.set_label("clickhouse")
-        http.run_sql_suite()
+    for handler in args.handlers.split(","):
+        if handler not in TEST_CLASSES:
+            raise Exception("Unknown test handler: {}".format(handler))
+        test_instance = TEST_CLASSES[handler](handler, args)
+        test_instance.set_driver(TEST_CONFIGS[handler])
+        test_instance.set_label(handler)
+        test_instance.run_sql_suite()
 
     global_statistics.check_and_exit()
 
 
 if __name__ == "__main__":
     parser = ArgumentParser(description="databend sqlogical tests")
-    parser.add_argument(
-        "--disable-mysql-test",
-        action="store_true",
-        default=os.environ.get("DISABLE_MYSQL_LOGIC_TEST"),
-        help="Disable mysql handler test",
-    )
-    parser.add_argument(
-        "--disable-http-test",
-        action="store_true",
-        default=os.environ.get("DISABLE_HTTP_LOGIC_TEST"),
-        help="Disable http handler test",
-    )
-    parser.add_argument(
-        "--disable-clickhouse-test",
-        action="store_true",
-        default=os.environ.get("DISABLE_CLICKHOUSE_LOGIC_TEST"),
-        help="Disable clickhouse handler test",
-    )
+
     parser.add_argument("pattern", nargs="*", help="Optional test case name regex")
+
+    parser.add_argument(
+        "--handlers",
+        default="mysql,http,clickhouse",
+        help="Test handlers, separated by comma",
+    )
 
     parser.add_argument(
         "--test-runs",
