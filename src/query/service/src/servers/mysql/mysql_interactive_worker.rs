@@ -24,8 +24,8 @@ use common_exception::Result;
 use common_exception::ToErrorCode;
 use common_expression::Chunk;
 use common_expression::DataSchemaRef;
+use common_expression::SendableChunkStream;
 use common_io::prelude::*;
-use common_pipeline_sources::processors::sources::stream_source::SendableChunkStream;
 use common_sql::plans::Plan;
 use common_sql::Planner;
 use common_users::CertifiedInfo;
@@ -55,7 +55,7 @@ use crate::servers::mysql::MYSQL_VERSION;
 use crate::sessions::QueryContext;
 use crate::sessions::Session;
 use crate::sessions::TableContext;
-use crate::stream::DataBlockStream;
+use crate::stream::ChunkStream;
 
 fn has_result_set_by_plan(plan: &Plan) -> bool {
     matches!(
@@ -321,7 +321,7 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
                 }
                 let has_result = chunk.num_rows() > 0;
                 Ok(QueryResult::create(
-                    DataBlockStream::create(None, vec![chunk]).boxed(),
+                    ChunkStream::create(None, vec![chunk]).boxed(),
                     None,
                     has_result,
                     schema,

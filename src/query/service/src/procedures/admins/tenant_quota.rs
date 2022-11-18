@@ -14,18 +14,26 @@
 
 use std::sync::Arc;
 
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
-use common_datavalues::DataField;
-use common_datavalues::DataSchema;
-use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::number::UInt32Type;
+use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
+use common_expression::types::ValueType;
+use common_expression::Chunk;
+use common_expression::Column;
+use common_expression::ColumnFrom;
+use common_expression::DataField;
+use common_expression::DataSchema;
+use common_expression::DataSchemaRefExt;
+use common_expression::Scalar;
+use common_expression::SchemaDataType;
+use common_expression::Value;
 use common_meta_types::TenantQuota;
 use common_meta_types::UserOptionFlag;
 use common_users::UserApiProvider;
 
-use crate::procedures::OneBlockProcedure;
+use crate::procedures::OneChunkProcedure;
 use crate::procedures::Procedure;
 use crate::procedures::ProcedureFeatures;
 use crate::sessions::QueryContext;
@@ -40,7 +48,7 @@ impl TenantQuotaProcedure {
 }
 
 #[async_trait::async_trait]
-impl OneBlockProcedure for TenantQuotaProcedure {
+impl OneChunkProcedure for TenantQuotaProcedure {
     fn name(&self) -> &str {
         "TENANT_QUOTA"
     }
@@ -57,7 +65,7 @@ impl OneBlockProcedure for TenantQuotaProcedure {
     /// max_tables_per_database: u32
     /// max_stages: u32
     /// max_files_per_stage: u32
-    async fn all_data(&self, ctx: Arc<QueryContext>, args: Vec<String>) -> Result<DataBlock> {
+    async fn all_data(&self, ctx: Arc<QueryContext>, args: Vec<String>) -> Result<Chunk> {
         let mut tenant = ctx.get_tenant();
         if !args.is_empty() {
             let user_info = ctx.get_current_user()?;
@@ -75,7 +83,7 @@ impl OneBlockProcedure for TenantQuotaProcedure {
         let mut quota = res.data;
 
         if args.len() <= 1 {
-            return self.to_block(&quota);
+            return self.to_chunk(&quota);
         };
 
         quota.max_databases = args[1].parse::<u32>()?;
@@ -91,26 +99,50 @@ impl OneBlockProcedure for TenantQuotaProcedure {
 
         quota_api.set_quota(&quota, Some(res.seq)).await?;
 
-        self.to_block(&quota)
+        self.to_chunk(&quota)
     }
 
     fn schema(&self) -> Arc<DataSchema> {
         DataSchemaRefExt::create(vec![
-            DataField::new("max_databases", u32::to_data_type()),
-            DataField::new("max_tables_per_database", u32::to_data_type()),
-            DataField::new("max_stages", u32::to_data_type()),
-            DataField::new("max_files_per_stage", u32::to_data_type()),
+            DataField::new(
+                "max_databases",
+                SchemaDataType::Number(NumberDataType::UInt32),
+            ),
+            DataField::new(
+                "max_tables_per_database",
+                SchemaDataType::Number(NumberDataType::UInt32),
+            ),
+            DataField::new("max_stages", SchemaDataType::Number(NumberDataType::UInt32)),
+            DataField::new(
+                "max_files_per_stage",
+                SchemaDataType::Number(NumberDataType::UInt32),
+            ),
         ])
     }
 }
 
 impl TenantQuotaProcedure {
-    fn to_block(&self, quota: &TenantQuota) -> Result<DataBlock> {
-        Ok(DataBlock::create(self.schema(), vec![
-            Series::from_data(vec![quota.max_databases]),
-            Series::from_data(vec![quota.max_tables_per_database]),
-            Series::from_data(vec![quota.max_stages]),
-            Series::from_data(vec![quota.max_files_per_stage]),
-        ]))
+    fn to_chunk(&self, quota: &TenantQuota) -> Result<Chunk> {
+        Ok(Chunk::new(
+            vec![
+                (
+                    Value::Scalar(UInt32Type::upcast_scalar(quota.max_databases)),
+                    DataType::Number(NumberDataType::UInt32),
+                ),
+                (
+                    Value::Scalar(UInt32Type::upcast_scalar(quota.max_tables_per_database)),
+                    DataType::Number(NumberDataType::UInt32),
+                ),
+                (
+                    Value::Scalar(UInt32Type::upcast_scalar(quota.max_stages)),
+                    DataType::Number(NumberDataType::UInt32),
+                ),
+                (
+                    Value::Scalar(UInt32Type::upcast_scalar(quota.max_files_per_stage)),
+                    DataType::Number(NumberDataType::UInt32),
+                ),
+            ],
+            1,
+        ))
     }
 }

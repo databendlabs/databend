@@ -47,6 +47,7 @@ mod meta_info;
 mod property;
 mod register;
 pub mod schema;
+mod stream;
 pub mod type_check;
 pub mod types;
 pub mod utils;
@@ -55,6 +56,7 @@ pub mod values;
 pub use meta_info::ChunkMetaInfo;
 pub use meta_info::ChunkMetaInfoPtr;
 pub use meta_info::ChunkMetaInfos;
+pub use stream::SendableChunkStream;
 
 pub use crate::chunk::*;
 pub use crate::chunk_compact_thresholds::ChunkCompactThresholds;

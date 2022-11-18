@@ -14,11 +14,11 @@
 
 use std::sync::Arc;
 
-use common_datablocks::DataBlock;
-use common_datavalues::DataSchema;
 use common_exception::Result;
+use common_expression::Chunk;
+use common_expression::DataSchema;
 
-use crate::procedures::OneBlockProcedure;
+use crate::procedures::OneChunkProcedure;
 use crate::procedures::Procedure;
 use crate::procedures::ProcedureFeatures;
 use crate::sessions::QueryContext;
@@ -36,7 +36,7 @@ impl ClusteringInformationProcedure {
 }
 
 #[async_trait::async_trait]
-impl OneBlockProcedure for ClusteringInformationProcedure {
+impl OneChunkProcedure for ClusteringInformationProcedure {
     fn name(&self) -> &str {
         "CLUSTERING_INFORMATION"
     }
@@ -46,7 +46,7 @@ impl OneBlockProcedure for ClusteringInformationProcedure {
         ProcedureFeatures::default().num_arguments(2)
     }
 
-    async fn all_data(&self, ctx: Arc<QueryContext>, args: Vec<String>) -> Result<DataBlock> {
+    async fn all_data(&self, ctx: Arc<QueryContext>, args: Vec<String>) -> Result<Chunk> {
         let database_name = args[0].clone();
         let table_name = args[1].clone();
         let tenant_id = ctx.get_tenant();

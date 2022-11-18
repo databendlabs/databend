@@ -18,7 +18,7 @@ mod table_read_block_stream;
 mod datablock_stream;
 mod progress_stream;
 
-pub use datablock_stream::DataBlockStream;
+pub use datablock_stream::ChunkStream;
 pub use processor_executor_stream::PullingExecutorStream;
 pub use progress_stream::ProgressStream;
 pub use table_read_block_stream::ReadDataBlockStream;

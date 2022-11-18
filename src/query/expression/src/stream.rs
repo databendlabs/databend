@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,14 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod admins;
-mod procedure;
-mod procedure_factory;
-pub mod systems;
+use common_exception::Result;
 
-pub use procedure::OneChunkProcedure;
-pub use procedure::Procedure;
-pub use procedure_factory::ProcedureFactory;
-pub use procedure_factory::ProcedureFeatures;
+use crate::Chunk;
 
-pub use crate::context_function::ContextFunction;
+pub type SendableChunkStream =
+    std::pin::Pin<Box<dyn futures::stream::Stream<Item = Result<Chunk>> + Send>>;

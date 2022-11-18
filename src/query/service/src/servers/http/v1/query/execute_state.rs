@@ -29,7 +29,7 @@ use common_datablocks::SendableDataBlockStream;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataSchemaRef;
-use common_pipeline_sources::processors::sources::stream_source::SendableChunkStream;
+use common_expression::SendableChunkStream;
 use common_sql::plans::Plan;
 use common_sql::Planner;
 use common_storages_fuse_result::BlockBuffer;
@@ -56,7 +56,7 @@ use crate::sessions::QueryContext;
 use crate::sessions::Session;
 use crate::sessions::TableContext;
 use crate::sql::Planner;
-use crate::stream::DataBlockStream;
+use crate::stream::ChunkStream;
 
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Eq)]
 pub enum ExecuteStateKind {
@@ -381,6 +381,6 @@ impl HttpQueryHandle {
                 }
             }
         });
-        Ok(Box::pin(DataBlockStream::create(None, vec![])))
+        Ok(Box::pin(ChunkStream::create(None, vec![])))
     }
 }

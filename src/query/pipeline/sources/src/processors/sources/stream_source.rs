@@ -18,15 +18,13 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::Chunk;
+use common_expression::SendableChunkStream;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use futures::StreamExt;
 
 use crate::processors::sources::AsyncSource;
 use crate::processors::sources::AsyncSourcer;
-
-pub type SendableChunkStream =
-    std::pin::Pin<Box<dyn futures::stream::Stream<Item = Result<Chunk>> + Send>>;
 
 /// AsyncSource backed by a stream
 pub struct AsyncStreamSource<const SKIP_EMPTY_CHUNK: bool> {

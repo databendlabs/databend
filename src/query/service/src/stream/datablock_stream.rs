@@ -18,15 +18,15 @@ use std::task::Poll;
 use common_exception::Result;
 use common_expression::Chunk;
 
-pub struct DataBlockStream {
+pub struct ChunkStream {
     current: usize,
     data: Vec<Chunk>,
     projects: Option<Vec<usize>>,
 }
 
-impl DataBlockStream {
+impl ChunkStream {
     pub fn create(projects: Option<Vec<usize>>, data: Vec<Chunk>) -> Self {
-        DataBlockStream {
+        ChunkStream {
             current: 0,
             data,
             projects,
@@ -34,7 +34,7 @@ impl DataBlockStream {
     }
 }
 
-impl futures::Stream for DataBlockStream {
+impl futures::Stream for ChunkStream {
     type Item = Result<Chunk>;
 
     fn poll_next(
