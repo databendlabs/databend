@@ -45,7 +45,7 @@ pub struct StatisticsAccumulator {
 impl StatisticsAccumulator {
     pub fn new(thresholds: ChunkCompactThresholds) -> Self {
         Self {
-            thresholds: Some(thresholds),
+            thresholds,
             ..Default::default()
         }
     }
