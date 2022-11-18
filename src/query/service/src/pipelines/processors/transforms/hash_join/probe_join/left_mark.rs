@@ -17,8 +17,6 @@ use std::iter::TrustedLen;
 use std::sync::atomic::Ordering;
 
 use common_catalog::table_context::TableContext;
-use common_datavalues::BooleanViewer;
-use common_datavalues::ScalarViewer;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::Chunk;
@@ -158,27 +156,28 @@ impl JoinHashTable {
                             let build_chunk = self.row_space.gather(&build_indexes)?;
                             let merged_chunk = self.merge_eq_chunk(&build_chunk, &probe_chunk)?;
 
-                            let type_vector = other_predicate.eval(&func_ctx, &merged_chunk)?;
-                            let filter_column = type_vector.vector();
-                            let filter_viewer = BooleanViewer::try_create(filter_column)?;
+                            todo!("expression");
+                            // let type_vector = other_predicate.eval(&func_ctx, &merged_chunk)?;
+                            // let filter_column = type_vector.vector();
+                            // let filter_viewer = BooleanViewer::try_create(filter_column)?;
 
-                            for (idx, build_index) in build_indexes.iter().enumerate() {
-                                let self_row_ptr =
-                                    row_ptrs.iter_mut().find(|p| (*p).eq(&build_index)).unwrap();
-                                if !filter_viewer.valid_at(idx) {
-                                    if self_row_ptr.marker == Some(MarkerKind::False) {
-                                        self_row_ptr.marker = Some(MarkerKind::Null);
-                                    }
-                                } else if filter_viewer.value_at(idx) {
-                                    self_row_ptr.marker = Some(MarkerKind::True);
-                                }
-                            }
+                            // for (idx, build_index) in build_indexes.iter().enumerate() {
+                            //     let self_row_ptr =
+                            //         row_ptrs.iter_mut().find(|p| (*p).eq(&build_index)).unwrap();
+                            //     if !filter_viewer.valid_at(idx) {
+                            //         if self_row_ptr.marker == Some(MarkerKind::False) {
+                            //             self_row_ptr.marker = Some(MarkerKind::Null);
+                            //         }
+                            //     } else if filter_viewer.value_at(idx) {
+                            //         self_row_ptr.marker = Some(MarkerKind::True);
+                            //     }
+                            // }
 
-                            index = new_index;
-                            remain -= addition;
+                            // index = new_index;
+                            // remain -= addition;
 
-                            build_indexes.clear();
-                            probe_indexes.clear();
+                            // build_indexes.clear();
+                            // probe_indexes.clear();
                         }
                     }
                 }
@@ -189,27 +188,28 @@ impl JoinHashTable {
         let build_chunk = self.row_space.gather(&build_indexes)?;
         let merged_chunk = self.merge_eq_chunk(&build_chunk, &probe_chunk)?;
 
-        let type_vector = other_predicate.eval(&func_ctx, &merged_chunk)?;
-        let filter_column = type_vector.vector();
-        let filter_viewer = BooleanViewer::try_create(filter_column)?;
+        todo!("expression");
+        // let type_vector = other_predicate.eval(&func_ctx, &merged_chunk)?;
+        // let filter_column = type_vector.vector();
+        // let filter_viewer = BooleanViewer::try_create(filter_column)?;
 
-        for (idx, build_index) in build_indexes.iter().enumerate() {
-            let self_row_ptr = row_ptrs.iter_mut().find(|p| (*p).eq(&build_index)).unwrap();
-            if !filter_viewer.valid_at(idx) {
-                if self_row_ptr.marker == Some(MarkerKind::False) {
-                    self_row_ptr.marker = Some(MarkerKind::Null);
-                }
-            } else if filter_viewer.value_at(idx) {
-                self_row_ptr.marker = Some(MarkerKind::True);
-            }
-        }
+        // for (idx, build_index) in build_indexes.iter().enumerate() {
+        //     let self_row_ptr = row_ptrs.iter_mut().find(|p| (*p).eq(&build_index)).unwrap();
+        //     if !filter_viewer.valid_at(idx) {
+        //         if self_row_ptr.marker == Some(MarkerKind::False) {
+        //             self_row_ptr.marker = Some(MarkerKind::Null);
+        //         }
+        //     } else if filter_viewer.value_at(idx) {
+        //         self_row_ptr.marker = Some(MarkerKind::True);
+        //     }
+        // }
 
-        if self.hash_join_desc.from_correlated_subquery {
-            // Must be correlated ANY subquery, we won't need to check `has_null` in `mark_join_chunks`.
-            // In the following, if value is Null and Marker is False, we'll set the marker to Null
-            let mut has_null = self.hash_join_desc.marker_join_desc.has_null.write();
-            *has_null = false;
-        }
+        // if self.hash_join_desc.from_correlated_subquery {
+        //     // Must be correlated ANY subquery, we won't need to check `has_null` in `mark_join_chunks`.
+        //     // In the following, if value is Null and Marker is False, we'll set the marker to Null
+        //     let mut has_null = self.hash_join_desc.marker_join_desc.has_null.write();
+        //     *has_null = false;
+        // }
 
         Ok(vec![Chunk::empty()])
     }

@@ -15,8 +15,8 @@
 use std::alloc::Layout;
 use std::sync::Arc;
 
-use common_datavalues::DataType;
 use common_exception::Result;
+use common_expression::types::DataType;
 use common_expression::Chunk;
 use common_expression::DataSchemaRef;
 use common_functions_v2::aggregates::get_layout_offsets;

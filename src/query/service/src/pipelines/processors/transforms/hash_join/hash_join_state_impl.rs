@@ -325,7 +325,7 @@ impl HashJoinState for JoinHashTable {
         // If build_indexes size will greater build table size, we need filter the redundant rows for build side.
         let mut bm = validity.into_mut().right().unwrap();
         self.filter_rows_for_right_join(&mut bm, &mut row_state);
-        let filtered_chunk = Chunk::filter_chunk_with_bool_column(merged_chunk, &bm.into())?;
+        let filtered_chunk = Chunk::filter_chunk_with_bitmap(merged_chunk, &bm.into())?;
 
         // Concat null chunks
         let null_chunk = self.null_chunks_for_right_join(&unmatched_build_indexes)?;
@@ -469,7 +469,7 @@ impl JoinHashTable {
                 row_state[row.chunk_index][row.row_index] -= 1;
             }
         }
-        Chunk::filter_chunk_with_bool_column(input, &bm.clone().into())
+        Chunk::filter_chunk_with_bitmap(input, &bm.clone().into())
     }
 
     pub(crate) fn non_equi_conditions_for_left_join(
@@ -532,10 +532,7 @@ impl JoinHashTable {
             }
             self.fill_null_for_left_join(&mut bm, &probe_indexes_vec[idx], row_state);
 
-            output_chunks.push(Chunk::filter_chunk_with_bool_column(
-                merged_chunk,
-                &bm.into(),
-            )?);
+            output_chunks.push(Chunk::filter_chunk_with_bitmap(merged_chunk, &bm.into())?);
         }
         Ok(output_chunks)
     }

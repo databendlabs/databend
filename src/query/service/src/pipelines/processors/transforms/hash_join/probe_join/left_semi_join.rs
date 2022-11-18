@@ -17,8 +17,6 @@ use std::iter::TrustedLen;
 use std::sync::atomic::Ordering;
 
 use common_arrow::arrow::bitmap::MutableBitmap;
-use common_datavalues::BooleanColumn;
-use common_datavalues::Column;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::Chunk;
@@ -202,9 +200,8 @@ impl JoinHashTable {
                             self.fill_null_for_anti_join(&mut bm, &probe_indexes, &mut row_state);
                         }
 
-                        let predicate = BooleanColumn::from_arrow_data(bm.into()).arc();
                         let probed_data_chunk =
-                            Chunk::filter_chunk_with_bool_column(probe_chunk, &bm.into())?;
+                            Chunk::filter_chunk_with_bitmap(probe_chunk, &bm.into())?;
 
                         if !probed_data_chunk.is_empty() {
                             probed_chunks.push(probed_data_chunk);
@@ -243,7 +240,7 @@ impl JoinHashTable {
             self.fill_null_for_anti_join(&mut bm, &probe_indexes, &mut row_state);
         }
 
-        let probed_data_chunk = Chunk::filter_chunk_with_bool_column(probe_chunk, &bm.into())?;
+        let probed_data_chunk = Chunk::filter_chunk_with_bitmap(probe_chunk, &bm.into())?;
 
         if !probed_data_chunk.is_empty() {
             probed_chunks.push(probed_data_chunk);

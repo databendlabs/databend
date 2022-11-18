@@ -157,7 +157,7 @@ impl Chunk {
         }
     }
 
-    pub fn filter_chunk_with_bool_column(_chunk: Chunk, _filter: &Bitmap) -> Result<Chunk> {
+    pub fn filter_chunk_with_bitmap(_chunk: Chunk, _filter: &Bitmap) -> Result<Chunk> {
         todo!("expression")
     }
 }
