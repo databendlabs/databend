@@ -74,6 +74,17 @@ impl FuseTable {
         operation_log: TableOperationLog,
         overwrite: bool,
     ) -> Result<()> {
+        self.commit_with_max_retry_elapsed(ctx, operation_log, None, overwrite)
+            .await
+    }
+
+    pub async fn commit_with_max_retry_elapsed(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        operation_log: TableOperationLog,
+        max_retry_elapsed: Option<Duration>,
+        overwrite: bool,
+    ) -> Result<()> {
         let mut tbl = self;
         let mut latest: Arc<dyn Table>;
 
@@ -88,7 +99,7 @@ impl FuseTable {
 
         // The maximum elapsed time after the occ starts, beyond which there will be no more retries.
         // By default, it is 2 minutes
-        let max_elapsed = OCC_DEFAULT_BACKOFF_MAX_ELAPSED_MS;
+        let max_elapsed = max_retry_elapsed.unwrap_or(OCC_DEFAULT_BACKOFF_MAX_ELAPSED_MS);
 
         // TODO(xuanwo): move to backon instead.
         //
