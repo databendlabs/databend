@@ -183,7 +183,7 @@ impl<Index: ColumnIndex> Expr<Index> {
 
     pub fn project_column_ref<ToIndex: ColumnIndex>(
         &self,
-        mut f: impl FnMut(&Index) -> ToIndex,
+        f: impl Fn(&Index) -> ToIndex + Copy,
     ) -> Expr<ToIndex> {
         match self {
             Expr::Constant {
@@ -212,7 +212,7 @@ impl<Index: ColumnIndex> Expr<Index> {
             } => Expr::Cast {
                 span: span.clone(),
                 is_try: *is_try,
-                expr: Box::new(expr.project_column_ref(|i| f(i))),
+                expr: Box::new(expr.project_column_ref(f)),
                 dest_type: dest_type.clone(),
             },
             Expr::FunctionCall {
@@ -227,10 +227,7 @@ impl<Index: ColumnIndex> Expr<Index> {
                 id: id.clone(),
                 function: function.clone(),
                 generics: generics.clone(),
-                args: args
-                    .iter()
-                    .map(|expr| expr.project_column_ref(|i| f(i)))
-                    .collect(),
+                args: args.iter().map(|expr| expr.project_column_ref(f)).collect(),
                 return_type: return_type.clone(),
             },
         }
