@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fmt::Debug;
 use std::fmt::Display;
@@ -184,7 +183,7 @@ impl<Index: ColumnIndex> Expr<Index> {
 
     pub fn project_column_ref<ToIndex: ColumnIndex>(
         &self,
-        f: impl FnMut(&Index) -> ToIndex,
+        mut f: impl FnMut(&Index) -> ToIndex,
     ) -> Expr<ToIndex> {
         match self {
             Expr::Constant {
@@ -213,7 +212,7 @@ impl<Index: ColumnIndex> Expr<Index> {
             } => Expr::Cast {
                 span: span.clone(),
                 is_try: *is_try,
-                expr: Box::new(expr.project_column_ref(f)),
+                expr: Box::new(expr.project_column_ref(|i| f(i))),
                 dest_type: dest_type.clone(),
             },
             Expr::FunctionCall {
@@ -228,7 +227,10 @@ impl<Index: ColumnIndex> Expr<Index> {
                 id: id.clone(),
                 function: function.clone(),
                 generics: generics.clone(),
-                args: args.iter().map(|expr| expr.project_column_ref(f)).collect(),
+                args: args
+                    .iter()
+                    .map(|expr| expr.project_column_ref(|i| f(i)))
+                    .collect(),
                 return_type: return_type.clone(),
             },
         }
