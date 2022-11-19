@@ -50,7 +50,6 @@ use crate::sql::plans::CopyPlanV2;
 use crate::sql::plans::Plan;
 
 const MAX_QUERY_COPIED_FILES_NUM: usize = 50;
-const TABLE_COPIED_FILE_KEY_EXPIRE_AFTER_DAYS: Option<u64> = Some(7);
 
 pub struct CopyInterpreterV2 {
     ctx: Arc<QueryContext>,
@@ -142,6 +141,7 @@ impl CopyInterpreterV2 {
     }
 
     async fn upsert_copied_files_info_to_meta(
+        ctx: &Arc<QueryContext>,
         tenant: String,
         database_name: String,
         table_id: u64,
@@ -154,14 +154,14 @@ impl CopyInterpreterV2 {
             return Ok(());
         }
 
-        let expire_at = TABLE_COPIED_FILE_KEY_EXPIRE_AFTER_DAYS
-            .map(|after_days| after_days * 86400 + Utc::now().timestamp() as u64);
+        let expire_hours = ctx.get_settings().get_load_file_metadata_expire_hours()?;
+        let expire_at = expire_hours * 60 + Utc::now().timestamp() as u64;
         let mut do_copy_stage_files = BTreeMap::new();
         for (file_name, file_info) in copy_stage_files {
             do_copy_stage_files.insert(file_name.clone(), file_info);
             if do_copy_stage_files.len() > MAX_QUERY_COPIED_FILES_NUM {
                 CopyInterpreterV2::do_upsert_copied_files_info_to_meta(
-                    expire_at,
+                    Some(expire_at),
                     tenant.clone(),
                     database_name.clone(),
                     table_id,
@@ -173,7 +173,7 @@ impl CopyInterpreterV2 {
         }
         if !do_copy_stage_files.is_empty() {
             CopyInterpreterV2::do_upsert_copied_files_info_to_meta(
-                expire_at,
+                Some(expire_at),
                 tenant.clone(),
                 database_name.clone(),
                 table_id,
@@ -464,6 +464,7 @@ impl CopyInterpreterV2 {
                             start.elapsed().as_secs()
                         );
                         CopyInterpreterV2::upsert_copied_files_info_to_meta(
+                            &ctx,
                             tenant,
                             database_name,
                             table_id,
