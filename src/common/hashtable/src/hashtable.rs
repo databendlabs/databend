@@ -253,6 +253,10 @@ where
         self.len()
     }
 
+    fn bytes_len(&self) -> usize {
+        std::mem::size_of::<Self>() + self.table.heap_bytes()
+    }
+
     fn entry(&self, key_ref: &Self::Key) -> Option<Self::EntryRef<'_>> {
         self.entry(key_ref)
     }

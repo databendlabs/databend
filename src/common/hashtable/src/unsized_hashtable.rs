@@ -788,6 +788,16 @@ where A: Allocator + Clone + Default
         self.len()
     }
 
+    fn bytes_len(&self) -> usize {
+        std::mem::size_of::<Self>()
+            + self.arena.allocated_bytes()
+            + self.table0.heap_bytes()
+            + self.table1.heap_bytes()
+            + self.table2.heap_bytes()
+            + self.table3.heap_bytes()
+            + self.table4.heap_bytes()
+    }
+
     fn entry(&self, key: &Self::Key) -> Option<Self::EntryRef<'_>> {
         let key = key.as_bytes();
         match key.len() {
