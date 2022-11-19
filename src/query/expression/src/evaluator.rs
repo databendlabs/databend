@@ -487,7 +487,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                     let chunk = Chunk::empty();
                     let evaluator = Evaluator::new(&chunk, self.tz, self.fn_registry);
                     // Since we know the expression is constant, it'll be safe to change its column index type.
-                    let cast_expr = cast_expr.project_column_ref(&HashMap::new());
+                    let cast_expr = cast_expr.project_column_ref(|_| unreachable!());
                     if let Ok(Value::Scalar(scalar)) = evaluator.run(&cast_expr) {
                         return (
                             Expr::Constant {
@@ -563,7 +563,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                     let chunk = Chunk::empty();
                     let evaluator = Evaluator::new(&chunk, self.tz, self.fn_registry);
                     // Since we know the expression is constant, it'll be safe to change its column index type.
-                    let func_expr = func_expr.project_column_ref(&HashMap::new());
+                    let func_expr = func_expr.project_column_ref(|_| unreachable!());
                     if let Ok(Value::Scalar(scalar)) = evaluator.run(&func_expr) {
                         return (
                             Expr::Constant {
