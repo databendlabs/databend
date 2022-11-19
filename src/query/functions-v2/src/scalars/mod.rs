@@ -20,6 +20,7 @@ mod array;
 mod boolean;
 mod control;
 mod datetime;
+mod geo;
 mod math;
 mod tuple;
 mod variant;
@@ -41,5 +42,6 @@ pub fn builtin_functions() -> FunctionRegistry {
     string_multi_args::register(&mut registry);
     tuple::register(&mut registry);
     variant::register(&mut registry);
+    geo::register(&mut registry);
     registry
 }
