@@ -95,10 +95,17 @@ where
             dropped: false,
         }
     }
+
     #[inline(always)]
     pub fn len(&self) -> usize {
         self.len
     }
+
+    #[inline(always)]
+    pub fn heap_bytes(&self) -> usize {
+        self.entries.heap_bytes()
+    }
+
     #[inline(always)]
     pub fn capacity(&self) -> usize {
         self.entries.len()
