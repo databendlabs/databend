@@ -1,8 +1,3 @@
-use std::any::Any;
-use std::sync::atomic::AtomicBool;
-use std::sync::Arc;
-use std::time::Duration;
-
 //  Copyright 2021 Datafuse Labs.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,7 +11,14 @@ use std::time::Duration;
 //  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
-use common_base::base::{tokio, Progress, ProgressValues};
+use std::any::Any;
+use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
+use std::time::Duration;
+
+use common_base::base::tokio;
+use common_base::base::Progress;
+use common_base::base::ProgressValues;
 use common_catalog::catalog::Catalog;
 use common_catalog::cluster_info::Cluster;
 use common_catalog::database::Database;
