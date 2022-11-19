@@ -38,6 +38,7 @@ use crate::values::Column;
 use crate::values::ColumnBuilder;
 use crate::values::Scalar;
 use crate::values::Value;
+use crate::ColumnIndex;
 use crate::FunctionDomain;
 use crate::FunctionRegistry;
 use crate::Result;
@@ -409,15 +410,15 @@ impl<'a> Evaluator<'a> {
     }
 }
 
-pub struct ConstantFolder<'a> {
-    input_domains: HashMap<usize, Domain>,
+pub struct ConstantFolder<'a, Index: ColumnIndex> {
+    input_domains: HashMap<Index, Domain>,
     tz: Tz,
     fn_registry: &'a FunctionRegistry,
 }
 
-impl<'a> ConstantFolder<'a> {
+impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
     pub fn new(
-        input_domains: HashMap<usize, Domain>,
+        input_domains: HashMap<Index, Domain>,
         tz: Tz,
         fn_registry: &'a FunctionRegistry,
     ) -> Self {
@@ -428,7 +429,7 @@ impl<'a> ConstantFolder<'a> {
         }
     }
 
-    pub fn fold(&self, expr: &Expr) -> (Expr, Option<Domain>) {
+    pub fn fold(&self, expr: &Expr<Index>) -> (Expr<Index>, Option<Domain>) {
         let (new_expr, domain) = match expr {
             Expr::Constant { scalar, .. } => (expr.clone(), Some(scalar.as_ref().domain())),
             Expr::ColumnRef {
@@ -485,6 +486,8 @@ impl<'a> ConstantFolder<'a> {
                 if inner_expr.as_constant().is_some() {
                     let chunk = Chunk::empty();
                     let evaluator = Evaluator::new(&chunk, self.tz, self.fn_registry);
+                    // Since we know the expression is constant, it'll be safe to change its column index type.
+                    let cast_expr = cast_expr.project_column_ref(&HashMap::new());
                     if let Ok(Value::Scalar(scalar)) = evaluator.run(&cast_expr) {
                         return (
                             Expr::Constant {
@@ -559,6 +562,8 @@ impl<'a> ConstantFolder<'a> {
                 if all_args_is_scalar {
                     let chunk = Chunk::empty();
                     let evaluator = Evaluator::new(&chunk, self.tz, self.fn_registry);
+                    // Since we know the expression is constant, it'll be safe to change its column index type.
+                    let func_expr = func_expr.project_column_ref(&HashMap::new());
                     if let Ok(Value::Scalar(scalar)) = evaluator.run(&func_expr) {
                         return (
                             Expr::Constant {
