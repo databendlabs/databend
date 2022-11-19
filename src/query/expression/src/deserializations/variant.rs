@@ -102,11 +102,10 @@ impl TypeDeserializer for VariantDeserializer {
         Ok(())
     }
 
-    fn de_json(&mut self, _value: &serde_json::Value, _format: &FormatSettings) -> Result<()> {
-        // todo(baishen)
-        // let _c: common_jsonb::Value = todo!("expression");
-        // _c.to_vec(&mut self.builder.data);
-        // self.builder.commit_row();
+    fn de_json(&mut self, value: &serde_json::Value, _format: &FormatSettings) -> Result<()> {
+        let v = common_jsonb::Value::from(value);
+        v.to_vec(&mut self.builder.data);
+        self.builder.commit_row();
         Ok(())
     }
 }
