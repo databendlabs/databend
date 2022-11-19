@@ -761,12 +761,15 @@ impl<'a, K: UnsizedKeyable + ?Sized + 'a, V: 'a> EntryMutRefLike
     fn key(&self) -> &Self::Key {
         self.key()
     }
+
     fn get(&self) -> &Self::Value {
         self.get()
     }
+
     fn get_mut(&mut self) -> &mut Self::Value {
         self.get_mut()
     }
+
     fn write(&mut self, value: Self::Value) {
         self.write(value);
     }
@@ -944,15 +947,20 @@ where A: Allocator + Clone + Default
                         self.table4.grow(1);
                     }
                 }
-                let s = self.arena.alloc_slice_copy(key);
-                self.table4
-                    .insert(FallbackKey::new(s))
-                    .map(|x| {
-                        UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table4(x))
-                    })
-                    .map_err(|x| {
-                        UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table4(x))
-                    })
+
+                match self.table4.insert(FallbackKey::new(key)) {
+                    Ok(e) => {
+                        // We need to save the key to avoid drop it.
+                        let s = self.arena.alloc_slice_copy(key);
+                        e.set_key(FallbackKey::new_with_hash(s, e.key.assume_init_ref().hash));
+                        Ok(UnsizedHashtableEntryMutRef(
+                            UnsizedHashtableEntryMutRefInner::Table4(e),
+                        ))
+                    }
+                    Err(e) => Err(UnsizedHashtableEntryMutRef(
+                        UnsizedHashtableEntryMutRefInner::Table4(e),
+                    )),
+                }
             }
             0 => self
                 .table0
@@ -1070,15 +1078,20 @@ where A: Allocator + Clone + Default
                         self.table4.grow(1);
                     }
                 }
-                let s = self.arena.alloc_slice_copy(key);
-                self.table4
-                    .insert(FallbackKey::new(s))
-                    .map(|x| {
-                        UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table4(x))
-                    })
-                    .map_err(|x| {
-                        UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table4(x))
-                    })
+
+                match self.table4.insert(FallbackKey::new(key)) {
+                    Ok(e) => {
+                        // We need to save the key to avoid drop it.
+                        let s = self.arena.alloc_slice_copy(key);
+                        e.set_key(FallbackKey::new_with_hash(s, e.key.assume_init_ref().hash));
+                        Ok(UnsizedHashtableEntryMutRef(
+                            UnsizedHashtableEntryMutRefInner::Table4(e),
+                        ))
+                    }
+                    Err(e) => Err(UnsizedHashtableEntryMutRef(
+                        UnsizedHashtableEntryMutRefInner::Table4(e),
+                    )),
+                }
             }
         }
     }
@@ -1099,15 +1112,20 @@ where A: Allocator + Clone + Default
                         self.table4.grow(1);
                     }
                 }
-                let s = self.arena.alloc_slice_copy(key);
-                self.table4
-                    .insert(FallbackKey::new_with_hash(s, hash))
-                    .map(|x| {
-                        UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table4(x))
-                    })
-                    .map_err(|x| {
-                        UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table4(x))
-                    })
+
+                match self.table4.insert(FallbackKey::new_with_hash(key, hash)) {
+                    Ok(e) => {
+                        // We need to save the key to avoid drop it.
+                        let s = self.arena.alloc_slice_copy(key);
+                        e.set_key(FallbackKey::new_with_hash(s, hash));
+                        Ok(UnsizedHashtableEntryMutRef(
+                            UnsizedHashtableEntryMutRefInner::Table4(e),
+                        ))
+                    }
+                    Err(e) => Err(UnsizedHashtableEntryMutRef(
+                        UnsizedHashtableEntryMutRefInner::Table4(e),
+                    )),
+                }
             }
             0 => self
                 .table0
@@ -1225,15 +1243,20 @@ where A: Allocator + Clone + Default
                         self.table4.grow(1);
                     }
                 }
-                let s = self.arena.alloc_slice_copy(key);
-                self.table4
-                    .insert(FallbackKey::new_with_hash(s, hash))
-                    .map(|x| {
-                        UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table4(x))
-                    })
-                    .map_err(|x| {
-                        UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table4(x))
-                    })
+
+                match self.table4.insert(FallbackKey::new_with_hash(key, hash)) {
+                    Ok(e) => {
+                        // We need to save the key to avoid drop it.
+                        let s = self.arena.alloc_slice_copy(key);
+                        e.set_key(FallbackKey::new_with_hash(s, hash));
+                        Ok(UnsizedHashtableEntryMutRef(
+                            UnsizedHashtableEntryMutRefInner::Table4(e),
+                        ))
+                    }
+                    Err(e) => Err(UnsizedHashtableEntryMutRef(
+                        UnsizedHashtableEntryMutRefInner::Table4(e),
+                    )),
+                }
             }
         }
     }
