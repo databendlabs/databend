@@ -26,6 +26,7 @@ use common_functions::scalars::FunctionFactory;
 use crate::binder::ColumnBinding;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::SExpr;
+use crate::optimizer::TableSet;
 use crate::IndexType;
 
 pub trait ScalarExpr {
@@ -35,6 +36,8 @@ pub trait ScalarExpr {
     fn used_columns(&self) -> ColumnSet;
 
     fn is_deterministic(&self) -> bool;
+
+    fn used_tables(&self) -> TableSet;
 
     // TODO: implement this in the future
     // fn outer_columns(&self) -> ColumnSet;
@@ -99,6 +102,20 @@ impl ScalarExpr for Scalar {
             Scalar::FunctionCall(scalar) => scalar.is_deterministic(),
             Scalar::CastExpr(scalar) => scalar.is_deterministic(),
             Scalar::SubqueryExpr(scalar) => scalar.is_deterministic(),
+        }
+    }
+
+    fn used_tables(&self) -> TableSet {
+        match self {
+            Scalar::BoundColumnRef(scalar) => scalar.used_tables(),
+            Scalar::ConstantExpr(scalar) => scalar.used_tables(),
+            Scalar::AndExpr(scalar) => scalar.used_tables(),
+            Scalar::OrExpr(scalar) => scalar.used_tables(),
+            Scalar::ComparisonExpr(scalar) => scalar.used_tables(),
+            Scalar::AggregateFunction(scalar) => scalar.used_tables(),
+            Scalar::FunctionCall(scalar) => scalar.used_tables(),
+            Scalar::CastExpr(scalar) => scalar.used_tables(),
+            Scalar::SubqueryExpr(scalar) => scalar.used_tables(),
         }
     }
 }
@@ -285,6 +302,16 @@ impl ScalarExpr for BoundColumnRef {
     fn is_deterministic(&self) -> bool {
         true
     }
+
+    fn used_tables(&self) -> TableSet {
+        let mut table_set = TableSet::new();
+        if let Some(table_name) = &self.column.table_name {
+            dbg!(table_name);
+            table_set.insert(table_name.parse::<usize>().unwrap());
+            return table_set;
+        }
+        table_set
+    }
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
@@ -305,6 +332,10 @@ impl ScalarExpr for ConstantExpr {
 
     fn is_deterministic(&self) -> bool {
         true
+    }
+
+    fn used_tables(&self) -> TableSet {
+        TableSet::new()
     }
 }
 
@@ -329,6 +360,13 @@ impl ScalarExpr for AndExpr {
     fn is_deterministic(&self) -> bool {
         self.left.is_deterministic() && self.right.is_deterministic()
     }
+
+    fn used_tables(&self) -> TableSet {
+        let mut table_set = TableSet::new();
+        table_set.extend(self.left.used_tables());
+        table_set.extend(self.right.used_tables());
+        table_set
+    }
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
@@ -351,6 +389,10 @@ impl ScalarExpr for OrExpr {
 
     fn is_deterministic(&self) -> bool {
         self.left.is_deterministic() && self.right.is_deterministic()
+    }
+
+    fn used_tables(&self) -> TableSet {
+        todo!()
     }
 }
 
@@ -432,6 +474,13 @@ impl ScalarExpr for ComparisonExpr {
             && self.left.is_deterministic()
             && self.right.is_deterministic()
     }
+
+    fn used_tables(&self) -> TableSet {
+        let mut table_set = TableSet::new();
+        table_set.extend(self.left.used_tables());
+        table_set.extend(self.right.used_tables());
+        table_set
+    }
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
@@ -460,6 +509,14 @@ impl ScalarExpr for AggregateFunction {
 
     fn is_deterministic(&self) -> bool {
         false
+    }
+
+    fn used_tables(&self) -> TableSet {
+        let mut table_set = TableSet::new();
+        for scalar in self.args.iter() {
+            table_set.extend(scalar.used_tables());
+        }
+        table_set
     }
 }
 
@@ -491,6 +548,10 @@ impl ScalarExpr for FunctionCall {
             .map_or(false, |feature| feature.is_deterministic)
             && self.arguments.iter().all(|arg| arg.is_deterministic())
     }
+
+    fn used_tables(&self) -> TableSet {
+        todo!()
+    }
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
@@ -511,6 +572,12 @@ impl ScalarExpr for CastExpr {
 
     fn is_deterministic(&self) -> bool {
         self.argument.is_deterministic()
+    }
+
+    fn used_tables(&self) -> TableSet {
+        let mut table_set = TableSet::new();
+        table_set.extend(self.argument.used_tables());
+        table_set
     }
 }
 
@@ -571,5 +638,10 @@ impl ScalarExpr for SubqueryExpr {
 
     fn is_deterministic(&self) -> bool {
         false
+    }
+
+    fn used_tables(&self) -> TableSet {
+        // Don't care used tables in subquery
+        TableSet::new()
     }
 }
