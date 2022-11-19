@@ -54,6 +54,7 @@ use crate::metrics::metrics_inc_commit_mutation_resolvable_conflict;
 use crate::metrics::metrics_inc_commit_mutation_retry;
 use crate::metrics::metrics_inc_commit_mutation_success;
 use crate::metrics::metrics_inc_commit_mutation_unresolvable_conflict;
+use crate::operations::commit::utils::no_side_effects_in_meta_store;
 use crate::operations::mutation::AbortOperation;
 use crate::operations::AppendOperationLogEntry;
 use crate::operations::TableOperationLog;
@@ -129,38 +130,50 @@ impl FuseTable {
                         Ok(())
                     };
                 }
-                Err(e) if self::utils::is_error_recoverable(&e, transient) => match backoff
-                    .next_backoff()
-                {
-                    Some(d) => {
-                        let name = tbl.table_info.name.clone();
-                        debug!(
-                            "got error TableVersionMismatched, tx will be retried {} ms later. table name {}, identity {}",
-                            d.as_millis(),
-                            name.as_str(),
-                            tbl.table_info.ident
-                        );
-                        common_base::base::tokio::time::sleep(d).await;
-                        latest = tbl.refresh(ctx.as_ref()).await?;
-                        tbl = FuseTable::try_from_table(latest.as_ref())?;
-                        retry_times += 1;
-                        continue;
+                Err(e) if self::utils::is_error_recoverable(&e, transient) => {
+                    match backoff.next_backoff() {
+                        Some(d) => {
+                            let name = tbl.table_info.name.clone();
+                            debug!(
+                                "got error TableVersionMismatched, tx will be retried {} ms later. table name {}, identity {}",
+                                d.as_millis(),
+                                name.as_str(),
+                                tbl.table_info.ident
+                            );
+                            common_base::base::tokio::time::sleep(d).await;
+                            latest = tbl.refresh(ctx.as_ref()).await?;
+                            tbl = FuseTable::try_from_table(latest.as_ref())?;
+                            retry_times += 1;
+                            continue;
+                        }
+                        None => {
+                            // Commit not fulfilled. try to abort the operations.
+                            // if it is safe to do so.
+                            if no_side_effects_in_meta_store(&e) {
+                                // if we are sure that table state inside metastore has not been
+                                // modified by this operation, abort this operation.
+                                info!("aborting operations");
+                                let _ = utils::abort_operations(self.get_operator(), operation_log)
+                                    .await;
+                            }
+                            break Err(ErrorCode::OCCRetryFailure(format!(
+                                "can not fulfill the tx after retries({} times, {} ms), aborted. table name {}, identity {}",
+                                retry_times,
+                                Instant::now()
+                                    .duration_since(backoff.start_time)
+                                    .as_millis(),
+                                tbl.table_info.name.as_str(),
+                                tbl.table_info.ident,
+                            )));
+                        }
                     }
-                    None => {
-                        info!("aborting operations");
-                        let _ = utils::abort_operations(self.get_operator(), operation_log).await;
-                        break Err(ErrorCode::OCCRetryFailure(format!(
-                            "can not fulfill the tx after retries({} times, {} ms), aborted. table name {}, identity {}",
-                            retry_times,
-                            Instant::now()
-                                .duration_since(backoff.start_time)
-                                .as_millis(),
-                            tbl.table_info.name.as_str(),
-                            tbl.table_info.ident,
-                        )));
-                    }
-                },
-                Err(e) => break Err(e),
+                }
+
+                Err(e) => {
+                    // we are not sure about if the table state has been modified or not, just propagate the error
+                    // and return, without aborting anything.
+                    break Err(e);
+                }
             }
         }
     }
@@ -325,9 +338,17 @@ impl FuseTable {
                 Ok(())
             }
             Err(e) => {
-                // commit snapshot to meta server failed, try to delete it.
-                // "major GC" will collect this, if deletion failure (even after DAL retried)
-                let _ = operator.object(&snapshot_location).delete().await;
+                // commit snapshot to meta server failed.
+                // figure out if the un-committed snapshot is safe to be removed.
+                if no_side_effects_in_meta_store(&e) {
+                    // currently, only in this case (TableVersionMismatched),  we are SURE about
+                    // that the table state insides meta store has NOT been changed.
+                    info!(
+                        "removing uncommitted table snapshot at location {}, of table {}, {}",
+                        snapshot_location, table_info.desc, table_info.ident
+                    );
+                    let _ = operator.object(&snapshot_location).delete().await;
+                }
                 Err(e)
             }
         }
@@ -493,7 +514,11 @@ impl FuseTable {
                     retries += 1;
                     metrics_inc_commit_mutation_retry();
                 }
-                Err(e) => return Err(e),
+                Err(e) => {
+                    // we are not sure about if the table state has been modified or not, just propagate the error
+                    // and return, without aborting anything.
+                    return Err(e);
+                }
                 Ok(_) => {
                     return {
                         metrics_inc_commit_mutation_success();
@@ -503,6 +528,10 @@ impl FuseTable {
             }
         }
 
+        // Commit not fulfilled. try to abort the operations.
+        //
+        // Note that, here the last error we have seen is TableVersionMismatched,
+        // otherwise we should have been returned, thus it is safe to abort the operation here.
         abort_operation
             .abort(ctx.clone(), self.operator.clone())
             .await?;
@@ -609,6 +638,13 @@ mod utils {
         let code = e.code();
         code == ErrorCode::TABLE_VERSION_MISMATCHED
             || (is_table_transient && code == ErrorCode::STORAGE_NOT_FOUND)
+    }
+
+    #[inline]
+    pub fn no_side_effects_in_meta_store(e: &ErrorCode) -> bool {
+        // currently, the only error that we know,  which indicates there are no side effects
+        // is TABLE_VERSION_MISMATCHED
+        e.code() == ErrorCode::TABLE_VERSION_MISMATCHED
     }
 
     // check if there are any fuse table legacy options
