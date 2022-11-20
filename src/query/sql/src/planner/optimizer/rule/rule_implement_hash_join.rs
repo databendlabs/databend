@@ -18,7 +18,7 @@ use crate::optimizer::rule::transform_result::TransformResult;
 use crate::optimizer::rule::Rule;
 use crate::optimizer::rule::RuleID;
 use crate::optimizer::SExpr;
-use crate::plans::LogicalInnerJoin;
+use crate::plans::LogicalJoin;
 use crate::plans::PatternPlan;
 use crate::plans::PhysicalHashJoin;
 use crate::plans::RelOp;
@@ -34,7 +34,7 @@ impl RuleImplementHashJoin {
             id: RuleID::ImplementHashJoin,
             pattern: SExpr::create_binary(
                 PatternPlan {
-                    plan_type: RelOp::LogicalInnerJoin,
+                    plan_type: RelOp::LogicalJoin,
                 }
                 .into(),
                 SExpr::create_leaf(
@@ -61,7 +61,7 @@ impl Rule for RuleImplementHashJoin {
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
         let plan = s_expr.plan().clone();
-        let logical_join: LogicalInnerJoin = plan.try_into()?;
+        let logical_join: LogicalJoin = plan.try_into()?;
 
         let result = SExpr::create(
             PhysicalHashJoin {

@@ -16,6 +16,9 @@ use core::iter::FromIterator;
 use std::borrow::Cow;
 
 use ordered_float::OrderedFloat;
+use serde_json::Map as JsonMap;
+use serde_json::Number as JsonNumber;
+use serde_json::Value as JsonValue;
 
 use super::number::Number;
 use super::value::Object;
@@ -142,5 +145,69 @@ impl<'a, K: Into<String>, V: Into<Value<'a>>> FromIterator<(K, V)> for Value<'a>
 impl<'a> From<()> for Value<'a> {
     fn from((): ()) -> Self {
         Value::Null
+    }
+}
+
+impl<'a> From<&JsonValue> for Value<'a> {
+    fn from(value: &JsonValue) -> Self {
+        match value {
+            JsonValue::Null => Value::Null,
+            JsonValue::Bool(v) => Value::Bool(*v),
+            JsonValue::Number(v) => {
+                if v.is_u64() {
+                    Value::Number(Number::UInt64(v.as_u64().unwrap()))
+                } else if v.is_i64() {
+                    Value::Number(Number::Int64(v.as_i64().unwrap()))
+                } else {
+                    Value::Number(Number::Float64(v.as_f64().unwrap()))
+                }
+            }
+            JsonValue::String(v) => Value::String(v.clone().into()),
+            JsonValue::Array(arr) => {
+                let mut vals: Vec<Value> = Vec::with_capacity(arr.len());
+                for val in arr {
+                    vals.push(val.into());
+                }
+                Value::Array(vals)
+            }
+            JsonValue::Object(obj) => {
+                let mut map = Object::new();
+                for (k, v) in obj.iter() {
+                    let val: Value = v.into();
+                    map.insert(k.to_string(), val);
+                }
+                Value::Object(map)
+            }
+        }
+    }
+}
+
+impl<'a> From<Value<'a>> for JsonValue {
+    fn from(value: Value<'a>) -> Self {
+        match value {
+            Value::Null => JsonValue::Null,
+            Value::Bool(v) => JsonValue::Bool(v),
+            Value::Number(v) => match v {
+                Number::Int64(v) => JsonValue::Number(v.into()),
+                Number::UInt64(v) => JsonValue::Number(v.into()),
+                Number::Float64(v) => JsonValue::Number(JsonNumber::from_f64(v).unwrap()),
+            },
+            Value::String(v) => JsonValue::String(v.to_string()),
+            Value::Array(arr) => {
+                let mut vals: Vec<JsonValue> = Vec::with_capacity(arr.len());
+                for val in arr {
+                    vals.push(val.into());
+                }
+                JsonValue::Array(vals)
+            }
+            Value::Object(obj) => {
+                let mut map = JsonMap::new();
+                for (k, v) in obj.iter() {
+                    let val: JsonValue = v.clone().into();
+                    map.insert(k.to_string(), val);
+                }
+                JsonValue::Object(map)
+            }
+        }
     }
 }

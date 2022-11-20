@@ -24,7 +24,7 @@ use crate::optimizer::RelExpr;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
 use crate::plans::JoinType;
-use crate::plans::LogicalInnerJoin;
+use crate::plans::LogicalJoin;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 
@@ -64,12 +64,12 @@ impl RuleLeftAssociateJoin {
             // *
             pattern: SExpr::create_binary(
                 PatternPlan {
-                    plan_type: RelOp::LogicalInnerJoin,
+                    plan_type: RelOp::LogicalJoin,
                 }
                 .into(),
                 SExpr::create_binary(
                     PatternPlan {
-                        plan_type: RelOp::LogicalInnerJoin,
+                        plan_type: RelOp::LogicalJoin,
                     }
                     .into(),
                     SExpr::create_pattern_leaf(),
@@ -100,8 +100,8 @@ impl Rule for RuleLeftAssociateJoin {
         //  t1  join4
         //      /  \
         //     t2  t3
-        let join1: LogicalInnerJoin = s_expr.plan.clone().try_into()?;
-        let join2: LogicalInnerJoin = s_expr.child(0)?.plan.clone().try_into()?;
+        let join1: LogicalJoin = s_expr.plan.clone().try_into()?;
+        let join2: LogicalJoin = s_expr.child(0)?.plan.clone().try_into()?;
         let t1 = s_expr.child(0)?.child(0)?;
         let t2 = s_expr.child(0)?.child(1)?;
         let t3 = s_expr.child(1)?;
@@ -118,8 +118,8 @@ impl Rule for RuleLeftAssociateJoin {
 
         let predicates = vec![get_join_predicates(&join1)?, get_join_predicates(&join2)?].concat();
 
-        let mut join_3 = LogicalInnerJoin::default();
-        let mut join_4 = LogicalInnerJoin::default();
+        let mut join_3 = LogicalJoin::default();
+        let mut join_4 = LogicalJoin::default();
 
         let t1_prop = RelExpr::with_s_expr(t1).derive_relational_prop()?;
         let t2_prop = RelExpr::with_s_expr(t2).derive_relational_prop()?;
