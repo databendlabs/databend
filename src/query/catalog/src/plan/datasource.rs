@@ -21,6 +21,8 @@ use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataValue;
+use common_datavalues::NullableType;
+use common_datavalues::VariantType;
 use common_meta_app::schema::TableInfo;
 use common_meta_types::UserStageInfo;
 
@@ -105,13 +107,31 @@ pub struct DataSourcePlan {
 impl DataSourcePlan {
     /// Return schema after the projection
     pub fn schema(&self) -> DataSchemaRef {
-        self.scan_fields
+        let schema = self
+            .scan_fields
             .clone()
             .map(|x| {
                 let fields: Vec<_> = x.values().cloned().collect();
                 Arc::new(self.source_info.schema().project_by_fields(fields))
             })
-            .unwrap_or_else(|| self.source_info.schema())
+            .unwrap_or_else(|| self.source_info.schema());
+
+        if let Some(PushDownInfo {
+            virtual_columns: Some(virtual_columns),
+            ..
+        }) = &self.push_downs
+        {
+            // add virtual columns to schema
+            let mut fields = schema.fields().clone();
+            for virtual_column in virtual_columns.iter() {
+                let data_type = NullableType::new_impl(VariantType::new_impl());
+                let field = DataField::new(&virtual_column.name, data_type);
+                fields.push(field);
+            }
+            DataSchema::new(fields).into()
+        } else {
+            schema
+        }
     }
 
     /// Return designated required fields or all fields in a hash map.

@@ -25,6 +25,7 @@ common-grpc = { path = "../../common/grpc" }
 common-hive-meta-store = { path = "../storages/hive/hive-meta-store", optional = true }
 common-http = { path = "../../common/http" }
 common-io = { path = "../../common/io" }
+common-jsonb = { path = "../../common/jsonb" }
 common-management = { path = "../management" }
 common-meta-api = { path = "../../meta/api" }
 common-meta-app = { path = "../../meta/app" }

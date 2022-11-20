@@ -30,6 +30,9 @@ impl Evaluator {
     pub fn eval_scalar(scalar: &Scalar) -> Result<EvalNode> {
         match scalar {
             Scalar::BoundColumnRef(_) => Err(ErrorCode::Ok("Cannot evaluate Scalar with variable")),
+            Scalar::VirtualColumnRef(_) => {
+                Err(ErrorCode::Ok("Cannot evaluate VirtualColumn Scalar"))
+            }
             Scalar::ConstantExpr(constant) => Ok(EvalNode::Constant {
                 value: constant.value.clone(),
                 data_type: *constant.data_type.clone(),

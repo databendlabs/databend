@@ -14,6 +14,7 @@
 
 use std::fmt::Debug;
 
+use common_jsonb::JsonPath;
 use common_meta_types::UserStageInfo;
 
 use crate::plan::Expression;
@@ -43,6 +44,16 @@ pub struct StagePushDownInfo {
     pub user_stage_info: UserStageInfo,
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct VirtualColumnInfo {
+    /// Source column name
+    pub source_name: String,
+    /// Virtual column name
+    pub name: String,
+    /// Json path to get value
+    pub json_path: Vec<JsonPath>,
+}
+
 /// Extras is a wrapper for push down items.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Default, Debug, PartialEq, Eq)]
 pub struct PushDownInfo {
@@ -60,4 +71,6 @@ pub struct PushDownInfo {
     pub order_by: Vec<(Expression, bool, bool)>,
     /// Optional stage info, used for COPY into <table> from stage
     pub stage: Option<StagePushDownInfo>,
+    /// Optional virtual columns
+    pub virtual_columns: Option<Vec<VirtualColumnInfo>>,
 }

@@ -31,6 +31,7 @@ use crate::plans::PhysicalOperator;
 use crate::plans::RelOp;
 use crate::plans::Scalar;
 use crate::plans::SortItem;
+use crate::plans::VirtualColumnRef;
 use crate::IndexType;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -41,6 +42,7 @@ pub struct PhysicalScan {
     pub limit: Option<usize>,
     pub order_by: Option<Vec<SortItem>>,
     pub prewhere: Option<Prewhere>,
+    pub virtual_columns: Option<Vec<VirtualColumnRef>>,
 }
 
 #[allow(clippy::derive_hash_xor_eq)]

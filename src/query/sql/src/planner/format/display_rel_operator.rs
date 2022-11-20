@@ -102,6 +102,13 @@ pub fn format_scalar(_metadata: &MetadataRef, scalar: &Scalar) -> String {
                 )
             }
         }
+        Scalar::VirtualColumnRef(column_ref) => {
+            if let Some(table_name) = &column_ref.column.table_name {
+                format!("{}.{} (#{})", table_name, column_ref.name, column_ref.index)
+            } else {
+                format!("{} (#{})", column_ref.name, column_ref.index)
+            }
+        }
         Scalar::ConstantExpr(constant) => constant.value.to_string(),
         Scalar::AndExpr(and) => format!(
             "({}) AND ({})",

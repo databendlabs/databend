@@ -147,9 +147,9 @@ impl SubqueryRewriter {
         is_conjunctive_predicate: bool,
     ) -> Result<(Scalar, SExpr)> {
         match scalar {
-            Scalar::BoundColumnRef(_) => Ok((scalar.clone(), s_expr.clone())),
-
-            Scalar::ConstantExpr(_) => Ok((scalar.clone(), s_expr.clone())),
+            Scalar::BoundColumnRef(_) | Scalar::VirtualColumnRef(_) | Scalar::ConstantExpr(_) => {
+                Ok((scalar.clone(), s_expr.clone()))
+            }
 
             Scalar::AndExpr(expr) => {
                 // Notice that the conjunctions has been flattened in binder, if we encounter

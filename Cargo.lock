@@ -1288,6 +1288,7 @@ dependencies = [
  "common-exception",
  "common-functions",
  "common-io",
+ "common-jsonb",
  "common-meta-app",
  "common-meta-types",
  "common-pipeline-core",
@@ -1605,6 +1606,7 @@ dependencies = [
  "byteorder",
  "fast-float",
  "ordered-float 3.3.0",
+ "serde",
  "serde_json",
 ]
 
@@ -2003,6 +2005,7 @@ dependencies = [
  "common-hive-meta-store",
  "common-http",
  "common-io",
+ "common-jsonb",
  "common-management",
  "common-meta-api",
  "common-meta-app",
@@ -2115,6 +2118,7 @@ dependencies = [
  "common-datavalues",
  "common-exception",
  "common-functions",
+ "common-jsonb",
  "common-meta-app",
  "common-meta-types",
  "common-pipeline-core",

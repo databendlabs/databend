@@ -416,6 +416,7 @@ impl SubqueryRewriter {
                         is_accurate: false,
                     },
                     prewhere: None,
+                    virtual_columns: None,
                 }
                 .into(),
             );

@@ -22,6 +22,7 @@ use super::prune_unused_columns::UnusedColumnPruner;
 use crate::optimizer::heuristic::decorrelate::decorrelate_subquery;
 use crate::optimizer::heuristic::implement::HeuristicImplementor;
 use crate::optimizer::heuristic::prewhere_optimization::PrewhereOptimizer;
+use crate::optimizer::heuristic::virutal_column_optimization::VirutalColumnOptimizer;
 use crate::optimizer::heuristic::RuleList;
 use crate::optimizer::rule::TransformResult;
 use crate::optimizer::ColumnSet;
@@ -90,7 +91,10 @@ impl HeuristicOptimizer {
         let pruner = UnusedColumnPruner::new(self.metadata.clone());
         let require_columns: ColumnSet =
             self.bind_context.columns.iter().map(|c| c.index).collect();
-        pruner.remove_unused_columns(&s_expr, require_columns)
+        let s_expr = pruner.remove_unused_columns(&s_expr, require_columns)?;
+
+        let mut virutal_column_optimizer = VirutalColumnOptimizer::new();
+        virutal_column_optimizer.optimize(&s_expr)
     }
 
     pub fn optimize(&mut self, s_expr: SExpr) -> Result<SExpr> {

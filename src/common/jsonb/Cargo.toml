@@ -10,4 +10,5 @@ edition = { workspace = true }
 byteorder = "1.4.3"
 fast-float = "0.2.0"
 ordered-float = { version = "3.1.0", features = ["serde"] }
+serde = { workspace = true }
 serde_json = { workspace = true }

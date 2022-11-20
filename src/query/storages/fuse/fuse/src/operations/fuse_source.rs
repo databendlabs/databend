@@ -18,12 +18,26 @@ use std::sync::Arc;
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
 use common_catalog::plan::PartInfoPtr;
+use common_catalog::plan::VirtualColumnInfo;
 use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
+use common_datavalues::Column;
 use common_datavalues::ColumnRef;
+use common_datavalues::DataField;
+use common_datavalues::DataSchema;
+use common_datavalues::DataSchemaRef;
+use common_datavalues::NullableColumnBuilder;
+use common_datavalues::NullableType;
+use common_datavalues::ScalarColumn;
+use common_datavalues::Series;
+use common_datavalues::VariantColumn;
+use common_datavalues::VariantType;
+use common_datavalues::VariantValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::FunctionContext;
+use common_jsonb::extract_value_by_path;
+use common_jsonb::JsonPathRef;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
@@ -59,6 +73,7 @@ pub struct FuseTableSource {
     prewhere_reader: Arc<BlockReader>,
     prewhere_filter: Arc<Option<EvalNode>>,
     remain_reader: Arc<Option<BlockReader>>,
+    virtual_columns: Option<Vec<VirtualColumnInfo>>,
 
     support_blocking: bool,
 }
@@ -71,6 +86,7 @@ impl FuseTableSource {
         prewhere_reader: Arc<BlockReader>,
         prewhere_filter: Arc<Option<EvalNode>>,
         remain_reader: Arc<Option<BlockReader>>,
+        virtual_columns: Option<Vec<VirtualColumnInfo>>,
     ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
         let support_blocking = prewhere_reader.support_blocking_api();
@@ -83,14 +99,20 @@ impl FuseTableSource {
             prewhere_reader,
             prewhere_filter,
             remain_reader,
+            virtual_columns,
             support_blocking,
         })))
     }
 
     fn generate_one_block(&mut self, block: DataBlock) -> Result<()> {
         let new_part = self.ctx.try_get_part();
-        // resort and prune columns
-        let block = block.resort(self.output_reader.schema())?;
+        let block = if self.virtual_columns.is_some() {
+            // add virtual columns to the block
+            self.generate_block_with_virtual_columns(block)?
+        } else {
+            // resort and prune columns
+            block.resort(self.output_reader.schema())?
+        };
         self.state = State::Generated(new_part, block);
         Ok(())
     }
@@ -100,6 +122,42 @@ impl FuseTableSource {
         let new_part = self.ctx.try_get_part();
         self.state = Generated(new_part, DataBlock::empty_with_schema(schema));
         Ok(())
+    }
+
+    fn generate_block_with_virtual_columns(&mut self, block: DataBlock) -> Result<DataBlock> {
+        let virtual_columns = self.virtual_columns.as_ref().unwrap();
+        let block = block.resort(self.output_reader.schema())?;
+
+        let mut fields = self.output_reader.schema().fields().clone();
+        let mut columns = block.columns().to_vec();
+        for virtual_column in virtual_columns.iter() {
+            if let Ok(source_column) = block.try_column_by_name(&virtual_column.source_name) {
+                let variant_column: &VariantColumn = unsafe { Series::static_cast(source_column) };
+                let mut builder =
+                    NullableColumnBuilder::<VariantValue>::with_capacity(variant_column.len());
+                let json_path_ref: Vec<JsonPathRef> = virtual_column
+                    .json_path
+                    .iter()
+                    .map(|p| p.as_ref())
+                    .collect();
+                for value in variant_column.scalar_iter() {
+                    match extract_value_by_path(value.as_ref(), &json_path_ref) {
+                        Some(child_value) => {
+                            builder.append(&VariantValue::from(child_value), true);
+                        }
+                        None => builder.append_null(),
+                    }
+                }
+                let column = builder.build(variant_column.len());
+                columns.push(column);
+
+                let data_type = NullableType::new_impl(VariantType::new_impl());
+                let field = DataField::new(&virtual_column.name, data_type);
+                fields.push(field);
+            }
+        }
+        let schema: DataSchemaRef = DataSchema::new(fields).into();
+        Ok(DataBlock::create(schema, columns))
     }
 }
 

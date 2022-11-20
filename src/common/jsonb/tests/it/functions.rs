@@ -32,7 +32,7 @@ use common_jsonb::object_keys;
 use common_jsonb::parse_json_path;
 use common_jsonb::parse_value;
 use common_jsonb::to_string;
-use common_jsonb::JsonPath;
+use common_jsonb::JsonPathRef;
 use common_jsonb::Number;
 use common_jsonb::Object;
 use common_jsonb::Value;
@@ -151,23 +151,23 @@ fn test_array_length() {
 #[test]
 fn test_get_by_path() {
     let sources = vec![
-        (r#"1234"#, vec![JsonPath::UInt64(0)], None),
-        (r#"[]"#, vec![JsonPath::UInt64(0)], None),
+        (r#"1234"#, vec![JsonPathRef::UInt64(0)], None),
+        (r#"[]"#, vec![JsonPathRef::UInt64(0)], None),
         (
             r#"["a","b","c"]"#,
-            vec![JsonPath::UInt64(0)],
+            vec![JsonPathRef::UInt64(0)],
             Some(Value::String(Cow::from("a"))),
         ),
         (
             r#"{"k1":["a","b","c"], "k2":{"k3":3,"k4":4}}"#,
-            vec![JsonPath::String(Cow::from("k1")), JsonPath::UInt64(0)],
+            vec![JsonPathRef::String(Cow::from("k1")), JsonPathRef::UInt64(0)],
             Some(Value::String(Cow::from("a"))),
         ),
         (
             r#"{"k1":["a","b","c"], "k2":{"k3":"v3","k4":"v4"}}"#,
             vec![
-                JsonPath::String(Cow::from("k2")),
-                JsonPath::String(Cow::from("k3")),
+                JsonPathRef::String(Cow::from("k2")),
+                JsonPathRef::String(Cow::from("k3")),
             ],
             Some(Value::String(Cow::from("v3"))),
         ),
@@ -351,20 +351,23 @@ fn test_compare() {
 #[test]
 fn test_parse_json_path() {
     let sources = vec![
-        (r#"[1][2]"#, vec![JsonPath::UInt64(1), JsonPath::UInt64(2)]),
+        (r#"[1][2]"#, vec![
+            JsonPathRef::UInt64(1),
+            JsonPathRef::UInt64(2),
+        ]),
         (r#"["k1"]["k2"]"#, vec![
-            JsonPath::String(Cow::from("k1")),
-            JsonPath::String(Cow::from("k2")),
+            JsonPathRef::String(Cow::from("k1")),
+            JsonPathRef::String(Cow::from("k2")),
         ]),
         (r#"k1.k2:k3"#, vec![
-            JsonPath::String(Cow::from("k1")),
-            JsonPath::String(Cow::from("k2")),
-            JsonPath::String(Cow::from("k3")),
+            JsonPathRef::String(Cow::from("k1")),
+            JsonPathRef::String(Cow::from("k2")),
+            JsonPathRef::String(Cow::from("k3")),
         ]),
         (r#"k1["k2"][1]"#, vec![
-            JsonPath::String(Cow::from("k1")),
-            JsonPath::String(Cow::from("k2")),
-            JsonPath::UInt64(1),
+            JsonPathRef::String(Cow::from("k1")),
+            JsonPathRef::String(Cow::from("k2")),
+            JsonPathRef::UInt64(1),
         ]),
     ];
 

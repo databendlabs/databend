@@ -347,6 +347,7 @@ impl<'a> Binder {
                         is_accurate,
                     },
                     prewhere: None,
+                    virtual_columns: None,
                 }
                 .into(),
             ),

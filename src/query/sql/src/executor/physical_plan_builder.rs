@@ -22,6 +22,7 @@ use common_catalog::plan::Expression;
 use common_catalog::plan::PrewhereInfo;
 use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
+use common_catalog::plan::VirtualColumnInfo;
 use common_catalog::table_context::TableContext;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
@@ -136,11 +137,35 @@ impl PhysicalPlanBuilder {
                     }
                 }
 
+                let virtual_columns = match &scan.virtual_columns {
+                    Some(virtual_columns) => {
+                        let mut infos: Vec<VirtualColumnInfo> =
+                            Vec::with_capacity(virtual_columns.len());
+                        for virtual_column in virtual_columns {
+                            let source_name = virtual_column.column.column_name.clone();
+                            name_mapping.insert(
+                                virtual_column.name.clone(),
+                                virtual_column.index.to_string(),
+                            );
+
+                            let info = VirtualColumnInfo {
+                                source_name,
+                                name: virtual_column.name.clone(),
+                                json_path: virtual_column.json_path.clone(),
+                            };
+                            infos.push(info);
+                        }
+                        Some(infos)
+                    }
+                    None => None,
+                };
+
                 let table_entry = metadata.table(scan.table_index);
                 let table = table_entry.table();
                 let table_schema = table.schema();
 
-                let push_downs = self.push_downs(scan, &table_schema, has_inner_column)?;
+                let push_downs =
+                    self.push_downs(scan, &table_schema, virtual_columns, has_inner_column)?;
 
                 let source = table
                     .read_plan_with_catalog(
@@ -477,6 +502,7 @@ impl PhysicalPlanBuilder {
         &self,
         scan: &PhysicalScan,
         table_schema: &DataSchemaRef,
+        virtual_columns: Option<Vec<VirtualColumnInfo>>,
         has_inner_column: bool,
     ) -> Result<PushDownInfo> {
         let metadata = self.metadata.read().clone();
@@ -599,6 +625,7 @@ impl PhysicalPlanBuilder {
             limit: scan.limit,
             order_by: order_by.unwrap_or_default(),
             stage: None,
+            virtual_columns,
         })
     }
 }
@@ -631,6 +658,24 @@ impl<'a> PhysicalScalarBuilder<'a> {
                             .map_or("".to_string(), |t| t.to_string() + "."),
                         column_ref.column.column_name.clone(),
                         column_ref.column.index
+                    ),
+                })
+            }
+            Scalar::VirtualColumnRef(column_ref) => {
+                // Remap string name to index in data block
+                let index = self.input_schema.index_of(&column_ref.index.to_string())?;
+                Ok(PhysicalScalar::IndexedVariable {
+                    data_type: column_ref.data_type(),
+                    index,
+                    display_name: format!(
+                        "{}{} (#{})",
+                        column_ref
+                            .column
+                            .table_name
+                            .as_ref()
+                            .map_or("".to_string(), |t| t.to_string() + "."),
+                        column_ref.name.clone(),
+                        column_ref.index
                     ),
                 })
             }

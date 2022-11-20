@@ -59,6 +59,7 @@ impl Rule for RuleImplementGet {
                 limit: logical_get.limit,
                 order_by: logical_get.order_by,
                 prewhere: logical_get.prewhere,
+                virtual_columns: logical_get.virtual_columns,
             }
             .into(),
         );

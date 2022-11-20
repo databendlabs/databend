@@ -18,8 +18,8 @@ use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::FormatSettings;
+use common_jsonb::extract_value_by_path;
 
-use crate::scalars::semi_structureds::get_path::extract_value_by_path;
 use crate::scalars::semi_structureds::get_path::parse_json_paths;
 use crate::scalars::Function;
 use crate::scalars::FunctionContext;

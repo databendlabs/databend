@@ -299,6 +299,7 @@ impl CopyInterpreterV2 {
                 limit: None,
                 order_by: vec![],
                 stage: Some(copy_info),
+                virtual_columns: None,
             };
             stage_table
                 .read_plan_with_catalog(ctx.clone(), catalog_name.to_string(), Some(pushdown))

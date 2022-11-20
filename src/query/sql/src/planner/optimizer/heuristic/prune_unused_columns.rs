@@ -103,6 +103,7 @@ impl UnusedColumnPruner {
                         is_accurate: p.statistics.is_accurate,
                     },
                     prewhere,
+                    virtual_columns: None,
                 })))
             }
             RelOperator::LogicalJoin(p) => {

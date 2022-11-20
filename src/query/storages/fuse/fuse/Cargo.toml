@@ -20,6 +20,7 @@ common-datablocks = { path = "../../../datablocks" }
 common-datavalues = { path = "../../../datavalues" }
 common-exception = { path = "../../../../common/exception" }
 common-functions = { path = "../../../functions" }
+common-jsonb = { path = "../../../../common/jsonb" }
 common-meta-app = { path = "../../../../meta/app" }
 common-meta-types = { path = "../../../../meta/types" }
 common-pipeline-core = { path = "../../../pipeline/core" }

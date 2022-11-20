@@ -155,6 +155,7 @@ fn test_format() {
                     limit: None,
                     order_by: None,
                     prewhere: None,
+                    virtual_columns: None,
                 }
                 .into(),
             ),
@@ -167,6 +168,7 @@ fn test_format() {
                 limit: None,
                 order_by: None,
                 prewhere: None,
+                virtual_columns: None,
             }
             .into(),
         ),

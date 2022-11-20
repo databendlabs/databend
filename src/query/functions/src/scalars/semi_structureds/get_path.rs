@@ -17,9 +17,9 @@ use std::fmt;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_jsonb::extract_value_by_path;
 use common_jsonb::parse_json_path;
-use common_jsonb::JsonPath;
-use serde_json::Value as JsonValue;
+use common_jsonb::JsonPathRef;
 
 use crate::scalars::Function;
 use crate::scalars::FunctionContext;
@@ -122,7 +122,7 @@ impl fmt::Display for GetPathFunction {
     }
 }
 
-pub fn parse_json_paths(column: &ColumnRef) -> Result<Vec<Vec<JsonPath>>> {
+pub fn parse_json_paths(column: &ColumnRef) -> Result<Vec<Vec<JsonPathRef>>> {
     let column: &StringColumn = if column.is_const() {
         let const_column: &ConstColumn = Series::check_get(column)?;
         Series::check_get(const_column.inner())?
@@ -130,7 +130,7 @@ pub fn parse_json_paths(column: &ColumnRef) -> Result<Vec<Vec<JsonPath>>> {
         Series::check_get(column)?
     };
 
-    let mut json_paths: Vec<Vec<JsonPath>> = vec![];
+    let mut json_paths: Vec<Vec<JsonPathRef>> = vec![];
     for v in column.iter() {
         if v.is_empty() {
             return Err(ErrorCode::SyntaxException(
@@ -142,38 +142,4 @@ pub fn parse_json_paths(column: &ColumnRef) -> Result<Vec<Vec<JsonPath>>> {
         json_paths.push(json_path);
     }
     Ok(json_paths)
-}
-
-pub fn extract_value_by_path<'a>(
-    value: &'a JsonValue,
-    json_path: &'a Vec<JsonPath>,
-) -> Option<&'a JsonValue> {
-    if json_path.is_empty() {
-        return None;
-    }
-
-    let mut found_value = true;
-    let mut value = value;
-    for key in json_path.iter() {
-        match key {
-            JsonPath::UInt64(k) => match value.get(*k as usize) {
-                Some(child_value) => value = child_value,
-                None => {
-                    found_value = false;
-                    break;
-                }
-            },
-            JsonPath::String(k) => match value.get(k.as_ref()) {
-                Some(child_value) => value = child_value,
-                None => {
-                    found_value = false;
-                    break;
-                }
-            },
-        }
-    }
-    if !found_value {
-        return None;
-    }
-    Some(value)
 }

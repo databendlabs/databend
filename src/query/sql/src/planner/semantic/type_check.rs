@@ -48,6 +48,7 @@ use common_datavalues::StringType;
 use common_datavalues::StructType;
 use common_datavalues::TimestampType;
 use common_datavalues::TypeID;
+use common_datavalues::VariantType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionFactory;
@@ -55,6 +56,7 @@ use common_functions::is_builtin_function;
 use common_functions::scalars::CastFunction;
 use common_functions::scalars::FunctionFactory;
 use common_functions::scalars::TupleFunction;
+use common_jsonb::JsonPath;
 use common_users::UserApiProvider;
 
 use super::name_resolution::NameResolutionContext;
@@ -77,6 +79,7 @@ use crate::plans::OrExpr;
 use crate::plans::Scalar;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
+use crate::plans::VirtualColumnRef;
 use crate::BindContext;
 use crate::MetadataRef;
 use crate::ScalarExpr;
@@ -732,7 +735,8 @@ impl<'a> TypeChecker<'a> {
                 expr: inner_expr,
                 accessor,
             } => {
-                // If it's map accessors to a tuple column, pushdown the map accessors to storage.
+                // If it's map accessors to a tuple or variant column,
+                // pushdown the map accessors to storage.
                 let mut accessors = Vec::new();
                 let mut expr = expr;
                 loop {
@@ -744,11 +748,7 @@ impl<'a> TypeChecker<'a> {
                                 | MapAccessor::PeriodNumber { .. }
                                 | MapAccessor::Colon { .. }
                                 | MapAccessor::Bracket {
-                                    key:
-                                        box Expr::Literal {
-                                            lit: Literal::String(..),
-                                            ..
-                                        },
+                                    key: box Expr::Literal { .. },
                                 }),
                             ..
                         } => {
@@ -761,19 +761,28 @@ impl<'a> TypeChecker<'a> {
                             column,
                             ..
                         } => {
-                            let (_, data_type) = *self.resolve(expr, None).await?;
-                            if data_type.data_type_id() != TypeID::Struct {
-                                break;
+                            let box (scalar, data_type) = self.resolve(expr, None).await?;
+                            match data_type.data_type_id() {
+                                TypeID::Variant | TypeID::VariantArray | TypeID::VariantObject => {
+                                    return self
+                                        .resolve_variant_map_access_pushdown(scalar, accessors)
+                                        .await;
+                                }
+                                TypeID::Struct => {
+                                    return self
+                                        .resolve_tuple_map_access_pushdown(
+                                            data_type,
+                                            accessors,
+                                            database.clone(),
+                                            table.clone(),
+                                            column.clone(),
+                                        )
+                                        .await;
+                                }
+                                _ => {
+                                    break;
+                                }
                             }
-                            return self
-                                .resolve_map_access_pushdown(
-                                    data_type,
-                                    accessors,
-                                    database.clone(),
-                                    table.clone(),
-                                    column.clone(),
-                                )
-                                .await;
                         }
                         _ => {
                             break;
@@ -1843,7 +1852,7 @@ impl<'a> TypeChecker<'a> {
     }
 
     #[async_recursion::async_recursion]
-    async fn resolve_map_access_pushdown(
+    async fn resolve_tuple_map_access_pushdown(
         &mut self,
         data_type: DataTypeImpl,
         mut accessors: Vec<MapAccessor<'async_recursion>>,
@@ -1943,6 +1952,71 @@ impl<'a> TypeChecker<'a> {
             }
             NameResolutionResult::Alias { scalar, .. } => (scalar.clone(), scalar.data_type()),
         };
+        Ok(Box::new((scalar, data_type)))
+    }
+
+    #[async_recursion::async_recursion]
+    async fn resolve_variant_map_access_pushdown(
+        &mut self,
+        scalar: Scalar,
+        mut accessors: Vec<MapAccessor<'async_recursion>>,
+    ) -> Result<Box<(Scalar, DataTypeImpl)>> {
+        let column_ref: BoundColumnRef = scalar.try_into()?;
+
+        let column_name = column_ref.column.column_name.clone();
+        let data_type = NullableType::new_impl(VariantType::new_impl());
+
+        let mut json_path = Vec::with_capacity(accessors.len());
+        while !accessors.is_empty() {
+            let accessor = accessors.pop().unwrap();
+            let accessor_lit = match accessor {
+                MapAccessor::Bracket {
+                    key: box Expr::Literal { lit, .. },
+                } => lit,
+                MapAccessor::Period { key } | MapAccessor::Colon { key } => {
+                    Literal::String(key.name.clone())
+                }
+                MapAccessor::PeriodNumber { key } => Literal::Integer(key),
+                _ => unreachable!(),
+            };
+
+            let path = match accessor_lit {
+                Literal::Integer(idx) => JsonPath::UInt64(idx),
+                Literal::String(name) => JsonPath::String(name.clone()),
+                _ => unreachable!(),
+            };
+            json_path.push(path);
+        }
+
+        let mut name = String::new();
+        name.push_str(&column_name);
+        for path in &json_path {
+            name.push_str(&path.to_string())
+        }
+
+        let mut index = 0;
+        // Check the same virtual columns
+        for column in self.metadata.read().columns() {
+            if column.table_index().is_none() && column.name() == name {
+                index = column.index();
+                break;
+            }
+        }
+        if index == 0 {
+            index =
+                self.metadata
+                    .write()
+                    .add_column(name.clone(), data_type.clone(), None, None, None);
+        }
+
+        let virtual_column = VirtualColumnRef {
+            column: column_ref.column,
+            name,
+            json_path,
+            index,
+        };
+        let scalar = Scalar::VirtualColumnRef(virtual_column);
+
         Ok(Box::new((scalar, data_type)))
     }
 

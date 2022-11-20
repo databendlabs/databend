@@ -19,6 +19,7 @@ use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PrewhereInfo;
 use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
+use common_catalog::plan::VirtualColumnInfo;
 use common_catalog::table_context::TableContext;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
@@ -124,6 +125,20 @@ impl FuseTable {
         })
     }
 
+    fn virtual_columns_of_push_downs(
+        &self,
+        push_downs: &Option<PushDownInfo>,
+    ) -> Option<Vec<VirtualColumnInfo>> {
+        if let Some(PushDownInfo {
+            virtual_columns, ..
+        }) = push_downs
+        {
+            virtual_columns.clone()
+        } else {
+            None
+        }
+    }
+
     fn adjust_io_request(
         &self,
         ctx: &Arc<dyn TableContext>,
@@ -211,6 +226,7 @@ impl FuseTable {
         let prewhere_filter =
             self.build_prewhere_filter_executor(ctx.clone(), plan, prewhere_reader.schema())?;
         let remain_reader = self.build_remain_reader(plan)?;
+        let virtual_columns = self.virtual_columns_of_push_downs(&plan.push_downs);
 
         info!("read block data adjust max io requests:{}", max_io_requests);
 
@@ -224,6 +240,7 @@ impl FuseTable {
                     prewhere_reader.clone(),
                     prewhere_filter.clone(),
                     remain_reader.clone(),
+                    virtual_columns.clone(),
                 )
             },
             max_io_requests,

@@ -19,9 +19,11 @@ use common_datavalues::BooleanType;
 use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
 use common_datavalues::NullableType;
+use common_datavalues::VariantType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::FunctionFactory;
+use common_jsonb::JsonPath;
 
 use crate::binder::ColumnBinding;
 use crate::optimizer::ColumnSet;
@@ -47,6 +49,7 @@ pub trait ScalarExpr {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Scalar {
     BoundColumnRef(BoundColumnRef),
+    VirtualColumnRef(VirtualColumnRef),
     ConstantExpr(ConstantExpr),
     AndExpr(AndExpr),
     OrExpr(OrExpr),
@@ -63,6 +66,7 @@ impl ScalarExpr for Scalar {
     fn data_type(&self) -> DataTypeImpl {
         match self {
             Scalar::BoundColumnRef(scalar) => scalar.data_type(),
+            Scalar::VirtualColumnRef(scalar) => scalar.data_type(),
             Scalar::ConstantExpr(scalar) => scalar.data_type(),
             Scalar::AndExpr(scalar) => scalar.data_type(),
             Scalar::OrExpr(scalar) => scalar.data_type(),
@@ -77,6 +81,7 @@ impl ScalarExpr for Scalar {
     fn used_columns(&self) -> ColumnSet {
         match self {
             Scalar::BoundColumnRef(scalar) => scalar.used_columns(),
+            Scalar::VirtualColumnRef(scalar) => scalar.used_columns(),
             Scalar::ConstantExpr(scalar) => scalar.used_columns(),
             Scalar::AndExpr(scalar) => scalar.used_columns(),
             Scalar::OrExpr(scalar) => scalar.used_columns(),
@@ -91,6 +96,7 @@ impl ScalarExpr for Scalar {
     fn is_deterministic(&self) -> bool {
         match self {
             Scalar::BoundColumnRef(scalar) => scalar.is_deterministic(),
+            Scalar::VirtualColumnRef(scalar) => scalar.is_deterministic(),
             Scalar::ConstantExpr(scalar) => scalar.is_deterministic(),
             Scalar::AndExpr(scalar) => scalar.is_deterministic(),
             Scalar::OrExpr(scalar) => scalar.is_deterministic(),
@@ -117,6 +123,25 @@ impl TryFrom<Scalar> for BoundColumnRef {
         } else {
             Err(ErrorCode::Internal(
                 "Cannot downcast Scalar to BoundColumnRef",
+            ))
+        }
+    }
+}
+
+impl From<VirtualColumnRef> for Scalar {
+    fn from(v: VirtualColumnRef) -> Self {
+        Self::VirtualColumnRef(v)
+    }
+}
+
+impl TryFrom<Scalar> for VirtualColumnRef {
+    type Error = ErrorCode;
+    fn try_from(value: Scalar) -> Result<Self> {
+        if let Scalar::VirtualColumnRef(value) = value {
+            Ok(value)
+        } else {
+            Err(ErrorCode::Internal(
+                "Cannot downcast Scalar to VirtualColumnRef",
             ))
         }
     }
@@ -276,6 +301,28 @@ pub struct BoundColumnRef {
 impl ScalarExpr for BoundColumnRef {
     fn data_type(&self) -> DataTypeImpl {
         *self.column.data_type.clone()
+    }
+
+    fn used_columns(&self) -> ColumnSet {
+        ColumnSet::from([self.column.index])
+    }
+
+    fn is_deterministic(&self) -> bool {
+        true
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+pub struct VirtualColumnRef {
+    pub column: ColumnBinding,
+    pub name: String,
+    pub json_path: Vec<JsonPath>,
+    pub index: IndexType,
+}
+
+impl ScalarExpr for VirtualColumnRef {
+    fn data_type(&self) -> DataTypeImpl {
+        NullableType::new_impl(VariantType::new_impl())
     }
 
     fn used_columns(&self) -> ColumnSet {

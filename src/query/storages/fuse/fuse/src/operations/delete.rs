@@ -98,6 +98,7 @@ impl FuseTable {
             limit: None,
             order_by: vec![],
             stage: None,
+            virtual_columns: None,
         };
         let push_downs = Some(extras);
         let segments_location = snapshot.segments.clone();

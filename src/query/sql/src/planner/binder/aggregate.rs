@@ -90,6 +90,7 @@ impl<'a> AggregateRewriter<'a> {
     pub fn visit(&mut self, scalar: &Scalar) -> Result<Scalar> {
         match scalar {
             Scalar::BoundColumnRef(_) => Ok(scalar.clone()),
+            Scalar::VirtualColumnRef(_) => Ok(scalar.clone()),
             Scalar::ConstantExpr(_) => Ok(scalar.clone()),
             Scalar::AndExpr(scalar) => Ok(AndExpr {
                 left: Box::new(self.visit(&scalar.left)?),

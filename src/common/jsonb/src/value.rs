@@ -17,6 +17,7 @@ use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
+use std::string::ToString;
 
 use super::number::Number;
 use super::ser::Encoder;
@@ -217,13 +218,13 @@ impl<'a> Value<'a> {
         encoder.encode(self);
     }
 
-    pub fn get_by_path(&self, paths: &[JsonPath<'a>]) -> Option<&Value<'a>> {
+    pub fn get_by_path(&self, paths: &[JsonPathRef<'a>]) -> Option<&Value<'a>> {
         if paths.is_empty() {
             return None;
         }
         let path = paths.get(0).unwrap();
         match path {
-            JsonPath::String(name) => {
+            JsonPathRef::String(name) => {
                 if let Some(obj) = self.as_object() {
                     if let Some(val) = obj.get(name.as_ref()) {
                         let val = if paths.len() == 1 {
@@ -235,7 +236,7 @@ impl<'a> Value<'a> {
                     }
                 }
             }
-            JsonPath::UInt64(index) => {
+            JsonPathRef::UInt64(index) => {
                 if let Some(arr) = self.as_array() {
                     if let Some(val) = arr.get(*index as usize) {
                         let val = if paths.len() == 1 {
@@ -289,8 +290,32 @@ impl<'a> Value<'a> {
     }
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum JsonPath {
+    String(String),
+    UInt64(u64),
+}
+
+impl ToString for JsonPath {
+    fn to_string(&self) -> String {
+        match self {
+            JsonPath::String(s) => format!("['{}']", s),
+            JsonPath::UInt64(n) => format!("[{}]", n),
+        }
+    }
+}
+
+impl<'a> JsonPath {
+    pub fn as_ref(&'a self) -> JsonPathRef<'a> {
+        match self {
+            JsonPath::String(v) => JsonPathRef::String(Cow::from(v)),
+            JsonPath::UInt64(v) => JsonPathRef::UInt64(*v),
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum JsonPath<'a> {
+pub enum JsonPathRef<'a> {
     String(Cow<'a, str>),
     UInt64(u64),
 }

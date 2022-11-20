@@ -31,6 +31,7 @@ use crate::plans::PhysicalOperator;
 use crate::plans::RelOp;
 use crate::plans::Scalar;
 use crate::plans::SortItem;
+use crate::plans::VirtualColumnRef;
 use crate::IndexType;
 use crate::ScalarExpr;
 
@@ -61,6 +62,7 @@ pub struct LogicalGet {
     pub limit: Option<usize>,
     pub order_by: Option<Vec<SortItem>>,
     pub prewhere: Option<Prewhere>,
+    pub virtual_columns: Option<Vec<VirtualColumnRef>>,
 
     pub statistics: Statistics,
 }

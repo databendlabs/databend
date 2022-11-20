@@ -49,7 +49,7 @@ use common_jsonb::is_object;
 use common_jsonb::object_keys;
 use common_jsonb::parse_json_path;
 use common_jsonb::parse_value;
-use common_jsonb::JsonPath;
+use common_jsonb::JsonPathRef;
 
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_1_arg::<StringType, VariantType, _, _>(
@@ -153,7 +153,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 if s.is_empty() {
                     output.push_null()
                 } else {
-                    let json_path = JsonPath::UInt64(idx);
+                    let json_path = JsonPathRef::UInt64(idx);
                     match get_by_path(s, vec![json_path]) {
                         Some(val) => output.push(val.as_slice()),
                         None => output.push_null(),
@@ -180,7 +180,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                             err
                         )
                     })?;
-                    let json_path = JsonPath::String(Cow::Borrowed(&name));
+                    let json_path = JsonPathRef::String(Cow::Borrowed(&name));
                     match get_by_path(s, vec![json_path]) {
                         Some(val) => output.push(val.as_slice()),
                         None => output.push_null(),
