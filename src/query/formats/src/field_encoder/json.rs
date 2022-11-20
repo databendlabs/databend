@@ -12,8 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::serializations::ArraySerializer;
-use common_datavalues::serializations::StructSerializer;
+use common_expression::types::array::ArrayColumn;
+use common_expression::types::ValueType;
+use common_expression::Column;
 use common_io::consts::FALSE_BYTES_LOWER;
 use common_io::consts::NULL_BYTES_LOWER;
 use common_io::consts::TRUE_BYTES_LOWER;
@@ -69,9 +70,9 @@ impl FieldEncoderRowBased for FieldEncoderJSON {
         }
     }
 
-    fn write_array<'a>(
+    fn write_array<T: ValueType>(
         &self,
-        column: &ArraySerializer<'a>,
+        column: &ArrayColumn<T>,
         row_index: usize,
         out_buf: &mut Vec<u8>,
         raw: bool,
@@ -81,15 +82,15 @@ impl FieldEncoderRowBased for FieldEncoderJSON {
         self.write_string_inner(&buf, out_buf, raw)
     }
 
-    fn write_struct<'a>(
+    fn write_tuple(
         &self,
-        column: &StructSerializer<'a>,
+        columns: &Vec<Column>,
         row_index: usize,
         out_buf: &mut Vec<u8>,
         raw: bool,
     ) {
         let mut buf = vec![];
-        self.nested.write_struct(column, row_index, &mut buf, false);
+        self.nested.write_tuple(columns, row_index, &mut buf, false);
         self.write_string_inner(&buf, out_buf, raw)
     }
 }

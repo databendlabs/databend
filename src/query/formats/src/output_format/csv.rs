@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datablocks::DataBlock;
-use common_datavalues::serializations::write_csv_string;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataType;
 use common_exception::Result;
+use common_expression::Chunk;
+use common_expression::Column;
+use common_expression::DataSchemaRef;
 
+use crate::field_encoder::write_csv_string;
 use crate::field_encoder::FieldEncoderCSV;
 use crate::field_encoder::FieldEncoderRowBased;
 use crate::output_format::OutputFormat;
@@ -66,21 +66,27 @@ impl<const WITH_NAMES: bool, const WITH_TYPES: bool> CSVOutputFormatBase<WITH_NA
 impl<const WITH_NAMES: bool, const WITH_TYPES: bool> OutputFormat
     for CSVOutputFormatBase<WITH_NAMES, WITH_TYPES>
 {
-    fn serialize_block(&mut self, block: &DataBlock) -> Result<Vec<u8>> {
-        let rows_size = block.column(0).len();
-        let mut buf = Vec::with_capacity(block.memory_size());
-        let serializers = block.get_serializers()?;
+    fn serialize_block(&mut self, chunk: &Chunk) -> Result<Vec<u8>> {
+        let rows_size = chunk.num_rows();
+        let mut buf = Vec::with_capacity(chunk.memory_size());
 
         let fd = self.field_delimiter;
         let rd = &self.record_delimiter;
 
+        let columns: Vec<Column> = chunk
+            .convert_to_full()
+            .columns()
+            .iter()
+            .map(|(val, _)| val.clone().into_column().unwrap())
+            .collect();
+
         for row_index in 0..rows_size {
-            for (col_index, serializer) in serializers.iter().enumerate() {
+            for (col_index, column) in columns.iter().enumerate() {
                 if col_index != 0 {
                     buf.push(fd);
                 }
                 self.field_encoder
-                    .write_field(serializer, row_index, &mut buf, false);
+                    .write_field(column, row_index, &mut buf, false);
             }
             buf.extend_from_slice(rd)
         }

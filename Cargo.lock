@@ -1433,18 +1433,22 @@ name = "common-formats"
 version = "0.1.0"
 dependencies = [
  "bstr 1.0.1",
+ "chrono",
  "chrono-tz",
  "common-arrow",
  "common-datablocks",
  "common-datavalues",
  "common-exception",
+ "common-expression",
  "common-io",
+ "common-jsonb",
  "common-meta-types",
  "common-settings",
  "lexical-core",
  "micromarshal",
  "num",
  "once_cell",
+ "ordered-float 3.4.0",
  "pretty_assertions",
  "serde_json",
 ]

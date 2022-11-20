@@ -12,9 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datablocks::DataBlock;
-use common_datavalues::DataSchemaRef;
 use common_exception::Result;
+use common_expression::Chunk;
+use common_expression::Column;
+use common_expression::DataSchemaRef;
 
 use crate::field_encoder::FieldEncoderRowBased;
 use crate::field_encoder::FieldEncoderValues;
@@ -32,23 +33,28 @@ impl ValuesOutputFormat {
 }
 
 impl OutputFormat for ValuesOutputFormat {
-    fn serialize_block(&mut self, block: &DataBlock) -> Result<Vec<u8>> {
-        let rows_size = block.column(0).len();
+    fn serialize_block(&mut self, chunk: &Chunk) -> Result<Vec<u8>> {
+        let rows_size = chunk.num_rows();
+        let mut buf = Vec::with_capacity(chunk.memory_size());
 
-        let mut buf = Vec::with_capacity(block.memory_size());
-        let serializers = block.get_serializers()?;
+        let columns: Vec<Column> = chunk
+            .convert_to_full()
+            .columns()
+            .iter()
+            .map(|(val, _)| val.clone().into_column().unwrap())
+            .collect();
 
         for row_index in 0..rows_size {
             if row_index != 0 {
                 buf.push(b',');
             }
             buf.push(b'(');
-            for (i, serializer) in serializers.iter().enumerate() {
+            for (i, column) in columns.iter().enumerate() {
                 if i != 0 {
                     buf.push(b',');
                 }
                 self.field_encoder
-                    .write_field(serializer, row_index, &mut buf, true);
+                    .write_field(column, row_index, &mut buf, true);
             }
             buf.push(b')');
         }

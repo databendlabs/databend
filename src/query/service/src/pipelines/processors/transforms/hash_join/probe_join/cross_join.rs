@@ -51,7 +51,7 @@ impl JoinHashTable {
         for (col, ty) in probe_chunk.columns().iter() {
             replicated_probe_chunk = replicated_probe_chunk.add_column(col.clone(), ty.clone())?;
         }
-        for ((col, ty)) in build_chunk.columns().iter() {
+        for (col, ty) in build_chunk.columns().iter() {
             replicated_probe_chunk = replicated_probe_chunk.add_column(col.clone(), ty.clone())?;
         }
         Ok(replicated_probe_chunk)

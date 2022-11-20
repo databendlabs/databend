@@ -348,34 +348,35 @@ impl SchemaDataType {
         }
     }
 
-    pub fn sql_name(&self) -> String {
+    pub fn name(&self) -> String {
         match self {
-            SchemaDataType::Null => "NULL".to_string(),
-            SchemaDataType::EmptyArray => "ARRAY()".to_string(),
-            SchemaDataType::Boolean => "BOOLEAN".to_string(),
-            SchemaDataType::String => "VARCHAR".to_string(),
+            SchemaDataType::Null => "Null".to_string(),
+            SchemaDataType::EmptyArray => "Array()".to_string(),
+            SchemaDataType::Boolean => "Boolean".to_string(),
+            SchemaDataType::String => "String".to_string(),
             SchemaDataType::Number(num_ty) => match num_ty {
-                NumberDataType::UInt8 => "TINYINT UNSIGNED".to_string(),
-                NumberDataType::UInt16 => "SMALLINT UNSIGNED".to_string(),
-                NumberDataType::UInt32 => "INT UNSIGNED".to_string(),
-                NumberDataType::UInt64 => "BIGINT UNSIGNED".to_string(),
-                NumberDataType::Int8 => "TINYINT".to_string(),
-                NumberDataType::Int16 => "SMALLINT".to_string(),
-                NumberDataType::Int32 => "INT".to_string(),
-                NumberDataType::Int64 => "BIGINT".to_string(),
-                NumberDataType::Float32 => "FLOAT".to_string(),
-                NumberDataType::Float64 => "DOUBLE".to_string(),
+                NumberDataType::UInt8 => "UInt8".to_string(),
+                NumberDataType::UInt16 => "UInt16".to_string(),
+                NumberDataType::UInt32 => "UInt32".to_string(),
+                NumberDataType::UInt64 => "UInt64".to_string(),
+                NumberDataType::Int8 => "Int8".to_string(),
+                NumberDataType::Int16 => "Int16".to_string(),
+                NumberDataType::Int32 => "Int32".to_string(),
+                NumberDataType::Int64 => "Int64".to_string(),
+                NumberDataType::Float32 => "Float32".to_string(),
+                NumberDataType::Float64 => "Float64".to_string(),
             },
-            SchemaDataType::Timestamp => "TIMESTAMP".to_string(),
-            SchemaDataType::Date => "DATE".to_string(),
-            SchemaDataType::Nullable(inner_ty) => format!("{} NULL", inner_ty.sql_name()),
-            SchemaDataType::Array(inner_ty) => format!("ARRAY({})", inner_ty.sql_name()),
+            SchemaDataType::Timestamp => "Timestamp".to_string(),
+            SchemaDataType::Date => "Date".to_string(),
+            SchemaDataType::Nullable(inner_ty) => format!("Nullable({})", inner_ty.name()),
+            SchemaDataType::Array(inner_ty) => format!("Array({})", inner_ty.name()),
+            SchemaDataType::Map(inner_ty) => format!("Map({})", inner_ty.name()),
             SchemaDataType::Tuple {
                 fields_name,
                 fields_type,
             } => {
                 let mut name = String::new();
-                name.push_str("TUPLE(");
+                name.push_str("Tuple(");
                 for ((i, field_name), field_ty) in
                     fields_name.iter().enumerate().zip(fields_type.iter())
                 {
@@ -391,8 +392,27 @@ impl SchemaDataType {
                 name.push(')');
                 name
             }
-            SchemaDataType::Variant => "VARIANT".to_string(),
-            _ => unreachable!(),
+            SchemaDataType::Variant => "Variant".to_string(),
+        }
+    }
+
+    pub fn sql_name(&self) -> String {
+        match self {
+            SchemaDataType::Number(num_ty) => match num_ty {
+                NumberDataType::UInt8 => "TINYINT UNSIGNED".to_string(),
+                NumberDataType::UInt16 => "SMALLINT UNSIGNED".to_string(),
+                NumberDataType::UInt32 => "INT UNSIGNED".to_string(),
+                NumberDataType::UInt64 => "BIGINT UNSIGNED".to_string(),
+                NumberDataType::Int8 => "TINYINT".to_string(),
+                NumberDataType::Int16 => "SMALLINT".to_string(),
+                NumberDataType::Int32 => "INT".to_string(),
+                NumberDataType::Int64 => "BIGINT".to_string(),
+                NumberDataType::Float32 => "FLOAT".to_string(),
+                NumberDataType::Float64 => "DOUBLE".to_string(),
+            },
+            SchemaDataType::String => "VARCHAR".to_string(),
+            SchemaDataType::Nullable(inner_ty) => format!("{} NULL", inner_ty.sql_name()),
+            _ => self.name().to_uppercase(),
         }
     }
 
