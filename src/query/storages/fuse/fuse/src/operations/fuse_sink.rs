@@ -22,6 +22,7 @@ use common_cache::Cache;
 use common_catalog::table_context::TableContext;
 use common_datablocks::serialize_data_blocks;
 use common_datablocks::serialize_data_blocks_with_compression;
+use common_datablocks::BlockCompactThresholds;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -88,6 +89,7 @@ pub struct FuseTableSink {
 }
 
 impl FuseTableSink {
+    #[allow(clippy::too_many_arguments)]
     pub fn try_create(
         input: Arc<InputPort>,
         ctx: Arc<dyn TableContext>,
@@ -95,13 +97,9 @@ impl FuseTableSink {
         data_accessor: Operator,
         meta_locations: TableMetaLocationGenerator,
         cluster_stats_gen: ClusterStatsGenerator,
+        thresholds: BlockCompactThresholds,
         output: Option<Arc<OutputPort>>,
     ) -> Result<ProcessorPtr> {
-        let thresholds = if cluster_stats_gen.is_cluster() {
-            None
-        } else {
-            Some(cluster_stats_gen.block_compact_thresholds())
-        };
         Ok(ProcessorPtr::create(Box::new(FuseTableSink {
             ctx,
             input,

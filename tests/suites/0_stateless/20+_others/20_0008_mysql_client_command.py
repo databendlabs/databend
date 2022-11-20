@@ -29,7 +29,7 @@ import time
 # --------------
 
 CURDIR = os.path.dirname(os.path.realpath(__file__))
-sys.path.insert(0, os.path.join(CURDIR, '../../../helpers'))
+sys.path.insert(0, os.path.join(CURDIR, "../../../helpers"))
 
 from client import client
 
@@ -37,9 +37,9 @@ log = None
 # uncomment the line below for debugging
 log = sys.stdout
 
-client1 = client(name='client1>', log=log)
+client1 = client(name="client1>", log=log)
 
 stdout, stderr = client1.run_with_output("status;select 'client_command_test';")
-assert '3307' in stdout
-assert 'client_command_test' in stdout
+assert "3307" in stdout
+assert "client_command_test" in stdout
 assert stderr is None

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_ast::ast::Indirection;
@@ -27,6 +28,8 @@ use common_ast::Backtrace;
 use common_ast::Dialect;
 use common_ast::DisplayError;
 use common_catalog::catalog_kind::CATALOG_DEFAULT;
+use common_catalog::table::ColumnId;
+use common_catalog::table::ColumnStatistics;
 use common_catalog::table::NavigationPoint;
 use common_catalog::table::Table;
 use common_catalog::table_function::TableFunction;
@@ -46,6 +49,7 @@ use crate::planner::semantic::TypeChecker;
 use crate::plans::ConstantExpr;
 use crate::plans::LogicalGet;
 use crate::plans::Scalar;
+use crate::plans::Statistics;
 use crate::BindContext;
 use crate::IndexType;
 
@@ -79,6 +83,7 @@ impl<'a> Binder {
         );
 
         self.bind_base_table(bind_context, database, table_index)
+            .await
     }
 
     pub(super) async fn bind_table_reference(
@@ -168,8 +173,9 @@ impl<'a> Binder {
                                 .write()
                                 .add_table(catalog, database.clone(), table_meta);
 
-                        let (s_expr, mut bind_context) =
-                            self.bind_base_table(bind_context, database.as_str(), table_index)?;
+                        let (s_expr, mut bind_context) = self
+                            .bind_base_table(bind_context, database.as_str(), table_index)
+                            .await?;
                         if let Some(alias) = alias {
                             bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
                         }
@@ -224,8 +230,9 @@ impl<'a> Binder {
                     table.clone(),
                 );
 
-                let (s_expr, mut bind_context) =
-                    self.bind_base_table(bind_context, "system", table_index)?;
+                let (s_expr, mut bind_context) = self
+                    .bind_base_table(bind_context, "system", table_index)
+                    .await?;
                 if let Some(alias) = alias {
                     bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
                 }
@@ -287,7 +294,7 @@ impl<'a> Binder {
         Ok((cte_info.s_expr.clone(), new_bind_context))
     }
 
-    fn bind_base_table(
+    async fn bind_base_table(
         &mut self,
         bind_context: &BindContext,
         database_name: &str,
@@ -296,6 +303,8 @@ impl<'a> Binder {
         let mut bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
         let columns = self.metadata.read().columns_by_table_index(table_index);
         let table = self.metadata.read().table(table_index).clone();
+
+        let mut col_stats: HashMap<IndexType, Option<ColumnStatistics>> = HashMap::new();
         for column in columns.iter() {
             let column_binding = ColumnBinding {
                 database_name: Some(database_name.to_string()),
@@ -310,7 +319,19 @@ impl<'a> Binder {
                 },
             };
             bind_context.add_column_binding(column_binding);
+            if !column.has_path_indices() {
+                if let Some(col_id) = column.leaf_index() {
+                    let col_stat = table
+                        .table()
+                        .column_statistics_provider()
+                        .await?
+                        .column_statistics(col_id as ColumnId);
+                    col_stats.insert(column.index(), col_stat);
+                }
+            }
         }
+
+        let is_accurate = table.table().engine().to_lowercase() == "fuse";
         let stat = table.table().table_statistics()?;
         Ok((
             SExpr::create_leaf(
@@ -320,7 +341,11 @@ impl<'a> Binder {
                     push_down_predicates: None,
                     limit: None,
                     order_by: None,
-                    statistics: stat,
+                    statistics: Statistics {
+                        statistics: stat,
+                        col_stats,
+                        is_accurate,
+                    },
                     prewhere: None,
                 }
                 .into(),

@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
+use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -104,6 +107,7 @@ impl<'a> RelExpr<'a> {
 
     pub fn compute_required_prop_child(
         &self,
+        ctx: Arc<dyn TableContext>,
         index: usize,
         input: &RequiredProperty,
     ) -> Result<RequiredProperty> {
@@ -113,7 +117,7 @@ impl<'a> RelExpr<'a> {
         };
 
         if let Some(physical) = plan.as_physical() {
-            let prop = physical.compute_required_prop_child(self, index, input)?;
+            let prop = physical.compute_required_prop_child(ctx, self, index, input)?;
             Ok(prop)
         } else {
             Err(ErrorCode::Internal(

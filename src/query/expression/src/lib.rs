@@ -18,16 +18,17 @@
 #![feature(box_patterns)]
 #![feature(type_ascription)]
 #![feature(associated_type_defaults)]
-#![allow(clippy::len_without_is_empty)]
-#![allow(clippy::needless_lifetimes)]
 #![feature(const_maybe_uninit_as_mut_ptr)]
 #![feature(anonymous_lifetime_in_impl_trait)]
 #![feature(const_mut_refs)]
 #![feature(generic_const_exprs)]
-#![allow(incomplete_features)]
+#![feature(trait_alias)]
 #![feature(iterator_try_collect)]
 #![feature(core_intrinsics)]
 #![feature(iter_order_by)]
+#![allow(clippy::len_without_is_empty)]
+#![allow(clippy::needless_lifetimes)]
+#![allow(incomplete_features)]
 
 pub type Result<T> = std::result::Result<T, (crate::Span, String)>;
 #[allow(dead_code)]
@@ -41,7 +42,6 @@ mod function;
 mod kernels;
 mod property;
 mod register;
-pub mod serializations;
 pub mod type_check;
 pub mod types;
 pub mod utils;
@@ -55,5 +55,4 @@ pub use crate::function::*;
 pub use crate::kernels::*;
 pub use crate::property::*;
 pub use crate::register::*;
-pub use crate::serializations::TypeSerializer;
 pub use crate::values::*;

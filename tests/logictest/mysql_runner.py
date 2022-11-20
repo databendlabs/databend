@@ -1,7 +1,6 @@
 from abc import ABC
 from datetime import datetime, date
 
-import mysql.connector
 
 import logictest
 from log import log
@@ -11,7 +10,6 @@ from mysql.connector.conversion import MySQLConverter
 
 
 class StringConverter(MySQLConverter):
-
     def _datetime_to_python(self, value, dsc=None):
         if not value:
             return None
@@ -19,7 +17,6 @@ class StringConverter(MySQLConverter):
 
 
 class TestMySQL(logictest.SuiteRunner, ABC):
-
     def __init__(self, kind, args):
         super().__init__(kind, args)
         self._connection = None
@@ -67,23 +64,22 @@ class TestMySQL(logictest.SuiteRunner, ABC):
                     vals.append("NULL")
                     continue
 
-                if query_type[i] == 'I':
+                if query_type[i] == "I":
                     if not isinstance(v, int):
                         log.debug(
                             f"Expected int, got type {type(v)} in query {statement.text} row {ri} col {i} value {v}"
                         )
-                elif query_type[i] == 'F' or query_type[i] == 'R':
+                elif query_type[i] == "F" or query_type[i] == "R":
                     if not isinstance(v, float):
                         log.debug(
                             f"Expected float, got type {type(v)} in query {statement.text} row {ri} col {i} value {v}"
                         )
-                elif query_type[i] == 'T':
-                    if not (isinstance(v, str) or isinstance(v, datetime) or
-                            isinstance(v, date)):
+                elif query_type[i] == "T":
+                    if not (isinstance(v, str) or isinstance(v, datetime) or isinstance(v, date)):
                         log.debug(
                             f"Expected string, got type {type(v)} in query { statement.text} row {ri} col {i} value {v}"
                         )
-                elif query_type[i] == 'B':
+                elif query_type[i] == "B":
                     # bool return int in mysql
                     if not isinstance(v, int):
                         log.debug(

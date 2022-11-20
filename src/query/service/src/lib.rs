@@ -37,6 +37,7 @@ pub mod interpreters;
 pub mod metrics;
 pub mod pipelines;
 pub mod procedures;
+pub mod schedulers;
 pub mod servers;
 pub mod sessions;
 pub mod stream;

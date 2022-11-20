@@ -18,7 +18,7 @@ conn.execute(
     "create table if not exists books(title varchar(255), author varchar(255), date varchar(255))"
 )
 conn.execute("insert into books values('mybook', 'author', '2022')")
-results = conn.execute('select * from books').fetchall()
+results = conn.execute("select * from books").fetchall()
 for result in results:
     print(result)
-conn.execute('drop database book_db')
+conn.execute("drop database book_db")

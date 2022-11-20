@@ -95,43 +95,6 @@ impl HashMethodKind {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct HashMethodSerializer {}
 
-impl HashMethodSerializer {
-    #[inline]
-    pub fn get_key(&self, column: &StringColumn, row: usize) -> Vec<u8> {
-        let v = column.get_data(row);
-        v.to_owned()
-    }
-
-    pub fn deserialize_group_columns(
-        &self,
-        keys: Vec<Vec<u8>>,
-        group_fields: &[DataField],
-    ) -> Result<Vec<ColumnRef>> {
-        debug_assert!(!keys.is_empty());
-        let mut keys: Vec<&[u8]> = keys.iter().map(|x| x.as_slice()).collect();
-
-        // Single StringColumn
-        if group_fields.len() == 1 && group_fields[0].data_type().data_type_id() == TypeID::String {
-            let col = StringColumn::from_slice(&keys);
-            return Ok(vec![col.arc()]);
-        }
-
-        let rows = keys.len();
-        let format = FormatSettings::default();
-        let mut res = Vec::with_capacity(group_fields.len());
-        for f in group_fields.iter() {
-            let data_type = f.data_type();
-            let mut deserializer = data_type.create_deserializer(rows);
-
-            for (_row, key) in keys.iter_mut().enumerate() {
-                deserializer.de_binary(key, &format)?;
-            }
-            res.push(deserializer.finish_to_column());
-        }
-        Ok(res)
-    }
-}
-
 impl HashMethod for HashMethodSerializer {
     type HashKey = [u8];
 

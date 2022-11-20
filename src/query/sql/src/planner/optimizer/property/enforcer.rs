@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
+use common_catalog::table_context::TableContext;
 use common_exception::Result;
 
 use crate::optimizer::property::Distribution;
@@ -21,19 +24,23 @@ use crate::optimizer::SExpr;
 use crate::plans::Exchange;
 
 /// Require and enforce physical property from a physical `SExpr`
-pub fn require_property(required: &RequiredProperty, s_expr: &SExpr) -> Result<SExpr> {
+pub fn require_property(
+    ctx: Arc<dyn TableContext>,
+    required: &RequiredProperty,
+    s_expr: &SExpr,
+) -> Result<SExpr> {
     // First, we will require the child SExpr with input `RequiredProperty`
     let optimized_children = s_expr
         .children()
         .iter()
-        .map(|child| require_property(required, child))
+        .map(|child| require_property(ctx.clone(), required, child))
         .collect::<Result<Vec<SExpr>>>()?;
     let optimized_expr = SExpr::create(s_expr.plan().clone(), optimized_children, None, None);
 
     let rel_expr = RelExpr::with_s_expr(&optimized_expr);
     let mut children = Vec::with_capacity(s_expr.arity());
     for index in 0..optimized_expr.arity() {
-        let required = rel_expr.compute_required_prop_child(index, required)?;
+        let required = rel_expr.compute_required_prop_child(ctx.clone(), index, required)?;
         let physical = rel_expr.derive_physical_prop_child(index)?;
         if required.satisfied_by(&physical) {
             children.push(optimized_expr.child(index)?.clone());
