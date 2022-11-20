@@ -12,6 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod plan_scheduler_query;
-pub use plan_scheduler_query::build_schedule_pipeline;
-pub use plan_scheduler_query::schedule_query_v2;
+mod fragments;
+mod scheduler;
+
+pub use fragments::*;
+pub use scheduler::build_distributed_pipeline;
+pub use scheduler::build_local_pipeline;
+pub use scheduler::build_query_pipeline;
