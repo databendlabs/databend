@@ -1818,7 +1818,6 @@ dependencies = [
  "serde_json",
  "sha1",
  "sha2",
- "sled",
  "thiserror",
  "tonic",
  "tonic-build",
