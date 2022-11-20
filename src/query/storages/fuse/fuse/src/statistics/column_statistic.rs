@@ -43,6 +43,10 @@ pub fn calc_column_distinct_of_values(
     Ok(0)
 }
 
+pub fn get_traverse_columns_dfs(data_block: &DataBlock) -> Result<Vec<Arc<dyn Column>>> {
+    traverse::traverse_columns_dfs(data_block.columns())
+}
+
 pub fn gen_columns_statistics(data_block: &DataBlock) -> Result<StatisticsOfColumns> {
     let mut statistics = StatisticsOfColumns::new();
 

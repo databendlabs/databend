@@ -28,6 +28,7 @@ use common_storages_table_meta::meta::Statistics;
 use common_storages_table_meta::meta::StatisticsOfColumns;
 
 use crate::statistics::column_statistic::calc_column_distinct_of_values;
+use crate::statistics::column_statistic::get_traverse_columns_dfs;
 
 pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
     stats_of_columns: &[T],
@@ -45,6 +46,12 @@ pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
             },
         )
     });
+
+    let leaves = if let Some(data_block) = data_block {
+        Some(get_traverse_columns_dfs(data_block)?)
+    } else {
+        None
+    };
 
     // Reduce the `Vec<&ColumnStatistics` into ColumnStatistics`, i.e.:
     // from : `HashMap<ColumnId, Vec<&ColumnStatistics>)>`
@@ -87,12 +94,15 @@ pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
                 .unwrap_or(DataValue::Null);
 
             let distinct_of_values = match data_block {
-                Some(data_block) => {
-                    let col = data_block.columns().get(*id as usize).unwrap();
-                    let col_data_type = col.data_type();
-                    let data_field = DataField::new("", col_data_type);
-                    let column_field = ColumnWithField::new(col.clone(), data_field);
-                    calc_column_distinct_of_values(col, column_field)?
+                Some(_data_block) => {
+                    if let Some(col) = leaves.as_ref().unwrap().get(*id as usize) {
+                        let col_data_type = col.data_type();
+                        let data_field = DataField::new("", col_data_type);
+                        let column_field = ColumnWithField::new(col.clone(), data_field);
+                        calc_column_distinct_of_values(col, column_field)?
+                    } else {
+                        0
+                    }
                 }
                 None => 0,
             };
