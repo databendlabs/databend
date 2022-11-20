@@ -60,7 +60,7 @@ impl FuseTable {
             let purge = false;
             return self.do_truncate(ctx.clone(), purge).await;
         }
-todo!()
+        todo!()
     }
 
     async fn generate_parts(
