@@ -100,8 +100,9 @@ impl HeuristicOptimizer {
         let pre_optimized = self.pre_optimize(s_expr)?;
         let optimized = self.optimize_expression(&pre_optimized)?;
         let post_optimized = self.post_optimize(optimized)?;
+        let final_s_expr = self.optimize_expression(&post_optimized)?;
 
-        Ok(post_optimized)
+        Ok(final_s_expr)
     }
 
     fn optimize_expression(&self, s_expr: &SExpr) -> Result<SExpr> {

@@ -98,7 +98,6 @@ impl ExtractOrPredicate {
                         }
                     } else {
                         let used_tables = and_arg.used_tables();
-                        dbg!(used_tables.clone());
                         if used_tables.len() == 1 && used_tables.contains(table_name) {
                             sub_scalars.push(and_arg.clone());
                         }
@@ -129,7 +128,6 @@ impl ExtractOrPredicate {
         let mut predicates = filter.predicates;
         let join_used_tables = s_expr.child(0)?.used_tables()?;
         let mut new_predicates = Vec::new();
-        assert_eq!(join_used_tables.len(), 2);
         for predicate in predicates.iter() {
             if let Scalar::OrExpr(or_expr) = predicate {
                 for join_used_table in join_used_tables.iter() {

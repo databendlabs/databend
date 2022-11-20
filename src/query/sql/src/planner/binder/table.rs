@@ -80,6 +80,7 @@ impl<'a> Binder {
             CATALOG_DEFAULT.to_owned(),
             database.to_string(),
             table_meta,
+            None,
         );
 
         self.bind_base_table(bind_context, database, table_index)
@@ -101,6 +102,11 @@ impl<'a> Binder {
                 travel_point,
             } => {
                 let table_name = normalize_identifier(table, &self.name_resolution_ctx).name;
+                let table_alias_name = if let Some(table_alias) = alias {
+                    Some(normalize_identifier(&table_alias.name, &self.name_resolution_ctx).name)
+                } else {
+                    None
+                };
                 // Check and bind common table expression
                 if let Some(cte_info) = bind_context.ctes_map.get(&table_name) {
                     return self.bind_cte(bind_context, &table_name, alias, &cte_info);
@@ -168,10 +174,12 @@ impl<'a> Binder {
                         }
                     }
                     _ => {
-                        let table_index =
-                            self.metadata
-                                .write()
-                                .add_table(catalog, database.clone(), table_meta);
+                        let table_index = self.metadata.write().add_table(
+                            catalog,
+                            database.clone(),
+                            table_meta,
+                            table_alias_name,
+                        );
 
                         let (s_expr, mut bind_context) = self
                             .bind_base_table(bind_context, database.as_str(), table_index)
@@ -223,11 +231,16 @@ impl<'a> Binder {
                         table_args,
                     )?;
                 let table = table_meta.as_table();
-
+                let table_alias_name = if let Some(table_alias) = alias {
+                    Some(normalize_identifier(&table_alias.name, &self.name_resolution_ctx).name)
+                } else {
+                    None
+                };
                 let table_index = self.metadata.write().add_table(
                     CATALOG_DEFAULT.to_string(),
                     "system".to_string(),
                     table.clone(),
+                    table_alias_name,
                 );
 
                 let (s_expr, mut bind_context) = self
