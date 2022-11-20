@@ -26,7 +26,7 @@ statement query III
 select count(number),  uniq(number), count_distinct(number), approx_count_distinct(number) from numbers_mt (10) where 1 = 2;
 
 ----
-0	0	0   0
+0	0	0	0
 
 
 statement query IIIII

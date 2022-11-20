@@ -16,6 +16,9 @@ use std::borrow::Borrow;
 use std::collections::HashMap;
 
 use common_datablocks::BlockCompactThresholds;
+use common_datablocks::DataBlock;
+use common_datavalues::ColumnWithField;
+use common_datavalues::DataField;
 use common_datavalues::DataValue;
 use common_exception::Result;
 use common_storages_table_meta::meta::BlockMeta;
@@ -24,8 +27,11 @@ use common_storages_table_meta::meta::ColumnStatistics;
 use common_storages_table_meta::meta::Statistics;
 use common_storages_table_meta::meta::StatisticsOfColumns;
 
+use crate::statistics::column_statistic::calc_column_distinct_of_values;
+
 pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
     stats_of_columns: &[T],
+    data_block: Option<&DataBlock>,
 ) -> Result<StatisticsOfColumns> {
     // Combine statistics of a column into `Vec`, that is:
     // from : `&[HashMap<ColumnId, ColumnStatistics>]`
@@ -51,7 +57,6 @@ pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
             let mut max_stats = Vec::with_capacity(stats.len());
             let mut null_count = 0;
             let mut in_memory_size = 0;
-            let mut distinct_of_values = 0;
 
             for col_stats in stats {
                 min_stats.push(col_stats.min.clone());
@@ -59,9 +64,6 @@ pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
 
                 null_count += col_stats.null_count;
                 in_memory_size += col_stats.in_memory_size;
-                if let Some(num) = col_stats.distinct_of_values {
-                    distinct_of_values += num;
-                }
             }
 
             // TODO:
@@ -84,6 +86,17 @@ pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
                 .cloned()
                 .unwrap_or(DataValue::Null);
 
+            let distinct_of_values = match data_block {
+                Some(data_block) => {
+                    let col = data_block.columns().get(*id as usize).unwrap();
+                    let col_data_type = col.data_type();
+                    let data_field = DataField::new("", col_data_type);
+                    let column_field = ColumnWithField::new(col.clone(), data_field);
+                    calc_column_distinct_of_values(col, column_field)?
+                }
+                None => 0,
+            };
+
             acc.insert(*id, ColumnStatistics {
                 min,
                 max,
@@ -103,7 +116,7 @@ pub fn merge_statistics(l: &Statistics, r: &Statistics) -> Result<Statistics> {
         uncompressed_byte_size: l.uncompressed_byte_size + r.uncompressed_byte_size,
         compressed_byte_size: l.compressed_byte_size + r.compressed_byte_size,
         index_size: l.index_size + r.index_size,
-        col_stats: reduce_block_statistics(&[&l.col_stats, &r.col_stats])?,
+        col_stats: reduce_block_statistics(&[&l.col_stats, &r.col_stats], None)?,
     };
     Ok(s)
 }
@@ -114,7 +127,7 @@ pub fn merge_statistics_mut(l: &mut Statistics, r: &Statistics) -> Result<()> {
     l.uncompressed_byte_size += r.uncompressed_byte_size;
     l.compressed_byte_size += r.compressed_byte_size;
     l.index_size += r.index_size;
-    l.col_stats = reduce_block_statistics(&[&l.col_stats, &r.col_stats])?;
+    l.col_stats = reduce_block_statistics(&[&l.col_stats, &r.col_stats], None)?;
     Ok(())
 }
 
@@ -153,7 +166,7 @@ pub fn reduce_block_metas<T: Borrow<BlockMeta>>(
         .iter()
         .map(|v| &v.borrow().col_stats)
         .collect::<Vec<_>>();
-    let merged_col_stats = reduce_block_statistics(&stats)?;
+    let merged_col_stats = reduce_block_statistics(&stats, None)?;
 
     Ok(Statistics {
         row_count,

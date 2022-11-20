@@ -88,7 +88,7 @@ impl StatisticsAccumulator {
     }
 
     pub fn summary(&self) -> Result<StatisticsOfColumns> {
-        super::reduce_block_statistics(&self.blocks_statistics)
+        super::reduce_block_statistics(&self.blocks_statistics, None)
     }
 
     fn add(

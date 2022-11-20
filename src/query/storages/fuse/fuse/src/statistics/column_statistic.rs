@@ -12,7 +12,10 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::sync::Arc;
+
 use common_datablocks::DataBlock;
+use common_datavalues::Column;
 use common_datavalues::ColumnWithField;
 use common_datavalues::DataField;
 use common_datavalues::DataValue;
@@ -22,6 +25,23 @@ use common_storages_index::MinMaxIndex;
 use common_storages_index::SupportedType;
 use common_storages_table_meta::meta::ColumnStatistics;
 use common_storages_table_meta::meta::StatisticsOfColumns;
+
+pub fn calc_column_distinct_of_values(
+    column: &Arc<dyn Column>,
+    column_field: ColumnWithField,
+) -> Result<u64> {
+    let distinct_values = eval_aggr(
+        "approx_count_distinct",
+        vec![],
+        &[column_field],
+        column.len(),
+    )?;
+    if distinct_values.len() > 0 {
+        return distinct_values.get(0).as_u64();
+    }
+
+    Ok(0)
+}
 
 pub fn gen_columns_statistics(data_block: &DataBlock) -> Result<StatisticsOfColumns> {
     let mut statistics = StatisticsOfColumns::new();
@@ -39,7 +59,6 @@ pub fn gen_columns_statistics(data_block: &DataBlock) -> Result<StatisticsOfColu
         let column_field = ColumnWithField::new(col.clone(), data_field);
         let mut min = DataValue::Null;
         let mut max = DataValue::Null;
-        let mut distinct_of_values: u64 = 0;
 
         let rows = col.len();
 
@@ -62,10 +81,7 @@ pub fn gen_columns_statistics(data_block: &DataBlock) -> Result<StatisticsOfColu
             }
         }
 
-        let distinct_values = eval_aggr("approx_count_distinct", vec![], &[column_field], rows)?;
-        if distinct_values.len() > 0 {
-            distinct_of_values = distinct_values.get(0).as_u64()?;
-        }
+        let distinct_of_values = calc_column_distinct_of_values(col, column_field)?;
 
         let (is_all_null, bitmap) = col.validity();
         let unset_bits = match (is_all_null, bitmap) {

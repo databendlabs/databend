@@ -91,7 +91,7 @@ fn test_ft_stats_col_stats_reduce() -> common_exception::Result<()> {
         .iter()
         .map(|b| gen_columns_statistics(&b.clone().unwrap()))
         .collect::<common_exception::Result<Vec<_>>>()?;
-    let r = reducers::reduce_block_statistics(&col_stats);
+    let r = reducers::reduce_block_statistics(&col_stats, None);
     assert!(r.is_ok());
     let r = r.unwrap();
     assert_eq!(3, r.len());
@@ -133,7 +133,7 @@ fn test_reduce_block_statistics_in_memory_size() -> common_exception::Result<()>
     // combine two statistics
     let col_stats_left = HashMap::from_iter(iter(0).take(num_of_cols));
     let col_stats_right = HashMap::from_iter(iter(0).take(num_of_cols));
-    let r = reducers::reduce_block_statistics(&[col_stats_left, col_stats_right])?;
+    let r = reducers::reduce_block_statistics(&[col_stats_left, col_stats_right], None)?;
     assert_eq!(num_of_cols, r.len());
     // there should be 100 columns in the result
     for idx in 1..=100 {
@@ -144,7 +144,6 @@ fn test_reduce_block_statistics_in_memory_size() -> common_exception::Result<()>
         assert_eq!(col_stats.in_memory_size, 2);
         // for each column, the reduced value of null_count should be 1 + 1
         assert_eq!(col_stats.null_count, 2);
-        assert_eq!(col_stats.distinct_of_values, Some(2));
     }
     Ok(())
 }
