@@ -22,7 +22,7 @@ select arg_max(number, number), sum_distinct(number), sum_if(number, number > 10
 ----
 NULL	NULL 	NULL 	NULL
 
-statement query III
+statement query IIII
 select count(number),  uniq(number), count_distinct(number), approx_count_distinct(number) from numbers_mt (10) where 1 = 2;
 
 ----
