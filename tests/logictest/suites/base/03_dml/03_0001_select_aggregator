@@ -24,7 +24,7 @@ select sum(3) from numbers(1000);
 ----
 3000
 
-statement query ITTT
+statement query ITTTI
 select count(null), min(null), sum(null), avg(null), approx_count_distinct(null) from numbers(1000);
 
 ----
