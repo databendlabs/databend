@@ -17,8 +17,8 @@ use std::fmt::Formatter;
 
 use crate::api::DataExchange;
 use crate::api::FragmentPayload;
-use crate::interpreters::QueryFragmentActions;
-use crate::interpreters::QueryFragmentsActions;
+use crate::schedulers::QueryFragmentActions;
+use crate::schedulers::QueryFragmentsActions;
 
 impl QueryFragmentsActions {
     pub fn display_indent(&self) -> impl std::fmt::Display + '_ {

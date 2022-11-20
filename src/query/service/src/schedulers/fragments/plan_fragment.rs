@@ -19,10 +19,10 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::api::DataExchange;
-use crate::interpreters::fragments::Fragmenter;
-use crate::interpreters::QueryFragmentAction;
-use crate::interpreters::QueryFragmentActions;
-use crate::interpreters::QueryFragmentsActions;
+use crate::schedulers::Fragmenter;
+use crate::schedulers::QueryFragmentAction;
+use crate::schedulers::QueryFragmentActions;
+use crate::schedulers::QueryFragmentsActions;
 use crate::sessions::QueryContext;
 use crate::sql::executor::PhysicalPlan;
 use crate::sql::executor::PhysicalPlanReplacer;
