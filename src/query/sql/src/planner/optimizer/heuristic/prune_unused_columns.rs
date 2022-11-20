@@ -227,7 +227,23 @@ impl UnusedColumnPruner {
                 self.keep_required_columns(expr.child(0)?, required)?,
             )),
 
-            RelOperator::DummyTableScan(_) | RelOperator::UnionAll(_) => Ok(expr.clone()),
+            RelOperator::UnionAll(p) => {
+                let left_used = p.pairs.iter().fold(required.clone(), |mut acc, v| {
+                    acc.insert(v.0);
+                    acc
+                });
+                let right_used = p.pairs.iter().fold(required, |mut acc, v| {
+                    acc.insert(v.1);
+                    acc
+                });
+                Ok(SExpr::create_binary(
+                    RelOperator::UnionAll(p.clone()),
+                    self.keep_required_columns(expr.child(0)?, left_used)?,
+                    self.keep_required_columns(expr.child(1)?, right_used)?,
+                ))
+            }
+
+            RelOperator::DummyTableScan(_) => Ok(expr.clone()),
 
             _ => Err(ErrorCode::Internal(
                 "Attempting to prune columns of a physical plan is not allowed",

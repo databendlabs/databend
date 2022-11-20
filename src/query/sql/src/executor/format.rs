@@ -94,24 +94,39 @@ fn table_scan_to_format_tree(
                 .map_or("NONE".to_string(), |limit| limit.to_string())
         });
 
+    let mut children = vec![
+        FormatTreeNode::new(format!("table: {table_name}")),
+        FormatTreeNode::new(format!("read rows: {}", plan.source.statistics.read_rows)),
+        FormatTreeNode::new(format!("read bytes: {}", plan.source.statistics.read_bytes)),
+        FormatTreeNode::new(format!(
+            "partitions total: {}",
+            plan.source.statistics.partitions_total
+        )),
+        FormatTreeNode::new(format!(
+            "partitions scanned: {}",
+            plan.source.statistics.partitions_scanned
+        )),
+        FormatTreeNode::new(format!(
+            "push downs: [filters: [{filters}], limit: {limit}]"
+        )),
+    ];
+
+    let mut output_columns: Vec<usize> = Vec::new();
+    if let Some(scan_fields) = &plan.source.scan_fields {
+        output_columns = scan_fields.keys().cloned().collect();
+    };
+
+    // If output_columns is empty, it indicates that scan all fields.
+    // Then output_columns won't show in explain
+    if !output_columns.is_empty() {
+        children.push(FormatTreeNode::new(format!(
+            "output columns: {}",
+            output_columns.iter().join(", ")
+        )));
+    }
     Ok(FormatTreeNode::with_children(
         "TableScan".to_string(),
-        vec![
-            FormatTreeNode::new(format!("table: {table_name}")),
-            FormatTreeNode::new(format!("read rows: {}", plan.source.statistics.read_rows)),
-            FormatTreeNode::new(format!("read bytes: {}", plan.source.statistics.read_bytes)),
-            FormatTreeNode::new(format!(
-                "partitions total: {}",
-                plan.source.statistics.partitions_total
-            )),
-            FormatTreeNode::new(format!(
-                "partitions scanned: {}",
-                plan.source.statistics.partitions_scanned
-            )),
-            FormatTreeNode::new(format!(
-                "push downs: [filters: [{filters}], limit: {limit}]"
-            )),
-        ],
+        children,
     ))
 }
 
