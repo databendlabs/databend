@@ -93,6 +93,7 @@ impl PrewhereOptimizer {
         if s_expr.match_pattern(&self.pattern) {
             let filter: Filter = s_expr.plan().clone().try_into()?;
             let mut get: LogicalGet = s_expr.child(0)?.plan().clone().try_into()?;
+            get.push_down_predicates = Some(filter.predicates);
             let metadata = self.metadata.read().clone();
 
             let table = metadata.table(get.table_index).table();

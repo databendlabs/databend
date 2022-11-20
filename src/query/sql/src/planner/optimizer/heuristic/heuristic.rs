@@ -20,6 +20,7 @@ use once_cell::sync::Lazy;
 
 use super::prune_unused_columns::UnusedColumnPruner;
 use crate::optimizer::heuristic::decorrelate::decorrelate_subquery;
+use crate::optimizer::heuristic::extract_or_predicate::ExtractOrPredicate;
 use crate::optimizer::heuristic::implement::HeuristicImplementor;
 use crate::optimizer::heuristic::prewhere_optimization::PrewhereOptimizer;
 use crate::optimizer::heuristic::RuleList;
@@ -84,8 +85,10 @@ impl HeuristicOptimizer {
     }
 
     fn post_optimize(&mut self, s_expr: SExpr) -> Result<SExpr> {
+        let extract_or = ExtractOrPredicate::new(self.metadata.clone());
+        let mut s_expr = extract_or.optimize(s_expr)?;
         let prewhere_optimizer = PrewhereOptimizer::new(self.metadata.clone());
-        let s_expr = prewhere_optimizer.prewhere_optimize(s_expr)?;
+        s_expr = prewhere_optimizer.prewhere_optimize(s_expr)?;
 
         let pruner = UnusedColumnPruner::new(self.metadata.clone());
         let require_columns: ColumnSet =
@@ -97,7 +100,6 @@ impl HeuristicOptimizer {
         let pre_optimized = self.pre_optimize(s_expr)?;
         let optimized = self.optimize_expression(&pre_optimized)?;
         let post_optimized = self.post_optimize(optimized)?;
-        // let mut result = self.implement_expression(&post_optimized)?;
 
         Ok(post_optimized)
     }
