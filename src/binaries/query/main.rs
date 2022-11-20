@@ -15,7 +15,7 @@
 use std::env;
 use std::sync::Arc;
 
-use common_base::base::RuntimeTracker;
+use common_base::base::MemoryTracker;
 use common_config::Config;
 use common_config::DATABEND_COMMIT_VERSION;
 use common_config::QUERY_SEMVER;
@@ -37,7 +37,7 @@ use databend_query::GlobalServices;
 use tracing::info;
 
 #[databend_main]
-async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<()> {
+async fn main(_global_tracker: Arc<MemoryTracker>) -> common_exception::Result<()> {
     let conf: Config = Config::load()?;
 
     if run_cmd(&conf) {
