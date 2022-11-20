@@ -240,10 +240,12 @@ impl CopyInterpreterV2 {
         for mut file in files {
             if let Some(copied_file) = copied_files.get(&file.path) {
                 match &copied_file.etag {
-                    Some(_etag) => {
-                        // No need to copy the file again if etag is_some and match.
-                        if file.etag == copied_file.etag {
-                            file.status = StageFileStatus::AlreadyCopied;
+                    Some(copied_etag) => {
+                        if let Some(file_etag) = &file.etag {
+                            // Check the 7 bytes etag prefix.
+                            if file_etag.starts_with(copied_etag) {
+                                file.status = StageFileStatus::AlreadyCopied;
+                            }
                         }
                     }
                     None => {
@@ -421,8 +423,13 @@ impl CopyInterpreterV2 {
 
                     let mut copied_files = BTreeMap::new();
                     for file in &need_copied_files {
+                        // Short the etag to 7 bytes for less space in metasrv.
+                        let short_etag = file.etag.clone().map(|mut v| {
+                            v.truncate(7);
+                            v
+                        });
                         copied_files.insert(file.path.clone(), TableCopiedFileInfo {
-                            etag: file.etag.clone(),
+                            etag: short_etag,
                             content_length: file.size,
                             last_modified: Some(file.last_modified),
                         });

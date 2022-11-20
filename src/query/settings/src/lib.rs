@@ -463,7 +463,7 @@ impl Settings {
                     UserSettingValue::UInt64(24 * 7),
                 ),
                 level: ScopeLevel::Session,
-                desc: "How many hours will the COPY file metadata stored in the metasrv, default value: 24*7=7days",
+                desc: "How many hours will the COPY file metadata expired in the metasrv, default value: 24*7=7days",
                 possible_values: None,
             },
         ];
