@@ -284,6 +284,10 @@ impl Rule for RulePushDownFilterJoin {
         s_expr = self.convert_mark_to_semi_join(&s_expr)?;
 
         let filter: Filter = s_expr.plan().clone().try_into()?;
+        if filter.predicates.is_empty() {
+            state.add_result(s_expr);
+            return Ok(());
+        }
         let (need_push, result) = try_push_down_filter_join(&s_expr, filter.predicates)?;
         if !need_push {
             return Ok(());
