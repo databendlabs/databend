@@ -300,6 +300,11 @@ impl<'a> Binder {
                     .await?
             }
 
+            Statement::UnSetVariable(stmt) => {
+                self.bind_unset_variable(bind_context, stmt)
+                    .await?
+            }
+
             Statement::SetRole {
                 is_default,
                 role_name,

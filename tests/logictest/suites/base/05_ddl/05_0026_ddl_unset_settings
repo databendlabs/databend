@@ -1,0 +1,57 @@
+onlyif mysql
+statement query TTTT
+SELECT name, value, default, level from system.settings where name in ('sql_dialect', 'timezone', 'wait_for_async_insert_timeout');
+
+----
+sql_dialect PostgreSQL PostgreSQL SESSION
+timezone                       UTC         UTC         SESSION
+wait_for_async_insert_timeout  100         100         SESSION
+
+onlyif mysql
+statement OK
+SET GLOBAL sql_dialect='MySQL';
+
+onlyif mysql
+statement OK
+SET GLOBAL timezone='Asia/Shanghai';
+
+onlyif mysql
+statement OK
+SET GLOBAL wait_for_async_insert_timeout=20000;
+
+onlyif mysql
+statement query TTTT
+SELECT name, value, default, level from system.settings where name in ('sql_dialect', 'timezone', 'wait_for_async_insert_timeout');
+
+----
+sql_dialect  MySQL  PostgreSQL  GLOBAL
+timezone  Asia/Shanghai  UTC  GLOBAL
+wait_for_async_insert_timeout  20000  100  GLOBAL
+
+onlyif mysql
+statement ok
+UNSET (timezone, wait_for_async_insert_timeout);
+
+onlyif mysql
+statement error 2801
+UNSET stl_dialect;
+
+onlyif mysql
+statement ok
+UNSET sql_dialect;
+
+onlyif mysql
+statement query I
+select 1
+
+----
+1
+
+onlyif mysql
+statement query TTTT
+SELECT name, value, default, level from system.settings where name in ('sql_dialect', 'timezone', 'wait_for_async_insert_timeout');
+
+----
+sql_dialect PostgreSQL PostgreSQL SESSION
+timezone                       UTC         UTC         SESSION
+wait_for_async_insert_timeout  100         100         SESSION

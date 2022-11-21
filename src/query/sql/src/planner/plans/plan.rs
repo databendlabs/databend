@@ -79,6 +79,7 @@ use crate::plans::ShowCreateTablePlan;
 use crate::plans::ShowGrantsPlan;
 use crate::plans::ShowRolesPlan;
 use crate::plans::TruncateTablePlan;
+use crate::plans::UnSettingPlan;
 use crate::plans::UndropDatabasePlan;
 use crate::plans::UndropTablePlan;
 use crate::plans::UpdatePlan;
@@ -183,6 +184,7 @@ pub enum Plan {
 
     // Set
     SetVariable(Box<SettingPlan>),
+    UnSetVariable(Box<UnSettingPlan>),
     Kill(Box<KillPlan>),
 
     // Share
@@ -271,6 +273,7 @@ impl Display for Plan {
             Plan::Call(_) => write!(f, "Call"),
             Plan::Presign(_) => write!(f, "Presign"),
             Plan::SetVariable(_) => write!(f, "SetVariable"),
+            Plan::UnSetVariable(_) => write!(f, "UnSetVariable"),
             Plan::SetRole(_) => write!(f, "SetRole"),
             Plan::Kill(_) => write!(f, "Kill"),
             Plan::CreateShare(_) => write!(f, "CreateShare"),
@@ -350,6 +353,7 @@ impl Plan {
             Plan::Call(_) => Arc::new(DataSchema::empty()),
             Plan::Presign(plan) => plan.schema(),
             Plan::SetVariable(plan) => plan.schema(),
+            Plan::UnSetVariable(plan) => plan.schema(),
             Plan::SetRole(plan) => plan.schema(),
             Plan::Kill(_) => Arc::new(DataSchema::empty()),
             Plan::CreateShare(plan) => plan.schema(),
