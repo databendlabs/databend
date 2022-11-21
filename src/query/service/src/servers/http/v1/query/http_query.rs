@@ -46,6 +46,10 @@ use crate::sessions::QueryAffect;
 use crate::sessions::SessionType;
 use crate::sessions::TableContext;
 
+fn default_as_true() -> bool {
+    true
+}
+
 #[derive(Deserialize, Debug)]
 pub struct HttpQueryRequest {
     pub session_id: Option<String>,
@@ -53,7 +57,7 @@ pub struct HttpQueryRequest {
     pub sql: String,
     #[serde(default)]
     pub pagination: PaginationConf,
-    #[serde(default)]
+    #[serde(default = "default_as_true")]
     pub string_fields: bool,
 }
 
