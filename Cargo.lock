@@ -3073,6 +3073,7 @@ dependencies = [
  "common-hive-meta-store",
  "common-http",
  "common-io",
+ "common-jsonb",
  "common-management",
  "common-meta-api",
  "common-meta-app",

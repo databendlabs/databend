@@ -14,11 +14,13 @@
 
 use std::sync::Arc;
 
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::DataSchemaRef;
-use common_datavalues::prelude::Series;
-use common_datavalues::SeriesFrom;
 use common_exception::Result;
+use common_expression::types::DataType;
+use common_expression::Chunk;
+use common_expression::Column;
+use common_expression::ColumnFrom;
+use common_expression::DataSchemaRef;
+use common_expression::Value;
 use common_meta_api::ShareApi;
 use common_meta_app::share::ShowSharesReq;
 use common_users::UserApiProvider;
@@ -91,14 +93,25 @@ impl Interpreter for ShowSharesInterpreter {
             comments.push(entry.comment.unwrap_or_default());
         }
 
-        PipelineBuildResult::from_chunks(vec![DataBlock::create(self.plan.schema(), vec![
-            Series::from_data(created_ons),
-            Series::from_data(kinds),
-            Series::from_data(names),
-            Series::from_data(database_names),
-            Series::from_data(from),
-            Series::from_data(to),
-            Series::from_data(comments),
-        ])])
+        let num_rows = resp.outbound_accounts.len();
+
+        PipelineBuildResult::from_chunks(vec![Chunk::new(
+            vec![
+                (
+                    Value::Column(Column::from_data(created_ons)),
+                    DataType::String,
+                ),
+                (Value::Column(Column::from_data(kinds)), DataType::String),
+                (Value::Column(Column::from_data(names)), DataType::String),
+                (
+                    Value::Column(Column::from_data(database_names)),
+                    DataType::String,
+                ),
+                (Value::Column(Column::from_data(from)), DataType::String),
+                (Value::Column(Column::from_data(to)), DataType::String),
+                (Value::Column(Column::from_data(comments)), DataType::String),
+            ],
+            num_rows,
+        )])
     }
 }

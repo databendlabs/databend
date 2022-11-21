@@ -234,7 +234,7 @@ impl Processor for FuseTableSink {
                 // TODO: dyn operation for table trait
                 let log_entry = AppendOperationLogEntry::new(location, segment);
                 let data_block = Chunk::try_from(log_entry)?;
-                self.ctx.push_precommit_block(data_block);
+                self.ctx.push_precommit_chunk(data_block);
             }
             _state => {
                 return Err(ErrorCode::Internal("Unknown state for fuse table sink"));

@@ -14,9 +14,12 @@
 
 use std::sync::Arc;
 
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_expression::types::DataType;
+use common_expression::Chunk;
+use common_expression::Column;
+use common_expression::ColumnFrom;
+use common_expression::Value;
 use common_meta_types::PrincipalIdentity;
 use common_sql::plans::ShowGrantsPlan;
 use common_users::RoleCacheManager;
@@ -81,11 +84,17 @@ impl Interpreter for ShowGrantsInterpreter {
             .fold(grant_set, |a, b| a | b)
             .entries()
             .iter()
-            .map(|e| format!("{} TO {}", e, identity).into_bytes())
+            .map(|e| format!("{} TO {}", e, identity))
             .collect::<Vec<_>>();
 
-        PipelineBuildResult::from_chunks(vec![DataBlock::create(self.plan.schema(), vec![
-            Series::from_data(grant_list),
-        ])])
+        let num_rows = grant_list.len();
+
+        PipelineBuildResult::from_chunks(vec![Chunk::new(
+            vec![(
+                Value::Column(Column::from_data(grant_list)),
+                DataType::String,
+            )],
+            num_rows,
+        )])
     }
 }

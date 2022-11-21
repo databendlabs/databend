@@ -14,9 +14,9 @@
 
 use std::sync::Arc;
 
-use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::DataSchema;
 use common_sql::plans::UseDatabasePlan;
 
 use crate::interpreters::Interpreter;

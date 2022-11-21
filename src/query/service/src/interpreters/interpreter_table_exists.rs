@@ -14,10 +14,11 @@
 
 use std::sync::Arc;
 
-use common_datablocks::DataBlock;
-use common_datavalues::Series;
-use common_datavalues::SeriesFrom;
 use common_exception::Result;
+use common_expression::types::DataType;
+use common_expression::Chunk;
+use common_expression::Scalar;
+use common_expression::Value;
 use common_sql::plans::ExistsTablePlan;
 
 use crate::interpreters::Interpreter;
@@ -52,8 +53,9 @@ impl Interpreter for ExistsTableInterpreter {
             false => 0u8,
         };
 
-        PipelineBuildResult::from_chunks(vec![DataBlock::create(self.plan.schema(), vec![
-            Series::from_data(vec![result]),
-        ])])
+        PipelineBuildResult::from_chunks(vec![Chunk::new(
+            vec![(Value::Scalar(Scalar::Boolean(result)), DataType::Boolean)],
+            1,
+        )])
     }
 }

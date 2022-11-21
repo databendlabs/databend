@@ -465,7 +465,7 @@ impl Table for FuseTable {
         self.do_recluster(ctx, pipeline, push_downs).await
     }
 
-    fn get_block_compact_thresholds(&self) -> ChunkCompactThresholds {
+    fn get_chunk_compact_thresholds(&self) -> ChunkCompactThresholds {
         let max_rows_per_block = self.get_option(FUSE_OPT_KEY_ROW_PER_BLOCK, DEFAULT_ROW_PER_BLOCK);
         let min_rows_per_block = (max_rows_per_block as f64 * 0.8) as usize;
         let max_bytes_per_block = self.get_option(

@@ -220,12 +220,12 @@ impl Table for StageTable {
         ))
     }
 
-    fn get_block_compact_thresholds(&self) -> ChunkCompactThresholds {
+    fn get_chunk_compact_thresholds(&self) -> ChunkCompactThresholds {
         let guard = self.block_compact_threshold.lock();
         (*guard).expect("must success")
     }
 
-    fn set_block_compact_thresholds(&self, thresholds: ChunkCompactThresholds) {
+    fn set_chunk_compact_thresholds(&self, thresholds: ChunkCompactThresholds) {
         let mut guard = self.block_compact_threshold.lock();
         (*guard) = Some(thresholds)
     }

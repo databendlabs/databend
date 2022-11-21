@@ -14,9 +14,12 @@
 
 use std::sync::Arc;
 
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_expression::types::DataType;
+use common_expression::Chunk;
+use common_expression::DataSchemaRef;
+use common_expression::Scalar;
+use common_expression::Value;
 use common_sql::executor::PhysicalScalar;
 use common_sql::plans::ShowCreateTablePlan;
 use common_storages_table_meta::table::is_internal_opt_key;
@@ -124,12 +127,22 @@ impl Interpreter for ShowCreateTableInterpreter {
                 .as_str()
         });
 
-        let block = DataBlock::create(self.plan.schema(), vec![
-            Series::from_data(vec![name.as_bytes()]),
-            Series::from_data(vec![table_create_sql.into_bytes()]),
-        ]);
-        debug!("Show create table executor result: {:?}", block);
+        let chunk = Chunk::new(
+            self.plan.schema(),
+            vec![
+                (
+                    Value::Scalar(Scalar::String(name.as_bytes().to_vec())),
+                    DataType::String,
+                ),
+                (
+                    Value::Scalar(Scalar::String(table_create_sql.into_bytes().to_vec())),
+                    DataType::String,
+                ),
+            ],
+            1,
+        );
+        debug!("Show create table executor result: {:?}", chunk);
 
-        PipelineBuildResult::from_chunks(vec![block])
+        PipelineBuildResult::from_chunks(vec![chunk])
     }
 }

@@ -81,7 +81,7 @@ impl FuseTable {
         projection: &Projection,
     ) -> Result<()> {
         let cluster_stats_gen = self.cluster_stats_gen()?;
-        let block_compact_thresholds = self.get_block_compact_thresholds();
+        let block_compact_thresholds = self.get_chunk_compact_thresholds();
         let mut deletion_collector = DeletionMutator::try_create(
             ctx.clone(),
             self.get_operator(),
@@ -186,7 +186,7 @@ impl FuseTable {
             cluster_key_index,
             extra_key_index,
             0,
-            self.get_block_compact_thresholds(),
+            self.get_chunk_compact_thresholds(),
         ))
     }
 }

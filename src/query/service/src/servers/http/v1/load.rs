@@ -141,7 +141,7 @@ pub async fn streaming_load(
                         schema,
                         context.get_scan_progress(),
                         true,
-                        to_table.get_block_compact_thresholds(),
+                        to_table.get_chunk_compact_thresholds(),
                     )
                     .await
                     .map_err(InternalServerError)?,

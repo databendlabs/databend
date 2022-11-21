@@ -314,11 +314,11 @@ impl TableContext for QueryContext {
     fn get_data_operator(&self) -> Result<DataOperator> {
         Ok(self.shared.data_operator.clone())
     }
-    fn push_precommit_block(&self, chunk: Chunk) {
-        self.shared.push_precommit_block(chunk)
+    fn push_precommit_chunk(&self, chunk: Chunk) {
+        self.shared.push_precommit_chunk(chunk)
     }
-    fn consume_precommit_blocks(&self) -> Vec<Chunk> {
-        self.shared.consume_precommit_blocks()
+    fn consume_precommit_chunks(&self) -> Vec<Chunk> {
+        self.shared.consume_precommit_chunks()
     }
     fn try_get_function_context(&self) -> Result<FunctionContext> {
         let tz = self.get_settings().get_timezone()?;

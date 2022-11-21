@@ -16,12 +16,12 @@ use std::sync::Arc;
 use std::time::SystemTime;
 
 use common_catalog::table_context::TableContext;
-use common_datablocks::SendableDataBlockStream;
-use common_datavalues::DataSchema;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::DataSchema;
+use common_expression::DataSchemaRef;
+use common_expression::DataSchemaRefExt;
+use common_expression::SendableChunkStream;
 
 use crate::interpreters::InterpreterMetrics;
 use crate::interpreters::InterpreterQueryLog;
@@ -48,8 +48,8 @@ pub trait Interpreter: Sync + Send {
         DataSchemaRefExt::create(vec![])
     }
 
-    /// The core of the databend processor which will execute the logical plan and get the DataBlock
-    async fn execute(&self, ctx: Arc<QueryContext>) -> Result<SendableDataBlockStream> {
+    /// The core of the databend processor which will execute the logical plan and get the Chunk
+    async fn execute(&self, ctx: Arc<QueryContext>) -> Result<SendableChunkStream> {
         InterpreterMetrics::record_query_start(&ctx);
         log_query_start(&ctx);
 

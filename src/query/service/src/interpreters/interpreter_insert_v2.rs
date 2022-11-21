@@ -24,10 +24,17 @@ use common_ast::parser::tokenize_sql;
 use common_ast::Backtrace;
 use common_base::base::GlobalIORuntime;
 use common_catalog::table::AppendMode;
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::number::NumberScalar;
+use common_expression::types::NumberDataType;
+use common_expression::Chunk;
+use common_expression::DataField;
+use common_expression::DataSchemaRef;
+use common_expression::DataSchemaRefExt;
+use common_expression::Scalar as DataScalar;
+use common_expression::SchemaDataType;
+use common_expression::Value;
 use common_formats::parse_timezone;
 use common_formats::FieldDecoderRowBased;
 use common_formats::FieldDecoderValues;
@@ -214,7 +221,7 @@ impl Interpreter for InsertInterpreterV2 {
                         let table = table.clone();
 
                         if may_error.is_none() {
-                            let append_entries = ctx.consume_precommit_blocks();
+                            let append_entries = ctx.consume_precommit_chunks();
                             // We must put the commit operation to global runtime, which will avoid the "dispatch dropped without returning error" in tower
                             return GlobalIORuntime::instance().block_on(async move {
                                 table.commit_insertion(ctx, append_entries, overwrite).await
@@ -270,14 +277,14 @@ impl AsyncSource for ValueSource {
     const SKIP_EMPTY_CHUNK: bool = true;
 
     #[async_trait::unboxed_simple]
-    async fn generate(&mut self) -> Result<Option<DataBlock>> {
+    async fn generate(&mut self) -> Result<Option<Chunk>> {
         if self.is_finished {
             return Ok(None);
         }
         let mut reader = Cursor::new(self.data.as_bytes());
-        let block = self.read(&mut reader).await?;
+        let chunk = self.read(&mut reader).await?;
         self.is_finished = true;
-        Ok(Some(block))
+        Ok(Some(chunk))
     }
 }
 
@@ -302,7 +309,7 @@ impl ValueSource {
         }
     }
 
-    pub async fn read<R: AsRef<[u8]>>(&self, reader: &mut Cursor<R>) -> Result<DataBlock> {
+    pub async fn read<R: AsRef<[u8]>>(&self, reader: &mut Cursor<R>) -> Result<Chunk> {
         let mut desers = self
             .schema
             .fields()
@@ -338,15 +345,16 @@ impl ValueSource {
         }
 
         if rows == 0 {
-            return Ok(DataBlock::empty_with_schema(self.schema.clone()));
+            return Ok(Chunk::empty());
         }
 
-        let columns = desers
-            .iter_mut()
-            .map(|deser| deser.finish_to_column())
-            .collect::<Vec<_>>();
+        todo!("expression");
+        // let columns = desers
+        //     .iter_mut()
+        //     .map(|deser| deser.finish_to_column())
+        //     .collect::<Vec<_>>();
 
-        Ok(DataBlock::create(self.schema.clone(), columns))
+        // Ok(Chunk::new(columns, rows))
     }
 
     /// Parse single row value, like ('111', 222, 1 + 1)
@@ -412,7 +420,7 @@ impl ValueSource {
                 let exprs =
                     parse_comma_separated_exprs(&tokens[1..tokens.len()], sql_dialect, &backtrace)?;
 
-                let values = exprs_to_datavalue(
+                let values = exprs_to_scalar(
                     exprs,
                     &self.schema,
                     self.ctx.clone(),
@@ -522,14 +530,14 @@ fn fill_default_value(operators: &mut Vec<ChunkOperator>, field: &DataField) -> 
     Ok(())
 }
 
-async fn exprs_to_datavalue<'a>(
+async fn exprs_to_scalar<'a>(
     exprs: Vec<Expr<'a>>,
     schema: &DataSchemaRef,
     ctx: Arc<dyn TableContext>,
     name_resolution_ctx: &NameResolutionContext,
     bind_context: &BindContext,
     metadata: MetadataRef,
-) -> Result<Vec<DataValue>> {
+) -> Result<Vec<DataScalar>> {
     let schema_fields_len = schema.fields().len();
     if exprs.len() != schema_fields_len {
         return Err(ErrorCode::TableSchemaMismatch(
@@ -555,7 +563,7 @@ async fn exprs_to_datavalue<'a>(
         );
         let (mut scalar, data_type) = scalar_binder.bind(expr).await?;
         let field_data_type = schema.field(i).data_type();
-        if data_type.ne(field_data_type) {
+        if data_type != field_data_type {
             scalar = Scalar::CastExpr(CastExpr {
                 argument: Box::new(scalar),
                 from_type: Box::new(data_type),
@@ -568,14 +576,17 @@ async fn exprs_to_datavalue<'a>(
         });
     }
 
-    let dummy = DataSchemaRefExt::create(vec![DataField::new("dummy", u8::to_data_type())]);
-    let one_row_block = DataBlock::create(dummy, vec![Series::from_data(vec![1u8])]);
+    let one_row_chunk = Chunk::new(
+        vec![Value::Scalar(DataScalar::Number(NumberScalar::UInt8(1)))],
+        1,
+    );
     let func_ctx = ctx.try_get_function_context()?;
     let mut expression_transform = CompoundChunkOperator {
         operators,
         ctx: func_ctx,
     };
-    let res = expression_transform.transform(one_row_block)?;
-    let datavalues: Vec<DataValue> = res.columns().iter().skip(1).map(|col| col.get(0)).collect();
-    Ok(datavalues)
+    let res = expression_transform.transform(one_row_chunk)?;
+    let data_scalars: Vec<DataScalar> =
+        res.columns().iter().skip(1).map(|col| col.get(0)).collect();
+    Ok(data_scalars)
 }

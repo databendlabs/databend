@@ -172,7 +172,7 @@ impl StatisticsSender {
 
     async fn fetch_precommit(ctx: &Arc<QueryContext>) -> Result<Vec<PrecommitBlock>> {
         Ok(ctx
-            .consume_precommit_blocks()
+            .consume_precommit_chunks()
             .into_iter()
             .map(PrecommitBlock)
             .collect())

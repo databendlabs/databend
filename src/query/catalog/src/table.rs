@@ -228,7 +228,7 @@ pub trait Table: Sync + Send {
         )))
     }
 
-    fn get_block_compact_thresholds(&self) -> ChunkCompactThresholds {
+    fn get_chunk_compact_thresholds(&self) -> ChunkCompactThresholds {
         ChunkCompactThresholds {
             max_rows_per_chunk: 1000 * 1000,
             min_rows_per_chunk: 800 * 1000,
@@ -236,7 +236,7 @@ pub trait Table: Sync + Send {
         }
     }
 
-    fn set_block_compact_thresholds(&self, _thresholds: ChunkCompactThresholds) {
+    fn set_chunk_compact_thresholds(&self, _thresholds: ChunkCompactThresholds) {
         unimplemented!()
     }
 

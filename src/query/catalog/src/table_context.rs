@@ -91,8 +91,8 @@ pub trait TableContext: Send + Sync {
     fn get_query_kind(&self) -> String;
     // Get the storage data accessor operator from the session manager.
     fn get_data_operator(&self) -> Result<DataOperator>;
-    fn push_precommit_block(&self, block: Chunk);
-    fn consume_precommit_blocks(&self) -> Vec<Chunk>;
+    fn push_precommit_chunk(&self, block: Chunk);
+    fn consume_precommit_chunks(&self) -> Vec<Chunk>;
     fn try_get_function_context(&self) -> Result<FunctionContext>;
     fn get_connection_id(&self) -> String;
     fn get_settings(&self) -> Arc<Settings>;

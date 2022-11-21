@@ -14,11 +14,13 @@
 
 use std::sync::Arc;
 
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::DataSchemaRef;
-use common_datavalues::prelude::Series;
-use common_datavalues::SeriesFrom;
 use common_exception::Result;
+use common_expression::types::DataType;
+use common_expression::Chunk;
+use common_expression::Column;
+use common_expression::ColumnFrom;
+use common_expression::DataSchemaRef;
+use common_expression::Value;
 use common_meta_api::ShareApi;
 use common_meta_app::share::GetShareGrantTenantsReq;
 use common_meta_app::share::ShareNameIdent;
@@ -72,11 +74,16 @@ impl Interpreter for ShowGrantTenantsOfShareInterpreter {
             accounts.push(account.account.clone());
         }
 
-        let block = DataBlock::create(self.plan.schema(), vec![
-            Series::from_data(granted_ons),
-            Series::from_data(accounts),
-        ]);
-
-        PipelineBuildResult::from_chunks(vec![block])
+        let num_rows = resp.accounts.len();
+        PipelineBuildResult::from_chunks(vec![Chunk::new(
+            vec![
+                (
+                    Value::Column(Column::from_data(granted_ons)),
+                    DataType::String,
+                ),
+                (Value::Column(Column::from_data(accounts)), DataType::String),
+            ],
+            num_rows,
+        )])
     }
 }

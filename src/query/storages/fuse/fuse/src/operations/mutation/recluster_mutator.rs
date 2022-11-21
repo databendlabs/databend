@@ -210,7 +210,7 @@ impl TableMutator for ReclusterMutator {
         let (mut segments, mut summary, mut abort_operation) =
             self.base_mutator.generate_segments().await?;
 
-        let append_entries = ctx.consume_precommit_blocks();
+        let append_entries = ctx.consume_precommit_chunks();
         let append_log_entries = append_entries
             .iter()
             .map(AppendOperationLogEntry::try_from)

@@ -36,7 +36,7 @@ pub struct PrecommitBlock(pub DataBlock);
 
 impl PrecommitBlock {
     pub fn precommit(&self, ctx: &Arc<QueryContext>) {
-        ctx.push_precommit_block(self.0.clone());
+        ctx.push_precommit_chunk(self.0.clone());
     }
 
     pub fn write<T: Write>(self, bytes: &mut T) -> Result<()> {

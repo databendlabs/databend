@@ -14,11 +14,13 @@
 
 use std::sync::Arc;
 
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::DataSchemaRef;
-use common_datavalues::prelude::Series;
-use common_datavalues::SeriesFrom;
 use common_exception::Result;
+use common_expression::types::DataType;
+use common_expression::Chunk;
+use common_expression::Column;
+use common_expression::ColumnFrom;
+use common_expression::DataSchemaRef;
+use common_expression::Value;
 use common_meta_api::ShareApi;
 use common_meta_app::share::GetShareGrantObjectReq;
 use common_meta_app::share::ShareGrantObjectName;
@@ -82,10 +84,19 @@ impl Interpreter for DescShareInterpreter {
             shared_ons.push(entry.grant_on.to_string());
         }
 
-        PipelineBuildResult::from_chunks(vec![DataBlock::create(self.plan.schema(), vec![
-            Series::from_data(kinds),
-            Series::from_data(names),
-            Series::from_data(shared_ons),
-        ])])
+        let num_rows = resp.objects.len();
+
+        PipelineBuildResult::from_chunks(vec![Chunk::new(
+            self.plan.schema(),
+            vec![
+                (Value::Column(Column::from_data(kinds)), DataType::String),
+                (Value::Column(Column::from_data(names)), DataType::String),
+                (
+                    Value::Column(Column::from_data(shared_ons)),
+                    DataType::String,
+                ),
+            ],
+            num_rows,
+        )])
     }
 }

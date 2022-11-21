@@ -14,10 +14,14 @@
 
 use std::sync::Arc;
 
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::DataType;
+use common_expression::Chunk;
+use common_expression::Column;
+use common_expression::ColumnFrom;
+use common_expression::DataSchemaRef;
+use common_expression::Value;
 use common_sql::executor::PhysicalScalar;
 use common_sql::plans::DescribeTablePlan;
 use common_storages_view::view_table::QUERY;
@@ -101,12 +105,20 @@ impl Interpreter for DescribeTableInterpreter {
             extras.push("".to_string());
         }
 
-        PipelineBuildResult::from_chunks(vec![DataBlock::create(self.plan.schema(), vec![
-            Series::from_data(names),
-            Series::from_data(types),
-            Series::from_data(nulls),
-            Series::from_data(default_exprs),
-            Series::from_data(extras),
-        ])])
+        let num_rows = schema.fields().len();
+
+        PipelineBuildResult::from_chunks(vec![Chunk::new(
+            vec![
+                (Value::Column(Column::from_data(names)), DataType::String),
+                (Value::Column(Column::from_data(types)), DataType::String),
+                (Value::Column(Column::from_data(nulls)), DataType::String),
+                (
+                    Value::Column(Column::from_data(default_exprs)),
+                    DataType::String,
+                ),
+                (Value::Column(Column::from_data(extras)), DataType::String),
+            ],
+            num_rows,
+        )])
     }
 }

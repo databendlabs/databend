@@ -58,11 +58,11 @@ type DatabaseAndTable = (String, String, String);
 /// For each subquery, they will share a runtime, session, progress, init_query_id
 pub struct QueryContextShared {
     pub(in crate::sessions) config: Config,
-    /// scan_progress for scan metrics of datablocks (uncompressed)
+    /// scan_progress for scan metrics of chunks (uncompressed)
     pub(in crate::sessions) scan_progress: Arc<Progress>,
-    /// write_progress for write/commit metrics of datablocks (uncompressed)
+    /// write_progress for write/commit metrics of chunks (uncompressed)
     pub(in crate::sessions) write_progress: Arc<Progress>,
-    /// result_progress for metrics of result datablocks (uncompressed)
+    /// result_progress for metrics of result chunks (uncompressed)
     pub(in crate::sessions) result_progress: Arc<Progress>,
     pub(in crate::sessions) error: Arc<Mutex<Option<ErrorCode>>>,
     pub(in crate::sessions) session: Arc<Session>,
@@ -79,7 +79,7 @@ pub struct QueryContextShared {
     pub(in crate::sessions) catalog_manager: Arc<CatalogManager>,
     pub(in crate::sessions) data_operator: DataOperator,
     pub(in crate::sessions) executor: Arc<RwLock<Weak<PipelineExecutor>>>,
-    pub(in crate::sessions) precommit_blocks: Arc<RwLock<Vec<Chunk>>>,
+    pub(in crate::sessions) precommit_chunks: Arc<RwLock<Vec<Chunk>>>,
     pub(in crate::sessions) created_time: SystemTime,
 }
 
@@ -109,7 +109,7 @@ impl QueryContextShared {
             auth_manager: AuthMgr::create(config).await?,
             affect: Arc::new(Mutex::new(None)),
             executor: Arc::new(RwLock::new(Weak::new())),
-            precommit_blocks: Arc::new(RwLock::new(vec![])),
+            precommit_chunks: Arc::new(RwLock::new(vec![])),
             created_time: SystemTime::now(),
         }))
     }
@@ -314,13 +314,13 @@ impl QueryContextShared {
         *executor = weak_ptr;
     }
 
-    pub fn push_precommit_block(&self, chunk: Chunk) {
-        let mut chunks = self.precommit_blocks.write();
+    pub fn push_precommit_chunk(&self, chunk: Chunk) {
+        let mut chunks = self.precommit_chunks.write();
         chunks.push(chunk);
     }
 
-    pub fn consume_precommit_blocks(&self) -> Vec<Chunk> {
-        let mut chunks = self.precommit_blocks.write();
+    pub fn consume_precommit_chunks(&self) -> Vec<Chunk> {
+        let mut chunks = self.precommit_chunks.write();
 
         let mut swaped_precommit_chunks = vec![];
         std::mem::swap(&mut *chunks, &mut swaped_precommit_chunks);

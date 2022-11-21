@@ -18,8 +18,8 @@ use common_base::base::GlobalIORuntime;
 use common_catalog::table::AppendMode;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
-use common_datavalues::DataSchemaRef;
 use common_exception::Result;
+use common_expression::DataSchemaRef;
 use common_pipeline_core::Pipeline;
 
 use crate::pipelines::processors::TransformAddOn;
@@ -78,7 +78,7 @@ pub fn append2table(
             let table = table.clone();
 
             if may_error.is_none() {
-                let append_entries = ctx.consume_precommit_blocks();
+                let append_entries = ctx.consume_precommit_chunks();
                 // We must put the commit operation to global runtime, which will avoid the "dispatch dropped without returning error" in tower
                 return GlobalIORuntime::instance().block_on(async move {
                     table.commit_insertion(ctx, append_entries, overwrite).await

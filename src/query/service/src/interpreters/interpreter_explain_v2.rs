@@ -15,10 +15,16 @@ use std::sync::Arc;
 
 use common_ast::ast::ExplainKind;
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::DataType;
+use common_expression::Chunk;
+use common_expression::Column;
+use common_expression::ColumnFrom;
+use common_expression::DataField;
+use common_expression::DataSchemaRefExt;
+use common_expression::SchemaDataType;
+use common_expression::Value;
 use common_sql::MetadataRef;
 
 use crate::interpreters::Interpreter;
@@ -50,7 +56,7 @@ impl Interpreter for ExplainInterpreter {
     }
 
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let blocks = match &self.kind {
+        let chunks = match &self.kind {
             ExplainKind::Raw => self.explain_plan(&self.plan)?,
 
             ExplainKind::Plan => match &self.plan {
@@ -102,18 +108,22 @@ impl Interpreter for ExplainInterpreter {
             | ExplainKind::Syntax(display_string)
             | ExplainKind::Memo(display_string) => {
                 let line_splitted_result: Vec<&str> = display_string.lines().collect();
-                let column = Series::from_data(line_splitted_result);
-                vec![DataBlock::create(self.schema.clone(), vec![column])]
+                let num_rows = line_splitted_result.len();
+                let column = Column::from_data(line_splitted_result);
+                vec![Chunk::new(
+                    vec![(Value::Column(column), DataType::String)],
+                    num_rows,
+                )]
             }
         };
 
-        PipelineBuildResult::from_chunks(blocks)
+        PipelineBuildResult::from_chunks(chunks)
     }
 }
 
 impl ExplainInterpreter {
     pub fn try_create(ctx: Arc<QueryContext>, plan: Plan, kind: ExplainKind) -> Result<Self> {
-        let data_field = DataField::new("explain", DataTypeImpl::String(StringType::default()));
+        let data_field = DataField::new("explain", SchemaDataType::String);
         let schema = DataSchemaRefExt::create(vec![data_field]);
         Ok(ExplainInterpreter {
             ctx,
@@ -123,66 +133,70 @@ impl ExplainInterpreter {
         })
     }
 
-    pub fn explain_plan(&self, plan: &Plan) -> Result<Vec<DataBlock>> {
+    pub fn explain_plan(&self, plan: &Plan) -> Result<Vec<Chunk>> {
         let result = plan.format_indent()?;
         let line_splitted_result: Vec<&str> = result.lines().collect();
-        let formatted_plan = Series::from_data(line_splitted_result);
-        Ok(vec![DataBlock::create(self.schema.clone(), vec![
-            formatted_plan,
-        ])])
+        let num_rows = line_splitted_result.len();
+        let formatted_plan = Column::from_data(line_splitted_result);
+        Ok(vec![Chunk::new(
+            vec![(Value::Column(formatted_plan), DataType::String)],
+            num_rows,
+        )])
     }
 
     pub fn explain_physical_plan(
         &self,
         plan: &PhysicalPlan,
         metadata: &MetadataRef,
-    ) -> Result<Vec<DataBlock>> {
+    ) -> Result<Vec<Chunk>> {
         let result = plan.format(metadata.clone())?;
         let line_splitted_result: Vec<&str> = result.lines().collect();
-        let formatted_plan = Series::from_data(line_splitted_result);
-        Ok(vec![DataBlock::create(self.schema.clone(), vec![
-            formatted_plan,
-        ])])
+        let num_rows = line_splitted_result.len();
+        let formatted_plan = Column::from_data(line_splitted_result);
+        Ok(vec![Chunk::new(
+            vec![(Value::Column(formatted_plan), DataType::String)],
+            num_rows,
+        )])
     }
 
     pub async fn explain_pipeline(
         &self,
         s_expr: SExpr,
         metadata: MetadataRef,
-    ) -> Result<Vec<DataBlock>> {
+    ) -> Result<Vec<Chunk>> {
         let builder = PhysicalPlanBuilder::new(metadata, self.ctx.clone());
         let plan = builder.build(&s_expr).await?;
         let build_res = build_query_pipeline(&self.ctx, &[], &plan).await?;
 
-        let mut blocks = vec![];
+        let mut chunks = Vec::with_capacity(1 + build_res.sources_pipelines.len());
         // Format root pipeline
-        blocks.push(DataBlock::create(self.schema.clone(), vec![
-            Series::from_data(
-                format!("{}", build_res.main_pipeline.display_indent())
-                    .lines()
-                    .map(|s| s.as_bytes())
-                    .collect::<Vec<_>>(),
-            ),
-        ]));
+        let line_splitted_result = format!("{}", build_res.main_pipeline.display_indent())
+            .lines()
+            .map(|s| s.as_bytes())
+            .collect::<Vec<_>>();
+        let num_rows = line_splitted_result.len();
+        let column = Column::from_data(line_splitted_result);
+        chunks.push(Chunk::new(
+            vec![(Value::Column(column), DataType::String)],
+            num_rows,
+        ));
         // Format child pipelines
         for pipeline in build_res.sources_pipelines.iter() {
-            blocks.push(DataBlock::create(self.schema.clone(), vec![
-                Series::from_data(
-                    format!("\n{}", pipeline.display_indent())
-                        .lines()
-                        .map(|s| s.as_bytes())
-                        .collect::<Vec<_>>(),
-                ),
-            ]));
+            let line_splitted_result = format!("\n{}", pipeline.display_indent())
+                .lines()
+                .map(|s| s.as_bytes())
+                .collect::<Vec<_>>();
+            let num_rows = line_splitted_result.len();
+            let column = Column::from_data(line_splitted_result);
+            chunks.push(Chunk::new(
+                vec![(Value::Column(column), DataType::String)],
+                num_rows,
+            ));
         }
-        Ok(blocks)
+        Ok(chunks)
     }
 
-    async fn explain_fragments(
-        &self,
-        s_expr: SExpr,
-        metadata: MetadataRef,
-    ) -> Result<Vec<DataBlock>> {
+    async fn explain_fragments(&self, s_expr: SExpr, metadata: MetadataRef) -> Result<Vec<Chunk>> {
         let ctx = self.ctx.clone();
         let plan = PhysicalPlanBuilder::new(metadata, self.ctx.clone())
             .build(&s_expr)
@@ -194,14 +208,15 @@ impl ExplainInterpreter {
         root_fragment.get_actions(ctx, &mut fragments_actions)?;
 
         let display_string = fragments_actions.display_indent().to_string();
-        let formatted_fragments = Series::from_data(
-            display_string
-                .lines()
-                .map(|s| s.as_bytes())
-                .collect::<Vec<_>>(),
-        );
-        Ok(vec![DataBlock::create(self.schema.clone(), vec![
-            formatted_fragments,
-        ])])
+        let line_splitted_result = display_string
+            .lines()
+            .map(|s| s.as_bytes())
+            .collect::<Vec<_>>();
+        let num_rows = line_splitted_result.len();
+        let formatted_plan = Column::from_data(line_splitted_result);
+        Ok(vec![Chunk::new(
+            vec![(Value::Column(formatted_plan), DataType::String)],
+            num_rows,
+        )])
     }
 }

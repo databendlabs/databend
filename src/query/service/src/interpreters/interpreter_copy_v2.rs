@@ -23,9 +23,9 @@ use common_catalog::plan::PushDownInfo;
 use common_catalog::plan::StagePushDownInfo;
 use common_catalog::plan::StageTableInfo;
 use common_catalog::table::AppendMode;
-use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::DataSchemaRefExt;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::TableCopiedFileInfo;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
@@ -344,7 +344,7 @@ impl CopyInterpreterV2 {
         let to_table = ctx
             .get_table(catalog_name, database_name, table_name)
             .await?;
-        stage_table.set_block_compact_thresholds(to_table.get_block_compact_thresholds());
+        stage_table.set_chunk_compact_thresholds(to_table.get_chunk_compact_thresholds());
 
         // Build pipeline.
         let mut build_res = PipelineBuildResult::create();
@@ -359,7 +359,7 @@ impl CopyInterpreterV2 {
             let settings = ctx.get_settings();
             let schema = stage_table_info.schema.clone();
             let stage_info = stage_table_info.user_stage_info.clone();
-            let compact_threshold = stage_table.get_block_compact_thresholds();
+            let compact_threshold = stage_table.get_chunk_compact_thresholds();
             let input_ctx = Arc::new(
                 InputContext::try_create_from_copy(
                     operator,
@@ -437,7 +437,7 @@ impl CopyInterpreterV2 {
 
                     return GlobalIORuntime::instance().block_on(async move {
                         // 1. Commit datas.
-                        let operations = ctx.consume_precommit_blocks();
+                        let operations = ctx.consume_precommit_chunks();
                         info!(
                             "copy: try to commit operations:{}, elapsed:{}",
                             operations.len(),

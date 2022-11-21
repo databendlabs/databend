@@ -14,10 +14,14 @@
 
 use std::sync::Arc;
 
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
-use common_datavalues::Series;
 use common_exception::Result;
+use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
+use common_expression::Chunk;
+use common_expression::Column;
+use common_expression::ColumnFrom;
+use common_expression::DataSchemaRef;
+use common_expression::Value;
 use common_sql::plans::ShowRolesPlan;
 
 use crate::interpreters::Interpreter;
@@ -71,12 +75,25 @@ impl Interpreter for ShowRolesInterpreter {
             .collect();
         let is_currents: Vec<bool> = roles.iter().map(|r| r.name == current_role_name).collect();
         let is_defaults: Vec<bool> = roles.iter().map(|r| r.name == default_role_name).collect();
+        let num_rows = roles.len();
 
-        PipelineBuildResult::from_chunks(vec![DataBlock::create(self.plan.schema(), vec![
-            Series::from_data(names),
-            Series::from_data(inherited_roles),
-            Series::from_data(is_currents),
-            Series::from_data(is_defaults),
-        ])])
+        PipelineBuildResult::from_chunks(vec![Chunk::new(
+            vec![
+                (Value::Column(Column::from_data(names)), DataType::String),
+                (
+                    Value::Column(Column::from_data(inherited_roles)),
+                    DataType::Number(NumberDataType::UInt64),
+                ),
+                (
+                    Value::Column(Column::from_data(is_currents)),
+                    DataType::Boolean,
+                ),
+                (
+                    Value::Column(Column::from_data(is_defaults)),
+                    DataType::Boolean,
+                ),
+            ],
+            num_rows,
+        )])
     }
 }
