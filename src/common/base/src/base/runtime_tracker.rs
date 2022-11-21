@@ -14,6 +14,7 @@
 
 use std::alloc::GlobalAlloc;
 use std::alloc::Layout;
+use std::ptr::NonNull;
 use std::sync::atomic::AtomicI64;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -57,8 +58,14 @@ impl ThreadTracker {
         }
     }
 
+    /// Accumulate allocated memory.
+    ///
+    /// `size` is the positive number of allocated bytes.
+    /// `p` is the pointer to the allocated memory.
     #[inline]
-    pub fn alloc_memory(size: i64) {
+    pub fn alloc_memory<T: ?Sized>(size: i64, p: &NonNull<T>) {
+        let _ = p;
+
         unsafe {
             if !TRACKER.is_null() {
                 (*TRACKER).untracked_memory += size;
@@ -73,8 +80,15 @@ impl ThreadTracker {
         }
     }
 
+    /// Accumulate deallocated memory.
+    ///
+    /// `size` is positive number of bytes of the memory to deallocate.
+    /// `p` is the pointer to the memory to deallocate.
     #[inline]
-    pub fn dealloc_memory(size: i64) {
+    pub fn dealloc_memory<T>(size: i64, p: &NonNull<T>) {
+        // size > 0
+        let _ = p;
+
         unsafe {
             if !TRACKER.is_null() {
                 (*TRACKER).untracked_memory -= size;
@@ -88,22 +102,21 @@ impl ThreadTracker {
             }
         }
     }
-
-    #[inline]
-    pub fn grow_memory(old_size: i64, new_size: i64) {
-        assert!(old_size <= new_size);
-        Self::alloc_memory(new_size - old_size)
-    }
-
-    #[inline]
-    pub fn shrink_memory(old_size: i64, new_size: i64) {
-        assert!(old_size >= new_size);
-        Self::dealloc_memory(old_size - new_size)
-    }
 }
 
 pub struct MemoryTracker {
-    memory_usage: AtomicI64,
+    /// Count of calls to `alloc`.
+    n_alloc: AtomicI64,
+
+    /// Number of allocated bytes.
+    bytes_alloc: AtomicI64,
+
+    /// Count of calls to `dealloc`.
+    n_dealloc: AtomicI64,
+
+    /// Number of deallocated bytes.
+    bytes_dealloc: AtomicI64,
+
     parent_memory_tracker: Option<Arc<MemoryTracker>>,
 }
 
@@ -118,13 +131,17 @@ impl MemoryTracker {
     ) -> Arc<MemoryTracker> {
         Arc::new(MemoryTracker {
             parent_memory_tracker,
-            memory_usage: AtomicI64::new(0),
+            n_alloc: AtomicI64::new(0),
+            bytes_alloc: AtomicI64::new(0),
+            n_dealloc: AtomicI64::new(0),
+            bytes_dealloc: AtomicI64::new(0),
         })
     }
 
     #[inline]
     pub fn alloc_memory(&self, size: i64) {
-        self.memory_usage.fetch_add(size, Ordering::Relaxed);
+        self.bytes_alloc.fetch_add(size, Ordering::Relaxed);
+        self.n_alloc.fetch_add(1, Ordering::Relaxed);
 
         if let Some(parent_memory_tracker) = &self.parent_memory_tracker {
             parent_memory_tracker.alloc_memory(size);
@@ -133,7 +150,8 @@ impl MemoryTracker {
 
     #[inline]
     pub fn dealloc_memory(&self, size: i64) {
-        self.memory_usage.fetch_sub(size, Ordering::Relaxed);
+        self.bytes_dealloc.fetch_add(size, Ordering::Relaxed);
+        self.n_dealloc.fetch_add(1, Ordering::Relaxed);
 
         if let Some(parent_memory_tracker) = &self.parent_memory_tracker {
             parent_memory_tracker.dealloc_memory(size);
@@ -153,7 +171,7 @@ impl MemoryTracker {
 
     #[inline]
     pub fn get_memory_usage(&self) -> i64 {
-        self.memory_usage.load(Ordering::Relaxed)
+        self.bytes_alloc.load(Ordering::Relaxed) - self.bytes_dealloc.load(Ordering::Relaxed)
     }
 }
 
