@@ -44,6 +44,9 @@ impl Interpreter for SettingInterpreter {
 
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let plan = self.set.clone();
+        let mut keys: Vec<String> = vec![];
+        let mut values: Vec<String> = vec![];
+        let mut is_globals: Vec<bool> = vec![];
         for var in plan.vars {
             let ok = match var.variable.to_lowercase().as_str() {
                 // To be compatible with some drivers
@@ -71,13 +74,16 @@ impl Interpreter for SettingInterpreter {
                 }
             };
             if ok {
-                self.ctx.set_affect(QueryAffect::ChangeSetting {
-                    key: var.variable.clone(),
-                    value: var.value.clone(),
-                    is_global: var.is_global,
-                })
+                keys.push(var.variable.clone());
+                values.push(var.value.clone());
+                is_globals.push(var.is_global);
             }
         }
+        self.ctx.set_affect(QueryAffect::ChangeSettings {
+            keys,
+            values,
+            is_globals,
+        });
 
         Ok(PipelineBuildResult::create())
     }

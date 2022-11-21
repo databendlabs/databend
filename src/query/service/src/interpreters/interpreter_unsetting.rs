@@ -43,6 +43,9 @@ impl Interpreter for UnSettingInterpreter {
 
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let plan = self.set.clone();
+        let mut keys: Vec<String> = vec![];
+        let mut values: Vec<String> = vec![];
+        let mut is_globals: Vec<bool> = vec![];
         for var in plan.vars {
             let (ok, value) = match var.to_lowercase().as_str() {
                 // To be compatible with some drivers
@@ -60,18 +63,21 @@ impl Interpreter for UnSettingInterpreter {
                 }
             };
             if ok {
-                // reset the system.settings
+                // reset the current ctx settings to default val
                 self.ctx
                     .get_settings()
                     .set_settings(var.clone(), value.clone(), false)?;
-                // reset the ctx
-                self.ctx.set_affect(QueryAffect::ChangeSetting {
-                    key: var,
-                    value,
-                    is_global: false,
-                })
+                // set affect
+                keys.push(var);
+                values.push(value);
+                is_globals.push(false);
             }
         }
+        self.ctx.set_affect(QueryAffect::ChangeSettings {
+            keys,
+            values,
+            is_globals,
+        });
 
         Ok(PipelineBuildResult::create())
     }
