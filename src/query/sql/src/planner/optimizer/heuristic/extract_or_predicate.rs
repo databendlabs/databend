@@ -74,6 +74,7 @@ impl ExtractOrPredicate {
         }
     }
 
+    // Only need to be executed once
     fn extract_or_predicate(
         &self,
         or_expr: &OrExpr,
@@ -127,12 +128,11 @@ impl ExtractOrPredicate {
 
     fn rewrite_predicates(&self, s_expr: &SExpr) -> Result<Vec<Scalar>> {
         let filter: Filter = s_expr.plan().clone().try_into()?;
-        let mut predicates = filter.predicates;
         // Find tables that JOIN operator used.
         // The extracted predicates should contain one of these tables.
         let join_used_tables = s_expr.child(0)?.used_tables()?;
         let mut new_predicates = Vec::new();
-        for predicate in predicates.iter() {
+        for predicate in filter.predicates.iter() {
             if let Scalar::OrExpr(or_expr) = predicate {
                 for join_used_table in join_used_tables.iter() {
                     if let Some(predicate) = self.extract_or_predicate(or_expr, *join_used_table)? {
@@ -141,8 +141,23 @@ impl ExtractOrPredicate {
                 }
             }
         }
-        predicates.extend(new_predicates);
-        Ok(predicates)
+        Ok(new_predicates)
+    }
+
+    // Recursively traverse s_expr, try to push down filter to the lowest join children
+    fn push_down_filter(&self, s_expr: &mut SExpr) -> Result<()> {
+        if s_expr.match_pattern(&self.pattern) {
+            let filter: Filter = s_expr.plan().clone().try_into()?;
+            let (need_push, result) = try_push_down_filter_join(s_expr, filter.predicates)?;
+            if need_push {
+                *s_expr = result
+            }
+        }
+
+        for child in s_expr.children.iter_mut() {
+            self.push_down_filter(child)?;
+        }
+        Ok(())
     }
 
     pub fn optimize(&self, s_expr: SExpr) -> Result<SExpr> {
@@ -150,12 +165,23 @@ impl ExtractOrPredicate {
         if s_expr.match_pattern(&self.pattern) {
             // Try to rewrite predicates in `Filter` operator.
             // Aim to extract extra predicates that can be pushed down.
-            let predicates = self.rewrite_predicates(&s_expr)?;
-            if predicates.is_empty() {
-                return Ok(s_expr);
+            let new_predicates = self.rewrite_predicates(&s_expr)?;
+            if new_predicates.is_empty() {
+                return Ok(s_expr.clone());
             }
-            let (_, result) = try_push_down_filter_join(&s_expr, predicates)?;
-            Ok(result)
+            let filter: Filter = s_expr.plan().clone().try_into()?;
+            let mut origin_predicates = filter.predicates;
+            origin_predicates.extend(new_predicates);
+            let mut s_expr = SExpr::create_unary(
+                Filter {
+                    predicates: origin_predicates,
+                    is_having: filter.is_having,
+                }
+                .into(),
+                s_expr.child(0)?.clone(),
+            );
+            self.push_down_filter(&mut s_expr)?;
+            Ok(s_expr)
         } else {
             let children = s_expr
                 .children()

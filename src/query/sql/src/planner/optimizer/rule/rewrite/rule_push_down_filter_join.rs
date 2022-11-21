@@ -303,9 +303,6 @@ impl Rule for RulePushDownFilterJoin {
 }
 
 pub fn try_push_down_filter_join(s_expr: &SExpr, predicates: Vec<Scalar>) -> Result<(bool, SExpr)> {
-    if predicates.is_empty() {
-        return Ok((false, s_expr.clone()));
-    }
     let join_expr = s_expr.child(0)?;
     let mut join: LogicalJoin = join_expr.plan().clone().try_into()?;
 
