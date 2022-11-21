@@ -39,6 +39,7 @@ pub use progress::ProgressValues;
 pub use runtime::Dropper;
 pub use runtime::Runtime;
 pub use runtime::TrySpawn;
+pub use runtime_tracker::AsyncThreadTracker;
 pub use runtime_tracker::MemoryTracker;
 pub use runtime_tracker::ThreadTracker;
 pub use select::select3;

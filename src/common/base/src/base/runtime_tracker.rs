@@ -14,9 +14,15 @@
 
 use std::alloc::GlobalAlloc;
 use std::alloc::Layout;
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::atomic::AtomicI64;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::task::Context;
+use std::task::Poll;
+
+use futures::FutureExt;
 
 use crate::mem_allocator::GlobalAllocator;
 
@@ -45,6 +51,12 @@ impl ThreadTracker {
     #[inline]
     pub fn current() -> *mut ThreadTracker {
         unsafe { TRACKER }
+    }
+
+    pub fn attach_thread_tracker(tracker: *mut ThreadTracker) {
+        unsafe {
+            TRACKER = tracker;
+        }
     }
 
     #[inline]
@@ -174,5 +186,33 @@ impl MemoryTracker {
         move || {
             ThreadTracker::create(mem_tracker.clone());
         }
+    }
+}
+
+pub struct AsyncThreadTracker<T: Future> {
+    inner: Pin<Box<T>>,
+    thread_tracker: *mut ThreadTracker,
+}
+
+unsafe impl<T: Future + Send> Send for AsyncThreadTracker<T> {}
+
+impl<T: Future> AsyncThreadTracker<T> {
+    pub fn create(tracker: *mut ThreadTracker, inner: T) -> AsyncThreadTracker<T> {
+        AsyncThreadTracker::<T> {
+            inner: Box::pin(inner),
+            thread_tracker: tracker,
+        }
+    }
+}
+
+impl<T: Future> Future for AsyncThreadTracker<T> {
+    type Output = T::Output;
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let old_tracker = ThreadTracker::current();
+        ThreadTracker::attach_thread_tracker(self.thread_tracker);
+        let res = self.inner.poll_unpin(cx);
+        ThreadTracker::attach_thread_tracker(old_tracker);
+        res
     }
 }
