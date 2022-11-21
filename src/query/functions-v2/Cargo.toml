@@ -42,6 +42,7 @@ regex = "1.6.0"
 serde = { workspace = true }
 simdutf8 = "0.1.4"
 siphasher = "0.3"
+streaming_algorithms = { git = "https://github.com/datafuse-extras/streaming_algorithms", tag = "hyperloglog_del_op_fix_overflow_bug" }
 strength_reduce = "0.2.3"
 
 [dev-dependencies]
