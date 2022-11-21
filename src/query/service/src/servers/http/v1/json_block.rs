@@ -18,6 +18,7 @@ use bstr::ByteSlice;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::Chunk;
+use common_expression::Column;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::TypeSerializer;
@@ -82,15 +83,21 @@ fn block_to_json_value_string_fields(
         return Ok(vec![]);
     }
     let rows_size = chunk.num_rows();
+    let columns: Vec<Column> = chunk
+        .convert_to_full()
+        .columns()
+        .iter()
+        .map(|(val, _)| val.clone().into_column().unwrap())
+        .collect();
+
     let mut res = Vec::new();
-    let serializers = chunk.get_serializers()?;
     let encoder = FieldEncoderValues::create_for_handler(format.timezone);
     let mut buf = vec![];
     for row_index in 0..rows_size {
         let mut row: Vec<JsonValue> = Vec::with_capacity(chunk.num_columns());
-        for serializer in serializers.iter() {
+        for column in columns.iter() {
             buf.clear();
-            encoder.write_field(serializer, row_index, &mut buf, true);
+            encoder.write_field(column, row_index, &mut buf, true);
             row.push(serde_json::to_value(
                 buf.to_str()
                     .map_err(|e| ErrorCode::BadBytes(format!("{}", e)))?,

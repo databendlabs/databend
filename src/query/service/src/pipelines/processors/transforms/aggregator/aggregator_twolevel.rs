@@ -146,7 +146,7 @@ where
             }
 
             let schema = &agg.params.output_schema;
-            let mut columns: Vec<(Value<AnyType, DataType>)> =
+            let mut columns: Vec<Value<AnyType, DataType>> =
                 Vec::with_capacity(schema.fields().len());
             let mut num_rows = 0;
             for mut builder in state_builders {

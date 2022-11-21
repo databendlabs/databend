@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datablocks::DataBlock;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataType;
 use common_exception::Result;
+use common_expression::Chunk;
+use common_expression::Column;
+use common_expression::DataSchemaRef;
 
 use crate::field_encoder::FieldEncoderJSON;
 use crate::field_encoder::FieldEncoderRowBased;
@@ -61,16 +61,22 @@ impl<const STRINGS: bool, const COMPACT: bool, const WITH_NAMES: bool, const WIT
 impl<const STRINGS: bool, const COMPACT: bool, const WITH_NAMES: bool, const WITH_TYPES: bool>
     OutputFormat for NDJSONOutputFormatBase<STRINGS, COMPACT, WITH_NAMES, WITH_TYPES>
 {
-    fn serialize_block(&mut self, block: &DataBlock) -> Result<Vec<u8>> {
-        let rows_size = block.column(0).len();
+    fn serialize_block(&mut self, chunk: &Chunk) -> Result<Vec<u8>> {
+        let rows_size = chunk.num_rows();
 
-        let mut buf = Vec::with_capacity(block.memory_size());
-        let serializers = block.get_serializers()?;
-        let field_names: Vec<_> = block
-            .schema()
+        let mut buf = Vec::with_capacity(chunk.memory_size());
+        let field_names: Vec<_> = self
+            .schema
             .fields()
             .iter()
             .map(|f| f.name().as_bytes())
+            .collect();
+
+        let columns: Vec<Column> = chunk
+            .convert_to_full()
+            .columns()
+            .iter()
+            .map(|(val, _)| val.clone().into_column().unwrap())
             .collect();
 
         for row_index in 0..rows_size {
@@ -79,7 +85,7 @@ impl<const STRINGS: bool, const COMPACT: bool, const WITH_NAMES: bool, const WIT
             } else {
                 buf.push(b'{');
             }
-            for (col_index, serializer) in serializers.iter().enumerate() {
+            for (col_index, column) in columns.iter().enumerate() {
                 if col_index != 0 {
                     buf.push(b',');
                 }
@@ -94,11 +100,11 @@ impl<const STRINGS: bool, const COMPACT: bool, const WITH_NAMES: bool, const WIT
                 if STRINGS {
                     buf.push(b'"');
                     self.field_encoder
-                        .write_field(serializer, row_index, &mut buf, true);
+                        .write_field(column, row_index, &mut buf, true);
                     buf.push(b'"');
                 } else {
                     self.field_encoder
-                        .write_field(serializer, row_index, &mut buf, false)
+                        .write_field(column, row_index, &mut buf, false)
                 }
             }
             if COMPACT {

@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datablocks::DataBlock;
 use common_exception::Result;
+use common_expression::Chunk;
 pub mod csv;
 pub mod ndjson;
 pub mod parquet;
@@ -31,7 +31,7 @@ pub use tsv::TSVWithNamesOutputFormat;
 pub use values::ValuesOutputFormat;
 
 pub trait OutputFormat: Send {
-    fn serialize_block(&mut self, data_block: &DataBlock) -> Result<Vec<u8>>;
+    fn serialize_block(&mut self, chunk: &Chunk) -> Result<Vec<u8>>;
 
     fn serialize_prefix(&self) -> Result<Vec<u8>> {
         Ok(vec![])

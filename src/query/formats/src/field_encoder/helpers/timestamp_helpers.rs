@@ -12,17 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod csv;
-mod helpers;
-mod json;
-mod row_based;
-mod tsv;
-mod values;
+use chrono_tz::Tz;
+use common_datavalues::DateConverter;
 
-pub use csv::write_csv_string;
-pub use csv::FieldEncoderCSV;
-pub use helpers::write_escaped_string;
-pub use json::FieldEncoderJSON;
-pub use row_based::FieldEncoderRowBased;
-pub use tsv::FieldEncoderTSV;
-pub use values::FieldEncoderValues;
+const TIME_FMT_MICRO: &str = "%Y-%m-%d %H:%M:%S%.6f";
+
+pub fn timestamp_to_string_micro(v: &i64, tz: &Tz) -> String {
+    let dt = v.to_timestamp(tz);
+    dt.format(TIME_FMT_MICRO).to_string()
+}

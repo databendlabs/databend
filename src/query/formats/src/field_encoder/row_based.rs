@@ -12,69 +12,56 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::serializations::ArraySerializer;
-use common_datavalues::serializations::BooleanSerializer;
-use common_datavalues::serializations::ConstSerializer;
-use common_datavalues::serializations::DateSerializer;
-use common_datavalues::serializations::NullableSerializer;
-use common_datavalues::serializations::NumberSerializer;
-use common_datavalues::serializations::StringSerializer;
-use common_datavalues::serializations::StructSerializer;
-use common_datavalues::serializations::TimestampSerializer;
-use common_datavalues::serializations::VariantSerializer;
-use common_datavalues::PrimitiveType;
-use common_datavalues::TypeSerializerImpl;
+use common_arrow::arrow::bitmap::Bitmap;
+use common_arrow::arrow::buffer::Buffer;
+use common_expression::types::array::ArrayColumn;
+use common_expression::types::nullable::NullableColumn;
+use common_expression::types::number::NumberColumn;
+use common_expression::types::string::StringColumn;
+use common_expression::types::ValueType;
+use common_expression::Column;
 use lexical_core::ToLexical;
 use micromarshal::Marshal;
 use micromarshal::Unmarshal;
-use num::cast::AsPrimitive;
+use ordered_float::OrderedFloat;
 
+use crate::field_encoder::helpers::date_to_string;
+use crate::field_encoder::helpers::timestamp_to_string_micro;
 use crate::field_encoder::helpers::PrimitiveWithFormat;
 use crate::CommonSettings;
 
 pub trait FieldEncoderRowBased {
     fn common_settings(&self) -> &CommonSettings;
 
-    fn write_field<'a>(
-        &self,
-        column: &TypeSerializerImpl<'a>,
-        row_index: usize,
-        out_buf: &mut Vec<u8>,
-        raw: bool,
-    ) {
+    fn write_field(&self, column: &Column, row_index: usize, out_buf: &mut Vec<u8>, raw: bool) {
         match &column {
-            TypeSerializerImpl::Const(c) => self.write_const(c, out_buf, raw),
-            TypeSerializerImpl::Null(_) => self.write_null(out_buf, raw),
-            TypeSerializerImpl::Nullable(c) => self.write_nullable(c, row_index, out_buf, raw),
-            TypeSerializerImpl::Boolean(c) => self.write_bool(c, row_index, out_buf, raw),
-            TypeSerializerImpl::Int8(c) => self.write_int(c, row_index, out_buf, raw),
-            TypeSerializerImpl::Int16(c) => self.write_int(c, row_index, out_buf, raw),
-            TypeSerializerImpl::Int32(c) => self.write_int(c, row_index, out_buf, raw),
-            TypeSerializerImpl::Int64(c) => self.write_int(c, row_index, out_buf, raw),
-            TypeSerializerImpl::UInt8(c) => self.write_int(c, row_index, out_buf, raw),
-            TypeSerializerImpl::UInt16(c) => self.write_int(c, row_index, out_buf, raw),
-            TypeSerializerImpl::UInt32(c) => self.write_int(c, row_index, out_buf, raw),
-            TypeSerializerImpl::UInt64(c) => self.write_int(c, row_index, out_buf, raw),
-            TypeSerializerImpl::Float32(c) => self.write_float(c, row_index, out_buf, raw),
-            TypeSerializerImpl::Float64(c) => self.write_float(c, row_index, out_buf, raw),
-            TypeSerializerImpl::Date(c) => self.write_date(c, row_index, out_buf, raw),
-            TypeSerializerImpl::Interval(c) => self.write_date(c, row_index, out_buf, raw),
-            TypeSerializerImpl::Timestamp(c) => self.write_timestamp(c, row_index, out_buf, raw),
-            TypeSerializerImpl::String(c) => self.write_string(c, row_index, out_buf, raw),
-            TypeSerializerImpl::Array(c) => self.write_array(c, row_index, out_buf, raw),
-            TypeSerializerImpl::Struct(c) => self.write_struct(c, row_index, out_buf, raw),
-            TypeSerializerImpl::Variant(c) => self.write_variant(c, row_index, out_buf, raw),
+            Column::Null { .. } => self.write_null(out_buf, raw),
+            Column::EmptyArray { .. } => self.write_empty_array(out_buf, raw),
+            Column::Boolean(c) => self.write_bool(&c, row_index, out_buf, raw),
+            Column::Number(col) => match col {
+                NumberColumn::UInt8(c) => self.write_int(&c, row_index, out_buf, raw),
+                NumberColumn::UInt16(c) => self.write_int(&c, row_index, out_buf, raw),
+                NumberColumn::UInt32(c) => self.write_int(&c, row_index, out_buf, raw),
+                NumberColumn::UInt64(c) => self.write_int(&c, row_index, out_buf, raw),
+                NumberColumn::Int8(c) => self.write_int(&c, row_index, out_buf, raw),
+                NumberColumn::Int16(c) => self.write_int(&c, row_index, out_buf, raw),
+                NumberColumn::Int32(c) => self.write_int(&c, row_index, out_buf, raw),
+                NumberColumn::Int64(c) => self.write_int(&c, row_index, out_buf, raw),
+                NumberColumn::Float32(c) => self.write_float(&c, row_index, out_buf, raw),
+                NumberColumn::Float64(c) => self.write_float(&c, row_index, out_buf, raw),
+            },
+            Column::Date(c) => self.write_date(&c, row_index, out_buf, raw),
+            Column::Timestamp(c) => self.write_timestamp(&c, row_index, out_buf, raw),
+            Column::String(c) => self.write_string(&c, row_index, out_buf, raw),
+            Column::Nullable(box c) => self.write_nullable(&c, row_index, out_buf, raw),
+            Column::Array(box c) => self.write_array(&c, row_index, out_buf, raw),
+            Column::Tuple { fields, .. } => self.write_tuple(&fields, row_index, out_buf, raw),
+            Column::Variant(c) => self.write_variant(&c, row_index, out_buf, raw),
         }
     }
 
-    fn write_bool(
-        &self,
-        column: &BooleanSerializer,
-        row_index: usize,
-        out_buf: &mut Vec<u8>,
-        _raw: bool,
-    ) {
-        let v = if column.values.get_bit(row_index) {
+    fn write_bool(&self, column: &Bitmap, row_index: usize, out_buf: &mut Vec<u8>, _raw: bool) {
+        let v = if column.get_bit(row_index) {
             &self.common_settings().true_bytes
         } else {
             &self.common_settings().false_bytes
@@ -87,9 +74,14 @@ pub trait FieldEncoderRowBased {
         out_buf.extend_from_slice(&self.common_settings().null_bytes);
     }
 
-    fn write_nullable(
+    fn write_empty_array(&self, out_buf: &mut Vec<u8>, _raw: bool) {
+        out_buf.extend_from_slice(b"[");
+        out_buf.extend_from_slice(b"]");
+    }
+
+    fn write_nullable<T: ValueType>(
         &self,
-        column: &NullableSerializer,
+        column: &NullableColumn<T>,
         row_index: usize,
         out_buf: &mut Vec<u8>,
         raw: bool,
@@ -97,98 +89,94 @@ pub trait FieldEncoderRowBased {
         if !column.validity.get_bit(row_index) {
             self.write_null(out_buf, raw)
         } else {
-            self.write_field(&column.inner, row_index, out_buf, raw)
+            self.write_field(
+                &T::upcast_column(column.column.clone()),
+                row_index,
+                out_buf,
+                raw,
+            )
         }
     }
 
     fn write_string_inner(&self, in_buf: &[u8], out_buf: &mut Vec<u8>, raw: bool);
 
-    fn write_const(&self, column: &ConstSerializer, out_buf: &mut Vec<u8>, raw: bool) {
-        self.write_field(&column.inner, 0, out_buf, raw)
-    }
-
-    fn write_int<'a, T>(
+    fn write_int<T>(
         &self,
-        column: &NumberSerializer<'a, T>,
+        column: &Buffer<T>,
         row_index: usize,
         out_buf: &mut Vec<u8>,
         _raw: bool,
     ) where
-        T: PrimitiveType + Marshal + Unmarshal<T> + ToLexical + PrimitiveWithFormat,
+        T: Marshal + Unmarshal<T> + ToLexical + PrimitiveWithFormat,
     {
-        column.values[row_index].write_field(out_buf, self.common_settings())
+        let v = unsafe { column.get_unchecked(row_index) };
+        v.write_field(out_buf, self.common_settings())
     }
 
-    fn write_float<'a, T>(
+    fn write_float<T>(
         &self,
-        column: &NumberSerializer<'a, T>,
+        column: &Buffer<OrderedFloat<T>>,
         row_index: usize,
         out_buf: &mut Vec<u8>,
         _raw: bool,
     ) where
-        T: PrimitiveType + Marshal + Unmarshal<T> + ToLexical + PrimitiveWithFormat,
+        T: Marshal + Unmarshal<T> + ToLexical + PrimitiveWithFormat,
     {
-        column.values[row_index].write_field(out_buf, self.common_settings())
+        let v = unsafe { column.get_unchecked(row_index) };
+        v.0.write_field(out_buf, self.common_settings())
     }
 
     fn write_string(
         &self,
-        column: &StringSerializer,
+        column: &StringColumn,
         row_index: usize,
         out_buf: &mut Vec<u8>,
         raw: bool,
     ) {
-        self.write_string_inner(
-            unsafe { column.column.value_unchecked(row_index) },
-            out_buf,
-            raw,
-        );
+        self.write_string_inner(unsafe { column.index_unchecked(row_index) }, out_buf, raw);
     }
 
-    fn write_date<'a, T: PrimitiveType + AsPrimitive<i64> + ToLexical>(
-        &self,
-        column: &DateSerializer<'a, T>,
-        row_index: usize,
-        out_buf: &mut Vec<u8>,
-        raw: bool,
-    ) {
-        let s = column.fmt(row_index);
+    fn write_date(&self, column: &Buffer<i32>, row_index: usize, out_buf: &mut Vec<u8>, raw: bool) {
+        let v = unsafe { column.get_unchecked(row_index) };
+        let s = date_to_string(&(*v as i64));
         self.write_string_inner(s.as_bytes(), out_buf, raw);
     }
 
-    fn write_timestamp<'a>(
+    fn write_timestamp(
         &self,
-        column: &TimestampSerializer<'a>,
+        column: &Buffer<i64>,
         row_index: usize,
         out_buf: &mut Vec<u8>,
         raw: bool,
     ) {
-        let s = column.to_string_micro(row_index, &self.common_settings().timezone);
+        let v = unsafe { column.get_unchecked(row_index) };
+        let s = timestamp_to_string_micro(&v, &self.common_settings().timezone);
         self.write_string_inner(s.as_bytes(), out_buf, raw);
     }
 
-    fn write_variant<'a>(
+    fn write_variant(
         &self,
-        column: &VariantSerializer<'a>,
+        column: &StringColumn,
         row_index: usize,
         out_buf: &mut Vec<u8>,
         raw: bool,
     ) {
-        let s = column.values[row_index].to_string();
+        let v = unsafe { column.index_unchecked(row_index) };
+        let s = common_jsonb::to_string(v);
         self.write_string_inner(s.as_bytes(), out_buf, raw);
     }
 
-    fn write_array<'a>(
+    fn write_array<T: ValueType>(
         &self,
-        column: &ArraySerializer<'a>,
+        column: &ArrayColumn<T>,
         row_index: usize,
         out_buf: &mut Vec<u8>,
         raw: bool,
     );
 
-    fn write_struct<'a>(
+    fn write_tuple(
         &self,
-        column: &StructSerializer<'a>,
+        columns: &Vec<Column>,
         row_index: usize,
         out_buf: &mut Vec<u8>,
         raw: bool,

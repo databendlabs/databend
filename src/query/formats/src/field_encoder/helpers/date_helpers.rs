@@ -12,17 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod csv;
-mod helpers;
-mod json;
-mod row_based;
-mod tsv;
-mod values;
+use std::ops::AddAssign;
 
-pub use csv::write_csv_string;
-pub use csv::FieldEncoderCSV;
-pub use helpers::write_escaped_string;
-pub use json::FieldEncoderJSON;
-pub use row_based::FieldEncoderRowBased;
-pub use tsv::FieldEncoderTSV;
-pub use values::FieldEncoderValues;
+use chrono::Duration;
+use chrono::NaiveDate;
+
+const DATE_FMT: &str = "%Y-%m-%d";
+
+pub fn date_to_string(v: &i64) -> String {
+    let mut date = NaiveDate::from_ymd(1970, 1, 1);
+    let d = Duration::days(*v);
+    date.add_assign(d);
+    date.format(DATE_FMT).to_string()
+}
