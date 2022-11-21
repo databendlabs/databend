@@ -120,7 +120,7 @@ fn table_scan_to_format_tree(
     // Then output_columns won't show in explain
     if !output_columns.is_empty() {
         children.push(FormatTreeNode::new(format!(
-            "output columns: {}",
+            "output columns: [{}]",
             output_columns.iter().join(", ")
         )));
     }
