@@ -28,7 +28,10 @@ static UNTRACKED_MEMORY_LIMIT: i64 = 4 * 1024 * 1024;
 
 pub struct ThreadTracker {
     mem_tracker: Arc<MemoryTracker>,
-    untracked_memory: i64,
+
+    // Buffered memory allocation stats is not reported to MemoryTracker and can not be seen.
+    alloc_buf: StatBuffer,
+    dealloc_buf: StatBuffer,
 }
 
 impl ThreadTracker {
@@ -36,7 +39,8 @@ impl ThreadTracker {
         unsafe {
             TRACKER = Box::into_raw(Box::new(ThreadTracker {
                 mem_tracker,
-                untracked_memory: 0,
+                alloc_buf: Default::default(),
+                dealloc_buf: Default::default(),
             }));
 
             TRACKER
@@ -67,15 +71,17 @@ impl ThreadTracker {
         let _ = p;
 
         unsafe {
-            if !TRACKER.is_null() {
-                (*TRACKER).untracked_memory += size;
+            if TRACKER.is_null() {
+                return;
+            }
 
-                if (*TRACKER).untracked_memory > UNTRACKED_MEMORY_LIMIT {
-                    (*TRACKER)
-                        .mem_tracker
-                        .alloc_memory((*TRACKER).untracked_memory);
-                    (*TRACKER).untracked_memory = 0;
-                }
+            (*TRACKER).alloc_buf.incr(size);
+
+            if (*TRACKER).alloc_buf.bytes > UNTRACKED_MEMORY_LIMIT {
+                (*TRACKER)
+                    .mem_tracker
+                    .alloc_memory((*TRACKER).alloc_buf.n, (*TRACKER).alloc_buf.bytes);
+                (*TRACKER).alloc_buf.reset();
             }
         }
     }
@@ -90,15 +96,17 @@ impl ThreadTracker {
         let _ = p;
 
         unsafe {
-            if !TRACKER.is_null() {
-                (*TRACKER).untracked_memory -= size;
+            if TRACKER.is_null() {
+                return;
+            }
 
-                if (*TRACKER).untracked_memory < -UNTRACKED_MEMORY_LIMIT {
-                    (*TRACKER)
-                        .mem_tracker
-                        .dealloc_memory(-(*TRACKER).untracked_memory);
-                    (*TRACKER).untracked_memory = 0;
-                }
+            (*TRACKER).dealloc_buf.incr(size);
+
+            if (*TRACKER).dealloc_buf.bytes > UNTRACKED_MEMORY_LIMIT {
+                (*TRACKER)
+                    .mem_tracker
+                    .dealloc_memory((*TRACKER).dealloc_buf.n, (*TRACKER).dealloc_buf.bytes);
+                (*TRACKER).dealloc_buf.reset();
             }
         }
     }
@@ -120,6 +128,27 @@ pub struct MemoryTracker {
     parent_memory_tracker: Option<Arc<MemoryTracker>>,
 }
 
+/// Buffering memory allocation stats.
+///
+/// A StatBuffer buffers stats changes in local variables, and periodically flush them to other storage such as an `Arc<T>` shared by several threads.
+#[derive(Clone, Debug, Default)]
+pub struct StatBuffer {
+    n: i64,
+    bytes: i64,
+}
+
+impl StatBuffer {
+    pub fn incr(&mut self, bs: i64) {
+        self.n += 1;
+        self.bytes += bs;
+    }
+
+    pub fn reset(&mut self) {
+        self.n = 0;
+        self.bytes = 0;
+    }
+}
+
 impl MemoryTracker {
     pub fn create() -> Arc<MemoryTracker> {
         let parent = MemoryTracker::current();
@@ -139,22 +168,22 @@ impl MemoryTracker {
     }
 
     #[inline]
-    pub fn alloc_memory(&self, size: i64) {
+    pub fn alloc_memory(&self, n: i64, size: i64) {
         self.bytes_alloc.fetch_add(size, Ordering::Relaxed);
-        self.n_alloc.fetch_add(1, Ordering::Relaxed);
+        self.n_alloc.fetch_add(n, Ordering::Relaxed);
 
         if let Some(parent_memory_tracker) = &self.parent_memory_tracker {
-            parent_memory_tracker.alloc_memory(size);
+            parent_memory_tracker.alloc_memory(n, size);
         }
     }
 
     #[inline]
-    pub fn dealloc_memory(&self, size: i64) {
+    pub fn dealloc_memory(&self, n: i64, size: i64) {
         self.bytes_dealloc.fetch_add(size, Ordering::Relaxed);
-        self.n_dealloc.fetch_add(1, Ordering::Relaxed);
+        self.n_dealloc.fetch_add(n, Ordering::Relaxed);
 
         if let Some(parent_memory_tracker) = &self.parent_memory_tracker {
-            parent_memory_tracker.dealloc_memory(size);
+            parent_memory_tracker.dealloc_memory(n, size);
         }
     }
 
