@@ -26,15 +26,15 @@ static mut TRACKER: *mut ThreadTracker = std::ptr::null_mut();
 static UNTRACKED_MEMORY_LIMIT: i64 = 4 * 1024 * 1024;
 
 pub struct ThreadTracker {
-    rt_tracker: Arc<RuntimeTracker>,
+    mem_tracker: Arc<MemoryTracker>,
     untracked_memory: i64,
 }
 
 impl ThreadTracker {
-    pub fn create(rt_tracker: Arc<RuntimeTracker>) -> *mut ThreadTracker {
+    pub fn create(mem_tracker: Arc<MemoryTracker>) -> *mut ThreadTracker {
         unsafe {
             TRACKER = Box::into_raw(Box::new(ThreadTracker {
-                rt_tracker,
+                mem_tracker,
                 untracked_memory: 0,
             }));
 
@@ -48,11 +48,11 @@ impl ThreadTracker {
     }
 
     #[inline]
-    pub fn current_runtime_tracker() -> Option<Arc<RuntimeTracker>> {
+    pub fn current_mem_tracker() -> Option<Arc<MemoryTracker>> {
         unsafe {
             match TRACKER.is_null() {
                 true => None,
-                false => Some((*TRACKER).rt_tracker.clone()),
+                false => Some((*TRACKER).mem_tracker.clone()),
             }
         }
     }
@@ -65,8 +65,7 @@ impl ThreadTracker {
 
                 if (*TRACKER).untracked_memory > UNTRACKED_MEMORY_LIMIT {
                     (*TRACKER)
-                        .rt_tracker
-                        .memory_tracker
+                        .mem_tracker
                         .alloc_memory((*TRACKER).untracked_memory);
                     (*TRACKER).untracked_memory = 0;
                 }
@@ -82,8 +81,7 @@ impl ThreadTracker {
 
                 if (*TRACKER).untracked_memory < -UNTRACKED_MEMORY_LIMIT {
                     (*TRACKER)
-                        .rt_tracker
-                        .memory_tracker
+                        .mem_tracker
                         .dealloc_memory(-(*TRACKER).untracked_memory);
                     (*TRACKER).untracked_memory = 0;
                 }
@@ -110,7 +108,14 @@ pub struct MemoryTracker {
 }
 
 impl MemoryTracker {
-    pub fn create(parent_memory_tracker: Option<Arc<MemoryTracker>>) -> Arc<MemoryTracker> {
+    pub fn create() -> Arc<MemoryTracker> {
+        let parent = MemoryTracker::current();
+        MemoryTracker::create_sub_tracker(parent)
+    }
+
+    pub fn create_sub_tracker(
+        parent_memory_tracker: Option<Arc<MemoryTracker>>,
+    ) -> Arc<MemoryTracker> {
         Arc::new(MemoryTracker {
             parent_memory_tracker,
             memory_usage: AtomicI64::new(0),
@@ -141,7 +146,7 @@ impl MemoryTracker {
             let thread_tracker = ThreadTracker::current();
             match thread_tracker.is_null() {
                 true => None,
-                false => Some((*thread_tracker).rt_tracker.memory_tracker.clone()),
+                false => Some((*thread_tracker).mem_tracker.clone()),
             }
         }
     }
@@ -152,38 +157,22 @@ impl MemoryTracker {
     }
 }
 
-pub struct RuntimeTracker {
-    memory_tracker: Arc<MemoryTracker>,
-}
-
-impl RuntimeTracker {
-    pub fn create() -> Arc<RuntimeTracker> {
-        let parent_memory_tracker = MemoryTracker::current();
-        Arc::new(RuntimeTracker {
-            memory_tracker: MemoryTracker::create(parent_memory_tracker),
-        })
-    }
-
-    #[inline]
-    pub fn get_memory_tracker(&self) -> &MemoryTracker {
-        &self.memory_tracker
-    }
-
+impl MemoryTracker {
     pub fn on_stop_thread(self: &Arc<Self>) -> impl Fn() {
         move || unsafe {
-            let tracker = std::mem::replace(&mut TRACKER, std::ptr::null_mut());
+            let thread_tracker = std::mem::replace(&mut TRACKER, std::ptr::null_mut());
 
-            std::ptr::drop_in_place(tracker as usize as *mut ThreadTracker);
-            GlobalAllocator.dealloc(tracker as *mut u8, Layout::new::<ThreadTracker>())
+            std::ptr::drop_in_place(thread_tracker as usize as *mut ThreadTracker);
+            GlobalAllocator.dealloc(thread_tracker as *mut u8, Layout::new::<ThreadTracker>())
         }
     }
 
     pub fn on_start_thread(self: &Arc<Self>) -> impl Fn() {
         // TODO: log::info("thread {}-{} started", thread_id, thread_name);
-        let rt_tracker = self.clone();
+        let mem_tracker = self.clone();
 
         move || {
-            ThreadTracker::create(rt_tracker.clone());
+            ThreadTracker::create(mem_tracker.clone());
         }
     }
 }

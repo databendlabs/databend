@@ -16,7 +16,7 @@ use std::env;
 use std::ops::Deref;
 use std::sync::Arc;
 
-use common_base::base::RuntimeTracker;
+use common_base::base::MemoryTracker;
 use common_base::base::StopHandle;
 use common_base::base::Stoppable;
 use common_exception::ErrorCode;
@@ -43,7 +43,7 @@ pub use kvapi::KvApiCommand;
 const CMD_KVAPI_PREFIX: &str = "kvapi::";
 
 #[databend_main]
-async fn main(_global_tracker: Arc<RuntimeTracker>) -> Result<(), ErrorCode> {
+async fn main(_global_tracker: Arc<MemoryTracker>) -> Result<(), ErrorCode> {
     let conf = Config::load()?;
 
     if run_cmd(&conf).await {

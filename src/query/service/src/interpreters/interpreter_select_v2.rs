@@ -18,10 +18,9 @@ use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 use common_sql::MetadataRef;
 
-use super::plan_schedulers::schedule_query_v2;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
-use crate::pipelines::PipelineBuilder;
+use crate::schedulers::build_query_pipeline;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::executor::PhysicalPlanBuilder;
@@ -54,25 +53,7 @@ impl SelectInterpreterV2 {
     pub async fn build_pipeline(&self) -> Result<PipelineBuildResult> {
         let builder = PhysicalPlanBuilder::new(self.metadata.clone(), self.ctx.clone());
         let physical_plan = builder.build(&self.s_expr).await?;
-
-        if self.ctx.get_cluster().is_empty() {
-            let last_schema = physical_plan.output_schema()?;
-            let pb = PipelineBuilder::create(self.ctx.clone());
-            let mut build_res = pb.finalize(&physical_plan)?;
-
-            // Render result set with given output schema
-            PipelineBuilder::render_result_set(
-                &self.ctx.try_get_function_context()?,
-                last_schema,
-                &self.bind_context.columns,
-                &mut build_res.main_pipeline,
-            )?;
-
-            build_res.set_max_threads(self.ctx.get_settings().get_max_threads()? as usize);
-            Ok(build_res)
-        } else {
-            schedule_query_v2(self.ctx.clone(), &self.bind_context.columns, &physical_plan).await
-        }
+        build_query_pipeline(&self.ctx, &self.bind_context.columns, &physical_plan).await
     }
 }
 
