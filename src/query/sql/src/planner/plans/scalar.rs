@@ -27,7 +27,6 @@ use common_functions::scalars::FunctionFactory;
 use crate::binder::ColumnBinding;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::SExpr;
-use crate::optimizer::TableSet;
 use crate::IndexType;
 
 pub trait ScalarExpr {

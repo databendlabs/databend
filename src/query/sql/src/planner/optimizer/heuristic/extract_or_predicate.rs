@@ -16,16 +16,12 @@ use common_datavalues::BooleanType;
 use common_datavalues::DataTypeImpl;
 use common_exception::Result;
 
-use crate::optimizer::util::try_push_down_filter_join;
-use crate::optimizer::ColumnSet;
-use crate::optimizer::RuleID;
+use crate::optimizer::try_push_down_filter_join;
 use crate::optimizer::SExpr;
 use crate::plans::AndExpr;
 use crate::plans::Filter;
-use crate::plans::LogicalGet;
 use crate::plans::OrExpr;
 use crate::plans::PatternPlan;
-use crate::plans::Prewhere;
 use crate::plans::RelOp;
 use crate::plans::Scalar;
 use crate::IndexType;
@@ -124,8 +120,10 @@ impl ExtractOrPredicate {
     }
 
     fn rewrite_predicates(&self, s_expr: &SExpr) -> Result<Vec<Scalar>> {
-        let mut filter: Filter = s_expr.plan().clone().try_into()?;
+        let filter: Filter = s_expr.plan().clone().try_into()?;
         let mut predicates = filter.predicates;
+        // Find tables that JOIN operator used.
+        // The extracted predicates should contain one of these tables.
         let join_used_tables = s_expr.child(0)?.used_tables()?;
         let mut new_predicates = Vec::new();
         for predicate in predicates.iter() {
@@ -144,6 +142,8 @@ impl ExtractOrPredicate {
     pub fn optimize(&self, s_expr: SExpr) -> Result<SExpr> {
         let rel_op = s_expr.plan();
         if s_expr.match_pattern(&self.pattern) {
+            // Try to rewrite predicates in `Filter` operator.
+            // Aim to extract extra predicates that can be pushed down.
             let predicates = self.rewrite_predicates(&s_expr)?;
             if predicates.is_empty() {
                 return Ok(s_expr);
@@ -189,6 +189,7 @@ fn flatten_ands(and_expr: AndExpr) -> Vec<Scalar> {
     flattened_ands
 }
 
+// Merge predicates to AND scalar
 fn make_and_expr(scalars: &[Scalar]) -> Scalar {
     if scalars.len() == 1 {
         return scalars[0].clone();
@@ -200,6 +201,7 @@ fn make_and_expr(scalars: &[Scalar]) -> Scalar {
     })
 }
 
+// Merge predicates to OR scalar
 fn make_or_expr(scalars: &[Scalar]) -> Scalar {
     if scalars.len() == 1 {
         return scalars[0].clone();

@@ -46,6 +46,7 @@ pub use property::RelationalProperty;
 pub use property::RequiredProperty;
 pub use property::Statistics;
 pub use property::TableSet;
+pub use rule::try_push_down_filter_join;
 pub use rule::RuleFactory;
 pub use rule::RuleID;
 pub use rule::RuleSet;

@@ -117,6 +117,7 @@ impl Metadata {
     ) -> IndexType {
         let table_name = table_meta.name().to_string();
         let table_index = self.tables.len();
+        // If exists table alias name, use it instead of origin name
         let table_entry = TableEntry {
             index: table_index,
             name: table_alias_name.map_or(table_name, |alias_name| alias_name),
