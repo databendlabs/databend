@@ -126,7 +126,7 @@ impl Settings {
             {
                 if ret.get_max_memory_usage()? == 0 {
                     let max_usage = if conf.query.max_memory_usage == 0 {
-                        sysinfo::System::new_all().available_memory()
+                        sysinfo::System::new_all().total_memory() * 80 / 100
                     } else {
                         conf.query.max_memory_usage
                     };
@@ -153,7 +153,7 @@ impl Settings {
             },
             // max_threads
             SettingValue {
-                default_value: UserSettingValue::UInt64(16),
+                default_value: UserSettingValue::UInt64(0),
                 user_setting: UserSetting::create("max_threads", UserSettingValue::UInt64(0)),
                 level: ScopeLevel::Session,
                 desc: "The maximum number of threads to execute the request. By default the value is 0 it means determined automatically.",

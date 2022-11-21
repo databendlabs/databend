@@ -305,6 +305,7 @@ async fn test_roles_table(file: &mut impl Write) -> Result<()> {
 async fn test_settings_table(file: &mut impl Write) -> Result<()> {
     let (_guard, ctx) = crate::tests::create_query_context().await?;
     ctx.get_settings().set_max_threads(2)?;
+    ctx.get_settings().set_max_memory_usage(1073741824)?;
 
     let table = SettingsTable::create(1);
 

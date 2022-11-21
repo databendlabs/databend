@@ -3162,6 +3162,7 @@ dependencies = [
  "semver 1.0.14",
  "serde",
  "serde_json",
+ "sysinfo",
  "temp-env",
  "tempfile",
  "time 0.3.15",

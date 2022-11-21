@@ -15,8 +15,11 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_settings::ScopeLevel;
+use common_settings::ScopeLevel::Global;
 use common_sql::plans::UnSettingPlan;
+use sysinfo::CpuRefreshKind;
+use sysinfo::RefreshKind;
+use sysinfo::SystemExt;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -46,17 +49,44 @@ impl Interpreter for UnSettingInterpreter {
         let mut keys: Vec<String> = vec![];
         let mut values: Vec<String> = vec![];
         let mut is_globals: Vec<bool> = vec![];
+        let settings = self.ctx.get_settings();
         for var in plan.vars {
             let (ok, value) = match var.to_lowercase().as_str() {
                 // To be compatible with some drivers
                 "sql_mode" | "autocommit" => (false, String::from("")),
+                "max_threads" => {
+                    if matches!(settings.get_setting_level("max_threads")?, Global) {
+                        self.ctx.get_settings().try_drop_setting("max_threads")?;
+                    }
+                    let conf = self.ctx.get_config();
+                    let cpus = if conf.query.num_cpus == 0 {
+                        sysinfo::System::new_with_specifics(
+                            RefreshKind::new().with_cpu(CpuRefreshKind::everything()),
+                        )
+                        .cpus()
+                        .len() as u64
+                    } else {
+                        conf.query.num_cpus
+                    };
+                    (true, cpus.to_string())
+                }
+                "max_memory_usage" => {
+                    if matches!(settings.get_setting_level("max_memory_usage")?, Global) {
+                        self.ctx
+                            .get_settings()
+                            .try_drop_setting("max_memory_usage")?;
+                    }
+                    let conf = self.ctx.get_config();
+                    let mem = if conf.query.max_memory_usage == 0 {
+                        sysinfo::System::new_all().total_memory() * 80 / 100
+                    } else {
+                        conf.query.max_memory_usage
+                    };
+                    (true, mem.to_string())
+                }
                 setting => {
-                    let settings = self.ctx.get_settings();
-                    match settings.get_setting_level(setting)? {
-                        ScopeLevel::Global => {
-                            self.ctx.get_settings().try_drop_setting(setting)?;
-                        }
-                        ScopeLevel::Session => {}
+                    if matches!(settings.get_setting_level(setting)?, Global) {
+                        self.ctx.get_settings().try_drop_setting(setting)?;
                     }
                     let default_val = settings.check_and_get_default_value(setting)?.to_string();
                     (true, default_val)
