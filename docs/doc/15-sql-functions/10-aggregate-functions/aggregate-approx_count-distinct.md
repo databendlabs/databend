@@ -31,7 +31,7 @@ SELECT APPROX_COUNT_DISTINCT(ipaddress) FROM webvisitors;
 3096
 
 
-SELECT COUNT_DISTINCT(ipaddress) FROM webvisitors;
+SELECT COUNT(DISTINCT ipaddress) FROM webvisitors;
 
 ---
 3099
