@@ -24,10 +24,9 @@ use common_base::base::GlobalIORuntime;
 use common_base::base::ProgressValues;
 use common_base::base::Thread;
 use common_base::base::TrySpawn;
-use common_datablocks::DataBlock;
-use common_datablocks::SendableDataBlockStream;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::Chunk;
 use common_expression::DataSchemaRef;
 use common_expression::SendableChunkStream;
 use common_sql::plans::Plan;
@@ -228,7 +227,7 @@ impl ExecuteState {
         sql: &str,
         session: Arc<Session>,
         ctx: Arc<QueryContext>,
-        block_sender: SizedChannelSender<DataBlock>,
+        block_sender: SizedChannelSender<Chunk>,
     ) -> Result<ExecuteRunning> {
         let mut planner = Planner::new(ctx.clone());
         let (plan, _, _) = planner.plan_sql(sql).await?;
@@ -270,7 +269,7 @@ impl ExecuteState {
 async fn execute(
     interpreter: Arc<dyn Interpreter>,
     ctx: Arc<QueryContext>,
-    block_sender: SizedChannelSender<DataBlock>,
+    block_sender: SizedChannelSender<Chunk>,
     executor: Arc<RwLock<Executor>>,
 ) -> Result<()> {
     let mut data_stream = interpreter.execute(ctx.clone()).await?;

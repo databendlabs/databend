@@ -18,7 +18,7 @@ use common_exception::Result;
 use common_expression::types::number::NumberScalar;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
-use common_expression::Column;
+use common_expression::Column as ExprColumn;
 use common_expression::DataField;
 use common_expression::DataSchemaRef;
 use common_expression::ScalarRef;
@@ -72,7 +72,7 @@ pub struct DFQueryResultWriter<'a, W: AsyncWrite + Send + Unpin> {
 
 fn write_field<'a, W: AsyncWrite + Unpin>(
     row_writer: &mut RowWriter<'a, W>,
-    column: &Column,
+    column: &ExprColumn,
     encoder: &FieldEncoderValues,
     buf: &mut Vec<u8>,
     row_index: usize,
