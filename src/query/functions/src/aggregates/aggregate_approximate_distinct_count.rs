@@ -33,6 +33,7 @@ pub struct AggregateApproximateDistinctCountState {
     hll: HyperLogLog<DataValue>,
 }
 
+/// S: ScalarType
 #[derive(Clone)]
 pub struct AggregateApproximateDistinctCountFunction {
     display_name: String,
@@ -44,7 +45,7 @@ impl AggregateApproximateDistinctCountFunction {
         _params: Vec<DataValue>,
         arguments: Vec<DataField>,
     ) -> Result<Arc<dyn AggregateFunction>> {
-        assert_variadic_arguments(display_name, arguments.len(), (0, 1))?;
+        assert_variadic_arguments(display_name, arguments.len(), (1, 32))?;
         Ok(Arc::new(AggregateApproximateDistinctCountFunction {
             display_name: display_name.to_string(),
         }))
@@ -86,16 +87,25 @@ impl AggregateFunction for AggregateApproximateDistinctCountFunction {
         _input_rows: usize,
     ) -> Result<()> {
         let state = place.get::<AggregateApproximateDistinctCountState>();
+        let column = &columns[0];
 
-        for column in columns {
-            let (_, bm) = column.validity();
-            let nulls = match combine_validities(bm, validity) {
-                Some(b) => b.unset_bits(),
-                None => 0,
-            };
-            if column.len() == nulls {
-                continue;
+        let (_, bm) = column.validity();
+        let bitmap = combine_validities(bm, validity);
+        let nulls = match bitmap {
+            Some(ref b) => b.unset_bits(),
+            None => 0,
+        };
+        if column.len() == nulls {
+            return Ok(());
+        }
+
+        if let Some(bitmap) = bitmap {
+            for (i, value) in column.to_values().iter().enumerate() {
+                if bitmap.get_bit(i) {
+                    state.hll.push(value);
+                }
             }
+        } else {
             column.to_values().iter().for_each(|value| {
                 state.hll.push(value);
             });

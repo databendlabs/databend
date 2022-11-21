@@ -36,11 +36,7 @@ pub fn calc_column_distinct_of_values(
         &[column_field],
         column.len(),
     )?;
-    if distinct_values.len() > 0 {
-        return distinct_values.get(0).as_u64();
-    }
-
-    Ok(0)
+    distinct_values.get(0).as_u64()
 }
 
 pub fn get_traverse_columns_dfs(data_block: &DataBlock) -> Result<Vec<Arc<dyn Column>>> {
