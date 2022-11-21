@@ -8,9 +8,27 @@ description:
 The binary `databend-meta` provides several handy commands to access the KVApi of databend meta service.
 `databend-meta --help` also includes a simple guide on using these CLI commands.
 
+:::caution
+
+These are low level API and should be avoided using if possible:
+
+
+- Some data stored in databend-meta are correlated, adding or deleting may break these internal consistency.
+  E.g., deleting a `database` when there are still `table`s belonging to it.
+
+- Most data in databend-mata are raw bytes. Data interpreting is done on the client side, i.e., by databend-query.
+  Modifying data may lead to compatibility issues.
+
+:::
+
+:::note
+
 The command line API is limited that:
 - only string key and string value are supported.
 - `seq` is not supported.
+
+:::
+
 
 ### Set `foo=bar`:
 ```shell
@@ -106,7 +124,7 @@ Output is the states of every specified key.
 
 ### List keys starting with `foo/`:
 ```shell
-databend-meta --grpc-api-address 1.2.3.4:5678 --cmd kvapi::upsert --key foo --value bar
+databend-meta --grpc-api-address 1.2.3.4:5678 --cmd kvapi::list --prefix foo/
 ```
 Output is the key values of every key starting with `prefix`.
 ```json
