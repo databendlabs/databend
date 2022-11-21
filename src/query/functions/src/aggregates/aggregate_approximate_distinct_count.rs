@@ -25,7 +25,7 @@ use streaming_algorithms::HyperLogLog;
 use super::aggregate_function::AggregateFunction;
 use super::aggregate_function_factory::AggregateFunctionDescription;
 use super::StateAddr;
-use crate::aggregates::aggregator_common::assert_variadic_arguments;
+use crate::aggregates::aggregator_common::assert_unary_arguments;
 
 /// Use Hyperloglog to estimate distinct of values
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -45,7 +45,7 @@ impl AggregateApproximateDistinctCountFunction {
         _params: Vec<DataValue>,
         arguments: Vec<DataField>,
     ) -> Result<Arc<dyn AggregateFunction>> {
-        assert_variadic_arguments(display_name, arguments.len(), (1, 32))?;
+        assert_unary_arguments(display_name, arguments.len())?;
         Ok(Arc::new(AggregateApproximateDistinctCountFunction {
             display_name: display_name.to_string(),
         }))
