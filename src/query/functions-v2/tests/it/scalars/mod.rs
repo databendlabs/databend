@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::io::Write;
 
 use comfy_table::Table;
@@ -35,6 +36,7 @@ mod cast;
 mod comparison;
 mod control;
 mod datetime;
+mod geo;
 mod math;
 pub(crate) mod parser;
 mod string;
@@ -57,9 +59,11 @@ pub fn run_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType, Co
         let input_domains = columns
             .iter()
             .map(|(_, _, col)| col.domain())
-            .collect::<Vec<_>>();
+            .enumerate()
+            .collect::<HashMap<_, _>>();
 
-        let constant_folder = ConstantFolder::new(&input_domains, chrono_tz::UTC, &fn_registry);
+        let constant_folder =
+            ConstantFolder::new(input_domains.clone(), chrono_tz::UTC, &fn_registry);
         let (optimized_expr, output_domain) = constant_folder.fold(&expr);
 
         let remote_expr = RemoteExpr::from_expr(optimized_expr);
@@ -130,7 +134,7 @@ pub fn run_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType, Co
                     let input_domains = used_columns
                         .iter()
                         .cloned()
-                        .map(|i| input_domains[i].clone())
+                        .map(|i| input_domains[&i].clone())
                         .collect::<Vec<_>>();
                     let columns = used_columns
                         .iter()

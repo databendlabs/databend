@@ -44,13 +44,12 @@ use common_sql::MetadataRef;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 
-use super::plan_schedulers::build_schedule_pipeline;
 use crate::interpreters::common::append2table;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::pipelines::PipelineBuildResult;
-use crate::pipelines::PipelineBuilder;
 use crate::pipelines::SourcePipeBuilder;
+use crate::schedulers::build_query_pipeline;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::evaluator::Evaluator;
@@ -169,7 +168,6 @@ impl Interpreter for InsertInterpreterV2 {
                     };
 
                     let catalog = self.plan.catalog.clone();
-                    let is_distributed_plan = select_plan.is_distributed_plan();
 
                     let insert_select_plan = match select_plan {
                         PhysicalPlan::Exchange(ref mut exchange) => {
@@ -204,14 +202,8 @@ impl Interpreter for InsertInterpreterV2 {
                         }
                     };
 
-                    let mut build_res = match is_distributed_plan {
-                        true => {
-                            build_schedule_pipeline(self.ctx.clone(), &insert_select_plan).await
-                        }
-                        false => {
-                            PipelineBuilder::create(self.ctx.clone()).finalize(&insert_select_plan)
-                        }
-                    }?;
+                    let mut build_res =
+                        build_query_pipeline(&self.ctx, &[], &insert_select_plan).await?;
 
                     let ctx = self.ctx.clone();
                     let overwrite = self.plan.overwrite;

@@ -68,3 +68,19 @@ impl Display for CreateCatalogReq {
         )
     }
 }
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DropCatalogReq {
+    pub if_exists: bool,
+    pub name_ident: CatalogNameIdent,
+}
+
+impl Display for DropCatalogReq {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "drop_catalog(if_exists={}):{}/{}",
+            self.if_exists, self.name_ident.tenant, self.name_ident.catalog_name
+        )
+    }
+}

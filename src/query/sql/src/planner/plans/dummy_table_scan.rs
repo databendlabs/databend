@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
+use common_catalog::table_context::TableContext;
 use common_exception::Result;
 
 use super::LogicalOperator;
@@ -20,6 +23,7 @@ use super::PhysicalOperator;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::PhysicalProperty;
 use crate::optimizer::RelationalProperty;
+use crate::optimizer::Statistics;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct DummyTableScan;
@@ -56,9 +60,11 @@ impl LogicalOperator for DummyTableScan {
             outer_columns: ColumnSet::new(),
             used_columns: ColumnSet::new(),
             cardinality: 1.0,
-            precise_cardinality: Some(1),
-
-            column_stats: Default::default(),
+            statistics: Statistics {
+                precise_cardinality: Some(1),
+                column_stats: Default::default(),
+                is_accurate: false,
+            },
         })
     }
 
@@ -79,6 +85,7 @@ impl PhysicalOperator for DummyTableScan {
 
     fn compute_required_prop_child<'a>(
         &self,
+        _ctx: Arc<dyn TableContext>,
         _rel_expr: &crate::optimizer::RelExpr<'a>,
         _child_index: usize,
         required: &crate::optimizer::RequiredProperty,

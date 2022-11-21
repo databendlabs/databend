@@ -39,6 +39,7 @@ SHOW SETTINGS;
 | max_execute_time               | 0          | 0          | SESSION | The maximum query execution time. it means no limit if the value is zero. default value: 0.                        | UInt64 |
 | max_storage_io_requests        | 1000       | 1000       | SESSION | The maximum number of concurrent IO requests. By default, it is 1000.                                              | UInt64 |
 | max_threads                    | 24         | 0          | SESSION | The maximum number of threads to execute the request. By default the value is 0 it means determined automatically. | UInt64 |
+| prefer_broadcast_join          | 0          | 0          | SESSION | If enable broadcast join, default value: 0                                                                         | UInt64 |
 | quoted_ident_case_sensitive    | 1          | 1          | SESSION | Case sensitivity of quoted identifiers, default value: 1 (aka case-sensitive).                                     | UInt64 |
 | row_tag                        | row        | row        | SESSION | In xml format, this field is represented as a row tag, e.g. <row>...</row>.                                        | String |
 | sql_dialect                    | PostgreSQL | PostgreSQL | SESSION | SQL dialect, support "PostgreSQL" "MySQL" and "Hive", default value: "PostgreSQL".                                 | String |

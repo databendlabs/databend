@@ -24,7 +24,7 @@ use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
 use crate::plans::Filter;
 use crate::plans::JoinType;
-use crate::plans::LogicalInnerJoin;
+use crate::plans::LogicalJoin;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 use crate::plans::Scalar;
@@ -54,7 +54,7 @@ impl RulePushDownFilterJoin {
                 .into(),
                 SExpr::create_binary(
                     PatternPlan {
-                        plan_type: RelOp::LogicalInnerJoin,
+                        plan_type: RelOp::LogicalJoin,
                     }
                     .into(),
                     SExpr::create_leaf(
@@ -148,7 +148,7 @@ impl RulePushDownFilterJoin {
 
     fn convert_outer_to_inner_join(&self, s_expr: &SExpr) -> Result<SExpr> {
         let filter: Filter = s_expr.plan().clone().try_into()?;
-        let mut join: LogicalInnerJoin = s_expr.child(0)?.plan().clone().try_into()?;
+        let mut join: LogicalJoin = s_expr.child(0)?.plan().clone().try_into()?;
         let origin_join_type = join.join_type.clone();
         if !origin_join_type.is_outer_join() {
             return Ok(s_expr.clone());
@@ -223,7 +223,7 @@ impl RulePushDownFilterJoin {
 
     fn convert_mark_to_semi_join(&self, s_expr: &SExpr) -> Result<SExpr> {
         let mut filter: Filter = s_expr.plan().clone().try_into()?;
-        let mut join: LogicalInnerJoin = s_expr.child(0)?.plan().clone().try_into()?;
+        let mut join: LogicalJoin = s_expr.child(0)?.plan().clone().try_into()?;
         let has_disjunction = filter
             .predicates
             .iter()
@@ -289,7 +289,7 @@ impl Rule for RulePushDownFilterJoin {
             return Ok(());
         }
         let join_expr = s_expr.child(0)?;
-        let mut join: LogicalInnerJoin = join_expr.plan().clone().try_into()?;
+        let mut join: LogicalJoin = join_expr.plan().clone().try_into()?;
 
         let rel_expr = RelExpr::with_s_expr(join_expr);
         let left_prop = rel_expr.derive_relational_prop_child(0)?;

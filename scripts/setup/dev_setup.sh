@@ -347,7 +347,7 @@ EOF
 		cat <<EOF
 Development tools (since -d was provided):
   * mysql client
-  * python3 (boto3, yapf, yamllint, ...)
+  * python3 (boto3, black, yamllint, ...)
   * python database drivers (mysql-connector-python, pymysql, sqlalchemy, clickhouse_driver)
   * sqllogic test dependencies (PyHamcrest, environs, fire, ...)
   * fuzz test dependencies (fuzzingbook)
@@ -387,6 +387,7 @@ INSTALL_DEV_TOOLS=false
 INSTALL_PROFILE=false
 INSTALL_CODEGEN=false
 INSTALL_TPCH_DATA=false
+TPCH_SCALE_FACTOR=$2
 
 # parse args
 while getopts "ybcdpstv" arg; do
@@ -549,7 +550,7 @@ if [[ "$INSTALL_DEV_TOOLS" == "true" ]]; then
 		install_pkg py3-pip "$PACKAGE_MANAGER"
 		install_pkg libffi-dev "$PACKAGE_MANAGER"
 	fi
-	python3 -m pip install --quiet boto3 "moto[all]" yapf shfmt-py toml yamllint
+	python3 -m pip install --quiet boto3 "moto[all]" black shfmt-py toml yamllint
 	# drivers
 	python3 -m pip install --quiet pymysql sqlalchemy clickhouse_driver
 	# sqllogic dependencies
@@ -581,18 +582,19 @@ fi
 
 if [[ "$INSTALL_TPCH_DATA" == "true" ]]; then
 	# Construct a docker imagine to generate tpch-data
-	if [[ -z $2 ]]; then
+	if [[ -z ${TPCH_SCALE_FACTOR} ]]; then
 		docker build -f scripts/setup/tpchdata.dockerfile -t databend:latest .
 	else
-		docker build -f scripts/setup/tpchdata.dockerfile -t databend:latest --build-arg scale_factor=$2 .
+		docker build -f scripts/setup/tpchdata.dockerfile -t databend:latest \
+			--build-arg scale_factor="${TPCH_SCALE_FACTOR}" .
 	fi
 	# Generate data into the ./data directory if it does not already exist
 	FILE=benchmark/tpch/data/customer.tbl
 	if test -f "$FILE"; then
 		echo "$FILE exists."
 	else
-		mkdir $(pwd)/benchmark/tpch/data 2>/dev/null
-		docker run -v $(pwd)/benchmark/tpch/data:/data --rm databend:latest
+		mkdir "$(pwd)/benchmark/tpch/data" 2>/dev/null
+		docker run -v "$(pwd)/benchmark/tpch/data:/data" --rm databend:latest
 	fi
 fi
 

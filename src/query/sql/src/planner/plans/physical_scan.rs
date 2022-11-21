@@ -13,7 +13,9 @@
 // limitations under the License.
 
 use std::hash::Hash;
+use std::sync::Arc;
 
+use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use itertools::Itertools;
 
@@ -84,6 +86,7 @@ impl PhysicalOperator for PhysicalScan {
     // Won't be invoked at all, since `PhysicalScan` is leaf node
     fn compute_required_prop_child<'a>(
         &self,
+        _ctx: Arc<dyn TableContext>,
         _rel_expr: &RelExpr<'a>,
         _child_index: usize,
         _required: &RequiredProperty,

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::collections::HashSet;
 
 use common_datavalues::type_coercion::compare_coercion;
@@ -43,7 +44,7 @@ use crate::plans::Filter;
 use crate::plans::FunctionCall;
 use crate::plans::JoinType;
 use crate::plans::LogicalGet;
-use crate::plans::LogicalInnerJoin;
+use crate::plans::LogicalJoin;
 use crate::plans::LogicalOperator;
 use crate::plans::OrExpr;
 use crate::plans::PatternPlan;
@@ -51,6 +52,7 @@ use crate::plans::RelOp;
 use crate::plans::RelOperator;
 use crate::plans::Scalar;
 use crate::plans::ScalarItem;
+use crate::plans::Statistics;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
 use crate::ColumnBinding;
@@ -177,7 +179,7 @@ impl SubqueryRewriter {
             }
         }
 
-        let join = LogicalInnerJoin {
+        let join = LogicalJoin {
             left_conditions,
             right_conditions,
             non_equi_conditions,
@@ -249,7 +251,7 @@ impl SubqueryRewriter {
                     &mut right_conditions,
                     &mut left_conditions,
                 )?;
-                let join_plan = LogicalInnerJoin {
+                let join_plan = LogicalJoin {
                     left_conditions,
                     right_conditions,
                     non_equi_conditions: vec![],
@@ -285,9 +287,10 @@ impl SubqueryRewriter {
                         NullableType::new_impl(BooleanType::new_impl()),
                         None,
                         None,
+                        None,
                     )
                 };
-                let join_plan = LogicalInnerJoin {
+                let join_plan = LogicalJoin {
                     left_conditions: right_conditions,
                     right_conditions: left_conditions,
                     non_equi_conditions: vec![],
@@ -339,9 +342,10 @@ impl SubqueryRewriter {
                         NullableType::new_impl(BooleanType::new_impl()),
                         None,
                         None,
+                        None,
                     )
                 };
-                let mark_join = LogicalInnerJoin {
+                let mark_join = LogicalJoin {
                     left_conditions: right_conditions,
                     right_conditions: left_conditions,
                     non_equi_conditions,
@@ -395,6 +399,7 @@ impl SubqueryRewriter {
                         },
                         None,
                         None,
+                        None,
                     ),
                 );
             }
@@ -405,13 +410,17 @@ impl SubqueryRewriter {
                     push_down_predicates: None,
                     limit: None,
                     order_by: None,
-                    statistics: None,
+                    statistics: Statistics {
+                        statistics: None,
+                        col_stats: HashMap::new(),
+                        is_accurate: false,
+                    },
                     prewhere: None,
                 }
                 .into(),
             );
             // Todo(xudong963): Wrap logical get with distinct to eliminate duplicates rows.
-            let cross_join = LogicalInnerJoin {
+            let cross_join = LogicalJoin {
                 left_conditions: vec![],
                 right_conditions: vec![],
                 non_equi_conditions: vec![],
@@ -494,7 +503,7 @@ impl SubqueryRewriter {
                 .into();
                 Ok(SExpr::create_unary(filter_plan, flatten_plan))
             }
-            RelOperator::LogicalInnerJoin(join) => {
+            RelOperator::LogicalJoin(join) => {
                 // Currently, we don't support join conditions contain subquery
                 if join
                     .used_columns()?
@@ -516,7 +525,7 @@ impl SubqueryRewriter {
                     need_cross_join,
                 )?;
                 Ok(SExpr::create_binary(
-                    LogicalInnerJoin {
+                    LogicalJoin {
                         left_conditions: join.left_conditions.clone(),
                         right_conditions: join.right_conditions.clone(),
                         non_equi_conditions: join.non_equi_conditions.clone(),

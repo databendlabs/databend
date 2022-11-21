@@ -12,6 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io::Read;
+
+use common_exception::ErrorCode;
+use common_exception::Result;
 use common_io::prelude::*;
 
 use crate::types::string::StringColumn;
@@ -22,15 +26,13 @@ use crate::Scalar;
 use crate::TypeDeserializer;
 
 pub struct VariantDeserializer {
-    pub buffer: Vec<u8>,
     pub builder: StringColumnBuilder,
 }
 
 impl VariantDeserializer {
-    pub fn create() -> Self {
+    pub fn with_capacity(capacity: usize) -> Self {
         Self {
-            buffer: Vec::new(),
-            builder: StringColumnBuilder::with_capacity(0, 0),
+            builder: StringColumnBuilder::with_capacity(capacity, capacity * 4),
         }
     }
 }
@@ -41,24 +43,26 @@ impl TypeDeserializer for VariantDeserializer {
             + self.builder.offsets.len() * std::mem::size_of::<u64>()
     }
 
-    fn de_default(&mut self, _format: &FormatSettings) {
+    fn de_default(&mut self) {
         self.builder.put(JSONB_NULL);
         self.builder.commit_row();
     }
 
-    fn append_data_value(&mut self, value: Scalar, _format: &FormatSettings) -> Result<(), String> {
+    fn append_data_value(&mut self, value: Scalar, _format: &FormatSettings) -> Result<()> {
         let v = value
             .as_variant()
-            .ok_or_else(|| "Unable to get variant value".to_string())?;
+            .ok_or_else(|| ErrorCode::from("Unable to get variant value"))?;
         self.builder.put(v.as_slice());
         self.builder.commit_row();
         Ok(())
     }
 
-    fn pop_data_value(&mut self) -> Result<Scalar, String> {
+    fn pop_data_value(&mut self) -> Result<()> {
         match self.builder.pop() {
-            Some(v) => Ok(Scalar::Variant(v.to_vec())),
-            None => Err("Variant column is empty when pop data value".to_string()),
+            Some(_) => Ok(()),
+            None => Err(ErrorCode::from(
+                "Variant column is empty when pop data value",
+            )),
         }
     }
 
@@ -68,5 +72,40 @@ impl TypeDeserializer for VariantDeserializer {
             offsets: std::mem::take(&mut self.builder.offsets).into(),
         };
         Column::Variant(col)
+    }
+
+    fn de_binary(&mut self, reader: &mut &[u8], _format: &FormatSettings) -> Result<()> {
+        let offset: u64 = reader.read_uvarint()?;
+
+        self.builder
+            .data
+            .resize(offset as usize + self.builder.data.len(), 0);
+        let last = *self.builder.offsets.last().unwrap() as usize;
+        reader.read_exact(&mut self.builder.data[last..last + offset as usize])?;
+
+        self.builder.commit_row();
+        Ok(())
+    }
+
+    fn de_fixed_binary_batch(
+        &mut self,
+        reader: &[u8],
+        step: usize,
+        rows: usize,
+        _format: &FormatSettings,
+    ) -> Result<()> {
+        for row in 0..rows {
+            let val = &reader[step * row..];
+            self.builder.put_slice(val);
+            self.builder.commit_row();
+        }
+        Ok(())
+    }
+
+    fn de_json(&mut self, value: &serde_json::Value, _format: &FormatSettings) -> Result<()> {
+        let v = common_jsonb::Value::from(value);
+        v.to_vec(&mut self.builder.data);
+        self.builder.commit_row();
+        Ok(())
     }
 }

@@ -21,6 +21,7 @@ use super::ScalarExpr;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
+use crate::optimizer::Statistics;
 use crate::plans::LogicalOperator;
 use crate::plans::Operator;
 use crate::plans::PhysicalOperator;
@@ -116,7 +117,7 @@ impl Display for JoinType {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct LogicalInnerJoin {
+pub struct LogicalJoin {
     pub left_conditions: Vec<Scalar>,
     pub right_conditions: Vec<Scalar>,
     pub non_equi_conditions: Vec<Scalar>,
@@ -126,7 +127,7 @@ pub struct LogicalInnerJoin {
     pub from_correlated_subquery: bool,
 }
 
-impl Default for LogicalInnerJoin {
+impl Default for LogicalJoin {
     fn default() -> Self {
         Self {
             left_conditions: Default::default(),
@@ -139,9 +140,9 @@ impl Default for LogicalInnerJoin {
     }
 }
 
-impl Operator for LogicalInnerJoin {
+impl Operator for LogicalJoin {
     fn rel_op(&self) -> RelOp {
-        RelOp::LogicalInnerJoin
+        RelOp::LogicalJoin
     }
 
     fn is_physical(&self) -> bool {
@@ -161,7 +162,7 @@ impl Operator for LogicalInnerJoin {
     }
 }
 
-impl LogicalOperator for LogicalInnerJoin {
+impl LogicalOperator for LogicalJoin {
     fn derive_relational_prop<'a>(&self, rel_expr: &RelExpr<'a>) -> Result<RelationalProperty> {
         let left_prop = rel_expr.derive_relational_prop_child(0)?;
         let right_prop = rel_expr.derive_relational_prop_child(1)?;
@@ -221,9 +222,11 @@ impl LogicalOperator for LogicalInnerJoin {
             outer_columns,
             used_columns,
             cardinality,
-            precise_cardinality: None,
-
-            column_stats: Default::default(),
+            statistics: Statistics {
+                precise_cardinality: None,
+                column_stats: Default::default(),
+                is_accurate: false,
+            },
         })
     }
 

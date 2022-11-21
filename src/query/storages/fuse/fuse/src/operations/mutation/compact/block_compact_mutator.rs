@@ -108,8 +108,8 @@ impl BlockCompactMutator {
                 }
                 order += 1;
             }
+            end = idx + 1;
             if compacted_segment_cnt + builder.segments.len() >= limit {
-                end = idx + 1;
                 break;
             }
         }

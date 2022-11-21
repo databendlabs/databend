@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::ops::Range;
 
 use crate::types::AnyType;
 use crate::types::DataType;
 use crate::ColumnBuilder;
 use crate::Domain;
-use crate::TypeSerializer;
 use crate::Value;
 
 /// Chunk is a lightweight container for a group of columns.
@@ -64,10 +64,11 @@ impl Chunk {
     }
 
     #[inline]
-    pub fn domains(&self) -> Vec<Domain> {
+    pub fn domains(&self) -> HashMap<usize, Domain> {
         self.columns
             .iter()
             .map(|(value, _)| value.as_ref().domain())
+            .enumerate()
             .collect()
     }
 
@@ -114,18 +115,5 @@ impl Chunk {
             columns,
             num_rows: range.end - range.start + 1,
         }
-    }
-
-    pub fn get_serializers(&self) -> Result<Vec<Box<dyn TypeSerializer>>, String> {
-        let mut serializers = Vec::with_capacity(self.num_columns());
-        for (value, data_type) in self.columns() {
-            let column = match value {
-                Value::Scalar(s) => ColumnBuilder::repeat(&s.as_ref(), 1, data_type).build(),
-                Value::Column(c) => c.clone(),
-            };
-            let serializer = data_type.create_serializer(column)?;
-            serializers.push(serializer);
-        }
-        Ok(serializers)
     }
 }

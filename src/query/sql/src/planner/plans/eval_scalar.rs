@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.#[derive(Clone, Debug)]
 
+use std::sync::Arc;
+
+use common_catalog::table_context::TableContext;
 use common_exception::Result;
 
 use crate::optimizer::ColumnSet;
@@ -19,6 +22,7 @@ use crate::optimizer::PhysicalProperty;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
 use crate::optimizer::RequiredProperty;
+use crate::optimizer::Statistics;
 use crate::plans::LogicalOperator;
 use crate::plans::Operator;
 use crate::plans::PhysicalOperator;
@@ -68,6 +72,7 @@ impl PhysicalOperator for EvalScalar {
 
     fn compute_required_prop_child<'a>(
         &self,
+        _ctx: Arc<dyn TableContext>,
         _rel_expr: &RelExpr<'a>,
         _child_index: usize,
         required: &RequiredProperty,
@@ -100,8 +105,8 @@ impl LogicalOperator for EvalScalar {
 
         // Derive cardinality
         let cardinality = input_prop.cardinality;
-        let precise_cardinality = input_prop.precise_cardinality;
-
+        let precise_cardinality = input_prop.statistics.precise_cardinality;
+        let is_accurate = input_prop.statistics.is_accurate;
         // Derive used columns
         let mut used_columns = self.used_columns()?;
         used_columns.extend(input_prop.used_columns);
@@ -111,9 +116,11 @@ impl LogicalOperator for EvalScalar {
             outer_columns,
             used_columns,
             cardinality,
-            precise_cardinality,
-
-            column_stats: Default::default(),
+            statistics: Statistics {
+                precise_cardinality,
+                column_stats: Default::default(),
+                is_accurate,
+            },
         })
     }
 

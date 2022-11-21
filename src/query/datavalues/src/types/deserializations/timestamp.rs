@@ -53,7 +53,6 @@ impl TypeDeserializer for TimestampDeserializer {
         for row in 0..rows {
             let mut reader = &reader[step * row..];
             let value: i64 = reader.read_scalar()?;
-            check_timestamp(value)?;
             self.builder.append_value(value);
         }
         Ok(())

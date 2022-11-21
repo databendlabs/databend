@@ -15,10 +15,10 @@
 mod access;
 // mod async_insert_queue_v2;
 mod common;
-mod fragments;
 mod interpreter;
 mod interpreter_call;
 mod interpreter_catalog_create;
+mod interpreter_catalog_drop;
 mod interpreter_cluster_key_alter;
 mod interpreter_cluster_key_drop;
 mod interpreter_clustering_history;
@@ -80,13 +80,9 @@ mod interpreter_user_udf_drop;
 mod interpreter_view_alter;
 mod interpreter_view_create;
 mod interpreter_view_drop;
-mod plan_schedulers;
 
 pub use access::ManagementModeAccess;
 pub use common::append2table;
-pub use fragments::QueryFragmentAction;
-pub use fragments::QueryFragmentActions;
-pub use fragments::QueryFragmentsActions;
 pub use interpreter::Interpreter;
 pub use interpreter::InterpreterPtr;
 pub use interpreter_call::CallInterpreter;

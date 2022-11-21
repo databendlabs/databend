@@ -8,7 +8,7 @@ import requests
 from mysql.connector.errors import Error
 from log import log
 
-headers = {'Content-Type': 'application/json', 'Accept': 'application/json'}
+headers = {"Content-Type": "application/json", "Accept": "application/json"}
 
 default_database = "default"
 
@@ -35,18 +35,18 @@ def format_result(results):
 
 
 def get_data_type(field):
-    if 'data_type' in field:
-        if 'inner' in field['data_type']:
-            return field['data_type']['inner']['type']
+    if "data_type" in field:
+        if "inner" in field["data_type"]:
+            return field["data_type"]["inner"]["type"]
         else:
-            return field['data_type']['type']
+            return field["data_type"]["type"]
 
 
 def get_query_options(response):
     ret = ""
     if get_error(response) is not None:
         return ret
-    for field in response['schema']['fields']:
+    for field in response["schema"]["fields"]:
         typ = str.lower(get_data_type(field))
         log.debug(f"type:{typ}")
         if "int" in typ:
@@ -62,21 +62,20 @@ def get_query_options(response):
 
 def get_next_uri(response):
     if "next_uri" in response:
-        return response['next_uri']
+        return response["next_uri"]
     return None
 
 
 def get_result(response):
-    return response['data']
+    return response["data"]
 
 
 def get_error(response):
-    if response['error'] is None:
+    if response["error"] is None:
         return None
 
     # Wrap errno into msg, for result check
-    return Error(msg=response['error']['message'],
-                 errno=response['error']['code'])
+    return Error(msg=response["error"]["message"], errno=response["error"]["code"])
 
 
 def check_error(response):
@@ -112,9 +111,11 @@ class HttpConnector(object):
     def make_headers(self):
         if "Authorization" not in self._additional_headers:
             return {
-                **headers, "Authorization":
-                    "Basic " + base64.b64encode("{}:{}".format(
-                        self._user, "").encode(encoding="utf-8")).decode()
+                **headers,
+                "Authorization": "Basic "
+                + base64.b64encode(
+                    "{}:{}".format(self._user, "").encode(encoding="utf-8")
+                ).decode(),
             }
         else:
             return {**headers, **self._additional_headers}
@@ -122,13 +123,15 @@ class HttpConnector(object):
     def query(self, statement, session):
         url = f"http://{self._host}:{self._port}/v1/query/"
         log.debug(f"http sql: {statement}")
+
         query_sql = {'sql': statement}
+
         if session is not None:
-            query_sql['session'] = session
+            query_sql["session"] = session
         log.debug(f"http headers {self.make_headers()}")
-        response = requests.post(url,
-                                 data=json.dumps(query_sql),
-                                 headers=self.make_headers())
+        response = requests.post(
+            url, data=json.dumps(query_sql), headers=self.make_headers()
+        )
 
         try:
             return json.loads(response.content)
@@ -154,15 +157,15 @@ class HttpConnector(object):
         response_list.append(response)
         start_time = time.time()
         time_limit = 12
-        session = response['session']
+        session = response["session"]
         if session:
             self._session = session
-        while response['next_uri'] is not None:
-            resp = self.next_page(response['next_uri'])
+        while response["next_uri"] is not None:
+            resp = self.next_page(response["next_uri"])
             response = json.loads(resp.content)
             log.debug(f"Sql in progress, fetch next_uri content: {response}")
             check_error(response)
-            session = response['session']
+            session = response["session"]
             if session:
                 self._session = session
             response_list.append(response)

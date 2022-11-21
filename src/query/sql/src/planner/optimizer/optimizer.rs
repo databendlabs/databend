@@ -148,7 +148,7 @@ pub fn optimize_query(
     let mut heuristic = HeuristicOptimizer::new(ctx.clone(), bind_context, metadata, rules);
     let mut result = heuristic.optimize(s_expr)?;
 
-    let mut cascades = CascadesOptimizer::create(ctx)?;
+    let mut cascades = CascadesOptimizer::create(ctx.clone())?;
     result = cascades.optimize(result)?;
 
     // So far, we don't have ability to execute distributed query
@@ -156,7 +156,7 @@ pub fn optimize_query(
     let enable_distributed_query =
         opt_ctx.config.enable_distributed_optimization && !contains_local_table_scan;
     if enable_distributed_query {
-        result = optimize_distributed_query(&result)?;
+        result = optimize_distributed_query(ctx.clone(), &result)?;
     }
 
     Ok(result)

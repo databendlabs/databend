@@ -21,12 +21,11 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_sql::MetadataRef;
 
-use super::fragments::Fragmenter;
-use super::QueryFragmentsActions;
-use crate::interpreters::plan_schedulers::schedule_query_v2;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
-use crate::pipelines::PipelineBuilder;
+use crate::schedulers::build_query_pipeline;
+use crate::schedulers::Fragmenter;
+use crate::schedulers::QueryFragmentsActions;
 use crate::sessions::QueryContext;
 use crate::sql::executor::PhysicalPlan;
 use crate::sql::executor::PhysicalPlanBuilder;
@@ -153,13 +152,7 @@ impl ExplainInterpreter {
     ) -> Result<Vec<DataBlock>> {
         let builder = PhysicalPlanBuilder::new(metadata, self.ctx.clone());
         let plan = builder.build(&s_expr).await?;
-
-        let pipeline_builder = PipelineBuilder::create(self.ctx.clone());
-        let build_res = if self.ctx.get_cluster().is_empty() {
-            pipeline_builder.finalize(&plan)?
-        } else {
-            schedule_query_v2(self.ctx.clone(), &[], &plan).await?
-        };
+        let build_res = build_query_pipeline(&self.ctx, &[], &plan).await?;
 
         let mut blocks = vec![];
         // Format root pipeline

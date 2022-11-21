@@ -38,9 +38,15 @@ impl<V, A: Allocator + Clone> Table1<V, A> {
     pub fn capacity(&self) -> usize {
         65536
     }
+
     pub fn len(&self) -> usize {
         self.len
     }
+
+    pub fn heap_bytes(&self) -> usize {
+        std::mem::size_of::<[Entry<[u8; 2], V>; 65536]>()
+    }
+
     pub fn get(&self, key: [u8; 2]) -> Option<&Ent<V>> {
         let e = &self.data[key[1] as usize * 256 + key[0] as usize];
         if unsafe { e.key.assume_init() } == key {

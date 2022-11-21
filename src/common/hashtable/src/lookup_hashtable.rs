@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::alloc::Allocator;
+use std::mem;
 use std::mem::MaybeUninit;
 
 use common_base::mem_allocator::GlobalAllocator;
@@ -80,6 +81,12 @@ macro_rules! lookup_impl {
 
             fn len(&self) -> usize {
                 self.len
+            }
+
+            fn bytes_len(&self) -> usize {
+                mem::size_of::<MaybeUninit<[bool; $capacity]>>() +
+                mem::size_of::<MaybeUninit<[Entry<$ty, V>; $capacity]>>() +
+                mem::size_of::<Self>()
             }
 
             fn entry(&self, key: &$ty) -> Option<Self::EntryRef<'_>> {

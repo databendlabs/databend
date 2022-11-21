@@ -25,7 +25,7 @@ lint:
 	# Cargo.toml file formatter(make setup to install)
 	taplo fmt
 	# Python file formatter(make setup to install)
-	yapf -ri tests/
+	black tests/
 	# Bash file formatter(make setup to install)
 	shfmt -l -w scripts/*
 

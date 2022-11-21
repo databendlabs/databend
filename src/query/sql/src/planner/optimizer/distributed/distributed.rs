@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
+use common_catalog::table_context::TableContext;
 use common_exception::Result;
 
 use crate::optimizer::property::require_property;
@@ -21,11 +24,11 @@ use crate::optimizer::RequiredProperty;
 use crate::optimizer::SExpr;
 use crate::plans::Exchange;
 
-pub fn optimize_distributed_query(s_expr: &SExpr) -> Result<SExpr> {
+pub fn optimize_distributed_query(ctx: Arc<dyn TableContext>, s_expr: &SExpr) -> Result<SExpr> {
     let required = RequiredProperty {
         distribution: Distribution::Any,
     };
-    let mut result = require_property(&required, s_expr)?;
+    let mut result = require_property(ctx, &required, s_expr)?;
     let rel_expr = RelExpr::with_s_expr(&result);
     let physical_prop = rel_expr.derive_physical_prop()?;
     let root_required = RequiredProperty {

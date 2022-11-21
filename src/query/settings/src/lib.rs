@@ -125,7 +125,11 @@ impl Settings {
             // Set max memory usage.
             {
                 if ret.get_max_memory_usage()? == 0 {
-                    let max_usage = sysinfo::System::new_all().available_memory();
+                    let max_usage = if conf.query.max_memory_usage == 0 {
+                        sysinfo::System::new_all().available_memory()
+                    } else {
+                        conf.query.max_memory_usage
+                    };
                     ret.set_max_memory_usage(max_usage)?;
                 }
             }
@@ -442,6 +446,26 @@ impl Settings {
                 desc: "If enable distributed eval index, default value: 1",
                 possible_values: None,
             },
+            SettingValue {
+                default_value: UserSettingValue::UInt64(0),
+                user_setting: UserSetting::create(
+                    "prefer_broadcast_join",
+                    UserSettingValue::UInt64(0),
+                ),
+                level: ScopeLevel::Session,
+                desc: "If enable broadcast join, default value: 0",
+                possible_values: None,
+            },
+            SettingValue {
+                default_value: UserSettingValue::UInt64(24 * 7),
+                user_setting: UserSetting::create(
+                    "load_file_metadata_expire_hours",
+                    UserSettingValue::UInt64(24 * 7),
+                ),
+                level: ScopeLevel::Session,
+                desc: "How many hours will the COPY file metadata expired in the metasrv, default value: 24*7=7days",
+                possible_values: None,
+            },
         ];
 
         let settings: Arc<DashMap<String, SettingValue>> = Arc::new(DashMap::default());
@@ -677,6 +701,18 @@ impl Settings {
         self.try_set_u64(KEY, v, false)
     }
 
+    pub fn get_prefer_broadcast_join(&self) -> Result<bool> {
+        static KEY: &str = "prefer_broadcast_join";
+        let v = self.try_get_u64(KEY)?;
+        Ok(v != 0)
+    }
+
+    pub fn set_prefer_broadcast_join(&self, val: bool) -> Result<()> {
+        static KEY: &str = "join_distribution_type";
+        let v = u64::from(val);
+        self.try_set_u64(KEY, v, false)
+    }
+
     pub fn get_sql_dialect(&self) -> Result<Dialect> {
         let key = "sql_dialect";
         self.check_and_get_setting_value(key)
@@ -706,6 +742,16 @@ impl Settings {
     pub fn get_hive_parquet_chunk_size(&self) -> Result<u64> {
         static KEY: &str = "hive_parquet_chunk_size";
         self.try_get_u64(KEY)
+    }
+
+    pub fn set_load_file_metadata_expire_hours(&self, val: u64) -> Result<()> {
+        let key = "load_file_metadata_expire_hours";
+        self.try_set_u64(key, val, false)
+    }
+
+    pub fn get_load_file_metadata_expire_hours(&self) -> Result<u64> {
+        let key = "load_file_metadata_expire_hours";
+        self.try_get_u64(key)
     }
 
     pub fn has_setting(&self, key: &str) -> bool {

@@ -23,6 +23,7 @@ use crate::plans::Aggregate;
 use crate::plans::EvalScalar;
 use crate::plans::LogicalGet;
 use crate::plans::RelOperator;
+use crate::plans::Statistics;
 use crate::MetadataRef;
 use crate::ScalarExpr;
 
@@ -96,11 +97,15 @@ impl UnusedColumnPruner {
                     push_down_predicates: p.push_down_predicates.clone(),
                     limit: p.limit,
                     order_by: p.order_by.clone(),
-                    statistics: p.statistics,
+                    statistics: Statistics {
+                        statistics: p.statistics.statistics,
+                        col_stats: p.statistics.col_stats.clone(),
+                        is_accurate: p.statistics.is_accurate,
+                    },
                     prewhere,
                 })))
             }
-            RelOperator::LogicalInnerJoin(p) => {
+            RelOperator::LogicalJoin(p) => {
                 // Include columns referenced in left conditions
                 let left = p.left_conditions.iter().fold(required.clone(), |acc, v| {
                     acc.union(&v.used_columns()).cloned().collect()
@@ -115,7 +120,7 @@ impl UnusedColumnPruner {
                 });
 
                 Ok(SExpr::create_binary(
-                    RelOperator::LogicalInnerJoin(p.clone()),
+                    RelOperator::LogicalJoin(p.clone()),
                     self.keep_required_columns(
                         expr.child(0)?,
                         left.union(&others).cloned().collect(),
