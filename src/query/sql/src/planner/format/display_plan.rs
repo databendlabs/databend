@@ -101,6 +101,7 @@ impl Plan {
             Plan::Presign(presign) => Ok(format!("{:?}", presign)),
 
             Plan::SetVariable(p) => Ok(format!("{:?}", p)),
+            Plan::UnSetVariable(p) => Ok(format!("{:?}", p)),
             Plan::SetRole(p) => Ok(format!("{:?}", p)),
             Plan::UseDatabase(p) => Ok(format!("{:?}", p)),
             Plan::Kill(p) => Ok(format!("{:?}", p)),

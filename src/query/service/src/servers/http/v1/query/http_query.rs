@@ -125,13 +125,15 @@ impl HttpSessionConf {
             QueryAffect::UseDB { name } => {
                 ret.database = Some(name.to_string());
             }
-            QueryAffect::ChangeSetting {
-                key,
-                value,
-                is_global: _,
+            QueryAffect::ChangeSettings {
+                keys,
+                values,
+                is_globals: _,
             } => {
                 let settings = ret.settings.get_or_insert_default();
-                settings.insert(key.to_string(), value.to_string());
+                for (key, value) in keys.iter().zip(values) {
+                    settings.insert(key.to_string(), value.to_string());
+                }
             }
             _ => {}
         }
@@ -267,7 +269,8 @@ impl HttpQuery {
                         &query_id,
                         e
                     );
-                    Executor::start_to_stop(&state_clone, ExecuteState::Stopped(state)).await;
+                    Executor::start_to_stop(&state_clone, ExecuteState::Stopped(Box::new(state)))
+                        .await;
                     block_sender_closer.close();
                 }
             }

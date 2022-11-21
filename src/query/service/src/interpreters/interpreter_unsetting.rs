@@ -14,10 +14,9 @@
 
 use std::sync::Arc;
 
-use chrono_tz::Tz;
-use common_exception::ErrorCode;
 use common_exception::Result;
-use common_sql::plans::SettingPlan;
+use common_settings::ScopeLevel;
+use common_sql::plans::UnSettingPlan;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -25,19 +24,19 @@ use crate::sessions::QueryAffect;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
-pub struct SettingInterpreter {
+pub struct UnSettingInterpreter {
     ctx: Arc<QueryContext>,
-    set: SettingPlan,
+    set: UnSettingPlan,
 }
 
-impl SettingInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, set: SettingPlan) -> Result<Self> {
-        Ok(SettingInterpreter { ctx, set })
+impl UnSettingInterpreter {
+    pub fn try_create(ctx: Arc<QueryContext>, set: UnSettingPlan) -> Result<Self> {
+        Ok(UnSettingInterpreter { ctx, set })
     }
 }
 
 #[async_trait::async_trait]
-impl Interpreter for SettingInterpreter {
+impl Interpreter for UnSettingInterpreter {
     fn name(&self) -> &str {
         "SettingInterpreter"
     }
@@ -48,35 +47,30 @@ impl Interpreter for SettingInterpreter {
         let mut values: Vec<String> = vec![];
         let mut is_globals: Vec<bool> = vec![];
         for var in plan.vars {
-            let ok = match var.variable.to_lowercase().as_str() {
+            let (ok, value) = match var.to_lowercase().as_str() {
                 // To be compatible with some drivers
-                "sql_mode" | "autocommit" => false,
-                "timezone" => {
-                    // check if the timezone is valid
-                    let tz = var.value.trim_matches(|c| c == '\'' || c == '\"');
-                    let _ = tz.parse::<Tz>().map_err(|_| {
-                        ErrorCode::InvalidTimezone(format!("Invalid Timezone: {}", var.value))
-                    })?;
-                    self.ctx.get_settings().set_settings(
-                        var.variable.clone(),
-                        tz.to_string(),
-                        var.is_global,
-                    )?;
-                    true
-                }
-                _ => {
-                    self.ctx.get_settings().set_settings(
-                        var.variable.clone(),
-                        var.value.clone(),
-                        var.is_global,
-                    )?;
-                    true
+                "sql_mode" | "autocommit" => (false, String::from("")),
+                setting => {
+                    let settings = self.ctx.get_settings();
+                    match settings.get_setting_level(setting)? {
+                        ScopeLevel::Global => {
+                            self.ctx.get_settings().try_drop_setting(setting)?;
+                        }
+                        ScopeLevel::Session => {}
+                    }
+                    let default_val = settings.check_and_get_default_value(setting)?.to_string();
+                    (true, default_val)
                 }
             };
             if ok {
-                keys.push(var.variable.clone());
-                values.push(var.value.clone());
-                is_globals.push(var.is_global);
+                // reset the current ctx settings to default val
+                self.ctx
+                    .get_settings()
+                    .set_settings(var.clone(), value.clone(), false)?;
+                // set affect
+                keys.push(var);
+                values.push(value);
+                is_globals.push(false);
             }
         }
         self.ctx.set_affect(QueryAffect::ChangeSettings {

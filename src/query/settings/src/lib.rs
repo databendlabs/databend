@@ -37,7 +37,7 @@ use sysinfo::RefreshKind;
 use sysinfo::SystemExt;
 
 #[derive(Clone)]
-enum ScopeLevel {
+pub enum ScopeLevel {
     #[allow(dead_code)]
     Global,
     Session,
@@ -153,7 +153,7 @@ impl Settings {
             },
             // max_threads
             SettingValue {
-                default_value: UserSettingValue::UInt64(0),
+                default_value: UserSettingValue::UInt64(16),
                 user_setting: UserSetting::create("max_threads", UserSettingValue::UInt64(0)),
                 level: ScopeLevel::Session,
                 desc: "The maximum number of threads to execute the request. By default the value is 0 it means determined automatically.",
@@ -758,11 +758,20 @@ impl Settings {
         self.settings.get(key).is_some()
     }
 
-    fn check_and_get_setting_value(&self, key: &str) -> Result<SettingValue> {
+    pub fn check_and_get_setting_value(&self, key: &str) -> Result<SettingValue> {
         let setting = self
             .settings
             .get(key)
             .map(|e| e.value().clone())
+            .ok_or_else(|| ErrorCode::UnknownVariable(format!("Unknown variable: {:?}", key)))?;
+        Ok(setting)
+    }
+
+    pub fn check_and_get_default_value(&self, key: &str) -> Result<UserSettingValue> {
+        let setting = self
+            .settings
+            .get(key)
+            .map(|e| e.value().default_value.clone())
             .ok_or_else(|| ErrorCode::UnknownVariable(format!("Unknown variable: {:?}", key)))?;
         Ok(setting)
     }
@@ -835,6 +844,25 @@ impl Settings {
         Ok(())
     }
 
+    pub fn try_drop_setting(&self, key: &str) -> Result<()> {
+        let mut setting = self
+            .settings
+            .get_mut(key)
+            .ok_or_else(|| ErrorCode::UnknownVariable(format!("Unknown variable: {:?}", key)))?;
+
+        let tenant = self.tenant.clone();
+        let key = key.to_string();
+        let drop_handle = GlobalIORuntime::instance().spawn(async move {
+            UserApiProvider::instance()
+                .get_setting_api_client(&tenant)?
+                .drop_setting(key.as_str(), None)
+                .await
+        });
+        futures::executor::block_on(drop_handle).unwrap()?;
+        setting.level = ScopeLevel::Session;
+        Ok(())
+    }
+
     fn set_setting_level(&self, key: &str, is_global: bool) -> Result<()> {
         let mut setting = self
             .settings
@@ -845,6 +873,15 @@ impl Settings {
             setting.level = ScopeLevel::Global;
         }
         Ok(())
+    }
+
+    pub fn get_setting_level(&self, key: &str) -> Result<ScopeLevel> {
+        let setting = self
+            .settings
+            .get_mut(key)
+            .ok_or_else(|| ErrorCode::UnknownVariable(format!("Unknown variable: {:?}", key)))?;
+
+        Ok(setting.level.clone())
     }
 
     pub fn get_setting_values(
