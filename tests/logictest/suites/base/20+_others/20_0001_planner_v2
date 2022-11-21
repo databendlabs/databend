@@ -395,6 +395,13 @@ select count_distinct(number) from ( select number % 100 as number from numbers(
 100
 
 
+statement query I
+select approx_count_distinct(number) from ( select number % 100 as number from numbers(100000));
+
+----
+100
+
+
 statement query B
 select sum_distinct(number) /  count_distinct(number) = avg_distinct(number) from ( select number % 100 as number from numbers(100000));
 

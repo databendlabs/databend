@@ -12,7 +12,10 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::sync::Arc;
+
 use common_datablocks::DataBlock;
+use common_datavalues::Column;
 use common_datavalues::ColumnWithField;
 use common_datavalues::DataField;
 use common_datavalues::DataValue;
@@ -22,6 +25,23 @@ use common_storages_index::MinMaxIndex;
 use common_storages_index::SupportedType;
 use common_storages_table_meta::meta::ColumnStatistics;
 use common_storages_table_meta::meta::StatisticsOfColumns;
+
+pub fn calc_column_distinct_of_values(
+    column: &Arc<dyn Column>,
+    column_field: ColumnWithField,
+) -> Result<u64> {
+    let distinct_values = eval_aggr(
+        "approx_count_distinct",
+        vec![],
+        &[column_field],
+        column.len(),
+    )?;
+    distinct_values.get(0).as_u64()
+}
+
+pub fn get_traverse_columns_dfs(data_block: &DataBlock) -> Result<Vec<Arc<dyn Column>>> {
+    traverse::traverse_columns_dfs(data_block.columns())
+}
 
 pub fn gen_columns_statistics(data_block: &DataBlock) -> Result<StatisticsOfColumns> {
     let mut statistics = StatisticsOfColumns::new();
@@ -43,7 +63,6 @@ pub fn gen_columns_statistics(data_block: &DataBlock) -> Result<StatisticsOfColu
         let rows = col.len();
 
         let mins = eval_aggr("min", vec![], &[column_field.clone()], rows)?;
-        let maxs = eval_aggr("max", vec![], &[column_field], rows)?;
 
         if mins.len() > 0 {
             min = if let Some(v) = mins.get(0).trim_min() {
@@ -53,6 +72,7 @@ pub fn gen_columns_statistics(data_block: &DataBlock) -> Result<StatisticsOfColu
             }
         }
 
+        let maxs = eval_aggr("max", vec![], &[column_field.clone()], rows)?;
         if maxs.len() > 0 {
             max = if let Some(v) = maxs.get(0).trim_max() {
                 v
@@ -60,6 +80,8 @@ pub fn gen_columns_statistics(data_block: &DataBlock) -> Result<StatisticsOfColu
                 continue;
             }
         }
+
+        let distinct_of_values = calc_column_distinct_of_values(col, column_field)?;
 
         let (is_all_null, bitmap) = col.validity();
         let unset_bits = match (is_all_null, bitmap) {
@@ -74,6 +96,7 @@ pub fn gen_columns_statistics(data_block: &DataBlock) -> Result<StatisticsOfColu
             max,
             null_count: unset_bits as u64,
             in_memory_size,
+            distinct_of_values: Some(distinct_of_values),
         };
 
         statistics.insert(idx as u32, col_stats);

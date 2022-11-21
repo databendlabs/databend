@@ -50,6 +50,7 @@ sha1 = "0.10.5"
 sha2 = "0.10.6"
 simdutf8 = "0.1.4"
 siphasher = "0.3"
+streaming_algorithms = { git = "https://github.com/datafuse-extras/streaming_algorithms", tag = "hyperloglog_del_op_fix_overflow_bug" }
 strength_reduce = "0.2.3"
 twox-hash = "1.6.3"
 uuid = { version = "1.1.2", features = ["v4"] }
