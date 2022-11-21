@@ -120,10 +120,11 @@ impl Metadata {
         // If exists table alias name, use it instead of origin name
         let table_entry = TableEntry {
             index: table_index,
-            name: table_alias_name.map_or(table_name, |alias_name| alias_name),
+            name: table_name,
             database,
             catalog,
             table: table_meta.clone(),
+            alias_name: table_alias_name,
         };
         self.tables.push(table_entry);
         let mut fields = VecDeque::new();
@@ -220,6 +221,7 @@ pub struct TableEntry {
     catalog: String,
     database: String,
     name: String,
+    alias_name: Option<String>,
     index: IndexType,
 
     table: Arc<dyn Table>,
@@ -240,6 +242,7 @@ impl TableEntry {
     pub fn new(
         index: IndexType,
         name: String,
+        alias_name: Option<String>,
         catalog: String,
         database: String,
         table: Arc<dyn Table>,
@@ -250,6 +253,7 @@ impl TableEntry {
             catalog,
             database,
             table,
+            alias_name,
         }
     }
 
@@ -266,6 +270,11 @@ impl TableEntry {
     /// Get the name of this table entry.
     pub fn name(&self) -> &str {
         &self.name
+    }
+
+    /// Get the alias name of this table entry.
+    pub fn alias_name(&self) -> &Option<String> {
+        &self.alias_name
     }
 
     /// Get the index this table entry.

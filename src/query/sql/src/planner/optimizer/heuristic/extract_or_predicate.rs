@@ -82,7 +82,13 @@ impl ExtractOrPredicate {
         let or_args = flatten_ors(or_expr.clone());
         let mut extracted_scalars = Vec::new();
         let meta_data = self.metadata.read();
-        let table_name = meta_data.table(required_table).name();
+        let table_name = meta_data
+            .table(required_table)
+            .alias_name()
+            .as_ref()
+            .map_or(meta_data.table(required_table).name(), |alias_name| {
+                alias_name
+            });
         for or_arg in or_args.iter() {
             let mut sub_scalars = Vec::new();
             if let Scalar::AndExpr(and_expr) = or_arg {
