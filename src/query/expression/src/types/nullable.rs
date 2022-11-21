@@ -165,6 +165,17 @@ impl<T: ValueType> ValueType for NullableType<T> {
     fn build_scalar(builder: Self::ColumnBuilder) -> Self::Scalar {
         builder.build_scalar()
     }
+
+    fn scalar_memory_size<'a>(scalar: &Self::ScalarRef<'a>) -> usize {
+        match scalar {
+            Some(scalar) => T::scalar_memory_size(scalar),
+            None => 0,
+        }
+    }
+
+    fn column_memory_size(col: &Self::Column) -> usize {
+        col.memory_size()
+    }
 }
 
 impl<T: ArgType> ArgType for NullableType<T> {
@@ -235,6 +246,10 @@ impl<T: ValueType> NullableColumn<T> {
             column: T::upcast_column(self.column),
             validity: self.validity,
         }
+    }
+
+    pub fn memory_size(&self) -> usize {
+        T::column_memory_size(&self.column) + self.validity.as_slice().0.len()
     }
 }
 

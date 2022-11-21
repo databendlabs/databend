@@ -152,6 +152,14 @@ impl<K: ValueType, V: ValueType> ValueType for KvPair<K, V> {
     fn build_scalar(builder: Self::ColumnBuilder) -> Self::Scalar {
         builder.build_scalar()
     }
+
+    fn scalar_memory_size<'a>((k, v): &Self::ScalarRef<'a>) -> usize {
+        K::scalar_memory_size(k) + V::scalar_memory_size(v)
+    }
+
+    fn column_memory_size(col: &Self::Column) -> usize {
+        col.memory_size()
+    }
 }
 
 impl<K: ArgType, V: ArgType> ArgType for KvPair<K, V> {
@@ -206,6 +214,10 @@ impl<K: ValueType, V: ValueType> KvColumn<K, V> {
             keys: K::iter_column(&self.keys),
             values: V::iter_column(&self.values),
         }
+    }
+
+    pub fn memory_size(&self) -> usize {
+        K::column_memory_size(&self.keys) + V::column_memory_size(&self.values)
     }
 }
 
@@ -390,6 +402,14 @@ impl<T: ValueType> ValueType for MapType<T> {
 
     fn build_scalar(builder: Self::ColumnBuilder) -> Self::Scalar {
         <MapInternal<T> as ValueType>::build_scalar(builder)
+    }
+
+    fn scalar_memory_size<'a>(scalar: &Self::ScalarRef<'a>) -> usize {
+        scalar.memory_size()
+    }
+
+    fn column_memory_size(col: &Self::Column) -> usize {
+        col.memory_size()
     }
 }
 

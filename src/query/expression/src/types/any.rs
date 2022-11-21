@@ -127,4 +127,12 @@ impl ValueType for AnyType {
     fn build_scalar(builder: Self::ColumnBuilder) -> Self::Scalar {
         builder.build_scalar()
     }
+
+    fn scalar_memory_size<'a>(scalar: &Self::ScalarRef<'a>) -> usize {
+        scalar.memory_size()
+    }
+
+    fn column_memory_size(col: &Self::Column) -> usize {
+        col.memory_size()
+    }
 }
