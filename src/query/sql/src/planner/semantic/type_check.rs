@@ -1034,7 +1034,6 @@ impl<'a> TypeChecker<'a> {
             | BinaryOperator::Div
             | BinaryOperator::Divide
             | BinaryOperator::Modulo
-            | BinaryOperator::StringConcat
             | BinaryOperator::Like
             | BinaryOperator::NotLike
             | BinaryOperator::Regexp
@@ -1046,6 +1045,10 @@ impl<'a> TypeChecker<'a> {
             | BinaryOperator::BitwiseXor
             | BinaryOperator::Xor => {
                 self.resolve_function(span, op.to_string().as_str(), &[left, right], required_type)
+                    .await
+            }
+            BinaryOperator::StringConcat => {
+                self.resolve_function(span, "concat", &[left, right], required_type)
                     .await
             }
             BinaryOperator::Gt
