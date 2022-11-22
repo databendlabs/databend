@@ -42,6 +42,7 @@ pub use runtime::TrySpawn;
 pub use runtime_tracker::AsyncThreadTracker;
 pub use runtime_tracker::MemoryTracker;
 pub use runtime_tracker::ThreadTracker;
+pub use runtime_tracker::GLOBAL_TRACKER;
 pub use select::select3;
 pub use select::Select3Output;
 pub use shutdown_signal::signal_stream;

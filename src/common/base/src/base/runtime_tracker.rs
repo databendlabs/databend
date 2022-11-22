@@ -30,6 +30,19 @@ use crate::mem_allocator::GlobalAllocator;
 #[thread_local]
 static mut TRACKER: *mut ThreadTracker = std::ptr::null_mut();
 
+/// Thread local memory allocation stat buffer for fast update.
+///
+/// The stat will be periodically flush to global stat tracker `GLOBAL_TRACKER`.
+#[thread_local]
+static mut MEM_STAT_BUFFER: StatBuffer = StatBuffer::empty();
+
+/// Global memory allocation stat tracker.
+pub static GLOBAL_TRACKER: MemoryTracker = MemoryTracker {
+    memory_usage: AtomicI64::new(0),
+
+    parent_memory_tracker: None,
+};
+
 static UNTRACKED_MEMORY_LIMIT: i64 = 4 * 1024 * 1024;
 
 pub struct ThreadTracker {
@@ -81,6 +94,11 @@ impl ThreadTracker {
         let _ = p;
 
         unsafe {
+            // Update global tracker
+            if MEM_STAT_BUFFER.incr(size) > UNTRACKED_MEMORY_LIMIT {
+                MEM_STAT_BUFFER.flush_to(&GLOBAL_TRACKER.memory_usage);
+            }
+
             if TRACKER.is_null() {
                 return;
             }
@@ -104,6 +122,11 @@ impl ThreadTracker {
         let _ = p;
 
         unsafe {
+            // Update global tracker
+            if MEM_STAT_BUFFER.incr(-size) < -UNTRACKED_MEMORY_LIMIT {
+                MEM_STAT_BUFFER.flush_to(&GLOBAL_TRACKER.memory_usage);
+            }
+
             if TRACKER.is_null() {
                 return;
             }
@@ -133,16 +156,27 @@ pub struct StatBuffer {
 }
 
 impl StatBuffer {
-    pub fn incr(&mut self, bs: i64) {
-        self.memory_usage += bs;
+    pub const fn empty() -> Self {
+        Self { memory_usage: 0 }
     }
 
-    pub fn decr(&mut self, bs: i64) {
+    pub fn incr(&mut self, bs: i64) -> i64 {
+        self.memory_usage += bs;
+        self.memory_usage
+    }
+
+    pub fn decr(&mut self, bs: i64) -> i64 {
         self.memory_usage -= bs;
+        self.memory_usage
     }
 
     pub fn reset(&mut self) {
         self.memory_usage = 0;
+    }
+
+    pub fn flush_to(&mut self, st: &AtomicI64) {
+        st.fetch_add(self.memory_usage, Ordering::Relaxed);
+        self.reset();
     }
 }
 
