@@ -118,6 +118,10 @@ async fn run_table_tests(
         actual_lines.as_mut_slice()[2..num_lines - 1].sort_unstable()
     }
     writeln!(file, "-------- TABLE CONTENTS ----------").unwrap();
+    if table_info.name.to_lowercase() == "settings" {
+        actual_lines
+            .retain(|&item| !(item.contains("max_threads") || item.contains("max_memory_usage")));
+    }
     for line in actual_lines {
         writeln!(file, "{}", line).unwrap();
     }
