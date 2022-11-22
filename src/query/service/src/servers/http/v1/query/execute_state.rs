@@ -90,7 +90,7 @@ impl Progresses {
 pub enum ExecuteState {
     Starting(ExecuteStarting),
     Running(ExecuteRunning),
-    Stopped(ExecuteStopped),
+    Stopped(Box<ExecuteStopped>),
 }
 
 impl ExecuteState {
@@ -183,12 +183,12 @@ impl Executor {
                     InterpreterQueryLog::log_finish(&s.ctx, SystemTime::now(), Some(e.clone()))
                         .unwrap_or_else(|e| error!("fail to write query_log {:?}", e));
                 }
-                guard.state = Stopped(ExecuteStopped {
+                guard.state = Stopped(Box::new(ExecuteStopped {
                     stats: Default::default(),
                     reason,
                     stop_time: Instant::now(),
                     affect: Default::default(),
-                })
+                }))
             }
             Running(r) => {
                 // release session
@@ -202,12 +202,12 @@ impl Executor {
                     }
                 }
 
-                guard.state = Stopped(ExecuteStopped {
+                guard.state = Stopped(Box::new(ExecuteStopped {
                     stats: Progresses::from_context(&r.ctx),
                     reason,
                     stop_time: Instant::now(),
                     affect: r.ctx.get_affect(),
-                })
+                }))
             }
             Stopped(s) => {
                 tracing::info!(

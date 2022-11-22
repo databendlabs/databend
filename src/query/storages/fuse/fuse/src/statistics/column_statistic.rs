@@ -13,6 +13,10 @@
 //  limitations under the License.
 
 use common_exception::Result;
+use common_expression::Value;
+use common_expression::types::AnyType;
+use common_expression::types::NumberType;
+use common_expression::types::ValueType;
 use common_expression::types::nullable::NullableColumn;
 use common_expression::types::DataType;
 use common_expression::Chunk;
@@ -24,6 +28,20 @@ use common_storages_index::MinMaxIndex;
 use common_storages_index::SupportedType;
 use common_storages_table_meta::meta::ColumnStatistics;
 use common_storages_table_meta::meta::StatisticsOfColumns;
+
+pub fn calc_column_distinct_of_values(
+    column: &Column,
+    data_type: &DataType,
+    rows: usize
+) -> Result<u64> {
+    let distinct_values =  eval_aggr("approx_count_distinct", vec![], &[column.clone()], &[data_type.clone()], rows)?;
+    let col = NumberType::<u64>::try_downcast_column(&distinct_values.0).unwrap();
+    Ok(col[0])
+}
+
+pub fn get_traverse_columns_dfs(data_block: &Chunk) ->  Result<Vec<(Value<AnyType>, DataType)>>  {
+    traverse::traverse_columns_dfs(data_block.columns())
+}
 
 pub fn gen_columns_statistics(chunk: &Chunk) -> Result<StatisticsOfColumns> {
     let mut statistics = StatisticsOfColumns::new();
@@ -74,6 +92,8 @@ pub fn gen_columns_statistics(chunk: &Chunk) -> Result<StatisticsOfColumns> {
         } else {
             0
         };
+        
+        let distinct_of_values = calc_column_distinct_of_values(col, data_type, rows)?;
 
         let in_memory_size = col.memory_size() as u64;
         let col_stats = ColumnStatistics {
@@ -81,6 +101,7 @@ pub fn gen_columns_statistics(chunk: &Chunk) -> Result<StatisticsOfColumns> {
             max,
             null_count: unset_bits as u64,
             in_memory_size,
+            distinct_of_values: Some(distinct_of_values),
         };
 
         statistics.insert(idx as u32, col_stats);

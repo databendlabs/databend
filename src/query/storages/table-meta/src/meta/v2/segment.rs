@@ -165,6 +165,7 @@ impl From<(v0::BlockMeta, &DataSchema)> for BlockMeta {
                     max: v.max.clone(),
                     null_count: v.null_count,
                     in_memory_size: v.in_memory_size,
+                    distinct_of_values: None,
                 };
 
                 (*k, stats)
@@ -200,6 +201,7 @@ impl From<(&v1::BlockMeta, &DataSchema)> for BlockMeta {
                     max: v.max.clone(),
                     null_count: v.null_count,
                     in_memory_size: v.in_memory_size,
+                    distinct_of_values: None,
                 };
 
                 (*k, stats)

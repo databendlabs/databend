@@ -77,6 +77,7 @@ impl HiveBlockFilter {
                                 max,
                                 null_count: null_count as u64,
                                 in_memory_size: in_memory_size as u64,
+                                distinct_of_values: None,
                             };
                             if let Ok(idx) = self.data_schema.index_of(col.name()) {
                                 statistics.insert(idx as u32, col_stats);
@@ -94,6 +95,7 @@ impl HiveBlockFilter {
                         max: v,
                         null_count: 0,
                         in_memory_size: 0,
+                        distinct_of_values: None,
                     };
                     statistics.insert(idx as u32, col_stats);
                 }

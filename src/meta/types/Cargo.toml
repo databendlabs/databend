@@ -16,7 +16,6 @@ common-meta-stoerr = { path = "../stoerr" }
 common-storage = { path = "../../common/storage" }
 
 openraft = { workspace = true }
-sled = { workspace = true }
 
 anyerror = { workspace = true }
 chrono = "0.4.22"

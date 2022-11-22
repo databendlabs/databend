@@ -209,7 +209,7 @@ impl Processor for CompactTransform {
                         blocks.push(block);
                     }
                     let new_block = Chunk::concat(&blocks)?;
-                    let col_stats = reduce_block_statistics(&stats_of_columns)?;
+                    let col_stats = reduce_block_statistics(&stats_of_columns,  Some(&new_block))?;
 
                     let block_writer = BlockWriter::new(&self.dal, &self.location_gen);
                     let new_meta = block_writer.write(new_block, col_stats, None).await?;

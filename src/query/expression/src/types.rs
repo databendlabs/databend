@@ -309,6 +309,14 @@ pub trait ValueType: Debug + Clone + PartialEq + Sized + 'static {
     fn append_builder(builder: &mut Self::ColumnBuilder, other_builder: &Self::ColumnBuilder);
     fn build_column(builder: Self::ColumnBuilder) -> Self::Column;
     fn build_scalar(builder: Self::ColumnBuilder) -> Self::Scalar;
+
+    fn scalar_memory_size<'a>(_: &Self::ScalarRef<'a>) -> usize {
+        std::mem::size_of::<Self::Scalar>()
+    }
+
+    fn column_memory_size(col: &Self::Column) -> usize {
+        Self::column_len(col) * std::mem::size_of::<Self::Scalar>()
+    }
 }
 
 pub trait ArgType: ValueType {

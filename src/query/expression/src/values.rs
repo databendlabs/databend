@@ -295,6 +295,29 @@ impl<'a> ScalarRef<'a> {
             ScalarRef::Variant(_) => Domain::Undefined,
         }
     }
+
+    pub fn memory_size(&self) -> usize {
+        match self {
+            ScalarRef::Null | ScalarRef::EmptyArray => 0,
+            ScalarRef::Number(NumberScalar::UInt8(_)) => 1,
+            ScalarRef::Number(NumberScalar::UInt16(_)) => 2,
+            ScalarRef::Number(NumberScalar::UInt32(_)) => 4,
+            ScalarRef::Number(NumberScalar::UInt64(_)) => 8,
+            ScalarRef::Number(NumberScalar::Float32(_)) => 4,
+            ScalarRef::Number(NumberScalar::Float64(_)) => 8,
+            ScalarRef::Number(NumberScalar::Int8(_)) => 1,
+            ScalarRef::Number(NumberScalar::Int16(_)) => 2,
+            ScalarRef::Number(NumberScalar::Int32(_)) => 4,
+            ScalarRef::Number(NumberScalar::Int64(_)) => 8,
+            ScalarRef::Boolean(_) => 1,
+            ScalarRef::String(s) => s.len(),
+            ScalarRef::Timestamp(_) => 8,
+            ScalarRef::Date(_) => 4,
+            ScalarRef::Array(col) => col.memory_size(),
+            ScalarRef::Tuple(scalars) => scalars.iter().map(|s| s.memory_size()).sum(),
+            ScalarRef::Variant(buf) => buf.len(),
+        }
+    }
 }
 
 impl PartialOrd for Scalar {

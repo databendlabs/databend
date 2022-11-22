@@ -14,7 +14,8 @@ TableScan
 ├── read bytes: 0
 ├── partitions total: 0
 ├── partitions scanned: 0
-└── push downs: [filters: [(a = 1)], limit: NONE]
+├── push downs: [filters: [(a = 1)], limit: NONE]
+└── output columns: [0]
 
 statement query T
 explain select * from t_where_optimizer where a = b;
@@ -74,7 +75,8 @@ TableScan
 ├── read bytes: 0
 ├── partitions total: 0
 ├── partitions scanned: 0
-└── push downs: [filters: [(b = 1)], limit: NONE]
+├── push downs: [filters: [(b = 1)], limit: NONE]
+└── output columns: [0]
 
 statement ok
 drop table t_where_optimizer;
@@ -92,7 +94,8 @@ TableScan
 ├── read bytes: 0
 ├── partitions total: 0
 ├── partitions scanned: 0
-└── push downs: [filters: [(s:a > 0)], limit: NONE]
+├── push downs: [filters: [(s:a > 0)], limit: NONE]
+└── output columns: [0, 1]
 
 statement ok
 drop table t_where_optimizer;

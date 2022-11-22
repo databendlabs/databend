@@ -209,6 +209,7 @@ impl AccessChecker for PrivilegeAccess {
             Plan::RemoveStage(_) => {}
             Plan::Presign(_) => {}
             Plan::SetVariable(_) => {}
+            Plan::UnSetVariable(_) => {}
             Plan::SetRole(_) => {}
             Plan::Kill(_) => {
                 session

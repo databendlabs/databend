@@ -374,6 +374,8 @@ pub trait VisitorMut: Sized {
     ) {
     }
 
+    fn visit_unset_variable(&mut self, _stmt: &mut UnSetStmt<'_>) {}
+
     fn visit_set_role(&mut self, _is_default: bool, _role_name: &mut String) {}
 
     fn visit_insert(&mut self, _insert: &mut InsertStmt<'_>) {}

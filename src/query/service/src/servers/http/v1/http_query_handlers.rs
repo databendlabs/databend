@@ -49,6 +49,7 @@ use crate::sessions::QueryAffect;
 use crate::sessions::SessionType;
 const HEADER_QUERY_ID: &str = "X-DATABEND-QUERY-ID";
 const HEADER_QUERY_STATE: &str = "X-DATABEND-QUERY-STATE";
+const HEADER_QUERY_PAGE_ROWS: &str = "X-DATABEND-QUERY-PAGE-ROWS";
 
 pub fn make_page_uri(query_id: &str, page_no: usize) -> String {
     format!("/v1/query/{}/page/{}", query_id, page_no)
@@ -148,6 +149,7 @@ impl QueryResponse {
             progresses: state.progresses.clone(),
             running_time_ms: state.running_time_ms,
         };
+        let rows = data.data.len();
         Json(QueryResponse {
             data: data.into(),
             state: state.state,
@@ -165,6 +167,7 @@ impl QueryResponse {
         })
         .with_header(HEADER_QUERY_ID, id.clone())
         .with_header(HEADER_QUERY_STATE, state.state.to_string())
+        .with_header(HEADER_QUERY_PAGE_ROWS, rows)
     }
 
     pub(crate) fn fail_to_start_sql(err: &ErrorCode) -> impl IntoResponse {

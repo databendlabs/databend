@@ -37,6 +37,7 @@ pub struct ColumnStatistics {
     #[serde(alias = "unset_bits")]
     pub null_count: u64,
     pub in_memory_size: u64,
+    pub distinct_of_values: Option<u64>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]

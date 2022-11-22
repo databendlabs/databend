@@ -63,6 +63,7 @@ impl HivePartitionPruner {
                     max: scalar,
                     null_count: 0,
                     in_memory_size: 0,
+                    distinct_of_values: None,
                 };
                 stats.insert(index as u32, column_stats);
             }
