@@ -145,6 +145,14 @@ impl ValueType for NullType {
     fn build_scalar(len: Self::ColumnBuilder) -> Self::Scalar {
         assert_eq!(len, 1);
     }
+
+    fn scalar_memory_size<'a>(_: &Self::ScalarRef<'a>) -> usize {
+        0
+    }
+
+    fn column_memory_size(_: &Self::Column) -> usize {
+        std::mem::size_of::<usize>()
+    }
 }
 
 impl ArgType for NullType {

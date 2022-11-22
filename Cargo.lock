@@ -1485,6 +1485,7 @@ dependencies = [
  "sha2",
  "simdutf8",
  "siphasher",
+ "streaming_algorithms",
  "strength_reduce",
  "twox-hash",
  "uuid",
@@ -1523,6 +1524,7 @@ dependencies = [
  "serde",
  "simdutf8",
  "siphasher",
+ "streaming_algorithms",
  "strength_reduce",
 ]
 
@@ -2040,6 +2042,7 @@ dependencies = [
  "semver 1.0.14",
  "serde",
  "serde_json",
+ "snailquote",
  "tempfile",
  "time 0.3.15",
  "tokio-stream",
@@ -6685,6 +6688,7 @@ dependencies = [
  "rand_chacha 0.2.2",
  "rand_core 0.5.1",
  "rand_hc",
+ "rand_pcg",
 ]
 
 [[package]]
@@ -6741,6 +6745,15 @@ name = "rand_hc"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ca3129af7b92a17112d59ad498c6f81eaf463253766b90396d39ea7a39d6613c"
+dependencies = [
+ "rand_core 0.5.1",
+]
+
+[[package]]
+name = "rand_pcg"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "16abd0c1b639e9eb4d7c50c0b8100b0d0f849be2349829c740fe8e6eb4816429"
 dependencies = [
  "rand_core 0.5.1",
 ]
@@ -7820,6 +7833,16 @@ name = "streaming-iterator"
 version = "0.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d55dd09aaa2f85ef8767cc9177294d63c30d62c8533329e75aa51d8b94976e22"
+
+[[package]]
+name = "streaming_algorithms"
+version = "0.3.0"
+source = "git+https://github.com/datafuse-extras/streaming_algorithms?tag=hyperloglog_del_op_fix_overflow_bug#e07d26324e3d5f42bd233231e80522b2659fce5e"
+dependencies = [
+ "rand 0.7.3",
+ "serde",
+ "twox-hash",
+]
 
 [[package]]
 name = "strength_reduce"

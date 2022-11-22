@@ -415,7 +415,8 @@ impl Table for FuseTable {
             let stats = &snapshot.summary.col_stats;
             FakedColumnStatisticsProvider {
                 column_stats: stats.clone(),
-                faked_ndv: snapshot.summary.row_count,
+                // save row count first
+                distinct_count: snapshot.summary.row_count,
             }
         } else {
             FakedColumnStatisticsProvider::default()
@@ -478,8 +479,7 @@ impl Table for FuseTable {
 #[derive(Default)]
 struct FakedColumnStatisticsProvider {
     column_stats: HashMap<ColumnId, FuseColumnStatistics>,
-    // faked value, just the row number
-    faked_ndv: u64,
+    distinct_count: u64,
 }
 
 impl ColumnStatisticsProvider for FakedColumnStatisticsProvider {
@@ -489,7 +489,9 @@ impl ColumnStatisticsProvider for FakedColumnStatisticsProvider {
             min: s.min.clone(),
             max: s.max.clone(),
             null_count: s.null_count,
-            number_of_distinct_values: self.faked_ndv,
+            number_of_distinct_values: s
+                .distinct_of_values
+                .map_or_else(|| self.distinct_count, |n| n),
         })
     }
 }

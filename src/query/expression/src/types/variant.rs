@@ -148,6 +148,14 @@ impl ValueType for VariantType {
     fn build_scalar(builder: Self::ColumnBuilder) -> Self::Scalar {
         builder.build_scalar()
     }
+
+    fn scalar_memory_size<'a>(scalar: &Self::ScalarRef<'a>) -> usize {
+        scalar.len()
+    }
+
+    fn column_memory_size(col: &Self::Column) -> usize {
+        col.data.len() + col.offsets.len() * 8
+    }
 }
 
 impl ArgType for VariantType {
