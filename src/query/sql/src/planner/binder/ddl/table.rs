@@ -794,6 +794,7 @@ impl<'a> Binder {
             match ast_action {
                 AstOptimizeTableAction::All => OptimizeTableAction::All,
                 AstOptimizeTableAction::Purge => OptimizeTableAction::Purge,
+                AstOptimizeTableAction::Statistic => OptimizeTableAction::Statistic,
                 AstOptimizeTableAction::Compact { target, limit } => {
                     let limit_cnt = match limit {
                         Some(Expr::Literal {

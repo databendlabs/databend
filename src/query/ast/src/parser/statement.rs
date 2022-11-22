@@ -1406,6 +1406,7 @@ pub fn optimize_table_action(i: Input) -> IResult<OptimizeTableAction> {
     alt((
         value(OptimizeTableAction::All, rule! { ALL }),
         value(OptimizeTableAction::Purge, rule! { PURGE }),
+        value(OptimizeTableAction::Statistic, rule! { STATISTIC }),
         map(
             rule! { COMPACT ~ (SEGMENT)? ~ ( LIMIT ~ ^#expr )?},
             |(_, opt_segment, opt_limit)| OptimizeTableAction::Compact {
