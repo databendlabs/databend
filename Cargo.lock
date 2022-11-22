@@ -2042,6 +2042,7 @@ dependencies = [
  "semver 1.0.14",
  "serde",
  "serde_json",
+ "snailquote",
  "tempfile",
  "time 0.3.15",
  "tokio-stream",

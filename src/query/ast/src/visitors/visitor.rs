@@ -351,6 +351,8 @@ pub trait Visitor<'ast>: Sized {
 
     fn visit_show_settings(&mut self, _like: &'ast Option<String>) {}
 
+    fn visit_unset_variable(&mut self, _stmt: &'ast UnSetStmt<'ast>) {}
+
     fn visit_show_process_list(&mut self) {}
 
     fn visit_show_metrics(&mut self) {}

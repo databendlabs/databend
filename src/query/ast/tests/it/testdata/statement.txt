@@ -7823,3 +7823,46 @@ Update(
 )
 
 
+---------- Input ----------
+UNSET max_threads;
+---------- Output ---------
+UNSET max_threads
+---------- AST ------------
+UnSetVariable(
+    UnSetStmt {
+        source: Var {
+            variable: Identifier {
+                name: "max_threads",
+                quote: None,
+                span: Ident(6..17),
+            },
+        },
+    },
+)
+
+
+---------- Input ----------
+UNSET (max_threads, sql_dialect);
+---------- Output ---------
+UNSET (max_threads, sql_dialect)
+---------- AST ------------
+UnSetVariable(
+    UnSetStmt {
+        source: Vars {
+            variables: [
+                Identifier {
+                    name: "max_threads",
+                    quote: None,
+                    span: Ident(7..18),
+                },
+                Identifier {
+                    name: "sql_dialect",
+                    quote: None,
+                    span: Ident(20..31),
+                },
+            ],
+        },
+    },
+)
+
+
