@@ -49,6 +49,7 @@ impl ExpressionParser {
             CATALOG_DEFAULT.to_owned(),
             "default".to_string(),
             table_meta,
+            None,
         );
 
         let columns = metadata.read().columns_by_table_index(table_index);
