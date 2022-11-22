@@ -67,7 +67,17 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
 
     fn merge(&self, _place: StateAddr, _rhs: StateAddr) -> Result<()>;
 
-    // TODO append the value into the column builder
+    fn batch_merge_result(
+        &self,
+        places: Vec<StateAddr>,
+        array: &mut dyn MutableColumn,
+    ) -> Result<()> {
+        for place in places {
+            self.merge_result(place, array)?;
+        }
+        Ok(())
+    }
+
     fn merge_result(&self, _place: StateAddr, array: &mut dyn MutableColumn) -> Result<()>;
 
     fn need_manual_drop_state(&self) -> bool {
