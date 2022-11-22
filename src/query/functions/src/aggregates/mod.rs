@@ -26,7 +26,7 @@ mod adaptors;
 
 #[macro_use]
 mod macros;
-mod aggregate_approximate_distinct_count;
+mod aggregate_approx_count_distinct;
 mod aggregate_arg_min_max;
 mod aggregate_avg;
 mod aggregate_combinator_distinct;
@@ -41,7 +41,7 @@ mod aggregate_stddev_pop;
 mod aggregate_window_funnel;
 
 pub use adaptors::*;
-pub use aggregate_approximate_distinct_count::AggregateApproximateDistinctCountFunction;
+pub use aggregate_approx_count_distinct::AggregateApproxCountDistinctFunction;
 pub use aggregate_arg_min_max::AggregateArgMinMaxFunction;
 pub use aggregate_avg::AggregateAvgFunction;
 pub use aggregate_combinator_distinct::AggregateDistinctCombinator;
