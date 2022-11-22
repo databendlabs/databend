@@ -154,10 +154,7 @@ impl HashMethod for HashMethodSerializer {
 
     fn build_keys_iter<'a>(&self, key_state: &'a KeysState) -> Result<Self::HashKeyIter<'a>> {
         match key_state {
-            KeysState::Column(col) => match col {
-                Column::String(col) => Ok(col.iter()),
-                _ => unreachable!(),
-            },
+            KeysState::Column(Column::String(col)) => Ok(col.iter()),
             _ => unreachable!(),
         }
     }
@@ -180,11 +177,7 @@ where T: Number
 impl<T> HashMethodFixedKeys<T>
 where T: Clone + Default
 {
-    fn build_keys_vec<'a>(
-        &self,
-        group_columns: &[(&Column, DataType)],
-        rows: usize,
-    ) -> Result<Vec<T>> {
+    fn build_keys_vec(&self, group_columns: &[(&Column, DataType)], rows: usize) -> Result<Vec<T>> {
         let step = std::mem::size_of::<T>();
         let mut group_keys: Vec<T> = vec![T::default(); rows];
         let ptr = group_keys.as_mut_ptr() as *mut u8;
@@ -342,10 +335,7 @@ macro_rules! impl_hash_method_fixed_keys {
                 key_state: &'a KeysState,
             ) -> Result<Self::HashKeyIter<'a>> {
                 match key_state {
-                    KeysState::Column(col) => match col {
-                        Column::Number(NumberColumn::$dt(col)) => Ok(col.iter()),
-                        _ => unreachable!(),
-                    },
+                    KeysState::Column(Column::Number(NumberColumn::$dt(col))) => Ok(col.iter()),
                     _ => unreachable!(),
                 }
             }
@@ -478,7 +468,7 @@ pub fn fixed_hash(
         let (null_offset, bitmap) = nulls.unwrap();
         let bitmap = bitmap
             .map(|b| (&b) & (&c.validity))
-            .unwrap_or(c.validity.clone());
+            .unwrap_or_else(|| c.validity.clone());
 
         let inner_type = data_type.as_nullable().unwrap();
         return fixed_hash(
@@ -520,15 +510,13 @@ pub fn fixed_hash(
             with_number_mapped_type!(|NUM_TYPE| match c {
                 NumberColumn::NUM_TYPE(t) => {
                     let mut ptr = ptr;
+                    let count = std::mem::size_of::<NUM_TYPE>();
                     match nulls {
                         Some((offsize, Some(bitmap))) => {
                             for (value, valid) in t.iter().zip(bitmap.iter()) {
                                 unsafe {
                                     if valid {
-                                        let slice = std::slice::from_raw_parts_mut(
-                                            ptr,
-                                            std::mem::size_of::<NUM_TYPE>(),
-                                        );
+                                        let slice = std::slice::from_raw_parts_mut(ptr, count);
                                         value.marshal(slice);
                                     } else {
                                         ptr.add(offsize).write(1u8);
@@ -541,10 +529,7 @@ pub fn fixed_hash(
                         _ => {
                             for value in t.iter() {
                                 unsafe {
-                                    let slice = std::slice::from_raw_parts_mut(
-                                        ptr,
-                                        std::mem::size_of::<NUM_TYPE>(),
-                                    );
+                                    let slice = std::slice::from_raw_parts_mut(ptr, count);
                                     value.marshal(slice);
                                     ptr = ptr.add(step);
                                 }

@@ -82,13 +82,7 @@ impl FieldEncoderRowBased for FieldEncoderJSON {
         self.write_string_inner(&buf, out_buf, raw)
     }
 
-    fn write_tuple(
-        &self,
-        columns: &Vec<Column>,
-        row_index: usize,
-        out_buf: &mut Vec<u8>,
-        raw: bool,
-    ) {
+    fn write_tuple(&self, columns: &[Column], row_index: usize, out_buf: &mut Vec<u8>, raw: bool) {
         let mut buf = vec![];
         self.nested.write_tuple(columns, row_index, &mut buf, false);
         self.write_string_inner(&buf, out_buf, raw)

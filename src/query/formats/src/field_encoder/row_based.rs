@@ -37,26 +37,26 @@ pub trait FieldEncoderRowBased {
         match &column {
             Column::Null { .. } => self.write_null(out_buf, raw),
             Column::EmptyArray { .. } => self.write_empty_array(out_buf, raw),
-            Column::Boolean(c) => self.write_bool(&c, row_index, out_buf, raw),
+            Column::Boolean(c) => self.write_bool(c, row_index, out_buf, raw),
             Column::Number(col) => match col {
-                NumberColumn::UInt8(c) => self.write_int(&c, row_index, out_buf, raw),
-                NumberColumn::UInt16(c) => self.write_int(&c, row_index, out_buf, raw),
-                NumberColumn::UInt32(c) => self.write_int(&c, row_index, out_buf, raw),
-                NumberColumn::UInt64(c) => self.write_int(&c, row_index, out_buf, raw),
-                NumberColumn::Int8(c) => self.write_int(&c, row_index, out_buf, raw),
-                NumberColumn::Int16(c) => self.write_int(&c, row_index, out_buf, raw),
-                NumberColumn::Int32(c) => self.write_int(&c, row_index, out_buf, raw),
-                NumberColumn::Int64(c) => self.write_int(&c, row_index, out_buf, raw),
-                NumberColumn::Float32(c) => self.write_float(&c, row_index, out_buf, raw),
-                NumberColumn::Float64(c) => self.write_float(&c, row_index, out_buf, raw),
+                NumberColumn::UInt8(c) => self.write_int(c, row_index, out_buf, raw),
+                NumberColumn::UInt16(c) => self.write_int(c, row_index, out_buf, raw),
+                NumberColumn::UInt32(c) => self.write_int(c, row_index, out_buf, raw),
+                NumberColumn::UInt64(c) => self.write_int(c, row_index, out_buf, raw),
+                NumberColumn::Int8(c) => self.write_int(c, row_index, out_buf, raw),
+                NumberColumn::Int16(c) => self.write_int(c, row_index, out_buf, raw),
+                NumberColumn::Int32(c) => self.write_int(c, row_index, out_buf, raw),
+                NumberColumn::Int64(c) => self.write_int(c, row_index, out_buf, raw),
+                NumberColumn::Float32(c) => self.write_float(c, row_index, out_buf, raw),
+                NumberColumn::Float64(c) => self.write_float(c, row_index, out_buf, raw),
             },
-            Column::Date(c) => self.write_date(&c, row_index, out_buf, raw),
-            Column::Timestamp(c) => self.write_timestamp(&c, row_index, out_buf, raw),
-            Column::String(c) => self.write_string(&c, row_index, out_buf, raw),
-            Column::Nullable(box c) => self.write_nullable(&c, row_index, out_buf, raw),
-            Column::Array(box c) => self.write_array(&c, row_index, out_buf, raw),
-            Column::Tuple { fields, .. } => self.write_tuple(&fields, row_index, out_buf, raw),
-            Column::Variant(c) => self.write_variant(&c, row_index, out_buf, raw),
+            Column::Date(c) => self.write_date(c, row_index, out_buf, raw),
+            Column::Timestamp(c) => self.write_timestamp(c, row_index, out_buf, raw),
+            Column::String(c) => self.write_string(c, row_index, out_buf, raw),
+            Column::Nullable(box c) => self.write_nullable(c, row_index, out_buf, raw),
+            Column::Array(box c) => self.write_array(c, row_index, out_buf, raw),
+            Column::Tuple { fields, .. } => self.write_tuple(fields, row_index, out_buf, raw),
+            Column::Variant(c) => self.write_variant(c, row_index, out_buf, raw),
         }
     }
 
@@ -150,7 +150,7 @@ pub trait FieldEncoderRowBased {
         raw: bool,
     ) {
         let v = unsafe { column.get_unchecked(row_index) };
-        let s = timestamp_to_string_micro(&v, &self.common_settings().timezone);
+        let s = timestamp_to_string_micro(v, &self.common_settings().timezone);
         self.write_string_inner(s.as_bytes(), out_buf, raw);
     }
 
@@ -174,11 +174,5 @@ pub trait FieldEncoderRowBased {
         raw: bool,
     );
 
-    fn write_tuple(
-        &self,
-        columns: &Vec<Column>,
-        row_index: usize,
-        out_buf: &mut Vec<u8>,
-        raw: bool,
-    );
+    fn write_tuple(&self, columns: &[Column], row_index: usize, out_buf: &mut Vec<u8>, raw: bool);
 }

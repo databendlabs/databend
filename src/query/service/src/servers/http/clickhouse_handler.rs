@@ -133,7 +133,7 @@ async fn execute(
     // try to catch runtime error before http response, so user can client can get http 500
     let first_block = match data_stream.next().await {
         Some(block) => match block {
-            Ok(block) => Some(compress_fn(output_format.serialize_block(&block))),
+            Ok(block) => Some(compress_fn(output_format.serialize_chunk(&block))),
             Err(err) => return Err(err),
         },
         None => None,
@@ -149,7 +149,7 @@ async fn execute(
             while let Some(block) = data_stream.next().await {
                 match block{
                     Ok(block) => {
-                        yield compress_fn(output_format.serialize_block(&block));
+                        yield compress_fn(output_format.serialize_chunk(&block));
                     },
                     Err(err) => {
                         let message = format!("{}", err);
@@ -379,7 +379,7 @@ fn serialize_one_block(
         &ctx.get_settings(),
     )?;
     let mut res = output_format.serialize_prefix()?;
-    let mut data = output_format.serialize_block(&block)?;
+    let mut data = output_format.serialize_chunk(&block)?;
     if params.compress() {
         data = compress_block(data)?;
     }

@@ -36,7 +36,7 @@ impl ParquetOutputFormat {
 }
 
 impl OutputFormat for ParquetOutputFormat {
-    fn serialize_block(&mut self, chunk: &Chunk) -> Result<Vec<u8>> {
+    fn serialize_chunk(&mut self, chunk: &Chunk) -> Result<Vec<u8>> {
         self.chunks.push(chunk.clone());
         Ok(vec![])
     }

@@ -31,7 +31,7 @@ pub use tsv::TSVWithNamesOutputFormat;
 pub use values::ValuesOutputFormat;
 
 pub trait OutputFormat: Send {
-    fn serialize_block(&mut self, chunk: &Chunk) -> Result<Vec<u8>>;
+    fn serialize_chunk(&mut self, chunk: &Chunk) -> Result<Vec<u8>>;
 
     fn serialize_prefix(&self) -> Result<Vec<u8>> {
         Ok(vec![])

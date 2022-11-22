@@ -149,7 +149,7 @@ impl Chunk {
                     .iter()
                     .map(|(value, ty)| match value {
                         Value::Scalar(v) => (Value::Scalar(v.clone()), ty.clone()),
-                        Value::Column(c) => (Value::Column(Column::filter(c, &bitmap)), ty.clone()),
+                        Value::Column(c) => (Value::Column(Column::filter(c, bitmap)), ty.clone()),
                     })
                     .collect();
                 Ok(Chunk::new(after_columns, chunk.num_rows() - count_zeros))

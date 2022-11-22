@@ -176,7 +176,10 @@ impl<'a, T: ValueType> ValueRef<'a, T> {
     }
 
     pub fn memory_size(&'a self) -> usize {
-        todo!("expression")
+        match self {
+            ValueRef::Scalar(scalar) => T::scalar_memory_size(scalar),
+            ValueRef::Column(c) => T::column_memory_size(c),
+        }
     }
 }
 

@@ -66,7 +66,7 @@ impl<const WITH_NAMES: bool, const WITH_TYPES: bool> CSVOutputFormatBase<WITH_NA
 impl<const WITH_NAMES: bool, const WITH_TYPES: bool> OutputFormat
     for CSVOutputFormatBase<WITH_NAMES, WITH_TYPES>
 {
-    fn serialize_block(&mut self, chunk: &Chunk) -> Result<Vec<u8>> {
+    fn serialize_chunk(&mut self, chunk: &Chunk) -> Result<Vec<u8>> {
         let rows_size = chunk.num_rows();
         let mut buf = Vec::with_capacity(chunk.memory_size());
 

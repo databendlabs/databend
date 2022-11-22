@@ -86,7 +86,7 @@ impl Downloader for ResultTable {
             while let Some(block) = block_stream.next().await {
                 match block{
                     Ok(block) => {
-                        yield output_format.serialize_block(&block);
+                        yield output_format.serialize_chunk(&block);
                     },
                     Err(err) => yield(Err(err)),
                 };

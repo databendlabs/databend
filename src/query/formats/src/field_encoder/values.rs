@@ -97,13 +97,7 @@ impl FieldEncoderRowBased for FieldEncoderValues {
         out_buf.push(b']');
     }
 
-    fn write_tuple(
-        &self,
-        columns: &Vec<Column>,
-        row_index: usize,
-        out_buf: &mut Vec<u8>,
-        _raw: bool,
-    ) {
+    fn write_tuple(&self, columns: &[Column], row_index: usize, out_buf: &mut Vec<u8>, _raw: bool) {
         out_buf.push(b'(');
         for (i, inner) in columns.iter().enumerate() {
             if i > 0 {
