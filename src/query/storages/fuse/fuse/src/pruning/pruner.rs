@@ -19,7 +19,7 @@ use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::{DataSchemaRef, Expr, RemoteExpr};
 // use common_sql::executor::ExpressionOp;
-use common_storages_index::BlockFilter;
+use common_storages_index::ChunkFilter;
 use common_storages_table_meta::meta::Location;
 use opendal::Operator;
 
@@ -166,7 +166,7 @@ mod util {
         todo!("expression");
         // match maybe_filter {
         //     // figure it out
-        //     Ok(filter) => BlockFilter::from_filter_block(schema.clone(), filter.into_data())?
+        //     Ok(filter) => ChunkFilter::from_filter_chunk(schema.clone(), filter.into_data())?
         //         .maybe_true(filter_expr),
         //     Err(e) if e.code() == ErrorCode::DEPRECATED_INDEX_FORMAT => {
         //         // In case that the index is no longer supported, just return ture to indicate

@@ -30,7 +30,7 @@ use opendal::Operator;
 use tracing::warn;
 use uuid::Uuid;
 
-use crate::index::BlockFilter;
+use crate::index::ChunkFilter;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::util;
 

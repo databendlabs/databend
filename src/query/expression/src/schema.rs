@@ -20,6 +20,8 @@ use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::datatypes::DataType as ArrowDataType;
 use common_arrow::arrow::datatypes::Field as ArrowField;
 use common_arrow::arrow::datatypes::Schema as ArrowSchema;
+use common_exception::ErrorCode;
+use common_exception::Result;
 use common_jsonb::Number as JsonbNumber;
 use common_jsonb::Object as JsonbObject;
 use common_jsonb::Value as JsonbValue;
@@ -46,7 +48,6 @@ use crate::utils::ColumnFrom;
 use crate::with_number_mapped_type;
 use crate::with_number_type;
 use crate::Column;
-use crate::Result;
 use crate::TypeDeserializer;
 use crate::Value;
 use crate::ARROW_EXT_TYPE_EMPTY_ARRAY;
@@ -157,13 +158,10 @@ impl DataSchema {
         }
         let valid_fields: Vec<String> = self.fields.iter().map(|f| f.name().clone()).collect();
 
-        Err((
-            None,
-            format!(
-                "Unable to get field named \"{}\". Valid fields: {:?}",
-                name, valid_fields
-            ),
-        ))
+        Err(ErrorCode::BadArguments(format!(
+            "Unable to get field named \"{}\". Valid fields: {:?}",
+            name, valid_fields
+        )))
     }
 
     /// Look up a column by name and return a immutable reference to the column along with
@@ -211,7 +209,9 @@ impl DataSchema {
 
     fn traverse_paths(fields: &[DataField], path: &[usize]) -> Result<DataField> {
         if path.is_empty() {
-            return Err((None, "path should not be empty".to_string()));
+            return Err(ErrorCode::BadArguments(
+                "path should not be empty".to_string(),
+            ));
         }
         let field = &fields[path[0]];
         if path.len() == 1 {
@@ -231,13 +231,10 @@ impl DataSchema {
             return Self::traverse_paths(&fields, &path[1..]);
         }
         let valid_fields: Vec<String> = fields.iter().map(|f| f.name().clone()).collect();
-        Err((
-            None,
-            format!(
-                "Unable to get field paths. Valid fields: {:?}",
-                valid_fields
-            ),
-        ))
+        Err(ErrorCode::BadArguments(format!(
+            "Unable to get field paths. Valid fields: {:?}",
+            valid_fields
+        )))
     }
 
     /// project will do column pruning.

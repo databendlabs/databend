@@ -16,14 +16,15 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::RemoteExpr;
 use common_expression::types::DataType;
 use common_expression::Chunk;
 use common_expression::DataField;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
+use common_expression::RemoteExpr;
 use common_expression::Scalar;
 use common_expression::SchemaDataType;
+use common_expression::Value;
 
 use crate::filters::Filter;
 use crate::filters::FilterBuilder;
@@ -31,13 +32,13 @@ use crate::filters::Xor8Builder;
 use crate::filters::Xor8Filter;
 use crate::SupportedType;
 
-/// BlockFilter represents multiple per-column filters(bloom filter or xor filter etc) for data block.
+/// ChunkFilter represents multiple per-column filters(bloom filter or xor filter etc) for chunk.
 ///
 /// By default we create a filter per column for a parquet data file. For columns whose data_type
 /// are not applicable for a filter, we skip the creation.
-/// That is to say, it is legal to have a BlockFilter with zero columns.
+/// That is to say, it is legal to have a ChunkFilter with zero columns.
 ///
-/// For example, for the source data block as follows:
+/// For example, for the source chunk as follows:
 /// ```
 ///         +---name--+--age--+
 ///         | "Alice" |  20   |
@@ -50,17 +51,17 @@ use crate::SupportedType;
 ///         |  123456789abcd |  ac2345bcd   |
 ///         +----------------+--------------+
 /// ```
-pub struct BlockFilter {
-    /// The schema of the source table/block, which the filter work for.
+pub struct ChunkFilter {
+    /// The schema of the source table/chunk, which the filter work for.
     pub source_schema: DataSchemaRef,
 
-    /// The schema of the filter block.
+    /// The schema of the filter chunk.
     ///
     /// It is a sub set of `source_schema`.
     pub filter_schema: DataSchemaRef,
 
-    /// Data block of filters;
-    pub filter_block: Chunk,
+    /// Data chunk of filters;
+    pub filter_chunk: Chunk,
 }
 
 /// FilterExprEvalResult represents the evaluation result of an expression by a filter.
@@ -76,7 +77,7 @@ pub enum FilterEvalResult {
     NotApplicable,
 }
 
-impl BlockFilter {
+impl ChunkFilter {
     /// For every applicable column, we will create a filter.
     /// The filter will be stored with field name 'Bloom(column_name)'
     pub fn build_filter_column_name(column_name: &str) -> String {
@@ -102,60 +103,59 @@ impl BlockFilter {
 
     /// Load a filter directly from the source table's schema and the corresponding filter parquet file.
     #[tracing::instrument(level = "debug", skip_all)]
-    pub fn from_filter_block(
+    pub fn from_filter_chunk(
         source_table_schema: DataSchemaRef,
         filter_schema: DataSchemaRef,
-        filter_block: Chunk,
+        filter_chunk: Chunk,
     ) -> Result<Self> {
         Ok(Self {
             source_schema: source_table_schema,
             filter_schema,
-            filter_block,
+            filter_chunk,
         })
     }
 
-    /// Create a filter block from source data.
+    /// Create a filter chunk from source data.
     ///
-    /// All input blocks should belong to a Parquet file, e.g. the block array represents the parquet file in memory.
-    pub fn try_create(source_schema: DataSchemaRef, blocks: &[&Chunk]) -> Result<Self> {
-        todo!("expression");
-        // if blocks.is_empty() {
-        //     return Err(ErrorCode::BadArguments("data blocks is empty"));
-        // }
+    /// All input chunks should belong to a Parquet file, e.g. the chunk array represents the parquet file in memory.
+    pub fn try_create(source_schema: DataSchemaRef, chunks: &[&Chunk]) -> Result<Self> {
+        if chunks.is_empty() {
+            return Err(ErrorCode::BadArguments("chunks is empty"));
+        }
 
-        // let mut filter_columns = vec![];
+        let mut filter_columns = vec![];
 
-        // let fields = source_schema.fields();
-        // for (i, field) in fields.iter().enumerate() {
-        //     if Xor8Filter::is_supported_type(field.data_type()) {
-        //         // create filter per column
-        //         let mut filter_builder = Xor8Builder::create();
+        let fields = source_schema.fields();
+        for (i, field) in fields.iter().enumerate() {
+            if Xor8Filter::is_supported_schema_type(field.data_type()) {
+                // create filter per column
+                let mut filter_builder = Xor8Builder::create();
 
-        //         // ingest the same column data from all blocks
-        //         for block in blocks.iter() {
-        //             let (col, _) = block.column(i);
-        //             // todo!("expression")
-        //             filter_builder.add_keys(&col.to_values());
-        //         }
+                // ingest the same column data from all chunks
+                for chunk in chunks.iter() {
+                    let (col, _) = chunk.column(i);
+                    todo!("expression");
+                    // filter_builder.add_keys(&col.to_values());
+                }
 
-        //         let filter = filter_builder.build()?;
+                let filter = filter_builder.build()?;
 
-        //         // create filter column
+                // create filter column
 
-        //         let serialized_bytes = filter.to_bytes()?;
-        //         let filter_value = Value::Scalar(Scalar::String(serialized_bytes));
+                let serialized_bytes = filter.to_bytes()?;
+                let filter_value = Value::Scalar(Scalar::String(serialized_bytes));
 
-        //         filter_columns.push((filter_value, DataType::String));
-        //     }
-        // }
+                filter_columns.push((filter_value, DataType::String));
+            }
+        }
 
-        // let filter_schema = Arc::new(Self::build_filter_schema(source_schema.as_ref()));
-        // let filter_block = Chunk::new(filter_columns, 1);
-        // Ok(Self {
-        //     source_schema,
-        //     filter_schema,
-        //     filter_block,
-        // })
+        let filter_schema = Arc::new(Self::build_filter_schema(source_schema.as_ref()));
+        let filter_chunk = Chunk::new(filter_columns, 1);
+        Ok(Self {
+            source_schema,
+            filter_schema,
+            filter_chunk,
+        })
     }
 
     pub fn find(
@@ -164,19 +164,22 @@ impl BlockFilter {
         target: &Scalar,
         typ: &SchemaDataType,
     ) -> Result<FilterEvalResult> {
-        todo!("expression");
-        // let filter_column = Self::build_filter_column_name(column_name);
-        // if !self.filter_schema.has_field(&filter_column)
-        //     || !Xor8Filter::is_supported_type(typ)
-        //     || target.is_null()
-        // {
-        //     // The column doesn't a filter
-        //     return Ok(FilterEvalResult::NotApplicable);
-        // }
+        let filter_column = Self::build_filter_column_name(column_name);
+        if !self.filter_schema.has_field(&filter_column)
+            || !Xor8Filter::is_supported_schema_type(typ)
+            || target.is_null()
+        {
+            // The column doesn't a filter
+            return Ok(FilterEvalResult::NotApplicable);
+        }
 
-        // let index = self.filter_schema.index_of(&filter_column)?;
-        // let filter_bytes = self.filter_block.first(index)?.as_string()?;
-        // let (filter, _size) = Xor8Filter::from_bytes(&filter_bytes)?;
+        let index = self.filter_schema.index_of(&filter_column)?;
+        let value = self.filter_chunk.first(index)?;
+        let filter_bytes = value
+            .as_string()
+            .ok_or_else(|| ErrorCode::Internal("data in filter chunk should be string data"))?;
+        let (filter, _size) = Xor8Filter::from_bytes(filter_bytes)?;
+        todo!("expression");
         // if filter.contains(target) {
         //     Ok(FilterEvalResult::Maybe)
         // } else {
@@ -213,7 +216,7 @@ impl BlockFilter {
         // }
     }
 
-    // Evaluate the equivalent expression like "name='Alice'"
+    // // Evaluate the equivalent expression like "name='Alice'"
     // fn eval_equivalent_expression(
     //     &self,
     //     left: &Expression,
@@ -227,9 +230,7 @@ impl BlockFilter {
     //         (Expression::IndexedVariable { name, .. }, Expression::Constant { value, .. })
     //         | (Expression::Constant { value, .. }, Expression::IndexedVariable { name, .. }) => {
     //             // find the corresponding column from source table
-    //             let data_field = schema.field_with_name(name).map_err(|(_, e)| {
-    //                 ErrorCode::BadArguments(format!("Cannot find column {}", name))
-    //             })?;
+    //             let data_field = schema.field_with_name(name)?;
     //             let data_type = data_field.data_type();
 
     //             // check if cast needed

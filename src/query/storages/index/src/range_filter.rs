@@ -20,13 +20,13 @@ use std::sync::Arc;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::RemoteExpr;
 use common_expression::types::NumberDataType;
 use common_expression::Chunk;
 use common_expression::Column;
 use common_expression::DataField;
 use common_expression::DataSchemaRef;
 use common_expression::FunctionContext;
+use common_expression::RemoteExpr;
 use common_expression::SchemaDataType;
 use common_functions_v2::scalars::check_pattern_type;
 use common_functions_v2::scalars::is_like_pattern_escape;
@@ -108,40 +108,40 @@ impl RangeFilter {
 //     schema: &DataSchemaRef,
 //     stat_columns: &mut StatColumns,
 // ) -> Expression {
-    // todo!("expression");
-    // let unhandled = Expression::Constant {
-    //     value: Scalar::Boolean(true),
-    //     data_type: DataType::Boolean,
-    // };
+// todo!("expression");
+// let unhandled = Expression::Constant {
+//     value: Scalar::Boolean(true),
+//     data_type: DataType::Boolean,
+// };
 
-    // let (exprs, op) = match expr {
-    //     Expression::Constant { .. } => return expr.clone(),
-    //     Expression::Function { name, args, .. } => {
-    //         if args.len() == 2 {
-    //             let left = &args[0];
-    //             let right = &args[1];
-    //             match name.to_lowercase().as_str() {
-    //                 "and" => {
-    //                     let left = build_verifiable_expr(left, schema, stat_columns);
-    //                     let right = build_verifiable_expr(right, schema, stat_columns);
-    //                     return left.and(&right).unwrap();
-    //                 }
-    //                 "or" => {
-    //                     let left = build_verifiable_expr(left, schema, stat_columns);
-    //                     let right = build_verifiable_expr(right, schema, stat_columns);
-    //                     return left.or(&right).unwrap();
-    //                 }
-    //                 _ => (vec![left.clone(), right.clone()], name.clone()),
-    //             }
-    //         } else {
-    //             try_convert_is_null(name.to_lowercase().as_str(), args.clone())
-    //         }
-    //     }
-    //     _ => return unhandled,
-    // };
+// let (exprs, op) = match expr {
+//     Expression::Constant { .. } => return expr.clone(),
+//     Expression::Function { name, args, .. } => {
+//         if args.len() == 2 {
+//             let left = &args[0];
+//             let right = &args[1];
+//             match name.to_lowercase().as_str() {
+//                 "and" => {
+//                     let left = build_verifiable_expr(left, schema, stat_columns);
+//                     let right = build_verifiable_expr(right, schema, stat_columns);
+//                     return left.and(&right).unwrap();
+//                 }
+//                 "or" => {
+//                     let left = build_verifiable_expr(left, schema, stat_columns);
+//                     let right = build_verifiable_expr(right, schema, stat_columns);
+//                     return left.or(&right).unwrap();
+//                 }
+//                 _ => (vec![left.clone(), right.clone()], name.clone()),
+//             }
+//         } else {
+//             try_convert_is_null(name.to_lowercase().as_str(), args.clone())
+//         }
+//     }
+//     _ => return unhandled,
+// };
 
-    // VerifiableExprBuilder::try_create(exprs, op.to_lowercase().as_str(), schema, stat_columns)
-    //     .map_or(unhandled.clone(), |mut v| v.build().unwrap_or(unhandled))
+// VerifiableExprBuilder::try_create(exprs, op.to_lowercase().as_str(), schema, stat_columns)
+//     .map_or(unhandled.clone(), |mut v| v.build().unwrap_or(unhandled))
 // }
 
 // fn inverse_operator(op: &str) -> Result<&str> {
@@ -158,7 +158,6 @@ impl RangeFilter {
 //     }
 // }
 
-// todo!("expression")
 // /// Try to convert `not(is_not_null)` to `is_null`.
 // fn try_convert_is_null(name: &str, args: Vec<Expression>) -> (Vec<Expression>, String) {
 //     // `is null` will be converted to `not(is not null)` in the parser.
@@ -202,7 +201,7 @@ impl RangeFilter {
 
 // #[derive(Debug, Clone)]
 // pub struct StatColumn {
-//     column_fields: ColumnFields, 
+//     column_fields: ColumnFields,
 //     stat_type: StatType,
 //     stat_field: DataField,
 //     expr: Expression,
@@ -682,7 +681,7 @@ impl RangeFilter {
 //     res
 // }
 
-// fn get_maybe_monotonic(op: &str, args: &Vec<Expression>) -> Result<bool> {
+// fn get_maybe_monotonic(op: &str, args: &[Expression]) -> Result<bool> {
 //     todo!("expression")
 // }
 

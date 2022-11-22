@@ -24,7 +24,7 @@ use common_datavalues::DataValue;
 use common_datavalues::StringType;
 use common_datavalues::ToDataType;
 use common_exception::Result;
-use common_storages_index::BlockFilter;
+use common_storages_index::ChunkFilter;
 use common_storages_index::FilterEvalResult;
 
 #[test]
@@ -65,15 +65,15 @@ fn test_column_type_support() -> Result<()> {
         u64::to_data_type(),
         i64::to_data_type(),
     ]);
-    let index = BlockFilter::try_create(&[&block])?;
+    let index = ChunkFilter::try_create(&[&block])?;
 
     // String type and 8 integral types are supported
-    assert_eq!(supported_types.len(), index.filter_block.columns().len());
+    assert_eq!(supported_types.len(), index.filter_chunk.columns().len());
 
     // check index columns
     schema.fields().iter().for_each(|field| {
-        let col_name = BlockFilter::build_filter_column_name(field.name());
-        let maybe_index_col = index.filter_block.try_column_by_name(&col_name);
+        let col_name = ChunkFilter::build_filter_column_name(field.name());
+        let maybe_index_col = index.filter_chunk.try_column_by_name(&col_name);
         if supported_types.contains(field.data_type()) {
             assert!(maybe_index_col.is_ok(), "check field {}", field.name())
         } else {
