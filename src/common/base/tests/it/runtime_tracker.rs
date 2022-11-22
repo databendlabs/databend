@@ -73,6 +73,10 @@ async fn test_async_thread_tracker() -> Result<()> {
     inner_join_handler.await.unwrap();
     outer_join_handler.await.unwrap();
 
+    drop(inner_runtime);
+    drop(outer_runtime);
+
+    // println!("{}", memory_tracker2.get_memory_usage());
     // XXX: maybe memory tracker leak
     // assert_eq!(memory_tracker2.get_memory_usage(), 0);
     Ok(())

@@ -88,7 +88,7 @@ impl ThreadTracker {
             (*TRACKER).buffer.incr(size);
 
             if (*TRACKER).buffer.memory_usage > UNTRACKED_MEMORY_LIMIT {
-                (*TRACKER).mem_tracker.alloc_memory(&(*TRACKER).buffer);
+                (*TRACKER).mem_tracker.record_memory(&(*TRACKER).buffer);
                 (*TRACKER).buffer.reset();
             }
         }
@@ -111,7 +111,7 @@ impl ThreadTracker {
             (*TRACKER).buffer.decr(size);
 
             if (*TRACKER).buffer.memory_usage < -UNTRACKED_MEMORY_LIMIT {
-                (*TRACKER).mem_tracker.dealloc_memory(&(*TRACKER).buffer);
+                (*TRACKER).mem_tracker.record_memory(&(*TRACKER).buffer);
                 (*TRACKER).buffer.reset();
             }
         }
@@ -119,18 +119,6 @@ impl ThreadTracker {
 }
 
 pub struct MemoryTracker {
-    /// Count of calls to `alloc`.
-    n_alloc: AtomicI64,
-
-    /// Number of allocated bytes.
-    bytes_alloc: AtomicI64,
-
-    /// Count of calls to `dealloc`.
-    n_dealloc: AtomicI64,
-
-    /// Number of deallocated bytes.
-    bytes_dealloc: AtomicI64,
-
     memory_usage: AtomicI64,
 
     parent_memory_tracker: Option<Arc<MemoryTracker>>,
@@ -142,32 +130,18 @@ pub struct MemoryTracker {
 #[derive(Clone, Debug, Default)]
 pub struct StatBuffer {
     memory_usage: i64,
-
-    n_alloc: i64,
-    n_dealloc: i64,
-
-    bytes_alloc: i64,
-    bytes_dealloc: i64,
 }
 
 impl StatBuffer {
     pub fn incr(&mut self, bs: i64) {
-        self.n_alloc += 1;
-        self.bytes_alloc += bs;
         self.memory_usage += bs;
     }
 
     pub fn decr(&mut self, bs: i64) {
-        self.n_dealloc += 1;
-        self.bytes_dealloc += bs;
         self.memory_usage -= bs;
     }
 
     pub fn reset(&mut self) {
-        self.n_alloc = 0;
-        self.n_dealloc = 0;
-        self.bytes_alloc = 0;
-        self.bytes_dealloc = 0;
         self.memory_usage = 0;
     }
 }
@@ -183,43 +157,17 @@ impl MemoryTracker {
     ) -> Arc<MemoryTracker> {
         Arc::new(MemoryTracker {
             parent_memory_tracker,
-            n_alloc: AtomicI64::new(0),
-            bytes_alloc: AtomicI64::new(0),
-            n_dealloc: AtomicI64::new(0),
-            bytes_dealloc: AtomicI64::new(0),
             memory_usage: AtomicI64::new(0),
         })
     }
 
     #[inline]
-    pub fn alloc_memory(&self, state: &StatBuffer) {
-        self.n_alloc.fetch_add(state.n_alloc, Ordering::Relaxed);
-        self.n_dealloc.fetch_add(state.n_dealloc, Ordering::Relaxed);
-        self.bytes_alloc
-            .fetch_add(state.bytes_alloc, Ordering::Relaxed);
-        self.bytes_dealloc
-            .fetch_add(state.bytes_dealloc, Ordering::Relaxed);
+    pub fn record_memory(&self, state: &StatBuffer) {
         self.memory_usage
             .fetch_add(state.memory_usage, Ordering::Relaxed);
 
         if let Some(parent_memory_tracker) = &self.parent_memory_tracker {
-            parent_memory_tracker.alloc_memory(state);
-        }
-    }
-
-    #[inline]
-    pub fn dealloc_memory(&self, state: &StatBuffer) {
-        self.n_alloc.fetch_add(state.n_alloc, Ordering::Relaxed);
-        self.n_dealloc.fetch_add(state.n_dealloc, Ordering::Relaxed);
-        self.bytes_alloc
-            .fetch_add(state.bytes_alloc, Ordering::Relaxed);
-        self.bytes_dealloc
-            .fetch_add(state.bytes_dealloc, Ordering::Relaxed);
-        self.memory_usage
-            .fetch_add(state.memory_usage, Ordering::Relaxed);
-
-        if let Some(parent_memory_tracker) = &self.parent_memory_tracker {
-            parent_memory_tracker.dealloc_memory(state);
+            parent_memory_tracker.record_memory(state);
         }
     }
 
@@ -245,6 +193,9 @@ impl MemoryTracker {
         move || unsafe {
             let thread_tracker = std::mem::replace(&mut TRACKER, std::ptr::null_mut());
 
+            (*thread_tracker)
+                .mem_tracker
+                .record_memory(&(*thread_tracker).buffer);
             std::ptr::drop_in_place(thread_tracker as usize as *mut ThreadTracker);
             GlobalAllocator.dealloc(thread_tracker as *mut u8, Layout::new::<ThreadTracker>())
         }
