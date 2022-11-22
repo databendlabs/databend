@@ -27,6 +27,7 @@ fn test_issue_6556_column_statistics_ser_de_compatability_null_count_alias()
         max: DataValue::Null,
         null_count: 0,
         in_memory_size: 0,
+        distinct_of_values: None,
     };
 
     let mut json_value = serde_json::to_value(&col_stats)?;

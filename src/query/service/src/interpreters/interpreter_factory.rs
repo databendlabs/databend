@@ -272,6 +272,10 @@ impl InterpreterFactory {
                 ctx,
                 *set_variable.clone(),
             )?)),
+            Plan::UnSetVariable(unset_variable) => Ok(Arc::new(UnSettingInterpreter::try_create(
+                ctx,
+                *unset_variable.clone(),
+            )?)),
             Plan::UseDatabase(p) => Ok(Arc::new(UseDatabaseInterpreter::try_create(
                 ctx,
                 *p.clone(),

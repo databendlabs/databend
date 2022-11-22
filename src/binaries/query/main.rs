@@ -189,6 +189,16 @@ async fn main(_global_tracker: Arc<MemoryTracker>) -> common_exception::Result<(
     );
     println!("Storage: {}", conf.storage.params);
     println!("Cache: {}", conf.cache.params);
+    println!(
+        "Builtin users: {}",
+        conf.query
+            .idm
+            .users
+            .keys()
+            .map(|name| name.to_string())
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
     println!();
     println!("Admin");
     println!("    listened at {}", conf.query.admin_api_address);

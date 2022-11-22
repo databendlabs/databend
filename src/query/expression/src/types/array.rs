@@ -140,6 +140,14 @@ impl<T: ValueType> ValueType for ArrayType<T> {
     fn build_scalar(builder: Self::ColumnBuilder) -> Self::Scalar {
         builder.build_scalar()
     }
+
+    fn scalar_memory_size<'a>(scalar: &Self::ScalarRef<'a>) -> usize {
+        T::column_memory_size(scalar)
+    }
+
+    fn column_memory_size(col: &Self::Column) -> usize {
+        col.memory_size()
+    }
 }
 
 impl<T: ArgType> ArgType for ArrayType<T> {
@@ -207,6 +215,10 @@ impl<T: ValueType> ArrayColumn<T> {
             values: T::upcast_column(self.values),
             offsets: self.offsets,
         }
+    }
+
+    pub fn memory_size(&self) -> usize {
+        T::column_memory_size(&self.values) + self.offsets.len() * 8
     }
 }
 

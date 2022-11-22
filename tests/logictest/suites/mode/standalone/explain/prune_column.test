@@ -214,7 +214,8 @@ EvalScalar
             ├── read bytes: 31
             ├── partitions total: 1
             ├── partitions scanned: 1
-            └── push downs: [filters: [(b = 2)], limit: NONE]
+            ├── push downs: [filters: [(b = 2)], limit: NONE]
+            └── output columns: [1]
 
 statement ok
 drop table t;

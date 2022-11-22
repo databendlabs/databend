@@ -316,6 +316,7 @@ pub fn walk_statement_mut<'a, V: VisitorMut>(visitor: &mut V, statement: &mut St
             variable,
             value,
         } => visitor.visit_set_variable(*is_global, variable, value),
+        Statement::UnSetVariable(stmt) => visitor.visit_unset_variable(stmt),
         Statement::SetRole {
             is_default,
             role_name,

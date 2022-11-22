@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::min;
+
 use common_base::base::AsyncThreadTracker;
 use common_base::base::MemoryTracker;
 use common_base::base::Runtime;
@@ -64,6 +66,12 @@ async fn test_async_thread_tracker() -> Result<()> {
             (0, 1 * 1024 * 1024),
         ] {
             out_rx.recv().await.unwrap();
+            println!(
+                "memory: {}, {}, {}",
+                min_memory_usage,
+                memory_tracker.get_memory_usage(),
+                max_memory_usage
+            );
             assert!(min_memory_usage <= memory_tracker.get_memory_usage());
             assert!(max_memory_usage > memory_tracker.get_memory_usage());
             inner_tx.send(()).await.unwrap();

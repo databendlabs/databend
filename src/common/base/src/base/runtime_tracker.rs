@@ -16,6 +16,7 @@ use std::alloc::GlobalAlloc;
 use std::alloc::Layout;
 use std::future::Future;
 use std::pin::Pin;
+use std::ptr::NonNull;
 use std::sync::atomic::AtomicI64;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -33,7 +34,10 @@ static UNTRACKED_MEMORY_LIMIT: i64 = 4 * 1024 * 1024;
 
 pub struct ThreadTracker {
     mem_tracker: Arc<MemoryTracker>,
-    untracked_memory: i64,
+
+    // Buffered memory allocation stats is not reported to MemoryTracker and can not be seen.
+    alloc_buf: StatBuffer,
+    dealloc_buf: StatBuffer,
 }
 
 impl ThreadTracker {
@@ -41,7 +45,8 @@ impl ThreadTracker {
         unsafe {
             TRACKER = Box::into_raw(Box::new(ThreadTracker {
                 mem_tracker,
-                untracked_memory: 0,
+                alloc_buf: Default::default(),
+                dealloc_buf: Default::default(),
             }));
 
             TRACKER
@@ -69,54 +74,91 @@ impl ThreadTracker {
         }
     }
 
+    /// Accumulate allocated memory.
+    ///
+    /// `size` is the positive number of allocated bytes.
+    /// `p` is the pointer to the allocated memory.
     #[inline]
-    pub fn alloc_memory(size: i64) {
-        unsafe {
-            if !TRACKER.is_null() {
-                (*TRACKER).untracked_memory += size;
+    pub fn alloc_memory<T: ?Sized>(size: i64, p: &NonNull<T>) {
+        let _ = p;
 
-                if (*TRACKER).untracked_memory > UNTRACKED_MEMORY_LIMIT {
-                    (*TRACKER)
-                        .mem_tracker
-                        .alloc_memory((*TRACKER).untracked_memory);
-                    (*TRACKER).untracked_memory = 0;
-                }
+        unsafe {
+            if TRACKER.is_null() {
+                return;
+            }
+
+            (*TRACKER).alloc_buf.incr(size);
+
+            if (*TRACKER).alloc_buf.bytes > UNTRACKED_MEMORY_LIMIT {
+                (*TRACKER)
+                    .mem_tracker
+                    .alloc_memory((*TRACKER).alloc_buf.n, (*TRACKER).alloc_buf.bytes);
+                (*TRACKER).alloc_buf.reset();
             }
         }
     }
 
+    /// Accumulate deallocated memory.
+    ///
+    /// `size` is positive number of bytes of the memory to deallocate.
+    /// `p` is the pointer to the memory to deallocate.
     #[inline]
-    pub fn dealloc_memory(size: i64) {
-        unsafe {
-            if !TRACKER.is_null() {
-                (*TRACKER).untracked_memory -= size;
+    pub fn dealloc_memory<T>(size: i64, p: &NonNull<T>) {
+        // size > 0
+        let _ = p;
 
-                if (*TRACKER).untracked_memory < -UNTRACKED_MEMORY_LIMIT {
-                    (*TRACKER)
-                        .mem_tracker
-                        .dealloc_memory(-(*TRACKER).untracked_memory);
-                    (*TRACKER).untracked_memory = 0;
-                }
+        unsafe {
+            if TRACKER.is_null() {
+                return;
+            }
+
+            (*TRACKER).dealloc_buf.incr(size);
+
+            if (*TRACKER).dealloc_buf.bytes > UNTRACKED_MEMORY_LIMIT {
+                (*TRACKER)
+                    .mem_tracker
+                    .dealloc_memory((*TRACKER).dealloc_buf.n, (*TRACKER).dealloc_buf.bytes);
+                (*TRACKER).dealloc_buf.reset();
             }
         }
-    }
-
-    #[inline]
-    pub fn grow_memory(old_size: i64, new_size: i64) {
-        assert!(old_size <= new_size);
-        Self::alloc_memory(new_size - old_size)
-    }
-
-    #[inline]
-    pub fn shrink_memory(old_size: i64, new_size: i64) {
-        assert!(old_size >= new_size);
-        Self::dealloc_memory(old_size - new_size)
     }
 }
 
 pub struct MemoryTracker {
-    memory_usage: AtomicI64,
+    /// Count of calls to `alloc`.
+    n_alloc: AtomicI64,
+
+    /// Number of allocated bytes.
+    bytes_alloc: AtomicI64,
+
+    /// Count of calls to `dealloc`.
+    n_dealloc: AtomicI64,
+
+    /// Number of deallocated bytes.
+    bytes_dealloc: AtomicI64,
+
     parent_memory_tracker: Option<Arc<MemoryTracker>>,
+}
+
+/// Buffering memory allocation stats.
+///
+/// A StatBuffer buffers stats changes in local variables, and periodically flush them to other storage such as an `Arc<T>` shared by several threads.
+#[derive(Clone, Debug, Default)]
+pub struct StatBuffer {
+    n: i64,
+    bytes: i64,
+}
+
+impl StatBuffer {
+    pub fn incr(&mut self, bs: i64) {
+        self.n += 1;
+        self.bytes += bs;
+    }
+
+    pub fn reset(&mut self) {
+        self.n = 0;
+        self.bytes = 0;
+    }
 }
 
 impl MemoryTracker {
@@ -130,25 +172,30 @@ impl MemoryTracker {
     ) -> Arc<MemoryTracker> {
         Arc::new(MemoryTracker {
             parent_memory_tracker,
-            memory_usage: AtomicI64::new(0),
+            n_alloc: AtomicI64::new(0),
+            bytes_alloc: AtomicI64::new(0),
+            n_dealloc: AtomicI64::new(0),
+            bytes_dealloc: AtomicI64::new(0),
         })
     }
 
     #[inline]
-    pub fn alloc_memory(&self, size: i64) {
-        self.memory_usage.fetch_add(size, Ordering::Relaxed);
+    pub fn alloc_memory(&self, n: i64, size: i64) {
+        self.bytes_alloc.fetch_add(size, Ordering::Relaxed);
+        self.n_alloc.fetch_add(n, Ordering::Relaxed);
 
         if let Some(parent_memory_tracker) = &self.parent_memory_tracker {
-            parent_memory_tracker.alloc_memory(size);
+            parent_memory_tracker.alloc_memory(n, size);
         }
     }
 
     #[inline]
-    pub fn dealloc_memory(&self, size: i64) {
-        self.memory_usage.fetch_sub(size, Ordering::Relaxed);
+    pub fn dealloc_memory(&self, n: i64, size: i64) {
+        self.bytes_dealloc.fetch_add(size, Ordering::Relaxed);
+        self.n_dealloc.fetch_add(n, Ordering::Relaxed);
 
         if let Some(parent_memory_tracker) = &self.parent_memory_tracker {
-            parent_memory_tracker.dealloc_memory(size);
+            parent_memory_tracker.dealloc_memory(n, size);
         }
     }
 
@@ -165,7 +212,7 @@ impl MemoryTracker {
 
     #[inline]
     pub fn get_memory_usage(&self) -> i64 {
-        self.memory_usage.load(Ordering::Relaxed)
+        self.bytes_alloc.load(Ordering::Relaxed) - self.bytes_dealloc.load(Ordering::Relaxed)
     }
 }
 

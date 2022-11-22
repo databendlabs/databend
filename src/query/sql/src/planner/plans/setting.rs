@@ -34,3 +34,14 @@ impl SettingPlan {
         Arc::new(DataSchema::empty())
     }
 }
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct UnSettingPlan {
+    pub vars: Vec<String>,
+}
+
+impl UnSettingPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
+}

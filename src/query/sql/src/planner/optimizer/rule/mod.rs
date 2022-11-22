@@ -23,6 +23,7 @@ mod transform;
 mod transform_result;
 
 pub use factory::RuleFactory;
+pub use rewrite::try_push_down_filter_join;
 pub use rule::Rule;
 pub use rule::RuleID;
 pub use rule::RulePtr;
