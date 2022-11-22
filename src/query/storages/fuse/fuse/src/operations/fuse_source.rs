@@ -65,6 +65,7 @@ pub struct FuseTableSource {
     remain_reader: Arc<Option<BlockReader>>,
 
     support_blocking: bool,
+    cnt : usize,
 }
 
 impl FuseTableSource {
@@ -88,6 +89,7 @@ impl FuseTableSource {
             prewhere_filter,
             remain_reader,
             support_blocking,
+            cnt: 0
         })))
     }
 }
@@ -124,7 +126,7 @@ impl Processor for FuseTableSource {
         }
 
         if matches!(self.state, State::Generated(_, _)) {
-            if let Generated(se, data_block) = std::mem::replace(&mut self.state, State::Finish) {
+            if let Generated(se, data_block) = std::mem::replace(&mut self.state, State::None) {
                 self.state = State::ReadData(se);
 
                 self.output.push_data(Ok(data_block));
@@ -164,8 +166,12 @@ impl Processor for FuseTableSource {
             State::ReadData(mut de) => {
                 let block = self.output_reader.next_block(&mut de)?;
                 self.state = match block {
-                    Some(block) => State::Generated(de, block),
-                    None => State::Finish,
+                    Some(block) => {
+                        self.cnt += 1;
+                        println!("got next count: {}, block: {}, total: {}",self.cnt, block.num_rows(), de.num_rows());
+                        State::Generated(de, block)
+                    },
+                    None => State::None,
                 };
                 Ok(())
             }
@@ -174,7 +180,7 @@ impl Processor for FuseTableSource {
     }
 
     async fn async_process(&mut self) -> Result<()> {
-        match std::mem::replace(&mut self.state, State::Finish) {
+        match std::mem::replace(&mut self.state, State::None) {
             State::Part(part) => {
                 let chunks = self.output_reader.read_columns_data(part.clone()).await?;
                 let se = self.output_reader.deserialize(part.clone(), chunks)?;

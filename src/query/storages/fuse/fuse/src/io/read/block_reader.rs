@@ -125,7 +125,7 @@ impl BlockReader {
             columns,
             types,
             field,
-            Some(8192),
+            Some(65536),
             rows,
         )?)
     }
