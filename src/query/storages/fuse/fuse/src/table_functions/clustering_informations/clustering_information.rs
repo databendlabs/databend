@@ -17,9 +17,9 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_catalog::plan::Expression;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::Expr;
 use common_expression::types::number::NumberScalar;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
@@ -42,7 +42,7 @@ use crate::Table;
 pub struct ClusteringInformation<'a> {
     pub ctx: Arc<dyn TableContext>,
     pub table: &'a FuseTable,
-    pub cluster_keys: Vec<Expression>,
+    pub cluster_keys: Vec<RemoteExpr<String>>,
 }
 
 struct ClusteringStatistics {
@@ -69,7 +69,7 @@ impl<'a> ClusteringInformation<'a> {
     pub fn new(
         ctx: Arc<dyn TableContext>,
         table: &'a FuseTable,
-        cluster_keys: Vec<Expression>,
+        cluster_keys: Vec<RemoteExpr<String>>,
     ) -> Self {
         Self {
             ctx,

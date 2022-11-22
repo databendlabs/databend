@@ -15,11 +15,10 @@
 use std::ops::Not;
 use std::sync::Arc;
 
-use common_catalog::plan::Expression;
 use common_catalog::plan::Projection;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use common_expression::Chunk;
+use common_expression::{Chunk, Expr, RemoteExpr};
 // use common_sql::evaluator::Evaluator;
 use common_storages_table_meta::meta::BlockMeta;
 
@@ -31,7 +30,7 @@ pub async fn delete_from_block(
     block_meta: &BlockMeta,
     ctx: &Arc<dyn TableContext>,
     filter_column_proj: Projection,
-    filter_expr: &Expression,
+    filter_expr: &RemoteExpr<String>,
 ) -> Result<Deletion> {
     todo!("expression");
     // let mut filtering_whole_block = false;

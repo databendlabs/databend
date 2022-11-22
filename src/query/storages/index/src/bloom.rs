@@ -14,9 +14,9 @@
 
 use std::sync::Arc;
 
-use common_catalog::plan::Expression;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::RemoteExpr;
 use common_expression::types::DataType;
 use common_expression::Chunk;
 use common_expression::DataField;
@@ -187,7 +187,7 @@ impl BlockFilter {
     /// Returns false when the expression must be false, otherwise true.
     /// The 'true' doesn't really mean the expression is true, but 'maybe true'.
     /// That is to say, you still need the load all data and run the execution.
-    pub fn maybe_true(&self, expr: &Expression) -> Result<bool> {
+    pub fn maybe_true(&self, expr: &RemoteExpr<String>) -> Result<bool> {
         Ok(self.eval(expr)? != FilterEvalResult::False)
     }
 
@@ -197,85 +197,86 @@ impl BlockFilter {
     ///
     /// Otherwise return either Maybe or NotApplicable.
     #[tracing::instrument(level = "debug", name = "block_filter_index_eval", skip_all)]
-    pub fn eval(&self, expr: &Expression) -> Result<FilterEvalResult> {
-        // TODO: support multiple columns and other ops like 'in' ...
-        match expr {
-            Expression::Function { name, args, .. } if args.len() == 2 => {
-                match name.to_lowercase().as_str() {
-                    "=" => self.eval_equivalent_expression(&args[0], &args[1]),
-                    "and" => self.eval_logical_and(&args[0], &args[1]),
-                    "or" => self.eval_logical_or(&args[0], &args[1]),
-                    _ => Ok(FilterEvalResult::NotApplicable),
-                }
-            }
-            _ => Ok(FilterEvalResult::NotApplicable),
-        }
+    pub fn eval(&self, expr: &RemoteExpr<String>) -> Result<FilterEvalResult> {
+        todo!("expression")
+        // // TODO: support multiple columns and other ops like 'in' ...
+        // match expr {
+        //     Expression::Function { name, args, .. } if args.len() == 2 => {
+        //         match name.to_lowercase().as_str() {
+        //             "=" => self.eval_equivalent_expression(&args[0], &args[1]),
+        //             "and" => self.eval_logical_and(&args[0], &args[1]),
+        //             "or" => self.eval_logical_or(&args[0], &args[1]),
+        //             _ => Ok(FilterEvalResult::NotApplicable),
+        //         }
+        //     }
+        //     _ => Ok(FilterEvalResult::NotApplicable),
+        // }
     }
 
     // Evaluate the equivalent expression like "name='Alice'"
-    fn eval_equivalent_expression(
-        &self,
-        left: &Expression,
-        right: &Expression,
-    ) -> Result<FilterEvalResult> {
-        let schema: &DataSchemaRef = &self.source_schema;
+    // fn eval_equivalent_expression(
+    //     &self,
+    //     left: &Expression,
+    //     right: &Expression,
+    // ) -> Result<FilterEvalResult> {
+    //     let schema: &DataSchemaRef = &self.source_schema;
 
-        // For now only support single column like "name = 'Alice'"
-        match (left, right) {
-            // match the expression of 'column_name = literal constant'
-            (Expression::IndexedVariable { name, .. }, Expression::Constant { value, .. })
-            | (Expression::Constant { value, .. }, Expression::IndexedVariable { name, .. }) => {
-                // find the corresponding column from source table
-                let data_field = schema.field_with_name(name).map_err(|(_, e)| {
-                    ErrorCode::BadArguments(format!("Cannot find column {}", name))
-                })?;
-                let data_type = data_field.data_type();
+    //     // For now only support single column like "name = 'Alice'"
+    //     match (left, right) {
+    //         // match the expression of 'column_name = literal constant'
+    //         (Expression::IndexedVariable { name, .. }, Expression::Constant { value, .. })
+    //         | (Expression::Constant { value, .. }, Expression::IndexedVariable { name, .. }) => {
+    //             // find the corresponding column from source table
+    //             let data_field = schema.field_with_name(name).map_err(|(_, e)| {
+    //                 ErrorCode::BadArguments(format!("Cannot find column {}", name))
+    //             })?;
+    //             let data_type = data_field.data_type();
 
-                // check if cast needed
-                todo!("expression");
-                // let value = if &value.data_type() != data_type {
-                //     let col = value.as_const_column(data_type, 1)?;
-                //     col.get_checked(0)?
-                // } else {
-                //     value.clone()
-                // };
-                self.find(name, value, data_type)
-            }
-            _ => Ok(FilterEvalResult::NotApplicable),
-        }
-    }
+    //             // check if cast needed
+    //             todo!("expression");
+    //             // let value = if &value.data_type() != data_type {
+    //             //     let col = value.as_const_column(data_type, 1)?;
+    //             //     col.get_checked(0)?
+    //             // } else {
+    //             //     value.clone()
+    //             // };
+    //             self.find(name, value, data_type)
+    //         }
+    //         _ => Ok(FilterEvalResult::NotApplicable),
+    //     }
+    // }
 
-    // Evaluate the logical and expression
-    fn eval_logical_and(&self, left: &Expression, right: &Expression) -> Result<FilterEvalResult> {
-        let left_result = self.eval(left)?;
-        if left_result == FilterEvalResult::False {
-            return Ok(FilterEvalResult::False);
-        }
+    // // Evaluate the logical and expression
+    // fn eval_logical_and(&self, left: &Expression, right: &Expression) -> Result<FilterEvalResult> {
+    //     let left_result = self.eval(left)?;
+    //     if left_result == FilterEvalResult::False {
+    //         return Ok(FilterEvalResult::False);
+    //     }
 
-        let right_result = self.eval(right)?;
-        if right_result == FilterEvalResult::False {
-            return Ok(FilterEvalResult::False);
-        }
+    //     let right_result = self.eval(right)?;
+    //     if right_result == FilterEvalResult::False {
+    //         return Ok(FilterEvalResult::False);
+    //     }
 
-        if left_result == FilterEvalResult::NotApplicable
-            || right_result == FilterEvalResult::NotApplicable
-        {
-            Ok(FilterEvalResult::NotApplicable)
-        } else {
-            Ok(FilterEvalResult::Maybe)
-        }
-    }
+    //     if left_result == FilterEvalResult::NotApplicable
+    //         || right_result == FilterEvalResult::NotApplicable
+    //     {
+    //         Ok(FilterEvalResult::NotApplicable)
+    //     } else {
+    //         Ok(FilterEvalResult::Maybe)
+    //     }
+    // }
 
-    // Evaluate the logical or expression
-    fn eval_logical_or(&self, left: &Expression, right: &Expression) -> Result<FilterEvalResult> {
-        let left_result = self.eval(left)?;
-        let right_result = self.eval(right)?;
-        match (&left_result, &right_result) {
-            (&FilterEvalResult::False, &FilterEvalResult::False) => Ok(FilterEvalResult::False),
-            (&FilterEvalResult::False, _) => Ok(right_result),
-            (_, &FilterEvalResult::False) => Ok(left_result),
-            (&FilterEvalResult::Maybe, &FilterEvalResult::Maybe) => Ok(FilterEvalResult::Maybe),
-            _ => Ok(FilterEvalResult::NotApplicable),
-        }
-    }
+    // // Evaluate the logical or expression
+    // fn eval_logical_or(&self, left: &Expression, right: &Expression) -> Result<FilterEvalResult> {
+    //     let left_result = self.eval(left)?;
+    //     let right_result = self.eval(right)?;
+    //     match (&left_result, &right_result) {
+    //         (&FilterEvalResult::False, &FilterEvalResult::False) => Ok(FilterEvalResult::False),
+    //         (&FilterEvalResult::False, _) => Ok(right_result),
+    //         (_, &FilterEvalResult::False) => Ok(left_result),
+    //         (&FilterEvalResult::Maybe, &FilterEvalResult::Maybe) => Ok(FilterEvalResult::Maybe),
+    //         _ => Ok(FilterEvalResult::NotApplicable),
+    //     }
+    // }
 }

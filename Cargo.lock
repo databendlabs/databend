@@ -2007,6 +2007,7 @@ dependencies = [
  "common-datablocks",
  "common-datavalues",
  "common-exception",
+ "common-expression",
  "common-formats",
  "common-functions",
  "common-grpc",

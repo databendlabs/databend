@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use common_catalog::plan::Expression;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataSchemaRef;
@@ -23,14 +22,14 @@ use common_storages_table_meta::meta::ColumnStatistics;
 
 pub(crate) struct TopNPrunner {
     schema: DataSchemaRef,
-    sort: Vec<(Expression, bool, bool)>,
+    sort: Vec<(RemoteExpr<String>, bool, bool)>,
     limit: usize,
 }
 
 impl TopNPrunner {
     pub(crate) fn new(
         schema: DataSchemaRef,
-        sort: Vec<(Expression, bool, bool)>,
+        sort: Vec<(RemoteExpr<String>, bool, bool)>,
         limit: usize,
     ) -> Self {
         Self {
@@ -60,8 +59,8 @@ impl TopNPrunner {
 
         // Currently, we only support topn on single-column sort.
         // TODO: support monadic + multi expression + order by cluster key sort.
-        let column = if let Expression::IndexedVariable { name, .. } = sort {
-            name
+        let column = if let Expr::ColumnRef { id, .. } = sort {
+            id
         } else {
             return Ok(metas);
         };

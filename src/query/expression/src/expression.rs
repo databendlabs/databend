@@ -91,7 +91,7 @@ pub enum Expr<Index: ColumnIndex = usize> {
 ///
 /// The remote node will recover the `Arc` pointer within `FunctionCall` by looking
 /// up the funciton registry with the `FunctionID`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RemoteExpr<Index: ColumnIndex = usize> {
     Constant {
         span: Span,

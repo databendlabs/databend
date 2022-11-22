@@ -13,16 +13,16 @@
 // limitations under the License.
 
 mod datasource;
-mod expression;
-mod expression_visitor;
+// mod expression; please use `RemoteExpr<String>` instead.
+// mod expression_visitor;
 mod partition;
 mod partition_statistics;
 mod projection;
 mod pushdown;
 
 pub use datasource::*;
-pub use expression::Expression;
-pub use expression_visitor::*;
+// pub use expression::Expression;
+// pub use expression_visitor::*;
 pub use partition::*;
 pub use partition_statistics::PartStatistics;
 pub use projection::Projection;

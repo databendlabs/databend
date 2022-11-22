@@ -22,6 +22,7 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataField;
+use common_expression::RemoteExpr;
 // use common_sql::ExpressionParser;
 use common_storages_table_meta::meta::TableSnapshot;
 
@@ -77,7 +78,7 @@ impl FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
         snapshot: &Arc<TableSnapshot>,
-        filter: &Expression,
+        filter: &RemoteExpr<String>,
         projection: &Projection,
     ) -> Result<()> {
         let cluster_stats_gen = self.cluster_stats_gen()?;

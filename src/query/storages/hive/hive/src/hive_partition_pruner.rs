@@ -16,7 +16,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::vec;
 
-use common_catalog::plan::Expression;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -32,7 +31,7 @@ use crate::utils::str_field_to_scalar;
 
 pub struct HivePartitionPruner {
     pub ctx: Arc<dyn TableContext>,
-    pub filters: Vec<Expression>,
+    pub filters: Vec<RemoteExpr<String>>,
     // pub partitions: Vec<String>,
     pub partition_schema: Arc<DataSchema>,
 }
@@ -40,7 +39,7 @@ pub struct HivePartitionPruner {
 impl HivePartitionPruner {
     pub fn create(
         ctx: Arc<dyn TableContext>,
-        filters: Vec<Expression>,
+        filters: Vec<RemoteExpr<String>>,
         partition_schema: Arc<DataSchema>,
     ) -> Self {
         HivePartitionPruner {

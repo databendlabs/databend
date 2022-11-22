@@ -22,6 +22,7 @@ use common_catalog::catalog_kind::CATALOG_DEFAULT;
 use common_catalog::plan::Expression;
 use common_catalog::table::Table;
 use common_exception::Result;
+use common_expression::Expr;
 use common_settings::Settings;
 use parking_lot::RwLock;
 
@@ -36,7 +37,7 @@ use crate::Visibility;
 pub struct ExpressionParser;
 
 impl ExpressionParser {
-    pub fn parse_exprs(table_meta: Arc<dyn Table>, sql: &str) -> Result<Vec<Expression>> {
+    pub fn parse_exprs(table_meta: Arc<dyn Table>, sql: &str) -> Result<Vec<Expr<String>>> {
         let sql_dialect = Dialect::MySQL;
         let tokens = tokenize_sql(sql)?;
         let backtrace = Backtrace::new();

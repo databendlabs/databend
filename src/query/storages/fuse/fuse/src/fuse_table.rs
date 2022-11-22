@@ -20,7 +20,6 @@ use std::sync::Arc;
 
 use common_catalog::catalog::StorageDescription;
 use common_catalog::plan::DataSourcePlan;
-use common_catalog::plan::Expression;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::Projection;
@@ -238,7 +237,7 @@ impl Table for FuseTable {
         true
     }
 
-    fn cluster_keys(&self) -> Vec<Expression> {
+    fn cluster_keys(&self) -> Vec<RemoteExpr<String>> {
         todo!("expression");
         // let table_meta = Arc::new(self.clone());
         // if let Some((_, order)) = &self.cluster_key_meta {

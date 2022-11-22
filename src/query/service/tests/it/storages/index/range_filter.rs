@@ -15,9 +15,9 @@
 use std::collections::HashMap;
 
 use common_base::base::tokio;
-use common_catalog::plan::Expression;
 use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_expression::RemoteExpr;
 // use common_sql::executor::add;
 // use common_sql::executor::col;
 // use common_sql::executor::func;
@@ -227,7 +227,7 @@ fn test_build_verifiable_function() -> Result<()> {
 
     struct Test {
         name: &'static str,
-        expr: Expression,
+        expr: RemoteExpr<String>,
         expect: &'static str,
     }
 
@@ -416,7 +416,7 @@ fn test_bound_for_like_pattern() -> Result<()> {
 
 struct Test {
     name: &'static str,
-    expr: Expression,
+    expr: RemoteExpr<String>,
     expect: bool,
     error: &'static str,
 }

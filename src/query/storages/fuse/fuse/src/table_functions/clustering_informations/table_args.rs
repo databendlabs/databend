@@ -14,10 +14,10 @@
 
 use std::sync::Arc;
 
-use common_catalog::plan::Expression;
 use common_catalog::table::Table;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::Expr;
 
 // use common_sql::ExpressionParser;
 use crate::table_functions::string_value;
@@ -39,7 +39,7 @@ pub fn parse_func_table_args(table_args: &TableArgs) -> Result<(String, String)>
     }
 }
 
-pub fn get_cluster_keys(table: &FuseTable, definition: &str) -> Result<Vec<Expression>> {
+pub fn get_cluster_keys(table: &FuseTable, definition: &str) -> Result<Vec<RemoteExpr<String>>> {
     todo!("expression");
     // let cluster_keys = if !definition.is_empty() {
     //     let table_meta = Arc::new(table.clone());

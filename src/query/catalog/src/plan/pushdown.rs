@@ -14,9 +14,9 @@
 
 use std::fmt::Debug;
 
+use common_expression::RemoteExpr;
 use common_meta_types::UserStageInfo;
 
-use crate::plan::Expression;
 use crate::plan::Projection;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -28,7 +28,7 @@ pub struct PrewhereInfo {
     /// remain_columns = scan.columns - need_columns
     pub remain_columns: Projection,
     /// filter for prewhere
-    pub filter: Expression,
+    pub filter: RemoteExpr<String>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -50,14 +50,14 @@ pub struct PushDownInfo {
     pub projection: Option<Projection>,
     /// Optional filter expression plan
     /// split_conjunctions by `and` operator
-    pub filters: Vec<Expression>,
+    pub filters: Vec<RemoteExpr<String>>,
     /// Optional prewhere information
     /// used for prewhere optimization
     pub prewhere: Option<PrewhereInfo>,
     /// Optional limit to skip read
     pub limit: Option<usize>,
     /// Optional order_by expression plan, asc, null_first
-    pub order_by: Vec<(Expression, bool, bool)>,
+    pub order_by: Vec<(RemoteExpr<String>, bool, bool)>,
     /// Optional stage info, used for COPY into <table> from stage
     pub stage: Option<StagePushDownInfo>,
 }

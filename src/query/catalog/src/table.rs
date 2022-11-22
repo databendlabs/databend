@@ -23,6 +23,7 @@ use common_exception::Result;
 use common_expression::Chunk;
 use common_expression::ChunkCompactThresholds;
 use common_expression::DataSchema;
+use common_expression::RemoteExpr;
 use common_expression::Scalar;
 use common_meta_app::schema::TableInfo;
 use common_meta_types::MetaId;
@@ -30,7 +31,6 @@ use common_pipeline_core::Pipeline;
 use common_storage::StorageMetrics;
 
 use crate::plan::DataSourcePlan;
-use crate::plan::Expression;
 use crate::plan::PartStatistics;
 use crate::plan::Partitions;
 use crate::plan::Projection;
@@ -90,7 +90,7 @@ pub trait Table: Sync + Send {
         false
     }
 
-    fn cluster_keys(&self) -> Vec<Expression> {
+    fn cluster_keys(&self) -> Vec<RemoteExpr<String>> {
         vec![]
     }
 

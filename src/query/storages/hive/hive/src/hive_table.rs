@@ -21,7 +21,6 @@ use common_base::base::tokio;
 use common_base::base::tokio::sync::Semaphore;
 use common_catalog::catalog_kind::CATALOG_HIVE;
 use common_catalog::plan::DataSourcePlan;
-use common_catalog::plan::Expression;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PartitionsShuffleKind;
@@ -229,7 +228,7 @@ impl HiveTable {
         }
     }
 
-    fn get_columns_from_expressions(expressions: &[Expression]) -> HashSet<String> {
+    fn get_columns_from_expressions(expressions: &[RemoteExpr<String>]) -> HashSet<String> {
         expressions
             .iter()
             .flat_map(|e| RequireColumnsVisitor::collect_columns_from_expr(e).unwrap())
@@ -297,7 +296,7 @@ impl HiveTable {
         &self,
         ctx: Arc<dyn TableContext>,
         partition_keys: Vec<String>,
-        filter_expressions: Vec<Expression>,
+        filter_expressions: Vec<RemoteExpr<String>>,
     ) -> Result<Vec<(String, Option<String>)>> {
         let hive_catalog = ctx.get_catalog(CATALOG_HIVE)?;
         let hive_catalog = hive_catalog.as_any().downcast_ref::<HiveCatalog>().unwrap();

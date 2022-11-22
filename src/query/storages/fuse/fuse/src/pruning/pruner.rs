@@ -15,10 +15,9 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use common_catalog::plan::Expression;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use common_expression::DataSchemaRef;
+use common_expression::{DataSchemaRef, Expr, RemoteExpr};
 // use common_sql::executor::ExpressionOp;
 use common_storages_index::BlockFilter;
 use common_storages_table_meta::meta::Location;
@@ -39,7 +38,7 @@ struct FilterPruner {
     index_columns: Vec<String>,
 
     /// the expression that would be evaluate
-    filter_expression: Expression,
+    filter_expression: RemoteExpr<String>,
 
     /// the data accessor
     dal: Operator,
@@ -52,7 +51,7 @@ impl FilterPruner {
     pub fn new(
         ctx: Arc<dyn TableContext>,
         index_columns: Vec<String>,
-        filter_expression: Expression,
+        filter_expression: RemoteExpr<String>,
         dal: Operator,
         data_schema: DataSchemaRef,
     ) -> Self {
@@ -103,7 +102,7 @@ impl Pruner for FilterPruner {
 /// otherwise, a [Filter] backed pruner will be return
 pub fn new_filter_pruner(
     ctx: &Arc<dyn TableContext>,
-    filter_exprs: Option<&[Expression]>,
+    filter_exprs: Option<&[RemoteExpr<String>]>,
     schema: &DataSchemaRef,
     dal: Operator,
 ) -> Result<Option<Arc<dyn Pruner + Send + Sync>>> {
@@ -154,7 +153,7 @@ mod util {
         ctx: Arc<dyn TableContext>,
         dal: Operator,
         schema: &DataSchemaRef,
-        filter_expr: &Expression,
+        filter_expr: &RemoteExpr<String>,
         filter_col_names: &[String],
         index_location: &Location,
         index_length: u64,

@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_catalog::plan::Expression;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_datavalues::DataTypeImpl;
@@ -28,7 +27,7 @@ use crate::evaluator::Evaluator;
 use crate::executor::PhysicalScalar;
 
 impl Evaluator {
-    pub fn eval_expression(expression: &Expression, schema: &DataSchema) -> Result<EvalNode> {
+    pub fn eval_expression(expression: &RemoteExpr<String>, schema: &DataSchema) -> Result<EvalNode> {
         let physical_scalar = PhysicalScalar::from_expression(expression, schema)?;
         Self::eval_physical_scalar(&physical_scalar)
     }
