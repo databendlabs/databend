@@ -120,12 +120,12 @@ impl BlockReader {
             .iter()
             .map(|column_descriptor| &column_descriptor.descriptor.primitive_type)
             .collect::<Vec<_>>();
-
+        
         Ok(column_iter_to_arrays(
             columns,
             types,
             field,
-            Some(rows),
+            Some(8192),
             rows,
         )?)
     }
@@ -281,7 +281,7 @@ impl BlockReader {
         &self,
         part: PartInfoPtr,
         chunks: Vec<(usize, Vec<u8>)>,
-    ) -> Result<DataBlock> {
+    ) -> Result<RowGroupDeserializer> {
         let part = FusePartInfo::from_part(&part)?;
         let mut chunk_map: HashMap<usize, Vec<u8>> = chunks.into_iter().collect();
         let mut columns_array_iter = Vec::with_capacity(self.projection.len());
@@ -318,10 +318,9 @@ impl BlockReader {
                 &part.compression,
             )?);
         }
-
-        let mut deserializer = RowGroupDeserializer::new(columns_array_iter, num_rows, None);
-
-        self.try_next_block(&mut deserializer)
+        
+        let deserializer = RowGroupDeserializer::new(columns_array_iter, num_rows, None);
+        Ok(deserializer)
     }
 
     pub async fn read_columns_data(&self, part: PartInfoPtr) -> Result<Vec<(usize, Vec<u8>)>> {
@@ -398,13 +397,22 @@ impl BlockReader {
         self.try_next_block(&mut deserializer)
     }
 
-    fn try_next_block(&self, deserializer: &mut RowGroupDeserializer) -> Result<DataBlock> {
+    pub fn try_next_block(&self, deserializer: &mut RowGroupDeserializer) -> Result<DataBlock> {
         match deserializer.next() {
             None => Err(ErrorCode::Internal(
                 "deserializer from row group: fail to get a chunk",
             )),
             Some(Err(cause)) => Err(ErrorCode::from(cause)),
             Some(Ok(chunk)) => DataBlock::from_chunk(&self.projected_schema, &chunk),
+        }
+    }
+    
+    
+    pub fn next_block(&self, deserializer: &mut RowGroupDeserializer) -> Result<Option<DataBlock>> {
+        match deserializer.next() {
+            None => Ok(None),
+            Some(Err(cause)) => Err(ErrorCode::from(cause)),
+            Some(Ok(chunk)) => Ok(Some(DataBlock::from_chunk(&self.projected_schema, &chunk)?)),
         }
     }
 

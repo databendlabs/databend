@@ -116,7 +116,9 @@ impl Processor for ResultTableSource {
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Finish) {
             State::Deserialize(part, chunks) => {
-                let data_block = self.block_reader.deserialize(part, chunks)?;
+                let mut se = self.block_reader.deserialize(part, chunks)?;
+                let data_block = self.block_reader.try_next_block(&mut se)?;
+                
                 let new_part = self.ctx.try_get_part();
 
                 let progress_values = ProgressValues {
@@ -124,7 +126,6 @@ impl Processor for ResultTableSource {
                     bytes: data_block.memory_size(),
                 };
                 self.scan_progress.incr(&progress_values);
-
                 self.state = State::Generated(new_part, data_block);
                 Ok(())
             }
