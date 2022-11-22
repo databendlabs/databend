@@ -96,16 +96,6 @@ pub mod linux_or_macos {
         }
 
         #[inline(always)]
-        unsafe fn deallocate(&self, ptr: NonNull<u8>, layout: Layout) {
-            if layout.size() == 0 {
-                debug_assert_eq!(ptr.as_ptr() as usize, layout.align());
-            } else {
-                let flags = layout_to_flags(layout.align(), layout.size());
-                ffi::sdallocx(ptr.as_ptr() as *mut _, layout.size(), flags)
-            }
-        }
-
-        #[inline(always)]
         fn allocate_zeroed(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
             let data_address = if layout.size() == 0 {
                 unsafe { NonNull::new(layout.align() as *mut ()).unwrap_unchecked() }
@@ -115,7 +105,19 @@ pub mod linux_or_macos {
                     NonNull::new(ffi::mallocx(layout.size(), flags) as *mut ()).ok_or(AllocError)?
                 }
             };
+            ThreadTracker::alloc_memory(layout.size() as i64);
             Ok(NonNull::<[u8]>::from_raw_parts(data_address, layout.size()))
+        }
+
+        #[inline(always)]
+        unsafe fn deallocate(&self, ptr: NonNull<u8>, layout: Layout) {
+            if layout.size() == 0 {
+                debug_assert_eq!(ptr.as_ptr() as usize, layout.align());
+            } else {
+                let flags = layout_to_flags(layout.align(), layout.size());
+                ffi::sdallocx(ptr.as_ptr() as *mut _, layout.size(), flags);
+                ThreadTracker::dealloc_memory(layout.size() as i64);
+            }
         }
 
         unsafe fn grow(
@@ -136,6 +138,8 @@ pub mod linux_or_macos {
                 NonNull::new(ffi::rallocx(ptr.cast().as_ptr(), new_layout.size(), flags) as *mut ())
                     .unwrap()
             };
+
+            ThreadTracker::grow_memory(old_layout.size() as i64, new_layout.size() as i64);
             Ok(NonNull::<[u8]>::from_raw_parts(
                 data_address,
                 new_layout.size(),
@@ -167,6 +171,8 @@ pub mod linux_or_macos {
                     .write_bytes(0, new_layout.size() - old_layout.size());
                 NonNull::new(raw as *mut ()).unwrap()
             };
+
+            ThreadTracker::grow_memory(old_layout.size() as i64, new_layout.size() as i64);
             Ok(NonNull::<[u8]>::from_raw_parts(
                 data_address,
                 new_layout.size(),
@@ -190,12 +196,14 @@ pub mod linux_or_macos {
             let flags = layout_to_flags(new_layout.align(), new_layout.size());
             if new_layout.size() == 0 {
                 ffi::sdallocx(ptr.as_ptr() as *mut c_void, new_layout.size(), flags);
+                ThreadTracker::shrink_memory(old_layout.size() as i64, new_layout.size() as i64);
                 let slice = std::slice::from_raw_parts_mut(new_layout.align() as *mut u8, 0);
                 let ptr = NonNull::new(slice).unwrap_unchecked();
                 Ok(ptr)
             } else {
                 let data_address =
                     ffi::rallocx(ptr.cast().as_ptr(), new_layout.size(), flags) as *mut u8;
+                ThreadTracker::shrink_memory(old_layout.size() as i64, new_layout.size() as i64);
                 let metadata = new_layout.size();
                 let slice = std::slice::from_raw_parts_mut(data_address, metadata);
                 let ptr = NonNull::new(slice).ok_or(AllocError)?;

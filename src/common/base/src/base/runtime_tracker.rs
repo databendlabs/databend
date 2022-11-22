@@ -192,6 +192,7 @@ impl MemoryTracker {
 pub struct AsyncThreadTracker<T: Future> {
     inner: Pin<Box<T>>,
     thread_tracker: *mut ThreadTracker,
+    old_thread_tracker: Option<*mut ThreadTracker>,
 }
 
 unsafe impl<T: Future + Send> Send for AsyncThreadTracker<T> {}
@@ -201,6 +202,7 @@ impl<T: Future> AsyncThreadTracker<T> {
         AsyncThreadTracker::<T> {
             inner: Box::pin(inner),
             thread_tracker: tracker,
+            old_thread_tracker: None,
         }
     }
 }
@@ -209,10 +211,19 @@ impl<T: Future> Future for AsyncThreadTracker<T> {
     type Output = T::Output;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let old_tracker = ThreadTracker::current();
-        ThreadTracker::attach_thread_tracker(self.thread_tracker);
+        self.old_thread_tracker = Some(ThreadTracker::current());
+        let new_tracker = self.thread_tracker;
+        ThreadTracker::attach_thread_tracker(new_tracker);
         let res = self.inner.poll_unpin(cx);
-        ThreadTracker::attach_thread_tracker(old_tracker);
+        ThreadTracker::attach_thread_tracker(self.old_thread_tracker.take().unwrap());
         res
+    }
+}
+
+impl<T: Future> Drop for AsyncThreadTracker<T> {
+    fn drop(&mut self) {
+        if let Some(old_thread_tracker) = self.old_thread_tracker.take() {
+            ThreadTracker::attach_thread_tracker(old_thread_tracker);
+        }
     }
 }
