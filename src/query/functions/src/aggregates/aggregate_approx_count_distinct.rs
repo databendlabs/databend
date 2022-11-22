@@ -29,24 +29,24 @@ use crate::aggregates::aggregator_common::assert_unary_arguments;
 
 /// Use Hyperloglog to estimate distinct of values
 #[derive(serde::Serialize, serde::Deserialize)]
-pub struct AggregateApproximateDistinctCountState {
+pub struct AggregateApproxCountDistinctState {
     hll: HyperLogLog<DataValue>,
 }
 
 /// S: ScalarType
 #[derive(Clone)]
-pub struct AggregateApproximateDistinctCountFunction {
+pub struct AggregateApproxCountDistinctFunction {
     display_name: String,
 }
 
-impl AggregateApproximateDistinctCountFunction {
+impl AggregateApproxCountDistinctFunction {
     pub fn try_create(
         display_name: &str,
         _params: Vec<DataValue>,
         arguments: Vec<DataField>,
     ) -> Result<Arc<dyn AggregateFunction>> {
         assert_unary_arguments(display_name, arguments.len())?;
-        Ok(Arc::new(AggregateApproximateDistinctCountFunction {
+        Ok(Arc::new(AggregateApproxCountDistinctFunction {
             display_name: display_name.to_string(),
         }))
     }
@@ -60,9 +60,9 @@ impl AggregateApproximateDistinctCountFunction {
     }
 }
 
-impl AggregateFunction for AggregateApproximateDistinctCountFunction {
+impl AggregateFunction for AggregateApproxCountDistinctFunction {
     fn name(&self) -> &str {
-        "AggregateApproximateDistinctCountFunction"
+        "AggregateApproxCountDistinctFunction"
     }
 
     fn return_type(&self) -> Result<DataTypeImpl> {
@@ -70,13 +70,13 @@ impl AggregateFunction for AggregateApproximateDistinctCountFunction {
     }
 
     fn init_state(&self, place: StateAddr) {
-        place.write(|| AggregateApproximateDistinctCountState {
+        place.write(|| AggregateApproxCountDistinctState {
             hll: HyperLogLog::new(0.04),
         });
     }
 
     fn state_layout(&self) -> Layout {
-        Layout::new::<AggregateApproximateDistinctCountState>()
+        Layout::new::<AggregateApproxCountDistinctState>()
     }
 
     fn accumulate(
@@ -86,7 +86,7 @@ impl AggregateFunction for AggregateApproximateDistinctCountFunction {
         validity: Option<&Bitmap>,
         _input_rows: usize,
     ) -> Result<()> {
-        let state = place.get::<AggregateApproximateDistinctCountState>();
+        let state = place.get::<AggregateApproxCountDistinctState>();
         let column = &columns[0];
 
         let (_, bm) = column.validity();
@@ -115,7 +115,7 @@ impl AggregateFunction for AggregateApproximateDistinctCountFunction {
     }
 
     fn accumulate_row(&self, place: StateAddr, columns: &[ColumnRef], _row: usize) -> Result<()> {
-        let state = place.get::<AggregateApproximateDistinctCountState>();
+        let state = place.get::<AggregateApproxCountDistinctState>();
         for column in columns {
             column.to_values().iter().for_each(|value| {
                 state.hll.push(value);
@@ -125,19 +125,19 @@ impl AggregateFunction for AggregateApproximateDistinctCountFunction {
     }
 
     fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
-        let state = place.get::<AggregateApproximateDistinctCountState>();
+        let state = place.get::<AggregateApproxCountDistinctState>();
         serialize_into_buf(writer, state)
     }
 
     fn deserialize(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
-        let state = place.get::<AggregateApproximateDistinctCountState>();
+        let state = place.get::<AggregateApproxCountDistinctState>();
         *state = deserialize_from_slice(reader)?;
         Ok(())
     }
 
     fn merge(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
-        let state = place.get::<AggregateApproximateDistinctCountState>();
-        let rhs = rhs.get::<AggregateApproximateDistinctCountState>();
+        let state = place.get::<AggregateApproxCountDistinctState>();
+        let rhs = rhs.get::<AggregateApproxCountDistinctState>();
         state.hll.union(&rhs.hll);
 
         Ok(())
@@ -145,14 +145,24 @@ impl AggregateFunction for AggregateApproximateDistinctCountFunction {
 
     fn merge_result(&self, place: StateAddr, array: &mut dyn MutableColumn) -> Result<()> {
         let builder: &mut MutablePrimitiveColumn<u64> = Series::check_get_mutable_column(array)?;
-        let state = place.get::<AggregateApproximateDistinctCountState>();
+        let state = place.get::<AggregateApproxCountDistinctState>();
         builder.append_value(state.hll.len() as u64);
 
         Ok(())
     }
+
+    fn get_own_null_adaptor(
+        &self,
+        _nested_function: super::AggregateFunctionRef,
+        _params: Vec<DataValue>,
+        _arguments: Vec<DataField>,
+    ) -> Result<Option<super::AggregateFunctionRef>> {
+        let f = self.clone();
+        Ok(Some(Arc::new(f)))
+    }
 }
 
-impl fmt::Display for AggregateApproximateDistinctCountFunction {
+impl fmt::Display for AggregateApproxCountDistinctFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.display_name)
     }
