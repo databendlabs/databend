@@ -18,6 +18,7 @@ use common_catalog::table::Table;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::Expr;
+use common_expression::RemoteExpr;
 
 // use common_sql::ExpressionParser;
 use crate::table_functions::string_value;

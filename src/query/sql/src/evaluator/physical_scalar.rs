@@ -27,7 +27,10 @@ use crate::evaluator::Evaluator;
 use crate::executor::PhysicalScalar;
 
 impl Evaluator {
-    pub fn eval_expression(expression: &RemoteExpr<String>, schema: &DataSchema) -> Result<EvalNode> {
+    pub fn eval_expression(
+        expression: &RemoteExpr<String>,
+        schema: &DataSchema,
+    ) -> Result<EvalNode> {
         let physical_scalar = PhysicalScalar::from_expression(expression, schema)?;
         Self::eval_physical_scalar(&physical_scalar)
     }

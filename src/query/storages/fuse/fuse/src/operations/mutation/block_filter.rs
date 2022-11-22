@@ -18,7 +18,9 @@ use std::sync::Arc;
 use common_catalog::plan::Projection;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use common_expression::{Chunk, Expr, RemoteExpr};
+use common_expression::Chunk;
+use common_expression::Expr;
+use common_expression::RemoteExpr;
 // use common_sql::evaluator::Evaluator;
 use common_storages_table_meta::meta::BlockMeta;
 

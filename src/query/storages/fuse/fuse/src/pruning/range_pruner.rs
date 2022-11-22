@@ -16,7 +16,9 @@ use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use common_expression::{DataSchemaRef, Expr};
+use common_expression::DataSchemaRef;
+use common_expression::Expr;
+use common_expression::RemoteExpr;
 use common_storages_index::RangeFilter;
 use common_storages_table_meta::meta::StatisticsOfColumns;
 

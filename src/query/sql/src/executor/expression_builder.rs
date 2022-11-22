@@ -115,43 +115,44 @@ where ExpressionBuilder<T>: FiledNameFormat
     // todo(leisky)
     pub fn normalize_schema(expression: &Expression, schema: &DataSchema) -> Result<Expr<String>> {
         todo!("expression")
-    //     match expression {
-    //         Expression::IndexedVariable { name, .. } => {
-    //             let data_type = match schema.field_with_name(name) {
-    //                 Ok(f) => f.data_type().clone(),
-    //                 Err(_) => return Ok(expression.clone()),
-    //             };
-    //             Ok(Expression::IndexedVariable {
-    //                 name: name.clone(),
-    //                 data_type,
-    //             })
-    //         }
-    //         Expression::Function { name, args, .. } => {
-    //             let args = args
-    //                 .iter()
-    //                 .map(|arg| Self::normalize_schema(arg, schema))
-    //                 .collect::<Result<Vec<_>>>();
+        //     match expression {
+        //         Expression::IndexedVariable { name, .. } => {
+        //             let data_type = match schema.field_with_name(name) {
+        //                 Ok(f) => f.data_type().clone(),
+        //                 Err(_) => return Ok(expression.clone()),
+        //             };
+        //             Ok(Expression::IndexedVariable {
+        //                 name: name.clone(),
+        //                 data_type,
+        //             })
+        //         }
+        //         Expression::Function { name, args, .. } => {
+        //             let args = args
+        //                 .iter()
+        //                 .map(|arg| Self::normalize_schema(arg, schema))
+        //                 .collect::<Result<Vec<_>>>();
 
-    //             let args = args?;
+        //             let args = args?;
 
-    //             let types = args.iter().map(|arg| arg.data_type()).collect::<Vec<_>>();
-    //             let types = types.iter().collect::<Vec<_>>();
-    //             let func = FunctionFactory::instance().get(name, &types)?;
+        //             let types = args.iter().map(|arg| arg.data_type()).collect::<Vec<_>>();
+        //             let types = types.iter().collect::<Vec<_>>();
+        //             let func = FunctionFactory::instance().get(name, &types)?;
 
-    //             Ok(Expression::Function {
-    //                 name: name.clone(),
-    //                 args,
-    //                 return_type: func.return_type(),
-    //             })
-    //         }
+        //             Ok(Expression::Function {
+        //                 name: name.clone(),
+        //                 args,
+        //                 return_type: func.return_type(),
+        //             })
+        //         }
 
-    //         Expression::Cast { input, target } => Ok(Expression::Cast {
-    //             input: Box::new(Self::normalize_schema(input.as_ref(), schema)?),
-    //             target: target.clone(),
-    //         }),
-    //         Expression::Constant { .. } => Ok(expression.clone()),
-    //     }
-    // }
+        //         Expression::Cast { input, target } => Ok(Expression::Cast {
+        //             input: Box::new(Self::normalize_schema(input.as_ref(), schema)?),
+        //             target: target.clone(),
+        //         }),
+        //         Expression::Constant { .. } => Ok(expression.clone()),
+        //     }
+        // }
+    }
 }
 
 // pub trait ExpressionOp {

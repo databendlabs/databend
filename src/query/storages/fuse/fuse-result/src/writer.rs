@@ -22,6 +22,7 @@ use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::serialize_chunks;
 use common_expression::Chunk;
+use common_expression::DataSchemaRef;
 use common_expression::SendableChunkStream;
 use common_storages_fuse::statistics::BlockStatistics;
 use common_storages_fuse::statistics::StatisticsAccumulator;
@@ -43,6 +44,8 @@ pub struct ResultTableWriter {
     pub data_accessor: Operator,
     pub locations: ResultLocations,
     pub accumulator: StatisticsAccumulator,
+
+    schema: DataSchemaRef,
 }
 
 impl ResultTableWriter {
@@ -55,6 +58,7 @@ impl ResultTableWriter {
             data_accessor,
             accumulator: StatisticsAccumulator::default(),
             stopped: false,
+            schema: query_info.schema.clone(),
         })
     }
 
@@ -99,13 +103,11 @@ impl ResultTableWriter {
         Ok(())
     }
 
-    pub async fn append_block(&mut self, block: Chunk) -> Result<PartInfoPtr> {
+    pub async fn append_block(&mut self, chunk: Chunk) -> Result<PartInfoPtr> {
         let location = self.locations.gen_block_location();
         let mut data = Vec::with_capacity(100 * 1024 * 1024);
-        let block_statistics = BlockStatistics::from(&block, location.clone(), None)?;
-        todo!("expression");
-        // let schema = block.schema().clone();
-        // let (size, meta_data) = serialize_chunks(vec![block], &schema, &mut data)?;
+        let block_statistics = BlockStatistics::from(&chunk, location.clone(), None)?;
+        let (size, meta_data) = serialize_chunks(vec![chunk], &self.schema, &mut data)?;
 
         let object = self.data_accessor.object(&location);
         { || object.write(data.as_slice()) }
@@ -119,10 +121,9 @@ impl ResultTableWriter {
                 )
             })
             .await?;
-        todo!("expression");
-        // self.accumulator
-        //     .add_block(size, meta_data, block_statistics, None, 0)?;
-        // Ok(self.get_last_part_info())
+        self.accumulator
+            .add_block(size, meta_data, block_statistics, None, 0)?;
+        Ok(self.get_last_part_info())
     }
 
     pub async fn write_stream(&mut self, mut stream: SendableChunkStream) -> Result<()> {
