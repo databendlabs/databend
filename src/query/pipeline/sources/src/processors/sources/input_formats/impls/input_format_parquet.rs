@@ -89,7 +89,6 @@ impl InputFormat for InputFormatParquet {
         _stage_info: &UserStageInfo,
         op: &Operator,
         _settings: &Arc<Settings>,
-        _schema: &DataSchemaRef,
     ) -> Result<Vec<Arc<SplitInfo>>> {
         let mut infos = vec![];
         for path in files {
