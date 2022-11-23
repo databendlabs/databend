@@ -1540,6 +1540,11 @@ impl MetaConfig {
                 "Cannot set both embedded dir and [address|endpoints] config"
             )));
         }
+        if !has_embedded_dir && !has_remote {
+            return Err(ErrorCode::InvalidConfig(format!(
+                "Set embedded dir or [address|endpoints] config"
+            )));
+        }
         Ok(())
     }
 }

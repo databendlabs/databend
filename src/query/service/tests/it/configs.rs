@@ -97,7 +97,7 @@ level = "INFO"
 format = "text"
 
 [meta]
-embedded_dir = "./.databend/meta_embedded"
+embedded_dir = ""
 address = ""
 endpoints = []
 username = "root"
@@ -725,7 +725,7 @@ dir = "./.databend/logs"
 query_enabled = false
 
 [meta]
-embedded_dir = "./.databend/meta_embedded"
+embedded_dir = ""
 address = ""
 endpoints = []
 username = "username_from_file"
