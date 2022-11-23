@@ -89,7 +89,7 @@ pub struct CompactTransform {
     location_gen: TableMetaLocationGenerator,
     dal: Operator,
 
-    // The max memory allowed in the compact transform.
+    // Limit the memory size of the block read.
     max_memory: usize,
     compact_tasks: VecDeque<CompactTask>,
     block_metas: Vec<Arc<BlockMeta>>,
@@ -331,6 +331,7 @@ impl Processor for CompactTransform {
 
                         meta_stats.push(meta.col_stats.clone());
 
+                        // read block in parallel.
                         task_futures.push(async move {
                             block_reader.read_with_block_meta(meta.as_ref()).await
                         });
@@ -342,8 +343,7 @@ impl Processor for CompactTransform {
                     }
                 }
 
-                let joint = futures::future::join_all(task_futures).await;
-                let blocks: Vec<DataBlock> = joint.into_iter().collect::<Result<Vec<_>>>()?;
+                let blocks = futures::future::try_join_all(task_futures).await?;
                 self.state = State::CompactBlocks {
                     blocks,
                     stats_of_columns,
