@@ -120,7 +120,7 @@ impl BlockReader {
             .iter()
             .map(|column_descriptor| &column_descriptor.descriptor.primitive_type)
             .collect::<Vec<_>>();
-        
+
         Ok(column_iter_to_arrays(
             columns,
             types,
@@ -318,7 +318,7 @@ impl BlockReader {
                 &part.compression,
             )?);
         }
-        
+
         let deserializer = RowGroupDeserializer::new(columns_array_iter, num_rows, None);
         Ok(deserializer)
     }
@@ -343,6 +343,7 @@ impl BlockReader {
     }
 
     pub fn support_blocking_api(&self) -> bool {
+        // false
         self.operator.metadata().can_blocking()
     }
 
@@ -406,8 +407,7 @@ impl BlockReader {
             Some(Ok(chunk)) => DataBlock::from_chunk(&self.projected_schema, &chunk),
         }
     }
-    
-    
+
     pub fn next_block(&self, deserializer: &mut RowGroupDeserializer) -> Result<Option<DataBlock>> {
         match deserializer.next() {
             None => Ok(None),

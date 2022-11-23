@@ -118,7 +118,7 @@ impl Processor for ResultTableSource {
             State::Deserialize(part, chunks) => {
                 let mut se = self.block_reader.deserialize(part, chunks)?;
                 let data_block = self.block_reader.try_next_block(&mut se)?;
-                
+
                 let new_part = self.ctx.try_get_part();
 
                 let progress_values = ProgressValues {

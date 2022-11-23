@@ -40,6 +40,9 @@ pub fn serialize_data_blocks_with_compression(
         write_statistics: false,
         compression,
         version: Version::V2,
+        // 88k default
+        // see: https://docs.dremio.com/software/data-formats/parquet-files/
+        data_pagesize_limit: Some(88 * 1024),
     };
     let batches = blocks
         .into_iter()

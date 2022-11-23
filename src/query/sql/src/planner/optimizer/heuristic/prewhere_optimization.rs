@@ -120,8 +120,8 @@ impl PrewhereOptimizer {
                     predicates: prewhere_pred,
                 })
             };
-
-            Ok(SExpr::create_leaf(get.into()))
+            Ok(s_expr.replace_children(vec![SExpr::create_leaf(get.into())]))
+            // Ok(SExpr::create_leaf(get.into()))
         } else {
             let children = s_expr
                 .children()
