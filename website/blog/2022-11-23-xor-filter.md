@@ -114,9 +114,7 @@ vim configs/databend-query.toml
 ... ...
 
 [meta]
-# To enable embedded meta-store, set address to "".
-embedded_dir = "./.databend/meta_embedded_1"
-address = "127.0.0.1:9191"
+endpoints = ["127.0.0.1:9191"]
 username = "root"
 password = "root"
 client_timeout_in_second = 60
@@ -133,7 +131,6 @@ bucket = "<your-bucket-name>"
 endpoint_url = "<your-s3-endpoint>"
 access_key_id = "<your-key>"
 secret_access_key = "<your-access-key>"
-enable_virtual_host_style = true
 ```
 
 Step 4: Start Databend Query
