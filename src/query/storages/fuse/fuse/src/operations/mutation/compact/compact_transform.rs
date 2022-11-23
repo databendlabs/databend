@@ -32,7 +32,6 @@ use common_storages_table_meta::caches::CacheManager;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::SegmentInfo;
 use common_storages_table_meta::meta::StatisticsOfColumns;
-use itertools::Itertools;
 use opendal::Operator;
 
 use super::compact_meta::CompactSourceMeta;
@@ -307,7 +306,6 @@ impl Processor for CompactTransform {
                 // The no need compact blockmetas.
                 let mut trivals = VecDeque::new();
                 let mut memory_usage = 0;
-                let mut block_idx = 0;
                 let mut stats_of_columns = Vec::new();
 
                 let block_reader = self.block_reader.as_ref();
@@ -334,12 +332,8 @@ impl Processor for CompactTransform {
                         meta_stats.push(meta.col_stats.clone());
 
                         task_futures.push(async move {
-                            (
-                                block_idx,
-                                block_reader.read_with_block_meta(meta.as_ref()).await,
-                            )
+                            block_reader.read_with_block_meta(meta.as_ref()).await
                         });
-                        block_idx += 1;
                     }
                     stats_of_columns.push(meta_stats);
 
@@ -349,12 +343,7 @@ impl Processor for CompactTransform {
                 }
 
                 let joint = futures::future::join_all(task_futures).await;
-                // keep the block order.
-                let blocks: Vec<DataBlock> = joint
-                    .into_iter()
-                    .sorted_by_key(|&(idx, _)| idx)
-                    .map(|(_, r)| r)
-                    .collect::<Result<Vec<_>>>()?;
+                let blocks: Vec<DataBlock> = joint.into_iter().collect::<Result<Vec<_>>>()?;
                 self.state = State::CompactBlocks {
                     blocks,
                     stats_of_columns,
