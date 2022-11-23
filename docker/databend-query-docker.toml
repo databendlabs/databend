@@ -37,7 +37,6 @@ dir = "./.databend/logs"
 
 [meta]
 # To enable embedded meta-store, set address to ""
-embedded_dir = "_meta_embedded_1"
 address = "0.0.0.0:9191"
 username = "root"
 password = "root"
