@@ -354,9 +354,20 @@ impl CopyInterpreterV2 {
                 .iter()
                 .map(|v| v.path.clone())
                 .collect::<Vec<_>>();
-
-            let operator = StageTable::get_op(&table_ctx, &stage_table_info.user_stage_info)?;
             let settings = ctx.get_settings();
+            let operator = StageTable::get_op(&table_ctx, &stage_table_info.user_stage_info)?;
+            let format = InputContext::get_input_format(
+                &stage_table_info.user_stage_info.file_format_options.format,
+            )?;
+            let splits = format
+                .get_splits(
+                    &files,
+                    &stage_table_info.user_stage_info,
+                    &operator,
+                    &settings,
+                )
+                .await?;
+
             let schema = stage_table_info.schema.clone();
             let stage_info = stage_table_info.user_stage_info.clone();
             let compact_threshold = stage_table.get_block_compact_thresholds();
@@ -366,7 +377,7 @@ impl CopyInterpreterV2 {
                     settings,
                     schema,
                     stage_info,
-                    files,
+                    splits,
                     ctx.get_scan_progress(),
                     compact_threshold,
                 )
