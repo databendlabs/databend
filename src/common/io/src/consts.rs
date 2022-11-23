@@ -19,5 +19,5 @@ pub const FALSE_BYTES_NUM: &str = "0";
 pub const NULL_BYTES_UPPER: &str = "NULL";
 pub const NULL_BYTES_LOWER: &str = "null";
 pub const NULL_BYTES_ESCAPE: &str = "\\N";
-pub const NAN_BYTES_LOWER: &str = "nan";
+pub const NAN_BYTES_LOWER: &str = "NaN";
 pub const INF_BYTES_LOWER: &str = "inf";
