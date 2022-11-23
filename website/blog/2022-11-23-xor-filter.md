@@ -53,13 +53,9 @@ xor bitmap encode: 61 bytes, raw:3000000 bytes, ratio:0.000020333333
 ### Test Environment
 
 Databend: v0.8.122-nightly, single node
-
 VM: 32 vCPU, 32 GiB (Cloud VM)
-
 Object Storage: S3
-
 Dataset: 10 billion records, 350G Raw Data, Xor Filter Index 700MB, all indexes and data are stored in object storage.
-
 Table:
 
 ```sql
