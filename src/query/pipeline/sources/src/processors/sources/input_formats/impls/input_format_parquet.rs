@@ -89,7 +89,7 @@ impl InputFormat for InputFormatParquet {
         _stage_info: &UserStageInfo,
         op: &Operator,
         _settings: &Arc<Settings>,
-        schema: &DataSchemaRef,
+        _schema: &DataSchemaRef,
     ) -> Result<Vec<Arc<SplitInfo>>> {
         let mut infos = vec![];
         for path in files {
@@ -98,8 +98,10 @@ impl InputFormat for InputFormatParquet {
             let mut reader = obj.seekable_reader(..(size as u64));
             let mut file_meta = read_metadata_async(&mut reader).await?;
             let row_groups = mem::take(&mut file_meta.row_groups);
-            let fields = Arc::new(get_fields(&file_meta, schema)?);
+            let infer_schema = read::infer_schema(&file_meta)?;
+            let fields = Arc::new(infer_schema.fields);
             let read_file_meta = Arc::new(FileMeta { fields });
+
             let file_info = Arc::new(FileInfo {
                 path: path.clone(),
                 size,
@@ -163,11 +165,13 @@ impl InputFormatPipe for ParquetFormatPipe {
         let op = ctx.source.get_operator()?;
         let obj = op.object(&split_info.file.path);
         let mut reader = obj.seekable_reader(..(split_info.file.size as u64));
-        RowGroupInMemory::read_async(&mut reader, meta.meta.clone(), meta.file.fields.clone()).await
+        let input_fields = Arc::new(get_used_fields(&meta.file.fields, &ctx.schema)?);
+        RowGroupInMemory::read_async(&mut reader, meta.meta.clone(), input_fields).await
     }
 }
 
 pub struct FileMeta {
+    // all fields in the parquet file
     pub fields: Arc<Vec<Field>>,
 }
 
@@ -184,7 +188,10 @@ impl DynData for SplitMeta {
 
 pub struct RowGroupInMemory {
     pub meta: RowGroupMetaData,
-    pub fields: Arc<Vec<Field>>,
+    // for input, they are in the order of schema.
+    // for select, they are the fields used in query.
+    // used both in read and deserialize.
+    pub fields_to_read: Arc<Vec<Field>>,
     pub field_meta_indexes: Vec<Vec<usize>>,
     pub field_arrays: Vec<Vec<Vec<u8>>>,
 }
@@ -217,7 +224,7 @@ impl RowGroupInMemory {
             meta,
             field_meta_indexes,
             field_arrays: filed_arrays,
-            fields,
+            fields_to_read: fields,
         })
     }
 
@@ -238,7 +245,7 @@ impl RowGroupInMemory {
             meta,
             field_meta_indexes,
             field_arrays: filed_arrays,
-            fields,
+            fields_to_read: fields,
         })
     }
 
@@ -252,7 +259,7 @@ impl RowGroupInMemory {
             let meta_data = meta_iters.zip(datas.into_iter()).collect::<Vec<_>>();
             let array_iters = to_deserializer(
                 meta_data,
-                self.fields[f].clone(),
+                self.fields_to_read[f].clone(),
                 self.meta.num_rows(),
                 None,
                 None,
@@ -340,6 +347,8 @@ impl AligningStateTrait for AligningState {
         if let Some(rb) = read_batch {
             if let ReadBatch::Buffer(b) = rb {
                 self.buffers.push(b)
+            } else {
+                unreachable!()
             };
             Ok(vec![])
         } else {
@@ -352,14 +361,14 @@ impl AligningStateTrait for AligningState {
             );
             let mut cursor = Cursor::new(file_in_memory);
             let file_meta = read_metadata(&mut cursor)?;
-            let read_fields = Arc::new(get_fields(&file_meta, &self.ctx.schema)?);
-
+            let infer_schema = read::infer_schema(&file_meta)?;
+            let fields = Arc::new(get_used_fields(&infer_schema.fields, &self.ctx.schema)?);
             let mut row_batches = Vec::with_capacity(file_meta.row_groups.len());
             for row_group in file_meta.row_groups.into_iter() {
                 row_batches.push(RowGroupInMemory::read(
                     &mut cursor,
                     row_group,
-                    read_fields.clone(),
+                    fields.clone(),
                 )?)
             }
             tracing::info!(
@@ -373,12 +382,10 @@ impl AligningStateTrait for AligningState {
     }
 }
 
-fn get_fields(file_meta: &FileMetaData, schema: &DataSchemaRef) -> Result<Vec<Field>> {
-    let infer_schema = read::infer_schema(file_meta)?;
-    let mut read_fields = Vec::with_capacity(schema.num_fields());
+fn get_used_fields(fields: &Vec<Field>, schema: &DataSchemaRef) -> Result<Vec<Field>> {
+    let mut read_fields = Vec::with_capacity(fields.len());
     for f in schema.fields().iter() {
-        if let Some(m) = infer_schema
-            .fields
+        if let Some(m) = fields
             .iter()
             .filter(|c| c.name.eq_ignore_ascii_case(f.name()))
             .last()
