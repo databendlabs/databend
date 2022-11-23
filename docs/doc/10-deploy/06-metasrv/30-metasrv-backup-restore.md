@@ -17,7 +17,7 @@ E.g., every line in the output file is a JSON of an exported key-value record.
 ```sh
 # cargo build --bin databend-metactl
 
-./target/debug/databend-metactl --export --raft-dir "<your_meta_dir>" > --db <output_fn>
+./target/debug/databend-metactl --export --raft-dir "<your_meta_dir>" --db <output_fn>
 
 # tail "<output_fn>"
 # ["state_machine/0",{"Nodes":{"key":2,"value":{"name":"","endpoint":{"addr":"localhost","port":28203}}}}]
