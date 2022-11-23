@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::alloc::GlobalAlloc;
-use std::alloc::Layout;
 use std::future::Future;
 use std::pin::Pin;
 use std::ptr::NonNull;
@@ -24,8 +22,6 @@ use std::task::Context;
 use std::task::Poll;
 
 use futures::FutureExt;
-
-use crate::mem_allocator::GlobalAllocator;
 
 #[thread_local]
 static mut TRACKER: Option<ThreadTracker> = None;
@@ -78,12 +74,7 @@ impl ThreadTracker {
     }
 
     pub fn fork() -> Option<ThreadTracker> {
-        unsafe {
-            match &TRACKER {
-                None => None,
-                Some(tracker) => Some(tracker.clone()),
-            }
-        }
+        unsafe { TRACKER.as_ref().cloned() }
     }
 
     pub fn attach_thread_tracker(tracker: Option<ThreadTracker>) -> Option<ThreadTracker> {
@@ -99,12 +90,7 @@ impl ThreadTracker {
 
     #[inline]
     pub fn current_mem_tracker() -> Option<Arc<MemoryTracker>> {
-        unsafe {
-            match &TRACKER {
-                None => None,
-                Some(tracker) => Some(tracker.mem_tracker.clone()),
-            }
-        }
+        unsafe { TRACKER.as_ref().map(|tracker| tracker.mem_tracker.clone()) }
     }
 
     /// Accumulate allocated memory.
@@ -225,12 +211,7 @@ impl MemoryTracker {
 
     #[inline]
     pub fn current() -> Option<Arc<MemoryTracker>> {
-        unsafe {
-            match &TRACKER {
-                None => None,
-                Some(tracker) => Some(tracker.mem_tracker.clone()),
-            }
-        }
+        unsafe { TRACKER.as_ref().map(|tracker| tracker.mem_tracker.clone()) }
     }
 
     #[inline]
@@ -242,7 +223,7 @@ impl MemoryTracker {
 impl MemoryTracker {
     pub fn on_stop_thread(self: &Arc<Self>) -> impl Fn() {
         move || unsafe {
-            if let Some(thread_tracker) = std::mem::replace(&mut TRACKER, None) {
+            if let Some(thread_tracker) = TRACKER.take() {
                 thread_tracker
                     .mem_tracker
                     .record_memory(&thread_tracker.buffer);
