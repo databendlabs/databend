@@ -94,9 +94,8 @@ impl ExecutorWorkerContext {
         let workers_condvar = self.get_workers_condvar().clone();
         let tasks_queue = executor.global_tasks_queue.clone();
 
-        let thread_tracker = ThreadTracker::current();
         executor.async_runtime.spawn(AsyncThreadTracker::create(
-            thread_tracker,
+            ThreadTracker::fork(),
             ProcessorAsyncTask::create(
                 worker_id,
                 processor.clone(),
