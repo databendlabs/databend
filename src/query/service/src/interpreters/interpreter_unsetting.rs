@@ -53,7 +53,7 @@ impl Interpreter for UnSettingInterpreter {
                 "sql_mode" | "autocommit" => (false, String::from("")),
                 setting => {
                     if matches!(settings.get_setting_level(setting)?, Global) {
-                        self.ctx.get_settings().try_drop_setting(setting)?;
+                        self.ctx.get_settings().try_drop_setting(setting).await?;
                     }
                     let default_val = {
                         if setting == "max_memory_usage" {
