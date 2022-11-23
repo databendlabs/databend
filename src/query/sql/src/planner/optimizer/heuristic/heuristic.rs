@@ -84,9 +84,8 @@ impl HeuristicOptimizer {
     }
 
     fn post_optimize(&mut self, s_expr: SExpr) -> Result<SExpr> {
-        let prewhere_optimizer = PrewhereOptimizer::new(self.metadata.clone());
-        let s_expr = prewhere_optimizer.prewhere_optimize(s_expr)?;
-
+        // let prewhere_optimizer = PrewhereOptimizer::new(self.metadata.clone());
+        // let s_expr = prewhere_optimizer.prewhere_optimize(s_expr)?;
         let pruner = UnusedColumnPruner::new(self.metadata.clone());
         let require_columns: ColumnSet =
             self.bind_context.columns.iter().map(|c| c.index).collect();

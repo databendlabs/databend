@@ -162,7 +162,7 @@ impl Processor for FuseTableSource {
                 self.state = match block {
                     Some(block) => {
                         self.cnt += 1;
-                        println!(
+                        tracing::debug!(
                             "got next count: {}, block: {}, total: {}",
                             self.cnt,
                             block.num_rows(),
