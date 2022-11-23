@@ -37,8 +37,8 @@ impl Default for NestedFormatSettings {
             true_bytes: TRUE_BYTES_NUM.as_bytes().to_vec(),
             false_bytes: FALSE_BYTES_NUM.as_bytes().to_vec(),
             null_bytes: NULL_BYTES_UPPER.as_bytes().to_vec(),
-            nan_bytes: NAN_BYTES_LOWER.as_bytes().to_vec(),
-            inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
+            nan_bytes: NAN_BYTES_SNAKE.as_bytes().to_vec(),
+            inf_bytes: INF_BYTES_SNAKE.as_bytes().to_vec(),
             quote_char: b'\'',
         }
     }
@@ -106,8 +106,8 @@ impl FormatSettings {
             true_bytes: TRUE_BYTES_LOWER.as_bytes().to_vec(),
             false_bytes: FALSE_BYTES_LOWER.as_bytes().to_vec(),
             null_bytes: NULL_BYTES_UPPER.as_bytes().to_vec(),
-            nan_bytes: NAN_BYTES_LOWER.as_bytes().to_vec(),
-            inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
+            nan_bytes: NAN_BYTES_SNAKE.as_bytes().to_vec(),
+            inf_bytes: INF_BYTES_SNAKE.as_bytes().to_vec(),
             quote_char: b'\'',
             escape: Some(b'\\'),
 
@@ -131,7 +131,7 @@ impl FormatSettings {
             true_bytes: TRUE_BYTES_NUM.as_bytes().to_vec(),
             false_bytes: FALSE_BYTES_NUM.as_bytes().to_vec(),
             nan_bytes: NAN_BYTES_LOWER.as_bytes().to_vec(),
-            inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
+            inf_bytes: INF_BYTES_SNAKE.as_bytes().to_vec(),
             null_bytes: NULL_BYTES_ESCAPE.as_bytes().to_vec(),
             quote_char: b'\'',
             escape: Some(b'\\'),

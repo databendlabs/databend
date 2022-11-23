@@ -17,8 +17,8 @@ use common_datavalues::serializations::write_escaped_string;
 use common_datavalues::serializations::ArraySerializer;
 use common_datavalues::serializations::StructSerializer;
 use common_io::consts::FALSE_BYTES_NUM;
-use common_io::consts::INF_BYTES_LOWER;
-use common_io::consts::NAN_BYTES_LOWER;
+use common_io::consts::INF_BYTES_SNAKE;
+use common_io::consts::NAN_BYTES_SNAKE;
 use common_io::consts::NULL_BYTES_UPPER;
 use common_io::consts::TRUE_BYTES_NUM;
 
@@ -38,8 +38,8 @@ impl FieldEncoderValues {
                 true_bytes: TRUE_BYTES_NUM.as_bytes().to_vec(),
                 false_bytes: FALSE_BYTES_NUM.as_bytes().to_vec(),
                 null_bytes: NULL_BYTES_UPPER.as_bytes().to_vec(),
-                nan_bytes: NAN_BYTES_LOWER.as_bytes().to_vec(),
-                inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
+                nan_bytes: NAN_BYTES_SNAKE.as_bytes().to_vec(),
+                inf_bytes: INF_BYTES_SNAKE.as_bytes().to_vec(),
                 timezone: options.timezone,
             },
             quote_char: b'\'',
@@ -52,8 +52,8 @@ impl FieldEncoderValues {
                 true_bytes: TRUE_BYTES_NUM.as_bytes().to_vec(),
                 false_bytes: FALSE_BYTES_NUM.as_bytes().to_vec(),
                 null_bytes: NULL_BYTES_UPPER.as_bytes().to_vec(),
-                nan_bytes: NAN_BYTES_LOWER.as_bytes().to_vec(),
-                inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
+                nan_bytes: NAN_BYTES_SNAKE.as_bytes().to_vec(),
+                inf_bytes: INF_BYTES_SNAKE.as_bytes().to_vec(),
                 timezone,
             },
             quote_char: b'\'',

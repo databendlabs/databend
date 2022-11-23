@@ -25,8 +25,8 @@ use common_datavalues::StructValue;
 use common_datavalues::TypeDeserializer;
 use common_exception::Result;
 use common_io::consts::FALSE_BYTES_LOWER;
-use common_io::consts::INF_BYTES_LOWER;
-use common_io::consts::NAN_BYTES_LOWER;
+use common_io::consts::INF_BYTES_SNAKE;
+use common_io::consts::NAN_BYTES_SNAKE;
 use common_io::consts::NULL_BYTES_UPPER;
 use common_io::consts::TRUE_BYTES_LOWER;
 use common_io::cursor_ext::BufferReadStringExt;
@@ -49,8 +49,8 @@ impl FieldDecoderValues {
                 true_bytes: TRUE_BYTES_LOWER.as_bytes().to_vec(),
                 false_bytes: FALSE_BYTES_LOWER.as_bytes().to_vec(),
                 null_bytes: NULL_BYTES_UPPER.as_bytes().to_vec(),
-                nan_bytes: NAN_BYTES_LOWER.as_bytes().to_vec(),
-                inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
+                nan_bytes: NAN_BYTES_SNAKE.as_bytes().to_vec(),
+                inf_bytes: INF_BYTES_SNAKE.as_bytes().to_vec(),
                 timezone: options.timezone,
             },
         }
@@ -62,8 +62,8 @@ impl FieldDecoderValues {
                 true_bytes: TRUE_BYTES_LOWER.as_bytes().to_vec(),
                 false_bytes: FALSE_BYTES_LOWER.as_bytes().to_vec(),
                 null_bytes: NULL_BYTES_UPPER.as_bytes().to_vec(),
-                nan_bytes: NAN_BYTES_LOWER.as_bytes().to_vec(),
-                inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
+                nan_bytes: NAN_BYTES_SNAKE.as_bytes().to_vec(),
+                inf_bytes: INF_BYTES_SNAKE.as_bytes().to_vec(),
                 timezone,
             },
         }
