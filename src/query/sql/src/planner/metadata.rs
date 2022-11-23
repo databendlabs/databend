@@ -318,6 +318,7 @@ impl TableEntry {
 
 #[derive(Clone, Debug)]
 pub enum ColumnEntry {
+    /// Column from base table, for example `SELECT t.a, t.b FROM t`.
     BaseTableColumn {
         table_index: IndexType,
         column_index: IndexType,
@@ -330,6 +331,8 @@ pub enum ColumnEntry {
         /// None if the data type of column is struct.
         leaf_index: Option<usize>,
     },
+
+    /// Column synthesized from other columns, for example `SELECT t.a + t.b AS a FROM t`.
     DerivedColumn {
         column_index: IndexType,
         alias: String,
