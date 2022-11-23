@@ -32,6 +32,10 @@ static mut TRACKER: Option<ThreadTracker> = None;
 #[thread_local]
 static mut MEM_STAT_BUFFER: StatBuffer = StatBuffer::empty();
 
+/// Limit process-wise memory usage by checking if `GLOBAL_TRACKER.memory_usage` exceeds the limit defined in this struct.
+#[thread_local]
+static mut GLOBAL_LIMIT: GlobalMemoryLimit = GlobalMemoryLimit::empty();
+
 /// Global memory allocation stat tracker.
 pub static GLOBAL_TRACKER: MemoryTracker = MemoryTracker {
     memory_usage: AtomicI64::new(0),
@@ -40,6 +44,30 @@ pub static GLOBAL_TRACKER: MemoryTracker = MemoryTracker {
 };
 
 static UNTRACKED_MEMORY_LIMIT: i64 = 4 * 1024 * 1024;
+
+pub fn get_memory_usage() -> i64 {
+    GLOBAL_TRACKER.memory_usage.load(Ordering::Relaxed)
+}
+
+pub fn is_allow_to_alloc(size: i64) -> bool {
+    debug_assert!(size >= 0);
+
+    let x = unsafe { &mut GLOBAL_LIMIT };
+    x.check_alloc_allowed(size)
+}
+
+pub fn set_memory_limit(mut size: i64) {
+    // It may cause the process unable to run if memory limit is too low.
+    const LOWEST: i64 = 256 * 1024 * 1024;
+
+    if size > 0 && size < LOWEST {
+        size = LOWEST;
+    }
+
+    unsafe {
+        GLOBAL_LIMIT.limit.store(size, Ordering::Relaxed);
+    }
+}
 
 #[derive(Clone)]
 pub struct ThreadTracker {
@@ -151,6 +179,74 @@ pub struct MemoryTracker {
     parent_memory_tracker: Option<Arc<MemoryTracker>>,
 }
 
+pub struct GlobalMemoryLimit {
+    /// The rate to check memory usage.
+    ///
+    /// Checking is expensive thus we do not check it for every memory allocation request.
+    check_rate_limit: RateLimiter,
+
+    /// The limit of used memory globally.
+    ///
+    /// Set to 0 to disable the limit.
+    limit: AtomicI64,
+}
+
+impl GlobalMemoryLimit {
+    pub const fn empty() -> Self {
+        Self {
+            check_rate_limit: RateLimiter::empty(),
+            limit: AtomicI64::new(0),
+        }
+    }
+
+    /// Check if allocated memory exceeds the limit.
+    ///
+    /// It does NOT do the check for every call.
+    fn check_alloc_allowed(&mut self, size: i64) -> bool {
+        // Check max memory threshold for every `CHECK_INTERVAL` MB allocated memory.
+        const CHECK_INTERVAL: i64 = 64 * 1024 * 1024;
+
+        let rate_lim = &mut self.check_rate_limit;
+
+        rate_lim.counter += size;
+
+        if rate_lim.counter > rate_lim.next_check {
+            rate_lim.next_check = rate_lim.counter + CHECK_INTERVAL;
+
+            let limit = self.limit.load(Ordering::Relaxed);
+            if limit == 0 {
+                // no limit
+                return true;
+            }
+
+            let mem_used = GLOBAL_TRACKER.memory_usage.load(Ordering::Relaxed);
+
+            return mem_used < limit;
+        }
+
+        true
+    }
+}
+
+/// Set a rate cap on an action that is less frequent than once per `n` allocated bytes.
+#[derive(Clone, Debug, Default)]
+pub struct RateLimiter {
+    /// This counter is used to set a rate cap on an action that is less frequent than once per `n` allocated bytes.
+    counter: i64,
+
+    /// The counter value at which the next check will be done.
+    next_check: i64,
+}
+
+impl RateLimiter {
+    pub const fn empty() -> Self {
+        Self {
+            counter: 0,
+            next_check: 0,
+        }
+    }
+}
+
 /// Buffering memory allocation stats.
 ///
 /// A StatBuffer buffers stats changes in local variables, and periodically flush them to other storage such as an `Arc<T>` shared by several threads.
@@ -243,8 +339,6 @@ impl MemoryTracker {
 }
 
 /// A [`Future`] that enters its thread tracker when being polled.
-///
-/// [`Future`]: std::future::Future
 pub struct AsyncThreadTracker<T: Future> {
     inner: Pin<Box<T>>,
     thread_tracker: Option<ThreadTracker>,

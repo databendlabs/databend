@@ -15,6 +15,7 @@
 use std::env;
 use std::sync::Arc;
 
+use common_base::base::set_memory_limit;
 use common_base::base::MemoryTracker;
 use common_config::Config;
 use common_config::DATABEND_COMMIT_VERSION;
@@ -46,6 +47,8 @@ async fn main(_global_tracker: Arc<MemoryTracker>) -> common_exception::Result<(
 
     init_default_metrics_recorder();
     set_panic_hook();
+
+    set_memory_limit(conf.query.max_memory_usage as i64);
 
     if conf.meta.is_embedded_meta()? {
         MetaEmbedded::init_global_meta_store(conf.meta.embedded_dir.clone()).await?;

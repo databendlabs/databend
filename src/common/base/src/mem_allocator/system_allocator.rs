@@ -18,6 +18,7 @@ use std::alloc::Layout;
 use std::alloc::System;
 use std::ptr::NonNull;
 
+use crate::base::is_allow_to_alloc;
 use crate::base::ThreadTracker;
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -26,6 +27,9 @@ pub struct SystemAllocator;
 unsafe impl Allocator for SystemAllocator {
     #[inline(always)]
     fn allocate(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
+        if !is_allow_to_alloc(layout.size() as i64) {
+            return Err(AllocError);
+        }
         let p = System.allocate(layout)?;
         ThreadTracker::alloc_memory(layout.size() as i64, &p);
         Ok(p)
@@ -39,6 +43,10 @@ unsafe impl Allocator for SystemAllocator {
 
     #[inline(always)]
     fn allocate_zeroed(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
+        if !is_allow_to_alloc(layout.size() as i64) {
+            return Err(AllocError);
+        }
+
         let p = System.allocate_zeroed(layout)?;
 
         ThreadTracker::alloc_memory(layout.size() as i64, &p);
@@ -53,6 +61,10 @@ unsafe impl Allocator for SystemAllocator {
         old_layout: Layout,
         new_layout: Layout,
     ) -> Result<NonNull<[u8]>, AllocError> {
+        if !is_allow_to_alloc((new_layout.size() - old_layout.size()) as i64) {
+            return Err(AllocError);
+        }
+
         ThreadTracker::dealloc_memory(old_layout.size() as i64, &ptr);
 
         let new_ptr = System.grow(ptr, old_layout, new_layout)?;
@@ -68,6 +80,10 @@ unsafe impl Allocator for SystemAllocator {
         old_layout: Layout,
         new_layout: Layout,
     ) -> Result<NonNull<[u8]>, AllocError> {
+        if !is_allow_to_alloc((new_layout.size() - old_layout.size()) as i64) {
+            return Err(AllocError);
+        }
+
         ThreadTracker::dealloc_memory(old_layout.size() as i64, &ptr);
 
         let new_ptr = System.grow_zeroed(ptr, old_layout, new_layout)?;

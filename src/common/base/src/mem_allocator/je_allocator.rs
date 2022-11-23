@@ -40,6 +40,7 @@ pub mod linux_or_macos {
     use tikv_jemalloc_sys as ffi;
 
     use super::JEAllocator;
+    use crate::base::is_allow_to_alloc;
     use crate::base::ThreadTracker;
 
     impl<T> JEAllocator<T> {
@@ -83,6 +84,10 @@ pub mod linux_or_macos {
     unsafe impl<T: Allocator> Allocator for JEAllocator<T> {
         #[inline(always)]
         fn allocate(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
+            if !is_allow_to_alloc(layout.size() as i64) {
+                return Err(AllocError);
+            }
+
             let data_address = if layout.size() == 0 {
                 unsafe { NonNull::new(layout.align() as *mut ()).unwrap_unchecked() }
             } else {
@@ -97,6 +102,10 @@ pub mod linux_or_macos {
 
         #[inline(always)]
         fn allocate_zeroed(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
+            if !is_allow_to_alloc(layout.size() as i64) {
+                return Err(AllocError);
+            }
+
             let data_address = if layout.size() == 0 {
                 unsafe { NonNull::new(layout.align() as *mut ()).unwrap_unchecked() }
             } else {
@@ -131,6 +140,10 @@ pub mod linux_or_macos {
             debug_assert_eq!(old_layout.align(), new_layout.align());
             debug_assert!(old_layout.size() <= new_layout.size());
 
+            if !is_allow_to_alloc((new_layout.size() - old_layout.size()) as i64) {
+                return Err(AllocError);
+            }
+
             ThreadTracker::dealloc_memory(old_layout.size() as i64, &ptr);
 
             let data_address = if new_layout.size() == 0 {
@@ -160,6 +173,10 @@ pub mod linux_or_macos {
         ) -> Result<NonNull<[u8]>, AllocError> {
             debug_assert_eq!(old_layout.align(), new_layout.align());
             debug_assert!(old_layout.size() <= new_layout.size());
+
+            if !is_allow_to_alloc((new_layout.size() - old_layout.size()) as i64) {
+                return Err(AllocError);
+            }
 
             ThreadTracker::dealloc_memory(old_layout.size() as i64, &ptr);
 
