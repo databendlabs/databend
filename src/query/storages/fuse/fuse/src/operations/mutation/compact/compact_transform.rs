@@ -90,6 +90,7 @@ pub struct CompactTransform {
     location_gen: TableMetaLocationGenerator,
     dal: Operator,
 
+    // The max memory allowed in the compact transform.
     max_memory: usize,
     compact_tasks: VecDeque<CompactTask>,
     block_metas: Vec<Arc<BlockMeta>>,
@@ -208,13 +209,17 @@ impl Processor for CompactTransform {
                         continue;
                     }
 
+                    // concat blocks.
                     let compact_blocks: Vec<_> = blocks.drain(0..block_num).collect();
                     let new_block = DataBlock::concat_blocks(&compact_blocks)?;
 
+                    // generate block statistics.
                     let col_stats = reduce_block_statistics(&stats, Some(&new_block))?;
                     let row_count = new_block.num_rows() as u64;
                     let block_size = new_block.memory_size() as u64;
                     let (block_location, block_id) = self.location_gen.gen_block_location();
+
+                    // build block index.
                     let (index_data, index_size, index_location) = {
                         // write index
                         let bloom_index = BlockFilter::try_create(&[&new_block])?;
@@ -231,12 +236,14 @@ impl Processor for CompactTransform {
                         (data, size, location)
                     };
 
+                    // serialize data block.
                     let mut block_data = Vec::with_capacity(100 * 1024 * 1024);
                     let schema = new_block.schema().clone();
                     let (file_size, meta_data) =
                         serialize_data_blocks(vec![new_block], &schema, &mut block_data)?;
                     let col_metas = util::column_metas(&meta_data)?;
 
+                    // new block meta.
                     let new_meta = BlockMeta::new(
                         row_count,
                         block_size,
@@ -295,7 +302,9 @@ impl Processor for CompactTransform {
     async fn async_process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Consume) {
             State::ReadBlocks => {
+                // block read tasks.
                 let mut task_futures = Vec::new();
+                // The no need compact blockmetas.
                 let mut trivals = VecDeque::new();
                 let mut memory_usage = 0;
                 let mut block_idx = 0;
@@ -304,6 +313,7 @@ impl Processor for CompactTransform {
                 let block_reader = self.block_reader.as_ref();
                 while let Some(task) = self.compact_tasks.pop_front() {
                     let metas = task.get_block_metas();
+                    // Only one block, no need to do a compact.
                     if metas.len() == 1 {
                         stats_of_columns.push(vec![]);
                         trivals.push_back(metas[0].clone());
@@ -339,6 +349,7 @@ impl Processor for CompactTransform {
                 }
 
                 let joint = futures::future::join_all(task_futures).await;
+                // keep the block order.
                 let blocks: Vec<DataBlock> = joint
                     .into_iter()
                     .sorted_by_key(|&(idx, _)| idx)
@@ -355,9 +366,11 @@ impl Processor for CompactTransform {
                 let dal = &self.dal;
                 while let Some(state) = serialize_states.pop() {
                     handles.push(async move {
+                        // write block data.
                         dal.object(&state.block_location)
                             .write(state.block_data)
                             .await?;
+                        // write index data.
                         dal.object(&state.index_location)
                             .write(state.index_data)
                             .await
