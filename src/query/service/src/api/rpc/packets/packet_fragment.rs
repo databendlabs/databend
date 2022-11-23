@@ -15,8 +15,8 @@
 use std::fmt::Debug;
 use std::fmt::Formatter;
 
-use common_datavalues::DataSchemaRef;
 use common_exception::Result;
+use common_expression::DataSchemaRef;
 
 use crate::api::DataExchange;
 use crate::sql::executor::PhysicalPlan;

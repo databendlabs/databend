@@ -25,7 +25,7 @@ use common_exception::Result;
 use futures_util::future::Either;
 
 use crate::api::rpc::flight_client::FlightExchange;
-use crate::api::rpc::packets::PrecommitBlock;
+use crate::api::rpc::packets::PrecommitChunk;
 use crate::api::rpc::packets::ProgressInfo;
 use crate::api::DataPacket;
 use crate::sessions::QueryContext;
@@ -170,11 +170,11 @@ impl StatisticsSender {
         Ok(progress_info)
     }
 
-    async fn fetch_precommit(ctx: &Arc<QueryContext>) -> Result<Vec<PrecommitBlock>> {
+    async fn fetch_precommit(ctx: &Arc<QueryContext>) -> Result<Vec<PrecommitChunk>> {
         Ok(ctx
             .consume_precommit_chunks()
             .into_iter()
-            .map(PrecommitBlock)
+            .map(PrecommitChunk)
             .collect())
     }
 }

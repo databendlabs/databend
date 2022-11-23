@@ -22,7 +22,7 @@ use common_storages_fuse::operations::AppendOperationLogEntry;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::SegmentInfo;
 use common_storages_table_meta::meta::Statistics;
-use databend_query::api::PrecommitBlock;
+use databend_query::api::PrecommitChunk;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_precommit_ser_and_deser() -> Result<()> {
@@ -40,11 +40,11 @@ async fn test_precommit_ser_and_deser() -> Result<()> {
     let segment_info = SegmentInfo::new(vec![Arc::new(block_meta)], Statistics::default());
     let log_entry = AppendOperationLogEntry::new("/_sg/1.json".to_string(), Arc::new(segment_info));
     let precommit_block = DataBlock::try_from(log_entry)?;
-    let test_precommit = PrecommitBlock(precommit_block);
+    let test_precommit = PrecommitChunk(precommit_block);
 
     let mut bytes = vec![];
-    PrecommitBlock::write(test_precommit.clone(), &mut bytes)?;
+    PrecommitChunk::write(test_precommit.clone(), &mut bytes)?;
     let mut read = bytes.as_slice();
-    assert_eq!(test_precommit, PrecommitBlock::read(&mut read)?);
+    assert_eq!(test_precommit, PrecommitChunk::read(&mut read)?);
     Ok(())
 }

@@ -15,10 +15,9 @@
 use std::collections::hash_map::DefaultHasher;
 use std::hash::Hasher;
 
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::Chunk;
 use common_functions::scalars::Function;
 use common_functions::scalars::FunctionContext;
 use common_functions::scalars::FunctionFactory;
@@ -180,15 +179,15 @@ impl OneHashKeyFlightScatter {
 }
 
 impl FlightScatter for OneHashKeyFlightScatter {
-    fn execute(&self, data_block: &DataBlock, _num: usize) -> Result<Vec<DataBlock>> {
-        let indices = self.indices_scalar.eval(&self.func_ctx, data_block)?;
+    fn execute(&self, chunk: &Chunk, _num: usize) -> Result<Vec<Chunk>> {
+        let indices = self.indices_scalar.eval(&self.func_ctx, chunk)?;
         let indices = Self::get_hash_values(indices.vector())?;
-        let data_blocks = DataBlock::scatter_block(data_block, &indices, self.scatter_size)?;
+        let chunks = Chunk::scatter(chunk, &indices, self.scatter_size)?;
 
-        let block_meta = data_block.meta()?;
-        let mut res = Vec::with_capacity(data_blocks.len());
-        for data_block in data_blocks {
-            res.push(data_block.add_meta(block_meta.clone())?);
+        let chunk_meta = chunk.meta()?;
+        let mut res = Vec::with_capacity(chunks.len());
+        for chunk in chunks {
+            res.push(chunk.add_meta(chunk_meta.clone())?);
         }
 
         Ok(res)
@@ -196,24 +195,24 @@ impl FlightScatter for OneHashKeyFlightScatter {
 }
 
 impl FlightScatter for HashFlightScatter {
-    fn execute(&self, data_block: &DataBlock, _num: usize) -> Result<Vec<DataBlock>> {
+    fn execute(&self, chunk: &Chunk, _num: usize) -> Result<Vec<Chunk>> {
         let hash_keys = self
             .hash_keys
             .iter()
-            .map(|eval| eval.eval(&self.func_ctx, data_block))
+            .map(|eval| eval.eval(&self.func_ctx, chunk))
             .collect::<Result<Vec<_>>>()?;
-        let hash = self.combine_hash_keys(&hash_keys, data_block.num_rows())?;
+        let hash = self.combine_hash_keys(&hash_keys, chunk.num_rows())?;
         let indices: Vec<usize> = hash
             .iter()
             .map(|c| (*c as usize) % self.scatter_size)
             .collect();
 
-        let block_meta = data_block.meta()?;
-        let data_blocks = DataBlock::scatter_block(data_block, &indices, self.scatter_size)?;
+        let chunk_meta = chunk.meta()?;
+        let chunks = Chunk::scatter(chunk, &indices, self.scatter_size)?;
 
-        let mut res = Vec::with_capacity(data_blocks.len());
-        for data_block in data_blocks {
-            res.push(data_block.add_meta(block_meta.clone())?);
+        let mut res = Vec::with_capacity(chunks.len());
+        for chunk in chunks {
+            res.push(chunk.add_meta(chunk_meta.clone())?);
         }
 
         Ok(res)

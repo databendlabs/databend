@@ -16,9 +16,9 @@ use std::any::Any;
 use std::sync::Arc;
 
 use common_arrow::arrow::io::flight::serialize_batch;
-use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::Chunk;
 
 use crate::api::rpc::exchange::exchange_params::ExchangeParams;
 use crate::api::rpc::exchange::exchange_params::MergeExchangeParams;
@@ -34,7 +34,7 @@ use crate::sessions::QueryContext;
 
 pub struct ExchangeMergeSink {
     input: Arc<InputPort>,
-    input_data: Option<DataBlock>,
+    input_data: Option<Chunk>,
     output_data: Option<DataPacket>,
     serialize_params: SerializeParams,
     flight_exchange: FlightExchange,
@@ -95,19 +95,19 @@ impl Processor for ExchangeMergeSink {
     }
 
     fn process(&mut self) -> Result<()> {
-        if let Some(data_block) = self.input_data.take() {
-            if data_block.is_empty() {
+        if let Some(chunk) = self.input_data.take() {
+            if chunk.is_empty() {
                 return Ok(());
             }
 
-            let meta = match bincode::serialize(&data_block.meta()?) {
+            let meta = match bincode::serialize(&chunk.meta()?) {
                 Ok(bytes) => Ok(bytes),
                 Err(_) => Err(ErrorCode::BadBytes(
-                    "block meta serialize error when exchange",
+                    "chunk meta serialize error when exchange",
                 )),
             }?;
 
-            let chunks = data_block.try_into()?;
+            let chunks = chunk.try_into()?;
             let options = &self.serialize_params.options;
             let ipc_fields = &self.serialize_params.ipc_fields;
             let (dicts, values) = serialize_batch(&chunks, ipc_fields, options)?;

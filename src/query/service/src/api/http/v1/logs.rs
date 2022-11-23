@@ -14,9 +14,9 @@
 
 use std::sync::Arc;
 
-use common_datablocks::SendableDataBlockStream;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::SendableChunkStream;
 // use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use poem::http::StatusCode;
 use poem::Body;
@@ -53,22 +53,22 @@ async fn select_table(sessions: &Arc<SessionManager>) -> Result<Body> {
     let stream = async_stream::try_stream! {
         match tracing_table_stream.next().await {
             Some(res) => {
-                let block = res?;
-                yield format!("{block:?}");
+                let chunk = res?;
+                yield format!("{chunk:?}");
             },
             None => return,
         }
 
         while let Some(res) = tracing_table_stream.next().await {
-            let block = res?;
-            yield format!(", {block:?}");
+            let chunk = res?;
+            yield format!(", {chunk:?}");
         }
     };
 
     Ok(Body::from_bytes_stream::<_, _, ErrorCode>(stream))
 }
 
-async fn execute_query(ctx: Arc<QueryContext>) -> Result<SendableDataBlockStream> {
+async fn execute_query(ctx: Arc<QueryContext>) -> Result<SendableChunkStream> {
     // TODO make default a constant
     let tracing_table = ctx.get_table("default", "system", "tracing").await?;
     let tracing_table_read_plan = tracing_table.read_plan(ctx.clone(), None).await?;

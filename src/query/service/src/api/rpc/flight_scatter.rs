@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datablocks::DataBlock;
 use common_exception::Result;
+use common_expression::Chunk;
 
 pub trait FlightScatter: Sync + Send {
-    fn execute(&self, data_block: &DataBlock, num: usize) -> Result<Vec<DataBlock>>;
+    fn execute(&self, chunk: &Chunk, num: usize) -> Result<Vec<Chunk>>;
 }

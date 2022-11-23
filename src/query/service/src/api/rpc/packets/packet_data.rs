@@ -24,7 +24,7 @@ use common_exception::Result;
 use tracing::error;
 
 use crate::api::rpc::packets::ProgressInfo;
-use crate::api::PrecommitBlock;
+use crate::api::PrecommitChunk;
 
 pub struct FragmentData {
     meta: Vec<u8>,
@@ -54,7 +54,7 @@ pub enum DataPacket {
     FetchProgressAndPrecommit,
     ProgressAndPrecommit {
         progress: Vec<ProgressInfo>,
-        precommit: Vec<PrecommitBlock>,
+        precommit: Vec<PrecommitChunk>,
     },
 }
 
@@ -147,7 +147,7 @@ impl TryFrom<FlightData> for DataPacket {
                 // Pre-commit.
                 let mut precommit = Vec::with_capacity(precommit_size as usize);
                 for _index in 0..precommit_size {
-                    precommit.push(PrecommitBlock::read(&mut bytes)?);
+                    precommit.push(PrecommitChunk::read(&mut bytes)?);
                 }
 
                 Ok(DataPacket::ProgressAndPrecommit {

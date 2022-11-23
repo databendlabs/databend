@@ -20,9 +20,9 @@ use common_arrow::arrow::io::flight::deserialize_batch;
 use common_arrow::arrow::io::flight::serialize_batch;
 use common_arrow::arrow::io::ipc::IpcSchema;
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::Chunk;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
@@ -41,9 +41,9 @@ use crate::clusters::ClusterHelper;
 use crate::sessions::QueryContext;
 
 struct OutputData {
-    pub data_block: Option<DataBlock>,
-    pub has_serialized_blocks: bool,
-    pub serialized_blocks: Vec<Option<DataPacket>>,
+    pub chunk: Option<Chunk>,
+    pub has_serialized_chunks: bool,
+    pub serialized_chunks: Vec<Option<DataPacket>>,
 }
 
 pub struct ExchangeTransform {
@@ -51,7 +51,7 @@ pub struct ExchangeTransform {
     wait_channel_closed: bool,
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
-    input_data: Option<DataBlock>,
+    input_data: Option<Chunk>,
     remote_data: Option<DataPacket>,
     output_data: Option<OutputData>,
     flight_exchanges: Vec<FlightExchange>,
@@ -158,8 +158,8 @@ impl Processor for ExchangeTransform {
 
         // If data needs to be sent to other nodes.
         if let Some(mut output_data) = self.output_data.take() {
-            if let Some(data_block) = output_data.data_block.take() {
-                self.output.push_data(Ok(data_block));
+            if let Some(chunk) = output_data.chunk.take() {
+                self.output.push_data(Ok(chunk));
             }
 
             self.output_data = Some(output_data);
@@ -207,35 +207,35 @@ impl Processor for ExchangeTransform {
 
     fn process(&mut self) -> Result<()> {
         // Prepare data to be sent to other nodes
-        if let Some(data_block) = self.input_data.take() {
+        if let Some(chunk) = self.input_data.take() {
             let scatter = &self.shuffle_exchange_params.shuffle_scatter;
 
-            let scatted_blocks = scatter.execute(&data_block, 0)?;
+            let scatted_chunks = scatter.execute(&chunk, 0)?;
 
             let mut output_data = OutputData {
-                data_block: None,
-                serialized_blocks: vec![],
-                has_serialized_blocks: false,
+                chunk: None,
+                serialized_chunks: vec![],
+                has_serialized_chunks: false,
             };
 
-            for (index, data_block) in scatted_blocks.into_iter().enumerate() {
-                if data_block.is_empty() {
-                    output_data.serialized_blocks.push(None);
+            for (index, chunk) in scatted_chunks.into_iter().enumerate() {
+                if chunk.is_empty() {
+                    output_data.serialized_chunks.push(None);
                     continue;
                 }
 
                 if index == self.serialize_params.local_executor_pos {
-                    output_data.data_block = Some(data_block);
-                    output_data.serialized_blocks.push(None);
+                    output_data.chunk = Some(chunk);
+                    output_data.serialized_chunks.push(None);
                 } else {
-                    let meta = match bincode::serialize(&data_block.meta()?) {
+                    let meta = match bincode::serialize(&chunk.meta()?) {
                         Ok(bytes) => Ok(bytes),
                         Err(_) => Err(ErrorCode::BadBytes(
-                            "block meta serialize error when exchange",
+                            "chunk meta serialize error when exchange",
                         )),
                     }?;
 
-                    let chunks = data_block.try_into()?;
+                    let chunks = chunk.try_into()?;
                     let options = &self.serialize_params.options;
                     let ipc_fields = &self.serialize_params.ipc_fields;
                     let (dicts, values) = serialize_batch(&chunks, ipc_fields, options)?;
@@ -246,10 +246,10 @@ impl Processor for ExchangeTransform {
                         ));
                     }
 
-                    output_data.has_serialized_blocks = true;
+                    output_data.has_serialized_chunks = true;
                     let data = FragmentData::create(meta, values);
                     output_data
-                        .serialized_blocks
+                        .serialized_chunks
                         .push(Some(DataPacket::FragmentData(data)));
                 }
             }
@@ -272,9 +272,9 @@ impl Processor for ExchangeTransform {
 
     async fn async_process(&mut self) -> Result<()> {
         if let Some(mut output_data) = self.output_data.take() {
-            let mut futures = Vec::with_capacity(output_data.serialized_blocks.len());
-            for index in 0..output_data.serialized_blocks.len() {
-                if let Some(output_packet) = output_data.serialized_blocks[index].take() {
+            let mut futures = Vec::with_capacity(output_data.serialized_chunks.len());
+            for index in 0..output_data.serialized_chunks.len() {
+                if let Some(output_packet) = output_data.serialized_chunks[index].take() {
                     let exchange = self.flight_exchanges[index].clone();
                     futures.push(Self::send_packet(output_packet, exchange));
                 }
@@ -331,15 +331,15 @@ impl ExchangeTransform {
         let meta = match bincode::deserialize(fragment_data.get_meta()) {
             Ok(meta) => Ok(meta),
             Err(cause) => Err(ErrorCode::BadBytes(format!(
-                "block meta deserialize error when exchange, {:?}",
+                "chunk meta deserialize error when exchange, {:?}",
                 cause
             ))),
         }?;
 
         self.output_data = Some(OutputData {
-            serialized_blocks: vec![],
-            has_serialized_blocks: false,
-            data_block: Some(DataBlock::from_chunk(schema, &batch)?.add_meta(meta)?),
+            serialized_chunks: vec![],
+            has_serialized_chunks: false,
+            chunk: Some(Chunk::from_arrow_chunk(&batch, schema)?.add_meta(meta)?),
         });
 
         Ok(())
