@@ -140,7 +140,7 @@ impl FuseTable {
 
         let all_col_ids = all_the_columns_ids(self);
         let projection = Projection::Columns(all_col_ids);
-        let block_reader = self.create_block_reader(projection)?;
+        let block_reader = self.create_block_reader(&ctx, projection)?;
 
         pipeline.add_transform(|input, output| {
             CompactTransform::try_create(

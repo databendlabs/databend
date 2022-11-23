@@ -55,6 +55,7 @@ pub struct BlockReader {
     projected_schema: DataSchemaRef,
     column_leaves: ColumnLeaves,
     parquet_schema_descriptor: SchemaDescriptor,
+    max_block_size: usize,
 }
 
 impl BlockReader {
@@ -62,6 +63,7 @@ impl BlockReader {
         operator: Operator,
         schema: DataSchemaRef,
         projection: Projection,
+    max_block_size: usize,
     ) -> Result<Arc<BlockReader>> {
         let projected_schema = match projection {
             Projection::Columns(ref indices) => DataSchemaRef::new(schema.project(indices)),
@@ -80,6 +82,7 @@ impl BlockReader {
             projected_schema,
             parquet_schema_descriptor,
             column_leaves,
+            max_block_size
         }))
     }
 
@@ -93,6 +96,7 @@ impl BlockReader {
         rows: usize,
         column_descriptors: Vec<&ColumnDescriptor>,
         field: Field,
+        max_block_size: usize,
         compression: &Compression,
     ) -> Result<ArrayIter<'static>> {
         let columns = metas
@@ -125,7 +129,7 @@ impl BlockReader {
             columns,
             types,
             field,
-            Some(65536),
+            Some(max_block_size),
             rows,
         )?)
     }
@@ -205,6 +209,7 @@ impl BlockReader {
                 num_rows,
                 column_descriptors,
                 field,
+                self.max_block_size,
                 &meta.compression(),
             )?);
         }
@@ -270,6 +275,7 @@ impl BlockReader {
                 num_rows,
                 column_descriptors,
                 field,
+                self.max_block_size,
                 &part.compression,
             )?);
         }
@@ -315,6 +321,7 @@ impl BlockReader {
                 num_rows,
                 column_descriptors,
                 field,
+                self.max_block_size,
                 &part.compression,
             )?);
         }

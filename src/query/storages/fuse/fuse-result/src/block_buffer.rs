@@ -219,8 +219,9 @@ impl BlockBufferWriterWithResultTable {
             .into_iter()
             .collect::<Vec<usize>>();
         let projection = Projection::Columns(indices);
-
-        let reader = BlockReader::create(ctx.get_data_operator()?.operator(), schema, projection)?;
+        
+        let max_block_size = ctx.get_settings().get_max_block_size()? as usize;
+        let reader = BlockReader::create(ctx.get_data_operator()?.operator(), schema, projection, max_block_size)?;
         Ok(Box::new(Self {
             buffer,
             reader,

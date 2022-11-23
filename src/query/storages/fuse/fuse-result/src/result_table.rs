@@ -125,7 +125,9 @@ impl ResultTable {
 
         let operator = ctx.get_data_operator()?.operator();
         let table_schema = self.get_table_info().schema();
-        BlockReader::create(operator, table_schema, projection)
+        
+        let max_block_size = ctx.get_settings().get_max_block_size()? as usize;
+        BlockReader::create(operator, table_schema, projection, max_block_size)
     }
 }
 
