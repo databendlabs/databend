@@ -22,7 +22,7 @@ use databend_query::sessions::SessionManager;
 use databend_query::sessions::SessionType;
 use databend_query::sessions::TableContext;
 use databend_query::sql::Planner;
-use databend_query::stream::ReadDataBlockStream;
+use databend_query::stream::ReadChunkStream;
 use databend_query::table_functions::NumbersTable;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
@@ -45,7 +45,7 @@ async fn test_number_table() -> Result<()> {
 
     let stream = table
         .as_table()
-        .read_data_block_stream(ctx, &source_plan)
+        .read_chunk_stream(ctx, &source_plan)
         .await?;
     let result = stream.try_collect::<Vec<_>>().await?;
     let block = &result[0];

@@ -18,22 +18,22 @@ use std::task::Poll;
 
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
-use common_datablocks::SendableDataBlockStream;
 use common_exception::Result;
 use common_expression::Chunk;
+use common_expression::SendableChunkStream;
 use futures::Stream;
 use pin_project_lite::pin_project;
 
 pin_project! {
     pub struct ProgressStream {
         #[pin]
-        input: SendableDataBlockStream,
+        input: SendableChunkStream,
         progress:Arc<Progress>,
     }
 }
 
 impl ProgressStream {
-    pub fn try_create(input: SendableDataBlockStream, progress: Arc<Progress>) -> Result<Self> {
+    pub fn try_create(input: SendableChunkStream, progress: Arc<Progress>) -> Result<Self> {
         Ok(Self { input, progress })
     }
 }

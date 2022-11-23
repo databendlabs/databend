@@ -27,7 +27,7 @@ use futures::StreamExt;
 
 use crate::sessions::QueryContext;
 use crate::storages::Table;
-use crate::stream::ReadDataBlockStream;
+use crate::stream::ReadChunkStream;
 
 pub type SendableVu8Stream =
     std::pin::Pin<Box<dyn futures::stream::Stream<Item = Result<Vec<u8>>> + Send>>;
@@ -63,7 +63,7 @@ impl Downloader for ResultTable {
             .await?;
         ctx.try_set_partitions(parts)?;
         let mut block_stream = self
-            .read_data_block_stream(ctx.clone(), &DataSourcePlan {
+            .read_chunk_stream(ctx.clone(), &DataSourcePlan {
                 catalog: "".to_string(),
                 source_info: DataSourceInfo::TableSource(Default::default()),
                 scan_fields: None,

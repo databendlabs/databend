@@ -15,8 +15,8 @@
 use std::sync::Arc;
 
 use common_catalog::plan::DataSourcePlan;
-use common_datablocks::SendableDataBlockStream;
 use common_exception::Result;
+use common_expression::SendableChunkStream;
 
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelinePullingExecutor;
@@ -27,21 +27,21 @@ use crate::storages::Table;
 use crate::stream::PullingExecutorStream;
 
 #[async_trait::async_trait]
-pub trait ReadDataBlockStream: Send + Sync {
-    async fn read_data_block_stream(
+pub trait ReadChunkStream: Send + Sync {
+    async fn read_chunk_stream(
         &self,
         _ctx: Arc<QueryContext>,
         _plan: &DataSourcePlan,
-    ) -> Result<SendableDataBlockStream>;
+    ) -> Result<SendableChunkStream>;
 }
 
 #[async_trait::async_trait]
-impl<T: ?Sized + Table> ReadDataBlockStream for T {
-    async fn read_data_block_stream(
+impl<T: ?Sized + Table> ReadChunkStream for T {
+    async fn read_chunk_stream(
         &self,
         ctx: Arc<QueryContext>,
         plan: &DataSourcePlan,
-    ) -> Result<SendableDataBlockStream> {
+    ) -> Result<SendableChunkStream> {
         let mut pipeline = Pipeline::create();
         self.read_data(ctx.clone(), plan, &mut pipeline)?;
 

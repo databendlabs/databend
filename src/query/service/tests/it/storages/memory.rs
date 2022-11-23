@@ -26,7 +26,7 @@ use common_meta_app::schema::TableMeta;
 // use common_sql::plans::TableOptions;
 use common_storages_memory::MemoryTable;
 use databend_query::sessions::TableContext;
-use databend_query::stream::ReadDataBlockStream;
+use databend_query::stream::ReadChunkStream;
 use futures::TryStreamExt;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -133,9 +133,7 @@ async fn test_memorytable() -> Result<()> {
             assert_eq!(table.engine(), "Memory");
             assert!(table.benefit_column_prune());
 
-            let stream = table
-                .read_data_block_stream(ctx.clone(), &source_plan)
-                .await?;
+            let stream = table.read_chunk_stream(ctx.clone(), &source_plan).await?;
             let result = stream.try_collect::<Vec<_>>().await?;
             assert_blocks_sorted_eq(expected_datablocks, &result);
 
@@ -169,9 +167,7 @@ async fn test_memorytable() -> Result<()> {
         ctx.try_set_partitions(source_plan.parts.clone())?;
         assert_eq!(table.engine(), "Memory");
 
-        let stream = table
-            .read_data_block_stream(ctx.clone(), &source_plan)
-            .await?;
+        let stream = table.read_chunk_stream(ctx.clone(), &source_plan).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         assert_blocks_sorted_eq(
             vec![
@@ -194,7 +190,7 @@ async fn test_memorytable() -> Result<()> {
         table.truncate(ctx.clone(), purge).await?;
 
         let source_plan = table.read_plan(ctx.clone(), None).await?;
-        let stream = table.read_data_block_stream(ctx, &source_plan).await?;
+        let stream = table.read_chunk_stream(ctx, &source_plan).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         assert_blocks_sorted_eq(vec!["++", "++"], &result);
     }

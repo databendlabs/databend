@@ -49,7 +49,7 @@ use databend_query::storages::fuse::FUSE_TBL_BLOCK_PREFIX;
 use databend_query::storages::fuse::FUSE_TBL_SEGMENT_PREFIX;
 use databend_query::storages::fuse::FUSE_TBL_SNAPSHOT_PREFIX;
 use databend_query::storages::Table;
-use databend_query::stream::ReadDataBlockStream;
+use databend_query::stream::ReadChunkStream;
 use databend_query::table_functions::TableArgs;
 use futures::TryStreamExt;
 use parking_lot::Mutex;
@@ -352,9 +352,7 @@ pub async fn test_drive_with_args_and_ctx(
         .read_plan(ctx.clone(), Some(PushDownInfo::default()))
         .await?;
     ctx.try_set_partitions(source_plan.parts.clone())?;
-    func.as_table()
-        .read_data_block_stream(ctx, &source_plan)
-        .await
+    func.as_table().read_chunk_stream(ctx, &source_plan).await
 }
 
 pub async fn test_drive_clustering_information(
@@ -368,9 +366,7 @@ pub async fn test_drive_clustering_information(
         .read_plan(ctx.clone(), Some(PushDownInfo::default()))
         .await?;
     ctx.try_set_partitions(source_plan.parts.clone())?;
-    func.as_table()
-        .read_data_block_stream(ctx, &source_plan)
-        .await
+    func.as_table().read_chunk_stream(ctx, &source_plan).await
 }
 
 pub fn expects_err<T>(case_name: &str, err_code: u16, res: Result<T>) {

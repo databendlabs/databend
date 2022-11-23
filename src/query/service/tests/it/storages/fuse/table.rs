@@ -35,7 +35,7 @@ use databend_query::sessions::TableContext;
 use databend_query::sql::Planner;
 use databend_query::storages::fuse::io::MetaReaders;
 use databend_query::storages::fuse::FuseTable;
-use databend_query::stream::ReadDataBlockStream;
+use databend_query::stream::ReadChunkStream;
 use futures::TryStreamExt;
 
 use crate::storages::fuse::table_test_fixture::TestFixture;
@@ -72,7 +72,7 @@ async fn test_fuse_table_normal_case() -> Result<()> {
 
         ctx.try_set_partitions(parts.clone())?;
         let stream = table
-            .read_data_block_stream(ctx.clone(), &DataSourcePlan {
+            .read_chunk_stream(ctx.clone(), &DataSourcePlan {
                 catalog: "default".to_owned(),
                 source_info: DataSourceInfo::TableSource(Default::default()),
                 scan_fields: None,
@@ -132,7 +132,7 @@ async fn test_fuse_table_normal_case() -> Result<()> {
         ctx.try_set_partitions(parts.clone())?;
 
         let stream = table
-            .read_data_block_stream(ctx.clone(), &DataSourcePlan {
+            .read_chunk_stream(ctx.clone(), &DataSourcePlan {
                 catalog: "default".to_owned(),
                 source_info: DataSourceInfo::TableSource(Default::default()),
                 scan_fields: None,

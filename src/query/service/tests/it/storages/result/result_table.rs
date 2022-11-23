@@ -31,7 +31,7 @@ use common_storages_fuse_result::ResultTable;
 use common_storages_fuse_result::ResultTableWriter;
 use databend_query::sessions::TableContext;
 use databend_query::storages::Table;
-use databend_query::stream::ReadDataBlockStream;
+use databend_query::stream::ReadChunkStream;
 use futures::TryStreamExt;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -74,7 +74,7 @@ async fn test_result_table() -> Result<()> {
         assert_eq!(stats.read_rows, 3);
         ctx.try_set_partitions(parts)?;
         let stream = table
-            .read_data_block_stream(ctx.clone(), &DataSourcePlan {
+            .read_chunk_stream(ctx.clone(), &DataSourcePlan {
                 catalog: "".to_string(),
                 source_info: DataSourceInfo::TableSource(Default::default()),
                 scan_fields: None,
