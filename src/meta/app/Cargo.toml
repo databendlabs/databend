@@ -15,7 +15,7 @@ common-expression = { path = "../../query/expression" }
 common-meta-types = { path = "../types" }
 common-storage = { path = "../../common/storage" }
 
-chrono = "0.4.22"
+chrono = { workspace = true }
 enumflags2 = { version = "0.7.5", features = ["serde"] }
 maplit = "1.0.2"
 num-derive = "0.3.3"

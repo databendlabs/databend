@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::cmp::Ordering;
+use std::hash::Hash;
 use std::ops::Range;
 
 use common_arrow::arrow::bitmap::Bitmap;
@@ -53,6 +54,7 @@ use crate::utils::arrow::buffer_into_mut;
 use crate::utils::arrow::constant_bitmap;
 use crate::utils::arrow::deserialize_arrow_array;
 use crate::utils::arrow::serialize_arrow_array;
+use crate::with_number_mapped_type;
 use crate::with_number_type;
 
 #[derive(Debug, Clone, PartialEq, EnumAsInner)]
@@ -383,6 +385,37 @@ impl PartialOrd for ScalarRef<'_> {
 impl PartialEq for ScalarRef<'_> {
     fn eq(&self, other: &Self) -> bool {
         self.partial_cmp(other) == Some(Ordering::Equal)
+    }
+}
+
+impl Hash for ScalarRef<'_> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        match self {
+            ScalarRef::Null | ScalarRef::EmptyArray => {}
+            ScalarRef::Number(t) => with_number_mapped_type!(|NUM_TYPE| match t {
+                NumberScalar::NUM_TYPE(v) => {
+                    v.hash(state);
+                }
+            }),
+            ScalarRef::Boolean(v) => v.hash(state),
+            ScalarRef::String(v) => v.hash(state),
+            ScalarRef::Timestamp(v) => v.hash(state),
+            ScalarRef::Date(v) => v.hash(state),
+            ScalarRef::Array(v) => {
+                let str = serialize_arrow_array(v.as_arrow());
+                str.hash(state);
+            }
+            ScalarRef::Tuple(v) => {
+                v.hash(state);
+            }
+            ScalarRef::Variant(v) => v.hash(state),
+        }
+    }
+}
+
+impl Hash for Scalar {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.as_ref().hash(state);
     }
 }
 

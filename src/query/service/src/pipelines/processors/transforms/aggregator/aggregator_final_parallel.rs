@@ -245,7 +245,9 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
             let mut aggregates_column_builder: Vec<Box<dyn MutableColumn>> = {
                 let mut values = vec![];
                 for aggregate_function in aggregate_functions {
-                    let builder = aggregate_function.return_type()?.create_mutable(1024);
+                    let builder = aggregate_function
+                        .return_type()?
+                        .create_mutable(self.hash_table.len());
                     values.push(builder)
                 }
                 values

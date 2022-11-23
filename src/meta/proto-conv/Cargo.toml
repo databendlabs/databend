@@ -18,7 +18,7 @@ common-meta-types = { path = "../types" }
 common-protos = { path = "../protos" }
 common-storage = { path = "../../common/storage" }
 
-chrono = "0.4.22"
+chrono = { workspace = true }
 num = "0.4.0"
 thiserror = { workspace = true }
 

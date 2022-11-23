@@ -111,11 +111,7 @@ impl Settings {
             {
                 if ret.get_max_threads()? == 0 {
                     let cpus = if conf.query.num_cpus == 0 {
-                        sysinfo::System::new_with_specifics(
-                            RefreshKind::new().with_cpu(CpuRefreshKind::everything()),
-                        )
-                        .cpus()
-                        .len() as u64
+                        ret.check_and_get_default_value("max_threads")?.as_u64()?
                     } else {
                         conf.query.num_cpus
                     };
@@ -126,7 +122,8 @@ impl Settings {
             {
                 if ret.get_max_memory_usage()? == 0 {
                     let max_usage = if conf.query.max_memory_usage == 0 {
-                        sysinfo::System::new_all().available_memory()
+                        ret.check_and_get_default_value("max_memory_usage")?
+                            .as_u64()?
                     } else {
                         conf.query.max_memory_usage
                     };
@@ -153,18 +150,26 @@ impl Settings {
             },
             // max_threads
             SettingValue {
-                default_value: UserSettingValue::UInt64(16),
+                default_value: UserSettingValue::UInt64(
+                    sysinfo::System::new_with_specifics(
+                        RefreshKind::new().with_cpu(CpuRefreshKind::everything()),
+                    )
+                    .cpus()
+                    .len() as u64,
+                ),
                 user_setting: UserSetting::create("max_threads", UserSettingValue::UInt64(0)),
                 level: ScopeLevel::Session,
-                desc: "The maximum number of threads to execute the request. By default the value is 0 it means determined automatically.",
+                desc: "The maximum number of threads to execute the request. By default the value is determined automatically.",
                 possible_values: None,
             },
             // max_memory_usage
             SettingValue {
-                default_value: UserSettingValue::UInt64(0),
+                default_value: UserSettingValue::UInt64(
+                    sysinfo::System::new_all().total_memory() * 80 / 100,
+                ),
                 user_setting: UserSetting::create("max_memory_usage", UserSettingValue::UInt64(0)),
                 level: ScopeLevel::Session,
-                desc: "The maximum memory usage for processing single query, in bytes. By default the value is 0 it means determined automatically.",
+                desc: "The maximum memory usage for processing single query, in bytes. By default the value is determined automatically.",
                 possible_values: None,
             },
             // max_storage_io_requests
@@ -844,7 +849,7 @@ impl Settings {
         Ok(())
     }
 
-    pub fn try_drop_setting(&self, key: &str) -> Result<()> {
+    pub async fn try_drop_setting(&self, key: &str) -> Result<()> {
         let mut setting = self
             .settings
             .get_mut(key)
@@ -852,13 +857,12 @@ impl Settings {
 
         let tenant = self.tenant.clone();
         let key = key.to_string();
-        let drop_handle = GlobalIORuntime::instance().spawn(async move {
-            UserApiProvider::instance()
-                .get_setting_api_client(&tenant)?
-                .drop_setting(key.as_str(), None)
-                .await
-        });
-        futures::executor::block_on(drop_handle).unwrap()?;
+
+        UserApiProvider::instance()
+            .get_setting_api_client(&tenant)?
+            .drop_setting(key.as_str(), None)
+            .await?;
+
         setting.level = ScopeLevel::Session;
         Ok(())
     }

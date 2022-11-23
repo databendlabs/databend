@@ -14,10 +14,10 @@
 
 use std::sync::Arc;
 
+use chrono::DateTime;
+use chrono::TimeZone;
 use chrono_tz::Tz;
 use common_arrow::arrow::bitmap::Bitmap;
-use common_datavalues::chrono::DateTime;
-use common_datavalues::chrono::TimeZone;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 

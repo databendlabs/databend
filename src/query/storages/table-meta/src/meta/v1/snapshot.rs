@@ -163,6 +163,7 @@ mod util {
     use chrono::Datelike;
     use chrono::TimeZone;
     use chrono::Timelike;
+    use chrono::Utc;
 
     use super::*;
     pub fn trim_timestamp_to_micro_second(ts: DateTime<Utc>) -> DateTime<Utc> {

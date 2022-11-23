@@ -65,7 +65,6 @@ impl InputPlan {
 #[derive(Debug)]
 pub struct CopyIntoPlan {
     pub stage_info: UserStageInfo,
-    pub files: Vec<String>,
 }
 
 #[derive(Debug)]
@@ -165,14 +164,11 @@ impl InputContext {
         settings: Arc<Settings>,
         schema: DataSchemaRef,
         stage_info: UserStageInfo,
-        files: Vec<String>,
+        splits: Vec<Arc<SplitInfo>>,
         scan_progress: Arc<Progress>,
         chunk_compact_thresholds: ChunkCompactThresholds,
     ) -> Result<Self> {
-        if files.is_empty() {
-            return Err(ErrorCode::BadArguments("no file to copy"));
-        }
-        let plan = Box::new(CopyIntoPlan { stage_info, files });
+        let plan = Box::new(CopyIntoPlan { stage_info });
         let read_batch_size = settings.get_input_read_buffer_size()? as usize;
         let file_format_options = &plan.stage_info.file_format_options;
         let format_typ = file_format_options.format.clone();
@@ -181,9 +177,6 @@ impl InputContext {
         let file_format_options = format_typ.final_file_format_options(&file_format_options)?;
 
         let format = Self::get_input_format(&format_typ)?;
-        let splits = format
-            .get_splits(&plan.files, &plan.stage_info, &operator, &settings, &schema)
-            .await?;
         let record_delimiter = {
             if file_format_options.stage.record_delimiter.is_empty() {
                 format.default_record_delimiter()

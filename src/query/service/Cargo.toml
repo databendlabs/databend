@@ -90,8 +90,8 @@ bstr = "1.0.1"
 bumpalo = "3.11.0"
 byteorder = "1.4.3"
 bytes = "1.2.1"
-chrono = "0.4.22"
-chrono-tz = "0.6.3"
+chrono = { workspace = true }
+chrono-tz = { workspace = true }
 dashmap = "5.4"
 futures = "0.3.24"
 futures-util = "0.3.24"

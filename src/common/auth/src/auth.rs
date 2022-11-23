@@ -20,10 +20,10 @@ use std::sync::Arc;
 
 use base64::encode_config;
 use base64::URL_SAFE;
+use chrono::DateTime;
+use chrono::Duration;
+use chrono::Utc;
 use common_base::base::tokio::sync::RwLock;
-use common_datavalues::chrono::DateTime;
-use common_datavalues::chrono::Duration;
-use common_datavalues::chrono::Utc;
 use http::HeaderValue;
 
 // Token file reference.

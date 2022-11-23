@@ -37,7 +37,6 @@ pub trait InputFormat: Send + Sync {
         stage_info: &UserStageInfo,
         op: &Operator,
         settings: &Arc<Settings>,
-        schema: &DataSchemaRef,
     ) -> Result<Vec<Arc<SplitInfo>>>;
 
     fn exec_copy(&self, ctx: Arc<InputContext>, pipeline: &mut Pipeline) -> Result<()>;

@@ -20,8 +20,8 @@ common-io = { path = "../../common/io" }
 # Github dependencies
 
 # Crates.io dependencies
-chrono = "0.4"
-chrono-tz = "0.6.3"
+chrono = { workspace = true }
+chrono-tz = { workspace = true }
 comfy-table = "6"
 common-jsonb = { path = "../../common/jsonb" }
 educe = "0.4"

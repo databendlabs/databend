@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_expression::FunctionRegistry;
+use ctor::ctor;
 
 mod arithmetic;
 mod arithmetic_modulo;
@@ -33,7 +34,10 @@ pub use comparison::check_pattern_type;
 pub use comparison::is_like_pattern_escape;
 pub use comparison::PatternType;
 
-pub fn builtin_functions() -> FunctionRegistry {
+#[ctor]
+pub static BUILTIN_FUNCTIONS: FunctionRegistry = builtin_functions();
+
+fn builtin_functions() -> FunctionRegistry {
     let mut registry = FunctionRegistry::new();
     arithmetic::register(&mut registry);
     array::register(&mut registry);

@@ -12,8 +12,8 @@ test = false
 
 [dependencies] # In alphabetical order
 bstr = "1.0.1"
-chrono = { version = "0.4.22", features = ["serde"] }
-chrono-tz = "0.6.3"
+chrono = { workspace = true }
+chrono-tz = { workspace = true }
 lexical-core = "0.8.5"
 micromarshal = "0.2.1"
 num = "0.4.0"
