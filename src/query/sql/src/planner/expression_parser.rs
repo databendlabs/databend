@@ -21,6 +21,7 @@ use common_ast::Dialect;
 use common_catalog::catalog_kind::CATALOG_DEFAULT;
 use common_catalog::plan::Expression;
 use common_catalog::table::Table;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_settings::Settings;
 use parking_lot::RwLock;
@@ -29,6 +30,7 @@ use crate::executor::ExpressionBuilderWithoutRenaming;
 use crate::planner::semantic::SyncTypeChecker;
 use crate::BindContext;
 use crate::ColumnBinding;
+use crate::ColumnEntry;
 use crate::Metadata;
 use crate::NameResolutionContext;
 use crate::Visibility;
@@ -55,18 +57,31 @@ impl ExpressionParser {
         let columns = metadata.read().columns_by_table_index(table_index);
         let table = metadata.read().table(table_index).clone();
         for column in columns.iter() {
-            let column_binding = ColumnBinding {
-                database_name: Some("default".to_string()),
-                table_name: Some(table.name().to_string()),
-                column_name: column.name().to_string(),
-                index: column.index(),
-                data_type: Box::new(column.data_type().clone()),
-                visibility: if column.has_path_indices() {
-                    Visibility::InVisible
-                } else {
-                    Visibility::Visible
+            let column_binding = match column {
+                ColumnEntry::BaseTableColumn {
+                    column_index,
+                    column_name,
+                    data_type,
+                    path_indices,
+                    ..
+                } => ColumnBinding {
+                    database_name: Some("default".to_string()),
+                    table_name: Some(table.name().to_string()),
+                    column_name: column_name.clone(),
+                    index: *column_index,
+                    data_type: Box::new(data_type.clone()),
+                    visibility: if path_indices.is_some() {
+                        Visibility::InVisible
+                    } else {
+                        Visibility::Visible
+                    },
                 },
+
+                _ => {
+                    return Err(ErrorCode::Internal("Invalid column entry"));
+                }
             };
+
             bind_context.add_column_binding(column_binding);
         }
 
