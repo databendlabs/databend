@@ -16,7 +16,6 @@ use std::any::Any;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use chrono;
 use chrono::DateTime;
 use chrono::Utc;
 use common_datablocks::BlockCompactThresholds;

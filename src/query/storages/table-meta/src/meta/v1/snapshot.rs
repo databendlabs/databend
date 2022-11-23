@@ -159,7 +159,6 @@ impl From<&TableSnapshot> for TableSnapshotLite {
 }
 
 mod util {
-    use chrono;
     use chrono::Datelike;
     use chrono::TimeZone;
     use chrono::Timelike;
