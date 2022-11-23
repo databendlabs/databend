@@ -849,7 +849,7 @@ impl Settings {
         Ok(())
     }
 
-    pub fn try_drop_setting(&self, key: &str) -> Result<()> {
+    pub async fn try_drop_setting(&self, key: &str) -> Result<()> {
         let mut setting = self
             .settings
             .get_mut(key)
@@ -857,13 +857,12 @@ impl Settings {
 
         let tenant = self.tenant.clone();
         let key = key.to_string();
-        let drop_handle = GlobalIORuntime::instance().spawn(async move {
-            UserApiProvider::instance()
-                .get_setting_api_client(&tenant)?
-                .drop_setting(key.as_str(), None)
-                .await
-        });
-        futures::executor::block_on(drop_handle).unwrap()?;
+
+        UserApiProvider::instance()
+            .get_setting_api_client(&tenant)?
+            .drop_setting(key.as_str(), None)
+            .await?;
+
         setting.level = ScopeLevel::Session;
         Ok(())
     }
