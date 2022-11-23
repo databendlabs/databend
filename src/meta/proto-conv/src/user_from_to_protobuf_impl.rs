@@ -19,8 +19,8 @@ use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::convert::TryFrom;
 
-use common_datavalues::chrono::DateTime;
-use common_datavalues::chrono::Utc;
+use chrono::DateTime;
+use chrono::Utc;
 use common_meta_types as mt;
 use common_protos::pb;
 use common_storage::StorageFsConfig;

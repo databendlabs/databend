@@ -18,7 +18,7 @@ common-storage = { path = "../../common/storage" }
 openraft = { workspace = true }
 
 anyerror = { workspace = true }
-chrono = "0.4.22"
+chrono = { workspace = true }
 derive_more = "0.99.17"
 enumflags2 = { version = "0.7.5", features = ["serde"] }
 hex = "0.4.3"

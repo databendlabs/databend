@@ -15,8 +15,8 @@
 use std::fmt;
 use std::sync::Arc;
 
-use common_datavalues::chrono::DateTime;
-use common_datavalues::chrono::Utc;
+use chrono::DateTime;
+use chrono::Utc;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 

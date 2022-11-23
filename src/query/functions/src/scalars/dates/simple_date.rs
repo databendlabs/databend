@@ -17,9 +17,9 @@ use std::marker::PhantomData;
 use std::ops::Sub;
 use std::sync::Arc;
 
-use common_datavalues::chrono::Date;
-use common_datavalues::chrono::NaiveDate;
-use common_datavalues::chrono::Utc;
+use chrono::Date;
+use chrono::NaiveDate;
+use chrono::Utc;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 

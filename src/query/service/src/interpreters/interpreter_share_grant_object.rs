@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_datavalues::chrono::Utc;
+use chrono::Utc;
 use common_exception::Result;
 use common_meta_api::ShareApi;
 use common_meta_app::share::GrantShareObjectReq;
