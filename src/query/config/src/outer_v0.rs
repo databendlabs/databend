@@ -1533,15 +1533,11 @@ pub struct MetaConfig {
 
 impl MetaConfig {
     fn check_config(&mut self) -> Result<()> {
-        println!(
-            "check_config: {} {} {:?}",
-            self.embedded_dir, self.address, self.endpoints
-        );
         let has_embedded_dir = !self.embedded_dir.is_empty();
         let has_remote = !self.address.is_empty() || !self.endpoints.is_empty();
         if has_embedded_dir && has_remote {
             return Err(ErrorCode::InvalidConfig(format!(
-                "cannot set both embedded dir and [address|endpoints] config"
+                "Cannot set both embedded dir and [address|endpoints] config"
             )));
         }
         Ok(())
