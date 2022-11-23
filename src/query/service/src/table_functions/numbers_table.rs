@@ -261,13 +261,13 @@ impl SyncSource for NumbersSource {
                 let column_data = (self.begin..self.begin + step).collect();
 
                 self.begin += step;
-                Ok(Chunk::new(
+                Ok(Some(Chunk::new(
                     vec![(
                         Value::Column(Column::from_data(column_data)),
                         DataType::Number(NumberDataType::UInt64),
                     )],
                     step,
-                ))
+                )))
             }
         }
     }

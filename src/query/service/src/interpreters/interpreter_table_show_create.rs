@@ -135,7 +135,7 @@ impl Interpreter for ShowCreateTableInterpreter {
                     DataType::String,
                 ),
                 (
-                    Value::Scalar(Scalar::String(table_create_sql.into_bytes().to_vec())),
+                    Value::Scalar(Scalar::String(table_create_sql.into_bytes())),
                     DataType::String,
                 ),
             ],

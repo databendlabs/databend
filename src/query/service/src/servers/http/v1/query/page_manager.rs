@@ -17,9 +17,9 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use common_base::base::tokio;
-use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::Chunk;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_io::prelude::FormatSettings;
@@ -51,11 +51,11 @@ pub struct PageManager {
     total_rows: usize,
     total_pages: usize,
     end: bool,
-    block_end: bool,
+    chunk_end: bool,
     schema: DataSchemaRef,
     last_page: Option<Page>,
     row_buffer: VecDeque<Vec<JsonValue>>,
-    block_receiver: SizedChannelReceiver<DataBlock>,
+    chunk_receiver: SizedChannelReceiver<Chunk>,
     string_fields: bool,
     format_settings: FormatSettings,
 }
@@ -63,7 +63,7 @@ pub struct PageManager {
 impl PageManager {
     pub fn new(
         max_rows_per_page: usize,
-        block_receiver: SizedChannelReceiver<DataBlock>,
+        chunk_receiver: SizedChannelReceiver<Chunk>,
         string_fields: bool,
         format_settings: FormatSettings,
     ) -> PageManager {
@@ -72,10 +72,10 @@ impl PageManager {
             last_page: None,
             total_pages: 0,
             end: false,
-            block_end: false,
+            chunk_end: false,
             row_buffer: Default::default(),
             schema: Arc::new(DataSchema::empty()),
-            block_receiver,
+            chunk_receiver,
             max_rows_per_page,
             string_fields,
             format_settings,
@@ -93,11 +93,11 @@ impl PageManager {
     pub async fn get_a_page(&mut self, page_no: usize, tp: &Wait) -> Result<Page> {
         let next_no = self.total_pages;
         if page_no == next_no && !self.end {
-            let (block, end) = self.collect_new_page(tp).await?;
-            let num_row = block.num_rows();
+            let (chunk, end) = self.collect_new_page(tp).await?;
+            let num_row = chunk.num_rows();
             self.total_rows += num_row;
             let page = Page {
-                data: block,
+                data: chunk,
                 total_rows: self.total_rows,
             };
             if num_row > 0 {
@@ -120,17 +120,17 @@ impl PageManager {
         }
     }
 
-    fn append_block(
+    fn append_chunk(
         &mut self,
         rows: &mut Vec<Vec<JsonValue>>,
-        block: DataBlock,
+        chunk: Chunk,
         remain: usize,
     ) -> Result<()> {
         let format_settings = &self.format_settings;
         if self.schema.fields().is_empty() {
-            self.schema = block.schema().clone();
+            self.schema = chunk.schema().clone();
         }
-        let mut iter = block_to_json_value(&block, format_settings, self.string_fields)?
+        let mut iter = block_to_json_value(&chunk, format_settings, self.string_fields)?
             .into_iter()
             .peekable();
         let chunk: Vec<_> = iter.by_ref().take(remain).collect();
@@ -155,17 +155,17 @@ impl PageManager {
                 break;
             }
             match tp {
-                Wait::Async => match self.block_receiver.try_recv() {
-                    Some(block) => self.append_block(&mut res, block, remain)?,
+                Wait::Async => match self.chunk_receiver.try_recv() {
+                    Some(chunk) => self.append_chunk(&mut res, chunk, remain)?,
                     None => break,
                 },
                 Wait::Deadline(t) => {
                     let now = Instant::now();
                     let d = *t - now;
-                    if let Ok(Some(block)) =
-                        tokio::time::timeout(d, self.block_receiver.recv()).await
+                    if let Ok(Some(chunk)) =
+                        tokio::time::timeout(d, self.chunk_receiver.recv()).await
                     {
-                        self.append_block(&mut res, block, remain)?;
+                        self.append_chunk(&mut res, chunk, remain)?;
                     } else {
                         break;
                     }
@@ -179,14 +179,14 @@ impl PageManager {
         };
 
         // try to report 'no more data' earlier to client to avoid unnecessary http call
-        if !self.block_end {
-            self.block_end = self.block_receiver.is_empty();
+        if !self.chunk_end {
+            self.chunk_end = self.chunk_receiver.is_empty();
         }
-        let end = self.block_end && self.row_buffer.is_empty();
+        let end = self.chunk_end && self.row_buffer.is_empty();
         Ok((block, end))
     }
 
     pub async fn detach(&self) {
-        self.block_receiver.close();
+        self.chunk_receiver.close();
     }
 }

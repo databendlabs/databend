@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
+use common_expression::DataSchemaRef;
 use common_formats::ClickhouseFormatType;
 use common_storages_fuse_result::ResultTable;
 use poem::error::BadRequest;
