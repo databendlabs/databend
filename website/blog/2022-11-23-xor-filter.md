@@ -10,8 +10,6 @@ authors:
   image_url: https://github.com/BohuTANG.png
 ---
 
-## Background
-
 Many optimizations are usually required for big data analytics to "reduce the distance to data." For example, using the Bloom Filter Index, queries can be filtered to determine whether data should be fetched from backend storage:
 
 ![Alt text](../static/img/blog/bloom-filter.png)
