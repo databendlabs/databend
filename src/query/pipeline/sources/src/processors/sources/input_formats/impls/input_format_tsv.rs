@@ -140,6 +140,10 @@ impl InputFormatTextBase for InputFormatTSV {
         b'\t'
     }
 
+    fn default_nan_display() -> String {
+        "nan".to_string()
+    }
+
     fn deserialize(builder: &mut BlockBuilder<Self>, batch: RowBatch) -> Result<()> {
         tracing::debug!(
             "tsv deserializing row batch {}, id={}, start_row={:?}, offset={}",

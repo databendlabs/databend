@@ -116,6 +116,7 @@ pub struct InputContext {
     pub rows_to_skip: usize,
     pub field_delimiter: u8,
     pub record_delimiter: RecordDelimiter,
+    pub nan_display: String,
 
     // runtime config
     pub settings: Arc<Settings>,
@@ -134,6 +135,7 @@ impl Debug for InputContext {
             .field("rows_to_skip", &self.rows_to_skip)
             .field("field_delimiter", &self.field_delimiter)
             .field("record_delimiter", &self.record_delimiter)
+            .field("nan_display", &self.nan_display)
             .field("format_settings", &self.format_settings)
             .field("block_compact_thresholds", &self.block_compact_thresholds)
             .field("read_batch_size", &self.read_batch_size)
@@ -196,6 +198,12 @@ impl InputContext {
             }
         };
 
+        let nan_display = if file_format_options.stage.nan_display.is_empty() {
+            format.default_nan_display()
+        } else {
+            file_format_options.stage.nan_display.clone()
+        };
+
         Ok(InputContext {
             format,
             schema,
@@ -203,6 +211,7 @@ impl InputContext {
             settings,
             format_settings,
             record_delimiter,
+            nan_display,
             read_batch_size,
             rows_to_skip,
             field_delimiter,
@@ -253,6 +262,11 @@ impl InputContext {
         };
         let record_delimiter =
             RecordDelimiter::try_from(file_format_options.stage.record_delimiter.as_bytes())?;
+        let nan_display = if file_format_options.stage.nan_display.is_empty() {
+            format.default_nan_display()
+        } else {
+            file_format_options.stage.nan_display
+        };
         let compression = settings.get_format_compression()?;
         let compression = if !compression.is_empty() {
             StageFileCompression::from_str(&compression).map_err(ErrorCode::BadArguments)?
@@ -270,6 +284,7 @@ impl InputContext {
             settings,
             format_settings,
             record_delimiter,
+            nan_display,
             read_batch_size,
             field_delimiter,
             rows_to_skip,

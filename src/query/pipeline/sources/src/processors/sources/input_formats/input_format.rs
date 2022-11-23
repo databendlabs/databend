@@ -30,6 +30,8 @@ pub trait InputFormat: Send + Sync {
 
     fn default_field_delimiter(&self) -> u8;
 
+    fn default_nan_display(&self) -> String;
+
     async fn get_splits(
         &self,
         files: &[String],

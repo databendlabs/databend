@@ -395,6 +395,8 @@ pub enum TokenKind {
     FIELDS,
     #[token("FIELD_DELIMITER", ignore(ascii_case))]
     FIELD_DELIMITER,
+    #[token("NAN_DISPLAY", ignore(ascii_case))]
+    NAN_DISPLAY,
     #[token("FILE_FORMAT", ignore(ascii_case))]
     FILE_FORMAT,
     #[token("FILES", ignore(ascii_case))]
