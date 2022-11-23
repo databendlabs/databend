@@ -347,7 +347,9 @@ impl AligningStateTrait for AligningState {
             if let ReadBatch::Buffer(b) = rb {
                 self.buffers.push(b)
             } else {
-                unreachable!()
+                return Err(ErrorCode::Internal(
+                    "Bug: should not see ReadBatch::RowGroup in align().",
+                ));
             };
             Ok(vec![])
         } else {
