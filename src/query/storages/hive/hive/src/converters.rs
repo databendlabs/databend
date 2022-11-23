@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_datavalues::chrono::Utc;
+use chrono::Utc;
 use common_datavalues::type_primitive::Float32Type;
 use common_datavalues::type_primitive::Float64Type;
 use common_datavalues::type_primitive::Int16Type;

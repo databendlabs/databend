@@ -12,8 +12,8 @@ test = false
 
 [dependencies]
 base64 = "0.13.0"
+chrono = { workspace = true }
 common-base = { path = "../../common/base" }
-common-datavalues = { path = "../../query/datavalues" }
 http = "0.2"
 [dev-dependencies]
 tempfile = "3.1.0"

@@ -86,6 +86,7 @@ fn test_format() {
         "catalog".to_string(),
         "database".to_string(),
         Arc::new(DummyTable::new("table".to_string())),
+        None,
     );
 
     let s_expr = SExpr::create_binary(

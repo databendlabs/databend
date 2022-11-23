@@ -12,54 +12,85 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::alloc::GlobalAlloc;
-use std::alloc::Layout;
+use std::future::Future;
+use std::pin::Pin;
 use std::ptr::NonNull;
 use std::sync::atomic::AtomicI64;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::task::Context;
+use std::task::Poll;
 
-use crate::mem_allocator::GlobalAllocator;
+use futures::FutureExt;
 
 #[thread_local]
-static mut TRACKER: *mut ThreadTracker = std::ptr::null_mut();
+static mut TRACKER: Option<ThreadTracker> = None;
+
+/// Thread local memory allocation stat buffer for fast update.
+///
+/// The stat will be periodically flush to global stat tracker `GLOBAL_TRACKER`.
+#[thread_local]
+static mut MEM_STAT_BUFFER: StatBuffer = StatBuffer::empty();
+
+/// Global memory allocation stat tracker.
+pub static GLOBAL_TRACKER: MemoryTracker = MemoryTracker {
+    memory_usage: AtomicI64::new(0),
+
+    parent_memory_tracker: None,
+};
 
 static UNTRACKED_MEMORY_LIMIT: i64 = 4 * 1024 * 1024;
 
+#[derive(Clone)]
 pub struct ThreadTracker {
     mem_tracker: Arc<MemoryTracker>,
 
     // Buffered memory allocation stats is not reported to MemoryTracker and can not be seen.
-    alloc_buf: StatBuffer,
-    dealloc_buf: StatBuffer,
+    buffer: StatBuffer,
+}
+
+/// A guard that restores the thread local tracker to `old` when being dropped.
+pub struct TrackerGuard<'a> {
+    old: &'a mut Option<ThreadTracker>,
+}
+
+impl<'a> Drop for TrackerGuard<'a> {
+    fn drop(&mut self) {
+        *self.old = ThreadTracker::attach_thread_tracker(self.old.take());
+    }
 }
 
 impl ThreadTracker {
-    pub fn create(mem_tracker: Arc<MemoryTracker>) -> *mut ThreadTracker {
-        unsafe {
-            TRACKER = Box::into_raw(Box::new(ThreadTracker {
-                mem_tracker,
-                alloc_buf: Default::default(),
-                dealloc_buf: Default::default(),
-            }));
-
-            TRACKER
+    pub fn create(mem_tracker: Arc<MemoryTracker>) -> ThreadTracker {
+        ThreadTracker {
+            mem_tracker,
+            buffer: Default::default(),
         }
     }
 
     #[inline]
-    pub fn current() -> *mut ThreadTracker {
-        unsafe { TRACKER }
+    pub fn current() -> &'static ThreadTracker {
+        unsafe { TRACKER.as_ref().unwrap() }
+    }
+
+    pub fn fork() -> Option<ThreadTracker> {
+        unsafe { TRACKER.as_ref().cloned() }
+    }
+
+    pub fn attach_thread_tracker(tracker: Option<ThreadTracker>) -> Option<ThreadTracker> {
+        unsafe { std::mem::replace(&mut TRACKER, tracker) }
+    }
+
+    /// Enters the context that use tracker `p` and returns a guard that restores the previous tracker when being dropped.
+    pub fn enter(tracker: &mut Option<ThreadTracker>) -> TrackerGuard {
+        *tracker = ThreadTracker::attach_thread_tracker(tracker.take());
+
+        TrackerGuard { old: tracker }
     }
 
     #[inline]
     pub fn current_mem_tracker() -> Option<Arc<MemoryTracker>> {
-        unsafe {
-            match TRACKER.is_null() {
-                true => None,
-                false => Some((*TRACKER).mem_tracker.clone()),
-            }
-        }
+        unsafe { TRACKER.as_ref().map(|tracker| tracker.mem_tracker.clone()) }
     }
 
     /// Accumulate allocated memory.
@@ -71,17 +102,18 @@ impl ThreadTracker {
         let _ = p;
 
         unsafe {
-            if TRACKER.is_null() {
-                return;
+            // Update global tracker
+            if MEM_STAT_BUFFER.incr(size) > UNTRACKED_MEMORY_LIMIT {
+                MEM_STAT_BUFFER.flush_to(&GLOBAL_TRACKER.memory_usage);
             }
 
-            (*TRACKER).alloc_buf.incr(size);
+            if let Some(tracker) = &mut TRACKER {
+                tracker.buffer.incr(size);
 
-            if (*TRACKER).alloc_buf.bytes > UNTRACKED_MEMORY_LIMIT {
-                (*TRACKER)
-                    .mem_tracker
-                    .alloc_memory((*TRACKER).alloc_buf.n, (*TRACKER).alloc_buf.bytes);
-                (*TRACKER).alloc_buf.reset();
+                if tracker.buffer.memory_usage > UNTRACKED_MEMORY_LIMIT {
+                    tracker.mem_tracker.record_memory(&tracker.buffer);
+                    tracker.buffer.reset();
+                }
             }
         }
     }
@@ -96,34 +128,25 @@ impl ThreadTracker {
         let _ = p;
 
         unsafe {
-            if TRACKER.is_null() {
-                return;
+            // Update global tracker
+            if MEM_STAT_BUFFER.incr(-size) < -UNTRACKED_MEMORY_LIMIT {
+                MEM_STAT_BUFFER.flush_to(&GLOBAL_TRACKER.memory_usage);
             }
 
-            (*TRACKER).dealloc_buf.incr(size);
+            if let Some(tracker) = &mut TRACKER {
+                tracker.buffer.decr(size);
 
-            if (*TRACKER).dealloc_buf.bytes > UNTRACKED_MEMORY_LIMIT {
-                (*TRACKER)
-                    .mem_tracker
-                    .dealloc_memory((*TRACKER).dealloc_buf.n, (*TRACKER).dealloc_buf.bytes);
-                (*TRACKER).dealloc_buf.reset();
+                if tracker.buffer.memory_usage < -UNTRACKED_MEMORY_LIMIT {
+                    tracker.mem_tracker.record_memory(&tracker.buffer);
+                    tracker.buffer.reset();
+                }
             }
         }
     }
 }
 
 pub struct MemoryTracker {
-    /// Count of calls to `alloc`.
-    n_alloc: AtomicI64,
-
-    /// Number of allocated bytes.
-    bytes_alloc: AtomicI64,
-
-    /// Count of calls to `dealloc`.
-    n_dealloc: AtomicI64,
-
-    /// Number of deallocated bytes.
-    bytes_dealloc: AtomicI64,
+    memory_usage: AtomicI64,
 
     parent_memory_tracker: Option<Arc<MemoryTracker>>,
 }
@@ -133,19 +156,31 @@ pub struct MemoryTracker {
 /// A StatBuffer buffers stats changes in local variables, and periodically flush them to other storage such as an `Arc<T>` shared by several threads.
 #[derive(Clone, Debug, Default)]
 pub struct StatBuffer {
-    n: i64,
-    bytes: i64,
+    memory_usage: i64,
 }
 
 impl StatBuffer {
-    pub fn incr(&mut self, bs: i64) {
-        self.n += 1;
-        self.bytes += bs;
+    pub const fn empty() -> Self {
+        Self { memory_usage: 0 }
+    }
+
+    pub fn incr(&mut self, bs: i64) -> i64 {
+        self.memory_usage += bs;
+        self.memory_usage
+    }
+
+    pub fn decr(&mut self, bs: i64) -> i64 {
+        self.memory_usage -= bs;
+        self.memory_usage
     }
 
     pub fn reset(&mut self) {
-        self.n = 0;
-        self.bytes = 0;
+        self.memory_usage = 0;
+    }
+
+    pub fn flush_to(&mut self, st: &AtomicI64) {
+        st.fetch_add(self.memory_usage, Ordering::Relaxed);
+        self.reset();
     }
 }
 
@@ -160,57 +195,39 @@ impl MemoryTracker {
     ) -> Arc<MemoryTracker> {
         Arc::new(MemoryTracker {
             parent_memory_tracker,
-            n_alloc: AtomicI64::new(0),
-            bytes_alloc: AtomicI64::new(0),
-            n_dealloc: AtomicI64::new(0),
-            bytes_dealloc: AtomicI64::new(0),
+            memory_usage: AtomicI64::new(0),
         })
     }
 
     #[inline]
-    pub fn alloc_memory(&self, n: i64, size: i64) {
-        self.bytes_alloc.fetch_add(size, Ordering::Relaxed);
-        self.n_alloc.fetch_add(n, Ordering::Relaxed);
+    pub fn record_memory(&self, state: &StatBuffer) {
+        self.memory_usage
+            .fetch_add(state.memory_usage, Ordering::Relaxed);
 
         if let Some(parent_memory_tracker) = &self.parent_memory_tracker {
-            parent_memory_tracker.alloc_memory(n, size);
-        }
-    }
-
-    #[inline]
-    pub fn dealloc_memory(&self, n: i64, size: i64) {
-        self.bytes_dealloc.fetch_add(size, Ordering::Relaxed);
-        self.n_dealloc.fetch_add(n, Ordering::Relaxed);
-
-        if let Some(parent_memory_tracker) = &self.parent_memory_tracker {
-            parent_memory_tracker.dealloc_memory(n, size);
+            parent_memory_tracker.record_memory(state);
         }
     }
 
     #[inline]
     pub fn current() -> Option<Arc<MemoryTracker>> {
-        unsafe {
-            let thread_tracker = ThreadTracker::current();
-            match thread_tracker.is_null() {
-                true => None,
-                false => Some((*thread_tracker).mem_tracker.clone()),
-            }
-        }
+        unsafe { TRACKER.as_ref().map(|tracker| tracker.mem_tracker.clone()) }
     }
 
     #[inline]
     pub fn get_memory_usage(&self) -> i64 {
-        self.bytes_alloc.load(Ordering::Relaxed) - self.bytes_dealloc.load(Ordering::Relaxed)
+        self.memory_usage.load(Ordering::Relaxed)
     }
 }
 
 impl MemoryTracker {
     pub fn on_stop_thread(self: &Arc<Self>) -> impl Fn() {
         move || unsafe {
-            let thread_tracker = std::mem::replace(&mut TRACKER, std::ptr::null_mut());
-
-            std::ptr::drop_in_place(thread_tracker as usize as *mut ThreadTracker);
-            GlobalAllocator.dealloc(thread_tracker as *mut u8, Layout::new::<ThreadTracker>())
+            if let Some(thread_tracker) = TRACKER.take() {
+                thread_tracker
+                    .mem_tracker
+                    .record_memory(&thread_tracker.buffer);
+            }
         }
     }
 
@@ -219,7 +236,49 @@ impl MemoryTracker {
         let mem_tracker = self.clone();
 
         move || {
-            ThreadTracker::create(mem_tracker.clone());
+            let thread_tracker = ThreadTracker::create(mem_tracker.clone());
+            ThreadTracker::attach_thread_tracker(Some(thread_tracker));
+        }
+    }
+}
+
+/// A [`Future`] that enters its thread tracker when being polled.
+///
+/// [`Future`]: std::future::Future
+pub struct AsyncThreadTracker<T: Future> {
+    inner: Pin<Box<T>>,
+    thread_tracker: Option<ThreadTracker>,
+    old_thread_tracker: Option<ThreadTracker>,
+}
+
+unsafe impl<T: Future + Send> Send for AsyncThreadTracker<T> {}
+
+impl<T: Future> AsyncThreadTracker<T> {
+    pub fn create(tracker: Option<ThreadTracker>, inner: T) -> AsyncThreadTracker<T> {
+        AsyncThreadTracker::<T> {
+            inner: Box::pin(inner),
+            thread_tracker: tracker,
+            old_thread_tracker: None,
+        }
+    }
+}
+
+impl<T: Future> Future for AsyncThreadTracker<T> {
+    type Output = T::Output;
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        self.old_thread_tracker = ThreadTracker::attach_thread_tracker(self.thread_tracker.take());
+        let res = self.inner.poll_unpin(cx);
+        self.thread_tracker = ThreadTracker::attach_thread_tracker(self.old_thread_tracker.take());
+        res
+    }
+}
+
+impl<T: Future> Drop for AsyncThreadTracker<T> {
+    fn drop(&mut self) {
+        if self.old_thread_tracker.is_some() {
+            self.thread_tracker =
+                ThreadTracker::attach_thread_tracker(self.old_thread_tracker.take());
         }
     }
 }

@@ -19,14 +19,14 @@ use std::task::Context;
 use std::task::Poll;
 
 use chrono::NaiveDateTime;
+use chrono::TimeZone;
+use chrono::Utc;
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table_function::TableFunction;
 use common_datablocks::DataBlock;
-use common_datavalues::chrono::TimeZone;
-use common_datavalues::chrono::Utc;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_meta_app::schema::TableIdent;

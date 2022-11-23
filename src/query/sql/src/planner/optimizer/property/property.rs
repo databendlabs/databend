@@ -19,6 +19,7 @@ use crate::plans::Scalar;
 use crate::IndexType;
 
 pub type ColumnSet = HashSet<IndexType>;
+pub type TableSet = HashSet<IndexType>;
 
 #[derive(Default, Clone)]
 pub struct RequiredProperty {
