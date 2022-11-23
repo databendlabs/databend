@@ -1513,6 +1513,7 @@ dependencies = [
  "common-jsonb",
  "crc32fast",
  "criterion",
+ "ctor",
  "goldenfile",
  "hex",
  "itertools",

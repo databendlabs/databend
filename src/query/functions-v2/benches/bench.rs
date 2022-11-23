@@ -21,7 +21,7 @@ mod parser;
 use common_expression::type_check;
 use common_expression::Chunk;
 use common_expression::Evaluator;
-use common_functions_v2::scalars::builtin_functions;
+use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 use criterion::Criterion;
 
 fn bench(c: &mut Criterion) {
@@ -34,16 +34,15 @@ fn bench(c: &mut Criterion) {
             b.iter(|| parser::parse_raw_expr(&text, &[]))
         });
 
-        let fn_registry = builtin_functions();
         let raw_expr = parser::parse_raw_expr(&text, &[]);
 
         group.bench_function(format!("check/{n}"), |b| {
-            b.iter(|| type_check::check(&raw_expr, &fn_registry))
+            b.iter(|| type_check::check(&raw_expr, &BUILTIN_FUNCTIONS))
         });
 
-        let expr = type_check::check(&raw_expr, &fn_registry).unwrap();
+        let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS).unwrap();
         let chunk = Chunk::new(vec![], 1);
-        let evaluator = Evaluator::new(&chunk, chrono_tz::UTC, &fn_registry);
+        let evaluator = Evaluator::new(&chunk, chrono_tz::UTC, &BUILTIN_FUNCTIONS);
 
         group.bench_function(format!("eval/{n}"), |b| b.iter(|| evaluator.run(&expr)));
     }
