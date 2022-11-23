@@ -124,7 +124,7 @@ class HttpConnector(object):
         url = f"http://{self._host}:{self._port}/v1/query/"
         log.debug(f"http sql: {statement}")
 
-        query_sql = {'sql': statement}
+        query_sql = {"sql": statement}
 
         if session is not None:
             query_sql["session"] = session
