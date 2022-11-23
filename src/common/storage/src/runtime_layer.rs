@@ -75,7 +75,7 @@ impl Accessor for RuntimeAccessor {
         let op = self.inner.clone();
         let path = path.to_string();
         let future = async move { op.create(&path, args).await };
-        let future = AsyncThreadTracker::create(ThreadTracker::current(), future);
+        let future = AsyncThreadTracker::create(ThreadTracker::fork(), future);
         self.runtime.spawn(future).await.expect("join must success")
     }
 
@@ -83,7 +83,7 @@ impl Accessor for RuntimeAccessor {
         let op = self.inner.clone();
         let path = path.to_string();
         let future = async move { op.read(&path, args).await };
-        let future = AsyncThreadTracker::create(ThreadTracker::current(), future);
+        let future = AsyncThreadTracker::create(ThreadTracker::fork(), future);
         self.runtime.spawn(future).await.expect("join must success")
     }
 
@@ -91,7 +91,7 @@ impl Accessor for RuntimeAccessor {
         let op = self.inner.clone();
         let path = path.to_string();
         let future = async move { op.write(&path, args, r).await };
-        let future = AsyncThreadTracker::create(ThreadTracker::current(), future);
+        let future = AsyncThreadTracker::create(ThreadTracker::fork(), future);
         self.runtime.spawn(future).await.expect("join must success")
     }
 
@@ -99,7 +99,7 @@ impl Accessor for RuntimeAccessor {
         let op = self.inner.clone();
         let path = path.to_string();
         let future = async move { op.stat(&path, args).await };
-        let future = AsyncThreadTracker::create(ThreadTracker::current(), future);
+        let future = AsyncThreadTracker::create(ThreadTracker::fork(), future);
         self.runtime.spawn(future).await.expect("join must success")
     }
 
@@ -107,7 +107,7 @@ impl Accessor for RuntimeAccessor {
         let op = self.inner.clone();
         let path = path.to_string();
         let future = async move { op.delete(&path, args).await };
-        let future = AsyncThreadTracker::create(ThreadTracker::current(), future);
+        let future = AsyncThreadTracker::create(ThreadTracker::fork(), future);
         self.runtime.spawn(future).await.expect("join must success")
     }
 
@@ -115,7 +115,7 @@ impl Accessor for RuntimeAccessor {
         let op = self.inner.clone();
         let path = path.to_string();
         let future = async move { op.list(&path, args).await };
-        let future = AsyncThreadTracker::create(ThreadTracker::current(), future);
+        let future = AsyncThreadTracker::create(ThreadTracker::fork(), future);
         self.runtime.spawn(future).await.expect("join must success")
     }
 }
