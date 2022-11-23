@@ -354,7 +354,7 @@ fn format_setting_csv(options: &FileFormatOptionsExt, timezone: Tz) -> FormatSet
         nested: Default::default(),
         true_bytes: TRUE_BYTES_LOWER.as_bytes().to_vec(),
         false_bytes: FALSE_BYTES_LOWER.as_bytes().to_vec(),
-        nan_bytes: NAN_BYTES_LOWER.as_bytes().to_vec(),
+        nan_bytes: NAN_BYTES_SNAKE.as_bytes().to_vec(),
         inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
         null_bytes: NULL_BYTES_ESCAPE.as_bytes().to_vec(),
         quote_char: options.quote.as_bytes()[0],
