@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use chrono::Utc;
 use common_auth::RefreshableToken;
 use common_auth::TokenFile;
 use common_base::base::tokio;
-use common_datavalues::chrono::Utc;
 
 #[tokio::test]
 async fn direct_token() {

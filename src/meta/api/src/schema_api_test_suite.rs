@@ -15,9 +15,9 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use common_datavalues::chrono::DateTime;
-use common_datavalues::chrono::Duration;
-use common_datavalues::chrono::Utc;
+use chrono::DateTime;
+use chrono::Duration;
+use chrono::Utc;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_meta_app::schema::CountTablesReq;

@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use chrono::DateTime;
+use chrono::Datelike;
+use chrono::NaiveDate;
 use chrono_tz::Tz;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::temporal_conversions::EPOCH_DAYS_FROM_CE;
-use common_datavalues::chrono::DateTime;
-use common_datavalues::chrono::Datelike;
-use common_datavalues::chrono::NaiveDate;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_io::prelude::BufferReadDateTimeExt;
