@@ -52,6 +52,17 @@ pub struct ThreadTracker {
     buffer: StatBuffer,
 }
 
+/// A guard that restores the thread local tracker to `old` when being dropped.
+pub struct TrackerGuard {
+    old: *mut ThreadTracker,
+}
+
+impl Drop for TrackerGuard {
+    fn drop(&mut self) {
+        ThreadTracker::attach_thread_tracker(self.old);
+    }
+}
+
 impl ThreadTracker {
     pub fn create(mem_tracker: Arc<MemoryTracker>) -> *mut ThreadTracker {
         unsafe {
@@ -73,6 +84,15 @@ impl ThreadTracker {
         unsafe {
             TRACKER = tracker;
         }
+    }
+
+    /// Enters the context that use tracker `p` and returns a guard that restores the previous tracker when being dropped.
+    pub fn enter(tracker: *mut ThreadTracker) -> TrackerGuard {
+        let g = TrackerGuard {
+            old: ThreadTracker::current(),
+        };
+        Self::attach_thread_tracker(tracker);
+        g
     }
 
     #[inline]
@@ -245,10 +265,12 @@ impl MemoryTracker {
     }
 }
 
+/// A [`Future`] that enters its thread tracker when being polled.
+///
+/// [`Future`]: std::future::Future
 pub struct AsyncThreadTracker<T: Future> {
     inner: Pin<Box<T>>,
     thread_tracker: *mut ThreadTracker,
-    old_thread_tracker: Option<*mut ThreadTracker>,
 }
 
 unsafe impl<T: Future + Send> Send for AsyncThreadTracker<T> {}
@@ -258,7 +280,6 @@ impl<T: Future> AsyncThreadTracker<T> {
         AsyncThreadTracker::<T> {
             inner: Box::pin(inner),
             thread_tracker: tracker,
-            old_thread_tracker: None,
         }
     }
 }
@@ -267,19 +288,8 @@ impl<T: Future> Future for AsyncThreadTracker<T> {
     type Output = T::Output;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        self.old_thread_tracker = Some(ThreadTracker::current());
-        let new_tracker = self.thread_tracker;
-        ThreadTracker::attach_thread_tracker(new_tracker);
-        let res = self.inner.poll_unpin(cx);
-        ThreadTracker::attach_thread_tracker(self.old_thread_tracker.take().unwrap());
-        res
-    }
-}
-
-impl<T: Future> Drop for AsyncThreadTracker<T> {
-    fn drop(&mut self) {
-        if let Some(old_thread_tracker) = self.old_thread_tracker.take() {
-            ThreadTracker::attach_thread_tracker(old_thread_tracker);
-        }
+        // Start using this tracker and restore to the old tracker when `_g` is dropped.
+        let _g = ThreadTracker::enter(self.thread_tracker);
+        self.inner.poll_unpin(cx)
     }
 }
