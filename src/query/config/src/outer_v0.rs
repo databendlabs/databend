@@ -1536,14 +1536,14 @@ impl MetaConfig {
         let has_embedded_dir = !self.embedded_dir.is_empty();
         let has_remote = !self.address.is_empty() || !self.endpoints.is_empty();
         if has_embedded_dir && has_remote {
-            return Err(ErrorCode::InvalidConfig(format!(
-                "Cannot set both embedded dir and [address|endpoints] config"
-            )));
+            return Err(ErrorCode::InvalidConfig(
+                "Cannot set both embedded dir and [address|endpoints] config".to_string(),
+            ));
         }
         if !has_embedded_dir && !has_remote {
-            return Err(ErrorCode::InvalidConfig(format!(
-                "Set embedded dir or [address|endpoints] config"
-            )));
+            return Err(ErrorCode::InvalidConfig(
+                "Set embedded dir or [address|endpoints] config".to_string(),
+            ));
         }
         Ok(())
     }
