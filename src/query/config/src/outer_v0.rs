@@ -1490,7 +1490,7 @@ impl From<InnerStderrLogConfig> for StderrLogConfig {
 #[serde(default)]
 pub struct MetaConfig {
     /// The dir to store persisted meta state for a embedded meta store
-    #[clap(long = "meta-embedded-dir", default_value = "")]
+    #[clap(long = "meta-embedded-dir", default_value_t)]
     #[serde(alias = "meta_embedded_dir")]
     pub embedded_dir: String,
 
@@ -1531,24 +1531,6 @@ pub struct MetaConfig {
     pub rpc_tls_meta_service_domain_name: String,
 }
 
-impl MetaConfig {
-    fn check_config(&mut self) -> Result<()> {
-        let has_embedded_dir = !self.embedded_dir.is_empty();
-        let has_remote = !self.address.is_empty() || !self.endpoints.is_empty();
-        if has_embedded_dir && has_remote {
-            return Err(ErrorCode::InvalidConfig(
-                "Cannot set both embedded dir and [address|endpoints] config".to_string(),
-            ));
-        }
-        if !has_embedded_dir && !has_remote {
-            return Err(ErrorCode::InvalidConfig(
-                "Set embedded dir or [address|endpoints] config".to_string(),
-            ));
-        }
-        Ok(())
-    }
-}
-
 impl Default for MetaConfig {
     fn default() -> Self {
         InnerMetaConfig::default().into()
@@ -1558,9 +1540,7 @@ impl Default for MetaConfig {
 impl TryInto<InnerMetaConfig> for MetaConfig {
     type Error = ErrorCode;
 
-    fn try_into(mut self) -> Result<InnerMetaConfig> {
-        self.check_config()?;
-
+    fn try_into(self) -> Result<InnerMetaConfig> {
         Ok(InnerMetaConfig {
             embedded_dir: self.embedded_dir,
             address: self.address,

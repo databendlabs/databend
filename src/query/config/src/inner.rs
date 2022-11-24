@@ -266,6 +266,24 @@ impl MetaConfig {
         Ok(!self.embedded_dir.is_empty())
     }
 
+    pub fn check_valid(&self) -> Result<()> {
+        let has_embedded_dir = !self.embedded_dir.is_empty();
+        let has_remote = !self.address.is_empty() || !self.endpoints.is_empty();
+        if has_embedded_dir && has_remote {
+            return Err(ErrorCode::InvalidConfig(
+                "Cannot set both embedded dir and [address|endpoints] config".to_string(),
+            ));
+        }
+
+        if !has_embedded_dir && !has_remote {
+            return Err(ErrorCode::InvalidConfig(
+                "Set embedded_dir or [address|endpoints] config to use meta".to_string(),
+            ));
+        }
+
+        Ok(())
+    }
+
     pub fn is_tls_enabled(&self) -> bool {
         !self.rpc_tls_meta_server_root_ca_cert.is_empty()
             && !self.rpc_tls_meta_service_domain_name.is_empty()

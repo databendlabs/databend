@@ -39,6 +39,7 @@ use tracing::info;
 #[databend_main]
 async fn main(_global_tracker: Arc<MemoryTracker>) -> common_exception::Result<()> {
     let conf: Config = Config::load()?;
+    conf.meta.check_valid()?;
 
     if run_cmd(&conf) {
         return Ok(());
