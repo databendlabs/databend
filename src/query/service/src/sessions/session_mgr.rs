@@ -95,7 +95,7 @@ impl SessionManager {
         let config = self.get_conf();
         {
             let sessions = self.active_sessions.read();
-            if sessions.len() == self.max_sessions {
+            if sessions.len() >= self.max_sessions {
                 return Err(ErrorCode::TooManyUserConnections(
                     "The current accept connection has exceeded max_active_sessions config",
                 ));
