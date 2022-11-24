@@ -425,7 +425,6 @@ impl<'a> Binder {
                 Scalar::FunctionCall(FunctionCall {
                     arguments,
                     func_name,
-                    arg_types,
                     return_type,
                 }) => {
                     let arguments = arguments
@@ -435,7 +434,6 @@ impl<'a> Binder {
                     Ok(Scalar::FunctionCall(FunctionCall {
                         arguments,
                         func_name: func_name.clone(),
-                        arg_types: arg_types.clone(),
                         return_type: return_type.clone(),
                     }))
                 }

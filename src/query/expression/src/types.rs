@@ -68,7 +68,7 @@ use crate::ScalarRef;
 
 pub type GenericMap = [DataType];
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, EnumAsInner)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, EnumAsInner)]
 pub enum DataType {
     Null,
     EmptyArray,

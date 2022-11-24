@@ -13,13 +13,14 @@
 // limitations under the License.
 
 use common_exception::Result;
-use common_functions::scalars::FunctionFactory;
+use common_expression::type_check;
+use common_expression::RawExpr;
+use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 
 use crate::plans::ComparisonExpr;
 use crate::plans::ComparisonOp;
 use crate::plans::LogicalJoin;
 use crate::plans::Scalar;
-use crate::ScalarExpr;
 
 pub fn get_join_predicates(join: &LogicalJoin) -> Result<Vec<Scalar>> {
     Ok(join
@@ -27,13 +28,20 @@ pub fn get_join_predicates(join: &LogicalJoin) -> Result<Vec<Scalar>> {
         .iter()
         .zip(join.right_conditions.iter())
         .map(|(left_cond, right_cond)| {
-            let func = FunctionFactory::instance()
-                .get("=", &[&left_cond.data_type(), &right_cond.data_type()])?;
+            let registry = BUILTIN_FUNCTIONS;
+            let raw_expr = RawExpr::FunctionCall {
+                span: None,
+                name: "=".to_string(),
+                params: vec![],
+                args: vec![left_cond.as_raw_expr(), right_cond.as_raw_expr()],
+            };
+            let expr = type_check::check(&raw_expr, &registry)
+                .map_err(|(_, e)| common_exception::ErrorCode::SemanticError(e))?;
             Ok(Scalar::ComparisonExpr(ComparisonExpr {
                 left: Box::new(left_cond.clone()),
                 right: Box::new(right_cond.clone()),
                 op: ComparisonOp::Equal,
-                return_type: Box::new(func.return_type()),
+                return_type: Box::new(expr.data_type().clone()),
             }))
         })
         .collect::<Result<Vec<_>>>()?

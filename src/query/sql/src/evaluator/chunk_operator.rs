@@ -14,18 +14,18 @@
 
 use std::sync::Arc;
 
-use common_datablocks::DataBlock;
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRef;
+use common_exception::ErrorCode;
 use common_exception::Result;
-use common_functions::scalars::FunctionContext;
+use common_expression::Chunk;
+use common_expression::Evaluator;
+use common_expression::Expr;
+use common_expression::FunctionContext;
+use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_transforms::processors::transforms::Transform;
 use common_pipeline_transforms::processors::transforms::Transformer;
-
-use crate::evaluator::EvalNode;
 
 /// `ChunkOperator` takes a `DataBlock` as input and produces a `DataBlock` as output.
 #[derive(Clone)]
@@ -33,49 +33,49 @@ pub enum ChunkOperator {
     /// Evaluate expression and append result column to the end.
     Map {
         /// Name of column in `DataBlock`, should be deprecated later.
-        name: String,
-        eval: EvalNode,
+        // name: String,
+        expr: Expr,
     },
 
     /// Filter the input `DataBlock` with the predicate `eval`.
-    Filter { eval: EvalNode },
+    Filter { expr: Expr },
 
     /// Reorganize the input `DataBlock` with `offsets`.
     Project { offsets: Vec<usize> },
-
-    /// Replace name of `DataField`s of input `DataBlock`.
-    Rename { output_schema: DataSchemaRef },
+    // Replace name of `DataField`s of input `DataBlock`.
+    // Rename { output_schema: DataSchemaRef },
 }
 
 impl ChunkOperator {
-    pub fn execute(&self, func_ctx: &FunctionContext, input: DataBlock) -> Result<DataBlock> {
+    pub fn execute(&self, func_ctx: &FunctionContext, mut input: Chunk) -> Result<Chunk> {
         match self {
-            ChunkOperator::Map { name, eval } => {
-                let result = eval.eval(func_ctx, &input)?;
-                input.add_column(result.vector, DataField::new(name, result.logical_type))
+            ChunkOperator::Map { expr } => {
+                let registry = BUILTIN_FUNCTIONS;
+                let evaluator = Evaluator::new(&input, func_ctx.tz, &registry);
+                let result = evaluator
+                    .run(expr)
+                    .map_err(|(_, e)| ErrorCode::Internal(e))?;
+                input.add_column(result, expr.data_type().clone());
+                Ok(input)
             }
 
-            ChunkOperator::Filter { eval } => {
-                let result = eval.eval(func_ctx, &input)?;
-                let predicate = result.vector;
-                DataBlock::filter_block(input, &predicate)
+            ChunkOperator::Filter { expr } => {
+                let registry = BUILTIN_FUNCTIONS;
+                let evaluator = Evaluator::new(&input, func_ctx.tz, &registry);
+                let filter = evaluator
+                    .run(expr)
+                    .map_err(|(_, e)| ErrorCode::Internal(e))?;
+                Chunk::filter(input, &filter)
             }
 
             ChunkOperator::Project { offsets } => {
-                let mut result = DataBlock::empty();
+                let mut result = Chunk::empty();
                 for offset in offsets {
-                    result = result.add_column(
-                        input.column(*offset).clone(),
-                        input.schema().field(*offset).clone(),
-                    )?;
+                    let (column, data_type) = input.column(*offset);
+                    result.add_column(column.clone(), data_type.clone());
                 }
                 Ok(result)
             }
-
-            ChunkOperator::Rename { output_schema } => Ok(DataBlock::create(
-                output_schema.clone(),
-                input.columns().to_vec(),
-            )),
         }
     }
 }
@@ -119,7 +119,7 @@ impl Transform for CompoundChunkOperator {
 
     const SKIP_EMPTY_CHUNK: bool = true;
 
-    fn transform(&mut self, data: DataBlock) -> Result<DataBlock> {
+    fn transform(&mut self, data: Chunk) -> Result<Chunk> {
         self.operators
             .iter()
             .try_fold(data, |input, op| op.execute(&self.ctx, input))
@@ -136,7 +136,7 @@ impl Transform for CompoundChunkOperator {
                         ChunkOperator::Map { .. } => "Map",
                         ChunkOperator::Filter { .. } => "Filter",
                         ChunkOperator::Project { .. } => "Project",
-                        ChunkOperator::Rename { .. } => "Rename",
+                        // ChunkOperator::Rename { .. } => "Rename",
                     }
                     .to_string()
                 })

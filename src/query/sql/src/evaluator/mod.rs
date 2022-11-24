@@ -23,7 +23,6 @@ pub use chunk_operator::CompoundChunkOperator;
 use common_datavalues::ColumnRef;
 use common_datavalues::DataTypeImpl;
 pub use eval_node::EvalNode;
-pub use monotonicity::ExpressionMonotonicityVisitor;
 
 pub struct Evaluator;
 

@@ -191,7 +191,7 @@ impl<Num: Number> ArgType for NumberType<Num> {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, EnumAsInner)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, EnumAsInner)]
 pub enum NumberDataType {
     UInt8,
     UInt16,

@@ -22,6 +22,7 @@ common-expression = { path = "../expression" }
 common-exception = { path = "../../common/exception" }
 common-formats = { path = "../formats" }
 common-functions = { path = "../functions" }
+common-functions-v2 = { path = "../functions-v2" }
 common-grpc = { path = "../../common/grpc" }
 common-hive-meta-store = { path = "../storages/hive/hive-meta-store", optional = true }
 common-http = { path = "../../common/http" }

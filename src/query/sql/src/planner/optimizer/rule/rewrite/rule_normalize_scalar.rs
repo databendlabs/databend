@@ -15,6 +15,8 @@
 use common_datavalues::BooleanType;
 use common_datavalues::DataValue;
 use common_exception::Result;
+use common_expression::types::DataType;
+use common_expression::Literal;
 
 use crate::optimizer::rule::Rule;
 use crate::optimizer::RuleID;
@@ -35,7 +37,7 @@ fn is_true(predicate: &Scalar) -> bool {
     matches!(
         predicate,
         Scalar::ConstantExpr(ConstantExpr {
-            value: DataValue::Boolean(true),
+            value: Literal::Boolean(true),
             ..
         })
     )
@@ -47,7 +49,7 @@ fn is_falsy(predicate: &Scalar) -> bool {
         Scalar::ConstantExpr(ConstantExpr {
             value,
             ..
-        }) if value == &DataValue::Boolean(false) || value == &DataValue::Null
+        }) if value == &Literal::Boolean(false) || value == &Literal::Null
     )
 }
 
@@ -59,8 +61,8 @@ fn normalize_falsy_predicate(predicates: Vec<Scalar>) -> Vec<Scalar> {
     if predicates.iter().any(is_falsy) {
         vec![
             ConstantExpr {
-                value: DataValue::Boolean(false),
-                data_type: Box::new(BooleanType::new_impl()),
+                value: Literal::Boolean(false),
+                data_type: Box::new(DataType::Boolean),
             }
             .into(),
         ]

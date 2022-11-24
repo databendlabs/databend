@@ -22,6 +22,7 @@ use common_ast::DisplayError;
 use common_datavalues::DataTypeImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::DataType;
 
 use crate::binder::scalar::ScalarBinder;
 use crate::binder::select::SelectList;
@@ -119,9 +120,6 @@ impl<'a> AggregateRewriter<'a> {
                 Ok(FunctionCall {
                     arguments: new_args,
                     func_name: func.func_name.clone(),
-                    // We won't modify data type of any argument during visiting, so it's
-                    // fine to reuse the types.
-                    arg_types: func.arg_types.clone(),
                     return_type: func.return_type.clone(),
                 }
                 .into())
@@ -169,7 +167,7 @@ impl<'a> AggregateRewriter<'a> {
                     // can not be referenced, the name is only for debug
                     column_name: name,
                     index,
-                    data_type: Box::new(arg.data_type()),
+                    data_type: Box::new(DataType::from(arg.data_type())),
                     visibility: Visibility::Visible,
                 };
                 replaced_args.push(
@@ -416,7 +414,7 @@ impl<'a> Binder {
         expr: &Expr<'a>,
         available_aliases: &[(ColumnBinding, Scalar)],
         original_error: ErrorCode,
-    ) -> Result<(Scalar, DataTypeImpl)> {
+    ) -> Result<(Scalar, DataType)> {
         let mut result: Vec<usize> = vec![];
         // If cannot resolve group item, then try to find an available alias
         for (i, (column_binding, _)) in available_aliases.iter().enumerate() {

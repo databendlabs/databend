@@ -21,11 +21,9 @@ use std::sync::Arc;
 use common_ast::ast::Expr;
 use common_ast::ast::Literal;
 use common_catalog::table::Table;
-use common_datavalues::DataField;
-use common_datavalues::DataType;
-use common_datavalues::DataTypeImpl;
-use common_datavalues::StructType;
-use common_datavalues::TypeID;
+use common_expression::types::DataType;
+use common_expression::DataField;
+use common_expression::SchemaDataType;
 use parking_lot::RwLock;
 
 /// Planner use [`usize`] as it's index type.
@@ -94,7 +92,7 @@ impl Metadata {
     pub fn add_base_table_column(
         &mut self,
         name: String,
-        data_type: DataTypeImpl,
+        data_type: SchemaDataType,
         table_index: IndexType,
         path_indices: Option<Vec<IndexType>>,
         leaf_index: Option<IndexType>,
@@ -112,7 +110,7 @@ impl Metadata {
         column_index
     }
 
-    pub fn add_derived_column(&mut self, alias: String, data_type: DataTypeImpl) -> IndexType {
+    pub fn add_derived_column(&mut self, alias: String, data_type: DataType) -> IndexType {
         let column_index = self.columns.len();
         let column_entry = ColumnEntry::DerivedColumn {
             column_index,
@@ -157,7 +155,7 @@ impl Metadata {
                 None
             };
 
-            if field.data_type().data_type_id() != TypeID::Struct {
+            if let SchemaDataType::Tuple { .. } = field.data_type() {
                 self.add_base_table_column(
                     field.name().clone(),
                     field.data_type().clone(),
@@ -175,35 +173,30 @@ impl Metadata {
                 path_indices,
                 None,
             );
-            let struct_type: StructType = field.data_type().clone().try_into().unwrap();
 
-            let inner_types = struct_type.types();
-            let inner_names = match struct_type.names() {
-                Some(inner_names) => inner_names
-                    .iter()
-                    .map(|name| format!("{}:{}", field.name(), name))
-                    .collect::<Vec<_>>(),
-                None => (0..inner_types.len())
-                    .map(|i| format!("{}:{}", field.name(), i + 1))
-                    .collect::<Vec<_>>(),
-            };
-            let mut i = inner_types.len();
-            for (inner_name, inner_type) in
-                inner_names.into_iter().rev().zip(inner_types.iter().rev())
+            if let SchemaDataType::Tuple {
+                fields_name,
+                fields_type,
+            } = field.data_type()
             {
-                i -= 1;
-                let mut inner_indices = indices.clone();
-                inner_indices.push(i);
+                let mut i = fields_type.len();
+                for (inner_name, inner_type) in
+                    fields_name.into_iter().rev().zip(fields_type.iter().rev())
+                {
+                    i -= 1;
+                    let mut inner_indices = indices.clone();
+                    inner_indices.push(i);
 
-                let inner_field = DataField::new(&inner_name, inner_type.clone());
-                fields.push_front((inner_indices, inner_field));
+                    let inner_field = DataField::new(&inner_name, inner_type.clone());
+                    fields.push_front((inner_indices, inner_field));
+                }
             }
         }
         table_index
     }
 
     /// find_smallest_column in given indices.
-    pub fn find_smallest_column(&self, indices: &[usize]) -> usize {
+    pub fn find_smallest_column(&self, indices: &[IndexType]) -> IndexType {
         let mut smallest_index = indices.iter().min().expect("indices must be valid");
         let mut smallest_size = usize::MAX;
         for idx in indices.iter() {
@@ -214,10 +207,10 @@ impl Metadata {
                 ..
             } = entry
             {
-                if let Ok(bytes) = data_type.data_type_id().numeric_byte_size() {
-                    if smallest_size > bytes {
-                        smallest_size = bytes;
-                        smallest_index = column_index;
+                if let SchemaDataType::Number(number_type) = data_type {
+                    if (number_type.bit_width() as usize) < smallest_size {
+                        smallest_size = number_type.bit_width() as usize;
+                        smallest_index = idx;
                     }
                 }
             }
@@ -323,7 +316,7 @@ pub enum ColumnEntry {
         table_index: IndexType,
         column_index: IndexType,
         column_name: String,
-        data_type: DataTypeImpl,
+        data_type: SchemaDataType,
 
         /// Path indices for inner column of struct data type.
         path_indices: Option<Vec<usize>>,
@@ -336,7 +329,7 @@ pub enum ColumnEntry {
     DerivedColumn {
         column_index: IndexType,
         alias: String,
-        data_type: DataTypeImpl,
+        data_type: DataType,
     },
 }
 

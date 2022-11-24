@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod expression_parser;
 mod format;
 mod metadata;
 #[allow(clippy::module_inception)]
@@ -28,7 +27,6 @@ pub use binder::Binder;
 pub use binder::ColumnBinding;
 pub use binder::ScalarBinder;
 pub use binder::Visibility;
-pub use expression_parser::ExpressionParser;
 pub use metadata::*;
 pub use planner::Planner;
 pub use plans::ScalarExpr;

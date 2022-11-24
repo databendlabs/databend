@@ -16,9 +16,10 @@ use std::sync::Arc;
 
 use chrono::Utc;
 use common_datavalues::prelude::*;
-use common_datavalues::DataField;
-use common_datavalues::DataSchema;
-use common_datavalues::DataSchemaRef;
+use common_expression::DataField;
+use common_expression::DataSchema;
+use common_expression::DataSchemaRef;
+use common_expression::SchemaDataType;
 use common_meta_app::share::CreateShareReq;
 use common_meta_app::share::DropShareReq;
 use common_meta_app::share::ShareGrantObjectName;
@@ -132,9 +133,9 @@ pub struct DescSharePlan {
 impl DescSharePlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::new(vec![
-            DataField::new("Kind", Vu8::to_data_type()),
-            DataField::new("Name", Vu8::to_data_type()),
-            DataField::new("Shared_on", Vu8::to_data_type()),
+            DataField::new("Kind", SchemaDataType::String),
+            DataField::new("Name", SchemaDataType::String),
+            DataField::new("Shared_on", SchemaDataType::String),
         ]))
     }
 }
@@ -146,13 +147,13 @@ pub struct ShowSharesPlan {}
 impl ShowSharesPlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::new(vec![
-            DataField::new("Created_on", Vu8::to_data_type()),
-            DataField::new("Kind", Vu8::to_data_type()),
-            DataField::new("Name", Vu8::to_data_type()),
-            DataField::new("Database_name", Vu8::to_data_type()),
-            DataField::new("From", Vu8::to_data_type()),
-            DataField::new("To", Vu8::to_data_type()),
-            DataField::new("Comment", Vu8::to_data_type()),
+            DataField::new("Created_on", SchemaDataType::String),
+            DataField::new("Kind", SchemaDataType::String),
+            DataField::new("Name", SchemaDataType::String),
+            DataField::new("Database_name", SchemaDataType::String),
+            DataField::new("From", SchemaDataType::String),
+            DataField::new("To", SchemaDataType::String),
+            DataField::new("Comment", SchemaDataType::String),
         ]))
     }
 }
@@ -166,9 +167,9 @@ pub struct ShowObjectGrantPrivilegesPlan {
 impl ShowObjectGrantPrivilegesPlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::new(vec![
-            DataField::new("Granted_on", Vu8::to_data_type()),
-            DataField::new("Privilege", Vu8::to_data_type()),
-            DataField::new("Share_name", Vu8::to_data_type()),
+            DataField::new("Granted_on", SchemaDataType::String),
+            DataField::new("Privilege", SchemaDataType::String),
+            DataField::new("Share_name", SchemaDataType::String),
         ]))
     }
 }
@@ -182,8 +183,8 @@ pub struct ShowGrantTenantsOfSharePlan {
 impl ShowGrantTenantsOfSharePlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::new(vec![
-            DataField::new("Granted_on", Vu8::to_data_type()),
-            DataField::new("Account", Vu8::to_data_type()),
+            DataField::new("Granted_on", SchemaDataType::String),
+            DataField::new("Account", SchemaDataType::String),
         ]))
     }
 }

@@ -16,7 +16,12 @@ use std::fmt::Display;
 
 use common_ast::ast::FormatTreeNode;
 use common_datavalues::format_data_type_sql;
+use common_exception::ErrorCode;
+use common_expression::type_check;
+use common_expression::types::DataType;
+use common_expression::RawExpr;
 use common_functions::scalars::FunctionFactory;
+use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 use itertools::Itertools;
 
 use crate::optimizer::SExpr;
@@ -136,7 +141,7 @@ pub fn format_scalar(_metadata: &MetadataRef, scalar: &Scalar) -> String {
             format!(
                 "CAST({} AS {})",
                 format_scalar(_metadata, &cast.argument),
-                format_data_type_sql(&cast.target_type)
+                cast.target_type.to_string()
             )
         }
         Scalar::SubqueryExpr(_) => "SUBQUERY".to_string(),
@@ -359,14 +364,11 @@ pub fn logical_join_to_format_tree(
         .iter()
         .zip(op.right_conditions.iter())
         .map(|(left, right)| {
-            let func = FunctionFactory::instance()
-                .get("=", &[&left.data_type(), &right.data_type()])
-                .unwrap();
             ComparisonExpr {
                 op: ComparisonOp::Equal,
                 left: Box::new(left.clone()),
                 right: Box::new(right.clone()),
-                return_type: Box::new(func.return_type()),
+                return_type: Box::new(DataType::Boolean),
             }
             .into()
         })
@@ -379,13 +381,10 @@ pub fn logical_join_to_format_tree(
 
     let equi_conditions = if !preds.is_empty() {
         let pred = preds.iter().skip(1).fold(preds[0].clone(), |prev, next| {
-            let func = FunctionFactory::instance()
-                .get("and", &[&prev.data_type(), &next.data_type()])
-                .unwrap();
             Scalar::AndExpr(AndExpr {
                 left: Box::new(prev),
                 right: Box::new(next.clone()),
-                return_type: Box::new(func.return_type()),
+                return_type: Box::new(DataType::Boolean),
             })
         });
         format_scalar(&metadata, &pred)

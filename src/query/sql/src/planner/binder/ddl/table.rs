@@ -45,14 +45,16 @@ use common_ast::walk_expr_mut;
 use common_ast::Backtrace;
 use common_ast::Dialect;
 use common_datavalues::type_coercion::compare_coercion;
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataSchemaRefExt;
 use common_datavalues::ToDataType;
 use common_datavalues::TypeFactory;
 use common_datavalues::Vu8;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::DataType;
+use common_expression::DataField;
+use common_expression::DataSchemaRef;
+use common_expression::DataSchemaRefExt;
+use common_expression::SchemaDataType;
 use common_storage::parse_uri_location;
 use common_storage::DataOperator;
 use common_storage::UriLocation;
@@ -68,6 +70,7 @@ use crate::optimizer::OptimizerConfig;
 use crate::optimizer::OptimizerContext;
 use crate::planner::semantic::normalize_identifier;
 use crate::planner::semantic::IdentifierNormalizer;
+use crate::planner::semantic::TypeChecker;
 use crate::plans::AlterTableClusterKeyPlan;
 use crate::plans::CastExpr;
 use crate::plans::CreateTablePlanV2;
@@ -243,8 +246,8 @@ impl<'a> Binder {
         let table = normalize_identifier(table, &self.name_resolution_ctx).name;
 
         let schema = DataSchemaRefExt::create(vec![
-            DataField::new("Table", Vu8::to_data_type()),
-            DataField::new("Create Table", Vu8::to_data_type()),
+            DataField::new("Table", SchemaDataType::String),
+            DataField::new("Create Table", SchemaDataType::String),
         ]);
         Ok(Plan::ShowCreateTable(Box::new(ShowCreateTablePlan {
             catalog,
@@ -274,11 +277,11 @@ impl<'a> Binder {
             .unwrap_or_else(|| self.ctx.get_current_database());
         let table = normalize_identifier(table, &self.name_resolution_ctx).name;
         let schema = DataSchemaRefExt::create(vec![
-            DataField::new("Field", Vu8::to_data_type()),
-            DataField::new("Type", Vu8::to_data_type()),
-            DataField::new("Null", Vu8::to_data_type()),
-            DataField::new("Default", Vu8::to_data_type()),
-            DataField::new("Extra", Vu8::to_data_type()),
+            DataField::new("Field", SchemaDataType::String),
+            DataField::new("Type", SchemaDataType::String),
+            DataField::new("Null", SchemaDataType::String),
+            DataField::new("Default", SchemaDataType::String),
+            DataField::new("Extra", SchemaDataType::String),
         ]);
 
         Ok(Plan::DescribeTable(Box::new(DescribeTablePlan {
@@ -418,7 +421,7 @@ impl<'a> Binder {
                     .map(|column_binding| {
                         DataField::new(
                             &column_binding.column_name,
-                            *column_binding.data_type.clone(),
+                            todo!("expression"), // *column_binding.data_type.clone(),
                         )
                     })
                     .collect();
@@ -438,7 +441,7 @@ impl<'a> Binder {
                     .map(|column_binding| {
                         DataField::new(
                             &column_binding.column_name,
-                            *column_binding.data_type.clone(),
+                            todo!("expression"), // *column_binding.data_type.clone(),
                         )
                     })
                     .collect();
@@ -869,15 +872,16 @@ impl<'a> Binder {
                 let mut fields_comments = Vec::with_capacity(columns.len());
                 for column in columns.iter() {
                     let name = normalize_identifier(&column.name, &self.name_resolution_ctx).name;
-                    let data_type = TypeFactory::instance().get(column.data_type.to_string())?;
+                    let data_type = TypeChecker::resolve_type_name(&column.data_type)?;
 
                     fields.push(DataField::new(&name, data_type.clone()));
                     fields_default_expr.push({
                         if let Some(default_expr) = &column.default_expr {
                             let (mut expr, expr_type) = scalar_binder.bind(default_expr).await?;
-                            if compare_coercion(&data_type, &expr_type).is_err() {
-                                return Err(ErrorCode::SemanticError(format!("column {name} is of type {} but default expression is of type {}", data_type, expr_type)));
-                            }
+                            todo!("expression type coercion");
+                            // if compare_coercion(&data_type, &expr_type).is_err() {
+                            //     return Err(ErrorCode::SemanticError(format!("column {name} is of type {} but default expression is of type {}", data_type, expr_type)));
+                            // }
                             if !expr_type.eq(&data_type) {
                                 expr = Scalar::CastExpr(CastExpr {
                                     argument: Box::new(expr),
@@ -965,7 +969,7 @@ impl<'a> Binder {
                 column_name: field.name().clone(),
                 // A dummy index is fine, since we won't actually evaluate the expression
                 index: 0,
-                data_type: Box::new(field.data_type().clone()),
+                data_type: Box::new(DataType::from(field.data_type())),
                 visibility: Visibility::Visible,
             };
             bind_context.columns.push(column);

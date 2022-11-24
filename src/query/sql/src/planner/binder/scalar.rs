@@ -16,8 +16,8 @@ use std::sync::Arc;
 
 use common_ast::ast::Expr;
 use common_catalog::table_context::TableContext;
-use common_datavalues::DataTypeImpl;
 use common_exception::Result;
+use common_expression::types::DataType;
 
 use crate::planner::binder::BindContext;
 use crate::planner::semantic::NameResolutionContext;
@@ -51,7 +51,7 @@ impl<'a> ScalarBinder<'a> {
         }
     }
 
-    pub async fn bind(&mut self, expr: &Expr<'a>) -> Result<(Scalar, DataTypeImpl)> {
+    pub async fn bind(&mut self, expr: &Expr<'a>) -> Result<(Scalar, DataType)> {
         let mut type_checker = TypeChecker::new(
             self.bind_context,
             self.ctx.clone(),

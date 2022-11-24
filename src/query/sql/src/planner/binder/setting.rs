@@ -16,6 +16,7 @@ use common_ast::ast::Identifier;
 use common_ast::ast::Literal;
 use common_ast::ast::UnSetSource;
 use common_ast::ast::UnSetStmt;
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 use super::BindContext;
@@ -44,8 +45,13 @@ impl<'a> Binder {
 
         let variable = variable.name.clone();
 
-        let box (value, _data_type) = type_checker.resolve_literal(value, None)?;
-        let value = String::from_utf8(value.as_string()?)?;
+        let box (value, _) = type_checker.resolve_literal(value, None)?;
+        let value = String::from_utf8(
+            value
+                .as_string()
+                .ok_or_else(|| ErrorCode::Internal("Invalid variable value"))?
+                .clone(),
+        )?;
 
         let vars = vec![VarValue {
             is_global,

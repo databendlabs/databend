@@ -17,8 +17,8 @@ use std::sync::Arc;
 use common_ast::ast::InsertSource;
 use common_ast::ast::InsertStmt;
 use common_ast::ast::Statement;
-use common_datavalues::DataSchemaRefExt;
 use common_exception::Result;
+use common_expression::DataSchemaRefExt;
 
 use crate::binder::Binder;
 use crate::normalize_identifier;

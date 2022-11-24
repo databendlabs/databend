@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::DataTypeImpl::Null;
-use common_datavalues::DataTypeImpl::Nullable;
 use common_datavalues::DataValue;
 use common_exception::Result;
+use common_expression::types::DataType;
+use common_expression::Literal;
 
 use crate::optimizer::rule::Rule;
 use crate::optimizer::rule::RuleID;
@@ -81,7 +81,10 @@ impl Rule for RuleFoldCountAggregate {
                 Scalar::AggregateFunction(agg_func) => {
                     agg_func.func_name == "count"
                         && (agg_func.args.is_empty()
-                            || !matches!(agg_func.args[0].data_type(), Nullable(_) | Null(_)))
+                            || !matches!(
+                                agg_func.args[0].data_type(),
+                                DataType::Nullable(_) | DataType::Null
+                            ))
                         && !agg_func.distinct
                 }
                 _ => false,
@@ -92,7 +95,7 @@ impl Rule for RuleFoldCountAggregate {
                 Scalar::AggregateFunction(agg_func) => {
                     agg_func.func_name == "count"
                         && (agg_func.args.is_empty()
-                            || matches!(agg_func.args[0].data_type(), Nullable(_)))
+                            || matches!(agg_func.args[0].data_type(), DataType::Nullable(_)))
                         && !agg_func.distinct
                 }
                 _ => false,
@@ -102,7 +105,7 @@ impl Rule for RuleFoldCountAggregate {
             let mut scalars = agg.aggregate_functions;
             for item in scalars.iter_mut() {
                 item.scalar = Scalar::ConstantExpr(ConstantExpr {
-                    value: DataValue::UInt64(card),
+                    value: Literal::UInt64(card),
                     data_type: Box::new(item.scalar.data_type()),
                 });
             }
@@ -126,7 +129,7 @@ impl Rule for RuleFoldCountAggregate {
                         let col_stat = column_stats.get(&index);
                         if let Some(card) = col_stat {
                             item.scalar = Scalar::ConstantExpr(ConstantExpr {
-                                value: DataValue::UInt64(table_card - card.null_count),
+                                value: Literal::UInt64(table_card - card.null_count),
                                 data_type: Box::new(item.scalar.data_type()),
                             });
                         } else {

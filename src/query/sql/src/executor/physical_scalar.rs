@@ -17,10 +17,11 @@ use std::fmt::Formatter;
 
 use common_catalog::plan::Expression;
 use common_datavalues::format_data_type_sql;
-use common_datavalues::DataSchema;
 use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
 use common_exception::Result;
+use common_expression::types::DataType;
+use common_expression::DataSchema;
 
 type ColumnID = String;
 type IndexType = usize;
@@ -30,28 +31,28 @@ type IndexType = usize;
 pub enum PhysicalScalar {
     IndexedVariable {
         index: usize,
-        data_type: DataTypeImpl,
+        data_type: DataType,
 
         display_name: String,
     },
     Constant {
         value: DataValue,
-        data_type: DataTypeImpl,
+        data_type: DataType,
     },
     Function {
         name: String,
         args: Vec<PhysicalScalar>,
-        return_type: DataTypeImpl,
+        return_type: DataType,
     },
 
     Cast {
         input: Box<PhysicalScalar>,
-        target: DataTypeImpl,
+        target: DataType,
     },
 }
 
 impl PhysicalScalar {
-    pub fn data_type(&self) -> DataTypeImpl {
+    pub fn data_type(&self) -> DataType {
         match self {
             PhysicalScalar::Constant { data_type, .. } => data_type.clone(),
             PhysicalScalar::Function { return_type, .. } => return_type.clone(),
@@ -190,9 +191,9 @@ pub struct AggregateFunctionDesc {
 #[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct AggregateFunctionSignature {
     pub name: String,
-    pub args: Vec<DataTypeImpl>,
+    pub args: Vec<DataType>,
     pub params: Vec<DataValue>,
-    pub return_type: DataTypeImpl,
+    pub return_type: DataType,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]

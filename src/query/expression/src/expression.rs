@@ -26,6 +26,8 @@ use serde::Serialize;
 use crate::function::Function;
 use crate::function::FunctionID;
 use crate::function::FunctionRegistry;
+use crate::types::number::F32;
+use crate::types::number::F64;
 use crate::types::DataType;
 use crate::values::Scalar;
 
@@ -118,7 +120,7 @@ pub enum RemoteExpr<Index: ColumnIndex = usize> {
     },
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, EnumAsInner)]
 pub enum Literal {
     Null,
     Int8(i8),
@@ -129,8 +131,8 @@ pub enum Literal {
     UInt16(u16),
     UInt32(u32),
     UInt64(u64),
-    Float32(f32),
-    Float64(f64),
+    Float32(F32),
+    Float64(F64),
     Boolean(bool),
     String(Vec<u8>),
 }

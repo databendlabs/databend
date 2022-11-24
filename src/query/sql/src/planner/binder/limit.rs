@@ -13,9 +13,10 @@
 // limitations under the License.
 
 use common_ast::ast::Expr;
-use common_datavalues::DataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
 
 use crate::binder::Binder;
 use crate::optimizer::SExpr;
@@ -42,10 +43,11 @@ impl<'a> Binder {
         let limit_cnt = match limit {
             Some(Expr::Literal { span: _, lit: x }) => {
                 let box (value, data_type) = type_checker.resolve_literal(x, None)?;
-                if !data_type.data_type_id().is_integer() {
+                if !matches!(data_type, DataType::Number(NumberDataType::UInt64)) {
                     return Err(ErrorCode::IllegalDataType("Unsupported limit type"));
                 }
-                Some(value.as_u64()? as usize)
+                todo!("expression downcast")
+                // Some(value.as_u64()? as usize)
             }
             Some(_) => {
                 return Err(ErrorCode::IllegalDataType("Unsupported limit type"));
@@ -56,10 +58,11 @@ impl<'a> Binder {
         let offset_cnt = if let Some(offset) = offset {
             if let Expr::Literal { lit: x, .. } = offset {
                 let box (value, data_type) = type_checker.resolve_literal(x, None)?;
-                if !data_type.data_type_id().is_integer() {
+                if !matches!(data_type, DataType::Number(NumberDataType::UInt64)) {
                     return Err(ErrorCode::IllegalDataType("Unsupported offset type"));
                 }
-                value.as_u64()? as usize
+                todo!("expression downcast")
+                // value.as_u64()? as usize
             } else {
                 // TODO: try fold constant expression like `1+1`
                 return Err(ErrorCode::SemanticError("Invalid OFFSET expression"));

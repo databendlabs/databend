@@ -16,15 +16,11 @@ use std::collections::BTreeMap;
 
 use common_catalog::plan::DataSourcePlan;
 use common_datablocks::DataBlock;
-use common_datavalues::wrap_nullable;
-use common_datavalues::BooleanType;
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataSchemaRefExt;
-use common_datavalues::NullableType;
-use common_datavalues::ToDataType;
-use common_datavalues::Vu8;
 use common_exception::Result;
+use common_expression::types::DataType;
+use common_expression::DataField;
+use common_expression::DataSchemaRef;
+use common_expression::SchemaDataType;
 use common_meta_app::schema::TableInfo;
 
 use super::AggregateFunctionDesc;
@@ -212,7 +208,7 @@ impl HashJoin {
                 for field in self.build.output_schema()?.fields() {
                     fields.push(DataField::new(
                         field.name().as_str(),
-                        wrap_nullable(field.data_type()),
+                        SchemaDataType::Nullable(Box::new(field.data_type().clone())),
                     ));
                 }
             }
@@ -221,7 +217,7 @@ impl HashJoin {
                 for field in self.probe.output_schema()?.fields() {
                     fields.push(DataField::new(
                         field.name().as_str(),
-                        wrap_nullable(field.data_type()),
+                        SchemaDataType::Nullable(Box::new(field.data_type().clone())),
                     ));
                 }
                 for field in self.build.output_schema()?.fields() {
@@ -236,13 +232,13 @@ impl HashJoin {
                 for field in self.probe.output_schema()?.fields() {
                     fields.push(DataField::new(
                         field.name().as_str(),
-                        wrap_nullable(field.data_type()),
+                        SchemaDataType::Nullable(Box::new(field.data_type().clone())),
                     ));
                 }
                 for field in self.build.output_schema()?.fields() {
                     fields.push(DataField::new(
                         field.name().as_str(),
-                        wrap_nullable(field.data_type()),
+                        SchemaDataType::Nullable(Box::new(field.data_type().clone())),
                     ));
                 }
             }
@@ -268,7 +264,7 @@ impl HashJoin {
                 };
                 fields.push(DataField::new(
                     name.as_str(),
-                    NullableType::new_impl(BooleanType::new_impl()),
+                    SchemaDataType::Nullable(Box::new(SchemaDataType::Boolean)),
                 ));
             }
 

@@ -30,6 +30,7 @@ use common_datavalues::type_coercion::compare_coercion;
 use common_datavalues::DataTypeImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::DataType;
 
 use crate::binder::join::JoinConditions;
 use crate::binder::scalar_common::split_conjunctions;
@@ -294,13 +295,14 @@ impl<'a> Binder {
                 .iter()
                 .zip(right_bind_context.columns.iter())
             {
-                if left_col.data_type != right_col.data_type {
-                    let data_type = compare_coercion(&left_col.data_type, &right_col.data_type)
-                        .expect("SetOperation's types cannot be matched");
-                    coercion_types.push(data_type);
-                } else {
-                    coercion_types.push(*left_col.data_type.clone());
-                }
+                todo!("expression coercion");
+                // if left_col.data_type != right_col.data_type {
+                //     let data_type = compare_coercion(&left_col.data_type, &right_col.data_type)
+                //         .expect("SetOperation's types cannot be matched");
+                //     coercion_types.push(data_type);
+                // } else {
+                //     coercion_types.push(*left_col.data_type.clone());
+                // }
             }
         }
         match (op, all) {
@@ -338,7 +340,7 @@ impl<'a> Binder {
         &mut self,
         left_context: BindContext,
         right_context: BindContext,
-        coercion_types: Vec<DataTypeImpl>,
+        coercion_types: Vec<DataType>,
         left_expr: SExpr,
         right_expr: SExpr,
         distinct: bool,
@@ -448,7 +450,7 @@ impl<'a> Binder {
         right_bind_context: BindContext,
         mut left_expr: SExpr,
         mut right_expr: SExpr,
-        coercion_types: Vec<DataTypeImpl>,
+        coercion_types: Vec<DataType>,
     ) -> Result<(BindContext, Vec<(IndexType, IndexType)>, SExpr, SExpr)> {
         let mut left_scalar_items = Vec::with_capacity(left_bind_context.columns.len());
         let mut right_scalar_items = Vec::with_capacity(right_bind_context.columns.len());
@@ -460,7 +462,7 @@ impl<'a> Binder {
             .zip(right_bind_context.columns.iter())
             .enumerate()
         {
-            let left_index = if left_col.data_type != coercion_types[idx] {
+            let left_index = if *left_col.data_type != coercion_types[idx] {
                 let new_column_index = self
                     .metadata
                     .write()
@@ -493,7 +495,7 @@ impl<'a> Binder {
                 new_bind_context.add_column_binding(left_col.clone());
                 left_col.index
             };
-            let right_index = if right_col.data_type != coercion_types[idx] {
+            let right_index = if *right_col.data_type != coercion_types[idx] {
                 let new_column_index = self
                     .metadata
                     .write()

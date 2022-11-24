@@ -25,11 +25,12 @@ use common_ast::ast::ShowCreateDatabaseStmt;
 use common_ast::ast::ShowDatabasesStmt;
 use common_ast::ast::ShowLimit;
 use common_ast::ast::UndropDatabaseStmt;
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRefExt;
 use common_datavalues::ToDataType;
 use common_datavalues::Vu8;
 use common_exception::Result;
+use common_expression::DataField;
+use common_expression::DataSchemaRefExt;
+use common_expression::SchemaDataType;
 use common_meta_app::schema::DatabaseMeta;
 use common_meta_app::share::ShareNameIdent;
 
@@ -81,8 +82,8 @@ impl<'a> Binder {
             .unwrap_or_else(|| self.ctx.get_current_catalog());
         let database = normalize_identifier(database, &self.name_resolution_ctx).name;
         let schema = DataSchemaRefExt::create(vec![
-            DataField::new("Database", Vu8::to_data_type()),
-            DataField::new("Create Database", Vu8::to_data_type()),
+            DataField::new("Database", SchemaDataType::String),
+            DataField::new("Create Database", SchemaDataType::String),
         ]);
 
         Ok(Plan::ShowCreateDatabase(Box::new(ShowCreateDatabasePlan {

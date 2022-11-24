@@ -12,12 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataSchemaRefExt;
 use common_datavalues::ToDataType;
 use common_datavalues::VariantObjectType;
 use common_datavalues::Vu8;
+use common_expression::DataField;
+use common_expression::DataSchemaRef;
+use common_expression::DataSchemaRefExt;
+use common_expression::SchemaDataType;
 use common_meta_types::UserStageInfo;
 use time::Duration;
 
@@ -38,9 +39,9 @@ pub struct PresignPlan {
 impl PresignPlan {
     pub fn schema(&self) -> DataSchemaRef {
         DataSchemaRefExt::create(vec![
-            DataField::new("method", Vu8::to_data_type()),
-            DataField::new("headers", VariantObjectType::new_impl()),
-            DataField::new("url", Vu8::to_data_type()),
+            DataField::new("method", SchemaDataType::String),
+            DataField::new("headers", SchemaDataType::Variant),
+            DataField::new("url", SchemaDataType::String),
         ])
     }
 }

@@ -27,7 +27,6 @@ use common_exception::Result;
 
 use crate::binder::scalar_common::split_conjunctions;
 use crate::binder::scalar_common::split_equivalent_predicate;
-use crate::binder::wrap_cast;
 use crate::binder::JoinPredicate;
 use crate::binder::Visibility;
 use crate::normalize_identifier;
@@ -76,14 +75,14 @@ impl<'a> Binder {
                 }
                 for column in right_context.all_column_bindings().iter() {
                     let mut nullable_column = column.clone();
-                    nullable_column.data_type = Box::new(wrap_nullable(&column.data_type));
+                    nullable_column.data_type = Box::new(column.data_type.wrap_nullable());
                     bind_context.add_column_binding(nullable_column);
                 }
             }
             JoinOperator::RightOuter => {
                 for column in left_context.all_column_bindings() {
                     let mut nullable_column = column.clone();
-                    nullable_column.data_type = Box::new(wrap_nullable(&column.data_type));
+                    nullable_column.data_type = Box::new(column.data_type.wrap_nullable());
                     bind_context.add_column_binding(nullable_column);
                 }
 
@@ -94,13 +93,13 @@ impl<'a> Binder {
             JoinOperator::FullOuter => {
                 for column in left_context.all_column_bindings() {
                     let mut nullable_column = column.clone();
-                    nullable_column.data_type = Box::new(wrap_nullable(&column.data_type));
+                    nullable_column.data_type = Box::new(column.data_type.wrap_nullable());
                     bind_context.add_column_binding(nullable_column);
                 }
 
                 for column in right_context.all_column_bindings().iter() {
                     let mut nullable_column = column.clone();
-                    nullable_column.data_type = Box::new(wrap_nullable(&column.data_type));
+                    nullable_column.data_type = Box::new(column.data_type.wrap_nullable());
                     bind_context.add_column_binding(nullable_column);
                 }
             }
@@ -577,11 +576,12 @@ impl<'a> JoinConditionResolver<'a> {
         let left_type = left.data_type();
         let right_type = right.data_type();
         if left_type.ne(&right_type) {
-            let least_super_type = compare_coercion(&left_type, &right_type)?;
-            // Wrap cast for both left and right, `cast` can change the physical type of the data block
-            // Related issue: https://github.com/datafuselabs/databend/issues/7650
-            left = wrap_cast(left, &least_super_type);
-            right = wrap_cast(right, &least_super_type);
+            todo!("expression: type coercion")
+            // let least_super_type = compare_coercion(&left_type, &right_type)?;
+            // // Wrap cast for both left and right, `cast` can change the physical type of the data block
+            // // Related issue: https://github.com/datafuselabs/databend/issues/7650
+            // left = wrap_cast(left, &least_super_type);
+            // right = wrap_cast(right, &least_super_type);
         }
 
         if left_used_columns.is_subset(&left_columns)

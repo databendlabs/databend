@@ -21,9 +21,9 @@ use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
-use common_datavalues::DataField;
-use common_datavalues::DataSchema;
 use common_exception::Result;
+use common_expression::DataField;
+use common_expression::DataSchema;
 
 #[async_trait::async_trait]
 pub trait ToReadDataSourcePlan {

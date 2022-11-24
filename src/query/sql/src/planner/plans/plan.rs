@@ -16,11 +16,12 @@ use std::fmt::Display;
 use std::sync::Arc;
 
 use common_ast::ast::ExplainKind;
-use common_datavalues::DataField;
-use common_datavalues::DataSchema;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataSchemaRefExt;
-use common_datavalues::StringType;
+use common_expression::types::DataType;
+use common_expression::DataField;
+use common_expression::DataSchema;
+use common_expression::DataSchemaRef;
+use common_expression::DataSchemaRefExt;
+use common_expression::SchemaDataType;
 
 use crate::optimizer::SExpr;
 use crate::plans::copy_v2::CopyPlanV2;
@@ -302,7 +303,7 @@ impl Plan {
                 ..
             } => bind_context.output_schema(),
             Plan::Explain { .. } | Plan::ExplainAst { .. } | Plan::ExplainSyntax { .. } => {
-                DataSchemaRefExt::create(vec![DataField::new("explain", StringType::new_impl())])
+                DataSchemaRefExt::create(vec![DataField::new("explain", SchemaDataType::String)])
             }
             Plan::Copy(_) => Arc::new(DataSchema::empty()),
             Plan::ShowCreateCatalog(plan) => plan.schema(),
