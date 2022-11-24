@@ -3,7 +3,7 @@ title: Replace Bloom Filter with Xor Filter to Speed up Queries
 description: Xor Filter
 slug: xor-filter
 date: 2022-11-23
-tags: [databend, xor]
+tags: [databend, xor, bloom]
 authors:
 - name: BohuTANG
   url: https://github.com/BohuTANG
@@ -16,7 +16,7 @@ Many optimizations are usually required for big data analytics to "reduce the di
 
 ## Why We Replaced the Bloom Filter
 
-Most popular databases use Bloom Filters to handle equivalent queries and avoid useless data readings. Databend also used the classic Bloom Filter algorithm in the first version (databend#6639). However, we found the Bloom Filter Index required plenty of storage space which even exceeded the data storage size (Databend automatically created Bloom indexes for some data types to make it easier for users to work with). The Bloom Filter Index didn't show a significant performance improvement because it is not much different from reading data directly from storage.
+Most popular databases use Bloom Filters to handle equivalent queries and avoid useless data readings. Databend also used the classic Bloom Filter algorithm in the first version ([databend#6639](https://github.com/datafuselabs/databend/pull/6639)). However, we found the Bloom Filter Index required plenty of storage space which even exceeded the data storage size (Databend automatically created Bloom indexes for some data types to make it easier for users to work with). The Bloom Filter Index didn't show a significant performance improvement because it is not much different from reading data directly from storage.
 
 The reason is that Bloom Filter does not know the cardinality of the data when it is generated. Take the Boolean type as an example, the algorithm allocates space for it without considering the cardinality (2, True or False).
 
@@ -30,7 +30,7 @@ XP is a master for Trie, so I'm sure implementation would be no big deal for him
 
 ## Why Xor Filter?
 
-A few explorations later, the Xor Filter algorithm, proposed by Daniel Lemire and his team in 2019: Xor Filters: Faster and Smaller Than Bloom Filters, caught my attention.
+A few explorations later, the Xor Filter algorithm, proposed by Daniel Lemire and his team in 2019: [Xor Filters: Faster and Smaller Than Bloom Filters, caught my attention(https://lemire.me/blog/2019/12/19/xor-filters-faster-and-smaller-than-bloom-filters/).
 
 ![Alt text](../static/img/blog/comparison.png)
 
