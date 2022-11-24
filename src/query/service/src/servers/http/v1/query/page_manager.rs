@@ -58,7 +58,6 @@ pub struct PageManager {
     last_page: Option<Page>,
     row_buffer: VecDeque<Vec<JsonValue>>,
     block_receiver: SizedChannelReceiver<DataBlock>,
-    string_fields: bool,
     format_settings: FormatSettings,
 }
 
@@ -67,7 +66,6 @@ impl PageManager {
         query_id: String,
         max_rows_per_page: usize,
         block_receiver: SizedChannelReceiver<DataBlock>,
-        string_fields: bool,
         format_settings: FormatSettings,
     ) -> PageManager {
         PageManager {
@@ -81,7 +79,6 @@ impl PageManager {
             schema: Arc::new(DataSchema::empty()),
             block_receiver,
             max_rows_per_page,
-            string_fields,
             format_settings,
         }
     }
@@ -134,7 +131,7 @@ impl PageManager {
         if self.schema.fields().is_empty() {
             self.schema = block.schema().clone();
         }
-        let mut iter = block_to_json_value(&block, format_settings, self.string_fields)?
+        let mut iter = block_to_json_value(&block, format_settings)?
             .into_iter()
             .peekable();
         let chunk: Vec<_> = iter.by_ref().take(remain).collect();
