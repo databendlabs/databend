@@ -169,6 +169,17 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         },
     );
 
+    let unset_variable = map(
+        rule! {
+            UNSET ~ #unset_source
+        },
+        |(_, unset_souce)| {
+            Statement::UnSetVariable(UnSetStmt {
+                source: unset_souce,
+            })
+        },
+    );
+
     let set_role = map(
         rule! {
             SET ~ (DEFAULT)? ~ ROLE ~ #literal_string
@@ -954,7 +965,6 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             | #show_metrics : "`SHOW METRICS`"
             | #show_functions : "`SHOW FUNCTIONS [<show_limit>]`"
             | #kill_stmt : "`KILL (QUERY | CONNECTION) <object_id>`"
-            | #set_variable : "`SET <variable> = <value>`"
             | #set_role: "`SET [DEFAULT] ROLE <role>`"
             | #show_databases : "`SHOW DATABASES [<show_limit>]`"
             | #undrop_database : "`UNDROP DATABASE <database>`"
@@ -963,6 +973,10 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             | #drop_database : "`DROP DATABASE [IF EXISTS] <database>`"
             | #alter_database : "`ALTER DATABASE [IF EXISTS] <action>`"
             | #use_database : "`USE <database>`"
+        ),
+        rule!(
+            #set_variable : "`SET <variable> = <value>`"
+            | #unset_variable : "`UNSET <variable>`"
         ),
         rule!(
             #show_tables : "`SHOW [FULL] TABLES [FROM <database>] [<show_limit>]`"
@@ -1086,6 +1100,27 @@ pub fn insert_source(i: Input) -> IResult<InsertSource> {
         #streaming
         | #values
         | #query
+    )(i)
+}
+
+pub fn unset_source(i: Input) -> IResult<UnSetSource> {
+    //#ident ~ ( "(" ~ ^#comma_separated_list1(ident) ~ ")")?
+    let var = map(
+        rule! {
+            #ident
+        },
+        |variable| UnSetSource::Var { variable },
+    );
+    let vars = map(
+        rule! {
+            "(" ~ ^#comma_separated_list1(ident) ~ ")"
+        },
+        |(_, variables, _)| UnSetSource::Vars { variables },
+    );
+
+    rule!(
+        #var
+        | #vars
     )(i)
 }
 

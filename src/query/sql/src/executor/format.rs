@@ -34,6 +34,7 @@ use crate::executor::FragmentKind;
 use crate::planner::IndexType;
 use crate::planner::MetadataRef;
 use crate::planner::DUMMY_TABLE_INDEX;
+use crate::ColumnEntry;
 
 impl PhysicalPlan {
     pub fn format(&self, metadata: MetadataRef) -> Result<String> {
@@ -151,7 +152,16 @@ fn project_to_format_tree(
         .columns
         .iter()
         .sorted()
-        .map(|column| format!("{} (#{})", metadata.read().column(*column).name(), column))
+        .map(|column| {
+            format!(
+                "{} (#{})",
+                match metadata.read().column(*column) {
+                    ColumnEntry::BaseTableColumn { column_name, .. } => column_name,
+                    ColumnEntry::DerivedColumn { alias, .. } => alias,
+                },
+                column
+            )
+        })
         .collect::<Vec<_>>()
         .join(", ");
     Ok(FormatTreeNode::with_children("Project".to_string(), vec![
@@ -187,7 +197,10 @@ pub fn pretty_display_agg_desc(desc: &AggregateFunctionDesc, metadata: &Metadata
             .iter()
             .map(|&index| {
                 let column = metadata.read().column(index).clone();
-                column.name().to_string()
+                match column {
+                    ColumnEntry::BaseTableColumn { column_name, .. } => column_name,
+                    ColumnEntry::DerivedColumn { alias, .. } => alias,
+                }
             })
             .collect::<Vec<_>>()
             .join(", ")
@@ -204,7 +217,11 @@ fn aggregate_partial_to_format_tree(
         .map(|column| {
             let index = column.parse::<IndexType>()?;
             let column = metadata.read().column(index).clone();
-            Ok(column.name().to_string())
+            let name = match column {
+                ColumnEntry::BaseTableColumn { column_name, .. } => column_name,
+                ColumnEntry::DerivedColumn { alias, .. } => alias,
+            };
+            Ok(name)
         })
         .collect::<Result<Vec<_>>>()?
         .join(", ");
@@ -235,7 +252,11 @@ fn aggregate_final_to_format_tree(
         .map(|column| {
             let index = column.parse::<IndexType>()?;
             let column = metadata.read().column(index).clone();
-            Ok(column.name().to_string())
+            let name = match column {
+                ColumnEntry::BaseTableColumn { column_name, .. } => column_name,
+                ColumnEntry::DerivedColumn { alias, .. } => alias,
+            };
+            Ok(name)
         })
         .collect::<Result<Vec<_>>>()?
         .join(", ");
@@ -265,7 +286,10 @@ fn sort_to_format_tree(plan: &Sort, metadata: &MetadataRef) -> Result<FormatTree
             let column = metadata.read().column(index).clone();
             Ok(format!(
                 "{} {} {}",
-                column.name(),
+                match column {
+                    ColumnEntry::BaseTableColumn { column_name, .. } => column_name,
+                    ColumnEntry::DerivedColumn { alias, .. } => alias,
+                },
                 if sort_key.asc { "ASC" } else { "DESC" },
                 if sort_key.nulls_first {
                     "NULLS FIRST"

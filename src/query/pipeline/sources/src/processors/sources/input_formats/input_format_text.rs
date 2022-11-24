@@ -17,7 +17,6 @@ use std::mem;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_datavalues::DataSchemaRef;
 use common_datavalues::TypeDeserializer;
 use common_datavalues::TypeDeserializerImpl;
 use common_exception::ErrorCode;
@@ -141,7 +140,6 @@ impl<T: InputFormatTextBase> InputFormat for InputFormatText<T> {
         stage_info: &UserStageInfo,
         op: &Operator,
         _settings: &Arc<Settings>,
-        _schema: &DataSchemaRef,
     ) -> Result<Vec<Arc<SplitInfo>>> {
         let mut infos = vec![];
         for path in files {

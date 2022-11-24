@@ -17,6 +17,8 @@
 #![feature(ptr_metadata)]
 #![feature(result_flattening)]
 #![feature(try_trait_v2)]
+#![feature(thread_id_value)]
+#![feature(backtrace_frames)]
 #![allow(incomplete_features)]
 
 pub mod base;

@@ -23,6 +23,7 @@ common-settings = { path = "../settings" }
 common-storage = { path = "../../common/storage" }
 
 async-trait = "0.1.57"
+chrono = { workspace = true }
 dashmap = "5.4"
 dyn-clone = "1.0.9"
 once_cell = "1.15.0"

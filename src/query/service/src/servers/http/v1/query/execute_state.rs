@@ -37,6 +37,7 @@ use futures_util::FutureExt;
 use serde::Deserialize;
 use serde::Serialize;
 use tracing::error;
+use tracing::info;
 use ExecuteState::*;
 
 use crate::interpreters::Interpreter;
@@ -88,7 +89,7 @@ impl Progresses {
 pub enum ExecuteState {
     Starting(ExecuteStarting),
     Running(ExecuteRunning),
-    Stopped(ExecuteStopped),
+    Stopped(Box<ExecuteStopped>),
 }
 
 impl ExecuteState {
@@ -115,6 +116,7 @@ pub struct ExecuteRunning {
 }
 
 pub struct ExecuteStopped {
+    pub ctx: Arc<QueryContext>,
     pub stats: Progresses,
     pub affect: Option<QueryAffect>,
     pub reason: Result<()>,
@@ -167,10 +169,9 @@ impl Executor {
     pub async fn stop(this: &Arc<RwLock<Executor>>, reason: Result<()>, kill: bool) {
         {
             let guard = this.read().await;
-            tracing::info!(
+            info!(
                 "http query {}: change state to Stopped, reason {:?}",
-                &guard.query_id,
-                reason
+                &guard.query_id, reason
             );
         }
 
@@ -181,12 +182,13 @@ impl Executor {
                     InterpreterQueryLog::log_finish(&s.ctx, SystemTime::now(), Some(e.clone()))
                         .unwrap_or_else(|e| error!("fail to write query_log {:?}", e));
                 }
-                guard.state = Stopped(ExecuteStopped {
+                guard.state = Stopped(Box::new(ExecuteStopped {
+                    ctx: s.ctx.clone(),
                     stats: Default::default(),
                     reason,
                     stop_time: Instant::now(),
                     affect: Default::default(),
-                })
+                }))
             }
             Running(r) => {
                 // release session
@@ -200,19 +202,18 @@ impl Executor {
                     }
                 }
 
-                guard.state = Stopped(ExecuteStopped {
+                guard.state = Stopped(Box::new(ExecuteStopped {
+                    ctx: r.ctx.clone(),
                     stats: Progresses::from_context(&r.ctx),
                     reason,
                     stop_time: Instant::now(),
                     affect: r.ctx.get_affect(),
-                })
+                }))
             }
             Stopped(s) => {
-                tracing::info!(
+                info!(
                     "http query {}: already stopped, reason {:?}, new reason {:?}",
-                    &guard.query_id,
-                    s.reason,
-                    reason
+                    &guard.query_id, s.reason, reason
                 );
             }
         }

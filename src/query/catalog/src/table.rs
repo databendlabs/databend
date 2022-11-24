@@ -20,7 +20,6 @@ use chrono::DateTime;
 use chrono::Utc;
 use common_datablocks::BlockCompactThresholds;
 use common_datablocks::DataBlock;
-use common_datavalues::chrono;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;

@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 use common_meta_types::UserStageInfo;
 use common_pipeline_core::Pipeline;
@@ -37,7 +36,6 @@ pub trait InputFormat: Send + Sync {
         stage_info: &UserStageInfo,
         op: &Operator,
         settings: &Arc<Settings>,
-        schema: &DataSchemaRef,
     ) -> Result<Vec<Arc<SplitInfo>>>;
 
     fn exec_copy(&self, ctx: Arc<InputContext>, pipeline: &mut Pipeline) -> Result<()>;

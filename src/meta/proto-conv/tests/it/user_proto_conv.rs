@@ -14,11 +14,11 @@
 
 use std::collections::HashSet;
 
-use common_datavalues::chrono::DateTime;
-use common_datavalues::chrono::NaiveDate;
-use common_datavalues::chrono::NaiveDateTime;
-use common_datavalues::chrono::NaiveTime;
-use common_datavalues::chrono::Utc;
+use chrono::DateTime;
+use chrono::NaiveDate;
+use chrono::NaiveDateTime;
+use chrono::NaiveTime;
+use chrono::Utc;
 use common_meta_types as mt;
 use common_meta_types::UserInfo;
 use common_meta_types::UserPrivilegeType;

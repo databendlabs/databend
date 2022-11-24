@@ -12,7 +12,7 @@ test = false
 
 [dependencies] # In alphabetical order
 bstr = "1.0.1"
-chrono-tz = "0.6.3"
+chrono-tz = { workspace = true }
 lexical-core = "0.8.5"
 micromarshal = "0.2.1"
 num = "0.4.0"

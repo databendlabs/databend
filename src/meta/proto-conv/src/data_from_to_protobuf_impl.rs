@@ -17,9 +17,9 @@
 
 use std::str::FromStr;
 
+use chrono::DateTime;
+use chrono::Utc;
 use common_datavalues as dv;
-use common_datavalues::chrono::DateTime;
-use common_datavalues::chrono::Utc;
 use common_protos::pb;
 use common_protos::pb::data_type::Dt;
 use num::FromPrimitive;
