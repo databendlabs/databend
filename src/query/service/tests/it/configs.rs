@@ -207,6 +207,7 @@ fn test_env_config_s3() -> Result<()> {
             ("QUERY_TABLE_DISK_CACHE_MB_SIZE", Some("512")),
             ("QUERY_TABLE_CACHE_SNAPSHOT_COUNT", Some("256")),
             ("QUERY_TABLE_CACHE_SEGMENT_COUNT", Some("10240")),
+            ("META_ADDRESS", Some("0.0.0.0:9191")),
             ("TABLE_CACHE_BLOOM_INDEX_META_COUNT", Some("3000")),
             (
                 "TABLE_CACHE_BLOOM_INDEX_DATA_BYTES",
@@ -256,6 +257,8 @@ fn test_env_config_s3() -> Result<()> {
             assert_eq!("1.2.3.4:9091", configured.query.flight_api_address);
             assert_eq!("1.2.3.4:8081", configured.query.admin_api_address);
             assert_eq!("1.2.3.4:7071", configured.query.metric_api_address);
+
+            assert_eq!("0.0.0.0:9191", configured.meta.address);
 
             assert_eq!("s3", configured.storage.storage_type);
             assert_eq!(16, configured.storage.storage_num_cpus);
@@ -321,6 +324,7 @@ fn test_env_config_fs() -> Result<()> {
             ("QUERY_TABLE_DISK_CACHE_MB_SIZE", Some("512")),
             ("QU-ERY_TABLE_CACHE_SNAPSHOT_COUNT", Some("256")),
             ("QUERY_TABLE_CACHE_SEGMENT_COUNT", Some("10240")),
+            ("META_ADDRESS", Some("0.0.0.0:9191")),
             ("TABLE_CACHE_BLOOM_INDEX_META_COUNT", Some("3000")),
             (
                 "TABLE_CACHE_BLOOM_INDEX_DATA_BYTES",
@@ -371,6 +375,7 @@ fn test_env_config_fs() -> Result<()> {
             assert_eq!("1.2.3.4:8081", configured.query.admin_api_address);
             assert_eq!("1.2.3.4:7071", configured.query.metric_api_address);
 
+            assert_eq!("0.0.0.0:9191", configured.meta.address);
             assert_eq!("fs", configured.storage.storage_type);
             assert_eq!(16, configured.storage.storage_num_cpus);
 
@@ -436,6 +441,7 @@ fn test_env_config_gcs() -> Result<()> {
             ("QUERY_TABLE_DISK_CACHE_MB_SIZE", Some("512")),
             ("QUERY_TABLE_CACHE_SNAPSHOT_COUNT", Some("256")),
             ("QUERY_TABLE_CACHE_SEGMENT_COUNT", Some("10240")),
+            ("META_ADDRESS", Some("0.0.0.0:9191")),
             ("TABLE_CACHE_BLOOM_INDEX_META_COUNT", Some("3000")),
             (
                 "TABLE_CACHE_BLOOM_INDEX_DATA_BYTES",
@@ -485,6 +491,8 @@ fn test_env_config_gcs() -> Result<()> {
             assert_eq!("1.2.3.4:9091", configured.query.flight_api_address);
             assert_eq!("1.2.3.4:8081", configured.query.admin_api_address);
             assert_eq!("1.2.3.4:7071", configured.query.metric_api_address);
+
+            assert_eq!("0.0.0.0:9191", configured.meta.address);
 
             assert_eq!("gcs", configured.storage.storage_type);
             assert_eq!(16, configured.storage.storage_num_cpus);
@@ -558,6 +566,7 @@ fn test_env_config_oss() -> Result<()> {
             ("QUERY_TABLE_DISK_CACHE_MB_SIZE", Some("512")),
             ("QUERY_TABLE_CACHE_SNAPSHOT_COUNT", Some("256")),
             ("QUERY_TABLE_CACHE_SEGMENT_COUNT", Some("10240")),
+            ("META_ADDRESS", Some("0.0.0.0:9191")),
             ("TABLE_CACHE_BLOOM_INDEX_META_COUNT", Some("3000")),
             (
                 "TABLE_CACHE_BLOOM_INDEX_DATA_BYTES",
@@ -607,6 +616,8 @@ fn test_env_config_oss() -> Result<()> {
             assert_eq!("1.2.3.4:9091", configured.query.flight_api_address);
             assert_eq!("1.2.3.4:8081", configured.query.admin_api_address);
             assert_eq!("1.2.3.4:7071", configured.query.metric_api_address);
+
+            assert_eq!("0.0.0.0:9191", configured.meta.address);
 
             assert_eq!("oss", configured.storage.storage_type);
             assert_eq!(16, configured.storage.storage_num_cpus);
@@ -725,9 +736,7 @@ dir = "./.databend/logs"
 query_enabled = false
 
 [meta]
-embedded_dir = ""
-address = ""
-endpoints = []
+address = "0.0.0.0:9191"
 username = "username_from_file"
 password = "password_from_file"
 client_timeout_in_second = 10
