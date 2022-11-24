@@ -261,7 +261,7 @@ impl Settings {
                     UserSettingValue::String("nan".to_owned()),
                 ),
                 level: ScopeLevel::Session,
-                desc: "Format field delimiter, default value is \"nan\": use default of the format.",
+                desc: "must be literal `nan` (case-sensitive), default value is \"nan\".",
                 possible_values: None,
             },
             SettingValue {

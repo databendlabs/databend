@@ -60,8 +60,6 @@ pub trait InputFormatTextBase: Sized + Send + Sync + 'static {
 
     fn default_field_delimiter() -> u8;
 
-    fn default_nan_display() -> String;
-
     fn deserialize(builder: &mut BlockBuilder<Self>, batch: RowBatch) -> Result<()>;
 
     fn align(state: &mut AligningState<Self>, buf: &[u8]) -> Result<Vec<RowBatch>>;
@@ -126,10 +124,6 @@ impl<T: InputFormatTextBase> InputFormat for InputFormatText<T> {
 
     fn default_field_delimiter(&self) -> u8 {
         T::default_field_delimiter()
-    }
-
-    fn default_nan_display(&self) -> String {
-        T::default_nan_display()
     }
 
     fn exec_copy(&self, ctx: Arc<InputContext>, pipeline: &mut Pipeline) -> Result<()> {

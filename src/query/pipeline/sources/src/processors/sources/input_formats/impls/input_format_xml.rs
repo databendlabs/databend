@@ -103,10 +103,6 @@ impl InputFormatTextBase for InputFormatXML {
         b','
     }
 
-    fn default_nan_display() -> String {
-        "nan".to_string()
-    }
-
     fn deserialize(builder: &mut BlockBuilder<Self>, batch: RowBatch) -> Result<()> {
         tracing::debug!(
             "xml deserializing row batch {}, id={}, start_row={:?}, offset={}",

@@ -326,10 +326,10 @@ fn check_options(options: &mut FileFormatOptions) -> Result<()> {
     }
 
     if options.nan_display.is_empty() {
-        options.nan_display = "NaN".to_string();
+        options.nan_display = "nan".to_string();
     } else if options.nan_display.len() != 3 || options.nan_display.to_lowercase() != "nan" {
         return Err(ErrorCode::InvalidArgument(
-            "nan_display must be case-sensitive literal `nan`",
+            "nan_display must be literal `nan` (case-sensitive)",
         ));
     }
 

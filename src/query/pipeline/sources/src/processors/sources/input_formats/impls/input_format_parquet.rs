@@ -83,10 +83,6 @@ impl InputFormat for InputFormatParquet {
         b'_'
     }
 
-    fn default_nan_display(&self) -> String {
-        "NaN".to_string()
-    }
-
     async fn get_splits(
         &self,
         files: &[String],

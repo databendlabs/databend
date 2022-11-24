@@ -120,10 +120,6 @@ impl InputFormatTextBase for InputFormatCSV {
         b','
     }
 
-    fn default_nan_display() -> String {
-        "NaN".to_string()
-    }
-
     fn create_field_decoder(options: &FileFormatOptionsExt) -> Arc<dyn FieldDecoder> {
         Arc::new(FieldDecoderCSV::create(options))
     }

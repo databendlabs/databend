@@ -87,10 +87,6 @@ impl InputFormatTextBase for InputFormatNDJson {
         b','
     }
 
-    fn default_nan_display() -> String {
-        "nan".to_string()
-    }
-
     fn deserialize(builder: &mut BlockBuilder<Self>, batch: RowBatch) -> Result<()> {
         let field_decoder = builder
             .field_decoder
