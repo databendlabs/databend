@@ -96,6 +96,10 @@ prost = { version = "0.11.0" }
 serde = { version = "1.0.145", features = ["derive", "rc"] }
 serde_json = { version = "1.0.85", default-features = false, features = ["preserve_order"] }
 
+# chrono
+chrono = { version = "0.4.22", features = ["serde"] }
+chrono-tz = "0.6.3"
+
 [profile.release]
 debug = 1
 lto = "thin"

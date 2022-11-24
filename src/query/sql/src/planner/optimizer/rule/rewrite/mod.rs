@@ -36,6 +36,7 @@ pub use rule_merge_filter::RuleMergeFilter;
 pub use rule_normalize_disjunctive_filter::RuleNormalizeDisjunctiveFilter;
 pub use rule_normalize_scalar::RuleNormalizeScalarFilter;
 pub use rule_push_down_filter_eval_scalar::RulePushDownFilterEvalScalar;
+pub use rule_push_down_filter_join::try_push_down_filter_join;
 pub use rule_push_down_filter_join::RulePushDownFilterJoin;
 pub use rule_push_down_filter_scan::RulePushDownFilterScan;
 pub use rule_push_down_limit_join::RulePushDownLimitOuterJoin;

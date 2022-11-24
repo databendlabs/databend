@@ -16,10 +16,10 @@ use std::fmt;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-use common_datavalues::chrono::Datelike;
-use common_datavalues::chrono::Duration;
-use common_datavalues::chrono::NaiveDate;
-use common_datavalues::chrono::NaiveDateTime;
+use chrono::Datelike;
+use chrono::Duration;
+use chrono::NaiveDate;
+use chrono::NaiveDateTime;
 use common_datavalues::prelude::*;
 use common_datavalues::with_match_primitive_types_error;
 use common_exception::ErrorCode;

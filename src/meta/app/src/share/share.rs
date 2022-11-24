@@ -18,8 +18,8 @@ use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use common_datavalues::chrono::DateTime;
-use common_datavalues::chrono::Utc;
+use chrono::DateTime;
+use chrono::Utc;
 use common_meta_types::errors::app_error::AppError;
 use common_meta_types::errors::app_error::WrongShareObject;
 use common_meta_types::KVAppError;

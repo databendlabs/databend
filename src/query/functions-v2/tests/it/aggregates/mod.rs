@@ -30,7 +30,7 @@ use common_expression::RawExpr;
 use common_expression::Scalar;
 use common_expression::Value;
 use common_functions_v2::aggregates::AggregateFunctionFactory;
-use common_functions_v2::scalars::builtin_functions;
+use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 use itertools::Itertools;
 
 use super::scalars::parser;
@@ -153,9 +153,8 @@ pub fn run_scalar_expr(
     raw_expr: &RawExpr,
     chunk: &Chunk,
 ) -> common_expression::Result<(Value<AnyType>, DataType)> {
-    let fn_registry = builtin_functions();
-    let expr = type_check::check(raw_expr, &fn_registry)?;
-    let evaluator = Evaluator::new(chunk, chrono_tz::UTC, &fn_registry);
+    let expr = type_check::check(raw_expr, &BUILTIN_FUNCTIONS)?;
+    let evaluator = Evaluator::new(chunk, chrono_tz::UTC, &BUILTIN_FUNCTIONS);
     let result = evaluator.run(&expr)?;
     Ok((result, expr.data_type().clone()))
 }

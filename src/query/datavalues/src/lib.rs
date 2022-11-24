@@ -36,8 +36,6 @@ mod types;
 mod variant_value;
 
 pub use array_value::*;
-pub use chrono;
-pub use chrono_tz::Tz;
 pub use columns::*;
 pub use data_field::*;
 pub use data_schema::*;

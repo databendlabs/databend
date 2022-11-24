@@ -25,6 +25,7 @@ use common_functions::scalars::FunctionFactory;
 
 use crate::executor::util::format_field_name;
 use crate::plans::Scalar;
+use crate::ColumnEntry;
 use crate::IndexType;
 use crate::MetadataRef;
 use crate::ScalarExpr;
@@ -63,7 +64,11 @@ where ExpressionBuilder<T>: FiledNameFormat
         match scalar {
             Scalar::BoundColumnRef(column_ref) => {
                 let metadata = self.metadata.read();
-                let name = metadata.column(column_ref.column.index).name();
+                let column_entry = metadata.column(column_ref.column.index);
+                let name = match column_entry {
+                    ColumnEntry::BaseTableColumn { column_name, .. } => column_name,
+                    ColumnEntry::DerivedColumn { alias, .. } => alias,
+                };
                 Ok(Expression::IndexedVariable {
                     name: name.to_string(),
                     data_type: (*column_ref.column.data_type).clone(),
