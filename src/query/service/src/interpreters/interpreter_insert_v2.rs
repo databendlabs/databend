@@ -369,11 +369,7 @@ impl ValueSource {
             ));
         }
 
-        let mut format = FormatSettings::for_values_parsing();
         let tz = self.ctx.get_settings().get_timezone()?;
-        format.timezone = tz.parse::<Tz>().map_err(|_| {
-            ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
-        })?;
         for col_idx in 0..col_size {
             let _ = reader.ignore_white_spaces();
             let col_end = if col_idx + 1 == col_size { b')' } else { b',' };
@@ -423,7 +419,7 @@ impl ValueSource {
                 .await?;
 
                 for (append_idx, deser) in desers.iter_mut().enumerate().take(col_size) {
-                    deser.append_data_value(values[append_idx].clone(), &format)?;
+                    deser.append_data_value(values[append_idx].clone())?;
                 }
                 reader.set_position(end_pos_of_row);
                 return Ok(());
