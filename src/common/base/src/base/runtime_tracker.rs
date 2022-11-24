@@ -26,19 +26,6 @@ use futures::FutureExt;
 #[thread_local]
 static mut TRACKER: Option<ThreadTracker> = None;
 
-/// Thread local memory allocation stat buffer for fast update.
-///
-/// The stat will be periodically flush to global stat tracker `GLOBAL_TRACKER`.
-#[thread_local]
-static mut MEM_STAT_BUFFER: StatBuffer = StatBuffer::empty();
-
-/// Global memory allocation stat tracker.
-pub static GLOBAL_TRACKER: MemoryTracker = MemoryTracker {
-    memory_usage: AtomicI64::new(0),
-
-    parent_memory_tracker: None,
-};
-
 static UNTRACKED_MEMORY_LIMIT: i64 = 4 * 1024 * 1024;
 
 #[derive(Clone)]
@@ -102,11 +89,6 @@ impl ThreadTracker {
         let _ = p;
 
         unsafe {
-            // Update global tracker
-            if MEM_STAT_BUFFER.incr(size) > UNTRACKED_MEMORY_LIMIT {
-                MEM_STAT_BUFFER.flush_to(&GLOBAL_TRACKER.memory_usage);
-            }
-
             if let Some(tracker) = &mut TRACKER {
                 tracker.buffer.incr(size);
 
@@ -128,11 +110,6 @@ impl ThreadTracker {
         let _ = p;
 
         unsafe {
-            // Update global tracker
-            if MEM_STAT_BUFFER.incr(-size) < -UNTRACKED_MEMORY_LIMIT {
-                MEM_STAT_BUFFER.flush_to(&GLOBAL_TRACKER.memory_usage);
-            }
-
             if let Some(tracker) = &mut TRACKER {
                 tracker.buffer.decr(size);
 
@@ -147,6 +124,11 @@ impl ThreadTracker {
 
 pub struct MemoryTracker {
     memory_usage: AtomicI64,
+
+    /// The limit of max used memory for this tracker.
+    ///
+    /// Set to 0 to disable the limit.
+    limit: AtomicI64,
 
     parent_memory_tracker: Option<Arc<MemoryTracker>>,
 }
@@ -194,15 +176,37 @@ impl MemoryTracker {
         parent_memory_tracker: Option<Arc<MemoryTracker>>,
     ) -> Arc<MemoryTracker> {
         Arc::new(MemoryTracker {
-            parent_memory_tracker,
             memory_usage: AtomicI64::new(0),
+            limit: AtomicI64::new(0),
+            parent_memory_tracker,
         })
     }
 
+    pub fn set_limit(&self, mut size: i64) {
+        // It may cause the process unable to run if memory limit is too low.
+        const LOWEST: i64 = 256 * 1024 * 1024;
+
+        if size > 0 && size < LOWEST {
+            size = LOWEST;
+        }
+
+        self.limit.store(size, Ordering::Relaxed);
+    }
+
+    /// Accumulate memory usage and check if it exceeds the limit.
     #[inline]
     pub fn record_memory(&self, state: &StatBuffer) {
-        self.memory_usage
+        let mut used = self
+            .memory_usage
             .fetch_add(state.memory_usage, Ordering::Relaxed);
+
+        used += state.memory_usage;
+
+        let limit = self.limit.load(Ordering::Relaxed);
+
+        if limit > 0 && used > limit {
+            panic!("memory usage exceeds user defined limit");
+        }
 
         if let Some(parent_memory_tracker) = &self.parent_memory_tracker {
             parent_memory_tracker.record_memory(state);
@@ -243,8 +247,6 @@ impl MemoryTracker {
 }
 
 /// A [`Future`] that enters its thread tracker when being polled.
-///
-/// [`Future`]: std::future::Future
 pub struct AsyncThreadTracker<T: Future> {
     inner: Pin<Box<T>>,
     thread_tracker: Option<ThreadTracker>,

@@ -13,7 +13,9 @@
 // limitations under the License.
 
 use std::env;
+use std::sync::Arc;
 
+use common_base::base::MemoryTracker;
 use common_base::base::Runtime;
 use common_config::Config;
 use common_config::DATABEND_COMMIT_VERSION;
@@ -42,7 +44,8 @@ fn main() {
             std::process::exit(cause.code() as i32);
         }
         Ok(main_runtime) => {
-            if let Err(cause) = main_runtime.block_on(main_entrypoint()) {
+            let tracker = main_runtime.get_tracker();
+            if let Err(cause) = main_runtime.block_on(main_entrypoint(tracker)) {
                 eprintln!("Databend Query start failure, cause: {:?}", cause);
                 std::process::exit(cause.code() as i32);
             }
@@ -50,7 +53,7 @@ fn main() {
     }
 }
 
-async fn main_entrypoint() -> Result<()> {
+async fn main_entrypoint(mem_tracker: Arc<MemoryTracker>) -> Result<()> {
     let conf: Config = Config::load()?;
 
     if run_cmd(&conf) {
@@ -60,10 +63,14 @@ async fn main_entrypoint() -> Result<()> {
     init_default_metrics_recorder();
     set_panic_hook();
 
+    let size = conf.query.max_memory_usage as i64;
+    info!("Set memory limit: {}", size);
+    mem_tracker.set_limit(size);
+
     if conf.meta.is_embedded_meta()? {
         MetaEmbedded::init_global_meta_store(conf.meta.embedded_dir.clone()).await?;
     }
-    // Make sure gloabl services have been inited.
+    // Make sure global services have been inited.
     GlobalServices::init(conf.clone()).await?;
 
     let tenant = conf.query.tenant_id.clone();
