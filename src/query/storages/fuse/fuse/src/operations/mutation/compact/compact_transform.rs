@@ -90,7 +90,7 @@ pub struct CompactTransform {
     dal: Operator,
 
     // Limit the memory size of the block read.
-    max_memory: usize,
+    max_memory: u64,
     compact_tasks: VecDeque<CompactTask>,
     block_metas: Vec<Arc<BlockMeta>>,
     order: usize,
@@ -111,8 +111,8 @@ impl CompactTransform {
         thresholds: BlockCompactThresholds,
     ) -> Result<ProcessorPtr> {
         let settings = ctx.get_settings();
-        let max_memory_usage = settings.get_max_memory_usage()? as usize;
-        let max_threads = settings.get_max_threads()? as usize;
+        let max_memory_usage = settings.get_max_memory_usage()?;
+        let max_threads = settings.get_max_threads()?;
         let max_memory = max_memory_usage / max_threads;
         Ok(ProcessorPtr::create(Box::new(CompactTransform {
             state: State::Consume,
@@ -153,7 +153,7 @@ impl Processor for CompactTransform {
 
         if matches!(
             &self.state,
-            State::SerializedBlocks(_) | State::SerializedSegment { .. }
+            State::ReadBlocks | State::SerializedBlocks(_) | State::SerializedSegment { .. }
         ) {
             return Ok(Event::Async);
         }
@@ -318,11 +318,18 @@ impl Processor for CompactTransform {
                         continue;
                     }
 
+                    memory_usage += metas.iter().fold(0, |acc, meta| {
+                        let memory = meta.bloom_filter_index_size + meta.block_size;
+                        acc + memory
+                    });
+
+                    if memory_usage > self.max_memory {
+                        self.compact_tasks.push_front(task);
+                        break;
+                    }
+
                     let mut meta_stats = Vec::with_capacity(metas.len());
                     for meta in metas {
-                        memory_usage += meta.block_size as usize;
-                        memory_usage += meta.bloom_filter_index_size as usize;
-
                         let progress_values = ProgressValues {
                             rows: meta.row_count as usize,
                             bytes: meta.block_size as usize,
@@ -337,10 +344,6 @@ impl Processor for CompactTransform {
                         });
                     }
                     stats_of_columns.push(meta_stats);
-
-                    if memory_usage >= self.max_memory {
-                        break;
-                    }
                 }
 
                 let blocks = futures::future::try_join_all(task_futures).await?;
