@@ -2484,6 +2484,7 @@ dependencies = [
  "serde_json",
  "serde_repr",
  "snailquote",
+ "tikv-jemalloc-ctl",
  "tracing",
  "typetag",
  "uuid",
