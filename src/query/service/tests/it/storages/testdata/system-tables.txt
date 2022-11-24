@@ -88,6 +88,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | name                     | system   | credits             | VARCHAR           |              |                    | NO          |         |
 | name                     | system   | databases           | VARCHAR           |              |                    | NO          |         |
 | name                     | system   | functions           | VARCHAR           |              |                    | NO          |         |
+| name                     | system   | malloc_stats_totals | VARCHAR           |              |                    | NO          |         |
 | name                     | system   | roles               | VARCHAR           |              |                    | NO          |         |
 | name                     | system   | settings            | VARCHAR           |              |                    | NO          |         |
 | name                     | system   | stages              | VARCHAR           |              |                    | NO          |         |
@@ -124,6 +125,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | stage_params             | system   | stages              | VARCHAR           |              |                    | NO          |         |
 | stage_type               | system   | stages              | VARCHAR           |              |                    | NO          |         |
 | start_time               | system   | clustering_history  | TIMESTAMP         |              |                    | NO          |         |
+| statistics               | system   | malloc_stats        | OBJECT            |              |                    | NO          |         |
 | status                   | system   | processes           | VARCHAR           |              |                    | NO          |         |
 | syntax                   | system   | functions           | VARCHAR           |              |                    | NO          |         |
 | table                    | system   | clustering_history  | VARCHAR           |              |                    | NO          |         |
@@ -137,6 +139,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | type                     | system   | settings            | VARCHAR           |              |                    | NO          |         |
 | user                     | system   | processes           | VARCHAR           |              |                    | NO          |         |
 | value                    | system   | configs             | VARCHAR           |              |                    | NO          |         |
+| value                    | system   | malloc_stats_totals | BIGINT UNSIGNED   |              |                    | NO          |         |
 | value                    | system   | metrics             | VARCHAR           |              |                    | NO          |         |
 | value                    | system   | settings            | VARCHAR           |              |                    | NO          |         |
 | version                  | system   | clusters            | VARCHAR           |              |                    | NO          |         |
