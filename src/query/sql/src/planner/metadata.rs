@@ -347,6 +347,13 @@ impl ColumnEntry {
             ColumnEntry::DerivedColumn { column_index, .. } => *column_index,
         }
     }
+
+    pub fn name(&self) -> String {
+        match self {
+            ColumnEntry::BaseTableColumn { column_name, .. } => column_name.clone(),
+            ColumnEntry::DerivedColumn { alias, .. } => alias.clone(),
+        }
+    }
 }
 
 pub fn optimize_remove_count_args(name: &str, distinct: bool, args: &[&Expr]) -> bool {

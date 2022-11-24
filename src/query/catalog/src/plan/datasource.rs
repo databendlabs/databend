@@ -21,8 +21,6 @@ use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataValue;
-use common_datavalues::NullableType;
-use common_datavalues::VariantType;
 use common_meta_app::schema::TableInfo;
 use common_meta_types::UserStageInfo;
 
@@ -124,8 +122,8 @@ impl DataSourcePlan {
             // add virtual columns to schema
             let mut fields = schema.fields().clone();
             for virtual_column in virtual_columns.iter() {
-                let data_type = NullableType::new_impl(VariantType::new_impl());
-                let field = DataField::new(&virtual_column.name, data_type);
+                let field =
+                    DataField::new(&virtual_column.name, (*virtual_column.data_type).clone());
                 fields.push(field);
             }
             DataSchema::new(fields).into()

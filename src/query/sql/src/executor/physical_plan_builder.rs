@@ -171,6 +171,7 @@ impl PhysicalPlanBuilder {
                                 source_name,
                                 name: virtual_column.name.clone(),
                                 json_path: virtual_column.json_path.clone(),
+                                data_type: virtual_column.data_type.clone(),
                             };
                             infos.push(info);
                         }
@@ -605,11 +606,31 @@ impl PhysicalPlanBuilder {
                     has_inner_column,
                 );
 
+                let virtual_columns = match &prewhere.virtual_columns {
+                    Some(virtual_columns) => {
+                        let mut infos: Vec<VirtualColumnInfo> =
+                            Vec::with_capacity(virtual_columns.len());
+                        for virtual_column in virtual_columns {
+                            let source_name = virtual_column.column.column_name.clone();
+                            let info = VirtualColumnInfo {
+                                source_name,
+                                name: virtual_column.name.clone(),
+                                json_path: virtual_column.json_path.clone(),
+                                data_type: virtual_column.data_type.clone(),
+                            };
+                            infos.push(info);
+                        }
+                        Some(infos)
+                    }
+                    None => None,
+                };
+
                 Ok::<PrewhereInfo, ErrorCode>(PrewhereInfo {
                     output_columns,
                     prewhere_columns,
                     remain_columns,
                     filter,
+                    virtual_columns,
                 })
             })
             .transpose()?;

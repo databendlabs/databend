@@ -24,14 +24,13 @@ use common_datablocks::DataBlock;
 use common_datavalues::Column;
 use common_datavalues::ColumnRef;
 use common_datavalues::DataField;
-use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
+use common_datavalues::DataSchemaRefExt;
+use common_datavalues::NullableColumn;
 use common_datavalues::NullableColumnBuilder;
-use common_datavalues::NullableType;
 use common_datavalues::ScalarColumn;
 use common_datavalues::Series;
 use common_datavalues::VariantColumn;
-use common_datavalues::VariantType;
 use common_datavalues::VariantValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -74,11 +73,13 @@ pub struct FuseTableSource {
     prewhere_filter: Arc<Option<EvalNode>>,
     remain_reader: Arc<Option<BlockReader>>,
     virtual_columns: Option<Vec<VirtualColumnInfo>>,
+    prewhere_virtual_columns: Option<Vec<VirtualColumnInfo>>,
 
     support_blocking: bool,
 }
 
 impl FuseTableSource {
+    #[allow(clippy::too_many_arguments)]
     pub fn create(
         ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
@@ -87,6 +88,7 @@ impl FuseTableSource {
         prewhere_filter: Arc<Option<EvalNode>>,
         remain_reader: Arc<Option<BlockReader>>,
         virtual_columns: Option<Vec<VirtualColumnInfo>>,
+        prewhere_virtual_columns: Option<Vec<VirtualColumnInfo>>,
     ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
         let support_blocking = prewhere_reader.support_blocking_api();
@@ -100,39 +102,98 @@ impl FuseTableSource {
             prewhere_filter,
             remain_reader,
             virtual_columns,
+            prewhere_virtual_columns,
             support_blocking,
         })))
     }
 
+    fn generate_schema(&self) -> DataSchemaRef {
+        match &self.virtual_columns {
+            Some(virtual_columns) => {
+                let mut fields = self.output_reader.schema().fields().clone();
+                for virtual_column in virtual_columns {
+                    let field =
+                        DataField::new(&virtual_column.name, (*virtual_column.data_type).clone());
+                    fields.push(field);
+                }
+                DataSchemaRefExt::create(fields)
+            }
+            None => self.output_reader.schema(),
+        }
+    }
+
+    fn generate_prewhere_schema(&self) -> DataSchemaRef {
+        match &self.prewhere_virtual_columns {
+            Some(virtual_columns) => {
+                let mut fields = self.prewhere_reader.schema().fields().clone();
+                for virtual_column in virtual_columns {
+                    let field =
+                        DataField::new(&virtual_column.name, (*virtual_column.data_type).clone());
+                    fields.push(field);
+                }
+                DataSchemaRefExt::create(fields)
+            }
+            None => self.prewhere_reader.schema(),
+        }
+    }
+
+    fn generate_one_prewhere_block(&self, block: DataBlock) -> Result<DataBlock> {
+        let block = if self.prewhere_virtual_columns.is_some() {
+            let block = block.resort(self.prewhere_reader.schema())?;
+            let schema = self.generate_prewhere_schema();
+            let virtual_columns = self.prewhere_virtual_columns.as_ref().unwrap();
+            // add virtual columns to the prewhere block
+            self.generate_block_with_virtual_columns(block, schema, virtual_columns)?
+        } else {
+            block
+        };
+        Ok(block)
+    }
+
     fn generate_one_block(&mut self, block: DataBlock) -> Result<()> {
         let new_part = self.ctx.try_get_part();
+        // resort and prune columns
+        let block = block.resort(self.output_reader.schema())?;
         let block = if self.virtual_columns.is_some() {
+            let schema = self.generate_schema();
+            let virtual_columns = self.virtual_columns.as_ref().unwrap();
             // add virtual columns to the block
-            self.generate_block_with_virtual_columns(block)?
+            self.generate_block_with_virtual_columns(block, schema, virtual_columns)?
         } else {
-            // resort and prune columns
-            block.resort(self.output_reader.schema())?
+            block
         };
         self.state = State::Generated(new_part, block);
         Ok(())
     }
 
     fn generate_one_empty_block(&mut self) -> Result<()> {
-        let schema = self.output_reader.schema();
+        let schema = self.generate_schema();
         let new_part = self.ctx.try_get_part();
         self.state = Generated(new_part, DataBlock::empty_with_schema(schema));
         Ok(())
     }
 
-    fn generate_block_with_virtual_columns(&mut self, block: DataBlock) -> Result<DataBlock> {
-        let virtual_columns = self.virtual_columns.as_ref().unwrap();
-        let block = block.resort(self.output_reader.schema())?;
-
-        let mut fields = self.output_reader.schema().fields().clone();
+    fn generate_block_with_virtual_columns(
+        &self,
+        block: DataBlock,
+        schema: DataSchemaRef,
+        virtual_columns: &[VirtualColumnInfo],
+    ) -> Result<DataBlock> {
         let mut columns = block.columns().to_vec();
         for virtual_column in virtual_columns.iter() {
             if let Ok(source_column) = block.try_column_by_name(&virtual_column.source_name) {
-                let variant_column: &VariantColumn = unsafe { Series::static_cast(source_column) };
+                let variant_column = if source_column.is_nullable() {
+                    let nullable_column: &NullableColumn =
+                        unsafe { Series::static_cast(source_column) };
+                    let variant_column: &VariantColumn =
+                        unsafe { Series::static_cast(nullable_column.inner()) };
+                    variant_column
+                } else {
+                    let variant_column: &VariantColumn =
+                        unsafe { Series::static_cast(source_column) };
+                    variant_column
+                };
+
                 let mut builder =
                     NullableColumnBuilder::<VariantValue>::with_capacity(variant_column.len());
                 let json_path_ref: Vec<JsonPathRef> = virtual_column
@@ -150,13 +211,8 @@ impl FuseTableSource {
                 }
                 let column = builder.build(variant_column.len());
                 columns.push(column);
-
-                let data_type = NullableType::new_impl(VariantType::new_impl());
-                let field = DataField::new(&virtual_column.name, data_type);
-                fields.push(field);
             }
         }
-        let schema: DataSchemaRef = DataSchema::new(fields).into();
         Ok(DataBlock::create(schema, columns))
     }
 }
@@ -274,6 +330,7 @@ impl Processor for FuseTableSource {
             State::PrewhereFilter(part, chunks) => {
                 // deserialize prewhere data block first
                 let data_block = self.prewhere_reader.deserialize(part.clone(), chunks)?;
+                let data_block = self.generate_one_prewhere_block(data_block)?;
                 if let Some(filter) = self.prewhere_filter.as_ref() {
                     // do filter
                     let res = filter

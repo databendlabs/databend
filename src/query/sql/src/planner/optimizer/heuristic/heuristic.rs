@@ -94,7 +94,7 @@ impl HeuristicOptimizer {
         let pruner = UnusedColumnPruner::new(self.metadata.clone());
         let require_columns: ColumnSet =
             self.bind_context.columns.iter().map(|c| c.index).collect();
-        let s_expr = pruner.remove_unused_columns(&s_expr, require_columns)?;
+        s_expr = pruner.remove_unused_columns(&s_expr, require_columns)?;
 
         let mut virutal_column_optimizer = VirutalColumnOptimizer::new();
         virutal_column_optimizer.optimize(&s_expr)

@@ -43,6 +43,8 @@ pub struct Prewhere {
     pub prewhere_columns: ColumnSet,
     // prewhere filter predicates
     pub predicates: Vec<Scalar>,
+    // optional prewhere virtual columns
+    pub virtual_columns: Option<Vec<VirtualColumnRef>>,
 }
 
 #[derive(Clone, Debug)]

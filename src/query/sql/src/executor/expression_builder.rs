@@ -25,7 +25,6 @@ use common_functions::scalars::FunctionFactory;
 
 use crate::executor::util::format_field_name;
 use crate::plans::Scalar;
-use crate::ColumnEntry;
 use crate::IndexType;
 use crate::MetadataRef;
 use crate::ScalarExpr;
@@ -65,13 +64,17 @@ where ExpressionBuilder<T>: FiledNameFormat
             Scalar::BoundColumnRef(column_ref) => {
                 let metadata = self.metadata.read();
                 let column_entry = metadata.column(column_ref.column.index);
-                let name = match column_entry {
-                    ColumnEntry::BaseTableColumn { column_name, .. } => column_name,
-                    ColumnEntry::DerivedColumn { alias, .. } => alias,
-                };
                 Ok(Expression::IndexedVariable {
-                    name: name.to_string(),
+                    name: column_entry.name(),
                     data_type: (*column_ref.column.data_type).clone(),
+                })
+            }
+            Scalar::VirtualColumnRef(column_ref) => {
+                let metadata = self.metadata.read();
+                let column_entry = metadata.column(column_ref.index);
+                Ok(Expression::IndexedVariable {
+                    name: column_entry.name(),
+                    data_type: (*column_ref.data_type).clone(),
                 })
             }
             Scalar::ConstantExpr(constant) => Ok(Expression::Constant {

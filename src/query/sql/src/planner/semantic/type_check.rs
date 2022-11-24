@@ -65,6 +65,7 @@ use crate::binder::wrap_cast_if_needed;
 use crate::binder::Binder;
 use crate::binder::NameResolutionResult;
 use crate::evaluator::Evaluator;
+use crate::optimizer::ColumnSet;
 use crate::optimizer::RelExpr;
 use crate::planner::metadata::optimize_remove_count_args;
 use crate::plans::AggregateFunction;
@@ -762,6 +763,7 @@ impl<'a> TypeChecker<'a> {
                             ..
                         } => {
                             let box (scalar, data_type) = self.resolve(expr, None).await?;
+                            let data_type = remove_nullable(&data_type);
                             match data_type.data_type_id() {
                                 TypeID::Variant | TypeID::VariantArray | TypeID::VariantObject => {
                                     return self
@@ -1962,7 +1964,12 @@ impl<'a> TypeChecker<'a> {
         mut accessors: Vec<MapAccessor<'async_recursion>>,
     ) -> Result<Box<(Scalar, DataTypeImpl)>> {
         let column_ref: BoundColumnRef = scalar.try_into()?;
-
+        let column_indices = ColumnSet::from([column_ref.column.index]);
+        let table_index = self
+            .metadata
+            .read()
+            .table_index_by_column_indexes(&column_indices)
+            .unwrap();
         let column_name = column_ref.column.column_name.clone();
         let data_type = NullableType::new_impl(VariantType::new_impl());
 
@@ -1996,26 +2003,29 @@ impl<'a> TypeChecker<'a> {
 
         let mut index = 0;
         // Check the same virtual columns
-        for column in self.metadata.read().columns() {
-            if column.table_index().is_none() && column.name() == name {
+        for column in self.metadata.read().columns_by_table_index(table_index) {
+            if column.name() == name {
                 index = column.index();
                 break;
             }
         }
         if index == 0 {
-            index =
-                self.metadata
-                    .write()
-                    .add_column(name.clone(), data_type.clone(), None, None, None);
+            index = self.metadata.write().add_base_table_column(
+                name.clone(),
+                data_type.clone(),
+                table_index,
+                None,
+                None,
+            );
         }
-
-        let virtual_column = VirtualColumnRef {
+        let scalar = Scalar::VirtualColumnRef(VirtualColumnRef {
             column: column_ref.column,
             name,
             json_path,
             index,
-        };
-        let scalar = Scalar::VirtualColumnRef(virtual_column);
+            table_index,
+            data_type: Box::new(data_type.clone()),
+        });
 
         Ok(Box::new((scalar, data_type)))
     }

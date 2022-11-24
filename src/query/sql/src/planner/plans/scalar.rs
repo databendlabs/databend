@@ -20,7 +20,6 @@ use common_datavalues::BooleanType;
 use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
 use common_datavalues::NullableType;
-use common_datavalues::VariantType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::FunctionFactory;
@@ -114,6 +113,7 @@ impl ScalarExpr for Scalar {
     fn used_tables(&self) -> HashSet<String> {
         match self {
             Scalar::BoundColumnRef(scalar) => scalar.used_tables(),
+            Scalar::VirtualColumnRef(scalar) => scalar.used_tables(),
             Scalar::ConstantExpr(scalar) => scalar.used_tables(),
             Scalar::AndExpr(scalar) => scalar.used_tables(),
             Scalar::OrExpr(scalar) => scalar.used_tables(),
@@ -344,11 +344,13 @@ pub struct VirtualColumnRef {
     pub name: String,
     pub json_path: Vec<JsonPath>,
     pub index: IndexType,
+    pub table_index: IndexType,
+    pub data_type: Box<DataTypeImpl>,
 }
 
 impl ScalarExpr for VirtualColumnRef {
     fn data_type(&self) -> DataTypeImpl {
-        NullableType::new_impl(VariantType::new_impl())
+        *self.data_type.clone()
     }
 
     fn used_columns(&self) -> ColumnSet {
@@ -357,6 +359,15 @@ impl ScalarExpr for VirtualColumnRef {
 
     fn is_deterministic(&self) -> bool {
         true
+    }
+
+    fn used_tables(&self) -> HashSet<String> {
+        let mut table_set = HashSet::new();
+        if let Some(table_name) = &self.column.table_name {
+            table_set.insert(table_name.to_string());
+            return table_set;
+        }
+        table_set
     }
 }
 

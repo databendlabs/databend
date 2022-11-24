@@ -53,6 +53,9 @@ impl PrewhereOptimizer {
             Scalar::BoundColumnRef(column) => {
                 columns.insert(column.column.index);
             }
+            Scalar::VirtualColumnRef(column) => {
+                columns.insert(column.column.index);
+            }
             Scalar::AndExpr(and) => {
                 Self::collect_columns_impl(and.left.as_ref(), columns);
                 Self::collect_columns_impl(and.right.as_ref(), columns);
@@ -119,6 +122,7 @@ impl PrewhereOptimizer {
                     output_columns: get.columns.clone(),
                     prewhere_columns,
                     predicates: prewhere_pred,
+                    virtual_columns: None,
                 })
             };
 

@@ -21,7 +21,9 @@ use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::plan::VirtualColumnInfo;
 use common_catalog::table_context::TableContext;
+use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
+use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_pipeline_core::Pipeline;
@@ -105,6 +107,21 @@ impl FuseTable {
         Ok(match self.prewhere_of_push_downs(&plan.push_downs) {
             None => Arc::new(None),
             Some(v) => {
+                let virtual_columns = self.prewhere_virtual_columns_of_push_downs(&plan.push_downs);
+                let schema = match virtual_columns {
+                    Some(virtual_columns) => {
+                        let mut fields = schema.fields().clone();
+                        for virtual_column in virtual_columns {
+                            let field = DataField::new(
+                                &virtual_column.name,
+                                *virtual_column.data_type.clone(),
+                            );
+                            fields.push(field);
+                        }
+                        DataSchemaRefExt::create(fields)
+                    }
+                    None => schema,
+                };
                 let executor = Evaluator::eval_expression(&v.filter, schema.as_ref())?;
                 Arc::new(Some(executor))
             }
@@ -131,6 +148,23 @@ impl FuseTable {
     ) -> Option<Vec<VirtualColumnInfo>> {
         if let Some(PushDownInfo {
             virtual_columns, ..
+        }) = push_downs
+        {
+            virtual_columns.clone()
+        } else {
+            None
+        }
+    }
+
+    fn prewhere_virtual_columns_of_push_downs(
+        &self,
+        push_downs: &Option<PushDownInfo>,
+    ) -> Option<Vec<VirtualColumnInfo>> {
+        if let Some(PushDownInfo {
+            prewhere: Some(PrewhereInfo {
+                virtual_columns, ..
+            }),
+            ..
         }) = push_downs
         {
             virtual_columns.clone()
@@ -227,8 +261,8 @@ impl FuseTable {
             self.build_prewhere_filter_executor(ctx.clone(), plan, prewhere_reader.schema())?;
         let remain_reader = self.build_remain_reader(plan)?;
         let virtual_columns = self.virtual_columns_of_push_downs(&plan.push_downs);
-
-        info!("read block data adjust max io requests:{}", max_io_requests);
+        let prewhere_virtual_columns =
+            self.prewhere_virtual_columns_of_push_downs(&plan.push_downs);
 
         // Add source pipe.
         pipeline.add_source(
@@ -241,6 +275,7 @@ impl FuseTable {
                     prewhere_filter.clone(),
                     remain_reader.clone(),
                     virtual_columns.clone(),
+                    prewhere_virtual_columns.clone(),
                 )
             },
             max_io_requests,

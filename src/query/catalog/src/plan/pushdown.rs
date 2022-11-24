@@ -14,6 +14,7 @@
 
 use std::fmt::Debug;
 
+use common_datavalues::DataTypeImpl;
 use common_jsonb::JsonPath;
 use common_meta_types::UserStageInfo;
 
@@ -30,6 +31,8 @@ pub struct PrewhereInfo {
     pub remain_columns: Projection,
     /// filter for prewhere
     pub filter: Expression,
+    /// Optional prewhere virtual columns
+    pub virtual_columns: Option<Vec<VirtualColumnInfo>>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -52,6 +55,8 @@ pub struct VirtualColumnInfo {
     pub name: String,
     /// Json path to get value
     pub json_path: Vec<JsonPath>,
+    /// Virtual column data type
+    pub data_type: Box<DataTypeImpl>,
 }
 
 /// Extras is a wrapper for push down items.
