@@ -1,7 +1,7 @@
 ---
 title: Databend Query Configuration
 sidebar_label: Databend Query Configuration
-description: 
+description:
   Databend Query Configuration
 ---
 
@@ -72,19 +72,19 @@ If `endpoints` is configured, the `address` configuration will no longer take ef
 * The IP address and port to listen on that can be scraped by Prometheus, e.g., `0.0.0.0::7070`.
 * Default: `"127.0.0.1:7070"`
 * Env variable: `QUERY_METRIC_API_ADDRESS`
- 
+
 ### flight_api_address
 
 * The IP address and port to listen on for databend-query cluster shuffle data, e.g., `0.0.0.0::9090`.
 * Default: `"127.0.0.1:9090"`
 * Env variable: `QUERY_FLIGHT_API_ADDRESS`
- 
+
 ### mysql_handler_host
 
 * The IP address to listen on for MySQL handler, e.g., `0.0.0.0`.
 * Default: `"127.0.0.1"`
 * Env variable: `QUERY_MYSQL_HANDLER_HOST`
- 
+
 ### mysql_handler_port
 
 * The port to listen on for MySQL handler, e.g., `3307`.
@@ -124,7 +124,7 @@ If `endpoints` is configured, the `address` configuration will no longer take ef
 
 ## 4. Storage config
 
-### type 
+### type
 
 * Which storage type(Must one of `"fs"` | `"s3"` | `"azblob"` | `"obs"`) should use for the databend-query, e.g., `"s3"`.
 * Default: `""`
