@@ -17,7 +17,6 @@ use std::io::Cursor;
 use std::ops::Not;
 use std::sync::Arc;
 
-use chrono_tz::Tz;
 use common_ast::ast::Expr;
 use common_ast::parser::parse_comma_separated_exprs;
 use common_ast::parser::tokenize_sql;
@@ -33,7 +32,6 @@ use common_formats::FieldDecoderRowBased;
 use common_formats::FieldDecoderValues;
 use common_io::cursor_ext::ReadBytesExt;
 use common_io::cursor_ext::ReadCheckPointExt;
-use common_io::prelude::FormatSettings;
 use common_pipeline_sources::processors::sources::AsyncSource;
 use common_pipeline_sources::processors::sources::AsyncSourcer;
 use common_pipeline_transforms::processors::transforms::Transform;
@@ -369,11 +367,6 @@ impl ValueSource {
             ));
         }
 
-        let mut format = FormatSettings::for_values_parsing();
-        let tz = self.ctx.get_settings().get_timezone()?;
-        format.timezone = tz.parse::<Tz>().map_err(|_| {
-            ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
-        })?;
         for col_idx in 0..col_size {
             let _ = reader.ignore_white_spaces();
             let col_end = if col_idx + 1 == col_size { b')' } else { b',' };
@@ -423,7 +416,7 @@ impl ValueSource {
                 .await?;
 
                 for (append_idx, deser) in desers.iter_mut().enumerate().take(col_size) {
-                    deser.append_data_value(values[append_idx].clone(), &format)?;
+                    deser.append_data_value(values[append_idx].clone())?;
                 }
                 reader.set_position(end_pos_of_row);
                 return Ok(());
