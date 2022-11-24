@@ -1494,11 +1494,7 @@ pub struct MetaConfig {
     #[serde(alias = "meta_embedded_dir")]
     pub embedded_dir: String,
 
-    /// MetaStore backend address
-    #[clap(long = "meta-address", default_value_t)]
-    #[serde(alias = "meta_address")]
-    pub address: String,
-
+    /// MetaStore backend endpoints
     #[clap(long = "meta-endpoints", help = "MetaStore peers endpoints")]
     pub endpoints: Vec<String>,
 
@@ -1543,7 +1539,6 @@ impl TryInto<InnerMetaConfig> for MetaConfig {
     fn try_into(self) -> Result<InnerMetaConfig> {
         Ok(InnerMetaConfig {
             embedded_dir: self.embedded_dir,
-            address: self.address,
             endpoints: self.endpoints,
             username: self.username,
             password: self.password,
@@ -1559,7 +1554,6 @@ impl From<InnerMetaConfig> for MetaConfig {
     fn from(inner: InnerMetaConfig) -> Self {
         Self {
             embedded_dir: inner.embedded_dir,
-            address: inner.address,
             endpoints: inner.endpoints,
             username: inner.username,
             password: inner.password,
@@ -1574,7 +1568,6 @@ impl From<InnerMetaConfig> for MetaConfig {
 impl Debug for MetaConfig {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         f.debug_struct("MetaConfig")
-            .field("address", &self.address)
             .field("endpoints", &self.endpoints)
             .field("username", &self.username)
             .field("password", &mask_string(&self.password, 3))

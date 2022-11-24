@@ -228,8 +228,7 @@ impl QueryConfig {
 pub struct MetaConfig {
     /// The dir to store persisted meta state for a embedded meta store
     pub embedded_dir: String,
-    /// MetaStore backend address
-    pub address: String,
+    /// MetaStore endpoint address
     pub endpoints: Vec<String>,
     /// MetaStore backend user name
     pub username: String,
@@ -249,7 +248,6 @@ impl Default for MetaConfig {
     fn default() -> Self {
         Self {
             embedded_dir: "".to_string(),
-            address: "".to_string(),
             endpoints: vec![],
             username: "root".to_string(),
             password: "".to_string(),
@@ -268,7 +266,7 @@ impl MetaConfig {
 
     pub fn check_valid(&self) -> Result<()> {
         let has_embedded_dir = !self.embedded_dir.is_empty();
-        let has_remote = !self.address.is_empty() || !self.endpoints.is_empty();
+        let has_remote = !self.endpoints.is_empty();
         if has_embedded_dir && has_remote {
             return Err(ErrorCode::InvalidConfig(
                 "Cannot set both embedded dir and [address|endpoints] config".to_string(),
@@ -298,7 +296,6 @@ impl MetaConfig {
 
     pub fn to_meta_grpc_client_conf(&self) -> RpcClientConf {
         RpcClientConf {
-            address: self.address.clone(),
             endpoints: self.endpoints.clone(),
             username: self.username.clone(),
             password: self.password.clone(),
@@ -321,7 +318,6 @@ impl MetaConfig {
 impl Debug for MetaConfig {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         f.debug_struct("MetaConfig")
-            .field("address", &self.address)
             .field("endpoints", &self.endpoints)
             .field("username", &self.username)
             .field("password", &mask_string(&self.password, 3))

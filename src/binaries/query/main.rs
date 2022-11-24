@@ -165,8 +165,8 @@ async fn main(_global_tracker: Arc<MemoryTracker>) -> common_exception::Result<(
         let register_to_metastore = cluster_discovery.register_to_metastore(&conf);
         register_to_metastore.await?;
         info!(
-            "Databend query has been registered:{:?} to metasrv:[{:?}].",
-            conf.query.cluster_id, conf.meta.address
+            "Databend query has been registered:{:?} to metasrv:{:?}.",
+            conf.query.cluster_id, conf.meta.endpoints
         );
     }
 
@@ -182,10 +182,8 @@ async fn main(_global_tracker: Arc<MemoryTracker>) -> common_exception::Result<(
         "Meta: {}",
         if conf.meta.is_embedded_meta()? {
             format!("embedded at {}", conf.meta.embedded_dir)
-        } else if !conf.meta.endpoints.is_empty() {
-            format!("connected to endpoints {:#?}", conf.meta.endpoints)
         } else {
-            format!("connected to address {}", conf.meta.address)
+            format!("connected to endpoints {:#?}", conf.meta.endpoints)
         }
     );
     println!("Storage: {}", conf.storage.params);
