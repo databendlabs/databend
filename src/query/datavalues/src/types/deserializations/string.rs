@@ -14,10 +14,8 @@
 
 use std::io::Read;
 
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::BinaryRead;
-use common_io::prelude::FormatSettings;
 
 use crate::prelude::*;
 pub struct StringDeserializer {
@@ -41,7 +39,7 @@ impl TypeDeserializer for StringDeserializer {
 
     // See GroupHash.rs for StringColumn
     #[allow(clippy::uninit_vec)]
-    fn de_binary(&mut self, reader: &mut &[u8], _format: &FormatSettings) -> Result<()> {
+    fn de_binary(&mut self, reader: &mut &[u8]) -> Result<()> {
         let offset: u64 = reader.read_uvarint()?;
 
         self.buffer.clear();
@@ -59,13 +57,7 @@ impl TypeDeserializer for StringDeserializer {
         self.builder.append_value("");
     }
 
-    fn de_fixed_binary_batch(
-        &mut self,
-        reader: &[u8],
-        step: usize,
-        rows: usize,
-        _format: &FormatSettings,
-    ) -> Result<()> {
+    fn de_fixed_binary_batch(&mut self, reader: &[u8], step: usize, rows: usize) -> Result<()> {
         for row in 0..rows {
             let reader = &reader[step * row..];
             self.builder.append_value(reader);
@@ -73,17 +65,7 @@ impl TypeDeserializer for StringDeserializer {
         Ok(())
     }
 
-    fn de_json(&mut self, value: &serde_json::Value, _format: &FormatSettings) -> Result<()> {
-        match value {
-            serde_json::Value::String(s) => {
-                self.builder.append_value(s);
-                Ok(())
-            }
-            _ => Err(ErrorCode::BadBytes("Incorrect json value, must be string")),
-        }
-    }
-
-    fn append_data_value(&mut self, value: DataValue, _format: &FormatSettings) -> Result<()> {
+    fn append_data_value(&mut self, value: DataValue) -> Result<()> {
         self.builder.append_data_value(value)
     }
 

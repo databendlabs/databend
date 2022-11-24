@@ -17,12 +17,11 @@ use std::sync::Arc;
 
 use bstr::ByteSlice;
 use common_datavalues::DataSchemaRef;
-use common_datavalues::TypeDeserializer;
 use common_datavalues::TypeDeserializerImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_formats::FieldDecoder;
-use common_formats::FieldDecoderValues;
+use common_formats::FieldJsonAstDecoder;
 use common_formats::FileFormatOptionsExt;
 use common_io::prelude::FormatSettings;
 use common_meta_types::StageFileFormatType;
@@ -36,6 +35,7 @@ pub struct InputFormatNDJson {}
 
 impl InputFormatNDJson {
     fn read_row(
+        field_decoder: &FieldJsonAstDecoder,
         buf: &[u8],
         deserializers: &mut [TypeDeserializerImpl],
         format_settings: &FormatSettings,
@@ -56,8 +56,7 @@ impl InputFormatNDJson {
             } else {
                 &json[f.name().to_lowercase()]
             };
-
-            deser.de_json(value, format_settings).map_err(|e| {
+            field_decoder.read_field(deser, value).map_err(|e| {
                 let value_str = format!("{:?}", value);
                 ErrorCode::BadBytes(format!(
                     "{}. column={} value={}",
@@ -81,7 +80,7 @@ impl InputFormatTextBase for InputFormatNDJson {
     }
 
     fn create_field_decoder(options: &FileFormatOptionsExt) -> Arc<dyn FieldDecoder> {
-        Arc::new(FieldDecoderValues::create(options))
+        Arc::new(FieldJsonAstDecoder::create(options))
     }
 
     fn default_field_delimiter() -> u8 {
@@ -89,6 +88,12 @@ impl InputFormatTextBase for InputFormatNDJson {
     }
 
     fn deserialize(builder: &mut BlockBuilder<Self>, batch: RowBatch) -> Result<()> {
+        let field_decoder = builder
+            .field_decoder
+            .as_any()
+            .downcast_ref::<FieldJsonAstDecoder>()
+            .expect("must success");
+
         let columns = &mut builder.mutable_columns;
         let mut start = 0usize;
         let start_row = batch.start_row;
@@ -97,6 +102,7 @@ impl InputFormatTextBase for InputFormatNDJson {
             let buf = buf.trim();
             if !buf.is_empty() {
                 if let Err(e) = Self::read_row(
+                    field_decoder,
                     buf,
                     columns,
                     &builder.ctx.format_settings,
