@@ -33,8 +33,7 @@ impl Session {
         let mut memory_usage = 0;
 
         if let Some(shared) = status.get_query_context_shared() {
-            if let Ok(runtime) = shared.try_get_runtime() {
-                let mem_tracker = runtime.get_tracker();
+            if let Some(mem_tracker) = shared.get_mem_tracker() {
                 memory_usage = mem_tracker.get_memory_usage();
             }
         }

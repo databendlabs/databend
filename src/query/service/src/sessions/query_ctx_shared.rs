@@ -20,6 +20,7 @@ use std::sync::Arc;
 use std::sync::Weak;
 use std::time::SystemTime;
 
+use common_base::base::MemoryTracker;
 use common_base::base::Progress;
 use common_base::base::Runtime;
 use common_config::Config;
@@ -70,6 +71,7 @@ pub struct QueryContextShared {
     pub(in crate::sessions) init_query_id: Arc<RwLock<String>>,
     pub(in crate::sessions) cluster_cache: Arc<Cluster>,
     pub(in crate::sessions) running_query: Arc<RwLock<Option<String>>>,
+    pub(in crate::sessions) mem_tracker: Arc<RwLock<Option<Arc<MemoryTracker>>>>,
     pub(in crate::sessions) running_query_kind: Arc<RwLock<Option<String>>>,
     pub(in crate::sessions) http_query: Arc<RwLock<Option<HttpQueryHandle>>>,
     pub(in crate::sessions) aborting: Arc<AtomicBool>,
@@ -102,6 +104,7 @@ impl QueryContextShared {
             error: Arc::new(Mutex::new(None)),
             runtime: Arc::new(RwLock::new(None)),
             running_query: Arc::new(RwLock::new(None)),
+            mem_tracker: Arc::new(RwLock::new(None)),
             running_query_kind: Arc::new(RwLock::new(None)),
             http_query: Arc::new(RwLock::new(None)),
             aborting: Arc::new(AtomicBool::new(false)),
@@ -258,6 +261,10 @@ impl QueryContextShared {
         }
     }
 
+    pub fn get_mem_tracker(&self) -> Option<Arc<MemoryTracker>> {
+        self.mem_tracker.read().as_ref().cloned()
+    }
+
     pub fn attach_http_query_handle(&self, handle: HttpQueryHandle) {
         let mut http_query = self.http_query.write();
         *http_query = Some(handle);
@@ -266,7 +273,7 @@ impl QueryContextShared {
         self.http_query.read().clone()
     }
 
-    pub fn attach_query_str(&self, kind: String, query: &str) {
+    pub fn attach_query(&self, kind: String, query: &str) {
         {
             let mut running_query = self.running_query.write();
             *running_query = Some(short_sql(query));
@@ -276,6 +283,10 @@ impl QueryContextShared {
             let mut running_query_kind = self.running_query_kind.write();
             *running_query_kind = Some(kind);
         }
+    }
+
+    pub fn attach_memory_tracker(&self, mem_tracker: Arc<MemoryTracker>) {
+        *self.mem_tracker.write() = Some(mem_tracker);
     }
 
     pub fn get_query_str(&self) -> String {

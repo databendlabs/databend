@@ -17,6 +17,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use common_base::base::tokio;
+use common_base::base::MemoryTracker;
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
 use common_catalog::catalog::Catalog;
@@ -352,6 +353,10 @@ impl TableContext for CtxDelegation {
     }
 
     fn attach_query_str(&self, _kind: String, _query: &str) {
+        todo!()
+    }
+
+    fn attach_memory_tracker(&self, _mem_tracker: Arc<MemoryTracker>) {
         todo!()
     }
 

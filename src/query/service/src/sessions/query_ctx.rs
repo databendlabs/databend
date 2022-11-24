@@ -24,6 +24,7 @@ use std::time::SystemTime;
 
 use chrono_tz::Tz;
 use common_base::base::tokio::task::JoinHandle;
+use common_base::base::MemoryTracker;
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
 use common_base::base::TrySpawn;
@@ -247,8 +248,13 @@ impl TableContext for QueryContext {
         }
         Ok(())
     }
+
     fn attach_query_str(&self, kind: String, query: &str) {
-        self.shared.attach_query_str(kind, query);
+        self.shared.attach_query(kind, query);
+    }
+
+    fn attach_memory_tracker(&self, mem_tracker: Arc<MemoryTracker>) {
+        self.shared.attach_memory_tracker(mem_tracker);
     }
 
     fn get_fragment_id(&self) -> usize {

@@ -17,6 +17,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::SystemTime;
 
+use common_base::base::MemoryTracker;
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
 use common_config::Config;
@@ -71,6 +72,7 @@ pub trait TableContext: Send + Sync {
     // Update the context partition pool from the pipeline builder.
     fn try_set_partitions(&self, partitions: Partitions) -> Result<()>;
     fn attach_query_str(&self, kind: String, query: &str);
+    fn attach_memory_tracker(&self, mem_tracker: Arc<MemoryTracker>);
     fn get_fragment_id(&self) -> usize;
     fn get_catalog(&self, catalog_name: &str) -> Result<Arc<dyn Catalog>>;
     fn get_id(&self) -> String;

@@ -17,13 +17,14 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use common_base::base::tokio::io::AsyncWrite;
-use common_base::base::TrySpawn;
+use common_base::base::AsyncThreadTracker;
+use common_base::base::MemoryTracker;
+use common_base::base::ThreadTracker;
 use common_config::DATABEND_COMMIT_VERSION;
 use common_datablocks::DataBlock;
 use common_datablocks::SendableDataBlockStream;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_exception::ToErrorCode;
 use common_io::prelude::*;
 use common_users::CertifiedInfo;
 use common_users::UserApiProvider;
@@ -38,7 +39,6 @@ use opensrv_mysql::StatementMetaWriter;
 use rand::RngCore;
 use tracing::error;
 use tracing::info;
-use tracing::Instrument;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
@@ -214,13 +214,22 @@ impl<W: AsyncWrite + Send + Sync + Unpin> AsyncMysqlShim<W> for InteractiveWorke
             ));
         }
 
-        let mut writer = DFQueryResultWriter::create(writer);
-
         let instant = Instant::now();
-        let query_result = self.base.do_query(query).await;
 
-        let format = self.base.session.get_format_settings()?;
-        let mut write_result = writer.write(query_result, &format).await;
+        let mem_tracker = MemoryTracker::create();
+        let do_query_future = AsyncThreadTracker::create(
+            Some(ThreadTracker::create(mem_tracker.clone())),
+            async move {
+                let mut writer = DFQueryResultWriter::create(writer);
+
+                let query_result = self.base.do_query(query, mem_tracker).await;
+
+                let format = self.base.session.get_format_settings()?;
+                writer.write(query_result, &format).await
+            },
+        );
+
+        let mut write_result = do_query_future.await;
 
         if let Err(cause) = write_result {
             let suffix = format!("(while in query {})", query);
@@ -310,8 +319,12 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
         federated.check(query)
     }
 
-    #[tracing::instrument(level = "debug", skip(self))]
-    async fn do_query(&mut self, query: &str) -> Result<QueryResult> {
+    #[tracing::instrument(level = "debug", skip(self, mem_tracker))]
+    async fn do_query(
+        &mut self,
+        query: &str,
+        mem_tracker: Arc<MemoryTracker>,
+    ) -> Result<QueryResult> {
         match self.federated_server_command_check(query) {
             Some(data_block) => {
                 info!("Federated query: {}", query);
@@ -331,6 +344,7 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
             None => {
                 info!("Normal query: {}", query);
                 let context = self.session.create_query_context().await?;
+                context.attach_memory_tracker(mem_tracker);
 
                 let mut planner = Planner::new(context.clone());
                 let (plan, _, _) = planner.plan_sql(query).await?;
@@ -377,35 +391,21 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
     )> {
         let instant = Instant::now();
 
-        let query_result = context.try_spawn({
-            let ctx = context.clone();
-            async move {
-                let mut data_stream = interpreter.execute(ctx.clone()).await?;
-                histogram!(
-                    super::mysql_metrics::METRIC_INTERPRETER_USEDTIME,
-                    instant.elapsed()
-                );
+        let mut data_stream = interpreter.execute(context.clone()).await?;
+        histogram!(
+            super::mysql_metrics::METRIC_INTERPRETER_USEDTIME,
+            instant.elapsed()
+        );
 
-                // Wrap the data stream, log finish event at the end of stream
-                let intercepted_stream = async_stream::stream! {
+        // Wrap the data stream, log finish event at the end of stream
+        let intercepted_stream = async_stream::stream! {
+            while let Some(item) = data_stream.next().await {
+                yield item
+            };
+        };
 
-                    while let Some(item) = data_stream.next().await {
-                        yield item
-                    };
-                };
-
-                Ok::<_, ErrorCode>(intercepted_stream.boxed())
-            }
-            .in_current_span()
-        })?;
-
-        let query_result = query_result.await.map_err_to_code(
-            ErrorCode::TokioError,
-            || "Cannot join handle from context's runtime",
-        )?;
-        let reporter = Box::new(ContextProgressReporter::new(context.clone(), instant))
-            as Box<dyn ProgressReporter + Send>;
-        query_result.map(|data| (data, Some(reporter)))
+        let reporter = ContextProgressReporter::new(context.clone(), instant);
+        Ok((intercepted_stream.boxed(), Some(Box::new(reporter))))
     }
 
     async fn do_init(&mut self, database_name: &str) -> Result<()> {
@@ -414,7 +414,7 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
         }
         let init_query = format!("USE `{}`;", database_name);
 
-        let do_query = self.do_query(&init_query).await;
+        let do_query = self.do_query(&init_query, MemoryTracker::create()).await;
         match do_query {
             Ok(_) => Ok(()),
             Err(error_code) => Err(error_code),
