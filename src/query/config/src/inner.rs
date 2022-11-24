@@ -269,13 +269,13 @@ impl MetaConfig {
         let has_remote = !self.endpoints.is_empty();
         if has_embedded_dir && has_remote {
             return Err(ErrorCode::InvalidConfig(
-                "Cannot set both embedded dir and endpoints in meta config".to_string(),
+                "Can not set embedded_dir and endpoints at the same time, embedded_dir is only for testing, please remove this config".to_string(),
             ));
         }
 
         if !has_embedded_dir && !has_remote {
             return Err(ErrorCode::InvalidConfig(
-                "Set embedded_dir or endpoints config in meta config".to_string(),
+                "Please set your meta endpoints config: endpoints = [<your-meta-service-endpoints>]".to_string(),
             ));
         }
 
