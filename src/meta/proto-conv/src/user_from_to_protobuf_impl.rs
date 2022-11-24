@@ -494,12 +494,14 @@ impl FromToProto for mt::FileFormatOptions {
             })?,
         )?;
 
+        let nan_display = if p.nan_display.is_empty() {"nan".to_string()} else {p.nan_display};
+
         Ok(mt::FileFormatOptions {
             format,
             skip_header: p.skip_header,
             field_delimiter: p.field_delimiter.clone(),
             record_delimiter: p.record_delimiter,
-            nan_display: p.nan_display,
+            nan_display,
             escape: p.escape,
             compression,
             row_tag: p.row_tag,
