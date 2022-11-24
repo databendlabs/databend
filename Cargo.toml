@@ -20,7 +20,6 @@ members = [
     "src/common/hashtable",
     "src/common/http",
     "src/common/io",
-    "src/common/macros",
     "src/common/metrics",
     "src/common/tracing",
     "src/common/storage",

@@ -13,13 +13,12 @@
 // limitations under the License.
 
 use std::env;
-use std::sync::Arc;
 
-use common_base::base::MemoryTracker;
+use common_base::base::Runtime;
 use common_config::Config;
 use common_config::DATABEND_COMMIT_VERSION;
 use common_config::QUERY_SEMVER;
-use common_macros::databend_main;
+use common_exception::Result;
 use common_meta_client::MIN_METASRV_SEMVER;
 use common_meta_embedded::MetaEmbedded;
 use common_metrics::init_default_metrics_recorder;
@@ -36,8 +35,22 @@ use databend_query::servers::ShutdownHandle;
 use databend_query::GlobalServices;
 use tracing::info;
 
-#[databend_main]
-async fn main(_global_tracker: Arc<MemoryTracker>) -> common_exception::Result<()> {
+fn main() {
+    match Runtime::with_default_worker_threads() {
+        Err(cause) => {
+            eprintln!("Databend Query start failure, cause: {:?}", cause);
+            std::process::exit(cause.code() as i32);
+        }
+        Ok(main_runtime) => {
+            if let Err(cause) = main_runtime.block_on(main_entrypoint()) {
+                eprintln!("Databend Query start failure, cause: {:?}", cause);
+                std::process::exit(cause.code() as i32);
+            }
+        }
+    }
+}
+
+async fn main_entrypoint() -> Result<()> {
     let conf: Config = Config::load()?;
 
     if run_cmd(&conf) {
