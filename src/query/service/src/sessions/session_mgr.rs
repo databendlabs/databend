@@ -108,7 +108,7 @@ impl SessionManager {
             SessionType::MySQL => {
                 let conn_id_session_id = self.mysql_conn_map.read();
                 mysql_conn_id = Some(self.mysql_basic_conn_id.fetch_add(1, Ordering::Relaxed));
-                if conn_id_session_id.len() == self.max_sessions {
+                if conn_id_session_id.len() >= self.max_sessions {
                     return Err(ErrorCode::TooManyUserConnections(
                         "The current accept connection has exceeded max_active_sessions config",
                     ));
