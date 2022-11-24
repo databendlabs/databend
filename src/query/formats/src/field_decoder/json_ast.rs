@@ -62,7 +62,7 @@ impl FieldDecoder for FieldJsonAstDecoder {
 impl FieldJsonAstDecoder {
     pub fn create(options: &FileFormatOptionsExt) -> Self {
         FieldJsonAstDecoder {
-            timezone: options.timezone.clone(),
+            timezone: options.timezone,
         }
     }
 
