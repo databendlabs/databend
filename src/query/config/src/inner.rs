@@ -269,13 +269,13 @@ impl MetaConfig {
         let has_remote = !self.endpoints.is_empty();
         if has_embedded_dir && has_remote {
             return Err(ErrorCode::InvalidConfig(
-                "Cannot set both embedded dir and [address|endpoints] config".to_string(),
+                "Cannot set both embedded dir and endpoints in meta config".to_string(),
             ));
         }
 
         if !has_embedded_dir && !has_remote {
             return Err(ErrorCode::InvalidConfig(
-                "Set embedded_dir or [address|endpoints] config to use meta".to_string(),
+                "Set embedded_dir or endpoints config in meta config".to_string(),
             ));
         }
 
