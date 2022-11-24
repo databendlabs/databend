@@ -79,7 +79,7 @@ const config = {
         ],
     ],
     themeConfig:
-    /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
+        /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
         ({
             announcementBar: {
                 id: 'announcementBar-2', // Increment on change
@@ -98,10 +98,10 @@ const config = {
                         position: 'right',
                     },
                     {
-                      to: '/download',
-                      label: 'Download',
-                      position: 'right',
-                  },
+                        to: '/download',
+                        label: 'Download',
+                        position: 'right',
+                    },
                     {
                         to: '/doc/contributing/good-pr',
                         label: 'Contributing',
@@ -112,7 +112,7 @@ const config = {
                         label: 'Benchmarking',
                         position: 'right',
                     },
-                    {to: '/blog', label: 'Blog', position: 'right'}, // or position: 'right'
+                    { to: '/blog', label: 'Blog', position: 'right' }, // or position: 'right'
                     {
                         href: 'https://github.com/datafuselabs/databend',
                         label: 'GitHub',
@@ -191,8 +191,8 @@ const config = {
             },
             image: 'img/logo/logo-no-text.png',
             metadata: [
-              {name: 'twitter:card', content: 'summary_large_image'},
-              {name: 'twitter:site', content: '@databend.rs'}
+                { name: 'twitter:card', content: 'summary_large_image' },
+                { name: 'twitter:site', content: '@databend.rs' }
             ],
         }),
 };
