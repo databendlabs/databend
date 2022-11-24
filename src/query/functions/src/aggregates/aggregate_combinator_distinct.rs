@@ -38,20 +38,17 @@ use super::AggregateCountFunction;
 use super::StateAddr;
 
 #[derive(Clone)]
-pub struct AggregateDistinctCombinator<S, State> {
+pub struct AggregateDistinctCombinator<State> {
     name: String,
 
     nested_name: String,
     arguments: Vec<DataField>,
     nested: Arc<dyn AggregateFunction>,
-    _s: PhantomData<S>,
     _state: PhantomData<State>,
 }
 
-impl<S, State> AggregateFunction for AggregateDistinctCombinator<S, State>
-where
-    S: Send + Sync,
-    State: DistinctStateFunc<S>,
+impl<State> AggregateFunction for AggregateDistinctCombinator<State>
+where State: DistinctStateFunc
 {
     fn name(&self) -> &str {
         &self.name
@@ -151,7 +148,7 @@ where
     }
 }
 
-impl<S, State> fmt::Display for AggregateDistinctCombinator<S, State> {
+impl<State> fmt::Display for AggregateDistinctCombinator<State> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.nested_name.as_str() {
             "uniq" => write!(f, "uniq"),
@@ -228,14 +225,12 @@ pub fn try_create(
         if phid.is_numeric() {
             dispatch_primitive_type_id!(phid, |$T |$E|  {
                 return Ok(Arc::new(AggregateDistinctCombinator::<
-                    $T,
                     AggregateDistinctPrimitiveState<$T, $E>,
                 > {
                     nested_name: nested_name.to_owned(),
                     arguments,
                     nested,
                     name,
-                    _s: PhantomData,
                     _state: PhantomData,
                 }));
             }, {
@@ -245,39 +240,33 @@ pub fn try_create(
         if phid.is_string() {
             return match nested_name {
                 "count" | "uniq" => Ok(Arc::new(AggregateDistinctCombinator::<
-                    u128,
                     AggregateUniqStringState,
                 > {
                     name,
                     arguments,
                     nested,
                     nested_name: nested_name.to_owned(),
-                    _s: PhantomData,
                     _state: PhantomData,
                 })),
                 _ => Ok(Arc::new(AggregateDistinctCombinator::<
-                    KeysRef,
                     AggregateDistinctStringState,
                 > {
                     nested_name: nested_name.to_owned(),
                     arguments,
                     nested,
                     name,
-                    _s: PhantomData,
                     _state: PhantomData,
                 })),
             };
         }
     }
     Ok(Arc::new(AggregateDistinctCombinator::<
-        DataGroupValues,
         AggregateDistinctState,
     > {
         nested_name: nested_name.to_owned(),
         arguments,
         nested,
         name,
-        _s: PhantomData,
         _state: PhantomData,
     }))
 }

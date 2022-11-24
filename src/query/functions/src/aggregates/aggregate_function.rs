@@ -66,6 +66,15 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
     fn deserialize(&self, _place: StateAddr, _reader: &mut &[u8]) -> Result<()>;
 
     fn merge(&self, _place: StateAddr, _rhs: StateAddr) -> Result<()>;
+    
+    
+    fn support_merge_parallel(&self) -> bool {
+        false
+    }
+    
+    fn merge_parallel(&self, _place: StateAddr, _rhs: StateAddr) -> Result<()> {
+        Ok(())
+    }
 
     fn batch_merge_result(
         &self,

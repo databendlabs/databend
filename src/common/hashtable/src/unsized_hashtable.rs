@@ -69,7 +69,7 @@ where
     A: Allocator + Clone + Default,
 {
     pub fn new() -> Self {
-        Self::new_in(Default::default())
+        Self::with_capacity(128)
     }
 }
 
@@ -83,20 +83,45 @@ where
     }
 }
 
+impl<K, A> UnsizedHashtable<K, (), A>
+where
+    K: UnsizedKeyable + ?Sized,
+    A: Allocator + Clone + Default,
+{
+    #[inline(always)]
+    pub fn set_insert(&mut self, key: &K) -> Result<&mut MaybeUninit<()>, &mut ()> {
+        unsafe { self.insert_borrowing(key) }
+    }
+
+    #[inline(always)]
+    pub fn set_merge(&mut self, other: &Self) {
+        unsafe {
+            for i in other.table0.iter() {
+                let _ = self.table0.insert(*i.key());
+            }
+            self.table1.set_merge(&other.table1);
+            self.table2.set_merge(&other.table2);
+            self.table3.set_merge(&other.table3);
+            self.table4.set_merge(&other.table4);
+        }
+    }
+}
+
 impl<K, V, A> UnsizedHashtable<K, V, A>
 where
     K: UnsizedKeyable + ?Sized,
     A: Allocator + Clone + Default,
 {
     /// The bump for strings doesn't allocate memory by `A`.
-    pub fn new_in(allocator: A) -> Self {
+    pub fn with_capacity(capacity: usize) -> Self {
+        let allocator = A::default();
         Self {
             arena: Bump::new(),
             table0: Table1::new_in(allocator.clone()),
-            table1: Table0::with_capacity_in(128, allocator.clone()),
-            table2: Table0::with_capacity_in(128, allocator.clone()),
-            table3: Table0::with_capacity_in(128, allocator.clone()),
-            table4: Table0::with_capacity_in(128, allocator),
+            table1: Table0::with_capacity_in(capacity, allocator.clone()),
+            table2: Table0::with_capacity_in(capacity, allocator.clone()),
+            table3: Table0::with_capacity_in(capacity, allocator.clone()),
+            table4: Table0::with_capacity_in(capacity, allocator),
             _phantom: PhantomData,
         }
     }
