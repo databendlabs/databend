@@ -12,10 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-mod fuse_snapshot;
-mod fuse_snapshot_table;
-mod table_args;
+mod fuse_statistic;
+mod fuse_statistic_table;
 
-pub use fuse_snapshot::FuseSnapshot;
-pub use fuse_snapshot_table::FuseSnapshotTable;
-pub use table_args::parse_func_history_args;
+pub use fuse_statistic_table::FuseStatisticTable;

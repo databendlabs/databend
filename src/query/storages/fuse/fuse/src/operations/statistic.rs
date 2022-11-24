@@ -46,7 +46,7 @@ impl FuseTable {
 
         if let Some(snapshot) = snapshot_opt {
             // 2. Iterator segments and blocks to estimate statistics.
-            let mut density_sum = HashMap::new();
+            let mut sum_map = HashMap::new();
             let mut row_count_sum = 0;
             let mut block_count_sum: u64 = 0;
 
@@ -66,10 +66,12 @@ impl FuseTable {
                                 None => 0.0,
                             };
 
-                            match density_sum.get_mut(i) {
-                                Some(sum) => *sum += density,
+                            match sum_map.get_mut(i) {
+                                Some(sum) => {
+                                    *sum += density;
+                                }
                                 None => {
-                                    let _ = density_sum.insert(*i, density);
+                                    let _ = sum_map.insert(*i, density);
                                 }
                             }
                         }
@@ -77,9 +79,9 @@ impl FuseTable {
                 });
             }
             let mut ndv_map = HashMap::new();
-            for (i, sum) in density_sum.iter() {
+            for (i, sum) in sum_map.iter() {
                 let density_avg = *sum / block_count_sum as f64;
-                ndv_map.insert(*i, density_avg as u64 * row_count_sum);
+                ndv_map.insert(*i, (density_avg * row_count_sum as f64) as u64);
             }
 
             // 3. Generate new table statistics

@@ -43,6 +43,8 @@ async fn test_table_modify_column_ndv_statistics() -> Result<()> {
 
     let num_inserts = 3;
     append_rows(ctx.clone(), num_inserts).await?;
+    let statistics_sql = "optimize table default.t statistic";
+    execute_command(ctx.clone(), statistics_sql).await?;
 
     let table = catalog
         .get_table(ctx.get_tenant().as_str(), "default", "t")
@@ -58,6 +60,7 @@ async fn test_table_modify_column_ndv_statistics() -> Result<()> {
 
     // append the same values again, and ndv does changed.
     append_rows(ctx.clone(), num_inserts).await?;
+    execute_command(ctx.clone(), statistics_sql).await?;
 
     // check count
     let count_qry = "select count(*) from t";
@@ -75,9 +78,9 @@ async fn test_table_modify_column_ndv_statistics() -> Result<()> {
             .delete(ctx.clone(), &delete.projection, &delete.selection)
             .await?;
     }
+    execute_command(ctx.clone(), statistics_sql).await?;
 
-    // check count
-    let expected = HashMap::from([(0, num_inserts as u64 - 1)]);
+    // check count: delete not affect counts
     check_column_ndv_statistics(table.clone(), expected).await?;
 
     Ok(())
