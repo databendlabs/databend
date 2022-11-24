@@ -26,6 +26,7 @@ use common_exception::ToErrorCode;
 use opensrv_mysql::AsyncMysqlIntermediary;
 use opensrv_mysql::IntermediaryOptions;
 use tracing::error;
+use tracing::warn;
 
 use crate::servers::mysql::mysql_interactive_worker::InteractiveWorker;
 use crate::sessions::Session;
@@ -45,7 +46,17 @@ impl MySQLConnection {
             Runtime::with_worker_threads(1, Some("mysql-query-executor".to_string()))?;
         Thread::spawn(move || {
             let join_handle = query_executor.spawn(async move {
-                let client_addr = non_blocking_stream.peer_addr().unwrap().to_string();
+                let client_addr = match non_blocking_stream.peer_addr() {
+                    Ok(addr) => addr.to_string(),
+                    Err(e) => {
+                        warn!(
+                            "Failed to get mysql conn peer address for {:?}: {}",
+                            non_blocking_stream, e
+                        );
+                        return Ok(());
+                    }
+                };
+
                 let interactive_worker = InteractiveWorker::create(session, client_addr);
                 let opts = IntermediaryOptions {
                     process_use_statement_on_query: true,

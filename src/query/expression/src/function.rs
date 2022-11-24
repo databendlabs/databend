@@ -67,9 +67,13 @@ pub enum FunctionID {
 pub struct Function {
     pub signature: FunctionSignature,
     #[allow(clippy::type_complexity)]
-    pub calc_domain: Box<dyn Fn(&[Domain]) -> FunctionDomain<AnyType>>,
+    pub calc_domain: Box<dyn Fn(&[Domain]) -> FunctionDomain<AnyType> + Send + Sync>,
     #[allow(clippy::type_complexity)]
-    pub eval: Box<dyn Fn(&[ValueRef<AnyType>], FunctionContext) -> Result<Value<AnyType>, String>>,
+    pub eval: Box<
+        dyn Fn(&[ValueRef<AnyType>], FunctionContext) -> Result<Value<AnyType>, String>
+            + Send
+            + Sync,
+    >,
 }
 
 #[derive(Default)]
@@ -79,8 +83,10 @@ pub struct FunctionRegistry {
     ///
     /// The first argument is the const parameters and the second argument is the number of arguments.
     #[allow(clippy::type_complexity)]
-    pub factories:
-        HashMap<String, Vec<Box<dyn Fn(&[usize], &[DataType]) -> Option<Arc<Function>> + 'static>>>,
+    pub factories: HashMap<
+        String,
+        Vec<Box<dyn Fn(&[usize], &[DataType]) -> Option<Arc<Function>> + Send + Sync + 'static>>,
+    >,
     /// Aliases map from alias function name to concrete function name.
     pub aliases: HashMap<String, String>,
 }
@@ -181,7 +187,7 @@ impl FunctionRegistry {
     pub fn register_function_factory(
         &mut self,
         name: &str,
-        factory: impl Fn(&[usize], &[DataType]) -> Option<Arc<Function>> + 'static,
+        factory: impl Fn(&[usize], &[DataType]) -> Option<Arc<Function>> + 'static + Send + Sync,
     ) {
         self.factories
             .entry(name.to_string())

@@ -1225,8 +1225,8 @@ name = "common-auth"
 version = "0.1.0"
 dependencies = [
  "base64",
+ "chrono",
  "common-base",
- "common-datavalues",
  "http",
  "tempfile",
 ]
@@ -1281,6 +1281,7 @@ name = "common-catalog"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "chrono",
  "common-base",
  "common-config",
  "common-datablocks",
@@ -1452,6 +1453,7 @@ dependencies = [
  "bstr 1.0.1",
  "bumpalo",
  "bytes",
+ "chrono",
  "chrono-tz",
  "common-arrow",
  "common-datablocks",
@@ -1512,6 +1514,7 @@ dependencies = [
  "common-jsonb",
  "crc32fast",
  "criterion",
+ "ctor",
  "goldenfile",
  "hex",
  "itertools",
@@ -1644,6 +1647,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "chrono",
  "common-base",
  "common-datavalues",
  "common-exception",
@@ -1917,6 +1921,7 @@ name = "common-proto-conv"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "chrono",
  "common-datavalues",
  "common-meta-app",
  "common-meta-types",
@@ -2189,6 +2194,7 @@ version = "0.1.0"
 dependencies = [
  "async-recursion",
  "async-trait",
+ "chrono",
  "common-arrow",
  "common-base",
  "common-catalog",
@@ -2493,6 +2499,7 @@ dependencies = [
 name = "common-storages-table-meta"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "common-arrow",
  "common-base",
  "common-cache",
@@ -6883,9 +6890,9 @@ dependencies = [
 
 [[package]]
 name = "reqsign"
-version = "0.6.3"
+version = "0.6.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "66d2652b3541e4286c00ef536de54feda4c129af5b4d9ae05ece70ce61b0cade"
+checksum = "d34ea360414ee77ddab3a8360a0c241fc77ab5e27892dcde1d2cfcc29d4e0f55"
 dependencies = [
  "anyhow",
  "backon",
@@ -8617,7 +8624,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if",
- "rand 0.8.5",
+ "rand 0.7.3",
  "static_assertions",
 ]
 

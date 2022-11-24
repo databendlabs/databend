@@ -24,6 +24,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::FormatSettings;
 use serde_json::Value as JsonValue;
+use tracing::info;
 
 use crate::servers::http::v1::json_block::block_to_json_value;
 use crate::servers::http::v1::query::sized_spsc::SizedChannelReceiver;
@@ -47,6 +48,7 @@ pub struct ResponseData {
 }
 
 pub struct PageManager {
+    query_id: String,
     max_rows_per_page: usize,
     total_rows: usize,
     total_pages: usize,
@@ -62,12 +64,14 @@ pub struct PageManager {
 
 impl PageManager {
     pub fn new(
+        query_id: String,
         max_rows_per_page: usize,
         block_receiver: SizedChannelReceiver<DataBlock>,
         string_fields: bool,
         format_settings: FormatSettings,
     ) -> PageManager {
         PageManager {
+            query_id,
             total_rows: 0,
             last_page: None,
             total_pages: 0,
@@ -162,12 +166,23 @@ impl PageManager {
                 Wait::Deadline(t) => {
                     let now = Instant::now();
                     let d = *t - now;
-                    if let Ok(Some(block)) =
-                        tokio::time::timeout(d, self.block_receiver.recv()).await
-                    {
-                        self.append_block(&mut res, block, remain)?;
-                    } else {
-                        break;
+                    match tokio::time::timeout(d, self.block_receiver.recv()).await {
+                        Ok(Some(block)) => {
+                            info!(
+                                "http query {} got new block with {} rows",
+                                &self.query_id,
+                                block.num_rows()
+                            );
+                            self.append_block(&mut res, block, remain)?;
+                        }
+                        Ok(None) => {
+                            info!("http query {} reach end of blocks", &self.query_id);
+                            break;
+                        }
+                        Err(_) => {
+                            info!("http query {} long pulling timeout", &self.query_id);
+                            break;
+                        }
                     }
                 }
             }

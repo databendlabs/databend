@@ -11,11 +11,11 @@ doctest = false
 test = false
 
 [dependencies]
-chrono = "0.4"
 common-datavalues = { path = "../../query/datavalues" }
 common-meta-types = { path = "../types" }
 common-storage = { path = "../../common/storage" }
 
+chrono = { workspace = true }
 enumflags2 = { version = "0.7.5", features = ["serde"] }
 maplit = "1.0.2"
 num-derive = "0.3.3"

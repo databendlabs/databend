@@ -381,13 +381,10 @@ impl SubqueryRewriter {
                 // For example, `EXISTS(SELECT a FROM t WHERE a > 1)` will be rewritten into
                 // `(SELECT COUNT(*) = 1 FROM t WHERE a > 1 LIMIT 1)`.
                 let agg_func = AggregateFunctionFactory::instance().get("count", vec![], vec![])?;
-                let agg_func_index = self.metadata.write().add_column(
-                    "count(*)".to_string(),
-                    agg_func.return_type()?,
-                    None,
-                    None,
-                    None,
-                );
+                let agg_func_index = self
+                    .metadata
+                    .write()
+                    .add_derived_column("count(*)".to_string(), agg_func.return_type()?);
 
                 let agg = Aggregate {
                     group_items: vec![],
@@ -497,12 +494,9 @@ impl SubqueryRewriter {
                 let marker_index = if let Some(idx) = subquery.projection_index {
                     idx
                 } else {
-                    self.metadata.write().add_column(
+                    self.metadata.write().add_derived_column(
                         "marker".to_string(),
                         NullableType::new_impl(BooleanType::new_impl()),
-                        None,
-                        None,
-                        None,
                     )
                 };
                 // Consider the sql: select * from t1 where t1.a = any(select t2.a from t2);

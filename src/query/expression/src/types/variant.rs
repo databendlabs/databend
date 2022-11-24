@@ -14,7 +14,7 @@
 
 use std::ops::Range;
 
-use common_datavalues::Tz;
+use chrono_tz::Tz;
 
 use super::date::date_to_string;
 use super::number::NumberScalar;

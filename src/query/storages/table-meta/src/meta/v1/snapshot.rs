@@ -14,9 +14,9 @@
 
 use std::ops::Add;
 
+use chrono::DateTime;
+use chrono::Utc;
 use common_base::base::uuid::Uuid;
-use common_datavalues::chrono::DateTime;
-use common_datavalues::chrono::Utc;
 use common_datavalues::DataSchema;
 use serde::Deserialize;
 use serde::Serialize;
@@ -162,8 +162,7 @@ mod util {
     use chrono::Datelike;
     use chrono::TimeZone;
     use chrono::Timelike;
-    use common_datavalues::chrono;
-    use common_datavalues::chrono::Utc;
+    use chrono::Utc;
 
     use super::*;
     pub fn trim_timestamp_to_micro_second(ts: DateTime<Utc>) -> DateTime<Utc> {

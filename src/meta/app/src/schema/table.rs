@@ -20,8 +20,8 @@ use std::fmt::Formatter;
 use std::ops::Deref;
 use std::sync::Arc;
 
-use common_datavalues::chrono::DateTime;
-use common_datavalues::chrono::Utc;
+use chrono::DateTime;
+use chrono::Utc;
 use common_datavalues::prelude::*;
 use common_meta_types::MatchSeq;
 use common_storage::StorageParams;
