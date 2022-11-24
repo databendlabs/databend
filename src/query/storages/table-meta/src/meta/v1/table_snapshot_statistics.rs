@@ -14,7 +14,6 @@
 
 use std::collections::HashMap;
 
-use common_base::base::uuid::Uuid;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -38,7 +37,7 @@ impl TableSnapshotStatistics {
     pub fn new(column_distinct_values: HashMap<ColumnId, u64>) -> Self {
         Self {
             format_version: TableSnapshotStatistics::VERSION,
-            snapshot_id: Uuid::new_v4(),
+            snapshot_id: SnapshotId::new_v4(),
             column_distinct_values,
         }
     }

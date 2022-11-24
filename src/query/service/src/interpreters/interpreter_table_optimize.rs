@@ -57,10 +57,7 @@ impl Interpreter for OptimizeTableInterpreter {
             action,
             OptimizeTableAction::Purge | OptimizeTableAction::All
         );
-        let do_statistic = matches!(
-            action,
-            OptimizeTableAction::Statistic | OptimizeTableAction::All
-        );
+        let do_statistic = matches!(action, OptimizeTableAction::Statistic);
         let do_compact_blocks = matches!(
             action,
             OptimizeTableAction::CompactBlocks(_) | OptimizeTableAction::All
@@ -116,12 +113,12 @@ impl Interpreter for OptimizeTableInterpreter {
             }
         }
 
-        if do_purge {
-            table.optimize(self.ctx.clone(), true).await?;
-        }
-
         if do_statistic {
             table.statistic(self.ctx.clone()).await?;
+        }
+
+        if do_purge {
+            table.optimize(self.ctx.clone(), true).await?;
         }
 
         Ok(PipelineBuildResult::create())
