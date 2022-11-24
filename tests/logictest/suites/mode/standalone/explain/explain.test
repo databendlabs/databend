@@ -692,6 +692,30 @@ Filter
         ├── partitions scanned: 0
         └── push downs: [filters: [(((a > 1) or (b < 2)) or (b < 3))], limit: NONE]
 
+statement query T
+explain select * from t1,t2 where (t1.a > 1 or t1.b < 2) and (t1.a > 1 or t1.b < 2);
+
+----
+HashJoin
+├── join type: CROSS
+├── build keys: []
+├── probe keys: []
+├── filters: []
+├── TableScan(Build)
+│   ├── table: default.default.t2
+│   ├── read rows: 0
+│   ├── read bytes: 0
+│   ├── partitions total: 0                                             
+│   ├── partitions scanned: 0
+│   └── push downs: [filters: [], limit: NONE]
+└── TableScan(Probe)
+    ├── table: default.default.t1
+    ├── read rows: 0
+    ├── read bytes: 0
+    ├── partitions total: 0
+    ├── partitions scanned: 0
+    └── push downs: [filters: [((a > 1) or (b < 2))], limit: NONE]
+
 statement ok
 drop table t1;
 

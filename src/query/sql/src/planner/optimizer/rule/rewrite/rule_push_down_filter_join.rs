@@ -13,6 +13,8 @@
 // limitations under the License.
 
 use common_datavalues::type_coercion::compare_coercion;
+use common_datavalues::BooleanType;
+use common_datavalues::DataTypeImpl;
 use common_exception::Result;
 
 use crate::binder::wrap_cast;
@@ -22,9 +24,11 @@ use crate::optimizer::rule::TransformResult;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
+use crate::plans::AndExpr;
 use crate::plans::Filter;
 use crate::plans::JoinType;
 use crate::plans::LogicalJoin;
+use crate::plans::OrExpr;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 use crate::plans::Scalar;
@@ -282,16 +286,21 @@ impl Rule for RulePushDownFilterJoin {
         let mut s_expr = self.convert_outer_to_inner_join(s_expr)?;
         // Second, check if can convert mark join to semi join
         s_expr = self.convert_mark_to_semi_join(&s_expr)?;
-
         let filter: Filter = s_expr.plan().clone().try_into()?;
         if filter.predicates.is_empty() {
             state.add_result(s_expr);
             return Ok(());
         }
-        let (need_push, result) = try_push_down_filter_join(&s_expr, filter.predicates)?;
+        // Third, extract or predicates from Filter to push down them to join.
+        // For example: `select * from t1, t2 where (t1.a=1 and t2.b=2) or (t1.a=2 and t2.b=1)`
+        // The predicate will be rewritten to `((t1.a=1 and t2.b=2) or (t1.a=2 and t2.b=1)) and (t1.a=1 or t1.a=2) and (t2.b=2 or t2.b=1)`
+        // So `(t1.a=1 or t1.a=1), (t2.b=2 or t2.b=1)` may be pushed down join and reduce rows between join
+        let predicates = rewrite_predicates(&s_expr)?;
+        let (need_push, mut result) = try_push_down_filter_join(&s_expr, predicates)?;
         if !need_push {
             return Ok(());
         }
+        result.apply_rule(&self.id);
         state.add_result(result);
 
         Ok(())
@@ -300,6 +309,66 @@ impl Rule for RulePushDownFilterJoin {
     fn pattern(&self) -> &SExpr {
         &self.pattern
     }
+}
+
+fn rewrite_predicates(s_expr: &SExpr) -> Result<Vec<Scalar>> {
+    let filter: Filter = s_expr.plan().clone().try_into()?;
+    let join = s_expr.child(0)?;
+    let mut new_predicates = Vec::new();
+    let mut origin_predicates = filter.predicates.clone();
+    for predicate in filter.predicates.iter() {
+        if let Scalar::OrExpr(or_expr) = predicate {
+            for join_child in join.children().iter() {
+                let rel_expr = RelExpr::with_s_expr(join_child);
+                let used_columns = rel_expr.derive_relational_prop()?.used_columns;
+                if let Some(predicate) = extract_or_predicate(or_expr, &used_columns)? {
+                    new_predicates.push(predicate)
+                }
+            }
+        }
+    }
+    origin_predicates.extend(new_predicates);
+    Ok(origin_predicates)
+}
+
+// Only need to be executed once
+fn extract_or_predicate(or_expr: &OrExpr, required_columns: &ColumnSet) -> Result<Option<Scalar>> {
+    let or_args = flatten_ors(or_expr.clone());
+    let mut extracted_scalars = Vec::new();
+    for or_arg in or_args.iter() {
+        let mut sub_scalars = Vec::new();
+        if let Scalar::AndExpr(and_expr) = or_arg {
+            let and_args = flatten_ands(and_expr.clone());
+            for and_arg in and_args.iter() {
+                if let Scalar::OrExpr(or_expr) = and_arg {
+                    if let Some(scalar) = extract_or_predicate(or_expr, required_columns)? {
+                        sub_scalars.push(scalar);
+                    }
+                } else {
+                    let used_columns = and_arg.used_columns();
+                    if used_columns.is_subset(required_columns) {
+                        sub_scalars.push(and_arg.clone());
+                    }
+                }
+            }
+        } else {
+            let used_columns = or_arg.used_columns();
+            if used_columns.is_subset(required_columns) {
+                sub_scalars.push(or_arg.clone());
+            }
+        }
+        if sub_scalars.is_empty() {
+            return Ok(None);
+        }
+
+        extracted_scalars.push(make_and_expr(&sub_scalars));
+    }
+
+    if !extracted_scalars.is_empty() {
+        return Ok(Some(make_or_expr(&extracted_scalars)));
+    }
+
+    Ok(None)
 }
 
 pub fn try_push_down_filter_join(s_expr: &SExpr, predicates: Vec<Scalar>) -> Result<(bool, SExpr)> {
@@ -408,4 +477,56 @@ pub fn try_push_down_filter_join(s_expr: &SExpr, predicates: Vec<Scalar>) -> Res
         );
     }
     Ok((need_push, result))
+}
+
+// Flatten nested ORs, such as `a=1 or b=1 or c=1`
+// It'll be flatten to [a=1, b=1, c=1]
+fn flatten_ors(or_expr: OrExpr) -> Vec<Scalar> {
+    let mut flattened_ors = Vec::new();
+    let or_args = vec![*or_expr.left, *or_expr.right];
+    for or_arg in or_args.iter() {
+        match or_arg {
+            Scalar::OrExpr(or_expr) => flattened_ors.extend(flatten_ors(or_expr.clone())),
+            _ => flattened_ors.push(or_arg.clone()),
+        }
+    }
+    flattened_ors
+}
+
+// Flatten nested ORs, such as `a=1 and b=1 and c=1`
+// It'll be flatten to [a=1, b=1, c=1]
+fn flatten_ands(and_expr: AndExpr) -> Vec<Scalar> {
+    let mut flattened_ands = Vec::new();
+    let and_args = vec![*and_expr.left, *and_expr.right];
+    for and_arg in and_args.iter() {
+        match and_arg {
+            Scalar::AndExpr(and_expr) => flattened_ands.extend(flatten_ands(and_expr.clone())),
+            _ => flattened_ands.push(and_arg.clone()),
+        }
+    }
+    flattened_ands
+}
+
+// Merge predicates to AND scalar
+fn make_and_expr(scalars: &[Scalar]) -> Scalar {
+    if scalars.len() == 1 {
+        return scalars[0].clone();
+    }
+    Scalar::AndExpr(AndExpr {
+        left: Box::new(scalars[0].clone()),
+        right: Box::new(make_and_expr(&scalars[1..])),
+        return_type: Box::new(DataTypeImpl::Boolean(BooleanType::default())),
+    })
+}
+
+// Merge predicates to OR scalar
+fn make_or_expr(scalars: &[Scalar]) -> Scalar {
+    if scalars.len() == 1 {
+        return scalars[0].clone();
+    }
+    Scalar::OrExpr(OrExpr {
+        left: Box::new(scalars[0].clone()),
+        right: Box::new(make_or_expr(&scalars[1..])),
+        return_type: Box::new(DataTypeImpl::Boolean(BooleanType::default())),
+    })
 }
