@@ -13,8 +13,6 @@
 // limitations under the License.
 
 use common_datavalues::type_coercion::compare_coercion;
-use common_datavalues::BooleanType;
-use common_datavalues::DataTypeImpl;
 use common_exception::Result;
 
 use crate::binder::wrap_cast;
@@ -515,7 +513,7 @@ fn make_and_expr(scalars: &[Scalar]) -> Scalar {
     Scalar::AndExpr(AndExpr {
         left: Box::new(scalars[0].clone()),
         right: Box::new(make_and_expr(&scalars[1..])),
-        return_type: Box::new(DataTypeImpl::Boolean(BooleanType::default())),
+        return_type: Box::new(scalars[0].data_type()),
     })
 }
 
@@ -527,6 +525,6 @@ fn make_or_expr(scalars: &[Scalar]) -> Scalar {
     Scalar::OrExpr(OrExpr {
         left: Box::new(scalars[0].clone()),
         right: Box::new(make_or_expr(&scalars[1..])),
-        return_type: Box::new(DataTypeImpl::Boolean(BooleanType::default())),
+        return_type: Box::new(scalars[0].data_type()),
     })
 }
