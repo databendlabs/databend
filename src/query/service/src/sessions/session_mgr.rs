@@ -272,4 +272,22 @@ impl SessionManager {
         }
         Ok(())
     }
+
+    fn get_active_user_session_num(&self) -> usize {
+        let active_sessions = self.active_sessions.read();
+        active_sessions
+            .iter()
+            .filter(|(_, y)| match y.upgrade() {
+                None => false,
+                Some(a) => a.get_type().is_user_session(),
+            })
+            .count()
+    }
+
+    pub fn get_current_session_status(&self) -> SessionManagerStatus {
+        let mut status_t = self.status.read().clone();
+        let active_session = self.get_active_user_session_num();
+        status_t.running_queries_count = active_session as u64;
+        status_t
+    }
 }
