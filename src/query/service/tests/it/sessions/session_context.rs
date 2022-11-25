@@ -23,7 +23,10 @@ use databend_query::sessions::SessionContext;
 
 #[tokio::test]
 async fn test_session_context() -> Result<()> {
-    let conf = Config::load()?;
+    let conf = Config::load_with_configs(vec![(
+        "META_ENDPOINTS".to_string(),
+        Some("[0.0.0.0:9191]".to_string()),
+    )])?;
     let tenant = &conf.query.tenant_id;
     let settings = Settings::default_settings(tenant);
     let session_ctx = SessionContext::try_create(conf, settings)?;

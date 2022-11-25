@@ -44,7 +44,6 @@ async fn main(_global_tracker: Arc<MemoryTracker>) -> common_exception::Result<(
         return Ok(());
     }
 
-    conf.meta.check_valid()?;
     init_default_metrics_recorder();
     set_panic_hook();
 

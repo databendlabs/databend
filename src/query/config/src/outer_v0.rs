@@ -159,6 +159,10 @@ impl Config {
 
         Ok(builder.build()?)
     }
+
+    pub fn load_with_configs(kvs: Vec<(&String, Option<&String>)>) -> Result<Self> {
+        temp_env::with_vars(kvs, Config::load)
+    }
 }
 
 impl From<InnerConfig> for Config {

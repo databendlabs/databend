@@ -65,9 +65,17 @@ impl Config {
     ///
     /// In the future, we could have `ConfigV1` and `ConfigV2`.
     pub fn load() -> Result<Self> {
-        let cfg = OuterV0Config::load()?.try_into()?;
+        let cfg: Self = OuterV0Config::load()?.try_into()?;
 
+        // Only check meta config when cmd is empty.
+        if cfg.cmd.is_empty() {
+            cfg.meta.check_valid()?;
+        }
         Ok(cfg)
+    }
+
+    pub fn load_with_configs(kvs: Vec<(String, Option<String>)>) -> Result<Self> {
+        temp_env::with_vars(kvs, Config::load)
     }
 
     pub fn tls_query_cli_enabled(&self) -> bool {
