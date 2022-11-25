@@ -440,6 +440,8 @@ pub trait HashtableLike {
 
     fn len(&self) -> usize;
 
+    fn bytes_len(&self) -> usize;
+
     fn entry(&self, key_ref: &Self::Key) -> Option<Self::EntryRef<'_>>;
     fn entry_mut(&mut self, key_ref: &Self::Key) -> Option<Self::EntryMutRef<'_>>;
 

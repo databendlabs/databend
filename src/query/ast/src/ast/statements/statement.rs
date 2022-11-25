@@ -60,6 +60,8 @@ pub enum Statement<'a> {
         value: Literal,
     },
 
+    UnSetVariable(UnSetStmt<'a>),
+
     SetRole {
         is_default: bool,
         role_name: String,
@@ -259,6 +261,7 @@ impl<'a> Display for Statement<'a> {
                 }
                 write!(f, "{variable} = {value}")?;
             }
+            Statement::UnSetVariable(unset) => write!(f, "{unset}")?,
             Statement::SetRole {
                 is_default,
                 role_name,

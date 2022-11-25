@@ -16,7 +16,6 @@ use common_arrow::arrow::bitmap::MutableBitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::BinaryRead;
-use common_io::prelude::FormatSettings;
 
 use crate::ColumnRef;
 use crate::DataValue;
@@ -34,10 +33,10 @@ impl TypeDeserializer for NullableDeserializer {
         self.inner.memory_size() + self.bitmap.as_slice().len()
     }
 
-    fn de_binary(&mut self, reader: &mut &[u8], format: &FormatSettings) -> Result<()> {
+    fn de_binary(&mut self, reader: &mut &[u8]) -> Result<()> {
         let valid: bool = reader.read_scalar()?;
         if valid {
-            self.inner.de_binary(reader, format)?;
+            self.inner.de_binary(reader)?;
         } else {
             self.inner.de_default();
         }
@@ -50,42 +49,23 @@ impl TypeDeserializer for NullableDeserializer {
         self.bitmap.push(false);
     }
 
-    fn de_fixed_binary_batch(
-        &mut self,
-        _reader: &[u8],
-        _step: usize,
-        _rows: usize,
-        _format: &FormatSettings,
-    ) -> Result<()> {
+    fn de_fixed_binary_batch(&mut self, _reader: &[u8], _step: usize, _rows: usize) -> Result<()> {
         // it's covered outside
         unreachable!()
     }
 
-    fn de_json(&mut self, value: &serde_json::Value, format: &FormatSettings) -> Result<()> {
-        match value {
-            serde_json::Value::Null => {
-                self.de_null(format);
-                Ok(())
-            }
-            other => {
-                self.bitmap.push(true);
-                self.inner.de_json(other, format)
-            }
-        }
-    }
-
-    fn de_null(&mut self, _format: &FormatSettings) -> bool {
+    fn de_null(&mut self) -> bool {
         self.inner.de_default();
         self.bitmap.push(false);
         true
     }
 
-    fn append_data_value(&mut self, value: DataValue, format: &FormatSettings) -> Result<()> {
+    fn append_data_value(&mut self, value: DataValue) -> Result<()> {
         if value.is_null() {
             self.inner.de_default();
             self.bitmap.push(false);
         } else {
-            self.inner.append_data_value(value, format)?;
+            self.inner.append_data_value(value)?;
             self.bitmap.push(true);
         }
         Ok(())

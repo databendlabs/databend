@@ -20,7 +20,6 @@ use std::ops::Not;
 
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_io::prelude::FormatSettings;
 use primitive_types::U256;
 use primitive_types::U512;
 
@@ -94,43 +93,6 @@ impl HashMethodKind {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct HashMethodSerializer {}
-
-impl HashMethodSerializer {
-    #[inline]
-    pub fn get_key(&self, column: &StringColumn, row: usize) -> Vec<u8> {
-        let v = column.get_data(row);
-        v.to_owned()
-    }
-
-    pub fn deserialize_group_columns(
-        &self,
-        keys: Vec<Vec<u8>>,
-        group_fields: &[DataField],
-    ) -> Result<Vec<ColumnRef>> {
-        debug_assert!(!keys.is_empty());
-        let mut keys: Vec<&[u8]> = keys.iter().map(|x| x.as_slice()).collect();
-
-        // Single StringColumn
-        if group_fields.len() == 1 && group_fields[0].data_type().data_type_id() == TypeID::String {
-            let col = StringColumn::from_slice(&keys);
-            return Ok(vec![col.arc()]);
-        }
-
-        let rows = keys.len();
-        let format = FormatSettings::default();
-        let mut res = Vec::with_capacity(group_fields.len());
-        for f in group_fields.iter() {
-            let data_type = f.data_type();
-            let mut deserializer = data_type.create_deserializer(rows);
-
-            for (_row, key) in keys.iter_mut().enumerate() {
-                deserializer.de_binary(key, &format)?;
-            }
-            res.push(deserializer.finish_to_column());
-        }
-        Ok(res)
-    }
-}
 
 impl HashMethod for HashMethodSerializer {
     type HashKey = [u8];
@@ -271,10 +233,9 @@ where T: Clone
             let mut deserializer = non_null_type.create_deserializer(rows);
             let reader = vec8.as_slice();
 
-            let format = FormatSettings::default();
             let col = match data_type.is_nullable() {
                 false => {
-                    deserializer.de_fixed_binary_batch(&reader[offsize..], step, rows, &format)?;
+                    deserializer.de_fixed_binary_batch(&reader[offsize..], step, rows)?;
                     deserializer.finish_to_column()
                 }
 
@@ -284,7 +245,6 @@ where T: Clone
                         &reader[null_offsize..],
                         step,
                         rows,
-                        &format,
                     )?;
 
                     null_offsize += 1;
@@ -294,7 +254,7 @@ where T: Clone
 
                     // we store 1 for nulls in fixed_hash
                     let bitmap = col.values().not();
-                    deserializer.de_fixed_binary_batch(&reader[offsize..], step, rows, &format)?;
+                    deserializer.de_fixed_binary_batch(&reader[offsize..], step, rows)?;
                     let inner = deserializer.finish_to_column();
                     NullableColumn::wrap_inner(inner, Some(bitmap))
                 }

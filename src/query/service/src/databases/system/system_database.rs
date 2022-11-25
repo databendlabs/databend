@@ -29,6 +29,8 @@ use common_storages_system::CreditsTable;
 use common_storages_system::DatabasesTable;
 use common_storages_system::EnginesTable;
 use common_storages_system::FunctionsTable;
+use common_storages_system::MallocStatsTable;
+use common_storages_system::MallocStatsTotalsTable;
 use common_storages_system::MetricsTable;
 use common_storages_system::OneTable;
 use common_storages_system::ProcessesTable;
@@ -66,6 +68,8 @@ impl SystemDatabase {
             ProcessesTable::create(sys_db_meta.next_table_id()),
             ConfigsTable::create(sys_db_meta.next_table_id()),
             MetricsTable::create(sys_db_meta.next_table_id()),
+            MallocStatsTable::create(sys_db_meta.next_table_id()),
+            MallocStatsTotalsTable::create(sys_db_meta.next_table_id()),
             ColumnsTable::create(sys_db_meta.next_table_id()),
             UsersTable::create(sys_db_meta.next_table_id()),
             Arc::new(QueryLogTable::create(

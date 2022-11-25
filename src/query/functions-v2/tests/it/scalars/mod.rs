@@ -25,7 +25,7 @@ use common_expression::ConstantFolder;
 use common_expression::Evaluator;
 use common_expression::RemoteExpr;
 use common_expression::Value;
-use common_functions_v2::scalars::builtin_functions;
+use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 use goldenfile::Mint;
 use itertools::Itertools;
 
@@ -36,6 +36,7 @@ mod cast;
 mod comparison;
 mod control;
 mod datetime;
+mod geo;
 mod math;
 pub(crate) mod parser;
 mod string;
@@ -52,8 +53,7 @@ pub fn run_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType, Co
                 .collect::<Vec<_>>(),
         );
 
-        let fn_registry = builtin_functions();
-        let expr = type_check::check(&raw_expr, &fn_registry)?;
+        let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS)?;
 
         let input_domains = columns
             .iter()
@@ -62,11 +62,11 @@ pub fn run_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType, Co
             .collect::<HashMap<_, _>>();
 
         let constant_folder =
-            ConstantFolder::new(input_domains.clone(), chrono_tz::UTC, &fn_registry);
+            ConstantFolder::new(input_domains.clone(), chrono_tz::UTC, &BUILTIN_FUNCTIONS);
         let (optimized_expr, output_domain) = constant_folder.fold(&expr);
 
         let remote_expr = RemoteExpr::from_expr(optimized_expr);
-        let optimized_expr = remote_expr.into_expr(&fn_registry).unwrap();
+        let optimized_expr = remote_expr.into_expr(&BUILTIN_FUNCTIONS).unwrap();
 
         let num_rows = columns.iter().map(|col| col.2.len()).max().unwrap_or(0);
         let chunk = Chunk::new(
@@ -81,7 +81,7 @@ pub fn run_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType, Co
             test_arrow_conversion(col);
         });
 
-        let evaluator = Evaluator::new(&chunk, chrono_tz::UTC, &fn_registry);
+        let evaluator = Evaluator::new(&chunk, chrono_tz::UTC, &BUILTIN_FUNCTIONS);
         let result = evaluator.run(&expr);
         let optimized_result = evaluator.run(&optimized_expr);
         match &result {
@@ -209,7 +209,7 @@ fn list_all_builtin_functions() {
 
     writeln!(file, "Simple functions:").unwrap();
 
-    let fn_registry = builtin_functions();
+    let fn_registry = &BUILTIN_FUNCTIONS;
     for func in fn_registry
         .funcs
         .iter()

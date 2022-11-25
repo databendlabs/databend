@@ -15,11 +15,12 @@
 use std::env;
 use std::sync::Arc;
 
-use common_base::base::RuntimeTracker;
+use common_base::base::MemoryTracker;
+use common_base::base::Runtime;
 use common_config::Config;
 use common_config::DATABEND_COMMIT_VERSION;
 use common_config::QUERY_SEMVER;
-use common_macros::databend_main;
+use common_exception::Result;
 use common_meta_client::MIN_METASRV_SEMVER;
 use common_meta_embedded::MetaEmbedded;
 use common_metrics::init_default_metrics_recorder;
@@ -36,8 +37,23 @@ use databend_query::servers::ShutdownHandle;
 use databend_query::GlobalServices;
 use tracing::info;
 
-#[databend_main]
-async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<()> {
+fn main() {
+    match Runtime::with_default_worker_threads() {
+        Err(cause) => {
+            eprintln!("Databend Query start failure, cause: {:?}", cause);
+            std::process::exit(cause.code() as i32);
+        }
+        Ok(main_runtime) => {
+            let tracker = main_runtime.get_tracker();
+            if let Err(cause) = main_runtime.block_on(main_entrypoint(tracker)) {
+                eprintln!("Databend Query start failure, cause: {:?}", cause);
+                std::process::exit(cause.code() as i32);
+            }
+        }
+    }
+}
+
+async fn main_entrypoint(mem_tracker: Arc<MemoryTracker>) -> Result<()> {
     let conf: Config = Config::load()?;
 
     if run_cmd(&conf) {
@@ -47,10 +63,14 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
     init_default_metrics_recorder();
     set_panic_hook();
 
+    let size = conf.query.max_memory_usage as i64;
+    info!("Set memory limit: {}", size);
+    mem_tracker.set_limit(size);
+
     if conf.meta.is_embedded_meta()? {
         MetaEmbedded::init_global_meta_store(conf.meta.embedded_dir.clone()).await?;
     }
-    // Make sure gloabl services have been inited.
+    // Make sure global services have been inited.
     GlobalServices::init(conf.clone()).await?;
 
     let tenant = conf.query.tenant_id.clone();
@@ -189,6 +209,16 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
     );
     println!("Storage: {}", conf.storage.params);
     println!("Cache: {}", conf.cache.params);
+    println!(
+        "Builtin users: {}",
+        conf.query
+            .idm
+            .users
+            .keys()
+            .map(|name| name.to_string())
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
     println!();
     println!("Admin");
     println!("    listened at {}", conf.query.admin_api_address);

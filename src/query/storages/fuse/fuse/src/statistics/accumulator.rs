@@ -39,11 +39,11 @@ pub struct StatisticsAccumulator {
     pub index_size: u64,
 
     pub perfect_block_count: u64,
-    pub thresholds: Option<BlockCompactThresholds>,
+    pub thresholds: BlockCompactThresholds,
 }
 
 impl StatisticsAccumulator {
-    pub fn new(thresholds: Option<BlockCompactThresholds>) -> Self {
+    pub fn new(thresholds: BlockCompactThresholds) -> Self {
         Self {
             thresholds,
             ..Default::default()
@@ -88,7 +88,7 @@ impl StatisticsAccumulator {
     }
 
     pub fn summary(&self) -> Result<StatisticsOfColumns> {
-        super::reduce_block_statistics(&self.blocks_statistics)
+        super::reduce_block_statistics(&self.blocks_statistics, None)
     }
 
     fn add(
@@ -113,10 +113,11 @@ impl StatisticsAccumulator {
         let data_location = (block_statistics.block_file_location, DataBlock::VERSION);
         let cluster_stats = block_statistics.block_cluster_statistics;
 
-        if let Some(thresholds) = self.thresholds {
-            if thresholds.check_large_enough(row_count as usize, block_size as usize) {
-                self.perfect_block_count += 1;
-            }
+        if self
+            .thresholds
+            .check_large_enough(row_count as usize, block_size as usize)
+        {
+            self.perfect_block_count += 1;
         }
 
         self.blocks_metas.push(Arc::new(BlockMeta::new(

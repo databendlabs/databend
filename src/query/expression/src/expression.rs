@@ -12,8 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::collections::HashSet;
+use std::fmt::Debug;
+use std::fmt::Display;
+use std::hash::Hash;
 use std::sync::Arc;
 
 use educe::Educe;
@@ -28,35 +30,36 @@ use crate::types::DataType;
 use crate::values::Scalar;
 
 pub type Span = Option<std::ops::Range<usize>>;
+pub trait ColumnIndex = Debug + Display + Clone + Serialize + Hash + Eq;
 
 #[derive(Debug, Clone)]
-pub enum RawExpr {
+pub enum RawExpr<Index: ColumnIndex = usize> {
     Literal {
         span: Span,
         lit: Literal,
     },
     ColumnRef {
         span: Span,
-        id: usize,
+        id: Index,
         data_type: DataType,
     },
     Cast {
         span: Span,
         is_try: bool,
-        expr: Box<RawExpr>,
+        expr: Box<RawExpr<Index>>,
         dest_type: DataType,
     },
     FunctionCall {
         span: Span,
         name: String,
         params: Vec<usize>,
-        args: Vec<RawExpr>,
+        args: Vec<RawExpr<Index>>,
     },
 }
 
 #[derive(Debug, Clone, Educe, EnumAsInner)]
 #[educe(PartialEq)]
-pub enum Expr {
+pub enum Expr<Index: ColumnIndex = usize> {
     Constant {
         span: Span,
         scalar: Scalar,
@@ -64,13 +67,13 @@ pub enum Expr {
     },
     ColumnRef {
         span: Span,
-        id: usize,
+        id: Index,
         data_type: DataType,
     },
     Cast {
         span: Span,
         is_try: bool,
-        expr: Box<Expr>,
+        expr: Box<Expr<Index>>,
         dest_type: DataType,
     },
     FunctionCall {
@@ -79,7 +82,7 @@ pub enum Expr {
         #[educe(PartialEq(ignore))]
         function: Arc<Function>,
         generics: Vec<DataType>,
-        args: Vec<Expr>,
+        args: Vec<Expr<Index>>,
         return_type: DataType,
     },
 }
@@ -89,7 +92,7 @@ pub enum Expr {
 /// The remote node will recover the `Arc` pointer within `FunctionCall` by looking
 /// up the funciton registry with the `FunctionID`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum RemoteExpr {
+pub enum RemoteExpr<Index: ColumnIndex = usize> {
     Constant {
         span: Span,
         scalar: Scalar,
@@ -97,20 +100,20 @@ pub enum RemoteExpr {
     },
     ColumnRef {
         span: Span,
-        id: usize,
+        id: Index,
         data_type: DataType,
     },
     Cast {
         span: Span,
         is_try: bool,
-        expr: Box<RemoteExpr>,
+        expr: Box<RemoteExpr<Index>>,
         dest_type: DataType,
     },
     FunctionCall {
         span: Span,
         id: FunctionID,
         generics: Vec<DataType>,
-        args: Vec<RemoteExpr>,
+        args: Vec<RemoteExpr<Index>>,
         return_type: DataType,
     },
 }
@@ -132,12 +135,12 @@ pub enum Literal {
     String(Vec<u8>),
 }
 
-impl RawExpr {
-    pub fn column_refs(&self) -> HashSet<usize> {
-        fn walk(expr: &RawExpr, buf: &mut HashSet<usize>) {
+impl<Index: ColumnIndex> RawExpr<Index> {
+    pub fn column_refs(&self) -> HashSet<Index> {
+        fn walk<Index: ColumnIndex>(expr: &RawExpr<Index>, buf: &mut HashSet<Index>) {
             match expr {
                 RawExpr::ColumnRef { id, .. } => {
-                    buf.insert(*id);
+                    buf.insert(id.clone());
                 }
                 RawExpr::Cast { expr, .. } => walk(expr, buf),
                 RawExpr::FunctionCall { args, .. } => args.iter().for_each(|expr| walk(expr, buf)),
@@ -151,7 +154,7 @@ impl RawExpr {
     }
 }
 
-impl Expr {
+impl<Index: ColumnIndex> Expr<Index> {
     pub fn data_type(&self) -> &DataType {
         match self {
             Expr::Constant { data_type, .. } => data_type,
@@ -161,11 +164,11 @@ impl Expr {
         }
     }
 
-    pub fn column_refs(&self) -> HashSet<usize> {
-        fn walk(expr: &Expr, buf: &mut HashSet<usize>) {
+    pub fn column_refs(&self) -> HashSet<Index> {
+        fn walk<Index: ColumnIndex>(expr: &Expr<Index>, buf: &mut HashSet<Index>) {
             match expr {
                 Expr::ColumnRef { id, .. } => {
-                    buf.insert(*id);
+                    buf.insert(id.clone());
                 }
                 Expr::Cast { expr, .. } => walk(expr, buf),
                 Expr::FunctionCall { args, .. } => args.iter().for_each(|expr| walk(expr, buf)),
@@ -178,16 +181,27 @@ impl Expr {
         buf
     }
 
-    pub fn project_column_ref(&self, map: &HashMap<usize, usize>) -> Expr {
+    pub fn project_column_ref<ToIndex: ColumnIndex>(
+        &self,
+        f: impl Fn(&Index) -> ToIndex + Copy,
+    ) -> Expr<ToIndex> {
         match self {
-            Expr::Constant { .. } => self.clone(),
+            Expr::Constant {
+                span,
+                scalar,
+                data_type,
+            } => Expr::Constant {
+                span: span.clone(),
+                scalar: scalar.clone(),
+                data_type: data_type.clone(),
+            },
             Expr::ColumnRef {
                 span,
                 id,
                 data_type,
             } => Expr::ColumnRef {
                 span: span.clone(),
-                id: map[id],
+                id: f(id),
                 data_type: data_type.clone(),
             },
             Expr::Cast {
@@ -198,7 +212,7 @@ impl Expr {
             } => Expr::Cast {
                 span: span.clone(),
                 is_try: *is_try,
-                expr: Box::new(expr.project_column_ref(map)),
+                expr: Box::new(expr.project_column_ref(f)),
                 dest_type: dest_type.clone(),
             },
             Expr::FunctionCall {
@@ -213,18 +227,15 @@ impl Expr {
                 id: id.clone(),
                 function: function.clone(),
                 generics: generics.clone(),
-                args: args
-                    .iter()
-                    .map(|expr| expr.project_column_ref(map))
-                    .collect(),
+                args: args.iter().map(|expr| expr.project_column_ref(f)).collect(),
                 return_type: return_type.clone(),
             },
         }
     }
 }
 
-impl RemoteExpr {
-    pub fn from_expr(expr: Expr) -> Self {
+impl<Index: ColumnIndex> RemoteExpr<Index> {
+    pub fn from_expr(expr: Expr<Index>) -> Self {
         match expr {
             Expr::Constant {
                 span,
@@ -272,7 +283,7 @@ impl RemoteExpr {
         }
     }
 
-    pub fn into_expr(self, fn_registry: &FunctionRegistry) -> Option<Expr> {
+    pub fn into_expr(self, fn_registry: &FunctionRegistry) -> Option<Expr<Index>> {
         Some(match self {
             RemoteExpr::Constant {
                 span,

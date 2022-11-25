@@ -37,7 +37,7 @@ use sysinfo::RefreshKind;
 use sysinfo::SystemExt;
 
 #[derive(Clone)]
-enum ScopeLevel {
+pub enum ScopeLevel {
     #[allow(dead_code)]
     Global,
     Session,
@@ -111,11 +111,7 @@ impl Settings {
             {
                 if ret.get_max_threads()? == 0 {
                     let cpus = if conf.query.num_cpus == 0 {
-                        sysinfo::System::new_with_specifics(
-                            RefreshKind::new().with_cpu(CpuRefreshKind::everything()),
-                        )
-                        .cpus()
-                        .len() as u64
+                        ret.check_and_get_default_value("max_threads")?.as_u64()?
                     } else {
                         conf.query.num_cpus
                     };
@@ -126,7 +122,8 @@ impl Settings {
             {
                 if ret.get_max_memory_usage()? == 0 {
                     let max_usage = if conf.query.max_memory_usage == 0 {
-                        sysinfo::System::new_all().available_memory()
+                        ret.check_and_get_default_value("max_memory_usage")?
+                            .as_u64()?
                     } else {
                         conf.query.max_memory_usage
                     };
@@ -153,18 +150,26 @@ impl Settings {
             },
             // max_threads
             SettingValue {
-                default_value: UserSettingValue::UInt64(0),
+                default_value: UserSettingValue::UInt64(
+                    sysinfo::System::new_with_specifics(
+                        RefreshKind::new().with_cpu(CpuRefreshKind::everything()),
+                    )
+                    .cpus()
+                    .len() as u64,
+                ),
                 user_setting: UserSetting::create("max_threads", UserSettingValue::UInt64(0)),
                 level: ScopeLevel::Session,
-                desc: "The maximum number of threads to execute the request. By default the value is 0 it means determined automatically.",
+                desc: "The maximum number of threads to execute the request. By default the value is determined automatically.",
                 possible_values: None,
             },
             // max_memory_usage
             SettingValue {
-                default_value: UserSettingValue::UInt64(0),
+                default_value: UserSettingValue::UInt64(
+                    sysinfo::System::new_all().total_memory() * 80 / 100,
+                ),
                 user_setting: UserSetting::create("max_memory_usage", UserSettingValue::UInt64(0)),
                 level: ScopeLevel::Session,
-                desc: "The maximum memory usage for processing single query, in bytes. By default the value is 0 it means determined automatically.",
+                desc: "The maximum memory usage for processing single query, in bytes. By default the value is determined automatically.",
                 possible_values: None,
             },
             // max_storage_io_requests
@@ -446,6 +451,26 @@ impl Settings {
                 desc: "If enable distributed eval index, default value: 1",
                 possible_values: None,
             },
+            SettingValue {
+                default_value: UserSettingValue::UInt64(0),
+                user_setting: UserSetting::create(
+                    "prefer_broadcast_join",
+                    UserSettingValue::UInt64(0),
+                ),
+                level: ScopeLevel::Session,
+                desc: "If enable broadcast join, default value: 0",
+                possible_values: None,
+            },
+            SettingValue {
+                default_value: UserSettingValue::UInt64(24 * 7),
+                user_setting: UserSetting::create(
+                    "load_file_metadata_expire_hours",
+                    UserSettingValue::UInt64(24 * 7),
+                ),
+                level: ScopeLevel::Session,
+                desc: "How many hours will the COPY file metadata expired in the metasrv, default value: 24*7=7days",
+                possible_values: None,
+            },
         ];
 
         let settings: Arc<DashMap<String, SettingValue>> = Arc::new(DashMap::default());
@@ -681,6 +706,18 @@ impl Settings {
         self.try_set_u64(KEY, v, false)
     }
 
+    pub fn get_prefer_broadcast_join(&self) -> Result<bool> {
+        static KEY: &str = "prefer_broadcast_join";
+        let v = self.try_get_u64(KEY)?;
+        Ok(v != 0)
+    }
+
+    pub fn set_prefer_broadcast_join(&self, val: bool) -> Result<()> {
+        static KEY: &str = "join_distribution_type";
+        let v = u64::from(val);
+        self.try_set_u64(KEY, v, false)
+    }
+
     pub fn get_sql_dialect(&self) -> Result<Dialect> {
         let key = "sql_dialect";
         self.check_and_get_setting_value(key)
@@ -712,15 +749,34 @@ impl Settings {
         self.try_get_u64(KEY)
     }
 
+    pub fn set_load_file_metadata_expire_hours(&self, val: u64) -> Result<()> {
+        let key = "load_file_metadata_expire_hours";
+        self.try_set_u64(key, val, false)
+    }
+
+    pub fn get_load_file_metadata_expire_hours(&self) -> Result<u64> {
+        let key = "load_file_metadata_expire_hours";
+        self.try_get_u64(key)
+    }
+
     pub fn has_setting(&self, key: &str) -> bool {
         self.settings.get(key).is_some()
     }
 
-    fn check_and_get_setting_value(&self, key: &str) -> Result<SettingValue> {
+    pub fn check_and_get_setting_value(&self, key: &str) -> Result<SettingValue> {
         let setting = self
             .settings
             .get(key)
             .map(|e| e.value().clone())
+            .ok_or_else(|| ErrorCode::UnknownVariable(format!("Unknown variable: {:?}", key)))?;
+        Ok(setting)
+    }
+
+    pub fn check_and_get_default_value(&self, key: &str) -> Result<UserSettingValue> {
+        let setting = self
+            .settings
+            .get(key)
+            .map(|e| e.value().default_value.clone())
             .ok_or_else(|| ErrorCode::UnknownVariable(format!("Unknown variable: {:?}", key)))?;
         Ok(setting)
     }
@@ -793,6 +849,24 @@ impl Settings {
         Ok(())
     }
 
+    pub async fn try_drop_setting(&self, key: &str) -> Result<()> {
+        let mut setting = self
+            .settings
+            .get_mut(key)
+            .ok_or_else(|| ErrorCode::UnknownVariable(format!("Unknown variable: {:?}", key)))?;
+
+        let tenant = self.tenant.clone();
+        let key = key.to_string();
+
+        UserApiProvider::instance()
+            .get_setting_api_client(&tenant)?
+            .drop_setting(key.as_str(), None)
+            .await?;
+
+        setting.level = ScopeLevel::Session;
+        Ok(())
+    }
+
     fn set_setting_level(&self, key: &str, is_global: bool) -> Result<()> {
         let mut setting = self
             .settings
@@ -803,6 +877,15 @@ impl Settings {
             setting.level = ScopeLevel::Global;
         }
         Ok(())
+    }
+
+    pub fn get_setting_level(&self, key: &str) -> Result<ScopeLevel> {
+        let setting = self
+            .settings
+            .get_mut(key)
+            .ok_or_else(|| ErrorCode::UnknownVariable(format!("Unknown variable: {:?}", key)))?;
+
+        Ok(setting.level.clone())
     }
 
     pub fn get_setting_values(

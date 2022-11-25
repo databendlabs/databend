@@ -19,8 +19,8 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::ops::Deref;
 
-use common_datavalues::chrono::DateTime;
-use common_datavalues::chrono::Utc;
+use chrono::DateTime;
+use chrono::Utc;
 
 use crate::share::ShareNameIdent;
 

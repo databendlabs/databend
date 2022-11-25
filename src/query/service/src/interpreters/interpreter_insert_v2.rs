@@ -17,7 +17,6 @@ use std::io::Cursor;
 use std::ops::Not;
 use std::sync::Arc;
 
-use chrono_tz::Tz;
 use common_ast::ast::Expr;
 use common_ast::parser::parse_comma_separated_exprs;
 use common_ast::parser::tokenize_sql;
@@ -33,7 +32,6 @@ use common_formats::FieldDecoderRowBased;
 use common_formats::FieldDecoderValues;
 use common_io::cursor_ext::ReadBytesExt;
 use common_io::cursor_ext::ReadCheckPointExt;
-use common_io::prelude::FormatSettings;
 use common_pipeline_sources::processors::sources::AsyncSource;
 use common_pipeline_sources::processors::sources::AsyncSourcer;
 use common_pipeline_transforms::processors::transforms::Transform;
@@ -44,13 +42,12 @@ use common_sql::MetadataRef;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 
-use super::plan_schedulers::build_schedule_pipeline;
 use crate::interpreters::common::append2table;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::pipelines::PipelineBuildResult;
-use crate::pipelines::PipelineBuilder;
 use crate::pipelines::SourcePipeBuilder;
+use crate::schedulers::build_query_pipeline;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::evaluator::Evaluator;
@@ -169,7 +166,6 @@ impl Interpreter for InsertInterpreterV2 {
                     };
 
                     let catalog = self.plan.catalog.clone();
-                    let is_distributed_plan = select_plan.is_distributed_plan();
 
                     let insert_select_plan = match select_plan {
                         PhysicalPlan::Exchange(ref mut exchange) => {
@@ -204,14 +200,8 @@ impl Interpreter for InsertInterpreterV2 {
                         }
                     };
 
-                    let mut build_res = match is_distributed_plan {
-                        true => {
-                            build_schedule_pipeline(self.ctx.clone(), &insert_select_plan).await
-                        }
-                        false => {
-                            PipelineBuilder::create(self.ctx.clone()).finalize(&insert_select_plan)
-                        }
-                    }?;
+                    let mut build_res =
+                        build_query_pipeline(&self.ctx, &[], &insert_select_plan).await?;
 
                     let ctx = self.ctx.clone();
                     let overwrite = self.plan.overwrite;
@@ -377,11 +367,6 @@ impl ValueSource {
             ));
         }
 
-        let mut format = FormatSettings::for_values_parsing();
-        let tz = self.ctx.get_settings().get_timezone()?;
-        format.timezone = tz.parse::<Tz>().map_err(|_| {
-            ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
-        })?;
         for col_idx in 0..col_size {
             let _ = reader.ignore_white_spaces();
             let col_end = if col_idx + 1 == col_size { b')' } else { b',' };
@@ -431,7 +416,7 @@ impl ValueSource {
                 .await?;
 
                 for (append_idx, deser) in desers.iter_mut().enumerate().take(col_size) {
-                    deser.append_data_value(values[append_idx].clone(), &format)?;
+                    deser.append_data_value(values[append_idx].clone())?;
                 }
                 reader.set_position(end_pos_of_row);
                 return Ok(());

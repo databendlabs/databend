@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_ast::ast::Indirection;
@@ -27,6 +28,8 @@ use common_ast::Backtrace;
 use common_ast::Dialect;
 use common_ast::DisplayError;
 use common_catalog::catalog_kind::CATALOG_DEFAULT;
+use common_catalog::table::ColumnId;
+use common_catalog::table::ColumnStatistics;
 use common_catalog::table::NavigationPoint;
 use common_catalog::table::Table;
 use common_catalog::table_function::TableFunction;
@@ -46,7 +49,9 @@ use crate::planner::semantic::TypeChecker;
 use crate::plans::ConstantExpr;
 use crate::plans::LogicalGet;
 use crate::plans::Scalar;
+use crate::plans::Statistics;
 use crate::BindContext;
+use crate::ColumnEntry;
 use crate::IndexType;
 
 impl<'a> Binder {
@@ -76,9 +81,11 @@ impl<'a> Binder {
             CATALOG_DEFAULT.to_owned(),
             database.to_string(),
             table_meta,
+            None,
         );
 
         self.bind_base_table(bind_context, database, table_index)
+            .await
     }
 
     pub(super) async fn bind_table_reference(
@@ -96,6 +103,11 @@ impl<'a> Binder {
                 travel_point,
             } => {
                 let table_name = normalize_identifier(table, &self.name_resolution_ctx).name;
+                let table_alias_name = if let Some(table_alias) = alias {
+                    Some(normalize_identifier(&table_alias.name, &self.name_resolution_ctx).name)
+                } else {
+                    None
+                };
                 // Check and bind common table expression
                 if let Some(cte_info) = bind_context.ctes_map.get(&table_name) {
                     return self.bind_cte(bind_context, &table_name, alias, &cte_info);
@@ -163,13 +175,16 @@ impl<'a> Binder {
                         }
                     }
                     _ => {
-                        let table_index =
-                            self.metadata
-                                .write()
-                                .add_table(catalog, database.clone(), table_meta);
+                        let table_index = self.metadata.write().add_table(
+                            catalog,
+                            database.clone(),
+                            table_meta,
+                            table_alias_name,
+                        );
 
-                        let (s_expr, mut bind_context) =
-                            self.bind_base_table(bind_context, database.as_str(), table_index)?;
+                        let (s_expr, mut bind_context) = self
+                            .bind_base_table(bind_context, database.as_str(), table_index)
+                            .await?;
                         if let Some(alias) = alias {
                             bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
                         }
@@ -217,15 +232,21 @@ impl<'a> Binder {
                         table_args,
                     )?;
                 let table = table_meta.as_table();
-
+                let table_alias_name = if let Some(table_alias) = alias {
+                    Some(normalize_identifier(&table_alias.name, &self.name_resolution_ctx).name)
+                } else {
+                    None
+                };
                 let table_index = self.metadata.write().add_table(
                     CATALOG_DEFAULT.to_string(),
                     "system".to_string(),
                     table.clone(),
+                    table_alias_name,
                 );
 
-                let (s_expr, mut bind_context) =
-                    self.bind_base_table(bind_context, "system", table_index)?;
+                let (s_expr, mut bind_context) = self
+                    .bind_base_table(bind_context, "system", table_index)
+                    .await?;
                 if let Some(alias) = alias {
                     bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
                 }
@@ -287,7 +308,7 @@ impl<'a> Binder {
         Ok((cte_info.s_expr.clone(), new_bind_context))
     }
 
-    fn bind_base_table(
+    async fn bind_base_table(
         &mut self,
         bind_context: &BindContext,
         database_name: &str,
@@ -296,31 +317,69 @@ impl<'a> Binder {
         let mut bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
         let columns = self.metadata.read().columns_by_table_index(table_index);
         let table = self.metadata.read().table(table_index).clone();
+
+        let mut col_stats: HashMap<IndexType, Option<ColumnStatistics>> = HashMap::new();
         for column in columns.iter() {
-            let column_binding = ColumnBinding {
-                database_name: Some(database_name.to_string()),
-                table_name: Some(table.name().to_string()),
-                column_name: column.name().to_string(),
-                index: column.index(),
-                data_type: Box::new(column.data_type().clone()),
-                visibility: if column.has_path_indices() {
-                    Visibility::InVisible
-                } else {
-                    Visibility::Visible
-                },
-            };
-            bind_context.add_column_binding(column_binding);
+            match column {
+                ColumnEntry::BaseTableColumn {
+                    column_name,
+                    column_index,
+                    path_indices,
+                    data_type,
+                    leaf_index,
+                    ..
+                } => {
+                    let column_binding = ColumnBinding {
+                        database_name: Some(database_name.to_string()),
+                        table_name: Some(table.name().to_string()),
+                        column_name: column_name.clone(),
+                        index: *column_index,
+                        data_type: Box::new(data_type.clone()),
+                        visibility: if path_indices.is_some() {
+                            Visibility::InVisible
+                        } else {
+                            Visibility::Visible
+                        },
+                    };
+                    bind_context.add_column_binding(column_binding);
+                    if path_indices.is_none() {
+                        if let Some(col_id) = *leaf_index {
+                            let col_stat = table
+                                .table()
+                                .column_statistics_provider()
+                                .await?
+                                .column_statistics(col_id as ColumnId);
+                            col_stats.insert(*column_index, col_stat);
+                        }
+                    }
+                }
+                _ => {
+                    return Err(ErrorCode::Internal("Invalid column entry"));
+                }
+            }
         }
+
+        let is_accurate = table.table().engine().to_lowercase() == "fuse";
         let stat = table.table().table_statistics()?;
         Ok((
             SExpr::create_leaf(
                 LogicalGet {
                     table_index,
-                    columns: columns.into_iter().map(|col| col.index()).collect(),
+                    columns: columns
+                        .into_iter()
+                        .map(|col| match col {
+                            ColumnEntry::BaseTableColumn { column_index, .. } => column_index,
+                            ColumnEntry::DerivedColumn { column_index, .. } => column_index,
+                        })
+                        .collect(),
                     push_down_predicates: None,
                     limit: None,
                     order_by: None,
-                    statistics: stat,
+                    statistics: Statistics {
+                        statistics: stat,
+                        col_stats,
+                        is_accurate,
+                    },
                     prewhere: None,
                 }
                 .into(),

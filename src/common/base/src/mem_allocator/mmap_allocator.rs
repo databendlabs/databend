@@ -36,6 +36,7 @@ pub mod linux {
     use std::ptr::NonNull;
 
     use super::MmapAllocator;
+    use crate::base::ThreadTracker;
 
     // MADV_POPULATE_WRITE is supported since Linux 5.14.
     const MADV_POPULATE_WRITE: i32 = 23;
@@ -57,12 +58,14 @@ pub mod linux {
                 return Err(AllocError);
             }
             let addr = NonNull::new(addr as *mut ()).ok_or(AllocError)?;
+            ThreadTracker::alloc_memory(layout.size() as i64, &addr);
             Ok(NonNull::<[u8]>::from_raw_parts(addr, layout.size()))
         }
 
         #[inline(always)]
         unsafe fn mmap_dealloc(&self, ptr: NonNull<u8>, layout: Layout) {
             debug_assert!(layout.align() <= page_size());
+            ThreadTracker::dealloc_memory(layout.size() as i64, &ptr);
             let result = libc::munmap(ptr.cast().as_ptr(), layout.size());
             assert_eq!(result, 0, "Failed to deallocate.");
         }
@@ -76,6 +79,9 @@ pub mod linux {
         ) -> Result<NonNull<[u8]>, AllocError> {
             debug_assert!(old_layout.align() <= page_size());
             debug_assert!(old_layout.align() == new_layout.align());
+
+            ThreadTracker::dealloc_memory(old_layout.size() as i64, &ptr);
+
             const REMAP_FLAGS: i32 = libc::MREMAP_MAYMOVE;
             let addr = libc::mremap(
                 ptr.cast().as_ptr(),
@@ -87,6 +93,7 @@ pub mod linux {
                 return Err(AllocError);
             }
             let addr = NonNull::new(addr as *mut ()).ok_or(AllocError)?;
+            ThreadTracker::alloc_memory(new_layout.size() as i64, &addr);
             if linux_kernel_version() >= (5, 14, 0) {
                 libc::madvise(addr.cast().as_ptr(), new_layout.size(), MADV_POPULATE_WRITE);
             }
@@ -102,6 +109,9 @@ pub mod linux {
         ) -> Result<NonNull<[u8]>, AllocError> {
             debug_assert!(old_layout.align() <= page_size());
             debug_assert!(old_layout.align() == new_layout.align());
+
+            ThreadTracker::dealloc_memory(old_layout.size() as i64, &ptr);
+
             const REMAP_FLAGS: i32 = libc::MREMAP_MAYMOVE;
             let addr = libc::mremap(
                 ptr.cast().as_ptr(),
@@ -113,6 +123,9 @@ pub mod linux {
                 return Err(AllocError);
             }
             let addr = NonNull::new(addr as *mut ()).ok_or(AllocError)?;
+
+            ThreadTracker::alloc_memory(new_layout.size() as i64, &addr);
+
             Ok(NonNull::<[u8]>::from_raw_parts(addr, new_layout.size()))
         }
     }
@@ -310,13 +323,13 @@ pub mod fallback {
         }
 
         #[inline(always)]
-        unsafe fn deallocate(&self, ptr: NonNull<u8>, layout: Layout) {
-            self.allocator.deallocate(ptr, layout)
+        fn allocate_zeroed(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
+            self.allocator.allocate_zeroed(layout)
         }
 
         #[inline(always)]
-        fn allocate_zeroed(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
-            self.allocator.allocate_zeroed(layout)
+        unsafe fn deallocate(&self, ptr: NonNull<u8>, layout: Layout) {
+            self.allocator.deallocate(ptr, layout)
         }
 
         unsafe fn grow(

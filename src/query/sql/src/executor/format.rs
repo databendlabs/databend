@@ -34,6 +34,7 @@ use crate::executor::FragmentKind;
 use crate::planner::IndexType;
 use crate::planner::MetadataRef;
 use crate::planner::DUMMY_TABLE_INDEX;
+use crate::ColumnEntry;
 
 impl PhysicalPlan {
     pub fn format(&self, metadata: MetadataRef) -> Result<String> {
@@ -94,24 +95,39 @@ fn table_scan_to_format_tree(
                 .map_or("NONE".to_string(), |limit| limit.to_string())
         });
 
+    let mut children = vec![
+        FormatTreeNode::new(format!("table: {table_name}")),
+        FormatTreeNode::new(format!("read rows: {}", plan.source.statistics.read_rows)),
+        FormatTreeNode::new(format!("read bytes: {}", plan.source.statistics.read_bytes)),
+        FormatTreeNode::new(format!(
+            "partitions total: {}",
+            plan.source.statistics.partitions_total
+        )),
+        FormatTreeNode::new(format!(
+            "partitions scanned: {}",
+            plan.source.statistics.partitions_scanned
+        )),
+        FormatTreeNode::new(format!(
+            "push downs: [filters: [{filters}], limit: {limit}]"
+        )),
+    ];
+
+    let mut output_columns: Vec<usize> = Vec::new();
+    if let Some(scan_fields) = &plan.source.scan_fields {
+        output_columns = scan_fields.keys().cloned().collect();
+    };
+
+    // If output_columns is empty, it indicates that scan all fields.
+    // Then output_columns won't show in explain
+    if !output_columns.is_empty() {
+        children.push(FormatTreeNode::new(format!(
+            "output columns: [{}]",
+            output_columns.iter().join(", ")
+        )));
+    }
     Ok(FormatTreeNode::with_children(
         "TableScan".to_string(),
-        vec![
-            FormatTreeNode::new(format!("table: {table_name}")),
-            FormatTreeNode::new(format!("read rows: {}", plan.source.statistics.read_rows)),
-            FormatTreeNode::new(format!("read bytes: {}", plan.source.statistics.read_bytes)),
-            FormatTreeNode::new(format!(
-                "partitions total: {}",
-                plan.source.statistics.partitions_total
-            )),
-            FormatTreeNode::new(format!(
-                "partitions scanned: {}",
-                plan.source.statistics.partitions_scanned
-            )),
-            FormatTreeNode::new(format!(
-                "push downs: [filters: [{filters}], limit: {limit}]"
-            )),
-        ],
+        children,
     ))
 }
 
@@ -136,7 +152,16 @@ fn project_to_format_tree(
         .columns
         .iter()
         .sorted()
-        .map(|column| format!("{} (#{})", metadata.read().column(*column).name(), column))
+        .map(|column| {
+            format!(
+                "{} (#{})",
+                match metadata.read().column(*column) {
+                    ColumnEntry::BaseTableColumn { column_name, .. } => column_name,
+                    ColumnEntry::DerivedColumn { alias, .. } => alias,
+                },
+                column
+            )
+        })
         .collect::<Vec<_>>()
         .join(", ");
     Ok(FormatTreeNode::with_children("Project".to_string(), vec![
@@ -172,7 +197,10 @@ pub fn pretty_display_agg_desc(desc: &AggregateFunctionDesc, metadata: &Metadata
             .iter()
             .map(|&index| {
                 let column = metadata.read().column(index).clone();
-                column.name().to_string()
+                match column {
+                    ColumnEntry::BaseTableColumn { column_name, .. } => column_name,
+                    ColumnEntry::DerivedColumn { alias, .. } => alias,
+                }
             })
             .collect::<Vec<_>>()
             .join(", ")
@@ -189,7 +217,11 @@ fn aggregate_partial_to_format_tree(
         .map(|column| {
             let index = column.parse::<IndexType>()?;
             let column = metadata.read().column(index).clone();
-            Ok(column.name().to_string())
+            let name = match column {
+                ColumnEntry::BaseTableColumn { column_name, .. } => column_name,
+                ColumnEntry::DerivedColumn { alias, .. } => alias,
+            };
+            Ok(name)
         })
         .collect::<Result<Vec<_>>>()?
         .join(", ");
@@ -220,7 +252,11 @@ fn aggregate_final_to_format_tree(
         .map(|column| {
             let index = column.parse::<IndexType>()?;
             let column = metadata.read().column(index).clone();
-            Ok(column.name().to_string())
+            let name = match column {
+                ColumnEntry::BaseTableColumn { column_name, .. } => column_name,
+                ColumnEntry::DerivedColumn { alias, .. } => alias,
+            };
+            Ok(name)
         })
         .collect::<Result<Vec<_>>>()?
         .join(", ");
@@ -250,7 +286,10 @@ fn sort_to_format_tree(plan: &Sort, metadata: &MetadataRef) -> Result<FormatTree
             let column = metadata.read().column(index).clone();
             Ok(format!(
                 "{} {} {}",
-                column.name(),
+                match column {
+                    ColumnEntry::BaseTableColumn { column_name, .. } => column_name,
+                    ColumnEntry::DerivedColumn { alias, .. } => alias,
+                },
                 if sort_key.asc { "ASC" } else { "DESC" },
                 if sort_key.nulls_first {
                     "NULLS FIRST"

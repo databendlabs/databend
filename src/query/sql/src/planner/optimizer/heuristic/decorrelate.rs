@@ -12,11 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::collections::HashSet;
 
 use common_datavalues::type_coercion::compare_coercion;
+use common_datavalues::wrap_nullable;
 use common_datavalues::BooleanType;
-use common_datavalues::DataTypeImpl;
 use common_datavalues::NullableType;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -43,7 +44,7 @@ use crate::plans::Filter;
 use crate::plans::FunctionCall;
 use crate::plans::JoinType;
 use crate::plans::LogicalGet;
-use crate::plans::LogicalInnerJoin;
+use crate::plans::LogicalJoin;
 use crate::plans::LogicalOperator;
 use crate::plans::OrExpr;
 use crate::plans::PatternPlan;
@@ -51,9 +52,11 @@ use crate::plans::RelOp;
 use crate::plans::RelOperator;
 use crate::plans::Scalar;
 use crate::plans::ScalarItem;
+use crate::plans::Statistics;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
 use crate::ColumnBinding;
+use crate::ColumnEntry;
 use crate::IndexType;
 use crate::MetadataRef;
 use crate::ScalarExpr;
@@ -177,7 +180,7 @@ impl SubqueryRewriter {
             }
         }
 
-        let join = LogicalInnerJoin {
+        let join = LogicalJoin {
             left_conditions,
             right_conditions,
             non_equi_conditions,
@@ -249,7 +252,7 @@ impl SubqueryRewriter {
                     &mut right_conditions,
                     &mut left_conditions,
                 )?;
-                let join_plan = LogicalInnerJoin {
+                let join_plan = LogicalJoin {
                     left_conditions,
                     right_conditions,
                     non_equi_conditions: vec![],
@@ -280,14 +283,12 @@ impl SubqueryRewriter {
                 let marker_index = if let Some(idx) = subquery.projection_index {
                     idx
                 } else {
-                    self.metadata.write().add_column(
+                    self.metadata.write().add_derived_column(
                         "marker".to_string(),
                         NullableType::new_impl(BooleanType::new_impl()),
-                        None,
-                        None,
                     )
                 };
-                let join_plan = LogicalInnerJoin {
+                let join_plan = LogicalJoin {
                     left_conditions: right_conditions,
                     right_conditions: left_conditions,
                     non_equi_conditions: vec![],
@@ -334,14 +335,12 @@ impl SubqueryRewriter {
                 let marker_index = if let Some(idx) = subquery.projection_index {
                     idx
                 } else {
-                    self.metadata.write().add_column(
+                    self.metadata.write().add_derived_column(
                         "marker".to_string(),
                         NullableType::new_impl(BooleanType::new_impl()),
-                        None,
-                        None,
                     )
                 };
-                let mark_join = LogicalInnerJoin {
+                let mark_join = LogicalJoin {
                     left_conditions: right_conditions,
                     right_conditions: left_conditions,
                     non_equi_conditions,
@@ -382,20 +381,19 @@ impl SubqueryRewriter {
                 .unwrap();
             for correlated_column in correlated_columns.iter() {
                 let column_entry = metadata.column(*correlated_column).clone();
+                let (name, data_type) = match &column_entry {
+                    ColumnEntry::BaseTableColumn {
+                        column_name,
+                        data_type,
+                        ..
+                    } => (column_name, data_type),
+                    ColumnEntry::DerivedColumn {
+                        alias, data_type, ..
+                    } => (alias, data_type),
+                };
                 self.derived_columns.insert(
                     *correlated_column,
-                    metadata.add_column(
-                        column_entry.name().to_string(),
-                        if let DataTypeImpl::Nullable(_) = column_entry.data_type() {
-                            column_entry.data_type().clone()
-                        } else {
-                            DataTypeImpl::Nullable(NullableType::create(
-                                column_entry.data_type().clone(),
-                            ))
-                        },
-                        None,
-                        None,
-                    ),
+                    metadata.add_derived_column(name.to_string(), wrap_nullable(data_type)),
                 );
             }
             let logical_get = SExpr::create_leaf(
@@ -405,13 +403,17 @@ impl SubqueryRewriter {
                     push_down_predicates: None,
                     limit: None,
                     order_by: None,
-                    statistics: None,
+                    statistics: Statistics {
+                        statistics: None,
+                        col_stats: HashMap::new(),
+                        is_accurate: false,
+                    },
                     prewhere: None,
                 }
                 .into(),
             );
             // Todo(xudong963): Wrap logical get with distinct to eliminate duplicates rows.
-            let cross_join = LogicalInnerJoin {
+            let cross_join = LogicalJoin {
                 left_conditions: vec![],
                 right_conditions: vec![],
                 non_equi_conditions: vec![],
@@ -449,12 +451,16 @@ impl SubqueryRewriter {
                 let metadata = self.metadata.read();
                 for derived_column in self.derived_columns.values() {
                     let column_entry = metadata.column(*derived_column);
+                    let data_type = match column_entry {
+                        ColumnEntry::BaseTableColumn { data_type, .. } => data_type,
+                        ColumnEntry::DerivedColumn { data_type, .. } => data_type,
+                    };
                     let column_binding = ColumnBinding {
                         database_name: None,
                         table_name: None,
                         column_name: format!("subquery_{}", derived_column),
                         index: *derived_column,
-                        data_type: Box::from(column_entry.data_type().clone()),
+                        data_type: Box::from(data_type.clone()),
                         visibility: Visibility::Visible,
                     };
                     items.push(ScalarItem {
@@ -494,7 +500,7 @@ impl SubqueryRewriter {
                 .into();
                 Ok(SExpr::create_unary(filter_plan, flatten_plan))
             }
-            RelOperator::LogicalInnerJoin(join) => {
+            RelOperator::LogicalJoin(join) => {
                 // Currently, we don't support join conditions contain subquery
                 if join
                     .used_columns()?
@@ -516,7 +522,7 @@ impl SubqueryRewriter {
                     need_cross_join,
                 )?;
                 Ok(SExpr::create_binary(
-                    LogicalInnerJoin {
+                    LogicalJoin {
                         left_conditions: join.left_conditions.clone(),
                         right_conditions: join.right_conditions.clone(),
                         non_equi_conditions: join.non_equi_conditions.clone(),
@@ -555,12 +561,16 @@ impl SubqueryRewriter {
                     let column_binding = {
                         let metadata = self.metadata.read();
                         let column_entry = metadata.column(*derived_column);
+                        let data_type = match column_entry {
+                            ColumnEntry::BaseTableColumn { data_type, .. } => data_type,
+                            ColumnEntry::DerivedColumn { data_type, .. } => data_type,
+                        };
                         ColumnBinding {
                             database_name: None,
                             table_name: None,
                             column_name: format!("subquery_{}", derived_column),
                             index: *derived_column,
-                            data_type: Box::from(column_entry.data_type().clone()),
+                            data_type: Box::from(data_type.clone()),
                             visibility: Visibility::Visible,
                         }
                     };
@@ -770,10 +780,11 @@ impl SubqueryRewriter {
         right_conditions: &mut Vec<Scalar>,
     ) -> Result<()> {
         for correlated_column in correlated_columns.iter() {
-            let data_type = {
-                let metadata = self.metadata.read();
-                let column_entry = metadata.column(*correlated_column);
-                column_entry.data_type().clone()
+            let metadata = self.metadata.read();
+            let column_entry = metadata.column(*correlated_column);
+            let data_type = match column_entry {
+                ColumnEntry::BaseTableColumn { data_type, .. } => data_type,
+                ColumnEntry::DerivedColumn { data_type, .. } => data_type,
             };
             let right_column = Scalar::BoundColumnRef(BoundColumnRef {
                 column: ColumnBinding {
@@ -792,7 +803,7 @@ impl SubqueryRewriter {
                     table_name: None,
                     column_name: format!("subquery_{}", derive_column),
                     index: *derive_column,
-                    data_type: Box::from(data_type),
+                    data_type: Box::from(data_type.clone()),
                     visibility: Visibility::Visible,
                 },
             });

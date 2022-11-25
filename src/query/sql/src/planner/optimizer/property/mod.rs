@@ -20,9 +20,13 @@ mod property;
 mod stat;
 
 pub use builder::RelExpr;
+pub use column_stat::ColumnStat;
+pub use column_stat::ColumnStatSet;
 pub use enforcer::require_property;
 pub use property::ColumnSet;
 pub use property::Distribution;
 pub use property::PhysicalProperty;
 pub use property::RelationalProperty;
 pub use property::RequiredProperty;
+pub use property::Statistics;
+pub use property::TableSet;

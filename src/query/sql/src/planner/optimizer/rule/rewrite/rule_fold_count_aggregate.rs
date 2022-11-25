@@ -87,7 +87,18 @@ impl Rule for RuleFoldCountAggregate {
                 _ => false,
             });
 
-        if let (true, Some(card)) = (is_simple_count, input_prop.precise_cardinality) {
+        let simple_nullable_count = agg.group_items.is_empty()
+            && agg.aggregate_functions.iter().all(|agg| match &agg.scalar {
+                Scalar::AggregateFunction(agg_func) => {
+                    agg_func.func_name == "count"
+                        && (agg_func.args.is_empty()
+                            || matches!(agg_func.args[0].data_type(), Nullable(_)))
+                        && !agg_func.distinct
+                }
+                _ => false,
+            });
+
+        if let (true, Some(card)) = (is_simple_count, input_prop.statistics.precise_cardinality) {
             let mut scalars = agg.aggregate_functions;
             for item in scalars.iter_mut() {
                 item.scalar = Scalar::ConstantExpr(ConstantExpr {
@@ -101,8 +112,36 @@ impl Rule for RuleFoldCountAggregate {
                 eval_scalar.into(),
                 SExpr::create_leaf(dummy_table_scan.into()),
             ));
+        } else if let (true, true, column_stats, Some(table_card)) = (
+            simple_nullable_count,
+            input_prop.statistics.is_accurate,
+            input_prop.statistics.column_stats,
+            input_prop.statistics.precise_cardinality,
+        ) {
+            let mut scalars = agg.aggregate_functions;
+            for item in scalars.iter_mut() {
+                if let Scalar::AggregateFunction(agg_func) = item.scalar.clone() {
+                    let col_set = agg_func.args[0].used_columns();
+                    for index in col_set {
+                        let col_stat = column_stats.get(&index);
+                        if let Some(card) = col_stat {
+                            item.scalar = Scalar::ConstantExpr(ConstantExpr {
+                                value: DataValue::UInt64(table_card - card.null_count),
+                                data_type: Box::new(item.scalar.data_type()),
+                            });
+                        } else {
+                            return Ok(());
+                        }
+                    }
+                }
+            }
+            let eval_scalar = EvalScalar { items: scalars };
+            let dummy_table_scan = DummyTableScan;
+            state.add_result(SExpr::create_unary(
+                eval_scalar.into(),
+                SExpr::create_leaf(dummy_table_scan.into()),
+            ));
         }
-
         Ok(())
     }
 

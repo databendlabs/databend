@@ -17,6 +17,8 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use common_base::base::tokio::runtime::Handle;
+use common_base::base::AsyncThreadTracker;
+use common_base::base::ThreadTracker;
 use opendal::ops::OpCreate;
 use opendal::ops::OpDelete;
 use opendal::ops::OpList;
@@ -73,54 +75,48 @@ impl Accessor for RuntimeAccessor {
     async fn create(&self, path: &str, args: OpCreate) -> Result<()> {
         let op = self.inner.clone();
         let path = path.to_string();
-        self.runtime
-            .spawn(async move { op.create(&path, args).await })
-            .await
-            .expect("join must success")
+        let future = async move { op.create(&path, args).await };
+        let future = AsyncThreadTracker::create(ThreadTracker::fork(), future);
+        self.runtime.spawn(future).await.expect("join must success")
     }
 
     async fn read(&self, path: &str, args: OpRead) -> Result<ObjectReader> {
         let op = self.inner.clone();
         let path = path.to_string();
-        self.runtime
-            .spawn(async move { op.read(&path, args).await })
-            .await
-            .expect("join must success")
+        let future = async move { op.read(&path, args).await };
+        let future = AsyncThreadTracker::create(ThreadTracker::fork(), future);
+        self.runtime.spawn(future).await.expect("join must success")
     }
 
     async fn write(&self, path: &str, args: OpWrite, r: BytesReader) -> Result<u64> {
         let op = self.inner.clone();
         let path = path.to_string();
-        self.runtime
-            .spawn(async move { op.write(&path, args, r).await })
-            .await
-            .expect("join must success")
+        let future = async move { op.write(&path, args, r).await };
+        let future = AsyncThreadTracker::create(ThreadTracker::fork(), future);
+        self.runtime.spawn(future).await.expect("join must success")
     }
 
     async fn stat(&self, path: &str, args: OpStat) -> Result<ObjectMetadata> {
         let op = self.inner.clone();
         let path = path.to_string();
-        self.runtime
-            .spawn(async move { op.stat(&path, args).await })
-            .await
-            .expect("join must success")
+        let future = async move { op.stat(&path, args).await };
+        let future = AsyncThreadTracker::create(ThreadTracker::fork(), future);
+        self.runtime.spawn(future).await.expect("join must success")
     }
 
     async fn delete(&self, path: &str, args: OpDelete) -> Result<()> {
         let op = self.inner.clone();
         let path = path.to_string();
-        self.runtime
-            .spawn(async move { op.delete(&path, args).await })
-            .await
-            .expect("join must success")
+        let future = async move { op.delete(&path, args).await };
+        let future = AsyncThreadTracker::create(ThreadTracker::fork(), future);
+        self.runtime.spawn(future).await.expect("join must success")
     }
 
     async fn list(&self, path: &str, args: OpList) -> Result<ObjectStreamer> {
         let op = self.inner.clone();
         let path = path.to_string();
-        self.runtime
-            .spawn(async move { op.list(&path, args).await })
-            .await
-            .expect("join must success")
+        let future = async move { op.list(&path, args).await };
+        let future = AsyncThreadTracker::create(ThreadTracker::fork(), future);
+        self.runtime.spawn(future).await.expect("join must success")
     }
 }

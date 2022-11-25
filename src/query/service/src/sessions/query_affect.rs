@@ -27,9 +27,9 @@ pub enum QueryAffect {
     UseDB {
         name: String,
     },
-    ChangeSetting {
-        key: String,
-        value: String,
-        is_global: bool,
+    ChangeSettings {
+        keys: Vec<String>,
+        values: Vec<String>,
+        is_globals: Vec<bool>,
     },
 }

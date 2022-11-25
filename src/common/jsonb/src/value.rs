@@ -14,14 +14,9 @@
 
 use std::borrow::Cow;
 use std::collections::BTreeMap;
-use std::convert::From;
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
-
-use serde_json::Map as JsonMap;
-use serde_json::Number as JsonNumber;
-use serde_json::Value as JsonValue;
 
 use super::number::Number;
 use super::ser::Encoder;
@@ -290,36 +285,6 @@ impl<'a> Value<'a> {
                 Some(Value::Array(keys))
             }
             _ => None,
-        }
-    }
-}
-
-impl<'a> From<Value<'a>> for JsonValue {
-    fn from(value: Value<'a>) -> Self {
-        match value {
-            Value::Null => JsonValue::Null,
-            Value::Bool(v) => JsonValue::Bool(v),
-            Value::Number(v) => match v {
-                Number::Int64(v) => JsonValue::Number(v.into()),
-                Number::UInt64(v) => JsonValue::Number(v.into()),
-                Number::Float64(v) => JsonValue::Number(JsonNumber::from_f64(v).unwrap()),
-            },
-            Value::String(v) => JsonValue::String(v.to_string()),
-            Value::Array(arr) => {
-                let mut vals: Vec<JsonValue> = Vec::with_capacity(arr.len());
-                for val in arr {
-                    vals.push(val.into());
-                }
-                JsonValue::Array(vals)
-            }
-            Value::Object(obj) => {
-                let mut map = JsonMap::new();
-                for (k, v) in obj.iter() {
-                    let val: JsonValue = v.clone().into();
-                    map.insert(k.to_string(), val);
-                }
-                JsonValue::Object(map)
-            }
         }
     }
 }

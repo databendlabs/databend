@@ -1,0 +1,132 @@
+ast            : great_circle_distance(55.755831, 37.617673, -55.755831, -37.617673)
+raw expr       : great_circle_distance(55.755831_f64, 37.617673_f64, minus(55.755831_f64), minus(37.617673_f64))
+checked expr   : great_circle_distance<Float64, Float64, Float64, Float64>(55.755831_f64, 37.617673_f64, minus<Float64>(55.755831_f64), minus<Float64>(37.617673_f64))
+optimized expr : 14128353_f32
+output type    : Float32
+output domain  : {-inf..=NaN}
+output         : 14128353
+
+
+ast            : great_circle_distance(lon1, lat1, lon2, lat2)
+raw expr       : great_circle_distance(ColumnRef(0)::Float64, ColumnRef(1)::Float64, ColumnRef(2)::Float64, ColumnRef(3)::Float64)
+checked expr   : great_circle_distance<Float64, Float64, Float64, Float64>(ColumnRef(0), ColumnRef(1), ColumnRef(2), ColumnRef(3))
+evaluation:
++--------+-------------------------+-------------------------+---------------------------+---------------------------+--------------+
+|        | lon1                    | lat1                    | lon2                      | lat2                      | Output       |
++--------+-------------------------+-------------------------+---------------------------+---------------------------+--------------+
+| Type   | Float64                 | Float64                 | Float64                   | Float64                   | Float32      |
+| Domain | {55.755831..=57.755831} | {37.617673..=39.617673} | {-57.755831..=-55.755831} | {-39.617673..=-37.617673} | {-inf..=NaN} |
+| Row 0  | 55.755831               | 37.617673               | -55.755831                | -37.617673                | 14128353     |
+| Row 1  | 56.755831               | 38.617673               | -56.755831                | -38.617673                | 14374804     |
+| Row 2  | 57.755831               | 39.617673               | -57.755831                | -39.617673                | 14618267     |
++--------+-------------------------+-------------------------+---------------------------+---------------------------+--------------+
+evaluation (internal):
++--------+-----------------------------------------------+
+| Column | Data                                          |
++--------+-----------------------------------------------+
+| lon1   | Float64([55.755831, 56.755831, 57.755831])    |
+| lat1   | Float64([37.617673, 38.617673, 39.617673])    |
+| lon2   | Float64([-55.755831, -56.755831, -57.755831]) |
+| lat2   | Float64([-37.617673, -38.617673, -39.617673]) |
+| Output | Float32([14128353, 14374804, 14618267])       |
++--------+-----------------------------------------------+
+
+
+ast            : geo_distance(55.755831, 37.617673, -55.755831, -37.617673)
+raw expr       : geo_distance(55.755831_f64, 37.617673_f64, minus(55.755831_f64), minus(37.617673_f64))
+checked expr   : geo_distance<Float64, Float64, Float64, Float64>(55.755831_f64, 37.617673_f64, minus<Float64>(55.755831_f64), minus<Float64>(37.617673_f64))
+optimized expr : 14128353_f32
+output type    : Float32
+output domain  : {-inf..=NaN}
+output         : 14128353
+
+
+ast            : geo_distance(lon1, lat1, lon2, lat2)
+raw expr       : geo_distance(ColumnRef(0)::Float64, ColumnRef(1)::Float64, ColumnRef(2)::Float64, ColumnRef(3)::Float64)
+checked expr   : geo_distance<Float64, Float64, Float64, Float64>(ColumnRef(0), ColumnRef(1), ColumnRef(2), ColumnRef(3))
+evaluation:
++--------+-------------------------+-------------------------+---------------------------+---------------------------+--------------+
+|        | lon1                    | lat1                    | lon2                      | lat2                      | Output       |
++--------+-------------------------+-------------------------+---------------------------+---------------------------+--------------+
+| Type   | Float64                 | Float64                 | Float64                   | Float64                   | Float32      |
+| Domain | {55.755831..=57.755831} | {37.617673..=39.617673} | {-57.755831..=-55.755831} | {-39.617673..=-37.617673} | {-inf..=NaN} |
+| Row 0  | 55.755831               | 37.617673               | -55.755831                | -37.617673                | 14128353     |
+| Row 1  | 56.755831               | 38.617673               | -56.755831                | -38.617673                | 14374804     |
+| Row 2  | 57.755831               | 39.617673               | -57.755831                | -39.617673                | 14618267     |
++--------+-------------------------+-------------------------+---------------------------+---------------------------+--------------+
+evaluation (internal):
++--------+-----------------------------------------------+
+| Column | Data                                          |
++--------+-----------------------------------------------+
+| lon1   | Float64([55.755831, 56.755831, 57.755831])    |
+| lat1   | Float64([37.617673, 38.617673, 39.617673])    |
+| lon2   | Float64([-55.755831, -56.755831, -57.755831]) |
+| lat2   | Float64([-37.617673, -38.617673, -39.617673]) |
+| Output | Float32([14128353, 14374804, 14618267])       |
++--------+-----------------------------------------------+
+
+
+ast            : great_circle_angle(0, 0, 45, 0)
+raw expr       : great_circle_angle(0_u8, 0_u8, 45_u8, 0_u8)
+checked expr   : great_circle_angle<Float64, Float64, Float64, Float64>(CAST(0_u8 AS Float64), CAST(0_u8 AS Float64), CAST(45_u8 AS Float64), CAST(0_u8 AS Float64))
+optimized expr : 44.99998_f32
+output type    : Float32
+output domain  : {-inf..=NaN}
+output         : 44.99998
+
+
+ast            : great_circle_angle(0, 0, a, 0)
+raw expr       : great_circle_angle(0_u8, 0_u8, ColumnRef(0)::Float64, 0_u8)
+checked expr   : great_circle_angle<Float64, Float64, Float64, Float64>(CAST(0_u8 AS Float64), CAST(0_u8 AS Float64), ColumnRef(0), CAST(0_u8 AS Float64))
+optimized expr : great_circle_angle<Float64, Float64, Float64, Float64>(0_f64, 0_f64, ColumnRef(0), 0_f64)
+evaluation:
++--------+-----------+--------------+
+|        | a         | Output       |
++--------+-----------+--------------+
+| Type   | Float64   | Float32      |
+| Domain | {45..=47} | {-inf..=NaN} |
+| Row 0  | 45        | 44.99998     |
+| Row 1  | 46        | 45.99966     |
+| Row 2  | 47        | 46.99969     |
++--------+-----------+--------------+
+evaluation (internal):
++--------+-----------------------------------------+
+| Column | Data                                    |
++--------+-----------------------------------------+
+| a      | Float64([45, 46, 47])                   |
+| Output | Float32([44.99998, 45.99966, 46.99969]) |
++--------+-----------------------------------------+
+
+
+ast            : point_in_ellipses(10., 10., 10., 9.1, 1., 0.9999)
+raw expr       : point_in_ellipses(10_f64, 10_f64, 10_f64, 9.1_f64, 1_f64, 0.9999_f64)
+checked expr   : point_in_ellipses<Float64, Float64, Float64, Float64, Float64, Float64>(10_f64, 10_f64, 10_f64, 9.1_f64, 1_f64, 0.9999_f64)
+optimized expr : 1_u8
+output type    : UInt8
+output domain  : {0..=255}
+output         : 1
+
+
+ast            : point_in_ellipses(10., 10., 10., 9.1, a, b)
+raw expr       : point_in_ellipses(10_f64, 10_f64, 10_f64, 9.1_f64, ColumnRef(0)::Float64, ColumnRef(1)::Float64)
+checked expr   : point_in_ellipses<Float64, Float64, Float64, Float64, Float64, Float64>(10_f64, 10_f64, 10_f64, 9.1_f64, ColumnRef(0), ColumnRef(1))
+evaluation:
++--------+-----------+-------------------+-----------+
+|        | a         | b                 | Output    |
++--------+-----------+-------------------+-----------+
+| Type   | Float64   | Float64           | UInt8     |
+| Domain | {1..=1.2} | {0.9997..=0.9999} | {0..=255} |
+| Row 0  | 1         | 0.9999            | 0         |
+| Row 1  | 1.1       | 0.9998            | 0         |
+| Row 2  | 1.2       | 0.9997            | 0         |
++--------+-----------+-------------------+-----------+
+evaluation (internal):
++--------+-----------------------------------+
+| Column | Data                              |
++--------+-----------------------------------+
+| a      | Float64([1, 1.1, 1.2])            |
+| b      | Float64([0.9999, 0.9998, 0.9997]) |
+| Output | UInt8([0, 0, 0])                  |
++--------+-----------------------------------+
+
+

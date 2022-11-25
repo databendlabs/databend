@@ -1,6 +1,6 @@
 <img src="https://user-images.githubusercontent.com/172204/193307982-a286c574-80ef-41de-b52f-1b064ae7fccd.png" alt="databend" />
 <div align="center">
- 
+
 <h4 align="center">
   <a href="https://databend.rs/doc/cloud">Databend Serverless Cloud (beta)</a>  |
   <a href="https://databend.rs/doc">Documentation</a>  |
@@ -63,24 +63,24 @@ Databend uses the latest techniques in vectorized query processing to allow you 
 - __Blazing Performance__
 
   Databend leverages data-level parallelism(Vectorized Query Execution) and instruction-level parallelism(SIMD) technology, offering blazing performance data analytics.
-  
-  
+
+
 - __Git-like Storage__
 
   Databend stores data with snapshots. It's easy to query, clone, and restore historical data in tables.
 
 - __Support for Semi-Structured Data__
 
-  Databend supports [ingestion of semi-structured data](https://databend.rs/doc/load-data) in various formats like CSV, JSON, and Parquet, which are located in the cloud or your local file system; Databend also supports semi-structured data types: [ARRAY, MAP, JSON](https://databend.rs/doc/reference/data-types/data-type-semi-structured-types), which is easy to import and operate on semi-structured.
+  Databend supports [ingestion of semi-structured data](https://databend.rs/doc/load-data) in various formats like CSV, JSON, and Parquet, which are located in the cloud or your local file system; Databend also supports semi-structured data types: [ARRAY, MAP, JSON](https://databend.rs/doc/sql-reference/data-types/data-type-semi-structured-types), which is easy to import and operate on semi-structured.
 
 - __MySQL/ClickHouse Compatible__
 
-  Databend is ANSI SQL compliant and MySQL/ClickHouse wire protocol compatible, making it easy to connect with existing tools([MySQL Client](https://databend.rs/doc/reference/api/mysql-handler), [ClickHouse Client](https://databend.rs/doc/reference/api/clickhouse-handler), [Vector](https://vector.dev/), [DBeaver](https://dbeaver.com/), [Jupyter](https://databend.rs/doc/integrations/gui-tool/jupyter), [JDBC](https://databend.rs/doc/develop), etc.).
+  Databend is ANSI SQL compliant and MySQL/ClickHouse wire protocol compatible, making it easy to connect with existing tools([MySQL Client](https://databend.rs/doc/integrations/api/mysql-handler), [ClickHouse Client](https://databend.rs/doc/integrations/api/clickhouse-handler), [Vector](https://vector.dev/), [DBeaver](https://dbeaver.com/), [Jupyter](https://databend.rs/doc/integrations/gui-tool/jupyter), [JDBC](https://databend.rs/doc/develop), etc.).
 
 - __Easy to Use__
 
   Databend has no indexes to build, no manual tuning required, no manual figuring out partitions or shard data, it’s all done for you as data is loaded into the table.
- 
+
 ## Architecture
 
 ![databend-arch](https://user-images.githubusercontent.com/172204/181448994-2b7c1623-6b20-4398-8917-45acca95ba90.png)
@@ -113,11 +113,11 @@ docker run --net=host  datafuselabs/databend
 - [Deploying a Standalone Databend](https://databend.rs/doc/deploy/deploying-databend)
 - [Expanding a Standalone Databend](https://databend.rs/doc/deploy/expanding-to-a-databend-cluster)
 - [Databend Cloud (Beta)](https://databend.rs/doc/cloud)
- 
+
 ### Connecting to Databend
 
-- [How to Connect Databend with MySQL Client](https://databend.rs/doc/reference/api/mysql-handler)
-- [How to Connect Databend with ClickHouse Client](https://databend.rs/doc/reference/api/clickhouse-handler)
+- [How to Connect Databend with MySQL Client](https://databend.rs/doc/integrations/api/mysql-handler)
+- [How to Connect Databend with ClickHouse Client](https://databend.rs/doc/integrations/api/clickhouse-handler)
 - [How to Connect Databend with DBeaver SQL IDE](https://databend.rs/doc/integrations/gui-tool/dbeaver)
 - [How to Execute Queries in Python](https://databend.rs/doc/develop/python)
 - [How to Query Databend in Jupyter Notebooks](https://databend.rs/doc/integrations/gui-tool/jupyter)
@@ -127,59 +127,58 @@ docker run --net=host  datafuselabs/databend
 ### Loading Data into Databend
 
 - [How to Load Data from Local File System](https://databend.rs/doc/load-data/local)
-- [How to Load Data from Remote Files](https://databend.rs/doc/load-data/remote)
+- [How to Load Data from Remote Files](https://databend.rs/doc/load-data/http)
 - [How to Load Data from Amazon S3](https://databend.rs/doc/load-data/s3)
 - [How to Load Data from Databend Stages](https://databend.rs/doc/load-data/stage)
-- [How to Load Data from MySQL](https://databend.rs/doc/load-data/mysql)
 
 ### Managing Users
 
-- [How to Create a User](https://databend.rs/doc/reference/sql/ddl/user/user-create-user)
-- [How to Grant Privileges to a User](https://databend.rs/doc/reference/sql/ddl/user/grant-privileges)
-- [How to Revoke Privileges from a User](https://databend.rs/doc/reference/sql/ddl/user/revoke-privileges)
-- [How to Create a Role](https://databend.rs/doc/reference/sql/ddl/user/user-create-role)
-- [How to Grant Privileges to a Role](https://databend.rs/doc/reference/sql/ddl/user/grant-privileges)
-- [How to Grant Role to a User](https://databend.rs/doc/reference/sql/ddl/user/grant-role)
-- [How to Revoke Role from a User](https://databend.rs/doc/reference/sql/ddl/user/revoke-role)
- 
+- [How to Create a User](https://databend.rs/doc/sql-commands/ddl/user/user-create-user)
+- [How to Grant Privileges to a User](https://databend.rs/doc/sql-commands/ddl/user/grant-privileges)
+- [How to Revoke Privileges from a User](https://databend.rs/doc/sql-commands/ddl/user/revoke-privileges)
+- [How to Create a Role](https://databend.rs/doc/sql-commands/ddl/user/user-create-role)
+- [How to Grant Privileges to a Role](https://databend.rs/doc/sql-commands/ddl/user/grant-privileges)
+- [How to Grant Role to a User](https://databend.rs/doc/sql-commands/ddl/user/grant-role)
+- [How to Revoke Role from a User](https://databend.rs/doc/sql-commands/ddl/user/revoke-role)
+
 ### Managing Databases
 
-- [How to Create a Database](https://databend.rs/doc/reference/sql/ddl/database/ddl-create-database)
-- [How to Drop a Database](https://databend.rs/doc/reference/sql/ddl/database/ddl-drop-database)
+- [How to Create a Database](https://databend.rs/doc/sql-commands/ddl/database/ddl-create-database)
+- [How to Drop a Database](https://databend.rs/doc/sql-commands/ddl/database/ddl-drop-database)
 
 ### Managing Tables
 
-- [How to Create a Table](https://databend.rs/doc/reference/sql/ddl/table/ddl-create-table)
-- [How to Drop a Table](https://databend.rs/doc/reference/sql/ddl/table/ddl-drop-table)
-- [How to Rename a Table](https://databend.rs/doc/reference/sql/ddl/table/ddl-rename-table)
-- [How to Truncate a Table](https://databend.rs/doc/reference/sql/ddl/table/ddl-truncate-table)
+- [How to Create a Table](https://databend.rs/doc/sql-commands/ddl/table/ddl-create-table)
+- [How to Drop a Table](https://databend.rs/doc/sql-commands/ddl/table/ddl-drop-table)
+- [How to Rename a Table](https://databend.rs/doc/sql-commands/ddl/table/ddl-rename-table)
+- [How to Truncate a Table](https://databend.rs/doc/sql-commands/ddl/table/ddl-truncate-table)
 
 ### Managing Views
 
-- [How to Create a View](https://databend.rs/doc/reference/sql/ddl/view/ddl-create-view)
-- [How to Drop a View](https://databend.rs/doc/reference/sql/ddl/view/ddl-drop-view)
-- [How to Alter a View](https://databend.rs/doc/reference/sql/ddl/view/ddl-alter-view)
+- [How to Create a View](https://databend.rs/doc/sql-commands/ddl/view/ddl-create-view)
+- [How to Drop a View](https://databend.rs/doc/sql-commands/ddl/view/ddl-drop-view)
+- [How to Alter a View](https://databend.rs/doc/sql-commands/ddl/view/ddl-alter-view)
 
 ### Managing User-Defined Functions
 
-- [How to Create a User-Defined Function](http://databend.rs/doc/reference/sql/ddl/udf/ddl-create-function)
-- [How to Drop a User-Defined Function](http://databend.rs/doc/reference/sql/ddl/udf/ddl-drop-function)
-- [How to Alter a User-Defined Function](http://databend.rs/doc/reference/sql/ddl/udf/ddl-alter-function)
+- [How to Create a User-Defined Function](https://databend.rs/doc/sql-commands/ddl/udf/ddl-create-function)
+- [How to Drop a User-Defined Function](https://databend.rs/doc/sql-commands/ddl/udf/ddl-drop-function)
+- [How to Alter a User-Defined Function](https://databend.rs/doc/sql-commands/ddl/udf/ddl-alter-function)
 
 ### Backup & Restore
 
-* [How to Back Up Meta Data](https://databend.rs/doc/manage/metasrv/metasrv-backup-restore)
-* [How to Back Up Databases](https://databend.rs/doc/manage/backup-restore/backup-and-restore-schema)
+* [How to Back Up Meta Data](https://databend.rs/doc/deploy/metasrv/metasrv-backup-restore)
+* [How to Back Up Databases](https://databend.rs/doc/deploy/backup-restore/backup-and-restore-schema)
 
 ### Use Cases
 
-- [Analyzing Nginx Access Logs With Databend](https://databend.rs/doc/learn/analyze-nginx-logs-with-databend-and-vector)
-- [User Retention Analysis With Databend](https://databend.rs/doc/learn/analyze-user-retention-with-databend)
-- [Conversion Funnel Analysis With Databend](https://databend.rs/doc/learn/analyze-funnel-with-databend)
+- [Analyzing Nginx Access Logs With Databend](https://databend.rs/doc/use-cases/analyze-nginx-logs-with-databend-and-vector)
+- [User Retention Analysis With Databend](https://databend.rs/doc/use-cases/analyze-user-retention-with-databend)
+- [Conversion Funnel Analysis With Databend](https://databend.rs/doc/use-cases/analyze-funnel-with-databend)
 
 ### Performance
 
-- [How to Benchmark Databend](https://databend.rs/doc/learn/analyze-ontime-with-databend-on-ec2-and-s3)
+- [How to Benchmark Databend](https://databend.rs/doc/use-cases/analyze-ontime-with-databend-on-ec2-and-s3)
 
 
 ## Contributing

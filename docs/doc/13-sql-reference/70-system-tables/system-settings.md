@@ -89,7 +89,7 @@ set max_block_size = 65536;
 
 ## max_threads
 
-The maximum number of threads to execute the request. By default the value is 0 it means determined automatically. The value usually the same as the number of logical cpus.
+The maximum number of threads to execute the request. By default the value is determined automatically. The value usually the same as the number of logical cpus.
 
 Examples:
 

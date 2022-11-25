@@ -36,7 +36,7 @@ pub fn display_memo(memo: &Memo, cost_map: &HashMap<IndexType, CostContext>) -> 
 pub fn display_rel_op(rel_op: &RelOperator) -> String {
     match rel_op {
         RelOperator::LogicalGet(_) => "LogicalGet".to_string(),
-        RelOperator::LogicalInnerJoin(_) => "LogicalInnerJoin".to_string(),
+        RelOperator::LogicalJoin(_) => "LogicalJoin".to_string(),
         RelOperator::PhysicalScan(_) => "PhysicalScan".to_string(),
         RelOperator::PhysicalHashJoin(_) => "PhysicalHashJoin".to_string(),
         RelOperator::EvalScalar(_) => "EvalScalar".to_string(),

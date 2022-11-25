@@ -571,6 +571,8 @@ floor(Float64) :: Float64
 floor(Float64 NULL) :: Float64 NULL
 from_base64(String) :: String
 from_base64(String NULL) :: String NULL
+geo_distance(Float64, Float64, Float64, Float64) :: Float32
+geo_distance(Float64 NULL, Float64 NULL, Float64 NULL, Float64 NULL) :: Float32 NULL
 get(Array(Nothing) NULL, UInt64 NULL) :: NULL
 get(Array(T0 NULL), UInt64) :: T0 NULL
 get(Array(T0 NULL) NULL, UInt64 NULL) :: T0 NULL
@@ -584,6 +586,10 @@ get_ignore_case(Variant, String) :: Variant NULL
 get_ignore_case(Variant NULL, String NULL) :: Variant NULL
 get_path(Variant, String) :: Variant NULL
 get_path(Variant NULL, String NULL) :: Variant NULL
+great_circle_angle(Float64, Float64, Float64, Float64) :: Float32
+great_circle_angle(Float64 NULL, Float64 NULL, Float64 NULL, Float64 NULL) :: Float32 NULL
+great_circle_distance(Float64, Float64, Float64, Float64) :: Float32
+great_circle_distance(Float64 NULL, Float64 NULL, Float64 NULL, Float64 NULL) :: Float32 NULL
 gt(String, String) :: Boolean
 gt(String NULL, String NULL) :: Boolean NULL
 gt(Timestamp, Timestamp) :: Boolean
@@ -2442,6 +2448,7 @@ concat
 concat_ws
 get
 multi_if
+point_in_ellipses
 regexp_instr
 regexp_like
 regexp_replace

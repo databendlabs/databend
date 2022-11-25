@@ -461,12 +461,10 @@ impl<'a> Binder {
             .enumerate()
         {
             let left_index = if left_col.data_type != coercion_types[idx] {
-                let new_column_index = self.metadata.write().add_column(
-                    left_col.column_name.clone(),
-                    coercion_types[idx].clone(),
-                    None,
-                    None,
-                );
+                let new_column_index = self
+                    .metadata
+                    .write()
+                    .add_derived_column(left_col.column_name.clone(), coercion_types[idx].clone());
                 let column_binding = ColumnBinding {
                     database_name: None,
                     table_name: None,
@@ -496,12 +494,10 @@ impl<'a> Binder {
                 left_col.index
             };
             let right_index = if right_col.data_type != coercion_types[idx] {
-                let new_column_index = self.metadata.write().add_column(
-                    right_col.column_name.clone(),
-                    coercion_types[idx].clone(),
-                    None,
-                    None,
-                );
+                let new_column_index = self
+                    .metadata
+                    .write()
+                    .add_derived_column(right_col.column_name.clone(), coercion_types[idx].clone());
                 let right_coercion_expr = CastExpr {
                     argument: Box::new(
                         BoundColumnRef {

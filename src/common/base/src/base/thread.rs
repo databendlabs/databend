@@ -68,11 +68,13 @@ impl Thread {
             thread_builder = thread_builder.name(named);
         }
 
-        ThreadJoinHandle::create(match ThreadTracker::current_runtime_tracker() {
+        ThreadJoinHandle::create(match ThreadTracker::current_mem_tracker() {
             None => thread_builder.spawn(f).unwrap(),
-            Some(runtime_tracker) => thread_builder
+            Some(memory_tracker) => thread_builder
                 .spawn(move || {
-                    ThreadTracker::create(runtime_tracker);
+                    ThreadTracker::attach_thread_tracker(Some(ThreadTracker::create(
+                        memory_tracker,
+                    )));
                     f()
                 })
                 .unwrap(),

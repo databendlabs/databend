@@ -97,8 +97,6 @@ impl HeuristicOptimizer {
         let pre_optimized = self.pre_optimize(s_expr)?;
         let optimized = self.optimize_expression(&pre_optimized)?;
         let post_optimized = self.post_optimize(optimized)?;
-        // let mut result = self.implement_expression(&post_optimized)?;
-
         Ok(post_optimized)
     }
 

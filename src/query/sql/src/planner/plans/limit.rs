@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
+use common_catalog::table_context::TableContext;
 use common_exception::Result;
 
 use crate::optimizer::ColumnSet;
@@ -20,6 +23,7 @@ use crate::optimizer::PhysicalProperty;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
 use crate::optimizer::RequiredProperty;
+use crate::optimizer::Statistics;
 use crate::plans::LogicalOperator;
 use crate::plans::Operator;
 use crate::plans::PhysicalOperator;
@@ -60,6 +64,7 @@ impl PhysicalOperator for Limit {
 
     fn compute_required_prop_child<'a>(
         &self,
+        _ctx: Arc<dyn TableContext>,
         _rel_expr: &RelExpr<'a>,
         _child_index: usize,
         required: &RequiredProperty,
@@ -82,9 +87,11 @@ impl LogicalOperator for Limit {
                 Some(limit) if (limit as f64) < input_prop.cardinality => limit as f64,
                 _ => input_prop.cardinality,
             },
-            precise_cardinality: None,
-
-            column_stats: Default::default(),
+            statistics: Statistics {
+                precise_cardinality: None,
+                column_stats: Default::default(),
+                is_accurate: false,
+            },
         })
     }
 

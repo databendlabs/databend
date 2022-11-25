@@ -12,51 +12,61 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_exception::ErrorCode;
+use common_exception::Result;
 use common_io::prelude::*;
 
 use crate::Column;
 use crate::Scalar;
 use crate::TypeDeserializer;
 
-#[derive(Debug, Default)]
-pub struct NullDeserializer {
-    pub len: usize,
-}
-
-impl NullDeserializer {
-    pub fn create() -> Self {
-        Self { len: 0 }
-    }
-}
-
-impl TypeDeserializer for NullDeserializer {
+impl TypeDeserializer for usize {
     fn memory_size(&self) -> usize {
-        self.len
+        std::mem::size_of::<usize>()
     }
 
-    fn de_default(&mut self, _format: &FormatSettings) {
-        self.len += 1;
-    }
-
-    fn append_data_value(
-        &mut self,
-        _value: Scalar,
-        _format: &FormatSettings,
-    ) -> Result<(), String> {
-        self.len += 1;
+    fn de_binary(&mut self, _reader: &mut &[u8], _format: &FormatSettings) -> Result<()> {
+        *self += 1;
         Ok(())
     }
 
-    fn pop_data_value(&mut self) -> Result<Scalar, String> {
-        if self.len > 0 {
-            self.len -= 1;
-            Ok(Scalar::Null)
+    fn de_default(&mut self) {
+        *self += 1;
+    }
+
+    fn de_fixed_binary_batch(
+        &mut self,
+        _reader: &[u8],
+        _step: usize,
+        rows: usize,
+        _format: &FormatSettings,
+    ) -> Result<()> {
+        for _ in 0..rows {
+            *self += 1;
+        }
+        Ok(())
+    }
+
+    fn de_json(&mut self, _value: &serde_json::Value, _format: &FormatSettings) -> Result<()> {
+        *self += 1;
+        Ok(())
+    }
+
+    fn append_data_value(&mut self, _value: Scalar, _format: &FormatSettings) -> Result<()> {
+        *self += 1;
+        Ok(())
+    }
+
+    fn pop_data_value(&mut self) -> Result<()> {
+        if *self > 0 {
+            *self -= 1;
+            Ok(())
         } else {
-            Err("Null column is empty when pop data value".to_string())
+            Err(ErrorCode::from("Null column is empty when pop data value"))
         }
     }
 
     fn finish_to_column(&mut self) -> Column {
-        Column::Null { len: self.len }
+        Column::Null { len: *self }
     }
 }

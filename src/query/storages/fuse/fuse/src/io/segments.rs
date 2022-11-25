@@ -22,7 +22,6 @@ use common_exception::Result;
 use common_storages_table_meta::meta::Location;
 use common_storages_table_meta::meta::SegmentInfo;
 use futures_util::future;
-use itertools::Itertools;
 use opendal::Operator;
 use tracing::Instrument;
 
@@ -41,14 +40,10 @@ impl SegmentsIO {
 
     // Read one segment file by location.
     // The index is the index of the segment_location in segment_locations.
-    async fn read_segment(
-        dal: Operator,
-        segment_location: Location,
-        index: usize,
-    ) -> (usize, Result<Arc<SegmentInfo>>) {
+    async fn read_segment(dal: Operator, segment_location: Location) -> Result<Arc<SegmentInfo>> {
         let (path, ver) = segment_location;
         let reader = MetaReaders::segment_info_reader(dal);
-        (index, reader.read(path, None, ver).await)
+        reader.read(path, None, ver).await
     }
 
     // Read all segments information from s3 in concurrency.
@@ -66,12 +61,12 @@ impl SegmentsIO {
         let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
 
         // 1.1 combine all the tasks.
-        let mut iter = segment_locations.iter().enumerate();
+        let mut iter = segment_locations.iter();
         let tasks = std::iter::from_fn(move || {
-            if let Some((idx, location)) = iter.next() {
+            if let Some(location) = iter.next() {
                 let location = location.clone();
                 Some(
-                    Self::read_segment(self.operator.clone(), location, idx)
+                    Self::read_segment(self.operator.clone(), location)
                         .instrument(tracing::debug_span!("read_segment")),
                 )
             } else {
@@ -90,17 +85,11 @@ impl SegmentsIO {
         let join_handlers = segments_runtime.try_spawn_batch(semaphore, tasks).await?;
 
         // 1.4 get all the result.
-        let joint: Vec<(usize, Result<Arc<SegmentInfo>>)> = future::try_join_all(join_handlers)
+        let joint = future::try_join_all(join_handlers)
             .instrument(tracing::debug_span!("read_segments_join_all"))
             .await
             .map_err(|e| ErrorCode::StorageOther(format!("read segments failure, {}", e)))?;
 
-        // 1.5 sort the result by the segment index.
-        let res: Vec<Result<Arc<SegmentInfo>>> = joint
-            .into_iter()
-            .sorted_by_key(|&(idx, _)| idx)
-            .map(|(_, r)| r)
-            .collect();
-        Ok(res)
+        Ok(joint)
     }
 }

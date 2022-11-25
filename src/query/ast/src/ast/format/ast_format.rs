@@ -919,6 +919,13 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
+    fn visit_unset_variable(&mut self, stmt: &'ast UnSetStmt<'ast>) {
+        let name = format!("UnSet {}", stmt);
+        let format_ctx = AstFormatContext::new(name);
+        let node = FormatTreeNode::new(format_ctx);
+        self.children.push(node);
+    }
+
     fn visit_insert(&mut self, insert: &'ast InsertStmt<'ast>) {
         let mut children = Vec::new();
         self.visit_table_ref(&insert.catalog, &insert.database, &insert.table);

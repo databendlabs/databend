@@ -144,9 +144,9 @@ impl FuseTable {
                 let max_memory_usage = ctx.get_settings().get_max_memory_usage()? as usize;
 
                 let setting_io_requests =
-                    ctx.get_settings().get_max_storage_io_requests()? as usize + 1;
-                let adjust_io_requests = (max_memory_usage / column_memory_usage) + 1;
-                std::cmp::min(adjust_io_requests, setting_io_requests)
+                    std::cmp::max(1, ctx.get_settings().get_max_storage_io_requests()?);
+                let adjust_io_requests = std::cmp::max(1, max_memory_usage / column_memory_usage);
+                std::cmp::min(adjust_io_requests, setting_io_requests as usize)
             }
         })
     }

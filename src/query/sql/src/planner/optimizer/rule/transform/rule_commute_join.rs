@@ -19,7 +19,7 @@ use crate::optimizer::rule::TransformResult;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
 use crate::plans::JoinType;
-use crate::plans::LogicalInnerJoin;
+use crate::plans::LogicalJoin;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 
@@ -44,7 +44,7 @@ impl RuleCommuteJoin {
             // *  *
             pattern: SExpr::create_binary(
                 PatternPlan {
-                    plan_type: RelOp::LogicalInnerJoin,
+                    plan_type: RelOp::LogicalJoin,
                 }
                 .into(),
                 SExpr::create_pattern_leaf(),
@@ -60,7 +60,7 @@ impl Rule for RuleCommuteJoin {
     }
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
-        let mut join: LogicalInnerJoin = s_expr.plan().clone().try_into()?;
+        let mut join: LogicalJoin = s_expr.plan().clone().try_into()?;
         let left_child = s_expr.child(0)?;
         let right_child = s_expr.child(1)?;
 

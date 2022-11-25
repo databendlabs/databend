@@ -39,18 +39,38 @@ pub struct Config {
     /// Run a command
     ///
     /// Supported commands:
+    ///
     /// - `ver`: print version and quit.
+    ///
     /// - `show-config`: print effective config and quit.
-    /// - `kvapi::<cmd>`: run kvapi command. The command can be `upsert`, `get`, `mget` and `list`
+    ///
+    /// - `kvapi::<cmd>`: run kvapi command. The command can be `upsert`, `delete`, `get`, `mget` and `list`:
+    ///
+    /// -    `--cmd kvapi::upsert --key    foo --value bar`
+    ///
+    /// -    `--cmd kvapi::delete --key    foo`
+    ///
+    /// -    `--cmd kvapi::get    --key    foo`
+    ///
+    /// -    `--cmd kvapi::mget   --key    foo bar`
+    ///
+    /// -    `--cmd kvapi::list   --prefix foo/`
     #[clap(long, default_value = "")]
     pub cmd: String,
 
+    /// The key sent to databend-meta server and is only used when running with `--cmd kvapi::*`
     #[clap(long, default_value = "", multiple = true)]
     pub key: Vec<String>,
 
+    /// The value sent to databend-meta server and is only used when running with `--cmd kvapi::upsert`
     #[clap(long, default_value = "")]
     pub value: String,
 
+    /// The seconds after which the value should expire. Only used when running with `--cmd kvapi::upsert`
+    #[clap(long)]
+    pub expire_after: Option<u64>,
+
+    /// The prefix sent to databend-meta server and is only used when running with `--cmd kvapi::list`
     #[clap(long, default_value = "")]
     pub prefix: String,
 
@@ -117,6 +137,7 @@ impl From<Config> for InnerConfig {
             cmd: x.cmd,
             key: x.key,
             value: x.value,
+            expire_after: x.expire_after,
             prefix: x.prefix,
             username: x.username,
             password: x.password,
@@ -139,6 +160,7 @@ impl From<InnerConfig> for Config {
             cmd: inner.cmd,
             key: inner.key,
             value: inner.value,
+            expire_after: inner.expire_after,
             prefix: inner.prefix,
             username: inner.username,
             password: inner.password,
@@ -327,6 +349,7 @@ impl Into<Config> for ConfigViaEnv {
             cmd: "".to_string(),
             key: vec![],
             value: "".to_string(),
+            expire_after: None,
             prefix: "".to_string(),
             username: "".to_string(),
             password: "".to_string(),

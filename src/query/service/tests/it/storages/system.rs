@@ -118,6 +118,10 @@ async fn run_table_tests(
         actual_lines.as_mut_slice()[2..num_lines - 1].sort_unstable()
     }
     writeln!(file, "-------- TABLE CONTENTS ----------").unwrap();
+    if table_info.name.to_lowercase() == "settings" {
+        actual_lines
+            .retain(|&item| !(item.contains("max_threads") || item.contains("max_memory_usage")));
+    }
     for line in actual_lines {
         writeln!(file, "{}", line).unwrap();
     }
@@ -305,6 +309,7 @@ async fn test_roles_table(file: &mut impl Write) -> Result<()> {
 async fn test_settings_table(file: &mut impl Write) -> Result<()> {
     let (_guard, ctx) = crate::tests::create_query_context().await?;
     ctx.get_settings().set_max_threads(2)?;
+    ctx.get_settings().set_max_memory_usage(1073741824)?;
 
     let table = SettingsTable::create(1);
 
@@ -353,6 +358,8 @@ async fn test_tables_table() -> Result<()> {
         r"\| system             \| clusters            \| SystemClusters     \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
         r"\| system             \| columns             \| SystemColumns      \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
         r"\| system             \| configs             \| SystemConfigs      \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
+        r"\| system             \| malloc_stats        \| SystemMetrics      \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
+        r"\| system             \| malloc_stats_totals \| SystemMetrics      \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
         r"\| system             \| contributors        \| SystemContributors \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
         r"\| system             \| credits             \| SystemCredits      \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
         r"\| system             \| databases           \| SystemDatabases    \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",

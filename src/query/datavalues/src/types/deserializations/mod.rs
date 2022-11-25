@@ -14,7 +14,6 @@
 
 use common_exception::Result;
 use enum_dispatch::enum_dispatch;
-use serde_json::Value;
 
 use crate::prelude::*;
 
@@ -31,7 +30,6 @@ mod variant;
 
 pub use array::*;
 pub use boolean::*;
-use common_io::prelude::FormatSettings;
 pub use date::*;
 pub use null::*;
 pub use nullable::*;
@@ -45,25 +43,17 @@ pub use variant::*;
 pub trait TypeDeserializer: Send + Sync {
     fn memory_size(&self) -> usize;
 
-    fn de_binary(&mut self, reader: &mut &[u8], format: &FormatSettings) -> Result<()>;
+    fn de_binary(&mut self, reader: &mut &[u8]) -> Result<()>;
 
     fn de_default(&mut self);
 
-    fn de_fixed_binary_batch(
-        &mut self,
-        reader: &[u8],
-        step: usize,
-        rows: usize,
-        format: &FormatSettings,
-    ) -> Result<()>;
+    fn de_fixed_binary_batch(&mut self, reader: &[u8], step: usize, rows: usize) -> Result<()>;
 
-    fn de_json(&mut self, reader: &Value, format: &FormatSettings) -> Result<()>;
-
-    fn de_null(&mut self, _format: &FormatSettings) -> bool {
+    fn de_null(&mut self) -> bool {
         false
     }
 
-    fn append_data_value(&mut self, value: DataValue, format: &FormatSettings) -> Result<()>;
+    fn append_data_value(&mut self, value: DataValue) -> Result<()>;
 
     /// Note this method will return err only when inner builder is empty.
     fn pop_data_value(&mut self) -> Result<DataValue>;
