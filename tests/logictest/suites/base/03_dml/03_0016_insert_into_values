@@ -62,7 +62,7 @@ statement error 4000
 insert into st1 values (upper('a'));
 
 statement ok
-insert into st1 values ('a'),('b'),('c');
+insert into st1 values ('a'),('b'), ('c');
 
 statement query T
 select * from st1;
@@ -72,6 +72,16 @@ A
 a
 b
 c
+
+statement query I
+select segment_count from fuse_snapshot('db1', 'st1');
+
+----
+2
+1
+
+statement ok
+set global insert_values_enable_expression = 1;
 
 statement ok
 drop table st1;
