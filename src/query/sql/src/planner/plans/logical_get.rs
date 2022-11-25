@@ -119,6 +119,8 @@ impl LogicalOperator for LogicalGet {
             used_columns.extend(prewhere.prewhere_columns.iter());
         }
 
+        used_columns.extend(self.columns.iter());
+
         let mut column_stats: ColumnStatSet = Default::default();
         for (k, v) in &self.statistics.col_stats {
             if let Some(col_stat) = v {

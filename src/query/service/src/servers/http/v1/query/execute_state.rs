@@ -37,6 +37,7 @@ use futures_util::FutureExt;
 use serde::Deserialize;
 use serde::Serialize;
 use tracing::error;
+use tracing::info;
 use ExecuteState::*;
 
 use crate::interpreters::Interpreter;
@@ -115,6 +116,7 @@ pub struct ExecuteRunning {
 }
 
 pub struct ExecuteStopped {
+    pub ctx: Arc<QueryContext>,
     pub stats: Progresses,
     pub affect: Option<QueryAffect>,
     pub reason: Result<()>,
@@ -167,10 +169,9 @@ impl Executor {
     pub async fn stop(this: &Arc<RwLock<Executor>>, reason: Result<()>, kill: bool) {
         {
             let guard = this.read().await;
-            tracing::info!(
+            info!(
                 "http query {}: change state to Stopped, reason {:?}",
-                &guard.query_id,
-                reason
+                &guard.query_id, reason
             );
         }
 
@@ -182,6 +183,7 @@ impl Executor {
                         .unwrap_or_else(|e| error!("fail to write query_log {:?}", e));
                 }
                 guard.state = Stopped(Box::new(ExecuteStopped {
+                    ctx: s.ctx.clone(),
                     stats: Default::default(),
                     reason,
                     stop_time: Instant::now(),
@@ -201,6 +203,7 @@ impl Executor {
                 }
 
                 guard.state = Stopped(Box::new(ExecuteStopped {
+                    ctx: r.ctx.clone(),
                     stats: Progresses::from_context(&r.ctx),
                     reason,
                     stop_time: Instant::now(),
@@ -208,11 +211,9 @@ impl Executor {
                 }))
             }
             Stopped(s) => {
-                tracing::info!(
+                info!(
                     "http query {}: already stopped, reason {:?}, new reason {:?}",
-                    &guard.query_id,
-                    s.reason,
-                    reason
+                    &guard.query_id, s.reason, reason
                 );
             }
         }

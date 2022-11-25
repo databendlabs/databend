@@ -12,10 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::BinaryRead;
-use common_io::prelude::FormatSettings;
 
 use crate::prelude::*;
 
@@ -28,7 +26,7 @@ impl TypeDeserializer for BooleanDeserializer {
         self.builder.memory_size()
     }
 
-    fn de_binary(&mut self, reader: &mut &[u8], _format: &FormatSettings) -> Result<()> {
+    fn de_binary(&mut self, reader: &mut &[u8]) -> Result<()> {
         let value: bool = reader.read_scalar()?;
         self.builder.append_value(value);
         Ok(())
@@ -38,13 +36,7 @@ impl TypeDeserializer for BooleanDeserializer {
         self.builder.append_value(false);
     }
 
-    fn de_fixed_binary_batch(
-        &mut self,
-        reader: &[u8],
-        step: usize,
-        rows: usize,
-        _format: &FormatSettings,
-    ) -> Result<()> {
+    fn de_fixed_binary_batch(&mut self, reader: &[u8], step: usize, rows: usize) -> Result<()> {
         for row in 0..rows {
             let mut reader = &reader[step * row..];
             let value: bool = reader.read_scalar()?;
@@ -54,15 +46,7 @@ impl TypeDeserializer for BooleanDeserializer {
         Ok(())
     }
 
-    fn de_json(&mut self, value: &serde_json::Value, _format: &FormatSettings) -> Result<()> {
-        match value {
-            serde_json::Value::Bool(v) => self.builder.append_value(*v),
-            _ => return Err(ErrorCode::BadBytes("Incorrect boolean value")),
-        }
-        Ok(())
-    }
-
-    fn append_data_value(&mut self, value: DataValue, _format: &FormatSettings) -> Result<()> {
+    fn append_data_value(&mut self, value: DataValue) -> Result<()> {
         self.builder.append_value(value.as_bool()?);
         Ok(())
     }

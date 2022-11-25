@@ -124,11 +124,10 @@ class HttpConnector(object):
         url = f"http://{self._host}:{self._port}/v1/query/"
         log.debug(f"http sql: {statement}")
 
-        query_sql = {'sql': statement}
+        query_sql = {"sql": statement}
 
         if session is not None:
             query_sql["session"] = session
-            print("query_sql is ", query_sql)
         log.debug(f"http headers {self.make_headers()}")
         response = requests.post(
             url, data=json.dumps(query_sql), headers=self.make_headers()
@@ -152,7 +151,6 @@ class HttpConnector(object):
     # return a list of response util empty next_uri
     def query_with_session(self, statement):
         current_session = self._session
-        print(current_session)
         response_list = list()
         response = self.query(statement, current_session)
         log.debug(f"response content: {response}")

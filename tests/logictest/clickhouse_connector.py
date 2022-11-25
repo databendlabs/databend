@@ -15,9 +15,7 @@ class ClickhouseConnector(object):
                 protocol = "https"
             else:
                 protocol = "http"
-        self._uri = (
-            f"clickhouse+http://{user}:{password}@{host}:{port}/{database}?protocol={protocol}"
-        )
+        self._uri = f"clickhouse+http://{user}:{password}@{host}:{port}/{database}?protocol={protocol}"
         log.debug(self._uri)
         e = environs.Env()
         self._additonal_headers = dict()

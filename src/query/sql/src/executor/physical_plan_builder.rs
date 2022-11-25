@@ -58,6 +58,7 @@ use crate::plans::Exchange;
 use crate::plans::PhysicalScan;
 use crate::plans::RelOperator;
 use crate::plans::Scalar;
+use crate::ColumnEntry;
 use crate::IndexType;
 use crate::Metadata;
 use crate::MetadataRef;
@@ -84,7 +85,10 @@ impl PhysicalPlanBuilder {
             let col_indices = columns
                 .iter()
                 .map(|index| {
-                    let name = metadata.column(*index).name();
+                    let name = match metadata.column(*index) {
+                        ColumnEntry::BaseTableColumn { column_name, .. } => column_name,
+                        ColumnEntry::DerivedColumn { alias, .. } => alias,
+                    };
                     schema.index_of(name).unwrap()
                 })
                 .sorted()
@@ -95,11 +99,20 @@ impl PhysicalPlanBuilder {
                 .iter()
                 .map(|index| {
                     let column = metadata.column(*index);
-                    match &column.path_indices() {
-                        Some(path_indices) => (column.index(), path_indices.to_vec()),
-                        None => {
-                            let name = metadata.column(*index).name();
-                            let idx = schema.index_of(name).unwrap();
+                    match column {
+                        ColumnEntry::BaseTableColumn {
+                            column_name,
+                            path_indices,
+                            ..
+                        } => match path_indices {
+                            Some(path_indices) => (column.index(), path_indices.to_vec()),
+                            None => {
+                                let idx = schema.index_of(column_name).unwrap();
+                                (column.index(), vec![idx])
+                            }
+                        },
+                        ColumnEntry::DerivedColumn { alias, .. } => {
+                            let idx = schema.index_of(alias).unwrap();
                             (column.index(), vec![idx])
                         }
                     }
@@ -121,18 +134,24 @@ impl PhysicalPlanBuilder {
                 let metadata = self.metadata.read().clone();
                 for index in scan.columns.iter() {
                     let column = metadata.column(*index);
-                    if column.has_path_indices() {
-                        has_inner_column = true;
+                    if let ColumnEntry::BaseTableColumn { path_indices, .. } = column {
+                        if path_indices.is_some() {
+                            has_inner_column = true;
+                        }
                     }
+
+                    let name = match column {
+                        ColumnEntry::BaseTableColumn { column_name, .. } => column_name,
+                        ColumnEntry::DerivedColumn { alias, .. } => alias,
+                    };
                     if let Some(prewhere) = &scan.prewhere {
                         // if there is a prewhere optimization,
                         // we can prune `PhysicalScan`'s output schema.
                         if prewhere.output_columns.contains(index) {
-                            name_mapping.insert(column.name().to_string(), index.to_string());
+                            name_mapping.insert(name.to_string(), index.to_string());
                         }
                     } else {
-                        let name = column.name().to_string();
-                        name_mapping.insert(name, index.to_string());
+                        name_mapping.insert(name.to_string(), index.to_string());
                     }
                 }
 
@@ -258,40 +277,40 @@ impl PhysicalPlanBuilder {
                     AggregateMode::Partial => {
                         let input_schema = input.output_schema()?;
                         let agg_funcs: Vec<AggregateFunctionDesc> = agg.aggregate_functions.iter().map(|v| {
-                                if let Scalar::AggregateFunction(agg) = &v.scalar {
-                                    Ok(AggregateFunctionDesc {
-                                        sig: AggregateFunctionSignature {
-                                            name: agg.func_name.clone(),
-                                            args: agg.args.iter().map(|s| {
-                                                s.data_type()
-                                            }).collect(),
-                                            params: agg.params.clone(),
-                                            return_type: *agg.return_type.clone(),
-                                        },
-                                        column_id: v.index.to_string(),
-                                        args: agg.args.iter().map(|arg| {
-                                            if let Scalar::BoundColumnRef(col) = arg {
-                                                input_schema.index_of(&col.column.index.to_string())
-                                            } else {
-                                                Err(ErrorCode::Internal(
-                                                    "Aggregate function argument must be a BoundColumnRef".to_string()
-                                                ))
-                                            }
-                                        }).collect::<Result<_>>()?,
-                                        arg_indices: agg.args.iter().map(|arg| {
-                                            if let Scalar::BoundColumnRef(col) = arg {
-                                                Ok(col.column.index)
-                                            } else {
-                                                Err(ErrorCode::Internal(
-                                                    "Aggregate function argument must be a BoundColumnRef".to_string()
-                                                ))
-                                            }
-                                        }).collect::<Result<_>>()?,
-                                    })
-                                } else {
-                                    Err(ErrorCode::Internal("Expected aggregate function".to_string()))
-                                }
-                            }).collect::<Result<_>>()?;
+                            if let Scalar::AggregateFunction(agg) = &v.scalar {
+                                Ok(AggregateFunctionDesc {
+                                    sig: AggregateFunctionSignature {
+                                        name: agg.func_name.clone(),
+                                        args: agg.args.iter().map(|s| {
+                                            s.data_type()
+                                        }).collect(),
+                                        params: agg.params.clone(),
+                                        return_type: *agg.return_type.clone(),
+                                    },
+                                    column_id: v.index.to_string(),
+                                    args: agg.args.iter().map(|arg| {
+                                        if let Scalar::BoundColumnRef(col) = arg {
+                                            input_schema.index_of(&col.column.index.to_string())
+                                        } else {
+                                            Err(ErrorCode::Internal(
+                                                "Aggregate function argument must be a BoundColumnRef".to_string()
+                                            ))
+                                        }
+                                    }).collect::<Result<_>>()?,
+                                    arg_indices: agg.args.iter().map(|arg| {
+                                        if let Scalar::BoundColumnRef(col) = arg {
+                                            Ok(col.column.index)
+                                        } else {
+                                            Err(ErrorCode::Internal(
+                                                "Aggregate function argument must be a BoundColumnRef".to_string()
+                                            ))
+                                        }
+                                    }).collect::<Result<_>>()?,
+                                })
+                            } else {
+                                Err(ErrorCode::Internal("Expected aggregate function".to_string()))
+                            }
+                        }).collect::<Result<_>>()?;
 
                         match input {
                             PhysicalPlan::Exchange(PhysicalExchange { input, kind, .. }) => {
@@ -577,14 +596,20 @@ impl PhysicalPlanBuilder {
                     .into_iter()
                     .map(|item| {
                         let metadata = self.metadata.read();
-                        let ty = metadata.column(item.index).data_type();
-                        let name = metadata.column(item.index).name();
+                        let column = metadata.column(item.index);
+                        let (name, data_type) = match column {
+                            ColumnEntry::BaseTableColumn {
+                                column_name,
+                                data_type,
+                                ..
+                            } => (column_name.clone(), data_type.clone()),
+                            ColumnEntry::DerivedColumn {
+                                alias, data_type, ..
+                            } => (alias.clone(), data_type.clone()),
+                        };
 
                         // sort item is already a column
-                        let scalar = Expression::IndexedVariable {
-                            name: name.to_string(),
-                            data_type: ty.clone(),
-                        };
+                        let scalar = Expression::IndexedVariable { name, data_type };
 
                         Ok((scalar, item.asc, item.nulls_first))
                     })

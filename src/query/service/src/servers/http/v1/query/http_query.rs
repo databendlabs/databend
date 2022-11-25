@@ -241,6 +241,7 @@ impl HttpQuery {
         let ctx_clone = ctx.clone();
         let sql = request.sql.clone();
         let query_id = id.clone();
+        let query_id_clone = id.clone();
         ctx.try_spawn(async move {
             let state = state_clone.clone();
             let running_state = ExecuteState::try_start_query(
@@ -259,6 +260,7 @@ impl HttpQuery {
                 Err(e) => {
                     InterpreterQueryLog::fail_to_start(ctx_clone.clone(), e.clone());
                     let state = ExecuteStopped {
+                        ctx: ctx_clone.clone(),
                         stats: Progresses::default(),
                         reason: Err(e.clone()),
                         stop_time: Instant::now(),
@@ -278,9 +280,9 @@ impl HttpQuery {
 
         let format_settings = ctx.get_format_settings()?;
         let data = Arc::new(TokioMutex::new(PageManager::new(
+            query_id_clone,
             request.pagination.max_rows_per_page,
             block_receiver,
-            request.string_fields,
             format_settings,
         )));
         let query = HttpQuery {

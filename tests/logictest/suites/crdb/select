@@ -93,8 +93,11 @@ SELECT k,v FROM kv;
 ----
 a NULL
 
-statement error 1008
+statement query T
 SELECT v||'foo' FROM kv;
+
+----
+NULL
 
 statement query T
 SELECT lower(v) FROM kv;

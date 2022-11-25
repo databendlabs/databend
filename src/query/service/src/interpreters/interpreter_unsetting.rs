@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_settings::ScopeLevel;
+use common_settings::ScopeLevel::Global;
 use common_sql::plans::UnSettingPlan;
 
 use crate::interpreters::Interpreter;
@@ -46,19 +46,34 @@ impl Interpreter for UnSettingInterpreter {
         let mut keys: Vec<String> = vec![];
         let mut values: Vec<String> = vec![];
         let mut is_globals: Vec<bool> = vec![];
+        let settings = self.ctx.get_settings();
         for var in plan.vars {
             let (ok, value) = match var.to_lowercase().as_str() {
                 // To be compatible with some drivers
                 "sql_mode" | "autocommit" => (false, String::from("")),
                 setting => {
-                    let settings = self.ctx.get_settings();
-                    match settings.get_setting_level(setting)? {
-                        ScopeLevel::Global => {
-                            self.ctx.get_settings().try_drop_setting(setting)?;
-                        }
-                        ScopeLevel::Session => {}
+                    if matches!(settings.get_setting_level(setting)?, Global) {
+                        self.ctx.get_settings().try_drop_setting(setting).await?;
                     }
-                    let default_val = settings.check_and_get_default_value(setting)?.to_string();
+                    let default_val = {
+                        if setting == "max_memory_usage" {
+                            let conf = self.ctx.get_config();
+                            if conf.query.max_memory_usage == 0 {
+                                settings.check_and_get_default_value(setting)?.to_string()
+                            } else {
+                                conf.query.max_memory_usage.to_string()
+                            }
+                        } else if setting == "max_threads" {
+                            let conf = self.ctx.get_config();
+                            if conf.query.num_cpus == 0 {
+                                settings.check_and_get_default_value(setting)?.to_string()
+                            } else {
+                                conf.query.num_cpus.to_string()
+                            }
+                        } else {
+                            settings.check_and_get_default_value(setting)?.to_string()
+                        }
+                    };
                     (true, default_val)
                 }
             };

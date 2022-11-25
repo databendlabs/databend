@@ -19,6 +19,7 @@ mod aggregate_function_factory;
 mod aggregate_function_state;
 
 mod adaptors;
+mod aggregate_approx_count_distinct;
 mod aggregate_arg_min_max;
 mod aggregate_avg;
 mod aggregate_combinator_distinct;
@@ -34,9 +35,6 @@ mod aggregate_sum;
 mod aggregate_window_funnel;
 mod aggregator;
 mod aggregator_common;
-
-// mod aggregate_stddev_pop;
-// mod aggregate_window_funnel;
 
 pub use adaptors::*;
 pub use aggregate_arg_min_max::AggregateArgMinMaxFunction;
@@ -57,6 +55,3 @@ pub use aggregate_retention::AggregateRetentionFunction;
 pub use aggregate_sum::AggregateSumFunction;
 pub use aggregator::Aggregators;
 pub use aggregator_common::*;
-
-// pub use aggregate_stddev_pop::AggregateStddevPopFunction;
-// pub use aggregate_window_funnel::AggregateWindowFunnelFunction;
