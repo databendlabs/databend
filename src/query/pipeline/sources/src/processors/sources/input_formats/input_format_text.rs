@@ -27,8 +27,8 @@ use common_meta_types::StageFileFormatType;
 use common_meta_types::UserStageInfo;
 use common_pipeline_core::Pipeline;
 use common_settings::Settings;
-use opendal::io_util::DecompressDecoder;
-use opendal::io_util::DecompressState;
+use opendal::raw::DecompressDecoder;
+use opendal::raw::DecompressState;
 use opendal::Operator;
 
 use super::InputFormat;

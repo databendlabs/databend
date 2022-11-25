@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::io::ErrorKind;
 use std::sync::Arc;
 
 use backon::ExponentialBackoff;
@@ -109,7 +108,7 @@ impl ResultTableWriter {
         let object = self.data_accessor.object(&location);
         { || object.write(data.as_slice()) }
             .retry(ExponentialBackoff::default().with_jitter())
-            .when(|err| err.kind() == ErrorKind::Interrupted)
+            .when(|err| err.is_temporary())
             .notify(|err, dur| {
                 warn!(
                     "append block write retry after {}s for error {:?}",
