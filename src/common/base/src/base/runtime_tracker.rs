@@ -15,6 +15,7 @@
 use std::future::Future;
 use std::pin::Pin;
 use std::ptr::NonNull;
+use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicI64;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -25,6 +26,12 @@ use futures::FutureExt;
 
 #[thread_local]
 static mut TRACKER: Option<ThreadTracker> = None;
+
+/// A flag indicating if current thread panicked due to exceeding memory limit.
+///
+/// While panicking, building a backtrace allocates a few more memory, these allocation should not trigger panicking again.
+#[thread_local]
+static PANICKING: AtomicBool = AtomicBool::new(false);
 
 static UNTRACKED_MEMORY_LIMIT: i64 = 4 * 1024 * 1024;
 
@@ -196,6 +203,11 @@ impl MemoryTracker {
     /// Accumulate memory usage and check if it exceeds the limit.
     #[inline]
     pub fn record_memory(&self, state: &StatBuffer) {
+        if PANICKING.load(Ordering::Relaxed) {
+            // This thread already panicked, do not panic again, do not push event to parent tracker either.
+            return;
+        }
+
         let mut used = self
             .memory_usage
             .fetch_add(state.memory_usage, Ordering::Relaxed);
@@ -205,7 +217,13 @@ impl MemoryTracker {
         let limit = self.limit.load(Ordering::Relaxed);
 
         if limit > 0 && used > limit {
-            panic!("memory usage exceeds user defined limit");
+            // Before panicking, disable limit checking. Otherwise it will panic again when building a backtrace.
+            PANICKING.store(true, Ordering::Relaxed);
+
+            panic!(
+                "memory usage({}) exceeds user defined limit({})",
+                used, limit
+            );
         }
 
         if let Some(parent_memory_tracker) = &self.parent_memory_tracker {
