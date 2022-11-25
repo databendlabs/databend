@@ -115,6 +115,9 @@ impl PrewhereOptimizer {
             get.prewhere = if prewhere_pred.is_empty() {
                 None
             } else {
+                if prewhere_columns.is_empty() {
+                    prewhere_columns = get.columns.clone();
+                }
                 Some(Prewhere {
                     output_columns: get.columns.clone(),
                     prewhere_columns,
