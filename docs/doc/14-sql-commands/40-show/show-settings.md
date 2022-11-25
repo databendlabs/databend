@@ -35,12 +35,13 @@ SHOW SETTINGS;
 | format_skip_header              | 0           | 0           | SESSION | Whether to skip the input header, default value: 0.                                                               | UInt64 |
 | group_by_two_level_threshold    | 10000       | 10000       | SESSION | The threshold of keys to open two-level aggregation, default value: 10000.                                        | UInt64 |
 | input_read_buffer_size          | 1048576     | 1048576     | SESSION | The size of buffer in bytes for input with format. By default, it is 1MB.                                         | UInt64 |
+| insert_values_enable_expression | 1           | 1           | SESSION | Whether to enable expression when insert values, default value: 1.                                                | UInt64 |
 | load_file_metadata_expire_hours | 168         | 168         | SESSION | How many hours will the COPY file metadata expired in the metasrv, default value: 24*7=7days                      | UInt64 |
 | max_block_size                  | 65536       | 65536       | SESSION | Maximum block size for reading, default value: 65536.                                                             | UInt64 |
 | max_execute_time                | 0           | 0           | SESSION | The maximum query execution time. it means no limit if the value is zero. default value: 0.                       | UInt64 |
-| max_memory_usage                | 26771259392 | 26771259392 | SESSION | The maximum memory usage for processing single query, in bytes. By default the value is determined automatically. | UInt64 |
+| max_memory_usage                | 13743895347 | 13743895347 | SESSION | The maximum memory usage for processing single query, in bytes. By default the value is determined automatically. | UInt64 |
 | max_storage_io_requests         | 1000        | 1000        | SESSION | The maximum number of concurrent IO requests. By default, it is 1000.                                             | UInt64 |
-| max_threads                     | 24          | 24          | SESSION | The maximum number of threads to execute the request. By default the value is determined automatically.           | UInt64 |
+| max_threads                     | 4           | 4           | SESSION | The maximum number of threads to execute the request. By default the value is determined automatically.           | UInt64 |
 | prefer_broadcast_join           | 0           | 0           | SESSION | If enable broadcast join, default value: 0                                                                        | UInt64 |
 | quoted_ident_case_sensitive     | 1           | 1           | SESSION | Case sensitivity of quoted identifiers, default value: 1 (aka case-sensitive).                                    | UInt64 |
 | row_tag                         | row         | row         | SESSION | In xml format, this field is represented as a row tag, e.g. <row>...</row>.                                       | String |

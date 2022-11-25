@@ -471,6 +471,16 @@ impl Settings {
                 desc: "How many hours will the COPY file metadata expired in the metasrv, default value: 24*7=7days",
                 possible_values: None,
             },
+            SettingValue {
+                default_value: UserSettingValue::UInt64(1),
+                user_setting: UserSetting::create(
+                    "insert_values_enable_expression",
+                    UserSettingValue::UInt64(1),
+                ),
+                level: ScopeLevel::Session,
+                desc: "Whether to enable expression when insert values, default value: 1.",
+                possible_values: None,
+            },
         ];
 
         let settings: Arc<DashMap<String, SettingValue>> = Arc::new(DashMap::default());
@@ -757,6 +767,11 @@ impl Settings {
     pub fn get_load_file_metadata_expire_hours(&self) -> Result<u64> {
         let key = "load_file_metadata_expire_hours";
         self.try_get_u64(key)
+    }
+
+    pub fn get_insert_values_enable_expression(&self) -> Result<u64> {
+        static KEY: &str = "insert_values_enable_expression";
+        self.try_get_u64(KEY)
     }
 
     pub fn has_setting(&self, key: &str) -> bool {
