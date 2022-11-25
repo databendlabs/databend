@@ -845,6 +845,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ec8a7b6a70fde80372154c65702f00a0f56f3e1c36abbc6c440484be248856db"
 
 [[package]]
+name = "bytesize"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6c58ec36aac5066d5ca17df51b3e70279f5670a72102f5752cb7e7c856adfc70"
+
+[[package]]
 name = "bzip2"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1238,12 +1244,14 @@ dependencies = [
  "anyhow",
  "async-channel",
  "async-trait",
+ "bytesize",
  "common-exception",
  "ctrlc",
  "futures",
  "libc",
  "num_cpus",
  "once_cell",
+ "pin-project-lite",
  "pprof",
  "rand 0.8.5",
  "semver 1.0.14",
