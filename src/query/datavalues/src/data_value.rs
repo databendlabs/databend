@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Borrow from apache/arrow/rust/datafusion/src/functions.rs
-// See notice.md
-
 use std::cmp::Ordering;
 use std::fmt;
 use std::hash::Hash;
