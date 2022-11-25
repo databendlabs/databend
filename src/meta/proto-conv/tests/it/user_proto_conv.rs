@@ -81,7 +81,7 @@ pub(crate) fn test_fs_stage_info() -> mt::UserStageInfo {
             skip_header: 1024,
             field_delimiter: "|".to_string(),
             record_delimiter: "//".to_string(),
-            nan_display: "nan".to_string(),
+            nan_display: "NaN".to_string(),
             escape: "\\".to_string(),
             compression: mt::StageFileCompression::Bz2,
             row_tag: "row".to_string(),

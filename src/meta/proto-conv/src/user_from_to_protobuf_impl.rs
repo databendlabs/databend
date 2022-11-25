@@ -495,7 +495,7 @@ impl FromToProto for mt::FileFormatOptions {
         )?;
 
         let nan_display = if p.nan_display.is_empty() {
-            "nan".to_string()
+            "".to_string()
         } else {
             p.nan_display
         };

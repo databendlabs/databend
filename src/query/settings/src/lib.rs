@@ -255,13 +255,13 @@ impl Settings {
                 possible_values: None,
             },
             SettingValue {
-                default_value: UserSettingValue::String("nan".to_owned()),
+                default_value: UserSettingValue::String("".to_owned()),
                 user_setting: UserSetting::create(
                     "format_nan_display",
-                    UserSettingValue::String("nan".to_owned()),
+                    UserSettingValue::String("".to_owned()),
                 ),
                 level: ScopeLevel::Session,
-                desc: "must be literal `nan` (case-sensitive), default value is \"nan\".",
+                desc: "must be literal `nan` or `null` (case-sensitive), default value is \"\".",
                 possible_values: None,
             },
             SettingValue {

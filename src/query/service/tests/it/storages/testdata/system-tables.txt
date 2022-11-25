@@ -338,7 +338,7 @@ DB.Table: 'system'.'settings', Table: settings-table_id:1, ver:0, Engine: System
 | format_empty_as_default         | 1          | 1           | SESSION | Format empty_as_default, default value: 1.                                                                        | UInt64 |
 | format_escape                   |            |             | SESSION | format escape char, default value: "", which means the format`s default setting.                                  | String |
 | format_field_delimiter          |            |             | SESSION | Format field delimiter, default value is "": use default of the format.                                           | String |
-| format_nan_display              | nan        | nan         | SESSION | must be literal `nan` (case-sensitive), default value is "nan".                                                   | String |
+| format_nan_display              |            |             | SESSION | must be literal `nan` or `null` (case-sensitive), default value is "".                                            | String |
 | format_quote                    |            |             | SESSION | The quote char for format. default value is "": use default of the format.                                        | String |
 | format_record_delimiter         |            |             | SESSION | Format record_delimiter, default value is "": use default of the format.                                          | String |
 | format_skip_header              | 0          | 0           | SESSION | Whether to skip the input header, default value: 0.                                                               | UInt64 |

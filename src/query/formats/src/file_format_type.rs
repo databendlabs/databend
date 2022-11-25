@@ -325,11 +325,12 @@ fn check_options(options: &mut FileFormatOptions) -> Result<()> {
         options.record_delimiter = '\n'.to_string();
     }
 
-    if options.nan_display.is_empty() {
-        options.nan_display = "nan".to_string();
-    } else if options.nan_display.len() != 3 || options.nan_display.to_lowercase() != "nan" {
+    if !options.nan_display.is_empty()
+        && (options.nan_display.to_lowercase() != "null"
+            && options.nan_display.to_lowercase() != "nan")
+    {
         return Err(ErrorCode::InvalidArgument(
-            "nan_display must be literal `nan` (case-sensitive)",
+            "nan_display must be literal `nan` or `null` (case-sensitive)",
         ));
     }
 
@@ -343,6 +344,9 @@ fn final_csv_options(options: &mut FileFormatOptionsExt) -> Result<()> {
     }
     if options.quote.is_empty() {
         options.quote = "\"".to_string();
+    }
+    if options.stage.nan_display.is_empty() {
+        options.stage.nan_display = "NaN".to_string();
     }
     Ok(())
 }
