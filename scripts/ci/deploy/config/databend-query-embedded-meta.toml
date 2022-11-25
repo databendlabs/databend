@@ -43,7 +43,6 @@ dir = "./.databend/logs_meta_embedded"
 [meta]
 # To enable embedded meta-store, set address to ""
 embedded_dir = "./.databend/meta_embedded"
-address = ""
 username = ""
 password = ""
 client_timeout_in_second = 60
