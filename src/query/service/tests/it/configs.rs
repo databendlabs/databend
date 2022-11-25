@@ -206,7 +206,7 @@ fn test_env_config_s3() -> Result<()> {
             ("QUERY_TABLE_DISK_CACHE_MB_SIZE", Some("512")),
             ("QUERY_TABLE_CACHE_SNAPSHOT_COUNT", Some("256")),
             ("QUERY_TABLE_CACHE_SEGMENT_COUNT", Some("10240")),
-            ("META_ENDPOINTS", Some("[0.0.0.0:9191]")),
+            ("META_ENDPOINTS", Some("0.0.0.0:9191")),
             ("TABLE_CACHE_BLOOM_INDEX_META_COUNT", Some("3000")),
             (
                 "TABLE_CACHE_BLOOM_INDEX_DATA_BYTES",
@@ -324,7 +324,7 @@ fn test_env_config_fs() -> Result<()> {
             ("QUERY_TABLE_DISK_CACHE_MB_SIZE", Some("512")),
             ("QU-ERY_TABLE_CACHE_SNAPSHOT_COUNT", Some("256")),
             ("QUERY_TABLE_CACHE_SEGMENT_COUNT", Some("10240")),
-            ("META_ENDPOINTS", Some("[0.0.0.0:9191]")),
+            ("META_ENDPOINTS", Some("0.0.0.0:9191")),
             ("TABLE_CACHE_BLOOM_INDEX_META_COUNT", Some("3000")),
             (
                 "TABLE_CACHE_BLOOM_INDEX_DATA_BYTES",
@@ -443,7 +443,7 @@ fn test_env_config_gcs() -> Result<()> {
             ("QUERY_TABLE_DISK_CACHE_MB_SIZE", Some("512")),
             ("QUERY_TABLE_CACHE_SNAPSHOT_COUNT", Some("256")),
             ("QUERY_TABLE_CACHE_SEGMENT_COUNT", Some("10240")),
-            ("META_ENDPOINTS", Some("[0.0.0.0:9191]")),
+            ("META_ENDPOINTS", Some("0.0.0.0:9191")),
             ("TABLE_CACHE_BLOOM_INDEX_META_COUNT", Some("3000")),
             (
                 "TABLE_CACHE_BLOOM_INDEX_DATA_BYTES",
@@ -569,7 +569,7 @@ fn test_env_config_oss() -> Result<()> {
             ("QUERY_TABLE_DISK_CACHE_MB_SIZE", Some("512")),
             ("QUERY_TABLE_CACHE_SNAPSHOT_COUNT", Some("256")),
             ("QUERY_TABLE_CACHE_SEGMENT_COUNT", Some("10240")),
-            ("META_ENDPOINTS", Some("[0.0.0.0:9191]")),
+            ("META_ENDPOINTS", Some("0.0.0.0:9191")),
             ("TABLE_CACHE_BLOOM_INDEX_META_COUNT", Some("3000")),
             (
                 "TABLE_CACHE_BLOOM_INDEX_DATA_BYTES",
