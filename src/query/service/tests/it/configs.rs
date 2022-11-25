@@ -160,19 +160,19 @@ bucket = ""
 endpoint_url = ""
 root = ""
 
-[cache]
+[storage.cache]
 type = "moka"
 num_cpus = 0
 
-[cache.fs]
+[storage.cache.fs]
 data_path = "_data"
 
-[cache.moka]
+[storage.cache.moka]
 max_capacity = 1073741824
 time_to_live = 3600
 time_to_idle = 600
 
-[cache.redis]
+[storage.cache.redis]
 endpoint_url = ""
 username = ""
 password = ""
