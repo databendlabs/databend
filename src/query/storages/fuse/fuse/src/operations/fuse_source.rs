@@ -15,6 +15,7 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use common_arrow::arrow::io::parquet::read::RowGroupDeserializer;
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
 use common_catalog::plan::PartInfoPtr;
@@ -43,10 +44,14 @@ pub struct PrewhereData {
 pub enum State {
     ReadDataPrewhere(Option<PartInfoPtr>),
     ReadDataRemain(PartInfoPtr, PrewhereData),
-    PrewhereFilter(PartInfoPtr, DataChunks),
-    Deserialize(PartInfoPtr, DataChunks, Option<PrewhereData>),
+    DeserAndFilter(PartInfoPtr),
     Generated(Option<PartInfoPtr>, DataBlock),
     Finish,
+}
+
+struct Deserializers {
+    prewhere: RowGroupDeserializer,
+    remain: Option<RowGroupDeserializer>,
 }
 
 pub struct FuseTableSource {
@@ -60,7 +65,10 @@ pub struct FuseTableSource {
     prewhere_filter: Arc<Option<EvalNode>>,
     remain_reader: Arc<Option<BlockReader>>,
 
+    deserializers: Option<Deserializers>,
+
     support_blocking: bool,
+    max_block_size: usize,
 }
 
 impl FuseTableSource {
@@ -74,6 +82,7 @@ impl FuseTableSource {
     ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
         let support_blocking = prewhere_reader.support_blocking_api();
+        let max_block_size = ctx.get_settings().get_max_block_size()? as usize;
         Ok(ProcessorPtr::create(Box::new(FuseTableSource {
             ctx,
             output,
@@ -83,23 +92,74 @@ impl FuseTableSource {
             prewhere_reader,
             prewhere_filter,
             remain_reader,
+            deserializers: None,
             support_blocking,
+            max_block_size,
         })))
     }
 
-    fn generate_one_block(&mut self, block: DataBlock) -> Result<()> {
-        let new_part = self.ctx.try_get_part();
+    fn generate_one_block(&mut self, part: PartInfoPtr, block: DataBlock) -> Result<()> {
         // resort and prune columns
         let block = block.resort(self.output_reader.schema())?;
-        self.state = State::Generated(new_part, block);
+        self.state = State::Generated(Some(part), block);
         Ok(())
     }
 
-    fn generate_one_empty_block(&mut self) -> Result<()> {
-        let schema = self.output_reader.schema();
-        let new_part = self.ctx.try_get_part();
-        self.state = Generated(new_part, DataBlock::empty_with_schema(schema));
-        Ok(())
+    fn init_remain_deser_and_generate_one_block(
+        &mut self,
+        part: PartInfoPtr,
+        chunks: DataChunks,
+        prewhere_data: PrewhereData,
+    ) -> Result<()> {
+        let remain_reader = self.remain_reader.as_ref().as_ref().unwrap();
+        let mut de = remain_reader.get_deserializer(
+            &part,
+            chunks,
+            Arc::new(|_, _| true),
+            Some(self.max_block_size),
+        )?;
+
+        // Generate one block because prewhere has already produced one block.
+        let remain_block = remain_reader.try_next_block(&mut de)?.ok_or_else(|| {
+            ErrorCode::Internal("It's a bug. Should get one block from remain reader.")
+        })?;
+
+        // Unwrap safety: this function is only called after ReadDataPrewhere.
+        let mut desers = self.deserializers.as_mut().unwrap();
+        desers.remain = Some(de);
+
+        let PrewhereData {
+            data_block: prewhere_block,
+            filter,
+        } = prewhere_data;
+
+        self.combine_and_generate_filtered_block(part, prewhere_block, Some(remain_block), filter)
+    }
+
+    fn combine_and_generate_filtered_block(
+        &mut self,
+        part: PartInfoPtr,
+        prewhere_block: DataBlock,
+        remain_block: Option<DataBlock>,
+        filter: ColumnRef,
+    ) -> Result<()> {
+        let mut block = prewhere_block;
+        if let Some(remain_block) = remain_block {
+            for (col, field) in remain_block
+                .columns()
+                .iter()
+                .zip(remain_block.schema().fields())
+            {
+                block = block.add_column(col.clone(), field.clone())?;
+            }
+        }
+        let progress_values = ProgressValues {
+            rows: block.num_rows(),
+            bytes: block.memory_size(),
+        };
+        self.scan_progress.incr(&progress_values);
+        let block = DataBlock::filter_block(block, &filter)?;
+        self.generate_one_block(part, block)
     }
 }
 
@@ -138,7 +198,7 @@ impl Processor for FuseTableSource {
             if let Generated(part, data_block) = std::mem::replace(&mut self.state, State::Finish) {
                 self.state = match part {
                     None => State::Finish,
-                    Some(part) => State::ReadDataPrewhere(Some(part)),
+                    Some(part) => State::DeserAndFilter(part),
                 };
 
                 self.output.push_data(Ok(data_block));
@@ -162,118 +222,101 @@ impl Processor for FuseTableSource {
                     Ok(Event::Async)
                 }
             }
-            State::PrewhereFilter(_, _) => Ok(Event::Sync),
-            State::Deserialize(_, _, _) => Ok(Event::Sync),
+            State::DeserAndFilter(_) => Ok(Event::Sync),
             State::Generated(_, _) => Err(ErrorCode::Internal("It's a bug.")),
         }
     }
 
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Finish) {
-            State::Deserialize(part, chunks, prewhere_data) => {
-                let data_block = if let Some(PrewhereData {
-                    data_block: mut prewhere_blocks,
-                    filter,
-                }) = prewhere_data
-                {
-                    let block = if chunks.is_empty() {
-                        prewhere_blocks
-                    } else if let Some(remain_reader) = self.remain_reader.as_ref() {
-                        let remain_block = remain_reader.deserialize(part, chunks)?;
-                        for (col, field) in remain_block
-                            .columns()
-                            .iter()
-                            .zip(remain_block.schema().fields())
-                        {
-                            prewhere_blocks =
-                                prewhere_blocks.add_column(col.clone(), field.clone())?;
-                        }
-                        prewhere_blocks
-                    } else {
-                        return Err(ErrorCode::Internal("It's a bug. Need remain reader"));
+            State::DeserAndFilter(part) => {
+                // Unwrap safety: the prewhere deserilizer is initialized.
+                let prewhere_deser = &mut self.deserializers.as_mut().unwrap().prewhere;
+                // Deserialize one block of prewhere columns.
+                let data_block = self.prewhere_reader.try_next_block(prewhere_deser)?;
+                if data_block.is_none() {
+                    // Current part is finished.
+                    let next_part = self.ctx.try_get_part();
+                    self.state = match next_part {
+                        None => State::Finish,
+                        part => State::ReadDataPrewhere(part),
                     };
-                    // the last step of prewhere
-                    let progress_values = ProgressValues {
-                        rows: block.num_rows(),
-                        bytes: block.memory_size(),
-                    };
-                    self.scan_progress.incr(&progress_values);
-                    DataBlock::filter_block(block, &filter)?
-                } else {
-                    let block = self.output_reader.deserialize(part, chunks)?;
-                    let progress_values = ProgressValues {
-                        rows: block.num_rows(),
-                        bytes: block.memory_size(),
-                    };
-                    self.scan_progress.incr(&progress_values);
+                    return Ok(());
+                }
+                let data_block = data_block.unwrap();
 
-                    block
-                };
-
-                self.generate_one_block(data_block)?;
-                Ok(())
-            }
-            State::PrewhereFilter(part, chunks) => {
-                // deserialize prewhere data block first
-                let data_block = self.prewhere_reader.deserialize(part.clone(), chunks)?;
                 if let Some(filter) = self.prewhere_filter.as_ref() {
                     // do filter
                     let res = filter
                         .eval(&FunctionContext::default(), &data_block)?
                         .vector;
                     let filter = DataBlock::cast_to_nonull_boolean(&res)?;
-                    // shortcut, if predicates is const boolean (or can be cast to boolean)
-                    if !DataBlock::filter_exists(&filter)? {
-                        // all rows in this block are filtered out
-                        // turn to read next part
-                        let progress_values = ProgressValues {
-                            rows: data_block.num_rows(),
-                            bytes: data_block.memory_size(),
-                        };
-                        self.scan_progress.incr(&progress_values);
-                        self.generate_one_empty_block()?;
-                        return Ok(());
-                    }
+
+                    // TODO: enable the shortcut below:
+                    // let all_filtered = !DataBlock::filter_exists(&filter)?;
+
                     if self.remain_reader.is_none() {
                         // shortcut, we don't need to read remain data
-                        let progress_values = ProgressValues {
-                            rows: data_block.num_rows(),
-                            bytes: data_block.memory_size(),
-                        };
-                        self.scan_progress.incr(&progress_values);
-                        let block = DataBlock::filter_block(data_block, &filter)?;
-                        self.generate_one_block(block)?;
-                    } else {
+                        self.combine_and_generate_filtered_block(part, data_block, None, filter)?;
+                    } else if self.deserializers.as_ref().unwrap().remain.is_none() {
+                        // If the remain deserializer is not initialized, we should read remain columns and init the deserializer.
+                        // Unwrap safety: the prewhere deserilizer is initialized.
                         self.state =
                             State::ReadDataRemain(part, PrewhereData { data_block, filter });
+                    } else {
+                        let remain_reader = self.remain_reader.as_ref().as_ref().unwrap();
+                        let remain_deser = self
+                            .deserializers
+                            .as_mut()
+                            .unwrap()
+                            .remain
+                            .as_mut()
+                            .unwrap();
+                        let remain_block =
+                            remain_reader.try_next_block(remain_deser)?.ok_or_else(|| {
+                                ErrorCode::Internal(
+                                    "It's a bug. Should get one block from remain reader.",
+                                )
+                            })?;
+                        self.combine_and_generate_filtered_block(
+                            part,
+                            data_block,
+                            Some(remain_block),
+                            filter,
+                        )?;
                     }
-                    Ok(())
                 } else {
-                    Err(ErrorCode::Internal(
-                        "It's a bug. No need to do prewhere filter",
-                    ))
+                    // no filters. This means all required columns are contained in `self.prewhere_reader`.
+                    let progress_values = ProgressValues {
+                        rows: data_block.num_rows(),
+                        bytes: data_block.memory_size(),
+                    };
+                    self.scan_progress.incr(&progress_values);
+                    self.generate_one_block(part, data_block)?;
                 }
+                Ok(())
             }
 
             State::ReadDataPrewhere(Some(part)) => {
                 let chunks = self.prewhere_reader.sync_read_columns_data(part.clone())?;
-
-                if self.prewhere_filter.is_some() {
-                    self.state = State::PrewhereFilter(part, chunks);
-                } else {
-                    // all needed columns are read.
-                    self.state = State::Deserialize(part, chunks, None)
-                }
+                let de = self.prewhere_reader.get_deserializer(
+                    &part,
+                    chunks,
+                    Arc::new(|_, _| true),
+                    Some(self.max_block_size),
+                )?;
+                self.deserializers = Some(Deserializers {
+                    prewhere: de,
+                    remain: None,
+                });
+                self.state = State::DeserAndFilter(part);
                 Ok(())
             }
             State::ReadDataRemain(part, prewhere_data) => {
-                if let Some(remain_reader) = self.remain_reader.as_ref() {
-                    let chunks = remain_reader.sync_read_columns_data(part.clone())?;
-                    self.state = State::Deserialize(part, chunks, Some(prewhere_data));
-                    Ok(())
-                } else {
-                    Err(ErrorCode::Internal("It's a bug. No remain reader"))
-                }
+                // Unwrap safety: only if self.remain_reader is not None will get into this branch.
+                let remain_reader = self.remain_reader.as_ref().as_ref().unwrap();
+                let chunks = remain_reader.sync_read_columns_data(part.clone())?;
+                self.init_remain_deser_and_generate_one_block(part, chunks, prewhere_data)
             }
             _ => Err(ErrorCode::Internal("It's a bug.")),
         }
@@ -283,23 +326,24 @@ impl Processor for FuseTableSource {
         match std::mem::replace(&mut self.state, State::Finish) {
             State::ReadDataPrewhere(Some(part)) => {
                 let chunks = self.prewhere_reader.read_columns_data(part.clone()).await?;
-
-                if self.prewhere_filter.is_some() {
-                    self.state = State::PrewhereFilter(part, chunks);
-                } else {
-                    // all needed columns are read.
-                    self.state = State::Deserialize(part, chunks, None)
-                }
+                let de = self.prewhere_reader.get_deserializer(
+                    &part,
+                    chunks,
+                    Arc::new(|_, _| true),
+                    Some(self.max_block_size),
+                )?;
+                self.deserializers = Some(Deserializers {
+                    prewhere: de,
+                    remain: None,
+                });
+                self.state = State::DeserAndFilter(part);
                 Ok(())
             }
             State::ReadDataRemain(part, prewhere_data) => {
-                if let Some(remain_reader) = self.remain_reader.as_ref() {
-                    let chunks = remain_reader.read_columns_data(part.clone()).await?;
-                    self.state = State::Deserialize(part, chunks, Some(prewhere_data));
-                    Ok(())
-                } else {
-                    Err(ErrorCode::Internal("It's a bug. No remain reader"))
-                }
+                // Unwrap safety: only if self.remain_reader is not None will get into this branch.
+                let remain_reader = self.remain_reader.as_ref().as_ref().unwrap();
+                let chunks = remain_reader.read_columns_data(part.clone()).await?;
+                self.init_remain_deser_and_generate_one_block(part, chunks, prewhere_data)
             }
             _ => Err(ErrorCode::Internal("It's a bug.")),
         }

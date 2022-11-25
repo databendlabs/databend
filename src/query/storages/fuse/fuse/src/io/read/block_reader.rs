@@ -26,6 +26,7 @@ use common_arrow::parquet::compression::Compression as ParquetCompression;
 use common_arrow::parquet::metadata::ColumnDescriptor;
 use common_arrow::parquet::metadata::SchemaDescriptor;
 use common_arrow::parquet::read::BasicDecompressor;
+use common_arrow::parquet::read::PageFilter;
 use common_arrow::parquet::read::PageMetaData;
 use common_arrow::parquet::read::PageReader;
 use common_catalog::plan::PartInfoPtr;
@@ -87,6 +88,7 @@ impl BlockReader {
         self.projected_schema.clone()
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn to_array_iter(
         metas: Vec<&ColumnMeta>,
         chunks: Vec<Vec<u8>>,
@@ -94,6 +96,8 @@ impl BlockReader {
         column_descriptors: Vec<&ColumnDescriptor>,
         field: Field,
         compression: &Compression,
+        page_filter: PageFilter,
+        chunk_size: Option<usize>,
     ) -> Result<ArrayIter<'static>> {
         let columns = metas
             .iter()
@@ -108,25 +112,20 @@ impl BlockReader {
                 let pages = PageReader::new_with_page_meta(
                     std::io::Cursor::new(chunk),
                     page_meta_data,
-                    Arc::new(|_, _| true),
+                    page_filter.clone(),
                     vec![],
                     usize::MAX,
                 );
                 Ok(BasicDecompressor::new(pages, vec![]))
             })
             .collect::<Result<Vec<_>>>()?;
-
         let types = column_descriptors
             .iter()
             .map(|column_descriptor| &column_descriptor.descriptor.primitive_type)
             .collect::<Vec<_>>();
 
         Ok(column_iter_to_arrays(
-            columns,
-            types,
-            field,
-            Some(rows),
-            rows,
+            columns, types, field, chunk_size, rows,
         )?)
     }
 
@@ -136,7 +135,7 @@ impl BlockReader {
     pub async fn read_with_block_meta(&self, meta: &BlockMeta) -> Result<DataBlock> {
         let (num_rows, columns_array_iter) = self.read_columns_with_block_meta(meta).await?;
         let mut deserializer = RowGroupDeserializer::new(columns_array_iter, num_rows, None);
-        self.try_next_block(&mut deserializer)
+        self.full_deserialize_impl(&mut deserializer)
     }
     // TODO refine these
 
@@ -206,6 +205,8 @@ impl BlockReader {
                 column_descriptors,
                 field,
                 &meta.compression(),
+                Arc::new(|_, _| true),
+                None,
             )?);
         }
 
@@ -271,18 +272,40 @@ impl BlockReader {
                 column_descriptors,
                 field,
                 &part.compression,
+                Arc::new(|_, _| true),
+                None,
             )?);
         }
 
         Ok((num_rows, columns_array_iter))
     }
 
-    pub fn deserialize(
+    pub fn full_deserialize(
         &self,
         part: PartInfoPtr,
         chunks: Vec<(usize, Vec<u8>)>,
     ) -> Result<DataBlock> {
-        let part = FusePartInfo::from_part(&part)?;
+        let mut deserializer = self.get_deserializer(&part, chunks, Arc::new(|_, _| true), None)?;
+        self.full_deserialize_impl(&mut deserializer)
+    }
+
+    // Deserialize chunks into a whole DataBlock at once.
+    fn full_deserialize_impl(&self, deserializer: &mut RowGroupDeserializer) -> Result<DataBlock> {
+        self.try_next_block(deserializer)
+            .transpose()
+            .unwrap_or(Err(ErrorCode::Internal(
+                "deserializer from row group: fail to get a whole datablock",
+            )))
+    }
+
+    pub fn get_deserializer(
+        &self,
+        part: &PartInfoPtr,
+        chunks: Vec<(usize, Vec<u8>)>,
+        page_filter: PageFilter,
+        chunk_size: Option<usize>,
+    ) -> Result<RowGroupDeserializer> {
+        let part = FusePartInfo::from_part(part)?;
         let mut chunk_map: HashMap<usize, Vec<u8>> = chunks.into_iter().collect();
         let mut columns_array_iter = Vec::with_capacity(self.projection.len());
 
@@ -316,12 +339,16 @@ impl BlockReader {
                 column_descriptors,
                 field,
                 &part.compression,
+                page_filter.clone(),
+                chunk_size,
             )?);
         }
 
-        let mut deserializer = RowGroupDeserializer::new(columns_array_iter, num_rows, None);
-
-        self.try_next_block(&mut deserializer)
+        Ok(RowGroupDeserializer::new(
+            columns_array_iter,
+            num_rows,
+            None,
+        ))
     }
 
     pub async fn read_columns_data(&self, part: PartInfoPtr) -> Result<Vec<(usize, Vec<u8>)>> {
@@ -395,16 +422,17 @@ impl BlockReader {
     pub async fn read(&self, part: PartInfoPtr) -> Result<DataBlock> {
         let (num_rows, columns_array_iter) = self.read_columns(part).await?;
         let mut deserializer = RowGroupDeserializer::new(columns_array_iter, num_rows, None);
-        self.try_next_block(&mut deserializer)
+        self.full_deserialize_impl(&mut deserializer)
     }
 
-    fn try_next_block(&self, deserializer: &mut RowGroupDeserializer) -> Result<DataBlock> {
+    pub fn try_next_block(
+        &self,
+        deserializer: &mut RowGroupDeserializer,
+    ) -> Result<Option<DataBlock>> {
         match deserializer.next() {
-            None => Err(ErrorCode::Internal(
-                "deserializer from row group: fail to get a chunk",
-            )),
+            None => Ok(None),
             Some(Err(cause)) => Err(ErrorCode::from(cause)),
-            Some(Ok(chunk)) => DataBlock::from_chunk(&self.projected_schema, &chunk),
+            Some(Ok(chunk)) => Ok(Some(DataBlock::from_chunk(&self.projected_schema, &chunk)?)),
         }
     }
 
