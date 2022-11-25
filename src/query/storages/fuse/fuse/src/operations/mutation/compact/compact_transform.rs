@@ -13,26 +13,34 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::VecDeque;
 use std::sync::Arc;
 
+use common_arrow::parquet::compression::CompressionOptions;
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
 use common_cache::Cache;
+use common_catalog::table_context::TableContext;
+use common_datablocks::serialize_data_blocks;
+use common_datablocks::serialize_data_blocks_with_compression;
 use common_datablocks::BlockCompactThresholds;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_storages_index::BlockFilter;
 use common_storages_table_meta::caches::CacheManager;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::SegmentInfo;
+use common_storages_table_meta::meta::StatisticsOfColumns;
 use opendal::Operator;
 
 use super::compact_meta::CompactSourceMeta;
+use super::compact_part::CompactTask;
 use super::CompactSinkMeta;
 use crate::io::BlockReader;
-use crate::io::BlockWriter;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::mutation::AbortOperation;
+use crate::operations::util;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::Event;
@@ -41,11 +49,24 @@ use crate::pipelines::processors::Processor;
 use crate::statistics::reduce_block_statistics;
 use crate::statistics::reducers::reduce_block_metas;
 
+struct SerializeState {
+    block_data: Vec<u8>,
+    block_location: String,
+    index_data: Vec<u8>,
+    index_location: String,
+}
+
 enum State {
     Consume,
-    Compact(DataBlock),
-    Generate(Vec<Arc<BlockMeta>>),
-    Serialized {
+    ReadBlocks,
+    CompactBlocks {
+        blocks: Vec<DataBlock>,
+        stats_of_columns: Vec<Vec<StatisticsOfColumns>>,
+        trivals: VecDeque<Arc<BlockMeta>>,
+    },
+    SerializedBlocks(Vec<SerializeState>),
+    GenerateSegment,
+    SerializedSegment {
         data: Vec<u8>,
         location: String,
         segment: Arc<SegmentInfo>,
@@ -68,13 +89,19 @@ pub struct CompactTransform {
     location_gen: TableMetaLocationGenerator,
     dal: Operator,
 
+    // Limit the memory size of the block read.
+    max_memory: u64,
+    compact_tasks: VecDeque<CompactTask>,
+    block_metas: Vec<Arc<BlockMeta>>,
     order: usize,
     thresholds: BlockCompactThresholds,
     abort_operation: AbortOperation,
 }
 
 impl CompactTransform {
+    #[allow(clippy::too_many_arguments)]
     pub fn try_create(
+        ctx: Arc<dyn TableContext>,
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         scan_progress: Arc<Progress>,
@@ -83,6 +110,10 @@ impl CompactTransform {
         dal: Operator,
         thresholds: BlockCompactThresholds,
     ) -> Result<ProcessorPtr> {
+        let settings = ctx.get_settings();
+        let max_memory_usage = settings.get_max_memory_usage()?;
+        let max_threads = settings.get_max_threads()?;
+        let max_memory = max_memory_usage / max_threads;
         Ok(ProcessorPtr::create(Box::new(CompactTransform {
             state: State::Consume,
             input,
@@ -92,6 +123,9 @@ impl CompactTransform {
             block_reader,
             location_gen,
             dal,
+            max_memory,
+            compact_tasks: VecDeque::new(),
+            block_metas: Vec::new(),
             order: 0,
             thresholds,
             abort_operation: AbortOperation::default(),
@@ -110,11 +144,17 @@ impl Processor for CompactTransform {
     }
 
     fn event(&mut self) -> Result<Event> {
-        if matches!(&self.state, State::Generate { .. } | State::Output { .. }) {
+        if matches!(
+            &self.state,
+            State::CompactBlocks { .. } | State::GenerateSegment { .. } | State::Output { .. }
+        ) {
             return Ok(Event::Sync);
         }
 
-        if matches!(&self.state, State::Serialized { .. }) {
+        if matches!(
+            &self.state,
+            State::ReadBlocks | State::SerializedBlocks(_) | State::SerializedSegment { .. }
+        ) {
             return Ok(Event::Async);
         }
 
@@ -143,18 +183,98 @@ impl Processor for CompactTransform {
             return Ok(Event::NeedData);
         }
 
-        self.state = State::Compact(self.input.pull_data().unwrap()?);
+        let input_data = self.input.pull_data().unwrap()?;
+        let meta = input_data
+            .get_meta()
+            .ok_or_else(|| ErrorCode::Internal("No block meta. It's a bug"))?;
+        let task_meta = CompactSourceMeta::from_meta(meta)?;
+        self.order = task_meta.order;
+        self.compact_tasks = task_meta.tasks.clone();
+
+        self.state = State::ReadBlocks;
         Ok(Event::Async)
     }
 
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Consume) {
-            State::Generate(metas) => {
+            State::CompactBlocks {
+                mut blocks,
+                stats_of_columns,
+                mut trivals,
+            } => {
+                let mut serialize_states = Vec::new();
+                for stats in stats_of_columns {
+                    let block_num = stats.len();
+                    if block_num == 0 {
+                        self.block_metas.push(trivals.pop_front().unwrap());
+                        continue;
+                    }
+
+                    // concat blocks.
+                    let compact_blocks: Vec<_> = blocks.drain(0..block_num).collect();
+                    let new_block = DataBlock::concat_blocks(&compact_blocks)?;
+
+                    // generate block statistics.
+                    let col_stats = reduce_block_statistics(&stats, Some(&new_block))?;
+                    let row_count = new_block.num_rows() as u64;
+                    let block_size = new_block.memory_size() as u64;
+                    let (block_location, block_id) = self.location_gen.gen_block_location();
+
+                    // build block index.
+                    let (index_data, index_size, index_location) = {
+                        // write index
+                        let bloom_index = BlockFilter::try_create(&[&new_block])?;
+                        let index_block = bloom_index.filter_block;
+                        let location = self.location_gen.block_bloom_index_location(&block_id);
+                        let mut data = Vec::with_capacity(100 * 1024);
+                        let index_block_schema = &bloom_index.filter_schema;
+                        let (size, _) = serialize_data_blocks_with_compression(
+                            vec![index_block],
+                            index_block_schema,
+                            &mut data,
+                            CompressionOptions::Uncompressed,
+                        )?;
+                        (data, size, location)
+                    };
+
+                    // serialize data block.
+                    let mut block_data = Vec::with_capacity(100 * 1024 * 1024);
+                    let schema = new_block.schema().clone();
+                    let (file_size, meta_data) =
+                        serialize_data_blocks(vec![new_block], &schema, &mut block_data)?;
+                    let col_metas = util::column_metas(&meta_data)?;
+
+                    // new block meta.
+                    let new_meta = BlockMeta::new(
+                        row_count,
+                        block_size,
+                        file_size,
+                        col_stats,
+                        col_metas,
+                        None,
+                        block_location.clone(),
+                        Some(index_location.clone()),
+                        index_size,
+                    );
+                    self.abort_operation.add_block(&new_meta);
+                    self.block_metas.push(Arc::new(new_meta));
+
+                    serialize_states.push(SerializeState {
+                        block_data,
+                        block_location: block_location.0,
+                        index_data,
+                        index_location: index_location.0,
+                    });
+                }
+                self.state = State::SerializedBlocks(serialize_states);
+            }
+            State::GenerateSegment => {
+                let metas = std::mem::take(&mut self.block_metas);
                 let stats = reduce_block_metas(&metas, self.thresholds)?;
                 let segment_info = SegmentInfo::new(metas, stats);
                 let location = self.location_gen.gen_segment_info_location();
                 self.abort_operation.add_segment(location.clone());
-                self.state = State::Serialized {
+                self.state = State::SerializedSegment {
                     data: serde_json::to_vec(&segment_info)?,
                     location,
                     segment: Arc::new(segment_info),
@@ -182,43 +302,82 @@ impl Processor for CompactTransform {
 
     async fn async_process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Consume) {
-            State::Compact(block) => {
-                let meta = block.get_meta().unwrap();
-                let task_meta = CompactSourceMeta::from_meta(meta)?;
-                self.order = task_meta.order;
-                let mut new_metas = Vec::with_capacity(task_meta.tasks.len());
-                for task in &task_meta.tasks {
+            State::ReadBlocks => {
+                // block read tasks.
+                let mut task_futures = Vec::new();
+                // The no need compact blockmetas.
+                let mut trivals = VecDeque::new();
+                let mut memory_usage = 0;
+                let mut stats_of_columns = Vec::new();
+
+                let block_reader = self.block_reader.as_ref();
+                while let Some(task) = self.compact_tasks.pop_front() {
                     let metas = task.get_block_metas();
                     // Only one block, no need to do a compact.
                     if metas.len() == 1 {
-                        new_metas.push(metas[0].clone());
+                        stats_of_columns.push(vec![]);
+                        trivals.push_back(metas[0].clone());
                         continue;
                     }
 
-                    let mut blocks = Vec::with_capacity(metas.len());
-                    let mut stats_of_columns = Vec::with_capacity(metas.len());
+                    memory_usage += metas.iter().fold(0, |acc, meta| {
+                        let memory = meta.bloom_filter_index_size + meta.block_size;
+                        acc + memory
+                    });
+
+                    if memory_usage > self.max_memory {
+                        self.compact_tasks.push_front(task);
+                        break;
+                    }
+
+                    let mut meta_stats = Vec::with_capacity(metas.len());
                     for meta in metas {
-                        let meta = meta.as_ref();
-                        stats_of_columns.push(meta.col_stats.clone());
-                        let block = self.block_reader.read_with_block_meta(meta).await?;
                         let progress_values = ProgressValues {
-                            rows: block.num_rows(),
-                            bytes: block.memory_size(),
+                            rows: meta.row_count as usize,
+                            bytes: meta.block_size as usize,
                         };
                         self.scan_progress.incr(&progress_values);
-                        blocks.push(block);
-                    }
-                    let new_block = DataBlock::concat_blocks(&blocks)?;
-                    let col_stats = reduce_block_statistics(&stats_of_columns, Some(&new_block))?;
 
-                    let block_writer = BlockWriter::new(&self.dal, &self.location_gen);
-                    let new_meta = block_writer.write(new_block, col_stats, None).await?;
-                    self.abort_operation.add_block(&new_meta);
-                    new_metas.push(Arc::new(new_meta));
+                        meta_stats.push(meta.col_stats.clone());
+
+                        // read block in parallel.
+                        task_futures.push(async move {
+                            block_reader.read_with_block_meta(meta.as_ref()).await
+                        });
+                    }
+                    stats_of_columns.push(meta_stats);
                 }
-                self.state = State::Generate(new_metas);
+
+                let blocks = futures::future::try_join_all(task_futures).await?;
+                self.state = State::CompactBlocks {
+                    blocks,
+                    stats_of_columns,
+                    trivals,
+                }
             }
-            State::Serialized {
+            State::SerializedBlocks(mut serialize_states) => {
+                let mut handles = Vec::with_capacity(serialize_states.len());
+                let dal = &self.dal;
+                while let Some(state) = serialize_states.pop() {
+                    handles.push(async move {
+                        // write block data.
+                        dal.object(&state.block_location)
+                            .write(state.block_data)
+                            .await?;
+                        // write index data.
+                        dal.object(&state.index_location)
+                            .write(state.index_data)
+                            .await
+                    });
+                }
+                futures::future::try_join_all(handles).await?;
+                if self.compact_tasks.is_empty() {
+                    self.state = State::GenerateSegment;
+                } else {
+                    self.state = State::ReadBlocks;
+                }
+            }
+            State::SerializedSegment {
                 data,
                 location,
                 segment,
