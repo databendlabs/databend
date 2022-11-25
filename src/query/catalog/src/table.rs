@@ -277,6 +277,15 @@ pub trait Table: Sync + Send {
             self.get_table_info().engine(),
         )))
     }
+
+    async fn revert_to(&self, ctx: Arc<dyn TableContext>, point: &NavigationPoint) -> Result<()> {
+        let (_, _) = (ctx, point);
+        Err(ErrorCode::Unimplemented(format!(
+            "table {},  of engine type {}, does not support revert",
+            self.name(),
+            self.get_table_info().engine(),
+        )))
+    }
 }
 
 #[async_trait::async_trait]

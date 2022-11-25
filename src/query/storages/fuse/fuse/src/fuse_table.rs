@@ -88,8 +88,7 @@ pub struct FuseTable {
 
 impl FuseTable {
     pub fn try_create(table_info: TableInfo) -> Result<Box<dyn Table>> {
-        let r = Self::do_create(table_info, false)?;
-        Ok(r)
+        Ok(Self::do_create(table_info, false)?)
     }
 
     pub fn do_create(table_info: TableInfo, read_only: bool) -> Result<Box<FuseTable>> {
@@ -262,6 +261,10 @@ impl Table for FuseTable {
         &self.table_info
     }
 
+    fn get_data_metrics(&self) -> Option<Arc<StorageMetrics>> {
+        Some(self.data_metrics.clone())
+    }
+
     fn benefit_column_prune(&self) -> bool {
         true
     }
@@ -281,10 +284,6 @@ impl Table for FuseTable {
 
     fn support_prewhere(&self) -> bool {
         true
-    }
-
-    fn get_data_metrics(&self) -> Option<Arc<StorageMetrics>> {
-        Some(self.data_metrics.clone())
     }
 
     async fn alter_table_cluster_keys(
@@ -503,6 +502,16 @@ impl Table for FuseTable {
         self.do_delete(ctx, projection, selection).await
     }
 
+    fn get_block_compact_thresholds(&self) -> BlockCompactThresholds {
+        let max_rows_per_block = self.get_option(FUSE_OPT_KEY_ROW_PER_BLOCK, DEFAULT_ROW_PER_BLOCK);
+        let min_rows_per_block = (max_rows_per_block as f64 * 0.8) as usize;
+        let max_bytes_per_block = self.get_option(
+            FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD,
+            DEFAULT_BLOCK_SIZE_IN_MEM_SIZE_THRESHOLD,
+        );
+        BlockCompactThresholds::new(max_rows_per_block, min_rows_per_block, max_bytes_per_block)
+    }
+
     async fn compact(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -522,14 +531,12 @@ impl Table for FuseTable {
         self.do_recluster(ctx, pipeline, push_downs).await
     }
 
-    fn get_block_compact_thresholds(&self) -> BlockCompactThresholds {
-        let max_rows_per_block = self.get_option(FUSE_OPT_KEY_ROW_PER_BLOCK, DEFAULT_ROW_PER_BLOCK);
-        let min_rows_per_block = (max_rows_per_block as f64 * 0.8) as usize;
-        let max_bytes_per_block = self.get_option(
-            FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD,
-            DEFAULT_BLOCK_SIZE_IN_MEM_SIZE_THRESHOLD,
-        );
-        BlockCompactThresholds::new(max_rows_per_block, min_rows_per_block, max_bytes_per_block)
+    async fn revert_to(&self, ctx: Arc<dyn TableContext>, point: &NavigationPoint) -> Result<()> {
+        // A read-only instance of fuse table, e.g. instance got by using time travel,
+        // revert operation is not allowed.
+        self.check_mutable()?;
+
+        self.do_revert_to(ctx.as_ref(), point).await
     }
 }
 
