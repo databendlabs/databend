@@ -53,9 +53,6 @@ statement error 1303
 insert into st1 values ('a', 'b');
 
 statement ok
-insert into st1 values (upper('a'));
-
-statement ok
 set global insert_values_enable_expression = 0;
 
 statement error 4000
@@ -68,7 +65,6 @@ statement query T
 select * from st1;
 
 ----
-A
 a
 b
 c
@@ -77,7 +73,6 @@ statement query I
 select segment_count from fuse_snapshot('db1', 'st1');
 
 ----
-2
 1
 
 statement ok
