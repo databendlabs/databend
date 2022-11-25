@@ -271,8 +271,6 @@ pub struct AsyncThreadTracker<T: Future> {
     old_thread_tracker: Option<ThreadTracker>,
 }
 
-unsafe impl<T: Future + Send> Send for AsyncThreadTracker<T> {}
-
 impl<T: Future> AsyncThreadTracker<T> {
     pub fn create(tracker: Option<ThreadTracker>, inner: T) -> AsyncThreadTracker<T> {
         AsyncThreadTracker::<T> {
