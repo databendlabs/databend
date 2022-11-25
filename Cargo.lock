@@ -1455,6 +1455,7 @@ dependencies = [
  "chrono",
  "chrono-tz",
  "common-arrow",
+ "common-base",
  "common-datablocks",
  "common-datavalues",
  "common-exception",
