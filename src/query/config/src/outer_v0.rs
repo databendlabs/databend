@@ -52,7 +52,6 @@ use super::inner::CatalogConfig as InnerCatalogConfig;
 use super::inner::CatalogHiveConfig as InnerCatalogHiveConfig;
 use super::inner::Config as InnerConfig;
 use super::inner::MetaConfig as InnerMetaConfig;
-use super::inner::MetaType;
 use super::inner::QueryConfig as InnerQueryConfig;
 use crate::DATABEND_COMMIT_VERSION;
 
@@ -1491,24 +1490,12 @@ impl From<InnerStderrLogConfig> for StderrLogConfig {
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct MetaConfig {
-    /// MetaStore type: remote, embedded, fallback
-    #[clap(long = "meta-type", default_value = "fallback")]
-    #[serde(rename = "type")]
-    pub meta_type: String,
-
     /// The dir to store persisted meta state for a embedded meta store
-    #[clap(
-        long = "meta-embedded-dir",
-        default_value = "./.databend/meta_embedded"
-    )]
+    #[clap(long = "meta-embedded-dir", default_value_t)]
     #[serde(alias = "meta_embedded_dir")]
     pub embedded_dir: String,
 
-    /// MetaStore backend address
-    #[clap(long = "meta-address", default_value_t)]
-    #[serde(alias = "meta_address")]
-    pub address: String,
-
+    /// MetaStore backend endpoints
     #[clap(long = "meta-endpoints", help = "MetaStore peers endpoints")]
     pub endpoints: Vec<String>,
 
@@ -1541,49 +1528,6 @@ pub struct MetaConfig {
     pub rpc_tls_meta_service_domain_name: String,
 }
 
-impl MetaConfig {
-    fn check_config(&mut self) -> Result<()> {
-        let t = match MetaType::from_str(&self.meta_type) {
-            Err(_) => {
-                return Err(ErrorCode::InvalidConfig(format!(
-                    "Invalid MetaType: {}",
-                    self.meta_type
-                )));
-            }
-            Ok(t) => t,
-        };
-
-        // Fallback is used for forward compatbility, that is:
-        // First check embedded config, then endpoints, finally address.
-        if t == MetaType::Fallback {
-            if !self.embedded_dir.is_empty() && self.endpoints.is_empty() {
-                self.meta_type = MetaType::Embedded.to_string();
-            } else {
-                self.meta_type = MetaType::Remote.to_string();
-            }
-        }
-        match t {
-            MetaType::Embedded => {
-                if self.embedded_dir.is_empty() {
-                    return Err(ErrorCode::InvalidConfig(
-                        "Embedded Meta but embedded_dir is empty",
-                    ));
-                }
-            }
-            MetaType::Remote => {
-                if self.address.is_empty() && self.endpoints.is_empty() {
-                    return Err(ErrorCode::InvalidConfig(
-                        "Remote Meta but address and enpoints are empty",
-                    ));
-                }
-            }
-            _ => {}
-        };
-
-        Ok(())
-    }
-}
-
 impl Default for MetaConfig {
     fn default() -> Self {
         InnerMetaConfig::default().into()
@@ -1593,12 +1537,9 @@ impl Default for MetaConfig {
 impl TryInto<InnerMetaConfig> for MetaConfig {
     type Error = ErrorCode;
 
-    fn try_into(mut self) -> Result<InnerMetaConfig> {
-        self.check_config()?;
-
+    fn try_into(self) -> Result<InnerMetaConfig> {
         Ok(InnerMetaConfig {
             embedded_dir: self.embedded_dir,
-            address: self.address,
             endpoints: self.endpoints,
             username: self.username,
             password: self.password,
@@ -1606,7 +1547,6 @@ impl TryInto<InnerMetaConfig> for MetaConfig {
             auto_sync_interval: self.auto_sync_interval,
             rpc_tls_meta_server_root_ca_cert: self.rpc_tls_meta_server_root_ca_cert,
             rpc_tls_meta_service_domain_name: self.rpc_tls_meta_service_domain_name,
-            meta_type: MetaType::from_str(&self.meta_type).unwrap(),
         })
     }
 }
@@ -1615,7 +1555,6 @@ impl From<InnerMetaConfig> for MetaConfig {
     fn from(inner: InnerMetaConfig) -> Self {
         Self {
             embedded_dir: inner.embedded_dir,
-            address: inner.address,
             endpoints: inner.endpoints,
             username: inner.username,
             password: inner.password,
@@ -1623,7 +1562,6 @@ impl From<InnerMetaConfig> for MetaConfig {
             auto_sync_interval: inner.auto_sync_interval,
             rpc_tls_meta_server_root_ca_cert: inner.rpc_tls_meta_server_root_ca_cert,
             rpc_tls_meta_service_domain_name: inner.rpc_tls_meta_service_domain_name,
-            meta_type: inner.meta_type.to_string(),
         }
     }
 }
@@ -1631,8 +1569,6 @@ impl From<InnerMetaConfig> for MetaConfig {
 impl Debug for MetaConfig {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         f.debug_struct("MetaConfig")
-            .field("meta_type", &self.meta_type)
-            .field("address", &self.address)
             .field("endpoints", &self.endpoints)
             .field("username", &self.username)
             .field("password", &mask_string(&self.password, 3))

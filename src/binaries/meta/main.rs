@@ -156,7 +156,7 @@ async fn run_kvapi_command(conf: &Config, op: &str) {
     match KvApiCommand::from_config(conf, op) {
         Ok(kv_cmd) => {
             let rpc_conf = RpcClientConf {
-                address: conf.grpc_api_address.clone(),
+                endpoints: vec![conf.grpc_api_address.clone()],
                 username: conf.username.clone(),
                 password: conf.password.clone(),
                 ..Default::default()
