@@ -29,12 +29,31 @@ use serde::Serialize;
 use super::utils::mask_string;
 
 /// Config for storage backend.
+///
+/// # TODO(xuanwo)
+///
+/// In the future, we will use the following storage config layout:
+///
+/// ```toml
+/// [storage]
+///
+/// [storage.data]
+/// type = "s3"
+///
+/// [storage.cache]
+/// type = "redis"
+///
+/// [storage.temperary]
+/// type = "s3"
+/// ```
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StorageConfig {
     pub num_cpus: u64,
     pub allow_insecure: bool,
 
     pub params: StorageParams,
+
+    pub cache: CacheConfig,
 }
 
 /// Config for cache backend.

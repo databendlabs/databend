@@ -208,7 +208,7 @@ async fn main_entrypoint(mem_tracker: Arc<MemoryTracker>) -> Result<()> {
         }
     );
     println!("Storage: {}", conf.storage.params);
-    println!("Cache: {}", conf.cache.params);
+    println!("Cache: {}", conf.storage.cache.params);
     println!(
         "Builtin users: {}",
         conf.query

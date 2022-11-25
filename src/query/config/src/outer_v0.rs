@@ -96,9 +96,6 @@ pub struct Config {
     #[clap(flatten)]
     pub storage: StorageConfig,
 
-    #[clap(skip)]
-    pub cache: CacheConfig,
-
     /// Note: Legacy Config API
     ///
     /// When setting its all feilds to empty strings, it will be ignored
@@ -172,7 +169,6 @@ impl From<InnerConfig> for Config {
             log: inner.log.into(),
             meta: inner.meta.into(),
             storage: inner.storage.into(),
-            cache: inner.cache.into(),
             catalog: HiveCatalogConfig::empty(),
 
             catalogs: inner
@@ -209,13 +205,29 @@ impl TryInto<InnerConfig> for Config {
             log: self.log.try_into()?,
             meta: self.meta.try_into()?,
             storage: self.storage.try_into()?,
-            cache: self.cache.try_into()?,
             catalogs,
         })
     }
 }
 
 /// Storage config group.
+///
+/// # TODO(xuanwo)
+///
+/// In the future, we will use the following storage config layout:
+///
+/// ```toml
+/// [storage]
+///
+/// [storage.data]
+/// type = "s3"
+///
+/// [storage.cache]
+/// type = "redis"
+///
+/// [storage.temperary]
+/// type = "s3"
+/// ```
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct StorageConfig {
@@ -257,6 +269,9 @@ pub struct StorageConfig {
     // OSS storage backend config
     #[clap(flatten)]
     pub oss: OssStorageConfig,
+
+    #[clap(skip)]
+    pub cache: CacheConfig,
 }
 
 impl Default for StorageConfig {
@@ -278,6 +293,8 @@ impl From<InnerStorageConfig> for StorageConfig {
             azblob: Default::default(),
             hdfs: Default::default(),
             obs: Default::default(),
+
+            cache: inner.cache.into(),
         };
 
         match inner.params {
@@ -341,6 +358,7 @@ impl TryInto<InnerStorageConfig> for StorageConfig {
                     _ => return Err(ErrorCode::StorageOther("not supported storage type")),
                 }
             },
+            cache: self.cache.try_into()?,
         })
     }
 }
