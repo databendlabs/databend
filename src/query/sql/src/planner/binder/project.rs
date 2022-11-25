@@ -199,7 +199,6 @@ impl<'a> Binder {
                                             .into(),
                                             alias: column_binding.column_name.clone(),
                                         };
-                                        println!("select_item is {:?}", select_item);
                                         output.items.push(select_item);
                                     }
                                 }
