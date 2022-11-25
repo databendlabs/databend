@@ -152,7 +152,7 @@ where for<'a> T::ScalarRef<'a>: Hash
     }
 
     unsafe fn drop_state(&self, place: StateAddr) {
-        let state = place.get::<AggregateApproxCountDistinctState>();
+        let state = place.get::<AggregateApproxCountDistinctState<T::ScalarRef<'_>>>();
         std::ptr::drop_in_place(state);
     }
 
