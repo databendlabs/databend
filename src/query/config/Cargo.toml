@@ -25,7 +25,6 @@ common-meta-types = { path = "../../meta/types" }
 common-storage = { path = "../../common/storage" }
 common-tracing = { path = "../../common/tracing" }
 common-users = { path = "../users" }
-temp-env = "0.3.0"
 
 clap = { workspace = true }
 hex = "0.4.3"

@@ -74,10 +74,6 @@ impl Config {
         Ok(cfg)
     }
 
-    pub fn load_with_configs(kvs: Vec<(String, Option<String>)>) -> Result<Self> {
-        temp_env::with_vars(kvs, Config::load)
-    }
-
     pub fn tls_query_cli_enabled(&self) -> bool {
         !self.query.rpc_tls_query_server_root_ca_cert.is_empty()
             && !self.query.rpc_tls_query_service_domain_name.is_empty()

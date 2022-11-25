@@ -1325,7 +1325,6 @@ dependencies = [
  "serde",
  "serfig",
  "strum",
- "temp-env",
  "tracing",
 ]
 
