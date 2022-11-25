@@ -33,7 +33,7 @@ use common_pipeline_sources::processors::sources::input_formats::StreamingReadBa
 use futures::StreamExt;
 use http::HeaderMap;
 use naive_cityhash::cityhash128;
-use opendal::io_util::CompressAlgorithm;
+use opendal::raw::CompressAlgorithm;
 use poem::error::BadRequest;
 use poem::error::InternalServerError;
 use poem::error::Result as PoemResult;

@@ -15,6 +15,7 @@
 use std::any::Any;
 use std::collections::HashMap;
 use std::convert::TryFrom;
+use std::ops::Deref;
 use std::str;
 use std::sync::Arc;
 
@@ -117,7 +118,7 @@ impl FuseTable {
         operator = operator
             .layer(StorageMetricsLayer::new(data_metrics.clone()))
             .layer(ContentCacheLayer::new(
-                CacheOperator::instance().inner(),
+                CacheOperator::instance().deref().clone(),
                 ContentCacheStrategy::Fixed(1024 * 1024),
             ));
 

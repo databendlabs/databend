@@ -686,10 +686,10 @@ async fn do_list_files_from_dir(
         if path[file_offset..].starts_with('.') || path[file_offset..].starts_with('_') {
             continue;
         }
-        match de.mode() {
+        match de.mode().await? {
             ObjectMode::FILE => {
                 let filename = path.to_string();
-                let length = de.content_length().await;
+                let length = de.content_length().await?;
                 all_files.push(HiveFileInfo::create(filename, length));
             }
             ObjectMode::DIR => {

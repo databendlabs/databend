@@ -1383,6 +1383,7 @@ dependencies = [
  "anyhow",
  "bincode 2.0.0-rc.2",
  "common-arrow",
+ "opendal",
  "paste",
  "prost",
  "serde",
@@ -5660,9 +5661,9 @@ checksum = "0ab1bc2a289d34bd04a330323ac98a1b4bc82c9d9fcb1e66b63caa84da26b575"
 
 [[package]]
 name = "opendal"
-version = "0.20.1"
+version = "0.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "63b17b778cf11d10fbaaae4a5a0f82d5c6f527f96a9e4843f4e2dd6cd0dbe580"
+checksum = "e093402bdf1033677db972e0f5ac349e3ec251fe99b5db91b1472180c1f48254"
 dependencies = [
  "anyhow",
  "async-compat",
@@ -8610,7 +8611,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if",
- "rand 0.7.3",
+ "rand 0.8.5",
  "static_assertions",
 ]
 
