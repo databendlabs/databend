@@ -183,8 +183,10 @@ impl Processor for CompactTransform {
             return Ok(Event::NeedData);
         }
 
-        let input_date = self.input.pull_data().unwrap()?;
-        let meta = input_date.get_meta().unwrap();
+        let input_data = self.input.pull_data().unwrap()?;
+        let meta = input_data
+            .get_meta()
+            .ok_or_else(|| ErrorCode::Internal("No block meta. It's a bug"))?;
         let task_meta = CompactSourceMeta::from_meta(meta)?;
         self.order = task_meta.order;
         self.compact_tasks = task_meta.tasks.clone();
