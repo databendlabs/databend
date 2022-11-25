@@ -1252,7 +1252,7 @@ dependencies = [
  "tikv-jemalloc-sys",
  "tokio",
  "tracing",
- "uuid",
+ "uuid 1.2.1",
 ]
 
 [[package]]
@@ -1487,7 +1487,7 @@ dependencies = [
  "siphasher",
  "strength_reduce",
  "twox-hash",
- "uuid",
+ "uuid 1.2.1",
 ]
 
 [[package]]
@@ -2047,7 +2047,7 @@ dependencies = [
  "tonic",
  "tracing",
  "typetag",
- "uuid",
+ "uuid 1.2.1",
 ]
 
 [[package]]
@@ -2133,7 +2133,7 @@ dependencies = [
  "serde_json",
  "tracing",
  "typetag",
- "uuid",
+ "uuid 1.2.1",
 ]
 
 [[package]]
@@ -2173,7 +2173,7 @@ dependencies = [
  "snailquote",
  "tracing",
  "typetag",
- "uuid",
+ "uuid 1.2.1",
  "walkdir",
 ]
 
@@ -2204,6 +2204,35 @@ dependencies = [
  "serde",
  "tracing",
  "typetag",
+]
+
+[[package]]
+name = "common-storages-iceberg"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "common-arrow",
+ "common-base",
+ "common-catalog",
+ "common-datablocks",
+ "common-datavalues",
+ "common-exception",
+ "common-meta-app",
+ "common-meta-store",
+ "common-meta-types",
+ "common-pipeline-core",
+ "common-pipeline-sources",
+ "common-storage",
+ "common-storages-cache",
+ "common-storages-index",
+ "common-storages-table-meta",
+ "futures",
+ "iceberg-rs",
+ "itertools",
+ "opendal",
+ "serde",
+ "serde_json",
+ "tracing",
 ]
 
 [[package]]
@@ -2263,7 +2292,7 @@ dependencies = [
  "snailquote",
  "tracing",
  "typetag",
- "uuid",
+ "uuid 1.2.1",
  "walkdir",
 ]
 
@@ -2303,7 +2332,7 @@ dependencies = [
  "snailquote",
  "tracing",
  "typetag",
- "uuid",
+ "uuid 1.2.1",
  "walkdir",
 ]
 
@@ -2343,7 +2372,7 @@ dependencies = [
  "snailquote",
  "tracing",
  "typetag",
- "uuid",
+ "uuid 1.2.1",
  "walkdir",
 ]
 
@@ -2383,7 +2412,7 @@ dependencies = [
  "snailquote",
  "tracing",
  "typetag",
- "uuid",
+ "uuid 1.2.1",
  "walkdir",
 ]
 
@@ -2439,7 +2468,7 @@ dependencies = [
  "snailquote",
  "tracing",
  "typetag",
- "uuid",
+ "uuid 1.2.1",
  "walkdir",
 ]
 
@@ -2479,7 +2508,7 @@ dependencies = [
  "snailquote",
  "tracing",
  "typetag",
- "uuid",
+ "uuid 1.2.1",
  "walkdir",
 ]
 
@@ -3170,7 +3199,7 @@ dependencies = [
  "typetag",
  "unicode-segmentation",
  "url",
- "uuid",
+ "uuid 1.2.1",
  "walkdir",
  "wiremock",
 ]
@@ -3214,7 +3243,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bef552e6f588e446098f6ba40d89ac146c8c7b64aade83c051ee00bb5d2bc18d"
 dependencies = [
  "serde",
- "uuid",
+ "uuid 1.2.1",
 ]
 
 [[package]]
@@ -4492,6 +4521,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "iceberg-rs"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "135084cd6f6fd13a839140488784239d025b9765df94b83894a60890a51e47f6"
+dependencies = [
+ "lazy_static",
+ "regex",
+ "serde",
+ "serde_json",
+ "uuid 0.8.2",
+]
+
+[[package]]
 name = "idna"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5274,7 +5316,7 @@ dependencies = [
  "tagptr",
  "thiserror",
  "triomphe",
- "uuid",
+ "uuid 1.2.1",
 ]
 
 [[package]]
@@ -5389,7 +5431,7 @@ dependencies = [
  "subprocess",
  "thiserror",
  "time 0.3.15",
- "uuid",
+ "uuid 1.2.1",
 ]
 
 [[package]]
@@ -7418,7 +7460,7 @@ dependencies = [
  "thiserror",
  "time 0.3.15",
  "url",
- "uuid",
+ "uuid 1.2.1",
 ]
 
 [[package]]
@@ -7893,7 +7935,7 @@ dependencies = [
  "debugid",
  "memmap2",
  "stable_deref_trait",
- "uuid",
+ "uuid 1.2.1",
 ]
 
 [[package]]
@@ -8756,6 +8798,16 @@ name = "utf8-width"
 version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5190c9442dcdaf0ddd50f37420417d219ae5261bbf5db120d0f9bab996c9cba1"
+
+[[package]]
+name = "uuid"
+version = "0.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bc5cf98d8186244414c848017f0e2676b3fcb46807f6668a97dfe67359a3c4b7"
+dependencies = [
+ "getrandom 0.2.7",
+ "serde",
+]
 
 [[package]]
 name = "uuid"

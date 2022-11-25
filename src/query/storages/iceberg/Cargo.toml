@@ -1,0 +1,36 @@
+[package]
+name = "common-storages-iceberg"
+version = "0.1.0"
+edition = "2021"
+authors = ["Databend Authors <opensource@datafuselabs.com>"]
+license = "Apache-2.0"
+publish = false
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+common-exception = { path = "../../../common/exception" }
+common-arrow = { path = "../../../common/arrow" }
+common-base = { path = "../../../common/base" }
+common-catalog = { path = "../../catalog" }
+common-datablocks = { path = "../../datablocks" }
+common-datavalues = { path = "../../datavalues" }
+common-meta-app = { path = "../../../meta/app" }
+common-meta-types = { path = "../../../meta/types" }
+common-meta-store = { path = "../../../meta/store" }
+common-pipeline-core = { path = "../../pipeline/core" }
+common-pipeline-sources = { path = "../../pipeline/sources" }
+common-storage = { path = "../../../common/storage" }
+common-storages-cache = { path = "../cache" }
+common-storages-index = { path = "../index" }
+common-storages-table-meta = { path = "../table-meta" }
+
+async-trait = "0.1.57"
+futures = "0.3.24"
+opendal = "0.19"
+tracing = "0.1.36"
+serde = { workspace = true }
+iceberg-rs = "0.1.0"
+serde_json = { workspace = true}
+itertools = "0.10.5"
+
