@@ -1429,11 +1429,19 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         },
     );
 
+    let revert_table = map(
+        rule! {
+            REVERT ~ TO ~ #travel_point
+        },
+        |(_, _, point)| AlterTableAction::RevertTo { point },
+    );
+
     rule!(
         #rename_table
         | #alter_table_cluster_key
         | #drop_table_cluster_key
         | #recluster_table
+        | #revert_table
     )(i)
 }
 

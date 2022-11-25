@@ -583,6 +583,8 @@ pub enum TokenKind {
     REGEXP,
     #[token("RENAME", ignore(ascii_case))]
     RENAME,
+    #[token("REVERT", ignore(ascii_case))]
+    REVERT,
     #[token("GRANT", ignore(ascii_case))]
     GRANT,
     #[token("ROLE", ignore(ascii_case))]

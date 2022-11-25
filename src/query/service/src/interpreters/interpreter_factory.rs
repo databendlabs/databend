@@ -313,6 +313,9 @@ impl InterpreterFactory {
             Plan::ShowGrantTenantsOfShare(p) => Ok(Arc::new(
                 ShowGrantTenantsOfShareInterpreter::try_create(ctx, *p.clone())?,
             )),
+            Plan::RevertTable(_) => {
+                todo!()
+            }
         }
     }
 }
