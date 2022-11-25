@@ -16,6 +16,7 @@ use std::collections::VecDeque;
 use std::mem::MaybeUninit;
 
 use crate::FastHash;
+use crate::HashSet;
 use crate::HashtableKeyable;
 use crate::HashtableLike;
 use crate::TwoLevelHashSet;
@@ -49,6 +50,14 @@ impl<Impl: HashtableLike> TwoLevelHashtable<Impl> {
 }
 
 impl<K: HashtableKeyable + FastHash> TwoLevelHashSet<K> {
+    pub fn inner_sets_mut(&mut self) -> &mut Vec<HashSet<K>> {
+        &mut self.tables
+    }
+
+    pub fn inner_sets(&self) -> &Vec<HashSet<K>> {
+        &self.tables
+    }
+
     pub fn set_merge(&mut self, other: &Self) {
         self.tables
             .iter_mut()

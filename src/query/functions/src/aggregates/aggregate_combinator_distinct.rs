@@ -18,6 +18,7 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::Bitmap;
+use common_base::base::ThreadPool;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_hashtable::KeysRef;
@@ -26,6 +27,7 @@ use ordered_float::OrderedFloat;
 use super::aggregate_distinct_state::AggregateDistinctPrimitiveState;
 use super::aggregate_distinct_state::AggregateDistinctState;
 use super::aggregate_distinct_state::AggregateDistinctStringState;
+use super::aggregate_distinct_state::AggregateDistinctTwoLevelPrimitiveState;
 use super::aggregate_distinct_state::AggregateUniqStringState;
 use super::aggregate_distinct_state::DataGroupValues;
 use super::aggregate_distinct_state::DistinctStateFunc;
@@ -101,6 +103,21 @@ where State: DistinctStateFunc
         let state = place.get::<State>();
         let rhs = rhs.get::<State>();
         state.merge(rhs)
+    }
+
+    fn support_merge_parallel(&self) -> bool {
+        State::support_merge_parallel()
+    }
+
+    fn merge_parallel(
+        &self,
+        pool: &mut ThreadPool,
+        place: StateAddr,
+        rhs: StateAddr,
+    ) -> Result<()> {
+        let state = place.get::<State>();
+        let rhs = rhs.get::<State>();
+        state.merge_parallel(pool, rhs)
     }
 
     #[allow(unused_mut)]
@@ -225,7 +242,7 @@ pub fn try_create(
         if phid.is_numeric() {
             dispatch_primitive_type_id!(phid, |$T |$E|  {
                 return Ok(Arc::new(AggregateDistinctCombinator::<
-                    AggregateDistinctPrimitiveState<$T, $E>,
+                    AggregateDistinctTwoLevelPrimitiveState<$T, $E>,
                 > {
                     nested_name: nested_name.to_owned(),
                     arguments,

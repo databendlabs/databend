@@ -21,14 +21,16 @@ use std::marker::Send;
 use std::marker::Sync;
 
 use common_arrow::arrow::bitmap::Bitmap;
+use common_base::base::ThreadPool;
 use common_datavalues::prelude::*;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_hashtable::FastHash;
 use common_hashtable::HashSet as CommonHashSet;
 use common_hashtable::HashtableKeyable;
 use common_hashtable::HashtableLike;
-use common_hashtable::KeysRef;
 use common_hashtable::StackHashSet;
+use common_hashtable::TwoLevelHashSet;
 use common_hashtable::UnsizedHashSet;
 use common_io::prelude::*;
 use serde::de::DeserializeOwned;
@@ -53,6 +55,17 @@ pub trait DistinctStateFunc: Send + Sync {
         input_rows: usize,
     ) -> Result<()>;
     fn merge(&mut self, rhs: &Self) -> Result<()>;
+
+    fn support_merge_parallel() -> bool {
+        false
+    }
+
+    fn merge_parallel(&mut self, _pool: &mut ThreadPool, _rhs: &mut Self) -> Result<()> {
+        Err(ErrorCode::Unimplemented(
+            "merge_parallel is not implemented".to_string(),
+        ))
+    }
+
     fn build_columns(&mut self, fields: &[DataField]) -> Result<Vec<ColumnRef>>;
 }
 
@@ -440,5 +453,136 @@ impl DistinctStateFunc for AggregateUniqStringState {
     // This method won't be called.
     fn build_columns(&mut self, _fields: &[DataField]) -> Result<Vec<ColumnRef>> {
         Ok(vec![])
+    }
+}
+
+pub struct AggregateDistinctTwoLevelPrimitiveState<T: PrimitiveType, E: From<T> + HashtableKeyable>
+{
+    set: TwoLevelHashSet<E>,
+    _t: PhantomData<T>,
+}
+
+const BUCKETS: usize = 256;
+impl<T, E> DistinctStateFunc for AggregateDistinctTwoLevelPrimitiveState<T, E>
+where
+    T: PrimitiveType + From<E>,
+    E: From<T>
+        + Sync
+        + Send
+        + Clone
+        + std::fmt::Debug
+        + HashtableKeyable
+        + FastHash
+        + Serialize
+        + DeserializeOwned
+        + 'static,
+{
+    fn new() -> Self {
+        let sets: Vec<CommonHashSet<E>> = (0..BUCKETS)
+            .map(|_| CommonHashSet::<E>::with_capacity(4))
+            .collect();
+        Self {
+            set: TwoLevelHashSet::create(sets),
+            _t: PhantomData,
+        }
+    }
+
+    fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
+        writer.write_uvarint(self.set.len() as u64)?;
+        for value in self.set.iter() {
+            serialize_into_buf(writer, value.key())?
+        }
+        Ok(())
+    }
+
+    fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()> {
+        let size = reader.read_uvarint()? as usize;
+
+        let sets: Vec<CommonHashSet<E>> = (0..BUCKETS)
+            .map(|_| CommonHashSet::<E>::with_capacity(size / BUCKETS))
+            .collect();
+        self.set = TwoLevelHashSet::create(sets);
+
+        for _ in 0..size {
+            let t: E = deserialize_from_slice(reader)?;
+            let _ = self.set.set_insert(&t);
+        }
+        Ok(())
+    }
+
+    fn is_empty(&self) -> bool {
+        self.set.len() == 0
+    }
+
+    fn len(&self) -> usize {
+        self.set.len()
+    }
+
+    fn add(&mut self, columns: &[ColumnRef], row: usize) -> Result<()> {
+        let array: &PrimitiveColumn<T> = unsafe { Series::static_cast(&columns[0]) };
+        let v = unsafe { array.value_unchecked(row) };
+        let _ = self.set.set_insert(&E::from(v));
+        Ok(())
+    }
+
+    fn batch_add(
+        &mut self,
+        columns: &[ColumnRef],
+        validity: Option<&Bitmap>,
+        input_rows: usize,
+    ) -> Result<()> {
+        let array: &PrimitiveColumn<T> = unsafe { Series::static_cast(&columns[0]) };
+        match validity {
+            Some(bitmap) => {
+                for (t, v) in array.iter().zip(bitmap.iter()) {
+                    if v {
+                        let _ = self.set.set_insert(&E::from(*t));
+                    }
+                }
+            }
+            None => {
+                for row in 0..input_rows {
+                    let v = unsafe { array.value_unchecked(row) };
+                    let _ = self.set.set_insert(&E::from(v));
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn merge(&mut self, rhs: &Self) -> Result<()> {
+        self.set.set_merge(&rhs.set);
+        Ok(())
+    }
+
+    fn build_columns(&mut self, _fields: &[DataField]) -> Result<Vec<ColumnRef>> {
+        let values: Vec<T> = self.set.iter().map(|e| (*e.key()).into()).collect();
+        let result = PrimitiveColumn::<T>::new_from_vec(values);
+        Ok(vec![result.arc()])
+    }
+
+    fn support_merge_parallel() -> bool {
+        true
+    }
+
+    fn merge_parallel(&mut self, pool: &mut ThreadPool, rhs: &mut Self) -> Result<()> {
+        let mut join_handles = Vec::with_capacity(self.set.inner_sets().len());
+
+        let left: Vec<CommonHashSet<E>> = std::mem::replace(self.set.inner_sets_mut(), vec![]);
+        let right: Vec<CommonHashSet<E>> = std::mem::replace(rhs.set.inner_sets_mut(), vec![]);
+
+        for (mut a, b) in left.into_iter().zip(right.into_iter()) {
+            join_handles.push(pool.execute(move || {
+                a.set_merge(&b);
+                a
+            }));
+        }
+
+        let mut vs = Vec::with_capacity(BUCKETS);
+        for join_handle in join_handles {
+            vs.push(join_handle.join());
+        }
+        *self.set.inner_sets_mut() = vs;
+        Ok(())
     }
 }

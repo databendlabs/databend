@@ -18,6 +18,7 @@ use std::sync::Arc;
 use std::vec;
 
 use bumpalo::Bump;
+use common_base::base::ThreadPool;
 use common_datablocks::DataBlock;
 use common_datavalues::ColumnRef;
 use common_datavalues::DataSchemaRef;
@@ -45,8 +46,8 @@ pub struct SingleStateAggregator<const FINAL: bool> {
     arg_indices: Vec<Vec<usize>>,
     schema: DataSchemaRef,
     arena: Bump,
-    
-    places:   Vec<StateAddr>,
+
+    places: Vec<StateAddr>,
     to_merge_places: Vec<Vec<StateAddr>>,
     layout: Layout,
     offsets_aggregate_states: Vec<usize>,
@@ -60,7 +61,7 @@ impl<const FINAL: bool> SingleStateAggregator<FINAL> {
         let layout = params
             .layout
             .ok_or_else(|| ErrorCode::LayoutError("layout shouldn't be None"))?;
-        
+
         let get_places = || -> Vec<StateAddr> {
             let place: StateAddr = arena.alloc_layout(layout).into();
             params
@@ -75,11 +76,11 @@ impl<const FINAL: bool> SingleStateAggregator<FINAL> {
                 .collect()
         };
         let places = get_places();
-        
+
         Ok(Self {
             arena,
             places,
-            to_merge_places: vec![vec![] ; params.aggregate_functions.len() ],
+            to_merge_places: vec![vec![]; params.aggregate_functions.len()],
             funcs: params.aggregate_functions.clone(),
             arg_indices: params.aggregate_functions_arguments.clone(),
             schema: params.output_schema.clone(),
@@ -88,18 +89,18 @@ impl<const FINAL: bool> SingleStateAggregator<FINAL> {
             states_dropped: false,
         })
     }
-    
+
     fn new_places(&self) -> Vec<StateAddr> {
         let place: StateAddr = self.arena.alloc_layout(self.layout).into();
         self.funcs
-                .iter()
-                .enumerate()
-                .map(|(idx, func)| {
-                    let arg_place = place.next(self.offsets_aggregate_states[idx]);
-                    func.init_state(arg_place);
-                    arg_place
-                })
-                .collect()  
+            .iter()
+            .enumerate()
+            .map(|(idx, func)| {
+                let arg_place = place.next(self.offsets_aggregate_states[idx]);
+                func.init_state(arg_place);
+                arg_place
+            })
+            .collect()
     }
 
     fn drop_states(&mut self) {
@@ -150,20 +151,23 @@ impl Aggregator for SingleStateAggregator<true> {
             }
             builders
         };
-        
+
+        let mut thread_pool = ThreadPool::create(32)?;
+
         for (index, func) in self.funcs.iter().enumerate() {
             let main_place = self.places[index];
-            
+
             if func.support_merge_parallel() {
-                // parallel_merge 
-                todo!()
-            
+                // parallel_merge
+                for place in self.to_merge_places[index].iter() {
+                    func.merge_parallel(&mut thread_pool, main_place, *place)?;
+                }
             } else {
-                for place in  self.to_merge_places[index].iter() {
+                for place in self.to_merge_places[index].iter() {
                     func.merge(main_place, *place)?;
                 }
             }
-           
+
             let array: &mut dyn MutableColumn = aggr_values[index].borrow_mut();
             func.merge_result(main_place, array)?;
         }

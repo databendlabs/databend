@@ -17,7 +17,9 @@ use std::fmt;
 use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::Bitmap;
+use common_base::base::ThreadPool;
 use common_datavalues::prelude::*;
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 use super::StateAddr;
@@ -66,14 +68,21 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
     fn deserialize(&self, _place: StateAddr, _reader: &mut &[u8]) -> Result<()>;
 
     fn merge(&self, _place: StateAddr, _rhs: StateAddr) -> Result<()>;
-    
-    
+
     fn support_merge_parallel(&self) -> bool {
         false
     }
-    
-    fn merge_parallel(&self, _place: StateAddr, _rhs: StateAddr) -> Result<()> {
-        Ok(())
+
+    fn merge_parallel(
+        &self,
+        _pool: &mut ThreadPool,
+        _place: StateAddr,
+        _rhs: StateAddr,
+    ) -> Result<()> {
+        Err(ErrorCode::Unimplemented(format!(
+            "merge_parallel is not implemented for {}",
+            self.name()
+        )))
     }
 
     fn batch_merge_result(
