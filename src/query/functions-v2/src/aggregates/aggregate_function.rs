@@ -73,6 +73,8 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
     // TODO append the value into the column builder
     fn merge_result(&self, _place: StateAddr, _builder: &mut ColumnBuilder) -> Result<()>;
 
+    // std::mem::needs_drop::<State>
+    // if true will call drop_state
     fn need_manual_drop_state(&self) -> bool {
         false
     }
