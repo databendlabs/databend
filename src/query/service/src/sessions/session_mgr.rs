@@ -95,7 +95,7 @@ impl SessionManager {
         let config = self.get_conf();
         {
             let sessions = self.active_sessions.read();
-            if sessions.len() == self.max_sessions {
+            if sessions.len() >= self.max_sessions {
                 return Err(ErrorCode::TooManyUserConnections(
                     "The current accept connection has exceeded max_active_sessions config",
                 ));
@@ -106,11 +106,9 @@ impl SessionManager {
         let mut mysql_conn_id = None;
         match session_typ {
             SessionType::MySQL => {
-                let mut conn_id_session_id = self.mysql_conn_map.write();
+                let conn_id_session_id = self.mysql_conn_map.read();
                 mysql_conn_id = Some(self.mysql_basic_conn_id.fetch_add(1, Ordering::Relaxed));
-                if conn_id_session_id.len() < self.max_sessions {
-                    conn_id_session_id.insert(mysql_conn_id, id.clone());
-                } else {
+                if conn_id_session_id.len() >= self.max_sessions {
                     return Err(ErrorCode::TooManyUserConnections(
                         "The current accept connection has exceeded max_active_sessions config",
                     ));
@@ -128,7 +126,7 @@ impl SessionManager {
         let user_api = UserApiProvider::instance();
         let session_settings = Settings::try_create(&config, user_api, tenant).await?;
         let session_ctx = SessionContext::try_create(config.clone(), session_settings)?;
-        let session = Session::try_create(id, typ.clone(), session_ctx, mysql_conn_id)?;
+        let session = Session::try_create(id.clone(), typ.clone(), session_ctx, mysql_conn_id)?;
 
         let mut sessions = self.active_sessions.write();
         if sessions.len() < self.max_sessions {
@@ -140,6 +138,17 @@ impl SessionManager {
 
             if !matches!(typ, SessionType::FlightRPC) {
                 sessions.insert(session.get_id(), Arc::downgrade(&session));
+            }
+
+            if let SessionType::MySQL = session_typ {
+                let mut conn_id_session_id = self.mysql_conn_map.write();
+                if conn_id_session_id.len() < self.max_sessions {
+                    conn_id_session_id.insert(mysql_conn_id, id);
+                } else {
+                    return Err(ErrorCode::TooManyUserConnections(
+                        "The current accept connection has exceeded max_active_sessions config",
+                    ));
+                }
             }
 
             Ok(session)

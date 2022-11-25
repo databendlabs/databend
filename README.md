@@ -1,6 +1,6 @@
 <img src="https://user-images.githubusercontent.com/172204/193307982-a286c574-80ef-41de-b52f-1b064ae7fccd.png" alt="databend" />
 <div align="center">
- 
+
 <h4 align="center">
   <a href="https://databend.rs/doc/cloud">Databend Serverless Cloud (beta)</a>  |
   <a href="https://databend.rs/doc">Documentation</a>  |
@@ -63,8 +63,8 @@ Databend uses the latest techniques in vectorized query processing to allow you 
 - __Blazing Performance__
 
   Databend leverages data-level parallelism(Vectorized Query Execution) and instruction-level parallelism(SIMD) technology, offering blazing performance data analytics.
-  
-  
+
+
 - __Git-like Storage__
 
   Databend stores data with snapshots. It's easy to query, clone, and restore historical data in tables.
@@ -80,7 +80,7 @@ Databend uses the latest techniques in vectorized query processing to allow you 
 - __Easy to Use__
 
   Databend has no indexes to build, no manual tuning required, no manual figuring out partitions or shard data, it’s all done for you as data is loaded into the table.
- 
+
 ## Architecture
 
 ![databend-arch](https://user-images.githubusercontent.com/172204/181448994-2b7c1623-6b20-4398-8917-45acca95ba90.png)
@@ -113,7 +113,7 @@ docker run --net=host  datafuselabs/databend
 - [Deploying a Standalone Databend](https://databend.rs/doc/deploy/deploying-databend)
 - [Expanding a Standalone Databend](https://databend.rs/doc/deploy/expanding-to-a-databend-cluster)
 - [Databend Cloud (Beta)](https://databend.rs/doc/cloud)
- 
+
 ### Connecting to Databend
 
 - [How to Connect Databend with MySQL Client](https://databend.rs/doc/integrations/api/mysql-handler)
@@ -140,7 +140,7 @@ docker run --net=host  datafuselabs/databend
 - [How to Grant Privileges to a Role](https://databend.rs/doc/sql-commands/ddl/user/grant-privileges)
 - [How to Grant Role to a User](https://databend.rs/doc/sql-commands/ddl/user/grant-role)
 - [How to Revoke Role from a User](https://databend.rs/doc/sql-commands/ddl/user/revoke-role)
- 
+
 ### Managing Databases
 
 - [How to Create a Database](https://databend.rs/doc/sql-commands/ddl/database/ddl-create-database)

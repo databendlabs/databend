@@ -1512,6 +1512,7 @@ dependencies = [
  "common-jsonb",
  "crc32fast",
  "criterion",
+ "ctor",
  "goldenfile",
  "hex",
  "itertools",
@@ -1607,15 +1608,6 @@ dependencies = [
  "fast-float",
  "ordered-float 3.3.0",
  "serde_json",
-]
-
-[[package]]
-name = "common-macros"
-version = "0.1.0"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
 ]
 
 [[package]]
@@ -2483,6 +2475,7 @@ dependencies = [
  "serde_json",
  "serde_repr",
  "snailquote",
+ "tikv-jemalloc-ctl",
  "tracing",
  "typetag",
  "uuid",
@@ -2993,7 +2986,6 @@ dependencies = [
  "common-config",
  "common-exception",
  "common-grpc",
- "common-macros",
  "common-meta-api",
  "common-meta-app",
  "common-meta-client",

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_exception::Result;
+use itertools::Itertools;
 
 use crate::optimizer::rule::Rule;
 use crate::optimizer::rule::RuleID;
@@ -21,6 +22,7 @@ use crate::optimizer::SExpr;
 use crate::plans::Filter;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
+use crate::plans::Scalar;
 
 pub struct RuleEliminateFilter {
     id: RuleID,
@@ -57,8 +59,21 @@ impl Rule for RuleEliminateFilter {
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
         let eval_scalar: Filter = s_expr.plan().clone().try_into()?;
-        if eval_scalar.predicates.is_empty() {
+        // First, de-duplication predicates.
+        let origin_predicates = eval_scalar.predicates.clone();
+        let predicates = eval_scalar
+            .predicates
+            .into_iter()
+            .unique()
+            .collect::<Vec<Scalar>>();
+        if predicates.is_empty() {
             state.add_result(s_expr.child(0)?.clone());
+        } else if origin_predicates.len() != predicates.len() {
+            let filter = Filter {
+                predicates,
+                is_having: eval_scalar.is_having,
+            };
+            state.add_result(SExpr::create_unary(filter.into(), s_expr.child(0)?.clone()));
         }
         Ok(())
     }

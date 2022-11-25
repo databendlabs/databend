@@ -13,7 +13,6 @@
 // limitations under the License.
 
 mod decorrelate;
-mod extract_or_predicate;
 #[allow(clippy::module_inception)]
 mod heuristic;
 mod implement;

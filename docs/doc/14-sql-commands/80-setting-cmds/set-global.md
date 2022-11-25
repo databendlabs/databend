@@ -2,7 +2,9 @@
 title: SET
 ---
 
-Changes the value of a session-level or cluster-level setting. To show all the current settings, use [SHOW SETTINGS](show-settings.md). 
+Changes the value of a setting. To show all the current settings, use [SHOW SETTINGS](show-settings.md).
+
+See also: [UNSET](unset.md)
 
 ## Syntax
 
@@ -10,7 +12,7 @@ Changes the value of a session-level or cluster-level setting. To show all the c
 SET [GLOBAL] <setting_name> = <new_value>;
 ```
 
-`GLOBAL`: Include this option when you change the value of a global-level setting. If you include this option preceding a session-level setting, the setting will become a cluster-level(or global-level) setting.
+`GLOBAL`: If you include this option preceding a session-level setting, the setting will become a cluster-level (global-level) setting.
 
 :::note
 A cluster-level setting is a cluster setting and the value will be stored in the meta service.

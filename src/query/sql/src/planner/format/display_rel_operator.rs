@@ -37,6 +37,7 @@ use crate::plans::PhysicalScan;
 use crate::plans::RelOperator;
 use crate::plans::Scalar;
 use crate::plans::Sort;
+use crate::ColumnEntry;
 use crate::MetadataRef;
 use crate::ScalarExpr;
 
@@ -265,12 +266,15 @@ fn physical_scan_to_format_tree(
                             .iter()
                             .map(|item| format!(
                                 "{} (#{}) {}",
-                                metadata.read().column(item.index).name(),
+                                match metadata.read().column(item.index) {
+                                    ColumnEntry::BaseTableColumn { column_name, .. } => column_name,
+                                    ColumnEntry::DerivedColumn { alias, .. } => alias,
+                                },
                                 item.index,
                                 if item.asc { "ASC" } else { "DESC" }
                             ))
                             .collect::<Vec<String>>()
-                            .join(", ")
+                            .join(", "),
                     ),
                 ))),
                 FormatTreeNode::new(FormatContext::Text(format!(
@@ -323,12 +327,15 @@ fn logical_get_to_format_tree(
                             .iter()
                             .map(|item| format!(
                                 "{} (#{}) {}",
-                                metadata.read().column(item.index).name(),
+                                match metadata.read().column(item.index) {
+                                    ColumnEntry::BaseTableColumn { column_name, .. } => column_name,
+                                    ColumnEntry::DerivedColumn { alias, .. } => alias,
+                                },
                                 item.index,
                                 if item.asc { "ASC" } else { "DESC" }
                             ))
                             .collect::<Vec<String>>()
-                            .join(", ")
+                            .join(", "),
                     ),
                 ))),
                 FormatTreeNode::new(FormatContext::Text(format!(
@@ -556,7 +563,10 @@ fn sort_to_format_tree(
         .iter()
         .map(|item| {
             let metadata = metadata.read();
-            let name = metadata.column(item.index).name();
+            let name = match metadata.column(item.index) {
+                ColumnEntry::BaseTableColumn { column_name, .. } => column_name,
+                ColumnEntry::DerivedColumn { alias, .. } => alias,
+            };
             format!(
                 "{} (#{}) {}",
                 name,

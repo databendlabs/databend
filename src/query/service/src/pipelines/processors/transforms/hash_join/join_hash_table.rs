@@ -197,7 +197,7 @@ impl JoinHashTable {
             probe_data_schema = probe_schema_wrap_nullable(&probe_data_schema);
         }
         Ok(Self {
-            row_space: RowSpace::new(build_data_schema),
+            row_space: RowSpace::new(ctx.clone(), build_data_schema)?,
             ref_count: Mutex::new(0),
             is_finished: Mutex::new(false),
             hash_join_desc,
