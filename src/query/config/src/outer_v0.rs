@@ -36,6 +36,7 @@ use common_storage::StorageMokaConfig as InnerStorageMokaConfig;
 use common_storage::StorageObsConfig as InnerStorageObsConfig;
 use common_storage::StorageOssConfig as InnerStorageOssConfig;
 use common_storage::StorageParams;
+use common_storage::StorageRedisConfig as InnerStorageRedisConfig;
 use common_storage::StorageS3Config as InnerStorageS3Config;
 use common_tracing::Config as InnerLogConfig;
 use common_tracing::FileConfig as InnerFileLogConfig;
@@ -93,9 +94,6 @@ pub struct Config {
     // Storage backend config.
     #[clap(flatten)]
     pub storage: StorageConfig,
-
-    #[clap(skip)]
-    pub cache: CacheConfig,
 
     /// Note: Legacy Config API
     ///
@@ -170,7 +168,6 @@ impl From<InnerConfig> for Config {
             log: inner.log.into(),
             meta: inner.meta.into(),
             storage: inner.storage.into(),
-            cache: inner.cache.into(),
             catalog: HiveCatalogConfig::empty(),
 
             catalogs: inner
@@ -207,13 +204,29 @@ impl TryInto<InnerConfig> for Config {
             log: self.log.try_into()?,
             meta: self.meta.try_into()?,
             storage: self.storage.try_into()?,
-            cache: self.cache.try_into()?,
             catalogs,
         })
     }
 }
 
 /// Storage config group.
+///
+/// # TODO(xuanwo)
+///
+/// In the future, we will use the following storage config layout:
+///
+/// ```toml
+/// [storage]
+///
+/// [storage.data]
+/// type = "s3"
+///
+/// [storage.cache]
+/// type = "redis"
+///
+/// [storage.temperary]
+/// type = "s3"
+/// ```
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct StorageConfig {
@@ -255,6 +268,9 @@ pub struct StorageConfig {
     // OSS storage backend config
     #[clap(flatten)]
     pub oss: OssStorageConfig,
+
+    #[clap(skip)]
+    pub cache: CacheConfig,
 }
 
 impl Default for StorageConfig {
@@ -276,6 +292,8 @@ impl From<InnerStorageConfig> for StorageConfig {
             azblob: Default::default(),
             hdfs: Default::default(),
             obs: Default::default(),
+
+            cache: inner.cache.into(),
         };
 
         match inner.params {
@@ -339,6 +357,7 @@ impl TryInto<InnerStorageConfig> for StorageConfig {
                     _ => return Err(ErrorCode::StorageOther("not supported storage type")),
                 }
             },
+            cache: self.cache.try_into()?,
         })
     }
 }
@@ -464,6 +483,7 @@ impl HiveCatalogConfig {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct CacheConfig {
     #[serde(rename = "type")]
     pub cache_type: String,
@@ -476,6 +496,9 @@ pub struct CacheConfig {
 
     // Moka cache backend config.
     pub moka: MokaStorageConfig,
+
+    // Redis cache backend config.
+    pub redis: RedisStorageConfig,
 }
 
 impl Default for CacheConfig {
@@ -491,6 +514,7 @@ impl From<InnerCacheConfig> for CacheConfig {
             cache_type: "".to_string(),
             fs: FsStorageConfig::default(),
             moka: MokaStorageConfig::default(),
+            redis: RedisStorageConfig::default(),
         };
 
         match inner.params {
@@ -501,6 +525,10 @@ impl From<InnerCacheConfig> for CacheConfig {
             StorageParams::Moka(v) => {
                 cfg.cache_type = "moka".to_string();
                 cfg.moka = v.into();
+            }
+            StorageParams::Redis(v) => {
+                cfg.cache_type = "redis".to_string();
+                cfg.redis = v.into();
             }
             v => unreachable!("{v:?} should not be used as cache backend"),
         }
@@ -518,6 +546,7 @@ impl TryInto<InnerCacheConfig> for CacheConfig {
                 match self.cache_type.as_str() {
                     "fs" => StorageParams::Fs(self.fs.try_into()?),
                     "moka" => StorageParams::Moka(self.moka.try_into()?),
+                    "redis" => StorageParams::Redis(self.redis.try_into()?),
                     _ => return Err(ErrorCode::StorageOther("not supported cache type")),
                 }
             },
@@ -1010,7 +1039,11 @@ impl TryInto<InnerStorageOssConfig> for OssStorageConfig {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
-pub struct MokaStorageConfig {}
+pub struct MokaStorageConfig {
+    pub max_capacity: u64,
+    pub time_to_live: i64,
+    pub time_to_idle: i64,
+}
 
 impl Default for MokaStorageConfig {
     fn default() -> Self {
@@ -1019,8 +1052,12 @@ impl Default for MokaStorageConfig {
 }
 
 impl From<InnerStorageMokaConfig> for MokaStorageConfig {
-    fn from(_: InnerStorageMokaConfig) -> Self {
-        Self {}
+    fn from(v: InnerStorageMokaConfig) -> Self {
+        Self {
+            max_capacity: v.max_capacity,
+            time_to_live: v.time_to_live,
+            time_to_idle: v.time_to_idle,
+        }
     }
 }
 
@@ -1028,7 +1065,69 @@ impl TryInto<InnerStorageMokaConfig> for MokaStorageConfig {
     type Error = ErrorCode;
 
     fn try_into(self) -> Result<InnerStorageMokaConfig> {
-        Ok(InnerStorageMokaConfig::default())
+        Ok(InnerStorageMokaConfig {
+            max_capacity: self.max_capacity,
+            time_to_live: self.time_to_live,
+            time_to_idle: self.time_to_idle,
+        })
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
+#[serde(default)]
+pub struct RedisStorageConfig {
+    pub endpoint_url: String,
+    pub username: String,
+    pub password: String,
+    pub root: String,
+    pub db: i64,
+    /// TTL in seconds
+    pub default_ttl: i64,
+}
+
+impl Default for RedisStorageConfig {
+    fn default() -> Self {
+        InnerStorageRedisConfig::default().into()
+    }
+}
+
+impl From<InnerStorageRedisConfig> for RedisStorageConfig {
+    fn from(v: InnerStorageRedisConfig) -> Self {
+        Self {
+            endpoint_url: v.endpoint_url.clone(),
+            username: v.username.unwrap_or_default(),
+            password: v.password.unwrap_or_default(),
+            root: v.root.clone(),
+            db: v.db,
+            default_ttl: v.default_ttl.unwrap_or_default(),
+        }
+    }
+}
+
+impl TryInto<InnerStorageRedisConfig> for RedisStorageConfig {
+    type Error = ErrorCode;
+
+    fn try_into(self) -> Result<InnerStorageRedisConfig> {
+        Ok(InnerStorageRedisConfig {
+            endpoint_url: self.endpoint_url.clone(),
+            username: if self.username.is_empty() {
+                None
+            } else {
+                Some(self.username.clone())
+            },
+            password: if self.password.is_empty() {
+                None
+            } else {
+                Some(self.password.clone())
+            },
+            root: self.root.clone(),
+            db: self.db,
+            default_ttl: if self.default_ttl == 0 {
+                None
+            } else {
+                Some(self.default_ttl)
+            },
+        })
     }
 }
 

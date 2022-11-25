@@ -97,6 +97,6 @@ async fn bytes_reader(op: &Operator, path: &str, len: Option<u64>) -> Result<Byt
         }
     };
 
-    let reader = object.range_reader(..len).await?;
+    let reader = object.range_reader(0..len).await?;
     Ok(Box::new(reader))
 }

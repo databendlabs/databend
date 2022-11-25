@@ -29,12 +29,31 @@ use serde::Serialize;
 use super::utils::mask_string;
 
 /// Config for storage backend.
+///
+/// # TODO(xuanwo)
+///
+/// In the future, we will use the following storage config layout:
+///
+/// ```toml
+/// [storage]
+///
+/// [storage.data]
+/// type = "s3"
+///
+/// [storage.cache]
+/// type = "redis"
+///
+/// [storage.temperary]
+/// type = "s3"
+/// ```
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StorageConfig {
     pub num_cpus: u64,
     pub allow_insecure: bool,
 
     pub params: StorageParams,
+
+    pub cache: CacheConfig,
 }
 
 /// Config for cache backend.
@@ -71,6 +90,7 @@ pub enum StorageParams {
     Obs(StorageObsConfig),
     Oss(StorageOssConfig),
     S3(StorageS3Config),
+    Redis(StorageRedisConfig),
 }
 
 impl Default for StorageParams {
@@ -108,7 +128,7 @@ impl Display for StorageParams {
                 write!(f, "ipfs | endpoint={},root={}", c.endpoint_url, c.root)
             }
             StorageParams::Memory => write!(f, "memory"),
-            StorageParams::Moka(_) => write!(f, "moka"),
+            StorageParams::Moka(v) => write!(f, "moka | max_capacity={}", v.max_capacity),
             StorageParams::Obs(v) => write!(
                 f,
                 "obs | bucket={},root={},endpoint={}",
@@ -124,6 +144,13 @@ impl Display for StorageParams {
                     f,
                     "s3 | bucket={},root={},endpoint={}",
                     v.bucket, v.root, v.endpoint_url
+                )
+            }
+            StorageParams::Redis(v) => {
+                write!(
+                    f,
+                    "redis | db={},root={},endpoint={}",
+                    v.db, v.root, v.endpoint_url
                 )
             }
         }
@@ -149,6 +176,7 @@ impl StorageParams {
             StorageParams::Oss(v) => v.endpoint_url.starts_with("https://"),
             StorageParams::S3(v) => v.endpoint_url.starts_with("https://"),
             StorageParams::Gcs(v) => v.endpoint_url.starts_with("https://"),
+            StorageParams::Redis(_) => false,
         }
     }
 }
@@ -407,8 +435,57 @@ impl Debug for StorageOssConfig {
 }
 
 /// config for Moka Object Storage Service
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct StorageMokaConfig {}
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StorageMokaConfig {
+    pub max_capacity: u64,
+    pub time_to_live: i64,
+    pub time_to_idle: i64,
+}
+
+impl Default for StorageMokaConfig {
+    fn default() -> Self {
+        Self {
+            // Use 1G as default.
+            max_capacity: 1024 * 1024 * 1024,
+            // Use 1 hour as default time to live
+            time_to_live: 3600,
+            // Use 10 minutes as default time to idle.
+            time_to_idle: 600,
+        }
+    }
+}
+
+/// config for Redis Storage Service
+#[derive(Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StorageRedisConfig {
+    pub endpoint_url: String,
+    pub username: Option<String>,
+    pub password: Option<String>,
+    pub root: String,
+    pub db: i64,
+    /// TTL in seconds
+    pub default_ttl: Option<i64>,
+}
+
+impl Debug for StorageRedisConfig {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut d = f.debug_struct("StorageRedisConfig");
+
+        d.field("endpoint_url", &self.endpoint_url)
+            .field("db", &self.db)
+            .field("root", &self.root)
+            .field("default_ttl", &self.default_ttl);
+
+        if let Some(username) = &self.username {
+            d.field("username", &mask_string(username, 3));
+        }
+        if let Some(password) = &self.password {
+            d.field("usernpasswordame", &mask_string(password, 3));
+        }
+
+        d.finish()
+    }
+}
 
 static SHARE_TABLE_CONFIG: OnceCell<Singleton<ShareTableConfig>> = OnceCell::new();
 

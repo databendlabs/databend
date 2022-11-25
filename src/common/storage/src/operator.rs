@@ -15,6 +15,7 @@
 use std::env;
 use std::io::Result;
 use std::ops::Deref;
+use std::time::Duration;
 
 use backon::ExponentialBackoff;
 use common_base::base::GlobalIORuntime;
@@ -36,6 +37,7 @@ use opendal::services::memory;
 use opendal::services::moka;
 use opendal::services::obs;
 use opendal::services::oss;
+use opendal::services::redis;
 use opendal::services::s3;
 use opendal::Operator;
 
@@ -51,6 +53,7 @@ use crate::runtime_layer::RuntimeLayer;
 use crate::CacheConfig;
 use crate::StorageConfig;
 use crate::StorageOssConfig;
+use crate::StorageRedisConfig;
 
 /// init_operator will init an opendal operator based on storage config.
 pub fn init_operator(cfg: &StorageParams) -> Result<Operator> {
@@ -68,6 +71,7 @@ pub fn init_operator(cfg: &StorageParams) -> Result<Operator> {
         StorageParams::Obs(cfg) => init_obs_operator(cfg)?,
         StorageParams::S3(cfg) => init_s3_operator(cfg)?,
         StorageParams::Oss(cfg) => init_oss_operator(cfg)?,
+        StorageParams::Redis(cfg) => init_redis_operator(cfg)?,
     };
 
     let op = op
@@ -274,8 +278,32 @@ fn init_oss_operator(cfg: &StorageOssConfig) -> Result<Operator> {
 }
 
 /// init_moka_operator will init a moka operator.
-fn init_moka_operator(_: &StorageMokaConfig) -> Result<Operator> {
+fn init_moka_operator(v: &StorageMokaConfig) -> Result<Operator> {
     let mut builder = moka::Builder::default();
+
+    builder.max_capacity(v.max_capacity);
+    builder.time_to_live(std::time::Duration::from_secs(v.time_to_live as u64));
+    builder.time_to_idle(std::time::Duration::from_secs(v.time_to_idle as u64));
+
+    Ok(Operator::new(builder.build()?))
+}
+
+/// init_redis_operator will init a reids operator.
+fn init_redis_operator(v: &StorageRedisConfig) -> Result<Operator> {
+    let mut builder = redis::Builder::default();
+
+    builder.endpoint(&v.endpoint_url);
+    builder.root(&v.root);
+    builder.db(v.db);
+    if let Some(v) = v.default_ttl {
+        builder.default_ttl(Duration::from_secs(v as u64));
+    }
+    if let Some(v) = &v.username {
+        builder.username(v);
+    }
+    if let Some(v) = &v.password {
+        builder.password(v);
+    }
 
     Ok(Operator::new(builder.build()?))
 }

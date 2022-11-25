@@ -229,6 +229,18 @@ DB.Table: 'system'.'configs', Table: configs-table_id:1, ver:0, Engine: SystemCo
 | storage | azblob.container                     |                                |             |
 | storage | azblob.endpoint_url                  |                                |             |
 | storage | azblob.root                          |                                |             |
+| storage | cache.fs.data_path                   | _data                          |             |
+| storage | cache.moka.max_capacity              | 1073741824                     |             |
+| storage | cache.moka.time_to_idle              | 600                            |             |
+| storage | cache.moka.time_to_live              | 3600                           |             |
+| storage | cache.num_cpus                       | 0                              |             |
+| storage | cache.redis.db                       | 0                              |             |
+| storage | cache.redis.default_ttl              | 0                              |             |
+| storage | cache.redis.endpoint_url             |                                |             |
+| storage | cache.redis.password                 |                                |             |
+| storage | cache.redis.root                     |                                |             |
+| storage | cache.redis.username                 |                                |             |
+| storage | cache.type                           | moka                           |             |
 | storage | fs.data_path                         | _data                          |             |
 | storage | gcs.bucket                           |                                |             |
 | storage | gcs.credential                       |                                |             |

@@ -83,7 +83,7 @@ impl GlobalServices {
         ClusterDiscovery::init(config.clone(), global_services.clone()).await?;
 
         DataOperator::init(&config.storage, global_services.clone()).await?;
-        CacheOperator::init(&config.cache, global_services.clone()).await?;
+        CacheOperator::init(&config.storage.cache, global_services.clone()).await?;
 
         ShareTableConfig::init(
             &config.query.share_endpoint_address,
