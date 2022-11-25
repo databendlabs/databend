@@ -242,7 +242,8 @@ pub fn try_create(
         if phid.is_numeric() {
             dispatch_primitive_type_id!(phid, |$T |$E|  {
                 return Ok(Arc::new(AggregateDistinctCombinator::<
-                    AggregateDistinctTwoLevelPrimitiveState<$T, $E>,
+                    // AggregateDistinctTwoLevelPrimitiveState<$T, $E>,
+                    AggregateDistinctPrimitiveState<$T, $E>,
                 > {
                     nested_name: nested_name.to_owned(),
                     arguments,

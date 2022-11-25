@@ -51,11 +51,12 @@ pub struct SingleStateAggregator<const FINAL: bool> {
     to_merge_places: Vec<Vec<StateAddr>>,
     layout: Layout,
     offsets_aggregate_states: Vec<usize>,
+    max_threads: usize,
     states_dropped: bool,
 }
 
 impl<const FINAL: bool> SingleStateAggregator<FINAL> {
-    pub fn try_create(params: &Arc<AggregatorParams>) -> Result<Self> {
+    pub fn try_create(params: &Arc<AggregatorParams>, max_threads: usize) -> Result<Self> {
         assert!(!params.offsets_aggregate_states.is_empty());
         let arena = Bump::new();
         let layout = params
@@ -87,6 +88,7 @@ impl<const FINAL: bool> SingleStateAggregator<FINAL> {
             layout,
             offsets_aggregate_states: params.offsets_aggregate_states.clone(),
             states_dropped: false,
+            max_threads,
         })
     }
 
@@ -152,7 +154,7 @@ impl Aggregator for SingleStateAggregator<true> {
             builders
         };
 
-        let mut thread_pool = ThreadPool::create(32)?;
+        let mut thread_pool = ThreadPool::create(self.max_threads)?;
 
         for (index, func) in self.funcs.iter().enumerate() {
             let main_place = self.places[index];

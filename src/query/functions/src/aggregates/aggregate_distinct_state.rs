@@ -488,25 +488,31 @@ where
     }
 
     fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
-        writer.write_uvarint(self.set.len() as u64)?;
-        for value in self.set.iter() {
-            serialize_into_buf(writer, value.key())?
+        let inners = self.set.inner_sets();
+
+        for inner in inners.iter() {
+            writer.write_uvarint(inner.len() as u64)?;
+            for value in inner.iter() {
+                serialize_into_buf(writer, value.key())?
+            }
         }
         Ok(())
     }
 
     fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()> {
-        let size = reader.read_uvarint()? as usize;
-
-        let sets: Vec<CommonHashSet<E>> = (0..BUCKETS)
-            .map(|_| CommonHashSet::<E>::with_capacity(size / BUCKETS))
+        let sets: Result<Vec<CommonHashSet<E>>> = (0..BUCKETS)
+            .map(|_| {
+                let size = reader.read_uvarint()? as usize;
+                let mut data = CommonHashSet::<E>::with_capacity(size);
+                for _i in 0..size {
+                    let t: E = deserialize_from_slice(reader)?;
+                    let _ = data.set_insert(t);
+                }
+                Ok(data)
+            })
             .collect();
-        self.set = TwoLevelHashSet::create(sets);
 
-        for _ in 0..size {
-            let t: E = deserialize_from_slice(reader)?;
-            let _ = self.set.set_insert(&t);
-        }
+        self.set = TwoLevelHashSet::create(sets?);
         Ok(())
     }
 
@@ -573,6 +579,9 @@ where
 
         for (mut a, b) in left.into_iter().zip(right.into_iter()) {
             join_handles.push(pool.execute(move || {
+                if a.is_empty() {
+                    return b;
+                }
                 a.set_merge(&b);
                 a
             }));

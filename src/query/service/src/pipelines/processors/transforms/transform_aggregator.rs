@@ -39,11 +39,12 @@ impl TransformAggregator {
     ) -> Result<ProcessorPtr> {
         let aggregator_params = transform_params.aggregator_params.clone();
 
+        let max_threads = ctx.get_settings().get_max_threads()? as usize;
         if aggregator_params.group_columns.is_empty() {
             return AggregatorTransform::create(
                 ctx,
                 transform_params,
-                FinalSingleStateAggregator::try_create(&aggregator_params)?,
+                FinalSingleStateAggregator::try_create(&aggregator_params, max_threads)?,
             );
         }
 
@@ -141,11 +142,12 @@ impl TransformAggregator {
     ) -> Result<ProcessorPtr> {
         let aggregator_params = transform_params.aggregator_params.clone();
 
+        let max_threads = ctx.get_settings().get_max_threads()? as usize;
         if aggregator_params.group_columns.is_empty() {
             return AggregatorTransform::create(
                 ctx,
                 transform_params,
-                PartialSingleStateAggregator::try_create(&aggregator_params)?,
+                PartialSingleStateAggregator::try_create(&aggregator_params, max_threads)?,
             );
         }
 
