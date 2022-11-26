@@ -14,6 +14,7 @@
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_io::consts::NAN_BYTES_LOWER;
 use common_io::consts::NAN_BYTES_SNAKE;
 use common_meta_types::StageFileFormatType;
 
@@ -149,7 +150,7 @@ impl FormatOptionChecker for TSVFormatOptionChecker {
     }
 
     fn check_nan_display(&self, nan_display: &mut String) -> Result<()> {
-        check_nan_display(nan_display, "nan")
+        check_nan_display(nan_display, NAN_BYTES_LOWER)
     }
 }
 
