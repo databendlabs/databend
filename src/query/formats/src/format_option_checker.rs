@@ -45,6 +45,7 @@ pub trait FormatOptionChecker {
         self.check_row_tag(&mut options.stage.row_tag)?;
         self.check_record_delimiter(&mut options.stage.record_delimiter)?;
         self.check_field_delimiter(&mut options.stage.field_delimiter)?;
+        self.check_nan_display(&mut options.stage.nan_display)?;
         Ok(())
     }
 
