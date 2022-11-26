@@ -69,7 +69,7 @@ pub trait FormatOptionChecker {
     }
 
     fn check_row_tag(&self, row_tag: &mut String) -> Result<()> {
-        if !row_tag.is_empty() && row_tag.as_str() == "row" {
+        if !row_tag.is_empty() && row_tag != "row" {
             Err(self.not_supported("row_tag"))
         } else {
             Ok(())
@@ -130,6 +130,10 @@ pub struct TSVFormatOptionChecker {}
 impl FormatOptionChecker for TSVFormatOptionChecker {
     fn name(&self) -> String {
         "TSV".to_string()
+    }
+
+    fn check_quote(&self, quote: &mut String) -> Result<()> {
+        check_quote(quote, "\'")
     }
 
     fn check_escape(&self, escape: &mut String) -> Result<()> {
