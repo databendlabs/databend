@@ -28,7 +28,6 @@ use common_exception::Result;
 use common_formats::ClickhouseFormatType;
 use common_formats::FileFormatOptionsExt;
 use common_formats::FileFormatTypeExt;
-use common_io::prelude::FormatSettings;
 use common_meta_types::StageFileCompression;
 use common_meta_types::StageFileFormatType;
 use common_meta_types::UserStageInfo;
@@ -119,7 +118,6 @@ pub struct InputContext {
 
     // runtime config
     pub settings: Arc<Settings>,
-    pub format_settings: FormatSettings,
 
     pub read_batch_size: usize,
     pub block_compact_thresholds: BlockCompactThresholds,
@@ -134,7 +132,6 @@ impl Debug for InputContext {
             .field("rows_to_skip", &self.rows_to_skip)
             .field("field_delimiter", &self.field_delimiter)
             .field("record_delimiter", &self.record_delimiter)
-            .field("format_settings", &self.format_settings)
             .field("block_compact_thresholds", &self.block_compact_thresholds)
             .field("read_batch_size", &self.read_batch_size)
             .field("num_splits", &self.splits.len())
@@ -185,8 +182,6 @@ impl InputContext {
             }
         };
 
-        let format_settings = format_typ.get_format_settings(&file_format_options, &settings)?;
-
         let rows_to_skip = file_format_options.stage.skip_header as usize;
         let field_delimiter = {
             if file_format_options.stage.field_delimiter.is_empty() {
@@ -201,7 +196,6 @@ impl InputContext {
             schema,
             splits,
             settings,
-            format_settings,
             record_delimiter,
             read_batch_size,
             rows_to_skip,
@@ -240,7 +234,6 @@ impl InputContext {
 
         let file_format_options = format_type.final_file_format_options(&file_format_options)?;
         let format = Self::get_input_format(&format_type)?;
-        let format_settings = format_type.get_format_settings(&file_format_options, &settings)?;
         let read_batch_size = settings.get_input_read_buffer_size()? as usize;
         let file_format_options_clone = file_format_options.clone();
         let field_delimiter = file_format_options.stage.field_delimiter;
@@ -268,7 +261,6 @@ impl InputContext {
             format,
             schema,
             settings,
-            format_settings,
             record_delimiter,
             read_batch_size,
             field_delimiter,
