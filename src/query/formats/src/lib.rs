@@ -15,6 +15,7 @@
 
 mod clickhouse;
 mod common_settings;
+mod delimiter;
 mod field_decoder;
 pub mod field_encoder;
 mod file_format_type;
@@ -22,6 +23,7 @@ mod format_option_checker;
 pub mod output_format;
 
 pub use clickhouse::ClickhouseFormatType;
+pub use delimiter::RecordDelimiter;
 pub use field_decoder::*;
 pub use file_format_type::parse_timezone;
 pub use file_format_type::FileFormatOptionsExt;

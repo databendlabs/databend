@@ -97,10 +97,6 @@ impl InputFormatTextBase for InputFormatXML {
         Arc::new(FieldDecoderXML::create(options))
     }
 
-    fn default_field_delimiter() -> u8 {
-        b','
-    }
-
     fn deserialize(builder: &mut BlockBuilder<Self>, batch: RowBatch) -> Result<()> {
         tracing::debug!(
             "xml deserializing row batch {}, id={}, start_row={:?}, offset={}",

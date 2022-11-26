@@ -81,10 +81,6 @@ impl InputFormatTextBase for InputFormatNDJson {
         Arc::new(FieldJsonAstDecoder::create(options))
     }
 
-    fn default_field_delimiter() -> u8 {
-        b','
-    }
-
     fn deserialize(builder: &mut BlockBuilder<Self>, batch: RowBatch) -> Result<()> {
         let field_decoder = builder
             .field_decoder

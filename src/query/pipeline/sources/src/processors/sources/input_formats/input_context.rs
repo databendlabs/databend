@@ -28,6 +28,7 @@ use common_exception::Result;
 use common_formats::ClickhouseFormatType;
 use common_formats::FileFormatOptionsExt;
 use common_formats::FileFormatTypeExt;
+use common_formats::RecordDelimiter;
 use common_meta_types::StageFileCompression;
 use common_meta_types::StageFileFormatType;
 use common_meta_types::UserStageInfo;
@@ -35,7 +36,6 @@ use common_settings::Settings;
 use opendal::raw::CompressAlgorithm;
 use opendal::Operator;
 
-use crate::processors::sources::input_formats::delimiter::RecordDelimiter;
 use crate::processors::sources::input_formats::impls::input_format_csv::InputFormatCSV;
 use crate::processors::sources::input_formats::impls::input_format_ndjson::InputFormatNDJson;
 use crate::processors::sources::input_formats::impls::input_format_parquet::InputFormatParquet;
@@ -174,22 +174,9 @@ impl InputContext {
         let file_format_options = format_typ.final_file_format_options(&file_format_options)?;
 
         let format = Self::get_input_format(&format_typ)?;
-        let record_delimiter = {
-            if file_format_options.stage.record_delimiter.is_empty() {
-                format.default_record_delimiter()
-            } else {
-                RecordDelimiter::try_from(file_format_options.stage.record_delimiter.as_str())?
-            }
-        };
-
+        let field_delimiter = file_format_options.get_field_delimiter();
+        let record_delimiter = file_format_options.get_record_delimiter()?;
         let rows_to_skip = file_format_options.stage.skip_header as usize;
-        let field_delimiter = {
-            if file_format_options.stage.field_delimiter.is_empty() {
-                format.default_field_delimiter()
-            } else {
-                file_format_options.stage.field_delimiter.as_bytes()[0]
-            }
-        };
 
         Ok(InputContext {
             format,
@@ -236,16 +223,8 @@ impl InputContext {
         let format = Self::get_input_format(&format_type)?;
         let read_batch_size = settings.get_input_read_buffer_size()? as usize;
         let file_format_options_clone = file_format_options.clone();
-        let field_delimiter = file_format_options.stage.field_delimiter;
-        let field_delimiter = {
-            if field_delimiter.is_empty() {
-                format.default_field_delimiter()
-            } else {
-                field_delimiter.as_bytes()[0]
-            }
-        };
-        let record_delimiter =
-            RecordDelimiter::try_from(file_format_options.stage.record_delimiter.as_bytes())?;
+        let field_delimiter = file_format_options.get_field_delimiter();
+        let record_delimiter = file_format_options.get_record_delimiter()?;
         let compression = settings.get_format_compression()?;
         let compression = if !compression.is_empty() {
             StageFileCompression::from_str(&compression).map_err(ErrorCode::BadArguments)?

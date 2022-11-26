@@ -25,6 +25,7 @@ use common_meta_types::StageFileFormatType;
 use common_settings::Settings;
 
 use super::clickhouse::ClickhouseSuffix;
+use crate::delimiter::RecordDelimiter;
 use crate::format_option_checker::get_format_option_checker;
 use crate::output_format::CSVOutputFormat;
 use crate::output_format::CSVWithNamesAndTypesOutputFormat;
@@ -71,6 +72,24 @@ pub struct FileFormatOptionsExt {
 impl FileFormatOptionsExt {
     pub fn get_quote_char(&self) -> u8 {
         self.quote.as_bytes()[0]
+    }
+
+    pub fn get_field_delimiter(&self) -> u8 {
+        let fd = &self.stage.field_delimiter;
+        if fd.is_empty() {
+            0 // dummy
+        } else {
+            fd.as_bytes()[0]
+        }
+    }
+
+    pub fn get_record_delimiter(&self) -> Result<RecordDelimiter> {
+        let fd = &self.stage.record_delimiter;
+        if fd.is_empty() {
+            Ok(RecordDelimiter::Any(0)) // dummy
+        } else {
+            RecordDelimiter::try_from(fd.as_bytes())
+        }
     }
 
     pub fn get_output_format_from_settings_clickhouse(
