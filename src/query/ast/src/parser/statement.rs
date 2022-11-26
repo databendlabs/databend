@@ -1431,7 +1431,7 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
 
     let revert_table = map(
         rule! {
-            REVERT ~ TO ~ #travel_point
+            FLASHBACK ~ TO ~ #travel_point
         },
         |(_, _, point)| AlterTableAction::RevertTo { point },
     );

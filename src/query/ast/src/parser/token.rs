@@ -405,6 +405,8 @@ pub enum TokenKind {
     FILES,
     #[token("FINAL", ignore(ascii_case))]
     FINAL,
+    #[token("FLASHBACK", ignore(ascii_case))]
+    FLASHBACK,
     #[token("FLOAT", ignore(ascii_case))]
     FLOAT,
     #[token("FLOAT32", ignore(ascii_case))]
@@ -583,8 +585,6 @@ pub enum TokenKind {
     REGEXP,
     #[token("RENAME", ignore(ascii_case))]
     RENAME,
-    #[token("REVERT", ignore(ascii_case))]
-    REVERT,
     #[token("GRANT", ignore(ascii_case))]
     GRANT,
     #[token("ROLE", ignore(ascii_case))]
