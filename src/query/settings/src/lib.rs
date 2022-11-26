@@ -478,7 +478,7 @@ impl Settings {
                     UserSettingValue::UInt64(1),
                 ),
                 level: ScopeLevel::Session,
-                desc: "Whether to enable expression when insert values, default value: 1.",
+                desc: "Whether to enable expression when inserting values, if your values do not have expressions please disable this setting to improve write performance, default value: 1.",
                 possible_values: None,
             },
         ];
