@@ -75,10 +75,10 @@ pub fn init_operator(cfg: &StorageParams) -> Result<Operator> {
         StorageParams::S3(cfg) => init_s3_operator(cfg)?,
         StorageParams::Oss(cfg) => init_oss_operator(cfg)?,
         StorageParams::Redis(cfg) => init_redis_operator(cfg)?,
-        _ => {
+        v => {
             return Err(Error::new(
                 ErrorKind::InvalidInput,
-                anyhow!("Unuppport storage type"),
+                anyhow!("Unuppport storage type: {:?}", v),
             ));
         }
     };
