@@ -118,6 +118,10 @@ impl FormatOptionChecker for CSVFormatOptionChecker {
         check_quote(quote, "\"")
     }
 
+    fn check_record_delimiter(&self, record_delimiter: &mut String) -> Result<()> {
+        check_record_delimiter(record_delimiter)
+    }
+
     fn check_field_delimiter(&self, field_delimiter: &mut String) -> Result<()> {
         check_field_delimiter(field_delimiter, ",")
     }
