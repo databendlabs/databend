@@ -237,7 +237,7 @@ pub fn check_record_delimiter(option: &mut String) -> Result<()> {
         let o = option.as_str();
         if o != "\n" && o != "\r\n" {
             return Err(ErrorCode::InvalidArgument(
-                "record_delimiter can only be '\n' or '\r\n'",
+                "record_delimiter can only be '\\n' or '\\r\\n'",
             ));
         };
     }
