@@ -21,7 +21,7 @@ use common_storages_table_meta::meta::SegmentInfo;
 use common_storages_table_meta::meta::SegmentInfoVersion;
 use common_storages_table_meta::meta::SnapshotVersion;
 use common_storages_table_meta::meta::TableSnapshot;
-use opendal::BytesReader;
+use opendal::raw::BytesReader;
 use opendal::Operator;
 
 use super::versioned_reader::VersionedReader;

@@ -33,7 +33,7 @@ use common_meta_types::StageFileCompression;
 use common_meta_types::StageFileFormatType;
 use common_meta_types::UserStageInfo;
 use common_settings::Settings;
-use opendal::io_util::CompressAlgorithm;
+use opendal::raw::CompressAlgorithm;
 use opendal::Operator;
 
 use crate::processors::sources::input_formats::delimiter::RecordDelimiter;

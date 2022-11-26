@@ -18,7 +18,7 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
-use opendal::io_util::CompressAlgorithm;
+use opendal::raw::CompressAlgorithm;
 
 pub trait DynData: Send + Sync + 'static {
     fn as_any(&self) -> &dyn Any;
