@@ -1585,9 +1585,10 @@ impl From<InnerStderrLogConfig> for StderrLogConfig {
 }
 
 /// Meta config group.
+/// deny_unknown_fields to check unknown field, like the deprecated `address`.
 /// TODO(xuanwo): All meta_xxx should be rename to xxx.
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize, Args)]
-#[serde(default)]
+#[serde(default, deny_unknown_fields)]
 pub struct MetaConfig {
     /// The dir to store persisted meta state for a embedded meta store
     #[clap(long = "meta-embedded-dir", default_value_t)]
