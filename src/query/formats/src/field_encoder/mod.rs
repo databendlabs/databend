@@ -13,12 +13,13 @@
 // limitations under the License.
 
 mod csv;
-mod helpers;
+pub mod helpers;
 mod json;
 mod row_based;
 mod tsv;
 mod values;
 
+pub use csv::write_csv_string;
 pub use csv::FieldEncoderCSV;
 pub use json::FieldEncoderJSON;
 pub use row_based::FieldEncoderRowBased;

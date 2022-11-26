@@ -59,7 +59,7 @@ fn test_data_block(is_nullable: bool) -> Result<()> {
         let settings = Settings::default_settings("default");
         settings.set_settings(
             "format_record_delimiter".to_string(),
-            "%".to_string(),
+            "\r\n".to_string(),
             false,
         )?;
         settings.set_settings("format_field_delimiter".to_string(), "$".to_string(), false)?;
@@ -68,7 +68,7 @@ fn test_data_block(is_nullable: bool) -> Result<()> {
         let buffer = formatter.serialize_block(&block)?;
 
         let csv_block = String::from_utf8(buffer)?;
-        let expect = r#"1$"a"$true$1.1$"1970-01-02"%2$"b"""$true$2.2$"1970-01-03"%3$"c'"$false$NaN$"1970-01-04"%"#;
+        let expect = "1$\"a\"$true$1.1$\"1970-01-02\"\r\n2$\"b\"\"\"$true$2.2$\"1970-01-03\"\r\n3$\"c'\"$false$NaN$\"1970-01-04\"\r\n";
         assert_eq!(&csv_block, expect);
     }
     Ok(())

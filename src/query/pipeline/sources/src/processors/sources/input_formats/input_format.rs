@@ -20,16 +20,11 @@ use common_pipeline_core::Pipeline;
 use common_settings::Settings;
 use opendal::Operator;
 
-use crate::processors::sources::input_formats::delimiter::RecordDelimiter;
 use crate::processors::sources::input_formats::input_context::InputContext;
 use crate::processors::sources::input_formats::input_split::SplitInfo;
 
 #[async_trait::async_trait]
 pub trait InputFormat: Send + Sync {
-    fn default_record_delimiter(&self) -> RecordDelimiter;
-
-    fn default_field_delimiter(&self) -> u8;
-
     async fn get_splits(
         &self,
         files: &[String],

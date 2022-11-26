@@ -25,12 +25,12 @@ use common_formats::FieldDecoder;
 use common_formats::FieldDecoderCSV;
 use common_formats::FieldDecoderRowBased;
 use common_formats::FileFormatOptionsExt;
+use common_formats::RecordDelimiter;
 use common_io::cursor_ext::*;
 use common_io::format_diagnostic::verbose_char;
 use common_meta_types::StageFileFormatType;
 use csv_core::ReadRecordResult;
 
-use crate::processors::sources::input_formats::delimiter::RecordDelimiter;
 use crate::processors::sources::input_formats::impls::input_format_tsv::format_column_error;
 use crate::processors::sources::input_formats::input_format_text::AligningState;
 use crate::processors::sources::input_formats::input_format_text::BlockBuilder;
@@ -114,10 +114,6 @@ impl InputFormatCSV {
 impl InputFormatTextBase for InputFormatCSV {
     fn format_type() -> StageFileFormatType {
         StageFileFormatType::Csv
-    }
-
-    fn default_field_delimiter() -> u8 {
-        b','
     }
 
     fn create_field_decoder(options: &FileFormatOptionsExt) -> Arc<dyn FieldDecoder> {
@@ -379,10 +375,15 @@ pub struct CsvReaderState {
 
 impl CsvReaderState {
     pub(crate) fn create(ctx: &Arc<InputContext>) -> Self {
+        let escape = if ctx.format_options.stage.escape.is_empty() {
+            None
+        } else {
+            Some(ctx.format_options.stage.escape.as_bytes()[0])
+        };
         let reader = csv_core::ReaderBuilder::new()
             .delimiter(ctx.field_delimiter)
-            .quote(ctx.format_settings.quote_char)
-            .escape(ctx.format_settings.escape)
+            .quote(ctx.format_options.quote.as_bytes()[0])
+            .escape(escape)
             .terminator(match ctx.record_delimiter {
                 RecordDelimiter::Crlf => csv_core::Terminator::CRLF,
                 RecordDelimiter::Any(v) => csv_core::Terminator::Any(v),

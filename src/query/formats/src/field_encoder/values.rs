@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use chrono_tz::Tz;
-use common_datavalues::serializations::write_escaped_string;
 use common_datavalues::serializations::ArraySerializer;
 use common_datavalues::serializations::StructSerializer;
 use common_io::consts::FALSE_BYTES_NUM;
@@ -22,6 +21,7 @@ use common_io::consts::NAN_BYTES_LOWER;
 use common_io::consts::NULL_BYTES_UPPER;
 use common_io::consts::TRUE_BYTES_NUM;
 
+use super::helpers::write_escaped_string;
 use crate::field_encoder::FieldEncoderRowBased;
 use crate::CommonSettings;
 use crate::FileFormatOptionsExt;

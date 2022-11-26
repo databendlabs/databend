@@ -18,7 +18,6 @@ use common_exception::Result;
 use common_io::prelude::FormatSettings;
 use serde_json::Value;
 
-pub use super::helper::json::write_json_string;
 use crate::prelude::*;
 
 #[derive(Clone)]

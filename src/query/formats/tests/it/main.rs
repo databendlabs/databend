@@ -20,6 +20,7 @@ use common_formats::FileFormatOptionsExt;
 use common_meta_types::StageFileFormatType;
 use common_settings::Settings;
 
+mod field_encoder;
 mod output_format_json_each_row;
 mod output_format_tcsv;
 mod output_format_utils;

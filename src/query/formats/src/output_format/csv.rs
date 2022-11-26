@@ -13,11 +13,11 @@
 // limitations under the License.
 
 use common_datablocks::DataBlock;
-use common_datavalues::serializations::write_csv_string;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataType;
 use common_exception::Result;
 
+use crate::field_encoder::write_csv_string;
 use crate::field_encoder::FieldEncoderCSV;
 use crate::field_encoder::FieldEncoderRowBased;
 use crate::output_format::OutputFormat;
