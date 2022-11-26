@@ -1321,10 +1321,14 @@ dependencies = [
  "databend-thrift",
  "hex",
  "once_cell",
+ "pretty_assertions",
  "semver 1.0.14",
  "serde",
  "serfig",
  "strum",
+ "temp-env",
+ "tempfile",
+ "toml",
  "tracing",
 ]
 

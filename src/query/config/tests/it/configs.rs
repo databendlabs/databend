@@ -98,6 +98,7 @@ format = "text"
 
 [meta]
 embedded_dir = ""
+address = ""
 endpoints = []
 username = "root"
 password = ""

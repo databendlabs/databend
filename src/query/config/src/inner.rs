@@ -228,6 +228,8 @@ impl QueryConfig {
 pub struct MetaConfig {
     /// The dir to store persisted meta state for a embedded meta store
     pub embedded_dir: String,
+    // Deprecated, only for check.
+    pub address: String,
     /// MetaStore endpoint address
     pub endpoints: Vec<String>,
     /// MetaStore backend user name
@@ -248,6 +250,7 @@ impl Default for MetaConfig {
     fn default() -> Self {
         Self {
             embedded_dir: "".to_string(),
+            address: "".to_string(),
             endpoints: vec![],
             username: "root".to_string(),
             password: "".to_string(),
@@ -265,6 +268,17 @@ impl MetaConfig {
     }
 
     pub fn check_valid(&self) -> Result<()> {
+        // Check the deprecated configs.
+        {
+            // Address.
+            if !self.address.is_empty() {
+                return Err(ErrorCode::InvalidConfig(format!(
+                    "meta config: address is deprecated, please use: endpoints = [\"{:}\"]",
+                    self.address
+                )));
+            }
+        }
+
         let has_embedded_dir = !self.embedded_dir.is_empty();
         let has_remote = !self.endpoints.is_empty();
         if has_embedded_dir && has_remote {
