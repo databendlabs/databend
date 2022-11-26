@@ -518,8 +518,8 @@ impl From<InnerCacheConfig> for CacheConfig {
         };
 
         match inner.params {
-            StorageParams::Disabled => {
-                cfg.cache_type = "disabled".to_string();
+            StorageParams::None => {
+                cfg.cache_type = "none".to_string();
             }
             StorageParams::Fs(v) => {
                 cfg.cache_type = "fs".to_string();
@@ -547,7 +547,7 @@ impl TryInto<InnerCacheConfig> for CacheConfig {
             num_cpus: self.cache_num_cpus,
             params: {
                 match self.cache_type.as_str() {
-                    "disabled" => StorageParams::Disabled,
+                    "none" => StorageParams::None,
                     "fs" => StorageParams::Fs(self.fs.try_into()?),
                     "moka" => StorageParams::Moka(self.moka.try_into()?),
                     "redis" => StorageParams::Redis(self.redis.try_into()?),

@@ -159,7 +159,7 @@ endpoint_url = ""
 root = ""
 
 [storage.cache]
-type = "disabled"
+type = "none"
 num_cpus = 0
 
 [storage.cache.fs]

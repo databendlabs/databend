@@ -438,7 +438,7 @@ impl CacheOperator {
     }
 
     pub async fn try_create(conf: &CacheConfig) -> common_exception::Result<CacheOperator> {
-        if conf.params == StorageParams::Disabled {
+        if conf.params == StorageParams::None {
             return Ok(CacheOperator { op: None });
         }
 
