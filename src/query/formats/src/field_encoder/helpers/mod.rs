@@ -12,8 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod escape;
 mod json;
 mod number_helpers;
 
+pub use escape::write_escaped_string;
 pub use json::write_json_string;
 pub use number_helpers::PrimitiveWithFormat;
