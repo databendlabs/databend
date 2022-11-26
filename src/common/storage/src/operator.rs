@@ -13,10 +13,13 @@
 // limitations under the License.
 
 use std::env;
+use std::io::Error;
+use std::io::ErrorKind;
 use std::io::Result;
 use std::ops::Deref;
 use std::time::Duration;
 
+use anyhow::anyhow;
 use backon::ExponentialBackoff;
 use common_base::base::GlobalIORuntime;
 use common_base::base::Singleton;
@@ -72,6 +75,12 @@ pub fn init_operator(cfg: &StorageParams) -> Result<Operator> {
         StorageParams::S3(cfg) => init_s3_operator(cfg)?,
         StorageParams::Oss(cfg) => init_oss_operator(cfg)?,
         StorageParams::Redis(cfg) => init_redis_operator(cfg)?,
+        v => {
+            return Err(Error::new(
+                ErrorKind::InvalidInput,
+                anyhow!("Unsupported storage type: {:?}", v),
+            ));
+        }
     };
 
     let op = op
@@ -412,15 +421,7 @@ impl DataOperator {
 /// background auto evict at any time.
 #[derive(Clone, Debug)]
 pub struct CacheOperator {
-    op: Operator,
-}
-
-impl Deref for CacheOperator {
-    type Target = Operator;
-
-    fn deref(&self) -> &Self::Target {
-        &self.op
-    }
+    op: Option<Operator>,
 }
 
 static CACHE_OPERATOR: OnceCell<Singleton<CacheOperator>> = OnceCell::new();
@@ -437,6 +438,10 @@ impl CacheOperator {
     }
 
     pub async fn try_create(conf: &CacheConfig) -> common_exception::Result<CacheOperator> {
+        if conf.params == StorageParams::None {
+            return Ok(CacheOperator { op: None });
+        }
+
         let operator = init_operator(&conf.params)?;
 
         // OpenDAL will send a real request to underlying storage to check whether it works or not.
@@ -456,13 +461,17 @@ impl CacheOperator {
             )));
         }
 
-        Ok(CacheOperator { op: operator })
+        Ok(CacheOperator { op: Some(operator) })
     }
 
-    pub fn instance() -> CacheOperator {
+    pub fn instance() -> Option<Operator> {
         match CACHE_OPERATOR.get() {
             None => panic!("CacheOperator is not init"),
-            Some(op) => op.get(),
+            Some(op) => op.get().inner(),
         }
+    }
+
+    fn inner(&self) -> Option<Operator> {
+        self.op.clone()
     }
 }

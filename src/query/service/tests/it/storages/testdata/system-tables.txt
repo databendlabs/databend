@@ -240,7 +240,7 @@ DB.Table: 'system'.'configs', Table: configs-table_id:1, ver:0, Engine: SystemCo
 | storage | cache.redis.password                 |                                |             |
 | storage | cache.redis.root                     |                                |             |
 | storage | cache.redis.username                 |                                |             |
-| storage | cache.type                           | moka                           |             |
+| storage | cache.type                           | none                           |             |
 | storage | fs.data_path                         | _data                          |             |
 | storage | gcs.bucket                           |                                |             |
 | storage | gcs.credential                       |                                |             |

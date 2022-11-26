@@ -68,7 +68,7 @@ impl Default for CacheConfig {
     fn default() -> Self {
         Self {
             num_cpus: 0,
-            params: StorageParams::Moka(StorageMokaConfig::default()),
+            params: StorageParams::None,
         }
     }
 }
@@ -91,6 +91,11 @@ pub enum StorageParams {
     Oss(StorageOssConfig),
     S3(StorageS3Config),
     Redis(StorageRedisConfig),
+
+    /// None means this storage type is none.
+    ///
+    /// This type is mostly for cache which mean bypass the cache logic.
+    None,
 }
 
 impl Default for StorageParams {
@@ -153,6 +158,9 @@ impl Display for StorageParams {
                     v.db, v.root, v.endpoint_url
                 )
             }
+            StorageParams::None => {
+                write!(f, "none",)
+            }
         }
     }
 }
@@ -177,6 +185,7 @@ impl StorageParams {
             StorageParams::S3(v) => v.endpoint_url.starts_with("https://"),
             StorageParams::Gcs(v) => v.endpoint_url.starts_with("https://"),
             StorageParams::Redis(_) => false,
+            StorageParams::None => false,
         }
     }
 }
