@@ -143,9 +143,7 @@ impl Session {
         let timezone = tz.parse::<Tz>().map_err(|_| {
             ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
         })?;
-        let format = FormatSettings {
-            timezone,
-        };
+        let format = FormatSettings { timezone };
         Ok(format)
     }
 
