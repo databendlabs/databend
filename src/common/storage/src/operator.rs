@@ -78,7 +78,7 @@ pub fn init_operator(cfg: &StorageParams) -> Result<Operator> {
         v => {
             return Err(Error::new(
                 ErrorKind::InvalidInput,
-                anyhow!("Unuppport storage type: {:?}", v),
+                anyhow!("Unsupported storage type: {:?}", v),
             ));
         }
     };
