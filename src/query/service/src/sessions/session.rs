@@ -145,7 +145,6 @@ impl Session {
         })?;
         let format = FormatSettings {
             timezone,
-            ..Default::default()
         };
         Ok(format)
     }
