@@ -33,7 +33,7 @@ fn test_data_block(is_nullable: bool) -> Result<()> {
         let tsv_block = String::from_utf8(buffer)?;
         let expect = r#"{"c1":1,"c2":"a","c3":true,"c4":1.1,"c5":"1970-01-02"}
 {"c1":2,"c2":"b\"","c3":true,"c4":2.2,"c5":"1970-01-03"}
-{"c1":3,"c2":"c'","c3":false,"c4":3.3,"c5":"1970-01-04"}
+{"c1":3,"c2":"c'","c3":false,"c4":null,"c5":"1970-01-04"}
 "#;
         assert_eq!(&tsv_block, expect);
     }

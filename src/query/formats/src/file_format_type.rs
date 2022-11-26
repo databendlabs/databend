@@ -217,6 +217,7 @@ impl FileFormatTypeExt for StageFileFormatType {
             skip_header: settings.get_format_skip_header()?,
             field_delimiter: settings.get_format_field_delimiter()?,
             record_delimiter: settings.get_format_record_delimiter()?,
+            nan_display: settings.get_format_nan_display()?,
             escape: settings.get_format_escape()?,
             compression: StageFileCompression::from_str(&settings.get_format_compression()?)
                 .map_err_to_code(
@@ -324,6 +325,15 @@ fn check_options(options: &mut FileFormatOptions) -> Result<()> {
         options.record_delimiter = '\n'.to_string();
     }
 
+    if !options.nan_display.is_empty()
+        && (options.nan_display.to_lowercase() != "null"
+            && options.nan_display.to_lowercase() != "nan")
+    {
+        return Err(ErrorCode::InvalidArgument(
+            "nan_display must be literal `nan` or `null` (case-sensitive)",
+        ));
+    }
+
     Ok(())
 }
 
@@ -334,6 +344,9 @@ fn final_csv_options(options: &mut FileFormatOptionsExt) -> Result<()> {
     }
     if options.quote.is_empty() {
         options.quote = "\"".to_string();
+    }
+    if options.stage.nan_display.is_empty() {
+        options.stage.nan_display = "NaN".to_string();
     }
     Ok(())
 }
@@ -354,7 +367,7 @@ fn format_setting_csv(options: &FileFormatOptionsExt, timezone: Tz) -> FormatSet
         nested: Default::default(),
         true_bytes: TRUE_BYTES_LOWER.as_bytes().to_vec(),
         false_bytes: FALSE_BYTES_LOWER.as_bytes().to_vec(),
-        nan_bytes: NAN_BYTES_LOWER.as_bytes().to_vec(),
+        nan_bytes: options.stage.nan_display.as_bytes().to_vec(),
         inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
         null_bytes: NULL_BYTES_ESCAPE.as_bytes().to_vec(),
         quote_char: options.quote.as_bytes()[0],

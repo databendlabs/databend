@@ -26,10 +26,10 @@ use http::header::CONTENT_LENGTH;
 use http::Method;
 use http::Request;
 use moka::sync::Cache;
-use opendal::http_util::AsyncBody;
-use opendal::http_util::HttpClient;
-use opendal::ops::Operation;
-use opendal::ops::PresignedRequest;
+use opendal::raw::AsyncBody;
+use opendal::raw::HttpClient;
+use opendal::raw::Operation;
+use opendal::raw::PresignedRequest;
 
 /// SharedSigner is used to track presign request, and it's response.
 ///

@@ -101,7 +101,7 @@ impl TestGlobalServices {
         ClusterDiscovery::init(config.clone(), global_services.clone()).await?;
 
         DataOperator::init(&config.storage, global_services.clone()).await?;
-        CacheOperator::init(&config.cache, global_services.clone()).await?;
+        CacheOperator::init(&config.storage.cache, global_services.clone()).await?;
         CacheManager::init(&config.query, global_services.clone())?;
         CatalogManager::init(&config, global_services.clone()).await?;
         HttpQueryManager::init(&config, global_services.clone()).await?;

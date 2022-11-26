@@ -1325,7 +1325,6 @@ dependencies = [
  "serde",
  "serfig",
  "strum",
- "strum_macros",
  "tracing",
 ]
 
@@ -1384,6 +1383,7 @@ dependencies = [
  "anyhow",
  "bincode 2.0.0-rc.2",
  "common-arrow",
+ "opendal",
  "paste",
  "prost",
  "serde",
@@ -1799,6 +1799,7 @@ dependencies = [
  "chrono",
  "common-building",
  "common-exception",
+ "common-io",
  "common-meta-stoerr",
  "common-storage",
  "derive_more",
@@ -5661,9 +5662,9 @@ checksum = "0ab1bc2a289d34bd04a330323ac98a1b4bc82c9d9fcb1e66b63caa84da26b575"
 
 [[package]]
 name = "opendal"
-version = "0.19.8"
+version = "0.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8759e3041052861fec2980cf07dcd0e6d612346003680119494badd8aba884b0"
+checksum = "e093402bdf1033677db972e0f5ac349e3ec251fe99b5db91b1472180c1f48254"
 dependencies = [
  "anyhow",
  "async-compat",
@@ -6877,9 +6878,9 @@ dependencies = [
 
 [[package]]
 name = "reqsign"
-version = "0.6.3"
+version = "0.6.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "66d2652b3541e4286c00ef536de54feda4c129af5b4d9ae05ece70ce61b0cade"
+checksum = "d34ea360414ee77ddab3a8360a0c241fc77ab5e27892dcde1d2cfcc29d4e0f55"
 dependencies = [
  "anyhow",
  "backon",
@@ -8749,7 +8750,6 @@ checksum = "b97acb4c28a254fd7a4aeec976c46a7fa404eac4d7c134b30c75144846d7cb8f"
 dependencies = [
  "base64",
  "chunked_transfer",
- "flate2",
  "log",
  "once_cell",
  "rustls",

@@ -43,6 +43,7 @@ pub use config::StorageMokaConfig;
 pub use config::StorageObsConfig;
 pub use config::StorageOssConfig;
 pub use config::StorageParams;
+pub use config::StorageRedisConfig;
 pub use config::StorageS3Config;
 pub use config::STORAGE_FTP_DEFAULT_ENDPOINT;
 pub use config::STORAGE_GCS_DEFAULT_ENDPOINT;

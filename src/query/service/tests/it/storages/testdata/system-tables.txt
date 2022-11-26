@@ -167,15 +167,13 @@ DB.Table: 'system'.'configs', Table: configs-table_id:1, ver:0, Engine: SystemCo
 | log     | stderr.format                        | text                           |             |
 | log     | stderr.level                         | DEBUG                          |             |
 | log     | stderr.on                            | true                           |             |
-| meta    | address                              |                                |             |
 | meta    | auto_sync_interval                   | 10                             |             |
 | meta    | client_timeout_in_second             | 10                             |             |
-| meta    | embedded_dir                         | ./.databend/meta_embedded      |             |
+| meta    | embedded_dir                         |                                |             |
 | meta    | endpoints                            |                                |             |
 | meta    | password                             |                                |             |
 | meta    | rpc_tls_meta_server_root_ca_cert     |                                |             |
 | meta    | rpc_tls_meta_service_domain_name     | localhost                      |             |
-| meta    | type                                 | fallback                       |             |
 | meta    | username                             | root                           |             |
 | query   | admin_api_address                    | 127.0.0.1:8080                 |             |
 | query   | api_tls_server_cert                  |                                |             |
@@ -231,6 +229,18 @@ DB.Table: 'system'.'configs', Table: configs-table_id:1, ver:0, Engine: SystemCo
 | storage | azblob.container                     |                                |             |
 | storage | azblob.endpoint_url                  |                                |             |
 | storage | azblob.root                          |                                |             |
+| storage | cache.fs.data_path                   | _data                          |             |
+| storage | cache.moka.max_capacity              | 1073741824                     |             |
+| storage | cache.moka.time_to_idle              | 600                            |             |
+| storage | cache.moka.time_to_live              | 3600                           |             |
+| storage | cache.num_cpus                       | 0                              |             |
+| storage | cache.redis.db                       | 0                              |             |
+| storage | cache.redis.default_ttl              | 0                              |             |
+| storage | cache.redis.endpoint_url             |                                |             |
+| storage | cache.redis.password                 |                                |             |
+| storage | cache.redis.root                     |                                |             |
+| storage | cache.redis.username                 |                                |             |
+| storage | cache.type                           | none                           |             |
 | storage | fs.data_path                         | _data                          |             |
 | storage | gcs.bucket                           |                                |             |
 | storage | gcs.credential                       |                                |             |
@@ -328,6 +338,7 @@ DB.Table: 'system'.'settings', Table: settings-table_id:1, ver:0, Engine: System
 | format_empty_as_default         | 1          | 1           | SESSION | Format empty_as_default, default value: 1.                                                                                                                             | UInt64 |
 | format_escape                   |            |             | SESSION | format escape char, default value: "", which means the format`s default setting.                                                                                       | String |
 | format_field_delimiter          |            |             | SESSION | Format field delimiter, default value is "": use default of the format.                                                                                                | String |
+| format_nan_display              |            |             | SESSION | must be literal `nan` or `null` (case-sensitive), default value is "".                                                                                                 | String |
 | format_quote                    |            |             | SESSION | The quote char for format. default value is "": use default of the format.                                                                                             | String |
 | format_record_delimiter         |            |             | SESSION | Format record_delimiter, default value is "": use default of the format.                                                                                               | String |
 | format_skip_header              | 0          | 0           | SESSION | Whether to skip the input header, default value: 0.                                                                                                                    | UInt64 |

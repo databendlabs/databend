@@ -255,6 +255,16 @@ impl Settings {
                 possible_values: None,
             },
             SettingValue {
+                default_value: UserSettingValue::String("".to_owned()),
+                user_setting: UserSetting::create(
+                    "format_nan_display",
+                    UserSettingValue::String("".to_owned()),
+                ),
+                level: ScopeLevel::Session,
+                desc: "must be literal `nan` or `null` (case-sensitive), default value is \"\".",
+                possible_values: None,
+            },
+            SettingValue {
                 default_value: UserSettingValue::UInt64(1),
                 user_setting: UserSetting::create(
                     "format_empty_as_default",
@@ -582,6 +592,12 @@ impl Settings {
 
     pub fn get_format_record_delimiter(&self) -> Result<String> {
         let key = "format_record_delimiter";
+        self.check_and_get_setting_value(key)
+            .and_then(|v| v.user_setting.value.as_string())
+    }
+
+    pub fn get_format_nan_display(&self) -> Result<String> {
+        let key = "format_nan_display";
         self.check_and_get_setting_value(key)
             .and_then(|v| v.user_setting.value.as_string())
     }
