@@ -16,7 +16,6 @@ use common_datavalues::serializations::ArraySerializer;
 use common_datavalues::serializations::StructSerializer;
 use common_io::consts::FALSE_BYTES_LOWER;
 use common_io::consts::INF_BYTES_LOWER;
-use common_io::consts::NAN_BYTES_SNAKE;
 use common_io::consts::NULL_BYTES_ESCAPE;
 use common_io::consts::TRUE_BYTES_LOWER;
 
@@ -39,7 +38,7 @@ impl FieldEncoderCSV {
                 true_bytes: TRUE_BYTES_LOWER.as_bytes().to_vec(),
                 false_bytes: FALSE_BYTES_LOWER.as_bytes().to_vec(),
                 null_bytes: NULL_BYTES_ESCAPE.as_bytes().to_vec(),
-                nan_bytes: NAN_BYTES_SNAKE.as_bytes().to_vec(),
+                nan_bytes: options.stage.nan_display.as_bytes().to_vec(),
                 inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
                 timezone: options.timezone,
             },
