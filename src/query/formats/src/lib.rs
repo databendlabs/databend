@@ -18,6 +18,7 @@ mod common_settings;
 mod field_decoder;
 pub mod field_encoder;
 mod file_format_type;
+mod format_option_checker;
 pub mod output_format;
 
 pub use clickhouse::ClickhouseFormatType;
