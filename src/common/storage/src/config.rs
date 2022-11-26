@@ -68,7 +68,7 @@ impl Default for CacheConfig {
     fn default() -> Self {
         Self {
             num_cpus: 0,
-            params: StorageParams::Moka(StorageMokaConfig::default()),
+            params: StorageParams::Disabled,
         }
     }
 }
@@ -91,6 +91,9 @@ pub enum StorageParams {
     Oss(StorageOssConfig),
     S3(StorageS3Config),
     Redis(StorageRedisConfig),
+
+    /// Disabled means this storage type is disabled.
+    Disabled,
 }
 
 impl Default for StorageParams {
@@ -153,6 +156,9 @@ impl Display for StorageParams {
                     v.db, v.root, v.endpoint_url
                 )
             }
+            StorageParams::Disabled => {
+                write!(f, "disabled",)
+            }
         }
     }
 }
@@ -177,6 +183,7 @@ impl StorageParams {
             StorageParams::S3(v) => v.endpoint_url.starts_with("https://"),
             StorageParams::Gcs(v) => v.endpoint_url.starts_with("https://"),
             StorageParams::Redis(_) => false,
+            StorageParams::Disabled => false,
         }
     }
 }
