@@ -21,15 +21,12 @@ use common_arrow::arrow::bitmap::Bitmap;
 use common_base::base::ThreadPool;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_hashtable::KeysRef;
 use ordered_float::OrderedFloat;
 
 use super::aggregate_distinct_state::AggregateDistinctPrimitiveState;
 use super::aggregate_distinct_state::AggregateDistinctState;
 use super::aggregate_distinct_state::AggregateDistinctStringState;
-use super::aggregate_distinct_state::AggregateDistinctTwoLevelPrimitiveState;
 use super::aggregate_distinct_state::AggregateUniqStringState;
-use super::aggregate_distinct_state::DataGroupValues;
 use super::aggregate_distinct_state::DistinctStateFunc;
 use super::aggregate_function::AggregateFunction;
 use super::aggregate_function_factory::AggregateFunctionCreator;
@@ -242,8 +239,7 @@ pub fn try_create(
         if phid.is_numeric() {
             dispatch_primitive_type_id!(phid, |$T |$E|  {
                 return Ok(Arc::new(AggregateDistinctCombinator::<
-                    AggregateDistinctTwoLevelPrimitiveState<$T, $E>,
-                    // AggregateDistinctPrimitiveState<$T, $E>,
+                    AggregateDistinctPrimitiveState<$T, $E>,
                 > {
                     nested_name: nested_name.to_owned(),
                     arguments,

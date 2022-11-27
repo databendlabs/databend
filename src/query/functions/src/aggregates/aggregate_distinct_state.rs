@@ -456,6 +456,8 @@ impl DistinctStateFunc for AggregateUniqStringState {
     }
 }
 
+// by default it's not enabled now
+#[allow(dead_code)]
 pub struct AggregateDistinctTwoLevelPrimitiveState<T: PrimitiveType, E: From<T> + HashtableKeyable>
 {
     set: TwoLevelHashSet<E>,
@@ -527,7 +529,7 @@ where
     fn add(&mut self, columns: &[ColumnRef], row: usize) -> Result<()> {
         let array: &PrimitiveColumn<T> = unsafe { Series::static_cast(&columns[0]) };
         let v = unsafe { array.value_unchecked(row) };
-        let _ = self.set.set_insert(&E::from(v));
+        self.set.set_insert(&E::from(v));
         Ok(())
     }
 
@@ -542,14 +544,14 @@ where
             Some(bitmap) => {
                 for (t, v) in array.iter().zip(bitmap.iter()) {
                     if v {
-                        let _ = self.set.set_insert(&E::from(*t));
+                        self.set.set_insert(&E::from(*t));
                     }
                 }
             }
             None => {
                 for row in 0..input_rows {
                     let v = unsafe { array.value_unchecked(row) };
-                    let _ = self.set.set_insert(&E::from(v));
+                    self.set.set_insert(&E::from(v));
                 }
             }
         }
@@ -574,8 +576,8 @@ where
     fn merge_parallel(&mut self, pool: &mut ThreadPool, rhs: &mut Self) -> Result<()> {
         let mut join_handles = Vec::with_capacity(self.set.inner_sets().len());
 
-        let left: Vec<CommonHashSet<E>> = std::mem::replace(self.set.inner_sets_mut(), vec![]);
-        let right: Vec<CommonHashSet<E>> = std::mem::replace(rhs.set.inner_sets_mut(), vec![]);
+        let left: Vec<CommonHashSet<E>> = std::mem::take(self.set.inner_sets_mut());
+        let right: Vec<CommonHashSet<E>> = std::mem::take(rhs.set.inner_sets_mut());
 
         for (mut a, b) in left.into_iter().zip(right.into_iter()) {
             join_handles.push(pool.execute(move || {
