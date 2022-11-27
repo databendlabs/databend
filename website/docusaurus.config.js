@@ -42,12 +42,21 @@ const config = {
                     path: '../docs/doc',
                     routeBasePath: 'doc',
                     sidebarPath: require.resolve('../docs/doc/sidebars.js'),
-                    editUrl: 'https://github.com/datafuselabs/databend/edit/main/databend',
+                    editUrl: ({locale, docPath}) => {
+                        if (locale !== config.i18n.defaultLocale) {
+                          return `https://databend.crowdin.com/databend/${locale}`;
+                        }
+                        return `https://github.com/datafuselabs/databend/edit/main/docs/doc/${docPath}`;
+                      },
                 },
                 blog: {
                     showReadingTime: true,
-                    editUrl:
-                        'https://github.com/datafuselabs/databend/edit/main/website',
+                    editUrl: ({locale, blogPath}) => {
+                        if (locale !== config.i18n.defaultLocale) {
+                          return `https://databend.crowdin.com/databend/${locale}`;
+                        }
+                        return `https://github.com/datafuselabs/databend/edit/main/website/blog/${blogPath}`;
+                      },
                     blogSidebarCount: 'ALL',
                     postsPerPage: 'ALL',
                 },
@@ -77,7 +86,12 @@ const config = {
                 path: '../docs/dev',
                 routeBasePath: 'dev',
                 sidebarPath: require.resolve('../docs/dev/sidebars.js'),
-                editUrl: 'https://github.com/datafuselabs/databend/edit/main/databend',
+                editUrl: ({locale, devPath}) => {
+                    if (locale !== config.i18n.defaultLocale) {
+                      return `https://databend.crowdin.com/databend/${locale}`;
+                    }
+                    return `https://github.com/datafuselabs/databend/edit/main/docs/dev/${devPath}`;
+                  },
             },
         ],
     ],
@@ -123,7 +137,13 @@ const config = {
                     },
                     {
                         type: 'localeDropdown',
-                        position: 'left',
+                        position: 'right',
+                        dropdownItemsAfter: [
+                            {
+                                to: 'https://databend.crowdin.com/databend',
+                                label: 'Help Us Translate',
+                            },
+                        ],
                     },
                 ],
             },
