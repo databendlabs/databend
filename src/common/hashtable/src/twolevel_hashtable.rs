@@ -21,8 +21,8 @@ use crate::HashtableKeyable;
 use crate::HashtableLike;
 use crate::TwoLevelHashSet;
 
-const BUCKETS: usize = 256;
 const BUCKETS_LG2: u32 = 8;
+const BUCKETS: usize = 1 << BUCKETS_LG2;
 
 pub struct TwoLevelHashtable<Impl> {
     tables: Vec<Impl>,
