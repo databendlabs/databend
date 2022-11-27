@@ -1507,6 +1507,7 @@ dependencies = [
  "comfy-table",
  "common-arrow",
  "common-ast",
+ "common-base",
  "common-exception",
  "common-expression",
  "common-hashtable",
