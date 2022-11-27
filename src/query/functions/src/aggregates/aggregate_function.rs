@@ -98,6 +98,8 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
 
     fn merge_result(&self, _place: StateAddr, array: &mut dyn MutableColumn) -> Result<()>;
 
+    // std::mem::needs_drop::<State>
+    // if true will call drop_state
     fn need_manual_drop_state(&self) -> bool {
         false
     }

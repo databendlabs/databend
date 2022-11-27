@@ -33,7 +33,6 @@ semver = "1.0.14"
 serde = { workspace = true }
 serfig = "0.0.3"
 strum = "0.24.1"
-strum_macros = "0.24.1"
 thrift = { package = "databend-thrift", version = "0.17.0", optional = true }
 tracing = "0.1.36"
 

@@ -19,7 +19,6 @@ use common_ast::ast::SelectTarget;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use super::bind_context::NameResolutionResult;
 use crate::binder::select::SelectItem;
 use crate::binder::select::SelectList;
 use crate::binder::Visibility;
@@ -154,28 +153,9 @@ impl<'a> Binder {
                 SelectTarget::QualifiedName(names) => {
                     // Handle qualified name as select target
                     if names.len() == 1 {
+                        // *
                         let indirection = &names[0];
                         match indirection {
-                            Indirection::Identifier(ident) => {
-                                let result = input_context.resolve_name(
-                                    None,
-                                    None,
-                                    &normalize_identifier(ident, &self.name_resolution_ctx).name,
-                                    &ident.span,
-                                    &[],
-                                )?;
-                                output.items.push(SelectItem {
-                                    select_target,
-                                    scalar: match result {
-                                        NameResolutionResult::Column(column) => {
-                                            BoundColumnRef { column }.into()
-                                        }
-                                        NameResolutionResult::Alias { scalar, .. } => scalar,
-                                    },
-
-                                    alias: ident.name.clone(),
-                                });
-                            }
                             Indirection::Star => {
                                 // Expands wildcard star, for example we have a table `t(a INT, b INT)`:
                                 // The query `SELECT * FROM t` will be expanded into `SELECT t.a, t.b FROM t`
@@ -193,9 +173,93 @@ impl<'a> Binder {
                                     });
                                 }
                             }
+                            _ => {
+                                return Err(ErrorCode::SemanticError(
+                                    "Unsupported indirection type",
+                                ));
+                            }
+                        }
+                    } else if names.len() == 2 {
+                        // table.*
+                        let indirection = &names[0];
+                        match indirection {
+                            Indirection::Identifier(table_name) => {
+                                let mut match_table = false;
+                                for column_binding in input_context.all_column_bindings() {
+                                    if column_binding.visibility != Visibility::Visible {
+                                        continue;
+                                    }
+                                    if column_binding.table_name == Some(table_name.name.clone()) {
+                                        match_table = true;
+                                        let select_item = SelectItem {
+                                            select_target,
+                                            scalar: BoundColumnRef {
+                                                column: column_binding.clone(),
+                                            }
+                                            .into(),
+                                            alias: column_binding.column_name.clone(),
+                                        };
+                                        output.items.push(select_item);
+                                    }
+                                }
+                                if !match_table {
+                                    return Err(ErrorCode::UnknownTable(format!(
+                                        "Unknown table '{}'",
+                                        table_name.name.clone()
+                                    )));
+                                }
+                            }
+                            _ => {
+                                return Err(ErrorCode::SemanticError(
+                                    "Unsupported indirection type",
+                                ));
+                            }
+                        }
+                    } else if names.len() == 3 {
+                        // db.table.*
+                        let db_name = &names[0];
+                        let tab_name = &names[1];
+                        match (db_name, tab_name) {
+                            (
+                                Indirection::Identifier(db_name),
+                                Indirection::Identifier(table_name),
+                            ) => {
+                                let mut match_table = false;
+                                for column_binding in input_context.all_column_bindings() {
+                                    if column_binding.visibility != Visibility::Visible {
+                                        continue;
+                                    }
+                                    if column_binding.database_name == Some(db_name.name.clone())
+                                        && column_binding.table_name
+                                            == Some(table_name.name.clone())
+                                    {
+                                        match_table = true;
+                                        let select_item = SelectItem {
+                                            select_target,
+                                            scalar: BoundColumnRef {
+                                                column: column_binding.clone(),
+                                            }
+                                            .into(),
+                                            alias: column_binding.column_name.clone(),
+                                        };
+                                        output.items.push(select_item);
+                                    }
+                                }
+                                if !match_table {
+                                    return Err(ErrorCode::UnknownTable(format!(
+                                        "Unknown table '{}'.'{}'",
+                                        db_name.name.clone(),
+                                        table_name.name.clone()
+                                    )));
+                                }
+                            }
+                            _ => {
+                                return Err(ErrorCode::SemanticError(
+                                    "Unsupported indirection type",
+                                ));
+                            }
                         }
                     } else {
-                        // TODO: Support indirection like `a.b`, `a.*`
                         return Err(ErrorCode::SemanticError("Unsupported indirection type"));
                     }
                 }

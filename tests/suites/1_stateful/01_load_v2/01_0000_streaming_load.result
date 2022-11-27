@@ -1,8 +1,16 @@
+--csv
 199	2020.0	769
+--csv.gz
 199	2020.0	769
+--csv.zstd
 199	2020.0	769
+--csv.bz2
 199	2020.0	769
+--parquet
 199	2020.0	769
+--ndjson
 198	2020.0	767
+--parquet less
 199	2020.0	769
+--parquet mismatch schema
 1

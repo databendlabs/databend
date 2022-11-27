@@ -20,7 +20,6 @@ use std::ops::Not;
 
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_io::prelude::FormatSettings;
 use primitive_types::U256;
 use primitive_types::U512;
 
@@ -235,10 +234,9 @@ where T: Clone
             let mut deserializer = non_null_type.create_deserializer(rows);
             let reader = vec8.as_slice();
 
-            let format = FormatSettings::default();
             let col = match data_type.is_nullable() {
                 false => {
-                    deserializer.de_fixed_binary_batch(&reader[offsize..], step, rows, &format)?;
+                    deserializer.de_fixed_binary_batch(&reader[offsize..], step, rows)?;
                     deserializer.finish_to_column()
                 }
 
@@ -248,7 +246,6 @@ where T: Clone
                         &reader[null_offsize..],
                         step,
                         rows,
-                        &format,
                     )?;
 
                     null_offsize += 1;
@@ -258,7 +255,7 @@ where T: Clone
 
                     // we store 1 for nulls in fixed_hash
                     let bitmap = col.values().not();
-                    deserializer.de_fixed_binary_batch(&reader[offsize..], step, rows, &format)?;
+                    deserializer.de_fixed_binary_batch(&reader[offsize..], step, rows)?;
                     let inner = deserializer.finish_to_column();
                     NullableColumn::wrap_inner(inner, Some(bitmap))
                 }

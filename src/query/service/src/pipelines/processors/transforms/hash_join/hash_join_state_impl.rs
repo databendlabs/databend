@@ -21,7 +21,6 @@ use common_datablocks::DataBlock;
 use common_datablocks::HashMethod;
 use common_datavalues::BooleanColumn;
 use common_datavalues::Column;
-use common_datavalues::ColumnRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -37,14 +36,20 @@ use crate::sql::planner::plans::JoinType;
 #[async_trait::async_trait]
 impl HashJoinState for JoinHashTable {
     fn build(&self, input: DataBlock) -> Result<()> {
-        let func_ctx = self.ctx.try_get_function_context()?;
-        let build_cols = self
-            .hash_join_desc
-            .build_keys
-            .iter()
-            .map(|expr| Ok(expr.eval(&func_ctx, &input)?.vector().clone()))
-            .collect::<Result<Vec<ColumnRef>>>()?;
-        self.row_space.push_cols(input, build_cols)
+        let mut data_block = input;
+        let data_block_size_limit = self.ctx.get_settings().get_max_block_size()? * 16;
+        {
+            let mut buffer = self.row_space.buffer.write().unwrap();
+            let buffer_row_size = buffer.iter().fold(0, |acc, x| acc + x.num_rows());
+            if buffer_row_size < data_block_size_limit as usize {
+                buffer.push(data_block);
+                return Ok(());
+            } else {
+                data_block = DataBlock::concat_blocks(&buffer)?;
+                buffer.clear();
+            }
+        }
+        self.add_build_block(data_block)
     }
 
     fn probe(&self, input: &DataBlock, probe_state: &mut ProbeState) -> Result<Vec<DataBlock>> {
@@ -119,7 +124,13 @@ impl HashJoinState for JoinHashTable {
                 }
             }};
         }
-
+        {
+            let buffer = self.row_space.buffer.write().unwrap();
+            if !buffer.is_empty() {
+                let data_block = DataBlock::concat_blocks(&buffer)?;
+                self.add_build_block(data_block)?;
+            }
+        }
         let interrupt = self.interrupt.clone();
         let mut chunks = self.row_space.chunks.write().unwrap();
         let mut has_null = false;

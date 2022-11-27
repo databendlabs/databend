@@ -313,4 +313,16 @@ impl JoinHashTable {
 
         self.merge_eq_block(&build_block, &probe_block)
     }
+
+    // Add `data_block` for build table to `row_space`
+    pub(crate) fn add_build_block(&self, data_block: DataBlock) -> Result<()> {
+        let func_ctx = self.ctx.try_get_function_context()?;
+        let build_cols = self
+            .hash_join_desc
+            .build_keys
+            .iter()
+            .map(|expr| Ok(expr.eval(&func_ctx, &data_block)?.vector().clone()))
+            .collect::<Result<Vec<ColumnRef>>>()?;
+        self.row_space.push_cols(data_block, build_cols)
+    }
 }

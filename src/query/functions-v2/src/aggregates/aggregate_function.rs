@@ -91,6 +91,8 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
         )))
     }
 
+    // std::mem::needs_drop::<State>
+    // if true will call drop_state
     fn need_manual_drop_state(&self) -> bool {
         false
     }

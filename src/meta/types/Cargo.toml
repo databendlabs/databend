@@ -12,6 +12,7 @@ test = false
 
 [dependencies]
 common-exception = { path = "../../common/exception" }
+common-io = { path = "../../common/io" }
 common-meta-stoerr = { path = "../stoerr" }
 common-storage = { path = "../../common/storage" }
 

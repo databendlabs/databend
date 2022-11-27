@@ -12,10 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::serializations::write_csv_string;
-use common_datavalues::serializations::write_escaped_string;
-use common_datavalues::serializations::write_json_string;
-use common_io::prelude::FormatSettings;
+use common_formats::field_encoder::helpers::write_escaped_string;
+use common_formats::field_encoder::helpers::write_json_string;
+use common_formats::field_encoder::write_csv_string;
 
 #[test]
 fn test_escape() {
@@ -46,62 +45,53 @@ fn test_escape() {
 
 #[test]
 fn test_json_escape() {
-    let setting = FormatSettings::default();
     let basic = b"\0\n\r\t\'/\"\\";
     {
         let mut buf = vec![];
-        write_json_string(basic, &mut buf, &setting);
+        write_json_string(basic, &mut buf, false, true);
         assert_eq!(&buf, b"\\u0000\\n\\r\\t\'\\/\\\"\\\\")
     }
 
     {
-        let setting = FormatSettings {
-            json_escape_forward_slashes: false,
-            ..FormatSettings::default()
-        };
         let mut buf = vec![];
-        write_json_string(basic, &mut buf, &setting);
+        write_json_string(basic, &mut buf, false, false);
         assert_eq!(&buf, b"\\u0000\\n\\r\\t\'/\\\"\\\\")
     }
 
     {
-        let setting = FormatSettings {
-            json_quote_denormals: true,
-            ..FormatSettings::default()
-        };
         let mut buf = vec![];
-        write_json_string(basic, &mut buf, &setting);
+        write_json_string(basic, &mut buf, true, true);
         assert_eq!(&buf, b"\\u0000\\n\\r\\t\'\\/\"\"\\\\")
     }
 
     {
         let mut buf = vec![];
-        write_json_string(b"\n123\n456\n", &mut buf, &setting);
+        write_json_string(b"\n123\n456\n", &mut buf, true, true);
         assert_eq!(&buf, b"\\n123\\n456\\n")
     }
 
     {
         let mut buf = vec![];
-        write_json_string(b"123\n", &mut buf, &setting);
+        write_json_string(b"123\n", &mut buf, true, true);
         assert_eq!(&buf, b"123\\n")
     }
 
     {
         let mut buf = vec![];
-        write_json_string(b"\n123", &mut buf, &setting);
+        write_json_string(b"\n123", &mut buf, true, true);
         assert_eq!(&buf, b"\\n123")
     }
 
     {
         let mut buf = vec![];
-        write_json_string(b"\n123", &mut buf, &setting);
+        write_json_string(b"\n123", &mut buf, true, true);
         assert_eq!(&buf, b"\\n123")
     }
 
     {
         let s = "123\u{2028}\u{2029}abc";
         let mut buf = vec![];
-        write_json_string(s.as_bytes(), &mut buf, &setting);
+        write_json_string(s.as_bytes(), &mut buf, true, true);
         assert_eq!(&buf, b"123\\u2028\\u2029abc")
     }
 }

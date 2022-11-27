@@ -18,8 +18,6 @@ use bstr::ByteSlice;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
-use common_datavalues::DataType;
-use common_datavalues::TypeSerializer;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_formats::field_encoder::FieldEncoderRowBased;
@@ -35,53 +33,7 @@ pub struct JsonBlock {
 
 pub type JsonBlockRef = Arc<JsonBlock>;
 
-pub fn block_to_json_value_columns(
-    block: &DataBlock,
-    format: &FormatSettings,
-) -> Result<Vec<Vec<JsonValue>>> {
-    if block.is_empty() {
-        return Ok(vec![]);
-    }
-    let mut col_table = Vec::new();
-    let columns_size = block.columns().len();
-    for col_index in 0..columns_size {
-        let column = block.column(col_index);
-        let column = column.convert_full_column();
-        let field = block.schema().field(col_index);
-        let data_type = field.data_type();
-        let serializer = data_type.create_serializer(&column)?;
-        col_table.push(serializer.serialize_json_values(format).map_err(|e| {
-            ErrorCode::Internal(format!(
-                "fail to serialize filed {}, error = {}",
-                field.name(),
-                e
-            ))
-        })?);
-    }
-    Ok(col_table)
-}
-
 pub fn block_to_json_value(
-    block: &DataBlock,
-    format: &FormatSettings,
-    string_fields: bool,
-) -> Result<Vec<Vec<JsonValue>>> {
-    if string_fields {
-        block_to_json_value_string_fields(block, format)
-    } else {
-        block_to_json_value_ast(block, format)
-    }
-}
-
-fn block_to_json_value_ast(
-    block: &DataBlock,
-    format: &FormatSettings,
-) -> Result<Vec<Vec<JsonValue>>> {
-    let cols = block_to_json_value_columns(block, format)?;
-    Ok(transpose(cols))
-}
-
-fn block_to_json_value_string_fields(
     block: &DataBlock,
     format: &FormatSettings,
 ) -> Result<Vec<Vec<JsonValue>>> {
@@ -116,9 +68,9 @@ impl JsonBlock {
         }
     }
 
-    pub fn new(block: &DataBlock, format: &FormatSettings, string_fields: bool) -> Result<Self> {
+    pub fn new(block: &DataBlock, format: &FormatSettings) -> Result<Self> {
         Ok(JsonBlock {
-            data: block_to_json_value(block, format, string_fields)?,
+            data: block_to_json_value(block, format)?,
             schema: block.schema().clone(),
         })
     }
@@ -154,21 +106,4 @@ impl From<JsonBlock> for Vec<Vec<JsonValue>> {
     fn from(block: JsonBlock) -> Self {
         block.data
     }
-}
-
-fn transpose(col_table: Vec<Vec<JsonValue>>) -> Vec<Vec<JsonValue>> {
-    if col_table.is_empty() {
-        return vec![];
-    }
-    let num_row = col_table[0].len();
-    let mut row_table = Vec::with_capacity(num_row);
-    for _ in 0..num_row {
-        row_table.push(Vec::with_capacity(col_table.len()));
-    }
-    for col in col_table {
-        for (row_index, row) in row_table.iter_mut().enumerate() {
-            row.push(col[row_index].clone());
-        }
-    }
-    row_table
 }
