@@ -20,9 +20,7 @@ jobs:
           config: '.github/crowdin.yml'
           base_url: 'https://databend.crowdin.com'
           base_path: '.'
-
-          # Avoid adding too many not translated files
-          skip_untranslated_files: true
+          # Include approved translations only in exported files
           export_only_approved: true
           # Make sure crowdin robot agree our template
           pull_request_title: 'docs: New Crowdin translations'
