@@ -23,6 +23,7 @@ use databend_query::api::http::v1::instance_status::InstanceStatus;
 use databend_query::interpreters::Interpreter;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::QueryContext;
+use databend_query::sessions::SessionManager;
 use databend_query::sessions::SessionType;
 use databend_query::sessions::TableContext;
 use databend_query::sql::Planner;
@@ -37,7 +38,8 @@ use poem::Route;
 use pretty_assertions::assert_eq;
 use tokio_stream::StreamExt;
 
-use crate::tests::create_query_context_with_type;
+use crate::tests::create_query_context_with_session;
+use crate::tests::TestGlobalServices;
 
 async fn get_status(ep: &Route) -> InstanceStatus {
     let response = ep
@@ -72,7 +74,8 @@ async fn run_query(query_ctx: &Arc<QueryContext>) -> Result<Arc<dyn Interpreter>
 
 #[tokio::test]
 async fn test_status() -> Result<()> {
-    let (_guard, query_ctx) = create_query_context_with_type(SessionType::HTTPQuery).await?;
+    // init global services
+    let guard = TestGlobalServices::setup(crate::tests::ConfigBuilder::create().build()).await?;
     let ep = Route::new().at("/v1/status", get(instance_status_handler));
 
     let status = get_status(&ep).await;
@@ -86,6 +89,8 @@ async fn test_status() -> Result<()> {
         "before running"
     );
 
+    let (_guard, query_ctx) =
+        create_query_context_with_session(SessionType::HTTPQuery, Some(guard)).await?;
     {
         let interpreter = run_query(&query_ctx).await?;
         let mut stream = interpreter.execute(query_ctx.clone()).await?;
@@ -102,6 +107,8 @@ async fn test_status() -> Result<()> {
 
         while (stream.next().await).is_some() {}
     }
+    let session = query_ctx.get_current_session();
+    SessionManager::instance().destroy_session(&session.get_id());
 
     let status = get_status(&ep).await;
     assert_eq!(
