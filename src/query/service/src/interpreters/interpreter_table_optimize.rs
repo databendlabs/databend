@@ -115,6 +115,7 @@ impl Interpreter for OptimizeTableInterpreter {
 
         if do_statistic {
             table.statistic(self.ctx.clone()).await?;
+            return Ok(PipelineBuildResult::create());
         }
 
         if do_purge {
