@@ -150,8 +150,8 @@ impl FuseTable {
         Ok(table_storage_prefix(db_id, table_id))
     }
 
-    pub fn table_snapshot_statistics_format_version(&self, location: &String) -> Result<u64> {
-        Ok(TableMetaLocationGenerator::snapshot_version(location))
+    pub fn table_snapshot_statistics_format_version(&self, location: &String) -> u64 {
+        TableMetaLocationGenerator::snapshot_version(location)
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
@@ -162,7 +162,7 @@ impl FuseTable {
         match snapshot {
             Some(snapshot) => {
                 if let Some(loc) = &snapshot.table_statistics_location {
-                    let ver = self.table_snapshot_statistics_format_version(loc)?;
+                    let ver = self.table_snapshot_statistics_format_version(loc);
                     let reader = MetaReaders::table_snapshot_statistics_reader(self.get_operator());
                     Ok(Some(reader.read(loc.as_str(), None, ver).await?))
                 } else {
