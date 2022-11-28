@@ -17,6 +17,7 @@ jobs:
         with:
           config: ".github/crowdin.yml"
           upload_sources: true
+          # Delete obsolete files and folders from Crowdin project
           upload_sources_args: "--delete-obsolete"
 
         env:
