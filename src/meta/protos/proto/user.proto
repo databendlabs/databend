@@ -185,6 +185,8 @@ message UserStageInfo {
     string escape = 6;
 
     string row_tag = 7;
+
+    string nan_display = 8;
   }
 
   message OnErrorMode {

@@ -8,27 +8,26 @@ import mysql.connector
 from fuzzingbook.Grammars import Grammar, is_valid_grammar
 
 
-class mysql_client():
-
+class mysql_client:
     def __init__(self):
         config = {
-            'user': 'root',
-            'host': '127.0.0.1',
-            'port': 3307,
-            'database': 'default',
+            "user": "root",
+            "host": "127.0.0.1",
+            "port": 3307,
+            "database": "default",
         }
         host = os.getenv("QUERY_MYSQL_HANDLER_HOST")
         if host is not None:
-            config['host'] = host
+            config["host"] = host
         port = os.getenv("QUERY_MYSQL_HANDLER_PORT")
         if port is not None:
-            config['port'] = port
+            config["port"] = port
         user = os.getenv("MYSQL_USER")
         if user is not None:
-            config['user'] = user
+            config["user"] = user
         default_database = os.getenv("MYSQL_DATABASE")
         if default_database is not None:
-            config['database'] = default_database
+            config["database"] = default_database
         self._connection = mysql.connector.connect(**config)
 
     def close(self):
@@ -45,7 +44,7 @@ class mysql_client():
 
 
 START_SYMBOL = "<start>"
-RE_NONTERMINAL = re.compile(r'(<[^<> ]*>)')
+RE_NONTERMINAL = re.compile(r"(<[^<> ]*>)")
 
 
 def nonterminals(expansion):
@@ -81,13 +80,12 @@ select_grammar: Grammar = {
         "SELECT <select_list> FROM <table_reference_list> order by <expression> ASC <limit_list>",
         "SELECT <select_list> FROM <table_reference_list> order by <expression> DESC <limit_list>",
     ],
-    "<select_list>": [
-        "*", "<select_target>", "<select_target>,<select_target>"
-    ],
+    "<select_list>": ["*", "<select_target>", "<select_target>,<select_target>"],
     "<select_target>": ["<target_rows>"],
     "<condition_expression>": ["<target_rows> <expr> <value>"],
     "<table_reference_list>": [
-        "<table_reference>", "<table_reference>, <table_reference>"
+        "<table_reference>",
+        "<table_reference>, <table_reference>",
     ],
     "<function_reference>": ["sum", "avg", "count", "min", "max"],
     "<group_by_list>": ["<expression>", "<following_expression>"],
@@ -95,11 +93,9 @@ select_grammar: Grammar = {
     "<following_expression>": ["<expression>", "<expression>,<expression>"],
     "<expression>": ["<target_rows>", "<target_rows>,<target_rows>"],
     "<table_reference>": ["t1", "t2", "t3"],
-    "<target_rows>": [
-        "row1", "row2", "row3", "row4", "row5", "row6", "row7", "row8"
-    ],
+    "<target_rows>": ["row1", "row2", "row3", "row4", "row5", "row6", "row7", "row8"],
     "<expr>": [">", "<", ">=", "<=", "!=", "="],
-    "<value>": ["1", "0", "null"]
+    "<value>": ["1", "0", "null"],
 }
 
 drop_grammar: Grammar = {
@@ -118,11 +114,13 @@ class ExpansionError(Exception):
 
 
 # https://www.fuzzingbook.org/html/Grammars.html
-def grammar_fuzzer(grammar,
-                   start_symbol: str = START_SYMBOL,
-                   max_nonterminals: int = 10,
-                   max_expansion_trials: int = 100,
-                   log: bool = False) -> str:
+def grammar_fuzzer(
+    grammar,
+    start_symbol: str = START_SYMBOL,
+    max_nonterminals: int = 10,
+    max_expansion_trials: int = 100,
+    log: bool = False,
+) -> str:
 
     term = start_symbol
     expansion_trials = 0
@@ -148,8 +146,7 @@ def grammar_fuzzer(grammar,
     return term
 
 
-class QueryGenerator():
-
+class QueryGenerator:
     def __init__(self, grammar, execute_times=100):
         random.seed(time.time())
         self._grammar = grammar
@@ -157,12 +154,10 @@ class QueryGenerator():
         self._max_nonterminals = random.randint(5, 10)
 
     def next(self):
-        return grammar_fuzzer(self._grammar,
-                              max_nonterminals=self._max_nonterminals)
+        return grammar_fuzzer(self._grammar, max_nonterminals=self._max_nonterminals)
 
 
-class QueryExecutor():
-
+class QueryExecutor:
     def __init__(self):
         self._client = mysql_client()
         self.prepare()
@@ -180,8 +175,7 @@ class QueryExecutor():
         self._client = None
 
 
-class FuzzRunner():
-
+class FuzzRunner:
     def __init__(self, generators, executor):
         self._generators = generators
         self._executor = executor
@@ -208,6 +202,6 @@ generator_list = [
     QueryGenerator(drop_grammar, 10),
 ]
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     f = FuzzRunner(generator_list, QueryExecutor())
     f.run()

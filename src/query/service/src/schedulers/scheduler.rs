@@ -16,34 +16,28 @@ use std::sync::Arc;
 
 use common_exception::Result;
 
-use crate::interpreters::fragments::Fragmenter;
-use crate::interpreters::fragments::QueryFragmentsActions;
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::PipelineBuilder;
+use crate::schedulers::Fragmenter;
+use crate::schedulers::QueryFragmentsActions;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::executor::PhysicalPlan;
 use crate::sql::ColumnBinding;
 
-pub async fn schedule_query_v2(
-    ctx: Arc<QueryContext>,
+/// Build query pipeline from physical plan.
+/// If plan is distributed plan it will build_distributed_pipeline
+/// else build_local_pipeline.
+pub async fn build_query_pipeline(
+    ctx: &Arc<QueryContext>,
     result_columns: &[ColumnBinding],
     plan: &PhysicalPlan,
 ) -> Result<PipelineBuildResult> {
-    if !plan.is_distributed_plan() {
-        let pb = PipelineBuilder::create(ctx.clone());
-        let mut build_res = pb.finalize(plan)?;
-        PipelineBuilder::render_result_set(
-            &ctx.try_get_function_context()?,
-            plan.output_schema()?,
-            result_columns,
-            &mut build_res.main_pipeline,
-        )?;
-        build_res.set_max_threads(ctx.get_settings().get_max_threads()? as usize);
-        return Ok(build_res);
-    }
-
-    let mut build_res = build_schedule_pipeline(ctx.clone(), plan).await?;
+    let mut build_res = if !plan.is_distributed_plan() {
+        build_local_pipeline(ctx, plan).await
+    } else {
+        build_distributed_pipeline(ctx, plan).await
+    }?;
 
     let input_schema = plan.output_schema()?;
     PipelineBuilder::render_result_set(
@@ -56,8 +50,22 @@ pub async fn schedule_query_v2(
     Ok(build_res)
 }
 
-pub async fn build_schedule_pipeline(
-    ctx: Arc<QueryContext>,
+/// Build local pipeline.
+pub async fn build_local_pipeline(
+    ctx: &Arc<QueryContext>,
+    plan: &PhysicalPlan,
+) -> Result<PipelineBuildResult> {
+    let pipeline = PipelineBuilder::create(ctx.clone());
+    let mut build_res = pipeline.finalize(plan)?;
+
+    let settings = ctx.get_settings();
+    build_res.set_max_threads(settings.get_max_threads()? as usize);
+    Ok(build_res)
+}
+
+/// Build distributed pipeline via fragment and actions.
+pub async fn build_distributed_pipeline(
+    ctx: &Arc<QueryContext>,
     plan: &PhysicalPlan,
 ) -> Result<PipelineBuildResult> {
     let fragmenter = Fragmenter::try_create(ctx.clone())?;

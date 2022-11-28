@@ -59,7 +59,7 @@ you are expected to get JSON like this (formatted):
   },
   "data": [
     [
-      49999999.5
+      "49999999.5"
     ]
   ],
   "state": "Succeeded",
@@ -96,7 +96,6 @@ QueryRequest
 | session_id    | string       | No       |         | used only when reuse server-side session         |
 | session       | SessionState | No       |         |                                                  |
 | pagination    | Pagination   | No       |         | a uniq query_id for this POST request            |
-| string_fields | bool         | No       | false   | all field value in data is represented in string |
 
 SessionState
 
@@ -191,9 +190,8 @@ Check the response body for error reason as a string when status code is not 200
 
 ### data format
 
-json only support a few types, we commanded setting `string_fields` to `true`,
-then all field value in data is represented in string,
-client need to interpreter the values with the help of information in the schema filed.
+all field value in `.data` is represented in string,
+client need to interpreter the values with the help of information in the `schema` field.
 
 
 ### session support (Optional)

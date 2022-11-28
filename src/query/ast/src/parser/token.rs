@@ -395,6 +395,8 @@ pub enum TokenKind {
     FIELDS,
     #[token("FIELD_DELIMITER", ignore(ascii_case))]
     FIELD_DELIMITER,
+    #[token("NAN_DISPLAY", ignore(ascii_case))]
+    NAN_DISPLAY,
     #[token("FILE_FORMAT", ignore(ascii_case))]
     FILE_FORMAT,
     #[token("FILES", ignore(ascii_case))]
@@ -611,6 +613,8 @@ pub enum TokenKind {
     SEGMENT,
     #[token("SET", ignore(ascii_case))]
     SET,
+    #[token("UNSET", ignore(ascii_case))]
+    UNSET,
     #[token("SETTINGS", ignore(ascii_case))]
     SETTINGS,
     #[token("STAGES", ignore(ascii_case))]

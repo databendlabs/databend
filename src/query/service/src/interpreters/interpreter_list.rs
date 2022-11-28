@@ -71,9 +71,9 @@ impl Interpreter for ListInterpreter {
 
         let names: Vec<String> = files.iter().map(|file| file.path.clone()).collect();
         let sizes: Vec<u64> = files.iter().map(|file| file.size).collect();
-        let md5s: Vec<Option<Vec<u8>>> = files
+        let etags: Vec<Option<Vec<u8>>> = files
             .iter()
-            .map(|file| file.md5.as_ref().map(|f| f.to_string().into_bytes()))
+            .map(|file| file.etag.as_ref().map(|f| f.to_string().into_bytes()))
             .collect();
         let last_modifieds: Vec<String> = files
             .iter()
@@ -91,7 +91,7 @@ impl Interpreter for ListInterpreter {
         PipelineBuildResult::from_blocks(vec![DataBlock::create(self.plan.schema(), vec![
             Series::from_data(names),
             Series::from_data(sizes),
-            Series::from_data(md5s),
+            Series::from_data(etags),
             Series::from_data(last_modifieds),
             Series::from_data(creators),
         ])])

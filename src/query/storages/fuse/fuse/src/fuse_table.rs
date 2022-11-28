@@ -40,6 +40,7 @@ use common_meta_app::schema::TableInfo;
 use common_sharing::create_share_table_operator;
 use common_sql::ExpressionParser;
 use common_storage::init_operator;
+use common_storage::CacheOperator;
 use common_storage::DataOperator;
 use common_storage::ShareTableConfig;
 use common_storage::StorageMetrics;
@@ -53,6 +54,8 @@ use common_storages_table_meta::table::table_storage_prefix;
 use common_storages_table_meta::table::OPT_KEY_DATABASE_ID;
 use common_storages_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
 use common_storages_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
+use opendal::layers::ContentCacheLayer;
+use opendal::layers::ContentCacheStrategy;
 use opendal::Operator;
 use uuid::Uuid;
 
@@ -112,6 +115,13 @@ impl FuseTable {
         };
         let data_metrics = Arc::new(StorageMetrics::default());
         operator = operator.layer(StorageMetricsLayer::new(data_metrics.clone()));
+        // If cache op is valid, layered with ContentCacheLayer.
+        if let Some(cache_op) = CacheOperator::instance() {
+            operator = operator.layer(ContentCacheLayer::new(
+                cache_op,
+                ContentCacheStrategy::Fixed(1024 * 1024),
+            ));
+        }
 
         Ok(Box::new(FuseTable {
             table_info,
@@ -415,7 +425,8 @@ impl Table for FuseTable {
             let stats = &snapshot.summary.col_stats;
             FakedColumnStatisticsProvider {
                 column_stats: stats.clone(),
-                faked_ndv: snapshot.summary.row_count,
+                // save row count first
+                distinct_count: snapshot.summary.row_count,
             }
         } else {
             FakedColumnStatisticsProvider::default()
@@ -478,8 +489,7 @@ impl Table for FuseTable {
 #[derive(Default)]
 struct FakedColumnStatisticsProvider {
     column_stats: HashMap<ColumnId, FuseColumnStatistics>,
-    // faked value, just the row number
-    faked_ndv: u64,
+    distinct_count: u64,
 }
 
 impl ColumnStatisticsProvider for FakedColumnStatisticsProvider {
@@ -489,7 +499,9 @@ impl ColumnStatisticsProvider for FakedColumnStatisticsProvider {
             min: s.min.clone(),
             max: s.max.clone(),
             null_count: s.null_count,
-            number_of_distinct_values: self.faked_ndv,
+            number_of_distinct_values: s
+                .distinct_of_values
+                .map_or_else(|| self.distinct_count, |n| n),
         })
     }
 }

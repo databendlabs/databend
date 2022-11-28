@@ -32,6 +32,8 @@ where Self: Deref<Target = [Self::T]> + DerefMut
 
     fn len(&self) -> usize;
 
+    fn heap_bytes(&self) -> usize;
+
     unsafe fn new_zeroed(len: usize, allocator: Self::A) -> Self;
 
     unsafe fn grow_zeroed(&mut self, new_len: usize);
@@ -64,6 +66,10 @@ unsafe impl<T, A: Allocator> Container for HeapContainer<T, A> {
     #[inline(always)]
     fn len(&self) -> usize {
         self.as_ref().len()
+    }
+
+    fn heap_bytes(&self) -> usize {
+        Layout::array::<T>(self.0.len()).unwrap().size()
     }
 
     unsafe fn new_zeroed(len: usize, allocator: Self::A) -> Self {
@@ -135,6 +141,14 @@ unsafe impl<T, const N: usize, A: Allocator + Clone> Container for StackContaine
     #[inline(always)]
     fn len(&self) -> usize {
         self.len
+    }
+
+    fn heap_bytes(&self) -> usize {
+        match self.len <= N {
+            true => 0,
+            false if self.ptr.is_null() => 0,
+            false => Layout::array::<T>(self.len).unwrap().size(),
+        }
     }
 
     unsafe fn new_zeroed(len: usize, allocator: Self::A) -> Self {

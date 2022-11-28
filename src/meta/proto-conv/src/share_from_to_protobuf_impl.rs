@@ -18,8 +18,8 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
-use common_datavalues::chrono::DateTime;
-use common_datavalues::chrono::Utc;
+use chrono::DateTime;
+use chrono::Utc;
 use common_meta_app::share as mt;
 use common_protos::pb;
 use enumflags2::BitFlags;

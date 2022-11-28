@@ -40,7 +40,7 @@ use crate::planner::semantic::NameResolutionContext;
 use crate::plans::BoundColumnRef;
 use crate::plans::Filter;
 use crate::plans::JoinType;
-use crate::plans::LogicalInnerJoin;
+use crate::plans::LogicalJoin;
 use crate::plans::Scalar;
 use crate::plans::ScalarExpr;
 use crate::BindContext;
@@ -241,7 +241,7 @@ impl<'a> Binder {
             other_conditions,
             &mut non_equi_conditions,
         )?;
-        let inner_join = LogicalInnerJoin {
+        let logical_join = LogicalJoin {
             left_conditions,
             right_conditions,
             non_equi_conditions,
@@ -250,7 +250,7 @@ impl<'a> Binder {
             from_correlated_subquery: false,
         };
         Ok(SExpr::create_binary(
-            inner_join.into(),
+            logical_join.into(),
             left_child,
             right_child,
         ))

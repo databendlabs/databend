@@ -3,7 +3,6 @@
 
 
 class LogicTestStatistics:
-
     def __init__(self) -> None:
         self._failed_map = dict()
         self._perf_map = dict()
@@ -20,10 +19,12 @@ class LogicTestStatistics:
             self._perf_map[runner] = dict()
         if suite_name not in self._perf_map[runner]:
             self._perf_map[runner][suite_name] = list()
-        self._perf_map[runner][suite_name].append({
-            "statement": statement,
-            "time_cost": time_cost,
-        })
+        self._perf_map[runner][suite_name].append(
+            {
+                "statement": statement,
+                "time_cost": time_cost,
+            }
+        )
 
     def __str__(self):
         failure_output = "Following failed statements:\n"
@@ -43,24 +44,19 @@ class LogicTestStatistics:
         runner_list = list()
         for runner in self._perf_map:
             runner_list.append(runner)
-            statement_cost = 0
+            time_cost = 0
             statement_count = 0
             suite_count = 0
-            suite_cost = 0
             for suite in self._perf_map[runner]:
                 suite_count += 1
                 for result in self._perf_map[runner][suite]:
                     statement_count += 1
-                    statement_cost = statement_cost + result["time_cost"]
-                    suite_cost = suite_cost + result["time_cost"]
+                    time_cost = time_cost + result["time_cost"]
             summary_output += (
-                f"Runner {runner} test {suite_count} suites, "
-                f"total time cost {suite_cost} seconds, "
-                f"avg time cost {round(suite_cost/suite_count*1000, 2)} ms\n")
-            summary_output += (
-                f"Runner {runner} test {statement_count} statements, "
-                f"total time cost {statement_cost} seconds, "
-                f"avg time cost{round(statement_cost/statement_count*1000,2)} ms\n"
+                f"Runner {runner} test {suite_count} suites, {statement_count} statements, "
+                f"total {round(time_cost, 2)} seconds, "
+                f"avg suite {round(time_cost / suite_count*1000, 2)} ms, "
+                f"avg statement {round(time_cost / statement_count*1000, 2)} ms\n"
             )
 
         return f"{summary_output}\n{failure_output}"

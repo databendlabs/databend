@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_expression::FunctionRegistry;
+use ctor::ctor;
 
 mod arithmetic;
 mod arithmetic_modulo;
@@ -20,6 +21,7 @@ mod array;
 mod boolean;
 mod control;
 mod datetime;
+mod geo;
 mod math;
 mod tuple;
 mod variant;
@@ -28,7 +30,10 @@ mod comparison;
 mod string;
 mod string_multi_args;
 
-pub fn builtin_functions() -> FunctionRegistry {
+#[ctor]
+pub static BUILTIN_FUNCTIONS: FunctionRegistry = builtin_functions();
+
+fn builtin_functions() -> FunctionRegistry {
     let mut registry = FunctionRegistry::new();
     arithmetic::register(&mut registry);
     array::register(&mut registry);
@@ -41,5 +46,6 @@ pub fn builtin_functions() -> FunctionRegistry {
     string_multi_args::register(&mut registry);
     tuple::register(&mut registry);
     variant::register(&mut registry);
+    geo::register(&mut registry);
     registry
 }

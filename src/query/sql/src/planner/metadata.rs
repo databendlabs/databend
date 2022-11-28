@@ -63,10 +63,14 @@ impl Metadata {
     }
 
     pub fn table_index_by_column_indexes(&self, column_indexes: &ColumnSet) -> Option<IndexType> {
-        self.columns
-            .iter()
-            .find(|v| column_indexes.contains(&v.column_index))
-            .and_then(|v| v.table_index)
+        self.columns.iter().find_map(|v| match v {
+            ColumnEntry::BaseTableColumn {
+                column_index,
+                table_index,
+                ..
+            } if column_indexes.contains(column_index) => Some(*table_index),
+            _ => None,
+        })
     }
 
     pub fn column(&self, index: IndexType) -> &ColumnEntry {
@@ -82,28 +86,39 @@ impl Metadata {
     pub fn columns_by_table_index(&self, index: IndexType) -> Vec<ColumnEntry> {
         self.columns
             .iter()
-            .filter(|v| v.table_index == Some(index))
+            .filter(|v| matches!(v, ColumnEntry::BaseTableColumn { table_index, .. } if index == *table_index))
             .cloned()
             .collect()
     }
 
-    pub fn add_column(
+    pub fn add_base_table_column(
         &mut self,
         name: String,
         data_type: DataTypeImpl,
-        table_index: Option<IndexType>,
+        table_index: IndexType,
         path_indices: Option<Vec<IndexType>>,
         leaf_index: Option<IndexType>,
     ) -> IndexType {
         let column_index = self.columns.len();
-        let column_entry = ColumnEntry::new(
-            name,
+        let column_entry = ColumnEntry::BaseTableColumn {
+            column_name: name,
             data_type,
             column_index,
             table_index,
             path_indices,
             leaf_index,
-        );
+        };
+        self.columns.push(column_entry);
+        column_index
+    }
+
+    pub fn add_derived_column(&mut self, alias: String, data_type: DataTypeImpl) -> IndexType {
+        let column_index = self.columns.len();
+        let column_entry = ColumnEntry::DerivedColumn {
+            column_index,
+            alias,
+            data_type,
+        };
         self.columns.push(column_entry);
         column_index
     }
@@ -113,15 +128,18 @@ impl Metadata {
         catalog: String,
         database: String,
         table_meta: Arc<dyn Table>,
+        table_alias_name: Option<String>,
     ) -> IndexType {
         let table_name = table_meta.name().to_string();
         let table_index = self.tables.len();
+        // If exists table alias name, use it instead of origin name
         let table_entry = TableEntry {
             index: table_index,
             name: table_name,
             database,
             catalog,
             table: table_meta.clone(),
+            alias_name: table_alias_name,
         };
         self.tables.push(table_entry);
         let mut fields = VecDeque::new();
@@ -140,20 +158,20 @@ impl Metadata {
             };
 
             if field.data_type().data_type_id() != TypeID::Struct {
-                self.add_column(
+                self.add_base_table_column(
                     field.name().clone(),
                     field.data_type().clone(),
-                    Some(table_index),
+                    table_index,
                     path_indices,
                     Some(leaf_index),
                 );
                 leaf_index += 1;
                 continue;
             }
-            self.add_column(
+            self.add_base_table_column(
                 field.name().clone(),
                 field.data_type().clone(),
-                Some(table_index),
+                table_index,
                 path_indices,
                 None,
             );
@@ -190,10 +208,17 @@ impl Metadata {
         let mut smallest_size = usize::MAX;
         for idx in indices.iter() {
             let entry = self.column(*idx);
-            if let Ok(bytes) = entry.data_type.data_type_id().numeric_byte_size() {
-                if smallest_size > bytes {
-                    smallest_size = bytes;
-                    smallest_index = &entry.column_index;
+            if let ColumnEntry::BaseTableColumn {
+                column_index,
+                data_type,
+                ..
+            } = entry
+            {
+                if let Ok(bytes) = data_type.data_type_id().numeric_byte_size() {
+                    if smallest_size > bytes {
+                        smallest_size = bytes;
+                        smallest_index = column_index;
+                    }
                 }
             }
         }
@@ -205,8 +230,14 @@ impl Metadata {
         let indices: Vec<usize> = self
             .columns
             .iter()
-            .filter(|v| v.table_index == Some(table_index))
-            .map(|v| v.column_index)
+            .filter_map(|v| match v {
+                ColumnEntry::BaseTableColumn {
+                    table_index: index,
+                    column_index,
+                    ..
+                } if *index == table_index => Some(*column_index),
+                _ => None,
+            })
             .collect();
 
         self.find_smallest_column(&indices)
@@ -218,6 +249,7 @@ pub struct TableEntry {
     catalog: String,
     database: String,
     name: String,
+    alias_name: Option<String>,
     index: IndexType,
 
     table: Arc<dyn Table>,
@@ -238,6 +270,7 @@ impl TableEntry {
     pub fn new(
         index: IndexType,
         name: String,
+        alias_name: Option<String>,
         catalog: String,
         database: String,
         table: Arc<dyn Table>,
@@ -248,6 +281,7 @@ impl TableEntry {
             catalog,
             database,
             table,
+            alias_name,
         }
     }
 
@@ -266,6 +300,11 @@ impl TableEntry {
         &self.name
     }
 
+    /// Get the alias name of this table entry.
+    pub fn alias_name(&self) -> &Option<String> {
+        &self.alias_name
+    }
+
     /// Get the index this table entry.
     pub fn index(&self) -> IndexType {
         self.index
@@ -278,72 +317,35 @@ impl TableEntry {
 }
 
 #[derive(Clone, Debug)]
-pub struct ColumnEntry {
-    column_index: IndexType,
-    name: String,
-    data_type: DataTypeImpl,
+pub enum ColumnEntry {
+    /// Column from base table, for example `SELECT t.a, t.b FROM t`.
+    BaseTableColumn {
+        table_index: IndexType,
+        column_index: IndexType,
+        column_name: String,
+        data_type: DataTypeImpl,
 
-    /// Table index of column entry. None if column is derived from a subquery.
-    table_index: Option<IndexType>,
-    /// Path indices for inner column of struct data type.
-    path_indices: Option<Vec<IndexType>>,
-    /// Leaf index is the primitive column index in Parquet, constructed in DFS order.
-    /// None if the data type of column is struct.
-    leaf_index: Option<IndexType>,
+        /// Path indices for inner column of struct data type.
+        path_indices: Option<Vec<usize>>,
+        /// Leaf index is the primitive column index in Parquet, constructed in DFS order.
+        /// None if the data type of column is struct.
+        leaf_index: Option<usize>,
+    },
+
+    /// Column synthesized from other columns, for example `SELECT t.a + t.b AS a FROM t`.
+    DerivedColumn {
+        column_index: IndexType,
+        alias: String,
+        data_type: DataTypeImpl,
+    },
 }
 
 impl ColumnEntry {
-    pub fn new(
-        name: String,
-        data_type: DataTypeImpl,
-        column_index: IndexType,
-        table_index: Option<IndexType>,
-        path_indices: Option<Vec<IndexType>>,
-        leaf_index: Option<IndexType>,
-    ) -> Self {
-        ColumnEntry {
-            column_index,
-            name,
-            data_type,
-            table_index,
-            path_indices,
-            leaf_index,
-        }
-    }
-
-    /// Get the name of this column entry.
-    pub fn name(&self) -> &str {
-        &self.name
-    }
-
-    /// Get the index of this column entry.
     pub fn index(&self) -> IndexType {
-        self.column_index
-    }
-
-    /// Get the data type of this column entry.
-    pub fn data_type(&self) -> &DataTypeImpl {
-        &self.data_type
-    }
-
-    /// Get the table index of this column entry.
-    pub fn table_index(&self) -> Option<IndexType> {
-        self.table_index
-    }
-
-    /// Get the path indices of this column entry.
-    pub fn path_indices(&self) -> Option<&[IndexType]> {
-        self.path_indices.as_deref()
-    }
-
-    /// Check if this column entry contains path_indices.
-    pub fn has_path_indices(&self) -> bool {
-        self.path_indices.is_some()
-    }
-
-    /// Get the leaf index of this column entry.
-    pub fn leaf_index(&self) -> Option<IndexType> {
-        self.leaf_index
+        match self {
+            ColumnEntry::BaseTableColumn { column_index, .. } => *column_index,
+            ColumnEntry::DerivedColumn { column_index, .. } => *column_index,
+        }
     }
 }
 

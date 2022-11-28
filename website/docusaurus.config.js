@@ -22,10 +22,13 @@ const config = {
 
     i18n: {
         defaultLocale: 'en-US',
-        locales: ['en-US'],
+        locales: ['en-US', 'zh-CN'],
         localeConfigs: {
             'en-US': {
                 label: 'English',
+            },
+            'zh-CN': {
+                label: '简体中文',
             },
         },
     },
@@ -39,12 +42,21 @@ const config = {
                     path: '../docs/doc',
                     routeBasePath: 'doc',
                     sidebarPath: require.resolve('../docs/doc/sidebars.js'),
-                    editUrl: 'https://github.com/datafuselabs/databend/edit/main/databend',
+                    editUrl: ({locale, docPath}) => {
+                        if (locale !== config.i18n.defaultLocale) {
+                          return `https://databend.crowdin.com/databend/${locale}`;
+                        }
+                        return `https://github.com/datafuselabs/databend/edit/main/docs/doc/${docPath}`;
+                      },
                 },
                 blog: {
                     showReadingTime: true,
-                    editUrl:
-                        'https://github.com/datafuselabs/databend/edit/main/website',
+                    editUrl: ({locale, blogPath}) => {
+                        if (locale !== config.i18n.defaultLocale) {
+                          return `https://databend.crowdin.com/databend/${locale}`;
+                        }
+                        return `https://github.com/datafuselabs/databend/edit/main/website/blog/${blogPath}`;
+                      },
                     blogSidebarCount: 'ALL',
                     postsPerPage: 'ALL',
                 },
@@ -74,12 +86,17 @@ const config = {
                 path: '../docs/dev',
                 routeBasePath: 'dev',
                 sidebarPath: require.resolve('../docs/dev/sidebars.js'),
-                editUrl: 'https://github.com/datafuselabs/databend/edit/main/databend',
+                editUrl: ({locale, devPath}) => {
+                    if (locale !== config.i18n.defaultLocale) {
+                      return `https://databend.crowdin.com/databend/${locale}`;
+                    }
+                    return `https://github.com/datafuselabs/databend/edit/main/docs/dev/${devPath}`;
+                  },
             },
         ],
     ],
     themeConfig:
-    /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
+        /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
         ({
             announcementBar: {
                 id: 'announcementBar-2', // Increment on change
@@ -98,10 +115,10 @@ const config = {
                         position: 'right',
                     },
                     {
-                      to: '/download',
-                      label: 'Download',
-                      position: 'right',
-                  },
+                        to: '/download',
+                        label: 'Download',
+                        position: 'right',
+                    },
                     {
                         to: '/doc/contributing/good-pr',
                         label: 'Contributing',
@@ -112,12 +129,22 @@ const config = {
                         label: 'Benchmarking',
                         position: 'right',
                     },
-                    {to: '/blog', label: 'Blog', position: 'right'}, // or position: 'right'
+                    { to: '/blog', label: 'Blog', position: 'right' }, // or position: 'right'
                     {
                         href: 'https://github.com/datafuselabs/databend',
                         label: 'GitHub',
                         position: 'right',
-                    }
+                    },
+                    {
+                        type: 'localeDropdown',
+                        position: 'right',
+                        dropdownItemsAfter: [
+                            {
+                                to: 'https://databend.crowdin.com/databend',
+                                label: 'Help Us Translate',
+                            },
+                        ],
+                    },
                 ],
             },
             footer: {
@@ -191,8 +218,8 @@ const config = {
             },
             image: 'img/logo/logo-no-text.png',
             metadata: [
-              {name: 'twitter:card', content: 'summary_large_image'},
-              {name: 'twitter:site', content: '@databend.rs'}
+                { name: 'twitter:card', content: 'summary_large_image' },
+                { name: 'twitter:site', content: '@databend.rs' }
             ],
         }),
 };

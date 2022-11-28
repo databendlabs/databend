@@ -16,9 +16,9 @@ use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
+use chrono::TimeZone;
+use chrono::Utc;
 use common_datavalues as dv;
-use common_datavalues::chrono::TimeZone;
-use common_datavalues::chrono::Utc;
 use common_meta_app::schema as mt;
 use common_meta_app::share;
 use common_proto_conv::FromToProto;

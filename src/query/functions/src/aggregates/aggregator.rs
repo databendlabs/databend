@@ -24,6 +24,7 @@ use super::aggregate_min_max_any::aggregate_max_function_desc;
 use super::aggregate_min_max_any::aggregate_min_function_desc;
 use super::aggregate_stddev_pop::aggregate_stddev_pop_function_desc;
 use super::aggregate_window_funnel::aggregate_window_funnel_function_desc;
+use super::AggregateApproxCountDistinctFunction;
 use super::AggregateCountFunction;
 use super::AggregateFunctionFactory;
 use super::AggregateIfCombinator;
@@ -56,6 +57,10 @@ impl Aggregators {
         factory.register("uniq", aggregate_combinator_uniq_desc());
 
         factory.register("retention", aggregate_retention_function_desc());
+        factory.register(
+            "approx_count_distinct",
+            AggregateApproxCountDistinctFunction::desc(),
+        );
     }
 
     pub fn register_combinator(factory: &mut AggregateFunctionFactory) {

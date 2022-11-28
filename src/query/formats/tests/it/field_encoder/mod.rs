@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,18 +12,4 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![deny(unused_crate_dependencies)]
-
-mod async_entrypoint;
-
-use proc_macro::TokenStream;
-
-#[proc_macro_attribute]
-pub fn databend_main(args: TokenStream, item: TokenStream) -> TokenStream {
-    async_entrypoint::async_main(args, item)
-}
-
-#[proc_macro_attribute]
-pub fn databend_test(args: TokenStream, item: TokenStream) -> TokenStream {
-    async_entrypoint::async_test(args, item)
-}
+mod helpers;

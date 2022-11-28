@@ -1410,10 +1410,10 @@ async fn test_affect() -> Result<()> {
     let sqls = vec![
         (
             serde_json::json!({"sql": "set max_threads=1", "session": {"settings": {"max_threads": "6", "timezone": "Asia/Shanghai"}}}),
-            Some(QueryAffect::ChangeSetting {
-                key: "max_threads".to_string(),
-                value: "1".to_string(),
-                is_global: false,
+            Some(QueryAffect::ChangeSettings {
+                keys: vec!["max_threads".to_string()],
+                values: vec!["1".to_string()],
+                is_globals: vec![false],
             }),
             Some(HttpSessionConf {
                 database: None,

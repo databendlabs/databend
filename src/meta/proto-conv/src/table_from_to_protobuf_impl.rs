@@ -17,9 +17,9 @@
 
 use std::sync::Arc;
 
+use chrono::DateTime;
+use chrono::Utc;
 use common_datavalues as dv;
-use common_datavalues::chrono::DateTime;
-use common_datavalues::chrono::Utc;
 use common_meta_app::schema as mt;
 use common_protos::pb;
 use common_storage::StorageParams;

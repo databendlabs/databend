@@ -16,12 +16,11 @@ use std::env;
 use std::ops::Deref;
 use std::sync::Arc;
 
-use common_base::base::RuntimeTracker;
+use common_base::base::tokio;
 use common_base::base::StopHandle;
 use common_base::base::Stoppable;
 use common_exception::ErrorCode;
 use common_grpc::RpcClientConf;
-use common_macros::databend_main;
 use common_meta_sled_store::init_sled_db;
 use common_meta_store::MetaStoreProvider;
 use common_metrics::init_default_metrics_recorder;
@@ -42,8 +41,8 @@ pub use kvapi::KvApiCommand;
 
 const CMD_KVAPI_PREFIX: &str = "kvapi::";
 
-#[databend_main]
-async fn main(_global_tracker: Arc<RuntimeTracker>) -> Result<(), ErrorCode> {
+#[tokio::main]
+async fn main() -> Result<(), ErrorCode> {
     let conf = Config::load()?;
 
     if run_cmd(&conf).await {
@@ -157,7 +156,7 @@ async fn run_kvapi_command(conf: &Config, op: &str) {
     match KvApiCommand::from_config(conf, op) {
         Ok(kv_cmd) => {
             let rpc_conf = RpcClientConf {
-                address: conf.grpc_api_address.clone(),
+                endpoints: vec![conf.grpc_api_address.clone()],
                 username: conf.username.clone(),
                 password: conf.password.clone(),
                 ..Default::default()

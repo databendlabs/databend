@@ -81,7 +81,7 @@ pub struct CompactSink {
     abort_operation: AbortOperation,
 
     inputs: Vec<Arc<InputPort>>,
-    input_data: BlockMetaInfos,
+    input_metas: BlockMetaInfos,
     cur_input_index: usize,
 }
 
@@ -104,7 +104,7 @@ impl CompactSink {
             retries: 0,
             abort_operation: AbortOperation::default(),
             inputs,
-            input_data: Vec::new(),
+            input_metas: Vec::new(),
             cur_input_index: 0,
         })))
     }
@@ -176,8 +176,14 @@ impl Processor for CompactSink {
                 self.state = State::GatherSegment;
                 return Ok(Event::Sync);
             }
-            self.input_data
-                .push(cur_input.pull_data().unwrap()?.get_meta().unwrap().clone());
+
+            let input_meta = cur_input
+                .pull_data()
+                .unwrap()?
+                .get_meta()
+                .cloned()
+                .ok_or_else(|| ErrorCode::Internal("No block meta. It's a bug"))?;
+            self.input_metas.push(input_meta);
             cur_input.set_need_data();
         }
         Ok(Event::NeedData)
@@ -186,7 +192,7 @@ impl Processor for CompactSink {
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::None) {
             State::GatherSegment => {
-                let metas = std::mem::take(&mut self.input_data);
+                let metas = std::mem::take(&mut self.input_metas);
                 let mut merged_segments = std::mem::take(&mut self.merged_segments);
                 for v in metas.iter() {
                     let meta = CompactSinkMeta::from_meta(v)?;

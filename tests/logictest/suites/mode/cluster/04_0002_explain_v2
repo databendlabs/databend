@@ -22,7 +22,8 @@ Exchange
     ├── read bytes: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
-    └── push downs: [filters: [(a > 0)], limit: NONE]
+    ├── push downs: [filters: [(a > 0)], limit: NONE]
+    └── output columns: [0]
 
 statement query T
 explain select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a and t2.a > 5 and t1.a > 1);
@@ -54,7 +55,7 @@ Exchange
                 ├── read bytes: 0
                 ├── partitions total: 0
                 ├── partitions scanned: 0
-                └── push downs: [filters: [], limit: NONE]
+                └── push downs: [filters: [((a > 3) or (a > 1))], limit: NONE]
 
 statement query T
 explain select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a);

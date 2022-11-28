@@ -15,9 +15,10 @@
 use std::sync::Arc;
 
 use common_meta_api::KVApi;
-use common_meta_types::MatchSeq;
-use common_meta_types::Operation;
+use common_meta_types::KVMeta;
+use common_meta_types::SeqV;
 use common_meta_types::UpsertKVReq;
+use common_meta_types::With;
 use databend_meta::configs::Config;
 
 pub enum KvApiCommand {
@@ -34,12 +35,24 @@ impl KvApiCommand {
                 if config.key.len() != 1 {
                     return Err("The number of keys must be 1".to_string());
                 }
-                Self::Upsert(UpsertKVReq::new(
-                    config.key[0].as_str(),
-                    MatchSeq::Any,
-                    Operation::Update(config.value.clone().into_bytes()),
-                    None,
-                ))
+
+                let req = UpsertKVReq::update(config.key[0].as_str(), config.value.as_bytes());
+
+                let req = if let Some(expire_after) = config.expire_after {
+                    req.with(KVMeta {
+                        expire_at: Some(SeqV::<()>::now_ms() / 1000 + expire_after),
+                    })
+                } else {
+                    req
+                };
+
+                Self::Upsert(req)
+            }
+            "delete" => {
+                if config.key.len() != 1 {
+                    return Err("The number of keys must be 1".to_string());
+                }
+                Self::Upsert(UpsertKVReq::delete(&config.key[0]))
             }
             "get" => {
                 if config.key.len() != 1 {

@@ -23,6 +23,7 @@ use crate::plans::Aggregate;
 use crate::plans::EvalScalar;
 use crate::plans::LogicalGet;
 use crate::plans::RelOperator;
+use crate::plans::Statistics;
 use crate::MetadataRef;
 use crate::ScalarExpr;
 
@@ -96,11 +97,15 @@ impl UnusedColumnPruner {
                     push_down_predicates: p.push_down_predicates.clone(),
                     limit: p.limit,
                     order_by: p.order_by.clone(),
-                    statistics: p.statistics,
+                    statistics: Statistics {
+                        statistics: p.statistics.statistics,
+                        col_stats: p.statistics.col_stats.clone(),
+                        is_accurate: p.statistics.is_accurate,
+                    },
                     prewhere,
                 })))
             }
-            RelOperator::LogicalInnerJoin(p) => {
+            RelOperator::LogicalJoin(p) => {
                 // Include columns referenced in left conditions
                 let left = p.left_conditions.iter().fold(required.clone(), |acc, v| {
                     acc.union(&v.used_columns()).cloned().collect()
@@ -115,7 +120,7 @@ impl UnusedColumnPruner {
                 });
 
                 Ok(SExpr::create_binary(
-                    RelOperator::LogicalInnerJoin(p.clone()),
+                    RelOperator::LogicalJoin(p.clone()),
                     self.keep_required_columns(
                         expr.child(0)?,
                         left.union(&others).cloned().collect(),
@@ -222,7 +227,23 @@ impl UnusedColumnPruner {
                 self.keep_required_columns(expr.child(0)?, required)?,
             )),
 
-            RelOperator::DummyTableScan(_) | RelOperator::UnionAll(_) => Ok(expr.clone()),
+            RelOperator::UnionAll(p) => {
+                let left_used = p.pairs.iter().fold(required.clone(), |mut acc, v| {
+                    acc.insert(v.0);
+                    acc
+                });
+                let right_used = p.pairs.iter().fold(required, |mut acc, v| {
+                    acc.insert(v.1);
+                    acc
+                });
+                Ok(SExpr::create_binary(
+                    RelOperator::UnionAll(p.clone()),
+                    self.keep_required_columns(expr.child(0)?, left_used)?,
+                    self.keep_required_columns(expr.child(1)?, right_used)?,
+                ))
+            }
+
+            RelOperator::DummyTableScan(_) => Ok(expr.clone()),
 
             _ => Err(ErrorCode::Internal(
                 "Attempting to prune columns of a physical plan is not allowed",

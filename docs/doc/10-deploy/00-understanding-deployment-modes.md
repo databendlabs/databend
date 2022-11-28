@@ -7,7 +7,7 @@ description:
 
 ## Understanding Deployment Modes
 
-A Databend deployment includes two types of node, Meta and Query. The Meta node stores various types of metadata (such as database, table, cluster, and transaction) and manages user information (including authorization and authentication). The Query node takes care of queries. 
+A Databend deployment includes two types of node, Meta and Query. The Meta node stores various types of metadata (such as database, table, cluster, and transaction) and manages user information (including authorization and authentication). The Query node takes care of queries.
 
 When deploying Databend, you specify a deployment mode, standalone, or cluster. A standalone Databend allows for one Meta node and one Query node, and a Databend cluster can include multiple Meta(databend-meta) to archive high availability and Query(databend-query) nodes to enhance the computing capability.
 
@@ -52,7 +52,7 @@ The following list provides recommended hardware specifications for the server r
 This topic describes the cluster deployment architecture and environments.
 
 ### Deployment Architecture
-When you deploy Databend in cluster mode, you set up multiple Meta and Query nodes, and host each node on separate machine. 
+When you deploy Databend in cluster mode, you set up multiple Meta and Query nodes, and host each node on separate machine.
 
 :::note
 Please note that you must have a minimum of three Meta nodes in a cluster for High Availability to work.

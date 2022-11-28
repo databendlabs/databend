@@ -38,12 +38,14 @@ use crate::FileFormatOptionsExt;
 pub struct FieldDecoderXML {
     pub nested: FieldDecoderValues,
     pub common_settings: CommonSettings,
+    pub ident_case_sensitive: bool,
 }
 
 impl FieldDecoderXML {
     pub fn create(options: &FileFormatOptionsExt) -> Self {
         FieldDecoderXML {
             nested: FieldDecoderValues::create(options),
+            ident_case_sensitive: options.ident_case_sensitive,
             common_settings: CommonSettings {
                 true_bytes: TRUE_BYTES_LOWER.as_bytes().to_vec(),
                 false_bytes: FALSE_BYTES_LOWER.as_bytes().to_vec(),

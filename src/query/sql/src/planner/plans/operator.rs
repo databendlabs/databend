@@ -25,7 +25,7 @@ use super::filter::Filter;
 use super::hash_join::PhysicalHashJoin;
 use super::limit::Limit;
 use super::logical_get::LogicalGet;
-use super::logical_join::LogicalInnerJoin;
+use super::logical_join::LogicalJoin;
 use super::pattern::PatternPlan;
 use super::physical_scan::PhysicalScan;
 use super::sort::Sort;
@@ -75,7 +75,7 @@ pub trait PhysicalOperator {
 pub enum RelOp {
     // Logical operators
     LogicalGet,
-    LogicalInnerJoin,
+    LogicalJoin,
 
     // Physical operators
     PhysicalScan,
@@ -99,7 +99,7 @@ pub enum RelOp {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum RelOperator {
     LogicalGet(LogicalGet),
-    LogicalInnerJoin(LogicalInnerJoin),
+    LogicalJoin(LogicalJoin),
 
     PhysicalScan(PhysicalScan),
     PhysicalHashJoin(PhysicalHashJoin),
@@ -120,7 +120,7 @@ impl Operator for RelOperator {
     fn rel_op(&self) -> RelOp {
         match self {
             RelOperator::LogicalGet(rel_op) => rel_op.rel_op(),
-            RelOperator::LogicalInnerJoin(rel_op) => rel_op.rel_op(),
+            RelOperator::LogicalJoin(rel_op) => rel_op.rel_op(),
             RelOperator::PhysicalScan(rel_op) => rel_op.rel_op(),
             RelOperator::PhysicalHashJoin(rel_op) => rel_op.rel_op(),
             RelOperator::EvalScalar(rel_op) => rel_op.rel_op(),
@@ -138,7 +138,7 @@ impl Operator for RelOperator {
     fn is_physical(&self) -> bool {
         match self {
             RelOperator::LogicalGet(rel_op) => rel_op.is_physical(),
-            RelOperator::LogicalInnerJoin(rel_op) => rel_op.is_physical(),
+            RelOperator::LogicalJoin(rel_op) => rel_op.is_physical(),
             RelOperator::PhysicalScan(rel_op) => rel_op.is_physical(),
             RelOperator::PhysicalHashJoin(rel_op) => rel_op.is_physical(),
             RelOperator::EvalScalar(rel_op) => rel_op.is_physical(),
@@ -156,7 +156,7 @@ impl Operator for RelOperator {
     fn is_logical(&self) -> bool {
         match self {
             RelOperator::LogicalGet(rel_op) => rel_op.is_logical(),
-            RelOperator::LogicalInnerJoin(rel_op) => rel_op.is_logical(),
+            RelOperator::LogicalJoin(rel_op) => rel_op.is_logical(),
             RelOperator::PhysicalScan(rel_op) => rel_op.is_logical(),
             RelOperator::PhysicalHashJoin(rel_op) => rel_op.is_logical(),
             RelOperator::EvalScalar(rel_op) => rel_op.is_logical(),
@@ -174,7 +174,7 @@ impl Operator for RelOperator {
     fn as_logical(&self) -> Option<&dyn LogicalOperator> {
         match self {
             RelOperator::LogicalGet(rel_op) => rel_op.as_logical(),
-            RelOperator::LogicalInnerJoin(rel_op) => rel_op.as_logical(),
+            RelOperator::LogicalJoin(rel_op) => rel_op.as_logical(),
             RelOperator::PhysicalScan(rel_op) => rel_op.as_logical(),
             RelOperator::PhysicalHashJoin(rel_op) => rel_op.as_logical(),
             RelOperator::EvalScalar(rel_op) => rel_op.as_logical(),
@@ -192,7 +192,7 @@ impl Operator for RelOperator {
     fn as_physical(&self) -> Option<&dyn PhysicalOperator> {
         match self {
             RelOperator::LogicalGet(rel_op) => rel_op.as_physical(),
-            RelOperator::LogicalInnerJoin(rel_op) => rel_op.as_physical(),
+            RelOperator::LogicalJoin(rel_op) => rel_op.as_physical(),
             RelOperator::PhysicalScan(rel_op) => rel_op.as_physical(),
             RelOperator::PhysicalHashJoin(rel_op) => rel_op.as_physical(),
             RelOperator::EvalScalar(rel_op) => rel_op.as_physical(),
@@ -228,20 +228,20 @@ impl TryFrom<RelOperator> for LogicalGet {
     }
 }
 
-impl From<LogicalInnerJoin> for RelOperator {
-    fn from(v: LogicalInnerJoin) -> Self {
-        Self::LogicalInnerJoin(v)
+impl From<LogicalJoin> for RelOperator {
+    fn from(v: LogicalJoin) -> Self {
+        Self::LogicalJoin(v)
     }
 }
 
-impl TryFrom<RelOperator> for LogicalInnerJoin {
+impl TryFrom<RelOperator> for LogicalJoin {
     type Error = ErrorCode;
     fn try_from(value: RelOperator) -> Result<Self> {
-        if let RelOperator::LogicalInnerJoin(value) = value {
+        if let RelOperator::LogicalJoin(value) = value {
             Ok(value)
         } else {
             Err(ErrorCode::Internal(
-                "Cannot downcast RelOperator to LogicalInnerJoin",
+                "Cannot downcast RelOperator to LogicalJoin",
             ))
         }
     }

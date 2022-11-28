@@ -12,13 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::io::Cursor;
-
-use common_exception::ErrorCode;
 use common_exception::Result;
-use common_io::cursor_ext::*;
 use common_io::prelude::BinaryRead;
-use common_io::prelude::FormatSettings;
 use common_io::prelude::StatBuffer;
 use lexical_core::FromLexical;
 use micromarshal::Unmarshal;
@@ -37,7 +32,7 @@ where
         self.builder.memory_size()
     }
 
-    fn de_binary(&mut self, reader: &mut &[u8], _format: &FormatSettings) -> Result<()> {
+    fn de_binary(&mut self, reader: &mut &[u8]) -> Result<()> {
         let value: T = reader.read_scalar()?;
         self.builder.append_value(value);
         Ok(())
@@ -47,13 +42,7 @@ where
         self.builder.append_value(T::default());
     }
 
-    fn de_fixed_binary_batch(
-        &mut self,
-        reader: &[u8],
-        step: usize,
-        rows: usize,
-        _format: &FormatSettings,
-    ) -> Result<()> {
+    fn de_fixed_binary_batch(&mut self, reader: &[u8], step: usize, rows: usize) -> Result<()> {
         for row in 0..rows {
             let mut reader = &reader[step * row..];
             let value: T = reader.read_scalar()?;
@@ -62,29 +51,11 @@ where
         Ok(())
     }
 
-    fn de_json(&mut self, value: &serde_json::Value, _format: &FormatSettings) -> Result<()> {
-        match value {
-            serde_json::Value::Number(v) => {
-                let v = v.to_string();
-                let mut reader = Cursor::new(v.as_bytes());
-                let v: T = if !T::FLOATING {
-                    reader.read_int_text()
-                } else {
-                    reader.read_float_text()
-                }?;
-
-                self.builder.append_value(v);
-                Ok(())
-            }
-            _ => Err(ErrorCode::BadBytes("Incorrect json value, must be number")),
-        }
-    }
-
-    fn de_null(&mut self, _format: &FormatSettings) -> bool {
+    fn de_null(&mut self) -> bool {
         false
     }
 
-    fn append_data_value(&mut self, value: DataValue, _format: &FormatSettings) -> Result<()> {
+    fn append_data_value(&mut self, value: DataValue) -> Result<()> {
         self.builder.append_data_value(value)
     }
 

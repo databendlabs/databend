@@ -48,7 +48,7 @@ curl  -H "stage_name:my_internal_stage" -F "upload=@books.parquet" -XPUT "http:/
 ```
 
 Then check the stage files with:
-```sql 
+```sql
 LIST @my_internal_stage;
 +---------------+
 | file_name     |
@@ -95,4 +95,3 @@ The file `books.parquet` has PUT to your named external stage.
 </TabItem>
 
 </Tabs>
-

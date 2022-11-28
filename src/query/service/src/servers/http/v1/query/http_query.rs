@@ -46,6 +46,10 @@ use crate::sessions::QueryAffect;
 use crate::sessions::SessionType;
 use crate::sessions::TableContext;
 
+fn default_as_true() -> bool {
+    true
+}
+
 #[derive(Deserialize, Debug)]
 pub struct HttpQueryRequest {
     pub session_id: Option<String>,
@@ -53,7 +57,7 @@ pub struct HttpQueryRequest {
     pub sql: String,
     #[serde(default)]
     pub pagination: PaginationConf,
-    #[serde(default)]
+    #[serde(default = "default_as_true")]
     pub string_fields: bool,
 }
 
@@ -121,13 +125,15 @@ impl HttpSessionConf {
             QueryAffect::UseDB { name } => {
                 ret.database = Some(name.to_string());
             }
-            QueryAffect::ChangeSetting {
-                key,
-                value,
-                is_global: _,
+            QueryAffect::ChangeSettings {
+                keys,
+                values,
+                is_globals: _,
             } => {
                 let settings = ret.settings.get_or_insert_default();
-                settings.insert(key.to_string(), value.to_string());
+                for (key, value) in keys.iter().zip(values) {
+                    settings.insert(key.to_string(), value.to_string());
+                }
             }
             _ => {}
         }
@@ -235,6 +241,7 @@ impl HttpQuery {
         let ctx_clone = ctx.clone();
         let sql = request.sql.clone();
         let query_id = id.clone();
+        let query_id_clone = id.clone();
         ctx.try_spawn(async move {
             let state = state_clone.clone();
             let running_state = ExecuteState::try_start_query(
@@ -253,6 +260,7 @@ impl HttpQuery {
                 Err(e) => {
                     InterpreterQueryLog::fail_to_start(ctx_clone.clone(), e.clone());
                     let state = ExecuteStopped {
+                        ctx: ctx_clone.clone(),
                         stats: Progresses::default(),
                         reason: Err(e.clone()),
                         stop_time: Instant::now(),
@@ -263,7 +271,8 @@ impl HttpQuery {
                         &query_id,
                         e
                     );
-                    Executor::start_to_stop(&state_clone, ExecuteState::Stopped(state)).await;
+                    Executor::start_to_stop(&state_clone, ExecuteState::Stopped(Box::new(state)))
+                        .await;
                     block_sender_closer.close();
                 }
             }
@@ -271,9 +280,9 @@ impl HttpQuery {
 
         let format_settings = ctx.get_format_settings()?;
         let data = Arc::new(TokioMutex::new(PageManager::new(
+            query_id_clone,
             request.pagination.max_rows_per_page,
             block_receiver,
-            request.string_fields,
             format_settings,
         )));
         let query = HttpQuery {

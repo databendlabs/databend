@@ -1,7 +1,5 @@
 import environs
 import os
-from clickhouse_sqlalchemy import make_session
-from sqlalchemy import create_engine
 
 from log import log
 
@@ -9,13 +7,7 @@ default_database = "default"
 
 
 class ClickhouseConnector(object):
-
-    def connect(self,
-                host,
-                port,
-                user="root",
-                password="",
-                database=default_database):
+    def connect(self, host, port, user="root", password="", database=default_database):
 
         protocol = os.getenv("QUERY_CLICKHOUSE_HANDLER_PROTOCAL")
         if protocol is None:
@@ -35,9 +27,11 @@ class ClickhouseConnector(object):
         self._session = None
 
     def query_with_session(self, statement):
+        from clickhouse_sqlalchemy import make_session  # type: ignore
+        from sqlalchemy import create_engine  # type: ignore
+
         if self._session is None:
-            engine = create_engine(self._uri,
-                                   connect_args=self._additonal_headers)
+            engine = create_engine(self._uri, connect_args=self._additonal_headers)
             self._session = make_session(engine)
         log.debug(statement)
         return self._session.execute(statement)

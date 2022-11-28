@@ -23,6 +23,7 @@ use super::PhysicalOperator;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::PhysicalProperty;
 use crate::optimizer::RelationalProperty;
+use crate::optimizer::Statistics;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct DummyTableScan;
@@ -59,9 +60,11 @@ impl LogicalOperator for DummyTableScan {
             outer_columns: ColumnSet::new(),
             used_columns: ColumnSet::new(),
             cardinality: 1.0,
-            precise_cardinality: Some(1),
-
-            column_stats: Default::default(),
+            statistics: Statistics {
+                precise_cardinality: Some(1),
+                column_stats: Default::default(),
+                is_accurate: false,
+            },
         })
     }
 

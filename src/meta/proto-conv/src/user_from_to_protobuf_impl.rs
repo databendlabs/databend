@@ -19,8 +19,8 @@ use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::convert::TryFrom;
 
-use common_datavalues::chrono::DateTime;
-use common_datavalues::chrono::Utc;
+use chrono::DateTime;
+use chrono::Utc;
 use common_meta_types as mt;
 use common_protos::pb;
 use common_storage::StorageFsConfig;
@@ -494,11 +494,18 @@ impl FromToProto for mt::FileFormatOptions {
             })?,
         )?;
 
+        let nan_display = if p.nan_display.is_empty() {
+            "".to_string()
+        } else {
+            p.nan_display
+        };
+
         Ok(mt::FileFormatOptions {
             format,
             skip_header: p.skip_header,
             field_delimiter: p.field_delimiter.clone(),
             record_delimiter: p.record_delimiter,
+            nan_display,
             escape: p.escape,
             compression,
             row_tag: p.row_tag,
@@ -515,6 +522,7 @@ impl FromToProto for mt::FileFormatOptions {
             skip_header: self.skip_header,
             field_delimiter: self.field_delimiter.clone(),
             record_delimiter: self.record_delimiter.clone(),
+            nan_display: self.nan_display.clone(),
             compression,
             row_tag: self.row_tag.clone(),
             escape: self.escape.clone(),

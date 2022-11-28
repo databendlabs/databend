@@ -205,10 +205,10 @@ impl SnapshotsIO {
         let mut file_list = vec![];
         let mut ds = data_accessor.object(prefix).list().await?;
         while let Some(de) = ds.try_next().await? {
-            match de.mode() {
+            match de.mode().await? {
                 ObjectMode::FILE => {
                     let location = de.path().to_string();
-                    let modified = de.last_modified().await;
+                    let modified = de.last_modified().await?;
                     file_list.push((location, modified));
                 }
                 _ => {

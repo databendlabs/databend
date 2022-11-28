@@ -68,29 +68,11 @@ fn test_data_block(is_nullable: bool) -> Result<()> {
     let block = DataBlock::create(schema, columns);
 
     let format = FormatSettings::default();
-    let json_block = JsonBlock::new(&block, &format, false)?;
+    let json_block = JsonBlock::new(&block, &format)?;
     let expect = vec![
-        vec![
-            val(1_i32),
-            val("a"),
-            val(true),
-            val(1.1_f64),
-            val("1970-01-02"),
-        ],
-        vec![
-            val(2_i32),
-            val("b"),
-            val(true),
-            val(2.2_f64),
-            val("1970-01-03"),
-        ],
-        vec![
-            val(3_i32),
-            val("c"),
-            val(false),
-            val(3.3_f64),
-            val("1970-01-04"),
-        ],
+        vec![val("1"), val("a"), val("1"), val("1.1"), val("1970-01-02")],
+        vec![val("2"), val("b"), val("1"), val("2.2"), val("1970-01-03")],
+        vec![val("3"), val("c"), val("0"), val("3.3"), val("1970-01-04")],
     ];
 
     assert_eq!(json_block.data().clone(), expect);
@@ -111,7 +93,7 @@ fn test_data_block_not_nullable() -> Result<()> {
 fn test_empty_block() -> Result<()> {
     let block = DataBlock::empty();
     let format = FormatSettings::default();
-    let json_block = JsonBlock::new(&block, &format, false)?;
+    let json_block = JsonBlock::new(&block, &format)?;
     assert!(json_block.is_empty());
     Ok(())
 }

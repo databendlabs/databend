@@ -31,7 +31,6 @@ common-base = { path = "../common/base" }
 common-config = { path = "../query/config" }
 common-exception = { path = "../common/exception" }
 common-grpc = { path = "../common/grpc" }
-common-macros = { path = "../common/macros" }
 common-meta-api = { path = "../meta/api" }
 common-meta-app = { path = "../meta/app" }
 common-meta-client = { path = "../meta/client" }

@@ -12,9 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::ErrorCode;
 use common_exception::Result;
-use common_io::prelude::FormatSettings;
 
 use crate::prelude::*;
 
@@ -29,10 +27,10 @@ impl TypeDeserializer for StructDeserializer {
     }
 
     #[allow(clippy::uninit_vec)]
-    fn de_binary(&mut self, reader: &mut &[u8], format: &FormatSettings) -> Result<()> {
+    fn de_binary(&mut self, reader: &mut &[u8]) -> Result<()> {
         let mut values = Vec::with_capacity(self.inners.len());
         for inner in self.inners.iter_mut() {
-            inner.de_binary(reader, format)?;
+            inner.de_binary(reader)?;
             values.push(inner.pop_data_value().unwrap());
         }
         self.builder.append_data_value(DataValue::Struct(values))
@@ -42,19 +40,13 @@ impl TypeDeserializer for StructDeserializer {
         self.builder.append_default();
     }
 
-    fn de_fixed_binary_batch(
-        &mut self,
-        reader: &[u8],
-        step: usize,
-        rows: usize,
-        format: &FormatSettings,
-    ) -> Result<()> {
+    fn de_fixed_binary_batch(&mut self, reader: &[u8], step: usize, rows: usize) -> Result<()> {
         for row in 0..rows {
             let mut reader = &reader[step * row..];
             let mut values = Vec::with_capacity(self.inners.len());
 
             for inner in self.inners.iter_mut() {
-                inner.de_binary(&mut reader, format)?;
+                inner.de_binary(&mut reader)?;
                 values.push(inner.pop_data_value().unwrap());
             }
             self.builder.append_data_value(DataValue::Struct(values))?;
@@ -62,30 +54,7 @@ impl TypeDeserializer for StructDeserializer {
         Ok(())
     }
 
-    fn de_json(&mut self, value: &serde_json::Value, format: &FormatSettings) -> Result<()> {
-        match value {
-            serde_json::Value::Object(obj) => {
-                if self.inners.len() != obj.len() {
-                    return Err(ErrorCode::BadBytes(format!(
-                        "Incorrect json value, expect {} values, but get {} values",
-                        self.inners.len(),
-                        obj.len()
-                    )));
-                }
-                let mut values = Vec::with_capacity(self.inners.len());
-                for (inner, item) in self.inners.iter_mut().zip(obj.iter()) {
-                    let (_, val) = item;
-                    inner.de_json(val, format)?;
-                    values.push(inner.pop_data_value()?);
-                }
-                self.builder.append_value(StructValue::new(values));
-                Ok(())
-            }
-            _ => Err(ErrorCode::BadBytes("Incorrect json value, must be object")),
-        }
-    }
-
-    fn append_data_value(&mut self, value: DataValue, _format: &FormatSettings) -> Result<()> {
+    fn append_data_value(&mut self, value: DataValue) -> Result<()> {
         self.builder.append_data_value(value)
     }
 

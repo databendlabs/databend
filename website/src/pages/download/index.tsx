@@ -4,7 +4,7 @@ import Table from 'rc-table';
 import styles from './styles.module.scss';
 import Layout from '@theme/Layout';
 import clsx from 'clsx';
-import { useLocalStorageState, useMount } from 'ahooks';
+import { useMount } from 'ahooks';
 import bytes from 'bytes';
 import axios from 'axios';
 
@@ -20,34 +20,32 @@ const LINUX_GENERIC_ARM = 'Linux Generic(ARM, 64-bit)';
 const MAC_X86 = 'macOS (x86, 64-bit)';
 const MAC_ARM = 'macOS (ARM, 64-bit)';
 const Releases: FC = (): ReactElement=> {
-  const [cacheTagName, setCacheTagName] = useLocalStorageState<string>('global-cache-tag-name');
-  const tagName = cacheTagName as string || 'v0.8.101-nightly';
   const DOWNLOAD_LINK = 'https://repo.databend.rs/databend/';
   useMount(()=> {
     getRelease();
   });
   const [releaseData, setReleaseData] = useState<IRow[]>([
     { 
-      name: `databend-${tagName}-aarch64-unknown-linux-musl.tar.gz`, 
-      tagName, 
+      name: `databend-aarch64-unknown-linux-musl.tar.gz`, 
+      tagName: '', 
       osType: LINUX_GENERIC_ARM, 
       size: 0
     },
     { 
-      name: `databend-${tagName}-x86_64-unknown-linux-musl.tar.gz`, 
-      tagName, 
+      name: `databend-x86_64-unknown-linux-musl.tar.gz`, 
+      tagName: '', 
       osType: LINUX_GENERIC_X86, 
       size: 0
     },
     { 
-      name: `databend-${tagName}-aarch64-apple-darwin.tar.gz`,
-      tagName,
+      name: `databend-aarch64-apple-darwin.tar.gz`,
+      tagName: '', 
       osType: MAC_ARM, 
       size: 0
     },
     { 
-      name: `databend-${tagName}-x86_64-apple-darwin.tar.gz`, 
-      tagName, 
+      name: `databend-x86_64-apple-darwin.tar.gz`, 
+      tagName: '', 
       osType: MAC_X86, 
       size: 0
     }
@@ -97,7 +95,6 @@ const Releases: FC = (): ReactElement=> {
     if(data && data?.length > 0){
       const releaseData = data[0];
       const { assets, tag_name } = releaseData || {};
-      setCacheTagName(tag_name);
       const reslut = assets
       ?.filter((item)=> {
         item.tagName = tag_name;

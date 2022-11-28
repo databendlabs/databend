@@ -49,12 +49,12 @@ use crate::api::FragmentPayload;
 use crate::api::FragmentPlanPacket;
 use crate::api::InitNodesChannelPacket;
 use crate::api::QueryFragmentsPlanPacket;
-use crate::interpreters::QueryFragmentActions;
-use crate::interpreters::QueryFragmentsActions;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::PipelineBuilder;
+use crate::schedulers::QueryFragmentActions;
+use crate::schedulers::QueryFragmentsActions;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 

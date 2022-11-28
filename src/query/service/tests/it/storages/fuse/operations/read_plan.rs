@@ -44,6 +44,7 @@ fn test_to_partitions() -> Result<()> {
         max: DataValue::Int64(2),
         null_count: 0,
         in_memory_size: col_size as u64,
+        distinct_of_values: None,
     };
 
     let col_metas_gen = |col_size| ColumnMeta {

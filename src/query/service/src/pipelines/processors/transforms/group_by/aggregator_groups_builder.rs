@@ -24,7 +24,6 @@ use common_datavalues::StringColumn;
 use common_datavalues::TypeDeserializer;
 use common_datavalues::TypeID;
 use common_exception::Result;
-use common_io::prelude::FormatSettings;
 
 use crate::pipelines::processors::AggregatorParams;
 
@@ -110,12 +109,11 @@ impl<'a> GroupColumnsBuilder for SerializedKeysGroupColumnsBuilder<'a> {
         }
 
         let mut res = Vec::with_capacity(self.group_data_types.len());
-        let format = FormatSettings::default();
         for data_type in self.group_data_types.iter() {
             let mut deserializer = data_type.create_deserializer(rows);
 
             for (_, key) in keys.iter_mut().enumerate() {
-                deserializer.de_binary(key, &format)?;
+                deserializer.de_binary(key)?;
             }
             res.push(deserializer.finish_to_column());
         }

@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use chrono::Datelike;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::temporal_conversions::EPOCH_DAYS_FROM_CE;
-use common_datavalues::chrono::Datelike;
 use common_datavalues::prelude::*;
 use common_datavalues::with_match_primitive_type_id;
 use common_exception::ErrorCode;

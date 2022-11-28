@@ -1225,8 +1225,8 @@ name = "common-auth"
 version = "0.1.0"
 dependencies = [
  "base64",
+ "chrono",
  "common-base",
- "common-datavalues",
  "http",
  "tempfile",
 ]
@@ -1281,6 +1281,7 @@ name = "common-catalog"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "chrono",
  "common-base",
  "common-config",
  "common-datablocks",
@@ -1324,7 +1325,6 @@ dependencies = [
  "serde",
  "serfig",
  "strum",
- "strum_macros",
  "tracing",
 ]
 
@@ -1383,6 +1383,7 @@ dependencies = [
  "anyhow",
  "bincode 2.0.0-rc.2",
  "common-arrow",
+ "opendal",
  "paste",
  "prost",
  "serde",
@@ -1451,6 +1452,7 @@ dependencies = [
  "bstr 1.0.1",
  "bumpalo",
  "bytes",
+ "chrono",
  "chrono-tz",
  "common-arrow",
  "common-datablocks",
@@ -1485,6 +1487,7 @@ dependencies = [
  "sha2",
  "simdutf8",
  "siphasher",
+ "streaming_algorithms",
  "strength_reduce",
  "twox-hash",
  "uuid 1.2.1",
@@ -1510,6 +1513,7 @@ dependencies = [
  "common-jsonb",
  "crc32fast",
  "criterion",
+ "ctor",
  "goldenfile",
  "hex",
  "itertools",
@@ -1523,6 +1527,7 @@ dependencies = [
  "serde",
  "simdutf8",
  "siphasher",
+ "streaming_algorithms",
  "strength_reduce",
 ]
 
@@ -1607,15 +1612,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "common-macros"
-version = "0.1.0"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
 name = "common-management"
 version = "0.1.0"
 dependencies = [
@@ -1640,6 +1636,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "chrono",
  "common-base",
  "common-datavalues",
  "common-exception",
@@ -1802,6 +1799,7 @@ dependencies = [
  "chrono",
  "common-building",
  "common-exception",
+ "common-io",
  "common-meta-stoerr",
  "common-storage",
  "derive_more",
@@ -1818,7 +1816,6 @@ dependencies = [
  "serde_json",
  "sha1",
  "sha2",
- "sled",
  "thiserror",
  "tonic",
  "tonic-build",
@@ -1914,6 +1911,7 @@ name = "common-proto-conv"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "chrono",
  "common-datavalues",
  "common-meta-app",
  "common-meta-types",
@@ -2041,6 +2039,7 @@ dependencies = [
  "semver 1.0.14",
  "serde",
  "serde_json",
+ "snailquote",
  "tempfile",
  "time 0.3.15",
  "tokio-stream",
@@ -2183,6 +2182,7 @@ version = "0.1.0"
 dependencies = [
  "async-recursion",
  "async-trait",
+ "chrono",
  "common-arrow",
  "common-base",
  "common-catalog",
@@ -2506,6 +2506,7 @@ dependencies = [
  "serde_json",
  "serde_repr",
  "snailquote",
+ "tikv-jemalloc-ctl",
  "tracing",
  "typetag",
  "uuid 1.2.1",
@@ -2516,6 +2517,7 @@ dependencies = [
 name = "common-storages-table-meta"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "common-arrow",
  "common-base",
  "common-cache",
@@ -3015,7 +3017,6 @@ dependencies = [
  "common-config",
  "common-exception",
  "common-grpc",
- "common-macros",
  "common-meta-api",
  "common-meta-app",
  "common-meta-client",
@@ -5703,9 +5704,9 @@ checksum = "0ab1bc2a289d34bd04a330323ac98a1b4bc82c9d9fcb1e66b63caa84da26b575"
 
 [[package]]
 name = "opendal"
-version = "0.19.8"
+version = "0.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8759e3041052861fec2980cf07dcd0e6d612346003680119494badd8aba884b0"
+checksum = "e093402bdf1033677db972e0f5ac349e3ec251fe99b5db91b1472180c1f48254"
 dependencies = [
  "anyhow",
  "async-compat",
@@ -6728,6 +6729,7 @@ dependencies = [
  "rand_chacha 0.2.2",
  "rand_core 0.5.1",
  "rand_hc",
+ "rand_pcg",
 ]
 
 [[package]]
@@ -6784,6 +6786,15 @@ name = "rand_hc"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ca3129af7b92a17112d59ad498c6f81eaf463253766b90396d39ea7a39d6613c"
+dependencies = [
+ "rand_core 0.5.1",
+]
+
+[[package]]
+name = "rand_pcg"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "16abd0c1b639e9eb4d7c50c0b8100b0d0f849be2349829c740fe8e6eb4816429"
 dependencies = [
  "rand_core 0.5.1",
 ]
@@ -6909,9 +6920,9 @@ dependencies = [
 
 [[package]]
 name = "reqsign"
-version = "0.6.3"
+version = "0.6.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "66d2652b3541e4286c00ef536de54feda4c129af5b4d9ae05ece70ce61b0cade"
+checksum = "d34ea360414ee77ddab3a8360a0c241fc77ab5e27892dcde1d2cfcc29d4e0f55"
 dependencies = [
  "anyhow",
  "backon",
@@ -7865,6 +7876,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d55dd09aaa2f85ef8767cc9177294d63c30d62c8533329e75aa51d8b94976e22"
 
 [[package]]
+name = "streaming_algorithms"
+version = "0.3.0"
+source = "git+https://github.com/datafuse-extras/streaming_algorithms?tag=hyperloglog_del_op_fix_overflow_bug#e07d26324e3d5f42bd233231e80522b2659fce5e"
+dependencies = [
+ "rand 0.7.3",
+ "serde",
+ "twox-hash",
+]
+
+[[package]]
 name = "strength_reduce"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8771,7 +8792,6 @@ checksum = "b97acb4c28a254fd7a4aeec976c46a7fa404eac4d7c134b30c75144846d7cb8f"
 dependencies = [
  "base64",
  "chunked_transfer",
- "flate2",
  "log",
  "once_cell",
  "rustls",

@@ -116,18 +116,18 @@ impl<'a> Binder {
                 self.bind_rewrite_to_query(
                     bind_context,
                     "SELECT metric, kind, labels, value FROM system.metrics",
-                    RewriteKind::ShowMetrics
+                    RewriteKind::ShowMetrics,
                 )
-                .await?
+                    .await?
             }
             Statement::ShowProcessList => {
                 self.bind_rewrite_to_query(bind_context, "SELECT * FROM system.processes", RewriteKind::ShowProcessList)
                     .await?
             }
             Statement::ShowEngines => {
-                 self.bind_rewrite_to_query(bind_context, "SELECT \"Engine\", \"Comment\" FROM system.engines ORDER BY \"Engine\" ASC", RewriteKind::ShowEngines)
+                self.bind_rewrite_to_query(bind_context, "SELECT \"Engine\", \"Comment\" FROM system.engines ORDER BY \"Engine\" ASC", RewriteKind::ShowEngines)
                     .await?
-            },
+            }
             Statement::ShowSettings { like } => self.bind_show_settings(bind_context, like).await?,
             // Catalogs
             Statement::ShowCatalogs(stmt) => self.bind_show_catalogs(bind_context, stmt).await?,
@@ -142,7 +142,7 @@ impl<'a> Binder {
             Statement::DropDatabase(stmt) => self.bind_drop_database(stmt).await?,
             Statement::UndropDatabase(stmt) => self.bind_undrop_database(stmt).await?,
             Statement::AlterDatabase(stmt) => self.bind_alter_database(stmt).await?,
-            Statement::UseDatabase { database } =>  {
+            Statement::UseDatabase { database } => {
                 Plan::UseDatabase(Box::new(UseDatabasePlan {
                     database: database.name.clone(),
                 }))
@@ -174,7 +174,7 @@ impl<'a> Binder {
                 if_exists: *if_exists,
                 user: user.clone(),
             })),
-            Statement::ShowUsers => self.bind_rewrite_to_query(bind_context, "SELECT name, hostname, auth_type, auth_string FROM system.users ORDER BY name",  RewriteKind::ShowUsers).await?,
+            Statement::ShowUsers => self.bind_rewrite_to_query(bind_context, "SELECT name, hostname, auth_type, auth_string FROM system.users ORDER BY name", RewriteKind::ShowUsers).await?,
             Statement::AlterUser(stmt) => self.bind_alter_user(stmt).await?,
 
             // Roles
@@ -237,12 +237,12 @@ impl<'a> Binder {
                 description,
             } => {
                 let mut validator = UDFValidator {
-                    name : udf_name.to_string(),
+                    name: udf_name.to_string(),
                     parameters: parameters.iter().map(|v| v.to_string()).collect(),
                     ..Default::default()
                 };
                 validator.verify_definition_expr(definition)?;
-                let udf =  UserDefinedFunction {
+                let udf = UserDefinedFunction {
                     name: validator.name,
                     parameters: validator.parameters,
                     definition: definition.to_string(),
@@ -251,9 +251,9 @@ impl<'a> Binder {
 
                 Plan::CreateUDF(Box::new(CreateUDFPlan {
                     if_not_exists: *if_not_exists,
-                    udf
+                    udf,
                 }))
-            },
+            }
             Statement::AlterUDF {
                 udf_name,
                 parameters,
@@ -261,12 +261,12 @@ impl<'a> Binder {
                 description,
             } => {
                 let mut validator = UDFValidator {
-                    name : udf_name.to_string(),
+                    name: udf_name.to_string(),
                     parameters: parameters.iter().map(|v| v.to_string()).collect(),
                     ..Default::default()
                 };
                 validator.verify_definition_expr(definition)?;
-                let udf =  UserDefinedFunction {
+                let udf = UserDefinedFunction {
                     name: validator.name,
                     parameters: validator.parameters,
                     definition: definition.to_string(),
@@ -297,6 +297,11 @@ impl<'a> Binder {
                 value,
             } => {
                 self.bind_set_variable(bind_context, *is_global, variable, value)
+                    .await?
+            }
+
+            Statement::UnSetVariable(stmt) => {
+                self.bind_unset_variable(bind_context, stmt)
                     .await?
             }
 
@@ -369,13 +374,10 @@ impl<'a> Binder {
         column_name: String,
         data_type: DataTypeImpl,
     ) -> ColumnBinding {
-        let index = self.metadata.write().add_column(
-            column_name.clone(),
-            data_type.clone(),
-            None,
-            None,
-            None,
-        );
+        let index = self
+            .metadata
+            .write()
+            .add_derived_column(column_name.clone(), data_type.clone());
         ColumnBinding {
             database_name,
             table_name,

@@ -30,7 +30,7 @@ Showing top 10 nodes out of 204
 
 Or
 ```shell
-go tool pprof -http=0.0.0.0:8081 $HOME/pprof/pprof.cpu.007.pb.gz
+go tool pprof -http=0.0.0.0:8080 $HOME/pprof/pprof.cpu.007.pb.gz
 ```
 
 ## Memory profiling

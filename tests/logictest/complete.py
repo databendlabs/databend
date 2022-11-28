@@ -24,7 +24,7 @@ def get_error_code(msg):
 
 def parse_sql_file(source_file):
     sqls = list()
-    f = open(source_file, encoding='UTF-8')
+    f = open(source_file, encoding="UTF-8")
     sql_content = ""
     skipped_query = False
     for line in f.readlines():
@@ -36,7 +36,7 @@ def parse_sql_file(source_file):
 
         # multi line sql
         sql_content = sql_content + "\n" + line.rstrip()
-        if ';' not in line:
+        if ";" not in line:
             continue
 
         statement = sql_content.strip()
@@ -51,7 +51,7 @@ def parse_logictest_file(source_file):
     parsing_statement = False
     skipped_query = False
     sqls = list()
-    f = open(source_file, encoding='UTF-8')
+    f = open(source_file, encoding="UTF-8")
     sql_content = ""
 
     for line in f.readlines():
@@ -88,7 +88,7 @@ def parse_logictest_file(source_file):
 
         if parsing_statement:
             sql_content = sql_content + "\n" + line.rstrip()
-            if ';' not in line:
+            if ";" not in line:
                 continue
 
             parsing_statement = False
@@ -109,7 +109,7 @@ def get_sql_from_file(source_file):
 
 
 def gen_suite_from_sql(sql_and_skips, dest_file):
-    out = open(f"{dest_file}", mode="w+", encoding='UTF-8')
+    out = open(f"{dest_file}", mode="w+", encoding="UTF-8")
     statements = list()
     connection = mysql.connector.connect(**mysql_config)
     cursor = connection.cursor(buffered=True)
@@ -123,8 +123,7 @@ def gen_suite_from_sql(sql_and_skips, dest_file):
             cursor.execute(sql)
             pick_create_statement(sql)
         except mysql.connector.Error as err:
-            statements.append(
-                f"statement error {get_error_code(err.msg)}\n{sql}\n\n")
+            statements.append(f"statement error {get_error_code(err.msg)}\n{sql}\n\n")
             continue
 
         try:
@@ -153,7 +152,7 @@ def gen_suite_from_sql(sql_and_skips, dest_file):
                 )
             else:
                 statements.append(f"statement ok\n{sql}\n\n")
-        except mysql.connector.Error as err:
+        except mysql.connector.Error:
             statements.append(f"statement ok\n{sql}\n\n")
 
     # cleanup database, table
@@ -179,11 +178,11 @@ def run(args):
     print(f"Source file: {args.source_file}")
     print(f"Dest file: {args.dest_file}")
 
-    mysql_config['user'] = args.mysql_user
-    mysql_config['host'] = args.mysql_host
-    mysql_config['port'] = args.mysql_port
-    mysql_config['passwd'] = args.mysql_passwd
-    mysql_config['database'] = args.mysql_database
+    mysql_config["user"] = args.mysql_user
+    mysql_config["host"] = args.mysql_host
+    mysql_config["port"] = args.mysql_port
+    mysql_config["passwd"] = args.mysql_passwd
+    mysql_config["database"] = args.mysql_database
 
     print(f"Mysql config: {mysql_config}")
     set_auto_cleanup(args.enable_auto_cleanup)
@@ -195,38 +194,41 @@ def run(args):
     gen_suite_from_sql(sql_and_skips, args.dest_file)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     parser = ArgumentParser(
-        description=
-        'databend sqllogictest auto-complete tools(from *.sql files or logictest files)'
+        description="databend sqllogictest auto-complete tools(from *.sql files or logictest files)"
     )
-    parser.add_argument('--source-file', help='Path to suites source file')
+    parser.add_argument("--source-file", help="Path to suites source file")
 
-    parser.add_argument('--dest-file',
-                        default="./auto",
-                        help='Path to logictest auto-complete file')
+    parser.add_argument(
+        "--dest-file", default="./auto", help="Path to logictest auto-complete file"
+    )
 
-    parser.add_argument('--show-sql',
-                        action='store_true',
-                        default=False,
-                        help='Show sql from source file')
+    parser.add_argument(
+        "--show-sql",
+        action="store_true",
+        default=False,
+        help="Show sql from source file",
+    )
 
-    parser.add_argument('--enable-auto-cleanup',
-                        action='store_true',
-                        default=False,
-                        help="Enable auto cleanup after test per session")
+    parser.add_argument(
+        "--enable-auto-cleanup",
+        action="store_true",
+        default=False,
+        help="Enable auto cleanup after test per session",
+    )
 
-    parser.add_argument('--mysql-user', default="root", help='Mysql user')
+    parser.add_argument("--mysql-user", default="root", help="Mysql user")
 
-    parser.add_argument('--mysql-host', default="127.0.0.1", help='Mysql host')
+    parser.add_argument("--mysql-host", default="127.0.0.1", help="Mysql host")
 
-    parser.add_argument('--mysql-port', default="3307", help='Mysql port')
+    parser.add_argument("--mysql-port", default="3307", help="Mysql port")
 
-    parser.add_argument('--mysql-passwd', default="root", help='Mysql password')
+    parser.add_argument("--mysql-passwd", default="root", help="Mysql password")
 
-    parser.add_argument('--mysql-database',
-                        default="default",
-                        help='Mysql default database')
+    parser.add_argument(
+        "--mysql-database", default="default", help="Mysql default database"
+    )
 
     args = parser.parse_args()
     run(args)

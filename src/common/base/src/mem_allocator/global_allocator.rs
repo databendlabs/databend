@@ -37,13 +37,13 @@ unsafe impl Allocator for GlobalAllocator {
     }
 
     #[inline(always)]
-    unsafe fn deallocate(&self, ptr: NonNull<u8>, layout: Layout) {
-        Fallback::new(Default::default()).deallocate(ptr, layout)
+    fn allocate_zeroed(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
+        Fallback::new(Default::default()).allocate_zeroed(layout)
     }
 
     #[inline(always)]
-    fn allocate_zeroed(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
-        Fallback::new(Default::default()).allocate_zeroed(layout)
+    unsafe fn deallocate(&self, ptr: NonNull<u8>, layout: Layout) {
+        Fallback::new(Default::default()).deallocate(ptr, layout)
     }
 
     #[inline(always)]

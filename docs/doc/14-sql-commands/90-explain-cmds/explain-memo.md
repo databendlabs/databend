@@ -28,8 +28,8 @@ EXPLAIN MEMO SELECT * FROM numbers(10) t, numbers(100) t1;
                                      
  Group #2                            
  ├── best cost: [#3] 310             
- ├── LogicalInnerJoin [#0, #1]       
- ├── LogicalInnerJoin [#1, #0]       
+ ├── LogicalJoin [#0, #1]       
+ ├── LogicalJoin [#1, #0]       
  ├── PhysicalHashJoin [#0, #1]       
  └── PhysicalHashJoin [#1, #0]
 ```

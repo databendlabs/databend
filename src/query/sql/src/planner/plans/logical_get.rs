@@ -12,13 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+
+use common_catalog::table::ColumnStatistics;
 use common_catalog::table::TableStatistics;
 use common_exception::Result;
 use itertools::Itertools;
 
 use crate::optimizer::ColumnSet;
+use crate::optimizer::ColumnStat;
+use crate::optimizer::ColumnStatSet;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
+use crate::optimizer::Statistics as OpStatistics;
 use crate::plans::LogicalOperator;
 use crate::plans::Operator;
 use crate::plans::PhysicalOperator;
@@ -39,6 +45,15 @@ pub struct Prewhere {
 }
 
 #[derive(Clone, Debug)]
+pub struct Statistics {
+    // statistics will be ignored in comparison and hashing
+    pub statistics: Option<TableStatistics>,
+    // statistics will be ignored in comparison and hashing
+    pub col_stats: HashMap<IndexType, Option<ColumnStatistics>>,
+    pub is_accurate: bool,
+}
+
+#[derive(Clone, Debug)]
 pub struct LogicalGet {
     pub table_index: IndexType,
     pub columns: ColumnSet,
@@ -47,8 +62,7 @@ pub struct LogicalGet {
     pub order_by: Option<Vec<SortItem>>,
     pub prewhere: Option<Prewhere>,
 
-    // statistics will be ignored in comparison and hashing
-    pub statistics: Option<TableStatistics>,
+    pub statistics: Statistics,
 }
 
 impl PartialEq for LogicalGet {
@@ -105,17 +119,36 @@ impl LogicalOperator for LogicalGet {
             used_columns.extend(prewhere.prewhere_columns.iter());
         }
 
+        used_columns.extend(self.columns.iter());
+
+        let mut column_stats: ColumnStatSet = Default::default();
+        for (k, v) in &self.statistics.col_stats {
+            if let Some(col_stat) = v {
+                let column_stat = ColumnStat {
+                    distinct_count: col_stat.number_of_distinct_values,
+                    null_count: col_stat.null_count,
+                };
+                column_stats.insert(*k as IndexType, column_stat);
+            }
+        }
         Ok(RelationalProperty {
             output_columns: self.columns.clone(),
             outer_columns: Default::default(),
             used_columns,
             cardinality: self
                 .statistics
+                .statistics
                 .as_ref()
                 .map_or(0.0, |stat| stat.num_rows.map_or(0.0, |num| num as f64)),
-            precise_cardinality: self.statistics.as_ref().and_then(|stat| stat.num_rows),
-
-            column_stats: Default::default(),
+            statistics: OpStatistics {
+                precise_cardinality: self
+                    .statistics
+                    .statistics
+                    .as_ref()
+                    .and_then(|stat| stat.num_rows),
+                column_stats,
+                is_accurate: self.statistics.is_accurate,
+            },
         })
     }
 

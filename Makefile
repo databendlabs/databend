@@ -25,7 +25,7 @@ lint:
 	# Cargo.toml file formatter(make setup to install)
 	taplo fmt
 	# Python file formatter(make setup to install)
-	yapf -ri tests/
+	black tests/
 	# Bash file formatter(make setup to install)
 	shfmt -l -w scripts/*
 
@@ -95,23 +95,11 @@ meta-bench: build-release
 
 test: unit-test stateless-test sqllogic-test metactl-test
 
-docker:
-	docker build --network host -f docker/Dockerfile -t ${HUB}/databend-query:${TAG} .
-
-# experiment feature: take a look at docker/README.md for detailed multi architecture image build support
-dockerx:
-	docker buildx build . -f ./docker/Dockerfile  --platform ${PLATFORM} --allow network.host --builder host -t ${HUB}/databend-query:${TAG} --build-arg VERSION=${VERSION} --push
-
-build-tool:
-	bash ./scripts/build/build-tool-runner.sh
-
-# used for the build of dev container
-dev-container:
-	cp ./rust-toolchain.toml ./docker/build-tool
-	docker build ./docker/build-tool -t ${HUB}/dev-container:${TAG} -f ./docker/build-tool/Dockerfile\
-
 profile:
 	bash ./scripts/ci/ci-run-profile.sh
+
+docs:
+	bash ./scripts/build/build-website.sh
 
 clean:
 	cargo clean
@@ -120,4 +108,4 @@ clean:
 	rm -rf ./src/common/base/_logs*/ ./src/meta/raft-store/_logs*/ ./src/meta/sled-store/_logs*/
 	rm -rf ./.databend ./query/service/.databend ./meta/service/.databend
 
-.PHONY: setup test run build fmt lint docker clean
+.PHONY: setup test run build fmt lint docker clean docs
