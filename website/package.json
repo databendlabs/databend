@@ -13,7 +13,7 @@
     "serve": "docusaurus serve",
     "write-translations": "docusaurus write-translations",
     "write-heading-ids": "docusaurus write-heading-ids",
-    "download-translations": "crowdin download --config=../.github/crowdin.yml --all",
+    "download-translations": "crowdin download --config=../.github/crowdin.yml --export-only-approved --all",
     "typecheck": "tsc"
   },
   "dependencies": {
