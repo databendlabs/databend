@@ -24,22 +24,33 @@ use crate::storages::fuse::table_test_fixture::TestFixture;
 
 #[tokio::test]
 async fn test_fuse_snapshot_optimize() -> Result<()> {
-    do_purge_test("implicit pure", "", 1, 0, 1, 1, 1).await
+    do_purge_test("implicit pure", "", 1, 0, 1, 1, 1, None).await
 }
 
 #[tokio::test]
 async fn test_fuse_snapshot_optimize_purge() -> Result<()> {
-    do_purge_test("explicit pure", "purge", 1, 0, 1, 1, 1).await
+    do_purge_test("explicit pure", "purge", 1, 0, 1, 1, 1, None).await
 }
 
 #[tokio::test]
 async fn test_fuse_snapshot_optimize_statistic() -> Result<()> {
-    do_purge_test("explicit pure", "statistic", 3, 1, 2, 2, 2).await
+    do_purge_test(
+        "explicit pure",
+        "statistic",
+        3,
+        1,
+        2,
+        2,
+        2,
+        // After compact, all the count will become 1
+        Some((1, 1, 1, 1, 1)),
+    )
+    .await
 }
 
 #[tokio::test]
 async fn test_fuse_snapshot_optimize_all() -> Result<()> {
-    do_purge_test("explicit pure", "all", 1, 0, 1, 1, 1).await
+    do_purge_test("explicit pure", "all", 1, 0, 1, 1, 1, None).await
 }
 
 async fn do_purge_test(
@@ -50,6 +61,7 @@ async fn do_purge_test(
     segment_count: u32,
     block_count: u32,
     index_count: u32,
+    after_compact: Option<(u32, u32, u32, u32, u32)>,
 ) -> Result<()> {
     let fixture = TestFixture::new().await;
     let db = fixture.default_db_name();
@@ -73,7 +85,29 @@ async fn do_purge_test(
         index_count,
     )
     .await;
-    history_should_have_item(&fixture, case_name, snapshot_count).await
+    history_should_have_item(&fixture, case_name, snapshot_count).await?;
+
+    if let Some((snapshot_count, table_statistic_count, segment_count, block_count, index_count)) =
+        after_compact
+    {
+        let qry = format!("optimize table {}.{} all", db, tbl);
+        execute_command(fixture.ctx().clone(), &qry).await?;
+
+        check_data_dir(
+            &fixture,
+            case_name,
+            snapshot_count,
+            table_statistic_count,
+            segment_count,
+            block_count,
+            index_count,
+        )
+        .await;
+
+        history_should_have_item(&fixture, case_name, snapshot_count).await?;
+    };
+
+    Ok(())
 }
 
 async fn do_insertions(fixture: &TestFixture) -> Result<()> {

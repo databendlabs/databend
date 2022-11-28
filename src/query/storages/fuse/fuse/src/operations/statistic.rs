@@ -31,9 +31,8 @@ impl FuseTable {
         let r = self.read_table_snapshot().await;
         let snapshot_opt = match r {
             Err(e) if e.code() == ErrorCode::STORAGE_NOT_FOUND => {
-                // concurrent gc: someone else has already collected this snapshot, ignore it
                 warn!(
-                    "concurrent gc: snapshot {:?} already collected. table: {}, ident {}",
+                    "concurrent statistic: snapshot {:?} already collected. table: {}, ident {}",
                     self.snapshot_loc().await?,
                     self.table_info.desc,
                     self.table_info.ident,
