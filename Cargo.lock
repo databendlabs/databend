@@ -30,9 +30,9 @@ dependencies = [
 
 [[package]]
 name = "ahash"
-version = "0.8.0"
+version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "57e6e951cfbb2db8de1828d49073a113a29fd7117b1596caa781a258c7e38d72"
+checksum = "bf6ccdb167abbf410dcb915cabd428929d7f6a04980b54a11f26a39f1c7f7107"
 dependencies = [
  "cfg-if",
  "getrandom 0.2.7",
@@ -1332,7 +1332,7 @@ dependencies = [
 name = "common-datablocks"
 version = "0.1.0"
 dependencies = [
- "ahash 0.8.0",
+ "ahash 0.8.2",
  "comfy-table",
  "common-arrow",
  "common-datavalues",
@@ -1554,7 +1554,7 @@ dependencies = [
 name = "common-hashtable"
 version = "0.1.0"
 dependencies = [
- "ahash 0.8.0",
+ "ahash 0.8.2",
  "bumpalo",
  "cfg-if",
  "common-base",
@@ -1978,7 +1978,7 @@ dependencies = [
 name = "common-sql"
 version = "0.1.0"
 dependencies = [
- "ahash 0.8.0",
+ "ahash 0.8.2",
  "async-channel",
  "async-recursion",
  "async-stream",
@@ -3068,7 +3068,7 @@ dependencies = [
 name = "databend-query"
 version = "0.1.0"
 dependencies = [
- "ahash 0.8.0",
+ "ahash 0.8.2",
  "async-channel",
  "async-recursion",
  "async-stream",
@@ -4117,7 +4117,7 @@ version = "0.15.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e7d52875c47f35a0db141bef968682165623e7d1671a0da40b87f581a3a953fd"
 dependencies = [
- "ahash 0.8.0",
+ "ahash 0.8.2",
  "geo",
  "geo-types",
  "h3ron-h3-sys",

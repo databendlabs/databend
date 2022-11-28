@@ -20,7 +20,7 @@ common-io = { path = "../../common/io" }
 # Github dependencies
 
 # Crates.io dependencies
-ahash = "0.8.0"
+ahash = { version = "0.8.2", features = ["no-rng"] }
 comfy-table = "6.1.0"
 futures = "0.3.24"
 parking_lot = "0.12.1"

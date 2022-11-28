@@ -15,7 +15,9 @@ test = false
 common-base = { path = "../base" }
 
 # Crates.io dependencies
-ahash = "0.8.0"
+
+## Must disable feature "runtime-rng", it will make the hash results unstable in cluster
+ahash = { version = "0.8.2", features = ["no-rng"] }
 bumpalo = "3.10.0"
 cfg-if = "1.0.0"
 libc = "0.2.126"
