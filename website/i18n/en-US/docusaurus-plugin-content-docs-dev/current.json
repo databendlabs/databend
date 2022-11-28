@@ -10,5 +10,17 @@
   "sidebar.docs.category.Introduction": {
     "message": "Introduction",
     "description": "The label for category Introduction in sidebar docs"
+  },
+  "sidebar.dev.category.Introduction": {
+    "message": "Introduction",
+    "description": "The label for category Introduction in sidebar dev"
+  },
+  "sidebar.dev.category.subsystems": {
+    "message": "subsystems",
+    "description": "The label for category subsystems in sidebar dev"
+  },
+  "sidebar.dev.category.databend-meta": {
+    "message": "databend-meta",
+    "description": "The label for category databend-meta in sidebar dev"
   }
 }

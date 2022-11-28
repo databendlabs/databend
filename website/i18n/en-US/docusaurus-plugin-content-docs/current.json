@@ -210,5 +210,229 @@
   "sidebar.docs.category.FAQ": {
     "message": "FAQ",
     "description": "The label for category FAQ in sidebar docs"
+  },
+  "sidebar.doc.category.Deploy & Manage Databend": {
+    "message": "Deploy & Manage Databend",
+    "description": "The label for category Deploy & Manage Databend in sidebar doc"
+  },
+  "sidebar.doc.category.Manage Meta Service Clusters": {
+    "message": "Manage Meta Service Clusters",
+    "description": "The label for category Manage Meta Service Clusters in sidebar doc"
+  },
+  "sidebar.doc.category.Manage Databend Query Clusters": {
+    "message": "Manage Databend Query Clusters",
+    "description": "The label for category Manage Databend Query Clusters in sidebar doc"
+  },
+  "sidebar.doc.category.Back Up and Restore Data": {
+    "message": "Back Up and Restore Data",
+    "description": "The label for category Back Up and Restore Data in sidebar doc"
+  },
+  "sidebar.doc.category.Upgrade": {
+    "message": "Upgrade",
+    "description": "The label for category Upgrade in sidebar doc"
+  },
+  "sidebar.doc.category.Integrations": {
+    "message": "Integrations",
+    "description": "The label for category Integrations in sidebar doc"
+  },
+  "sidebar.doc.category.APIs": {
+    "message": "APIs",
+    "description": "The label for category APIs in sidebar doc"
+  },
+  "sidebar.doc.category.Data Tools": {
+    "message": "Data Tools",
+    "description": "The label for category Data Tools in sidebar doc"
+  },
+  "sidebar.doc.category.GUI Tools": {
+    "message": "GUI Tools",
+    "description": "The label for category GUI Tools in sidebar doc"
+  },
+  "sidebar.doc.category.Load Data": {
+    "message": "Load Data",
+    "description": "The label for category Load Data in sidebar doc"
+  },
+  "sidebar.doc.category.SQL Reference": {
+    "message": "SQL Reference",
+    "description": "The label for category SQL Reference in sidebar doc"
+  },
+  "sidebar.doc.category.Data Types": {
+    "message": "Data Types",
+    "description": "The label for category Data Types in sidebar doc"
+  },
+  "sidebar.doc.category.System Tables": {
+    "message": "System Tables",
+    "description": "The label for category System Tables in sidebar doc"
+  },
+  "sidebar.doc.category.SQL Commands": {
+    "message": "SQL Commands",
+    "description": "The label for category SQL Commands in sidebar doc"
+  },
+  "sidebar.doc.category.DDL Commands": {
+    "message": "DDL Commands",
+    "description": "The label for category DDL Commands in sidebar doc"
+  },
+  "sidebar.doc.category.Stage": {
+    "message": "Stage",
+    "description": "The label for category Stage in sidebar doc"
+  },
+  "sidebar.doc.category.Cluster Key": {
+    "message": "Cluster Key",
+    "description": "The label for category Cluster Key in sidebar doc"
+  },
+  "sidebar.doc.category.Share": {
+    "message": "Share",
+    "description": "The label for category Share in sidebar doc"
+  },
+  "sidebar.doc.category.Database": {
+    "message": "Database",
+    "description": "The label for category Database in sidebar doc"
+  },
+  "sidebar.doc.category.Table": {
+    "message": "Table",
+    "description": "The label for category Table in sidebar doc"
+  },
+  "sidebar.doc.category.User": {
+    "message": "User",
+    "description": "The label for category User in sidebar doc"
+  },
+  "sidebar.doc.category.User-Defined Function": {
+    "message": "User-Defined Function",
+    "description": "The label for category User-Defined Function in sidebar doc"
+  },
+  "sidebar.doc.category.View": {
+    "message": "View",
+    "description": "The label for category View in sidebar doc"
+  },
+  "sidebar.doc.category.Presign": {
+    "message": "Presign",
+    "description": "The label for category Presign in sidebar doc"
+  },
+  "sidebar.doc.category.DML Commands": {
+    "message": "DML Commands",
+    "description": "The label for category DML Commands in sidebar doc"
+  },
+  "sidebar.doc.category.Query Syntax": {
+    "message": "Query Syntax",
+    "description": "The label for category Query Syntax in sidebar doc"
+  },
+  "sidebar.doc.category.Query Operators": {
+    "message": "Query Operators",
+    "description": "The label for category Query Operators in sidebar doc"
+  },
+  "sidebar.doc.category.Show Commands": {
+    "message": "Show Commands",
+    "description": "The label for category Show Commands in sidebar doc"
+  },
+  "sidebar.doc.category.List Commands": {
+    "message": "List Commands",
+    "description": "The label for category List Commands in sidebar doc"
+  },
+  "sidebar.doc.category.Kill Commands": {
+    "message": "Kill Commands",
+    "description": "The label for category Kill Commands in sidebar doc"
+  },
+  "sidebar.doc.category.Setting Commands": {
+    "message": "Setting Commands",
+    "description": "The label for category Setting Commands in sidebar doc"
+  },
+  "sidebar.doc.category.Explain Commands": {
+    "message": "Explain Commands",
+    "description": "The label for category Explain Commands in sidebar doc"
+  },
+  "sidebar.doc.category.SQL Functions": {
+    "message": "SQL Functions",
+    "description": "The label for category SQL Functions in sidebar doc"
+  },
+  "sidebar.doc.category.Aggregate Functions": {
+    "message": "Aggregate Functions",
+    "description": "The label for category Aggregate Functions in sidebar doc"
+  },
+  "sidebar.doc.category.Conditional Functions": {
+    "message": "Conditional Functions",
+    "description": "The label for category Conditional Functions in sidebar doc"
+  },
+  "sidebar.doc.category.Numeric Functions": {
+    "message": "Numeric Functions",
+    "description": "The label for category Numeric Functions in sidebar doc"
+  },
+  "sidebar.doc.category.Date & Time Functions": {
+    "message": "Date & Time Functions",
+    "description": "The label for category Date & Time Functions in sidebar doc"
+  },
+  "sidebar.doc.category.String Functions": {
+    "message": "String Functions",
+    "description": "The label for category String Functions in sidebar doc"
+  },
+  "sidebar.doc.category.Conversion Functions": {
+    "message": "Conversion Functions",
+    "description": "The label for category Conversion Functions in sidebar doc"
+  },
+  "sidebar.doc.category.Hash Functions": {
+    "message": "Hash Functions",
+    "description": "The label for category Hash Functions in sidebar doc"
+  },
+  "sidebar.doc.category.UUID Functions": {
+    "message": "UUID Functions",
+    "description": "The label for category UUID Functions in sidebar doc"
+  },
+  "sidebar.doc.category.IP Address Functions": {
+    "message": "IP Address Functions",
+    "description": "The label for category IP Address Functions in sidebar doc"
+  },
+  "sidebar.doc.category.Context Functions": {
+    "message": "Context Functions",
+    "description": "The label for category Context Functions in sidebar doc"
+  },
+  "sidebar.doc.category.Semi-structured Data Functions": {
+    "message": "Semi-structured Data Functions",
+    "description": "The label for category Semi-structured Data Functions in sidebar doc"
+  },
+  "sidebar.doc.category.System Functions": {
+    "message": "System Functions",
+    "description": "The label for category System Functions in sidebar doc"
+  },
+  "sidebar.doc.category.Other Functions": {
+    "message": "Other Functions",
+    "description": "The label for category Other Functions in sidebar doc"
+  },
+  "sidebar.doc.category.Test Functions": {
+    "message": "Test Functions",
+    "description": "The label for category Test Functions in sidebar doc"
+  },
+  "sidebar.doc.category.Window Functions": {
+    "message": "Window Functions",
+    "description": "The label for category Window Functions in sidebar doc"
+  },
+  "sidebar.doc.category.Geography Functions": {
+    "message": "Geography Functions",
+    "description": "The label for category Geography Functions in sidebar doc"
+  },
+  "sidebar.doc.category.Developer Guides": {
+    "message": "Developer Guides",
+    "description": "The label for category Developer Guides in sidebar doc"
+  },
+  "sidebar.doc.category.Use Cases": {
+    "message": "Use Cases",
+    "description": "The label for category Use Cases in sidebar doc"
+  },
+  "sidebar.doc.category.Performance": {
+    "message": "Performance",
+    "description": "The label for category Performance in sidebar doc"
+  },
+  "sidebar.doc.category.Release Notes": {
+    "message": "Release Notes",
+    "description": "The label for category Release Notes in sidebar doc"
+  },
+  "sidebar.doc.category.Contribute to Databend": {
+    "message": "Contribute to Databend",
+    "description": "The label for category Contribute to Databend in sidebar doc"
+  },
+  "sidebar.doc.category.RFCs": {
+    "message": "RFCs",
+    "description": "The label for category RFCs in sidebar doc"
+  },
+  "sidebar.doc.category.FAQ": {
+    "message": "FAQ",
+    "description": "The label for category FAQ in sidebar doc"
   }
 }
