@@ -28,15 +28,15 @@ impl FuseTable {
         ctx: &dyn TableContext,
         point: &NavigationPoint,
     ) -> Result<()> {
-        // 0. try navigate to the point
+        // 1. try navigate to the point
         let table = self.navigate_to(point).await?;
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
         let table_info = fuse_table.get_table_info();
 
-        // 1. prepare table meta which being reverted to
+        // 2. prepare table meta which being reverted to
         let table_meta_to_be_committed = fuse_table.table_info.meta.clone();
 
-        // 2. prepare the request
+        // 3. prepare the request
         //  using the CURRENT version as the base table version
         let base_version = self.table_info.ident.seq;
         let catalog = ctx.get_catalog(&table_info.meta.catalog)?;
@@ -47,10 +47,9 @@ impl FuseTable {
             new_table_meta: table_meta_to_be_committed,
         };
 
-        // 3. let's roll
+        // 4. let's roll
         let tenant = ctx.get_tenant();
         let db_name = ctx.get_current_database(); // TODO is this SAFE?
-        // 3.1 revert table meta
         let reply = catalog.update_table_meta(&tenant, &db_name, req).await;
         if reply.is_ok() {
             // try keep the snapshot hit
