@@ -105,7 +105,7 @@ We can switch between versions by the Commit ID, which implements the functions 
 * Tree: Describes blob object information
 * Blob: Describes file information
 
-![image](../static/img/blog/git-work-mechanism.jpeg)
+![image](/img/blog/git-work-mechanism.jpeg)
 
 ### HEAD File
 
@@ -178,7 +178,7 @@ Databend's Fuse Engine was designed in a way similar to Git. It introduces three
 * Segment: Describes block object information.
 * Block: Describes parquet file information.
 
-![image](../static/img/blog/engine-work-mechanism.jpeg)
+![image](/img/blog/engine-work-mechanism.jpeg)
 
 Let's repeat the operations we just did with Git in Fuse Engine.
 

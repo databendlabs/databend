@@ -12,7 +12,7 @@ authors:
 
 The most impressive part of the movie *Spider-Man: No Way Home* is "three generations coming together. In the story, when the spider-man's friend repeats the magic words "Find Peter Parker!", we surprisingly see two old friends on the screen, the previous generations of spider-man. They travel from other universes to join forces and develop cures for the villains.
 
-![](../static/img/blog/spiderman.png)
+![](/img/blog/spiderman.png)
 
 Did you know that you have a similar magic power in Databend? That is, you can always get back the previous versions of your data in a few simple steps whenever you need them. The secret is Databend automatically creates and saves snapshots with timestamps of your tables when a data updating occurs, so you can track the history of a table and see how what it looked like at a time point in the past.
 
@@ -28,7 +28,7 @@ insert into spiderman values(3,'Peter-3');
 
 Databend creates and saves three snapshots for the code above. Each one holds a historical version of the data in the table. 
 
-![](../static/img/blog/peters.png)
+![](/img/blog/peters.png)
 
 To find them, use the system function [FUSE_SNAPSHOT](https://databend.rs/doc/reference/functions/system-functions/fuse_snapshot). The function returns everything you may need to know about the saved snapshots of a table, such as the snapshot IDs, timestamps, and locations.
 

@@ -7,7 +7,7 @@ description:
 
 The Streaming Load API is used to read data from your local files and load it into Databend.
 
-![image](../../../public/img/load/load-data-from-local-fs.png)
+![image](/img/load/load-data-from-local-fs.png)
 
 ## API Request Format
 

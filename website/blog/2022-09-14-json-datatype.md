@@ -16,7 +16,7 @@ As data volume increases rapidly in recent years, many platforms have started to
 
 Databend supports structured data types, as well as JSON. This post dives deeply into the JSON data type in Databend.
 
-![](../static/img/blog/json.png)
+![](/img/blog/json.png)
 
 ## Working with JSON in Databend
 

@@ -12,7 +12,7 @@ Databend's Time Travel feature relies on historical data. If you purge historica
 
 Snapshot, segment, and block are the concepts Databend uses for data storage. Databend uses them to construct a hierarchical structure for storing table data.
 
-![](../../../../public/img/sql/storage-structure.PNG)
+![](/img/sql/storage-structure.PNG)
 
 Databend automatically creates snapshots of a table when data updates occur, so a snapshot represents a version of the table's data. When working with Databend, you're most likely to access a snapshot with the snapshot ID when you retrieve and query a previous version of the table' data with the [AT](../../20-query-syntax/dml-at.md) clause. 
 

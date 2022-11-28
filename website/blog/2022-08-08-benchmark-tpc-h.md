@@ -17,7 +17,7 @@ TPC-H is a decision support benchmark. It consists of a suite of business-orient
 
 The TPC-H benchmark simulates a system for online sales of parts and components and defines eight tables in total. The structure, data volume, and mutual relationship of each table are shown in the figure below:
 
-![](../static/img/blog/tables.jpeg)
+![](/img/blog/tables.jpeg)
 
 The benchmark workload consists of twenty-two decision support queries that must be executed as part of the TPC-H benchmark. Each TPC-H query asks a business question and includes the corresponding query to answer the question. More information about TPC-H can be found at https://www.tpc.org/tpch/.
 

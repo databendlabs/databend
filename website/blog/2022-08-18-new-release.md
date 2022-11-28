@@ -30,7 +30,7 @@ Databend is a modern cloud data warehouse based on Rust that enables high-perfor
 
 To better support complex SQL queries and improve user experience, Databend v0.8 is designed with a new Planner framework.
 
-![](../static/img/blog/new-planner-framework.png)
+![](/img/blog/new-planner-framework.png)
 
 Databend has added JOIN and proper subquery support, driven by New Planner.
 
