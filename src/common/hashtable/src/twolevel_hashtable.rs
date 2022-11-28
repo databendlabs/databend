@@ -16,10 +16,13 @@ use std::collections::VecDeque;
 use std::mem::MaybeUninit;
 
 use crate::FastHash;
+use crate::HashSet;
+use crate::HashtableKeyable;
 use crate::HashtableLike;
+use crate::TwoLevelHashSet;
 
-const BUCKETS: usize = 256;
 const BUCKETS_LG2: u32 = 8;
+const BUCKETS: usize = 1 << BUCKETS_LG2;
 
 pub struct TwoLevelHashtable<Impl> {
     tables: Vec<Impl>,
@@ -43,6 +46,31 @@ impl<Impl: HashtableLike> TwoLevelHashtable<Impl> {
         }
 
         iters
+    }
+}
+
+impl<K: HashtableKeyable + FastHash> TwoLevelHashSet<K> {
+    pub fn inner_sets_mut(&mut self) -> &mut Vec<HashSet<K>> {
+        &mut self.tables
+    }
+
+    pub fn inner_sets(&self) -> &Vec<HashSet<K>> {
+        &self.tables
+    }
+
+    pub fn set_merge(&mut self, other: &Self) {
+        self.tables
+            .iter_mut()
+            .zip(other.tables.iter())
+            .for_each(|(l, r)| {
+                l.set_merge(r);
+            });
+    }
+
+    pub fn set_insert(&mut self, key: &K) {
+        let hash = key.fast_hash();
+        let index = hash as usize >> (64u32 - BUCKETS_LG2);
+        let _ = unsafe { self.tables[index].insert_and_entry_with_hash(key, hash) };
     }
 }
 

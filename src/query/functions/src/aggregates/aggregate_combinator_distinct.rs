@@ -18,16 +18,15 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::Bitmap;
+use common_base::base::ThreadPool;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_hashtable::KeysRef;
 use ordered_float::OrderedFloat;
 
 use super::aggregate_distinct_state::AggregateDistinctPrimitiveState;
 use super::aggregate_distinct_state::AggregateDistinctState;
 use super::aggregate_distinct_state::AggregateDistinctStringState;
 use super::aggregate_distinct_state::AggregateUniqStringState;
-use super::aggregate_distinct_state::DataGroupValues;
 use super::aggregate_distinct_state::DistinctStateFunc;
 use super::aggregate_function::AggregateFunction;
 use super::aggregate_function_factory::AggregateFunctionCreator;
@@ -38,20 +37,17 @@ use super::AggregateCountFunction;
 use super::StateAddr;
 
 #[derive(Clone)]
-pub struct AggregateDistinctCombinator<S, State> {
+pub struct AggregateDistinctCombinator<State> {
     name: String,
 
     nested_name: String,
     arguments: Vec<DataField>,
     nested: Arc<dyn AggregateFunction>,
-    _s: PhantomData<S>,
     _state: PhantomData<State>,
 }
 
-impl<S, State> AggregateFunction for AggregateDistinctCombinator<S, State>
-where
-    S: Send + Sync,
-    State: DistinctStateFunc<S>,
+impl<State> AggregateFunction for AggregateDistinctCombinator<State>
+where State: DistinctStateFunc
 {
     fn name(&self) -> &str {
         &self.name
@@ -106,6 +102,21 @@ where
         state.merge(rhs)
     }
 
+    fn support_merge_parallel(&self) -> bool {
+        State::support_merge_parallel()
+    }
+
+    fn merge_parallel(
+        &self,
+        pool: &mut ThreadPool,
+        place: StateAddr,
+        rhs: StateAddr,
+    ) -> Result<()> {
+        let state = place.get::<State>();
+        let rhs = rhs.get::<State>();
+        state.merge_parallel(pool, rhs)
+    }
+
     #[allow(unused_mut)]
     fn merge_result(&self, place: StateAddr, array: &mut dyn MutableColumn) -> Result<()> {
         let state = place.get::<State>();
@@ -151,7 +162,7 @@ where
     }
 }
 
-impl<S, State> fmt::Display for AggregateDistinctCombinator<S, State> {
+impl<State> fmt::Display for AggregateDistinctCombinator<State> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.nested_name.as_str() {
             "uniq" => write!(f, "uniq"),
@@ -228,14 +239,12 @@ pub fn try_create(
         if phid.is_numeric() {
             dispatch_primitive_type_id!(phid, |$T |$E|  {
                 return Ok(Arc::new(AggregateDistinctCombinator::<
-                    $T,
                     AggregateDistinctPrimitiveState<$T, $E>,
                 > {
                     nested_name: nested_name.to_owned(),
                     arguments,
                     nested,
                     name,
-                    _s: PhantomData,
                     _state: PhantomData,
                 }));
             }, {
@@ -245,39 +254,33 @@ pub fn try_create(
         if phid.is_string() {
             return match nested_name {
                 "count" | "uniq" => Ok(Arc::new(AggregateDistinctCombinator::<
-                    u128,
                     AggregateUniqStringState,
                 > {
                     name,
                     arguments,
                     nested,
                     nested_name: nested_name.to_owned(),
-                    _s: PhantomData,
                     _state: PhantomData,
                 })),
                 _ => Ok(Arc::new(AggregateDistinctCombinator::<
-                    KeysRef,
                     AggregateDistinctStringState,
                 > {
                     nested_name: nested_name.to_owned(),
                     arguments,
                     nested,
                     name,
-                    _s: PhantomData,
                     _state: PhantomData,
                 })),
             };
         }
     }
     Ok(Arc::new(AggregateDistinctCombinator::<
-        DataGroupValues,
         AggregateDistinctState,
     > {
         nested_name: nested_name.to_owned(),
         arguments,
         nested,
         name,
-        _s: PhantomData,
         _state: PhantomData,
     }))
 }

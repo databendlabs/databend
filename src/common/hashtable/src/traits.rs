@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::hash::BuildHasher;
 use std::mem::MaybeUninit;
 use std::num::NonZeroU64;
 
@@ -241,8 +242,9 @@ impl FastHash for u128 {
                 }
                 (high as u64) << 32 | low as u64
             } else {
-                use std::hash::Hasher;
-                let mut hasher = ahash::AHasher::default();
+                 use std::hash::Hasher;
+                let state = ahash::RandomState::with_seeds(SEEDS[0], SEEDS[1], SEEDS[2], SEEDS[3]);
+                let mut hasher = state.build_hasher();
                 hasher.write_u128(*self);
                 hasher.finish()
             }
@@ -271,8 +273,9 @@ impl FastHash for U256 {
                 }
                 (high as u64) << 32 | low as u64
             } else {
-                use std::hash::Hasher;
-                let mut hasher = ahash::AHasher::default();
+                 use std::hash::Hasher;
+                let state = ahash::RandomState::with_seeds(SEEDS[0], SEEDS[1], SEEDS[2], SEEDS[3]);
+                let mut hasher = state.build_hasher();
                 for x in self.0 {
                     hasher.write_u64(x);
                 }
@@ -296,8 +299,9 @@ impl FastHash for U512 {
                 }
                 (high as u64) << 32 | low as u64
             } else {
-                use std::hash::Hasher;
-                let mut hasher = ahash::AHasher::default();
+                 use std::hash::Hasher;
+                let state = ahash::RandomState::with_seeds(SEEDS[0], SEEDS[1], SEEDS[2], SEEDS[3]);
+                let mut hasher = state.build_hasher();
                 for x in self.0 {
                     hasher.write_u64(x);
                 }
@@ -329,6 +333,8 @@ impl FastHash for OrderedFloat<f64> {
     }
 }
 
+const SEEDS: [u64; 4] = [1, 1949, 2009, 9527];
+
 impl FastHash for [u8] {
     #[inline(always)]
     fn fast_hash(&self) -> u64 {
@@ -356,7 +362,8 @@ impl FastHash for [u8] {
                 (high as u64) << 32 | low as u64
             } else {
                 use std::hash::Hasher;
-                let mut hasher = ahash::AHasher::default();
+                let state = ahash::RandomState::with_seeds(SEEDS[0], SEEDS[1], SEEDS[2], SEEDS[3]);
+                let mut hasher = state.build_hasher();
                 hasher.write(self);
                 hasher.finish()
             }
@@ -381,8 +388,9 @@ impl<const N: usize> FastHash for ([u64; N], NonZeroU64) {
                 low = unsafe { _mm_crc32_u64(low as u64, self.1.get()) as u32 };
                 (high as u64) << 32 | low as u64
             } else {
-                use std::hash::Hasher;
-                let mut hasher = ahash::AHasher::default();
+                 use std::hash::Hasher;
+                let state = ahash::RandomState::with_seeds(SEEDS[0], SEEDS[1], SEEDS[2], SEEDS[3]);
+                let mut hasher = state.build_hasher();
                 for x in self.0 {
                     hasher.write_u64(x);
                 }

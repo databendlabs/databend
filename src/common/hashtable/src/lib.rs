@@ -60,6 +60,7 @@ pub type StackHashSetIter<'a, K> = stack_hashtable::StackHashtableIter<'a, K, ()
 pub type StackHashSetIterMut<'a, K> = stack_hashtable::StackHashtableIter<'a, K, ()>;
 
 pub type TwoLevelHashMap<Inner> = twolevel_hashtable::TwoLevelHashtable<Inner>;
+pub type TwoLevelHashSet<K> = twolevel_hashtable::TwoLevelHashtable<HashSet<K>>;
 pub type TwoLevelHashMapIter<Inner> = twolevel_hashtable::TwoLevelHashtableIter<Inner>;
 
 pub type UnsizedHashMap<K, V> = unsized_hashtable::UnsizedHashtable<K, V>;

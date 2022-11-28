@@ -53,6 +53,7 @@ pub type HashMethodKeysU512 = HashMethodFixedKeys<U512>;
 
 /// These methods are `generic` method to generate hash key,
 /// that is the 'numeric' or 'binary` representation of each column value as hash key.
+#[derive(Clone)]
 pub enum HashMethodKind {
     Serializer(HashMethodSerializer),
     KeysU8(HashMethodKeysU8),
