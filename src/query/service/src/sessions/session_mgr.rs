@@ -97,7 +97,7 @@ impl SessionManager {
         let config = self.get_conf();
         {
             let sessions = self.active_sessions.read();
-            self.validate_max_active_sessions(sessions.len())?;
+            self.validate_max_active_sessions(sessions.len(), "active sessions")?;
         }
         let id = uuid::Uuid::new_v4().to_string();
         let session_typ = typ.clone();
@@ -106,7 +106,7 @@ impl SessionManager {
             SessionType::MySQL => {
                 let mysql_conn_map = self.mysql_conn_map.read();
                 mysql_conn_id = Some(self.mysql_basic_conn_id.fetch_add(1, Ordering::Relaxed));
-                self.validate_max_active_sessions(mysql_conn_map.len())?;
+                self.validate_max_active_sessions(mysql_conn_map.len(), "mysql conns")?;
             }
             _ => {
                 debug!(
@@ -123,7 +123,7 @@ impl SessionManager {
         let session = Session::try_create(id.clone(), typ.clone(), session_ctx, mysql_conn_id)?;
 
         let mut sessions = self.active_sessions.write();
-        self.validate_max_active_sessions(sessions.len())?;
+        self.validate_max_active_sessions(sessions.len(), "active sessions")?;
 
         label_counter(
             METRIC_SESSION_CONNECT_NUMBERS,
@@ -143,7 +143,7 @@ impl SessionManager {
 
         if let SessionType::MySQL = session_typ {
             let mut mysql_conn_map = self.mysql_conn_map.write();
-            self.validate_max_active_sessions(mysql_conn_map.len())?;
+            self.validate_max_active_sessions(mysql_conn_map.len(), "mysql conns")?;
             mysql_conn_map.insert(mysql_conn_id, id);
         }
 
@@ -263,11 +263,11 @@ impl SessionManager {
         }
     }
 
-    fn validate_max_active_sessions(&self, count: usize) -> Result<()> {
+    fn validate_max_active_sessions(&self, count: usize, reason: &str) -> Result<()> {
         if count >= self.max_sessions {
             return Err(ErrorCode::TooManyUserConnections(format!(
-                "Current sessions ({}) has exceeded the max_active_sessions limit ({})",
-                count, self.max_sessions
+                "Current {} ({}) has exceeded the max_active_sessions limit ({})",
+                reason, count, self.max_sessions
             )));
         }
         Ok(())
