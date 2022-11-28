@@ -1,0 +1,7 @@
+{
+  "label": "Manage Databend Query Clusters",
+  "link": {
+    "type": "generated-index",
+    "slug": "/operations/query"
+  }
+}
