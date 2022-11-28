@@ -2,7 +2,7 @@ name: Crowdin Action
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
 
 jobs:
   synchronize-with-crowdin:
@@ -15,25 +15,9 @@ jobs:
       - name: crowdin action
         uses: crowdin/github-action@1.5.1
         with:
-          upload_translations: true
-          download_translations: true
-          config: '.github/crowdin.yml'
-          base_url: 'https://databend.crowdin.com'
-          base_path: '.'
-          # Include approved translations only in exported files
-          export_only_approved: true
-          # Make sure crowdin robot agree our template
-          pull_request_title: 'docs: New Crowdin translations'
-          pull_request_body: |
-            I hereby agree to the terms of the CLA available at: https://databend.rs/dev/policies/cla/
-
-            ## Summary
-
-            Update i18n files
-
-            ## Changelog
-
-            - Not for changelog (changelog entry is not required)
+          config: ".github/crowdin.yml"
+          upload_sources: true
+          upload_sources_args: "--delete-obsolete"
 
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
