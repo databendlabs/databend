@@ -13,41 +13,40 @@
 // limitations under the License.
 
 use std::fmt::Debug;
-use std::io;
-use std::io::Error;
-use std::io::ErrorKind;
-use std::io::Result;
 use std::sync::Arc;
 
-use anyhow::anyhow;
 use async_trait::async_trait;
 use common_auth::RefreshableToken;
 use http::Request;
 use http::StatusCode;
-use opendal::http_util::new_request_build_error;
-use opendal::http_util::parse_content_length;
-use opendal::http_util::parse_error_response;
-use opendal::http_util::parse_etag;
-use opendal::http_util::parse_last_modified;
-use opendal::http_util::AsyncBody;
-use opendal::http_util::ErrorResponse;
-use opendal::http_util::HttpClient;
-use opendal::ops::BytesRange;
-use opendal::ops::OpRead;
-use opendal::ops::OpStat;
-use opendal::ops::Operation;
-use opendal::ops::PresignedRequest;
-use opendal::Accessor;
-use opendal::AccessorCapability;
-use opendal::AccessorMetadata;
-use opendal::BytesReader;
+use opendal::raw::apply_wrapper;
+use opendal::raw::new_request_build_error;
+use opendal::raw::parse_content_length;
+use opendal::raw::parse_error_response;
+use opendal::raw::parse_etag;
+use opendal::raw::parse_last_modified;
+use opendal::raw::Accessor;
+use opendal::raw::AccessorCapability;
+use opendal::raw::AccessorMetadata;
+use opendal::raw::AsyncBody;
+use opendal::raw::BytesReader;
+use opendal::raw::ErrorResponse;
+use opendal::raw::HttpClient;
+use opendal::raw::Operation;
+use opendal::raw::PresignedRequest;
+use opendal::raw::RpRead;
+use opendal::raw::RpStat;
+use opendal::Error;
+use opendal::ErrorKind;
 use opendal::Layer;
 use opendal::ObjectMetadata;
 use opendal::ObjectMode;
+use opendal::OpRead;
+use opendal::OpStat;
 use opendal::Operator;
+use opendal::Result;
 use opendal::Scheme;
 use reqwest::header::RANGE;
-use thiserror::Error;
 
 use crate::SharedSigner;
 
@@ -84,10 +83,10 @@ impl SharedLayer {
 
 impl Layer for SharedLayer {
     fn layer(&self, _: Arc<dyn Accessor>) -> Arc<dyn Accessor> {
-        Arc::new(SharedAccessor {
+        Arc::new(apply_wrapper(SharedAccessor {
             signer: self.signer.clone(),
             client: HttpClient::new(),
-        })
+        }))
     }
 }
 
@@ -132,40 +131,47 @@ impl Accessor for SharedAccessor {
         meta
     }
 
-    async fn read(&self, path: &str, args: OpRead) -> Result<BytesReader> {
-        let req: PresignedRequest = self
-            .signer
-            .fetch(path, Operation::Read)
-            .await
-            .map_err(|err| Error::new(ErrorKind::Other, err))?;
+    async fn read(&self, path: &str, args: OpRead) -> Result<(RpRead, BytesReader)> {
+        let req: PresignedRequest =
+            self.signer
+                .fetch(path, Operation::Read)
+                .await
+                .map_err(|err| {
+                    Error::new(ErrorKind::Unexpected, "fetch presigned url failed").set_source(err)
+                })?;
 
+        let br = args.range();
         let mut req: Request<AsyncBody> = req.into();
         req.headers_mut().insert(
             RANGE,
-            BytesRange::new(args.offset(), args.size())
-                .to_string()
-                .parse()
-                .map_err(|err| Error::new(ErrorKind::Other, err))?,
+            br.to_header().parse().map_err(|err| {
+                Error::new(ErrorKind::Unexpected, "header value is invalid").set_source(err)
+            })?,
         );
 
         let resp = self.client.send_async(req).await?;
-        Ok(resp.into_body().reader())
+        let content_length = parse_content_length(resp.headers())
+            .unwrap()
+            .expect("content_length must be valid");
+        Ok((RpRead::new(content_length), resp.into_body().reader()))
     }
 
-    async fn stat(&self, path: &str, _args: OpStat) -> Result<ObjectMetadata> {
+    async fn stat(&self, path: &str, _args: OpStat) -> Result<RpStat> {
         // Stat root always returns a DIR.
         if path == "/" {
-            return Ok(ObjectMetadata::new(ObjectMode::DIR));
+            return Ok(RpStat::new(ObjectMetadata::new(ObjectMode::DIR)));
         }
-        let req: PresignedRequest = self
-            .signer
-            .fetch(path, Operation::Stat)
-            .await
-            .map_err(|err| Error::new(ErrorKind::Other, err))?;
+        let req: PresignedRequest =
+            self.signer
+                .fetch(path, Operation::Stat)
+                .await
+                .map_err(|err| {
+                    Error::new(ErrorKind::Unexpected, "fetch presigned url failed").set_source(err)
+                })?;
         let req = Request::head(req.uri());
         let req = req
             .body(AsyncBody::Empty)
-            .map_err(|e| new_request_build_error(Operation::Stat, path, e))?;
+            .map_err(new_request_build_error)?;
         let resp = self.client.send_async(req).await?;
         let status = resp.status();
         match status {
@@ -176,76 +182,50 @@ impl Accessor for SharedAccessor {
                     ObjectMode::FILE
                 };
                 let mut m = ObjectMetadata::new(mode);
-                if let Some(v) = parse_content_length(resp.headers())
-                    .map_err(|e| new_other_object_error(Operation::Stat, path, e))?
-                {
+                if let Some(v) = parse_content_length(resp.headers())? {
                     m.set_content_length(v);
                 }
 
-                if let Some(v) = parse_etag(resp.headers())
-                    .map_err(|e| new_other_object_error(Operation::Stat, path, e))?
-                {
+                if let Some(v) = parse_etag(resp.headers())? {
                     m.set_etag(v);
                     m.set_content_md5(v.trim_matches('"'));
                 }
 
-                if let Some(v) = parse_last_modified(resp.headers())
-                    .map_err(|e| new_other_object_error(Operation::Stat, path, e))?
-                {
+                if let Some(v) = parse_last_modified(resp.headers())? {
                     m.set_last_modified(v);
                 }
-                Ok(m)
+                Ok(RpStat::new(m))
             }
             StatusCode::NOT_FOUND if path.ends_with('/') => {
-                Ok(ObjectMetadata::new(ObjectMode::DIR))
+                Ok(RpStat::new(ObjectMetadata::new(ObjectMode::DIR)))
             }
             _ => {
                 let er = parse_error_response(resp).await?;
-                let err = parse_error(Operation::Stat, path, er);
+                let err = parse_error(er);
                 Err(err)
             }
         }
     }
 }
 
-#[derive(Error, Debug)]
-#[error("object error: (op: {op}, path: {path}, source: {source})")]
-pub struct ObjectError {
-    op: Operation,
-    path: String,
-    source: anyhow::Error,
-}
-
-impl ObjectError {
-    pub fn new(op: Operation, path: &str, source: impl Into<anyhow::Error>) -> Self {
-        ObjectError {
-            op,
-            path: path.to_string(),
-            source: source.into(),
-        }
-    }
-}
-
-pub fn parse_error(op: Operation, path: &str, er: ErrorResponse) -> Error {
-    let kind = match er.status_code() {
-        StatusCode::NOT_FOUND => ErrorKind::NotFound,
-        StatusCode::FORBIDDEN => ErrorKind::PermissionDenied,
+pub fn parse_error(er: ErrorResponse) -> Error {
+    let (kind, retryable) = match er.status_code() {
+        StatusCode::NOT_FOUND => (ErrorKind::ObjectNotFound, false),
+        StatusCode::FORBIDDEN => (ErrorKind::ObjectPermissionDenied, false),
         StatusCode::INTERNAL_SERVER_ERROR
         | StatusCode::BAD_GATEWAY
         | StatusCode::SERVICE_UNAVAILABLE
-        | StatusCode::GATEWAY_TIMEOUT => ErrorKind::Interrupted,
-        _ => ErrorKind::Other,
+        | StatusCode::GATEWAY_TIMEOUT => (ErrorKind::Unexpected, true),
+        _ => (ErrorKind::Unexpected, false),
     };
 
-    Error::new(kind, ObjectError::new(op, path, anyhow!("{er}")))
-}
+    let mut err = Error::new(kind, &er.to_string());
 
-pub fn new_other_object_error(
-    op: Operation,
-    path: &str,
-    source: impl Into<anyhow::Error>,
-) -> Error {
-    io::Error::new(io::ErrorKind::Other, ObjectError::new(op, path, source))
+    if retryable {
+        err = err.set_temporary();
+    }
+
+    err
 }
 
 pub struct DummySharedLayer {}

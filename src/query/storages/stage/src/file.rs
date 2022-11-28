@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::io;
 use std::sync::Arc;
 
 use chrono::TimeZone;
@@ -73,7 +72,7 @@ pub async fn list_file(
 
             None
         }
-        Err(e) if e.kind() == io::ErrorKind::NotFound => None,
+        Err(e) if e.kind() == opendal::ErrorKind::ObjectNotFound => None,
         Err(e) => return Err(e.into()),
         _ => None,
     };
@@ -84,9 +83,9 @@ pub async fn list_file(
             Ok(_) => {
                 let mut ds = op.batch().walk_top_down(&dir)?;
                 while let Some(de) = ds.try_next().await? {
-                    if de.mode().is_file() {
+                    if de.mode().await?.is_file() {
                         let path = de.path().to_string();
-                        let meta = de.metadata().await;
+                        let meta = de.metadata().await?;
                         files.push((path, meta));
                     }
                 }

@@ -60,6 +60,8 @@ struct FileFormat {
     pub record_delimiter: String,
     #[serde(default = "default_field_delimiter")]
     pub field_delimiter: String,
+    #[serde(default = "default_nan_display")]
+    pub nan_display: String,
     #[serde(default = "default_skip_header")]
     pub skip_header: i32,
     #[serde(default = "default_compression")]
@@ -72,6 +74,10 @@ fn default_record_delimiter() -> String {
 
 fn default_field_delimiter() -> String {
     ",".to_string()
+}
+
+fn default_nan_display() -> String {
+    "NaN".to_string()
 }
 
 fn default_skip_header() -> i32 {
@@ -95,6 +101,7 @@ fn test_options_de() {
         format: Format::Csv,
         record_delimiter: "\n".to_string(),
         field_delimiter: "/".to_string(),
+        nan_display: "NaN".to_string(),
         skip_header: 1,
         compression: Compression::Gzip
     });
@@ -104,6 +111,7 @@ fn test_options_de() {
         format: Format::Csv,
         record_delimiter: "\n".to_string(),
         field_delimiter: ",".to_string(),
+        nan_display: "NaN".to_string(),
         skip_header: 0,
         compression: Compression::None
     });

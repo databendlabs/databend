@@ -40,7 +40,7 @@ futures = "0.3.24"
 futures-util = "0.3.24"
 itertools = "0.10.5"
 metrics = "0.20.1"
-opendal = "0.19"
+opendal = "0.21"
 serde = { workspace = true }
 serde_json = { workspace = true }
 tracing = "0.1.36"

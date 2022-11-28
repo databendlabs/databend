@@ -17,14 +17,12 @@ use std::sync::Arc;
 
 use bstr::ByteSlice;
 use common_datavalues::DataSchemaRef;
-use common_datavalues::TypeDeserializer;
 use common_datavalues::TypeDeserializerImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_formats::FieldDecoder;
-use common_formats::FieldDecoderValues;
+use common_formats::FieldJsonAstDecoder;
 use common_formats::FileFormatOptionsExt;
-use common_io::prelude::FormatSettings;
 use common_meta_types::StageFileFormatType;
 
 use crate::processors::sources::input_formats::input_format_text::AligningState;
@@ -36,14 +34,14 @@ pub struct InputFormatNDJson {}
 
 impl InputFormatNDJson {
     fn read_row(
+        field_decoder: &FieldJsonAstDecoder,
         buf: &[u8],
         deserializers: &mut [TypeDeserializerImpl],
-        format_settings: &FormatSettings,
         schema: &DataSchemaRef,
     ) -> Result<()> {
         let mut json: serde_json::Value = serde_json::from_reader(buf)?;
         // if it's not case_sensitive, we convert to lowercase
-        if !format_settings.ident_case_sensitive {
+        if !field_decoder.ident_case_sensitive {
             if let serde_json::Value::Object(x) = json {
                 let y = x.into_iter().map(|(k, v)| (k.to_lowercase(), v)).collect();
                 json = serde_json::Value::Object(y);
@@ -51,13 +49,12 @@ impl InputFormatNDJson {
         }
 
         for (f, deser) in schema.fields().iter().zip(deserializers.iter_mut()) {
-            let value = if format_settings.ident_case_sensitive {
+            let value = if field_decoder.ident_case_sensitive {
                 &json[f.name().to_owned()]
             } else {
                 &json[f.name().to_lowercase()]
             };
-
-            deser.de_json(value, format_settings).map_err(|e| {
+            field_decoder.read_field(deser, value).map_err(|e| {
                 let value_str = format!("{:?}", value);
                 ErrorCode::BadBytes(format!(
                     "{}. column={} value={}",
@@ -81,14 +78,16 @@ impl InputFormatTextBase for InputFormatNDJson {
     }
 
     fn create_field_decoder(options: &FileFormatOptionsExt) -> Arc<dyn FieldDecoder> {
-        Arc::new(FieldDecoderValues::create(options))
-    }
-
-    fn default_field_delimiter() -> u8 {
-        b','
+        Arc::new(FieldJsonAstDecoder::create(options))
     }
 
     fn deserialize(builder: &mut BlockBuilder<Self>, batch: RowBatch) -> Result<()> {
+        let field_decoder = builder
+            .field_decoder
+            .as_any()
+            .downcast_ref::<FieldJsonAstDecoder>()
+            .expect("must success");
+
         let columns = &mut builder.mutable_columns;
         let mut start = 0usize;
         let start_row = batch.start_row;
@@ -96,12 +95,7 @@ impl InputFormatTextBase for InputFormatNDJson {
             let buf = &batch.data[start..*end];
             let buf = buf.trim();
             if !buf.is_empty() {
-                if let Err(e) = Self::read_row(
-                    buf,
-                    columns,
-                    &builder.ctx.format_settings,
-                    &builder.ctx.schema,
-                ) {
+                if let Err(e) = Self::read_row(field_decoder, buf, columns, &builder.ctx.schema) {
                     let row_info = if let Some(r) = start_row {
                         format!("row={},", r + i)
                     } else {

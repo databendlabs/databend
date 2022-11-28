@@ -14,8 +14,10 @@
 
 use std::hash::Hash;
 use std::hash::Hasher;
+use std::sync::Arc;
 use std::sync::RwLock;
 
+use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
 use common_datablocks::KeysState;
 use common_datavalues::ColumnRef;
@@ -23,6 +25,7 @@ use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 
 use crate::pipelines::processors::transforms::hash_join::desc::MarkerKind;
+use crate::sessions::QueryContext;
 
 pub type ColumnVector = Vec<ColumnRef>;
 
@@ -58,14 +61,17 @@ impl RowPtr {
 pub struct RowSpace {
     pub data_schema: DataSchemaRef,
     pub chunks: RwLock<Vec<Chunk>>,
+    pub buffer: RwLock<Vec<DataBlock>>,
 }
 
 impl RowSpace {
-    pub fn new(data_schema: DataSchemaRef) -> Self {
-        Self {
+    pub fn new(ctx: Arc<QueryContext>, data_schema: DataSchemaRef) -> Result<Self> {
+        let buffer_size = ctx.get_settings().get_max_block_size()? * 16;
+        Ok(Self {
             data_schema,
             chunks: RwLock::new(vec![]),
-        }
+            buffer: RwLock::new(Vec::with_capacity(buffer_size as usize)),
+        })
     }
 
     pub fn schema(&self) -> DataSchemaRef {

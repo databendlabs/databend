@@ -47,3 +47,7 @@
 /docker/               @datafuselabs/databend-tool-reviewer
 /scripts/              @datafuselabs/databend-tool-reviewer
 /.github/              @datafuselabs/databend-tool-reviewer
+
+# Dependences
+Cargo.lock @Xuanwo @PsiACE
+Cargo.toml @Xuanwo @PsiACE

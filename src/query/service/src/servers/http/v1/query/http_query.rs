@@ -283,7 +283,6 @@ impl HttpQuery {
             query_id_clone,
             request.pagination.max_rows_per_page,
             block_receiver,
-            request.string_fields,
             format_settings,
         )));
         let query = HttpQuery {

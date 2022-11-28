@@ -117,8 +117,11 @@ SELECT kv.K,KV.v FROM kv;
 ----
 a NULL
 
-statement error 1065
+statement query TT
 SELECT kv.* FROM kv;
+
+----
+a NULL
 
 statement query T
 SELECT FOO.k FROM kv AS foo WHERE foo.k = 'a';

@@ -28,15 +28,14 @@ use common_exception::Result;
 use common_formats::ClickhouseFormatType;
 use common_formats::FileFormatOptionsExt;
 use common_formats::FileFormatTypeExt;
-use common_io::prelude::FormatSettings;
+use common_formats::RecordDelimiter;
 use common_meta_types::StageFileCompression;
 use common_meta_types::StageFileFormatType;
 use common_meta_types::UserStageInfo;
 use common_settings::Settings;
-use opendal::io_util::CompressAlgorithm;
+use opendal::raw::CompressAlgorithm;
 use opendal::Operator;
 
-use crate::processors::sources::input_formats::delimiter::RecordDelimiter;
 use crate::processors::sources::input_formats::impls::input_format_csv::InputFormatCSV;
 use crate::processors::sources::input_formats::impls::input_format_ndjson::InputFormatNDJson;
 use crate::processors::sources::input_formats::impls::input_format_parquet::InputFormatParquet;
@@ -119,7 +118,6 @@ pub struct InputContext {
 
     // runtime config
     pub settings: Arc<Settings>,
-    pub format_settings: FormatSettings,
 
     pub read_batch_size: usize,
     pub block_compact_thresholds: BlockCompactThresholds,
@@ -134,7 +132,6 @@ impl Debug for InputContext {
             .field("rows_to_skip", &self.rows_to_skip)
             .field("field_delimiter", &self.field_delimiter)
             .field("record_delimiter", &self.record_delimiter)
-            .field("format_settings", &self.format_settings)
             .field("block_compact_thresholds", &self.block_compact_thresholds)
             .field("read_batch_size", &self.read_batch_size)
             .field("num_splits", &self.splits.len())
@@ -177,31 +174,15 @@ impl InputContext {
         let file_format_options = format_typ.final_file_format_options(&file_format_options)?;
 
         let format = Self::get_input_format(&format_typ)?;
-        let record_delimiter = {
-            if file_format_options.stage.record_delimiter.is_empty() {
-                format.default_record_delimiter()
-            } else {
-                RecordDelimiter::try_from(file_format_options.stage.record_delimiter.as_str())?
-            }
-        };
-
-        let format_settings = format_typ.get_format_settings(&file_format_options, &settings)?;
-
+        let field_delimiter = file_format_options.get_field_delimiter();
+        let record_delimiter = file_format_options.get_record_delimiter()?;
         let rows_to_skip = file_format_options.stage.skip_header as usize;
-        let field_delimiter = {
-            if file_format_options.stage.field_delimiter.is_empty() {
-                format.default_field_delimiter()
-            } else {
-                file_format_options.stage.field_delimiter.as_bytes()[0]
-            }
-        };
 
         Ok(InputContext {
             format,
             schema,
             splits,
             settings,
-            format_settings,
             record_delimiter,
             read_batch_size,
             rows_to_skip,
@@ -240,19 +221,10 @@ impl InputContext {
 
         let file_format_options = format_type.final_file_format_options(&file_format_options)?;
         let format = Self::get_input_format(&format_type)?;
-        let format_settings = format_type.get_format_settings(&file_format_options, &settings)?;
         let read_batch_size = settings.get_input_read_buffer_size()? as usize;
         let file_format_options_clone = file_format_options.clone();
-        let field_delimiter = file_format_options.stage.field_delimiter;
-        let field_delimiter = {
-            if field_delimiter.is_empty() {
-                format.default_field_delimiter()
-            } else {
-                field_delimiter.as_bytes()[0]
-            }
-        };
-        let record_delimiter =
-            RecordDelimiter::try_from(file_format_options.stage.record_delimiter.as_bytes())?;
+        let field_delimiter = file_format_options.get_field_delimiter();
+        let record_delimiter = file_format_options.get_record_delimiter()?;
         let compression = settings.get_format_compression()?;
         let compression = if !compression.is_empty() {
             StageFileCompression::from_str(&compression).map_err(ErrorCode::BadArguments)?
@@ -268,7 +240,6 @@ impl InputContext {
             format,
             schema,
             settings,
-            format_settings,
             record_delimiter,
             read_batch_size,
             field_delimiter,

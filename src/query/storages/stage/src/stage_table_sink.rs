@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::io::ErrorKind;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -258,7 +257,7 @@ impl Processor for StageTableSink {
                 let object = self.data_accessor.object(&path);
                 { || object.write(bytes.as_slice()) }
                     .retry(ExponentialBackoff::default().with_jitter())
-                    .when(|err| err.kind() == ErrorKind::Interrupted)
+                    .when(|err| err.is_temporary())
                     .notify(|err, dur| {
                         warn!(
                             "stage table sink write retry after {}s for error {:?}",

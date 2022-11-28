@@ -28,7 +28,7 @@ Metrics has four attributes: `metric`, `kind`, `labels`, `value`.
 `metric` indicate the name of the metric contained in the databend-query.
 
 `kind` records the kind of metric.
-Now contains:
+Available kinds:
 * [`counter`](https://prometheus.io/docs/concepts/metric_types/#counter)
 * [`gauge`](https://prometheus.io/docs/concepts/metric_types/#gauge)
 * [`summary`](https://prometheus.io/docs/concepts/metric_types/#summary)
@@ -42,7 +42,7 @@ Now contains:
 
 :::info
 
-Metrics with `summary` kind are used to track the distribution of a set of the corresponding time consumtion.
+Databend uses `summary` metrics to keep track of the total time spent handling various requests.
 Value quantile contains: [0.0, 0.5, 0.9, 0.99, 0.999].
 
 :::

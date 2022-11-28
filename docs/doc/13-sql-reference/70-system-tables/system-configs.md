@@ -43,7 +43,7 @@ SELECT * FROM system.configs;
 | table_disk_cache_mb_size             | 1024             | query |             |
 | log_level                            | INFO             | log   |             |
 | log_dir                              | ./_logs          | log   |             |
-| meta_embedded_dir                    | ./_meta_embedded | meta  |             |
+| meta_embedded_dir                    |                  | meta  |             |
 | meta_address                         |                  | meta  |             |
 | meta_username                        |                  | meta  |             |
 | meta_password                        |                  | meta  |             |
