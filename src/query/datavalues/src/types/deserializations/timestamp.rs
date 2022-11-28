@@ -12,12 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::io::Cursor;
-
 use common_exception::*;
-use common_io::cursor_ext::*;
 use common_io::prelude::BinaryRead;
-use common_io::prelude::FormatSettings;
 use num::cast::AsPrimitive;
 
 use crate::columns::MutableColumn;
@@ -32,7 +28,7 @@ impl TypeDeserializer for TimestampDeserializer {
         self.builder.memory_size()
     }
 
-    fn de_binary(&mut self, reader: &mut &[u8], _format: &FormatSettings) -> Result<()> {
+    fn de_binary(&mut self, reader: &mut &[u8]) -> Result<()> {
         let value: i64 = reader.read_scalar()?;
         check_timestamp(value)?;
         self.builder.append_value(value);
@@ -43,13 +39,7 @@ impl TypeDeserializer for TimestampDeserializer {
         self.builder.append_value(i64::default());
     }
 
-    fn de_fixed_binary_batch(
-        &mut self,
-        reader: &[u8],
-        step: usize,
-        rows: usize,
-        _format: &FormatSettings,
-    ) -> Result<()> {
+    fn de_fixed_binary_batch(&mut self, reader: &[u8], step: usize, rows: usize) -> Result<()> {
         for row in 0..rows {
             let mut reader = &reader[step * row..];
             let value: i64 = reader.read_scalar()?;
@@ -58,23 +48,7 @@ impl TypeDeserializer for TimestampDeserializer {
         Ok(())
     }
 
-    fn de_json(&mut self, value: &serde_json::Value, format: &FormatSettings) -> Result<()> {
-        match value {
-            serde_json::Value::String(v) => {
-                let v = v.clone();
-                let mut reader = Cursor::new(v.as_bytes());
-                let ts = reader.read_timestamp_text(&format.timezone)?;
-
-                let micros = ts.timestamp_micros();
-                check_timestamp(micros)?;
-                self.builder.append_value(micros.as_());
-                Ok(())
-            }
-            _ => Err(ErrorCode::BadBytes("Incorrect boolean value")),
-        }
-    }
-
-    fn append_data_value(&mut self, value: DataValue, _format: &FormatSettings) -> Result<()> {
+    fn append_data_value(&mut self, value: DataValue) -> Result<()> {
         let v = value.as_i64()?;
         check_timestamp(v)?;
         self.builder.append_value(v.as_());

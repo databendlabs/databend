@@ -18,7 +18,6 @@ use common_exception::Result;
 use super::RelationalProperty;
 use crate::optimizer::rule::AppliedRules;
 use crate::optimizer::rule::RuleID;
-use crate::optimizer::TableSet;
 use crate::plans::Operator;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
@@ -147,39 +146,5 @@ impl SExpr {
     /// Check if a rule is applied for current SExpr
     pub(crate) fn applied_rule(&self, rule_id: &RuleID) -> bool {
         self.applied_rules.get(rule_id)
-    }
-
-    pub(crate) fn used_tables(&self) -> Result<TableSet> {
-        match &self.plan {
-            RelOperator::LogicalGet(operator) => {
-                let mut table_set = TableSet::new();
-                table_set.insert(operator.table_index);
-                Ok(table_set)
-            }
-            RelOperator::PhysicalScan(operator) => {
-                let mut table_set = TableSet::new();
-                table_set.insert(operator.table_index);
-                Ok(table_set)
-            }
-            RelOperator::LogicalJoin(_)
-            | RelOperator::PhysicalHashJoin(_)
-            | RelOperator::UnionAll(_) => {
-                let mut table_set = TableSet::new();
-                table_set.extend(self.child(0)?.used_tables()?);
-                table_set.extend(self.child(1)?.used_tables()?);
-                Ok(table_set)
-            }
-            RelOperator::EvalScalar(_)
-            | RelOperator::Filter(_)
-            | RelOperator::Aggregate(_)
-            | RelOperator::Sort(_)
-            | RelOperator::Limit(_)
-            | RelOperator::Exchange(_) => {
-                let mut table_set = TableSet::new();
-                table_set.extend(self.child(0)?.used_tables()?);
-                Ok(table_set)
-            }
-            RelOperator::DummyTableScan(_) | RelOperator::Pattern(_) => Ok(TableSet::new()),
-        }
     }
 }

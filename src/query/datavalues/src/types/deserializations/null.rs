@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use common_exception::Result;
-use common_io::prelude::FormatSettings;
 
 use crate::ColumnRef;
 use crate::DataValue;
@@ -30,7 +29,7 @@ impl TypeDeserializer for NullDeserializer {
         self.builder.memory_size()
     }
 
-    fn de_binary(&mut self, _reader: &mut &[u8], _format: &FormatSettings) -> Result<()> {
+    fn de_binary(&mut self, _reader: &mut &[u8]) -> Result<()> {
         self.builder.append_default();
         Ok(())
     }
@@ -39,25 +38,14 @@ impl TypeDeserializer for NullDeserializer {
         self.builder.append_default();
     }
 
-    fn de_fixed_binary_batch(
-        &mut self,
-        _reader: &[u8],
-        _step: usize,
-        rows: usize,
-        _format: &FormatSettings,
-    ) -> Result<()> {
+    fn de_fixed_binary_batch(&mut self, _reader: &[u8], _step: usize, rows: usize) -> Result<()> {
         for _ in 0..rows {
             self.builder.append_default();
         }
         Ok(())
     }
 
-    fn de_json(&mut self, _value: &serde_json::Value, _format: &FormatSettings) -> Result<()> {
-        self.builder.append_default();
-        Ok(())
-    }
-
-    fn append_data_value(&mut self, _value: DataValue, _format: &FormatSettings) -> Result<()> {
+    fn append_data_value(&mut self, _value: DataValue) -> Result<()> {
         self.builder.append_default();
         Ok(())
     }

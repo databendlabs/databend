@@ -49,7 +49,6 @@ use futures::AsyncSeek;
 use opendal::Operator;
 use similar_asserts::traits::MakeDiff;
 
-use crate::processors::sources::input_formats::delimiter::RecordDelimiter;
 use crate::processors::sources::input_formats::input_context::InputContext;
 use crate::processors::sources::input_formats::input_pipeline::AligningStateTrait;
 use crate::processors::sources::input_formats::input_pipeline::BlockBuilderTrait;
@@ -75,14 +74,6 @@ fn col_offset(meta: &ColumnChunkMetaData) -> i64 {
 
 #[async_trait::async_trait]
 impl InputFormat for InputFormatParquet {
-    fn default_record_delimiter(&self) -> RecordDelimiter {
-        RecordDelimiter::Crlf
-    }
-
-    fn default_field_delimiter(&self) -> u8 {
-        b'_'
-    }
-
     async fn get_splits(
         &self,
         files: &[String],

@@ -12,14 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::io::Cursor;
-
 use chrono::Datelike;
 use chrono::NaiveDate;
 use common_exception::*;
-use common_io::cursor_ext::*;
 use common_io::prelude::BinaryRead;
-use common_io::prelude::FormatSettings;
 use common_io::prelude::StatBuffer;
 use lexical_core::FromLexical;
 use micromarshal::Unmarshal;
@@ -44,7 +40,7 @@ where
         self.builder.memory_size()
     }
 
-    fn de_binary(&mut self, reader: &mut &[u8], _format: &FormatSettings) -> Result<()> {
+    fn de_binary(&mut self, reader: &mut &[u8]) -> Result<()> {
         let value: T = reader.read_scalar()?;
         check_date(value.as_i32())?;
         self.builder.append_value(value);
@@ -55,13 +51,7 @@ where
         self.builder.append_value(T::default());
     }
 
-    fn de_fixed_binary_batch(
-        &mut self,
-        reader: &[u8],
-        step: usize,
-        rows: usize,
-        _format: &FormatSettings,
-    ) -> Result<()> {
+    fn de_fixed_binary_batch(&mut self, reader: &[u8], step: usize, rows: usize) -> Result<()> {
         for row in 0..rows {
             let mut reader = &reader[step * row..];
             let value: T = reader.read_scalar()?;
@@ -71,21 +61,7 @@ where
         Ok(())
     }
 
-    fn de_json(&mut self, value: &serde_json::Value, format: &FormatSettings) -> Result<()> {
-        match value {
-            serde_json::Value::String(v) => {
-                let mut reader = Cursor::new(v.as_bytes());
-                let date = reader.read_date_text(&format.timezone)?;
-                let days = uniform_date(date);
-                check_date(days.as_i32())?;
-                self.builder.append_value(days);
-                Ok(())
-            }
-            _ => Err(ErrorCode::BadBytes("Incorrect boolean value")),
-        }
-    }
-
-    fn append_data_value(&mut self, value: DataValue, _format: &FormatSettings) -> Result<()> {
+    fn append_data_value(&mut self, value: DataValue) -> Result<()> {
         let v = value.as_i64()? as i32;
         check_date(v)?;
         self.builder.append_value(v.as_());

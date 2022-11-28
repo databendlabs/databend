@@ -23,7 +23,7 @@ use common_storages_table_meta::meta::SnapshotVersion;
 use common_storages_table_meta::meta::TableSnapshot;
 use common_storages_table_meta::meta::TableSnapshotStatistics;
 use common_storages_table_meta::meta::TableSnapshotStatisticsVersion;
-use opendal::BytesReader;
+use opendal::raw::BytesReader;
 use opendal::Operator;
 
 use super::versioned_reader::VersionedReader;
@@ -123,6 +123,6 @@ async fn bytes_reader(op: &Operator, path: &str, len: Option<u64>) -> Result<Byt
         }
     };
 
-    let reader = object.range_reader(..len).await?;
+    let reader = object.range_reader(0..len).await?;
     Ok(Box::new(reader))
 }

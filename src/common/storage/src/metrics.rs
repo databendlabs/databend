@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::io::Result;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
@@ -20,13 +19,16 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use async_trait::async_trait;
-use opendal::io_util::observe_read;
-use opendal::io_util::ReadEvent;
-use opendal::ops::OpRead;
-use opendal::ops::OpWrite;
-use opendal::Accessor;
-use opendal::BytesReader;
+use opendal::raw::observe_read;
+use opendal::raw::Accessor;
+use opendal::raw::BytesReader;
+use opendal::raw::ReadEvent;
+use opendal::raw::RpRead;
+use opendal::raw::RpWrite;
 use opendal::Layer;
+use opendal::OpRead;
+use opendal::OpWrite;
+use opendal::Result;
 use parking_lot::RwLock;
 
 /// StorageMetrics represents the metrics of storage (all bytes metrics are compressed size).
@@ -180,10 +182,10 @@ impl Accessor for StorageMetricsAccessor {
         Some(self.inner.clone())
     }
 
-    async fn read(&self, path: &str, args: OpRead) -> Result<BytesReader> {
+    async fn read(&self, path: &str, args: OpRead) -> Result<(RpRead, BytesReader)> {
         let metric = self.metrics.clone();
 
-        self.inner.read(path, args).await.map(|r| {
+        self.inner.read(path, args).await.map(|(rp, r)| {
             let mut last_pending = None;
             let r = observe_read(r, move |e| {
                 let start = match last_pending {
@@ -202,11 +204,11 @@ impl Accessor for StorageMetricsAccessor {
                 metric.inc_read_bytes_cost(start.elapsed().as_millis() as u64);
             });
 
-            Box::new(r) as BytesReader
+            (rp, Box::new(r) as BytesReader)
         })
     }
 
-    async fn write(&self, path: &str, args: OpWrite, r: BytesReader) -> Result<u64> {
+    async fn write(&self, path: &str, args: OpWrite, r: BytesReader) -> Result<RpWrite> {
         let metric = self.metrics.clone();
 
         let mut last_pending = None;

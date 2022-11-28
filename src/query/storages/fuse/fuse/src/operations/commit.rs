@@ -12,7 +12,6 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use std::io::ErrorKind;
 use std::ops::Range;
 use std::sync::Arc;
 use std::time::Duration;
@@ -468,7 +467,7 @@ impl FuseTable {
         let object = operator.object(&hint_path);
         { || object.write(last_snapshot_path.as_bytes()) }
             .retry(backon::ExponentialBackoff::default().with_jitter())
-            .when(|err| err.kind() == ErrorKind::Interrupted)
+            .when(|err| err.is_temporary())
             .notify(|err, dur| {
                 warn!(
                     "fuse table write_last_snapshot_hint retry after {}s for error {:?}",

@@ -70,6 +70,10 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
         20,
         "2022-11-02: Add: users.proto/FileFormatOptions::row_tag",
     ),
+    (
+        21,
+        "2022-11-24: Add: users.proto/FileFormatOptions::nan_display",
+    ),
 ];
 
 pub const VER: u64 = META_CHANGE_LOG.last().unwrap().0;

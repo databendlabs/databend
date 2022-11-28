@@ -36,6 +36,7 @@ use common_storage::StorageMokaConfig as InnerStorageMokaConfig;
 use common_storage::StorageObsConfig as InnerStorageObsConfig;
 use common_storage::StorageOssConfig as InnerStorageOssConfig;
 use common_storage::StorageParams;
+use common_storage::StorageRedisConfig as InnerStorageRedisConfig;
 use common_storage::StorageS3Config as InnerStorageS3Config;
 use common_tracing::Config as InnerLogConfig;
 use common_tracing::FileConfig as InnerFileLogConfig;
@@ -52,7 +53,6 @@ use super::inner::CatalogConfig as InnerCatalogConfig;
 use super::inner::CatalogHiveConfig as InnerCatalogHiveConfig;
 use super::inner::Config as InnerConfig;
 use super::inner::MetaConfig as InnerMetaConfig;
-use super::inner::MetaType;
 use super::inner::QueryConfig as InnerQueryConfig;
 use crate::DATABEND_COMMIT_VERSION;
 
@@ -94,9 +94,6 @@ pub struct Config {
     // Storage backend config.
     #[clap(flatten)]
     pub storage: StorageConfig,
-
-    #[clap(skip)]
-    pub cache: CacheConfig,
 
     /// Note: Legacy Config API
     ///
@@ -171,7 +168,6 @@ impl From<InnerConfig> for Config {
             log: inner.log.into(),
             meta: inner.meta.into(),
             storage: inner.storage.into(),
-            cache: inner.cache.into(),
             catalog: HiveCatalogConfig::empty(),
 
             catalogs: inner
@@ -208,13 +204,29 @@ impl TryInto<InnerConfig> for Config {
             log: self.log.try_into()?,
             meta: self.meta.try_into()?,
             storage: self.storage.try_into()?,
-            cache: self.cache.try_into()?,
             catalogs,
         })
     }
 }
 
 /// Storage config group.
+///
+/// # TODO(xuanwo)
+///
+/// In the future, we will use the following storage config layout:
+///
+/// ```toml
+/// [storage]
+///
+/// [storage.data]
+/// type = "s3"
+///
+/// [storage.cache]
+/// type = "redis"
+///
+/// [storage.temperary]
+/// type = "s3"
+/// ```
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct StorageConfig {
@@ -256,6 +268,9 @@ pub struct StorageConfig {
     // OSS storage backend config
     #[clap(flatten)]
     pub oss: OssStorageConfig,
+
+    #[clap(skip)]
+    pub cache: CacheConfig,
 }
 
 impl Default for StorageConfig {
@@ -277,6 +292,8 @@ impl From<InnerStorageConfig> for StorageConfig {
             azblob: Default::default(),
             hdfs: Default::default(),
             obs: Default::default(),
+
+            cache: inner.cache.into(),
         };
 
         match inner.params {
@@ -340,6 +357,7 @@ impl TryInto<InnerStorageConfig> for StorageConfig {
                     _ => return Err(ErrorCode::StorageOther("not supported storage type")),
                 }
             },
+            cache: self.cache.try_into()?,
         })
     }
 }
@@ -465,6 +483,7 @@ impl HiveCatalogConfig {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct CacheConfig {
     #[serde(rename = "type")]
     pub cache_type: String,
@@ -477,6 +496,9 @@ pub struct CacheConfig {
 
     // Moka cache backend config.
     pub moka: MokaStorageConfig,
+
+    // Redis cache backend config.
+    pub redis: RedisStorageConfig,
 }
 
 impl Default for CacheConfig {
@@ -492,9 +514,13 @@ impl From<InnerCacheConfig> for CacheConfig {
             cache_type: "".to_string(),
             fs: FsStorageConfig::default(),
             moka: MokaStorageConfig::default(),
+            redis: RedisStorageConfig::default(),
         };
 
         match inner.params {
+            StorageParams::None => {
+                cfg.cache_type = "none".to_string();
+            }
             StorageParams::Fs(v) => {
                 cfg.cache_type = "fs".to_string();
                 cfg.fs = v.into();
@@ -502,6 +528,10 @@ impl From<InnerCacheConfig> for CacheConfig {
             StorageParams::Moka(v) => {
                 cfg.cache_type = "moka".to_string();
                 cfg.moka = v.into();
+            }
+            StorageParams::Redis(v) => {
+                cfg.cache_type = "redis".to_string();
+                cfg.redis = v.into();
             }
             v => unreachable!("{v:?} should not be used as cache backend"),
         }
@@ -517,8 +547,10 @@ impl TryInto<InnerCacheConfig> for CacheConfig {
             num_cpus: self.cache_num_cpus,
             params: {
                 match self.cache_type.as_str() {
+                    "none" => StorageParams::None,
                     "fs" => StorageParams::Fs(self.fs.try_into()?),
                     "moka" => StorageParams::Moka(self.moka.try_into()?),
+                    "redis" => StorageParams::Redis(self.redis.try_into()?),
                     _ => return Err(ErrorCode::StorageOther("not supported cache type")),
                 }
             },
@@ -1011,7 +1043,11 @@ impl TryInto<InnerStorageOssConfig> for OssStorageConfig {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
-pub struct MokaStorageConfig {}
+pub struct MokaStorageConfig {
+    pub max_capacity: u64,
+    pub time_to_live: i64,
+    pub time_to_idle: i64,
+}
 
 impl Default for MokaStorageConfig {
     fn default() -> Self {
@@ -1020,8 +1056,12 @@ impl Default for MokaStorageConfig {
 }
 
 impl From<InnerStorageMokaConfig> for MokaStorageConfig {
-    fn from(_: InnerStorageMokaConfig) -> Self {
-        Self {}
+    fn from(v: InnerStorageMokaConfig) -> Self {
+        Self {
+            max_capacity: v.max_capacity,
+            time_to_live: v.time_to_live,
+            time_to_idle: v.time_to_idle,
+        }
     }
 }
 
@@ -1029,7 +1069,69 @@ impl TryInto<InnerStorageMokaConfig> for MokaStorageConfig {
     type Error = ErrorCode;
 
     fn try_into(self) -> Result<InnerStorageMokaConfig> {
-        Ok(InnerStorageMokaConfig::default())
+        Ok(InnerStorageMokaConfig {
+            max_capacity: self.max_capacity,
+            time_to_live: self.time_to_live,
+            time_to_idle: self.time_to_idle,
+        })
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
+#[serde(default)]
+pub struct RedisStorageConfig {
+    pub endpoint_url: String,
+    pub username: String,
+    pub password: String,
+    pub root: String,
+    pub db: i64,
+    /// TTL in seconds
+    pub default_ttl: i64,
+}
+
+impl Default for RedisStorageConfig {
+    fn default() -> Self {
+        InnerStorageRedisConfig::default().into()
+    }
+}
+
+impl From<InnerStorageRedisConfig> for RedisStorageConfig {
+    fn from(v: InnerStorageRedisConfig) -> Self {
+        Self {
+            endpoint_url: v.endpoint_url.clone(),
+            username: v.username.unwrap_or_default(),
+            password: v.password.unwrap_or_default(),
+            root: v.root.clone(),
+            db: v.db,
+            default_ttl: v.default_ttl.unwrap_or_default(),
+        }
+    }
+}
+
+impl TryInto<InnerStorageRedisConfig> for RedisStorageConfig {
+    type Error = ErrorCode;
+
+    fn try_into(self) -> Result<InnerStorageRedisConfig> {
+        Ok(InnerStorageRedisConfig {
+            endpoint_url: self.endpoint_url.clone(),
+            username: if self.username.is_empty() {
+                None
+            } else {
+                Some(self.username.clone())
+            },
+            password: if self.password.is_empty() {
+                None
+            } else {
+                Some(self.password.clone())
+            },
+            root: self.root.clone(),
+            db: self.db,
+            default_ttl: if self.default_ttl == 0 {
+                None
+            } else {
+                Some(self.default_ttl)
+            },
+        })
     }
 }
 
@@ -1493,28 +1595,17 @@ impl From<InnerStderrLogConfig> for StderrLogConfig {
 }
 
 /// Meta config group.
+/// deny_unknown_fields to check unknown field, like the deprecated `address`.
 /// TODO(xuanwo): All meta_xxx should be rename to xxx.
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize, Args)]
-#[serde(default)]
+#[serde(default, deny_unknown_fields)]
 pub struct MetaConfig {
-    /// MetaStore type: remote, embedded, fallback
-    #[clap(long = "meta-type", default_value = "fallback")]
-    #[serde(rename = "type")]
-    pub meta_type: String,
-
     /// The dir to store persisted meta state for a embedded meta store
-    #[clap(
-        long = "meta-embedded-dir",
-        default_value = "./.databend/meta_embedded"
-    )]
+    #[clap(long = "meta-embedded-dir", default_value_t)]
     #[serde(alias = "meta_embedded_dir")]
     pub embedded_dir: String,
 
-    /// MetaStore backend address
-    #[clap(long = "meta-address", default_value_t)]
-    #[serde(alias = "meta_address")]
-    pub address: String,
-
+    /// MetaStore backend endpoints
     #[clap(long = "meta-endpoints", help = "MetaStore peers endpoints")]
     pub endpoints: Vec<String>,
 
@@ -1547,49 +1638,6 @@ pub struct MetaConfig {
     pub rpc_tls_meta_service_domain_name: String,
 }
 
-impl MetaConfig {
-    fn check_config(&mut self) -> Result<()> {
-        let t = match MetaType::from_str(&self.meta_type) {
-            Err(_) => {
-                return Err(ErrorCode::InvalidConfig(format!(
-                    "Invalid MetaType: {}",
-                    self.meta_type
-                )));
-            }
-            Ok(t) => t,
-        };
-
-        // Fallback is used for forward compatbility, that is:
-        // First check embedded config, then endpoints, finally address.
-        if t == MetaType::Fallback {
-            if !self.embedded_dir.is_empty() && self.endpoints.is_empty() {
-                self.meta_type = MetaType::Embedded.to_string();
-            } else {
-                self.meta_type = MetaType::Remote.to_string();
-            }
-        }
-        match t {
-            MetaType::Embedded => {
-                if self.embedded_dir.is_empty() {
-                    return Err(ErrorCode::InvalidConfig(
-                        "Embedded Meta but embedded_dir is empty",
-                    ));
-                }
-            }
-            MetaType::Remote => {
-                if self.address.is_empty() && self.endpoints.is_empty() {
-                    return Err(ErrorCode::InvalidConfig(
-                        "Remote Meta but address and enpoints are empty",
-                    ));
-                }
-            }
-            _ => {}
-        };
-
-        Ok(())
-    }
-}
-
 impl Default for MetaConfig {
     fn default() -> Self {
         InnerMetaConfig::default().into()
@@ -1599,12 +1647,9 @@ impl Default for MetaConfig {
 impl TryInto<InnerMetaConfig> for MetaConfig {
     type Error = ErrorCode;
 
-    fn try_into(mut self) -> Result<InnerMetaConfig> {
-        self.check_config()?;
-
+    fn try_into(self) -> Result<InnerMetaConfig> {
         Ok(InnerMetaConfig {
             embedded_dir: self.embedded_dir,
-            address: self.address,
             endpoints: self.endpoints,
             username: self.username,
             password: self.password,
@@ -1612,7 +1657,6 @@ impl TryInto<InnerMetaConfig> for MetaConfig {
             auto_sync_interval: self.auto_sync_interval,
             rpc_tls_meta_server_root_ca_cert: self.rpc_tls_meta_server_root_ca_cert,
             rpc_tls_meta_service_domain_name: self.rpc_tls_meta_service_domain_name,
-            meta_type: MetaType::from_str(&self.meta_type).unwrap(),
         })
     }
 }
@@ -1621,7 +1665,6 @@ impl From<InnerMetaConfig> for MetaConfig {
     fn from(inner: InnerMetaConfig) -> Self {
         Self {
             embedded_dir: inner.embedded_dir,
-            address: inner.address,
             endpoints: inner.endpoints,
             username: inner.username,
             password: inner.password,
@@ -1629,7 +1672,6 @@ impl From<InnerMetaConfig> for MetaConfig {
             auto_sync_interval: inner.auto_sync_interval,
             rpc_tls_meta_server_root_ca_cert: inner.rpc_tls_meta_server_root_ca_cert,
             rpc_tls_meta_service_domain_name: inner.rpc_tls_meta_service_domain_name,
-            meta_type: inner.meta_type.to_string(),
         }
     }
 }
@@ -1637,8 +1679,6 @@ impl From<InnerMetaConfig> for MetaConfig {
 impl Debug for MetaConfig {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         f.debug_struct("MetaConfig")
-            .field("meta_type", &self.meta_type)
-            .field("address", &self.address)
             .field("endpoints", &self.endpoints)
             .field("username", &self.username)
             .field("password", &mask_string(&self.password, 3))

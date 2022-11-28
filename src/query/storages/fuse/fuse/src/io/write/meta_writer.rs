@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::io::Error;
-use std::io::ErrorKind;
 
 use backon::ExponentialBackoff;
 use backon::Retryable;
@@ -28,7 +27,7 @@ where T: Serialize {
     let object = data_accessor.object(location);
     { || object.write(bs.as_slice()) }
         .retry(ExponentialBackoff::default().with_jitter())
-        .when(|err| err.kind() == ErrorKind::Interrupted)
+        .when(|err| err.is_temporary())
         .notify(|err, dur| {
             warn!(
                 "stage table sink write retry after {}s for error {:?}",

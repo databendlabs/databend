@@ -65,8 +65,6 @@ format = "text"
 dir = "./.databend/logs_1"
 
 [meta]
-# To enable embedded meta-store, set address to "".
-embedded_dir = "./.databend/meta_embedded_1"
 endpoints = ["0.0.0.0:9191"]
 username = "root"
 password = "root"

@@ -17,8 +17,6 @@ use common_datavalues::serializations::NullSerializer;
 use common_exception::Result;
 use pretty_assertions::assert_eq;
 
-mod helpers;
-
 #[test]
 fn test_convert_arrow() {
     let t = TimestampType::new_impl();
