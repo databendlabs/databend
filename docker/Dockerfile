@@ -1,7 +1,7 @@
 FROM ubuntu:22.04
 
 RUN apt-get update -y && \
-    apt-get install -y apt-transport-https ca-certificates && \
+    apt-get install -y apt-transport-https ca-certificates curl xxd && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* && \
     rm -rf /var/cache/apt/*
