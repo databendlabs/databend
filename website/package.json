@@ -14,7 +14,7 @@
     "write-translations": "docusaurus write-translations",
     "write-heading-ids": "docusaurus write-heading-ids",
     "download-translations": "crowdin download --config=../.github/crowdin.yml --export-only-approved --all",
-    "typecheck": "tsc"
+    "typecheck": "tsc "
   },
   "dependencies": {
     "@crowdin/cli": "^3.9.1",
