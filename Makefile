@@ -59,6 +59,9 @@ endif
 build-native:
 	bash ./scripts/build/build-native.sh
 
+build-deb:
+	cargo deb -p databend-binaries
+
 unit-test:
 	ulimit -n 10000;ulimit -s 16384; RUST_LOG="ERROR" bash ./scripts/ci/ci-run-unit-tests.sh
 

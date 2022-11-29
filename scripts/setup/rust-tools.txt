@@ -1,3 +1,4 @@
 cargo-audit@0.17.3
+cargo-deb@1.41.3
 cargo-machete@0.4.0
 taplo-cli@0.8.0

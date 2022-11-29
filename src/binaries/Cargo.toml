@@ -81,3 +81,21 @@ name = "databend-query"
 path = "query/main.rs"
 doctest = false
 test = false
+
+[package.metadata.deb]
+name = "databend"
+maintainer = "Databend Authors <opensource@datafuselabs.com>"
+copyright = "2022, Datafuse Labs"
+license-file = ["../../LICENSE", "0"]
+extended-description = """\
+Databend is a powerful cloud data warehouse. Built for elasticity and efficiency. \
+Free and open. Also available in the cloud: https://app.databend.com """
+depends = "$auto"
+section = "database"
+assets = [
+    ["target/release/databend-meta", "usr/bin/", "755"],
+    ["target/release/databend-metabench", "usr/bin/", "755"],
+    ["target/release/databend-metactl", "usr/bin/", "755"],
+    ["target/release/databend-query", "usr/bin/", "755"],
+    ["../../README.md", "usr/share/doc/databend/README", "644"],
+]
