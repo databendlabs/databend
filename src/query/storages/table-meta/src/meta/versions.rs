@@ -63,6 +63,24 @@ impl SnapshotVersion {
     }
 }
 
+impl Versioned<0> for v1::TableSnapshotStatistics {}
+
+pub enum TableSnapshotStatisticsVersion {
+    V0(PhantomData<v1::TableSnapshotStatistics>),
+}
+
+impl TableSnapshotStatisticsVersion {
+    pub fn version(&self) -> u64 {
+        match self {
+            TableSnapshotStatisticsVersion::V0(a) => Self::ver(a),
+        }
+    }
+
+    fn ver<const V: u64, T: Versioned<V>>(_v: &PhantomData<T>) -> u64 {
+        V
+    }
+}
+
 impl Versioned<0> for DataBlock {}
 
 impl Versioned<2> for BlockFilter {}
@@ -100,6 +118,20 @@ mod converters {
                 1 => Ok(SnapshotVersion::V1(ver_eq::<_, 1>(PhantomData))),
                 _ => Err(ErrorCode::Internal(format!(
                     "unknown snapshot segment version {value}, versions supported: 0, 1"
+                ))),
+            }
+        }
+    }
+
+    impl TryFrom<u64> for TableSnapshotStatisticsVersion {
+        type Error = ErrorCode;
+        fn try_from(value: u64) -> Result<Self, Self::Error> {
+            match value {
+                0 => Ok(TableSnapshotStatisticsVersion::V0(ver_eq::<_, 0>(
+                    PhantomData,
+                ))),
+                _ => Err(ErrorCode::Internal(format!(
+                    "unknown table snapshot statistics version {value}, versions supported: 0"
                 ))),
             }
         }

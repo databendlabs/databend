@@ -18,6 +18,7 @@ pub use v1::BlockMeta;
 pub use v1::SegmentInfo;
 pub use v1::TableSnapshot;
 pub use v1::TableSnapshotLite;
+pub use v1::TableSnapshotStatistics;
 
 use super::v0;
 use super::v1;
