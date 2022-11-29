@@ -16,8 +16,10 @@ mod escape;
 mod json;
 mod number_helpers;
 mod timestamp_helpers;
+mod date_helpers;
 
 pub use escape::write_escaped_string;
 pub use json::write_json_string;
 pub use number_helpers::PrimitiveWithFormat;
+pub use date_helpers::date_to_string;
 pub use timestamp_helpers::timestamp_to_string_micro;

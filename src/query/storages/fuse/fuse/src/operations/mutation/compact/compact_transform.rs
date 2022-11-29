@@ -20,6 +20,7 @@ use common_arrow::parquet::compression::CompressionOptions;
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
 use common_cache::Cache;
+use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::Chunk;
@@ -135,157 +136,12 @@ impl Processor for CompactTransform {
     }
 
     fn event(&mut self) -> Result<Event> {
-        if matches!(
-            &self.state,
-            State::CompactBlocks { .. } | State::GenerateSegment { .. } | State::Output { .. }
-        ) {
-            return Ok(Event::Sync);
-        }
-
-        if matches!(
-            &self.state,
-            State::ReadBlocks | State::SerializedBlocks(_) | State::SerializedSegment { .. }
-        ) {
-            return Ok(Event::Async);
-        }
-
-        if self.output.is_finished() {
-            self.input.finish();
-            return Ok(Event::Finished);
-        }
-
-        if !self.output.can_push() {
-            self.input.set_not_need_data();
-            return Ok(Event::NeedConsume);
-        }
-
-        if let Some(data_block) = self.output_data.take() {
-            self.output.push_data(Ok(data_block));
-            return Ok(Event::NeedConsume);
-        }
-
-        if self.input.is_finished() {
-            self.output.finish();
-            return Ok(Event::Finished);
-        }
-
-        if !self.input.has_data() {
-            self.input.set_need_data();
-            return Ok(Event::NeedData);
-        }
-
-        let input_data = self.input.pull_data().unwrap()?;
-        let meta = input_data
-            .get_meta()
-            .ok_or_else(|| ErrorCode::Internal("No block meta. It's a bug"))?;
-        let task_meta = CompactSourceMeta::from_meta(meta)?;
-        self.order = task_meta.order;
-        self.compact_tasks = task_meta.tasks.clone();
-
-        self.state = State::ReadBlocks;
-        Ok(Event::Async)
+        todo!("expression");
     }
 
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Consume) {
-            State::CompactBlocks {
-                mut blocks,
-                stats_of_columns,
-                mut trivals,
-            } => {
-                let mut serialize_states = Vec::new();
-                for stats in stats_of_columns {
-                    let block_num = stats.len();
-                    if block_num == 0 {
-                        self.block_metas.push(trivals.pop_front().unwrap());
-                        continue;
-                    }
-
-                    // concat blocks.
-                    let compact_blocks: Vec<_> = blocks.drain(0..block_num).collect();
-                    let new_block = DataBlock::concat_blocks(&compact_blocks)?;
-
-                    // generate block statistics.
-                    let col_stats = reduce_block_statistics(&stats, Some(&new_block))?;
-                    let row_count = new_block.num_rows() as u64;
-                    let block_size = new_block.memory_size() as u64;
-                    let (block_location, block_id) = self.location_gen.gen_block_location();
-
-                    // build block index.
-                    let (index_data, index_size, index_location) = {
-                        // write index
-                        let bloom_index = BlockFilter::try_create(&[&new_block])?;
-                        let index_block = bloom_index.filter_block;
-                        let location = self.location_gen.block_bloom_index_location(&block_id);
-                        let mut data = Vec::with_capacity(100 * 1024);
-                        let index_block_schema = &bloom_index.filter_schema;
-                        let (size, _) = serialize_data_blocks_with_compression(
-                            vec![index_block],
-                            index_block_schema,
-                            &mut data,
-                            CompressionOptions::Uncompressed,
-                        )?;
-                        (data, size, location)
-                    };
-
-                    // serialize data block.
-                    let mut block_data = Vec::with_capacity(100 * 1024 * 1024);
-                    let schema = new_block.schema().clone();
-                    let (file_size, meta_data) =
-                        serialize_data_blocks(vec![new_block], &schema, &mut block_data)?;
-                    let col_metas = util::column_metas(&meta_data)?;
-
-                    // new block meta.
-                    let new_meta = BlockMeta::new(
-                        row_count,
-                        block_size,
-                        file_size,
-                        col_stats,
-                        col_metas,
-                        None,
-                        block_location.clone(),
-                        Some(index_location.clone()),
-                        index_size,
-                    );
-                    self.abort_operation.add_block(&new_meta);
-                    self.block_metas.push(Arc::new(new_meta));
-
-                    serialize_states.push(SerializeState {
-                        block_data,
-                        block_location: block_location.0,
-                        index_data,
-                        index_location: index_location.0,
-                    });
-                }
-                self.state = State::SerializedBlocks(serialize_states);
-            }
-            State::GenerateSegment => {
-                let metas = std::mem::take(&mut self.block_metas);
-                let stats = reduce_block_metas(&metas, self.thresholds)?;
-                let segment_info = SegmentInfo::new(metas, stats);
-                let location = self.location_gen.gen_segment_info_location();
-                self.abort_operation.add_segment(location.clone());
-                self.state = State::SerializedSegment {
-                    data: serde_json::to_vec(&segment_info)?,
-                    location,
-                    segment: Arc::new(segment_info),
-                };
-            }
-            State::Output { location, segment } => {
-                if let Some(segment_cache) = CacheManager::instance().get_table_segment_cache() {
-                    let cache = &mut segment_cache.write();
-                    cache.put(location.clone(), segment.clone());
-                }
-
-                let meta = CompactSinkMeta::create(
-                    self.order,
-                    location,
-                    segment,
-                    std::mem::take(&mut self.abort_operation),
-                );
-                self.output_data = Some(Chunk::empty_with_meta(meta));
-            }
-            _ => return Err(ErrorCode::Internal("It's a bug.")),
+            _ => todo!("expression"),
         }
 
         Ok(())

@@ -35,6 +35,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::Chunk;
 use common_expression::ChunkCompactThresholds;
+use common_expression::RemoteExpr;
 use common_meta_app::schema::TableInfo;
 use common_sharing::create_share_table_operator;
 // use common_sql::ExpressionParser;

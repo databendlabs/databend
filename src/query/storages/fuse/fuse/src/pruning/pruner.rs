@@ -145,7 +145,6 @@ pub fn new_filter_pruner(
 }
 
 mod util {
-    use common_catalog::plan::ExpressionVisitor;
     use common_catalog::plan::Recursion;
     use common_exception::ErrorCode;
 
@@ -183,38 +182,5 @@ mod util {
     struct PointQueryVisitor {
         // indices of columns which used by point query kept here
         columns: HashSet<String>,
-    }
-
-    impl ExpressionVisitor for PointQueryVisitor {
-        fn pre_visit(mut self, expr: &Expression) -> Result<Recursion<Self>> {
-            // 1. only binary op "=" is considered, which is NOT enough
-            // 2. should combine this logic with Filter
-            match expr {
-                Expression::Function { name, args, .. }
-                    if name.as_str() == "=" && args.len() == 2 =>
-                {
-                    match (&args[0], &args[1]) {
-                        (Expression::IndexedVariable { name, .. }, Expression::Constant { .. })
-                        | (Expression::Constant { .. }, Expression::IndexedVariable { name, .. }) =>
-                        {
-                            self.columns.insert(name.clone());
-                            Ok(Recursion::Stop(self))
-                        }
-                        _ => Ok(Recursion::Continue(self)),
-                    }
-                }
-                _ => Ok(Recursion::Continue(self)),
-            }
-        }
-    }
-
-    pub fn columns_of_eq_expressions(filter_expr: &Expression) -> Result<Vec<String>> {
-        let visitor = PointQueryVisitor {
-            columns: HashSet::new(),
-        };
-
-        filter_expr
-            .accept(visitor)
-            .map(|r| r.columns.into_iter().collect())
     }
 }

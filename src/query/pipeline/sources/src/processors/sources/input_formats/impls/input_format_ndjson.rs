@@ -75,6 +75,12 @@ impl InputFormatTextBase for InputFormatNDJson {
     }
 
     fn deserialize(builder: &mut ChunkBuilder<Self>, batch: RowBatch) -> Result<()> {
+        let field_decoder = builder
+            .field_decoder
+            .as_any()
+            .downcast_ref::<FieldJsonAstDecoder>()
+            .expect("must success");
+            
         let columns = &mut builder.mutable_columns;
         let mut start = 0usize;
         let start_row = batch.start_row;
