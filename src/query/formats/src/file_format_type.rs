@@ -27,6 +27,8 @@ use common_meta_types::StageFileFormatType;
 use common_settings::Settings;
 
 use super::clickhouse::ClickhouseSuffix;
+use crate::delimiter::RecordDelimiter;
+use crate::format_option_checker::get_format_option_checker;
 use crate::output_format::CSVOutputFormat;
 use crate::output_format::CSVWithNamesAndTypesOutputFormat;
 use crate::output_format::CSVWithNamesOutputFormat;
@@ -55,12 +57,6 @@ pub trait FileFormatTypeExt {
         options: &FileFormatOptionsExt,
     ) -> Result<FileFormatOptionsExt>;
 
-    fn get_format_settings(
-        &self,
-        final_options: &FileFormatOptionsExt,
-        settings: &Settings,
-    ) -> Result<FormatSettings>;
-
     fn get_content_type(&self) -> String;
 }
 
@@ -78,6 +74,24 @@ pub struct FileFormatOptionsExt {
 impl FileFormatOptionsExt {
     pub fn get_quote_char(&self) -> u8 {
         self.quote.as_bytes()[0]
+    }
+
+    pub fn get_field_delimiter(&self) -> u8 {
+        let fd = &self.stage.field_delimiter;
+        if fd.is_empty() {
+            0 // dummy
+        } else {
+            fd.as_bytes()[0]
+        }
+    }
+
+    pub fn get_record_delimiter(&self) -> Result<RecordDelimiter> {
+        let fd = &self.stage.record_delimiter;
+        if fd.is_empty() {
+            Ok(RecordDelimiter::Any(0)) // dummy
+        } else {
+            RecordDelimiter::try_from(fd.as_bytes())
+        }
     }
 
     pub fn get_output_format_from_settings_clickhouse(
@@ -217,6 +231,7 @@ impl FileFormatTypeExt for StageFileFormatType {
             skip_header: settings.get_format_skip_header()?,
             field_delimiter: settings.get_format_field_delimiter()?,
             record_delimiter: settings.get_format_record_delimiter()?,
+            nan_display: settings.get_format_nan_display()?,
             escape: settings.get_format_escape()?,
             compression: StageFileCompression::from_str(&settings.get_format_compression()?)
                 .map_err_to_code(
@@ -249,44 +264,9 @@ impl FileFormatTypeExt for StageFileFormatType {
         options: &FileFormatOptionsExt,
     ) -> Result<FileFormatOptionsExt> {
         let mut options = options.to_owned();
-        check_options(&mut options.stage)?;
-
-        match self {
-            StageFileFormatType::Csv => final_csv_options(&mut options)?,
-            StageFileFormatType::Tsv => final_tsv_options(&mut options)?,
-            StageFileFormatType::Json => {}
-            StageFileFormatType::NdJson => {}
-            StageFileFormatType::Avro => {}
-            StageFileFormatType::Orc => {}
-            StageFileFormatType::Parquet => final_tsv_options(&mut options)?,
-            StageFileFormatType::Xml => {}
-        }
+        let checker = get_format_option_checker(&options.stage.format)?;
+        checker.check_options(&mut options)?;
         Ok(options)
-    }
-
-    fn get_format_settings(
-        &self,
-        options: &FileFormatOptionsExt,
-        settings: &Settings,
-    ) -> Result<FormatSettings> {
-        let tz = parse_timezone(settings)?;
-        let format_setting = match self {
-            StageFileFormatType::Csv => format_setting_csv(options, tz),
-            StageFileFormatType::Tsv => format_setting_tsv(options, tz),
-            StageFileFormatType::Json => {
-                unreachable!()
-            }
-            StageFileFormatType::NdJson => format_setting_ndjson(options, tz),
-            StageFileFormatType::Avro => {
-                unreachable!()
-            }
-            StageFileFormatType::Orc => {
-                unreachable!()
-            }
-            StageFileFormatType::Parquet => format_setting_parquet(options, tz),
-            StageFileFormatType::Xml => format_setting_xml(options, tz),
-        };
-        Ok(format_setting)
     }
 
     fn get_content_type(&self) -> String {
@@ -299,150 +279,6 @@ impl FileFormatTypeExt for StageFileFormatType {
         }
         .to_string()
     }
-}
-
-fn check_options(options: &mut FileFormatOptions) -> Result<()> {
-    if options.escape.len() > 1 {
-        return Err(ErrorCode::InvalidArgument(
-            "escape can only contain one char",
-        ));
-    };
-
-    if options.field_delimiter.len() > 1 {
-        return Err(ErrorCode::InvalidArgument(
-            "field_delimiter can only contain one char",
-        ));
-    };
-
-    if options.record_delimiter.len() > 1 && options.record_delimiter.as_str() != "\r\n" {
-        return Err(ErrorCode::InvalidArgument(
-            "record_delimiter can only contain one char except '\r\n'",
-        ));
-    };
-
-    if options.record_delimiter.is_empty() {
-        options.record_delimiter = '\n'.to_string();
-    }
-
-    Ok(())
-}
-
-// todo(youngsofun): return error for unused options after we support NONE.
-fn final_csv_options(options: &mut FileFormatOptionsExt) -> Result<()> {
-    if options.stage.field_delimiter.is_empty() {
-        options.stage.field_delimiter = ','.to_string();
-    }
-    if options.quote.is_empty() {
-        options.quote = "\"".to_string();
-    }
-    Ok(())
-}
-
-fn final_tsv_options(options: &mut FileFormatOptionsExt) -> Result<()> {
-    if options.stage.field_delimiter.is_empty() {
-        options.stage.field_delimiter = '\t'.to_string();
-    }
-    if options.quote.is_empty() {
-        options.quote = "\'".to_string();
-    }
-    Ok(())
-}
-
-fn format_setting_csv(options: &FileFormatOptionsExt, timezone: Tz) -> FormatSettings {
-    FormatSettings {
-        timezone,
-        nested: Default::default(),
-        true_bytes: TRUE_BYTES_LOWER.as_bytes().to_vec(),
-        false_bytes: FALSE_BYTES_LOWER.as_bytes().to_vec(),
-        nan_bytes: NAN_BYTES_LOWER.as_bytes().to_vec(),
-        inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
-        null_bytes: NULL_BYTES_ESCAPE.as_bytes().to_vec(),
-        quote_char: options.quote.as_bytes()[0],
-        escape: FormatSettings::parse_escape(&options.stage.escape, None),
-        record_delimiter: options.stage.record_delimiter.as_bytes().to_vec(),
-        field_delimiter: options.stage.field_delimiter.as_bytes().to_vec(),
-
-        // not used
-        empty_as_default: true,
-        json_quote_denormals: false,
-        json_escape_forward_slashes: true,
-        ident_case_sensitive: false,
-        row_tag: vec![],
-    }
-}
-
-fn format_setting_tsv(options: &FileFormatOptionsExt, timezone: Tz) -> FormatSettings {
-    FormatSettings {
-        timezone,
-        nested: Default::default(),
-        true_bytes: TRUE_BYTES_NUM.as_bytes().to_vec(),
-        false_bytes: FALSE_BYTES_NUM.as_bytes().to_vec(),
-        nan_bytes: NAN_BYTES_LOWER.as_bytes().to_vec(),
-        inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
-        null_bytes: NULL_BYTES_ESCAPE.as_bytes().to_vec(),
-        quote_char: options.quote.as_bytes()[0],
-        escape: FormatSettings::parse_escape(&options.stage.escape, Some(b'\\')),
-        record_delimiter: options.stage.record_delimiter.as_bytes().to_vec(),
-        field_delimiter: options.stage.field_delimiter.as_bytes().to_vec(),
-
-        // not used
-        empty_as_default: true,
-        json_quote_denormals: false,
-        json_escape_forward_slashes: true,
-        ident_case_sensitive: false,
-        row_tag: vec![],
-    }
-}
-
-fn format_setting_ndjson(options: &FileFormatOptionsExt, timezone: Tz) -> FormatSettings {
-    FormatSettings {
-        timezone,
-        nested: Default::default(),
-        true_bytes: TRUE_BYTES_LOWER.as_bytes().to_vec(),
-        false_bytes: FALSE_BYTES_LOWER.as_bytes().to_vec(),
-        nan_bytes: NULL_BYTES_LOWER.as_bytes().to_vec(),
-        inf_bytes: NULL_BYTES_LOWER.as_bytes().to_vec(),
-        null_bytes: NULL_BYTES_LOWER.as_bytes().to_vec(),
-        quote_char: b'\"',
-        escape: FormatSettings::parse_escape(&options.stage.escape, Some(b'\\')),
-        record_delimiter: vec![b'\n'],
-        field_delimiter: vec![b','],
-
-        // not used
-        empty_as_default: true,
-        json_quote_denormals: false,
-        json_escape_forward_slashes: true,
-        ident_case_sensitive: options.ident_case_sensitive,
-        row_tag: vec![],
-    }
-}
-
-fn format_setting_xml(options: &FileFormatOptionsExt, timezone: Tz) -> FormatSettings {
-    FormatSettings {
-        timezone,
-        nested: Default::default(),
-        true_bytes: TRUE_BYTES_LOWER.as_bytes().to_vec(),
-        false_bytes: FALSE_BYTES_LOWER.as_bytes().to_vec(),
-        nan_bytes: NULL_BYTES_LOWER.as_bytes().to_vec(),
-        inf_bytes: NULL_BYTES_LOWER.as_bytes().to_vec(),
-        null_bytes: NULL_BYTES_LOWER.as_bytes().to_vec(),
-        ident_case_sensitive: options.ident_case_sensitive,
-        row_tag: options.stage.row_tag.clone().into_bytes(),
-
-        // not used
-        empty_as_default: true,
-        json_quote_denormals: false,
-        json_escape_forward_slashes: true,
-        quote_char: b'\"',
-        escape: FormatSettings::parse_escape(&options.stage.escape, Some(b'\\')),
-        record_delimiter: vec![b'\n'],
-        field_delimiter: vec![b','],
-    }
-}
-
-fn format_setting_parquet(options: &FileFormatOptionsExt, timezone: Tz) -> FormatSettings {
-    // dummy
-    format_setting_csv(options, timezone)
 }
 
 pub fn parse_timezone(settings: &Settings) -> Result<Tz> {

@@ -28,7 +28,7 @@ use futures::AsyncRead;
 use futures_util::stream::FuturesUnordered;
 use futures_util::AsyncReadExt;
 use futures_util::StreamExt;
-use opendal::io_util::CompressAlgorithm;
+use opendal::raw::CompressAlgorithm;
 
 use crate::processors::sources::input_formats::beyond_end_reader::BeyondEndReader;
 use crate::processors::sources::input_formats::input_context::InputContext;

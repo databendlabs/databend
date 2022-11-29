@@ -16,11 +16,11 @@ This post was originally published by [Anne-Laure Civeyrac](https://blog.mergify
 
 :::
 
-![image](../static/img/blog/they-use-mergify-0.png)
+![image](/img/blog/they-use-mergify-0.png)
 
 Every day, major projects use Mergify to automate their GitHub workflow. Whether they have a core team of 3 or 50 people, the one thing they all have in common is that the project leads are willing to let their developers focus on what’s really important—code. So we decided to meet with some of them to get to know more about the challenges they face and discover how Mergify helps their teams be more efficient when it comes to pull requests. This time, we sat down (virtually) with [Xuanwo](https://twitter.com/OnlyXuanwo), an infrastructure engineer who oversees automation, distributed systems and storage for the [Databend](https://databend.rs/) project.
 
-![image](../static/img/blog/they-use-mergify-1.png)
+![image](/img/blog/they-use-mergify-1.png)
 
 Xuanwo
 
@@ -36,7 +36,7 @@ Right now, we have more than 100 contributors on Databend, with about 30 of them
 
 Databend is a very new project and it doesn’t have a stable release yet, so our pull request \[PR\] workflow is quite simple. All our contributions go through GitHub PRs. For every PR, we use [GitHub Actions as the CI](https://github.com/features/actions), where we run `cargo check`, `cargo fmt`, `cargo clippy`, and all our test cases. If all the checks pass, we merge the PR. And once on the main branch, the PR runs production CI, which goes through all test cases with the release build. We then release a nightly version daily, uploading our release builds to GitHub releases and the [Docker Hub Registry](https://hub.docker.com/_/registry).
 
-![image](../static/img/blog/they-use-mergify-2.png)
+![image](/img/blog/they-use-mergify-2.png)
 
 **How many people need to approve PRs?**
 
@@ -50,7 +50,7 @@ Mainly the PR merge speed! Our developers are coding in [Rust](https://www.rust-
 
 Before coming across Mergify, we enabled the option on GitHub that requires code to be updated before merging. But it added a lot of work for our maintainers, who had to merge the main branch repeatedly.
 
-![image](../static/img/blog/they-use-mergify-3.png)
+![image](/img/blog/they-use-mergify-3.png)
 
 So to make their lives easier, we implemented Mergify to update the branch automatically and merge PRs after all tests have passed.
 
@@ -62,7 +62,7 @@ The automatic merge! And with the help of the Mergify team, we enabled the merge
 
 Oh, I love PR actions. Although I can implement the same features with GitHub Actions, I find Mergify’s PR actions more simple and exciting. For example, last week, we introduced a new requirement that every PR must be semantic—we want all PRs to contain a valid title starting with a type like “fix”, “feat”, or “refactor”.
 
-![image](../static/img/blog/they-use-mergify-4.png)
+![image](/img/blog/they-use-mergify-4.png)
 
 [Actions](https://docs.mergify.com/actions/) 
 

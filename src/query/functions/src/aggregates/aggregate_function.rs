@@ -17,7 +17,9 @@ use std::fmt;
 use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::Bitmap;
+use common_base::base::ThreadPool;
 use common_datavalues::prelude::*;
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 use super::StateAddr;
@@ -67,9 +69,37 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
 
     fn merge(&self, _place: StateAddr, _rhs: StateAddr) -> Result<()>;
 
-    // TODO append the value into the column builder
+    fn support_merge_parallel(&self) -> bool {
+        false
+    }
+
+    fn merge_parallel(
+        &self,
+        _pool: &mut ThreadPool,
+        _place: StateAddr,
+        _rhs: StateAddr,
+    ) -> Result<()> {
+        Err(ErrorCode::Unimplemented(format!(
+            "merge_parallel is not implemented for {}",
+            self.name()
+        )))
+    }
+
+    fn batch_merge_result(
+        &self,
+        places: Vec<StateAddr>,
+        array: &mut dyn MutableColumn,
+    ) -> Result<()> {
+        for place in places {
+            self.merge_result(place, array)?;
+        }
+        Ok(())
+    }
+
     fn merge_result(&self, _place: StateAddr, array: &mut dyn MutableColumn) -> Result<()>;
 
+    // std::mem::needs_drop::<State>
+    // if true will call drop_state
     fn need_manual_drop_state(&self) -> bool {
         false
     }

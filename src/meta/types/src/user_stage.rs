@@ -17,6 +17,7 @@ use std::str::FromStr;
 
 use chrono::DateTime;
 use chrono::Utc;
+use common_io::consts::NAN_BYTES_SNAKE;
 use common_storage::StorageParams;
 
 use crate::UserIdentity;
@@ -171,6 +172,7 @@ pub struct FileFormatOptions {
     pub skip_header: u64,
     pub field_delimiter: String,
     pub record_delimiter: String,
+    pub nan_display: String,
     pub escape: String,
     pub compression: StageFileCompression,
     pub row_tag: String,
@@ -182,6 +184,7 @@ impl Default for FileFormatOptions {
             format: StageFileFormatType::default(),
             record_delimiter: "\n".to_string(),
             field_delimiter: ",".to_string(),
+            nan_display: NAN_BYTES_SNAKE.to_string(),
             skip_header: 0,
             escape: "".to_string(),
             compression: StageFileCompression::default(),

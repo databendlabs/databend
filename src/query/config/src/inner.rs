@@ -25,7 +25,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_grpc::RpcClientConf;
 use common_grpc::RpcClientTlsConfig;
-use common_storage::CacheConfig;
 use common_storage::StorageConfig;
 use common_tracing::Config as LogConfig;
 use common_users::idm_config::IDMConfig;
@@ -51,9 +50,6 @@ pub struct Config {
     // Storage backend config.
     pub storage: StorageConfig,
 
-    // Cache backend config.
-    pub cache: CacheConfig,
-
     // external catalog config.
     // - Later, catalog information SHOULD be kept in KV Service
     // - currently only supports HIVE (via hive meta store)
@@ -65,8 +61,12 @@ impl Config {
     ///
     /// In the future, we could have `ConfigV1` and `ConfigV2`.
     pub fn load() -> Result<Self> {
-        let cfg = OuterV0Config::load()?.try_into()?;
+        let cfg: Self = OuterV0Config::load()?.try_into()?;
 
+        // Only check meta config when cmd is empty.
+        if cfg.cmd.is_empty() {
+            cfg.meta.check_valid()?;
+        }
         Ok(cfg)
     }
 
@@ -224,33 +224,11 @@ impl QueryConfig {
     }
 }
 
-#[derive(
-    serde::Serialize,
-    serde::Deserialize,
-    Debug,
-    PartialEq,
-    Eq,
-    Clone,
-    strum_macros::EnumString,
-    strum_macros::Display,
-)]
-#[strum(serialize_all = "camelCase")]
-pub enum MetaType {
-    Remote,
-
-    Embedded,
-
-    // Fallback is used for forward compatbility, that is:
-    // First check embedded config, then endpoints, finally address.
-    Fallback,
-}
-
 #[derive(Clone, PartialEq, Eq)]
 pub struct MetaConfig {
     /// The dir to store persisted meta state for a embedded meta store
     pub embedded_dir: String,
-    /// MetaStore backend address
-    pub address: String,
+    /// MetaStore endpoint address
     pub endpoints: Vec<String>,
     /// MetaStore backend user name
     pub username: String,
@@ -264,14 +242,12 @@ pub struct MetaConfig {
     /// Certificate for client to identify meta rpc serve
     pub rpc_tls_meta_server_root_ca_cert: String,
     pub rpc_tls_meta_service_domain_name: String,
-    pub meta_type: MetaType,
 }
 
 impl Default for MetaConfig {
     fn default() -> Self {
         Self {
-            embedded_dir: "./.databend/meta_embedded".to_string(),
-            address: "".to_string(),
+            embedded_dir: "".to_string(),
             endpoints: vec![],
             username: "root".to_string(),
             password: "".to_string(),
@@ -279,14 +255,31 @@ impl Default for MetaConfig {
             auto_sync_interval: 10,
             rpc_tls_meta_server_root_ca_cert: "".to_string(),
             rpc_tls_meta_service_domain_name: "localhost".to_string(),
-            meta_type: MetaType::Fallback,
         }
     }
 }
 
 impl MetaConfig {
     pub fn is_embedded_meta(&self) -> Result<bool> {
-        Ok(self.meta_type == MetaType::Embedded)
+        Ok(!self.embedded_dir.is_empty())
+    }
+
+    pub fn check_valid(&self) -> Result<()> {
+        let has_embedded_dir = !self.embedded_dir.is_empty();
+        let has_remote = !self.endpoints.is_empty();
+        if has_embedded_dir && has_remote {
+            return Err(ErrorCode::InvalidConfig(
+                "Can not set embedded_dir and endpoints at the same time, embedded_dir is only for testing, please remove this config".to_string(),
+            ));
+        }
+
+        if !has_embedded_dir && !has_remote {
+            return Err(ErrorCode::InvalidConfig(
+                "Please set your meta endpoints config: endpoints = [<your-meta-service-endpoints>]".to_string(),
+            ));
+        }
+
+        Ok(())
     }
 
     pub fn is_tls_enabled(&self) -> bool {
@@ -303,7 +296,6 @@ impl MetaConfig {
 
     pub fn to_meta_grpc_client_conf(&self) -> RpcClientConf {
         RpcClientConf {
-            address: self.address.clone(),
             endpoints: self.endpoints.clone(),
             username: self.username.clone(),
             password: self.password.clone(),
@@ -326,7 +318,6 @@ impl MetaConfig {
 impl Debug for MetaConfig {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         f.debug_struct("MetaConfig")
-            .field("address", &self.address)
             .field("endpoints", &self.endpoints)
             .field("username", &self.username)
             .field("password", &mask_string(&self.password, 3))

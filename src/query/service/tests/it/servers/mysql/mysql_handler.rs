@@ -70,7 +70,7 @@ async fn test_rejected_session_with_sequence() -> Result<()> {
                 assert_eq!(error.code(), 1067);
                 assert_eq!(
                     error.message(),
-                    "Reject connection, cause: Server error: `ERROR HY000 (1815): The current accept connection has exceeded max_active_sessions config'"
+                    "Reject connection, cause: Server error: `ERROR HY000 (1815): Current active sessions (1) has exceeded the max_active_sessions limit (1)'"
                 );
             }
         };
@@ -109,7 +109,7 @@ async fn test_rejected_session_with_parallel() -> Result<()> {
                 assert_eq!(error.code(), 1067);
                 assert_eq!(
                     error.message(),
-                    "Reject connection, cause: Server error: `ERROR HY000 (1815): The current accept connection has exceeded max_active_sessions config'"
+                    "Reject connection, cause: Server error: `ERROR HY000 (1815): Current active sessions (1) has exceeded the max_active_sessions limit (1)'"
                 );
                 CreateServerResult::Rejected
             }

@@ -33,247 +33,39 @@ pub struct TransformAggregator;
 
 impl TransformAggregator {
     pub fn try_create_final(
-        input_port: Arc<InputPort>,
-        output_port: Arc<OutputPort>,
         transform_params: AggregatorTransformParams,
         ctx: Arc<QueryContext>,
     ) -> Result<ProcessorPtr> {
-        let aggregator_params = transform_params.aggregator_params;
+        let aggregator_params = transform_params.aggregator_params.clone();
 
+        let max_threads = ctx.get_settings().get_max_threads()? as usize;
         if aggregator_params.group_columns.is_empty() {
             return AggregatorTransform::create(
                 ctx,
-                input_port,
-                output_port,
-                FinalSingleStateAggregator::try_create(&aggregator_params)?,
+                transform_params,
+                FinalSingleStateAggregator::try_create(&aggregator_params, max_threads)?,
             );
         }
 
         todo!("expression");
-        // match aggregator_params.aggregate_functions.is_empty() {
-        //     true => match transform_params.method {
-        //         HashMethodKind::KeysU8(method) => AggregatorTransform::create(
-        //             ctx.clone(),
-        //             transform_params.transform_input_port,
-        //             transform_params.transform_output_port,
-        //             KeysU8FinalAggregator::<false>::create(ctx, method, aggregator_params)?,
-        //         ),
-        //         HashMethodKind::KeysU16(method) => AggregatorTransform::create(
-        //             ctx.clone(),
-        //             transform_params.transform_input_port,
-        //             transform_params.transform_output_port,
-        //             KeysU16FinalAggregator::<false>::create(ctx, method, aggregator_params)?,
-        //         ),
-        //         HashMethodKind::KeysU32(method) => AggregatorTransform::create(
-        //             ctx.clone(),
-        //             transform_params.transform_input_port,
-        //             transform_params.transform_output_port,
-        //             KeysU32FinalAggregator::<false>::create(ctx, method, aggregator_params)?,
-        //         ),
-        //         HashMethodKind::KeysU64(method) => AggregatorTransform::create(
-        //             ctx.clone(),
-        //             transform_params.transform_input_port,
-        //             transform_params.transform_output_port,
-        //             KeysU64FinalAggregator::<false>::create(ctx, method, aggregator_params)?,
-        //         ),
-        //         HashMethodKind::Serializer(method) => AggregatorTransform::create(
-        //             ctx.clone(),
-        //             transform_params.transform_input_port,
-        //             transform_params.transform_output_port,
-        //             SerializerFinalAggregator::<false>::create(ctx, method, aggregator_params)?,
-        //         ),
-        //         HashMethodKind::KeysU128(method) => AggregatorTransform::create(
-        //             ctx.clone(),
-        //             transform_params.transform_input_port,
-        //             transform_params.transform_output_port,
-        //             KeysU128FinalAggregator::<false>::create(ctx, method, aggregator_params)?,
-        //         ),
-        //         HashMethodKind::KeysU256(method) => AggregatorTransform::create(
-        //             ctx.clone(),
-        //             transform_params.transform_input_port,
-        //             transform_params.transform_output_port,
-        //             KeysU256FinalAggregator::<false>::create(ctx, method, aggregator_params)?,
-        //         ),
-        //         HashMethodKind::KeysU512(method) => AggregatorTransform::create(
-        //             ctx.clone(),
-        //             transform_params.transform_input_port,
-        //             transform_params.transform_output_port,
-        //             KeysU512FinalAggregator::<false>::create(ctx, method, aggregator_params)?,
-        //         ),
-        //     },
-        //     false => match transform_params.method {
-        //         HashMethodKind::KeysU8(method) => AggregatorTransform::create(
-        //             ctx.clone(),
-        //             transform_params.transform_input_port,
-        //             transform_params.transform_output_port,
-        //             KeysU8FinalAggregator::<true>::create(ctx, method, aggregator_params)?,
-        //         ),
-        //         HashMethodKind::KeysU16(method) => AggregatorTransform::create(
-        //             ctx.clone(),
-        //             transform_params.transform_input_port,
-        //             transform_params.transform_output_port,
-        //             KeysU16FinalAggregator::<true>::create(ctx, method, aggregator_params)?,
-        //         ),
-        //         HashMethodKind::KeysU32(method) => AggregatorTransform::create(
-        //             ctx.clone(),
-        //             transform_params.transform_input_port,
-        //             transform_params.transform_output_port,
-        //             KeysU32FinalAggregator::<true>::create(ctx, method, aggregator_params)?,
-        //         ),
-        //         HashMethodKind::KeysU64(method) => AggregatorTransform::create(
-        //             ctx.clone(),
-        //             transform_params.transform_input_port,
-        //             transform_params.transform_output_port,
-        //             KeysU64FinalAggregator::<true>::create(ctx, method, aggregator_params)?,
-        //         ),
-        //         HashMethodKind::Serializer(method) => AggregatorTransform::create(
-        //             ctx.clone(),
-        //             transform_params.transform_input_port,
-        //             transform_params.transform_output_port,
-        //             SerializerFinalAggregator::<true>::create(ctx, method, aggregator_params)?,
-        //         ),
-        //         HashMethodKind::KeysU128(method) => AggregatorTransform::create(
-        //             ctx.clone(),
-        //             transform_params.transform_input_port,
-        //             transform_params.transform_output_port,
-        //             KeysU128FinalAggregator::<true>::create(ctx, method, aggregator_params)?,
-        //         ),
-        //         HashMethodKind::KeysU256(method) => AggregatorTransform::create(
-        //             ctx.clone(),
-        //             transform_params.transform_input_port,
-        //             transform_params.transform_output_port,
-        //             KeysU256FinalAggregator::<true>::create(ctx, method, aggregator_params)?,
-        //         ),
-        //         HashMethodKind::KeysU512(method) => AggregatorTransform::create(
-        //             ctx.clone(),
-        //             transform_params.transform_input_port,
-        //             transform_params.transform_output_port,
-        //             KeysU512FinalAggregator::<true>::create(ctx, method, aggregator_params)?,
-        //         ),
-        //     },
-        // }
     }
 
     pub fn try_create_partial(
-        input_port: Arc<InputPort>,
-        output_port: Arc<OutputPort>,
         transform_params: AggregatorTransformParams,
         ctx: Arc<QueryContext>,
     ) -> Result<ProcessorPtr> {
-        let aggregator_params = transform_params.aggregator_params;
+        let aggregator_params = transform_params.aggregator_params.clone();
 
+        let max_threads = ctx.get_settings().get_max_threads()? as usize;
         if aggregator_params.group_columns.is_empty() {
             return AggregatorTransform::create(
                 ctx,
-                input_port,
-                output_port,
-                PartialSingleStateAggregator::try_create(&aggregator_params)?,
+                transform_params,
+                PartialSingleStateAggregator::try_create(&aggregator_params, max_threads)?,
             );
         }
 
         todo!("expression");
-        // match aggregator_params.aggregate_functions.is_empty() {
-        //     true => match transform_params.method {
-        //         HashMethodKind::KeysU8(method) => AggregatorTransform::create(
-        //             ctx,
-        //             transform_params.transform_input_port,
-        //             transform_params.transform_output_port,
-        //             Keys8Grouper::create(method, aggregator_params)?,
-        //         ),
-        //         HashMethodKind::KeysU16(method) => AggregatorTransform::create(
-        //             ctx,
-        //             transform_params.transform_input_port,
-        //             transform_params.transform_output_port,
-        //             Keys16Grouper::create(method, aggregator_params)?,
-        //         ),
-        //         HashMethodKind::KeysU32(method) => AggregatorTransform::create(
-        //             ctx,
-        //             transform_params.transform_input_port,
-        //             transform_params.transform_output_port,
-        //             Keys32Grouper::create(method, aggregator_params)?,
-        //         ),
-        //         HashMethodKind::KeysU64(method) => AggregatorTransform::create(
-        //             ctx,
-        //             transform_params.transform_input_port,
-        //             transform_params.transform_output_port,
-        //             Keys64Grouper::create(method, aggregator_params)?,
-        //         ),
-        //         HashMethodKind::KeysU128(method) => AggregatorTransform::create(
-        //             ctx,
-        //             transform_params.transform_input_port,
-        //             transform_params.transform_output_port,
-        //             Keys128Grouper::create(method, aggregator_params)?,
-        //         ),
-        //         HashMethodKind::KeysU256(method) => AggregatorTransform::create(
-        //             ctx,
-        //             transform_params.transform_input_port,
-        //             transform_params.transform_output_port,
-        //             Keys256Grouper::create(method, aggregator_params)?,
-        //         ),
-        //         HashMethodKind::KeysU512(method) => AggregatorTransform::create(
-        //             ctx,
-        //             transform_params.transform_input_port,
-        //             transform_params.transform_output_port,
-        //             Keys512Grouper::create(method, aggregator_params)?,
-        //         ),
-        //         HashMethodKind::Serializer(method) => AggregatorTransform::create(
-        //             ctx,
-        //             transform_params.transform_input_port,
-        //             transform_params.transform_output_port,
-        //             KeysSerializerGrouper::create(method, aggregator_params)?,
-        //         ),
-        //     },
-        //     false => match transform_params.method {
-        //         HashMethodKind::KeysU8(method) => AggregatorTransform::create(
-        //             ctx,
-        //             transform_params.transform_input_port,
-        //             transform_params.transform_output_port,
-        //             Keys8Aggregator::create(method, aggregator_params)?,
-        //         ),
-        //         HashMethodKind::KeysU16(method) => AggregatorTransform::create(
-        //             ctx,
-        //             transform_params.transform_input_port,
-        //             transform_params.transform_output_port,
-        //             Keys16Aggregator::create(method, aggregator_params)?,
-        //         ),
-        //         HashMethodKind::KeysU32(method) => AggregatorTransform::create(
-        //             ctx,
-        //             transform_params.transform_input_port,
-        //             transform_params.transform_output_port,
-        //             Keys32Aggregator::create(method, aggregator_params)?,
-        //         ),
-        //         HashMethodKind::KeysU64(method) => AggregatorTransform::create(
-        //             ctx,
-        //             transform_params.transform_input_port,
-        //             transform_params.transform_output_port,
-        //             Keys64Aggregator::create(method, aggregator_params)?,
-        //         ),
-        //         HashMethodKind::KeysU128(method) => AggregatorTransform::create(
-        //             ctx,
-        //             transform_params.transform_input_port,
-        //             transform_params.transform_output_port,
-        //             Keys128Aggregator::create(method, aggregator_params)?,
-        //         ),
-        //         HashMethodKind::KeysU256(method) => AggregatorTransform::create(
-        //             ctx,
-        //             transform_params.transform_input_port,
-        //             transform_params.transform_output_port,
-        //             Keys256Aggregator::create(method, aggregator_params)?,
-        //         ),
-        //         HashMethodKind::KeysU512(method) => AggregatorTransform::create(
-        //             ctx,
-        //             transform_params.transform_input_port,
-        //             transform_params.transform_output_port,
-        //             Keys512Aggregator::create(method, aggregator_params)?,
-        //         ),
-        //         HashMethodKind::Serializer(method) => AggregatorTransform::create(
-        //             ctx,
-        //             transform_params.transform_input_port,
-        //             transform_params.transform_output_port,
-        //             KeysSerializerAggregator::create(method, aggregator_params)?,
-        //         ),
-        //     },
-        // }
     }
 }
 
@@ -295,24 +87,29 @@ enum AggregatorTransform<TAggregator: Aggregator + TwoLevelAggregatorLike> {
 impl<TAggregator: Aggregator + TwoLevelAggregatorLike + 'static> AggregatorTransform<TAggregator> {
     pub fn create(
         ctx: Arc<QueryContext>,
-        input_port: Arc<InputPort>,
-        output_port: Arc<OutputPort>,
+        transform_params: AggregatorTransformParams,
         inner: TAggregator,
     ) -> Result<ProcessorPtr> {
         let settings = ctx.get_settings();
         let two_level_threshold = settings.get_group_by_two_level_threshold()? as usize;
 
-        Ok(ProcessorPtr::create(Box::new(AggregatorTransform::<
-            TAggregator,
-        >::ConsumeData(
-            ConsumeState {
-                inner,
-                input_port,
-                output_port,
-                two_level_threshold,
-                input_chunk: None,
-            },
-        ))))
+        let transformer = AggregatorTransform::<TAggregator>::ConsumeData(ConsumeState {
+            inner,
+            input_port: transform_params.transform_input_port,
+            output_port: transform_params.transform_output_port,
+            two_level_threshold,
+            input_chunk: None,
+        });
+
+        if TAggregator::SUPPORT_TWO_LEVEL
+            && transform_params.aggregator_params.has_distinct_combinator()
+        {
+            Ok(ProcessorPtr::create(Box::new(
+                transformer.convert_to_two_level_consume()?,
+            )))
+        } else {
+            Ok(ProcessorPtr::create(Box::new(transformer)))
+        }
     }
 
     pub fn convert_to_generate(self) -> Result<Self> {

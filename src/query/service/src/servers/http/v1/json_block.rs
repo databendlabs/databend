@@ -35,47 +35,7 @@ pub struct JsonBlock {
 
 pub type JsonBlockRef = Arc<JsonBlock>;
 
-pub fn block_to_json_value_columns(
-    chunk: &Chunk,
-    format: &FormatSettings,
-) -> Result<Vec<Vec<JsonValue>>> {
-    if chunk.is_empty() {
-        return Ok(vec![]);
-    }
-    let mut col_table = Vec::new();
-    let columns_size = chunk.num_columns();
-    for col_index in 0..columns_size {
-        let (value, data_type) = chunk.column(col_index);
-        let column = value.into_column()?;
-        let serializer = data_type.create_serializer(column)?;
-        col_table.push(serializer.serialize_json_values(format).map_err(|e| {
-            ErrorCode::Internal(format!(
-                "fail to serialize filed {} error = {}",
-                col_index, e
-            ))
-        })?);
-    }
-    Ok(col_table)
-}
-
 pub fn block_to_json_value(
-    chunk: &Chunk,
-    format: &FormatSettings,
-    string_fields: bool,
-) -> Result<Vec<Vec<JsonValue>>> {
-    if string_fields {
-        block_to_json_value_string_fields(chunk, format)
-    } else {
-        block_to_json_value_ast(chunk, format)
-    }
-}
-
-fn block_to_json_value_ast(chunk: &Chunk, format: &FormatSettings) -> Result<Vec<Vec<JsonValue>>> {
-    let cols = block_to_json_value_columns(chunk, format)?;
-    Ok(transpose(cols))
-}
-
-fn block_to_json_value_string_fields(
     chunk: &Chunk,
     format: &FormatSettings,
 ) -> Result<Vec<Vec<JsonValue>>> {
@@ -120,10 +80,9 @@ impl JsonBlock {
         schema: DataSchemaRef,
         chunk: &Chunk,
         format: &FormatSettings,
-        string_fields: bool,
     ) -> Result<Self> {
         Ok(JsonBlock {
-            data: block_to_json_value(chunk, format, string_fields)?,
+            data: block_to_json_value(chunk, format)?,
             schema: schema.clone(),
         })
     }
@@ -159,21 +118,4 @@ impl From<JsonBlock> for Vec<Vec<JsonValue>> {
     fn from(block: JsonBlock) -> Self {
         block.data
     }
-}
-
-fn transpose(col_table: Vec<Vec<JsonValue>>) -> Vec<Vec<JsonValue>> {
-    if col_table.is_empty() {
-        return vec![];
-    }
-    let num_row = col_table[0].len();
-    let mut row_table = Vec::with_capacity(num_row);
-    for _ in 0..num_row {
-        row_table.push(Vec::with_capacity(col_table.len()));
-    }
-    for col in col_table {
-        for (row_index, row) in row_table.iter_mut().enumerate() {
-            row.push(col[row_index].clone());
-        }
-    }
-    row_table
 }

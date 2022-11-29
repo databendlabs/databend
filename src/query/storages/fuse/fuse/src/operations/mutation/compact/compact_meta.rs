@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::VecDeque;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
@@ -27,7 +28,7 @@ use crate::operations::mutation::AbortOperation;
 #[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq)]
 pub struct CompactSourceMeta {
     pub order: usize,
-    pub tasks: Vec<CompactTask>,
+    pub tasks: VecDeque<CompactTask>,
 }
 
 #[typetag::serde(name = "compact_source_info")]
@@ -45,7 +46,7 @@ impl ChunkMetaInfo for CompactSourceMeta {
 }
 
 impl CompactSourceMeta {
-    pub fn create(order: usize, tasks: Vec<CompactTask>) -> ChunkMetaInfoPtr {
+    pub fn create(order: usize, tasks: VecDeque<CompactTask>) -> BlockMetaInfoPtr {
         Arc::new(Box::new(CompactSourceMeta { order, tasks }))
     }
 

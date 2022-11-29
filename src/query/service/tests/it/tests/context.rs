@@ -35,20 +35,17 @@ use crate::tests::sessions::TestGuard;
 use crate::tests::TestGlobalServices;
 
 pub async fn create_query_context() -> Result<(TestGuard, Arc<QueryContext>)> {
-    create_query_context_with_session(SessionType::Dummy).await
+    create_query_context_with_session(SessionType::Dummy, None).await
 }
 
-pub async fn create_query_context_with_type(
+pub async fn create_query_context_with_session(
     typ: SessionType,
+    guard: Option<TestGuard>,
 ) -> Result<(TestGuard, Arc<QueryContext>)> {
-    create_query_context_with_session(typ).await
-}
-
-async fn create_query_context_with_session(
-    typ: SessionType,
-) -> Result<(TestGuard, Arc<QueryContext>)> {
-    let guard = TestGlobalServices::setup(crate::tests::ConfigBuilder::create().build()).await?;
-
+    let guard = match guard {
+        None => TestGlobalServices::setup(crate::tests::ConfigBuilder::create().build()).await?,
+        Some(g) => g,
+    };
     let dummy_session = SessionManager::instance().create_session(typ).await?;
 
     // Set user with all privileges

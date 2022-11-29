@@ -12,13 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod date_helpers;
 mod escape;
 mod json;
 mod number_helpers;
 mod timestamp_helpers;
 
-pub use date_helpers::date_to_string;
 pub use escape::write_escaped_string;
 pub use json::write_json_string;
 pub use number_helpers::PrimitiveWithFormat;

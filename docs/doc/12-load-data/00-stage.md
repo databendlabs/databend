@@ -5,7 +5,7 @@ description:
   Load data from Databend stages.
 ---
 
-![image](../../public/img/load/load-data-from-stage.png)
+![image](/img/load/load-data-from-stage.png)
 
 In this tutorial, you will create an internal stage, stage a sample file, and then load data from the file into Databend with the [COPY INTO](../14-sql-commands/10-dml/dml-copy-into-table.md) command.
 

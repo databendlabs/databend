@@ -283,7 +283,13 @@ where
     A: Allocator + Clone,
 {
     pub unsafe fn set_merge(&mut self, other: &Self) {
-        assert!(self.capacity() >= self.len() + other.len());
+        while (self.len() + other.len()) * 2 > self.capacity() {
+            if (self.entries.len() >> 22) == 0 {
+                self.grow(2);
+            } else {
+                self.grow(1);
+            }
+        }
         for entry in other.iter() {
             let key = entry.key.assume_init();
             let _ = self.insert(key);

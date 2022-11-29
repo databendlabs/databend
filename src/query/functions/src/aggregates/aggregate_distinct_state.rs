@@ -21,13 +21,19 @@ use std::marker::Send;
 use std::marker::Sync;
 
 use common_arrow::arrow::bitmap::Bitmap;
+use common_base::base::ThreadPool;
 use common_datavalues::prelude::*;
+use common_exception::ErrorCode;
 use common_exception::Result;
+use common_hashtable::FastHash;
 use common_hashtable::HashSet as CommonHashSet;
 use common_hashtable::HashtableKeyable;
-use common_hashtable::KeysRef;
+use common_hashtable::HashtableLike;
 use common_hashtable::StackHashSet;
+use common_hashtable::TwoLevelHashSet;
+use common_hashtable::UnsizedHashSet;
 use common_io::prelude::*;
+use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde::Serialize;
 use siphasher::sip128::Hasher128;
@@ -35,7 +41,7 @@ use siphasher::sip128::SipHasher24;
 
 use super::aggregate_distinct_state::DataGroupValue;
 
-pub trait DistinctStateFunc<S>: Send + Sync {
+pub trait DistinctStateFunc: Send + Sync {
     fn new() -> Self;
     fn serialize(&self, writer: &mut Vec<u8>) -> Result<()>;
     fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()>;
@@ -49,6 +55,17 @@ pub trait DistinctStateFunc<S>: Send + Sync {
         input_rows: usize,
     ) -> Result<()>;
     fn merge(&mut self, rhs: &Self) -> Result<()>;
+
+    fn support_merge_parallel() -> bool {
+        false
+    }
+
+    fn merge_parallel(&mut self, _pool: &mut ThreadPool, _rhs: &mut Self) -> Result<()> {
+        Err(ErrorCode::Unimplemented(
+            "merge_parallel is not implemented".to_string(),
+        ))
+    }
+
     fn build_columns(&mut self, fields: &[DataField]) -> Result<Vec<ColumnRef>>;
 }
 
@@ -60,20 +77,15 @@ pub struct AggregateDistinctState {
 }
 
 pub struct AggregateDistinctPrimitiveState<T: PrimitiveType, E: From<T> + HashtableKeyable> {
-    set: StackHashSet<E, 16>,
+    set: CommonHashSet<E>,
     _t: PhantomData<T>,
 }
 
-const HOLDER_CAPACITY: usize = 256;
-const HOLDER_BYTES_CAPACITY: usize = HOLDER_CAPACITY * 8;
-
 pub struct AggregateDistinctStringState {
-    set: CommonHashSet<KeysRef>,
-    inserted: bool,
-    holders: Vec<MutableStringColumn>,
+    set: UnsizedHashSet<[u8]>,
 }
 
-impl DistinctStateFunc<DataGroupValues> for AggregateDistinctState {
+impl DistinctStateFunc for AggregateDistinctState {
     fn new() -> Self {
         AggregateDistinctState {
             set: HashSet::new(),
@@ -179,68 +191,28 @@ impl DistinctStateFunc<DataGroupValues> for AggregateDistinctState {
     }
 }
 
-impl AggregateDistinctStringState {
-    #[inline]
-    fn insert_and_materialize(&mut self, key: &KeysRef) {
-        match unsafe { self.set.insert_and_entry(*key) } {
-            Ok(entity) => {
-                self.inserted = true;
-                let data = unsafe { key.as_slice() };
-
-                let holder = self.holders.last_mut().unwrap();
-                // TODO(sundy): may cause memory fragmentation, refactor this using arena
-                if holder.may_resize(data.len()) {
-                    let mut holder = MutableStringColumn::with_values_capacity(
-                        HOLDER_BYTES_CAPACITY.max(data.len()),
-                        HOLDER_CAPACITY,
-                    );
-                    holder.push(data);
-                    let value = unsafe { holder.value_unchecked(holder.len() - 1) };
-                    unsafe {
-                        entity.set_key(KeysRef::create(value.as_ptr() as usize, value.len()));
-                    }
-                    self.holders.push(holder);
-                } else {
-                    holder.push(data);
-                    let value = unsafe { holder.value_unchecked(holder.len() - 1) };
-                    unsafe {
-                        entity.set_key(KeysRef::create(value.as_ptr() as usize, value.len()));
-                    }
-                }
-            }
-            Err(_) => {
-                self.inserted = false;
-            }
-        }
-    }
-}
-
-impl DistinctStateFunc<KeysRef> for AggregateDistinctStringState {
+impl DistinctStateFunc for AggregateDistinctStringState {
     fn new() -> Self {
         AggregateDistinctStringState {
-            set: CommonHashSet::new(),
-            inserted: false,
-            holders: vec![MutableStringColumn::with_values_capacity(
-                HOLDER_BYTES_CAPACITY,
-                HOLDER_CAPACITY,
-            )],
+            set: UnsizedHashSet::<[u8]>::with_capacity(4),
         }
     }
 
     fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
-        serialize_into_buf(writer, &self.holders)
+        writer.write_uvarint(self.set.len() as u64)?;
+        for k in self.set.iter() {
+            writer.write_binary(k.key())?;
+        }
+        Ok(())
     }
 
     fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()> {
-        self.holders = deserialize_from_slice(reader)?;
-        self.set = CommonHashSet::with_capacity(self.holders.iter().map(|h| h.len()).sum());
-
-        for holder in self.holders.iter() {
-            for index in 0..holder.len() {
-                let data = unsafe { holder.value_unchecked(index) };
-                let key = KeysRef::create(data.as_ptr() as usize, data.len());
-                self.inserted = self.set.set_insert(key).is_ok();
-            }
+        let size = reader.read_uvarint()?;
+        self.set = UnsizedHashSet::<[u8]>::with_capacity(size as usize);
+        for _ in 0..size {
+            let s = reader.read_uvarint()? as usize;
+            let _ = self.set.set_insert(&reader[..s]);
+            *reader = &reader[s..];
         }
         Ok(())
     }
@@ -256,8 +228,7 @@ impl DistinctStateFunc<KeysRef> for AggregateDistinctStringState {
     fn add(&mut self, columns: &[ColumnRef], row: usize) -> Result<()> {
         let column: &StringColumn = unsafe { Series::static_cast(&columns[0]) };
         let data = column.get_data(row);
-        let key = KeysRef::create(data.as_ptr() as usize, data.len());
-        self.insert_and_materialize(&key);
+        let _ = self.set.set_insert(data);
         Ok(())
     }
 
@@ -274,16 +245,14 @@ impl DistinctStateFunc<KeysRef> for AggregateDistinctStringState {
                 for row in 0..input_rows {
                     if v.get_bit(row) {
                         let data = column.get_data(row);
-                        let key = KeysRef::create(data.as_ptr() as usize, data.len());
-                        self.insert_and_materialize(&key);
+                        let _ = self.set.set_insert(data);
                     }
                 }
             }
             _ => {
                 for row in 0..input_rows {
                     let data = column.get_data(row);
-                    let key = KeysRef::create(data.as_ptr() as usize, data.len());
-                    self.insert_and_materialize(&key);
+                    let _ = self.set.set_insert(data);
                 }
             }
         }
@@ -291,48 +260,36 @@ impl DistinctStateFunc<KeysRef> for AggregateDistinctStringState {
     }
 
     fn merge(&mut self, rhs: &Self) -> Result<()> {
-        for value in rhs.set.iter() {
-            self.insert_and_materialize(value.key());
-        }
+        self.set.set_merge(&rhs.set);
         Ok(())
     }
 
     // After build_columns, the set is not avaiable any more.
     fn build_columns(&mut self, _fields: &[DataField]) -> Result<Vec<ColumnRef>> {
-        if self.holders.len() == 1 {
-            let c = self.holders[0].finish();
-            return Ok(vec![c.arc()]);
+        let mut builder = MutableStringColumn::with_capacity(self.set.len());
+        for key in self.set.iter() {
+            builder.push(key.key())
         }
-        let mut values = Vec::with_capacity(
-            self.holders
-                .iter()
-                .map(|h| h.values_offsets().0.len())
-                .sum(),
-        );
-        let mut offsets = Vec::with_capacity(self.holders.iter().map(|h| h.len()).sum());
-
-        let mut last_offset = 0;
-        offsets.push(0);
-        for holder in self.holders.iter_mut() {
-            for offset in holder.values_offsets().1.iter() {
-                last_offset += *offset;
-                offsets.push(last_offset);
-            }
-            values.append(holder.values_mut());
-        }
-        let mut c = MutableStringColumn::from_data(values, offsets);
-        Ok(vec![c.finish().arc()])
+        Ok(vec![builder.finish().arc()])
     }
 }
 
-impl<T, E> DistinctStateFunc<T> for AggregateDistinctPrimitiveState<T, E>
+impl<T, E> DistinctStateFunc for AggregateDistinctPrimitiveState<T, E>
 where
     T: PrimitiveType + From<E>,
-    E: From<T> + Sync + Send + Clone + std::fmt::Debug + HashtableKeyable,
+    E: From<T>
+        + Sync
+        + Send
+        + Clone
+        + std::fmt::Debug
+        + HashtableKeyable
+        + FastHash
+        + Serialize
+        + DeserializeOwned,
 {
     fn new() -> Self {
         AggregateDistinctPrimitiveState {
-            set: StackHashSet::new(),
+            set: CommonHashSet::with_capacity(4),
             _t: PhantomData,
         }
     }
@@ -340,25 +297,23 @@ where
     fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
         writer.write_uvarint(self.set.len() as u64)?;
         for value in self.set.iter() {
-            let t: T = (*value.key()).into();
-            serialize_into_buf(writer, &t)?
+            serialize_into_buf(writer, value.key())?
         }
         Ok(())
     }
 
     fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()> {
         let size = reader.read_uvarint()?;
-        self.set = StackHashSet::with_capacity(size as usize);
+        self.set = CommonHashSet::with_capacity(size as usize);
         for _ in 0..size {
-            let t: T = deserialize_from_slice(reader)?;
-            let e = E::from(t);
-            let _ = self.set.set_insert(e);
+            let t: E = deserialize_from_slice(reader)?;
+            let _ = self.set.set_insert(t);
         }
         Ok(())
     }
 
     fn is_empty(&self) -> bool {
-        self.set.is_empty()
+        self.set.len() == 0
     }
 
     fn len(&self) -> usize {
@@ -398,9 +353,7 @@ where
     }
 
     fn merge(&mut self, rhs: &Self) -> Result<()> {
-        for x in rhs.set.iter() {
-            let _ = self.set.set_insert(*x.key());
-        }
+        self.set.set_merge(&rhs.set);
         Ok(())
     }
 
@@ -417,7 +370,7 @@ pub struct AggregateUniqStringState {
     inserted: bool,
 }
 
-impl DistinctStateFunc<u128> for AggregateUniqStringState {
+impl DistinctStateFunc for AggregateUniqStringState {
     fn new() -> Self {
         AggregateUniqStringState {
             set: StackHashSet::new(),
@@ -500,5 +453,147 @@ impl DistinctStateFunc<u128> for AggregateUniqStringState {
     // This method won't be called.
     fn build_columns(&mut self, _fields: &[DataField]) -> Result<Vec<ColumnRef>> {
         Ok(vec![])
+    }
+}
+
+// by default it's not enabled now
+#[allow(dead_code)]
+pub struct AggregateDistinctTwoLevelPrimitiveState<T: PrimitiveType, E: From<T> + HashtableKeyable>
+{
+    set: TwoLevelHashSet<E>,
+    _t: PhantomData<T>,
+}
+
+const BUCKETS: usize = 256;
+impl<T, E> DistinctStateFunc for AggregateDistinctTwoLevelPrimitiveState<T, E>
+where
+    T: PrimitiveType + From<E>,
+    E: From<T>
+        + Sync
+        + Send
+        + Clone
+        + std::fmt::Debug
+        + HashtableKeyable
+        + FastHash
+        + Serialize
+        + DeserializeOwned
+        + 'static,
+{
+    fn new() -> Self {
+        let sets: Vec<CommonHashSet<E>> = (0..BUCKETS)
+            .map(|_| CommonHashSet::<E>::with_capacity(4))
+            .collect();
+        Self {
+            set: TwoLevelHashSet::create(sets),
+            _t: PhantomData,
+        }
+    }
+
+    fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
+        let inners = self.set.inner_sets();
+
+        for inner in inners.iter() {
+            writer.write_uvarint(inner.len() as u64)?;
+            for value in inner.iter() {
+                serialize_into_buf(writer, value.key())?
+            }
+        }
+        Ok(())
+    }
+
+    fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()> {
+        let sets: Result<Vec<CommonHashSet<E>>> = (0..BUCKETS)
+            .map(|_| {
+                let size = reader.read_uvarint()? as usize;
+                let mut data = CommonHashSet::<E>::with_capacity(size);
+                for _i in 0..size {
+                    let t: E = deserialize_from_slice(reader)?;
+                    let _ = data.set_insert(t);
+                }
+                Ok(data)
+            })
+            .collect();
+
+        self.set = TwoLevelHashSet::create(sets?);
+        Ok(())
+    }
+
+    fn is_empty(&self) -> bool {
+        self.set.len() == 0
+    }
+
+    fn len(&self) -> usize {
+        self.set.len()
+    }
+
+    fn add(&mut self, columns: &[ColumnRef], row: usize) -> Result<()> {
+        let array: &PrimitiveColumn<T> = unsafe { Series::static_cast(&columns[0]) };
+        let v = unsafe { array.value_unchecked(row) };
+        self.set.set_insert(&E::from(v));
+        Ok(())
+    }
+
+    fn batch_add(
+        &mut self,
+        columns: &[ColumnRef],
+        validity: Option<&Bitmap>,
+        input_rows: usize,
+    ) -> Result<()> {
+        let array: &PrimitiveColumn<T> = unsafe { Series::static_cast(&columns[0]) };
+        match validity {
+            Some(bitmap) => {
+                for (t, v) in array.iter().zip(bitmap.iter()) {
+                    if v {
+                        self.set.set_insert(&E::from(*t));
+                    }
+                }
+            }
+            None => {
+                for row in 0..input_rows {
+                    let v = unsafe { array.value_unchecked(row) };
+                    self.set.set_insert(&E::from(v));
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn merge(&mut self, rhs: &Self) -> Result<()> {
+        self.set.set_merge(&rhs.set);
+        Ok(())
+    }
+
+    fn build_columns(&mut self, _fields: &[DataField]) -> Result<Vec<ColumnRef>> {
+        let values: Vec<T> = self.set.iter().map(|e| (*e.key()).into()).collect();
+        let result = PrimitiveColumn::<T>::new_from_vec(values);
+        Ok(vec![result.arc()])
+    }
+
+    fn support_merge_parallel() -> bool {
+        true
+    }
+
+    fn merge_parallel(&mut self, pool: &mut ThreadPool, rhs: &mut Self) -> Result<()> {
+        let mut join_handles = Vec::with_capacity(self.set.inner_sets().len());
+
+        let left: Vec<CommonHashSet<E>> = std::mem::take(self.set.inner_sets_mut());
+        let right: Vec<CommonHashSet<E>> = std::mem::take(rhs.set.inner_sets_mut());
+
+        for (mut a, b) in left.into_iter().zip(right.into_iter()) {
+            join_handles.push(pool.execute(move || {
+                if a.is_empty() {
+                    return b;
+                }
+                a.set_merge(&b);
+                a
+            }));
+        }
+
+        let mut vs = Vec::with_capacity(BUCKETS);
+        for join_handle in join_handles {
+            vs.push(join_handle.join());
+        }
+        *self.set.inner_sets_mut() = vs;
+        Ok(())
     }
 }

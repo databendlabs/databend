@@ -33,7 +33,7 @@ fn test_data_block(is_nullable: bool) -> Result<()> {
         let tsv_block = String::from_utf8(buffer)?;
         let expect = "1\ta\t1\t1.1\t1970-01-02\n\
                             2\tb\"\t1\t2.2\t1970-01-03\n\
-                            3\tc\\'\t0\t3.3\t1970-01-04\n";
+                            3\tc\\'\t0\tnan\t1970-01-04\n";
         assert_eq!(&tsv_block, expect);
 
         let formatter = get_output_format_clickhouse("TsvWithNames", schema.clone())?;
@@ -59,7 +59,7 @@ fn test_data_block(is_nullable: bool) -> Result<()> {
         let settings = Settings::default_settings("default");
         settings.set_settings(
             "format_record_delimiter".to_string(),
-            "%".to_string(),
+            "\r\n".to_string(),
             false,
         )?;
         settings.set_settings("format_field_delimiter".to_string(), "$".to_string(), false)?;
@@ -68,7 +68,7 @@ fn test_data_block(is_nullable: bool) -> Result<()> {
         let buffer = formatter.serialize_chunk(&block)?;
 
         let csv_block = String::from_utf8(buffer)?;
-        let expect = r#"1$"a"$true$1.1$"1970-01-02"%2$"b"""$true$2.2$"1970-01-03"%3$"c'"$false$3.3$"1970-01-04"%"#;
+        let expect = "1$\"a\"$true$1.1$\"1970-01-02\"\r\n2$\"b\"\"\"$true$2.2$\"1970-01-03\"\r\n3$\"c'\"$false$NaN$\"1970-01-04\"\r\n";
         assert_eq!(&csv_block, expect);
     }
     Ok(())

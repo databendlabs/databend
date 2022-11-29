@@ -12,10 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::alloc::Layout;
 use std::borrow::BorrowMut;
 use std::sync::Arc;
+use std::vec;
 
 use bumpalo::Bump;
+use common_base::base::ThreadPool;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::string::StringColumnBuilder;
@@ -42,20 +45,24 @@ pub struct SingleStateAggregator<const FINAL: bool> {
     funcs: Vec<AggregateFunctionRef>,
     arg_indices: Vec<Vec<usize>>,
     schema: DataSchemaRef,
-    _arena: Bump,
+    arena: Bump,
+
     places: Vec<StateAddr>,
-    // used for deserialization only, so we can reuse it during the loop
-    temp_places: Vec<StateAddr>,
+    to_merge_places: Vec<Vec<StateAddr>>,
+    layout: Layout,
+    offsets_aggregate_states: Vec<usize>,
+    max_threads: usize,
     states_dropped: bool,
 }
 
 impl<const FINAL: bool> SingleStateAggregator<FINAL> {
-    pub fn try_create(params: &Arc<AggregatorParams>) -> Result<Self> {
+    pub fn try_create(params: &Arc<AggregatorParams>, max_threads: usize) -> Result<Self> {
         assert!(!params.offsets_aggregate_states.is_empty());
         let arena = Bump::new();
         let layout = params
             .layout
             .ok_or_else(|| ErrorCode::LayoutError("layout shouldn't be None"))?;
+
         let get_places = || -> Vec<StateAddr> {
             let place: StateAddr = arena.alloc_layout(layout).into();
             params
@@ -69,18 +76,33 @@ impl<const FINAL: bool> SingleStateAggregator<FINAL> {
                 })
                 .collect()
         };
-
         let places = get_places();
-        let temp_places = get_places();
+
         Ok(Self {
-            _arena: arena,
+            arena,
             places,
+            to_merge_places: vec![vec![]; params.aggregate_functions.len()],
             funcs: params.aggregate_functions.clone(),
             arg_indices: params.aggregate_functions_arguments.clone(),
             schema: params.output_schema.clone(),
-            temp_places,
+            layout,
+            offsets_aggregate_states: params.offsets_aggregate_states.clone(),
             states_dropped: false,
+            max_threads,
         })
+    }
+
+    fn new_places(&self) -> Vec<StateAddr> {
+        let place: StateAddr = self.arena.alloc_layout(self.layout).into();
+        self.funcs
+            .iter()
+            .enumerate()
+            .map(|(idx, func)| {
+                let arg_place = place.next(self.offsets_aggregate_states[idx]);
+                func.init_state(arg_place);
+                arg_place
+            })
+            .collect()
     }
 
     fn drop_states(&mut self) {
@@ -91,9 +113,11 @@ impl<const FINAL: bool> SingleStateAggregator<FINAL> {
                 }
             }
 
-            for (place, func) in self.temp_places.iter().zip(self.funcs.iter()) {
+            for (places, func) in self.to_merge_places.iter().zip(self.funcs.iter()) {
                 if func.need_manual_drop_state() {
-                    unsafe { func.drop_state(*place) }
+                    for place in places {
+                        unsafe { func.drop_state(*place) }
+                    }
                 }
             }
 
@@ -116,12 +140,9 @@ impl Aggregator for SingleStateAggregator<true> {
             ))?;
 
             let mut data = unsafe { binary_array.index_unchecked(0) };
-
-            let temp_addr = self.temp_places[index];
             func.deserialize(temp_addr, &mut data)?;
-            func.merge(place, temp_addr)?;
+            self.to_merge_places[index].push(places[index]);
         }
-
         Ok(())
     }
 
@@ -130,15 +151,29 @@ impl Aggregator for SingleStateAggregator<true> {
             let mut builders = vec![];
             for func in &self.funcs {
                 let data_type = func.return_type()?;
-                builders.push((ColumnBuilder::with_capacity(&data_type, 1024), data_type));
+                builders.push((ColumnBuilder::with_capacity(&data_type, 1), data_type));
             }
             builders
         };
 
+        let mut thread_pool = ThreadPool::create(self.max_threads)?;
+
         for (index, func) in self.funcs.iter().enumerate() {
-            let place = self.places[index];
-            let (builder, _) = aggr_values[index].borrow_mut();
-            func.merge_result(place, builder)?;
+            let main_place = self.places[index];
+
+            if func.support_merge_parallel() {
+                // parallel_merge
+                for place in self.to_merge_places[index].iter() {
+                    func.merge_parallel(&mut thread_pool, main_place, *place)?;
+                }
+            } else {
+                for place in self.to_merge_places[index].iter() {
+                    func.merge(main_place, *place)?;
+                }
+            }
+
+            let (array, _) = aggr_values[index].borrow_mut();
+            func.merge_result(main_place, array)?;
         }
 
         let mut num_rows = 0;

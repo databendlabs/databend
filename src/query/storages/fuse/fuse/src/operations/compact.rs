@@ -146,6 +146,7 @@ impl FuseTable {
 
         pipeline.add_transform(|input, output| {
             CompactTransform::try_create(
+                ctx.clone(),
                 input,
                 output,
                 ctx.get_scan_progress(),

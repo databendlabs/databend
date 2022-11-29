@@ -15,15 +15,10 @@
 use std::marker::PhantomData;
 
 use common_exception::Result;
-use common_expression::types::string::StringColumn;
-use common_expression::types::string::StringColumnBuilder;
 use common_expression::types::DataType;
-use common_expression::types::StringType;
 use common_expression::Column;
 use common_expression::ColumnFrom;
 use common_expression::HashMethodFixedKeys;
-use common_expression::TypeDeserializer;
-use common_io::prelude::FormatSettings;
 
 use crate::pipelines::processors::AggregatorParams;
 

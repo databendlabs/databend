@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::VecDeque;
 use std::sync::Arc;
 
 use common_catalog::plan::PartInfoPtr;
@@ -36,7 +37,7 @@ enum State {
     ReadData(Option<PartInfoPtr>),
     Generate {
         order: usize,
-        tasks: Vec<CompactTask>,
+        tasks: VecDeque<CompactTask>,
     },
     Output(Option<PartInfoPtr>, Chunk),
     Finish,
@@ -119,7 +120,7 @@ impl Processor for CompactSource {
             State::ReadData(Some(part)) => {
                 let part = CompactPartInfo::from_part(&part)?;
                 let mut builder = CompactTaskBuilder::default();
-                let mut tasks = Vec::new();
+                let mut tasks = VecDeque::new();
                 // The order of the compact is from old to new.
                 for segment in part.segments.iter().rev() {
                     for block in segment.blocks.iter() {
@@ -131,8 +132,8 @@ impl Processor for CompactSource {
                     }
                 }
                 if !builder.is_empty() {
-                    let task = tasks.pop();
-                    tasks.push(builder.finalize(task));
+                    let task = tasks.pop_back();
+                    tasks.push_back(builder.finalize(task));
                 }
                 self.state = State::Generate {
                     order: part.order,

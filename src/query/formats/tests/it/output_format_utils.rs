@@ -39,7 +39,7 @@ pub fn get_simple_block(is_nullable: bool) -> Result<DataBlock> {
         Series::from_data(vec![1i32, 2, 3]),
         Series::from_data(vec!["a", "b\"", "c'"]),
         Series::from_data(vec![true, true, false]),
-        Series::from_data(vec![1.1f64, 2.2, 3.3]),
+        Series::from_data(vec![1.1f64, 2.2, f64::NAN]),
         Series::from_data(vec![1_i32, 2_i32, 3_i32]),
     ];
 

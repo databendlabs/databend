@@ -343,8 +343,6 @@ impl PipelineBuilder {
 
         self.main_pipeline.add_transform(|input, output| {
             TransformAggregator::try_create_partial(
-                input.clone(),
-                output.clone(),
                 AggregatorTransformParams::try_create(input, output, &params)?,
                 self.ctx.clone(),
             )
@@ -366,8 +364,6 @@ impl PipelineBuilder {
         self.main_pipeline.resize(1)?;
         self.main_pipeline.add_transform(|input, output| {
             TransformAggregator::try_create_final(
-                input.clone(),
-                output.clone(),
                 AggregatorTransformParams::try_create(input, output, &params)?,
                 self.ctx.clone(),
             )

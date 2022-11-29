@@ -87,6 +87,12 @@ impl AggregatorParams {
         }
         Some(place)
     }
+
+    pub fn has_distinct_combinator(&self) -> bool {
+        self.aggregate_functions
+            .iter()
+            .any(|f| f.name().contains("DistinctCombinator"))
+    }
 }
 
 pub struct AggregatorTransformParams {

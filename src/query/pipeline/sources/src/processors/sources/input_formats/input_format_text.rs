@@ -27,13 +27,12 @@ use common_meta_types::StageFileFormatType;
 use common_meta_types::UserStageInfo;
 use common_pipeline_core::Pipeline;
 use common_settings::Settings;
-use opendal::io_util::DecompressDecoder;
-use opendal::io_util::DecompressState;
+use opendal::raw::DecompressDecoder;
+use opendal::raw::DecompressState;
 use opendal::Operator;
 
 use super::InputFormat;
 use crate::processors::sources::input_formats::beyond_end_reader::BeyondEndReader;
-use crate::processors::sources::input_formats::delimiter::RecordDelimiter;
 use crate::processors::sources::input_formats::impls::input_format_csv::CsvReaderState;
 use crate::processors::sources::input_formats::impls::input_format_xml::XmlReaderState;
 use crate::processors::sources::input_formats::input_context::InputContext;
@@ -52,13 +51,7 @@ pub trait InputFormatTextBase: Sized + Send + Sync + 'static {
         false
     }
 
-    fn default_record_delimiter() -> RecordDelimiter {
-        RecordDelimiter::Crlf
-    }
-
     fn create_field_decoder(options: &FileFormatOptionsExt) -> Arc<dyn FieldDecoder>;
-
-    fn default_field_delimiter() -> u8;
 
     fn deserialize(builder: &mut ChunkBuilder<Self>, batch: RowBatch) -> Result<()>;
 
@@ -118,14 +111,6 @@ impl<T: InputFormatTextBase> InputFormatPipe for InputFormatTextPipe<T> {
 
 #[async_trait::async_trait]
 impl<T: InputFormatTextBase> InputFormat for InputFormatText<T> {
-    fn default_record_delimiter(&self) -> RecordDelimiter {
-        T::default_record_delimiter()
-    }
-
-    fn default_field_delimiter(&self) -> u8 {
-        T::default_field_delimiter()
-    }
-
     fn exec_copy(&self, ctx: Arc<InputContext>, pipeline: &mut Pipeline) -> Result<()> {
         InputFormatTextPipe::<T>::execute_copy_with_aligner(ctx, pipeline)
     }

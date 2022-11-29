@@ -12,8 +12,6 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use std::io::ErrorKind;
-
 use backon::ExponentialBackoff;
 use backon::Retryable;
 use common_arrow::parquet::compression::CompressionOptions;
@@ -126,7 +124,7 @@ pub async fn write_data(data: &[u8], data_accessor: &Operator, location: &str) -
 
     { || object.write(data) }
         .retry(ExponentialBackoff::default().with_jitter())
-        .when(|err| err.kind() == ErrorKind::Interrupted)
+        .when(|err| err.is_temporary())
         .notify(|err, dur| {
             warn!(
                 "fuse table block writer write_data retry after {}s for error {:?}",

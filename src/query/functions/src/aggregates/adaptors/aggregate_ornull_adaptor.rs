@@ -17,6 +17,7 @@ use std::fmt;
 use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::Bitmap;
+use common_base::base::ThreadPool;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_io::prelude::BinaryWrite;
@@ -189,6 +190,19 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
         let flag = self.get_flag(place) + self.get_flag(rhs);
         self.set_flag(place, flag);
         Ok(())
+    }
+
+    fn support_merge_parallel(&self) -> bool {
+        self.inner.support_merge_parallel()
+    }
+
+    fn merge_parallel(
+        &self,
+        pool: &mut ThreadPool,
+        place: StateAddr,
+        rhs: StateAddr,
+    ) -> Result<()> {
+        self.inner.merge_parallel(pool, place, rhs)
     }
 
     fn merge_result(&self, place: StateAddr, array: &mut dyn MutableColumn) -> Result<()> {

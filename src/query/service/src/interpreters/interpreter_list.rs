@@ -75,9 +75,9 @@ impl Interpreter for ListInterpreter {
         let num_rows = files.len();
         let names: Vec<String> = files.iter().map(|file| file.path.clone()).collect();
         let sizes: Vec<u64> = files.iter().map(|file| file.size).collect();
-        let md5s: Vec<Option<Vec<u8>>> = files
+        let etags: Vec<Option<Vec<u8>>> = files
             .iter()
-            .map(|file| file.md5.as_ref().map(|f| f.to_string().into_bytes()))
+            .map(|file| file.etag.as_ref().map(|f| f.to_string().into_bytes()))
             .collect();
         let last_modifieds: Vec<String> = files
             .iter()
@@ -99,7 +99,7 @@ impl Interpreter for ListInterpreter {
                     Value::Column(Column::from_data(sizes)),
                     DataType::Number(NumberDataType::UInt64),
                 ),
-                (Value::Column(Column::from_data(md5s)), DataType::String),
+                (Value::Column(Column::from_data(etags)), DataType::String),
                 (
                     Value::Column(Column::from_data(last_modifieds)),
                     DataType::String,

@@ -230,7 +230,11 @@ impl ConfigsTable {
                     descs,
                     group.clone(),
                     v.clone(),
-                    Some(k.to_string()),
+                    if let Some(prefix) = &name_prefix {
+                        Some(format!("{prefix}.{k}"))
+                    } else {
+                        Some(k.to_string())
+                    },
                 ),
                 _ => unimplemented!(),
             }

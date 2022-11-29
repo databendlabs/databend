@@ -24,7 +24,6 @@ use common_formats::FieldDecoderRowBased;
 use common_formats::FieldDecoderXML;
 use common_formats::FileFormatOptionsExt;
 use common_io::cursor_ext::*;
-use common_io::prelude::FormatSettings;
 use common_meta_types::StageFileFormatType;
 use xml::reader::XmlEvent;
 use xml::EventReader;
@@ -44,13 +43,12 @@ impl InputFormatXML {
         buf: &[u8],
         deserializers: &mut [Box<dyn TypeDeserializer>],
         schema: &DataSchemaRef,
-        format_settings: &FormatSettings,
         path: &str,
         row_index: usize,
     ) -> Result<()> {
         let mut raw_data: HashMap<String, Vec<u8>> = serde_json::from_reader(buf)?;
 
-        if !format_settings.ident_case_sensitive {
+        if !field_decoder.ident_case_sensitive {
             raw_data = raw_data
                 .into_iter()
                 .map(|(k, v)| (k.to_lowercase(), v))
@@ -58,7 +56,7 @@ impl InputFormatXML {
         }
 
         for (field, deserializer) in schema.fields().iter().zip(deserializers.iter_mut()) {
-            let value = if format_settings.ident_case_sensitive {
+            let value = if field_decoder.ident_case_sensitive {
                 raw_data.get(field.name())
             } else {
                 raw_data.get(&field.name().to_lowercase())
@@ -77,10 +75,6 @@ impl InputFormatTextBase for InputFormatXML {
 
     fn create_field_decoder(options: &FileFormatOptionsExt) -> Arc<dyn FieldDecoder> {
         Arc::new(FieldDecoderXML::create(options))
-    }
-
-    fn default_field_delimiter() -> u8 {
-        b','
     }
 
     fn deserialize(builder: &mut ChunkBuilder<Self>, batch: RowBatch) -> Result<()> {
@@ -107,7 +101,6 @@ impl InputFormatTextBase for InputFormatXML {
                 buf,
                 columns,
                 &builder.ctx.schema,
-                &builder.ctx.format_settings,
                 &batch.path,
                 start_row + i,
             )?;
@@ -256,7 +249,7 @@ pub struct XmlReaderState {
 impl XmlReaderState {
     pub fn create(ctx: &Arc<InputContext>) -> XmlReaderState {
         XmlReaderState {
-            row_tag: ctx.format_settings.row_tag.clone(),
+            row_tag: ctx.format_options.stage.row_tag.as_bytes().to_vec(),
             field_tag: vec![b'f', b'i', b'e', b'l', b'd'],
             end_tag: vec![],
             data: vec![],

@@ -116,7 +116,13 @@ impl HashJoinState for JoinHashTable {
                 }
             }};
         }
-
+        {
+            let buffer = self.row_space.buffer.write().unwrap();
+            if !buffer.is_empty() {
+                let data_block = DataBlock::concat_blocks(&buffer)?;
+                self.add_build_block(data_block)?;
+            }
+        }
         let interrupt = self.interrupt.clone();
         let mut chunks = self.row_space.chunks.write().unwrap();
         let mut has_null = false;

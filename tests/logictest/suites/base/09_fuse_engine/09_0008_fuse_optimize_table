@@ -256,6 +256,48 @@ select segment_count, block_count from fuse_snapshot('db_09_0008', 't2') limit 1
 2 4
 
 
+
+statement ok
+set max_threads=1;
+
+statement ok
+set max_memory_usage=600;
+
+statement ok
+create table t3(c int) block_per_segment=4 row_per_block=3;
+
+statement ok
+insert into t3 values(1);
+
+statement ok
+insert into t3 values(2);
+
+statement ok
+insert into t3 values(3);
+
+statement ok
+insert into t3 values(4);
+
+statement ok
+optimize table t3 compact;
+
+statement query I
+select * from t3 order by c;
+
+----
+1
+2
+3
+4
+
+statement query II
+select segment_count, block_count from fuse_snapshot('db_09_0008', 't3') limit 1;
+
+----
+1 2
+
+
+
 statement ok
 DROP TABLE m;
 
@@ -267,6 +309,9 @@ DROP TABLE t1;
 
 statement ok
 DROP TABLE t2;
+
+statement ok
+DROP TABLE t3;
 
 statement ok
 DROP DATABASE db_09_0008;

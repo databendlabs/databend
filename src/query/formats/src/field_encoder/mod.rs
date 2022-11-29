@@ -13,7 +13,7 @@
 // limitations under the License.
 
 mod csv;
-mod helpers;
+pub mod helpers;
 mod json;
 mod row_based;
 mod tsv;

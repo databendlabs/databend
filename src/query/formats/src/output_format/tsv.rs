@@ -17,7 +17,7 @@ use common_expression::Chunk;
 use common_expression::Column;
 use common_expression::DataSchemaRef;
 
-use crate::field_encoder::write_escaped_string;
+use crate::field_encoder::helpers::write_escaped_string;
 use crate::field_encoder::FieldEncoderRowBased;
 use crate::field_encoder::FieldEncoderTSV;
 use crate::output_format::OutputFormat;
