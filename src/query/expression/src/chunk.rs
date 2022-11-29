@@ -24,14 +24,21 @@ use crate::Value;
 /// Chunk is a lightweight container for a group of columns.
 #[derive(Clone)]
 pub struct Chunk {
-    columns: Vec<(Value<AnyType>, DataType)>,
+    columns: Vec<ChunkEntry>,
     num_rows: usize,
+}
+
+#[derive(Clone)]
+pub struct ChunkEntry {
+    pub id: usize,
+    pub data_type: DataType,
+    pub value: Value<AnyType>,
 }
 
 impl Chunk {
     #[inline]
-    pub fn new(columns: Vec<(Value<AnyType>, DataType)>, num_rows: usize) -> Self {
-        debug_assert!(columns.iter().all(|(col, _)| match col {
+    pub fn new(columns: Vec<ChunkEntry>, num_rows: usize) -> Self {
+        debug_assert!(columns.iter().all(|entry| match &entry.value {
             Value::Scalar(_) => true,
             Value::Column(c) => c.len() == num_rows,
         }));
@@ -44,8 +51,21 @@ impl Chunk {
     }
 
     #[inline]
-    pub fn columns(&self) -> &[(Value<AnyType>, DataType)] {
-        &self.columns
+    pub fn columns(&self) -> impl Iterator<Item = &ChunkEntry> {
+        self.columns.iter()
+    }
+
+    #[inline]
+    pub fn get_by_offset(&self, offset: usize) -> &ChunkEntry {
+        &self.columns[offset]
+    }
+
+    #[inline]
+    pub fn get_by_id(&self, id: usize) -> &ChunkEntry {
+        self.columns()
+            .find(|entry| entry.id == id)
+            .ok_or_else(|| format!("Chunk doesn't contain a column with id `{id}`"))
+            .unwrap()
     }
 
     #[inline]
@@ -67,7 +87,7 @@ impl Chunk {
     pub fn domains(&self) -> HashMap<usize, Domain> {
         self.columns
             .iter()
-            .map(|(value, _)| value.as_ref().domain())
+            .map(|entry| entry.value.as_ref().domain())
             .enumerate()
             .collect()
     }
@@ -75,9 +95,8 @@ impl Chunk {
     #[inline]
     pub fn memory_size(&self) -> usize {
         self.columns()
-            .iter()
-            .map(|(col, _)| match col {
-                Value::Scalar(s) => std::mem::size_of_val(s) * self.num_rows,
+            .map(|entry| match &entry.value {
+                Value::Scalar(s) => std::mem::size_of_val(&s) * self.num_rows,
                 Value::Column(c) => c.memory_size(),
             })
             .sum()
@@ -86,14 +105,22 @@ impl Chunk {
     pub fn convert_to_full(&self) -> Self {
         let columns = self
             .columns()
-            .iter()
-            .map(|(col, ty)| match col {
+            .map(|entry| match &entry.value {
                 Value::Scalar(s) => {
-                    let builder = ColumnBuilder::repeat(&s.as_ref(), self.num_rows, ty);
+                    let builder =
+                        ColumnBuilder::repeat(&s.as_ref(), self.num_rows, &entry.data_type);
                     let col = builder.build();
-                    (Value::Column(col), ty.clone())
+                    ChunkEntry {
+                        id: entry.id,
+                        data_type: entry.data_type.clone(),
+                        value: Value::Column(col),
+                    }
                 }
-                Value::Column(c) => (Value::Column(c.clone()), ty.clone()),
+                Value::Column(c) => ChunkEntry {
+                    id: entry.id,
+                    data_type: entry.data_type.clone(),
+                    value: Value::Column(c.clone()),
+                },
             })
             .collect();
         Self {
@@ -105,10 +132,17 @@ impl Chunk {
     pub fn slice(&self, range: Range<usize>) -> Self {
         let columns = self
             .columns()
-            .iter()
-            .map(|(col, ty)| match col {
-                Value::Scalar(s) => (Value::Scalar(s.clone()), ty.clone()),
-                Value::Column(c) => (Value::Column(c.slice(range.clone())), ty.clone()),
+            .map(|entry| match &entry.value {
+                Value::Scalar(s) => ChunkEntry {
+                    id: entry.id,
+                    data_type: entry.data_type.clone(),
+                    value: Value::Scalar(s.clone()),
+                },
+                Value::Column(c) => ChunkEntry {
+                    id: entry.id,
+                    data_type: entry.data_type.clone(),
+                    value: Value::Column(c.slice(range.clone())),
+                },
             })
             .collect();
         Self {

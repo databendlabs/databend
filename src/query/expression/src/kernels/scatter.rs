@@ -32,6 +32,7 @@ use crate::types::ValueType;
 use crate::types::VariantType;
 use crate::with_number_mapped_type;
 use crate::Chunk;
+use crate::ChunkEntry;
 use crate::Column;
 use crate::ColumnBuilder;
 use crate::Scalar;
@@ -39,30 +40,38 @@ use crate::Value;
 
 impl Chunk {
     pub fn scatter<I: Index>(&self, indices: &[I], scatter_size: usize) -> Result<Vec<Self>> {
-        let scattered_columns: Vec<(Vec<Column>, &DataType)> = self
+        let scattered_columns: Vec<Vec<ChunkEntry>> = self
             .columns()
-            .iter()
-            .map(|(col, ty)| match col {
-                Value::Scalar(s) => (
-                    Column::scatter_repeat_scalars::<I>(s, ty, indices, scatter_size),
-                    ty,
-                ),
-                Value::Column(c) => (c.scatter(ty, indices, scatter_size), ty),
+            .map(|entry| match &entry.value {
+                Value::Scalar(s) => {
+                    Column::scatter_repeat_scalars::<I>(s, &entry.data_type, indices, scatter_size)
+                        .into_iter()
+                        .map(|value| ChunkEntry {
+                            id: entry.id,
+                            data_type: entry.data_type.clone(),
+                            value: Value::Column(value),
+                        })
+                        .collect()
+                }
+                Value::Column(c) => c
+                    .scatter(&entry.data_type, indices, scatter_size)
+                    .into_iter()
+                    .map(|value| ChunkEntry {
+                        id: entry.id,
+                        data_type: entry.data_type.clone(),
+                        value: Value::Column(value),
+                    })
+                    .collect(),
             })
             .collect();
 
         let scattered_chunks = (0..scatter_size)
             .map(|scatter_idx| {
-                let chunk_columns: Vec<(Value<AnyType>, DataType)> = scattered_columns
+                let chunk_columns: Vec<ChunkEntry> = scattered_columns
                     .iter()
-                    .map(|(col_scatters, ty)| {
-                        (
-                            Value::Column(col_scatters[scatter_idx].clone()),
-                            (*ty).clone(),
-                        )
-                    })
+                    .map(|entry| entry[scatter_idx].clone())
                     .collect();
-                let num_rows = chunk_columns[0].0.as_column().unwrap().len();
+                let num_rows = chunk_columns[0].value.as_column().unwrap().len();
                 Chunk::new(chunk_columns, num_rows)
             })
             .collect();

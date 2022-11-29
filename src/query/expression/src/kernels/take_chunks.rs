@@ -30,6 +30,7 @@ use crate::types::ValueType;
 use crate::types::VariantType;
 use crate::with_number_mapped_type;
 use crate::Chunk;
+use crate::ChunkEntry;
 use crate::Column;
 use crate::ColumnBuilder;
 use crate::Scalar;
@@ -49,41 +50,47 @@ impl Chunk {
             .map(|index| {
                 let columns = chunks
                     .iter()
-                    .map(|chunk| (&chunk.columns()[index], chunk.num_rows()))
+                    .map(|chunk| (chunk.get_by_offset(index), chunk.num_rows()))
                     .collect_vec();
 
-                let datatype = columns[0].0.1.clone();
-                if datatype.is_null() {
-                    return (Value::Scalar(Scalar::Null), datatype);
+                let id = columns[0].0.id;
+                let ty = columns[0].0.data_type.clone();
+                if ty.is_null() {
+                    return ChunkEntry {
+                        id,
+                        data_type: ty,
+                        value: Value::Scalar(Scalar::Null),
+                    };
                 }
 
                 // if they are all same scalars
-                if matches!(columns[0], ((Value::Scalar(_), _), _)) {
-                    let all_same_scalar = columns.iter().map(|((val, _), _)| val).all_equal();
+                if matches!(columns[0].0.value, Value::Scalar(_)) {
+                    let all_same_scalar = columns.iter().map(|(entry, _)| &entry.value).all_equal();
                     if all_same_scalar {
-                        return columns[0].0.clone();
+                        return (*columns[0].0).clone();
                     }
                 }
 
                 let full_columns: Vec<Column> = columns
                     .iter()
-                    .map(|((col, ty), rows)| match col {
+                    .map(|(entry, rows)| match &entry.value {
                         Value::Scalar(s) => {
-                            let builder = ColumnBuilder::repeat(&s.as_ref(), *rows, ty);
+                            let builder =
+                                ColumnBuilder::repeat(&s.as_ref(), *rows, &entry.data_type);
                             builder.build()
                         }
                         Value::Column(c) => c.clone(),
                     })
                     .collect();
 
-                let column = Column::take_column_indices(
-                    &full_columns,
-                    datatype.clone(),
-                    indices,
-                    result_size,
-                );
+                let column =
+                    Column::take_column_indices(&full_columns, ty.clone(), indices, result_size);
 
-                (Value::Column(column), datatype)
+                ChunkEntry {
+                    id,
+                    data_type: ty,
+                    value: Value::Column(column),
+                }
             })
             .collect();
 

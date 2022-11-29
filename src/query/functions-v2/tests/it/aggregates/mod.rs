@@ -23,6 +23,7 @@ use common_expression::types::number::NumberScalar;
 use common_expression::types::AnyType;
 use common_expression::types::DataType;
 use common_expression::Chunk;
+use common_expression::ChunkEntry;
 use common_expression::Column;
 use common_expression::ColumnBuilder;
 use common_expression::Evaluator;
@@ -63,7 +64,12 @@ pub fn run_agg_ast(
     let chunk = Chunk::new(
         columns
             .iter()
-            .map(|(_, ty, col)| (Value::Column(col.clone()), ty.clone()))
+            .enumerate()
+            .map(|(id, (_, ty, col))| ChunkEntry {
+                id,
+                data_type: ty.clone(),
+                value: Value::Column(col.clone()),
+            })
             .collect::<Vec<_>>(),
         num_rows,
     );
