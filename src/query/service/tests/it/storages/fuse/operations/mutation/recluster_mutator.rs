@@ -109,6 +109,7 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
         Statistics::default(),
         test_segment_locations.clone(),
         Some((0, "(id)".to_string())),
+        None,
     );
     let base_snapshot = Arc::new(base_snapshot);
 

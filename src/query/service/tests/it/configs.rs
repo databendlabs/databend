@@ -69,6 +69,7 @@ table_memory_cache_mb_size = 256
 table_disk_cache_root = "_cache"
 table_disk_cache_mb_size = 1024
 table_cache_snapshot_count = 256
+table_cache_statistic_count = 256
 table_cache_segment_count = 10240
 table_cache_bloom_index_meta_count = 3000
 table_cache_bloom_index_data_bytes = 1073741824

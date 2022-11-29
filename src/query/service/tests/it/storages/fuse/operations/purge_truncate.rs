@@ -17,7 +17,7 @@ use common_exception::Result;
 use crate::storages::fuse::table_test_fixture::append_sample_data;
 use crate::storages::fuse::table_test_fixture::check_data_dir;
 use crate::storages::fuse::table_test_fixture::execute_command;
-use crate::storages::fuse::table_test_fixture::history_should_have_only_one_item;
+use crate::storages::fuse::table_test_fixture::history_should_have_item;
 use crate::storages::fuse::table_test_fixture::TestFixture;
 
 #[tokio::test]
@@ -34,16 +34,17 @@ async fn test_fuse_truncate_purge_stmt() -> Result<()> {
 
     let expected_index_count = 2;
     // there should be some data there: 2 snapshot, 2 segment, 2 block
-    check_data_dir(&fixture, "truncate_purge", 2, 2, 2, expected_index_count).await;
+    check_data_dir(&fixture, "truncate_purge", 2, 0, 2, 2, expected_index_count).await;
 
     // let's truncate
     let qry = format!("truncate table {}.{} purge", db, tbl);
     execute_command(ctx.clone(), qry.as_str()).await?;
 
     // one history item left there
-    history_should_have_only_one_item(
+    history_should_have_item(
         &fixture,
         "after_truncate_there_should_be_one_history_item_left",
+        1,
     )
     .await?;
 
@@ -52,6 +53,7 @@ async fn test_fuse_truncate_purge_stmt() -> Result<()> {
         &fixture,
         "truncate_after_purge_check_file_items",
         1,
+        0,
         0,
         0,
         0,

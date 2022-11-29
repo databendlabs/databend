@@ -27,6 +27,7 @@ pub use self::column_from::*;
 use crate::types::AnyType;
 use crate::types::DataType;
 use crate::Chunk;
+use crate::ChunkEntry;
 use crate::Column;
 use crate::ConstantFolder;
 use crate::Domain;
@@ -56,7 +57,11 @@ pub fn eval_function(
                     id,
                     data_type: ty.clone(),
                 },
-                (val, ty),
+                ChunkEntry {
+                    id,
+                    data_type: ty,
+                    value: val,
+                },
             )
         })
         .unzip();

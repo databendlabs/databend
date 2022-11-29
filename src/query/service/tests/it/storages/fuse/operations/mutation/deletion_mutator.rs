@@ -91,6 +91,7 @@ async fn test_deletion_mutator_multiple_empty_segments() -> Result<()> {
         Statistics::default(),
         test_segment_locations.clone(),
         None,
+        None,
     );
 
     let table_ctx: Arc<dyn TableContext> = ctx as Arc<dyn TableContext>;

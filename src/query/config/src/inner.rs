@@ -147,6 +147,8 @@ pub struct QueryConfig {
     pub table_disk_cache_mb_size: u64,
     /// Max number of cached table snapshot
     pub table_cache_snapshot_count: u64,
+    /// Max number of cached table statistic
+    pub table_cache_statistic_count: u64,
     /// Max number of cached table segment
     pub table_cache_segment_count: u64,
     /// Max number of cached bloom index meta objects
@@ -202,6 +204,7 @@ impl Default for QueryConfig {
             table_disk_cache_root: "_cache".to_string(),
             table_disk_cache_mb_size: 1024,
             table_cache_snapshot_count: 256,
+            table_cache_statistic_count: 256,
             table_cache_segment_count: 10240,
             table_cache_bloom_index_meta_count: 3000,
             table_cache_bloom_index_data_bytes: 1024 * 1024 * 1024,

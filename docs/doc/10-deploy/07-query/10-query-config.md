@@ -1,13 +1,17 @@
 ---
-title: Databend Query Configuration
-sidebar_label: Databend Query Configuration
+title: Query Server Configurations
+sidebar_label: Query Server Configurations
 description:
-  Databend Query Configuration
+  Query Server Configuration
 ---
 
-A `databend-query` server is configured with a `toml` file or flags.
+The configuration file `databend-query.toml` contains settings for configuring the Databend query server. Additionally, you can configure more settings for the query server with the script `databend-query`. To find out the available settings with the script, refer to the script's help information:
 
-You can explore more flags with `./databend-query -h`.
+```bash
+./databend-query -h
+```
+
+This topic explains the settings you can find in the configuration file `databend-query.toml`.
 
 ## 1. Logging Config
 
@@ -30,34 +34,36 @@ You can explore more flags with `./databend-query -h`.
 
 ## 2. Meta Service Config
 
-### address
-
-* Meta service endpoint, which lets databend-query connect to get meta data, e.g., `192.168.0.1:9101`.
-* Default: `""`
-* Env variable: `META_ADDRESS`
-* Required.
-
 ### username
 
-* Meta service username when connecting to it.
+* The username used to connect to the Meta service.
 * Default: `"root"`
 * Env variable: `META_USERNAME`
 
 ### password
 
-* Meta service password when connecting to it, `password` is not recommended here, please use Env variable instead.
+* The password used to connect to the Meta service. Databend recommends using the enviorment variable to provide the password.
 * Default: `"root"`
 * Env variable: `META_PASSWORD`
 
 ### endpoints
 
-* A list of meta server endpoints that databend-query can connect to(as seeds), e.g., `["192.168.0.1:9101", "192.168.0.2:9101"]`.
-* Default: `[""]`
+* Sets one or more meta server endpoints that this query server can connect to. For a robust connection to Meta, include multiple meta servers within the cluster as backups if possible, for example, `["192.168.0.1:9191", "192.168.0.2:9191"]`.
+* This setting only takes effect when Databend works in cluster mode. You don't need to configure it for standalone Databend.
+* Default: `["0.0.0.0:9191"]`
 * Env variable: `META_ENDPOINTS`
 
-:::tip
-If `endpoints` is configured, the `address` configuration will no longer take effect, you only need to configure one of them.
-:::
+### client_timeout_in_second
+
+* Sets the wait time (in seconds) before terminating the attempt to connect a meta server.
+* Default: 60
+
+### auto_sync_interval
+
+* Sets how often (in seconds) this query server should automatically sync up with the meta servers within the cluster to check their availability.
+* To disable the sync up, set it to 0.
+* This setting only takes effect when Databend works in cluster mode. You don't need to configure it for standalone Databend.
+* Default: 60
 
 ## 3. Query config
 
@@ -220,7 +226,7 @@ If `endpoints` is configured, the `address` configuration will no longer take ef
 * Env variable: `STORAGE_OBS_SECRET_ACCESS_KEY`
 * Required.
 
-## A Toml File Demo
+## A Toml File Sample
 
 For ease of experience, set all hosts to 0.0.0.0. Exercise caution when setting host if the application is in production.
 
@@ -239,9 +245,11 @@ format = "text"
 
 # Meta Service
 [meta]
-address = "0.0.0.0:9101"
+endpoints = ["0.0.0.0:9191"]
 username = "root"
 password = "root"
+client_timeout_in_second = 60
+auto_sync_interval = 60
 
 [query]
 # For admin RESET API.

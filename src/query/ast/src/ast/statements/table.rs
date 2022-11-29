@@ -454,6 +454,7 @@ pub enum CompactTarget {
 pub enum OptimizeTableAction<'a> {
     All,
     Purge,
+    Statistic,
     Compact {
         target: CompactTarget,
         limit: Option<Expr<'a>>,
@@ -465,6 +466,7 @@ impl<'a> Display for OptimizeTableAction<'a> {
         match self {
             OptimizeTableAction::All => write!(f, "ALL"),
             OptimizeTableAction::Purge => write!(f, "PURGE"),
+            OptimizeTableAction::Statistic => write!(f, "STATISTIC"),
             OptimizeTableAction::Compact { target, limit } => {
                 match target {
                     CompactTarget::Block => {
