@@ -106,7 +106,7 @@ pub fn exclude_col(i: Input) -> IResult<ExcludeCol> {
 pub fn select_target(i: Input) -> IResult<SelectTarget> {
     let qualified_wildcard = map(
         rule! {
-            ( #ident ~ "." ~ ( #ident ~ "." )? )? ~ "*" ~ ( ( EXCEPT | EXCLUDE ) ~ #exclude_col )?
+            ( #ident ~ "." ~ ( #ident ~ "." )? )? ~ "*" ~ ( EXCLUDE ~ #exclude_col )?
         },
         |(res, _, opt_exclude)| match res {
             Some((fst, _, Some((snd, _)))) => SelectTarget::QualifiedName {

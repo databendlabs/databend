@@ -55,14 +55,14 @@ insert into default.t1 values(2, (200,200));
 
 
 statement query I
-select * except c1 from db.t;
+select * exclude c1 from db.t;
 
 ----
 1
 
 
 statement query T
-select * except (id) from db.t;
+select * exclude (id) from db.t;
 
 ----
 (0,0)
@@ -76,75 +76,75 @@ select t.* exclude (id) from db.t;
 
 
 statement query T
-select db.t.* except (id) from db.t;
+select db.t.* exclude (id) from db.t;
 
 ----
 (0,0)
 
 
 statement error 1065
-select db.t.* except (id, c1) from db.t;
+select db.t.* exclude (id, c1) from db.t;
 
 
 statement query T
-select c.* except (id) from db.t as c;
+select c.* exclude (id) from db.t as c;
 
 ----
 (0,0)
 
 
 statement error 1065
-select db.c.* except (id) from db.t as c;
+select db.c.* exclude (id) from db.t as c;
 
 
 statement error 1065
-select * except id from (select t.id as id, t.c1 as id from db.t) t1;
+select * exclude id from (select t.id as id, t.c1 as id from db.t) t1;
 
 
 statement error 1065
-select t1.* except id from (select t.id as id, t.c1 as id from db.t) t1;
+select t1.* exclude id from (select t.id as id, t.c1 as id from db.t) t1;
 
 
 statement query ITITITIIT
-select *, t.* except c1, t1.* except (c1), t2.* except id from db.t join db.t1 on t.id != t1.id join default.t as t2 on t.id=t2.id;
+select *, t.* exclude c1, t1.* exclude (c1), t2.* exclude id from db.t join db.t1 on t.id != t1.id join default.t as t2 on t.id=t2.id;
 
 ----
 1 (0,0)    2 (0,0)    1 (100,100)    1    2 (100,100)
 
 
 statement query IT
-select db.t.* except (c1), default.t1.* except id from db.t join default.t1;
+select db.t.* exclude (c1), default.t1.* exclude id from db.t join default.t1;
 
 ----
 1 (200,200)
 
 
 statement error 1065
-select * except id from default.t1 join db.t;
+select * exclude id from default.t1 join db.t;
 
 
 statement error 1065
-select db.t.* except (c1), default.t1.* except idcc from db.t join default.t1;
+select db.t.* exclude (c1), default.t1.* exclude idcc from db.t join default.t1;
 
 
 statement error 1065
-select * except c10 from (select * from db.t) t1;
+select * exclude c10 from (select * from db.t) t1;
 
 
 statement error 1065
-select * except (id, c1) from (select * from db.t) t1;
+select * exclude (id, c1) from (select * from db.t) t1;
 
 
 statement error 1065
-select t1.* except (id, c1) from (select * from db.t) t1;
+select t1.* exclude (id, c1) from (select * from db.t) t1;
 
 
 statement error 1065
-select * except (c1, c1) from db.t;
+select * exclude (c1, c1) from db.t;
 
 
 statement error 1065
-select * except (id, id) from db.t;
+select * exclude (id, id) from db.t;
 
 
 statement ok
