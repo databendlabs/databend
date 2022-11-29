@@ -96,7 +96,7 @@ impl Chunk {
     pub fn memory_size(&self) -> usize {
         self.columns()
             .map(|entry| match &entry.value {
-                Value::Scalar(s) => std::mem::size_of_val(&s) * self.num_rows,
+                Value::Scalar(s) => std::mem::size_of_val(&s),
                 Value::Column(c) => c.memory_size(),
             })
             .sum()
