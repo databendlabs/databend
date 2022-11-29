@@ -192,7 +192,7 @@ where
                         PhantomData,
                     ))
                 }),
-            3..=8 => {
+            1..=8 => {
                 if unlikely((self.table1.len() + 1) * 2 > self.table1.capacity()) {
                     if (self.table1.entries.len() >> 22) == 0 {
                         self.table1.grow(2);
@@ -709,7 +709,6 @@ unsafe impl Keyable for FallbackKey {
         unsafe { this.assume_init_ref().key.is_none() }
     }
 
-
     #[inline(always)]
     fn hash(&self) -> u64 {
         self.hash
@@ -790,7 +789,7 @@ where A: Allocator + Clone + Default
             0 => self.table0.get().map(|x| {
                 UnsizedHashtableEntryRef(UnsizedHashtableEntryRefInner::Table0(x, PhantomData))
             }),
-            3..=8 => unsafe {
+            1..=8 => unsafe {
                 let mut t = [0u64; 1];
                 t[0] = read_le(key.as_ptr(), key.len());
                 let t = std::mem::transmute::<_, InlineKey<0>>(t);
@@ -838,7 +837,7 @@ where A: Allocator + Clone + Default
                     PhantomData,
                 ))
             }),
-            3..=8 => unsafe {
+            1..=8 => unsafe {
                 let mut t = [0u64; 1];
                 t[0] = read_le(key.as_ptr(), key.len());
                 let t = std::mem::transmute::<_, InlineKey<0>>(t);
@@ -1073,7 +1072,7 @@ where A: Allocator + Clone + Default
                         PhantomData,
                     ))
                 }),
-            3..=8 => {
+            1..=8 => {
                 if unlikely((self.table1.len() + 1) * 2 > self.table1.capacity()) {
                     if (self.table1.entries.len() >> 22) == 0 {
                         self.table1.grow(2);
