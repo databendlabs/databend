@@ -36,7 +36,7 @@ impl<V, A: Allocator + Clone> TableEmpty<V, A> {
     }
 
     pub fn len(&self) -> usize {
-        usize::from(!self.has_zero)
+        usize::from(self.has_zero)
     }
 
     pub fn heap_bytes(&self) -> usize {
