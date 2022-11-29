@@ -43,6 +43,8 @@ import TabItem from '@theme/TabItem';
 
 * Ensure there is a default storage class for the Kubernetes cluster.
 
+  ````mdx-code-block
+
   :::tip For cloud platforms
 
   <Tabs>
@@ -94,6 +96,8 @@ import TabItem from '@theme/TabItem';
   </Tabs>
 
   :::
+
+  ````
 
 * **[Recommanded]** Ensure Prometheus Operator running in Kubernetes cluster, if you want to monitor the status for Databend Meta and Databend Query.
 
@@ -239,6 +243,8 @@ service:
   type: LoadBalancer
 ```
 
+````mdx-code-block
+
 :::caution for LoadBalancer
 When setting the service type to `LoadBalancer`,
 almost all cloud platform would assign a public ip address for the query service,
@@ -247,6 +253,7 @@ this may lead to security problem.
 Then annotations would be nessesary to tell the cloud platform create an internal loadbalancer.
 
 For different cloud providers:
+
 
 <Tabs>
 <TabItem value="aws" label="AWS">
@@ -277,6 +284,10 @@ For different cloud providers:
 </Tabs>
 
 :::
+
+````
+
+````mdx-code-block
 
 :::tip for cloud storage
 
@@ -348,6 +359,8 @@ config:
 </Tabs>
 
 :::
+
+````
 
 2. Deploy the query cluster for `tenant1` in namespace `databend-query`
 

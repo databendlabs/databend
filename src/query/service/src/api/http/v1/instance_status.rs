@@ -43,10 +43,7 @@ fn secs_since_epoch(t: SystemTime) -> u64 {
 #[poem::handler]
 pub async fn instance_status_handler() -> poem::Result<impl IntoResponse> {
     let session_manager = SessionManager::instance();
-    let status = {
-        let status = session_manager.status.read();
-        status.clone()
-    };
+    let status = session_manager.get_current_session_status();
     let status = InstanceStatus {
         running_queries_count: status.running_queries_count,
         last_query_started_at: status.last_query_started_at.map(secs_since_epoch),

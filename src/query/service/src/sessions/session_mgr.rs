@@ -28,6 +28,7 @@ use common_config::Config;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_metrics::label_counter;
+use common_metrics::label_gauge;
 use common_settings::Settings;
 use common_users::UserApiProvider;
 use futures::future::Either;
@@ -45,6 +46,7 @@ use crate::sessions::SessionType;
 
 static METRIC_SESSION_CONNECT_NUMBERS: &str = "session_connect_numbers";
 static METRIC_SESSION_CLOSE_NUMBERS: &str = "session_close_numbers";
+static METRIC_SESSION_ACTIVE_CONNECTIONS: &str = "session_connections";
 
 pub struct SessionManager {
     pub(in crate::sessions) conf: Config,
@@ -95,24 +97,16 @@ impl SessionManager {
         let config = self.get_conf();
         {
             let sessions = self.active_sessions.read();
-            if sessions.len() >= self.max_sessions {
-                return Err(ErrorCode::TooManyUserConnections(
-                    "The current accept connection has exceeded max_active_sessions config",
-                ));
-            }
+            self.validate_max_active_sessions(sessions.len(), "active sessions")?;
         }
         let id = uuid::Uuid::new_v4().to_string();
         let session_typ = typ.clone();
         let mut mysql_conn_id = None;
         match session_typ {
             SessionType::MySQL => {
-                let conn_id_session_id = self.mysql_conn_map.read();
+                let mysql_conn_map = self.mysql_conn_map.read();
                 mysql_conn_id = Some(self.mysql_basic_conn_id.fetch_add(1, Ordering::Relaxed));
-                if conn_id_session_id.len() >= self.max_sessions {
-                    return Err(ErrorCode::TooManyUserConnections(
-                        "The current accept connection has exceeded max_active_sessions config",
-                    ));
-                }
+                self.validate_max_active_sessions(mysql_conn_map.len(), "mysql conns")?;
             }
             _ => {
                 debug!(
@@ -129,34 +123,31 @@ impl SessionManager {
         let session = Session::try_create(id.clone(), typ.clone(), session_ctx, mysql_conn_id)?;
 
         let mut sessions = self.active_sessions.write();
-        if sessions.len() < self.max_sessions {
-            label_counter(
-                METRIC_SESSION_CONNECT_NUMBERS,
-                &config.query.tenant_id,
-                &config.query.cluster_id,
-            );
+        self.validate_max_active_sessions(sessions.len(), "active sessions")?;
 
-            if !matches!(typ, SessionType::FlightRPC) {
-                sessions.insert(session.get_id(), Arc::downgrade(&session));
-            }
+        label_counter(
+            METRIC_SESSION_CONNECT_NUMBERS,
+            &config.query.tenant_id,
+            &config.query.cluster_id,
+        );
+        label_gauge(
+            METRIC_SESSION_ACTIVE_CONNECTIONS,
+            sessions.len() as f64,
+            &config.query.tenant_id,
+            &config.query.cluster_id,
+        );
 
-            if let SessionType::MySQL = session_typ {
-                let mut conn_id_session_id = self.mysql_conn_map.write();
-                if conn_id_session_id.len() < self.max_sessions {
-                    conn_id_session_id.insert(mysql_conn_id, id);
-                } else {
-                    return Err(ErrorCode::TooManyUserConnections(
-                        "The current accept connection has exceeded max_active_sessions config",
-                    ));
-                }
-            }
-
-            Ok(session)
-        } else {
-            Err(ErrorCode::TooManyUserConnections(
-                "The current accept connection has exceeded max_active_sessions config",
-            ))
+        if !matches!(typ, SessionType::FlightRPC) {
+            sessions.insert(session.get_id(), Arc::downgrade(&session));
         }
+
+        if let SessionType::MySQL = session_typ {
+            let mut mysql_conn_map = self.mysql_conn_map.write();
+            self.validate_max_active_sessions(mysql_conn_map.len(), "mysql conns")?;
+            mysql_conn_map.insert(mysql_conn_id, id);
+        }
+
+        Ok(session)
     }
 
     pub fn get_session_by_id(&self, id: &str) -> Option<Arc<Session>> {
@@ -270,5 +261,33 @@ impl SessionManager {
                 false
             }
         }
+    }
+
+    fn validate_max_active_sessions(&self, count: usize, reason: &str) -> Result<()> {
+        if count >= self.max_sessions {
+            return Err(ErrorCode::TooManyUserConnections(format!(
+                "Current {} ({}) has exceeded the max_active_sessions limit ({})",
+                reason, count, self.max_sessions
+            )));
+        }
+        Ok(())
+    }
+
+    fn get_active_user_session_num(&self) -> usize {
+        let active_sessions = self.active_sessions.read();
+        active_sessions
+            .iter()
+            .filter(|(_, y)| match y.upgrade() {
+                None => false,
+                Some(a) => a.get_type().is_user_session(),
+            })
+            .count()
+    }
+
+    pub fn get_current_session_status(&self) -> SessionManagerStatus {
+        let mut status_t = self.status.read().clone();
+        let active_session = self.get_active_user_session_num();
+        status_t.running_queries_count = active_session as u64;
+        status_t
     }
 }

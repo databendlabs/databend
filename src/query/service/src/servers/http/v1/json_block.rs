@@ -43,7 +43,7 @@ pub fn block_to_json_value(
     let rows_size = block.column(0).len();
     let mut res = Vec::new();
     let serializers = block.get_serializers()?;
-    let encoder = FieldEncoderValues::create_for_handler(format.timezone);
+    let encoder = FieldEncoderValues::create_for_http_handler(format.timezone);
     let mut buf = vec![];
     for row_index in 0..rows_size {
         let mut row: Vec<JsonValue> = Vec::with_capacity(block.num_columns());

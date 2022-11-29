@@ -14,6 +14,7 @@
 
 use common_expression::types::DataType;
 use common_expression::Chunk;
+use common_expression::ChunkEntry;
 use common_expression::Column;
 use common_expression::Value;
 
@@ -21,7 +22,12 @@ pub fn new_chunk(columns: &[(DataType, Column)]) -> Chunk {
     let len = columns.get(0).map_or(1, |(_, c)| c.len());
     let columns = columns
         .iter()
-        .map(|(ty, c)| (Value::Column(c.clone()), ty.clone()))
+        .enumerate()
+        .map(|(id, (ty, col))| ChunkEntry {
+            id,
+            data_type: ty.clone(),
+            value: Value::Column(col.clone()),
+        })
         .collect();
 
     Chunk::new(columns, len)

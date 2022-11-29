@@ -20,6 +20,7 @@ use common_ast::DisplayError;
 use common_expression::type_check;
 use common_expression::types::DataType;
 use common_expression::Chunk;
+use common_expression::ChunkEntry;
 use common_expression::Column;
 use common_expression::ConstantFolder;
 use common_expression::Evaluator;
@@ -72,7 +73,12 @@ pub fn run_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType, Co
         let chunk = Chunk::new(
             columns
                 .iter()
-                .map(|(_, ty, col)| (Value::Column(col.clone()), ty.clone()))
+                .enumerate()
+                .map(|(id, (_, ty, col))| ChunkEntry {
+                    id,
+                    data_type: ty.clone(),
+                    value: Value::Column(col.clone()),
+                })
                 .collect::<Vec<_>>(),
             num_rows,
         );

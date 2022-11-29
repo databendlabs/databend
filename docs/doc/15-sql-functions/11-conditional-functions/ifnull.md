@@ -16,11 +16,11 @@ IFNULL( <expr1>, <expr2>)
 | Arguments   | Description |
 | ----------- | ----------- |
 | `<expr1>` | Any general expression of any data type. |
-| `<expr2>` | Any general expression that evaluates to the same data type as \<expr1\>. |
+| `<expr2>` | Any general expression that evaluates to the same data type as `<expr1>`. |
 
 ## Return Type
 
-The data type of the returned value is the data type of \<expr1\>.
+The data type of the returned value is the data type of `<expr1>`.
 
 ## Examples
 

@@ -12,7 +12,7 @@ authors:
 
 Life is a journey, sometimes you must go back to move forward. When working with databases, you need to access the data history now and then. Time Travel is one of the most valuable features that Databend has rolled out. The time travel feature acts as a data recovery utility that enables you to restore a dropped table or get back a previous version of your data in a table. For example, when you accidentally delete a table or update some rows by mistake, you will need the help from Time Travel. This post sheds some light on what you can do with Time Travel in Databend.
 
-![](../static/img/blog/timetravel.png)
+![](/img/blog/timetravel.png)
 
 First things first, you must know that not all the historical data can be restored based on the Databend retention policy. The default retention period is 24 hours, which means you can restore your historical data within 24 hours after it is deleted or outdated.
 

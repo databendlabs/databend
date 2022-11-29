@@ -5,7 +5,7 @@ description:
   Databend is MySQL and MariaDB wire protocol-compatible.
 ---
 
-![image](../../../public/img/api/api-handler-mysql.png)
+![image](/img/api/api-handler-mysql.png)
 
 ## Overview
 

@@ -201,7 +201,8 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
                     match block.get_serializers() {
                         Ok(serializers) => {
                             let rows_size = block.column(0).len();
-                            let encoder = FieldEncoderValues::create_for_handler(format.timezone);
+                            let encoder =
+                                FieldEncoderValues::create_for_mysql_handler(format.timezone);
                             let mut buf = Vec::<u8>::new();
                             for row_index in 0..rows_size {
                                 for (col_index, serializer) in serializers.iter().enumerate() {

@@ -25,7 +25,10 @@ mod keys_ref;
 mod lookup_hashtable;
 mod stack_hashtable;
 mod table0;
+
+#[allow(dead_code)]
 mod table1;
+mod table_empty;
 mod traits;
 mod twolevel_hashtable;
 mod unsized_hashtable;
@@ -60,6 +63,7 @@ pub type StackHashSetIter<'a, K> = stack_hashtable::StackHashtableIter<'a, K, ()
 pub type StackHashSetIterMut<'a, K> = stack_hashtable::StackHashtableIter<'a, K, ()>;
 
 pub type TwoLevelHashMap<Inner> = twolevel_hashtable::TwoLevelHashtable<Inner>;
+pub type TwoLevelHashSet<K> = twolevel_hashtable::TwoLevelHashtable<HashSet<K>>;
 pub type TwoLevelHashMapIter<Inner> = twolevel_hashtable::TwoLevelHashtableIter<Inner>;
 
 pub type UnsizedHashMap<K, V> = unsized_hashtable::UnsizedHashtable<K, V>;

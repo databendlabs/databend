@@ -12,7 +12,7 @@ authors:
 
 Many optimizations are usually required for big data analytics to "reduce the distance to data." For example, using the Bloom Filter Index, queries can be filtered to determine whether data should be fetched from backend storage:
 
-![Alt text](../static/img/blog/bloom-filter.png)
+![Alt text](/img/blog/bloom-filter.png)
 
 ## Why We Replaced the Bloom Filter
 
@@ -26,13 +26,13 @@ At the TiDB User Conference on a Saturday in September, I met XP (@drmingdrmer) 
 
 XP is a master for Trie, so I'm sure implementation would be no big deal for him. But I think some existing technologies might be able to help.
 
-![Alt text](../static/img/blog/tidb-databend.png)
+![Alt text](/img/blog/tidb-databend.png)
 
 ## Why Xor Filter?
 
 A few explorations later, the Xor Filter algorithm, proposed by Daniel Lemire and his team in 2019: [Xor Filters: Faster and Smaller Than Bloom Filters, caught my attention(https://lemire.me/blog/2019/12/19/xor-filters-faster-and-smaller-than-bloom-filters/).
 
-![Alt text](../static/img/blog/comparison.png)
+![Alt text](/img/blog/comparison.png)
 
 I did a test ([Xor Filter Bench](https://github.com/BohuTANG/databend/commit/b45793c044c17cc6f8706c42bbe21201590f359f)) with the Rust version ([xorfilter](https://github.com/prataprc/xorfilter)) and got a very positive result, so we replaced Bloom Filters with Xor Filters by [databend#7860](https://github.com/datafuselabs/databend/pull/7860). Let's do a test and see how it performs with Xor Filters.
 

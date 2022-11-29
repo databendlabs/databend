@@ -17,6 +17,7 @@ use std::sync::Once;
 
 use metrics::counter;
 use metrics::decrement_gauge;
+use metrics::gauge;
 use metrics::histogram;
 use metrics::increment_gauge;
 use metrics_exporter_prometheus::PrometheusBuilder;
@@ -50,6 +51,15 @@ pub fn label_counter_with_val_and_labels(
 }
 
 #[inline]
+pub fn label_gauge_with_val_and_labels(
+    name: &'static str,
+    labels: &Vec<(&'static str, String)>,
+    val: f64,
+) {
+    gauge!(name, val, labels);
+}
+
+#[inline]
 pub fn label_increment_gauge_with_val_and_labels(
     name: &'static str,
     labels: &Vec<(&'static str, String)>,
@@ -79,6 +89,15 @@ pub fn label_counter_with_val(name: &'static str, val: u64, tenant_id: &str, clu
         (LABEL_KEY_CLUSTER, cluster_id.to_string()),
     ];
     counter!(name, val, &labels);
+}
+
+#[inline]
+pub fn label_gauge(name: &'static str, val: f64, tenant_id: &str, cluster_id: &str) {
+    let labels = [
+        (LABEL_KEY_TENANT, tenant_id.to_string()),
+        (LABEL_KEY_CLUSTER, cluster_id.to_string()),
+    ];
+    gauge!(name, val, &labels);
 }
 
 pub fn init_default_metrics_recorder() {

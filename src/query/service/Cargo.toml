@@ -79,7 +79,7 @@ common-users = { path = "../users" }
 # Github dependencies
 
 # Crates.io dependencies
-ahash = "0.8.0"
+ahash = { version = "0.8.2", features = ["no-rng"] }
 async-channel = "1.7.1"
 async-recursion = "1.0.0"
 async-stream = "0.3.3"

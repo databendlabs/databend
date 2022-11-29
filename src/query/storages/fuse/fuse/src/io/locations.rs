@@ -20,17 +20,21 @@ use common_storages_table_meta::meta::BlockFilter;
 use common_storages_table_meta::meta::Location;
 use common_storages_table_meta::meta::SegmentInfo;
 use common_storages_table_meta::meta::SnapshotVersion;
+use common_storages_table_meta::meta::TableSnapshotStatisticsVersion;
 use common_storages_table_meta::meta::Versioned;
 use uuid::Uuid;
 
 use crate::constants::FUSE_TBL_BLOCK_PREFIX;
 use crate::constants::FUSE_TBL_SEGMENT_PREFIX;
 use crate::constants::FUSE_TBL_SNAPSHOT_PREFIX;
+use crate::constants::FUSE_TBL_SNAPSHOT_STATISTICS_PREFIX;
 use crate::FUSE_TBL_LAST_SNAPSHOT_HINT;
 use crate::FUSE_TBL_XOR_BLOOM_INDEX_PREFIX;
 
 static SNAPSHOT_V0: SnapshotVersion = SnapshotVersion::V0(PhantomData);
 static SNAPSHOT_V1: SnapshotVersion = SnapshotVersion::V1(PhantomData);
+static SNAPSHOT_STATISTICS_V0: TableSnapshotStatisticsVersion =
+    TableSnapshotStatisticsVersion::V0(PhantomData);
 
 #[derive(Clone)]
 pub struct TableMetaLocationGenerator {
@@ -100,6 +104,19 @@ impl TableMetaLocationGenerator {
         }
     }
 
+    pub fn snapshot_statistics_location_from_uuid(
+        &self,
+        id: &Uuid,
+        version: u64,
+    ) -> Result<String> {
+        let statistics_version = TableSnapshotStatisticsVersion::try_from(version)?;
+        Ok(statistics_version.create(id, &self.prefix))
+    }
+
+    pub fn snapshot_statistics_version(_location: impl AsRef<str>) -> u64 {
+        SNAPSHOT_STATISTICS_V0.version()
+    }
+
     pub fn gen_last_snapshot_hint_location(&self) -> String {
         format!("{}/{}", &self.prefix, FUSE_TBL_LAST_SNAPSHOT_HINT)
     }
@@ -125,6 +142,24 @@ impl SnapshotLocationCreator for SnapshotVersion {
         match self {
             SnapshotVersion::V0(_) => "",
             SnapshotVersion::V1(_) => "_v1.json",
+        }
+    }
+}
+
+impl SnapshotLocationCreator for TableSnapshotStatisticsVersion {
+    fn create(&self, id: &Uuid, prefix: impl AsRef<str>) -> String {
+        format!(
+            "{}/{}/{}{}",
+            prefix.as_ref(),
+            FUSE_TBL_SNAPSHOT_STATISTICS_PREFIX,
+            id.simple(),
+            self.suffix(),
+        )
+    }
+
+    fn suffix(&self) -> &'static str {
+        match self {
+            TableSnapshotStatisticsVersion::V0(_) => "_ts_v0.json",
         }
     }
 }
