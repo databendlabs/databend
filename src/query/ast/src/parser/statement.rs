@@ -204,19 +204,20 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         |(_, _, _, catalog)| Statement::ShowCreateCatalog(ShowCreateCatalogStmt { catalog }),
     );
     // TODO: support `COMMENT` in create catalog
+    // TODO: use a more specific option struct instead of BTreeMap
     let create_catalog = map(
         rule! {
             CREATE ~ CATALOG ~ ( IF ~ NOT ~ EXISTS )?
             ~ #ident
             ~ TYPE ~ "=" ~ #catalog_type
-            ~ CONNECTION ~ "=" ~ #options
+            ~ CONNECTION ~ "=" ~ #catalog_options
         },
         |(_, _, opt_if_not_exists, catalog, _, _, ty, _, _, options)| {
             Statement::CreateCatalog(CreateCatalogStmt {
                 if_not_exists: opt_if_not_exists.is_some(),
                 catalog_name: catalog.to_string(),
                 catalog_type: ty,
-                options,
+                catalog_options: options,
             })
         },
     );
@@ -742,7 +743,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             CREATE ~ STAGE ~ ( IF ~ NOT ~ EXISTS )?
             ~ ( #stage_name )
             ~ ( URL ~ "=" ~ #uri_location)?
-            ~ ( FILE_FORMAT ~ "=" ~ #options)?
+            ~ ( FILE_FORMAT ~ "=" ~ #catalog_options)?
             ~ ( ON_ERROR ~ "=" ~ #ident)?
             ~ ( SIZE_LIMIT ~ "=" ~ #literal_u64)?
             ~ ( VALIDATION_MODE ~ "=" ~ #ident)?
@@ -1524,9 +1525,9 @@ pub fn uri_location(i: Input) -> IResult<UriLocation> {
     map_res(
         rule! {
             #literal_string
-            ~ (CONNECTION ~ "=" ~ #options)?
-            ~ (CREDENTIALS ~ "=" ~ #options)?
-            ~ (ENCRYPTION ~ "=" ~ #options)?
+            ~ (CONNECTION ~ "=" ~ #catalog_options)?
+            ~ (CREDENTIALS ~ "=" ~ #catalog_options)?
+            ~ (ENCRYPTION ~ "=" ~ #catalog_options)?
         },
         |(location, connection_opt, credentials_opt, encryption_opt)| {
             // fs location is not a valid url, let's check it in advance.
@@ -1662,6 +1663,7 @@ pub fn catalog_type(i: Input) -> IResult<CatalogType> {
     let catalog_type = alt((
         value(CatalogType::Default, rule! {DEFAULT}),
         value(CatalogType::Hive, rule! {HIVE}),
+        value(CatalogType::Iceberg, rule! {ICEBERG}),
     ));
     map(rule! { ^#catalog_type }, |catalog_type| catalog_type)(i)
 }
@@ -1716,9 +1718,10 @@ pub fn copy_option(i: Input) -> IResult<CopyOption> {
             rule! { PATTERN ~ "=" ~ #literal_string },
             |(_, _, pattern)| CopyOption::Pattern(pattern),
         ),
-        map(rule! { FILE_FORMAT ~ "=" ~ #options }, |(_, _, options)| {
-            CopyOption::FileFormat(options)
-        }),
+        map(
+            rule! { FILE_FORMAT ~ "=" ~ #catalog_options },
+            |(_, _, options)| CopyOption::FileFormat(options),
+        ),
         map(
             rule! { VALIDATION_MODE ~ "=" ~ #literal_string },
             |(_, _, validation_mode)| CopyOption::ValidationMode(validation_mode),
@@ -1763,7 +1766,7 @@ pub fn parameter_to_string(i: Input) -> IResult<String> {
 }
 
 // parse: (k = v ...)* into a map
-pub fn options(i: Input) -> IResult<BTreeMap<String, String>> {
+pub fn catalog_options(i: Input) -> IResult<BTreeMap<String, String>> {
     let ident_with_format = alt((
         ident_to_string,
         map(rule! { FORMAT }, |_| "FORMAT".to_string()),

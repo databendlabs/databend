@@ -53,8 +53,8 @@ use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_types::MetaId;
+use common_storage::DataOperator;
 use futures::TryStreamExt;
-use opendal::Operator;
 
 use crate::database::IcebergDatabase;
 use crate::table::IcebergTable;
@@ -71,7 +71,7 @@ pub struct IcebergCatalog {
     /// name of this iceberg table
     name: String,
     /// underlying storage access operator
-    operator: Arc<Operator>,
+    operator: Arc<DataOperator>,
 }
 
 impl IcebergCatalog {
@@ -82,7 +82,7 @@ impl IcebergCatalog {
     /// For example, to create a iceberg catalog on S3, the endpoint_url should be:
     ///
     /// `s3://bucket_name/path/to/iceberg_catalog`
-    pub fn try_create(name: &str, operator: Operator) -> Result<Self> {
+    pub fn try_create(name: &str, operator: DataOperator) -> Result<Self> {
         Ok(Self {
             name: name.to_string(),
             operator: Arc::new(operator),

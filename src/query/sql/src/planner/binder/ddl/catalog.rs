@@ -86,7 +86,7 @@ impl<'a> Binder {
             if_not_exists,
             catalog_name: catalog,
             catalog_type,
-            options,
+            catalog_options: options,
         } = stmt;
 
         let tenant = self.ctx.get_tenant();

@@ -31,8 +31,8 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
+use common_storage::DataOperator;
 use iceberg_rs::model::table::TableMetadataV2;
-use opendal::Operator;
 
 use crate::converters::meta_iceberg_to_databend;
 
@@ -59,7 +59,7 @@ pub struct IcebergTable {
     /// name of the current table
     name: String,
     /// root of the catalog
-    catalog_root: Arc<Operator>,
+    catalog_root: Arc<DataOperator>,
     /// table metadata
     manifests: TableMetadataV2,
     /// table information
@@ -73,7 +73,7 @@ impl IcebergTable {
         tenant: &str,
         database: &str,
         table_name: &str,
-        catalog_root: Arc<Operator>,
+        catalog_root: Arc<DataOperator>,
     ) -> Result<IcebergTable> {
         let meta_ptr_file = format!("{}/{}/{}", database, table_name, META_PTR);
         // only care about data in the latest snapshot for now :)

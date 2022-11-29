@@ -63,9 +63,20 @@ impl Interpreter for CreateCatalogInterpreter {
                     return Err(err);
                 }
             }
+            CatalogType::Iceberg => {
+                if !cfg!(feature = "iceberg") {
+                    let err = ErrorCode::CatalogNotSupported(
+                        "Iceberg catalog support is not enabled in your databend-query distribution."
+                        .to_string(),
+                    );
+                    return Err(err);
+                }
+            }
         }
         let catalog_manager = CatalogManager::instance();
-        catalog_manager.create_user_defined_catalog(self.plan.clone().into())?;
+        catalog_manager
+            .create_user_defined_catalog(self.plan.clone().into())
+            .await?;
 
         Ok(PipelineBuildResult::create())
     }

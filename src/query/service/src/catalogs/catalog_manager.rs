@@ -25,8 +25,14 @@ use common_exception::Result;
 use common_meta_app::schema::CatalogType;
 use common_meta_app::schema::CreateCatalogReq;
 use common_meta_app::schema::DropCatalogReq;
+#[cfg(feature = "iceberg")]
+use common_storage::parse_uri_location;
+#[cfg(feature = "iceberg")]
+use common_storage::DataOperator;
 #[cfg(feature = "hive")]
 use common_storages_hive::HiveCatalog;
+#[cfg(feature = "iceberg")]
+use common_storages_iceberg::IcebergCatalog;
 use dashmap::DashMap;
 
 use crate::catalogs::DatabaseCatalog;
@@ -41,7 +47,7 @@ pub trait CatalogManagerHelper {
 
     fn register_external_catalogs(&self, conf: &Config) -> Result<()>;
 
-    fn create_user_defined_catalog(&self, req: CreateCatalogReq) -> Result<()>;
+    async fn create_user_defined_catalog(&self, req: CreateCatalogReq) -> Result<()>;
 
     fn drop_user_defined_catalog(&self, req: DropCatalogReq) -> Result<()>;
 }
@@ -105,7 +111,7 @@ impl CatalogManagerHelper for CatalogManager {
         Ok(())
     }
 
-    fn create_user_defined_catalog(&self, req: CreateCatalogReq) -> Result<()> {
+    async fn create_user_defined_catalog(&self, req: CreateCatalogReq) -> Result<()> {
         let catalog_type = req.meta.catalog_type;
 
         // create catalog first
@@ -130,6 +136,71 @@ impl CatalogManagerHelper for CatalogManager {
                     let ctl_name = &req.name_ident.catalog_name;
                     let if_not_exists = req.if_not_exists;
 
+                    self.insert_catalog(ctl_name, catalog, if_not_exists)
+                }
+            }
+            CatalogType::Iceberg => {
+                #[cfg(not(feature = "iceberg"))]
+                {
+                    Err(ErrorCode::CatalogNotSupported(
+                        "Hive catalog is not enabled, please recompile with --features hive",
+                    ))
+                }
+                #[cfg(feature = "iceberg")]
+                {
+                    use common_storage::UriLocation;
+                    use reqwest::Url;
+
+                    let catalog_options = req.meta.options;
+                    // the uri should in the same schema as in stages
+                    let uri = catalog_options
+                        .get("uri")
+                        .ok_or_else(|| ErrorCode::InvalidArgument("expected field: URI"))?;
+
+                    // create a uri location
+                    let location = if let Some(path) = uri.strip_prefix("fs://") {
+                        UriLocation {
+                            protocol: "fs".to_string(),
+                            name: "".to_string(),
+                            path: path.to_string(),
+                            connection: catalog_options,
+                        }
+                    } else {
+                        let parsed = Url::parse(uri).map_err(|err| {
+                            ErrorCode::InvalidArgument(format!("expected valid URI: {:?}", err))
+                        })?;
+
+                        UriLocation {
+                            protocol: parsed.scheme().to_string(),
+                            name: parsed
+                                .host_str()
+                                .map(|hostname| {
+                                    if let Some(port) = parsed.port() {
+                                        format!("{}:{}", hostname, port)
+                                    } else {
+                                        hostname.to_string()
+                                    }
+                                })
+                                .ok_or_else(|| {
+                                    ErrorCode::InvalidArgument(
+                                        "expected valid URI: no hostname section",
+                                    )
+                                })?,
+                            path: if parsed.path().is_empty() {
+                                "/".to_string()
+                            } else {
+                                parsed.path().to_string()
+                            },
+                            connection: catalog_options,
+                        }
+                    };
+                    let (sp, _) = parse_uri_location(&location)?;
+                    let data_operator = DataOperator::try_create_with_storage_params(&sp).await?;
+                    let ctl_name = &req.name_ident.catalog_name;
+                    let catalog: Arc<dyn Catalog> =
+                        Arc::new(IcebergCatalog::try_create(ctl_name, data_operator)?);
+
+                    let if_not_exists = req.if_not_exists;
                     self.insert_catalog(ctl_name, catalog, if_not_exists)
                 }
             }

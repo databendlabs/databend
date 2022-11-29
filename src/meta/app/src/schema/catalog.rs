@@ -22,6 +22,7 @@ use chrono::Utc;
 pub enum CatalogType {
     Default = 1,
     Hive = 2,
+    Iceberg = 3,
 }
 
 impl Display for CatalogType {
@@ -29,6 +30,7 @@ impl Display for CatalogType {
         match self {
             CatalogType::Default => write!(f, "DEFAULT"),
             CatalogType::Hive => write!(f, "HIVE"),
+            CatalogType::Iceberg => write!(f, "ICEBERG"),
         }
     }
 }
