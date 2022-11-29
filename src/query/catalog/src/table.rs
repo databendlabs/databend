@@ -195,6 +195,12 @@ pub trait Table: Sync + Send {
         Ok(())
     }
 
+    async fn statistic(&self, ctx: Arc<dyn TableContext>) -> Result<()> {
+        let _ = ctx;
+
+        Ok(())
+    }
+
     fn table_statistics(&self) -> Result<Option<TableStatistics>> {
         Ok(None)
     }

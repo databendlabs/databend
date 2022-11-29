@@ -1266,6 +1266,10 @@ pub struct QueryConfig {
     #[clap(long, default_value = "256")]
     pub table_cache_snapshot_count: u64,
 
+    /// Max number of cached table snapshot statistics
+    #[clap(long, default_value = "256")]
+    pub table_cache_statistic_count: u64,
+
     /// Max number of cached table segment
     #[clap(long, default_value = "10240")]
     pub table_cache_segment_count: u64,
@@ -1352,6 +1356,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             table_disk_cache_root: self.table_disk_cache_root,
             table_disk_cache_mb_size: self.table_disk_cache_mb_size,
             table_cache_snapshot_count: self.table_cache_snapshot_count,
+            table_cache_statistic_count: self.table_cache_statistic_count,
             table_cache_segment_count: self.table_cache_segment_count,
             table_cache_bloom_index_meta_count: self.table_cache_bloom_index_meta_count,
             table_cache_bloom_index_data_bytes: self.table_cache_bloom_index_data_bytes,
@@ -1413,6 +1418,7 @@ impl From<InnerQueryConfig> for QueryConfig {
             table_disk_cache_root: inner.table_disk_cache_root,
             table_disk_cache_mb_size: inner.table_disk_cache_mb_size,
             table_cache_snapshot_count: inner.table_cache_snapshot_count,
+            table_cache_statistic_count: inner.table_cache_statistic_count,
             table_cache_segment_count: inner.table_cache_segment_count,
             table_cache_bloom_index_meta_count: inner.table_cache_bloom_index_meta_count,
             table_cache_bloom_index_data_bytes: inner.table_cache_bloom_index_data_bytes,

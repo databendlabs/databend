@@ -27,6 +27,7 @@ use parking_lot::RwLock;
 use crate::caches::TenantLabel;
 use crate::meta::SegmentInfo;
 use crate::meta::TableSnapshot;
+use crate::meta::TableSnapshotStatistics;
 
 pub type ItemCache<V> = RwLock<LruCache<String, Arc<V>, DefaultHashBuilder, Count>>;
 pub type BytesCache = RwLock<LruCache<String, Arc<Vec<u8>>, DefaultHashBuilder, BytesMeter>>;
@@ -76,6 +77,7 @@ pub fn new_bytes_cache(capacity: u64, tenant_label: TenantLabel) -> LabeledBytes
 
 pub type SegmentInfoCache = LabeledItemCache<SegmentInfo>;
 pub type TableSnapshotCache = LabeledItemCache<TableSnapshot>;
+pub type TableSnapshotStatisticCache = LabeledItemCache<TableSnapshotStatistics>;
 /// Cache bloom filter.
 /// For each index block, columns are cached individually.
 pub type BloomIndexCache = LabeledBytesCache;

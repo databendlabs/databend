@@ -18,3 +18,4 @@ mod table_args;
 
 pub use fuse_snapshot::FuseSnapshot;
 pub use fuse_snapshot_table::FuseSnapshotTable;
+pub use table_args::parse_func_history_args;
