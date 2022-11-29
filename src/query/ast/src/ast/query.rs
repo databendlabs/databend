@@ -119,9 +119,31 @@ pub enum SelectTarget<'a> {
         alias: Option<Identifier<'a>>,
     },
 
-    // Qualified name, e.g. `SELECT t.a, t.* FROM t`.
+    // Qualified name, e.g. `SELECT t.a, t.* exclude t.a FROM t`.
     // For simplicity, wildcard is involved.
-    QualifiedName(QualifiedName<'a>),
+    QualifiedName {
+        qualified: QualifiedName<'a>,
+        exclude: Option<ExcludeCol<'a>>,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ExcludeCol<'a> {
+    Col(Identifier<'a>),
+    Cols(Vec<Identifier<'a>>),
+}
+
+impl Display for ExcludeCol<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ExcludeCol::Col(col) => write!(f, "{col}"),
+            ExcludeCol::Cols(cols) => {
+                write!(f, "(")?;
+                write_comma_separated_list(f, cols)?;
+                write!(f, ")")
+            }
+        }
+    }
 }
 
 pub type QualifiedName<'a> = Vec<Indirection<'a>>;
@@ -370,8 +392,24 @@ impl<'a> Display for SelectTarget<'a> {
                     write!(f, " AS {ident}")?;
                 }
             }
-            SelectTarget::QualifiedName(indirections) => {
-                write_period_separated_list(f, indirections)?;
+            SelectTarget::QualifiedName { qualified, exclude } => {
+                write_period_separated_list(f, qualified)?;
+                if let Some(exclude) = exclude {
+                    // ORDER BY clause
+                    match exclude {
+                        ExcludeCol::Col(col) => {
+                            write!(f, " EXCLUDE")?;
+                            write!(f, " {col}")?;
+                        }
+                        ExcludeCol::Cols(cols) => {
+                            if !cols.is_empty() {
+                                write!(f, " EXCLUDE (")?;
+                                write_comma_separated_list(f, cols)?;
+                                write!(f, ")")?;
+                            }
+                        }
+                    }
+                }
             }
         }
         Ok(())

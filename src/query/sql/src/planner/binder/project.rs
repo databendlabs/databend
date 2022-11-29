@@ -13,7 +13,10 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 
+use common_ast::ast::ExcludeCol;
+use common_ast::ast::Identifier;
 use common_ast::ast::Indirection;
 use common_ast::ast::SelectTarget;
 use common_exception::ErrorCode;
@@ -150,8 +153,107 @@ impl<'a> Binder {
         let mut output = SelectList::<'a>::default();
         for select_target in select_list {
             match select_target {
-                SelectTarget::QualifiedName(names) => {
+                SelectTarget::QualifiedName {
+                    qualified: names,
+                    exclude,
+                } => {
                     // Handle qualified name as select target
+                    let mut exclude_cols: HashSet<String> = HashSet::new();
+                    if let Some(exclude) = exclude {
+                        match exclude {
+                            ExcludeCol::Col(col) => {
+                                exclude_cols.insert(col.name.clone());
+                            }
+                            ExcludeCol::Cols(cols) => {
+                                for col in cols {
+                                    exclude_cols.insert(col.name.clone());
+                                }
+                                if exclude_cols.len() < cols.len() {
+                                    // * except (id, id)
+                                    return Err(ErrorCode::SemanticError("duplicate column name"));
+                                }
+                            }
+                        }
+                    }
+
+                    // Pre-check exclude_col is legal
+                    let precheck_exclude_cols = |input_context: &BindContext,
+                                                 exclude_cols: &HashSet<String>,
+                                                 db_name: Option<&Identifier>,
+                                                 table_name: Option<&Identifier>|
+                     -> Result<()> {
+                        let all_columns_bind = input_context.all_column_bindings();
+                        let mut qualified_cols_name: HashMap<String, u8> = HashMap::new();
+                        for i in all_columns_bind {
+                            if let (None, None) = (db_name, table_name) {
+                                if i.visibility != Visibility::Visible {
+                                    continue;
+                                }
+                                if qualified_cols_name.contains_key(i.column_name.as_str()) {
+                                    qualified_cols_name.insert(
+                                        i.column_name.clone(),
+                                        *qualified_cols_name.get(i.column_name.as_str()).unwrap()
+                                            + 1,
+                                    );
+                                } else {
+                                    qualified_cols_name.insert(i.column_name.clone(), 0u8);
+                                }
+                            } else if let (None, Some(table_name)) = (db_name, table_name) {
+                                if i.visibility != Visibility::Visible {
+                                    continue;
+                                }
+                                if i.table_name == Some(table_name.name.clone()) {
+                                    if qualified_cols_name.contains_key(i.column_name.as_str()) {
+                                        qualified_cols_name.insert(
+                                            i.column_name.clone(),
+                                            *qualified_cols_name
+                                                .get(i.column_name.as_str())
+                                                .unwrap()
+                                                + 1,
+                                        );
+                                    } else {
+                                        qualified_cols_name.insert(i.column_name.clone(), 0u8);
+                                    }
+                                }
+                            } else if let (Some(db_name), Some(table_name)) = (db_name, table_name)
+                            {
+                                if i.visibility != Visibility::Visible {
+                                    continue;
+                                }
+                                if i.table_name == Some(table_name.name.clone())
+                                    && i.database_name == Some(db_name.name.clone())
+                                {
+                                    if qualified_cols_name.contains_key(i.column_name.as_str()) {
+                                        qualified_cols_name.insert(
+                                            i.column_name.clone(),
+                                            *qualified_cols_name
+                                                .get(i.column_name.as_str())
+                                                .unwrap()
+                                                + 1,
+                                        );
+                                    } else {
+                                        qualified_cols_name.insert(i.column_name.clone(), 0u8);
+                                    }
+                                }
+                            }
+                        }
+                        for exclude_col in exclude_cols {
+                            if qualified_cols_name.get(exclude_col).is_none() {
+                                return Err(ErrorCode::SemanticError(format!(
+                                    "column '{exclude_col}' doesn't exist"
+                                )));
+                            } else if 0 < *qualified_cols_name.get(exclude_col).unwrap() {
+                                return Err(ErrorCode::SemanticError(format!(
+                                    "ambiguous column name '{exclude_col}'"
+                                )));
+                            }
+                        }
+                        if exclude_cols.len() == qualified_cols_name.len() {
+                            return Err(ErrorCode::SemanticError("SELECT with no columns"));
+                        }
+                        Ok(())
+                    };
+
                     if names.len() == 1 {
                         // *
                         let indirection = &names[0];
@@ -159,18 +261,42 @@ impl<'a> Binder {
                             Indirection::Star => {
                                 // Expands wildcard star, for example we have a table `t(a INT, b INT)`:
                                 // The query `SELECT * FROM t` will be expanded into `SELECT t.a, t.b FROM t`
-                                for column_binding in input_context.all_column_bindings() {
-                                    if column_binding.visibility != Visibility::Visible {
-                                        continue;
-                                    }
-                                    output.items.push(SelectItem {
-                                        select_target,
-                                        scalar: BoundColumnRef {
-                                            column: column_binding.clone(),
+                                if exclude_cols.is_empty() {
+                                    for column_binding in input_context.all_column_bindings() {
+                                        if column_binding.visibility != Visibility::Visible {
+                                            continue;
                                         }
-                                        .into(),
-                                        alias: column_binding.column_name.clone(),
-                                    });
+                                        output.items.push(SelectItem {
+                                            select_target,
+                                            scalar: BoundColumnRef {
+                                                column: column_binding.clone(),
+                                            }
+                                            .into(),
+                                            alias: column_binding.column_name.clone(),
+                                        });
+                                    }
+                                } else {
+                                    precheck_exclude_cols(
+                                        input_context,
+                                        &exclude_cols,
+                                        None,
+                                        None,
+                                    )?;
+                                    for column_binding in input_context.all_column_bindings() {
+                                        if column_binding.visibility != Visibility::Visible {
+                                            continue;
+                                        }
+                                        if exclude_cols.get(&column_binding.column_name).is_none() {
+                                            output.items.push(SelectItem {
+                                                select_target,
+                                                scalar: BoundColumnRef {
+                                                    column: column_binding.clone(),
+                                                }
+                                                .into(),
+                                                alias: column_binding.column_name.clone(),
+                                            });
+                                        }
+                                    }
                                 }
                             }
                             _ => {
@@ -185,21 +311,54 @@ impl<'a> Binder {
                         match indirection {
                             Indirection::Identifier(table_name) => {
                                 let mut match_table = false;
-                                for column_binding in input_context.all_column_bindings() {
-                                    if column_binding.visibility != Visibility::Visible {
-                                        continue;
+                                if exclude_cols.is_empty() {
+                                    for column_binding in input_context.all_column_bindings() {
+                                        if column_binding.visibility != Visibility::Visible {
+                                            continue;
+                                        }
+                                        if column_binding.table_name
+                                            == Some(table_name.name.clone())
+                                        {
+                                            match_table = true;
+                                            output.items.push(SelectItem {
+                                                select_target,
+                                                scalar: BoundColumnRef {
+                                                    column: column_binding.clone(),
+                                                }
+                                                .into(),
+                                                alias: column_binding.column_name.clone(),
+                                            });
+                                        }
                                     }
-                                    if column_binding.table_name == Some(table_name.name.clone()) {
-                                        match_table = true;
-                                        let select_item = SelectItem {
-                                            select_target,
-                                            scalar: BoundColumnRef {
-                                                column: column_binding.clone(),
+                                } else {
+                                    precheck_exclude_cols(
+                                        input_context,
+                                        &exclude_cols,
+                                        None,
+                                        Some(table_name),
+                                    )?;
+                                    for column_binding in input_context.all_column_bindings() {
+                                        if column_binding.visibility != Visibility::Visible {
+                                            continue;
+                                        }
+                                        if column_binding.table_name
+                                            == Some(table_name.name.clone())
+                                        {
+                                            match_table = true;
+                                            if exclude_cols
+                                                .get(&column_binding.column_name)
+                                                .is_none()
+                                            {
+                                                output.items.push(SelectItem {
+                                                    select_target,
+                                                    scalar: BoundColumnRef {
+                                                        column: column_binding.clone(),
+                                                    }
+                                                    .into(),
+                                                    alias: column_binding.column_name.clone(),
+                                                });
                                             }
-                                            .into(),
-                                            alias: column_binding.column_name.clone(),
-                                        };
-                                        output.items.push(select_item);
+                                        }
                                     }
                                 }
                                 if !match_table {
@@ -225,26 +384,62 @@ impl<'a> Binder {
                                 Indirection::Identifier(table_name),
                             ) => {
                                 let mut match_table = false;
-                                for column_binding in input_context.all_column_bindings() {
-                                    if column_binding.visibility != Visibility::Visible {
-                                        continue;
+                                if exclude_cols.is_empty() {
+                                    for column_binding in input_context.all_column_bindings() {
+                                        if column_binding.visibility != Visibility::Visible {
+                                            continue;
+                                        }
+                                        if column_binding.database_name
+                                            == Some(db_name.name.clone())
+                                            && column_binding.table_name
+                                                == Some(table_name.name.clone())
+                                        {
+                                            match_table = true;
+                                            output.items.push(SelectItem {
+                                                select_target,
+                                                scalar: BoundColumnRef {
+                                                    column: column_binding.clone(),
+                                                }
+                                                .into(),
+                                                alias: column_binding.column_name.clone(),
+                                            });
+                                        }
                                     }
-                                    if column_binding.database_name == Some(db_name.name.clone())
-                                        && column_binding.table_name
-                                            == Some(table_name.name.clone())
-                                    {
-                                        match_table = true;
-                                        let select_item = SelectItem {
-                                            select_target,
-                                            scalar: BoundColumnRef {
-                                                column: column_binding.clone(),
+                                } else {
+                                    precheck_exclude_cols(
+                                        input_context,
+                                        &exclude_cols,
+                                        Some(db_name),
+                                        Some(table_name),
+                                    )?;
+
+                                    for column_binding in input_context.all_column_bindings() {
+                                        if column_binding.visibility != Visibility::Visible {
+                                            continue;
+                                        }
+                                        if column_binding.database_name
+                                            == Some(db_name.name.clone())
+                                            && column_binding.table_name
+                                                == Some(table_name.name.clone())
+                                        {
+                                            match_table = true;
+                                            if exclude_cols
+                                                .get(&column_binding.column_name)
+                                                .is_none()
+                                            {
+                                                output.items.push(SelectItem {
+                                                    select_target,
+                                                    scalar: BoundColumnRef {
+                                                        column: column_binding.clone(),
+                                                    }
+                                                    .into(),
+                                                    alias: column_binding.column_name.clone(),
+                                                });
                                             }
-                                            .into(),
-                                            alias: column_binding.column_name.clone(),
-                                        };
-                                        output.items.push(select_item);
+                                        }
                                     }
                                 }
+
                                 if !match_table {
                                     return Err(ErrorCode::UnknownTable(format!(
                                         "Unknown table '{}'.'{}'",

@@ -418,6 +418,7 @@ fn test_query() {
     let mut mint = Mint::new("tests/it/testdata");
     let mut file = mint.new_goldenfile("query.txt").unwrap();
     let cases = &[
+        r#"select * except c1, b.* except (c2, c3, c4) from customer inner join orders on a = b limit 1"#,
         r#"select * from customer inner join orders"#,
         r#"select * from customer cross join orders"#,
         r#"select * from customer inner join orders on a = b limit 1"#,

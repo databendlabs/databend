@@ -83,21 +83,48 @@ pub fn with(i: Input) -> IResult<With> {
     )(i)
 }
 
+pub fn exclude_col(i: Input) -> IResult<ExcludeCol> {
+    let var = map(
+        rule! {
+            #ident
+        },
+        ExcludeCol::Col,
+    );
+    let vars = map(
+        rule! {
+            "(" ~ ^#comma_separated_list1(ident) ~ ")"
+        },
+        |(_, cols, _)| ExcludeCol::Cols(cols),
+    );
+
+    rule!(
+        #var
+        | #vars
+    )(i)
+}
+
 pub fn select_target(i: Input) -> IResult<SelectTarget> {
     let qualified_wildcard = map(
         rule! {
-            ( #ident ~ "." ~ ( #ident ~ "." )? )? ~ "*"
+            ( #ident ~ "." ~ ( #ident ~ "." )? )? ~ "*" ~ ( ( EXCEPT | EXCLUDE ) ~ #exclude_col )?
         },
-        |(res, _)| match res {
-            Some((fst, _, Some((snd, _)))) => SelectTarget::QualifiedName(vec![
-                Indirection::Identifier(fst),
-                Indirection::Identifier(snd),
-                Indirection::Star,
-            ]),
-            Some((fst, _, None)) => {
-                SelectTarget::QualifiedName(vec![Indirection::Identifier(fst), Indirection::Star])
-            }
-            None => SelectTarget::QualifiedName(vec![Indirection::Star]),
+        |(res, _, opt_exclude)| match res {
+            Some((fst, _, Some((snd, _)))) => SelectTarget::QualifiedName {
+                qualified: vec![
+                    Indirection::Identifier(fst),
+                    Indirection::Identifier(snd),
+                    Indirection::Star,
+                ],
+                exclude: opt_exclude.map(|(_, exclude)| exclude),
+            },
+            Some((fst, _, None)) => SelectTarget::QualifiedName {
+                qualified: vec![Indirection::Identifier(fst), Indirection::Star],
+                exclude: opt_exclude.map(|(_, exclude)| exclude),
+            },
+            None => SelectTarget::QualifiedName {
+                qualified: vec![Indirection::Star],
+                exclude: opt_exclude.map(|(_, exclude)| exclude),
+            },
         },
     );
     let projection = map(
