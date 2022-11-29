@@ -27,8 +27,7 @@ impl<V, A: Allocator + Clone> TableEmpty<V, A> {
     pub fn new_in(allocator: A) -> Self {
         Self {
             slice: unsafe {
-                let res = Box::<[Ent<V>; 1], A>::new_zeroed_in(allocator).assume_init();
-                res
+                Box::<[Ent<V>; 1], A>::new_zeroed_in(allocator).assume_init()
             },
             has_zero: false,
         }
@@ -39,7 +38,7 @@ impl<V, A: Allocator + Clone> TableEmpty<V, A> {
     }
 
     pub fn len(&self) -> usize {
-        if self.has_zero { 1 } else { 0 }
+        usize::from(!self.has_zero)
     }
 
     pub fn heap_bytes(&self) -> usize {
