@@ -11,6 +11,8 @@ The configuration file `databend-query.toml` contains settings for configuring t
 ./databend-query -h
 ```
 
+This topic explains the settings you can find in the configuration file `databend-query.toml`.
+
 ## 1. Logging Config
 
 ### log.file
@@ -46,7 +48,8 @@ The configuration file `databend-query.toml` contains settings for configuring t
 
 ### endpoints
 
-* Sets one or more meta server endpoints that this query server can connect to. To establish a robust connection, include multiple servers as backups if possible, for example, `["192.168.0.1:9191", "192.168.0.2:9191"]`.
+* Sets one or more meta server endpoints that this query server can connect to. For a robust connection to Meta, include multiple meta servers within the cluster as backups if possible, for example, `["192.168.0.1:9191", "192.168.0.2:9191"]`.
+* This setting only takes effect when Databend works in cluster mode. You don't need to configure it for standalone Databend.
 * Default: `["0.0.0.0:9191"]`
 * Env variable: `META_ENDPOINTS`
 
@@ -57,8 +60,9 @@ The configuration file `databend-query.toml` contains settings for configuring t
 
 ### auto_sync_interval
 
-* Sets how often (in seconds) this query server should automatically sync up with the meta server for the most recent number of meta servers within the cluster.
+* Sets how often (in seconds) this query server should automatically sync up with the meta servers within the cluster to check their availability.
 * To disable the sync up, set it to 0.
+* This setting only takes effect when Databend works in cluster mode. You don't need to configure it for standalone Databend.
 * Default: 60
 
 ## 3. Query config
