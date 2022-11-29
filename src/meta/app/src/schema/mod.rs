@@ -20,6 +20,7 @@ mod table;
 
 pub use catalog::CatalogMeta;
 pub use catalog::CatalogNameIdent;
+pub use catalog::CatalogOption;
 pub use catalog::CatalogType;
 pub use catalog::CreateCatalogReq;
 pub use catalog::DropCatalogReq;

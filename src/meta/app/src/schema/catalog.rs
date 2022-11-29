@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
 use std::fmt::Display;
 
 use chrono::DateTime;
 use chrono::Utc;
+use common_storage::StorageParams;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum CatalogType {
@@ -35,10 +35,18 @@ impl Display for CatalogType {
     }
 }
 
+/// different options for creating catalogs
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CatalogOption {
+    // hms_address
+    Hive(String),
+    // Uri location for iceberg
+    Iceberg(Box<StorageParams>),
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CatalogMeta {
-    pub catalog_type: CatalogType,
-    pub options: BTreeMap<String, String>,
+    pub catalog_option: CatalogOption,
     pub created_on: DateTime<Utc>,
 }
 

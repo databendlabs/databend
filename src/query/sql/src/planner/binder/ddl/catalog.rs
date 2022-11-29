@@ -25,9 +25,14 @@ use common_datavalues::DataField;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::ToDataType;
 use common_datavalues::Vu8;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::CatalogMeta;
+use common_meta_app::schema::CatalogOption;
 use common_meta_app::schema::CatalogType;
+use common_storage::parse_uri_location;
+use common_storage::UriLocation;
+use url::Url;
 
 use crate::normalize_identifier;
 use crate::plans::CreateCatalogPlan;
@@ -91,7 +96,7 @@ impl<'a> Binder {
 
         let tenant = self.ctx.get_tenant();
 
-        let meta = self.catalog_meta(*catalog_type, options);
+        let meta = self.try_create_meta_from_options(*catalog_type, options)?;
 
         Ok(Plan::CreateCatalog(Box::new(CreateCatalogPlan {
             if_not_exists: *if_not_exists,
@@ -115,16 +120,92 @@ impl<'a> Binder {
         })))
     }
 
-    fn catalog_meta(
+    fn try_create_meta_from_options(
         &self,
         catalog_type: CatalogType,
         options: &BTreeMap<String, String>,
-    ) -> CatalogMeta {
-        let options = options.clone();
-        CatalogMeta {
-            catalog_type,
-            options,
+    ) -> Result<CatalogMeta> {
+        // get catalog options from options
+        let catalog_option = match catalog_type {
+            // creating default catalog type is not supported
+            CatalogType::Default => {
+                return Err(ErrorCode::CatalogNotSupported(
+                    "Creating default catalog is not allowed!",
+                ));
+            }
+            CatalogType::Hive => {
+                if !cfg!(feature = "hive") {
+                    return Err(ErrorCode::CatalogNotSupported(
+                        "Hive catalog support is not enabled in your databend-query distribution."
+                            .to_string(),
+                    ));
+                }
+                let address = options
+                    .get("address")
+                    .ok_or_else(|| ErrorCode::InvalidArgument("expected field: ADDRESS"))?;
+
+                CatalogOption::Hive(address.to_string())
+            }
+            CatalogType::Iceberg => {
+                if !cfg!(feature = "iceberg") {
+                    return Err(ErrorCode::CatalogNotSupported(
+                        "Iceberg catalog support is not enabled in your databend-query distribution."
+                        .to_string(),
+                            ));
+                }
+                let catalog_options = options.clone();
+                // the uri should in the same schema as in stages
+                let uri = catalog_options
+                    .get("uri")
+                    .ok_or_else(|| ErrorCode::InvalidArgument("expected field: URI"))?;
+
+                // create a uri location
+                let location = if let Some(path) = uri.strip_prefix("fs://") {
+                    UriLocation {
+                        protocol: "fs".to_string(),
+                        name: "".to_string(),
+                        path: path.to_string(),
+                        connection: catalog_options,
+                    }
+                } else {
+                    let parsed = Url::parse(uri).map_err(|err| {
+                        ErrorCode::InvalidArgument(format!("expected valid URI: {:?}", err))
+                    })?;
+
+                    UriLocation {
+                        protocol: parsed.scheme().to_string(),
+                        name: parsed
+                            .host_str()
+                            .map(|hostname| {
+                                if let Some(port) = parsed.port() {
+                                    format!("{}:{}", hostname, port)
+                                } else {
+                                    hostname.to_string()
+                                }
+                            })
+                            .ok_or_else(|| {
+                                ErrorCode::InvalidArgument(
+                                    "expected valid URI: no hostname section",
+                                )
+                            })?,
+                        path: if parsed.path().is_empty() {
+                            "/".to_string()
+                        } else {
+                            parsed.path().to_string()
+                        },
+                        connection: catalog_options,
+                    }
+                };
+
+                let (sp, _) = parse_uri_location(&location)?;
+
+                CatalogOption::Iceberg(Box::new(sp))
+            }
+        };
+
+        Ok(CatalogMeta {
+            catalog_option,
             created_on: Utc::now(),
-        }
+        })
     }
 }

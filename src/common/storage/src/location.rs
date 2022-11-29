@@ -32,7 +32,7 @@ use crate::StorageParams;
 use crate::StorageS3Config;
 use crate::STORAGE_GCS_DEFAULT_ENDPOINT;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UriLocation {
     pub protocol: String,
     pub name: String,
