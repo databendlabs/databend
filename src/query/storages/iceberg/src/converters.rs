@@ -15,7 +15,7 @@
 //! this module is used for converting iceberg data types, shemas and other metadata
 //! to databend
 
-use common_datavalues::chrono;
+use chrono::Utc;
 use common_datavalues::create_primitive_datatype;
 use common_datavalues::BooleanType;
 use common_datavalues::DataField;
@@ -35,7 +35,7 @@ use iceberg_rs::model::table::TableMetadataV2;
 use itertools::Itertools;
 
 /// generate TableMeta from Iceberg table meta
-pub(super) fn meta_iceberg_to_databend(catalog: &str, meta: &TableMetadataV2) -> TableMeta {
+pub(crate) fn meta_iceberg_to_databend(catalog: &str, meta: &TableMetadataV2) -> TableMeta {
     let schema = match meta.schemas.last() {
         Some(scm) => schema_iceberg_to_databend(scm),
         // empty schema
@@ -47,7 +47,7 @@ pub(super) fn meta_iceberg_to_databend(catalog: &str, meta: &TableMetadataV2) ->
         schema,
         catalog: catalog.to_string(),
         engine: "iceberg".to_string(),
-        created_on: chrono::Utc::now(),
+        created_on: Utc::now(),
         ..Default::default()
     }
 }
@@ -127,4 +127,76 @@ fn primitive_iceberg_to_databend(prim: &AllType) -> DataTypeImpl {
     }
 }
 
-// todo: add stateless tests here
+#[cfg(test)]
+mod convert_test {
+    use iceberg_rs::model::table::TableMetadataV2;
+
+    use super::meta_iceberg_to_databend;
+
+    /// example metadata file
+    const METADATA_FILE: &str = r#"
+    {
+        "format-version" : 2,
+        "table-uuid": "fb072c92-a02b-11e9-ae9c-1bb7bc9eca94",
+        "location": "s3://b/wh/data.db/table",
+        "last-sequence-number" : 1,
+        "last-updated-ms": 1515100955770,
+        "last-column-id": 1,
+        "schemas": [
+            {
+                "schema-id" : 1,
+                "type" : "struct",
+                "fields" :[
+                    {
+                        "id": 1,
+                        "name": "struct_name",
+                        "required": true,
+                        "field_type": "fixed[1]"
+                    }
+                ]
+            }
+        ],
+        "current-schema-id" : 1,
+        "partition-specs": [
+            {
+                "spec-id": 1,
+                "fields": [
+                    {
+                        "source-id": 4,
+                        "field-id": 1000,
+                        "name": "ts_day",
+                        "transform": "day"
+                    }
+                ]
+            }
+        ],
+        "default-spec-id": 1,
+        "last-partition-id": 1,
+        "properties": {
+            "commit.retry.num-retries": "1"
+        },
+        "metadata-log": [
+            {
+                "metadata-file": "s3://bucket/.../v1.json",
+                "timestamp-ms": 1515100
+            }
+        ],
+        "sort-orders": [],
+        "default-sort-order-id": 0
+    }
+"#;
+
+    fn gen_iceberg_meta() -> TableMetadataV2 {
+        serde_json::de::from_str(METADATA_FILE).unwrap()
+    }
+
+    #[test]
+    fn test_parse_metadata() {
+        let metadata: TableMetadataV2 = gen_iceberg_meta();
+
+        let converted = meta_iceberg_to_databend("ctl", &metadata);
+
+        assert_eq!(converted.engine, "iceberg");
+        assert_eq!(converted.catalog, "ctl");
+    }
+}

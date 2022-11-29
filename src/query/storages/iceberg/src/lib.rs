@@ -50,13 +50,19 @@
 //! SELECT * FROM icb_ctl.db0.tbl1;
 //! ```
 
-// the Iceberg Catalog implementation
+/// the Iceberg Catalog implementation
 mod catalog;
-// data converters
+/// data converters
 mod converters;
-// database implementation
+/// database implementation
 mod database;
-// table implementation
+/// reading manifestlist and manifest files
+#[allow(unused)]
+mod manifest;
+/// table metadata reader
+#[allow(unused)]
+mod meta_reader;
+/// table implementation
 mod table;
 
 pub use catalog::IcebergCatalog;

@@ -14,7 +14,6 @@
 
 //! simply wrapping directories into databases
 use common_catalog::database::Database;
-use common_datavalues::chrono;
 use common_meta_app::schema::DatabaseIdent;
 use common_meta_app::schema::DatabaseInfo;
 use common_meta_app::schema::DatabaseMeta;

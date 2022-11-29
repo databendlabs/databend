@@ -29,8 +29,10 @@ async-trait = "0.1.57"
 futures = "0.3.24"
 opendal = "0.19"
 tracing = "0.1.36"
-serde = { workspace = true }
+serde = { workspace = true ,features=["derive"]}
 iceberg-rs = "0.1.0"
 serde_json = { workspace = true}
+chrono = { workspace = true }
 itertools = "0.10.5"
+arrow = { package="arrow2", version = "0.14", features=["io_avro", "io_avro_async"]}
 

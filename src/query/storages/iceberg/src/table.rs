@@ -52,6 +52,7 @@ const META_PTR: &str = "metadata/version_hint.text";
 ///             - data/     <- data directory
 ///         - ...  <- other tables
 ///     - ...   <- other databases
+#[allow(unused)]
 pub struct IcebergTable {
     /// database that belongs to
     database: String,
