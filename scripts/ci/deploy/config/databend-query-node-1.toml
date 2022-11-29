@@ -40,21 +40,21 @@ table_disk_cache_mb_size = 10240
 table_cache_bloom_index_meta_count=3000
 table_cache_bloom_index_data_bytes=1073741824
 
-[[query.users]]
-name = "admin"
-auth_type = "no_password"
+# [[query.users]]
+# name = "admin"
+# auth_type = "no_password"
 
-[[query.users]]
-name = "databend"
-auth_type = "double_sha1_password"
-# echo -n "databend" | sha1sum | cut -d' ' -f1 | xxd -r -p | sha1sum
-auth_string = "3081f32caef285c232d066033c89a78d88a6d8a5"
+# [[query.users]]
+# name = "databend"
+# auth_type = "double_sha1_password"
+# # echo -n "databend" | sha1sum | cut -d' ' -f1 | xxd -r -p | sha1sum
+# auth_string = "3081f32caef285c232d066033c89a78d88a6d8a5"
 
-[[query.users]]
-name = "datafuselabs"
-auth_type = "sha256_password"
-#  echo -n "datafuselabs" | sha256sum
-auth_string = "6db1a2f5da402b43c066fcadcbf78f04260b3236d9035e44dd463f21e29e6f3b"
+# [[query.users]]
+# name = "datafuselabs"
+# auth_type = "sha256_password"
+# #  echo -n "datafuselabs" | sha256sum
+# auth_string = "6db1a2f5da402b43c066fcadcbf78f04260b3236d9035e44dd463f21e29e6f3b"
 
 
 [log]
