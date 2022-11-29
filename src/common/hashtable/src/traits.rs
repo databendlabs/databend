@@ -25,7 +25,7 @@ use primitive_types::U512;
 /// All functions must be implemented correctly.
 pub unsafe trait Keyable: Sized + Copy + Eq {
     fn is_zero(this: &MaybeUninit<Self>) -> bool;
-    
+
     fn equals_zero(this: &Self) -> bool;
 
     fn hash(&self) -> u64;
