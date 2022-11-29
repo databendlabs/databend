@@ -25,7 +25,7 @@ use primitive_types::U512;
 /// All functions must be implemented correctly.
 pub unsafe trait Keyable: Sized + Copy + Eq {
     fn is_zero(this: &MaybeUninit<Self>) -> bool;
-
+    
     fn equals_zero(this: &Self) -> bool;
 
     fn hash(&self) -> u64;
@@ -242,7 +242,7 @@ impl FastHash for u128 {
                 }
                 (high as u64) << 32 | low as u64
             } else {
-                 use std::hash::Hasher;
+                use std::hash::Hasher;
                 let state = ahash::RandomState::with_seeds(SEEDS[0], SEEDS[1], SEEDS[2], SEEDS[3]);
                 let mut hasher = state.build_hasher();
                 hasher.write_u128(*self);
