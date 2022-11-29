@@ -87,6 +87,7 @@ impl PhysicalOperator for PhysicalHashJoin {
         required: &RequiredProperty,
     ) -> Result<RequiredProperty> {
         let mut required = required.clone();
+        tracing::info!("{} {:?}", child_index, required);
 
         let probe_physical_prop = rel_expr.derive_physical_prop_child(0)?;
         let build_physical_prop = rel_expr.derive_physical_prop_child(1)?;
@@ -101,8 +102,6 @@ impl PhysicalOperator for PhysicalHashJoin {
         {
             if child_index == 1 {
                 required.distribution = Distribution::Broadcast;
-            } else {
-                required.distribution = Distribution::Hash(self.probe_keys.clone());
             }
         } else if child_index == 0 {
             required.distribution = Distribution::Hash(self.probe_keys.clone());

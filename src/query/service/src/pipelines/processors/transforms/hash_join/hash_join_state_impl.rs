@@ -53,6 +53,7 @@ impl HashJoinState for JoinHashTable {
     }
 
     fn probe(&self, input: &DataBlock, probe_state: &mut ProbeState) -> Result<Vec<DataBlock>> {
+        tracing::info!("{:?}", input);
         match self.hash_join_desc.join_type {
             JoinType::Inner
             | JoinType::LeftSemi
