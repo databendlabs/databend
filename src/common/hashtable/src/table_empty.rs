@@ -26,9 +26,7 @@ pub struct TableEmpty<V, A: Allocator + Clone> {
 impl<V, A: Allocator + Clone> TableEmpty<V, A> {
     pub fn new_in(allocator: A) -> Self {
         Self {
-            slice: unsafe {
-                Box::<[Ent<V>; 1], A>::new_zeroed_in(allocator).assume_init()
-            },
+            slice: unsafe { Box::<[Ent<V>; 1], A>::new_zeroed_in(allocator).assume_init() },
             has_zero: false,
         }
     }
@@ -74,13 +72,13 @@ impl<V, A: Allocator + Clone> TableEmpty<V, A> {
     pub fn iter(&self) -> TableEmptyIter<'_, V> {
         TableEmptyIter {
             slice: self.slice.as_ref(),
-            i: if self.has_zero { 0 } else { 1 },
+            i: usize::from(!self.has_zero),
         }
     }
     pub fn iter_mut(&mut self) -> TableEmptyIterMut<'_, V> {
         TableEmptyIterMut {
             slice: self.slice.as_mut(),
-            i: if self.has_zero { 0 } else { 1 },
+            i: usize::from(!self.has_zero),
         }
     }
 }
