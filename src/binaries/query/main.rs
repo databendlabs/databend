@@ -63,9 +63,11 @@ async fn main_entrypoint(mem_tracker: Arc<MemoryTracker>) -> Result<()> {
     init_default_metrics_recorder();
     set_panic_hook();
 
-    let size = conf.query.max_memory_usage as i64;
-    info!("Set memory limit: {}", size);
-    mem_tracker.set_limit(size);
+    if conf.query.max_memory_limit_enabled {
+        let size = conf.query.max_server_memory_usage as i64;
+        info!("Set memory limit: {}", size);
+        mem_tracker.set_limit(size);
+    }
 
     if conf.meta.is_embedded_meta()? {
         MetaEmbedded::init_global_meta_store(conf.meta.embedded_dir.clone()).await?;
