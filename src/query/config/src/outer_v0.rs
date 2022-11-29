@@ -1137,7 +1137,7 @@ impl TryInto<InnerStorageRedisConfig> for RedisStorageConfig {
 
 /// Query config group.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
-#[serde(default)]
+#[serde(default, deny_unknown_fields)]
 pub struct QueryConfig {
     /// Tenant id for get the information from the MetaSrv.
     #[clap(long, default_value = "admin")]
