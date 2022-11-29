@@ -64,8 +64,12 @@ impl<V, A: Allocator + Clone> TableEmpty<V, A> {
     ///
     /// The resulted `MaybeUninit` should be initialized immedidately.
     pub fn insert(&mut self) -> Result<&mut Ent<V>, &mut Ent<V>> {
-        self.has_zero = true;
-        Ok(&mut self.slice[0])
+        if !self.has_zero {
+            self.has_zero = true;
+            Ok(&mut self.slice[0])
+        } else {
+            Err(&mut self.slice[0])
+        }
     }
 
     pub fn iter(&self) -> TableEmptyIter<'_, V> {
