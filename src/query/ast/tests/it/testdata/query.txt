@@ -1,7 +1,7 @@
 ---------- Input ----------
 select * exclude c1, b.* exclude (c2, c3, c4) from customer inner join orders on a = b limit 1
 ---------- Output ---------
-SELECT * EXCLUDE c1, b.* EXCLUDE (c2, c3, c4) FROM customer INNER JOIN orders ON a = b LIMIT 1
+SELECT * EXCLUDE (c1), b.* EXCLUDE (c2, c3, c4) FROM customer INNER JOIN orders ON a = b LIMIT 1
 ---------- AST ------------
 Query {
     span: [
@@ -70,13 +70,13 @@ Query {
                         Star,
                     ],
                     exclude: Some(
-                        Col(
+                        [
                             Identifier {
                                 name: "c1",
                                 quote: None,
                                 span: Ident(17..19),
                             },
-                        ),
+                        ],
                     ),
                 },
                 QualifiedName {
@@ -91,25 +91,23 @@ Query {
                         Star,
                     ],
                     exclude: Some(
-                        Cols(
-                            [
-                                Identifier {
-                                    name: "c2",
-                                    quote: None,
-                                    span: Ident(34..36),
-                                },
-                                Identifier {
-                                    name: "c3",
-                                    quote: None,
-                                    span: Ident(38..40),
-                                },
-                                Identifier {
-                                    name: "c4",
-                                    quote: None,
-                                    span: Ident(42..44),
-                                },
-                            ],
-                        ),
+                        [
+                            Identifier {
+                                name: "c2",
+                                quote: None,
+                                span: Ident(34..36),
+                            },
+                            Identifier {
+                                name: "c3",
+                                quote: None,
+                                span: Ident(38..40),
+                            },
+                            Identifier {
+                                name: "c4",
+                                quote: None,
+                                span: Ident(42..44),
+                            },
+                        ],
                     ),
                 },
             ],

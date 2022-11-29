@@ -123,27 +123,8 @@ pub enum SelectTarget<'a> {
     // For simplicity, wildcard is involved.
     QualifiedName {
         qualified: QualifiedName<'a>,
-        exclude: Option<ExcludeCol<'a>>,
+        exclude: Option<Vec<Identifier<'a>>>,
     },
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum ExcludeCol<'a> {
-    Col(Identifier<'a>),
-    Cols(Vec<Identifier<'a>>),
-}
-
-impl Display for ExcludeCol<'_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ExcludeCol::Col(col) => write!(f, "{col}"),
-            ExcludeCol::Cols(cols) => {
-                write!(f, "(")?;
-                write_comma_separated_list(f, cols)?;
-                write!(f, ")")
-            }
-        }
-    }
 }
 
 pub type QualifiedName<'a> = Vec<Indirection<'a>>;
@@ -394,20 +375,12 @@ impl<'a> Display for SelectTarget<'a> {
             }
             SelectTarget::QualifiedName { qualified, exclude } => {
                 write_period_separated_list(f, qualified)?;
-                if let Some(exclude) = exclude {
-                    // ORDER BY clause
-                    match exclude {
-                        ExcludeCol::Col(col) => {
-                            write!(f, " EXCLUDE")?;
-                            write!(f, " {col}")?;
-                        }
-                        ExcludeCol::Cols(cols) => {
-                            if !cols.is_empty() {
-                                write!(f, " EXCLUDE (")?;
-                                write_comma_separated_list(f, cols)?;
-                                write!(f, ")")?;
-                            }
-                        }
+                if let Some(cols) = exclude {
+                    // EXCLUDE
+                    if !cols.is_empty() {
+                        write!(f, " EXCLUDE (")?;
+                        write_comma_separated_list(f, cols)?;
+                        write!(f, ")")?;
                     }
                 }
             }

@@ -20,7 +20,6 @@ use crate::ast::format::syntax::inline_dot;
 use crate::ast::format::syntax::interweave_comma;
 use crate::ast::format::syntax::parenthenized;
 use crate::ast::format::syntax::NEST_FACTOR;
-use crate::ast::ExcludeCol;
 use crate::ast::Expr;
 use crate::ast::JoinCondition;
 use crate::ast::JoinOperator;
@@ -133,39 +132,30 @@ fn pretty_select_list(select_list: Vec<SelectTarget>) -> RcDoc {
                                 .map(|indirection| RcDoc::text(indirection.to_string())),
                         )
                         .group();
-                        docs.append(if let Some(exclude) = exclude {
-                            match exclude {
-                                ExcludeCol::Col(col) => RcDoc::line().append(
-                                    RcDoc::text("EXCEPT")
-                                        .append(RcDoc::space().nest(NEST_FACTOR))
-                                        .append(RcDoc::text(col.to_string())),
-                                ),
-                                ExcludeCol::Cols(cols) => {
-                                    if !cols.is_empty() {
-                                        RcDoc::line()
-                                            .append(
-                                                RcDoc::text("EXCEPT").append(
-                                                    if cols.len() > 1 {
-                                                        RcDoc::line()
-                                                    } else {
-                                                        RcDoc::space()
-                                                    }
-                                                    .nest(NEST_FACTOR),
-                                                ),
-                                            )
-                                            .append(
-                                                interweave_comma(cols.into_iter().map(|ident| {
-                                                    RcDoc::space()
-                                                        .append(RcDoc::space())
-                                                        .append(RcDoc::text(ident.to_string()))
-                                                }))
-                                                .nest(NEST_FACTOR)
-                                                .group(),
-                                            )
-                                    } else {
-                                        RcDoc::nil()
-                                    }
-                                }
+                        docs.append(if let Some(cols) = exclude {
+                            if !cols.is_empty() {
+                                RcDoc::line()
+                                    .append(
+                                        RcDoc::text("EXCLUDE").append(
+                                            if cols.len() > 1 {
+                                                RcDoc::line()
+                                            } else {
+                                                RcDoc::space()
+                                            }
+                                            .nest(NEST_FACTOR),
+                                        ),
+                                    )
+                                    .append(
+                                        interweave_comma(cols.into_iter().map(|ident| {
+                                            RcDoc::space()
+                                                .append(RcDoc::space())
+                                                .append(RcDoc::text(ident.to_string()))
+                                        }))
+                                        .nest(NEST_FACTOR)
+                                        .group(),
+                                    )
+                            } else {
+                                RcDoc::nil()
                             }
                         } else {
                             RcDoc::nil()

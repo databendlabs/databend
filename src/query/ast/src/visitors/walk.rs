@@ -197,14 +197,9 @@ pub fn walk_select_target<'a, V: Visitor<'a>>(visitor: &mut V, target: &'a Selec
                     Indirection::Star => {}
                 }
             }
-            if let Some(exclude) = exclude {
-                match exclude {
-                    ExcludeCol::Col(col) => visitor.visit_identifier(col),
-                    ExcludeCol::Cols(cols) => {
-                        for ident in cols.iter() {
-                            visitor.visit_identifier(ident);
-                        }
-                    }
+            if let Some(cols) = exclude {
+                for ident in cols.iter() {
+                    visitor.visit_identifier(ident);
                 }
             }
         }

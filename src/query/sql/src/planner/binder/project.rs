@@ -15,7 +15,6 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
 
-use common_ast::ast::ExcludeCol;
 use common_ast::ast::Identifier;
 use common_ast::ast::Indirection;
 use common_ast::ast::SelectTarget;
@@ -159,20 +158,13 @@ impl<'a> Binder {
                 } => {
                     // Handle qualified name as select target
                     let mut exclude_cols: HashSet<String> = HashSet::new();
-                    if let Some(exclude) = exclude {
-                        match exclude {
-                            ExcludeCol::Col(col) => {
-                                exclude_cols.insert(col.name.clone());
-                            }
-                            ExcludeCol::Cols(cols) => {
-                                for col in cols {
-                                    exclude_cols.insert(col.name.clone());
-                                }
-                                if exclude_cols.len() < cols.len() {
-                                    // * except (id, id)
-                                    return Err(ErrorCode::SemanticError("duplicate column name"));
-                                }
-                            }
+                    if let Some(cols) = exclude {
+                        for col in cols {
+                            exclude_cols.insert(col.name.clone());
+                        }
+                        if exclude_cols.len() < cols.len() {
+                            // * except (id, id)
+                            return Err(ErrorCode::SemanticError("duplicate column name"));
                         }
                     }
 
@@ -184,59 +176,56 @@ impl<'a> Binder {
                      -> Result<()> {
                         let all_columns_bind = input_context.all_column_bindings();
                         let mut qualified_cols_name: HashMap<String, u8> = HashMap::new();
-                        for i in all_columns_bind {
-                            if let (None, None) = (db_name, table_name) {
-                                if i.visibility != Visibility::Visible {
-                                    continue;
-                                }
-                                if qualified_cols_name.contains_key(i.column_name.as_str()) {
-                                    qualified_cols_name.insert(
-                                        i.column_name.clone(),
-                                        *qualified_cols_name.get(i.column_name.as_str()).unwrap()
-                                            + 1,
-                                    );
-                                } else {
-                                    qualified_cols_name.insert(i.column_name.clone(), 0u8);
-                                }
-                            } else if let (None, Some(table_name)) = (db_name, table_name) {
-                                if i.visibility != Visibility::Visible {
-                                    continue;
-                                }
-                                if i.table_name == Some(table_name.name.clone()) {
-                                    if qualified_cols_name.contains_key(i.column_name.as_str()) {
-                                        qualified_cols_name.insert(
-                                            i.column_name.clone(),
-                                            *qualified_cols_name
-                                                .get(i.column_name.as_str())
-                                                .unwrap()
-                                                + 1,
-                                        );
-                                    } else {
-                                        qualified_cols_name.insert(i.column_name.clone(), 0u8);
+
+                        fn fill_qualified_cols(
+                            qualified_cols_name: &mut HashMap<String, u8>,
+                            column_bind: &ColumnBinding,
+                        ) {
+                            let col_name = column_bind.column_name.clone();
+                            if qualified_cols_name.contains_key(col_name.as_str()) {
+                                qualified_cols_name.insert(
+                                    col_name.clone(),
+                                    *qualified_cols_name.get(col_name.as_str()).unwrap() + 1,
+                                );
+                            } else {
+                                qualified_cols_name.insert(col_name, 0u8);
+                            }
+                        }
+
+                        match (db_name, table_name) {
+                            (None, None) => {
+                                for column_bind in all_columns_bind {
+                                    if column_bind.visibility != Visibility::Visible {
+                                        continue;
                                     }
+                                    fill_qualified_cols(&mut qualified_cols_name, column_bind);
                                 }
-                            } else if let (Some(db_name), Some(table_name)) = (db_name, table_name)
-                            {
-                                if i.visibility != Visibility::Visible {
-                                    continue;
-                                }
-                                if i.table_name == Some(table_name.name.clone())
-                                    && i.database_name == Some(db_name.name.clone())
-                                {
-                                    if qualified_cols_name.contains_key(i.column_name.as_str()) {
-                                        qualified_cols_name.insert(
-                                            i.column_name.clone(),
-                                            *qualified_cols_name
-                                                .get(i.column_name.as_str())
-                                                .unwrap()
-                                                + 1,
-                                        );
-                                    } else {
-                                        qualified_cols_name.insert(i.column_name.clone(), 0u8);
+                            }
+                            (None, Some(table_name)) => {
+                                for column_bind in all_columns_bind {
+                                    if column_bind.visibility != Visibility::Visible {
+                                        continue;
+                                    }
+                                    if column_bind.table_name == Some(table_name.name.clone()) {
+                                        fill_qualified_cols(&mut qualified_cols_name, column_bind);
                                     }
                                 }
                             }
+                            (Some(db_name), Some(table_name)) => {
+                                for column_bind in all_columns_bind {
+                                    if column_bind.visibility != Visibility::Visible {
+                                        continue;
+                                    }
+                                    if column_bind.table_name == Some(table_name.name.clone())
+                                        && column_bind.database_name == Some(db_name.name.clone())
+                                    {
+                                        fill_qualified_cols(&mut qualified_cols_name, column_bind);
+                                    }
+                                }
+                            }
+                            (Some(_), None) => {}
                         }
+
                         for exclude_col in exclude_cols {
                             if qualified_cols_name.get(exclude_col).is_none() {
                                 return Err(ErrorCode::SemanticError(format!(
