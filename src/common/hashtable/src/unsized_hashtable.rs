@@ -26,7 +26,6 @@ use common_base::mem_allocator::MmapAllocator;
 use super::container::HeapContainer;
 use super::table0::Entry;
 use super::table0::Table0;
-use super::table1::Table1;
 use super::traits::EntryMutRefLike;
 use super::traits::EntryRefLike;
 use super::traits::FastHash;
@@ -36,8 +35,9 @@ use super::traits::UnsizedKeyable;
 use super::utils::read_le;
 use crate::table0::Table0Iter;
 use crate::table0::Table0IterMut;
-use crate::table1::Table1Iter;
-use crate::table1::Table1IterMut;
+use crate::table_empty::TableEmpty;
+use crate::table_empty::TableEmptyIter;
+use crate::table_empty::TableEmptyIterMut;
 
 pub struct UnsizedHashtable<K, V, A = MmapAllocator<GlobalAllocator>>
 where
@@ -45,7 +45,7 @@ where
     A: Allocator + Clone,
 {
     pub(crate) arena: Bump,
-    pub(crate) table0: Table1<V, A>,
+    pub(crate) table0: TableEmpty<V, A>,
     pub(crate) table1: Table0<InlineKey<0>, V, HeapContainer<Entry<InlineKey<0>, V>, A>, A>,
     pub(crate) table2: Table0<InlineKey<1>, V, HeapContainer<Entry<InlineKey<1>, V>, A>, A>,
     pub(crate) table3: Table0<InlineKey<2>, V, HeapContainer<Entry<InlineKey<2>, V>, A>, A>,
@@ -96,8 +96,8 @@ where
     #[inline(always)]
     pub fn set_merge(&mut self, other: &Self) {
         unsafe {
-            for i in other.table0.iter() {
-                let _ = self.table0.insert(*i.key());
+            for _ in other.table0.iter() {
+                let _ = self.table0.insert();
             }
             self.table1.set_merge(&other.table1);
             self.table2.set_merge(&other.table2);
@@ -117,7 +117,7 @@ where
         let allocator = A::default();
         Self {
             arena: Bump::new(),
-            table0: Table1::new_in(allocator.clone()),
+            table0: TableEmpty::new_in(allocator.clone()),
             table1: Table0::with_capacity_in(capacity, allocator.clone()),
             table2: Table0::with_capacity_in(capacity, allocator.clone()),
             table3: Table0::with_capacity_in(capacity, allocator.clone()),
@@ -179,7 +179,7 @@ where
             }
             0 => self
                 .table0
-                .insert([0, 0])
+                .insert()
                 .map(|x| {
                     UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table0(
                         x,
@@ -192,37 +192,7 @@ where
                         PhantomData,
                     ))
                 }),
-            1 => self
-                .table0
-                .insert([key[0], 0])
-                .map(|x| {
-                    UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table0(
-                        x,
-                        PhantomData,
-                    ))
-                })
-                .map_err(|x| {
-                    UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table0(
-                        x,
-                        PhantomData,
-                    ))
-                }),
-            2 => self
-                .table0
-                .insert([key[0], key[1]])
-                .map(|x| {
-                    UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table0(
-                        x,
-                        PhantomData,
-                    ))
-                })
-                .map_err(|x| {
-                    UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table0(
-                        x,
-                        PhantomData,
-                    ))
-                }),
-            3..=8 => {
+            1..=8 => {
                 if unlikely((self.table1.len() + 1) * 2 > self.table1.capacity()) {
                     if (self.table1.entries.len() >> 22) == 0 {
                         self.table1.grow(2);
@@ -320,7 +290,7 @@ where
 pub struct UnsizedHashtableIter<'a, K, V>
 where K: UnsizedKeyable + ?Sized
 {
-    it_0: Option<Table1Iter<'a, V>>,
+    it_0: Option<TableEmptyIter<'a, V>>,
     it_1: Option<Table0Iter<'a, InlineKey<0>, V>>,
     it_2: Option<Table0Iter<'a, InlineKey<1>, V>>,
     it_3: Option<Table0Iter<'a, InlineKey<2>, V>>,
@@ -381,7 +351,7 @@ where K: UnsizedKeyable + ?Sized
 pub struct UnsizedHashtableIterMut<'a, K, V>
 where K: UnsizedKeyable + ?Sized
 {
-    it_0: Option<Table1IterMut<'a, V>>,
+    it_0: Option<TableEmptyIterMut<'a, V>>,
     it_1: Option<Table0IterMut<'a, InlineKey<0>, V>>,
     it_2: Option<Table0IterMut<'a, InlineKey<1>, V>>,
     it_3: Option<Table0IterMut<'a, InlineKey<2>, V>>,
@@ -440,7 +410,7 @@ where K: UnsizedKeyable + ?Sized
 }
 
 enum UnsizedHashtableEntryRefInner<'a, K: ?Sized, V> {
-    Table0(&'a Entry<[u8; 2], V>, PhantomData<K>),
+    Table0(&'a Entry<[u8; 0], V>, PhantomData<K>),
     Table1(&'a Entry<InlineKey<0>, V>),
     Table2(&'a Entry<InlineKey<1>, V>),
     Table3(&'a Entry<InlineKey<2>, V>),
@@ -466,16 +436,7 @@ impl<'a, K: ?Sized + UnsizedKeyable, V> UnsizedHashtableEntryRefInner<'a, K, V> 
     fn key(self) -> &'a K {
         use UnsizedHashtableEntryRefInner::*;
         match self {
-            Table0(e, _) => unsafe {
-                let key = e.key.assume_init_ref();
-                if key[1] != 0 {
-                    UnsizedKeyable::from_bytes(&key[..2])
-                } else if key[0] != 0 {
-                    UnsizedKeyable::from_bytes(&key[..1])
-                } else {
-                    UnsizedKeyable::from_bytes(&key[..0])
-                }
-            },
+            Table0(_, _) => unsafe { UnsizedKeyable::from_bytes(&[]) },
             Table1(e) => unsafe {
                 let bytes = e.key().1.get().to_le_bytes();
                 for i in (0..=7).rev() {
@@ -562,7 +523,7 @@ impl<'a, K: ?Sized + UnsizedKeyable, V> UnsizedHashtableEntryRef<'a, K, V> {
 }
 
 enum UnsizedHashtableEntryMutRefInner<'a, K: ?Sized, V> {
-    Table0(&'a mut Entry<[u8; 2], V>, PhantomData<K>),
+    Table0(&'a mut Entry<[u8; 0], V>, PhantomData<K>),
     Table1(&'a mut Entry<InlineKey<0>, V>),
     Table2(&'a mut Entry<InlineKey<1>, V>),
     Table3(&'a mut Entry<InlineKey<2>, V>),
@@ -573,16 +534,7 @@ impl<'a, K: ?Sized + UnsizedKeyable, V> UnsizedHashtableEntryMutRefInner<'a, K, 
     fn key(&self) -> &'a K {
         use UnsizedHashtableEntryMutRefInner::*;
         match self {
-            Table0(e, _) => unsafe {
-                let key = e.key.assume_init_ref();
-                if key[1] != 0 {
-                    &*(UnsizedKeyable::from_bytes(&key[..2]) as *const K)
-                } else if key[0] != 0 {
-                    &*(UnsizedKeyable::from_bytes(&key[..1]) as *const K)
-                } else {
-                    &*(UnsizedKeyable::from_bytes(&key[..0]) as *const K)
-                }
-            },
+            Table0(_, _) => unsafe { &*(UnsizedKeyable::from_bytes(&[]) as *const K) },
             Table1(e) => unsafe {
                 let bytes = e.key().1.get().to_le_bytes();
                 for i in (0..=7).rev() {
@@ -834,16 +786,10 @@ where A: Allocator + Clone + Default
                     .get(&FallbackKey::new(key))
                     .map(|x| UnsizedHashtableEntryRef(UnsizedHashtableEntryRefInner::Table4(x)))
             },
-            0 => self.table0.get([0, 0]).map(|x| {
+            0 => self.table0.get().map(|x| {
                 UnsizedHashtableEntryRef(UnsizedHashtableEntryRefInner::Table0(x, PhantomData))
             }),
-            1 => self.table0.get([key[0], 0]).map(|x| {
-                UnsizedHashtableEntryRef(UnsizedHashtableEntryRefInner::Table0(x, PhantomData))
-            }),
-            2 => self.table0.get([key[0], key[1]]).map(|x| {
-                UnsizedHashtableEntryRef(UnsizedHashtableEntryRefInner::Table0(x, PhantomData))
-            }),
-            3..=8 => unsafe {
+            1..=8 => unsafe {
                 let mut t = [0u64; 1];
                 t[0] = read_le(key.as_ptr(), key.len());
                 let t = std::mem::transmute::<_, InlineKey<0>>(t);
@@ -885,25 +831,13 @@ where A: Allocator + Clone + Default
                     UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table4(x))
                 })
             },
-            0 => self.table0.get_mut([0, 0]).map(|x| {
+            0 => self.table0.get_mut().map(|x| {
                 UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table0(
                     x,
                     PhantomData,
                 ))
             }),
-            1 => self.table0.get_mut([key[0], 0]).map(|x| {
-                UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table0(
-                    x,
-                    PhantomData,
-                ))
-            }),
-            2 => self.table0.get_mut([key[0], key[1]]).map(|x| {
-                UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table0(
-                    x,
-                    PhantomData,
-                ))
-            }),
-            3..=8 => unsafe {
+            1..=8 => unsafe {
                 let mut t = [0u64; 1];
                 t[0] = read_le(key.as_ptr(), key.len());
                 let t = std::mem::transmute::<_, InlineKey<0>>(t);
@@ -989,7 +923,7 @@ where A: Allocator + Clone + Default
             }
             0 => self
                 .table0
-                .insert([0, 0])
+                .insert()
                 .map(|x| {
                     UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table0(
                         x,
@@ -1002,37 +936,8 @@ where A: Allocator + Clone + Default
                         PhantomData,
                     ))
                 }),
-            1 => self
-                .table0
-                .insert([key[0], 0])
-                .map(|x| {
-                    UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table0(
-                        x,
-                        PhantomData,
-                    ))
-                })
-                .map_err(|x| {
-                    UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table0(
-                        x,
-                        PhantomData,
-                    ))
-                }),
-            2 => self
-                .table0
-                .insert([key[0], key[1]])
-                .map(|x| {
-                    UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table0(
-                        x,
-                        PhantomData,
-                    ))
-                })
-                .map_err(|x| {
-                    UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table0(
-                        x,
-                        PhantomData,
-                    ))
-                }),
-            3..=8 => {
+
+            1..=8 => {
                 if unlikely((self.table1.len() + 1) * 2 > self.table1.capacity()) {
                     if (self.table1.entries.len() >> 22) == 0 {
                         self.table1.grow(2);
@@ -1154,7 +1059,7 @@ where A: Allocator + Clone + Default
             }
             0 => self
                 .table0
-                .insert([0, 0])
+                .insert()
                 .map(|x| {
                     UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table0(
                         x,
@@ -1167,37 +1072,7 @@ where A: Allocator + Clone + Default
                         PhantomData,
                     ))
                 }),
-            1 => self
-                .table0
-                .insert([key[0], 0])
-                .map(|x| {
-                    UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table0(
-                        x,
-                        PhantomData,
-                    ))
-                })
-                .map_err(|x| {
-                    UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table0(
-                        x,
-                        PhantomData,
-                    ))
-                }),
-            2 => self
-                .table0
-                .insert([key[0], key[1]])
-                .map(|x| {
-                    UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table0(
-                        x,
-                        PhantomData,
-                    ))
-                })
-                .map_err(|x| {
-                    UnsizedHashtableEntryMutRef(UnsizedHashtableEntryMutRefInner::Table0(
-                        x,
-                        PhantomData,
-                    ))
-                }),
-            3..=8 => {
+            1..=8 => {
                 if unlikely((self.table1.len() + 1) * 2 > self.table1.capacity()) {
                     if (self.table1.entries.len() >> 22) == 0 {
                         self.table1.grow(2);
