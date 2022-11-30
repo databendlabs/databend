@@ -7320,10 +7320,12 @@ PRESIGN @my_stage/ EXPIRE = 3600
 Presign(
     PresignStmt {
         action: Download,
-        location: StageLocation {
-            name: "my_stage",
-            path: "/",
-        },
+        location: StageLocation(
+            StageLocation {
+                name: "my_stage",
+                path: "/",
+            },
+        ),
         expire: 3600s,
     },
 )
@@ -7337,10 +7339,12 @@ PRESIGN @my_stage/path/to/dir/ EXPIRE = 3600
 Presign(
     PresignStmt {
         action: Download,
-        location: StageLocation {
-            name: "my_stage",
-            path: "/path/to/dir/",
-        },
+        location: StageLocation(
+            StageLocation {
+                name: "my_stage",
+                path: "/path/to/dir/",
+            },
+        ),
         expire: 3600s,
     },
 )
@@ -7354,10 +7358,12 @@ PRESIGN @my_stage/path/to/file EXPIRE = 3600
 Presign(
     PresignStmt {
         action: Download,
-        location: StageLocation {
-            name: "my_stage",
-            path: "/path/to/file",
-        },
+        location: StageLocation(
+            StageLocation {
+                name: "my_stage",
+                path: "/path/to/file",
+            },
+        ),
         expire: 3600s,
     },
 )
@@ -7371,10 +7377,12 @@ PRESIGN @my_stage/path/to/file EXPIRE = 3600
 Presign(
     PresignStmt {
         action: Download,
-        location: StageLocation {
-            name: "my_stage",
-            path: "/path/to/file",
-        },
+        location: StageLocation(
+            StageLocation {
+                name: "my_stage",
+                path: "/path/to/file",
+            },
+        ),
         expire: 3600s,
     },
 )
@@ -7388,10 +7396,12 @@ PRESIGN @my_stage/path/to/file EXPIRE = 7200
 Presign(
     PresignStmt {
         action: Upload,
-        location: StageLocation {
-            name: "my_stage",
-            path: "/path/to/file",
-        },
+        location: StageLocation(
+            StageLocation {
+                name: "my_stage",
+                path: "/path/to/file",
+            },
+        ),
         expire: 7200s,
     },
 )

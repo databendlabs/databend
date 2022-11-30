@@ -1793,20 +1793,12 @@ pub fn presign_action(i: Input) -> IResult<PresignAction> {
 }
 
 pub fn presign_location(i: Input) -> IResult<PresignLocation> {
-    map(at_string, |location| {
-        let parsed = location.splitn(2, '/').collect::<Vec<_>>();
-        if parsed.len() == 1 {
-            PresignLocation::StageLocation {
-                name: parsed[0].to_string(),
-                path: "/".to_string(),
-            }
-        } else {
-            PresignLocation::StageLocation {
-                name: parsed[0].to_string(),
-                path: format!("/{}", parsed[1]),
-            }
-        }
-    })(i)
+    map_res(
+        rule! {
+            #stage_location
+        },
+        |v| Ok(PresignLocation::StageLocation(v)),
+    )(i)
 }
 
 pub fn table_reference_only(i: Input) -> IResult<TableReference> {
