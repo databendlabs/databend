@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_catalog::plan::Expression;
 use common_datavalues::DataSchemaRef;
+use common_datavalues::DataTypeImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_storages_table_meta::meta::BlockMeta;
@@ -71,6 +72,14 @@ impl TopNPrunner {
         } else {
             return Ok(metas);
         };
+
+        // String Type min/max is truncated
+        if matches!(
+            self.schema.field(sort_idx as usize).data_type(),
+            DataTypeImpl::String(_)
+        ) {
+            return Ok(metas);
+        }
 
         let mut id_stats = metas
             .iter()
