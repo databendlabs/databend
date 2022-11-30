@@ -50,8 +50,6 @@ use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReply;
 use common_meta_app::schema::RenameTableReq;
 use common_meta_app::schema::TableCopiedFileInfo;
-use common_meta_app::schema::TableCopiedFileLock;
-use common_meta_app::schema::TableCopiedFileLockKey;
 use common_meta_app::schema::TableCopiedFileNameIdent;
 use common_meta_app::schema::TableId;
 use common_meta_app::schema::TableIdList;
@@ -1845,27 +1843,24 @@ impl<KV: KVApi> SchemaApi for KV {
                 )));
             }
 
-            let lock_key = TableCopiedFileLockKey { table_id };
-            let (lock_key_seq, lock_op): (_, Option<TableCopiedFileLock>) =
-                get_struct_value(self, &lock_key).await?;
-
             debug!(
                 ident = display(&tbid),
                 table_meta = debug(&tb_meta),
                 "upsert_table_copied_file_info"
             );
 
-            let lock = match lock_op {
-                Some(lock) => lock,
-                None => TableCopiedFileLock {},
-            };
-            let mut condition = vec![
-                txn_cond_seq(&tbid, Eq, tb_meta_seq),
-                txn_cond_seq(&lock_key, Eq, lock_key_seq),
-            ];
-            let mut if_then = vec![
-                txn_op_put(&lock_key, serialize_struct(&lock)?), // copied file lock key
-            ];
+            let mut condition = vec![txn_cond_seq(&tbid, Eq, tb_meta_seq)];
+            let mut if_then = vec![];
+            // `remove_table_copied_files` and `upsert_table_copied_file_info`
+            // all modify `TableCopiedFileInfo`,
+            // so there used to has `TableCopiedFileLockKey` in these two functions
+            // to protect TableCopiedFileInfo modification.
+            // In issue: https://github.com/datafuselabs/databend/issues/8897,
+            // there is chance that if copy files concurrently, `upsert_table_copied_file_info`
+            // may return `TxnRetryMaxTimes`.
+            // So now, in case that `TableCopiedFileInfo` has expire time, remove `TableCopiedFileLockKey`
+            // in each function. In this case there is chance that some `TableCopiedFileInfo` may not be
+            // removed in `remove_table_copied_files`, but these data can be purged in case of expire time.
             for (file, file_info) in req.file_info.iter() {
                 let key = TableCopiedFileNameIdent {
                     table_id,
@@ -2194,29 +2189,20 @@ async fn remove_table_copied_files(
     condition: &mut Vec<TxnCondition>,
     if_then: &mut Vec<TxnOp>,
 ) -> Result<(), KVAppError> {
-    let lock_key = TableCopiedFileLockKey { table_id };
-    let (lock_key_seq, lock_op): (_, Option<TableCopiedFileLock>) =
-        get_struct_value(kv_api, &lock_key).await?;
+    // List files by tenant, db_name, table_name
+    let dbid_tbname_idlist = TableCopiedFileNameIdent {
+        table_id,
+        // Using a empty file to to list all
+        file: "".to_string(),
+    };
 
-    condition.push(txn_cond_seq(&lock_key, Eq, lock_key_seq));
-    if let Some(lock) = lock_op {
-        if_then.push(txn_op_put(&lock_key, serialize_struct(&lock)?)); // copied file lock key
-
-        // List files by tenant, db_name, table_name
-        let dbid_tbname_idlist = TableCopiedFileNameIdent {
-            table_id,
-            // Using a empty file to to list all
-            file: "".to_string(),
-        };
-
-        let files = list_keys(kv_api, &dbid_tbname_idlist).await?;
-        for file in files {
-            let (file_seq, _opt): (_, Option<TableCopiedFileInfo>) =
-                get_struct_value(kv_api, &file).await?;
-            if file_seq != 0 {
-                condition.push(txn_cond_seq(&file, Eq, file_seq));
-                if_then.push(txn_op_del(&file));
-            }
+    let files = list_keys(kv_api, &dbid_tbname_idlist).await?;
+    for file in files {
+        let (file_seq, _opt): (_, Option<TableCopiedFileInfo>) =
+            get_struct_value(kv_api, &file).await?;
+        if file_seq != 0 {
+            condition.push(txn_cond_seq(&file, Eq, file_seq));
+            if_then.push(txn_op_del(&file));
         }
     }
 
