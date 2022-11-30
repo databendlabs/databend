@@ -28,7 +28,7 @@ use common_expression::types::VariantType;
 use common_expression::types::ALL_NUMERICS_TYPES;
 use common_expression::values::Value;
 use common_expression::with_number_mapped_type;
-use common_expression::FunctionContext;
+use common_expression::EvalContext;
 use common_expression::FunctionDomain;
 use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
@@ -379,11 +379,11 @@ fn register_like(registry: &mut FunctionRegistry) {
 }
 
 fn vectorize_like(
-    func: impl Fn(&[u8], &[u8], FunctionContext, PatternType) -> Result<bool, String> + Copy,
+    func: impl Fn(&[u8], &[u8], EvalContext, PatternType) -> Result<bool, String> + Copy,
 ) -> impl Fn(
     ValueRef<StringType>,
     ValueRef<StringType>,
-    FunctionContext,
+    EvalContext,
 ) -> Result<Value<BooleanType>, String>
 + Copy {
     move |arg1, arg2, ctx| match (arg1, arg2) {
@@ -426,7 +426,7 @@ fn vectorize_regexp(
     func: impl Fn(
         &[u8],
         &[u8],
-        FunctionContext,
+        EvalContext,
         &mut HashMap<Vec<u8>, Regex>,
         &mut HashMap<Vec<u8>, String>,
     ) -> Result<bool, String>
@@ -434,7 +434,7 @@ fn vectorize_regexp(
 ) -> impl Fn(
     ValueRef<StringType>,
     ValueRef<StringType>,
-    FunctionContext,
+    EvalContext,
 ) -> Result<Value<BooleanType>, String>
 + Copy {
     move |arg1, arg2, ctx| {

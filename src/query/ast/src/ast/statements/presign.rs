@@ -16,6 +16,8 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::time::Duration;
 
+use crate::ast::StageLocation;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PresignAction {
     Download,
@@ -40,19 +42,13 @@ impl Display for PresignAction {
 /// TODO: we can support uri location in the future.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PresignLocation {
-    StageLocation {
-        /// The name of the stage.
-        name: String,
-        path: String,
-    },
+    StageLocation(StageLocation),
 }
 
 impl Display for PresignLocation {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            PresignLocation::StageLocation { name, path } => {
-                write!(f, "@{name}{path}")
-            }
+            PresignLocation::StageLocation(v) => v.fmt(f),
         }
     }
 }

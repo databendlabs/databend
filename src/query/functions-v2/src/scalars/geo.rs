@@ -28,8 +28,8 @@ use common_expression::types::NumberDataType;
 use common_expression::types::NumberType;
 use common_expression::types::ValueType;
 use common_expression::Column;
+use common_expression::EvalContext;
 use common_expression::Function;
-use common_expression::FunctionContext;
 use common_expression::FunctionDomain;
 use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
@@ -129,7 +129,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
 fn point_in_ellipses_fn(
     args: &[ValueRef<AnyType>],
-    _: FunctionContext,
+    _: EvalContext,
 ) -> Result<Value<AnyType>, String> {
     let len = args.iter().find_map(|arg| match arg {
         ValueRef::Column(col) => Some(col.len()),
