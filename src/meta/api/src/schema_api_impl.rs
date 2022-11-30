@@ -2196,6 +2196,10 @@ async fn remove_table_copied_files(
         file: "".to_string(),
     };
 
+    // `list_keys` list all the TableCopiedFileNameIdent of this table.
+    // But if a upsert_table_copied_file_info run concurrently, there is chance that
+    // `list_keys` may lack of some new inserted TableCopiedFileNameIdent.
+    // But since TableCopiedFileNameIdent has expire time, they can be purged by expire time.
     let files = list_keys(kv_api, &dbid_tbname_idlist).await?;
     for file in files {
         let (file_seq, _opt): (_, Option<TableCopiedFileInfo>) =
