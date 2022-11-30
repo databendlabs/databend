@@ -363,6 +363,7 @@ fn exchange_to_format_tree(
 ) -> Result<FormatTreeNode<String>> {
     Ok(FormatTreeNode::with_children("Exchange".to_string(), vec![
         FormatTreeNode::new(format!("exchange type: {}", match plan.kind {
+            FragmentKind::Init => "Init-Partition".to_string(),
             FragmentKind::Normal => format!(
                 "Hash({})",
                 plan.keys

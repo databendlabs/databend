@@ -100,9 +100,7 @@ impl PhysicalOperator for PhysicalHashJoin {
         } else if ctx.get_settings().get_prefer_broadcast_join()?
             && !matches!(self.join_type, JoinType::Right | JoinType::Full)
         {
-            if child_index == 1 {
-                required.distribution = Distribution::Broadcast;
-            }
+            required.distribution = Distribution::Broadcast;
         } else if child_index == 0 {
             required.distribution = Distribution::Hash(self.probe_keys.clone());
         } else {

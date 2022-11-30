@@ -87,6 +87,7 @@ impl Fragmenter {
                     from_multiple_nodes,
                     Self::get_executors(ctx),
                 ))),
+                _ => Ok(None),
             },
             _ => Ok(None),
         }
