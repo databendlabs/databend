@@ -16,7 +16,10 @@ use std::io::BufRead;
 use std::io::Cursor;
 use std::ops::Not;
 use std::sync::Arc;
+use std::thread;
+use std::time::SystemTime;
 
+use aho_corasick::AhoCorasick;
 use common_ast::ast::Expr;
 use common_ast::parser::parse_comma_separated_exprs;
 use common_ast::parser::tokenize_sql;
@@ -32,6 +35,7 @@ use common_formats::FieldDecoderRowBased;
 use common_formats::FieldDecoderValues;
 use common_io::cursor_ext::ReadBytesExt;
 use common_io::cursor_ext::ReadCheckPointExt;
+use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_sources::processors::sources::AsyncSource;
 use common_pipeline_sources::processors::sources::AsyncSourcer;
 use common_pipeline_sources::processors::sources::SyncSource;
@@ -102,6 +106,65 @@ impl InsertInterpreterV2 {
         let cast_needed = select_schema != *output_schema;
         Ok(cast_needed)
     }
+
+    fn split_values(&self, data: &String) -> Result<Vec<usize>> {
+        let patterns = &["\\", "'", ")"];
+        let ac = AhoCorasick::new(patterns);
+        let mut prev_slash = None;
+        let mut is_open = false;
+        let mut last_pos = 0;
+
+        let mut row_poses = vec![];
+        let step = 1000 * 1000;
+        let mut threshold = step;
+        for mat in ac.find_iter(data) {
+            let pat = mat.pattern();
+            let pos = mat.start();
+            if pat == 0 {
+                prev_slash = Some(pos);
+            } else if pat == 1 {
+                if is_open {
+                    if let Some(prev_slash) = prev_slash {
+                        if prev_slash == pos - 1 {
+                            continue;
+                        }
+                    }
+                    is_open = false;
+                } else {
+                    is_open = true;
+                }
+            } else if pat == 2 {
+                if is_open {
+                    continue;
+                }
+                if pos >= threshold {
+                    row_poses.push(pos);
+                    threshold += step;
+                }
+                last_pos = pos;
+            }
+        }
+        if let Some(pos) = row_poses.last() {
+            if *pos != last_pos {
+                row_poses.push(last_pos);
+            }
+        } else {
+            row_poses.push(last_pos);
+        }
+
+        // check invalid end values
+        if last_pos < data.len() - 1 {
+            let s = unsafe { data.get_unchecked(last_pos + 1..data.len()) };
+            for v in s.bytes() {
+                if v != b' ' {
+                    return Err(ErrorCode::BadDataValueType(
+                        "Invalid end values".to_string(),
+                    ));
+                }
+            }
+        }
+        Ok(row_poses)
+    }
 }
 
 #[async_trait::async_trait]
@@ -129,27 +192,53 @@ impl Interpreter for InsertInterpreterV2 {
             match &self.plan.source {
                 InsertInputSource::Values(data) => {
                     let settings = self.ctx.get_settings();
+                    let enable_expression = settings.get_insert_values_enable_expression()?;
 
-                    build_res.main_pipeline.add_source(
-                        |output| {
+                    if enable_expression == 0 {
+                        let mut source_builder = SourcePipeBuilder::create();
+                        let mut start = 0;
+
+                        let mut is_first = true;
+                        let poses = self.split_values(data)?;
+                        for pos in poses {
+                            let end = pos + 1;
                             let name_resolution_ctx =
                                 NameResolutionContext::try_from(settings.as_ref())?;
+
+                            let part_data = unsafe { data.get_unchecked(start..end) };
                             let inner = ValueSource::new(
-                                data.to_string(),
+                                part_data.to_string(),
                                 self.ctx.clone(),
                                 name_resolution_ctx,
                                 plan.schema(),
+                                is_first,
                             );
-                            let enable_expression =
-                                settings.get_insert_values_enable_expression()?;
-                            if enable_expression == 0 {
-                                SyncSourcer::create(self.ctx.clone(), output, inner)
-                            } else {
+                            let output = OutputPort::create();
+                            let source =
+                                SyncSourcer::create(self.ctx.clone(), output.clone(), inner)?;
+                            source_builder.add_source(output, source);
+                            start = end;
+                            is_first = false;
+                        }
+                        build_res.main_pipeline.add_pipe(source_builder.finalize())
+                    } else {
+                        build_res.main_pipeline.add_source(
+                            |output| {
+                                let name_resolution_ctx =
+                                    NameResolutionContext::try_from(settings.as_ref())?;
+
+                                let inner = ValueSource::new(
+                                    data.to_string(),
+                                    self.ctx.clone(),
+                                    name_resolution_ctx,
+                                    plan.schema(),
+                                    true,
+                                );
                                 AsyncSourcer::create(self.ctx.clone(), output, inner)
-                            }
-                        },
-                        1,
-                    )?;
+                            },
+                            1,
+                        )?;
+                    }
                 }
                 InsertInputSource::StreamingWithFormat(_, _, input_context) => {
                     let input_context = input_context.as_ref().expect("must success").clone();
@@ -267,6 +356,7 @@ pub struct ValueSource {
     bind_context: BindContext,
     schema: DataSchemaRef,
     metadata: MetadataRef,
+    is_first: bool,
     is_finished: bool,
 }
 
@@ -307,6 +397,7 @@ impl ValueSource {
         ctx: Arc<dyn TableContext>,
         name_resolution_ctx: NameResolutionContext,
         schema: DataSchemaRef,
+        is_first: bool,
     ) -> Self {
         let bind_context = BindContext::new();
         let metadata = Arc::new(RwLock::new(Metadata::default()));
@@ -318,11 +409,15 @@ impl ValueSource {
             schema,
             bind_context,
             metadata,
+            is_first,
             is_finished: false,
         }
     }
 
     pub async fn read<R: AsRef<[u8]>>(&self, reader: &mut Cursor<R>) -> Result<DataBlock> {
+        let id = thread::current().id();
+        let t1 = SystemTime::now();
+
         let mut desers = self
             .schema
             .fields()
@@ -336,6 +431,7 @@ impl ValueSource {
         let field_decoder = FieldDecoderValues::create_for_insert(timezone);
 
         loop {
+            // println!("000000000------=======111111111-----rows={:?}", rows);
             let _ = reader.ignore_white_spaces();
             if reader.eof() {
                 break;
@@ -366,10 +462,18 @@ impl ValueSource {
             .map(|deser| deser.finish_to_column())
             .collect::<Vec<_>>();
 
+        let t2 = SystemTime::now();
+        let d1 = t2
+            .duration_since(t1)
+            .expect("Clock may have gone backwards");
+        println!("read {:?} -- {:?}", id, d1);
+
         Ok(DataBlock::create(self.schema.clone(), columns))
     }
 
     pub fn sync_read<R: AsRef<[u8]>>(&self, reader: &mut Cursor<R>) -> Result<DataBlock> {
+        let id = thread::current().id();
+        let t1 = SystemTime::now();
         let mut desers = self
             .schema
             .fields()
@@ -381,6 +485,12 @@ impl ValueSource {
         let mut rows = 0;
         let timezone = parse_timezone(&self.ctx.get_settings())?;
         let field_decoder = FieldDecoderValues::create_for_insert(timezone);
+
+        // skip comma in previous row.
+        if !self.is_first {
+            let _ = reader.ignore_white_spaces();
+            reader.must_ignore_byte(b',')?;
+        }
 
         loop {
             let _ = reader.ignore_white_spaces();
@@ -404,6 +514,12 @@ impl ValueSource {
             .iter_mut()
             .map(|deser| deser.finish_to_column())
             .collect::<Vec<_>>();
+
+        let t2 = SystemTime::now();
+        let d1 = t2
+            .duration_since(t1)
+            .expect("Clock may have gone backwards");
+        println!("sync read {:?} -- {:?}", id, d1);
 
         Ok(DataBlock::create(self.schema.clone(), columns))
     }
