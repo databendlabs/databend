@@ -61,6 +61,13 @@ impl PartInfo for CompactPartInfo {
     fn hash(&self) -> u64 {
         0
     }
+
+    fn data_size(&self) -> u64 {
+        self.segments
+            .iter()
+            .map(|v| v.blocks.iter().map(|x| x.block_size).sum::<u64>())
+            .sum()
+    }
 }
 
 impl CompactPartInfo {

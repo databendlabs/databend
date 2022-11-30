@@ -75,6 +75,10 @@ impl PartInfo for FusePartInfo {
         self.location.hash(&mut s);
         s.finish()
     }
+
+    fn data_size(&self) -> u64 {
+        self.columns_meta.values().map(|v| v.length).sum()
+    }
 }
 
 impl FusePartInfo {

@@ -48,6 +48,10 @@ impl PartInfo for TestPartInfo {
         self.loc.hash(&mut s);
         s.finish()
     }
+
+    fn data_size(&self) -> u64 {
+        0
+    }
 }
 
 impl TestPartInfo {

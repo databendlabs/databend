@@ -31,6 +31,9 @@ pub trait PartInfo: Send + Sync {
 
     /// Used for partition distributed.
     fn hash(&self) -> u64;
+
+    /// Data size of this Partition.
+    fn data_size(&self) -> u64;
 }
 
 impl Debug for Box<dyn PartInfo> {
@@ -82,6 +85,10 @@ impl Partitions {
 
     pub fn len(&self) -> usize {
         self.partitions.len()
+    }
+
+    pub fn data_size(&self) -> u64 {
+        self.partitions.iter().map(|v| v.data_size()).sum()
     }
 
     pub fn is_empty(&self) -> bool {

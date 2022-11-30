@@ -55,6 +55,10 @@ impl PartInfo for HivePartInfo {
         self.filename.hash(&mut s);
         s.finish()
     }
+
+    fn data_size(&self) -> u64 {
+        self.filesize
+    }
 }
 
 impl HivePartInfo {

@@ -57,4 +57,8 @@ impl PartInfo for StageFilePartition {
         self.path.hash(&mut s);
         s.finish()
     }
+
+    fn data_size(&self) -> u64 {
+        self.size
+    }
 }

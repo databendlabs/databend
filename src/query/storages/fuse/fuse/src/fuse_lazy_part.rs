@@ -45,6 +45,10 @@ impl PartInfo for FuseLazyPartInfo {
         self.segment_location.0.hash(&mut s);
         s.finish()
     }
+
+    fn data_size(&self) -> u64 {
+        0
+    }
 }
 
 impl FuseLazyPartInfo {

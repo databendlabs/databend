@@ -43,6 +43,10 @@ impl PartInfo for MemoryPartInfo {
     fn hash(&self) -> u64 {
         0
     }
+
+    fn data_size(&self) -> u64 {
+        0
+    }
 }
 
 impl MemoryPartInfo {

@@ -13,6 +13,7 @@
 //  limitations under the License.
 
 use std::any::Any;
+use std::intrinsics::size_of;
 use std::sync::Arc;
 
 use common_catalog::plan::PartInfo;
@@ -42,6 +43,11 @@ impl PartInfo for NumbersPartInfo {
 
     fn hash(&self) -> u64 {
         0
+    }
+
+    fn data_size(&self) -> u64 {
+        let size = size_of::<u64>() as u64;
+        size * (self.part_end - self.part_start)
     }
 }
 
