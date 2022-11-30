@@ -29,6 +29,7 @@ use crate::plans::Scalar;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Exchange {
+    Random,
     Hash(Vec<Scalar>),
     Broadcast,
     Merge,
@@ -60,6 +61,7 @@ impl PhysicalOperator for Exchange {
     fn derive_physical_prop<'a>(&self, _rel_expr: &RelExpr<'a>) -> Result<PhysicalProperty> {
         Ok(PhysicalProperty {
             distribution: match self {
+                Exchange::Random => Distribution::Random,
                 Exchange::Hash(hash_keys) => Distribution::Hash(hash_keys.clone()),
                 Exchange::Broadcast => Distribution::Broadcast,
                 Exchange::Merge => Distribution::Serial,
