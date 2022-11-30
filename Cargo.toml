@@ -142,3 +142,4 @@ rpath = false
 # If there are dependencies that need patching, they can be listed below.
 # For example:
 # arrow-format = { git = "https://github.com/datafuse-extras/arrow-format", rev = "78dacc1" }
+parquet2 = { git = "https://github.com/jorgecarleitao/parquet2", rev = "fb08b72" }

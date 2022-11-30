@@ -16,15 +16,19 @@ use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
+use std::sync::Mutex;
 
+use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::datatypes::Field;
 use common_arrow::arrow::io::parquet::read::column_iter_to_arrays;
 use common_arrow::arrow::io::parquet::read::ArrayIter;
 use common_arrow::arrow::io::parquet::read::RowGroupDeserializer;
 use common_arrow::arrow::io::parquet::write::to_parquet_schema;
 use common_arrow::parquet::compression::Compression as ParquetCompression;
+use common_arrow::parquet::indexes::Interval;
 use common_arrow::parquet::metadata::ColumnDescriptor;
 use common_arrow::parquet::metadata::SchemaDescriptor;
+use common_arrow::parquet::page::CompressedPage;
 use common_arrow::parquet::read::BasicDecompressor;
 use common_arrow::parquet::read::PageMetaData;
 use common_arrow::parquet::read::PageReader;
@@ -47,6 +51,57 @@ use tracing::Instrument;
 
 use crate::fuse_part::ColumnMeta;
 use crate::fuse_part::FusePartInfo;
+
+struct FilteredState {
+    bitmap: Bitmap,
+    pos: usize,
+}
+
+impl FilteredState {
+    fn new(bitmap: Bitmap) -> Self {
+        Self { bitmap, pos: 0 }
+    }
+
+    #[inline]
+    fn advance(&mut self, num: usize) {
+        self.pos += num;
+    }
+
+    /// Return if [`self.pos`, `self.pos + num`) are set.
+    #[inline]
+    fn range_all_set(&self, num: usize) -> bool {
+        self.bitmap.null_count_range(self.pos, num) == 0
+    }
+
+    /// Return if [`self.pos`, `self.pos + num`) are unset.
+    #[inline]
+    fn range_all_unset(&self, num: usize) -> bool {
+        self.bitmap.null_count_range(self.pos, num) == num
+    }
+
+    fn convert_to_intervals(&self, num_rows: usize) -> Vec<Interval> {
+        let mut res = vec![];
+        let mut started = false;
+        let mut start = 0;
+        for (i, v) in self.bitmap.iter().skip(self.pos).take(num_rows).enumerate() {
+            if v {
+                if !started {
+                    start = i;
+                    started = true;
+                }
+            } else if started {
+                res.push(Interval::new(start, i - start));
+                started = false;
+            }
+        }
+
+        if started {
+            res.push(Interval::new(start, num_rows - start));
+        }
+
+        res
+    }
+}
 
 #[derive(Clone)]
 pub struct BlockReader {
@@ -126,6 +181,82 @@ impl BlockReader {
             types,
             field,
             Some(rows),
+            rows,
+        )?)
+    }
+
+    /// Read `arrow::Array` from the parquet file with a filter.
+    /// The length of `filter` should be exactly the same as the number of the whole `arrow::Array`.
+    #[allow(clippy::too_many_arguments)]
+    fn to_array_iter_with_filter(
+        metas: Vec<&ColumnMeta>,
+        chunks: Vec<Vec<u8>>,
+        rows: usize,
+        column_descriptors: Vec<&ColumnDescriptor>,
+        field: Field,
+        compression: &Compression,
+        filter: Bitmap,
+    ) -> Result<ArrayIter<'static>> {
+        let columns = metas
+            .iter()
+            .zip(chunks.into_iter().zip(column_descriptors.iter()))
+            .map(|(meta, (chunk, column_descriptor))| {
+                let page_meta_data = PageMetaData {
+                    column_start: meta.offset,
+                    num_values: meta.num_values as i64,
+                    compression: Self::to_parquet_compression(compression)?,
+                    descriptor: column_descriptor.descriptor.clone(),
+                };
+                let page_filter_state = Arc::new(Mutex::new(FilteredState::new(filter.clone())));
+                let page_iter_state = page_filter_state.clone();
+                let pages = PageReader::new_with_page_meta(
+                    std::io::Cursor::new(chunk),
+                    page_meta_data,
+                    Arc::new(move |_, header| {
+                        // If the bitmap for current page is all unset, skip it.
+
+                        let mut state = page_filter_state.lock().unwrap();
+                        let num_rows = header.num_values();
+                        let all_unset = state.range_all_unset(num_rows);
+                        if all_unset {
+                            // skip this page.
+                            state.advance(num_rows);
+                        }
+                        !all_unset
+                    }),
+                    vec![],
+                    usize::MAX,
+                )
+                .map(move |page| {
+                    page.map(|page| match page {
+                        CompressedPage::Data(mut page) => {
+                            let num_rows = page.num_values();
+                            let mut state = page_iter_state.lock().unwrap();
+                            if state.range_all_unset(num_rows) {
+                                page.select_rows(vec![]);
+                            } else if !state.range_all_set(num_rows) {
+                                page.select_rows(state.convert_to_intervals(num_rows));
+                            };
+                            state.advance(num_rows);
+                            CompressedPage::Data(page)
+                        }
+                        CompressedPage::Dict(_) => page,
+                    })
+                });
+                Ok(BasicDecompressor::new(pages, vec![]))
+            })
+            .collect::<Result<Vec<_>>>()?;
+
+        let types = column_descriptors
+            .iter()
+            .map(|column_descriptor| &column_descriptor.descriptor.primitive_type)
+            .collect::<Vec<_>>();
+
+        Ok(column_iter_to_arrays(
+            columns,
+            types,
+            field,
+            Some(rows - filter.unset_bits()),
             rows,
         )?)
     }
@@ -281,6 +412,7 @@ impl BlockReader {
         &self,
         part: PartInfoPtr,
         chunks: Vec<(usize, Vec<u8>)>,
+        filter: Option<Bitmap>,
     ) -> Result<DataBlock> {
         let part = FusePartInfo::from_part(&part)?;
         let mut chunk_map: HashMap<usize, Vec<u8>> = chunks.into_iter().collect();
@@ -309,14 +441,27 @@ impl BlockReader {
                 column_chunks.push(column_chunk);
                 column_descriptors.push(column_descriptor);
             }
-            columns_array_iter.push(Self::to_array_iter(
-                column_metas,
-                column_chunks,
-                num_rows,
-                column_descriptors,
-                field,
-                &part.compression,
-            )?);
+            let array_iter = if let Some(ref bitmap) = filter {
+                Self::to_array_iter_with_filter(
+                    column_metas,
+                    column_chunks,
+                    num_rows,
+                    column_descriptors,
+                    field,
+                    &part.compression,
+                    bitmap.clone(),
+                )?
+            } else {
+                Self::to_array_iter(
+                    column_metas,
+                    column_chunks,
+                    num_rows,
+                    column_descriptors,
+                    field,
+                    &part.compression,
+                )?
+            };
+            columns_array_iter.push(array_iter);
         }
 
         let mut deserializer = RowGroupDeserializer::new(columns_array_iter, num_rows, None);
