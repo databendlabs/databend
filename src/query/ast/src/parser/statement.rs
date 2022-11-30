@@ -1469,17 +1469,13 @@ pub fn copy_unit(i: Input) -> IResult<CopyUnit> {
     let stage_location = |i| {
         map(at_string, |location| {
             let parsed = location.splitn(2, '/').collect::<Vec<_>>();
-            if parsed.len() == 1 {
-                CopyUnit::StageLocation {
-                    name: parsed[0].to_string(),
-                    path: "/".to_string(),
-                }
+            let name = parsed[0].to_string();
+            let path = if parsed.len() == 1 {
+                "/".to_string()
             } else {
-                CopyUnit::StageLocation {
-                    name: parsed[0].to_string(),
-                    path: format!("/{}", parsed[1]),
-                }
-            }
+                format!("/{}", parsed[1])
+            };
+            CopyUnit::StageLocation(StageLocation { name, path })
         })(i)
     };
 

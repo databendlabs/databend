@@ -6575,10 +6575,12 @@ COPY INTO mytable FROM @~/mybucket/data.csv FILE_FORMAT = ( field_delimiter = ',
 ---------- AST ------------
 Copy(
     CopyStmt {
-        src: StageLocation {
-            name: "~",
-            path: "/mybucket/data.csv",
-        },
+        src: StageLocation(
+            StageLocation {
+                name: "~",
+                path: "/mybucket/data.csv",
+            },
+        ),
         dst: Table {
             catalog: None,
             database: None,
@@ -6867,10 +6869,12 @@ COPY INTO mytable FROM @my_stage/ FILE_FORMAT = ( field_delimiter = ',' record_d
 ---------- AST ------------
 Copy(
     CopyStmt {
-        src: StageLocation {
-            name: "my_stage",
-            path: "/",
-        },
+        src: StageLocation(
+            StageLocation {
+                name: "my_stage",
+                path: "/",
+            },
+        ),
         dst: Table {
             catalog: None,
             database: None,
@@ -6976,10 +6980,12 @@ Copy(
                 span: Ident(41..48),
             },
         },
-        dst: StageLocation {
-            name: "my_stage",
-            path: "/",
-        },
+        dst: StageLocation(
+            StageLocation {
+                name: "my_stage",
+                path: "/",
+            },
+        ),
         files: [],
         pattern: "",
         file_format: {
@@ -7078,10 +7084,12 @@ COPY INTO mytable FROM @external_stage/path/to/file.csv FILE_FORMAT = ( field_de
 ---------- AST ------------
 Copy(
     CopyStmt {
-        src: StageLocation {
-            name: "external_stage",
-            path: "/path/to/file.csv",
-        },
+        src: StageLocation(
+            StageLocation {
+                name: "external_stage",
+                path: "/path/to/file.csv",
+            },
+        ),
         dst: Table {
             catalog: None,
             database: None,
@@ -7126,10 +7134,12 @@ COPY INTO mytable FROM @external_stage/path/to/dir/ FILE_FORMAT = ( field_delimi
 ---------- AST ------------
 Copy(
     CopyStmt {
-        src: StageLocation {
-            name: "external_stage",
-            path: "/path/to/dir/",
-        },
+        src: StageLocation(
+            StageLocation {
+                name: "external_stage",
+                path: "/path/to/dir/",
+            },
+        ),
         dst: Table {
             catalog: None,
             database: None,
@@ -7174,10 +7184,12 @@ COPY INTO mytable FROM @external_stage/path/to/file.csv FILE_FORMAT = ( field_de
 ---------- AST ------------
 Copy(
     CopyStmt {
-        src: StageLocation {
-            name: "external_stage",
-            path: "/path/to/file.csv",
-        },
+        src: StageLocation(
+            StageLocation {
+                name: "external_stage",
+                path: "/path/to/file.csv",
+            },
+        ),
         dst: Table {
             catalog: None,
             database: None,
