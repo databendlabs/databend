@@ -16,7 +16,6 @@
 
 mod layer;
 pub use layer::create_share_table_operator;
-pub use layer::SharedLayer;
-mod signer;
 
+mod signer;
 pub use signer::SharedSigner;

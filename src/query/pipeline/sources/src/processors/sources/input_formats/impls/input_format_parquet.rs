@@ -25,7 +25,7 @@ use std::sync::Arc;
 use common_arrow::arrow::array::Array;
 use common_arrow::arrow::chunk::Chunk;
 use common_arrow::arrow::datatypes::Field;
-use common_arrow::arrow::io::parquet::read;
+use common_arrow::arrow::io::parquet::read::infer_schema;
 use common_arrow::arrow::io::parquet::read::read_columns;
 use common_arrow::arrow::io::parquet::read::read_metadata_async;
 use common_arrow::arrow::io::parquet::read::to_deserializer;
@@ -38,6 +38,7 @@ use common_arrow::read_columns_async;
 use common_datablocks::DataBlock;
 use common_datavalues::remove_nullable;
 use common_datavalues::DataField;
+use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -88,7 +89,7 @@ impl InputFormat for InputFormatParquet {
             let mut reader = obj.seekable_reader(..(size as u64));
             let mut file_meta = read_metadata_async(&mut reader).await?;
             let row_groups = mem::take(&mut file_meta.row_groups);
-            let infer_schema = read::infer_schema(&file_meta)?;
+            let infer_schema = infer_schema(&file_meta)?;
             let fields = Arc::new(infer_schema.fields);
             let read_file_meta = Arc::new(FileMeta { fields });
 
@@ -126,6 +127,15 @@ impl InputFormat for InputFormatParquet {
             }
         }
         Ok(infos)
+    }
+
+    async fn infer_schema(&self, path: &str, op: &Operator) -> Result<DataSchema> {
+        let obj = op.object(path);
+        let size = obj.content_length().await?;
+        let mut reader = obj.seekable_reader(..size);
+        let file_meta = read_metadata_async(&mut reader).await?;
+        let arrow_schema = infer_schema(&file_meta)?;
+        Ok(DataSchema::from(arrow_schema))
     }
 
     fn exec_copy(&self, ctx: Arc<InputContext>, pipeline: &mut Pipeline) -> Result<()> {
@@ -353,7 +363,7 @@ impl AligningStateTrait for AligningState {
             );
             let mut cursor = Cursor::new(file_in_memory);
             let file_meta = read_metadata(&mut cursor)?;
-            let infer_schema = read::infer_schema(&file_meta)?;
+            let infer_schema = infer_schema(&file_meta)?;
             let fields = Arc::new(get_used_fields(&infer_schema.fields, &self.ctx.schema)?);
             let mut row_batches = Vec::with_capacity(file_meta.row_groups.len());
             for row_group in file_meta.row_groups.into_iter() {

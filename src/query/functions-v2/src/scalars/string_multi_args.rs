@@ -34,8 +34,8 @@ use common_expression::types::ValueType;
 use common_expression::wrap_nullable;
 use common_expression::Column;
 use common_expression::Domain;
+use common_expression::EvalContext;
 use common_expression::Function;
-use common_expression::FunctionContext;
 use common_expression::FunctionDomain;
 use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
@@ -568,7 +568,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     });
 }
 
-fn concat_fn(args: &[ValueRef<AnyType>], _: FunctionContext) -> Result<Value<AnyType>, String> {
+fn concat_fn(args: &[ValueRef<AnyType>], _: EvalContext) -> Result<Value<AnyType>, String> {
     let len = args.iter().find_map(|arg| match arg {
         ValueRef::Column(col) => Some(col.len()),
         _ => None,
@@ -593,7 +593,7 @@ fn concat_fn(args: &[ValueRef<AnyType>], _: FunctionContext) -> Result<Value<Any
     }
 }
 
-fn char_fn(args: &[ValueRef<AnyType>], _: FunctionContext) -> Result<Value<AnyType>, String> {
+fn char_fn(args: &[ValueRef<AnyType>], _: EvalContext) -> Result<Value<AnyType>, String> {
     let args = args
         .iter()
         .map(|arg| arg.try_downcast::<UInt8Type>().unwrap())
@@ -636,10 +636,7 @@ fn char_fn(args: &[ValueRef<AnyType>], _: FunctionContext) -> Result<Value<AnyTy
     Ok(Value::Column(Column::String(result)))
 }
 
-fn regexp_instr_fn(
-    args: &[ValueRef<AnyType>],
-    _: FunctionContext,
-) -> Result<Value<AnyType>, String> {
+fn regexp_instr_fn(args: &[ValueRef<AnyType>], _: EvalContext) -> Result<Value<AnyType>, String> {
     let len = args.iter().find_map(|arg| match arg {
         ValueRef::Column(col) => Some(col.len()),
         _ => None,
@@ -715,10 +712,7 @@ fn regexp_instr_fn(
     }
 }
 
-fn regexp_like_fn(
-    args: &[ValueRef<AnyType>],
-    _: FunctionContext,
-) -> Result<Value<AnyType>, String> {
+fn regexp_like_fn(args: &[ValueRef<AnyType>], _: EvalContext) -> Result<Value<AnyType>, String> {
     let len = args.iter().find_map(|arg| match arg {
         ValueRef::Column(col) => Some(col.len()),
         _ => None,
@@ -763,10 +757,7 @@ fn regexp_like_fn(
     }
 }
 
-fn regexp_replace_fn(
-    args: &[ValueRef<AnyType>],
-    _: FunctionContext,
-) -> Result<Value<AnyType>, String> {
+fn regexp_replace_fn(args: &[ValueRef<AnyType>], _: EvalContext) -> Result<Value<AnyType>, String> {
     let len = args.iter().find_map(|arg| match arg {
         ValueRef::Column(col) => Some(col.len()),
         _ => None,
@@ -848,10 +839,7 @@ fn regexp_replace_fn(
     }
 }
 
-fn regexp_substr_fn(
-    args: &[ValueRef<AnyType>],
-    _: FunctionContext,
-) -> Result<Value<AnyType>, String> {
+fn regexp_substr_fn(args: &[ValueRef<AnyType>], _: EvalContext) -> Result<Value<AnyType>, String> {
     let len = args.iter().find_map(|arg| match arg {
         ValueRef::Column(col) => Some(col.len()),
         _ => None,

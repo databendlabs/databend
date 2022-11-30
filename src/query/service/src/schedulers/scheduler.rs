@@ -70,7 +70,6 @@ pub async fn build_distributed_pipeline(
 ) -> Result<PipelineBuildResult> {
     let fragmenter = Fragmenter::try_create(ctx.clone())?;
     let root_fragment = fragmenter.build_fragment(plan)?;
-
     let mut fragments_actions = QueryFragmentsActions::create(ctx.clone());
     root_fragment.get_actions(ctx.clone(), &mut fragments_actions)?;
 
