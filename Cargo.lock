@@ -1967,6 +1967,7 @@ dependencies = [
  "bytes",
  "common-auth",
  "http",
+ "log",
  "moka",
  "opendal",
  "reqwest",

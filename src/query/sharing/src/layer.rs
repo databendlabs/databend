@@ -122,10 +122,17 @@ impl Accessor for SharedAccessor {
         );
 
         let resp = self.client.send_async(req).await?;
-        let content_length = parse_content_length(resp.headers())
-            .unwrap()
-            .expect("content_length must be valid");
-        Ok((RpRead::new(content_length), resp.into_body().reader()))
+
+        if resp.status().is_success() {
+            let content_length = parse_content_length(resp.headers())
+                .unwrap()
+                .expect("content_length must be valid");
+            Ok((RpRead::new(content_length), resp.into_body().reader()))
+        } else {
+            let er = parse_error_response(resp).await?;
+            let err = parse_error(er);
+            Err(err)
+        }
     }
 
     async fn stat(&self, path: &str, _args: OpStat) -> Result<RpStat> {
