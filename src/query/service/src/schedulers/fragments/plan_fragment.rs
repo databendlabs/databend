@@ -135,7 +135,6 @@ impl PlanFragment {
         let partition_reshuffle = partitions.reshuffle(executors)?;
 
         for (executor, parts) in partition_reshuffle.iter() {
-            tracing::info!("{}, {:?}", executor, parts);
             let mut new_read_source = read_source.clone();
             new_read_source.parts = parts.clone();
             let mut plan = self.plan.clone();

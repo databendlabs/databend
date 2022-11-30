@@ -155,7 +155,7 @@ Exchange
     │       ├── partitions scanned: 0
     │       └── push downs: [filters: [], limit: NONE]
     └── Exchange(Probe)
-        ├── exchange type: Hash(t1.a (#0))
+        ├── exchange type: Init-Partition
         └── TableScan
             ├── table: default.default.t1
             ├── read rows: 0
