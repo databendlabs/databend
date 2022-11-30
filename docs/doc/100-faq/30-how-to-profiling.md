@@ -50,7 +50,7 @@ Currently, it does not work on Mac, with either intel or ARM.
 - Fire up `databend`, using environment variable `MALLOC_CONF` to enable memory profiling.
   
   For example:
-  `MALLOC_CONF=prof:true ./target/debug/databend-query`
+  `MALLOC_CONF=prof:true,lg_prof_interval:30 ./target/debug/databend-query`
 
 ### Examine memory usage
 
@@ -115,10 +115,6 @@ Generate a call graph in `pdf` illustrating memory allocation during this interv
 ```shell
 jeprof \
     --show_bytes \
-    --nodecount=1024 \
-    --nodefraction=0.001 \
-    --edgefraction=0.001 \
-    --maxdegree=64 \
     --pdf \
     ./target/debug/databend-meta \
     --base=a.prof \
