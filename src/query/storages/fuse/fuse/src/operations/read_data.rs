@@ -167,6 +167,9 @@ impl FuseTable {
         pipeline: &mut Pipeline,
         read_kind: ReadDataKind,
     ) -> Result<()> {
+        let projection = self.projection_of_push_downs(&plan.push_downs);
+        let projection_num = projection.len();
+
         let mut lazy_init_segments = Vec::with_capacity(plan.parts.len());
 
         for part in &plan.parts.partitions {
@@ -206,13 +209,21 @@ impl FuseTable {
                     Result::<_, ErrorCode>::Ok(partitions)
                 })?;
 
+                info!(
+                    "after prunning, need to scan data_size={}, partitions={}, each block need to scan data_size={}, projections={}, each projection need to scan data_size={}",
+                    partitions.data_size(),
+                    partitions.len(),
+                    partitions.data_size() as usize / partitions.len(),
+                    projection_num,
+                    partitions.data_size() as usize / partitions.len()/ projection_num,
+                );
+
                 query_ctx.try_set_partitions(partitions)?;
 
                 Ok(())
             });
         }
 
-        let projection = self.projection_of_push_downs(&plan.push_downs);
         let max_io_requests = self.adjust_io_request(&ctx, &projection, read_kind)?;
         let block_reader = self.build_block_reader(plan)?;
         let prewhere_reader = self.build_prewhere_reader(plan)?;
