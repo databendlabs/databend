@@ -13,12 +13,16 @@
 // limitations under the License.
 
 use std::fmt::Debug;
-use std::sync::Arc;
 
 use async_trait::async_trait;
+use backon::ExponentialBackoff;
 use common_auth::RefreshableToken;
 use http::Request;
 use http::StatusCode;
+use opendal::layers::LoggingLayer;
+use opendal::layers::MetricsLayer;
+use opendal::layers::RetryLayer;
+use opendal::layers::TracingLayer;
 use opendal::raw::apply_wrapper;
 use opendal::raw::new_request_build_error;
 use opendal::raw::parse_content_length;
@@ -38,7 +42,6 @@ use opendal::raw::RpRead;
 use opendal::raw::RpStat;
 use opendal::Error;
 use opendal::ErrorKind;
-use opendal::Layer;
 use opendal::ObjectMetadata;
 use opendal::ObjectMode;
 use opendal::OpRead;
@@ -50,46 +53,6 @@ use reqwest::header::RANGE;
 
 use crate::SharedSigner;
 
-/// SharedLayer is used to handle databend cloud's sharing logic.
-///
-/// We will inject all read request to:
-///
-/// - Get presgined url from sharing endpoint.
-/// - Read data from the url instead.
-///
-/// # Example:
-///
-/// ```no_build
-/// use anyhow::Result;
-/// use common_sharing::SharedLayer;
-/// use opendal::Operator;
-/// use opendal::Scheme;
-///
-/// let _ = Operator::from_env(Scheme::Memory)
-///     .expect("must init")
-///     .layer(SharedLayer::new(signer));
-/// ```
-#[derive(Debug, Clone)]
-pub struct SharedLayer {
-    signer: SharedSigner,
-}
-
-impl SharedLayer {
-    /// Create a new SharedLayer.
-    pub fn new(signer: SharedSigner) -> Self {
-        Self { signer }
-    }
-}
-
-impl Layer for SharedLayer {
-    fn layer(&self, _: Arc<dyn Accessor>) -> Arc<dyn Accessor> {
-        Arc::new(apply_wrapper(SharedAccessor {
-            signer: self.signer.clone(),
-            client: HttpClient::new(),
-        }))
-    }
-}
-
 pub fn create_share_table_operator(
     share_endpoint_address: Option<String>,
     share_endpoint_token: RefreshableToken,
@@ -97,7 +60,7 @@ pub fn create_share_table_operator(
     share_name: &str,
     table_name: &str,
 ) -> Operator {
-    match share_endpoint_address {
+    let op = match share_endpoint_address {
         Some(share_endpoint_address) => {
             let signer = SharedSigner::new(
                 &format!(
@@ -106,14 +69,23 @@ pub fn create_share_table_operator(
                 ),
                 share_endpoint_token,
             );
-            Operator::from_env(Scheme::Memory)
-                .expect("must init")
-                .layer(SharedLayer::new(signer))
+            Operator::new(apply_wrapper(SharedAccessor {
+                signer,
+                client: HttpClient::new(),
+            }))
         }
-        None => Operator::from_env(Scheme::Memory)
-            .expect("must init")
-            .layer(DummySharedLayer {}),
-    }
+        None => Operator::new(DummySharedAccessor {}),
+    };
+
+    op
+        // Add retry
+        .layer(RetryLayer::new(ExponentialBackoff::default().with_jitter()))
+        // Add metrics
+        .layer(MetricsLayer)
+        // Add logging
+        .layer(LoggingLayer)
+        // Add tracing
+        .layer(TracingLayer)
 }
 
 #[derive(Debug)]
@@ -228,16 +200,15 @@ pub fn parse_error(er: ErrorResponse) -> Error {
     err
 }
 
-pub struct DummySharedLayer {}
-impl Layer for DummySharedLayer {
-    fn layer(&self, _: Arc<dyn Accessor>) -> Arc<dyn Accessor> {
-        Arc::new(DummySharedAccessor {})
-    }
-}
-
 // A dummy Accessor which cannot do anything.
 #[derive(Debug)]
 struct DummySharedAccessor {}
 
 #[async_trait]
-impl Accessor for DummySharedAccessor {}
+impl Accessor for DummySharedAccessor {
+    fn metadata(&self) -> AccessorMetadata {
+        let mut meta = AccessorMetadata::default();
+        meta.set_scheme(Scheme::Custom("shared"));
+        meta
+    }
+}
