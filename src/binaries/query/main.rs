@@ -35,6 +35,7 @@ use databend_query::servers::MySQLHandler;
 use databend_query::servers::Server;
 use databend_query::servers::ShutdownHandle;
 use databend_query::GlobalServices;
+use sysinfo::SystemExt;
 use tracing::info;
 
 fn main() {
@@ -54,11 +55,19 @@ fn main() {
 }
 
 async fn main_entrypoint(mem_tracker: Arc<MemoryTracker>) -> Result<()> {
-    let conf: Config = Config::load()?;
+    let mut conf: Config = Config::load()?;
 
     if run_cmd(&conf) {
         return Ok(());
     }
+
+    let total_memory = sysinfo::System::new_all().total_memory();
+    let default_max_memory_usage = total_memory * 90 / 100;
+    conf.query.max_server_memory_usage = match conf.query.max_server_memory_usage {
+        0 => default_max_memory_usage,
+        memory if memory > default_max_memory_usage => default_max_memory_usage,
+        memory => memory,
+    };
 
     init_default_metrics_recorder();
     set_panic_hook();

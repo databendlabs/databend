@@ -121,13 +121,8 @@ impl Settings {
             // Set max memory usage.
             {
                 if ret.get_max_memory_usage()? == 0 {
-                    let max_usage = if conf.query.max_server_memory_usage == 0 {
-                        ret.check_and_get_default_value("max_memory_usage")?
-                            .as_u64()?
-                    } else {
-                        conf.query.max_server_memory_usage
-                    };
-                    ret.set_max_memory_usage(max_usage)?;
+                    assert_ne!(conf.query.max_server_memory_usage, 0);
+                    ret.set_max_memory_usage(conf.query.max_server_memory_usage)?;
                 }
             }
         }
@@ -165,7 +160,7 @@ impl Settings {
             // max_memory_usage
             SettingValue {
                 default_value: UserSettingValue::UInt64(
-                    sysinfo::System::new_all().total_memory() * 80 / 100,
+                    sysinfo::System::new_all().total_memory() * 90 / 100,
                 ),
                 user_setting: UserSetting::create("max_memory_usage", UserSettingValue::UInt64(0)),
                 level: ScopeLevel::Session,

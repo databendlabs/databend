@@ -58,11 +58,8 @@ impl Interpreter for UnSettingInterpreter {
                     let default_val = {
                         if setting == "max_memory_usage" {
                             let conf = self.ctx.get_config();
-                            if conf.query.max_server_memory_usage == 0 {
-                                settings.check_and_get_default_value(setting)?.to_string()
-                            } else {
-                                conf.query.max_server_memory_usage.to_string()
-                            }
+                            assert_ne!(conf.query.max_server_memory_usage, 0);
+                            conf.query.max_server_memory_usage.to_string()
                         } else if setting == "max_threads" {
                             let conf = self.ctx.get_config();
                             if conf.query.num_cpus == 0 {

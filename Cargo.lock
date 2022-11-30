@@ -3008,6 +3008,7 @@ dependencies = [
  "sentry",
  "serde",
  "serde_json",
+ "sysinfo",
  "tokio-stream",
  "tonic",
  "tracing",

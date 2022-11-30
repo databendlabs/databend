@@ -27,6 +27,7 @@ impl ConfigBuilder {
         let mut conf = Config::default();
         conf.query.tenant_id = "test".to_string();
         conf.log = common_tracing::Config::new_testing();
+        conf.query.max_server_memory_usage = u64::MAX;
 
         ConfigBuilder { conf }
     }
