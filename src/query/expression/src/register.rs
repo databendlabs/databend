@@ -27,8 +27,8 @@ use crate::types::nullable::NullableDomain;
 use crate::types::*;
 use crate::values::Value;
 use crate::values::ValueRef;
+use crate::EvalContext;
 use crate::Function;
-use crate::FunctionContext;
 use crate::FunctionDomain;
 use crate::FunctionRegistry;
 use crate::FunctionSignature;
@@ -42,12 +42,7 @@ impl FunctionRegistry {
         func: G,
     ) where
         F: Fn(&I1::Domain) -> FunctionDomain<O> + 'static + Clone + Copy + Send + Sync,
-        G: Fn(I1::ScalarRef<'_>, FunctionContext) -> O::Scalar
-            + 'static
-            + Clone
-            + Copy
-            + Send
-            + Sync,
+        G: Fn(I1::ScalarRef<'_>, EvalContext) -> O::Scalar + 'static + Clone + Copy + Send + Sync,
     {
         self.register_passthrough_nullable_1_arg::<I1, O, _, _>(
             name,
@@ -65,7 +60,7 @@ impl FunctionRegistry {
         func: G,
     ) where
         F: Fn(&I1::Domain, &I2::Domain) -> FunctionDomain<O> + 'static + Clone + Copy + Send + Sync,
-        G: Fn(I1::ScalarRef<'_>, I2::ScalarRef<'_>, FunctionContext) -> O::Scalar
+        G: Fn(I1::ScalarRef<'_>, I2::ScalarRef<'_>, EvalContext) -> O::Scalar
             + 'static
             + Clone
             + Copy
@@ -93,12 +88,7 @@ impl FunctionRegistry {
             + Copy
             + Send
             + Sync,
-        G: Fn(
-                I1::ScalarRef<'_>,
-                I2::ScalarRef<'_>,
-                I3::ScalarRef<'_>,
-                FunctionContext,
-            ) -> O::Scalar
+        G: Fn(I1::ScalarRef<'_>, I2::ScalarRef<'_>, I3::ScalarRef<'_>, EvalContext) -> O::Scalar
             + 'static
             + Clone
             + Copy
@@ -131,7 +121,7 @@ impl FunctionRegistry {
                 I2::ScalarRef<'_>,
                 I3::ScalarRef<'_>,
                 I4::ScalarRef<'_>,
-                FunctionContext,
+                EvalContext,
             ) -> O::Scalar
             + 'static
             + Clone
@@ -175,7 +165,7 @@ impl FunctionRegistry {
                 I3::ScalarRef<'_>,
                 I4::ScalarRef<'_>,
                 I5::ScalarRef<'_>,
-                FunctionContext,
+                EvalContext,
             ) -> O::Scalar
             + 'static
             + Clone
@@ -199,7 +189,7 @@ impl FunctionRegistry {
         func: G,
     ) where
         F: Fn(&I1::Domain) -> FunctionDomain<O> + 'static + Clone + Copy + Send + Sync,
-        G: for<'a> Fn(ValueRef<'a, I1>, FunctionContext) -> Result<Value<O>, String>
+        G: for<'a> Fn(ValueRef<'a, I1>, EvalContext) -> Result<Value<O>, String>
             + 'static
             + Clone
             + Copy
@@ -249,11 +239,7 @@ impl FunctionRegistry {
         func: G,
     ) where
         F: Fn(&I1::Domain, &I2::Domain) -> FunctionDomain<O> + 'static + Clone + Copy + Send + Sync,
-        G: for<'a> Fn(
-                ValueRef<'a, I1>,
-                ValueRef<'a, I2>,
-                FunctionContext,
-            ) -> Result<Value<O>, String>
+        G: for<'a> Fn(ValueRef<'a, I1>, ValueRef<'a, I2>, EvalContext) -> Result<Value<O>, String>
             + 'static
             + Clone
             + Copy
@@ -319,7 +305,7 @@ impl FunctionRegistry {
                 ValueRef<'a, I1>,
                 ValueRef<'a, I2>,
                 ValueRef<'a, I3>,
-                FunctionContext,
+                EvalContext,
             ) -> Result<Value<O>, String>
             + 'static
             + Clone
@@ -397,7 +383,7 @@ impl FunctionRegistry {
                 ValueRef<'a, I2>,
                 ValueRef<'a, I3>,
                 ValueRef<'a, I4>,
-                FunctionContext,
+                EvalContext,
             ) -> Result<Value<O>, String>
             + 'static
             + Clone
@@ -483,7 +469,7 @@ impl FunctionRegistry {
                 ValueRef<'a, I3>,
                 ValueRef<'a, I4>,
                 ValueRef<'a, I5>,
-                FunctionContext,
+                EvalContext,
             ) -> Result<Value<O>, String>
             + 'static
             + Clone
@@ -555,7 +541,7 @@ impl FunctionRegistry {
             + Copy
             + Send
             + Sync,
-        G: for<'a> Fn(ValueRef<'a, I1>, FunctionContext) -> Result<Value<NullableType<O>>, String>
+        G: for<'a> Fn(ValueRef<'a, I1>, EvalContext) -> Result<Value<NullableType<O>>, String>
             + 'static
             + Clone
             + Copy
@@ -618,7 +604,7 @@ impl FunctionRegistry {
         G: for<'a> Fn(
                 ValueRef<'a, I1>,
                 ValueRef<'a, I2>,
-                FunctionContext,
+                EvalContext,
             ) -> Result<Value<NullableType<O>>, String>
             + 'static
             + Clone
@@ -690,7 +676,7 @@ impl FunctionRegistry {
                 ValueRef<'a, I1>,
                 ValueRef<'a, I2>,
                 ValueRef<'a, I3>,
-                FunctionContext,
+                EvalContext,
             ) -> Result<Value<NullableType<O>>, String>
             + 'static
             + Clone
@@ -778,7 +764,7 @@ impl FunctionRegistry {
                 ValueRef<'a, I2>,
                 ValueRef<'a, I3>,
                 ValueRef<'a, I4>,
-                FunctionContext,
+                EvalContext,
             ) -> Result<Value<NullableType<O>>, String>
             + 'static
             + Clone
@@ -870,7 +856,7 @@ impl FunctionRegistry {
                 ValueRef<'a, I3>,
                 ValueRef<'a, I4>,
                 ValueRef<'a, I5>,
-                FunctionContext,
+                EvalContext,
             ) -> Result<Value<NullableType<O>>, String>
             + 'static
             + Clone
@@ -937,7 +923,7 @@ impl FunctionRegistry {
         func: G,
     ) where
         F: Fn() -> FunctionDomain<O> + 'static + Clone + Copy + Send + Sync,
-        G: for<'a> Fn(FunctionContext) -> Result<Value<O>, String>
+        G: for<'a> Fn(EvalContext) -> Result<Value<O>, String>
             + 'static
             + Clone
             + Copy
@@ -967,7 +953,7 @@ impl FunctionRegistry {
         func: G,
     ) where
         F: Fn(&I1::Domain) -> FunctionDomain<O> + 'static + Clone + Copy + Send + Sync,
-        G: for<'a> Fn(ValueRef<'a, I1>, FunctionContext) -> Result<Value<O>, String>
+        G: for<'a> Fn(ValueRef<'a, I1>, EvalContext) -> Result<Value<O>, String>
             + 'static
             + Clone
             + Copy
@@ -997,11 +983,7 @@ impl FunctionRegistry {
         func: G,
     ) where
         F: Fn(&I1::Domain, &I2::Domain) -> FunctionDomain<O> + 'static + Clone + Copy + Send + Sync,
-        G: for<'a> Fn(
-                ValueRef<'a, I1>,
-                ValueRef<'a, I2>,
-                FunctionContext,
-            ) -> Result<Value<O>, String>
+        G: for<'a> Fn(ValueRef<'a, I1>, ValueRef<'a, I2>, EvalContext) -> Result<Value<O>, String>
             + 'static
             + Clone
             + Copy
@@ -1040,7 +1022,7 @@ impl FunctionRegistry {
                 ValueRef<'a, I1>,
                 ValueRef<'a, I2>,
                 ValueRef<'a, I3>,
-                FunctionContext,
+                EvalContext,
             ) -> Result<Value<O>, String>
             + 'static
             + Clone
@@ -1091,7 +1073,7 @@ impl FunctionRegistry {
                 ValueRef<'a, I2>,
                 ValueRef<'a, I3>,
                 ValueRef<'a, I4>,
-                FunctionContext,
+                EvalContext,
             ) -> Result<Value<O>, String>
             + 'static
             + Clone
@@ -1149,7 +1131,7 @@ impl FunctionRegistry {
                 ValueRef<'a, I3>,
                 ValueRef<'a, I4>,
                 ValueRef<'a, I5>,
-                FunctionContext,
+                EvalContext,
             ) -> Result<Value<O>, String>
             + 'static
             + Clone
@@ -1182,8 +1164,8 @@ impl FunctionRegistry {
 }
 
 pub fn vectorize_1_arg<I1: ArgType, O: ArgType>(
-    func: impl Fn(I1::ScalarRef<'_>, FunctionContext) -> O::Scalar + Copy + Send + Sync,
-) -> impl Fn(ValueRef<I1>, FunctionContext) -> Result<Value<O>, String> + Copy + Send + Sync {
+    func: impl Fn(I1::ScalarRef<'_>, EvalContext) -> O::Scalar + Copy + Send + Sync,
+) -> impl Fn(ValueRef<I1>, EvalContext) -> Result<Value<O>, String> + Copy + Send + Sync {
     move |arg1, ctx| match (arg1) {
         (ValueRef::Scalar(arg1)) => Ok(Value::Scalar(func(arg1, ctx))),
         (ValueRef::Column(arg1)) => {
@@ -1196,11 +1178,8 @@ pub fn vectorize_1_arg<I1: ArgType, O: ArgType>(
 }
 
 pub fn vectorize_2_arg<I1: ArgType, I2: ArgType, O: ArgType>(
-    func: impl Fn(I1::ScalarRef<'_>, I2::ScalarRef<'_>, FunctionContext) -> O::Scalar
-    + Copy
-    + Send
-    + Sync,
-) -> impl Fn(ValueRef<I1>, ValueRef<I2>, FunctionContext) -> Result<Value<O>, String> + Copy + Send + Sync
+    func: impl Fn(I1::ScalarRef<'_>, I2::ScalarRef<'_>, EvalContext) -> O::Scalar + Copy + Send + Sync,
+) -> impl Fn(ValueRef<I1>, ValueRef<I2>, EvalContext) -> Result<Value<O>, String> + Copy + Send + Sync
 {
     move |arg1, arg2, ctx| match (arg1, arg2) {
         (ValueRef::Scalar(arg1), ValueRef::Scalar(arg2)) => {
@@ -1231,11 +1210,11 @@ pub fn vectorize_2_arg<I1: ArgType, I2: ArgType, O: ArgType>(
 }
 
 pub fn vectorize_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgType>(
-    func: impl Fn(I1::ScalarRef<'_>, I2::ScalarRef<'_>, I3::ScalarRef<'_>, FunctionContext) -> O::Scalar
+    func: impl Fn(I1::ScalarRef<'_>, I2::ScalarRef<'_>, I3::ScalarRef<'_>, EvalContext) -> O::Scalar
     + Copy
     + Send
     + Sync,
-) -> impl Fn(ValueRef<I1>, ValueRef<I2>, ValueRef<I3>, FunctionContext) -> Result<Value<O>, String>
+) -> impl Fn(ValueRef<I1>, ValueRef<I2>, ValueRef<I3>, EvalContext) -> Result<Value<O>, String>
 + Copy
 + Send
 + Sync {
@@ -1308,7 +1287,7 @@ pub fn vectorize_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType, O: Ar
         I2::ScalarRef<'_>,
         I3::ScalarRef<'_>,
         I4::ScalarRef<'_>,
-        FunctionContext,
+        EvalContext,
     ) -> O::Scalar
     + Copy
     + Send
@@ -1318,7 +1297,7 @@ pub fn vectorize_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType, O: Ar
     ValueRef<I2>,
     ValueRef<I3>,
     ValueRef<I4>,
-    FunctionContext,
+    EvalContext,
 ) -> Result<Value<O>, String>
 + Copy
 + Send
@@ -1561,7 +1540,7 @@ pub fn vectorize_5_arg<
         I3::ScalarRef<'_>,
         I4::ScalarRef<'_>,
         I5::ScalarRef<'_>,
-        FunctionContext,
+        EvalContext,
     ) -> O::Scalar
     + Copy
     + Send
@@ -1572,7 +1551,7 @@ pub fn vectorize_5_arg<
     ValueRef<I3>,
     ValueRef<I4>,
     ValueRef<I5>,
-    FunctionContext,
+    EvalContext,
 ) -> Result<Value<O>, String>
 + Copy
 + Send
@@ -2142,11 +2121,11 @@ pub fn vectorize_5_arg<
 }
 
 pub fn vectorize_with_builder_1_arg<I1: ArgType, O: ArgType>(
-    func: impl Fn(I1::ScalarRef<'_>, &mut O::ColumnBuilder, FunctionContext) -> Result<(), String>
+    func: impl Fn(I1::ScalarRef<'_>, &mut O::ColumnBuilder, EvalContext) -> Result<(), String>
     + Copy
     + Send
     + Sync,
-) -> impl Fn(ValueRef<I1>, FunctionContext) -> Result<Value<O>, String> + Copy + Send + Sync {
+) -> impl Fn(ValueRef<I1>, EvalContext) -> Result<Value<O>, String> + Copy + Send + Sync {
     move |arg1, ctx| match (arg1) {
         (ValueRef::Scalar(arg1)) => {
             let mut builder = O::create_builder(1, ctx.generics);
@@ -2170,12 +2149,12 @@ pub fn vectorize_with_builder_2_arg<I1: ArgType, I2: ArgType, O: ArgType>(
         I1::ScalarRef<'_>,
         I2::ScalarRef<'_>,
         &mut O::ColumnBuilder,
-        FunctionContext,
+        EvalContext,
     ) -> Result<(), String>
     + Copy
     + Send
     + Sync,
-) -> impl Fn(ValueRef<I1>, ValueRef<I2>, FunctionContext) -> Result<Value<O>, String> + Copy + Send + Sync
+) -> impl Fn(ValueRef<I1>, ValueRef<I2>, EvalContext) -> Result<Value<O>, String> + Copy + Send + Sync
 {
     move |arg1, arg2, ctx| match (arg1, arg2) {
         (ValueRef::Scalar(arg1), ValueRef::Scalar(arg2)) => {
@@ -2220,12 +2199,12 @@ pub fn vectorize_with_builder_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: Ar
         I2::ScalarRef<'_>,
         I3::ScalarRef<'_>,
         &mut O::ColumnBuilder,
-        FunctionContext,
+        EvalContext,
     ) -> Result<(), String>
     + Copy
     + Send
     + Sync,
-) -> impl Fn(ValueRef<I1>, ValueRef<I2>, ValueRef<I3>, FunctionContext) -> Result<Value<O>, String>
+) -> impl Fn(ValueRef<I1>, ValueRef<I2>, ValueRef<I3>, EvalContext) -> Result<Value<O>, String>
 + Copy
 + Send
 + Sync {
@@ -2319,7 +2298,7 @@ pub fn vectorize_with_builder_4_arg<
         I3::ScalarRef<'_>,
         I4::ScalarRef<'_>,
         &mut O::ColumnBuilder,
-        FunctionContext,
+        EvalContext,
     ) -> Result<(), String>
     + Copy
     + Send
@@ -2329,7 +2308,7 @@ pub fn vectorize_with_builder_4_arg<
     ValueRef<I2>,
     ValueRef<I3>,
     ValueRef<I4>,
-    FunctionContext,
+    EvalContext,
 ) -> Result<Value<O>, String>
 + Copy
 + Send
@@ -2618,7 +2597,7 @@ pub fn vectorize_with_builder_5_arg<
         I4::ScalarRef<'_>,
         I5::ScalarRef<'_>,
         &mut O::ColumnBuilder,
-        FunctionContext,
+        EvalContext,
     ) -> Result<(), String>
     + Copy
     + Send
@@ -2629,7 +2608,7 @@ pub fn vectorize_with_builder_5_arg<
     ValueRef<I3>,
     ValueRef<I4>,
     ValueRef<I5>,
-    FunctionContext,
+    EvalContext,
 ) -> Result<Value<O>, String>
 + Copy
 + Send
@@ -3368,13 +3347,13 @@ pub fn vectorize_with_builder_5_arg<
 }
 
 pub fn passthrough_nullable_1_arg<I1: ArgType, O: ArgType>(
-    func: impl for<'a> Fn(ValueRef<'a, I1>, FunctionContext) -> Result<Value<O>, String>
+    func: impl for<'a> Fn(ValueRef<'a, I1>, EvalContext) -> Result<Value<O>, String>
     + Copy
     + Send
     + Sync,
 ) -> impl for<'a> Fn(
     ValueRef<'a, NullableType<I1>>,
-    FunctionContext,
+    EvalContext,
 ) -> Result<Value<NullableType<O>>, String>
 + Copy
 + Send
@@ -3395,18 +3374,14 @@ pub fn passthrough_nullable_1_arg<I1: ArgType, O: ArgType>(
 }
 
 pub fn passthrough_nullable_2_arg<I1: ArgType, I2: ArgType, O: ArgType>(
-    func: impl for<'a> Fn(
-        ValueRef<'a, I1>,
-        ValueRef<'a, I2>,
-        FunctionContext,
-    ) -> Result<Value<O>, String>
+    func: impl for<'a> Fn(ValueRef<'a, I1>, ValueRef<'a, I2>, EvalContext) -> Result<Value<O>, String>
     + Copy
     + Send
     + Sync,
 ) -> impl for<'a> Fn(
     ValueRef<'a, NullableType<I1>>,
     ValueRef<'a, NullableType<I2>>,
-    FunctionContext,
+    EvalContext,
 ) -> Result<Value<NullableType<O>>, String>
 + Copy
 + Send
@@ -3451,7 +3426,7 @@ pub fn passthrough_nullable_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgT
         ValueRef<'a, I1>,
         ValueRef<'a, I2>,
         ValueRef<'a, I3>,
-        FunctionContext,
+        EvalContext,
     ) -> Result<Value<O>, String>
     + Copy
     + Send
@@ -3460,7 +3435,7 @@ pub fn passthrough_nullable_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgT
     ValueRef<'a, NullableType<I1>>,
     ValueRef<'a, NullableType<I2>>,
     ValueRef<'a, NullableType<I3>>,
-    FunctionContext,
+    EvalContext,
 ) -> Result<Value<NullableType<O>>, String>
 + Copy
 + Send
@@ -3585,7 +3560,7 @@ pub fn passthrough_nullable_4_arg<
         ValueRef<'a, I2>,
         ValueRef<'a, I3>,
         ValueRef<'a, I4>,
-        FunctionContext,
+        EvalContext,
     ) -> Result<Value<O>, String>
     + Copy
     + Send
@@ -3595,7 +3570,7 @@ pub fn passthrough_nullable_4_arg<
     ValueRef<'a, NullableType<I2>>,
     ValueRef<'a, NullableType<I3>>,
     ValueRef<'a, NullableType<I4>>,
-    FunctionContext,
+    EvalContext,
 ) -> Result<Value<NullableType<O>>, String>
 + Copy
 + Send
@@ -3926,7 +3901,7 @@ pub fn passthrough_nullable_5_arg<
         ValueRef<'a, I3>,
         ValueRef<'a, I4>,
         ValueRef<'a, I5>,
-        FunctionContext,
+        EvalContext,
     ) -> Result<Value<O>, String>
     + Copy
     + Send
@@ -3937,7 +3912,7 @@ pub fn passthrough_nullable_5_arg<
     ValueRef<'a, NullableType<I3>>,
     ValueRef<'a, NullableType<I4>>,
     ValueRef<'a, NullableType<I5>>,
-    FunctionContext,
+    EvalContext,
 ) -> Result<Value<NullableType<O>>, String>
 + Copy
 + Send
@@ -4659,13 +4634,13 @@ pub fn passthrough_nullable_5_arg<
 }
 
 pub fn combine_nullable_1_arg<I1: ArgType, O: ArgType>(
-    func: impl for<'a> Fn(ValueRef<'a, I1>, FunctionContext) -> Result<Value<NullableType<O>>, String>
+    func: impl for<'a> Fn(ValueRef<'a, I1>, EvalContext) -> Result<Value<NullableType<O>>, String>
     + Copy
     + Send
     + Sync,
 ) -> impl for<'a> Fn(
     ValueRef<'a, NullableType<I1>>,
-    FunctionContext,
+    EvalContext,
 ) -> Result<Value<NullableType<O>>, String>
 + Copy
 + Send
@@ -4693,7 +4668,7 @@ pub fn combine_nullable_2_arg<I1: ArgType, I2: ArgType, O: ArgType>(
     func: impl for<'a> Fn(
         ValueRef<'a, I1>,
         ValueRef<'a, I2>,
-        FunctionContext,
+        EvalContext,
     ) -> Result<Value<NullableType<O>>, String>
     + Copy
     + Send
@@ -4701,7 +4676,7 @@ pub fn combine_nullable_2_arg<I1: ArgType, I2: ArgType, O: ArgType>(
 ) -> impl for<'a> Fn(
     ValueRef<'a, NullableType<I1>>,
     ValueRef<'a, NullableType<I2>>,
-    FunctionContext,
+    EvalContext,
 ) -> Result<Value<NullableType<O>>, String>
 + Copy
 + Send
@@ -4760,7 +4735,7 @@ pub fn combine_nullable_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgType>
         ValueRef<'a, I1>,
         ValueRef<'a, I2>,
         ValueRef<'a, I3>,
-        FunctionContext,
+        EvalContext,
     ) -> Result<Value<NullableType<O>>, String>
     + Copy
     + Send
@@ -4769,7 +4744,7 @@ pub fn combine_nullable_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgType>
     ValueRef<'a, NullableType<I1>>,
     ValueRef<'a, NullableType<I2>>,
     ValueRef<'a, NullableType<I3>>,
-    FunctionContext,
+    EvalContext,
 ) -> Result<Value<NullableType<O>>, String>
 + Copy
 + Send
@@ -4924,7 +4899,7 @@ pub fn combine_nullable_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType
         ValueRef<'a, I2>,
         ValueRef<'a, I3>,
         ValueRef<'a, I4>,
-        FunctionContext,
+        EvalContext,
     ) -> Result<Value<NullableType<O>>, String>
     + Copy
     + Send
@@ -4934,7 +4909,7 @@ pub fn combine_nullable_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType
     ValueRef<'a, NullableType<I2>>,
     ValueRef<'a, NullableType<I3>>,
     ValueRef<'a, NullableType<I4>>,
-    FunctionContext,
+    EvalContext,
 ) -> Result<Value<NullableType<O>>, String>
 + Copy
 + Send
@@ -5347,7 +5322,7 @@ pub fn combine_nullable_5_arg<
         ValueRef<'a, I3>,
         ValueRef<'a, I4>,
         ValueRef<'a, I5>,
-        FunctionContext,
+        EvalContext,
     ) -> Result<Value<NullableType<O>>, String>
     + Copy
     + Send
@@ -5358,7 +5333,7 @@ pub fn combine_nullable_5_arg<
     ValueRef<'a, NullableType<I3>>,
     ValueRef<'a, NullableType<I4>>,
     ValueRef<'a, NullableType<I5>>,
-    FunctionContext,
+    EvalContext,
 ) -> Result<Value<NullableType<O>>, String>
 + Copy
 + Send
@@ -6330,14 +6305,14 @@ fn erase_calc_domain_generic_5_arg<
 }
 
 fn erase_function_generic_0_arg<O: ArgType>(
-    func: impl for<'a> Fn(FunctionContext) -> Result<Value<O>, String>,
-) -> impl Fn(&[ValueRef<AnyType>], FunctionContext) -> Result<Value<AnyType>, String> {
+    func: impl for<'a> Fn(EvalContext) -> Result<Value<O>, String>,
+) -> impl Fn(&[ValueRef<AnyType>], EvalContext) -> Result<Value<AnyType>, String> {
     move |args, ctx| func(ctx).map(Value::upcast)
 }
 
 fn erase_function_generic_1_arg<I1: ArgType, O: ArgType>(
-    func: impl for<'a> Fn(ValueRef<'a, I1>, FunctionContext) -> Result<Value<O>, String>,
-) -> impl Fn(&[ValueRef<AnyType>], FunctionContext) -> Result<Value<AnyType>, String> {
+    func: impl for<'a> Fn(ValueRef<'a, I1>, EvalContext) -> Result<Value<O>, String>,
+) -> impl Fn(&[ValueRef<AnyType>], EvalContext) -> Result<Value<AnyType>, String> {
     move |args, ctx| {
         let arg1 = args[0].try_downcast().unwrap();
         func(arg1, ctx).map(Value::upcast)
@@ -6345,12 +6320,8 @@ fn erase_function_generic_1_arg<I1: ArgType, O: ArgType>(
 }
 
 fn erase_function_generic_2_arg<I1: ArgType, I2: ArgType, O: ArgType>(
-    func: impl for<'a> Fn(
-        ValueRef<'a, I1>,
-        ValueRef<'a, I2>,
-        FunctionContext,
-    ) -> Result<Value<O>, String>,
-) -> impl Fn(&[ValueRef<AnyType>], FunctionContext) -> Result<Value<AnyType>, String> {
+    func: impl for<'a> Fn(ValueRef<'a, I1>, ValueRef<'a, I2>, EvalContext) -> Result<Value<O>, String>,
+) -> impl Fn(&[ValueRef<AnyType>], EvalContext) -> Result<Value<AnyType>, String> {
     move |args, ctx| {
         let arg1 = args[0].try_downcast().unwrap();
         let arg2 = args[1].try_downcast().unwrap();
@@ -6363,9 +6334,9 @@ fn erase_function_generic_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgTyp
         ValueRef<'a, I1>,
         ValueRef<'a, I2>,
         ValueRef<'a, I3>,
-        FunctionContext,
+        EvalContext,
     ) -> Result<Value<O>, String>,
-) -> impl Fn(&[ValueRef<AnyType>], FunctionContext) -> Result<Value<AnyType>, String> {
+) -> impl Fn(&[ValueRef<AnyType>], EvalContext) -> Result<Value<AnyType>, String> {
     move |args, ctx| {
         let arg1 = args[0].try_downcast().unwrap();
         let arg2 = args[1].try_downcast().unwrap();
@@ -6380,9 +6351,9 @@ fn erase_function_generic_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgTy
         ValueRef<'a, I2>,
         ValueRef<'a, I3>,
         ValueRef<'a, I4>,
-        FunctionContext,
+        EvalContext,
     ) -> Result<Value<O>, String>,
-) -> impl Fn(&[ValueRef<AnyType>], FunctionContext) -> Result<Value<AnyType>, String> {
+) -> impl Fn(&[ValueRef<AnyType>], EvalContext) -> Result<Value<AnyType>, String> {
     move |args, ctx| {
         let arg1 = args[0].try_downcast().unwrap();
         let arg2 = args[1].try_downcast().unwrap();
@@ -6406,9 +6377,9 @@ fn erase_function_generic_5_arg<
         ValueRef<'a, I3>,
         ValueRef<'a, I4>,
         ValueRef<'a, I5>,
-        FunctionContext,
+        EvalContext,
     ) -> Result<Value<O>, String>,
-) -> impl Fn(&[ValueRef<AnyType>], FunctionContext) -> Result<Value<AnyType>, String> {
+) -> impl Fn(&[ValueRef<AnyType>], EvalContext) -> Result<Value<AnyType>, String> {
     move |args, ctx| {
         let arg1 = args[0].try_downcast().unwrap();
         let arg2 = args[1].try_downcast().unwrap();
