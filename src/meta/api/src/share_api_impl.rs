@@ -600,6 +600,16 @@ impl<KV: KVApi> ShareApi for KV {
                     txn_op_put(&id_key, serialize_struct(&share_meta)?), /* (share_id) -> share_meta */
                     txn_op_put(&object, serialize_struct(&share_ids)?),  /* (object) -> share_ids */
                 ];
+                // Some database has been created before `DatabaseIdToName`, so create it if need.
+                create_db_name_to_id_key_if_need(
+                    self,
+                    &seq_and_id,
+                    &share_name_key.tenant,
+                    &req.object,
+                    &mut condition,
+                    &mut if_then,
+                )
+                .await?;
                 add_grant_object_txn_if_then(share_id, seq_and_id.clone(), &mut if_then)?;
 
                 let txn_req = TxnRequest {
@@ -1043,6 +1053,50 @@ async fn get_outbound_share_infos_by_tenant(
     Ok(outbound_share_accounts)
 }
 
+async fn get_inbound_share_info_by_tenant(
+    kv_api: &(impl KVApi + ?Sized),
+    tenant: &String,
+    share_account: ShareAccountNameIdent,
+) -> Result<ShareAccountReply, KVAppError> {
+    let share_id = share_account.share_id;
+    let (_share_meta_seq, share_meta) = get_share_meta_by_id_or_err(
+        kv_api,
+        share_id,
+        format!("get_inbound_share_infos_by_tenant: {}", share_id),
+    )
+    .await?;
+
+    let (_seq, share_name) = get_share_id_to_name_or_err(
+        kv_api,
+        share_id,
+        format!("get_inbound_share_infos_by_tenant: {}", share_id),
+    )
+    .await?;
+    let database_name = get_share_database_name(kv_api, &share_meta, &share_name).await?;
+
+    let share_account_key = ShareAccountNameIdent {
+        account: tenant.clone(),
+        share_id,
+    };
+    let (_seq, meta) = get_share_account_meta_or_err(
+        kv_api,
+        &share_account_key,
+        format!(
+            "get_inbound_share_infos_by_tenant's account: {}/{}",
+            share_id, tenant
+        ),
+    )
+    .await?;
+
+    Ok(ShareAccountReply {
+        share_name,
+        database_name,
+        create_on: meta.share_on,
+        accounts: None,
+        comment: share_meta.comment.clone(),
+    })
+}
+
 async fn get_inbound_share_infos_by_tenant(
     kv_api: &(impl KVApi + ?Sized),
     tenant: &String,
@@ -1055,43 +1109,11 @@ async fn get_inbound_share_infos_by_tenant(
     };
     let share_accounts = list_keys(kv_api, &tenant_share_name_key).await?;
     for share_account in share_accounts {
-        let share_id = share_account.share_id;
-        let (_share_meta_seq, share_meta) = get_share_meta_by_id_or_err(
-            kv_api,
-            share_id,
-            format!("get_inbound_share_infos_by_tenant: {}", share_id),
-        )
-        .await?;
+        let reply = get_inbound_share_info_by_tenant(kv_api, tenant, share_account).await;
 
-        let (_seq, share_name) = get_share_id_to_name_or_err(
-            kv_api,
-            share_id,
-            format!("get_inbound_share_infos_by_tenant: {}", share_id),
-        )
-        .await?;
-        let database_name = get_share_database_name(kv_api, &share_meta, &share_name).await?;
-
-        let share_account_key = ShareAccountNameIdent {
-            account: tenant.clone(),
-            share_id,
+        if let Ok(reply) = reply {
+            inbound_share_accounts.push(reply);
         };
-        let (_seq, meta) = get_share_account_meta_or_err(
-            kv_api,
-            &share_account_key,
-            format!(
-                "get_inbound_share_infos_by_tenant's account: {}/{}",
-                share_id, tenant
-            ),
-        )
-        .await?;
-
-        inbound_share_accounts.push(ShareAccountReply {
-            share_name,
-            database_name,
-            create_on: meta.share_on,
-            accounts: None,
-            comment: share_meta.comment.clone(),
-        });
     }
     Ok(inbound_share_accounts)
 }
@@ -1124,6 +1146,33 @@ async fn get_object_name_from_id(
             }
         }
     }
+}
+
+async fn create_db_name_to_id_key_if_need(
+    kv_api: &(impl KVApi + ?Sized),
+    seq_and_id: &ShareGrantObjectSeqAndId,
+    tenant: &str,
+    obj_name: &ShareGrantObjectName,
+    condition: &mut Vec<TxnCondition>,
+    if_then: &mut Vec<TxnOp>,
+) -> Result<(), KVAppError> {
+    if let ShareGrantObjectName::Database(db) = obj_name {
+        if let ShareGrantObjectSeqAndId::Database(_, db_id, _) = seq_and_id {
+            let db_id_key = DatabaseIdToName { db_id: *db_id };
+            let (db_name_seq, _): (_, Option<DatabaseNameIdent>) =
+                get_struct_value(kv_api, &db_id_key).await?;
+            if db_name_seq == 0 {
+                condition.push(txn_cond_seq(&db_id_key, Eq, 0));
+
+                let name_key = DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db.clone(),
+                };
+                if_then.push(txn_op_put(&db_id_key, serialize_struct(&name_key)?));
+            }
+        }
+    };
+    Ok(())
 }
 
 fn check_share_object(
