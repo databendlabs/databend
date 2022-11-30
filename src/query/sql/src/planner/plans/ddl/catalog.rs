@@ -12,14 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
 
-use common_datavalues::DataSchema;
-use common_datavalues::DataSchemaRef;
+
+
+
 use common_meta_app::schema::CatalogMeta;
 use common_meta_app::schema::CatalogNameIdent;
 use common_meta_app::schema::CreateCatalogReq;
 use common_meta_app::schema::DropCatalogReq;
+use crate::NameAndDataTypes;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateCatalogPlan {
@@ -56,8 +57,8 @@ impl From<&CreateCatalogPlan> for CreateCatalogReq {
 }
 
 impl CreateCatalogPlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
+    pub fn schema(&self) -> NameAndDataTypes {
+        Default::default()
     }
 }
 
@@ -69,8 +70,8 @@ pub struct DropCatalogPlan {
 }
 
 impl DropCatalogPlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
+    pub fn schema(&self) -> NameAndDataTypes {
+        Default::default()
     }
 }
 
@@ -101,11 +102,11 @@ impl From<&DropCatalogPlan> for DropCatalogReq {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ShowCreateCatalogPlan {
     pub catalog: String,
-    pub schema: DataSchemaRef,
+    pub schema: NameAndDataTypes,
 }
 
 impl ShowCreateCatalogPlan {
-    pub fn schema(&self) -> DataSchemaRef {
+    pub fn schema(&self) -> NameAndDataTypes {
         self.schema.clone()
     }
 }

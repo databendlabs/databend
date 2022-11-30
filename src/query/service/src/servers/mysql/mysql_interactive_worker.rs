@@ -39,6 +39,7 @@ use rand::RngCore;
 use tracing::error;
 use tracing::info;
 use tracing::Instrument;
+use common_sql::to_data_schema;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
@@ -192,7 +193,7 @@ impl<W: AsyncWrite + Send + Sync + Unpin> AsyncMysqlShim<W> for InteractiveWorke
 
     /// https://dev.mysql.com/doc/internals/en/com-stmt-close.html
     async fn on_close<'a>(&'a mut self, stmt_id: u32)
-    where W: 'async_trait {
+        where W: 'async_trait {
         self.base.do_close(stmt_id).await;
     }
 
@@ -342,7 +343,7 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
                     Ok(interpreter) => {
                         let (blocks, extra_info) =
                             Self::exec_query(interpreter.clone(), &context).await?;
-                        let schema = interpreter.schema();
+                        let schema = to_data_schema(&interpreter.schema());
                         Ok(QueryResult::create(
                             blocks,
                             extra_info,
@@ -388,7 +389,7 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
 
                 Ok::<_, ErrorCode>(intercepted_stream.boxed())
             }
-            .in_current_span()
+                .in_current_span()
         })?;
 
         let query_result = query_result.await.map_err_to_code(

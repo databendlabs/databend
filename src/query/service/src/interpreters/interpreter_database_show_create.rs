@@ -19,6 +19,7 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_sql::plans::ShowCreateDatabasePlan;
+use common_sql::{NameAndDataTypes, to_data_schema};
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -42,7 +43,7 @@ impl Interpreter for ShowCreateDatabaseInterpreter {
         "ShowCreateDatabaseInterpreter"
     }
 
-    fn schema(&self) -> DataSchemaRef {
+    fn schema(&self) -> NameAndDataTypes {
         self.plan.schema()
     }
 
@@ -70,7 +71,7 @@ impl Interpreter for ShowCreateDatabaseInterpreter {
             }
         }
 
-        PipelineBuildResult::from_blocks(vec![DataBlock::create(self.plan.schema(), vec![
+        PipelineBuildResult::from_blocks(vec![DataBlock::create(to_data_schema(&self.plan.schema()), vec![
             Series::from_data(vec![name.as_bytes()]),
             Series::from_data(vec![info.into_bytes()]),
         ])])

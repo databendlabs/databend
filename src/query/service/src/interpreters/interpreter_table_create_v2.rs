@@ -21,6 +21,7 @@ use common_exception::Result;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TableNameIdent;
+use common_sql::{NameAndDataTypes, to_data_schema};
 use common_sql::plans::CreateTablePlanV2;
 use common_users::UserApiProvider;
 
@@ -128,8 +129,7 @@ impl CreateTableInterpreterV2 {
         // For the situation above, we implicitly cast the data type when inserting data.
         // The casting and schema checking is in interpreter_insert.rs, function check_schema_cast.
         let table_schema = table.schema();
-        let select_fields: Vec<DataField> = select_plan
-            .schema()
+        let select_fields: Vec<DataField> = to_data_schema(&select_plan.schema())
             .fields()
             .iter()
             .filter_map(|f| table_schema.field_with_name(f.name()).ok())
@@ -167,9 +167,10 @@ impl CreateTableInterpreterV2 {
         let input_schema = self.plan.schema.clone();
         for (idx, field) in self.plan.schema.fields().clone().into_iter().enumerate() {
             let field = if let Some(Some(scalar)) = &self.plan.field_default_exprs.get(idx) {
-                let mut builder = PhysicalScalarBuilder::new(&input_schema);
-                let physical_scaler = builder.build(scalar)?;
-                field.with_default_expr(Some(serde_json::to_string(&physical_scaler)?))
+                let schema = &NameAndDataTypes::from(&input_schema);
+                let mut builder = PhysicalScalarBuilder::new(schema);
+                let physical_scalar = builder.build(scalar)?;
+                field.with_default_expr(Some(serde_json::to_string(&physical_scalar)?))
             } else {
                 field
             };

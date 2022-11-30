@@ -18,6 +18,7 @@ use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_meta_types::MetaId;
 use common_pipeline_sources::processors::sources::input_formats::InputContext;
+use crate::NameAndDataTypes;
 
 use super::Plan;
 
@@ -56,8 +57,8 @@ impl PartialEq for Insert {
 }
 
 impl Insert {
-    pub fn schema(&self) -> DataSchemaRef {
-        self.schema.clone()
+    pub fn schema(&self) -> NameAndDataTypes {
+        Default::default()
     }
 
     pub fn has_select_plan(&self) -> bool {

@@ -14,9 +14,9 @@
 
 use std::sync::Arc;
 
-use common_datavalues::DataSchemaRef;
+
 use common_exception::Result;
-use common_sql::MetadataRef;
+use common_sql::{MetadataRef, NameAndDataTypes};
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -72,7 +72,7 @@ impl Interpreter for SelectInterpreterV2 {
         "SelectInterpreterV2"
     }
 
-    fn schema(&self) -> DataSchemaRef {
+    fn schema(&self) -> NameAndDataTypes {
         self.bind_context.output_schema()
     }
 

@@ -11,10 +11,11 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-use std::sync::Arc;
+
 
 use common_datavalues::prelude::*;
 use common_meta_types::UserStageInfo;
+use crate::{NameAndDataType, NameAndDataTypes};
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct ListPlan {
@@ -24,19 +25,19 @@ pub struct ListPlan {
 }
 
 impl ListPlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        let name = DataField::new("name", Vu8::to_data_type());
-        let size = DataField::new("size", u64::to_data_type());
-        let md5 = DataField::new_nullable("md5", Vu8::to_data_type());
-        let last_modified = DataField::new("last_modified", Vu8::to_data_type());
-        let creator = DataField::new_nullable("creator", Vu8::to_data_type());
+    pub fn schema(&self) -> NameAndDataTypes {
+        let name = NameAndDataType::new("name", Vu8::to_data_type());
+        let size = NameAndDataType::new("size", u64::to_data_type());
+        let md5 = NameAndDataType::new("md5", wrap_nullable(&Vu8::to_data_type()));
+        let last_modified = NameAndDataType::new("last_modified", Vu8::to_data_type());
+        let creator = NameAndDataType::new("creator", wrap_nullable(&Vu8::to_data_type()));
 
-        Arc::new(DataSchema::new(vec![
+        NameAndDataTypes::new(vec![
             name,
             size,
             md5,
             last_modified,
             creator,
-        ]))
+        ])
     }
 }

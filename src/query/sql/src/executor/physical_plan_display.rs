@@ -100,8 +100,7 @@ impl Display for Project {
                 .projections
                 .iter()
                 .sorted()
-                .map(|idx| input_schema.field(*idx).name())
-                .cloned()
+                .map(|idx| input_schema[*idx].name.clone())
                 .collect::<Vec<String>>();
 
             return write!(f, "Project: [{}]", project_columns_name.join(", "));

@@ -18,9 +18,9 @@ use std::sync::Arc;
 use common_ast::ast::TableAlias;
 use common_ast::parser::token::Token;
 use common_ast::DisplayError;
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataSchemaRefExt;
+
+
+
 use common_datavalues::DataTypeImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -32,6 +32,7 @@ use crate::optimizer::SExpr;
 use crate::plans::Scalar;
 use crate::IndexType;
 use crate::NameResolutionContext;
+use crate::planner::utils::{NameAndDataType, NameAndDataTypes};
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub enum Visibility {
@@ -250,24 +251,24 @@ impl BindContext {
         ) {
             // No qualified table name specified
             ((None, _), (None, None)) | ((None, _), (None, Some(_)))
-                if column == column_binding.column_name =>
-            {
-                column_binding.visibility != Visibility::UnqualifiedWildcardInVisible
-            }
+            if column == column_binding.column_name =>
+                {
+                    column_binding.visibility != Visibility::UnqualifiedWildcardInVisible
+                }
 
             // Qualified column reference without database name
             ((None, _), (Some(table), Some(table_name)))
-                if table == table_name && column == column_binding.column_name =>
-            {
-                true
-            }
+            if table == table_name && column == column_binding.column_name =>
+                {
+                    true
+                }
 
             // Qualified column reference with database name
             ((Some(db), Some(db_name)), (Some(table), Some(table_name)))
-                if db == db_name && table == table_name && column == column_binding.column_name =>
-            {
-                true
-            }
+            if db == db_name && table == table_name && column == column_binding.column_name =>
+                {
+                    true
+                }
             _ => false,
         }
     }
@@ -286,18 +287,17 @@ impl BindContext {
     }
 
     /// Return data scheme.
-    pub fn output_schema(&self) -> DataSchemaRef {
-        let fields = self
+    pub fn output_schema(&self) -> NameAndDataTypes {
+        NameAndDataTypes::new(self
             .columns
             .iter()
             .map(|column_binding| {
-                DataField::new(
-                    &column_binding.column_name,
-                    *column_binding.data_type.clone(),
-                )
+                NameAndDataType {
+                    name: column_binding.column_name.clone(),
+                    data_type: *column_binding.data_type.clone(),
+                }
             })
-            .collect();
-        DataSchemaRefExt::create(fields)
+            .collect::<Vec<_>>())
     }
 }
 

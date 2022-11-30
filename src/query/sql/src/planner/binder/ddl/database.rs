@@ -25,8 +25,8 @@ use common_ast::ast::ShowCreateDatabaseStmt;
 use common_ast::ast::ShowDatabasesStmt;
 use common_ast::ast::ShowLimit;
 use common_ast::ast::UndropDatabaseStmt;
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRefExt;
+
+
 use common_datavalues::ToDataType;
 use common_datavalues::Vu8;
 use common_exception::Result;
@@ -43,7 +43,7 @@ use crate::plans::RenameDatabasePlan;
 use crate::plans::RewriteKind;
 use crate::plans::ShowCreateDatabasePlan;
 use crate::plans::UndropDatabasePlan;
-use crate::BindContext;
+use crate::{BindContext, NameAndDataType, NameAndDataTypes};
 
 impl<'a> Binder {
     pub(in crate::planner::binder) async fn bind_show_databases(
@@ -80,15 +80,15 @@ impl<'a> Binder {
             .map(|catalog| normalize_identifier(catalog, &self.name_resolution_ctx).name)
             .unwrap_or_else(|| self.ctx.get_current_catalog());
         let database = normalize_identifier(database, &self.name_resolution_ctx).name;
-        let schema = DataSchemaRefExt::create(vec![
-            DataField::new("Database", Vu8::to_data_type()),
-            DataField::new("Create Database", Vu8::to_data_type()),
-        ]);
+        let schema = vec![
+            NameAndDataType::new("Database", Vu8::to_data_type()),
+            NameAndDataType::new("Create Database", Vu8::to_data_type()),
+        ];
 
         Ok(Plan::ShowCreateDatabase(Box::new(ShowCreateDatabasePlan {
             catalog,
             database,
-            schema,
+            schema: NameAndDataTypes::new(schema),
         })))
     }
 

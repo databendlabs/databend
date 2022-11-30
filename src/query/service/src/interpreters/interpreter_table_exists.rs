@@ -19,6 +19,7 @@ use common_datavalues::Series;
 use common_datavalues::SeriesFrom;
 use common_exception::Result;
 use common_sql::plans::ExistsTablePlan;
+use common_sql::to_data_schema;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -52,7 +53,7 @@ impl Interpreter for ExistsTableInterpreter {
             false => 0u8,
         };
 
-        PipelineBuildResult::from_blocks(vec![DataBlock::create(self.plan.schema(), vec![
+        PipelineBuildResult::from_blocks(vec![DataBlock::create(to_data_schema(&self.plan.schema()), vec![
             Series::from_data(vec![result]),
         ])])
     }

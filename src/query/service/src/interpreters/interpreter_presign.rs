@@ -20,6 +20,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_storages_stage::StageTable;
 use serde_json::Value;
+use common_sql::{NameAndDataTypes, to_data_schema};
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -46,7 +47,7 @@ impl Interpreter for PresignInterpreter {
         "PresignInterpreter"
     }
 
-    fn schema(&self) -> DataSchemaRef {
+    fn schema(&self) -> NameAndDataTypes {
         self.plan.schema()
     }
 
@@ -65,7 +66,7 @@ impl Interpreter for PresignInterpreter {
             PresignAction::Upload => o.presign_write(self.plan.expire)?,
         };
 
-        let block = DataBlock::create(self.plan.schema(), vec![
+        let block = DataBlock::create(to_data_schema(&self.plan.schema()), vec![
             Series::from_data(vec![presigned_req.method().as_str()]),
             Series::from_data(vec![VariantValue(Value::Object(
                 presigned_req

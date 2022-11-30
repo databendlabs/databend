@@ -12,15 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
 
-use common_datavalues::DataSchema;
-use common_datavalues::DataSchemaRef;
+
+
+
 use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::DatabaseMeta;
 use common_meta_app::schema::DatabaseNameIdent;
 use common_meta_app::schema::DropDatabaseReq;
 use common_meta_app::schema::UndropDatabaseReq;
+use crate::NameAndDataTypes;
 
 /// Create.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -59,8 +60,8 @@ impl From<&CreateDatabasePlan> for CreateDatabaseReq {
 }
 
 impl CreateDatabasePlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
+    pub fn schema(&self) -> NameAndDataTypes {
+        Default::default()
     }
 }
 
@@ -74,8 +75,8 @@ pub struct DropDatabasePlan {
 }
 
 impl DropDatabasePlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
+    pub fn schema(&self) -> NameAndDataTypes {
+        Default::default()
     }
 }
 
@@ -119,8 +120,8 @@ pub struct RenameDatabaseEntity {
 }
 
 impl RenameDatabasePlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
+    pub fn schema(&self) -> NameAndDataTypes {
+        Default::default()
     }
 }
 
@@ -133,8 +134,8 @@ pub struct UndropDatabasePlan {
 }
 
 impl UndropDatabasePlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
+    pub fn schema(&self) -> NameAndDataTypes {
+        Default::default()
     }
 }
 
@@ -156,8 +157,8 @@ pub struct UseDatabasePlan {
 }
 
 impl UseDatabasePlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
+    pub fn schema(&self) -> NameAndDataTypes {
+        Default::default()
     }
 }
 
@@ -166,11 +167,11 @@ impl UseDatabasePlan {
 pub struct ShowCreateDatabasePlan {
     pub catalog: String,
     pub database: String,
-    pub schema: DataSchemaRef,
+    pub schema: NameAndDataTypes,
 }
 
 impl ShowCreateDatabasePlan {
-    pub fn schema(&self) -> DataSchemaRef {
+    pub fn schema(&self) -> NameAndDataTypes {
         self.schema.clone()
     }
 }

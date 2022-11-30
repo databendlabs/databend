@@ -19,7 +19,7 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_sql::MetadataRef;
+use common_sql::{MetadataRef, NameAndDataType, NameAndDataTypes, to_data_schema};
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -34,7 +34,7 @@ use crate::sql::plans::Plan;
 
 pub struct ExplainInterpreter {
     ctx: Arc<QueryContext>,
-    schema: DataSchemaRef,
+    schema: NameAndDataTypes,
     kind: ExplainKind,
     plan: Plan,
 }
@@ -45,7 +45,7 @@ impl Interpreter for ExplainInterpreter {
         "ExplainInterpreterV2"
     }
 
-    fn schema(&self) -> DataSchemaRef {
+    fn schema(&self) -> NameAndDataTypes {
         self.schema.clone()
     }
 
@@ -106,7 +106,7 @@ impl Interpreter for ExplainInterpreter {
             | ExplainKind::Memo(display_string) => {
                 let line_splitted_result: Vec<&str> = display_string.lines().collect();
                 let column = Series::from_data(line_splitted_result);
-                vec![DataBlock::create(self.schema.clone(), vec![column])]
+                vec![DataBlock::create(to_data_schema(&self.schema), vec![column])]
             }
         };
 
@@ -116,8 +116,8 @@ impl Interpreter for ExplainInterpreter {
 
 impl ExplainInterpreter {
     pub fn try_create(ctx: Arc<QueryContext>, plan: Plan, kind: ExplainKind) -> Result<Self> {
-        let data_field = DataField::new("explain", DataTypeImpl::String(StringType::default()));
-        let schema = DataSchemaRefExt::create(vec![data_field]);
+        let data_field = NameAndDataType::new("explain", DataTypeImpl::String(StringType::default()));
+        let schema = NameAndDataTypes::new(vec![data_field]);
         Ok(ExplainInterpreter {
             ctx,
             schema,
@@ -130,7 +130,7 @@ impl ExplainInterpreter {
         let result = plan.format_indent()?;
         let line_splitted_result: Vec<&str> = result.lines().collect();
         let formatted_plan = Series::from_data(line_splitted_result);
-        Ok(vec![DataBlock::create(self.schema.clone(), vec![
+        Ok(vec![DataBlock::create(to_data_schema(&self.schema), vec![
             formatted_plan,
         ])])
     }
@@ -143,7 +143,7 @@ impl ExplainInterpreter {
         let result = plan.format(metadata.clone())?;
         let line_splitted_result: Vec<&str> = result.lines().collect();
         let formatted_plan = Series::from_data(line_splitted_result);
-        Ok(vec![DataBlock::create(self.schema.clone(), vec![
+        Ok(vec![DataBlock::create(to_data_schema(&self.schema), vec![
             formatted_plan,
         ])])
     }
@@ -160,7 +160,7 @@ impl ExplainInterpreter {
 
         let mut blocks = vec![];
         // Format root pipeline
-        blocks.push(DataBlock::create(self.schema.clone(), vec![
+        blocks.push(DataBlock::create(to_data_schema(&self.schema), vec![
             Series::from_data(
                 format!("{}", build_res.main_pipeline.display_indent())
                     .lines()
@@ -170,7 +170,7 @@ impl ExplainInterpreter {
         ]));
         // Format child pipelines
         for pipeline in build_res.sources_pipelines.iter() {
-            blocks.push(DataBlock::create(self.schema.clone(), vec![
+            blocks.push(DataBlock::create(to_data_schema(&self.schema), vec![
                 Series::from_data(
                     format!("\n{}", pipeline.display_indent())
                         .lines()
@@ -204,7 +204,7 @@ impl ExplainInterpreter {
                 .map(|s| s.as_bytes())
                 .collect::<Vec<_>>(),
         );
-        Ok(vec![DataBlock::create(self.schema.clone(), vec![
+        Ok(vec![DataBlock::create(to_data_schema(&self.schema), vec![
             formatted_fragments,
         ])])
     }

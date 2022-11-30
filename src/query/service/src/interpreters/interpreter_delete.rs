@@ -14,8 +14,9 @@
 
 use std::sync::Arc;
 
-use common_datavalues::DataSchemaRef;
+
 use common_exception::Result;
+use common_sql::NameAndDataTypes;
 use common_sql::plans::DeletePlan;
 
 use crate::interpreters::Interpreter;
@@ -44,7 +45,7 @@ impl Interpreter for DeleteInterpreter {
     }
 
     /// Get the schema of SelectPlan
-    fn schema(&self) -> DataSchemaRef {
+    fn schema(&self) -> NameAndDataTypes {
         self.plan.schema()
     }
 

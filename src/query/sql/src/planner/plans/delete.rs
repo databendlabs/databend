@@ -12,12 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
+
 
 use common_catalog::plan::Projection;
-use common_datavalues::DataSchema;
-use common_datavalues::DataSchemaRef;
+
+
 use common_meta_app::schema::TableIdent;
+use crate::NameAndDataTypes;
 
 /// # TODO
 ///
@@ -45,7 +46,7 @@ pub struct DeletePlan {
 }
 
 impl DeletePlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
+    pub fn schema(&self) -> NameAndDataTypes {
+        Default::default()
     }
 }

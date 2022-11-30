@@ -14,10 +14,10 @@
 
 use std::sync::Arc;
 
-use common_datavalues::DataField;
+
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
-use common_datavalues::DataSchemaRefExt;
+
 use common_datavalues::ToDataType;
 use common_datavalues::Vu8;
 use common_meta_types::AuthInfo;
@@ -26,6 +26,7 @@ use common_meta_types::PrincipalIdentity;
 use common_meta_types::UserIdentity;
 use common_meta_types::UserOption;
 use common_meta_types::UserPrivilegeSet;
+use crate::{NameAndDataType, NameAndDataTypes};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateUserPlan {
@@ -36,8 +37,8 @@ pub struct CreateUserPlan {
 }
 
 impl CreateUserPlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
+    pub fn schema(&self) -> NameAndDataTypes {
+        Default::default()
     }
 }
 
@@ -50,8 +51,8 @@ pub struct AlterUserPlan {
 }
 
 impl AlterUserPlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
+    pub fn schema(&self) -> NameAndDataTypes {
+        Default::default()
     }
 }
 
@@ -62,8 +63,8 @@ pub struct DropUserPlan {
 }
 
 impl DropUserPlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
+    pub fn schema(&self) -> NameAndDataTypes {
+        Default::default()
     }
 }
 
@@ -74,8 +75,8 @@ pub struct CreateRolePlan {
 }
 
 impl CreateRolePlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
+    pub fn schema(&self) -> NameAndDataTypes {
+        Default::default()
     }
 }
 
@@ -86,8 +87,8 @@ pub struct DropRolePlan {
 }
 
 impl DropRolePlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
+    pub fn schema(&self) -> NameAndDataTypes {
+        Default::default()
     }
 }
 
@@ -98,8 +99,8 @@ pub struct GrantRolePlan {
 }
 
 impl GrantRolePlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
+    pub fn schema(&self) -> NameAndDataTypes {
+        Default::default()
     }
 }
 
@@ -109,8 +110,8 @@ pub struct ShowGrantsPlan {
 }
 
 impl ShowGrantsPlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        DataSchemaRefExt::create(vec![DataField::new("Grants", Vu8::to_data_type())])
+    pub fn schema(&self) -> NameAndDataTypes {
+        NameAndDataTypes::new(vec![NameAndDataType::new("Grants", Vu8::to_data_type())])
     }
 }
 
@@ -133,8 +134,8 @@ pub struct SetRolePlan {
 }
 
 impl SetRolePlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
+    pub fn schema(&self) -> NameAndDataTypes {
+        Default::default()
     }
 }
 
@@ -142,12 +143,12 @@ impl SetRolePlan {
 pub struct ShowRolesPlan {}
 
 impl ShowRolesPlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        DataSchemaRefExt::create(vec![
-            DataField::new("name", Vu8::to_data_type()),
-            DataField::new("inherited_roles", u64::to_data_type()),
-            DataField::new("is_current", bool::to_data_type()),
-            DataField::new("is_default", bool::to_data_type()),
+    pub fn schema(&self) -> NameAndDataTypes {
+        NameAndDataTypes::new(vec![
+            NameAndDataType::new("name", Vu8::to_data_type()),
+            NameAndDataType::new("inherited_roles", u64::to_data_type()),
+            NameAndDataType::new("is_current", bool::to_data_type()),
+            NameAndDataType::new("is_default", bool::to_data_type()),
         ])
     }
 }
@@ -160,8 +161,8 @@ pub struct GrantPrivilegePlan {
 }
 
 impl GrantPrivilegePlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
+    pub fn schema(&self) -> NameAndDataTypes {
+        Default::default()
     }
 }
 

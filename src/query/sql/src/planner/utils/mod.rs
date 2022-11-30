@@ -12,26 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod name_and_type;
 
-
-
-
-use crate::plans::Scalar;
-use crate::{MetadataRef, NameAndDataTypes};
-
-#[derive(Clone, Debug)]
-pub struct ReclusterTablePlan {
-    pub tenant: String,
-    pub catalog: String,
-    pub database: String,
-    pub table: String,
-    pub is_final: bool,
-    pub metadata: MetadataRef,
-    pub push_downs: Option<Scalar>,
-}
-
-impl ReclusterTablePlan {
-    pub fn schema(&self) -> NameAndDataTypes {
-        Default::default()
-    }
-}
+pub use name_and_type::*;

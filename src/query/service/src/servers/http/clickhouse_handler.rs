@@ -49,6 +49,7 @@ use poem::Route;
 use serde::Deserialize;
 use serde::Serialize;
 use tracing::info;
+use common_sql::to_data_schema;
 
 use crate::interpreters::InterpreterFactory;
 use crate::interpreters::InterpreterPtr;
@@ -208,7 +209,7 @@ pub async fn clickhouse_handler_get(
     let interpreter = InterpreterFactory::get(context.clone(), &plan)
         .await
         .map_err(BadRequest)?;
-    execute(context, interpreter, plan.schema(), format, params, None)
+    execute(context, interpreter, to_data_schema(&plan.schema()), format, params, None)
         .await
         .map_err(InternalServerError)
 }
@@ -274,13 +275,13 @@ pub async fn clickhouse_handler_post(
                     format.as_str(),
                     rx,
                     ctx.get_settings(),
-                    schema,
+                    to_data_schema(&schema),
                     ctx.get_scan_progress(),
                     false,
                     to_table.get_block_compact_thresholds(),
                 )
-                .await
-                .map_err(InternalServerError)?,
+                    .await
+                    .map_err(InternalServerError)?,
             );
             *input_context_ref = Some(input_context.clone());
             info!(
@@ -297,7 +298,7 @@ pub async fn clickhouse_handler_post(
                     tx,
                     compression_alg,
                 )
-                .await
+                    .await
             }));
         }
     };
@@ -307,7 +308,7 @@ pub async fn clickhouse_handler_post(
         .await
         .map_err(BadRequest)?;
 
-    execute(ctx, interpreter, plan.schema(), format, params, handle)
+    execute(ctx, interpreter, to_data_schema(&plan.schema()), format, params, handle)
         .await
         .map_err(InternalServerError)
 }

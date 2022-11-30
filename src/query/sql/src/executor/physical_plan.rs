@@ -18,9 +18,9 @@ use common_catalog::plan::DataSourcePlan;
 use common_datablocks::DataBlock;
 use common_datavalues::wrap_nullable;
 use common_datavalues::BooleanType;
-use common_datavalues::DataField;
+
 use common_datavalues::DataSchemaRef;
-use common_datavalues::DataSchemaRefExt;
+
 use common_datavalues::NullableType;
 use common_datavalues::ToDataType;
 use common_datavalues::Vu8;
@@ -32,7 +32,7 @@ use super::SortDesc;
 use crate::executor::PhysicalScalar;
 use crate::optimizer::ColumnSet;
 use crate::plans::JoinType;
-use crate::ColumnBinding;
+use crate::{ColumnBinding, NameAndDataType, NameAndDataTypes, to_data_schema};
 use crate::IndexType;
 
 pub type ColumnID = String;
@@ -47,14 +47,14 @@ pub struct TableScan {
 }
 
 impl TableScan {
-    pub fn output_schema(&self) -> Result<DataSchemaRef> {
-        let mut fields = Vec::with_capacity(self.name_mapping.len());
+    pub fn output_schema(&self) -> Result<NameAndDataTypes> {
+        let mut name_and_types = Vec::with_capacity(self.name_mapping.len());
         let schema = self.source.schema();
         for (name, id) in self.name_mapping.iter() {
             let orig_field = schema.field_with_name(name)?;
-            fields.push(DataField::new(id.as_str(), orig_field.data_type().clone()));
+            name_and_types.push(NameAndDataType::new(id, orig_field.data_type().clone()));
         }
-        Ok(DataSchemaRefExt::create(fields))
+        Ok(NameAndDataTypes::new(name_and_types))
     }
 }
 
@@ -65,7 +65,7 @@ pub struct Filter {
 }
 
 impl Filter {
-    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+    pub fn output_schema(&self) -> Result<NameAndDataTypes> {
         self.input.output_schema()
     }
 }
@@ -80,13 +80,13 @@ pub struct Project {
 }
 
 impl Project {
-    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+    pub fn output_schema(&self) -> Result<NameAndDataTypes> {
         let input_schema = self.input.output_schema()?;
-        let mut fields = Vec::new();
+        let mut name_and_types = Vec::new();
         for i in self.projections.iter() {
-            fields.push(input_schema.field(*i).clone());
+            name_and_types.push(input_schema[*i].clone());
         }
-        Ok(DataSchemaRefExt::create(fields))
+        Ok(NameAndDataTypes::new(name_and_types))
     }
 }
 
@@ -97,14 +97,13 @@ pub struct EvalScalar {
 }
 
 impl EvalScalar {
-    pub fn output_schema(&self) -> Result<DataSchemaRef> {
-        let input_schema = self.input.output_schema()?;
-        let mut fields = input_schema.fields().clone();
+    pub fn output_schema(&self) -> Result<NameAndDataTypes> {
+        let mut name_and_types = self.input.output_schema()?;
         for (scalar, name) in self.scalars.iter() {
             let data_type = scalar.data_type();
-            fields.push(DataField::new(name, data_type));
+            name_and_types.inner_mut().push(NameAndDataType::new(name, data_type));
         }
-        Ok(DataSchemaRefExt::create(fields))
+        Ok(name_and_types)
     }
 }
 
@@ -116,25 +115,26 @@ pub struct AggregatePartial {
 }
 
 impl AggregatePartial {
-    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+    pub fn output_schema(&self) -> Result<NameAndDataTypes> {
         let input_schema = self.input.output_schema()?;
-        let mut fields = Vec::with_capacity(self.agg_funcs.len() + self.group_by.len());
+        let mut name_and_types = Vec::with_capacity(self.agg_funcs.len() + self.group_by.len());
         for agg in self.agg_funcs.iter() {
-            fields.push(DataField::new(agg.column_id.as_str(), Vu8::to_data_type()));
+            name_and_types.push(NameAndDataType::new(agg.column_id.as_str(), Vu8::to_data_type()));
         }
         if !self.group_by.is_empty() {
-            let sample_block = DataBlock::empty_with_schema(input_schema.clone());
+            let data_schema = to_data_schema(&input_schema);
+            let sample_block = DataBlock::empty_with_schema(data_schema.clone());
             let method = DataBlock::choose_hash_method(
                 &sample_block,
                 &self
                     .group_by
                     .iter()
-                    .map(|name| input_schema.index_of(name))
+                    .map(|name| data_schema.index_of(name))
                     .collect::<Result<Vec<_>>>()?,
             )?;
-            fields.push(DataField::new("_group_by_key", method.data_type()));
+            name_and_types.push(NameAndDataType::new("_group_by_key", method.data_type()));
         }
-        Ok(DataSchemaRefExt::create(fields))
+        Ok(NameAndDataTypes::new(name_and_types))
     }
 }
 
@@ -147,11 +147,11 @@ pub struct AggregateFinal {
 }
 
 impl AggregateFinal {
-    pub fn output_schema(&self) -> Result<DataSchemaRef> {
-        let mut fields = Vec::with_capacity(self.agg_funcs.len() + self.group_by.len());
+    pub fn output_schema(&self) -> Result<NameAndDataTypes> {
+        let mut name_and_types = Vec::with_capacity(self.agg_funcs.len() + self.group_by.len());
         for agg in self.agg_funcs.iter() {
             let data_type = agg.sig.return_type.clone();
-            fields.push(DataField::new(agg.column_id.as_str(), data_type));
+            name_and_types.push(NameAndDataType::new(agg.column_id.as_str(), data_type));
         }
         for id in self.group_by.iter() {
             let data_type = self
@@ -159,9 +159,9 @@ impl AggregateFinal {
                 .field_with_name(id.as_str())?
                 .data_type()
                 .clone();
-            fields.push(DataField::new(id.as_str(), data_type));
+            name_and_types.push(NameAndDataType::new(id.as_str(), data_type));
         }
-        Ok(DataSchemaRefExt::create(fields))
+        Ok(NameAndDataTypes::new(name_and_types))
     }
 }
 
@@ -174,7 +174,7 @@ pub struct Sort {
 }
 
 impl Sort {
-    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+    pub fn output_schema(&self) -> Result<NameAndDataTypes> {
         self.input.output_schema()
     }
 }
@@ -187,7 +187,7 @@ pub struct Limit {
 }
 
 impl Limit {
-    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+    pub fn output_schema(&self) -> Result<NameAndDataTypes> {
         self.input.output_schema()
     }
 }
@@ -205,44 +205,44 @@ pub struct HashJoin {
 }
 
 impl HashJoin {
-    pub fn output_schema(&self) -> Result<DataSchemaRef> {
-        let mut fields = self.probe.output_schema()?.fields().clone();
+    pub fn output_schema(&self) -> Result<NameAndDataTypes> {
+        let mut name_and_types = self.probe.output_schema()?;
         match self.join_type {
             JoinType::Left | JoinType::Single => {
-                for field in self.build.output_schema()?.fields() {
-                    fields.push(DataField::new(
-                        field.name().as_str(),
-                        wrap_nullable(field.data_type()),
+                for name_and_type in self.build.output_schema()? {
+                    name_and_types.inner_mut().push(NameAndDataType::new(
+                        name_and_type.name.as_str(),
+                        wrap_nullable(&name_and_type.data_type),
                     ));
                 }
             }
             JoinType::Right => {
-                fields.clear();
-                for field in self.probe.output_schema()?.fields() {
-                    fields.push(DataField::new(
-                        field.name().as_str(),
-                        wrap_nullable(field.data_type()),
+                name_and_types.inner_mut().clear();
+                for name_and_type in self.probe.output_schema()? {
+                    name_and_types.inner_mut().push(NameAndDataType::new(
+                        name_and_type.name.as_str(),
+                        wrap_nullable(&name_and_type.data_type),
                     ));
                 }
-                for field in self.build.output_schema()?.fields() {
-                    fields.push(DataField::new(
-                        field.name().as_str(),
-                        field.data_type().clone(),
+                for name_and_type in self.build.output_schema()? {
+                    name_and_types.inner_mut().push(NameAndDataType::new(
+                        name_and_type.name.as_str(),
+                        wrap_nullable(&name_and_type.data_type),
                     ));
                 }
             }
             JoinType::Full => {
-                fields.clear();
-                for field in self.probe.output_schema()?.fields() {
-                    fields.push(DataField::new(
-                        field.name().as_str(),
-                        wrap_nullable(field.data_type()),
+                name_and_types.inner_mut().clear();
+                for name_and_type in self.probe.output_schema()? {
+                    name_and_types.inner_mut().push(NameAndDataType::new(
+                        name_and_type.name.as_str(),
+                        wrap_nullable(&name_and_type.data_type),
                     ));
                 }
-                for field in self.build.output_schema()?.fields() {
-                    fields.push(DataField::new(
-                        field.name().as_str(),
-                        wrap_nullable(field.data_type()),
+                for name_and_type in self.build.output_schema()? {
+                    name_and_types.inner_mut().push(NameAndDataType::new(
+                        name_and_type.name.as_str(),
+                        wrap_nullable(&name_and_type.data_type),
                     ));
                 }
             }
@@ -250,38 +250,38 @@ impl HashJoin {
                 // Do nothing
             }
             JoinType::RightSemi | JoinType::RightAnti => {
-                fields.clear();
-                fields = self.build.output_schema()?.fields().clone();
+                name_and_types.inner_mut().clear();
+                name_and_types = self.build.output_schema()?;
             }
             JoinType::LeftMark | JoinType::RightMark => {
-                fields.clear();
+                name_and_types.inner_mut().clear();
                 let outer_table = if self.join_type == JoinType::RightMark {
                     &self.probe
                 } else {
                     &self.build
                 };
-                fields = outer_table.output_schema()?.fields().clone();
+                name_and_types = outer_table.output_schema()?;
                 let name = if let Some(idx) = self.marker_index {
                     idx.to_string()
                 } else {
                     "marker".to_string()
                 };
-                fields.push(DataField::new(
+                name_and_types.inner_mut().push(NameAndDataType::new(
                     name.as_str(),
                     NullableType::new_impl(BooleanType::new_impl()),
                 ));
             }
 
             _ => {
-                for field in self.build.output_schema()?.fields() {
-                    fields.push(DataField::new(
-                        field.name().as_str(),
-                        field.data_type().clone(),
+                for name_and_type in self.build.output_schema()? {
+                    name_and_types.inner_mut().push(NameAndDataType::new(
+                        name_and_type.name.as_str(),
+                        wrap_nullable(&name_and_type.data_type),
                     ));
                 }
             }
         }
-        Ok(DataSchemaRefExt::create(fields))
+        Ok(name_and_types)
     }
 }
 
@@ -293,7 +293,7 @@ pub struct Exchange {
 }
 
 impl Exchange {
-    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+    pub fn output_schema(&self) -> Result<NameAndDataTypes> {
         self.input.output_schema()
     }
 }
@@ -301,7 +301,7 @@ impl Exchange {
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ExchangeSource {
     /// Output schema of exchanged data
-    pub schema: DataSchemaRef,
+    pub schema: NameAndDataTypes,
 
     /// Fragment ID of source fragment
     pub source_fragment_id: usize,
@@ -309,7 +309,7 @@ pub struct ExchangeSource {
 }
 
 impl ExchangeSource {
-    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+    pub fn output_schema(&self) -> Result<NameAndDataTypes> {
         Ok(self.schema.clone())
     }
 }
@@ -329,7 +329,7 @@ pub enum FragmentKind {
 pub struct ExchangeSink {
     pub input: Box<PhysicalPlan>,
     /// Input schema of exchanged data
-    pub schema: DataSchemaRef,
+    pub schema: NameAndDataTypes,
     pub kind: FragmentKind,
     pub keys: Vec<PhysicalScalar>,
 
@@ -341,7 +341,7 @@ pub struct ExchangeSink {
 }
 
 impl ExchangeSink {
-    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+    pub fn output_schema(&self) -> Result<NameAndDataTypes> {
         Ok(self.schema.clone())
     }
 }
@@ -351,11 +351,11 @@ pub struct UnionAll {
     pub left: Box<PhysicalPlan>,
     pub right: Box<PhysicalPlan>,
     pub pairs: Vec<(String, String)>,
-    pub schema: DataSchemaRef,
+    pub schema: NameAndDataTypes,
 }
 
 impl UnionAll {
-    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+    pub fn output_schema(&self) -> Result<NameAndDataTypes> {
         Ok(self.schema.clone())
     }
 }
@@ -365,17 +365,17 @@ pub struct DistributedInsertSelect {
     pub input: Box<PhysicalPlan>,
     pub catalog: String,
     pub table_info: TableInfo,
-    pub insert_schema: DataSchemaRef,
-    pub select_schema: DataSchemaRef,
+    pub insert_schema: NameAndDataTypes,
+    pub select_schema: NameAndDataTypes,
     pub select_column_bindings: Vec<ColumnBinding>,
     pub cast_needed: bool,
 }
 
 impl DistributedInsertSelect {
-    pub fn output_schema(&self) -> Result<DataSchemaRef> {
-        Ok(DataSchemaRefExt::create(vec![
-            DataField::new("seg_loc", Vu8::to_data_type()),
-            DataField::new("seg_info", Vu8::to_data_type()),
+    pub fn output_schema(&self) -> Result<NameAndDataTypes> {
+        Ok(NameAndDataTypes::new(vec![
+            NameAndDataType::new("seg_loc", Vu8::to_data_type()),
+            NameAndDataType::new("seg_info", Vu8::to_data_type()),
         ]))
     }
 }
@@ -411,7 +411,7 @@ impl PhysicalPlan {
             )
     }
 
-    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+    pub fn output_schema(&self) -> Result<NameAndDataTypes> {
         match self {
             PhysicalPlan::TableScan(plan) => plan.output_schema(),
             PhysicalPlan::Filter(plan) => plan.output_schema(),
@@ -430,7 +430,7 @@ impl PhysicalPlan {
         }
     }
 
-    pub fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a PhysicalPlan> + 'a> {
+    pub fn children<'a>(&'a self) -> Box<dyn Iterator<Item=&'a PhysicalPlan> + 'a> {
         match self {
             PhysicalPlan::TableScan(_) => Box::new(std::iter::empty()),
             PhysicalPlan::Filter(plan) => Box::new(std::iter::once(plan.input.as_ref())),

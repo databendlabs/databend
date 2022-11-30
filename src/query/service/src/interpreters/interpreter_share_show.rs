@@ -15,12 +15,13 @@
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_datavalues::prelude::DataSchemaRef;
+
 use common_datavalues::prelude::Series;
 use common_datavalues::SeriesFrom;
 use common_exception::Result;
 use common_meta_api::ShareApi;
 use common_meta_app::share::ShowSharesReq;
+use common_sql::{NameAndDataTypes, to_data_schema};
 use common_users::UserApiProvider;
 
 use crate::interpreters::Interpreter;
@@ -46,7 +47,7 @@ impl Interpreter for ShowSharesInterpreter {
         "ShowSharesInterpreter"
     }
 
-    fn schema(&self) -> DataSchemaRef {
+    fn schema(&self) -> NameAndDataTypes {
         self.plan.schema()
     }
 
@@ -91,7 +92,7 @@ impl Interpreter for ShowSharesInterpreter {
             comments.push(entry.comment.unwrap_or_default());
         }
 
-        PipelineBuildResult::from_blocks(vec![DataBlock::create(self.plan.schema(), vec![
+        PipelineBuildResult::from_blocks(vec![DataBlock::create(to_data_schema(&self.plan.schema()), vec![
             Series::from_data(created_ons),
             Series::from_data(kinds),
             Series::from_data(names),

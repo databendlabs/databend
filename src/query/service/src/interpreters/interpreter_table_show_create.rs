@@ -21,6 +21,7 @@ use common_sql::executor::PhysicalScalar;
 use common_sql::plans::ShowCreateTablePlan;
 use common_storages_table_meta::table::is_internal_opt_key;
 use tracing::debug;
+use common_sql::{NameAndDataTypes, to_data_schema};
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -44,7 +45,7 @@ impl Interpreter for ShowCreateTableInterpreter {
         "ShowCreateTableInterpreter"
     }
 
-    fn schema(&self) -> DataSchemaRef {
+    fn schema(&self) -> NameAndDataTypes {
         self.plan.schema()
     }
 
@@ -124,7 +125,7 @@ impl Interpreter for ShowCreateTableInterpreter {
                 .as_str()
         });
 
-        let block = DataBlock::create(self.plan.schema(), vec![
+        let block = DataBlock::create(to_data_schema(&self.plan.schema()), vec![
             Series::from_data(vec![name.as_bytes()]),
             Series::from_data(vec![table_create_sql.into_bytes()]),
         ]);

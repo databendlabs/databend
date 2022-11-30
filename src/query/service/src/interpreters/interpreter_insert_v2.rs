@@ -39,7 +39,7 @@ use common_pipeline_sources::processors::sources::SyncSourcer;
 use common_pipeline_transforms::processors::transforms::Transform;
 use common_sql::evaluator::ChunkOperator;
 use common_sql::evaluator::CompoundChunkOperator;
-use common_sql::Metadata;
+use common_sql::{Metadata, to_data_schema};
 use common_sql::MetadataRef;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
@@ -89,7 +89,7 @@ impl InsertInterpreterV2 {
 
     fn check_schema_cast(&self, plan: &Plan) -> Result<bool> {
         let output_schema = &self.plan.schema;
-        let select_schema = plan.schema();
+        let select_schema = to_data_schema(&plan.schema());
 
         // validate schema
         if select_schema.fields().len() < output_schema.fields().len() {
@@ -138,7 +138,7 @@ impl Interpreter for InsertInterpreterV2 {
                                 data.to_string(),
                                 self.ctx.clone(),
                                 name_resolution_ctx,
-                                plan.schema(),
+                                to_data_schema(&plan.schema()),
                             );
                             let enable_expression =
                                 settings.get_insert_values_enable_expression()?;
@@ -243,7 +243,7 @@ impl Interpreter for InsertInterpreterV2 {
         append2table(
             self.ctx.clone(),
             table.clone(),
-            plan.schema(),
+            to_data_schema(&plan.schema()),
             &mut build_res,
             self.plan.overwrite,
             true,
@@ -353,7 +353,7 @@ impl ValueSource {
                 &self.bind_context,
                 self.metadata.clone(),
             )
-            .await?;
+                .await?;
             rows += 1;
         }
 
@@ -474,7 +474,7 @@ impl ValueSource {
                     bind_context,
                     metadata,
                 )
-                .await?;
+                    .await?;
 
                 for (append_idx, deser) in desers.iter_mut().enumerate().take(col_size) {
                     deser.append_data_value(values[append_idx].clone())?;

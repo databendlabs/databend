@@ -15,8 +15,9 @@
 use std::sync::Arc;
 use std::sync::RwLock;
 
-use common_datavalues::DataSchemaRef;
+
 use common_exception::Result;
+use common_sql::{NameAndDataTypes};
 use common_sql::plans::CallPlan;
 
 use super::Interpreter;
@@ -28,7 +29,7 @@ use crate::sessions::TableContext;
 pub struct CallInterpreter {
     ctx: Arc<QueryContext>,
     plan: CallPlan,
-    schema: RwLock<Option<DataSchemaRef>>,
+    schema: RwLock<Option<NameAndDataTypes>>,
 }
 
 impl CallInterpreter {
@@ -47,7 +48,7 @@ impl Interpreter for CallInterpreter {
         "CallInterpreter"
     }
 
-    fn schema(&self) -> DataSchemaRef {
+    fn schema(&self) -> NameAndDataTypes {
         self.schema
             .read()
             .unwrap()
@@ -62,7 +63,7 @@ impl Interpreter for CallInterpreter {
 
         let name = plan.name.clone();
         let func = ProcedureFactory::instance().get(name)?;
-        let last_schema = func.schema();
+        let last_schema = NameAndDataTypes::from(&func.schema());
         {
             let mut schema = self.schema.write().unwrap();
             *schema = Some(last_schema);
@@ -74,7 +75,7 @@ impl Interpreter for CallInterpreter {
             plan.args.clone(),
             &mut build_res.main_pipeline,
         )
-        .await?;
+            .await?;
 
         Ok(build_res)
     }

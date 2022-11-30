@@ -36,6 +36,7 @@ use poem::Request;
 use serde::Deserialize;
 use serde::Serialize;
 use tokio::sync::mpsc::Sender;
+use common_sql::to_data_schema;
 
 use super::HttpQueryContext;
 use crate::interpreters::InterpreterFactory;
@@ -56,7 +57,7 @@ pub struct LoadResponse {
 }
 
 #[allow(clippy::manual_async_fn)]
-fn execute_query(context: Arc<QueryContext>, plan: Plan) -> impl Future<Output = Result<()>> {
+fn execute_query(context: Arc<QueryContext>, plan: Plan) -> impl Future<Output=Result<()>> {
     async move {
         let interpreter = InterpreterFactory::get(context.clone(), &plan).await?;
 
@@ -138,13 +139,13 @@ pub async fn streaming_load(
                         format.as_str(),
                         rx,
                         context.get_settings(),
-                        schema,
+                        to_data_schema(&schema),
                         context.get_scan_progress(),
                         true,
                         to_table.get_block_compact_thresholds(),
                     )
-                    .await
-                    .map_err(InternalServerError)?,
+                        .await
+                        .map_err(InternalServerError)?,
                 );
                 *input_context_ref = Some(input_context.clone());
                 tracing::info!("streaming load {:?}", input_context);

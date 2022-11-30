@@ -13,17 +13,18 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
-use std::sync::Arc;
+
 
 use common_ast::ast::Engine;
-use common_datavalues::DataField;
-use common_datavalues::DataSchema;
+
+
 use common_datavalues::DataSchemaRef;
 use common_datavalues::ToDataType;
 use common_meta_app::schema::DropTableReq;
 use common_meta_app::schema::TableNameIdent;
 use common_meta_app::schema::UndropTableReq;
 use common_storage::StorageParams;
+use crate::{NameAndDataType, NameAndDataTypes};
 
 use crate::plans::Plan;
 use crate::plans::Scalar;
@@ -49,8 +50,8 @@ pub struct CreateTablePlanV2 {
 }
 
 impl CreateTablePlanV2 {
-    pub fn schema(&self) -> DataSchemaRef {
-        self.schema.clone()
+    pub fn schema(&self) -> NameAndDataTypes {
+        Default::default()
     }
 }
 
@@ -62,11 +63,11 @@ pub struct DescribeTablePlan {
     /// The table name.
     pub table: String,
     /// The schema description of the output.
-    pub schema: DataSchemaRef,
+    pub schema: NameAndDataTypes,
 }
 
 impl DescribeTablePlan {
-    pub fn schema(&self) -> DataSchemaRef {
+    pub fn schema(&self) -> NameAndDataTypes {
         self.schema.clone()
     }
 }
@@ -84,8 +85,8 @@ pub struct DropTablePlan {
 }
 
 impl DropTablePlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
+    pub fn schema(&self) -> NameAndDataTypes {
+        Default::default()
     }
 }
 
@@ -112,8 +113,8 @@ pub struct OptimizeTablePlan {
 }
 
 impl OptimizeTablePlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
+    pub fn schema(&self) -> NameAndDataTypes {
+        Default::default()
     }
 }
 
@@ -144,8 +145,8 @@ pub struct RenameTableEntity {
 }
 
 impl RenameTablePlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
+    pub fn schema(&self) -> NameAndDataTypes {
+        Default::default()
     }
 }
 
@@ -159,11 +160,11 @@ pub struct ShowCreateTablePlan {
     /// The table name
     pub table: String,
     /// The table schema
-    pub schema: DataSchemaRef,
+    pub schema: NameAndDataTypes,
 }
 
 impl ShowCreateTablePlan {
-    pub fn schema(&self) -> DataSchemaRef {
+    pub fn schema(&self) -> NameAndDataTypes {
         self.schema.clone()
     }
 }
@@ -179,8 +180,8 @@ pub struct TruncateTablePlan {
 }
 
 impl TruncateTablePlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
+    pub fn schema(&self) -> NameAndDataTypes {
+        Default::default()
     }
 }
 
@@ -194,8 +195,8 @@ pub struct UndropTablePlan {
 }
 
 impl UndropTablePlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
+    pub fn schema(&self) -> NameAndDataTypes {
+        Default::default()
     }
 }
 
@@ -213,7 +214,6 @@ impl From<UndropTablePlan> for UndropTableReq {
 }
 
 /// Exists table.
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ExistsTablePlan {
     pub catalog: String,
@@ -222,11 +222,11 @@ pub struct ExistsTablePlan {
 }
 
 impl ExistsTablePlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::new(vec![DataField::new(
+    pub fn schema(&self) -> NameAndDataTypes {
+        NameAndDataTypes::new(vec![NameAndDataType::new(
             "result",
             u8::to_data_type(),
-        )]))
+        )])
     }
 }
 
@@ -241,8 +241,8 @@ pub struct AlterTableClusterKeyPlan {
 }
 
 impl AlterTableClusterKeyPlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
+    pub fn schema(&self) -> NameAndDataTypes {
+        Default::default()
     }
 }
 
@@ -255,7 +255,7 @@ pub struct DropTableClusterKeyPlan {
 }
 
 impl DropTableClusterKeyPlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
+    pub fn schema(&self) -> NameAndDataTypes {
+        Default::default()
     }
 }

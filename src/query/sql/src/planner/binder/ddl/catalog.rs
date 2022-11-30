@@ -21,15 +21,15 @@ use common_ast::ast::DropCatalogStmt;
 use common_ast::ast::ShowCatalogsStmt;
 use common_ast::ast::ShowCreateCatalogStmt;
 use common_ast::ast::ShowLimit;
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRefExt;
+
+
 use common_datavalues::ToDataType;
 use common_datavalues::Vu8;
 use common_exception::Result;
 use common_meta_app::schema::CatalogMeta;
 use common_meta_app::schema::CatalogType;
 
-use crate::normalize_identifier;
+use crate::{NameAndDataType, NameAndDataTypes, normalize_identifier};
 use crate::plans::CreateCatalogPlan;
 use crate::plans::DropCatalogPlan;
 use crate::plans::Plan;
@@ -68,13 +68,13 @@ impl<'a> Binder {
     ) -> Result<Plan> {
         let ShowCreateCatalogStmt { catalog } = stmt;
         let catalog = normalize_identifier(catalog, &self.name_resolution_ctx).name;
-        let schema = DataSchemaRefExt::create(vec![
-            DataField::new("Catalog", Vu8::to_data_type()),
-            DataField::new("Create Catalog", Vu8::to_data_type()),
-        ]);
+        let schema = vec![
+            NameAndDataType::new("Catalog", Vu8::to_data_type()),
+            NameAndDataType::new("Create Catalog", Vu8::to_data_type()),
+        ];
         Ok(Plan::ShowCreateCatalog(Box::new(ShowCreateCatalogPlan {
             catalog,
-            schema,
+            schema: NameAndDataTypes::new(schema),
         })))
     }
 

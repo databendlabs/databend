@@ -87,7 +87,7 @@ use crate::plans::Scalar;
 use crate::plans::ShowCreateTablePlan;
 use crate::plans::TruncateTablePlan;
 use crate::plans::UndropTablePlan;
-use crate::BindContext;
+use crate::{BindContext, NameAndDataType, NameAndDataTypes};
 use crate::ColumnBinding;
 use crate::ScalarExpr;
 
@@ -240,9 +240,9 @@ impl<'a> Binder {
             .unwrap_or_else(|| self.ctx.get_current_database());
         let table = normalize_identifier(table, &self.name_resolution_ctx).name;
 
-        let schema = DataSchemaRefExt::create(vec![
-            DataField::new("Table", Vu8::to_data_type()),
-            DataField::new("Create Table", Vu8::to_data_type()),
+        let schema = NameAndDataTypes::new(vec![
+            NameAndDataType::new("Table", Vu8::to_data_type()),
+            NameAndDataType::new("Create Table", Vu8::to_data_type()),
         ]);
         Ok(Plan::ShowCreateTable(Box::new(ShowCreateTablePlan {
             catalog,
@@ -271,12 +271,12 @@ impl<'a> Binder {
             .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
             .unwrap_or_else(|| self.ctx.get_current_database());
         let table = normalize_identifier(table, &self.name_resolution_ctx).name;
-        let schema = DataSchemaRefExt::create(vec![
-            DataField::new("Field", Vu8::to_data_type()),
-            DataField::new("Type", Vu8::to_data_type()),
-            DataField::new("Null", Vu8::to_data_type()),
-            DataField::new("Default", Vu8::to_data_type()),
-            DataField::new("Extra", Vu8::to_data_type()),
+        let schema = NameAndDataTypes::new(vec![
+            NameAndDataType::new("Field", Vu8::to_data_type()),
+            NameAndDataType::new("Type", Vu8::to_data_type()),
+            NameAndDataType::new("Null", Vu8::to_data_type()),
+            NameAndDataType::new("Default", Vu8::to_data_type()),
+            NameAndDataType::new("Extra", Vu8::to_data_type()),
         ]);
 
         Ok(Plan::DescribeTable(Box::new(DescribeTablePlan {
@@ -804,9 +804,9 @@ impl<'a> Binder {
                 AstOptimizeTableAction::Compact { target, limit } => {
                     let limit_cnt = match limit {
                         Some(Expr::Literal {
-                            lit: Literal::Integer(uint),
-                            ..
-                        }) => Some(*uint as usize),
+                                 lit: Literal::Integer(uint),
+                                 ..
+                             }) => Some(*uint as usize),
                         Some(_) => {
                             return Err(ErrorCode::IllegalDataType("Unsupported limit type"));
                         }

@@ -24,7 +24,7 @@ use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table_context::TableContext;
 use common_datavalues::DataSchemaRef;
-use common_datavalues::DataSchemaRefExt;
+
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::FunctionFactory;
@@ -58,7 +58,7 @@ use crate::plans::Exchange;
 use crate::plans::PhysicalScan;
 use crate::plans::RelOperator;
 use crate::plans::Scalar;
-use crate::ColumnEntry;
+use crate::{ColumnEntry, NameAndDataTypes, to_data_schema};
 use crate::IndexType;
 use crate::Metadata;
 use crate::MetadataRef;
@@ -194,14 +194,11 @@ impl PhysicalPlanBuilder {
                 let probe_side = self.build(s_expr.child(0)?).await?;
                 let build_side_schema = build_side.output_schema()?;
                 let probe_side_schema = probe_side.output_schema()?;
-                let merged_schema = DataSchemaRefExt::create(
-                    probe_side_schema
-                        .fields()
-                        .iter()
-                        .chain(build_side_schema.fields())
-                        .cloned()
-                        .collect(),
-                );
+                let merged_schema = NameAndDataTypes::new(probe_side_schema
+                    .iter()
+                    .chain(build_side_schema.iter())
+                    .cloned()
+                    .collect());
                 Ok(PhysicalPlan::HashJoin(HashJoin {
                     build: Box::new(build_side),
                     probe: Box::new(probe_side),
@@ -289,8 +286,12 @@ impl PhysicalPlanBuilder {
                                     },
                                     column_id: v.index.to_string(),
                                     args: agg.args.iter().map(|arg| {
-                                        if let Scalar::BoundColumnRef(col) = arg {
-                                            input_schema.index_of(&col.column.index.to_string())
+                                        if let Scalar::BoundColumnRef(column_ref) = arg {
+                                            let (index, _) = input_schema.iter()
+                                                .enumerate()
+                                                .find(|(_, v)| v.name == column_ref.column.index.to_string())
+                                                .ok_or_else(|| ErrorCode::Internal(format!("Cannot find variable with id: {}", column_ref.column.index)))?;
+                                            Ok(index)
                                         } else {
                                             Err(ErrorCode::Internal(
                                                 "Aggregate function argument must be a BoundColumnRef".to_string()
@@ -321,7 +322,10 @@ impl PhysicalPlanBuilder {
                                 };
 
                                 let output_schema = aggregate_partial.output_schema()?;
-                                let group_by_key_index = output_schema.index_of("_group_by_key")?;
+                                let (group_by_key_index, _) = output_schema.iter()
+                                    .enumerate()
+                                    .find(|(_, v)| v.name == "_group_by_key")
+                                    .ok_or_else(|| ErrorCode::Internal("Cannot find column"))?;
 
                                 PhysicalPlan::Exchange(PhysicalExchange {
                                     kind,
@@ -330,9 +334,8 @@ impl PhysicalPlanBuilder {
                                     )),
                                     keys: vec![PhysicalScalar::IndexedVariable {
                                         index: group_by_key_index,
-                                        data_type: output_schema
-                                            .field(group_by_key_index)
-                                            .data_type()
+                                        data_type: output_schema[group_by_key_index]
+                                            .data_type
                                             .clone(),
                                         display_name: "_group_by_key".to_string(),
                                     }],
@@ -352,9 +355,9 @@ impl PhysicalPlanBuilder {
                             PhysicalPlan::AggregatePartial(ref agg) => agg.input.output_schema()?,
 
                             PhysicalPlan::Exchange(PhysicalExchange {
-                                input: box PhysicalPlan::AggregatePartial(ref agg),
-                                ..
-                            }) => agg.input.output_schema()?,
+                                                       input: box PhysicalPlan::AggregatePartial(ref agg),
+                                                       ..
+                                                   }) => agg.input.output_schema()?,
 
                             _ => unreachable!(),
                         };
@@ -372,8 +375,12 @@ impl PhysicalPlanBuilder {
                                     },
                                     column_id: v.index.to_string(),
                                     args: agg.args.iter().map(|arg| {
-                                        if let Scalar::BoundColumnRef(col) = arg {
-                                            input_schema.index_of(&col.column.index.to_string())
+                                        if let Scalar::BoundColumnRef(column_ref) = arg {
+                                            let (index, _) = input_schema.iter()
+                                                .enumerate()
+                                                .find(|(_, v)| v.name == column_ref.column.index.to_string())
+                                                .ok_or_else(|| ErrorCode::Internal(format!("Cannot find variable with id: {}", column_ref.column.index)))?;
+                                            Ok(index)
                                         } else {
                                             Err(ErrorCode::Internal(
                                                 "Aggregate function argument must be a BoundColumnRef".to_string()
@@ -397,7 +404,7 @@ impl PhysicalPlanBuilder {
 
                         match input {
                             PhysicalPlan::AggregatePartial(ref agg) => {
-                                let before_group_by_schema = agg.input.output_schema()?;
+                                let before_group_by_schema = to_data_schema(&agg.input.output_schema()?);
                                 PhysicalPlan::AggregateFinal(AggregateFinal {
                                     input: Box::new(input),
                                     group_by: group_items,
@@ -407,10 +414,10 @@ impl PhysicalPlanBuilder {
                             }
 
                             PhysicalPlan::Exchange(PhysicalExchange {
-                                input: box PhysicalPlan::AggregatePartial(ref agg),
-                                ..
-                            }) => {
-                                let before_group_by_schema = agg.input.output_schema()?;
+                                                       input: box PhysicalPlan::AggregatePartial(ref agg),
+                                                       ..
+                                                   }) => {
+                                let before_group_by_schema = to_data_schema(&agg.input.output_schema()?);
                                 PhysicalPlan::AggregateFinal(AggregateFinal {
                                     input: Box::new(input),
                                     group_by: group_items,
@@ -475,15 +482,15 @@ impl PhysicalPlanBuilder {
                     .iter()
                     .map(|(l, r)| (l.to_string(), r.to_string()))
                     .collect::<Vec<_>>();
-                let fields = pairs
+                let schema = pairs
                     .iter()
-                    .map(|(left, _)| Ok(left_schema.field_with_name(left)?.clone()))
+                    .map(|(left, _)| Ok(left_schema.iter().find(|v| &v.name == left).ok_or_else(|| ErrorCode::Internal("Cannot find column"))?.clone()))
                     .collect::<Result<Vec<_>>>()?;
                 Ok(PhysicalPlan::UnionAll(UnionAll {
                     left: Box::new(left),
                     right: Box::new(self.build(s_expr.child(1)?).await?),
                     pairs,
-                    schema: DataSchemaRefExt::create(fields),
+                    schema: NameAndDataTypes::new(schema),
                 }))
             }
             _ => Err(ErrorCode::Internal(format!(
@@ -630,11 +637,11 @@ impl PhysicalPlanBuilder {
 }
 
 pub struct PhysicalScalarBuilder<'a> {
-    input_schema: &'a DataSchemaRef,
+    input_schema: &'a NameAndDataTypes,
 }
 
 impl<'a> PhysicalScalarBuilder<'a> {
-    pub fn new(input_schema: &'a DataSchemaRef) -> Self {
+    pub fn new(input_schema: &'a NameAndDataTypes) -> Self {
         Self { input_schema }
     }
 
@@ -642,9 +649,12 @@ impl<'a> PhysicalScalarBuilder<'a> {
         match scalar {
             Scalar::BoundColumnRef(column_ref) => {
                 // Remap string name to index in data block
-                let index = self
+                let (index, _) = self
                     .input_schema
-                    .index_of(&column_ref.column.index.to_string())?;
+                    .iter()
+                    .enumerate()
+                    .find(|(_, v)| v.name == column_ref.column.index.to_string())
+                    .ok_or_else(|| ErrorCode::Internal(format!("Cannot find variable with id: {}", column_ref.column.index)))?;
                 Ok(PhysicalScalar::IndexedVariable {
                     data_type: column_ref.data_type(),
                     index,

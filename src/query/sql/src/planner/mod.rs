@@ -22,6 +22,7 @@ mod semantic;
 pub(crate) mod binder;
 pub mod optimizer;
 pub mod plans;
+mod utils;
 
 pub use binder::BindContext;
 pub use binder::Binder;
@@ -36,3 +37,4 @@ pub use semantic::normalize_identifier;
 pub use semantic::validate_function_arg;
 pub use semantic::IdentifierNormalizer;
 pub use semantic::NameResolutionContext;
+pub use utils::*;

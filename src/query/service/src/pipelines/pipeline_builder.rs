@@ -37,6 +37,7 @@ use common_sql::evaluator::ChunkOperator;
 use common_sql::evaluator::CompoundChunkOperator;
 use common_sql::executor::AggregateFunctionDesc;
 use common_sql::executor::PhysicalScalar;
+use common_sql::{NameAndDataTypes, to_data_schema};
 
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::transforms::HashJoinDesc;
@@ -150,8 +151,8 @@ impl PipelineBuilder {
         JoinHashTable::create_join_state(
             self.ctx.clone(),
             &join.build_keys,
-            join.build.output_schema()?,
-            join.probe.output_schema()?,
+            to_data_schema(&join.build.output_schema()?),
+            to_data_schema(&join.probe.output_schema()?),
             HashJoinDesc::create(join)?,
         )
     }
@@ -181,7 +182,7 @@ impl PipelineBuilder {
 
     pub fn render_result_set(
         func_ctx: &FunctionContext,
-        input_schema: DataSchemaRef,
+        input_schema: NameAndDataTypes,
         result_columns: &[ColumnBinding],
         pipeline: &mut Pipeline,
         ignore_result: bool,
@@ -196,10 +197,14 @@ impl PipelineBuilder {
             let index = column_binding.index;
             let name = column_binding.column_name.clone();
             let data_type = input_schema
-                .field_with_name(index.to_string().as_str())?
-                .data_type()
+                .iter()
+                .find(|v| v.name == index.to_string())
+                .ok_or_else(|| {
+                    ErrorCode::Internal("Cannot find column")
+                })?
+                .data_type
                 .clone();
-            projections.push(input_schema.index_of(index.to_string().as_str())?);
+            projections.push(input_schema.index_of_name(index.to_string().as_str()).ok_or_else(|| ErrorCode::Internal("Cannot find column"))?);
             result_fields.push(DataField::new(name.as_str(), data_type.clone()));
         }
         let output_schema = DataSchemaRefExt::create(result_fields);
@@ -244,7 +249,7 @@ impl PipelineBuilder {
                 offsets: projections,
             },
             ChunkOperator::Rename {
-                output_schema: scan.output_schema()?,
+                output_schema: to_data_schema(&scan.output_schema()?),
             },
         ];
 
@@ -341,8 +346,8 @@ impl PipelineBuilder {
     fn build_aggregate_partial(&mut self, aggregate: &AggregatePartial) -> Result<()> {
         self.build_pipeline(&aggregate.input)?;
         let params = Self::build_aggregator_params(
-            aggregate.input.output_schema()?,
-            aggregate.output_schema()?,
+            to_data_schema(&aggregate.input.output_schema()?),
+            to_data_schema(&aggregate.output_schema()?),
             &aggregate.group_by,
             &aggregate.agg_funcs,
         )?;
@@ -362,7 +367,7 @@ impl PipelineBuilder {
 
         let params = Self::build_aggregator_params(
             aggregate.before_group_by_schema.clone(),
-            aggregate.output_schema()?,
+            to_data_schema(&aggregate.output_schema()?),
             &aggregate.group_by,
             &aggregate.agg_funcs,
         )?;
@@ -459,7 +464,7 @@ impl PipelineBuilder {
         // Concat merge in single thread
         try_add_multi_sort_merge(
             &mut self.main_pipeline,
-            sort.output_schema()?,
+            to_data_schema(&sort.output_schema()?),
             block_size,
             sort.limit,
             sort_desc,
@@ -484,7 +489,7 @@ impl PipelineBuilder {
                 input,
                 output,
                 state.clone(),
-                join.output_schema()?,
+                to_data_schema(&join.output_schema()?),
             )
         })?;
 
@@ -544,7 +549,7 @@ impl PipelineBuilder {
         let build_res = exchange_manager.get_fragment_source(
             &exchange_source.query_id,
             exchange_source.source_fragment_id,
-            exchange_source.schema.clone(),
+            to_data_schema(&exchange_source.schema.clone()),
         )?;
 
         self.main_pipeline = build_res.main_pipeline;
@@ -594,7 +599,7 @@ impl PipelineBuilder {
                 TransformMergeBlock::try_create(
                     transform_input_port,
                     transform_output_port,
-                    union_all.output_schema()?,
+                    to_data_schema(&union_all.output_schema()?),
                     union_all.pairs.clone(),
                     union_all_receiver.clone(),
                 )
@@ -621,14 +626,13 @@ impl PipelineBuilder {
         )?;
 
         if insert_select.cast_needed {
-            let mut functions = Vec::with_capacity(insert_schema.fields().len());
+            let mut functions = Vec::with_capacity(insert_schema.inner().len());
             for (target_field, original_field) in insert_schema
-                .fields()
                 .iter()
-                .zip(select_schema.fields().iter())
+                .zip(select_schema.iter())
             {
-                let target_type_name = target_field.data_type().name();
-                let from_type = original_field.data_type().clone();
+                let target_type_name = target_field.data_type.name();
+                let from_type = original_field.data_type.clone();
                 let cast_function = CastFunction::create("cast", &target_type_name, from_type)?;
                 functions.push(cast_function);
             }
@@ -639,7 +643,7 @@ impl PipelineBuilder {
                     TransformCastSchema::try_create(
                         transform_input_port,
                         transform_output_port,
-                        insert_schema.clone(),
+                        to_data_schema(&insert_schema.clone()),
                         functions.clone(),
                         func_ctx.clone(),
                     )
@@ -653,9 +657,9 @@ impl PipelineBuilder {
 
         // Fill missing columns.
         {
-            let source_schema = insert_schema;
+            let source_schema = to_data_schema(insert_schema);
             let target_schema = &table.schema();
-            if source_schema != target_schema {
+            if &source_schema != target_schema {
                 self.main_pipeline.add_transform(
                     |transform_input_port, transform_output_port| {
                         TransformAddOn::try_create(

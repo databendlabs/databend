@@ -12,10 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
 
-use common_datavalues::DataSchema;
-use common_datavalues::DataSchemaRef;
+
+
+
+use crate::NameAndDataTypes;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct VarValue {
@@ -30,8 +31,8 @@ pub struct SettingPlan {
 }
 
 impl SettingPlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
+    pub fn schema(&self) -> NameAndDataTypes {
+        Default::default()
     }
 }
 
@@ -41,7 +42,7 @@ pub struct UnSettingPlan {
 }
 
 impl UnSettingPlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
+    pub fn schema(&self) -> NameAndDataTypes {
+        Default::default()
     }
 }

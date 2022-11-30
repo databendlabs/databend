@@ -11,10 +11,11 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-use std::sync::Arc;
 
-use common_datavalues::DataSchema;
-use common_datavalues::DataSchemaRef;
+
+
+
+use crate::NameAndDataTypes;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateViewPlan {
@@ -27,8 +28,8 @@ pub struct CreateViewPlan {
 }
 
 impl CreateViewPlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
+    pub fn schema(&self) -> NameAndDataTypes {
+        Default::default()
     }
 }
 
@@ -42,8 +43,8 @@ pub struct AlterViewPlan {
 }
 
 impl AlterViewPlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
+    pub fn schema(&self) -> NameAndDataTypes {
+        Default::default()
     }
 }
 
@@ -57,7 +58,7 @@ pub struct DropViewPlan {
 }
 
 impl DropViewPlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
+    pub fn schema(&self) -> NameAndDataTypes {
+        Default::default()
     }
 }

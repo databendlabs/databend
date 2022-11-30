@@ -13,13 +13,13 @@
 // limitations under the License.
 
 use std::fmt::Display;
-use std::sync::Arc;
+
 
 use common_ast::ast::ExplainKind;
-use common_datavalues::DataField;
-use common_datavalues::DataSchema;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::DataSchemaRefExt;
+
+
+
+
 use common_datavalues::StringType;
 
 use crate::optimizer::SExpr;
@@ -84,8 +84,9 @@ use crate::plans::UndropDatabasePlan;
 use crate::plans::UndropTablePlan;
 use crate::plans::UpdatePlan;
 use crate::plans::UseDatabasePlan;
-use crate::BindContext;
+use crate::{BindContext, NameAndDataType};
 use crate::MetadataRef;
+use crate::planner::utils::NameAndDataTypes;
 
 #[derive(Clone, Debug)]
 pub enum Plan {
@@ -293,7 +294,7 @@ impl Display for Plan {
 
 // TODO the schema is not completed
 impl Plan {
-    pub fn schema(&self) -> DataSchemaRef {
+    pub fn schema(&self) -> NameAndDataTypes {
         match self {
             Plan::Query {
                 s_expr: _,
@@ -302,15 +303,15 @@ impl Plan {
                 ..
             } => bind_context.output_schema(),
             Plan::Explain { .. } | Plan::ExplainAst { .. } | Plan::ExplainSyntax { .. } => {
-                DataSchemaRefExt::create(vec![DataField::new("explain", StringType::new_impl())])
+                NameAndDataTypes::new(vec![NameAndDataType::new("explain", StringType::new_impl())])
             }
-            Plan::Copy(_) => Arc::new(DataSchema::empty()),
+            Plan::Copy(_) => Default::default(),
             Plan::ShowCreateCatalog(plan) => plan.schema(),
             Plan::CreateCatalog(plan) => plan.schema(),
             Plan::DropCatalog(plan) => plan.schema(),
             Plan::ShowCreateDatabase(plan) => plan.schema(),
             Plan::CreateDatabase(plan) => plan.schema(),
-            Plan::UseDatabase(_) => Arc::new(DataSchema::empty()),
+            Plan::UseDatabase(_) => Default::default(),
             Plan::DropDatabase(plan) => plan.schema(),
             Plan::UndropDatabase(plan) => plan.schema(),
             Plan::RenameDatabase(plan) => plan.schema(),
@@ -342,20 +343,20 @@ impl Plan {
             Plan::CreateStage(plan) => plan.schema(),
             Plan::DropStage(plan) => plan.schema(),
             Plan::RemoveStage(plan) => plan.schema(),
-            Plan::RevokePriv(_) => Arc::new(DataSchema::empty()),
-            Plan::RevokeRole(_) => Arc::new(DataSchema::empty()),
-            Plan::CreateUDF(_) => Arc::new(DataSchema::empty()),
-            Plan::AlterUDF(_) => Arc::new(DataSchema::empty()),
-            Plan::DropUDF(_) => Arc::new(DataSchema::empty()),
+            Plan::RevokePriv(_) => Default::default(),
+            Plan::RevokeRole(_) => Default::default(),
+            Plan::CreateUDF(_) => Default::default(),
+            Plan::AlterUDF(_) => Default::default(),
+            Plan::DropUDF(_) => Default::default(),
             Plan::Insert(plan) => plan.schema(),
-            Plan::Delete(_) => Arc::new(DataSchema::empty()),
-            Plan::Update(_) => Arc::new(DataSchema::empty()),
-            Plan::Call(_) => Arc::new(DataSchema::empty()),
+            Plan::Delete(_) => Default::default(),
+            Plan::Update(_) => Default::default(),
+            Plan::Call(_) => Default::default(),
             Plan::Presign(plan) => plan.schema(),
             Plan::SetVariable(plan) => plan.schema(),
             Plan::UnSetVariable(plan) => plan.schema(),
             Plan::SetRole(plan) => plan.schema(),
-            Plan::Kill(_) => Arc::new(DataSchema::empty()),
+            Plan::Kill(_) => Default::default(),
             Plan::CreateShare(plan) => plan.schema(),
             Plan::DropShare(plan) => plan.schema(),
             Plan::GrantShareObject(plan) => plan.schema(),

@@ -18,6 +18,7 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_meta_types::PrincipalIdentity;
+use common_sql::{NameAndDataTypes, to_data_schema};
 use common_sql::plans::ShowGrantsPlan;
 use common_users::RoleCacheManager;
 use common_users::UserApiProvider;
@@ -44,7 +45,7 @@ impl Interpreter for ShowGrantsInterpreter {
         "ShowGrantsInterpreter"
     }
 
-    fn schema(&self) -> DataSchemaRef {
+    fn schema(&self) -> NameAndDataTypes {
         self.plan.schema()
     }
 
@@ -84,7 +85,7 @@ impl Interpreter for ShowGrantsInterpreter {
             .map(|e| format!("{} TO {}", e, identity).into_bytes())
             .collect::<Vec<_>>();
 
-        PipelineBuildResult::from_blocks(vec![DataBlock::create(self.plan.schema(), vec![
+        PipelineBuildResult::from_blocks(vec![DataBlock::create(to_data_schema(&self.plan.schema()), vec![
             Series::from_data(grant_list),
         ])])
     }

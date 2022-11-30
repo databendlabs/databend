@@ -17,6 +17,7 @@ use std::fmt::Formatter;
 
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
+use common_sql::to_data_schema;
 
 use crate::api::DataExchange;
 use crate::sql::executor::PhysicalPlan;
@@ -40,7 +41,7 @@ impl Debug for FragmentPayload {
 impl FragmentPayload {
     pub fn schema(&self) -> Result<DataSchemaRef> {
         match self {
-            FragmentPayload::Plan(plan) => plan.output_schema(),
+            FragmentPayload::Plan(plan) => Ok(to_data_schema(&plan.output_schema()?)),
         }
     }
 }
