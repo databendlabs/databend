@@ -14,9 +14,9 @@
 
 use std::sync::Arc;
 
-
 use common_exception::Result;
-use common_sql::{MetadataRef, NameAndDataTypes};
+use common_sql::MetadataRef;
+use common_sql::NameAndDataTypes;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;

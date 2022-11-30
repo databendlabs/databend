@@ -18,11 +18,10 @@ use std::time::SystemTime;
 use common_catalog::table_context::TableContext;
 use common_datablocks::SendableDataBlockStream;
 use common_datavalues::DataSchema;
-
-
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_sql::{NameAndDataTypes, to_data_schema};
+use common_sql::to_data_schema;
+use common_sql::NameAndDataTypes;
 
 use crate::interpreters::InterpreterMetrics;
 use crate::interpreters::InterpreterQueryLog;
@@ -106,7 +105,9 @@ pub trait Interpreter: Sync + Send {
 
         // WTF: We need to implement different logic for the HTTP handler
         if let Some(handle) = ctx.get_http_query() {
-            return handle.execute(ctx.clone(), build_res, to_data_schema(&self.schema())).await;
+            return handle
+                .execute(ctx.clone(), build_res, to_data_schema(&self.schema()))
+                .await;
         }
 
         let pulling_executor = PipelinePullingExecutor::from_pipelines(build_res, settings)?;

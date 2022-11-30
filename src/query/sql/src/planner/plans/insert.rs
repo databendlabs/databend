@@ -18,9 +18,9 @@ use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_meta_types::MetaId;
 use common_pipeline_sources::processors::sources::input_formats::InputContext;
-use crate::NameAndDataTypes;
 
 use super::Plan;
+use crate::NameAndDataTypes;
 
 #[derive(Clone)]
 pub enum InsertInputSource {

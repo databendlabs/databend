@@ -24,7 +24,6 @@ use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table_context::TableContext;
 use common_datavalues::DataSchemaRef;
-
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::FunctionFactory;
@@ -58,10 +57,12 @@ use crate::plans::Exchange;
 use crate::plans::PhysicalScan;
 use crate::plans::RelOperator;
 use crate::plans::Scalar;
-use crate::{ColumnEntry, NameAndDataTypes, to_data_schema};
+use crate::to_data_schema;
+use crate::ColumnEntry;
 use crate::IndexType;
 use crate::Metadata;
 use crate::MetadataRef;
+use crate::NameAndDataTypes;
 use crate::ScalarExpr;
 use crate::DUMMY_TABLE_INDEX;
 
@@ -194,11 +195,13 @@ impl PhysicalPlanBuilder {
                 let probe_side = self.build(s_expr.child(0)?).await?;
                 let build_side_schema = build_side.output_schema()?;
                 let probe_side_schema = probe_side.output_schema()?;
-                let merged_schema = NameAndDataTypes::new(probe_side_schema
-                    .iter()
-                    .chain(build_side_schema.iter())
-                    .cloned()
-                    .collect());
+                let merged_schema = NameAndDataTypes::new(
+                    probe_side_schema
+                        .iter()
+                        .chain(build_side_schema.iter())
+                        .cloned()
+                        .collect(),
+                );
                 Ok(PhysicalPlan::HashJoin(HashJoin {
                     build: Box::new(build_side),
                     probe: Box::new(probe_side),
@@ -322,7 +325,8 @@ impl PhysicalPlanBuilder {
                                 };
 
                                 let output_schema = aggregate_partial.output_schema()?;
-                                let (group_by_key_index, _) = output_schema.iter()
+                                let (group_by_key_index, _) = output_schema
+                                    .iter()
                                     .enumerate()
                                     .find(|(_, v)| v.name == "_group_by_key")
                                     .ok_or_else(|| ErrorCode::Internal("Cannot find column"))?;
@@ -355,9 +359,9 @@ impl PhysicalPlanBuilder {
                             PhysicalPlan::AggregatePartial(ref agg) => agg.input.output_schema()?,
 
                             PhysicalPlan::Exchange(PhysicalExchange {
-                                                       input: box PhysicalPlan::AggregatePartial(ref agg),
-                                                       ..
-                                                   }) => agg.input.output_schema()?,
+                                input: box PhysicalPlan::AggregatePartial(ref agg),
+                                ..
+                            }) => agg.input.output_schema()?,
 
                             _ => unreachable!(),
                         };
@@ -404,7 +408,8 @@ impl PhysicalPlanBuilder {
 
                         match input {
                             PhysicalPlan::AggregatePartial(ref agg) => {
-                                let before_group_by_schema = to_data_schema(&agg.input.output_schema()?);
+                                let before_group_by_schema =
+                                    to_data_schema(&agg.input.output_schema()?);
                                 PhysicalPlan::AggregateFinal(AggregateFinal {
                                     input: Box::new(input),
                                     group_by: group_items,
@@ -414,10 +419,11 @@ impl PhysicalPlanBuilder {
                             }
 
                             PhysicalPlan::Exchange(PhysicalExchange {
-                                                       input: box PhysicalPlan::AggregatePartial(ref agg),
-                                                       ..
-                                                   }) => {
-                                let before_group_by_schema = to_data_schema(&agg.input.output_schema()?);
+                                input: box PhysicalPlan::AggregatePartial(ref agg),
+                                ..
+                            }) => {
+                                let before_group_by_schema =
+                                    to_data_schema(&agg.input.output_schema()?);
                                 PhysicalPlan::AggregateFinal(AggregateFinal {
                                     input: Box::new(input),
                                     group_by: group_items,
@@ -484,7 +490,13 @@ impl PhysicalPlanBuilder {
                     .collect::<Vec<_>>();
                 let schema = pairs
                     .iter()
-                    .map(|(left, _)| Ok(left_schema.iter().find(|v| &v.name == left).ok_or_else(|| ErrorCode::Internal("Cannot find column"))?.clone()))
+                    .map(|(left, _)| {
+                        Ok(left_schema
+                            .iter()
+                            .find(|v| &v.name == left)
+                            .ok_or_else(|| ErrorCode::Internal("Cannot find column"))?
+                            .clone())
+                    })
                     .collect::<Result<Vec<_>>>()?;
                 Ok(PhysicalPlan::UnionAll(UnionAll {
                     left: Box::new(left),
@@ -654,7 +666,12 @@ impl<'a> PhysicalScalarBuilder<'a> {
                     .iter()
                     .enumerate()
                     .find(|(_, v)| v.name == column_ref.column.index.to_string())
-                    .ok_or_else(|| ErrorCode::Internal(format!("Cannot find variable with id: {}", column_ref.column.index)))?;
+                    .ok_or_else(|| {
+                        ErrorCode::Internal(format!(
+                            "Cannot find variable with id: {}",
+                            column_ref.column.index
+                        ))
+                    })?;
                 Ok(PhysicalScalar::IndexedVariable {
                     data_type: column_ref.data_type(),
                     index,

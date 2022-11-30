@@ -12,10 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
-
-
 use common_meta_types::UserStageInfo;
+
 use crate::NameAndDataTypes;
 
 #[derive(Clone, Debug, PartialEq, Eq)]

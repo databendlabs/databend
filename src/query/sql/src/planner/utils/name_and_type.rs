@@ -13,7 +13,11 @@
 // limitations under the License.
 
 use std::ops::Index;
-use common_datavalues::{DataField, DataSchemaRef, DataSchemaRefExt, DataTypeImpl};
+
+use common_datavalues::DataField;
+use common_datavalues::DataSchemaRef;
+use common_datavalues::DataSchemaRefExt;
+use common_datavalues::DataTypeImpl;
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct NameAndDataTypes(Vec<NameAndDataType>);
@@ -82,18 +86,18 @@ impl IntoIterator for NameAndDataTypes {
 
 impl From<&DataSchemaRef> for NameAndDataTypes {
     fn from(schema: &DataSchemaRef) -> Self {
-        let name_and_types = schema.fields().iter().map(|f| {
-            NameAndDataType::new(f.name().to_string(), f.data_type().clone())
-        }).collect();
+        let name_and_types = schema
+            .fields()
+            .iter()
+            .map(|f| NameAndDataType::new(f.name().to_string(), f.data_type().clone()))
+            .collect();
         NameAndDataTypes::new(name_and_types)
     }
 }
 
 // TODO(leiysky): we won't allow to convert `NameAndDataTypes` to `DataSchemaRef`
 // with new expression, deprecate this function then.
-pub fn to_data_schema(
-    name_and_data_types: &NameAndDataTypes,
-) -> DataSchemaRef {
+pub fn to_data_schema(name_and_data_types: &NameAndDataTypes) -> DataSchemaRef {
     let fields = name_and_data_types
         .iter()
         .map(|name_and_data_type| name_and_data_type.as_data_field())

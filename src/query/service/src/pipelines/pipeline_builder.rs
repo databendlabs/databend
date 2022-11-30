@@ -37,7 +37,8 @@ use common_sql::evaluator::ChunkOperator;
 use common_sql::evaluator::CompoundChunkOperator;
 use common_sql::executor::AggregateFunctionDesc;
 use common_sql::executor::PhysicalScalar;
-use common_sql::{NameAndDataTypes, to_data_schema};
+use common_sql::to_data_schema;
+use common_sql::NameAndDataTypes;
 
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::transforms::HashJoinDesc;
@@ -199,12 +200,14 @@ impl PipelineBuilder {
             let data_type = input_schema
                 .iter()
                 .find(|v| v.name == index.to_string())
-                .ok_or_else(|| {
-                    ErrorCode::Internal("Cannot find column")
-                })?
+                .ok_or_else(|| ErrorCode::Internal("Cannot find column"))?
                 .data_type
                 .clone();
-            projections.push(input_schema.index_of_name(index.to_string().as_str()).ok_or_else(|| ErrorCode::Internal("Cannot find column"))?);
+            projections.push(
+                input_schema
+                    .index_of_name(index.to_string().as_str())
+                    .ok_or_else(|| ErrorCode::Internal("Cannot find column"))?,
+            );
             result_fields.push(DataField::new(name.as_str(), data_type.clone()));
         }
         let output_schema = DataSchemaRefExt::create(result_fields);
@@ -627,10 +630,7 @@ impl PipelineBuilder {
 
         if insert_select.cast_needed {
             let mut functions = Vec::with_capacity(insert_schema.inner().len());
-            for (target_field, original_field) in insert_schema
-                .iter()
-                .zip(select_schema.iter())
-            {
+            for (target_field, original_field) in insert_schema.iter().zip(select_schema.iter()) {
                 let target_type_name = target_field.data_type.name();
                 let from_type = original_field.data_type.clone();
                 let cast_function = CastFunction::create("cast", &target_type_name, from_type)?;

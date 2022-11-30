@@ -18,8 +18,9 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_datavalues::Series;
 use common_exception::Result;
-use common_sql::{NameAndDataTypes, to_data_schema};
 use common_sql::plans::ShowRolesPlan;
+use common_sql::to_data_schema;
+use common_sql::NameAndDataTypes;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -73,11 +74,14 @@ impl Interpreter for ShowRolesInterpreter {
         let is_currents: Vec<bool> = roles.iter().map(|r| r.name == current_role_name).collect();
         let is_defaults: Vec<bool> = roles.iter().map(|r| r.name == default_role_name).collect();
 
-        PipelineBuildResult::from_blocks(vec![DataBlock::create(to_data_schema(&self.plan.schema()), vec![
-            Series::from_data(names),
-            Series::from_data(inherited_roles),
-            Series::from_data(is_currents),
-            Series::from_data(is_defaults),
-        ])])
+        PipelineBuildResult::from_blocks(vec![DataBlock::create(
+            to_data_schema(&self.plan.schema()),
+            vec![
+                Series::from_data(names),
+                Series::from_data(inherited_roles),
+                Series::from_data(is_currents),
+                Series::from_data(is_defaults),
+            ],
+        )])
     }
 }

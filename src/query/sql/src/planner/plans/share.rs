@@ -12,19 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
-
 use chrono::Utc;
 use common_datavalues::prelude::*;
-
-
-
 use common_meta_app::share::CreateShareReq;
 use common_meta_app::share::DropShareReq;
 use common_meta_app::share::ShareGrantObjectName;
 use common_meta_app::share::ShareGrantObjectPrivilege;
 use common_meta_app::share::ShareNameIdent;
-use crate::{NameAndDataType, NameAndDataTypes};
+
+use crate::NameAndDataType;
+use crate::NameAndDataTypes;
 
 // Create Share Plan
 #[derive(Clone, Debug, PartialEq, Eq)]

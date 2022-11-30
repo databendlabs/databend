@@ -19,8 +19,9 @@ use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_sql::executor::PhysicalScalar;
-use common_sql::{NameAndDataTypes, to_data_schema};
 use common_sql::plans::DescribeTablePlan;
+use common_sql::to_data_schema;
+use common_sql::NameAndDataTypes;
 use common_storages_view::view_table::QUERY;
 use common_storages_view::view_table::VIEW_ENGINE;
 
@@ -62,7 +63,7 @@ impl Interpreter for DescribeTableInterpreter {
             if let Some(query) = tbl_info.options().get(QUERY) {
                 let mut planner = Planner::new(self.ctx.clone());
                 let (plan, _, _) = planner.plan_sql(query).await?;
-                to_data_schema( &plan.schema())
+                to_data_schema(&plan.schema())
             } else {
                 return Err(ErrorCode::Internal(
                     "Logical error, View Table must have a SelectQuery inside.",
@@ -102,12 +103,15 @@ impl Interpreter for DescribeTableInterpreter {
             extras.push("".to_string());
         }
 
-        PipelineBuildResult::from_blocks(vec![DataBlock::create(to_data_schema(&self.plan.schema()), vec![
-            Series::from_data(names),
-            Series::from_data(types),
-            Series::from_data(nulls),
-            Series::from_data(default_exprs),
-            Series::from_data(extras),
-        ])])
+        PipelineBuildResult::from_blocks(vec![DataBlock::create(
+            to_data_schema(&self.plan.schema()),
+            vec![
+                Series::from_data(names),
+                Series::from_data(types),
+                Series::from_data(nulls),
+                Series::from_data(default_exprs),
+                Series::from_data(extras),
+            ],
+        )])
     }
 }

@@ -39,7 +39,8 @@ use common_pipeline_sources::processors::sources::SyncSourcer;
 use common_pipeline_transforms::processors::transforms::Transform;
 use common_sql::evaluator::ChunkOperator;
 use common_sql::evaluator::CompoundChunkOperator;
-use common_sql::{Metadata, to_data_schema};
+use common_sql::to_data_schema;
+use common_sql::Metadata;
 use common_sql::MetadataRef;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
@@ -353,7 +354,7 @@ impl ValueSource {
                 &self.bind_context,
                 self.metadata.clone(),
             )
-                .await?;
+            .await?;
             rows += 1;
         }
 
@@ -474,7 +475,7 @@ impl ValueSource {
                     bind_context,
                     metadata,
                 )
-                    .await?;
+                .await?;
 
                 for (append_idx, deser) in desers.iter_mut().enumerate().take(col_size) {
                     deser.append_data_value(values[append_idx].clone())?;

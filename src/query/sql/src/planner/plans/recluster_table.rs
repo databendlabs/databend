@@ -12,12 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
-
-
-
 use crate::plans::Scalar;
-use crate::{MetadataRef, NameAndDataTypes};
+use crate::MetadataRef;
+use crate::NameAndDataTypes;
 
 #[derive(Clone, Debug)]
 pub struct ReclusterTablePlan {

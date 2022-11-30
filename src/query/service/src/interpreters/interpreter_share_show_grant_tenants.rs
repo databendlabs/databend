@@ -15,14 +15,14 @@
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-
 use common_datavalues::prelude::Series;
 use common_datavalues::SeriesFrom;
 use common_exception::Result;
 use common_meta_api::ShareApi;
 use common_meta_app::share::GetShareGrantTenantsReq;
 use common_meta_app::share::ShareNameIdent;
-use common_sql::{NameAndDataTypes, to_data_schema};
+use common_sql::to_data_schema;
+use common_sql::NameAndDataTypes;
 use common_users::UserApiProvider;
 
 use crate::interpreters::Interpreter;

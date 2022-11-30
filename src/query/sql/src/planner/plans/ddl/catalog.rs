@@ -12,14 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
-
-
-
 use common_meta_app::schema::CatalogMeta;
 use common_meta_app::schema::CatalogNameIdent;
 use common_meta_app::schema::CreateCatalogReq;
 use common_meta_app::schema::DropCatalogReq;
+
 use crate::NameAndDataTypes;
 
 #[derive(Clone, Debug, PartialEq, Eq)]

@@ -21,15 +21,13 @@ use common_ast::ast::DropCatalogStmt;
 use common_ast::ast::ShowCatalogsStmt;
 use common_ast::ast::ShowCreateCatalogStmt;
 use common_ast::ast::ShowLimit;
-
-
 use common_datavalues::ToDataType;
 use common_datavalues::Vu8;
 use common_exception::Result;
 use common_meta_app::schema::CatalogMeta;
 use common_meta_app::schema::CatalogType;
 
-use crate::{NameAndDataType, NameAndDataTypes, normalize_identifier};
+use crate::normalize_identifier;
 use crate::plans::CreateCatalogPlan;
 use crate::plans::DropCatalogPlan;
 use crate::plans::Plan;
@@ -37,6 +35,8 @@ use crate::plans::RewriteKind;
 use crate::plans::ShowCreateCatalogPlan;
 use crate::BindContext;
 use crate::Binder;
+use crate::NameAndDataType;
+use crate::NameAndDataTypes;
 
 impl<'a> Binder {
     pub(in crate::planner::binder) async fn bind_show_catalogs(

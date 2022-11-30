@@ -18,9 +18,7 @@ use common_catalog::plan::DataSourcePlan;
 use common_datablocks::DataBlock;
 use common_datavalues::wrap_nullable;
 use common_datavalues::BooleanType;
-
 use common_datavalues::DataSchemaRef;
-
 use common_datavalues::NullableType;
 use common_datavalues::ToDataType;
 use common_datavalues::Vu8;
@@ -32,8 +30,11 @@ use super::SortDesc;
 use crate::executor::PhysicalScalar;
 use crate::optimizer::ColumnSet;
 use crate::plans::JoinType;
-use crate::{ColumnBinding, NameAndDataType, NameAndDataTypes, to_data_schema};
+use crate::to_data_schema;
+use crate::ColumnBinding;
 use crate::IndexType;
+use crate::NameAndDataType;
+use crate::NameAndDataTypes;
 
 pub type ColumnID = String;
 
@@ -101,7 +102,9 @@ impl EvalScalar {
         let mut name_and_types = self.input.output_schema()?;
         for (scalar, name) in self.scalars.iter() {
             let data_type = scalar.data_type();
-            name_and_types.inner_mut().push(NameAndDataType::new(name, data_type));
+            name_and_types
+                .inner_mut()
+                .push(NameAndDataType::new(name, data_type));
         }
         Ok(name_and_types)
     }
@@ -119,7 +122,10 @@ impl AggregatePartial {
         let input_schema = self.input.output_schema()?;
         let mut name_and_types = Vec::with_capacity(self.agg_funcs.len() + self.group_by.len());
         for agg in self.agg_funcs.iter() {
-            name_and_types.push(NameAndDataType::new(agg.column_id.as_str(), Vu8::to_data_type()));
+            name_and_types.push(NameAndDataType::new(
+                agg.column_id.as_str(),
+                Vu8::to_data_type(),
+            ));
         }
         if !self.group_by.is_empty() {
             let data_schema = to_data_schema(&input_schema);
@@ -430,7 +436,7 @@ impl PhysicalPlan {
         }
     }
 
-    pub fn children<'a>(&'a self) -> Box<dyn Iterator<Item=&'a PhysicalPlan> + 'a> {
+    pub fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a PhysicalPlan> + 'a> {
         match self {
             PhysicalPlan::TableScan(_) => Box::new(std::iter::empty()),
             PhysicalPlan::Filter(plan) => Box::new(std::iter::once(plan.input.as_ref())),

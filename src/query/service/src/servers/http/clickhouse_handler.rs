@@ -30,6 +30,7 @@ use common_formats::FileFormatOptionsExt;
 use common_formats::FileFormatTypeExt;
 use common_pipeline_sources::processors::sources::input_formats::InputContext;
 use common_pipeline_sources::processors::sources::input_formats::StreamingReadBatch;
+use common_sql::to_data_schema;
 use futures::StreamExt;
 use http::HeaderMap;
 use naive_cityhash::cityhash128;
@@ -49,7 +50,6 @@ use poem::Route;
 use serde::Deserialize;
 use serde::Serialize;
 use tracing::info;
-use common_sql::to_data_schema;
 
 use crate::interpreters::InterpreterFactory;
 use crate::interpreters::InterpreterPtr;
@@ -209,9 +209,16 @@ pub async fn clickhouse_handler_get(
     let interpreter = InterpreterFactory::get(context.clone(), &plan)
         .await
         .map_err(BadRequest)?;
-    execute(context, interpreter, to_data_schema(&plan.schema()), format, params, None)
-        .await
-        .map_err(InternalServerError)
+    execute(
+        context,
+        interpreter,
+        to_data_schema(&plan.schema()),
+        format,
+        params,
+        None,
+    )
+    .await
+    .map_err(InternalServerError)
 }
 
 #[poem::handler]
@@ -280,8 +287,8 @@ pub async fn clickhouse_handler_post(
                     false,
                     to_table.get_block_compact_thresholds(),
                 )
-                    .await
-                    .map_err(InternalServerError)?,
+                .await
+                .map_err(InternalServerError)?,
             );
             *input_context_ref = Some(input_context.clone());
             info!(
@@ -298,7 +305,7 @@ pub async fn clickhouse_handler_post(
                     tx,
                     compression_alg,
                 )
-                    .await
+                .await
             }));
         }
     };
@@ -308,9 +315,16 @@ pub async fn clickhouse_handler_post(
         .await
         .map_err(BadRequest)?;
 
-    execute(ctx, interpreter, to_data_schema(&plan.schema()), format, params, handle)
-        .await
-        .map_err(InternalServerError)
+    execute(
+        ctx,
+        interpreter,
+        to_data_schema(&plan.schema()),
+        format,
+        params,
+        handle,
+    )
+    .await
+    .map_err(InternalServerError)
 }
 
 #[poem::handler]

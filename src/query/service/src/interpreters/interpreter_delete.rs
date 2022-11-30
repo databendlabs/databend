@@ -14,10 +14,9 @@
 
 use std::sync::Arc;
 
-
 use common_exception::Result;
-use common_sql::NameAndDataTypes;
 use common_sql::plans::DeletePlan;
+use common_sql::NameAndDataTypes;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;

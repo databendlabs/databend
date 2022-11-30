@@ -14,20 +14,18 @@
 
 use std::collections::BTreeMap;
 
-
 use common_ast::ast::Engine;
-
-
 use common_datavalues::DataSchemaRef;
 use common_datavalues::ToDataType;
 use common_meta_app::schema::DropTableReq;
 use common_meta_app::schema::TableNameIdent;
 use common_meta_app::schema::UndropTableReq;
 use common_storage::StorageParams;
-use crate::{NameAndDataType, NameAndDataTypes};
 
 use crate::plans::Plan;
 use crate::plans::Scalar;
+use crate::NameAndDataType;
+use crate::NameAndDataTypes;
 
 pub type TableOptions = BTreeMap<String, String>;
 
@@ -223,10 +221,7 @@ pub struct ExistsTablePlan {
 
 impl ExistsTablePlan {
     pub fn schema(&self) -> NameAndDataTypes {
-        NameAndDataTypes::new(vec![NameAndDataType::new(
-            "result",
-            u8::to_data_type(),
-        )])
+        NameAndDataTypes::new(vec![NameAndDataType::new("result", u8::to_data_type())])
     }
 }
 

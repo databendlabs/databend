@@ -15,10 +15,9 @@
 use std::sync::Arc;
 use std::sync::RwLock;
 
-
 use common_exception::Result;
-use common_sql::{NameAndDataTypes};
 use common_sql::plans::CallPlan;
+use common_sql::NameAndDataTypes;
 
 use super::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -75,7 +74,7 @@ impl Interpreter for CallInterpreter {
             plan.args.clone(),
             &mut build_res.main_pipeline,
         )
-            .await?;
+        .await?;
 
         Ok(build_res)
     }

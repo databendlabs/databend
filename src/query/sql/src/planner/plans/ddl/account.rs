@@ -14,10 +14,8 @@
 
 use std::sync::Arc;
 
-
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
-
 use common_datavalues::ToDataType;
 use common_datavalues::Vu8;
 use common_meta_types::AuthInfo;
@@ -26,7 +24,9 @@ use common_meta_types::PrincipalIdentity;
 use common_meta_types::UserIdentity;
 use common_meta_types::UserOption;
 use common_meta_types::UserPrivilegeSet;
-use crate::{NameAndDataType, NameAndDataTypes};
+
+use crate::NameAndDataType;
+use crate::NameAndDataTypes;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateUserPlan {

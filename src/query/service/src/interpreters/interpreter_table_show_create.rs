@@ -19,9 +19,10 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_sql::executor::PhysicalScalar;
 use common_sql::plans::ShowCreateTablePlan;
+use common_sql::to_data_schema;
+use common_sql::NameAndDataTypes;
 use common_storages_table_meta::table::is_internal_opt_key;
 use tracing::debug;
-use common_sql::{NameAndDataTypes, to_data_schema};
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;

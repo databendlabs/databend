@@ -87,8 +87,10 @@ use crate::plans::Scalar;
 use crate::plans::ShowCreateTablePlan;
 use crate::plans::TruncateTablePlan;
 use crate::plans::UndropTablePlan;
-use crate::{BindContext, NameAndDataType, NameAndDataTypes};
+use crate::BindContext;
 use crate::ColumnBinding;
+use crate::NameAndDataType;
+use crate::NameAndDataTypes;
 use crate::ScalarExpr;
 
 struct SelectBuilder {
@@ -804,9 +806,9 @@ impl<'a> Binder {
                 AstOptimizeTableAction::Compact { target, limit } => {
                     let limit_cnt = match limit {
                         Some(Expr::Literal {
-                                 lit: Literal::Integer(uint),
-                                 ..
-                             }) => Some(*uint as usize),
+                            lit: Literal::Integer(uint),
+                            ..
+                        }) => Some(*uint as usize),
                         Some(_) => {
                             return Err(ErrorCode::IllegalDataType("Unsupported limit type"));
                         }

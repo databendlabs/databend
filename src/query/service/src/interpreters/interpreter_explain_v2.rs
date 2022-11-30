@@ -19,7 +19,10 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_sql::{MetadataRef, NameAndDataType, NameAndDataTypes, to_data_schema};
+use common_sql::to_data_schema;
+use common_sql::MetadataRef;
+use common_sql::NameAndDataType;
+use common_sql::NameAndDataTypes;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -106,7 +109,9 @@ impl Interpreter for ExplainInterpreter {
             | ExplainKind::Memo(display_string) => {
                 let line_splitted_result: Vec<&str> = display_string.lines().collect();
                 let column = Series::from_data(line_splitted_result);
-                vec![DataBlock::create(to_data_schema(&self.schema), vec![column])]
+                vec![DataBlock::create(to_data_schema(&self.schema), vec![
+                    column,
+                ])]
             }
         };
 
@@ -116,7 +121,8 @@ impl Interpreter for ExplainInterpreter {
 
 impl ExplainInterpreter {
     pub fn try_create(ctx: Arc<QueryContext>, plan: Plan, kind: ExplainKind) -> Result<Self> {
-        let data_field = NameAndDataType::new("explain", DataTypeImpl::String(StringType::default()));
+        let data_field =
+            NameAndDataType::new("explain", DataTypeImpl::String(StringType::default()));
         let schema = NameAndDataTypes::new(vec![data_field]);
         Ok(ExplainInterpreter {
             ctx,

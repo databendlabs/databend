@@ -14,15 +14,11 @@
 
 use std::fmt::Display;
 
-
 use common_ast::ast::ExplainKind;
-
-
-
-
 use common_datavalues::StringType;
 
 use crate::optimizer::SExpr;
+use crate::planner::utils::NameAndDataTypes;
 use crate::plans::copy_v2::CopyPlanV2;
 use crate::plans::insert::Insert;
 use crate::plans::presign::PresignPlan;
@@ -84,9 +80,9 @@ use crate::plans::UndropDatabasePlan;
 use crate::plans::UndropTablePlan;
 use crate::plans::UpdatePlan;
 use crate::plans::UseDatabasePlan;
-use crate::{BindContext, NameAndDataType};
+use crate::BindContext;
 use crate::MetadataRef;
-use crate::planner::utils::NameAndDataTypes;
+use crate::NameAndDataType;
 
 #[derive(Clone, Debug)]
 pub enum Plan {
@@ -303,7 +299,10 @@ impl Plan {
                 ..
             } => bind_context.output_schema(),
             Plan::Explain { .. } | Plan::ExplainAst { .. } | Plan::ExplainSyntax { .. } => {
-                NameAndDataTypes::new(vec![NameAndDataType::new("explain", StringType::new_impl())])
+                NameAndDataTypes::new(vec![NameAndDataType::new(
+                    "explain",
+                    StringType::new_impl(),
+                )])
             }
             Plan::Copy(_) => Default::default(),
             Plan::ShowCreateCatalog(plan) => plan.schema(),

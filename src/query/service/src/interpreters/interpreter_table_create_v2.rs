@@ -21,8 +21,9 @@ use common_exception::Result;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TableNameIdent;
-use common_sql::{NameAndDataTypes, to_data_schema};
 use common_sql::plans::CreateTablePlanV2;
+use common_sql::to_data_schema;
+use common_sql::NameAndDataTypes;
 use common_users::UserApiProvider;
 
 use crate::interpreters::InsertInterpreterV2;

@@ -15,13 +15,13 @@
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-
 use common_datavalues::prelude::Series;
 use common_datavalues::SeriesFrom;
 use common_exception::Result;
 use common_meta_api::ShareApi;
 use common_meta_app::share::GetObjectGrantPrivilegesReq;
-use common_sql::{NameAndDataTypes, to_data_schema};
+use common_sql::to_data_schema;
+use common_sql::NameAndDataTypes;
 use common_users::UserApiProvider;
 
 use crate::interpreters::Interpreter;
@@ -71,10 +71,13 @@ impl Interpreter for ShowObjectGrantPrivilegesInterpreter {
             created_ons.push(privilege.grant_on.to_string());
         }
 
-        PipelineBuildResult::from_blocks(vec![DataBlock::create(to_data_schema(&self.plan.schema()), vec![
-            Series::from_data(created_ons),
-            Series::from_data(privileges),
-            Series::from_data(share_names),
-        ])])
+        PipelineBuildResult::from_blocks(vec![DataBlock::create(
+            to_data_schema(&self.plan.schema()),
+            vec![
+                Series::from_data(created_ons),
+                Series::from_data(privileges),
+                Series::from_data(share_names),
+            ],
+        )])
     }
 }

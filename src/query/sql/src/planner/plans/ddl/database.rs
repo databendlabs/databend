@@ -12,15 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
-
-
-
 use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::DatabaseMeta;
 use common_meta_app::schema::DatabaseNameIdent;
 use common_meta_app::schema::DropDatabaseReq;
 use common_meta_app::schema::UndropDatabaseReq;
+
 use crate::NameAndDataTypes;
 
 /// Create.

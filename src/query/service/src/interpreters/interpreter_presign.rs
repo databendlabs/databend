@@ -18,9 +18,10 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_sql::to_data_schema;
+use common_sql::NameAndDataTypes;
 use common_storages_stage::StageTable;
 use serde_json::Value;
-use common_sql::{NameAndDataTypes, to_data_schema};
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;

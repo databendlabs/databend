@@ -15,15 +15,15 @@
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-
 use common_datavalues::Series;
 use common_datavalues::SeriesFrom;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_sql::plans::ListPlan;
+use common_sql::to_data_schema;
+use common_sql::NameAndDataTypes;
 use common_storages_stage::list_file;
 use regex::Regex;
-use common_sql::{NameAndDataTypes, to_data_schema};
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -89,12 +89,15 @@ impl Interpreter for ListInterpreter {
             .map(|file| file.creator.as_ref().map(|c| c.to_string().into_bytes()))
             .collect();
 
-        PipelineBuildResult::from_blocks(vec![DataBlock::create(to_data_schema(&self.plan.schema()), vec![
-            Series::from_data(names),
-            Series::from_data(sizes),
-            Series::from_data(etags),
-            Series::from_data(last_modifieds),
-            Series::from_data(creators),
-        ])])
+        PipelineBuildResult::from_blocks(vec![DataBlock::create(
+            to_data_schema(&self.plan.schema()),
+            vec![
+                Series::from_data(names),
+                Series::from_data(sizes),
+                Series::from_data(etags),
+                Series::from_data(last_modifieds),
+                Series::from_data(creators),
+            ],
+        )])
     }
 }

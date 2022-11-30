@@ -12,10 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 use common_datavalues::prelude::*;
 use common_meta_types::UserStageInfo;
-use crate::{NameAndDataType, NameAndDataTypes};
+
+use crate::NameAndDataType;
+use crate::NameAndDataTypes;
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct ListPlan {
@@ -32,12 +33,6 @@ impl ListPlan {
         let last_modified = NameAndDataType::new("last_modified", Vu8::to_data_type());
         let creator = NameAndDataType::new("creator", wrap_nullable(&Vu8::to_data_type()));
 
-        NameAndDataTypes::new(vec![
-            name,
-            size,
-            md5,
-            last_modified,
-            creator,
-        ])
+        NameAndDataTypes::new(vec![name, size, md5, last_modified, creator])
     }
 }
