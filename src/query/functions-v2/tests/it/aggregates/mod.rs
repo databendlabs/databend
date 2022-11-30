@@ -27,6 +27,7 @@ use common_expression::ChunkEntry;
 use common_expression::Column;
 use common_expression::ColumnBuilder;
 use common_expression::Evaluator;
+use common_expression::FunctionContext;
 use common_expression::RawExpr;
 use common_expression::Scalar;
 use common_expression::Value;
@@ -160,7 +161,8 @@ pub fn run_scalar_expr(
     chunk: &Chunk,
 ) -> common_expression::Result<(Value<AnyType>, DataType)> {
     let expr = type_check::check(raw_expr, &BUILTIN_FUNCTIONS)?;
-    let evaluator = Evaluator::new(chunk, chrono_tz::UTC, &BUILTIN_FUNCTIONS);
+    let fn_ctx = FunctionContext { tz: chrono_tz::UTC };
+    let evaluator = Evaluator::new(chunk, fn_ctx, &BUILTIN_FUNCTIONS);
     let result = evaluator.run(&expr)?;
     Ok((result, expr.data_type().clone()))
 }
