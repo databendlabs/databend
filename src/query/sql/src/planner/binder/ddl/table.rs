@@ -27,6 +27,7 @@ use common_ast::ast::DropTableStmt;
 use common_ast::ast::Engine;
 use common_ast::ast::ExistsTableStmt;
 use common_ast::ast::Expr;
+use common_ast::ast::Identifier;
 use common_ast::ast::Literal;
 use common_ast::ast::OptimizeTableAction as AstOptimizeTableAction;
 use common_ast::ast::OptimizeTableStmt;
@@ -166,10 +167,7 @@ impl<'a> Binder {
             with_history,
         } = stmt;
 
-        let database = database
-            .as_ref()
-            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
-            .unwrap_or_else(|| self.ctx.get_current_database());
+        let database = self.check_database_exist(database).await?;
 
         let mut select_builder = if stmt.with_history {
             SelectBuilder::from("system.tables_with_history")
@@ -294,15 +292,9 @@ impl<'a> Binder {
         bind_context: &BindContext,
         stmt: &ShowTablesStatusStmt<'a>,
     ) -> Result<Plan> {
-        let ShowTablesStatusStmt {
-            database: db,
-            limit,
-        } = stmt;
+        let ShowTablesStatusStmt { database, limit } = stmt;
 
-        let database = db
-            .as_ref()
-            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
-            .unwrap_or_else(|| self.ctx.get_current_database());
+        let database = self.check_database_exist(database).await?;
 
         let select_cols = "name AS Name, engine AS Engine, 0 AS Version, \
         NULL AS Row_format, num_rows AS Rows, NULL AS Avg_row_length, data_size AS Data_length, \
@@ -338,6 +330,32 @@ impl<'a> Binder {
         let backtrace = Backtrace::new();
         let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL, &backtrace)?;
         self.bind_statement(bind_context, &stmt).await
+    }
+
+    async fn check_database_exist(&mut self, database: &Option<Identifier<'_>>) -> Result<String> {
+        match database {
+            None => Ok(self.ctx.get_current_database()),
+            Some(ident) => {
+                let database = normalize_identifier(ident, &self.name_resolution_ctx).name;
+                let dbs = self
+                    .ctx
+                    .get_catalog(&self.ctx.get_current_catalog())?
+                    .list_databases(&self.ctx.get_tenant())
+                    .await?;
+                let mut exist = false;
+                for db in dbs {
+                    if *db.get_db_name() == database {
+                        exist = true;
+                    }
+                }
+                if !exist {
+                    return Err(ErrorCode::UnknownDatabase(format!(
+                        "Unknown database '{database}'"
+                    )));
+                }
+                Ok(database)
+            }
+        }
     }
 
     pub(in crate::planner::binder) async fn bind_create_table(

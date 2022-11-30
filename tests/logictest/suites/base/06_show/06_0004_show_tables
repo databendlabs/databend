@@ -90,3 +90,6 @@ SELECT * FROM INFORMATION_SCHEMA.COLUMNS limit 1;
 statement ok
 DROP DATABASE showtable;
 
+statement error 1003
+SHOW TABLES FROM showtable;
+
