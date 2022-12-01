@@ -180,7 +180,6 @@ If you are a hacker passionate about database internals, feel free to play with 
 You can submit [issues](https://github.com/datafuselabs/databend/issues) for any problems you find. We also highly appreciate any of your pull requests.
 
 - [Databend Website](https://databend.rs)
-- [Weekly](https://weekly.databend.rs/) (A weekly newsletter about Databend)
 - [GitHub Discussions](https://github.com/datafuselabs/databend/discussions) (Feature/Bug reports, Contributions)
 - [Twitter](https://twitter.com/Datafuse_Labs) (Get the news fast)
 - [Slack Channel](https://link.databend.rs/join-slack) (For live discussion with the Community)
