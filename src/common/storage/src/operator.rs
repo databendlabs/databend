@@ -89,7 +89,7 @@ pub fn init_operator(cfg: &StorageParams) -> Result<Operator> {
         // Add metrics
         .layer(MetricsLayer)
         // Add logging
-        .layer(LoggingLayer)
+        .layer(LoggingLayer::default())
         // Add tracing
         .layer(TracingLayer)
         // NOTE

@@ -42,6 +42,8 @@ use common_sql::ExpressionParser;
 use common_storage::init_operator;
 use common_storage::CacheOperator;
 use common_storage::DataOperator;
+use common_storage::MemoryCachePolicy;
+use common_storage::RemoteCachePolicy;
 use common_storage::ShareTableConfig;
 use common_storage::StorageMetrics;
 use common_storage::StorageMetricsLayer;
@@ -55,8 +57,8 @@ use common_storages_table_meta::table::table_storage_prefix;
 use common_storages_table_meta::table::OPT_KEY_DATABASE_ID;
 use common_storages_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
 use common_storages_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
-use opendal::layers::ContentCacheLayer;
-use opendal::layers::ContentCacheStrategy;
+use opendal::layers::CacheLayer;
+use opendal::layers::LoggingLayer;
 use opendal::Operator;
 use uuid::Uuid;
 
@@ -118,10 +120,26 @@ impl FuseTable {
         operator = operator.layer(StorageMetricsLayer::new(data_metrics.clone()));
         // If cache op is valid, layered with ContentCacheLayer.
         if let Some(cache_op) = CacheOperator::instance() {
-            operator = operator.layer(ContentCacheLayer::new(
-                cache_op,
-                ContentCacheStrategy::Fixed(1024 * 1024),
-            ));
+            operator = operator
+                .layer(CacheLayer::new(cache_op).with_policy(RemoteCachePolicy::new(1024 * 1024)))
+                // Always add an in-memory cache
+                .layer(
+                    CacheLayer::new(
+                        Operator::from(
+                            opendal::services::moka::Builder::default()
+                                // TODO: allow configure size
+                                .max_capacity(1024 * 1024 * 1024)
+                                .build()?,
+                        )
+                        .layer(
+                            LoggingLayer::default()
+                                // We don't want logs for expected error happend in cache.
+                                .with_error_level(None),
+                        ),
+                    )
+                    // TODO: allow using different policy
+                    .with_policy(MemoryCachePolicy::new(1024 * 1024)),
+                );
         }
 
         Ok(Box::new(FuseTable {

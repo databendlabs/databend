@@ -5674,9 +5674,8 @@ checksum = "0ab1bc2a289d34bd04a330323ac98a1b4bc82c9d9fcb1e66b63caa84da26b575"
 
 [[package]]
 name = "opendal"
-version = "0.21.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e093402bdf1033677db972e0f5ac349e3ec251fe99b5db91b1472180c1f48254"
+version = "0.21.2"
+source = "git+https://github.com/datafuselabs/opendal?rev=764e721#764e72184e42f5949dd4c8f29770a2e397e89204"
 dependencies = [
  "anyhow",
  "async-compat",
@@ -5707,11 +5706,11 @@ dependencies = [
  "serde",
  "serde_json",
  "suppaftp",
- "thiserror",
  "time 0.3.15",
  "tokio",
  "tracing",
  "ureq",
+ "uuid",
 ]
 
 [[package]]
