@@ -629,9 +629,11 @@ impl PipelineBuilder {
         )?;
 
         if insert_select.cast_needed {
-            let mut functions = Vec::with_capacity(insert_schema.inner().len());
-            for (target_field, original_field) in insert_schema.iter().zip(select_schema.iter()) {
-                let target_type_name = target_field.data_type.name();
+            let mut functions = Vec::with_capacity(insert_schema.fields().len());
+            for (target_field, original_field) in
+                insert_schema.fields().iter().zip(select_schema.iter())
+            {
+                let target_type_name = target_field.data_type().name();
                 let from_type = original_field.data_type.clone();
                 let cast_function = CastFunction::create("cast", &target_type_name, from_type)?;
                 functions.push(cast_function);
@@ -643,7 +645,7 @@ impl PipelineBuilder {
                     TransformCastSchema::try_create(
                         transform_input_port,
                         transform_output_port,
-                        to_data_schema(&insert_schema.clone()),
+                        insert_schema.clone(),
                         functions.clone(),
                         func_ctx.clone(),
                     )
@@ -657,7 +659,7 @@ impl PipelineBuilder {
 
         // Fill missing columns.
         {
-            let source_schema = to_data_schema(insert_schema);
+            let source_schema = insert_schema.clone();
             let target_schema = &table.schema();
             if &source_schema != target_schema {
                 self.main_pipeline.add_transform(

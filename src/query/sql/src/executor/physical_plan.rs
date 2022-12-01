@@ -371,7 +371,7 @@ pub struct DistributedInsertSelect {
     pub input: Box<PhysicalPlan>,
     pub catalog: String,
     pub table_info: TableInfo,
-    pub insert_schema: NameAndDataTypes,
+    pub insert_schema: DataSchemaRef,
     pub select_schema: NameAndDataTypes,
     pub select_column_bindings: Vec<ColumnBinding>,
     pub cast_needed: bool,

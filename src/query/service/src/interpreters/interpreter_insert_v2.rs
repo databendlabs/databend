@@ -139,7 +139,7 @@ impl Interpreter for InsertInterpreterV2 {
                                 data.to_string(),
                                 self.ctx.clone(),
                                 name_resolution_ctx,
-                                to_data_schema(&plan.schema()),
+                                plan.schema.clone(),
                             );
                             let enable_expression =
                                 settings.get_insert_values_enable_expression()?;
@@ -187,7 +187,7 @@ impl Interpreter for InsertInterpreterV2 {
                                     table_info: table1.get_table_info().clone(),
                                     select_schema: plan.schema(),
                                     select_column_bindings,
-                                    insert_schema: self.plan.schema(),
+                                    insert_schema: self.plan.schema.clone(),
                                     cast_needed: self.check_schema_cast(plan)?,
                                 }),
                             ));
@@ -202,7 +202,7 @@ impl Interpreter for InsertInterpreterV2 {
                                     table_info: table1.get_table_info().clone(),
                                     select_schema: plan.schema(),
                                     select_column_bindings,
-                                    insert_schema: self.plan.schema(),
+                                    insert_schema: self.plan.schema.clone(),
                                     cast_needed: self.check_schema_cast(plan)?,
                                 },
                             ))
@@ -244,7 +244,7 @@ impl Interpreter for InsertInterpreterV2 {
         append2table(
             self.ctx.clone(),
             table.clone(),
-            to_data_schema(&plan.schema()),
+            plan.schema.clone(),
             &mut build_res,
             self.plan.overwrite,
             true,
