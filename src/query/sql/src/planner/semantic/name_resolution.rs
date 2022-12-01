@@ -56,7 +56,7 @@ pub fn normalize_identifier<'a>(
         ident.clone()
     } else {
         Identifier {
-            name: ident.name.to_lowercase(),
+            name: ident.name.clone(),
             quote: ident.quote,
             span: ident.span.clone(),
         }

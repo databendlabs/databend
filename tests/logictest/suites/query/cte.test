@@ -382,3 +382,11 @@ with it as ( select * from numbers(1) ) select i.number from it as i;
 
 ----
 0
+
+statement query I
+select A.* from  (WITH source2 AS (select 1 as e) SELECT * FROM source2) A;
+
+----
+1
+
+
