@@ -13,6 +13,7 @@
 //  limitations under the License.
 
 use std::collections::VecDeque;
+use std::str;
 use std::sync::Arc;
 
 use common_ast::ast::Engine;
@@ -30,6 +31,7 @@ use common_sql::plans::CreateDatabasePlan;
 use common_sql::plans::CreateTablePlanV2;
 use common_storage::StorageFsConfig;
 use common_storage::StorageParams;
+use common_storages_fuse::FuseTable;
 use common_storages_fuse::FUSE_TBL_XOR_BLOOM_INDEX_PREFIX;
 use common_storages_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_query::interpreters::append2table;
@@ -46,6 +48,7 @@ use databend_query::sql::Planner;
 use databend_query::storages::fuse::table_functions::ClusteringInformationTable;
 use databend_query::storages::fuse::table_functions::FuseSnapshotTable;
 use databend_query::storages::fuse::FUSE_TBL_BLOCK_PREFIX;
+use databend_query::storages::fuse::FUSE_TBL_LAST_SNAPSHOT_HINT;
 use databend_query::storages::fuse::FUSE_TBL_SEGMENT_PREFIX;
 use databend_query::storages::fuse::FUSE_TBL_SNAPSHOT_PREFIX;
 use databend_query::storages::fuse::FUSE_TBL_SNAPSHOT_STATISTICS_PREFIX;
@@ -461,7 +464,7 @@ pub async fn check_data_dir(
     segment_count: u32,
     block_count: u32,
     index_count: u32,
-) {
+) -> Result<()> {
     let data_path = match fixture.ctx().get_config().storage.params {
         StorageParams::Fs(v) => v.root,
         _ => panic!("storage type is not fs"),
@@ -472,11 +475,13 @@ pub async fn check_data_dir(
     let mut sg_count = 0;
     let mut b_count = 0;
     let mut i_count = 0;
+    let mut last_snapshot_loc = "".to_string();
     let prefix_snapshot = FUSE_TBL_SNAPSHOT_PREFIX;
     let prefix_snapshot_statistics = FUSE_TBL_SNAPSHOT_STATISTICS_PREFIX;
     let prefix_segment = FUSE_TBL_SEGMENT_PREFIX;
     let prefix_block = FUSE_TBL_BLOCK_PREFIX;
     let prefix_index = FUSE_TBL_XOR_BLOOM_INDEX_PREFIX;
+    let prefix_last_snapshot_hint = FUSE_TBL_LAST_SNAPSHOT_HINT;
     for entry in WalkDir::new(root) {
         let entry = entry.unwrap();
         if entry.file_type().is_file() {
@@ -494,6 +499,9 @@ pub async fn check_data_dir(
                 i_count += 1;
             } else if path.starts_with(prefix_snapshot_statistics) {
                 ts_count += 1;
+            } else if path.starts_with(prefix_last_snapshot_hint) {
+                let content = fixture.ctx.get_data_operator()?.object(path).read().await?;
+                last_snapshot_loc = str::from_utf8(&content)?.to_string();
             }
         }
     }
@@ -525,6 +533,13 @@ pub async fn check_data_dir(
         "case [{}], check index count",
         case_name
     );
+
+    let table = fixture.latest_default_table().await?;
+    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+    let snapshot_loc = fuse_table.snapshot_loc().await?;
+    assert_eq!(snapshot_loc, Some(last_snapshot_loc));
+
+    Ok(())
 }
 
 pub async fn history_should_have_item(
