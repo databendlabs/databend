@@ -32,6 +32,7 @@ pub async fn build_query_pipeline(
     ctx: &Arc<QueryContext>,
     result_columns: &[ColumnBinding],
     plan: &PhysicalPlan,
+    ignore_result: bool,
 ) -> Result<PipelineBuildResult> {
     let mut build_res = if !plan.is_distributed_plan() {
         build_local_pipeline(ctx, plan).await
@@ -45,6 +46,7 @@ pub async fn build_query_pipeline(
         input_schema,
         result_columns,
         &mut build_res.main_pipeline,
+        ignore_result,
     )?;
 
     Ok(build_res)
