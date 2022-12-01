@@ -69,27 +69,17 @@ t2
 statement ok
 USE default;
 
-statement ok
+statement error 1003
 SHOW TABLES FROM showtables WHERE name LIKE 't%';
 
-statement ok
+statement error 1003
 SHOW TABLES FROM showtables WHERE name = 't%' AND 1 = 0;
 
-statement ok
+statement error 1003
 SHOW TABLES FROM showtables WHERE name = 't2' OR 1 = 1;
 
-statement ok
+statement error 1003
 SHOW TABLES FROM showtables WHERE name = 't2' AND 1 = 1;
 
 statement ok
-SELECT * FROM INFORMATION_SCHEMA.TABLES limit 1;
-
-statement ok
-SELECT * FROM INFORMATION_SCHEMA.COLUMNS limit 1;
-
-statement ok
 DROP DATABASE showtable;
-
-statement error 1003
-SHOW TABLES FROM showtable;
-

@@ -337,22 +337,10 @@ impl<'a> Binder {
             None => Ok(self.ctx.get_current_database()),
             Some(ident) => {
                 let database = normalize_identifier(ident, &self.name_resolution_ctx).name;
-                let dbs = self
-                    .ctx
+                self.ctx
                     .get_catalog(&self.ctx.get_current_catalog())?
-                    .list_databases(&self.ctx.get_tenant())
+                    .get_database(&self.ctx.get_tenant(), &database)
                     .await?;
-                let mut exist = false;
-                for db in dbs {
-                    if *db.get_db_name() == database {
-                        exist = true;
-                    }
-                }
-                if !exist {
-                    return Err(ErrorCode::UnknownDatabase(format!(
-                        "Unknown database '{database}'"
-                    )));
-                }
                 Ok(database)
             }
         }
