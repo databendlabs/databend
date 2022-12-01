@@ -30,6 +30,7 @@ use common_functions::scalars::CastFunction;
 use common_functions::scalars::FunctionContext;
 use common_functions::scalars::FunctionFactory;
 use common_pipeline_core::Pipe;
+use common_pipeline_sinks::processors::sinks::EmptySink;
 use common_pipeline_sinks::processors::sinks::UnionReceiveSink;
 use common_pipeline_transforms::processors::transforms::try_add_multi_sort_merge;
 use common_sql::evaluator::ChunkOperator;
@@ -183,7 +184,12 @@ impl PipelineBuilder {
         input_schema: DataSchemaRef,
         result_columns: &[ColumnBinding],
         pipeline: &mut Pipeline,
+        ignore_result: bool,
     ) -> Result<()> {
+        if ignore_result {
+            return pipeline.add_sink(|input| Ok(EmptySink::create(input)));
+        }
+
         let mut projections = Vec::with_capacity(result_columns.len());
         let mut result_fields = Vec::with_capacity(result_columns.len());
         for column_binding in result_columns {
@@ -611,6 +617,7 @@ impl PipelineBuilder {
             insert_select.input.output_schema()?,
             &insert_select.select_column_bindings,
             &mut self.main_pipeline,
+            false,
         )?;
 
         if insert_select.cast_needed {

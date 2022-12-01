@@ -65,8 +65,13 @@ impl OneBlockProcedure for SearchTablesProcedure {
             ..
         } = plan
         {
-            let interpreter =
-                SelectInterpreterV2::try_create(ctx.clone(), *bind_context, *s_expr, metadata)?;
+            let interpreter = SelectInterpreterV2::try_create(
+                ctx.clone(),
+                *bind_context,
+                *s_expr,
+                metadata,
+                true,
+            )?;
             interpreter.execute(ctx.clone()).await
         } else {
             return Err(ErrorCode::Internal("search tables build query error"));
