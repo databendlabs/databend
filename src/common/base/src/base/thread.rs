@@ -19,6 +19,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use super::runtime_tracker::ThreadTracker;
+use crate::base::MemoryTracker;
 
 pub struct Thread;
 
@@ -72,9 +73,11 @@ impl Thread {
             None => thread_builder.spawn(f).unwrap(),
             Some(memory_tracker) => thread_builder
                 .spawn(move || {
-                    ThreadTracker::attach_thread_tracker(Some(ThreadTracker::create(
-                        memory_tracker,
-                    )));
+                    let c = MemoryTracker::create_sub_tracker(Some(memory_tracker));
+                    let mut tracker = ThreadTracker::create(Some(c));
+
+                    ThreadTracker::swap_with(&mut tracker);
+
                     f()
                 })
                 .unwrap(),

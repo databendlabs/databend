@@ -134,7 +134,6 @@ impl Runtime {
         let mut builder = tokio::runtime::Builder::new_multi_thread();
         builder
             .enable_all()
-            .on_thread_stop(mem_tracker.on_stop_thread())
             .on_thread_start(mem_tracker.on_start_thread());
 
         builder
