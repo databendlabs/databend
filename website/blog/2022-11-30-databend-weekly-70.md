@@ -1,5 +1,5 @@
 ---
-title: 'This week in Databend #70'
+title: 'This Week in Databend #70'
 date: 2022-11-30
 slug: 2022-11-30-databend-weekly
 tags: [databend, weekly]
@@ -11,47 +11,47 @@ authors:
 
 [Databend](https://github.com/datafuselabs/databend) is a powerful cloud data warehouse. Built for elasticity and efficiency. Free and open. Also available in the cloud: <https://app.databend.com> .
 
-## What's Changed
+## What's New
 
-Below is a list of some major changes that we don't want you to miss.
+Check out what we've done this week to make Databend even better for you.
 
-### Exciting New Features :sparkles:
+### New Features :sparkles:
 
-**format**
+**Format**
 
 - better checking of format options ([#8981](https://github.com/datafuselabs/databend/pull/8981))
 - add basic schema infer for parquet ([#9043](https://github.com/datafuselabs/databend/pull/9043))
 
-**query**
+**Query**
 
 - QualifiedName support 'db.table.*' and 'table.*' ([#8965](https://github.com/datafuselabs/databend/pull/8965))
 - support bulk insert without exprssion ([#8966](https://github.com/datafuselabs/databend/pull/8966))
 
-**storage**
+**Storage**
 
 - add cache layer for fuse engine ([#8830](https://github.com/datafuselabs/databend/pull/8830))
 - add system table system.memory_statistics ([#8945](https://github.com/datafuselabs/databend/pull/8945))
 - add optimize statistic ddl support ([#8891](https://github.com/datafuselabs/databend/pull/8891))
 
-### Code Refactor :tada:
+### Code Refactoring :tada:
 
-**base**
+**Base**
 
 - remove common macros ([#8936](https://github.com/datafuselabs/databend/pull/8936))
 
-**format**
+**Format**
 
 - TypeDeserializer get rid of FormatSetting ([#8950](https://github.com/datafuselabs/databend/pull/8950))
 
-**planner**
+**Planner**
 
 - refactor extract or predicate ([#8951](https://github.com/datafuselabs/databend/pull/8951))
 
-**processors**
+**Processors**
 
 - optimize join by merging build data block ([#8961](https://github.com/datafuselabs/databend/pull/8961))
 
-**new expression**
+**New Expression**
 
 - allow sparse column id in chunk, redo [#8789](https://github.com/datafuselabs/databend/pull/8789) with a new approach. ([#9008](https://github.com/datafuselabs/databend/pull/9008))
 
@@ -59,37 +59,37 @@ Below is a list of some major changes that we don't want you to miss.
 
 - i18n support with crowdin ([#8987](https://github.com/datafuselabs/databend/pull/8987), [#8997](https://github.com/datafuselabs/databend/pull/8997), etc.)
 
-### Thoughtful Bug Fix :wrench:
+### Bug Fixes :wrench:
 
-**base**
+**Base**
 
 - try fix lost tracker ([#8932](https://github.com/datafuselabs/databend/pull/8932))
 
-**meta**
+**Meta**
 
 - fix share db bug, create DatabaseIdToName if need ([#9006](https://github.com/datafuselabs/databend/pull/9006))
 
-**mysql handler**
+**Mysql handler**
 
 - fix mysql conns leak ([#8894](https://github.com/datafuselabs/databend/pull/8894))
 
-**processors**
+**Processors**
 
 - try fix update list memory leak ([#9023](https://github.com/datafuselabs/databend/pull/9023))
 
-**storage**
+**Storage**
 
 - read and write block in parallel when compact ([#8921](https://github.com/datafuselabs/databend/pull/8921))
 
-## News
+## What's On in Databend
 
-Let's take a look at what's new at Datafuse Labs & Databend each week.
+Stay connected with the latest news about Databend.
 
 #### Preview of Infer Schema
 
-To load data from a stage or location, users need to create table first. However, sometimes users don't know the file schema, or the schema is too complex / too simple to be input by users.
+You usually need to create a table before loading data from a file stored on a stage or somewhere. Unfortunately, sometimes you might not know the file schema to create the table or are unable to input the schema due to its complexity. 
 
-Allowing infer schema from existing files makes our users' lives easier. Also, this feature will unlock the databend from implementing `select * from @my_stage`.
+Introducing the capability to infer schema from an existing file will make the work much easier. You will even be able to query data directly from a stage using a SELECT statement like `select * from @my_stage`.
 
 ```sql
 INFER 's3://mybucket/data.csv' FILE_FORMAT = ( TYPE = CSV );
@@ -101,7 +101,7 @@ INFER 's3://mybucket/data.csv' FILE_FORMAT = ( TYPE = CSV );
 +-------------+---------+----------+
 ```
 
-[#9043](https://github.com/datafuselabs/databend/pull/9043) has added basic schema infer for parquet. We will be moving forward with support for `select from stage` ([#7211](https://github.com/datafuselabs/databend/issues/7211)) on this basis.
+We've added support for inferring the basic schema from parquet files in [#9043](https://github.com/datafuselabs/databend/pull/9043), and we're now working on [#7211](https://github.com/datafuselabs/databend/issues/7211) to implement `select from @stage`.
 
 **Learn More**
 
