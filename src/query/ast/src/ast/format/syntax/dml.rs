@@ -232,9 +232,9 @@ fn pretty_copy_unit(copy_unit: CopyUnit) -> RcDoc {
             RcDoc::nil()
         })
         .append(RcDoc::text(table.to_string())),
-        CopyUnit::StageLocation { name, path } => RcDoc::text("@")
-            .append(RcDoc::text(name))
-            .append(RcDoc::text(path)),
+        CopyUnit::StageLocation(v) => RcDoc::text("@")
+            .append(RcDoc::text(v.name))
+            .append(RcDoc::text(v.path)),
         CopyUnit::UriLocation(v) => RcDoc::text(v.to_string()),
         CopyUnit::Query(query) => RcDoc::text("(")
             .append(pretty_query(*query))

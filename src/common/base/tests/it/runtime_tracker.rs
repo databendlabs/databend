@@ -29,7 +29,7 @@ async fn test_async_thread_tracker() -> Result<()> {
 
     let memory_tracker = MemoryTracker::create();
     let inner_join_handler = inner_runtime.spawn(AsyncThreadTracker::create(
-        Some(ThreadTracker::create(memory_tracker.clone())),
+        ThreadTracker::create(Some(memory_tracker.clone())),
         async move {
             let memory = vec![0_u8; 3 * 1024 * 1024];
             out_tx.send(()).await.unwrap();

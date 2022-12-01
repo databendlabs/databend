@@ -135,18 +135,26 @@ impl FuseTable {
                 ctx.get_settings().get_max_threads()? as usize
             }
             ReadDataKind::BlockDataAdjustIORequests => {
-                // Assume 160MB one block file.
-                let block_file_size = 160 * 1024 * 1024_usize;
+                let conf = ctx.get_config();
+                let mut max_memory_usage = ctx.get_settings().get_max_memory_usage()? as usize;
+                if conf.query.table_cache_enabled {
+                    // Removing bloom index memory size.
+                    max_memory_usage -= conf.query.table_cache_bloom_index_data_bytes as usize;
+                }
 
+                // Assume 300MB one block file after decompressed.
+                let block_file_size = 300 * 1024 * 1024_usize;
                 let table_column_len = self.table_info.schema().fields().len();
                 let per_column_bytes = block_file_size / table_column_len;
-                let column_memory_usage = per_column_bytes * projection.len();
-                let max_memory_usage = ctx.get_settings().get_max_memory_usage()? as usize;
+                let scan_column_bytes = per_column_bytes * projection.len();
+                let estimate_io_requests = max_memory_usage / scan_column_bytes;
 
-                let setting_io_requests =
-                    std::cmp::max(1, ctx.get_settings().get_max_storage_io_requests()?);
-                let adjust_io_requests = std::cmp::max(1, max_memory_usage / column_memory_usage);
-                std::cmp::min(adjust_io_requests, setting_io_requests as usize)
+                let setting_io_requests = std::cmp::max(
+                    1,
+                    ctx.get_settings().get_max_storage_io_requests()? as usize,
+                );
+                let adjust_io_requests = std::cmp::max(1, estimate_io_requests);
+                std::cmp::min(adjust_io_requests, setting_io_requests)
             }
         })
     }

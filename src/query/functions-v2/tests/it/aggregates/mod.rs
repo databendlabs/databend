@@ -23,9 +23,11 @@ use common_expression::types::number::NumberScalar;
 use common_expression::types::AnyType;
 use common_expression::types::DataType;
 use common_expression::Chunk;
+use common_expression::ChunkEntry;
 use common_expression::Column;
 use common_expression::ColumnBuilder;
 use common_expression::Evaluator;
+use common_expression::FunctionContext;
 use common_expression::RawExpr;
 use common_expression::Scalar;
 use common_expression::Value;
@@ -63,7 +65,12 @@ pub fn run_agg_ast(
     let chunk = Chunk::new(
         columns
             .iter()
-            .map(|(_, ty, col)| (Value::Column(col.clone()), ty.clone()))
+            .enumerate()
+            .map(|(id, (_, ty, col))| ChunkEntry {
+                id,
+                data_type: ty.clone(),
+                value: Value::Column(col.clone()),
+            })
             .collect::<Vec<_>>(),
         num_rows,
     );
@@ -154,7 +161,8 @@ pub fn run_scalar_expr(
     chunk: &Chunk,
 ) -> common_expression::Result<(Value<AnyType>, DataType)> {
     let expr = type_check::check(raw_expr, &BUILTIN_FUNCTIONS)?;
-    let evaluator = Evaluator::new(chunk, chrono_tz::UTC, &BUILTIN_FUNCTIONS);
+    let fn_ctx = FunctionContext { tz: chrono_tz::UTC };
+    let evaluator = Evaluator::new(chunk, fn_ctx, &BUILTIN_FUNCTIONS);
     let result = evaluator.run(&expr)?;
     Ok((result, expr.data_type().clone()))
 }

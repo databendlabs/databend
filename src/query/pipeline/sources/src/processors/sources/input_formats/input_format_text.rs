@@ -17,6 +17,7 @@ use std::mem;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
+use common_datavalues::DataSchema;
 use common_datavalues::TypeDeserializer;
 use common_datavalues::TypeDeserializerImpl;
 use common_exception::ErrorCode;
@@ -117,6 +118,12 @@ impl<T: InputFormatTextBase> InputFormat for InputFormatText<T> {
 
     fn exec_stream(&self, ctx: Arc<InputContext>, pipeline: &mut Pipeline) -> Result<()> {
         InputFormatTextPipe::<T>::execute_stream(ctx, pipeline)
+    }
+
+    async fn infer_schema(&self, _path: &str, _op: &Operator) -> Result<DataSchema> {
+        Err(ErrorCode::Unimplemented(
+            "infer_schema is not implemented for this format yet.",
+        ))
     }
 
     async fn get_splits(

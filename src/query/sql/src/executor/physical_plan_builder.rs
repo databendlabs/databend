@@ -450,6 +450,7 @@ impl PhysicalPlanBuilder {
                 let input_schema = input.output_schema()?;
                 let mut keys = vec![];
                 let kind = match exchange {
+                    Exchange::Random => FragmentKind::Init,
                     Exchange::Hash(scalars) => {
                         for scalar in scalars {
                             let mut builder = PhysicalScalarBuilder::new(&input_schema);
