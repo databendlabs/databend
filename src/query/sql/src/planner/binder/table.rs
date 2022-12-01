@@ -260,12 +260,12 @@ impl<'a> Binder {
             } => {
                 // For subquery, we need use a new context to bind it.
                 let new_bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
-                let (s_expr, mut bind_context) =
+                let (s_expr, mut new_bind_context) =
                     self.bind_query(&new_bind_context, subquery).await?;
                 if let Some(alias) = alias {
-                    bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
+                    new_bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
                 }
-                Ok((s_expr, bind_context))
+                Ok((s_expr, new_bind_context))
             }
         }
     }
