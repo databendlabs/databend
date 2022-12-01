@@ -273,6 +273,9 @@ impl<'a> Binder {
                 }
                 Ok((s_expr, new_bind_context))
             }
+            TableReference::Stage { .. } => {
+                unimplemented!()
+            }
         }
     }
 

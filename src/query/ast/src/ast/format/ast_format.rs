@@ -2189,6 +2189,31 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                 let node = FormatTreeNode::with_children(format_ctx, vec![child]);
                 self.children.push(node);
             }
+            TableReference::Stage {
+                span: _,
+                location,
+                files,
+                alias,
+            } => {
+                let mut children = Vec::new();
+                if !files.is_empty() {
+                    let files = files.join(",");
+                    let files = format!("files = {}", files);
+                    children.push(FormatTreeNode::new(AstFormatContext::new(files)))
+                }
+                let stage_name = format!("Stage {:?}", location);
+                let format_ctx = if let Some(alias) = alias {
+                    AstFormatContext::with_children_alias(
+                        stage_name,
+                        children.len(),
+                        Some(format!("{}", alias)),
+                    )
+                } else {
+                    AstFormatContext::with_children(stage_name, children.len())
+                };
+                let node = FormatTreeNode::with_children(format_ctx, children);
+                self.children.push(node)
+            }
         }
     }
 
