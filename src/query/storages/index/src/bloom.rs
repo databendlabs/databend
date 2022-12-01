@@ -127,7 +127,10 @@ impl BlockFilter {
                 // ingest the same column data from all blocks
                 for block in blocks.iter() {
                     let col = block.column(i);
-                    filter_builder.add_keys(&col.to_values());
+                    for idx in 0..col.len() {
+                        let value = col.get(idx);
+                        filter_builder.add_key(&value);
+                    }
                 }
 
                 let filter = filter_builder.build()?;
