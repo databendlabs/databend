@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_meta_types::UserStageInfo;
 use common_storages_stage::StageTable;
 use common_users::UserApiProvider;
 use poem::error::InternalServerError;
@@ -59,10 +60,21 @@ pub async fn upload_to_stage(
                 StatusCode::BAD_REQUEST,
             )
         })?;
-    let stage = UserApiProvider::instance()
-        .get_stage(context.get_tenant().as_str(), stage_name)
-        .await
-        .map_err(InternalServerError)?;
+
+    let stage = if stage_name == "~" {
+        UserStageInfo::new_user_stage(
+            context
+                .get_current_user()
+                .map_err(InternalServerError)?
+                .name
+                .as_str(),
+        )
+    } else {
+        UserApiProvider::instance()
+            .get_stage(context.get_tenant().as_str(), stage_name)
+            .await
+            .map_err(InternalServerError)?
+    };
 
     let rename_me_qry_ctx: Arc<dyn TableContext> = context.clone();
     let op = StageTable::get_op(&rename_me_qry_ctx, &stage).map_err(InternalServerError)?;

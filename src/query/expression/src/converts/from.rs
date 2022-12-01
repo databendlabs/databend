@@ -17,6 +17,7 @@ use common_datavalues::remove_nullable;
 use common_datavalues::ColumnRef;
 use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
+use itertools::Itertools;
 
 use crate::types::number::NumberScalar;
 use crate::types::AnyType;
@@ -24,6 +25,7 @@ use crate::types::DataType;
 use crate::types::NumberDataType;
 use crate::with_number_type;
 use crate::Chunk;
+use crate::ChunkEntry;
 use crate::Column;
 use crate::ColumnBuilder;
 use crate::Scalar;
@@ -156,12 +158,17 @@ pub fn convert_column(column: &ColumnRef, logical_type: &DataTypeImpl) -> Value<
 }
 
 pub fn from_block(datablock: &DataBlock) -> Chunk {
-    let columns: Vec<(Value<AnyType>, DataType)> = datablock
+    let columns = datablock
         .columns()
         .iter()
         .zip(datablock.schema().fields().iter())
-        .map(|(c, f)| (convert_column(c, f.data_type()), from_type(f.data_type())))
-        .collect();
+        .enumerate()
+        .map(|(id, (c, f))| ChunkEntry {
+            id,
+            data_type: from_type(f.data_type()),
+            value: convert_column(c, f.data_type()),
+        })
+        .collect_vec();
 
     Chunk::new(columns, datablock.num_rows())
 }

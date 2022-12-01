@@ -21,7 +21,7 @@ use crate::IndexType;
 pub type ColumnSet = HashSet<IndexType>;
 pub type TableSet = HashSet<IndexType>;
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Debug)]
 pub struct RequiredProperty {
     pub distribution: Distribution,
 }

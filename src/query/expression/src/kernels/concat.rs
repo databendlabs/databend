@@ -14,6 +14,7 @@
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use itertools::Itertools;
 
 use crate::types::array::ArrayColumnBuilder;
 use crate::types::nullable::NullableColumn;
@@ -34,6 +35,7 @@ use crate::types::ValueType;
 use crate::types::VariantType;
 use crate::with_number_mapped_type;
 use crate::Chunk;
+use crate::ChunkEntry;
 use crate::Column;
 use crate::ColumnBuilder;
 use crate::Value;
@@ -50,21 +52,40 @@ impl Chunk {
 
         let concat_columns = (0..chunks[0].num_columns())
             .map(|i| {
+                debug_assert!(
+                    chunks
+                        .iter()
+                        .map(|chunk| chunk.get_by_offset(i).id)
+                        .all_equal()
+                );
+                debug_assert!(
+                    chunks
+                        .iter()
+                        .map(|chunk| &chunk.get_by_offset(i).data_type)
+                        .all_equal()
+                );
+
                 let columns = chunks
                     .iter()
                     .map(|chunk| {
-                        let (col, ty) = &chunk.columns()[i];
-                        match col {
-                            Value::Scalar(s) => {
-                                ColumnBuilder::repeat(&s.as_ref(), chunk.num_rows(), ty).build()
-                            }
+                        let entry = &chunk.get_by_offset(i);
+                        match &entry.value {
+                            Value::Scalar(s) => ColumnBuilder::repeat(
+                                &s.as_ref(),
+                                chunk.num_rows(),
+                                &entry.data_type,
+                            )
+                            .build(),
                             Value::Column(c) => c.clone(),
                         }
                     })
                     .collect::<Vec<_>>();
-                let ty = chunks[0].columns()[i].1.clone();
-                let col = Column::concat(&columns);
-                (Value::Column(col), ty)
+
+                ChunkEntry {
+                    id: chunks[0].get_by_offset(i).id,
+                    data_type: chunks[0].get_by_offset(i).data_type.clone(),
+                    value: Value::Column(Column::concat(&columns)),
+                }
             })
             .collect();
 

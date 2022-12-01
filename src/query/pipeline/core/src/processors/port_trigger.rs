@@ -68,7 +68,7 @@ impl DirectedEdge {
     }
 }
 
-struct UpdateListMutable {
+pub struct UpdateListMutable {
     updated_edges: Vec<DirectedEdge>,
     updated_triggers: Vec<Arc<UnsafeCell<UpdateTrigger>>>,
 }
@@ -81,17 +81,6 @@ impl UpdateList {
                 updated_triggers: vec![],
             }),
         })
-    }
-
-    /// Trigger node input or output edge. Executor will schedule this edge.
-    ///
-    /// # Safety
-    ///
-    /// Must be thread safe call. In other words, it needs to be called in single thread or in mutex guard.
-    #[inline(always)]
-    pub unsafe fn update_edge(&self, edge: DirectedEdge) {
-        let inner = &mut *self.inner.get();
-        inner.updated_edges.push(edge);
     }
 
     /// Enter the next scheduling cycle
@@ -118,7 +107,7 @@ impl UpdateList {
     /// Must be thread safe call. In other words, it needs to be called in single thread or in mutex guard.
     pub unsafe fn create_trigger(self: &Arc<Self>, edge_index: EdgeIndex) -> *mut UpdateTrigger {
         let inner = &mut *self.inner.get();
-        let update_trigger = UpdateTrigger::create(edge_index, self.clone());
+        let update_trigger = UpdateTrigger::create(edge_index, self.inner.get());
         inner
             .updated_triggers
             .push(Arc::new(UnsafeCell::new(update_trigger)));
@@ -128,7 +117,7 @@ impl UpdateList {
 
 pub struct UpdateTrigger {
     index: EdgeIndex,
-    update_list: Arc<UpdateList>,
+    update_list: *mut UpdateListMutable,
     version: usize,
     prev_version: usize,
 }
@@ -136,7 +125,7 @@ pub struct UpdateTrigger {
 unsafe impl Send for UpdateTrigger {}
 
 impl UpdateTrigger {
-    pub fn create(index: EdgeIndex, update_list: Arc<UpdateList>) -> UpdateTrigger {
+    pub fn create(index: EdgeIndex, update_list: *mut UpdateListMutable) -> UpdateTrigger {
         UpdateTrigger {
             index,
             update_list,
@@ -165,9 +154,8 @@ impl UpdateTrigger {
             let self_ = &mut **self_;
             if self_.version == self_.prev_version {
                 self_.version += 1;
-                self_
-                    .update_list
-                    .update_edge(DirectedEdge::Target(self_.index));
+                let inner = &mut *self_.update_list;
+                inner.updated_edges.push(DirectedEdge::Target(self_.index));
             }
         }
     }
@@ -183,9 +171,8 @@ impl UpdateTrigger {
             let self_ = &mut **self_;
             if self_.version == self_.prev_version {
                 self_.version += 1;
-                self_
-                    .update_list
-                    .update_edge(DirectedEdge::Source(self_.index));
+                let inner = &mut *self_.update_list;
+                inner.updated_edges.push(DirectedEdge::Source(self_.index));
             }
         }
     }
