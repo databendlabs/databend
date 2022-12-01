@@ -240,14 +240,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-
       - name: Get the version
         id: get_version
         run: echo "VERSION=${GITHUB_REF/refs\/tags\//}" >> $GITHUB_OUTPUT
-
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v1
-
       - uses: ./.github/actions/setup_docker
         id: login
         with:
@@ -255,15 +252,20 @@ jobs:
           ecr_role_arn: ${{ secrets.ECR_ROLE_ARN }}
           dockerhub_user: ${{ secrets.DOCKERHUB_USERNAME }}
           dockerhub_token: ${{ secrets.DOCKERHUB_TOKEN }}
-
       - name: Download binaries for usage
         id: download_binaries
         run: |
-          version=${{ needs.create_release.outputs.version }}
-          mkdir -p ./target/release
-          wget -q https://repo.databend.rs/databend/${version}/databend-${version}-x86_64-unknown-linux-gnu.tar.gz
-          tar x -C ./target/release -f ./databend-${version}-x86_64-unknown-linux-gnu.tar.gz --strip-components 1 bin/
-
+          version="${{ needs.create_release.outputs.version }}"
+          declare -A platform_targets=( ["arm64"]="aarch64-unknown-linux-gnu" ["amd64"]="x86_64-unknown-linux-gnu")
+          mkdir -p ./distro/
+          for platform in ${!platform_targets[@]}; do
+              target=${platform_targets[$platform]}
+              wget -P distro -qc https://repo.databend.rs/databend/${version}/databend-${version}-${target}.tar.gz
+              mkdir -p ./target/${target}/release
+              tar x -C ./target/${target}/release -f ./distro/databend-${version}-${target}.tar.gz --strip-components 1 bin/
+              mkdir -p ./distro/linux/${platform}
+              cp ./target/${target}/release/databend-* ./distro/linux/${platform}
+          done
       - name: Build and push
         id: docker_build
         uses: docker/build-push-action@v3
@@ -274,7 +276,7 @@ jobs:
             ${{ steps.login.outputs.dockerhub_repo }}:${{ needs.create_release.outputs.version }}
             ${{ steps.login.outputs.ecr_repo }}:latest
             ${{ steps.login.outputs.ecr_repo }}:${{ needs.create_release.outputs.version }}
-          platforms: linux/amd64
+          platforms: linux/amd64,linux/arm64
           context: .
           file: ./docker/Dockerfile
           build-args: VERSION=${{ needs.create_release.outputs.version }}
@@ -295,14 +297,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-
       - name: Get the version
         id: get_version
         run: echo "VERSION=${GITHUB_REF/refs\/tags\//}" >> $GITHUB_OUTPUT
-
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v1
-
       - uses: ./.github/actions/setup_docker
         id: login
         with:
@@ -310,7 +309,6 @@ jobs:
           ecr_role_arn: ${{ secrets.ECR_ROLE_ARN }}
           dockerhub_user: ${{ secrets.DOCKERHUB_USERNAME }}
           dockerhub_token: ${{ secrets.DOCKERHUB_TOKEN }}
-
       - name: Download binaries for usage
         id: download_binaries
         run: |
@@ -325,7 +323,6 @@ jobs:
               mkdir -p ./distro/linux/${platform}
               cp ./target/${target}/release/databend-* ./distro/linux/${platform}
           done
-
       - name: get image tags
         id: get_image_tags
         shell: bash
@@ -339,7 +336,6 @@ jobs:
             _tags="${_tags},${{ steps.login.outputs.ecr_repo }}:latest"
           fi
           echo "IMAGE_TAGS=${_tags}" >> $GITHUB_OUTPUT
-
       - name: push service image
         uses: docker/build-push-action@v3
         with:
