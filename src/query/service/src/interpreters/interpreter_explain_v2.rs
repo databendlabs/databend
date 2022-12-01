@@ -70,7 +70,10 @@ impl Interpreter for ExplainInterpreter {
 
             ExplainKind::Pipeline => match &self.plan {
                 Plan::Query {
-                    s_expr, metadata, ignore_result, ..
+                    s_expr,
+                    metadata,
+                    ignore_result,
+                    ..
                 } => {
                     self.explain_pipeline(*s_expr.clone(), metadata.clone(), *ignore_result)
                         .await?
