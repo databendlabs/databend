@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::base::AsyncThreadTracker;
-use common_base::base::MemoryTracker;
+use common_base::base::MemStat;
 use common_base::base::Runtime;
 use common_base::base::ThreadTracker;
+use common_base::base::TrackedFuture;
 use common_base::base::TrySpawn;
 use common_exception::Result;
 
@@ -27,8 +27,8 @@ async fn test_async_thread_tracker() -> Result<()> {
     let outer_runtime = Runtime::with_worker_threads(2, Some(String::from("Outer")))?;
     let inner_runtime = Runtime::with_worker_threads(2, Some(String::from("Inner")))?;
 
-    let memory_tracker = MemoryTracker::create();
-    let inner_join_handler = inner_runtime.spawn(AsyncThreadTracker::create(
+    let memory_tracker = MemStat::create();
+    let inner_join_handler = inner_runtime.spawn(TrackedFuture::create(
         ThreadTracker::create(Some(memory_tracker.clone())),
         async move {
             let memory = vec![0_u8; 3 * 1024 * 1024];
