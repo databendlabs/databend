@@ -20,6 +20,8 @@ use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_meta_types::UserStageInfo;
 use futures::TryStreamExt;
+use opendal::Object;
+use opendal::Operator;
 use tracing::warn;
 
 use crate::StageFilePartition;
@@ -110,4 +112,19 @@ pub async fn list_file(
         .collect::<Vec<StageFilePartition>>();
 
     Ok(results)
+}
+
+pub async fn get_first_file(op: &Operator, path: &str) -> Result<Option<Object>> {
+    let root_object = op.object(path);
+    let meta = match root_object.metadata().await {
+        Ok(meta) => meta,
+        Err(e) if e.kind() == opendal::ErrorKind::ObjectNotFound => return Ok(None),
+        Err(e) => return Err(e.into()),
+    };
+    if !meta.mode().is_dir() {
+        Ok(Some(root_object))
+    } else {
+        let mut lister = root_object.list().await?;
+        Ok(lister.try_next().await?)
+    }
 }
