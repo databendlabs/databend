@@ -236,7 +236,7 @@ pub async fn clickhouse_handler_post(
 
     let default_format = get_default_format(&params, headers).map_err(BadRequest)?;
     let mut sql = params.query();
-    if sql.is_empty() {
+    if !sql.is_empty() {
         sql.push(' ');
     }
     sql.push_str(body.into_string().await?.as_str());
