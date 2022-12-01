@@ -129,12 +129,12 @@ impl InputFormat for InputFormatParquet {
         Ok(infos)
     }
 
-    async fn infer_schema(&self, path: &str, op: &Operator) -> Result<DataSchema> {
+    async fn infer_schema(&self, path: &str, op: &Operator) -> Result<DataSchemaRef> {
         let obj = op.object(path);
         let mut reader = obj.seekable_reader(..);
         let file_meta = read_metadata_async(&mut reader).await?;
         let arrow_schema = infer_schema(&file_meta)?;
-        Ok(DataSchema::from(arrow_schema))
+        Ok(Arc::new(DataSchema::from(arrow_schema)))
     }
 
     fn exec_copy(&self, ctx: Arc<InputContext>, pipeline: &mut Pipeline) -> Result<()> {
