@@ -236,7 +236,9 @@ pub async fn clickhouse_handler_post(
 
     let default_format = get_default_format(&params, headers).map_err(BadRequest)?;
     let mut sql = params.query();
-    sql.push_str(" ");
+    if sql.is_empty() {
+        sql.push(' ');
+    }
     sql.push_str(body.into_string().await?.as_str());
     let n = 100;
     // other parts of the request already logged in middleware
