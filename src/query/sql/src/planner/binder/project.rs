@@ -13,7 +13,9 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 
+use common_ast::ast::Identifier;
 use common_ast::ast::Indirection;
 use common_ast::ast::SelectTarget;
 use common_exception::ErrorCode;
@@ -131,6 +133,7 @@ impl<'a> Binder {
     ///
     ///   * Qualified name, e.g. `SELECT t.a FROM t`
     ///   * Qualified name with wildcard, e.g. `SELECT t.* FROM t, t1`
+    ///   * Qualified name with exclude, e.g. `SELECT t.* EXCLUDE (c1, c2) FROM t, t1`
     ///   * Scalar expression or aggregate expression, e.g. `SELECT COUNT(*)+1 AS count FROM t`
     ///
     /// For qualified names, we just resolve it with the input `BindContext`. If successful, we
@@ -150,19 +153,44 @@ impl<'a> Binder {
         let mut output = SelectList::<'a>::default();
         for select_target in select_list {
             match select_target {
-                SelectTarget::QualifiedName(names) => {
+                SelectTarget::QualifiedName {
+                    qualified: names,
+                    exclude,
+                } => {
                     // Handle qualified name as select target
-                    if names.len() == 1 {
-                        // *
-                        let indirection = &names[0];
-                        match indirection {
-                            Indirection::Star => {
+                    let mut exclude_cols: HashSet<String> = HashSet::new();
+                    if let Some(cols) = exclude {
+                        for col in cols {
+                            exclude_cols.insert(col.name.clone());
+                        }
+                        if exclude_cols.len() < cols.len() {
+                            // * except (id, id)
+                            return Err(ErrorCode::SemanticError("duplicate column name"));
+                        }
+                    }
+
+                    let empty_exclude = exclude_cols.is_empty();
+                    let mut match_table = false;
+
+                    if names.len() == 1 || names.len() == 2 {
+                        let table_name = match &names[0] {
+                            Indirection::Star => None,
+                            Indirection::Identifier(table_name) => Some(table_name),
+                        };
+                        let star = table_name.is_none();
+                        if !empty_exclude {
+                            precheck_exclude_cols(input_context, &exclude_cols, None, table_name)?;
+                        }
+                        for column_binding in input_context.all_column_bindings() {
+                            if column_binding.visibility != Visibility::Visible {
+                                continue;
+                            }
+                            let push_item = empty_exclude
+                                || exclude_cols.get(&column_binding.column_name).is_none();
+                            if star {
                                 // Expands wildcard star, for example we have a table `t(a INT, b INT)`:
                                 // The query `SELECT * FROM t` will be expanded into `SELECT t.a, t.b FROM t`
-                                for column_binding in input_context.all_column_bindings() {
-                                    if column_binding.visibility != Visibility::Visible {
-                                        continue;
-                                    }
+                                if push_item {
                                     output.items.push(SelectItem {
                                         select_target,
                                         scalar: BoundColumnRef {
@@ -172,48 +200,26 @@ impl<'a> Binder {
                                         alias: column_binding.column_name.clone(),
                                     });
                                 }
-                            }
-                            _ => {
-                                return Err(ErrorCode::SemanticError(
-                                    "Unsupported indirection type",
-                                ));
+                            } else if column_binding.table_name
+                                == Some(table_name.unwrap().name.clone())
+                                && push_item
+                            {
+                                match_table = true;
+                                output.items.push(SelectItem {
+                                    select_target,
+                                    scalar: BoundColumnRef {
+                                        column: column_binding.clone(),
+                                    }
+                                    .into(),
+                                    alias: column_binding.column_name.clone(),
+                                });
                             }
                         }
-                    } else if names.len() == 2 {
-                        // table.*
-                        let indirection = &names[0];
-                        match indirection {
-                            Indirection::Identifier(table_name) => {
-                                let mut match_table = false;
-                                for column_binding in input_context.all_column_bindings() {
-                                    if column_binding.visibility != Visibility::Visible {
-                                        continue;
-                                    }
-                                    if column_binding.table_name == Some(table_name.name.clone()) {
-                                        match_table = true;
-                                        let select_item = SelectItem {
-                                            select_target,
-                                            scalar: BoundColumnRef {
-                                                column: column_binding.clone(),
-                                            }
-                                            .into(),
-                                            alias: column_binding.column_name.clone(),
-                                        };
-                                        output.items.push(select_item);
-                                    }
-                                }
-                                if !match_table {
-                                    return Err(ErrorCode::UnknownTable(format!(
-                                        "Unknown table '{}'",
-                                        table_name.name.clone()
-                                    )));
-                                }
-                            }
-                            _ => {
-                                return Err(ErrorCode::SemanticError(
-                                    "Unsupported indirection type",
-                                ));
-                            }
+                        if !star && !match_table {
+                            return Err(ErrorCode::UnknownTable(format!(
+                                "Unknown table '{}'",
+                                table_name.unwrap().name
+                            )));
                         }
                     } else if names.len() == 3 {
                         // db.table.*
@@ -224,25 +230,37 @@ impl<'a> Binder {
                                 Indirection::Identifier(db_name),
                                 Indirection::Identifier(table_name),
                             ) => {
-                                let mut match_table = false;
+                                if !empty_exclude {
+                                    precheck_exclude_cols(
+                                        input_context,
+                                        &exclude_cols,
+                                        Some(db_name),
+                                        Some(table_name),
+                                    )?;
+                                }
                                 for column_binding in input_context.all_column_bindings() {
                                     if column_binding.visibility != Visibility::Visible {
                                         continue;
                                     }
-                                    if column_binding.database_name == Some(db_name.name.clone())
+                                    let match_table_with_db = column_binding.database_name
+                                        == Some(db_name.name.clone())
                                         && column_binding.table_name
-                                            == Some(table_name.name.clone())
+                                            == Some(table_name.name.clone());
+                                    if match_table_with_db
+                                        && (exclude_cols.is_empty()
+                                            || exclude_cols
+                                                .get(&column_binding.column_name)
+                                                .is_none())
                                     {
                                         match_table = true;
-                                        let select_item = SelectItem {
+                                        output.items.push(SelectItem {
                                             select_target,
                                             scalar: BoundColumnRef {
                                                 column: column_binding.clone(),
                                             }
                                             .into(),
                                             alias: column_binding.column_name.clone(),
-                                        };
-                                        output.items.push(select_item);
+                                        });
                                     }
                                 }
                                 if !match_table {
@@ -289,4 +307,76 @@ impl<'a> Binder {
         }
         Ok(output)
     }
+}
+
+// Pre-check exclude_col is legal
+fn precheck_exclude_cols(
+    input_context: &BindContext,
+    exclude_cols: &HashSet<String>,
+    db_name: Option<&Identifier>,
+    table_name: Option<&Identifier>,
+) -> Result<()> {
+    let all_columns_bind = input_context.all_column_bindings();
+    let mut qualified_cols_name: HashSet<String> = HashSet::new();
+
+    fn fill_qualified_cols(
+        qualified_cols_name: &mut HashSet<String>,
+        column_bind: &ColumnBinding,
+    ) -> Result<()> {
+        let col_name = column_bind.column_name.clone();
+        if qualified_cols_name.contains(col_name.as_str()) {
+            return Err(ErrorCode::SemanticError(format!(
+                "ambiguous column name '{col_name}'"
+            )));
+        } else {
+            qualified_cols_name.insert(col_name);
+        }
+        Ok(())
+    }
+
+    match (db_name, table_name) {
+        (None, None) => {
+            for column_bind in all_columns_bind {
+                if column_bind.visibility != Visibility::Visible {
+                    continue;
+                }
+                fill_qualified_cols(&mut qualified_cols_name, column_bind)?;
+            }
+        }
+        (None, Some(table_name)) => {
+            for column_bind in all_columns_bind {
+                if column_bind.visibility != Visibility::Visible {
+                    continue;
+                }
+                if column_bind.table_name == Some(table_name.name.clone()) {
+                    fill_qualified_cols(&mut qualified_cols_name, column_bind)?;
+                }
+            }
+        }
+        (Some(db_name), Some(table_name)) => {
+            for column_bind in all_columns_bind {
+                if column_bind.visibility != Visibility::Visible {
+                    continue;
+                }
+                if column_bind.table_name == Some(table_name.name.clone())
+                    && column_bind.database_name == Some(db_name.name.clone())
+                {
+                    fill_qualified_cols(&mut qualified_cols_name, column_bind)?;
+                }
+            }
+        }
+        (Some(_), None) => {}
+    }
+
+    for exclude_col in exclude_cols {
+        if qualified_cols_name.get(exclude_col).is_none() {
+            return Err(ErrorCode::SemanticError(format!(
+                "column '{exclude_col}' doesn't exist"
+            )));
+        }
+    }
+    if exclude_cols.len() == qualified_cols_name.len() {
+        return Err(ErrorCode::SemanticError("SELECT with no columns"));
+    }
+    Ok(())
 }

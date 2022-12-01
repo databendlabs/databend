@@ -61,7 +61,10 @@ impl<'a> Binder {
         stmt: &SelectStmt<'a>,
     ) -> Result<(SExpr, BindContext)> {
         for select_target in &stmt.select_list {
-            if let SelectTarget::QualifiedName(names) = select_target {
+            if let SelectTarget::QualifiedName {
+                qualified: names, ..
+            } = select_target
+            {
                 for indirect in names {
                     if indirect == &Indirection::Star {
                         return Err(ErrorCode::SemanticError(stmt.span.display_error(

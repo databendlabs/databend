@@ -108,26 +108,61 @@ fn pretty_select_list(select_list: Vec<SelectTarget>) -> RcDoc {
     }
     .nest(NEST_FACTOR)
     .append(
-        interweave_comma(select_list.into_iter().map(|select_target| {
-            match select_target {
-                SelectTarget::AliasedExpr { expr, alias } => {
-                    pretty_expr(*expr).append(if let Some(alias) = alias {
-                        RcDoc::space()
-                            .append(RcDoc::text("AS"))
-                            .append(RcDoc::space())
-                            .append(RcDoc::text(alias.to_string()))
-                    } else {
-                        RcDoc::nil()
-                    })
-                }
-                SelectTarget::QualifiedName(object_name) => inline_dot(
-                    object_name
-                        .into_iter()
-                        .map(|indirection| RcDoc::text(indirection.to_string())),
-                )
-                .group(),
-            }
-        }))
+        interweave_comma(
+            select_list
+                .into_iter()
+                .map(|select_target| match select_target {
+                    SelectTarget::AliasedExpr { expr, alias } => {
+                        pretty_expr(*expr).append(if let Some(alias) = alias {
+                            RcDoc::space()
+                                .append(RcDoc::text("AS"))
+                                .append(RcDoc::space())
+                                .append(RcDoc::text(alias.to_string()))
+                        } else {
+                            RcDoc::nil()
+                        })
+                    }
+                    SelectTarget::QualifiedName {
+                        qualified: object_name,
+                        exclude,
+                    } => {
+                        let docs = inline_dot(
+                            object_name
+                                .into_iter()
+                                .map(|indirection| RcDoc::text(indirection.to_string())),
+                        )
+                        .group();
+                        docs.append(if let Some(cols) = exclude {
+                            if !cols.is_empty() {
+                                RcDoc::line()
+                                    .append(
+                                        RcDoc::text("EXCLUDE").append(
+                                            if cols.len() > 1 {
+                                                RcDoc::line()
+                                            } else {
+                                                RcDoc::space()
+                                            }
+                                            .nest(NEST_FACTOR),
+                                        ),
+                                    )
+                                    .append(
+                                        interweave_comma(cols.into_iter().map(|ident| {
+                                            RcDoc::space()
+                                                .append(RcDoc::space())
+                                                .append(RcDoc::text(ident.to_string()))
+                                        }))
+                                        .nest(NEST_FACTOR)
+                                        .group(),
+                                    )
+                            } else {
+                                RcDoc::nil()
+                            }
+                        } else {
+                            RcDoc::nil()
+                        })
+                    }
+                }),
+        )
         .nest(NEST_FACTOR)
         .group(),
     )

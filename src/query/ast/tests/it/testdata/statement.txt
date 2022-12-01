@@ -377,11 +377,12 @@ CreateTable(
                         ],
                         distinct: false,
                         select_list: [
-                            QualifiedName(
-                                [
+                            QualifiedName {
+                                qualified: [
                                     Star,
                                 ],
-                            ),
+                                exclude: None,
+                            },
                         ],
                         from: [
                             Table {
@@ -1909,11 +1910,12 @@ Query(
                 ],
                 distinct: false,
                 select_list: [
-                    QualifiedName(
-                        [
+                    QualifiedName {
+                        qualified: [
                             Star,
                         ],
-                    ),
+                        exclude: None,
+                    },
                 ],
                 from: [
                     Table {
@@ -1972,11 +1974,12 @@ Query(
                 ],
                 distinct: false,
                 select_list: [
-                    QualifiedName(
-                        [
+                    QualifiedName {
+                        qualified: [
                             Star,
                         ],
-                    ),
+                        exclude: None,
+                    },
                 ],
                 from: [
                     Table {
@@ -2047,11 +2050,12 @@ Query(
                 ],
                 distinct: false,
                 select_list: [
-                    QualifiedName(
-                        [
+                    QualifiedName {
+                        qualified: [
                             Star,
                         ],
-                    ),
+                        exclude: None,
+                    },
                 ],
                 from: [
                     Table {
@@ -2149,11 +2153,12 @@ Query(
                 ],
                 distinct: false,
                 select_list: [
-                    QualifiedName(
-                        [
+                    QualifiedName {
+                        qualified: [
                             Star,
                         ],
-                    ),
+                        exclude: None,
+                    },
                 ],
                 from: [
                     Table {
@@ -2295,11 +2300,12 @@ Query(
                 ],
                 distinct: false,
                 select_list: [
-                    QualifiedName(
-                        [
+                    QualifiedName {
+                        qualified: [
                             Star,
                         ],
-                    ),
+                        exclude: None,
+                    },
                 ],
                 from: [
                     Join {
@@ -2448,11 +2454,12 @@ Query(
                 ],
                 distinct: false,
                 select_list: [
-                    QualifiedName(
-                        [
+                    QualifiedName {
+                        qualified: [
                             Star,
                         ],
-                    ),
+                        exclude: None,
+                    },
                 ],
                 from: [
                     Join {
@@ -2603,11 +2610,12 @@ Query(
                 ],
                 distinct: false,
                 select_list: [
-                    QualifiedName(
-                        [
+                    QualifiedName {
+                        qualified: [
                             Star,
                         ],
-                    ),
+                        exclude: None,
+                    },
                 ],
                 from: [
                     Join {
@@ -2758,11 +2766,12 @@ Query(
                 ],
                 distinct: false,
                 select_list: [
-                    QualifiedName(
-                        [
+                    QualifiedName {
+                        qualified: [
                             Star,
                         ],
-                    ),
+                        exclude: None,
+                    },
                 ],
                 from: [
                     Join {
@@ -2911,11 +2920,12 @@ Query(
                 ],
                 distinct: false,
                 select_list: [
-                    QualifiedName(
-                        [
+                    QualifiedName {
+                        qualified: [
                             Star,
                         ],
-                    ),
+                        exclude: None,
+                    },
                 ],
                 from: [
                     Join {
@@ -3065,11 +3075,12 @@ Query(
                 ],
                 distinct: false,
                 select_list: [
-                    QualifiedName(
-                        [
+                    QualifiedName {
+                        qualified: [
                             Star,
                         ],
-                    ),
+                        exclude: None,
+                    },
                 ],
                 from: [
                     Join {
@@ -3218,11 +3229,12 @@ Query(
                 ],
                 distinct: false,
                 select_list: [
-                    QualifiedName(
-                        [
+                    QualifiedName {
+                        qualified: [
                             Star,
                         ],
-                    ),
+                        exclude: None,
+                    },
                 ],
                 from: [
                     Join {
@@ -3372,11 +3384,12 @@ Query(
                 ],
                 distinct: false,
                 select_list: [
-                    QualifiedName(
-                        [
+                    QualifiedName {
+                        qualified: [
                             Star,
                         ],
-                    ),
+                        exclude: None,
+                    },
                 ],
                 from: [
                     Join {
@@ -3527,11 +3540,12 @@ Query(
                 ],
                 distinct: false,
                 select_list: [
-                    QualifiedName(
-                        [
+                    QualifiedName {
+                        qualified: [
                             Star,
                         ],
-                    ),
+                        exclude: None,
+                    },
                 ],
                 from: [
                     Join {
@@ -3682,11 +3696,12 @@ Query(
                 ],
                 distinct: false,
                 select_list: [
-                    QualifiedName(
-                        [
+                    QualifiedName {
+                        qualified: [
                             Star,
                         ],
-                    ),
+                        exclude: None,
+                    },
                 ],
                 from: [
                     Join {
@@ -3835,11 +3850,12 @@ Query(
                 ],
                 distinct: false,
                 select_list: [
-                    QualifiedName(
-                        [
+                    QualifiedName {
+                        qualified: [
                             Star,
                         ],
-                    ),
+                        exclude: None,
+                    },
                 ],
                 from: [
                     Join {
@@ -3981,11 +3997,12 @@ Query(
                 ],
                 distinct: false,
                 select_list: [
-                    QualifiedName(
-                        [
+                    QualifiedName {
+                        qualified: [
                             Star,
                         ],
-                    ),
+                        exclude: None,
+                    },
                 ],
                 from: [
                     Join {
@@ -4089,11 +4106,12 @@ Query(
                 ],
                 distinct: false,
                 select_list: [
-                    QualifiedName(
-                        [
+                    QualifiedName {
+                        qualified: [
                             Star,
                         ],
-                    ),
+                        exclude: None,
+                    },
                 ],
                 from: [
                     Join {
@@ -4197,11 +4215,12 @@ Query(
                 ],
                 distinct: false,
                 select_list: [
-                    QualifiedName(
-                        [
+                    QualifiedName {
+                        qualified: [
                             Star,
                         ],
-                    ),
+                        exclude: None,
+                    },
                 ],
                 from: [
                     Join {
@@ -4303,11 +4322,12 @@ Query(
                 ],
                 distinct: false,
                 select_list: [
-                    QualifiedName(
-                        [
+                    QualifiedName {
+                        qualified: [
                             Star,
                         ],
-                    ),
+                        exclude: None,
+                    },
                 ],
                 from: [
                     Join {
@@ -4422,11 +4442,12 @@ Query(
                 ],
                 distinct: false,
                 select_list: [
-                    QualifiedName(
-                        [
+                    QualifiedName {
+                        qualified: [
                             Star,
                         ],
-                    ),
+                        exclude: None,
+                    },
                 ],
                 from: [
                     Table {
@@ -4624,11 +4645,12 @@ Query(
                 ],
                 distinct: false,
                 select_list: [
-                    QualifiedName(
-                        [
+                    QualifiedName {
+                        qualified: [
                             Star,
                         ],
-                    ),
+                        exclude: None,
+                    },
                 ],
                 from: [
                     Table {
@@ -4826,11 +4848,12 @@ Query(
                 ],
                 distinct: false,
                 select_list: [
-                    QualifiedName(
-                        [
+                    QualifiedName {
+                        qualified: [
                             Star,
                         ],
-                    ),
+                        exclude: None,
+                    },
                 ],
                 from: [
                     Table {
@@ -5026,11 +5049,12 @@ Query(
                 ],
                 distinct: false,
                 select_list: [
-                    QualifiedName(
-                        [
+                    QualifiedName {
+                        qualified: [
                             Star,
                         ],
-                    ),
+                        exclude: None,
+                    },
                 ],
                 from: [
                     Table {
@@ -5404,11 +5428,12 @@ Insert(
                         ],
                         distinct: false,
                         select_list: [
-                            QualifiedName(
-                                [
+                            QualifiedName {
+                                qualified: [
                                     Star,
                                 ],
-                            ),
+                                exclude: None,
+                            },
                         ],
                         from: [
                             Table {

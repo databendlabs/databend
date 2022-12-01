@@ -119,9 +119,12 @@ pub enum SelectTarget<'a> {
         alias: Option<Identifier<'a>>,
     },
 
-    // Qualified name, e.g. `SELECT t.a, t.* FROM t`.
+    // Qualified name, e.g. `SELECT t.a, t.* exclude t.a FROM t`.
     // For simplicity, wildcard is involved.
-    QualifiedName(QualifiedName<'a>),
+    QualifiedName {
+        qualified: QualifiedName<'a>,
+        exclude: Option<Vec<Identifier<'a>>>,
+    },
 }
 
 pub type QualifiedName<'a> = Vec<Indirection<'a>>;
@@ -370,8 +373,16 @@ impl<'a> Display for SelectTarget<'a> {
                     write!(f, " AS {ident}")?;
                 }
             }
-            SelectTarget::QualifiedName(indirections) => {
-                write_period_separated_list(f, indirections)?;
+            SelectTarget::QualifiedName { qualified, exclude } => {
+                write_period_separated_list(f, qualified)?;
+                if let Some(cols) = exclude {
+                    // EXCLUDE
+                    if !cols.is_empty() {
+                        write!(f, " EXCLUDE (")?;
+                        write_comma_separated_list(f, cols)?;
+                        write!(f, ")")?;
+                    }
+                }
             }
         }
         Ok(())
