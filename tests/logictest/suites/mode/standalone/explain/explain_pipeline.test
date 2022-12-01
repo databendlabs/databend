@@ -8,6 +8,9 @@ create table t1(a int, b int);
 statement ok
 set max_threads = 16;
 
+statement ok
+set max_storage_io_requests = 16;
+
 statement query T
 explain pipeline select a from t1 ignore_result;
 
