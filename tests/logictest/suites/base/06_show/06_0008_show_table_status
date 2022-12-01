@@ -121,3 +121,5 @@ SHOW TABLE STATUS FROM showtabstat WHERE Create_time = 'test';
 statement ok
 DROP DATABASE IF EXISTS showtabstat;
 
+statement error 1003
+SHOW TABLE STATUS FROM showtabstat WHERE Create_time = 'test';
