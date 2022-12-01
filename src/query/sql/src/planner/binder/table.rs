@@ -258,7 +258,10 @@ impl<'a> Binder {
                 subquery,
                 alias,
             } => {
-                let (s_expr, mut bind_context) = self.bind_query(bind_context, subquery).await?;
+                // For subquery, we need use a new context to bind it.
+                let new_bind_context = BindContext::new();
+                let (s_expr, mut bind_context) =
+                    self.bind_query(&new_bind_context, subquery).await?;
                 if let Some(alias) = alias {
                     bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
                 }
