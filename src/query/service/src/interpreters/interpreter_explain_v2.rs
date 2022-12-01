@@ -70,9 +70,12 @@ impl Interpreter for ExplainInterpreter {
 
             ExplainKind::Pipeline => match &self.plan {
                 Plan::Query {
-                    s_expr, metadata, ..
+                    s_expr,
+                    metadata,
+                    ignore_result,
+                    ..
                 } => {
-                    self.explain_pipeline(*s_expr.clone(), metadata.clone())
+                    self.explain_pipeline(*s_expr.clone(), metadata.clone(), *ignore_result)
                         .await?
                 }
                 _ => {
@@ -149,10 +152,11 @@ impl ExplainInterpreter {
         &self,
         s_expr: SExpr,
         metadata: MetadataRef,
+        ignore_result: bool,
     ) -> Result<Vec<DataBlock>> {
         let builder = PhysicalPlanBuilder::new(metadata, self.ctx.clone());
         let plan = builder.build(&s_expr).await?;
-        let build_res = build_query_pipeline(&self.ctx, &[], &plan).await?;
+        let build_res = build_query_pipeline(&self.ctx, &[], &plan, ignore_result).await?;
 
         let mut blocks = vec![];
         // Format root pipeline
