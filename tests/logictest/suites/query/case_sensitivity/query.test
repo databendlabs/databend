@@ -51,3 +51,10 @@ select "b" from (select "A" as "B" from "T");
 onlyif mysql
 statement ok
 drop table "T";
+
+onlyif mysql
+statement query I
+select A.* from  (WITH source2 AS (select 1 as e) SELECT * FROM source2) A;
+
+----
+1
