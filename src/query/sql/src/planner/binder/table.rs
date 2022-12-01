@@ -259,7 +259,7 @@ impl<'a> Binder {
                 alias,
             } => {
                 // For subquery, we need use a new context to bind it.
-                let new_bind_context = BindContext::new();
+                let new_bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
                 let (s_expr, mut bind_context) =
                     self.bind_query(&new_bind_context, subquery).await?;
                 if let Some(alias) = alias {
