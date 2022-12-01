@@ -205,6 +205,7 @@ DB.Table: 'system'.'configs', Table: configs-table_id:1, ver:0, Engine: SystemCo
 | query   | mysql_handler_host                   | 127.0.0.1                      |             |
 | query   | mysql_handler_port                   | 3307                           |             |
 | query   | num_cpus                             | 0                              |             |
+| query   | quota                                | null                           |             |
 | query   | rpc_tls_query_server_root_ca_cert    |                                |             |
 | query   | rpc_tls_query_service_domain_name    | localhost                      |             |
 | query   | rpc_tls_server_cert                  |                                |             |
