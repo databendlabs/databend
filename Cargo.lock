@@ -2021,6 +2021,7 @@ dependencies = [
  "common-pipeline-transforms",
  "common-settings",
  "common-storage",
+ "common-storages-stage",
  "common-storages-table-meta",
  "common-storages-view",
  "common-tracing",
