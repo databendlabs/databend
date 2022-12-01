@@ -12,4 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod deletion_meta;
 mod deletion_part;
+mod deletion_sink;
+mod deletion_source;
+
+pub use deletion_meta::Deletion;

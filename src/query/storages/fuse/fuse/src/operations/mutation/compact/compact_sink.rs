@@ -21,7 +21,7 @@ use common_catalog::table_context::TableContext;
 use common_datablocks::BlockMetaInfos;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_pipeline_core::processors::processor::ProcessorPtr;
+use crate::pipelines::processors::processor::ProcessorPtr;
 use common_storages_table_meta::meta::Location;
 use common_storages_table_meta::meta::SegmentInfo;
 use common_storages_table_meta::meta::Statistics;

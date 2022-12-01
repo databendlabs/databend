@@ -19,15 +19,15 @@ use common_catalog::plan::PartInfo;
 use common_catalog::plan::PartInfoPtr;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_storages_table_meta::meta::BlockMeta;
-use common_storages_table_meta::meta::SegmentInfo;
+use common_storages_table_meta::meta::ClusterStatistics;
 
-#[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+use crate::pruning::BlockIndex;
+
+#[derive(serde::Serialize, serde::Deserialize, PartialEq)]
 pub struct DeletionPartInfo {
-    segment: Arc<SegmentInfo>,
-    index: usize,
-    // The deleted block index and block meta.
-    blocks: Vec<(usize, BlockMeta)>,
+    pub index: BlockIndex,
+    pub cluster_stats: Option<ClusterStatistics>,
+    pub part: PartInfoPtr,
 }
 
 #[typetag::serde(name = "deletion")]
@@ -44,20 +44,20 @@ impl PartInfo for DeletionPartInfo {
     }
 
     fn hash(&self) -> u64 {
-        0
+        self.part.hash()
     }
 }
 
 impl DeletionPartInfo {
     pub fn create(
-        segment: Arc<SegmentInfo>,
-        index: usize,
-        blocks: Vec<(usize, BlockMeta)>,
+        index: BlockIndex,
+        cluster_stats: Option<ClusterStatistics>,
+        part: PartInfoPtr,
     ) -> PartInfoPtr {
         Arc::new(Box::new(DeletionPartInfo {
-            segment,
             index,
-            blocks,
+            cluster_stats,
+            part,
         }))
     }
 
