@@ -27,7 +27,7 @@ Currently, it does not work on Mac, with either intel or ARM.
 2. Fire up `databend`, using environment variable `MALLOC_CONF` to enable memory profiling:
   
   ```
-  MALLOC_CONF=prof:true,lg_prof_interval:30 ./target/debug/databend-query
+  MALLOC_CONF=prof:true,lg_prof_interval:30 ./target/release/databend-query
   ```
 
 ### Generate heap profile
