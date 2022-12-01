@@ -170,20 +170,22 @@ impl<'a> Binder {
                             return Err(ErrorCode::SemanticError("duplicate column name"));
                         }
                     }
-                    return match names.len() {
+                    match names.len() {
                         1 | 2 => self.resolve_qualified_name_without_database_name(
                             input_context,
                             names,
                             exclude_cols,
                             select_target,
-                        ),
+                            &mut output,
+                        )?,
                         3 => self.resolve_qualified_name_with_database_name(
                             input_context,
                             names,
                             exclude_cols,
                             select_target,
-                        ),
-                        _ => Err(ErrorCode::SemanticError("Unsupported indirection type")),
+                            &mut output,
+                        )?,
+                        _ => return Err(ErrorCode::SemanticError("Unsupported indirection type")),
                     };
                 }
                 SelectTarget::AliasedExpr { expr, alias } => {
@@ -219,10 +221,10 @@ impl<'a> Binder {
         names: &QualifiedName,
         exclude_cols: HashSet<String>,
         select_target: &'a SelectTarget,
-    ) -> Result<SelectList<'a>> {
+        output: &mut SelectList<'a>,
+    ) -> Result<()> {
         let mut match_table = false;
         let empty_exclude = exclude_cols.is_empty();
-        let mut output = SelectList::<'a>::default();
         let table_name = match &names[0] {
             Indirection::Star => None,
             Indirection::Identifier(table_name) => Some(table_name),
@@ -276,7 +278,7 @@ impl<'a> Binder {
                 table_name.unwrap().name
             )));
         }
-        Ok(output)
+        Ok(())
     }
 
     fn resolve_qualified_name_with_database_name(
@@ -285,10 +287,10 @@ impl<'a> Binder {
         names: &QualifiedName,
         exclude_cols: HashSet<String>,
         select_target: &'a SelectTarget,
-    ) -> Result<SelectList<'a>> {
+        output: &mut SelectList<'a>,
+    ) -> Result<()> {
         let mut match_table = false;
         let empty_exclude = exclude_cols.is_empty();
-        let mut output = SelectList::<'a>::default();
         // db.table.*
         let db_name = &names[0];
         let tab_name = &names[1];
@@ -346,7 +348,7 @@ impl<'a> Binder {
                 return Err(ErrorCode::SemanticError("Unsupported indirection type"));
             }
         }
-        Ok(output)
+        Ok(())
     }
 }
 
