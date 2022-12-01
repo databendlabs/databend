@@ -60,6 +60,10 @@ impl FilterBuilder for Xor8Builder {
     type Filter = Xor8Filter;
     type Error = Xor8BuildingError;
 
+    fn add_key<K: Hash>(&mut self, key: &K) {
+        self.filter.insert(key)
+    }
+
     fn add_keys<K: Hash>(&mut self, keys: &[K]) {
         self.filter.populate(keys)
     }
