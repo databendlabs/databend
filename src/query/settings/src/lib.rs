@@ -174,13 +174,13 @@ impl Settings {
             },
             // max_storage_io_requests
             SettingValue {
-                default_value: UserSettingValue::UInt64(1000),
+                default_value: UserSettingValue::UInt64(64),
                 user_setting: UserSetting::create(
                     "max_storage_io_requests",
-                    UserSettingValue::UInt64(1000),
+                    UserSettingValue::UInt64(64),
                 ),
                 level: ScopeLevel::Session,
-                desc: "The maximum number of concurrent IO requests. By default, it is 1000.",
+                desc: "The maximum number of concurrent IO requests. By default, it is 64.",
                 possible_values: None,
             },
             // flight_client_timeout
