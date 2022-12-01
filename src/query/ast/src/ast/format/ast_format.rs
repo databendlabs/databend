@@ -2093,7 +2093,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                 let node = FormatTreeNode::with_children(format_ctx, vec![child]);
                 self.children.push(node);
             }
-            SelectTarget::QualifiedName(_) => {
+            SelectTarget::QualifiedName { .. } => {
                 let name = format!("Target {}", target);
                 let format_ctx = AstFormatContext::new(name);
                 let node = FormatTreeNode::new(format_ctx);
