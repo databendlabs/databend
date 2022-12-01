@@ -92,7 +92,7 @@ pub fn exclude_col(i: Input) -> IResult<Vec<Identifier>> {
     );
     let vars = map(
         rule! {
-            "(" ~ ^#comma_separated_list1(ident) ~ ")"
+             "(" ~ ^#comma_separated_list1(ident) ~ ^")"
         },
         |(_, cols, _)| cols,
     );
@@ -108,23 +108,26 @@ pub fn select_target(i: Input) -> IResult<SelectTarget> {
         rule! {
             ( #ident ~ "." ~ ( #ident ~ "." )? )? ~ "*" ~ ( EXCLUDE ~ #exclude_col )?
         },
-        |(res, _, opt_exclude)| match res {
-            Some((fst, _, Some((snd, _)))) => SelectTarget::QualifiedName {
-                qualified: vec![
-                    Indirection::Identifier(fst),
-                    Indirection::Identifier(snd),
-                    Indirection::Star,
-                ],
-                exclude: opt_exclude.map(|(_, exclude)| exclude),
-            },
-            Some((fst, _, None)) => SelectTarget::QualifiedName {
-                qualified: vec![Indirection::Identifier(fst), Indirection::Star],
-                exclude: opt_exclude.map(|(_, exclude)| exclude),
-            },
-            None => SelectTarget::QualifiedName {
-                qualified: vec![Indirection::Star],
-                exclude: opt_exclude.map(|(_, exclude)| exclude),
-            },
+        |(res, _, opt_exclude)| {
+            let exclude = opt_exclude.map(|(_, exclude)| exclude);
+            match res {
+                Some((fst, _, Some((snd, _)))) => SelectTarget::QualifiedName {
+                    qualified: vec![
+                        Indirection::Identifier(fst),
+                        Indirection::Identifier(snd),
+                        Indirection::Star,
+                    ],
+                    exclude,
+                },
+                Some((fst, _, None)) => SelectTarget::QualifiedName {
+                    qualified: vec![Indirection::Identifier(fst), Indirection::Star],
+                    exclude,
+                },
+                None => SelectTarget::QualifiedName {
+                    qualified: vec![Indirection::Star],
+                    exclude,
+                },
+            }
         },
     );
     let projection = map(

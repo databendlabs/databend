@@ -317,21 +317,21 @@ fn precheck_exclude_cols(
     table_name: Option<&Identifier>,
 ) -> Result<()> {
     let all_columns_bind = input_context.all_column_bindings();
-    let mut qualified_cols_name: HashMap<String, u8> = HashMap::new();
+    let mut qualified_cols_name: HashSet<String> = HashSet::new();
 
     fn fill_qualified_cols(
-        qualified_cols_name: &mut HashMap<String, u8>,
+        qualified_cols_name: &mut HashSet<String>,
         column_bind: &ColumnBinding,
-    ) {
+    ) -> Result<()> {
         let col_name = column_bind.column_name.clone();
-        if qualified_cols_name.contains_key(col_name.as_str()) {
-            qualified_cols_name.insert(
-                col_name.clone(),
-                *qualified_cols_name.get(col_name.as_str()).unwrap() + 1,
-            );
+        if qualified_cols_name.contains(col_name.as_str()) {
+            return Err(ErrorCode::SemanticError(format!(
+                "ambiguous column name '{col_name}'"
+            )));
         } else {
-            qualified_cols_name.insert(col_name, 0u8);
+            qualified_cols_name.insert(col_name);
         }
+        Ok(())
     }
 
     match (db_name, table_name) {
@@ -340,7 +340,7 @@ fn precheck_exclude_cols(
                 if column_bind.visibility != Visibility::Visible {
                     continue;
                 }
-                fill_qualified_cols(&mut qualified_cols_name, column_bind);
+                fill_qualified_cols(&mut qualified_cols_name, column_bind)?;
             }
         }
         (None, Some(table_name)) => {
@@ -349,7 +349,7 @@ fn precheck_exclude_cols(
                     continue;
                 }
                 if column_bind.table_name == Some(table_name.name.clone()) {
-                    fill_qualified_cols(&mut qualified_cols_name, column_bind);
+                    fill_qualified_cols(&mut qualified_cols_name, column_bind)?;
                 }
             }
         }
@@ -361,7 +361,7 @@ fn precheck_exclude_cols(
                 if column_bind.table_name == Some(table_name.name.clone())
                     && column_bind.database_name == Some(db_name.name.clone())
                 {
-                    fill_qualified_cols(&mut qualified_cols_name, column_bind);
+                    fill_qualified_cols(&mut qualified_cols_name, column_bind)?;
                 }
             }
         }
@@ -372,10 +372,6 @@ fn precheck_exclude_cols(
         if qualified_cols_name.get(exclude_col).is_none() {
             return Err(ErrorCode::SemanticError(format!(
                 "column '{exclude_col}' doesn't exist"
-            )));
-        } else if 0 < *qualified_cols_name.get(exclude_col).unwrap() {
-            return Err(ErrorCode::SemanticError(format!(
-                "ambiguous column name '{exclude_col}'"
             )));
         }
     }
