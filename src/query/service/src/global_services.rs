@@ -100,6 +100,8 @@ impl GlobalServices {
         UserApiProvider::init(
             config.meta.to_meta_grpc_client_conf(),
             config.query.idm,
+            config.query.tenant_id.as_str(),
+            config.query.tenant_quota,
             global_services.clone(),
         )
         .await?;
