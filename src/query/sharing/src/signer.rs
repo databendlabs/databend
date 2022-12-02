@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::fmt::Formatter;
+use std::time;
 use std::time::Duration;
 
 use anyhow::anyhow;
@@ -25,6 +26,7 @@ use http::header::AUTHORIZATION;
 use http::header::CONTENT_LENGTH;
 use http::Method;
 use http::Request;
+use log::info;
 use moka::sync::Cache;
 use opendal::raw::AsyncBody;
 use opendal::raw::HttpClient;
@@ -135,6 +137,9 @@ impl SharedSigner {
     /// ]
     /// ```
     async fn sign_inner(&self, reqs: Vec<PresignRequest>) -> Result<()> {
+        let now = time::Instant::now();
+        info!("started sharing signing");
+
         let reqs: Vec<PresignRequestItem> = reqs
             .into_iter()
             .map(|v| PresignRequestItem {
@@ -161,6 +166,10 @@ impl SharedSigner {
             );
         }
 
+        info!(
+            "finished sharing signing after {}ms",
+            now.elapsed().as_millis()
+        );
         Ok(())
     }
 }

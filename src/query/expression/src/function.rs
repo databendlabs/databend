@@ -42,7 +42,12 @@ pub struct FunctionSignature {
 }
 
 #[derive(Clone, Copy)]
-pub struct FunctionContext<'a> {
+pub struct FunctionContext {
+    pub tz: Tz,
+}
+
+#[derive(Clone, Copy)]
+pub struct EvalContext<'a> {
     pub generics: &'a GenericMap,
     pub num_rows: usize,
     pub tz: Tz,
@@ -70,9 +75,7 @@ pub struct Function {
     pub calc_domain: Box<dyn Fn(&[Domain]) -> FunctionDomain<AnyType> + Send + Sync>,
     #[allow(clippy::type_complexity)]
     pub eval: Box<
-        dyn Fn(&[ValueRef<AnyType>], FunctionContext) -> Result<Value<AnyType>, String>
-            + Send
-            + Sync,
+        dyn Fn(&[ValueRef<AnyType>], EvalContext) -> Result<Value<AnyType>, String> + Send + Sync,
     >,
 }
 
@@ -204,8 +207,8 @@ impl FunctionRegistry {
 
 pub fn wrap_nullable<F>(
     f: F,
-) -> impl Fn(&[ValueRef<AnyType>], FunctionContext) -> Result<Value<AnyType>, String> + Copy
-where F: Fn(&[ValueRef<AnyType>], FunctionContext) -> Result<Value<AnyType>, String> + Copy {
+) -> impl Fn(&[ValueRef<AnyType>], EvalContext) -> Result<Value<AnyType>, String> + Copy
+where F: Fn(&[ValueRef<AnyType>], EvalContext) -> Result<Value<AnyType>, String> + Copy {
     move |args, ctx| {
         type T = NullableType<AnyType>;
         type Result = AnyType;

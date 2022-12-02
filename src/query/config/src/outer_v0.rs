@@ -26,6 +26,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::AuthInfo;
 use common_meta_types::AuthType;
+use common_meta_types::TenantQuota;
 use common_storage::CacheConfig as InnerCacheConfig;
 use common_storage::StorageAzblobConfig as InnerStorageAzblobConfig;
 use common_storage::StorageConfig as InnerStorageConfig;
@@ -1137,7 +1138,7 @@ impl TryInto<InnerStorageRedisConfig> for RedisStorageConfig {
 
 /// Query config group.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
-#[serde(default)]
+#[serde(default, deny_unknown_fields)]
 pub struct QueryConfig {
     /// Tenant id for get the information from the MetaSrv.
     #[clap(long, default_value = "admin")]
@@ -1161,7 +1162,10 @@ pub struct QueryConfig {
 
     /// The max total memory in bytes that can be used by this process.
     #[clap(long, default_value = "0")]
-    pub max_memory_usage: u64,
+    pub max_server_memory_usage: u64,
+
+    #[clap(long, parse(try_from_str), default_value = "false")]
+    pub max_memory_limit_enabled: bool,
 
     #[deprecated(note = "clickhouse tcp support is deprecated")]
     #[clap(long, default_value = "127.0.0.1")]
@@ -1309,6 +1313,9 @@ pub struct QueryConfig {
 
     #[clap(long, default_value = "")]
     pub share_endpoint_auth_token_file: String,
+
+    #[clap(skip)]
+    quota: Option<TenantQuota>,
 }
 
 impl Default for QueryConfig {
@@ -1328,7 +1335,8 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             mysql_handler_host: self.mysql_handler_host,
             mysql_handler_port: self.mysql_handler_port,
             max_active_sessions: self.max_active_sessions,
-            max_memory_usage: self.max_memory_usage,
+            max_server_memory_usage: self.max_server_memory_usage,
+            max_memory_limit_enabled: self.max_memory_limit_enabled,
             clickhouse_http_handler_host: self.clickhouse_http_handler_host,
             clickhouse_http_handler_port: self.clickhouse_http_handler_port,
             http_handler_host: self.http_handler_host,
@@ -1370,6 +1378,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             },
             share_endpoint_address: self.share_endpoint_address,
             share_endpoint_auth_token_file: self.share_endpoint_auth_token_file,
+            tenant_quota: self.quota,
         })
     }
 }
@@ -1384,7 +1393,8 @@ impl From<InnerQueryConfig> for QueryConfig {
             mysql_handler_host: inner.mysql_handler_host,
             mysql_handler_port: inner.mysql_handler_port,
             max_active_sessions: inner.max_active_sessions,
-            max_memory_usage: inner.max_memory_usage,
+            max_server_memory_usage: inner.max_server_memory_usage,
+            max_memory_limit_enabled: inner.max_memory_limit_enabled,
 
             // clickhouse tcp is deprecated
             clickhouse_handler_host: "127.0.0.1".to_string(),
@@ -1430,6 +1440,7 @@ impl From<InnerQueryConfig> for QueryConfig {
             users: users_from_inner(inner.idm.users),
             share_endpoint_address: inner.share_endpoint_address,
             share_endpoint_auth_token_file: inner.share_endpoint_auth_token_file,
+            quota: inner.tenant_quota,
         }
     }
 }
@@ -1737,6 +1748,7 @@ fn check_no_auth_string(auth_string: Option<String>, auth_info: AuthInfo) -> Res
         _ => Ok(auth_info),
     }
 }
+
 impl TryInto<AuthInfo> for UserAuthConfig {
     type Error = ErrorCode;
 

@@ -127,11 +127,7 @@ pub enum CopyUnit<'a> {
     ///
     /// - internal stage: `@internal_stage/path/to/dir/`
     /// - external stage: `@s3_external_stage/path/to/dir/`
-    StageLocation {
-        /// The name of the stage.
-        name: String,
-        path: String,
-    },
+    StageLocation(StageLocation),
     /// UriLocation (a.k.a external location) can be used in `INTO` or `FROM`.
     ///
     /// For examples: `'s3://example/path/to/dir' CONNECTION = (AWS_ACCESS_ID="admin" AWS_SECRET_KEY="admin")`
@@ -173,9 +169,7 @@ impl Display for CopyUnit<'_> {
                     write!(f, "{table}")
                 }
             }
-            CopyUnit::StageLocation { name, path } => {
-                write!(f, "@{name}{path}")
-            }
+            CopyUnit::StageLocation(v) => v.fmt(f),
             CopyUnit::UriLocation(v) => v.fmt(f),
             CopyUnit::Query(query) => {
                 write!(f, "({query})")
@@ -204,6 +198,18 @@ impl Display for UriLocation {
             write!(f, " )")?;
         }
         Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StageLocation {
+    pub name: String,
+    pub path: String,
+}
+
+impl Display for StageLocation {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "@{}{}", self.name, self.path)
     }
 }
 

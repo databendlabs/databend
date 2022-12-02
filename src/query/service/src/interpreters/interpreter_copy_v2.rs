@@ -83,6 +83,7 @@ impl CopyInterpreterV2 {
             *(bind_context.clone()),
             *s_expr.clone(),
             metadata.clone(),
+            false,
         )?;
 
         // Building data schema from bind_context columns

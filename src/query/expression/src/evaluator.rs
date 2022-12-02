@@ -16,14 +16,13 @@ use std::collections::HashMap;
 #[cfg(debug_assertions)]
 use std::sync::Mutex;
 
-use chrono_tz::Tz;
 use common_arrow::arrow::bitmap;
 use itertools::Itertools;
 
 use crate::chunk::Chunk;
 use crate::expression::Expr;
 use crate::expression::Span;
-use crate::function::FunctionContext;
+use crate::function::EvalContext;
 use crate::property::Domain;
 use crate::type_check::check_simple_cast;
 use crate::types::any::AnyType;
@@ -39,21 +38,26 @@ use crate::values::ColumnBuilder;
 use crate::values::Scalar;
 use crate::values::Value;
 use crate::ColumnIndex;
+use crate::FunctionContext;
 use crate::FunctionDomain;
 use crate::FunctionRegistry;
 use crate::Result;
 
 pub struct Evaluator<'a> {
     input_columns: &'a Chunk,
-    tz: Tz,
+    fn_ctx: FunctionContext,
     fn_registry: &'a FunctionRegistry,
 }
 
 impl<'a> Evaluator<'a> {
-    pub fn new(input_columns: &'a Chunk, tz: Tz, fn_registry: &'a FunctionRegistry) -> Self {
+    pub fn new(
+        input_columns: &'a Chunk,
+        fn_ctx: FunctionContext,
+        fn_registry: &'a FunctionRegistry,
+    ) -> Self {
         Evaluator {
             input_columns,
-            tz,
+            fn_ctx,
             fn_registry,
         }
     }
@@ -82,10 +86,10 @@ impl<'a> Evaluator<'a> {
                         .all_equal()
                 );
                 let cols_ref = cols.iter().map(Value::as_ref).collect::<Vec<_>>();
-                let ctx = FunctionContext {
+                let ctx = EvalContext {
                     generics,
                     num_rows: self.input_columns.num_rows(),
-                    tz: self.tz,
+                    tz: self.fn_ctx.tz,
                 };
                 (function.eval)(cols_ref.as_slice(), ctx).map_err(|msg| (span.clone(), msg))
             }
@@ -110,9 +114,13 @@ impl<'a> Evaluator<'a> {
             if !*RECURSING.lock().unwrap() {
                 *RECURSING.lock().unwrap() = true;
                 assert_eq!(
-                    ConstantFolder::new(self.input_columns.domains(), self.tz, self.fn_registry)
-                        .fold(expr)
-                        .1,
+                    ConstantFolder::new(
+                        self.input_columns.domains(),
+                        self.fn_ctx,
+                        self.fn_registry
+                    )
+                    .fold(expr)
+                    .1,
                     None,
                     "domain calculation should not return any domain for expressions that are possible to fail"
                 );
@@ -401,7 +409,7 @@ impl<'a> Evaluator<'a> {
             span,
             cast_fn,
             [(value, src_type.clone())],
-            self.tz,
+            self.fn_ctx,
             num_rows,
             self.fn_registry,
         )?;
@@ -412,19 +420,19 @@ impl<'a> Evaluator<'a> {
 
 pub struct ConstantFolder<'a, Index: ColumnIndex> {
     input_domains: HashMap<Index, Domain>,
-    tz: Tz,
+    fn_ctx: FunctionContext,
     fn_registry: &'a FunctionRegistry,
 }
 
 impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
     pub fn new(
         input_domains: HashMap<Index, Domain>,
-        tz: Tz,
+        fn_ctx: FunctionContext,
         fn_registry: &'a FunctionRegistry,
     ) -> Self {
         ConstantFolder {
             input_domains,
-            tz,
+            fn_ctx,
             fn_registry,
         }
     }
@@ -485,7 +493,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
 
                 if inner_expr.as_constant().is_some() {
                     let chunk = Chunk::empty();
-                    let evaluator = Evaluator::new(&chunk, self.tz, self.fn_registry);
+                    let evaluator = Evaluator::new(&chunk, self.fn_ctx, self.fn_registry);
                     // Since we know the expression is constant, it'll be safe to change its column index type.
                     let cast_expr = cast_expr.project_column_ref(|_| unreachable!());
                     if let Ok(Value::Scalar(scalar)) = evaluator.run(&cast_expr) {
@@ -561,7 +569,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
 
                 if all_args_is_scalar {
                     let chunk = Chunk::empty();
-                    let evaluator = Evaluator::new(&chunk, self.tz, self.fn_registry);
+                    let evaluator = Evaluator::new(&chunk, self.fn_ctx, self.fn_registry);
                     // Since we know the expression is constant, it'll be safe to change its column index type.
                     let func_expr = func_expr.project_column_ref(|_| unreachable!());
                     if let Ok(Value::Scalar(scalar)) = evaluator.run(&func_expr) {
@@ -753,7 +761,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
             span,
             cast_fn,
             [(domain.clone(), src_type.clone())],
-            self.tz,
+            self.fn_ctx,
             self.fn_registry,
         )?;
         assert_eq!(&ty, dest_type);

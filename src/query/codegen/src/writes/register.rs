@@ -35,7 +35,7 @@ pub fn codegen_register() {
             use std::sync::Arc;
             
             use crate::Function;
-            use crate::FunctionContext;
+            use crate::EvalContext;
             use crate::FunctionDomain;
             use crate::FunctionRegistry;
             use crate::FunctionSignature;
@@ -82,7 +82,7 @@ pub fn codegen_register() {
                     func: G,
                 ) where
                     F: Fn({arg_f_closure_sig}) -> FunctionDomain<O> + 'static + Clone + Copy + Send + Sync,
-                    G: Fn({arg_g_closure_sig} FunctionContext) -> O::Scalar + 'static + Clone + Copy + Send + Sync,
+                    G: Fn({arg_g_closure_sig} EvalContext) -> O::Scalar + 'static + Clone + Copy + Send + Sync,
                 {{
                     self.register_passthrough_nullable_{n_args}_arg::<{arg_generics} O, _, _>(
                         name,
@@ -154,7 +154,7 @@ pub fn codegen_register() {
                     func: G,
                 ) where
                     F: Fn({arg_f_closure_sig}) -> FunctionDomain<O> + 'static + Clone + Copy + Send + Sync,
-                    G: for<'a> Fn({arg_g_closure_sig} FunctionContext) -> Result<Value<O>, String> + 'static + Clone + Copy + Send + Sync,
+                    G: for<'a> Fn({arg_g_closure_sig} EvalContext) -> Result<Value<O>, String> + 'static + Clone + Copy + Send + Sync,
                 {{
                     let has_nullable = &[{arg_sig_type} O::data_type()]
                         .iter()
@@ -257,7 +257,7 @@ pub fn codegen_register() {
                     func: G,
                 ) where
                     F: Fn({arg_f_closure_sig}) -> FunctionDomain<NullableType<O>> + 'static + Clone + Copy + Send + Sync,
-                    G: for<'a> Fn({arg_g_closure_sig} FunctionContext) -> Result<Value<NullableType<O>>, String> + 'static + Clone + Copy + Send + Sync,
+                    G: for<'a> Fn({arg_g_closure_sig} EvalContext) -> Result<Value<NullableType<O>>, String> + 'static + Clone + Copy + Send + Sync,
                 {{
                     let has_nullable = &[{arg_sig_type} O::data_type()]
                         .iter()
@@ -340,7 +340,7 @@ pub fn codegen_register() {
                     func: G,
                 ) where
                     F: Fn({arg_f_closure_sig}) -> FunctionDomain<O> + 'static + Clone + Copy + Send + Sync,
-                    G: for <'a> Fn({arg_g_closure_sig} FunctionContext) -> Result<Value<O>, String> + 'static + Clone + Copy + Send + Sync,
+                    G: for <'a> Fn({arg_g_closure_sig} EvalContext) -> Result<Value<O>, String> + 'static + Clone + Copy + Send + Sync,
                 {{
                     self.funcs
                         .entry(name.to_string())
@@ -441,8 +441,8 @@ pub fn codegen_register() {
             source,
             "
                 pub fn vectorize_{n_args}_arg<{arg_generics_bound} O: ArgType>(
-                    func: impl Fn({arg_input_closure_sig} FunctionContext) -> O::Scalar + Copy + Send + Sync,
-                ) -> impl Fn({arg_output_closure_sig} FunctionContext) -> Result<Value<O>, String> + Copy + Send + Sync {{
+                    func: impl Fn({arg_input_closure_sig} EvalContext) -> O::Scalar + Copy + Send + Sync,
+                ) -> impl Fn({arg_output_closure_sig} EvalContext) -> Result<Value<O>, String> + Copy + Send + Sync {{
                     move |{func_args} ctx| match ({args_tuple}) {{
                         ({arg_scalar}) => Ok(Value::Scalar(func({func_args} ctx))),
                         {match_arms}
@@ -535,8 +535,8 @@ pub fn codegen_register() {
             source,
             "
                 pub fn vectorize_with_builder_{n_args}_arg<{arg_generics_bound} O: ArgType>(
-                    func: impl Fn({arg_input_closure_sig} &mut O::ColumnBuilder, FunctionContext) -> Result<(), String> + Copy + Send + Sync,
-                ) -> impl Fn({arg_output_closure_sig} FunctionContext) -> Result<Value<O>, String> + Copy + Send + Sync {{
+                    func: impl Fn({arg_input_closure_sig} &mut O::ColumnBuilder, EvalContext) -> Result<(), String> + Copy + Send + Sync,
+                ) -> impl Fn({arg_output_closure_sig} EvalContext) -> Result<Value<O>, String> + Copy + Send + Sync {{
                     move |{func_args} ctx| match ({args_tuple}) {{
                         ({arg_scalar}) => {{
                             let mut builder = O::create_builder(1, ctx.generics);
@@ -640,8 +640,8 @@ pub fn codegen_register() {
             source,
             "
                 pub fn passthrough_nullable_{n_args}_arg<{arg_generics_bound} O: ArgType>(
-                    func: impl for <'a> Fn({arg_input_closure_sig} FunctionContext) -> Result<Value<O>, String> + Copy + Send + Sync,
-                ) -> impl for <'a> Fn({arg_output_closure_sig} FunctionContext) -> Result<Value<NullableType<O>>, String> + Copy + Send + Sync {{
+                    func: impl for <'a> Fn({arg_input_closure_sig} EvalContext) -> Result<Value<O>, String> + Copy + Send + Sync,
+                ) -> impl for <'a> Fn({arg_output_closure_sig} EvalContext) -> Result<Value<NullableType<O>>, String> + Copy + Send + Sync {{
                     move |{closure_args} ctx| match ({args_tuple}) {{
                         {scalar_nones_pats} => Ok(Value::Scalar(None)),
                         ({arg_scalar}) => Ok(Value::Scalar(Some(
@@ -747,8 +747,8 @@ pub fn codegen_register() {
             source,
             "
                 pub fn combine_nullable_{n_args}_arg<{arg_generics_bound} O: ArgType>(
-                    func: impl for <'a> Fn({arg_input_closure_sig} FunctionContext) -> Result<Value<NullableType<O>>, String> + Copy + Send + Sync,
-                ) -> impl for <'a> Fn({arg_output_closure_sig} FunctionContext) -> Result<Value<NullableType<O>>, String> + Copy + Send + Sync {{
+                    func: impl for <'a> Fn({arg_input_closure_sig} EvalContext) -> Result<Value<NullableType<O>>, String> + Copy + Send + Sync,
+                ) -> impl for <'a> Fn({arg_output_closure_sig} EvalContext) -> Result<Value<NullableType<O>>, String> + Copy + Send + Sync {{
                     move |{closure_args} ctx| match ({args_tuple}) {{
                         {scalar_nones_pats} => Ok(Value::Scalar(None)),
                         ({arg_scalar}) => Ok(Value::Scalar(
@@ -825,8 +825,8 @@ pub fn codegen_register() {
             source,
             "
                 fn erase_function_generic_{n_args}_arg<{arg_generics_bound} O: ArgType>(
-                    func: impl for <'a> Fn({arg_g_closure_sig} FunctionContext) -> Result<Value<O>, String>,
-                ) -> impl Fn(&[ValueRef<AnyType>], FunctionContext) -> Result<Value<AnyType>, String> {{
+                    func: impl for <'a> Fn({arg_g_closure_sig} EvalContext) -> Result<Value<O>, String>,
+                ) -> impl Fn(&[ValueRef<AnyType>], EvalContext) -> Result<Value<AnyType>, String> {{
                     move |args, ctx| {{
                         {let_args}
                         func({func_args} ctx).map(Value::upcast)

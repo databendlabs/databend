@@ -33,6 +33,7 @@ use common_meta_api::KVApi;
 use common_meta_store::MetaStore;
 use common_meta_store::MetaStoreProvider;
 use common_meta_types::AuthInfo;
+use common_meta_types::TenantQuota;
 use once_cell::sync::OnceCell;
 
 use crate::idm_config::IDMConfig;
@@ -49,11 +50,18 @@ impl UserApiProvider {
     pub async fn init(
         conf: RpcClientConf,
         idm_config: IDMConfig,
+        tenant: &str,
+        quota: Option<TenantQuota>,
         v: Singleton<Arc<UserApiProvider>>,
     ) -> Result<()> {
         v.init(Self::try_create(conf, idm_config).await?)?;
 
         USER_API_PROVIDER.set(v).ok();
+        if let Some(q) = quota {
+            let i = UserApiProvider::instance().get_tenant_quota_api_client(tenant)?;
+            let res = i.get_quota(None).await?;
+            i.set_quota(&q, Some(res.seq)).await?;
+        }
         Ok(())
     }
 
