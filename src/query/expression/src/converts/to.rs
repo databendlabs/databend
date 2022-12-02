@@ -27,6 +27,7 @@ use crate::with_number_type;
 use crate::Chunk;
 use crate::Column;
 use crate::ColumnBuilder;
+use crate::ColumnIndex;
 use crate::Value;
 
 pub fn to_type(datatype: &DataTypeImpl) -> DataType {
@@ -72,7 +73,7 @@ pub fn to_column(column: &Value<AnyType>, size: usize, data_type: &DataType) -> 
     }
 }
 
-pub fn to_datablock(chunk: &Chunk, schema: DataSchemaRef) -> DataBlock {
+pub fn to_datablock<Index: ColumnIndex>(chunk: &Chunk<Index>, schema: DataSchemaRef) -> DataBlock {
     let columns = chunk
         .columns()
         .map(|entry| to_column(&entry.value, chunk.num_rows(), &entry.data_type))
