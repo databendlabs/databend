@@ -18,6 +18,7 @@ mod name_resolution;
 mod type_check;
 
 pub use grouping_check::GroupingChecker;
+pub use name_resolution::compare_table_name;
 pub use name_resolution::normalize_identifier;
 pub use name_resolution::IdentifierNormalizer;
 pub use name_resolution::NameResolutionContext;

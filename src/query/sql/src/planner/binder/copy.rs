@@ -55,7 +55,7 @@ impl<'a> Binder {
     ) -> Result<Plan> {
         match (&stmt.src, &stmt.dst) {
             (
-                CopyUnit::StageLocation { name, path },
+                CopyUnit::StageLocation(stage_location),
                 CopyUnit::Table {
                     catalog,
                     database,
@@ -75,8 +75,8 @@ impl<'a> Binder {
                 self.bind_copy_from_stage_into_table(
                     bind_context,
                     stmt,
-                    name,
-                    path,
+                    &stage_location.name,
+                    &stage_location.path,
                     &catalog_name,
                     &database_name,
                     &table,
@@ -124,7 +124,7 @@ impl<'a> Binder {
                     database,
                     table,
                 },
-                CopyUnit::StageLocation { name, path },
+                CopyUnit::StageLocation(stage_location),
             ) => {
                 let catalog_name = catalog
                     .as_ref()
@@ -142,8 +142,8 @@ impl<'a> Binder {
                     &catalog_name,
                     &database_name,
                     &table,
-                    name,
-                    path,
+                    &stage_location.name,
+                    &stage_location.path,
                 )
                 .await
             }
@@ -182,9 +182,15 @@ impl<'a> Binder {
                 )
                 .await
             }
-            (CopyUnit::Query(query), CopyUnit::StageLocation { name, path }) => {
-                self.bind_copy_from_query_into_stage(bind_context, stmt, query, name, path)
-                    .await
+            (CopyUnit::Query(query), CopyUnit::StageLocation(stage_location)) => {
+                self.bind_copy_from_query_into_stage(
+                    bind_context,
+                    stmt,
+                    query,
+                    &stage_location.name,
+                    &stage_location.path,
+                )
+                .await
             }
             (CopyUnit::Query(query), CopyUnit::UriLocation(uri_location)) => {
                 let ul = UriLocation {

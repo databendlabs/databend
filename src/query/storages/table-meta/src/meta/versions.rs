@@ -116,6 +116,20 @@ mod converters {
         }
     }
 
+    impl TryFrom<u64> for TableSnapshotStatisticsVersion {
+        type Error = ErrorCode;
+        fn try_from(value: u64) -> Result<Self, Self::Error> {
+            match value {
+                0 => Ok(TableSnapshotStatisticsVersion::V0(ver_eq::<_, 0>(
+                    PhantomData,
+                ))),
+                _ => Err(ErrorCode::Internal(format!(
+                    "unknown table snapshot statistics version {value}, versions supported: 0"
+                ))),
+            }
+        }
+    }
+
     impl TryFrom<u64> for BlockBloomFilterIndexVersion {
         type Error = ErrorCode;
         fn try_from(value: u64) -> Result<Self, Self::Error> {

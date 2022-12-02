@@ -49,6 +49,7 @@ use common_storages_table_meta::meta::ClusterKey;
 use common_storages_table_meta::meta::ColumnStatistics as FuseColumnStatistics;
 use common_storages_table_meta::meta::Statistics as FuseStatistics;
 use common_storages_table_meta::meta::TableSnapshot;
+use common_storages_table_meta::meta::TableSnapshotStatistics;
 use common_storages_table_meta::meta::Versioned;
 use common_storages_table_meta::table::table_storage_prefix;
 use common_storages_table_meta::table::OPT_KEY_DATABASE_ID;
@@ -157,6 +158,29 @@ impl FuseTable {
                 ))
             })?;
         Ok(table_storage_prefix(db_id, table_id))
+    }
+
+    pub fn table_snapshot_statistics_format_version(&self, location: &String) -> u64 {
+        TableMetaLocationGenerator::snapshot_version(location)
+    }
+
+    #[tracing::instrument(level = "debug", skip_all)]
+    pub(crate) async fn read_table_snapshot_statistics(
+        &self,
+        snapshot: Option<&Arc<TableSnapshot>>,
+    ) -> Result<Option<Arc<TableSnapshotStatistics>>> {
+        match snapshot {
+            Some(snapshot) => {
+                if let Some(loc) = &snapshot.table_statistics_location {
+                    let ver = self.table_snapshot_statistics_format_version(loc);
+                    let reader = MetaReaders::table_snapshot_statistics_reader(self.get_operator());
+                    Ok(Some(reader.read(loc.as_str(), None, ver).await?))
+                } else {
+                    Ok(None)
+                }
+            }
+            None => Ok(None),
+        }
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
@@ -280,6 +304,9 @@ impl Table for FuseTable {
         let prev_version = self.snapshot_format_version().await?;
         let prev_timestamp = prev.as_ref().and_then(|v| v.timestamp);
         let prev_snapshot_id = prev.as_ref().map(|v| (v.snapshot_id, prev_version));
+        let prev_statistics_location = prev
+            .as_ref()
+            .and_then(|v| v.table_statistics_location.clone());
         let (summary, segments) = if let Some(v) = prev {
             (v.summary.clone(), v.segments.clone())
         } else {
@@ -294,6 +321,7 @@ impl Table for FuseTable {
             summary,
             segments,
             cluster_key_meta,
+            prev_statistics_location,
         );
 
         let mut table_info = self.table_info.clone();
@@ -304,6 +332,7 @@ impl Table for FuseTable {
             &table_info,
             &self.meta_location_generator,
             new_snapshot,
+            None,
             &self.operator,
         )
         .await
@@ -323,6 +352,9 @@ impl Table for FuseTable {
         let prev = self.read_table_snapshot().await?;
         let prev_version = self.snapshot_format_version().await?;
         let prev_timestamp = prev.as_ref().and_then(|v| v.timestamp);
+        let prev_statistics_location = prev
+            .as_ref()
+            .and_then(|v| v.table_statistics_location.clone());
         let prev_snapshot_id = prev.as_ref().map(|v| (v.snapshot_id, prev_version));
         let (summary, segments) = if let Some(v) = prev {
             (v.summary.clone(), v.segments.clone())
@@ -338,6 +370,7 @@ impl Table for FuseTable {
             summary,
             segments,
             None,
+            prev_statistics_location,
         );
 
         let mut table_info = self.table_info.clone();
@@ -348,6 +381,7 @@ impl Table for FuseTable {
             &table_info,
             &self.meta_location_generator,
             new_snapshot,
+            None,
             &self.operator,
         )
         .await
@@ -411,6 +445,11 @@ impl Table for FuseTable {
         self.do_gc(&ctx, keep_last_snapshot).await
     }
 
+    #[tracing::instrument(level = "debug", name = "statistic", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
+    async fn statistic(&self, ctx: Arc<dyn TableContext>) -> Result<()> {
+        self.do_statistic(&ctx).await
+    }
+
     fn table_statistics(&self) -> Result<Option<TableStatistics>> {
         let s = &self.table_info.meta.statistics;
         Ok(Some(TableStatistics {
@@ -424,13 +463,23 @@ impl Table for FuseTable {
     async fn column_statistics_provider(&self) -> Result<Box<dyn ColumnStatisticsProvider>> {
         let provider = if let Some(snapshot) = self.read_table_snapshot().await? {
             let stats = &snapshot.summary.col_stats;
-            FakedColumnStatisticsProvider {
-                column_stats: stats.clone(),
-                // save row count first
-                distinct_count: snapshot.summary.row_count,
+            let table_statistics = self.read_table_snapshot_statistics(Some(&snapshot)).await?;
+            if let Some(table_statistics) = table_statistics {
+                FuseTableColumnStatisticsProvider {
+                    column_stats: stats.clone(),
+                    row_count: snapshot.summary.row_count,
+                    // save row count first
+                    column_distinct_values: Some(table_statistics.column_distinct_values.clone()),
+                }
+            } else {
+                FuseTableColumnStatisticsProvider {
+                    column_stats: stats.clone(),
+                    row_count: snapshot.summary.row_count,
+                    column_distinct_values: None,
+                }
             }
         } else {
-            FakedColumnStatisticsProvider::default()
+            FuseTableColumnStatisticsProvider::default()
         };
         Ok(Box::new(provider))
     }
@@ -488,21 +537,23 @@ impl Table for FuseTable {
 }
 
 #[derive(Default)]
-struct FakedColumnStatisticsProvider {
+struct FuseTableColumnStatisticsProvider {
     column_stats: HashMap<ColumnId, FuseColumnStatistics>,
-    distinct_count: u64,
+    pub column_distinct_values: Option<HashMap<ColumnId, u64>>,
+    pub row_count: u64,
 }
 
-impl ColumnStatisticsProvider for FakedColumnStatisticsProvider {
+impl ColumnStatisticsProvider for FuseTableColumnStatisticsProvider {
     fn column_statistics(&self, column_id: ColumnId) -> Option<ColumnStatistics> {
         let col_stats = &self.column_stats.get(&column_id);
         col_stats.map(|s| ColumnStatistics {
             min: s.min.clone(),
             max: s.max.clone(),
             null_count: s.null_count,
-            number_of_distinct_values: s
-                .distinct_of_values
-                .map_or_else(|| self.distinct_count, |n| n),
+            number_of_distinct_values: self
+                .column_distinct_values
+                .as_ref()
+                .map_or(self.row_count, |map| map.get(&column_id).map_or(0, |v| *v)),
         })
     }
 }

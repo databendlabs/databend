@@ -11,7 +11,7 @@
 //  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
-
+#![allow(clippy::too_many_arguments)]
 mod common;
 
 /// Re-exports meta data structures of current version, i.e. v1
@@ -35,3 +35,4 @@ pub use current::*;
 pub use versions::BlockBloomFilterIndexVersion;
 pub use versions::SegmentInfoVersion;
 pub use versions::SnapshotVersion;
+pub use versions::TableSnapshotStatisticsVersion;

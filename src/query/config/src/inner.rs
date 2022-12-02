@@ -25,6 +25,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_grpc::RpcClientConf;
 use common_grpc::RpcClientTlsConfig;
+use common_meta_types::TenantQuota;
 use common_storage::StorageConfig;
 use common_tracing::Config as LogConfig;
 use common_users::idm_config::IDMConfig;
@@ -108,7 +109,8 @@ pub struct QueryConfig {
     pub mysql_handler_host: String,
     pub mysql_handler_port: u16,
     pub max_active_sessions: u64,
-    pub max_memory_usage: u64,
+    pub max_server_memory_usage: u64,
+    pub max_memory_limit_enabled: bool,
     pub clickhouse_http_handler_host: String,
     pub clickhouse_http_handler_port: u16,
     pub http_handler_host: String,
@@ -146,6 +148,8 @@ pub struct QueryConfig {
     pub table_disk_cache_mb_size: u64,
     /// Max number of cached table snapshot
     pub table_cache_snapshot_count: u64,
+    /// Max number of cached table statistic
+    pub table_cache_statistic_count: u64,
     /// Max number of cached table segment
     pub table_cache_segment_count: u64,
     /// Max number of cached bloom index meta objects
@@ -161,6 +165,7 @@ pub struct QueryConfig {
     pub idm: IDMConfig,
     pub share_endpoint_address: String,
     pub share_endpoint_auth_token_file: String,
+    pub tenant_quota: Option<TenantQuota>,
 }
 
 impl Default for QueryConfig {
@@ -172,7 +177,8 @@ impl Default for QueryConfig {
             mysql_handler_host: "127.0.0.1".to_string(),
             mysql_handler_port: 3307,
             max_active_sessions: 256,
-            max_memory_usage: 0,
+            max_server_memory_usage: 0,
+            max_memory_limit_enabled: false,
             clickhouse_http_handler_host: "127.0.0.1".to_string(),
             clickhouse_http_handler_port: 8124,
             http_handler_host: "127.0.0.1".to_string(),
@@ -200,6 +206,7 @@ impl Default for QueryConfig {
             table_disk_cache_root: "_cache".to_string(),
             table_disk_cache_mb_size: 1024,
             table_cache_snapshot_count: 256,
+            table_cache_statistic_count: 256,
             table_cache_segment_count: 10240,
             table_cache_bloom_index_meta_count: 3000,
             table_cache_bloom_index_data_bytes: 1024 * 1024 * 1024,
@@ -211,6 +218,7 @@ impl Default for QueryConfig {
             idm: IDMConfig::default(),
             share_endpoint_address: "".to_string(),
             share_endpoint_auth_token_file: "".to_string(),
+            tenant_quota: None,
         }
     }
 }

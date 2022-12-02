@@ -83,6 +83,8 @@ pub mod linux_or_macos {
     unsafe impl<T: Allocator> Allocator for JEAllocator<T> {
         #[inline(always)]
         fn allocate(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
+            ThreadTracker::alloc(layout.size() as i64);
+
             let data_address = if layout.size() == 0 {
                 unsafe { NonNull::new(layout.align() as *mut ()).unwrap_unchecked() }
             } else {
@@ -91,12 +93,13 @@ pub mod linux_or_macos {
                     NonNull::new(ffi::mallocx(layout.size(), flags) as *mut ()).ok_or(AllocError)?
                 }
             };
-            ThreadTracker::alloc_memory(layout.size() as i64, &data_address);
             Ok(NonNull::<[u8]>::from_raw_parts(data_address, layout.size()))
         }
 
         #[inline(always)]
         fn allocate_zeroed(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
+            ThreadTracker::alloc(layout.size() as i64);
+
             let data_address = if layout.size() == 0 {
                 unsafe { NonNull::new(layout.align() as *mut ()).unwrap_unchecked() }
             } else {
@@ -106,17 +109,16 @@ pub mod linux_or_macos {
                 }
             };
 
-            ThreadTracker::alloc_memory(layout.size() as i64, &data_address);
             Ok(NonNull::<[u8]>::from_raw_parts(data_address, layout.size()))
         }
 
         #[inline(always)]
         unsafe fn deallocate(&self, ptr: NonNull<u8>, layout: Layout) {
+            ThreadTracker::dealloc(layout.size() as i64);
+
             if layout.size() == 0 {
                 debug_assert_eq!(ptr.as_ptr() as usize, layout.align());
             } else {
-                ThreadTracker::dealloc_memory(layout.size() as i64, &ptr);
-
                 let flags = layout_to_flags(layout.align(), layout.size());
                 ffi::sdallocx(ptr.as_ptr() as *mut _, layout.size(), flags);
             }
@@ -131,7 +133,8 @@ pub mod linux_or_macos {
             debug_assert_eq!(old_layout.align(), new_layout.align());
             debug_assert!(old_layout.size() <= new_layout.size());
 
-            ThreadTracker::dealloc_memory(old_layout.size() as i64, &ptr);
+            ThreadTracker::dealloc(old_layout.size() as i64);
+            ThreadTracker::alloc(new_layout.size() as i64);
 
             let data_address = if new_layout.size() == 0 {
                 NonNull::new(new_layout.align() as *mut ()).unwrap_unchecked()
@@ -143,8 +146,6 @@ pub mod linux_or_macos {
                 NonNull::new(ffi::rallocx(ptr.cast().as_ptr(), new_layout.size(), flags) as *mut ())
                     .unwrap()
             };
-
-            ThreadTracker::alloc_memory(new_layout.size() as i64, &data_address);
 
             Ok(NonNull::<[u8]>::from_raw_parts(
                 data_address,
@@ -161,7 +162,8 @@ pub mod linux_or_macos {
             debug_assert_eq!(old_layout.align(), new_layout.align());
             debug_assert!(old_layout.size() <= new_layout.size());
 
-            ThreadTracker::dealloc_memory(old_layout.size() as i64, &ptr);
+            ThreadTracker::dealloc(old_layout.size() as i64);
+            ThreadTracker::alloc(new_layout.size() as i64);
 
             let data_address = if new_layout.size() == 0 {
                 NonNull::new(new_layout.align() as *mut ()).unwrap_unchecked()
@@ -180,8 +182,6 @@ pub mod linux_or_macos {
                 NonNull::new(raw as *mut ()).unwrap()
             };
 
-            ThreadTracker::alloc_memory(new_layout.size() as i64, &data_address);
-
             Ok(NonNull::<[u8]>::from_raw_parts(
                 data_address,
                 new_layout.size(),
@@ -197,7 +197,8 @@ pub mod linux_or_macos {
             debug_assert_eq!(old_layout.align(), new_layout.align());
             debug_assert!(old_layout.size() >= new_layout.size());
 
-            ThreadTracker::dealloc_memory(old_layout.size() as i64, &ptr);
+            ThreadTracker::dealloc(old_layout.size() as i64);
+            ThreadTracker::alloc(new_layout.size() as i64);
 
             if old_layout.size() == 0 {
                 debug_assert_eq!(ptr.as_ptr() as usize, old_layout.align());
@@ -219,7 +220,6 @@ pub mod linux_or_macos {
                 NonNull::new(slice).ok_or(AllocError)?
             };
 
-            ThreadTracker::alloc_memory(new_layout.size() as i64, &new_ptr);
             Ok(new_ptr)
         }
     }

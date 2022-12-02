@@ -27,6 +27,7 @@ use crate::storages::fuse::table_functions::ClusteringInformationTable;
 use crate::storages::fuse::table_functions::FuseBlockTable;
 use crate::storages::fuse::table_functions::FuseSegmentTable;
 use crate::storages::fuse::table_functions::FuseSnapshotTable;
+use crate::storages::fuse::table_functions::FuseStatisticTable;
 use crate::table_functions::async_crash_me::AsyncCrashMeTable;
 use crate::table_functions::sync_crash_me::SyncCrashMeTable;
 use crate::table_functions::NumbersTable;
@@ -109,6 +110,10 @@ impl TableFunctionFactory {
         creators.insert(
             "fuse_block".to_string(),
             (next_id(), Arc::new(FuseBlockTable::create)),
+        );
+        creators.insert(
+            "fuse_statistic".to_string(),
+            (next_id(), Arc::new(FuseStatisticTable::create)),
         );
 
         creators.insert(

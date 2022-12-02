@@ -17,8 +17,10 @@ use common_expression::types::array::ArrayColumn;
 use common_expression::types::ValueType;
 use common_expression::Column;
 use common_io::consts::FALSE_BYTES_NUM;
+use common_io::consts::INF_BYTES_LONG;
 use common_io::consts::INF_BYTES_LOWER;
 use common_io::consts::NAN_BYTES_LOWER;
+use common_io::consts::NAN_BYTES_SNAKE;
 use common_io::consts::NULL_BYTES_UPPER;
 use common_io::consts::TRUE_BYTES_NUM;
 
@@ -47,7 +49,7 @@ impl FieldEncoderValues {
         }
     }
 
-    pub fn create_for_handler(timezone: Tz) -> Self {
+    pub fn create_for_http_handler(timezone: Tz) -> Self {
         FieldEncoderValues {
             common_settings: CommonSettings {
                 true_bytes: TRUE_BYTES_NUM.as_bytes().to_vec(),
@@ -55,6 +57,24 @@ impl FieldEncoderValues {
                 null_bytes: NULL_BYTES_UPPER.as_bytes().to_vec(),
                 nan_bytes: NAN_BYTES_LOWER.as_bytes().to_vec(),
                 inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
+                timezone,
+            },
+            quote_char: b'\'',
+        }
+    }
+
+    // JDBC only accept "NaN" and "Infinity".
+    // mysql python client will decode to python float, which is printed as 'nan' and 'inf'
+    // so we still use 'nan' and 'inf' in logic test.
+    // https://github.com/datafuselabs/databend/discussions/8941
+    pub fn create_for_mysql_handler(timezone: Tz) -> Self {
+        FieldEncoderValues {
+            common_settings: CommonSettings {
+                true_bytes: TRUE_BYTES_NUM.as_bytes().to_vec(),
+                false_bytes: FALSE_BYTES_NUM.as_bytes().to_vec(),
+                null_bytes: NULL_BYTES_UPPER.as_bytes().to_vec(),
+                nan_bytes: NAN_BYTES_SNAKE.as_bytes().to_vec(),
+                inf_bytes: INF_BYTES_LONG.as_bytes().to_vec(),
                 timezone,
             },
             quote_char: b'\'',

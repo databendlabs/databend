@@ -72,6 +72,14 @@ impl TopNPrunner {
             return Ok(metas);
         };
 
+        // String Type min/max is truncated
+        if matches!(
+            self.schema.field(sort_idx as usize).data_type(),
+            DataTypeImpl::String(_)
+        ) {
+            return Ok(metas);
+        }
+
         let mut id_stats = metas
             .iter()
             .map(|(id, meta)| {

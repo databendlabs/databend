@@ -216,7 +216,7 @@ impl Interpreter for InsertInterpreterV2 {
                     };
 
                     let mut build_res =
-                        build_query_pipeline(&self.ctx, &[], &insert_select_plan).await?;
+                        build_query_pipeline(&self.ctx, &[], &insert_select_plan, false).await?;
 
                     let ctx = self.ctx.clone();
                     let overwrite = self.plan.overwrite;

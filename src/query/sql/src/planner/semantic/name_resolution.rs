@@ -63,6 +63,18 @@ pub fn normalize_identifier<'a>(
     }
 }
 
+pub fn compare_table_name(
+    table_name1: &str,
+    table_name2: &str,
+    context: &NameResolutionContext,
+) -> bool {
+    if context.unquoted_ident_case_sensitive || !context.quoted_ident_case_sensitive {
+        table_name1 == table_name2
+    } else {
+        table_name1.to_lowercase() == table_name2.to_lowercase()
+    }
+}
+
 pub struct IdentifierNormalizer<'a> {
     pub ctx: &'a NameResolutionContext,
 }

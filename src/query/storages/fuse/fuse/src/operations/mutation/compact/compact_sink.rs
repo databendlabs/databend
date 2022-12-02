@@ -272,6 +272,7 @@ impl Processor for CompactSink {
                     table_info,
                     &self.location_gen,
                     new_snapshot,
+                    None,
                     &self.dal,
                 )
                 .await

@@ -55,7 +55,7 @@ impl Chunk {
         }
         let order_columns = descriptions
             .iter()
-            .map(|d| column_to_arrow_array(chunk.column(d.index), num_rows))
+            .map(|d| column_to_arrow_array(chunk.get_by_id(d.index), num_rows))
             .collect::<Vec<_>>();
 
         let order_arrays = descriptions
@@ -99,8 +99,8 @@ impl Chunk {
         let sort_arrays = descriptions
             .iter()
             .map(|d| {
-                let left = column_to_arrow_array(lhs.column(d.index), lhs_len);
-                let right = column_to_arrow_array(rhs.column(d.index), rhs_len);
+                let left = column_to_arrow_array(lhs.get_by_id(d.index), lhs_len);
+                let right = column_to_arrow_array(rhs.get_by_id(d.index), rhs_len);
                 sort_options.push(arrow_sort::SortOptions {
                     descending: !d.asc,
                     nulls_first: d.nulls_first,

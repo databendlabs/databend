@@ -31,6 +31,7 @@ use crate::types::ValueType;
 use crate::types::VariantType;
 use crate::with_number_mapped_type;
 use crate::Chunk;
+use crate::ChunkEntry;
 use crate::Column;
 use crate::ColumnBuilder;
 use crate::Scalar;
@@ -50,41 +51,47 @@ impl Chunk {
             .map(|index| {
                 let columns = chunks
                     .iter()
-                    .map(|chunk| (&chunk.columns()[index], chunk.num_rows()))
+                    .map(|chunk| (chunk.get_by_offset(index), chunk.num_rows()))
                     .collect_vec();
 
-                let datatype = columns[0].0.1.clone();
-                if datatype.is_null() {
-                    return (Value::Scalar(Scalar::Null), datatype);
+                let id = columns[0].0.id;
+                let ty = columns[0].0.data_type.clone();
+                if ty.is_null() {
+                    return ChunkEntry {
+                        id,
+                        data_type: ty,
+                        value: Value::Scalar(Scalar::Null),
+                    };
                 }
 
                 // if they are all same scalars
-                if matches!(columns[0], ((Value::Scalar(_), _), _)) {
-                    let all_same_scalar = columns.iter().map(|((val, _), _)| val).all_equal();
+                if matches!(columns[0].0.value, Value::Scalar(_)) {
+                    let all_same_scalar = columns.iter().map(|(entry, _)| &entry.value).all_equal();
                     if all_same_scalar {
-                        return columns[0].0.clone();
+                        return (*columns[0].0).clone();
                     }
                 }
 
                 let full_columns: Vec<Column> = columns
                     .iter()
-                    .map(|((col, ty), rows)| match col {
+                    .map(|(entry, rows)| match &entry.value {
                         Value::Scalar(s) => {
-                            let builder = ColumnBuilder::repeat(&s.as_ref(), *rows, ty);
+                            let builder =
+                                ColumnBuilder::repeat(&s.as_ref(), *rows, &entry.data_type);
                             builder.build()
                         }
                         Value::Column(c) => c.clone(),
                     })
                     .collect();
 
-                let column = Column::take_column_indices(
-                    &full_columns,
-                    datatype.clone(),
-                    indices,
-                    result_size,
-                );
+                let column =
+                    Column::take_column_indices(&full_columns, ty.clone(), indices, result_size);
 
-                (Value::Column(column), datatype)
+                ChunkEntry {
+                    id,
+                    data_type: ty,
+                    value: Value::Column(column),
+                }
             })
             .collect();
 
@@ -94,9 +101,8 @@ impl Chunk {
     pub fn take_by_slice_limit(chunk: &Chunk, slice: (usize, usize), limit: Option<usize>) -> Self {
         let columns = chunk
             .columns()
-            .iter()
-            .map(|col| {
-                Self::take_column_by_slices_limit(&[col.clone()], &[(0, slice.0, slice.1)], limit)
+            .map(|entry| {
+                Self::take_column_by_slices_limit(&[entry.clone()], &[(0, slice.0, slice.1)], limit)
             })
             .collect::<Vec<_>>();
 
@@ -123,7 +129,7 @@ impl Chunk {
         for index in 0..chunks[0].num_columns() {
             let cols = chunks
                 .iter()
-                .map(|c| c.columns()[index].clone())
+                .map(|c| c.get_by_offset(index).clone())
                 .collect::<Vec<_>>();
 
             let merged_col = Self::take_column_by_slices_limit(&cols, slices, limit);
@@ -135,12 +141,14 @@ impl Chunk {
     }
 
     pub fn take_column_by_slices_limit(
-        columns: &[(Value<AnyType>, DataType)],
+        columns: &[ChunkEntry],
         slices: &[MergeSlice],
         limit: Option<usize>,
-    ) -> (Value<AnyType>, DataType) {
+    ) -> ChunkEntry {
         assert!(!columns.is_empty());
-        let ty = &columns[0].1;
+        let ty = &columns[0].data_type;
+        let id = &columns[0].id;
+
         let num_rows = limit
             .unwrap_or(usize::MAX)
             .min(slices.iter().map(|(_, _, c)| *c).sum());
@@ -150,10 +158,10 @@ impl Chunk {
         for (index, start, len) in slices {
             let len = (*len).min(remain);
             remain -= len;
-            let (col, ty) = &columns[*index];
-            match col {
+            let col = &columns[*index];
+            match &col.value {
                 Value::Scalar(scalar) => {
-                    let other = ColumnBuilder::repeat(&scalar.as_ref(), len, ty);
+                    let other = ColumnBuilder::repeat(&scalar.as_ref(), len, &col.data_type);
                     builder.append(&other);
                 }
                 Value::Column(c) => {
@@ -171,11 +179,18 @@ impl Chunk {
         // if they are all same scalars, combine it to a single scalar
         let all_same = col.len() > 0 && col.iter().all(|s| unsafe { s == col.index_unchecked(0) });
 
-        if all_same {
+        let value = if all_same {
             let s = unsafe { col.index_unchecked(0) };
-            (Value::Scalar(s.to_owned()), ty.clone())
+
+            Value::Scalar(s.to_owned())
         } else {
-            (Value::Column(col), ty.clone())
+            Value::Column(col)
+        };
+
+        ChunkEntry {
+            id: *id,
+            data_type: ty.clone(),
+            value,
         }
     }
 }

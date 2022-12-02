@@ -13,10 +13,9 @@
 // limitations under the License.
 
 use std::env;
-use std::sync::Arc;
 
-use common_base::base::MemoryTracker;
 use common_base::base::Runtime;
+use common_base::base::GLOBAL_MEM_STAT;
 use common_config::Config;
 use common_config::DATABEND_COMMIT_VERSION;
 use common_config::QUERY_SEMVER;
@@ -43,9 +42,8 @@ fn main() {
             eprintln!("Databend Query start failure, cause: {:?}", cause);
             std::process::exit(cause.code() as i32);
         }
-        Ok(main_runtime) => {
-            let tracker = main_runtime.get_tracker();
-            if let Err(cause) = main_runtime.block_on(main_entrypoint(tracker)) {
+        Ok(rt) => {
+            if let Err(cause) = rt.block_on(main_entrypoint()) {
                 eprintln!("Databend Query start failure, cause: {:?}", cause);
                 std::process::exit(cause.code() as i32);
             }
@@ -53,7 +51,7 @@ fn main() {
     }
 }
 
-async fn main_entrypoint(mem_tracker: Arc<MemoryTracker>) -> Result<()> {
+async fn main_entrypoint() -> Result<()> {
     let conf: Config = Config::load()?;
 
     if run_cmd(&conf) {
@@ -63,15 +61,17 @@ async fn main_entrypoint(mem_tracker: Arc<MemoryTracker>) -> Result<()> {
     init_default_metrics_recorder();
     set_panic_hook();
 
-    let size = conf.query.max_memory_usage as i64;
-    info!("Set memory limit: {}", size);
-    mem_tracker.set_limit(size);
-
     if conf.meta.is_embedded_meta()? {
         MetaEmbedded::init_global_meta_store(conf.meta.embedded_dir.clone()).await?;
     }
     // Make sure global services have been inited.
     GlobalServices::init(conf.clone()).await?;
+
+    if conf.query.max_memory_limit_enabled {
+        let size = conf.query.max_server_memory_usage as i64;
+        info!("Set memory limit: {}", size);
+        GLOBAL_MEM_STAT.set_limit(size);
+    }
 
     let tenant = conf.query.tenant_id.clone();
     let cluster_id = conf.query.cluster_id.clone();

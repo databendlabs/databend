@@ -21,6 +21,7 @@ use common_arrow::ArrayRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use crate::ColumnBuilder;
 use crate::schema::DataSchema;
 use crate::types::AnyType;
 use crate::types::DataType;
@@ -34,15 +35,22 @@ use crate::Value;
 /// Chunk is a lightweight container for a group of columns.
 #[derive(Clone)]
 pub struct Chunk {
-    columns: Vec<(Value<AnyType>, DataType)>,
+    columns: Vec<ChunkEntry>,
     num_rows: usize,
     meta: Option<ChunkMetaInfoPtr>,
 }
 
+#[derive(Clone)]
+pub struct ChunkEntry {
+    pub id: usize,
+    pub data_type: DataType,
+    pub value: Value<AnyType>,
+}
+
 impl Chunk {
     #[inline]
-    pub fn new(columns: Vec<(Value<AnyType>, DataType)>, num_rows: usize) -> Self {
-        debug_assert!(columns.iter().all(|(col, _)| match col {
+    pub fn new(columns: Vec<ChunkEntry>, num_rows: usize) -> Self {
+        debug_assert!(columns.iter().all(|entry| match &entry.value {
             Value::Scalar(_) => true,
             Value::Column(c) => c.len() == num_rows,
         }));
@@ -55,11 +63,11 @@ impl Chunk {
 
     #[inline]
     pub fn new_with_meta(
-        columns: Vec<(Value<AnyType>, DataType)>,
+        columns: Vec<ChunkEntry>,
         num_rows: usize,
         meta: Option<ChunkMetaInfoPtr>,
     ) -> Self {
-        debug_assert!(columns.iter().all(|(col, _)| match col {
+        debug_assert!(columns.iter().all(|col| match &col.value {
             Value::Scalar(_) => true,
             Value::Column(c) => c.len() == num_rows,
         }));
@@ -76,19 +84,23 @@ impl Chunk {
     }
 
     #[inline]
-    pub fn empty_with_meta(meta: ChunkMetaInfoPtr) -> Self {
-        Chunk::new_with_meta(vec![], 0, Some(meta))
+    pub fn columns(&self) -> impl Iterator<Item = &ChunkEntry> {
+        self.columns.iter()
     }
 
     #[inline]
-    pub fn columns(&self) -> &[(Value<AnyType>, DataType)] {
-        &self.columns
+    pub fn get_by_offset(&self, offset: usize) -> &ChunkEntry {
+        &self.columns[offset]
     }
 
     #[inline]
-    pub fn column(&self, index: usize) -> &(Value<AnyType>, DataType) {
-        &self.columns[index]
+    pub fn get_by_id(&self, id: usize) -> &ChunkEntry {
+        self.columns()
+            .find(|entry| entry.id == id)
+            .ok_or_else(|| format!("Chunk doesn't contain a column with id `{id}`"))
+            .unwrap()
     }
+
 
     #[inline]
     pub fn num_rows(&self) -> usize {
@@ -109,7 +121,7 @@ impl Chunk {
     pub fn domains(&self) -> HashMap<usize, Domain> {
         self.columns
             .iter()
-            .map(|(value, _)| value.as_ref().domain())
+            .map(|entry| entry.value.as_ref().domain())
             .enumerate()
             .collect()
     }
@@ -117,9 +129,8 @@ impl Chunk {
     #[inline]
     pub fn memory_size(&self) -> usize {
         self.columns()
-            .iter()
-            .map(|(col, _)| match col {
-                Value::Scalar(s) => std::mem::size_of_val(s) * self.num_rows,
+            .map(|entry| match &entry.value {
+                Value::Scalar(s) => std::mem::size_of_val(&s),
                 Value::Column(c) => c.memory_size(),
             })
             .sum()
@@ -128,10 +139,22 @@ impl Chunk {
     pub fn convert_to_full(&self) -> Self {
         let columns = self
             .columns()
-            .iter()
-            .map(|(col, ty)| {
-                let col = col.convert_to_full_column(ty, self.num_rows());
-                (Value::Column(col), ty.clone())
+            .map(|entry| match &entry.value {
+                Value::Scalar(s) => {
+                    let builder =
+                        ColumnBuilder::repeat(&s.as_ref(), self.num_rows, &entry.data_type);
+                    let col = builder.build();
+                    ChunkEntry {
+                        id: entry.id,
+                        data_type: entry.data_type.clone(),
+                        value: Value::Column(col),
+                    }
+                }
+                Value::Column(c) => ChunkEntry {
+                    id: entry.id,
+                    data_type: entry.data_type.clone(),
+                    value: Value::Column(c.clone()),
+                },
             })
             .collect();
         Self {
@@ -150,46 +173,27 @@ impl Chunk {
             self.columns
                 .iter()
                 .zip(schema.fields())
-                .all(|((_, ty), field)| { ty == &field.data_type().into() })
+                .all(|(col, field)| { col.data_type == field.data_type().into() })
         );
 
         // Return chunk directly, because we don't support decimal yet.
         self.clone()
     }
 
-    /// Take the first Scalar of the column.
-    #[inline]
-    pub fn first(&self, index: usize) -> Result<Scalar> {
-        if self.num_rows == 0 {
-            return Err(ErrorCode::EmptyData("Chunk is empty"));
-        }
-        let (value, _) = self.column(index);
-        match value {
-            Value::Scalar(s) => Ok(s.clone()),
-            Value::Column(c) => Ok(unsafe { c.index_unchecked(0).to_owned() }),
-        }
-    }
-
-    /// Take the last Scalar of the column.
-    #[inline]
-    pub fn last(&self, index: usize) -> Result<Scalar> {
-        if self.num_rows == 0 {
-            return Err(ErrorCode::EmptyData("Chunk is empty"));
-        }
-        let (value, _) = self.column(index);
-        match value {
-            Value::Scalar(s) => Ok(s.clone()),
-            Value::Column(c) => Ok(unsafe { c.index_unchecked(self.num_rows - 1).to_owned() }),
-        }
-    }
-
     pub fn slice(&self, range: Range<usize>) -> Self {
         let columns = self
             .columns()
-            .iter()
-            .map(|(col, ty)| match col {
-                Value::Scalar(s) => (Value::Scalar(s.clone()), ty.clone()),
-                Value::Column(c) => (Value::Column(c.slice(range.clone())), ty.clone()),
+            .map(|entry| match &entry.value {
+                Value::Scalar(s) => ChunkEntry {
+                    id: entry.id,
+                    data_type: entry.data_type.clone(),
+                    value: Value::Scalar(s.clone()),
+                },
+                Value::Column(c) => ChunkEntry {
+                    id: entry.id,
+                    data_type: entry.data_type.clone(),
+                    value: Value::Column(c.slice(range.clone())),
+                },
             })
             .collect();
         Self {
@@ -200,12 +204,12 @@ impl Chunk {
     }
 
     #[inline]
-    pub fn add_column(&mut self, column: Value<AnyType>, data_type: DataType) {
+    pub fn add_column(&mut self, column: ChunkEntry) {
         #[cfg(debug_assertions)]
-        if let Value::Column(col) = &column {
+        if let Value::Column(col) = &column.value {
             assert_eq!(self.num_rows, col.len());
         }
-        self.columns.push((column, data_type))
+        self.columns.push(column);
     }
 
     #[inline]
@@ -244,20 +248,7 @@ impl Chunk {
         arrow_chunk: &ArrowChunk<A>,
         schema: &DataSchemaRef,
     ) -> Result<Self> {
-        let mut num_rows = 0;
-        let columns: Vec<(Value<AnyType>, DataType)> = arrow_chunk
-            .columns()
-            .iter()
-            .zip(schema.fields())
-            .map(|(c, f)| {
-                let col = Column::from_arrow(c.as_ref());
-                num_rows = col.len();
-                let data_type = f.data_type().into();
-                (Value::Column(col), data_type)
-            })
-            .collect();
-
-        Ok(Self::new(columns, num_rows))
+        todo!("expression")
     }
 }
 
@@ -268,9 +259,8 @@ impl TryFrom<Chunk> for ArrowChunk<ArrayRef> {
         let arrays = v
             .convert_to_full()
             .columns()
-            .iter()
-            .map(|(val, _)| {
-                let column = val.clone().into_column().unwrap();
+            .map(|val| {
+                let column = val.value.clone().into_column().unwrap();
                 column.as_arrow()
             })
             .collect();

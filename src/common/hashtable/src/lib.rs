@@ -25,7 +25,10 @@ mod keys_ref;
 mod lookup_hashtable;
 mod stack_hashtable;
 mod table0;
+
+#[allow(dead_code)]
 mod table1;
+mod table_empty;
 mod traits;
 mod twolevel_hashtable;
 mod unsized_hashtable;

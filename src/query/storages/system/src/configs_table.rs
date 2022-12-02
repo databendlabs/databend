@@ -236,7 +236,17 @@ impl ConfigsTable {
                         Some(k.to_string())
                     },
                 ),
-                _ => unimplemented!(),
+                Value::Null => ConfigsTable::push_config(
+                    names,
+                    values,
+                    groups,
+                    descs,
+                    k.to_string(),
+                    "null".to_string(),
+                    group.clone(),
+                    "".to_string(),
+                    name_prefix.clone(),
+                ),
             }
         }
     }

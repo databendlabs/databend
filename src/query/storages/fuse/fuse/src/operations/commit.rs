@@ -38,6 +38,7 @@ use common_storages_table_meta::meta::Location;
 use common_storages_table_meta::meta::SegmentInfo;
 use common_storages_table_meta::meta::Statistics;
 use common_storages_table_meta::meta::TableSnapshot;
+use common_storages_table_meta::meta::TableSnapshotStatistics;
 use common_storages_table_meta::meta::Versioned;
 use common_storages_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use opendal::Operator;
@@ -198,6 +199,9 @@ impl FuseTable {
         let prev = self.read_table_snapshot().await?;
         let prev_version = self.snapshot_format_version().await?;
         let prev_timestamp = prev.as_ref().and_then(|v| v.timestamp);
+        let prev_statistics_location = prev
+            .as_ref()
+            .and_then(|v| v.table_statistics_location.clone());
         let schema = self.table_info.meta.schema.as_ref().clone();
         let (segments, summary) = Self::merge_append_operations(operation_log)?;
 
@@ -221,6 +225,7 @@ impl FuseTable {
                 summary,
                 segments,
                 self.cluster_key_meta.clone(),
+                prev_statistics_location,
             )
         } else {
             Self::merge_table_operations(
@@ -247,6 +252,7 @@ impl FuseTable {
             &self.table_info,
             &self.meta_location_generator,
             new_snapshot,
+            None,
             &self.operator,
         )
         .await
@@ -269,6 +275,9 @@ impl FuseTable {
         };
         let prev_snapshot_id = previous.as_ref().map(|v| (v.snapshot_id, prev_version));
         let prev_snapshot_timestamp = previous.as_ref().and_then(|v| v.timestamp);
+        let prev_statistics_location = previous
+            .as_ref()
+            .and_then(|v| v.table_statistics_location.clone());
 
         // 2. merge segment locations with previous snapshot, if any
         if let Some(snapshot) = &previous {
@@ -284,6 +293,7 @@ impl FuseTable {
             stats,
             new_segments,
             cluster_key_meta,
+            prev_statistics_location,
         );
         Ok(new_snapshot)
     }
@@ -293,13 +303,24 @@ impl FuseTable {
         table_info: &TableInfo,
         location_generator: &TableMetaLocationGenerator,
         snapshot: TableSnapshot,
+        table_statistics: Option<TableSnapshotStatistics>,
         operator: &Operator,
     ) -> Result<()> {
         let snapshot_location = location_generator
             .snapshot_location_from_uuid(&snapshot.snapshot_id, snapshot.format_version())?;
+        let need_to_save_statistics =
+            snapshot.table_statistics_location.is_some() && table_statistics.is_some();
 
         // 1. write down snapshot
         write_meta(operator, &snapshot_location, &snapshot).await?;
+        if need_to_save_statistics {
+            write_meta(
+                operator,
+                &snapshot.table_statistics_location.clone().unwrap(),
+                table_statistics.clone().unwrap(),
+            )
+            .await?;
+        }
 
         // 2. prepare table meta
         let mut new_table_meta = table_info.meta.clone();
@@ -340,7 +361,19 @@ impl FuseTable {
             Ok(_) => {
                 if let Some(snapshot_cache) = CacheManager::instance().get_table_snapshot_cache() {
                     let cache = &mut snapshot_cache.write();
-                    cache.put(snapshot_location.clone(), Arc::new(snapshot));
+                    cache.put(snapshot_location.clone(), Arc::new(snapshot.clone()));
+                }
+                // upsert snapshot stastics cache
+                if let Some(snapshot_statistics) = table_statistics {
+                    if let Some(mut_snapshot_statistics) =
+                        CacheManager::instance().get_table_snapshot_statistics_cache()
+                    {
+                        let cache = &mut mut_snapshot_statistics.write();
+                        cache.put(
+                            snapshot.table_statistics_location.unwrap(),
+                            Arc::new(snapshot_statistics),
+                        );
+                    }
                 }
                 // try keep a hit file of last snapshot
                 Self::write_last_snapshot_hint(operator, location_generator, snapshot_location)
@@ -358,6 +391,12 @@ impl FuseTable {
                         snapshot_location, table_info.desc, table_info.ident
                     );
                     let _ = operator.object(&snapshot_location).delete().await;
+                    if need_to_save_statistics {
+                        let _ = operator
+                            .object(&snapshot.table_statistics_location.unwrap())
+                            .delete()
+                            .await;
+                    }
                 }
                 Err(e)
             }
@@ -481,6 +520,7 @@ impl FuseTable {
                 latest_table_info,
                 &self.meta_location_generator,
                 snapshot_tobe_committed,
+                None,
                 &self.operator,
             )
             .await

@@ -45,7 +45,6 @@ pub struct QueryResult {
     extra_info: Option<Box<dyn ProgressReporter + Send>>,
     has_result_set: bool,
     schema: DataSchemaRef,
-    ignore_result: bool,
 }
 
 impl QueryResult {
@@ -54,14 +53,12 @@ impl QueryResult {
         extra_info: Option<Box<dyn ProgressReporter + Send>>,
         has_result_set: bool,
         schema: DataSchemaRef,
-        ignore_result: bool,
     ) -> QueryResult {
         QueryResult {
             chunks,
             extra_info,
             has_result_set,
             schema,
-            ignore_result,
         }
     }
 }
@@ -178,124 +175,9 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
             Err(error) => Self::err(&error, dataset_writer).await,
             Ok(columns) => {
                 let mut row_writer = dataset_writer.start(&columns).await?;
-
                 let chunks = &mut query_result.chunks;
-                while let Some(chunk) = chunks.next().await {
-                    let chunk = match chunk {
-                        Err(e) => {
-                            error!("result row write failed: {:?}", e);
-                            row_writer
-                                .finish_error(
-                                    ErrorKind::ER_UNKNOWN_ERROR,
-                                    &format!("result row write failed: {}", e).as_bytes(),
-                                )
-                                .await?;
-                            return Ok(());
-                        }
-                        Ok(chunk) => chunk,
-                    };
-
-                    if query_result.ignore_result {
-                        continue;
-                    }
-
-                    let mut columns = Vec::with_capacity(chunk.num_columns());
-                    let mut data_types = Vec::with_capacity(chunk.num_columns());
-                    for (value, data_type) in chunk.columns().iter() {
-                        columns.push(value.into_column().unwrap());
-                        data_types.push(data_type);
-                    }
-                    let rows_size = chunk.num_rows();
-                    let encoder = FieldEncoderValues::create_for_handler(format.timezone);
-                    let mut buf = Vec::<u8>::new();
-                    for row_index in 0..rows_size {
-                        for (col_index, column) in columns.iter().enumerate() {
-                            let val = unsafe { columns[col_index].index_unchecked(row_index) };
-
-                            if let ScalarRef::Null = val {
-                                row_writer.write_col(None::<u8>)?;
-                                continue;
-                            }
-                            let data_type = data_types[col_index].remove_nullable();
-                            match (data_type, val.clone()) {
-                                (DataType::Boolean, ScalarRef::Boolean(v)) => {
-                                    row_writer.write_col(v as i8)?
-                                }
-                                (DataType::Date, ScalarRef::Date(v)) => {
-                                    let v = v as i32;
-                                    row_writer.write_col(v.to_date(&tz).naive_local())?
-                                }
-                                (DataType::Timestamp, ScalarRef::Timestamp(_)) => write_field(
-                                    &mut row_writer,
-                                    column,
-                                    &encoder,
-                                    &mut buf,
-                                    row_index,
-                                )?,
-                                (DataType::String, ScalarRef::String(v)) => {
-                                    row_writer.write_col(v)?
-                                }
-                                (DataType::Array(_), ScalarRef::Array(_)) => write_field(
-                                    &mut row_writer,
-                                    column,
-                                    &encoder,
-                                    &mut buf,
-                                    row_index,
-                                )?,
-                                (DataType::Tuple { .. }, ScalarRef::Tuple(_)) => write_field(
-                                    &mut row_writer,
-                                    column,
-                                    &encoder,
-                                    &mut buf,
-                                    row_index,
-                                )?,
-                                (DataType::Variant, ScalarRef::Variant(_)) => write_field(
-                                    &mut row_writer,
-                                    column,
-                                    &encoder,
-                                    &mut buf,
-                                    row_index,
-                                )?,
-                                (_, ScalarRef::Number(n)) => {
-                                    match n {
-                                        NumberScalar::Float32(_) | NumberScalar::Float64(_) =>
-                                        // mysql writer use a text protocol,
-                                        // it use format!() to serialize number,
-                                        // the result will be different with our column for floats
-                                        {
-                                            buf.clear();
-                                            encoder.write_field(column, row_index, &mut buf, true);
-                                            row_writer.write_col(&buf[..])?;
-                                        }
-                                        NumberScalar::UInt8(v) => row_writer.write_col(v)?,
-                                        NumberScalar::UInt16(v) => row_writer.write_col(v)?,
-                                        NumberScalar::UInt32(v) => row_writer.write_col(v)?,
-                                        NumberScalar::UInt64(v) => row_writer.write_col(v)?,
-                                        NumberScalar::Int8(v) => row_writer.write_col(v)?,
-                                        NumberScalar::Int16(v) => row_writer.write_col(v)?,
-                                        NumberScalar::Int32(v) => row_writer.write_col(v)?,
-                                        NumberScalar::Int64(v) => row_writer.write_col(v)?,
-                                    }
-                                }
-                                (_, v) => {
-                                    return Err(ErrorCode::BadDataValueType(format!(
-                                        "Unsupported column type:{:?}, expected type in schema: {:?}",
-                                        v.data_type(),
-                                        data_type
-                                    )));
-                                }
-                            }
-                        }
-                        row_writer.end_row().await?;
-                    }
-                }
-
-                let info = query_result
-                    .extra_info
-                    .map(|r| r.progress_info())
-                    .unwrap_or_default();
-                row_writer.finish_with_info(&info).await?;
-
+                
+                todo!("expression");
                 Ok(())
             }
         }

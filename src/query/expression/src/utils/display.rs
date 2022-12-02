@@ -60,10 +60,14 @@ impl Debug for Chunk {
         let mut table = Table::new();
         table.load_preset("||--+-++|    ++++++");
 
-        table.set_header(vec!["Column ID", "Column Data"]);
+        table.set_header(vec!["Column ID", "Type", "Column Data"]);
 
-        for (i, (col, _)) in self.columns().iter().enumerate() {
-            table.add_row(vec![i.to_string(), format!("{:?}", col)]);
+        for (i, entry) in self.columns().enumerate() {
+            table.add_row(vec![
+                i.to_string(),
+                entry.data_type.to_string(),
+                format!("{:?}", entry.value),
+            ]);
         }
 
         write!(f, "{}", table)
@@ -80,8 +84,7 @@ impl Display for Chunk {
         for index in 0..self.num_rows() {
             let row: Vec<_> = self
                 .columns()
-                .iter()
-                .map(|(val, _)| val.as_ref().index(index).unwrap().to_string())
+                .map(|entry| entry.value.as_ref().index(index).unwrap().to_string())
                 .map(Cell::new)
                 .collect();
             table.add_row(row);

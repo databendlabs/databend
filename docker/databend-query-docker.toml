@@ -19,7 +19,6 @@ metric_api_address = "0.0.0.0:7070"
 mysql_handler_host = "0.0.0.0"
 mysql_handler_port = 3307
 
-
 # Databend Query ClickHouse HTTP Handler.
 clickhouse_http_handler_host = "0.0.0.0"
 clickhouse_http_handler_port = 8124
@@ -28,15 +27,18 @@ clickhouse_http_handler_port = 8124
 http_handler_host = "0.0.0.0"
 http_handler_port = 8000
 
-tenant_id = "test_tenant"
-cluster_id = "test_cluster"
+tenant_id = "default"
+cluster_id = "default"
 
 [log]
+
+[log.file]
 level = "INFO"
+format = "text"
 dir = "./.databend/logs"
 
+
 [meta]
-# To enable embedded meta-store, set address to ""
 endpoints = ["0.0.0.0:9191"]
 username = "root"
 password = "root"
@@ -49,4 +51,4 @@ type = "fs"
 
 # fs storage.
 [storage.fs]
-data_path = "stateless_test_data"
+data_path = "./.databend/data"

@@ -99,16 +99,19 @@ impl AggregateFunction for AggregateApproxCountDistinctFunction {
             return Ok(());
         }
 
+        // This is a hot path, to_values will alloc more memory(Vec::with_capacity).
         if let Some(bitmap) = bitmap {
-            for (i, value) in column.to_values().iter().enumerate() {
+            for i in 0..column.len() {
+                let value = &column.get(i);
                 if bitmap.get_bit(i) {
                     state.hll.push(value);
                 }
             }
         } else {
-            column.to_values().iter().for_each(|value| {
+            for i in 0..column.len() {
+                let value = &column.get(i);
                 state.hll.push(value);
-            });
+            }
         }
 
         Ok(())

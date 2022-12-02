@@ -119,6 +119,12 @@ impl<T: InputFormatTextBase> InputFormat for InputFormatText<T> {
         InputFormatTextPipe::<T>::execute_stream(ctx, pipeline)
     }
 
+    async fn infer_schema(&self, _path: &str, _op: &Operator) -> Result<DataSchema> {
+        Err(ErrorCode::Unimplemented(
+            "infer_schema is not implemented for this format yet.",
+        ))
+    }
+
     async fn get_splits(
         &self,
         files: &[String],

@@ -48,6 +48,7 @@ use databend_query::storages::fuse::table_functions::FuseSnapshotTable;
 use databend_query::storages::fuse::FUSE_TBL_BLOCK_PREFIX;
 use databend_query::storages::fuse::FUSE_TBL_SEGMENT_PREFIX;
 use databend_query::storages::fuse::FUSE_TBL_SNAPSHOT_PREFIX;
+use databend_query::storages::fuse::FUSE_TBL_SNAPSHOT_STATISTICS_PREFIX;
 use databend_query::storages::Table;
 use databend_query::stream::ReadChunkStream;
 use databend_query::table_functions::TableArgs;
@@ -452,6 +453,7 @@ pub async fn check_data_dir(
     fixture: &TestFixture,
     case_name: &str,
     snapshot_count: u32,
+    table_statistic_count: u32,
     segment_count: u32,
     block_count: u32,
     index_count: u32,
@@ -462,10 +464,12 @@ pub async fn check_data_dir(
     };
     let root = data_path.as_str();
     let mut ss_count = 0;
+    let mut ts_count = 0;
     let mut sg_count = 0;
     let mut b_count = 0;
     let mut i_count = 0;
     let prefix_snapshot = FUSE_TBL_SNAPSHOT_PREFIX;
+    let prefix_snapshot_statistics = FUSE_TBL_SNAPSHOT_STATISTICS_PREFIX;
     let prefix_segment = FUSE_TBL_SEGMENT_PREFIX;
     let prefix_block = FUSE_TBL_BLOCK_PREFIX;
     let prefix_index = FUSE_TBL_XOR_BLOOM_INDEX_PREFIX;
@@ -484,6 +488,8 @@ pub async fn check_data_dir(
                 b_count += 1;
             } else if path.starts_with(prefix_index) {
                 i_count += 1;
+            } else if path.starts_with(prefix_snapshot_statistics) {
+                ts_count += 1;
             }
         }
     }
@@ -491,6 +497,11 @@ pub async fn check_data_dir(
     assert_eq!(
         ss_count, snapshot_count,
         "case [{}], check snapshot count",
+        case_name
+    );
+    assert_eq!(
+        ts_count, table_statistic_count,
+        "case [{}], check snapshot statistics count",
         case_name
     );
     assert_eq!(
@@ -512,20 +523,23 @@ pub async fn check_data_dir(
     );
 }
 
-pub async fn history_should_have_only_one_item(
+pub async fn history_should_have_item(
     fixture: &TestFixture,
     case_name: &str,
+    item_cnt: u32,
 ) -> Result<()> {
     // check history
     let db = fixture.default_db_name();
     let tbl = fixture.default_table_name();
+    let count_str = format!("| {}     |", item_cnt);
     let expected = vec![
         "+-------+",
         "| count |",
         "+-------+",
-        "| 1     |",
+        count_str.as_str(),
         "+-------+",
     ];
+
     let qry = format!(
         "select count(*) as count from fuse_snapshot('{}', '{}')",
         db, tbl

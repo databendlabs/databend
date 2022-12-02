@@ -25,6 +25,7 @@ use common_arrow::arrow::io::ipc::read::FileReader;
 use common_arrow::arrow::io::ipc::write::FileWriter;
 use common_arrow::arrow::io::ipc::write::WriteOptions as IpcWriteOptions;
 
+use crate::ChunkEntry;
 use crate::types::AnyType;
 use crate::types::DataType;
 use crate::ColumnBuilder;
@@ -88,12 +89,12 @@ pub fn deserialize_arrow_array(bytes: &[u8]) -> Option<Box<dyn Array>> {
 
 /// Convert a column to a arrow array.
 pub fn column_to_arrow_array(
-    column: &(Value<AnyType>, DataType),
+    column: &ChunkEntry,
     num_rows: usize,
 ) -> Box<dyn Array> {
-    match &column.0 {
+    match &column.value {
         Value::Scalar(v) => {
-            let builder = ColumnBuilder::repeat(&v.as_ref(), num_rows, &column.1);
+            let builder = ColumnBuilder::repeat(&v.as_ref(), num_rows, &column.data_type);
             builder.build().as_arrow()
         }
         Value::Column(c) => c.as_arrow(),

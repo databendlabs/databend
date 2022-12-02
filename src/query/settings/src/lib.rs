@@ -121,11 +121,11 @@ impl Settings {
             // Set max memory usage.
             {
                 if ret.get_max_memory_usage()? == 0 {
-                    let max_usage = if conf.query.max_memory_usage == 0 {
+                    let max_usage = if conf.query.max_server_memory_usage == 0 {
                         ret.check_and_get_default_value("max_memory_usage")?
                             .as_u64()?
                     } else {
-                        conf.query.max_memory_usage
+                        conf.query.max_server_memory_usage
                     };
                     ret.set_max_memory_usage(max_usage)?;
                 }
@@ -174,13 +174,13 @@ impl Settings {
             },
             // max_storage_io_requests
             SettingValue {
-                default_value: UserSettingValue::UInt64(1000),
+                default_value: UserSettingValue::UInt64(64),
                 user_setting: UserSetting::create(
                     "max_storage_io_requests",
-                    UserSettingValue::UInt64(1000),
+                    UserSettingValue::UInt64(64),
                 ),
                 level: ScopeLevel::Session,
-                desc: "The maximum number of concurrent IO requests. By default, it is 1000.",
+                desc: "The maximum number of concurrent IO requests. By default, it is 64.",
                 possible_values: None,
             },
             // flight_client_timeout

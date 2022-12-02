@@ -24,6 +24,7 @@ mod operation_log;
 mod read_data;
 mod read_partitions;
 mod recluster;
+mod statistic;
 mod truncate;
 
 mod fuse_source;

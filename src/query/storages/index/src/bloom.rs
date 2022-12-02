@@ -135,7 +135,6 @@ impl ChunkFilter {
                 for chunk in chunks.iter() {
                     let (col, _) = chunk.column(i);
                     todo!("expression");
-                    // filter_builder.add_keys(&col.to_values());
                 }
 
                 let filter = filter_builder.build()?;

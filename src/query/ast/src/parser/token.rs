@@ -367,6 +367,8 @@ pub enum TokenKind {
     DROP,
     #[token("EXCEPT", ignore(ascii_case))]
     EXCEPT,
+    #[token("EXCLUDE", ignore(ascii_case))]
+    EXCLUDE,
     #[token("ELSE", ignore(ascii_case))]
     ELSE,
     #[token("END", ignore(ascii_case))]
@@ -565,6 +567,8 @@ pub enum TokenKind {
     PROCESSLIST,
     #[token("PURGE", ignore(ascii_case))]
     PURGE,
+    #[token("STATISTIC", ignore(ascii_case))]
+    STATISTIC,
     #[token("QUARTER", ignore(ascii_case))]
     QUARTER,
     #[token("QUERY", ignore(ascii_case))]

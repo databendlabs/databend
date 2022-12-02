@@ -22,6 +22,7 @@ use crate::optimizer::RelExpr;
 use crate::optimizer::RequiredProperty;
 use crate::optimizer::SExpr;
 use crate::plans::Exchange;
+use crate::plans::RelOperator;
 
 /// Require and enforce physical property from a physical `SExpr`
 pub fn require_property(
@@ -42,6 +43,18 @@ pub fn require_property(
     for index in 0..optimized_expr.arity() {
         let required = rel_expr.compute_required_prop_child(ctx.clone(), index, required)?;
         let physical = rel_expr.derive_physical_prop_child(index)?;
+        if let RelOperator::PhysicalHashJoin(_) = &s_expr.plan {
+            // If the child is join probe side and join type is broadcast join
+            // We should wrap the child with Random exchange to make it partition to all nodes
+            if index == 0 && required.distribution == Distribution::Broadcast {
+                let enforced_child =
+                    enforce_property(optimized_expr.child(index)?, &RequiredProperty {
+                        distribution: Distribution::Any,
+                    })?;
+                children.push(enforced_child);
+                continue;
+            }
+        }
         if required.satisfied_by(&physical) {
             children.push(optimized_expr.child(index)?.clone());
             continue;
@@ -68,7 +81,9 @@ fn enforce_property(s_expr: &SExpr, required: &RequiredProperty) -> Result<SExpr
 
 pub fn enforce_distribution(distribution: &Distribution, s_expr: &SExpr) -> Result<SExpr> {
     match distribution {
-        Distribution::Random | Distribution::Any => Ok(s_expr.clone()),
+        Distribution::Random | Distribution::Any => {
+            Ok(SExpr::create_unary(Exchange::Random.into(), s_expr.clone()))
+        }
 
         Distribution::Serial => Ok(SExpr::create_unary(Exchange::Merge.into(), s_expr.clone())),
 

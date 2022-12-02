@@ -48,7 +48,7 @@ pub fn block_to_json_value(chunk: &Chunk, format: &FormatSettings) -> Result<Vec
         .collect();
 
     let mut res = Vec::new();
-    let encoder = FieldEncoderValues::create_for_handler(format.timezone);
+    let encoder = FieldEncoderValues::create_for_http_handler(format.timezone);
     let mut buf = vec![];
     for row_index in 0..rows_size {
         let mut row: Vec<JsonValue> = Vec::with_capacity(chunk.num_columns());

@@ -34,6 +34,7 @@ use crate::types::ValueType;
 use crate::with_number_mapped_type;
 use crate::with_number_type;
 use crate::Chunk;
+use crate::ChunkEntry;
 use crate::Column;
 use crate::Scalar;
 use crate::Value;
@@ -146,10 +147,16 @@ impl Chunk {
                 }
                 let after_columns = chunk
                     .columns()
-                    .iter()
-                    .map(|(value, ty)| match value {
-                        Value::Scalar(v) => (Value::Scalar(v.clone()), ty.clone()),
-                        Value::Column(c) => (Value::Column(Column::filter(c, bitmap)), ty.clone()),
+                    .map(|entry| match &entry.value {
+                        Value::Column(c) => {
+                            let value = Value::Column(Column::filter(c, bitmap));
+                            ChunkEntry {
+                                id: entry.id,
+                                data_type: entry.data_type.clone(),
+                                value,
+                            }
+                        }
+                        _ => entry.clone(),
                     })
                     .collect();
                 Ok(Chunk::new(after_columns, chunk.num_rows() - count_zeros))

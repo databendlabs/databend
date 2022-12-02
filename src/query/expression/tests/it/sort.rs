@@ -103,7 +103,7 @@ fn test_chunk_sort() -> Result<()> {
     for (sort_descs, limit, expected) in test_cases {
         let res = Chunk::sort(&chunk, &sort_descs, limit)?;
 
-        for ((col, _), expect) in res.columns().iter().zip(expected.iter()) {
+        for ((col, _), expect) in res.columns().zip(expected.iter()) {
             assert_eq!(
                 col.as_column().unwrap(),
                 expect,

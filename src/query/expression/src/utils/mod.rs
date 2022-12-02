@@ -20,7 +20,6 @@ pub mod display;
 
 use std::collections::HashMap;
 
-use chrono_tz::Tz;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::chunk::Chunk as ArrowChunk;
 use common_arrow::arrow::datatypes::DataType as ArrowDataType;
@@ -39,11 +38,13 @@ pub use self::column_from::*;
 use crate::types::AnyType;
 use crate::types::DataType;
 use crate::Chunk;
+use crate::ChunkEntry;
 use crate::Column;
 use crate::ConstantFolder;
 use crate::DataSchema;
 use crate::Domain;
 use crate::Evaluator;
+use crate::FunctionContext;
 use crate::FunctionRegistry;
 use crate::RawExpr;
 use crate::Result;
@@ -55,7 +56,7 @@ pub fn eval_function(
     span: Span,
     fn_name: &str,
     args: impl IntoIterator<Item = (Value<AnyType>, DataType)>,
-    tz: Tz,
+    fn_ctx: FunctionContext,
     num_rows: usize,
     fn_registry: &FunctionRegistry,
 ) -> Result<(Value<AnyType>, DataType)> {
@@ -69,7 +70,11 @@ pub fn eval_function(
                     id,
                     data_type: ty.clone(),
                 },
-                (val, ty),
+                ChunkEntry {
+                    id,
+                    data_type: ty,
+                    value: val,
+                },
             )
         })
         .unzip();
@@ -81,7 +86,7 @@ pub fn eval_function(
     };
     let expr = crate::type_check::check(&raw_expr, fn_registry)?;
     let chunk = Chunk::new(cols, num_rows);
-    let evaluator = Evaluator::new(&chunk, tz, fn_registry);
+    let evaluator = Evaluator::new(&chunk, fn_ctx, fn_registry);
     Ok((evaluator.run(&expr)?, expr.data_type().clone()))
 }
 
@@ -90,7 +95,7 @@ pub fn calculate_function_domain(
     span: Span,
     fn_name: &str,
     args: impl IntoIterator<Item = (Domain, DataType)>,
-    tz: Tz,
+    fn_ctx: FunctionContext,
     fn_registry: &FunctionRegistry,
 ) -> Result<(Option<Domain>, DataType)> {
     let (args, args_domain): (Vec<_>, HashMap<_, _>) = args
@@ -114,7 +119,7 @@ pub fn calculate_function_domain(
         args,
     };
     let expr = crate::type_check::check(&raw_expr, fn_registry)?;
-    let constant_folder = ConstantFolder::new(args_domain, tz, fn_registry);
+    let constant_folder = ConstantFolder::new(args_domain, fn_ctx, fn_registry);
     let (_, output_domain) = constant_folder.fold(&expr);
     Ok((output_domain, expr.data_type().clone()))
 }
