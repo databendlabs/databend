@@ -39,6 +39,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::Chunk;
 use common_expression::DataField;
+use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_meta_types::UserStageInfo;
 use common_pipeline_core::Pipeline;
@@ -133,7 +134,7 @@ impl InputFormat for InputFormatParquet {
         let mut reader = obj.seekable_reader(..size);
         let file_meta = read_metadata_async(&mut reader).await?;
         let arrow_schema = infer_schema(&file_meta)?;
-        Ok(DataSchema::from(arrow_schema))
+        Ok(DataSchema::from(&arrow_schema))
     }
 
     fn exec_copy(&self, ctx: Arc<InputContext>, pipeline: &mut Pipeline) -> Result<()> {

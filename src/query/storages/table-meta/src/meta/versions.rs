@@ -69,6 +69,24 @@ impl SnapshotVersion {
     }
 }
 
+impl Versioned<0> for v1::TableSnapshotStatistics {}
+
+pub enum TableSnapshotStatisticsVersion {
+    V0(PhantomData<v1::TableSnapshotStatistics>),
+}
+
+impl TableSnapshotStatisticsVersion {
+    pub fn version(&self) -> u64 {
+        match self {
+            TableSnapshotStatisticsVersion::V0(a) => Self::ver(a),
+        }
+    }
+
+    fn ver<const V: u64, T: Versioned<V>>(_v: &PhantomData<T>) -> u64 {
+        V
+    }
+}
+
 pub struct DataBlock {}
 
 impl Versioned<0> for DataBlock {}

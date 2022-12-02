@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::AnyType;
 use common_expression::types::DataType;
 use common_expression::Chunk;
 use common_expression::DataField;
@@ -123,38 +124,7 @@ impl ChunkFilter {
             return Err(ErrorCode::BadArguments("chunks is empty"));
         }
 
-        let mut filter_columns = vec![];
-
-        let fields = source_schema.fields();
-        for (i, field) in fields.iter().enumerate() {
-            if Xor8Filter::is_supported_schema_type(field.data_type()) {
-                // create filter per column
-                let mut filter_builder = Xor8Builder::create();
-
-                // ingest the same column data from all chunks
-                for chunk in chunks.iter() {
-                    let (col, _) = chunk.column(i);
-                    todo!("expression");
-                }
-
-                let filter = filter_builder.build()?;
-
-                // create filter column
-
-                let serialized_bytes = filter.to_bytes()?;
-                let filter_value = Value::Scalar(Scalar::String(serialized_bytes));
-
-                filter_columns.push((filter_value, DataType::String));
-            }
-        }
-
-        let filter_schema = Arc::new(Self::build_filter_schema(source_schema.as_ref()));
-        let filter_chunk = Chunk::new(filter_columns, 1);
-        Ok(Self {
-            source_schema,
-            filter_schema,
-            filter_chunk,
-        })
+        todo!("expression");
     }
 
     pub fn find(
@@ -171,13 +141,6 @@ impl ChunkFilter {
             // The column doesn't a filter
             return Ok(FilterEvalResult::NotApplicable);
         }
-
-        let index = self.filter_schema.index_of(&filter_column)?;
-        let value = self.filter_chunk.first(index)?;
-        let filter_bytes = value
-            .as_string()
-            .ok_or_else(|| ErrorCode::Internal("data in filter chunk should be string data"))?;
-        let (filter, _size) = Xor8Filter::from_bytes(filter_bytes)?;
         todo!("expression");
         // if filter.contains(target) {
         //     Ok(FilterEvalResult::Maybe)

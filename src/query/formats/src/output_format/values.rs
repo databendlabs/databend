@@ -40,8 +40,7 @@ impl OutputFormat for ValuesOutputFormat {
         let columns: Vec<Column> = chunk
             .convert_to_full()
             .columns()
-            .iter()
-            .map(|(val, _)| val.clone().into_column().unwrap())
+            .map(|column| column.value.clone().into_column().unwrap())
             .collect();
 
         for row_index in 0..rows_size {

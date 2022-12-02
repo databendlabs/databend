@@ -76,8 +76,7 @@ impl<const WITH_NAMES: bool, const WITH_TYPES: bool> OutputFormat
         let columns: Vec<Column> = chunk
             .convert_to_full()
             .columns()
-            .iter()
-            .map(|(val, _)| val.clone().into_column().unwrap())
+            .map(|val| val.value.clone().into_column().unwrap())
             .collect();
 
         for row_index in 0..rows_size {

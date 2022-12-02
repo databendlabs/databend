@@ -44,7 +44,7 @@ pub fn block_to_json_value(chunk: &Chunk, format: &FormatSettings) -> Result<Vec
         .convert_to_full()
         .columns()
         .iter()
-        .map(|(val, _)| val.clone().into_column().unwrap())
+        .map(|column| column.value.clone().into_column().unwrap())
         .collect();
 
     let mut res = Vec::new();

@@ -58,6 +58,7 @@ pub struct TableSnapshot {
 
     // The metadata of the cluster keys.
     pub cluster_key_meta: Option<ClusterKey>,
+    pub table_statistics_location: Option<String>,
 }
 
 impl TableSnapshot {
@@ -69,6 +70,7 @@ impl TableSnapshot {
         summary: Statistics,
         segments: Vec<Location>,
         cluster_key_meta: Option<ClusterKey>,
+        table_statistics_location: Option<String>
     ) -> Self {
         let now = Utc::now();
         // make snapshot timestamp monotonically increased
@@ -87,6 +89,7 @@ impl TableSnapshot {
             summary,
             segments,
             cluster_key_meta,
+            table_statistics_location,
         }
     }
 
@@ -101,6 +104,7 @@ impl TableSnapshot {
             clone.summary,
             clone.segments,
             clone.cluster_key_meta,
+            clone.table_statistics_location
         )
     }
 
@@ -122,6 +126,7 @@ impl From<v0::TableSnapshot> for TableSnapshot {
             summary: s.summary,
             segments: s.segments.into_iter().map(|l| (l, 0)).collect(),
             cluster_key_meta: None,
+            table_statistics_location: None,
         }
     }
 }
@@ -137,6 +142,7 @@ impl From<v1::TableSnapshot> for TableSnapshot {
             summary: s.summary,
             segments: s.segments,
             cluster_key_meta: None,
+            table_statistics_location: s.table_statistics_location
         }
     }
 }

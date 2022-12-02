@@ -19,6 +19,7 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::Chunk;
+use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::TypeDeserializer;
 use common_formats::FieldDecoder;

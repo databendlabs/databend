@@ -107,12 +107,12 @@ impl ClusterStatsGenerator {
         let mut max = Vec::with_capacity(self.cluster_key_index.len());
 
         for key in self.cluster_key_index.iter() {
-            let (val, data_type) = chunk.column(*key);
-            let val_ref = val.as_ref();
+            let val = chunk.get_by_id(*key);
+            let val_ref = val.value.as_ref();
             let mut left = unsafe { val_ref.index_unchecked(0) };
             // To avoid high cardinality, for the string column,
             // cluster statistics uses only the first 5 bytes.
-            if data_type == &DataType::String {
+            if val.data_type == DataType::String {
                 let v = left.into_string().unwrap();
                 let l = v.len();
                 let e = if l < 5 { l } else { 5 };
@@ -121,7 +121,7 @@ impl ClusterStatsGenerator {
             min.push(left.to_owned());
 
             let mut right = unsafe { val_ref.index_unchecked(val_ref.len() - 1) };
-            if data_type == &DataType::String {
+            if val.data_type == DataType::String {
                 let v = right.into_string().unwrap();
                 let l = v.len();
                 let e = if l < 5 { l } else { 5 };
