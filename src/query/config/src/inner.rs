@@ -71,6 +71,14 @@ impl Config {
         Ok(cfg)
     }
 
+    /// # NOTE
+    ///
+    /// This function is served for tests only.
+    pub fn load_without_args() -> Result<Self> {
+        let cfg: Self = OuterV0Config::load_without_args()?.try_into()?;
+        Ok(cfg)
+    }
+
     pub fn tls_query_cli_enabled(&self) -> bool {
         !self.query.rpc_tls_query_server_root_ca_cert.is_empty()
             && !self.query.rpc_tls_query_service_domain_name.is_empty()

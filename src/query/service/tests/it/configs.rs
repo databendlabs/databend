@@ -18,7 +18,9 @@ use std::fs;
 use std::io::Write;
 
 use common_config::CatalogConfig;
+use common_config::CatalogHiveConfig;
 use common_config::Config;
+use common_config::ThriftProtocol;
 use common_exception::Result;
 use pretty_assertions::assert_eq;
 
@@ -252,7 +254,9 @@ fn test_env_config_s3() -> Result<()> {
             ("CONFIG_FILE", None),
         ],
         || {
-            let configured = Config::load().expect("must success").into_outer();
+            let configured = Config::load_without_args()
+                .expect("must success")
+                .into_outer();
 
             assert_eq!("DEBUG", configured.log.level);
 
@@ -370,7 +374,9 @@ fn test_env_config_fs() -> Result<()> {
             ("CONFIG_FILE", None),
         ],
         || {
-            let configured = Config::load().expect("must success").into_outer();
+            let configured = Config::load_without_args()
+                .expect("must success")
+                .into_outer();
 
             assert_eq!("DEBUG", configured.log.level);
 
@@ -489,7 +495,9 @@ fn test_env_config_gcs() -> Result<()> {
             ("CONFIG_FILE", None),
         ],
         || {
-            let configured = Config::load().expect("must success").into_outer();
+            let configured = Config::load_without_args()
+                .expect("must success")
+                .into_outer();
 
             assert_eq!("DEBUG", configured.log.level);
 
@@ -615,7 +623,9 @@ fn test_env_config_oss() -> Result<()> {
             ("CONFIG_FILE", None),
         ],
         || {
-            let configured = Config::load().expect("must success").into_outer();
+            let configured = Config::load_without_args()
+                .expect("must success")
+                .into_outer();
 
             assert_eq!("DEBUG", configured.log.level);
 
@@ -824,7 +834,9 @@ protocol = "binary"
             ("STORAGE_TYPE", None),
         ],
         || {
-            let cfg = Config::load().expect("config load success").into_outer();
+            let cfg = Config::load_without_args()
+                .expect("config load success")
+                .into_outer();
 
             assert_eq!("tenant_id_from_env", cfg.query.tenant_id);
             assert_eq!("access_key_id_from_env", cfg.storage.s3.access_key_id);
@@ -852,6 +864,85 @@ protocol = "binary"
                     assert_eq!("binary", cfg.protocol.to_string(), "protocol incorrect");
                 }
             }
+        },
+    );
+
+    // remove temp file
+    fs::remove_file(file_path)?;
+
+    Ok(())
+}
+
+/// Test old hive catalog
+#[test]
+fn test_override_config_old_hive_catalog() -> Result<()> {
+    let file_path = temp_dir().join("databend_test_override_config_old_hive_catalog.toml");
+
+    let mut f = fs::File::create(&file_path)?;
+    f.write_all(
+        r#"
+[catalog]
+meta_store_address = "1.1.1.1:10000"
+protocol = "binary"
+"#
+        .as_bytes(),
+    )?;
+
+    // Make sure all data flushed.
+    f.flush()?;
+
+    temp_env::with_vars(
+        vec![("CONFIG_FILE", Some(file_path.to_string_lossy().as_ref()))],
+        || {
+            let cfg = Config::load_without_args().expect("config load success");
+
+            assert_eq!(
+                cfg.catalogs["hive"],
+                CatalogConfig::Hive(CatalogHiveConfig {
+                    address: "1.1.1.1:10000".to_string(),
+                    protocol: ThriftProtocol::Binary,
+                })
+            );
+        },
+    );
+
+    // remove temp file
+    fs::remove_file(file_path)?;
+
+    Ok(())
+}
+
+/// Test new hive catalog
+#[test]
+fn test_override_config_new_hive_catalog() -> Result<()> {
+    let file_path = temp_dir().join("databend_test_override_config_new_hive_catalog.toml");
+
+    let mut f = fs::File::create(&file_path)?;
+    f.write_all(
+        r#"
+[catalogs.my_hive]
+type = "hive"
+address = "1.1.1.1:12000"
+protocol = "binary"
+"#
+        .as_bytes(),
+    )?;
+
+    // Make sure all data flushed.
+    f.flush()?;
+
+    temp_env::with_vars(
+        vec![("CONFIG_FILE", Some(file_path.to_string_lossy().as_ref()))],
+        || {
+            let cfg = Config::load_without_args().expect("config load success");
+
+            assert_eq!(
+                cfg.catalogs["my_hive"],
+                CatalogConfig::Hive(CatalogHiveConfig {
+                    address: "1.1.1.1:12000".to_string(),
+                    protocol: ThriftProtocol::Binary,
+                })
+            );
         },
     );
 

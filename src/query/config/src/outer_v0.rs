@@ -158,6 +158,40 @@ impl Config {
 
         Ok(builder.build()?)
     }
+
+    /// Load will load config from file, env and args.
+    ///
+    /// - Load from file as default.
+    /// - Load from env, will override config from file.
+    ///
+    /// # NOTE
+    ///
+    /// This function is only used for tests.
+    pub fn load_without_args() -> Result<Self> {
+        let arg_conf = Config::default();
+
+        let mut builder: serfig::Builder<Self> = serfig::Builder::default();
+
+        // Load from config file first.
+        {
+            let config_file = if !arg_conf.config_file.is_empty() {
+                arg_conf.config_file.clone()
+            } else if let Ok(path) = env::var("CONFIG_FILE") {
+                path
+            } else {
+                "".to_string()
+            };
+
+            if !config_file.is_empty() {
+                builder = builder.collect(from_file(Toml, &config_file));
+            }
+        }
+
+        // Then, load from env.
+        builder = builder.collect(from_env());
+
+        Ok(builder.build()?)
+    }
 }
 
 impl From<InnerConfig> for Config {
@@ -169,7 +203,7 @@ impl From<InnerConfig> for Config {
             log: inner.log.into(),
             meta: inner.meta.into(),
             storage: inner.storage.into(),
-            catalog: HiveCatalogConfig::empty(),
+            catalog: HiveCatalogConfig::default(),
 
             catalogs: inner
                 .catalogs
@@ -366,9 +400,9 @@ impl TryInto<InnerStorageConfig> for StorageConfig {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CatalogConfig {
     #[serde(rename = "type")]
-    ty: String,
+    pub ty: String,
     #[serde(flatten)]
-    hive: CatalogsHiveConfig,
+    pub hive: CatalogsHiveConfig,
 }
 
 impl Default for CatalogConfig {
@@ -389,8 +423,8 @@ pub struct CatalogsHiveConfig {
 }
 
 /// this is the legacy version of external catalog configuration
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
-#[serde(default = "HiveCatalogConfig::empty")]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Args)]
+#[serde(default)]
 pub struct HiveCatalogConfig {
     #[clap(long = "hive-meta-store-address", default_value_t)]
     #[serde(rename = "address", alias = "meta_store_address")]
@@ -464,21 +498,6 @@ impl From<InnerCatalogHiveConfig> for HiveCatalogConfig {
         Self {
             meta_store_address: inner.address,
             protocol: inner.protocol.to_string(),
-        }
-    }
-}
-
-impl Default for HiveCatalogConfig {
-    fn default() -> Self {
-        InnerCatalogHiveConfig::default().into()
-    }
-}
-
-impl HiveCatalogConfig {
-    pub fn empty() -> Self {
-        HiveCatalogConfig {
-            meta_store_address: "".to_string(),
-            protocol: "".to_string(),
         }
     }
 }
