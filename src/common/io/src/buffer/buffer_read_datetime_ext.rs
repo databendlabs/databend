@@ -47,7 +47,7 @@ where R: BufferRead
 {
     fn read_date_text(&mut self, tz: &Tz) -> Result<NaiveDate> {
         // TODO support YYYYMMDD format
-        self.read_timestamp_text(tz).map(|dt| dt.naive_utc().date())
+        self.read_timestamp_text(tz).map(|dt| dt.naive_local().date())
     }
 
     fn read_timestamp_text(&mut self, tz: &Tz) -> Result<DateTime<Tz>> {
