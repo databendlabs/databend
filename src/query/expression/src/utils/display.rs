@@ -51,11 +51,12 @@ use crate::values::Value;
 use crate::values::ValueRef;
 use crate::with_number_type;
 use crate::Column;
+use crate::ColumnIndex;
 use crate::SchemaDataType;
 
 const FLOAT_NUM_FRAC_DIGITS: u32 = 10;
 
-impl Debug for Chunk {
+impl<Index: ColumnIndex> Debug for Chunk<Index> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut table = Table::new();
         table.load_preset("||--+-++|    ++++++");
@@ -74,7 +75,7 @@ impl Debug for Chunk {
     }
 }
 
-impl Display for Chunk {
+impl<Index: ColumnIndex> Display for Chunk<Index> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut table = Table::new();
         table.load_preset("||--+-++|    ++++++");

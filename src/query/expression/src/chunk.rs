@@ -21,12 +21,13 @@ use common_arrow::ArrayRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::ColumnBuilder;
 use crate::schema::DataSchema;
 use crate::types::AnyType;
 use crate::types::DataType;
 use crate::ChunkMetaInfoPtr;
 use crate::Column;
+use crate::ColumnBuilder;
+use crate::ColumnIndex;
 use crate::DataSchemaRef;
 use crate::Domain;
 use crate::Scalar;
@@ -34,22 +35,22 @@ use crate::Value;
 
 /// Chunk is a lightweight container for a group of columns.
 #[derive(Clone)]
-pub struct Chunk {
-    columns: Vec<ChunkEntry>,
+pub struct Chunk<Index: ColumnIndex = usize> {
+    columns: Vec<ChunkEntry<Index>>,
     num_rows: usize,
     meta: Option<ChunkMetaInfoPtr>,
 }
 
 #[derive(Clone)]
-pub struct ChunkEntry {
-    pub id: usize,
+pub struct ChunkEntry<Index: ColumnIndex = usize> {
+    pub id: Index,
     pub data_type: DataType,
     pub value: Value<AnyType>,
 }
 
-impl Chunk {
+impl<Index: ColumnIndex> Chunk<Index> {
     #[inline]
-    pub fn new(columns: Vec<ChunkEntry>, num_rows: usize) -> Self {
+    pub fn new(columns: Vec<ChunkEntry<Index>>, num_rows: usize) -> Self {
         debug_assert!(columns.iter().all(|entry| match &entry.value {
             Value::Scalar(_) => true,
             Value::Column(c) => c.len() == num_rows,
@@ -63,7 +64,7 @@ impl Chunk {
 
     #[inline]
     pub fn new_with_meta(
-        columns: Vec<ChunkEntry>,
+        columns: Vec<ChunkEntry<Index>>,
         num_rows: usize,
         meta: Option<ChunkMetaInfoPtr>,
     ) -> Self {
@@ -84,23 +85,22 @@ impl Chunk {
     }
 
     #[inline]
-    pub fn columns(&self) -> impl Iterator<Item = &ChunkEntry> {
+    pub fn columns(&self) -> impl Iterator<Item = &ChunkEntry<Index>> {
         self.columns.iter()
     }
 
     #[inline]
-    pub fn get_by_offset(&self, offset: usize) -> &ChunkEntry {
+    pub fn get_by_offset(&self, offset: usize) -> &ChunkEntry<Index> {
         &self.columns[offset]
     }
 
     #[inline]
-    pub fn get_by_id(&self, id: usize) -> &ChunkEntry {
+    pub fn get_by_id(&self, id: &Index) -> &ChunkEntry<Index> {
         self.columns()
-            .find(|entry| entry.id == id)
+            .find(|entry| entry.id == *id)
             .ok_or_else(|| format!("Chunk doesn't contain a column with id `{id}`"))
             .unwrap()
     }
-
 
     #[inline]
     pub fn num_rows(&self) -> usize {
@@ -118,11 +118,10 @@ impl Chunk {
     }
 
     #[inline]
-    pub fn domains(&self) -> HashMap<usize, Domain> {
+    pub fn domains(&self) -> HashMap<Index, Domain> {
         self.columns
             .iter()
-            .map(|entry| entry.value.as_ref().domain())
-            .enumerate()
+            .map(|entry| (entry.id.clone(), entry.value.as_ref().domain()))
             .collect()
     }
 
@@ -145,13 +144,13 @@ impl Chunk {
                         ColumnBuilder::repeat(&s.as_ref(), self.num_rows, &entry.data_type);
                     let col = builder.build();
                     ChunkEntry {
-                        id: entry.id,
+                        id: entry.id.clone(),
                         data_type: entry.data_type.clone(),
                         value: Value::Column(col),
                     }
                 }
                 Value::Column(c) => ChunkEntry {
-                    id: entry.id,
+                    id: entry.id.clone(),
                     data_type: entry.data_type.clone(),
                     value: Value::Column(c.clone()),
                 },
@@ -185,12 +184,12 @@ impl Chunk {
             .columns()
             .map(|entry| match &entry.value {
                 Value::Scalar(s) => ChunkEntry {
-                    id: entry.id,
+                    id: entry.id.clone(),
                     data_type: entry.data_type.clone(),
                     value: Value::Scalar(s.clone()),
                 },
                 Value::Column(c) => ChunkEntry {
-                    id: entry.id,
+                    id: entry.id.clone(),
                     data_type: entry.data_type.clone(),
                     value: Value::Column(c.slice(range.clone())),
                 },
@@ -204,7 +203,7 @@ impl Chunk {
     }
 
     #[inline]
-    pub fn add_column(&mut self, column: ChunkEntry) {
+    pub fn add_column(&mut self, column: ChunkEntry<Index>) {
         #[cfg(debug_assertions)]
         if let Value::Column(col) = &column.value {
             assert_eq!(self.num_rows, col.len());

@@ -36,10 +36,11 @@ use crate::with_number_type;
 use crate::Chunk;
 use crate::ChunkEntry;
 use crate::Column;
+use crate::ColumnIndex;
 use crate::Scalar;
 use crate::Value;
 
-impl Chunk {
+impl<Index: ColumnIndex> Chunk<Index> {
     // check if the predicate has any valid row
     pub fn filter_exists(predicate: &Value<AnyType>) -> Result<bool> {
         let predicate = Self::cast_to_nonull_boolean(predicate).ok_or_else(|| {
@@ -54,7 +55,7 @@ impl Chunk {
         }
     }
 
-    pub fn filter(self, predicate: &Value<AnyType>) -> Result<Chunk> {
+    pub fn filter(self, predicate: &Value<AnyType>) -> Result<Chunk<Index>> {
         if self.num_columns() == 0 || self.num_rows() == 0 {
             return Ok(self);
         }
@@ -137,7 +138,7 @@ impl Chunk {
         }
     }
 
-    pub fn filter_chunk_with_bitmap(chunk: Chunk, bitmap: &Bitmap) -> Result<Chunk> {
+    pub fn filter_chunk_with_bitmap(chunk: Chunk<Index>, bitmap: &Bitmap) -> Result<Chunk<Index>> {
         let count_zeros = bitmap.unset_bits();
         match count_zeros {
             0 => Ok(chunk),
@@ -151,7 +152,7 @@ impl Chunk {
                         Value::Column(c) => {
                             let value = Value::Column(Column::filter(c, bitmap));
                             ChunkEntry {
-                                id: entry.id,
+                                id: entry.id.clone(),
                                 data_type: entry.data_type.clone(),
                                 value,
                             }

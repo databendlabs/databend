@@ -443,7 +443,7 @@ impl FuseTable {
     }
 
     // Left a hint file which indicates the location of the latest snapshot
-    async fn write_last_snapshot_hint(
+    pub async fn write_last_snapshot_hint(
         operator: &Operator,
         location_generator: &TableMetaLocationGenerator,
         last_snapshot_path: String,

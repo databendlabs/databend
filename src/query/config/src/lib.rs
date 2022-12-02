@@ -28,7 +28,9 @@ mod outer_v0;
 mod version;
 
 pub use inner::CatalogConfig;
+pub use inner::CatalogHiveConfig;
 pub use inner::Config;
 pub use inner::QueryConfig;
+pub use inner::ThriftProtocol;
 pub use version::DATABEND_COMMIT_VERSION;
 pub use version::QUERY_SEMVER;

@@ -103,13 +103,13 @@ fn test_chunk_sort() -> Result<()> {
     for (sort_descs, limit, expected) in test_cases {
         let res = Chunk::sort(&chunk, &sort_descs, limit)?;
 
-        for ((col, _), expect) in res.columns().zip(expected.iter()) {
+        for (entry, expect) in res.columns().zip(expected.iter()) {
             assert_eq!(
-                col.as_column().unwrap(),
+                entry.value.as_column().unwrap(),
                 expect,
                 "the column after sort is wrong, expect: {:?}, got: {:?}",
                 expect,
-                col
+                entry.value
             );
         }
     }
@@ -219,14 +219,14 @@ fn test_chunks_merge_sort() -> Result<()> {
     for (name, sort_descs, limit, expected) in test_cases {
         let res = Chunk::merge_sort(&chunks, &sort_descs, limit, aborting.clone())?;
 
-        for ((col, _), expect) in res.columns().iter().zip(expected.iter()) {
+        for (entry, expect) in res.columns().zip(expected.iter()) {
             assert_eq!(
-                col.as_column().unwrap(),
+                entry.value.as_column().unwrap(),
                 expect,
                 "{}: the column after sort is wrong, expect: {:?}, got: {:?}",
                 name,
                 expect,
-                col
+                entry.value
             );
         }
     }

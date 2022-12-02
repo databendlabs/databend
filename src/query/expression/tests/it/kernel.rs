@@ -20,6 +20,7 @@ use common_expression::types::NumberDataType;
 use common_expression::utils::ColumnFrom;
 use common_expression::Chunk;
 use common_expression::ChunkEntry;
+use common_expression::ChunkRowIndex;
 use common_expression::Column;
 use common_expression::Value;
 use goldenfile::Mint;
@@ -180,17 +181,19 @@ pub fn test_pass() {
         ];
         for i in 0..3 {
             let mut columns = Vec::with_capacity(3);
-            columns.push((
-                Value::Column(Column::from_data(vec![(i + 10) as u8; 4])),
-                DataType::Number(NumberDataType::UInt8),
-            ));
-            columns.push((
-                Value::Column(Column::from_data_with_validity(
+            columns.push(ChunkEntry {
+                id: 0,
+                data_type: DataType::Number(NumberDataType::UInt8),
+                value: Value::Column(Column::from_data(vec![(i + 10) as u8; 4])),
+            });
+            columns.push(ChunkEntry {
+                id: 1,
+                data_type: DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt8))),
+                value: Value::Column(Column::from_data_with_validity(
                     vec![(i + 10) as u8; 4],
                     vec![true, true, false, false],
                 )),
-                DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt8))),
-            ));
+            });
             chunks.push(Chunk::new(columns, 4))
         }
 

@@ -56,7 +56,7 @@ fn test_data_block(is_nullable: bool) -> Result<()> {
     }
 
     {
-        let settings = Settings::default_settings("default");
+        let settings = Settings::default_settings("default")?;
         settings.set_settings(
             "format_record_delimiter".to_string(),
             "\r\n".to_string(),

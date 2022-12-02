@@ -61,9 +61,9 @@ fn test_group_by_hash() -> Result<()> {
     {
         for col in columns {
             let index = schema.index_of(col).unwrap();
-            let (col, ty) = chunk.column(index);
-            let col = col.as_column().unwrap();
-            group_columns.push((col, ty.clone()));
+            let entry = chunk.get_by_offset(index);
+            let col = entry.value.as_column().unwrap();
+            group_columns.push((col, entry.data_type.clone()));
         }
     }
 

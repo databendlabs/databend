@@ -70,7 +70,7 @@ impl TableSnapshot {
         summary: Statistics,
         segments: Vec<Location>,
         cluster_key_meta: Option<ClusterKey>,
-        table_statistics_location: Option<String>
+        table_statistics_location: Option<String>,
     ) -> Self {
         let now = Utc::now();
         // make snapshot timestamp monotonically increased
@@ -104,7 +104,7 @@ impl TableSnapshot {
             clone.summary,
             clone.segments,
             clone.cluster_key_meta,
-            clone.table_statistics_location
+            clone.table_statistics_location,
         )
     }
 
@@ -142,7 +142,7 @@ impl From<v1::TableSnapshot> for TableSnapshot {
             summary: s.summary,
             segments: s.segments,
             cluster_key_meta: None,
-            table_statistics_location: s.table_statistics_location
+            table_statistics_location: s.table_statistics_location,
         }
     }
 }
