@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use common_arrow::arrow::bitmap::MutableBitmap;
-use common_arrow::arrow::types::Index;
 use common_exception::Result;
 
 use crate::types::array::ArrayColumnBuilder;
@@ -35,19 +34,21 @@ use crate::Chunk;
 use crate::ChunkEntry;
 use crate::Column;
 use crate::ColumnBuilder;
+use crate::ColumnIndex;
 use crate::Scalar;
 use crate::Value;
 
-impl Chunk {
-    pub fn scatter<I: Index>(&self, indices: &[I], scatter_size: usize) -> Result<Vec<Self>> {
-        let scattered_columns: Vec<Vec<ChunkEntry>> = self
+impl<Index: ColumnIndex> Chunk<Index> {
+    pub fn scatter<I>(&self, indices: &[I], scatter_size: usize) -> Result<Vec<Self>>
+    where I: common_arrow::arrow::types::Index {
+        let scattered_columns: Vec<Vec<ChunkEntry<Index>>> = self
             .columns()
             .map(|entry| match &entry.value {
                 Value::Scalar(s) => {
                     Column::scatter_repeat_scalars::<I>(s, &entry.data_type, indices, scatter_size)
                         .into_iter()
                         .map(|value| ChunkEntry {
-                            id: entry.id,
+                            id: entry.id.clone(),
                             data_type: entry.data_type.clone(),
                             value: Value::Column(value),
                         })
@@ -57,7 +58,7 @@ impl Chunk {
                     .scatter(&entry.data_type, indices, scatter_size)
                     .into_iter()
                     .map(|value| ChunkEntry {
-                        id: entry.id,
+                        id: entry.id.clone(),
                         data_type: entry.data_type.clone(),
                         value: Value::Column(value),
                     })
@@ -67,7 +68,7 @@ impl Chunk {
 
         let scattered_chunks = (0..scatter_size)
             .map(|scatter_idx| {
-                let chunk_columns: Vec<ChunkEntry> = scattered_columns
+                let chunk_columns: Vec<ChunkEntry<Index>> = scattered_columns
                     .iter()
                     .map(|entry| entry[scatter_idx].clone())
                     .collect();
@@ -81,12 +82,15 @@ impl Chunk {
 }
 
 impl Column {
-    pub fn scatter_repeat_scalars<I: Index>(
+    pub fn scatter_repeat_scalars<I>(
         scalar: &Scalar,
         data_type: &DataType,
         indices: &[I],
         scatter_size: usize,
-    ) -> Vec<Self> {
+    ) -> Vec<Self>
+    where
+        I: common_arrow::arrow::types::Index,
+    {
         let mut vs = vec![0usize; scatter_size];
         for index in indices {
             vs[index.to_usize()] += 1;
@@ -96,12 +100,15 @@ impl Column {
             .collect()
     }
 
-    pub fn scatter<I: Index>(
+    pub fn scatter<I>(
         &self,
         data_type: &DataType,
         indices: &[I],
         scatter_size: usize,
-    ) -> Vec<Self> {
+    ) -> Vec<Self>
+    where
+        I: common_arrow::arrow::types::Index,
+    {
         let length = indices.len();
         match self {
             Column::Null { .. } => {
@@ -202,12 +209,15 @@ impl Column {
         }
     }
 
-    fn scatter_scalars<T: ValueType, I: Index>(
+    fn scatter_scalars<T: ValueType, I>(
         col: &T::Column,
         builder: T::ColumnBuilder,
         indices: &[I],
         scatter_size: usize,
-    ) -> Vec<Self> {
+    ) -> Vec<Self>
+    where
+        I: common_arrow::arrow::types::Index,
+    {
         let mut builders: Vec<T::ColumnBuilder> =
             std::iter::repeat(builder).take(scatter_size).collect();
 

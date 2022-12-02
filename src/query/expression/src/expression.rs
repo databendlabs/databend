@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::hash::Hash;
@@ -136,11 +136,11 @@ pub enum Literal {
 }
 
 impl<Index: ColumnIndex> RawExpr<Index> {
-    pub fn column_refs(&self) -> HashSet<Index> {
-        fn walk<Index: ColumnIndex>(expr: &RawExpr<Index>, buf: &mut HashSet<Index>) {
+    pub fn column_refs(&self) -> HashMap<Index, DataType> {
+        fn walk<Index: ColumnIndex>(expr: &RawExpr<Index>, buf: &mut HashMap<Index, DataType>) {
             match expr {
-                RawExpr::ColumnRef { id, .. } => {
-                    buf.insert(id.clone());
+                RawExpr::ColumnRef { id, data_type, .. } => {
+                    buf.insert(id.clone(), data_type.clone());
                 }
                 RawExpr::Cast { expr, .. } => walk(expr, buf),
                 RawExpr::FunctionCall { args, .. } => args.iter().for_each(|expr| walk(expr, buf)),
@@ -148,7 +148,7 @@ impl<Index: ColumnIndex> RawExpr<Index> {
             }
         }
 
-        let mut buf = HashSet::new();
+        let mut buf = HashMap::new();
         walk(self, &mut buf);
         buf
     }
@@ -164,11 +164,11 @@ impl<Index: ColumnIndex> Expr<Index> {
         }
     }
 
-    pub fn column_refs(&self) -> HashSet<Index> {
-        fn walk<Index: ColumnIndex>(expr: &Expr<Index>, buf: &mut HashSet<Index>) {
+    pub fn column_refs(&self) -> HashMap<Index, DataType> {
+        fn walk<Index: ColumnIndex>(expr: &Expr<Index>, buf: &mut HashMap<Index, DataType>) {
             match expr {
-                Expr::ColumnRef { id, .. } => {
-                    buf.insert(id.clone());
+                Expr::ColumnRef { id, data_type, .. } => {
+                    buf.insert(id.clone(), data_type.clone());
                 }
                 Expr::Cast { expr, .. } => walk(expr, buf),
                 Expr::FunctionCall { args, .. } => args.iter().for_each(|expr| walk(expr, buf)),
@@ -176,7 +176,7 @@ impl<Index: ColumnIndex> Expr<Index> {
             }
         }
 
-        let mut buf = HashSet::new();
+        let mut buf = HashMap::new();
         walk(self, &mut buf);
         buf
     }
