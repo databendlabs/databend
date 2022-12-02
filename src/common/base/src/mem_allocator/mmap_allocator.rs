@@ -58,14 +58,14 @@ pub mod linux {
                 return Err(AllocError);
             }
             let addr = NonNull::new(addr as *mut ()).ok_or(AllocError)?;
-            ThreadTracker::alloc_memory(layout.size() as i64);
+            ThreadTracker::alloc(layout.size() as i64);
             Ok(NonNull::<[u8]>::from_raw_parts(addr, layout.size()))
         }
 
         #[inline(always)]
         unsafe fn mmap_dealloc(&self, ptr: NonNull<u8>, layout: Layout) {
             debug_assert!(layout.align() <= page_size());
-            ThreadTracker::dealloc_memory(layout.size() as i64);
+            ThreadTracker::dealloc(layout.size() as i64);
             let result = libc::munmap(ptr.cast().as_ptr(), layout.size());
             assert_eq!(result, 0, "Failed to deallocate.");
         }
@@ -80,8 +80,8 @@ pub mod linux {
             debug_assert!(old_layout.align() <= page_size());
             debug_assert!(old_layout.align() == new_layout.align());
 
-            ThreadTracker::dealloc_memory(old_layout.size() as i64);
-            ThreadTracker::alloc_memory(new_layout.size() as i64);
+            ThreadTracker::dealloc(old_layout.size() as i64);
+            ThreadTracker::alloc(new_layout.size() as i64);
 
             const REMAP_FLAGS: i32 = libc::MREMAP_MAYMOVE;
             let addr = libc::mremap(
@@ -110,8 +110,8 @@ pub mod linux {
             debug_assert!(old_layout.align() <= page_size());
             debug_assert!(old_layout.align() == new_layout.align());
 
-            ThreadTracker::dealloc_memory(old_layout.size() as i64);
-            ThreadTracker::alloc_memory(new_layout.size() as i64);
+            ThreadTracker::dealloc(old_layout.size() as i64);
+            ThreadTracker::alloc(new_layout.size() as i64);
 
             const REMAP_FLAGS: i32 = libc::MREMAP_MAYMOVE;
             let addr = libc::mremap(
