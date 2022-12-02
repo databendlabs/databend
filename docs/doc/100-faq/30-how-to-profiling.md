@@ -39,4 +39,13 @@ jeprof --pdf ./target/release/databend-query heap.prof > heap.pdf
 ```
 
 <img src="https://user-images.githubusercontent.com/172204/204963954-f6eacf10-d8bd-4469-9c8d-7d30955f1a78.png" width="600"/>
+
+### Fast jeprof
+jeprof is very slow for large heap analysis, the bottleneck is `addr2line`, if you want to speed up from **30 minutes to 3s**, please use :
+```
+git clone https://github.com/gimli-rs/addr2line
+cd addr2line
+cargo b --examples -r
+cp ./target/release/examples/addr2line <your-addr2line-find-with-whereis-addr2line>
+```
     

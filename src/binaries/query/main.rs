@@ -15,7 +15,7 @@
 use std::env;
 
 use common_base::base::Runtime;
-use common_base::base::GLOBAL_TRACKER;
+use common_base::base::GLOBAL_MEM_STAT;
 use common_config::Config;
 use common_config::DATABEND_COMMIT_VERSION;
 use common_config::QUERY_SEMVER;
@@ -70,7 +70,7 @@ async fn main_entrypoint() -> Result<()> {
     if conf.query.max_memory_limit_enabled {
         let size = conf.query.max_server_memory_usage as i64;
         info!("Set memory limit: {}", size);
-        GLOBAL_TRACKER.set_limit(size);
+        GLOBAL_MEM_STAT.set_limit(size);
     }
 
     let tenant = conf.query.tenant_id.clone();

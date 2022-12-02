@@ -205,6 +205,7 @@ DB.Table: 'system'.'configs', Table: configs-table_id:1, ver:0, Engine: SystemCo
 | query   | mysql_handler_host                   | 127.0.0.1                      |             |
 | query   | mysql_handler_port                   | 3307                           |             |
 | query   | num_cpus                             | 0                              |             |
+| query   | quota                                | null                           |             |
 | query   | rpc_tls_query_server_root_ca_cert    |                                |             |
 | query   | rpc_tls_query_service_domain_name    | localhost                      |             |
 | query   | rpc_tls_server_cert                  |                                |             |
@@ -350,7 +351,7 @@ DB.Table: 'system'.'settings', Table: settings-table_id:1, ver:0, Engine: System
 | load_file_metadata_expire_hours | 168        | 168         | SESSION | How many hours will the COPY file metadata expired in the metasrv, default value: 24*7=7days                                                                           | UInt64 |
 | max_block_size                  | 65536      | 65536       | SESSION | Maximum block size for reading, default value: 65536.                                                                                                                  | UInt64 |
 | max_execute_time                | 0          | 0           | SESSION | The maximum query execution time. it means no limit if the value is zero. default value: 0.                                                                            | UInt64 |
-| max_storage_io_requests         | 1000       | 1000        | SESSION | The maximum number of concurrent IO requests. By default, it is 1000.                                                                                                  | UInt64 |
+| max_storage_io_requests         | 64         | 64          | SESSION | The maximum number of concurrent IO requests. By default, it is 64.                                                                                                    | UInt64 |
 | prefer_broadcast_join           | 0          | 0           | SESSION | If enable broadcast join, default value: 0                                                                                                                             | UInt64 |
 | quoted_ident_case_sensitive     | 1          | 1           | SESSION | Case sensitivity of quoted identifiers, default value: 1 (aka case-sensitive).                                                                                         | UInt64 |
 | row_tag                         | row        | row         | SESSION | In xml format, this field is represented as a row tag, e.g. <row>...</row>.                                                                                            | String |

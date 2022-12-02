@@ -25,6 +25,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_grpc::RpcClientConf;
 use common_grpc::RpcClientTlsConfig;
+use common_meta_types::TenantQuota;
 use common_storage::StorageConfig;
 use common_tracing::Config as LogConfig;
 use common_users::idm_config::IDMConfig;
@@ -164,6 +165,7 @@ pub struct QueryConfig {
     pub idm: IDMConfig,
     pub share_endpoint_address: String,
     pub share_endpoint_auth_token_file: String,
+    pub tenant_quota: Option<TenantQuota>,
 }
 
 impl Default for QueryConfig {
@@ -216,6 +218,7 @@ impl Default for QueryConfig {
             idm: IDMConfig::default(),
             share_endpoint_address: "".to_string(),
             share_endpoint_auth_token_file: "".to_string(),
+            tenant_quota: None,
         }
     }
 }

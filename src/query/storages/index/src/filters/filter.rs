@@ -42,6 +42,9 @@ pub trait FilterBuilder {
     type Filter: Filter;
     type Error: std::error::Error;
 
+    /// Add a key into the filter for building.
+    fn add_key<K: Hash>(&mut self, key: &K);
+
     /// Add several keys into the filter for building.
     ///
     /// This methods can be called more than once.

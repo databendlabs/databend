@@ -26,6 +26,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::AuthInfo;
 use common_meta_types::AuthType;
+use common_meta_types::TenantQuota;
 use common_storage::CacheConfig as InnerCacheConfig;
 use common_storage::StorageAzblobConfig as InnerStorageAzblobConfig;
 use common_storage::StorageConfig as InnerStorageConfig;
@@ -1312,6 +1313,9 @@ pub struct QueryConfig {
 
     #[clap(long, default_value = "")]
     pub share_endpoint_auth_token_file: String,
+
+    #[clap(skip)]
+    quota: Option<TenantQuota>,
 }
 
 impl Default for QueryConfig {
@@ -1374,6 +1378,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             },
             share_endpoint_address: self.share_endpoint_address,
             share_endpoint_auth_token_file: self.share_endpoint_auth_token_file,
+            tenant_quota: self.quota,
         })
     }
 }
@@ -1435,6 +1440,7 @@ impl From<InnerQueryConfig> for QueryConfig {
             users: users_from_inner(inner.idm.users),
             share_endpoint_address: inner.share_endpoint_address,
             share_endpoint_auth_token_file: inner.share_endpoint_auth_token_file,
+            quota: inner.tenant_quota,
         }
     }
 }

@@ -367,6 +367,8 @@ pub enum TokenKind {
     DROP,
     #[token("EXCEPT", ignore(ascii_case))]
     EXCEPT,
+    #[token("EXCLUDE", ignore(ascii_case))]
+    EXCLUDE,
     #[token("ELSE", ignore(ascii_case))]
     ELSE,
     #[token("END", ignore(ascii_case))]

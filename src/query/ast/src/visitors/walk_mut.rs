@@ -185,13 +185,21 @@ pub fn walk_select_target_mut<'a, V: VisitorMut>(visitor: &mut V, target: &mut S
                 visitor.visit_identifier(alias);
             }
         }
-        SelectTarget::QualifiedName(names) => {
+        SelectTarget::QualifiedName {
+            qualified: names,
+            exclude,
+        } => {
             for indirection in names {
                 match indirection {
                     Indirection::Identifier(ident) => {
                         visitor.visit_identifier(ident);
                     }
                     Indirection::Star => {}
+                }
+            }
+            if let Some(cols) = exclude {
+                for ident in cols {
+                    visitor.visit_identifier(ident);
                 }
             }
         }
