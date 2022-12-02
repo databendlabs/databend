@@ -15,7 +15,7 @@ authors:
 
 Check out what we've done this week to make Databend even better for you.
 
-### New Features :sparkles:
+### Features & Improvements :sparkles:
 
 **Format**
 
@@ -132,7 +132,7 @@ opensrv_mysql::secure_run_with_options(shim, w, ops, tls_config, init_params).aw
 
 [Issue 8983: Feature: tls support for mysql handler](https://github.com/datafuselabs/databend/issues/8983)
 
-If you're interested, click the link above to join the discussion and PR review work, or pick up a good first issue at <https://link.databend.rs/i-m-feeling-lucky> to get started.
+Please let us know if you're interested in contributing to this issue, or pick up a good first issue at <https://link.databend.rs/i-m-feeling-lucky> to get started.
 
 ## Changelog
 
@@ -174,7 +174,7 @@ Thanks a lot to the contributors for their excellent work this week.
 
 We'd love to hear from you. Feel free to run the code and see if Databend works for you. Submit an issue with your problem if you need help.
 
-[DatafuseLabs Community](https://github.com/datafuselabs/) is open to everyone who loves data warehouses. Please join the community and make a pull request to share your thoughts.
+[DatafuseLabs Community](https://github.com/datafuselabs/) is open to everyone who loves data warehouses. Please join the community and share your thoughts.
 
 - [Databend Website](https://databend.rs)
 - [GitHub Discussions](https://github.com/datafuselabs/databend/discussions) (Feature/Bug reports, Contributions)
