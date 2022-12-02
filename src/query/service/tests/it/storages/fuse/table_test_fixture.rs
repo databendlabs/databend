@@ -500,7 +500,12 @@ pub async fn check_data_dir(
             } else if path.starts_with(prefix_snapshot_statistics) {
                 ts_count += 1;
             } else if path.starts_with(prefix_last_snapshot_hint) {
-                let content = fixture.ctx.get_data_operator()?.object(path).read().await?;
+                let content = fixture
+                    .ctx
+                    .get_data_operator()?
+                    .object(entry_path)
+                    .read()
+                    .await?;
                 last_snapshot_loc = str::from_utf8(&content)?.to_string();
             }
         }
@@ -537,7 +542,12 @@ pub async fn check_data_dir(
     let table = fixture.latest_default_table().await?;
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
     let snapshot_loc = fuse_table.snapshot_loc().await?;
-    assert_eq!(snapshot_loc, Some(last_snapshot_loc));
+    let snapshot_loc = snapshot_loc.unwrap();
+    assert!(last_snapshot_loc.contains(&snapshot_loc));
+    assert_eq!(
+        last_snapshot_loc.find(&snapshot_loc),
+        Some(last_snapshot_loc.len() - snapshot_loc.len())
+    );
 
     Ok(())
 }
