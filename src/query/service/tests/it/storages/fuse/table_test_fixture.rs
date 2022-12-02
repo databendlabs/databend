@@ -464,6 +464,7 @@ pub async fn check_data_dir(
     segment_count: u32,
     block_count: u32,
     index_count: u32,
+    check_last_snapshot: Option<()>,
 ) -> Result<()> {
     let data_path = match fixture.ctx().get_config().storage.params {
         StorageParams::Fs(v) => v.root,
@@ -499,7 +500,7 @@ pub async fn check_data_dir(
                 i_count += 1;
             } else if path.starts_with(prefix_snapshot_statistics) {
                 ts_count += 1;
-            } else if path.starts_with(prefix_last_snapshot_hint) {
+            } else if path.starts_with(prefix_last_snapshot_hint) && check_last_snapshot.is_some() {
                 let content = fixture
                     .ctx
                     .get_data_operator()?
@@ -539,15 +540,17 @@ pub async fn check_data_dir(
         case_name
     );
 
-    let table = fixture.latest_default_table().await?;
-    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-    let snapshot_loc = fuse_table.snapshot_loc().await?;
-    let snapshot_loc = snapshot_loc.unwrap();
-    assert!(last_snapshot_loc.contains(&snapshot_loc));
-    assert_eq!(
-        last_snapshot_loc.find(&snapshot_loc),
-        Some(last_snapshot_loc.len() - snapshot_loc.len())
-    );
+    if check_last_snapshot.is_some() {
+        let table = fixture.latest_default_table().await?;
+        let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+        let snapshot_loc = fuse_table.snapshot_loc().await?;
+        let snapshot_loc = snapshot_loc.unwrap();
+        assert!(last_snapshot_loc.contains(&snapshot_loc));
+        assert_eq!(
+            last_snapshot_loc.find(&snapshot_loc),
+            Some(last_snapshot_loc.len() - snapshot_loc.len())
+        );
+    }
 
     Ok(())
 }

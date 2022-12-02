@@ -83,6 +83,7 @@ async fn do_purge_test(
         segment_count,
         block_count,
         index_count,
+        Some(()),
     )
     .await?;
     history_should_have_item(&fixture, case_name, snapshot_count).await?;
@@ -101,6 +102,7 @@ async fn do_purge_test(
             segment_count,
             block_count,
             index_count,
+            Some(()),
         )
         .await?;
 
