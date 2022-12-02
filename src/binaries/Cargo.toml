@@ -8,7 +8,7 @@ publish = { workspace = true }
 edition = { workspace = true }
 
 [features]
-default = ["simd"]
+default = ["simd", "memory-profiling"]
 memory-profiling = ["databend-meta/memory-profiling", "databend-query/memory-profiling", "common-base/memory-profiling"]
 simd = ["databend-meta/simd", "databend-query/simd"]
 tokio-console = [

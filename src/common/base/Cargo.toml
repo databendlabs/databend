@@ -42,8 +42,8 @@ pprof = { version = "0.10.1", features = [
 ] }
 semver = "1.0.10"
 serde = { workspace = true }
-tikv-jemalloc-ctl = { version = "0.4.2", optional = true }
-tikv-jemalloc-sys = "0.4.3"
+tikv-jemalloc-ctl = { version = "0.5.0", optional = true }
+tikv-jemalloc-sys = "0.5.2"
 tokio = { version = "1.21.1", features = ["full"] }
 tracing = "0.1.36"
 uuid = { version = "1.1.2", features = ["serde", "v4"] }
