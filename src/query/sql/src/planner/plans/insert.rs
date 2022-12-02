@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
+use common_meta_types::FileFormatOptions;
 use common_meta_types::MetaId;
 use common_pipeline_sources::processors::sources::input_formats::InputContext;
 
@@ -25,7 +26,12 @@ use super::Plan;
 pub enum InsertInputSource {
     SelectPlan(Box<Plan>),
     // From outside streaming source
-    StreamingWithFormat(String, usize, Option<Arc<InputContext>>),
+    StreamingWithFormat(
+        String,
+        usize,
+        Option<Arc<InputContext>>,
+        Option<FileFormatOptions>,
+    ),
     // From cloned String and format
     Values(String),
 }

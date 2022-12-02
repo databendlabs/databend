@@ -957,11 +957,40 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
 
     fn visit_insert_source(&mut self, insert_source: &'ast InsertSource<'ast>) {
         match insert_source {
-            InsertSource::Streaming { format, .. } => {
+            InsertSource::Streaming {
+                format,
+                option_settings,
+                ..
+            } => {
                 let streaming_name = format!("StreamSource {}", format);
-                let streaming_format_ctx = AstFormatContext::new(streaming_name);
-                let streaming_node = FormatTreeNode::new(streaming_format_ctx);
-                self.children.push(streaming_node);
+
+                if let Some(settings) = option_settings {
+                    let mut file_formats_children = Vec::with_capacity(settings.len());
+                    for (k, v) in settings.iter() {
+                        let file_format_name = format!("FileFormat {} = {:?}", k, v);
+                        let file_format_format_ctx = AstFormatContext::new(file_format_name);
+                        let file_format_node = FormatTreeNode::new(file_format_format_ctx);
+                        file_formats_children.push(file_format_node);
+                    }
+                    let file_formats_format_name = "FileFormats".to_string();
+                    let files_formats_format_ctx = AstFormatContext::with_children(
+                        file_formats_format_name,
+                        file_formats_children.len(),
+                    );
+                    let files_formats_node = FormatTreeNode::with_children(
+                        files_formats_format_ctx,
+                        file_formats_children,
+                    );
+                    let streaming_format_ctx = AstFormatContext::with_children(streaming_name, 1);
+                    let streaming_node = FormatTreeNode::with_children(streaming_format_ctx, vec![
+                        files_formats_node,
+                    ]);
+                    self.children.push(streaming_node);
+                } else {
+                    let streaming_format_ctx = AstFormatContext::new(streaming_name);
+                    let streaming_node = FormatTreeNode::new(streaming_format_ctx);
+                    self.children.push(streaming_node);
+                }
             }
             InsertSource::Values { .. } => {
                 let values_name = "ValueSource".to_string();

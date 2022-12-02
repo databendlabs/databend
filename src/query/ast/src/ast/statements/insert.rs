@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
@@ -60,6 +61,7 @@ pub enum InsertSource<'a> {
         format: String,
         rest_str: &'a str,
         start: usize,
+        option_settings: Option<BTreeMap<String, String>>,
     },
     Values {
         rest_str: &'a str,
@@ -76,8 +78,17 @@ impl Display for InsertSource<'_> {
                 format,
                 rest_str,
                 start: _,
+                option_settings,
             } => {
-                write!(f, "FORMAT {format} {rest_str}")
+                write!(f, "FORMAT {format} {rest_str}")?;
+                if let Some(settings) = option_settings {
+                    write!(f, " FILE_FORMAT = (")?;
+                    for (k, v) in settings.iter() {
+                        write!(f, " {} = '{}'", k, v)?;
+                    }
+                    write!(f, " )")?
+                }
+                Ok(())
             }
             InsertSource::Values { rest_str } => write!(f, "VALUES {rest_str}"),
             InsertSource::Select { query } => write!(f, "{query}"),

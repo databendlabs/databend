@@ -25,6 +25,7 @@ use crate::normalize_identifier;
 use crate::optimizer::optimize;
 use crate::optimizer::OptimizerConfig;
 use crate::optimizer::OptimizerContext;
+use crate::planner::binder::copy::parse_copy_file_format_options;
 use crate::plans::Insert;
 use crate::plans::InsertInputSource;
 use crate::plans::Plan;
@@ -81,12 +82,24 @@ impl<'a> Binder {
                 format,
                 rest_str,
                 start,
+                option_settings,
             } => {
                 if format.to_uppercase() == "VALUES" {
                     let data = rest_str.trim_end_matches(';').trim_start().to_owned();
                     Ok(InsertInputSource::Values(data))
                 } else {
-                    Ok(InsertInputSource::StreamingWithFormat(format, start, None))
+                    let file_format_options = if option_settings.is_some() {
+                        let opts = parse_copy_file_format_options(&option_settings.unwrap())?;
+                        Some(opts)
+                    } else {
+                        None
+                    };
+                    Ok(InsertInputSource::StreamingWithFormat(
+                        format,
+                        start,
+                        None,
+                        file_format_options,
+                    ))
                 }
             }
             InsertSource::Values { rest_str } => {

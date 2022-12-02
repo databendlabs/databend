@@ -27,6 +27,7 @@ use common_base::runtime::TrySpawn;
 use common_config::Config;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_types::FileFormatOptions;
 use common_meta_types::UserSetting;
 use common_meta_types::UserSettingValue;
 use common_users::UserApiProvider;
@@ -489,6 +490,38 @@ impl Settings {
             tenant: tenant.to_string(),
             settings,
         }))
+    }
+
+    pub fn set_file_format_options(&self, opts: &FileFormatOptions) -> Result<()> {
+        // hack here for associate args in streaming load with file_format_option in copy into.
+        // format_skip_header -> skip_header
+        // format_compression -> compression
+        // format_field_delimiter -> field_delimiter
+        // format_record_delimiter -> record_delimiter
+        // format_quote -> escape
+        self.set_settings(
+            "format_skip_header".to_string(),
+            opts.skip_header.to_string(),
+            false,
+        )?;
+        self.set_settings(
+            "format_compression".to_string(),
+            opts.compression.to_string(),
+            false,
+        )?;
+        self.set_settings(
+            "format_field_delimiter".to_string(),
+            opts.field_delimiter.clone(),
+            false,
+        )?;
+        self.set_settings(
+            "format_record_delimiter".to_string(),
+            opts.record_delimiter.clone(),
+            false,
+        )?;
+        self.set_settings("format_quote".to_string(), opts.escape.clone(), false)?;
+
+        Ok(())
     }
 
     // Get max_block_size.

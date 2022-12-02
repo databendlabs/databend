@@ -143,7 +143,7 @@ impl Interpreter for InsertInterpreterV2 {
                         1,
                     )?;
                 }
-                InsertInputSource::StreamingWithFormat(_, _, input_context) => {
+                InsertInputSource::StreamingWithFormat(_, _, input_context, _) => {
                     let input_context = input_context.as_ref().expect("must success").clone();
                     input_context
                         .format
@@ -228,7 +228,7 @@ impl Interpreter for InsertInterpreterV2 {
         }
 
         let append_mode = match &self.plan.source {
-            InsertInputSource::StreamingWithFormat(_, _, _) => AppendMode::Copy,
+            InsertInputSource::StreamingWithFormat(_, _, _, _) => AppendMode::Copy,
             _ => AppendMode::Normal,
         };
 

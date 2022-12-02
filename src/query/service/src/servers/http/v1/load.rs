@@ -100,6 +100,7 @@ pub async fn streaming_load(
         .unwrap_or("");
 
     let settings = context.get_settings();
+
     for (key, value) in req.headers().iter() {
         if settings.has_setting(key.as_str()) {
             let value = value.to_str().map_err(InternalServerError)?;
@@ -122,7 +123,12 @@ pub async fn streaming_load(
     let schema = plan.schema();
     match &mut plan {
         Plan::Insert(insert) => match &mut insert.source {
-            InsertInputSource::StreamingWithFormat(format, start, input_context_ref) => {
+            InsertInputSource::StreamingWithFormat(
+                format,
+                start,
+                input_context_ref,
+                option_settings,
+            ) => {
                 let sql_rest = &insert_sql[*start..].trim();
                 if !sql_rest.is_empty() {
                     return Err(poem::Error::from_string(
@@ -135,6 +141,21 @@ pub async fn streaming_load(
                     .await
                     .map_err(InternalServerError)?;
                 let (tx, rx) = tokio::sync::mpsc::channel(2);
+                if let Some(opts) = option_settings {
+                    settings
+                        .set_file_format_options(opts)
+                        .map_err(InternalServerError)?;
+                } else {
+                    for (key, value) in req.headers().iter() {
+                        if settings.has_setting(key.as_str()) {
+                            let value = value.to_str().map_err(InternalServerError)?;
+                            let value = parse_escape_string(remove_quote(value.as_bytes()));
+                            settings
+                                .set_settings(key.to_string(), value, false)
+                                .map_err(InternalServerError)?
+                        }
+                    }
+                }
                 let input_context = Arc::new(
                     InputContext::try_create_from_insert(
                         format.as_str(),

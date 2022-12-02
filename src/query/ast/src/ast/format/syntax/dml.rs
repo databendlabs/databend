@@ -75,6 +75,7 @@ fn pretty_source(source: InsertSource) -> RcDoc {
             format,
             rest_str,
             start,
+            option_settings,
         } => RcDoc::text("FORMAT")
             .append(RcDoc::space())
             .append(RcDoc::text(format))
@@ -83,7 +84,23 @@ fn pretty_source(source: InsertSource) -> RcDoc {
                     .nest(NEST_FACTOR)
                     .append(RcDoc::text(rest_str.to_string()))
                     .append(RcDoc::text(start.to_string())),
-            ),
+            )
+            .append(if let Some(settings) = option_settings {
+                RcDoc::line()
+                    .append(RcDoc::text("FILE_FORMAT_SETTINGS = "))
+                    .append(parenthenized(
+                        interweave_comma(settings.iter().map(|(k, v)| {
+                            RcDoc::text(k.to_string())
+                                .append(RcDoc::space())
+                                .append(RcDoc::text("="))
+                                .append(RcDoc::space())
+                                .append(RcDoc::text(format!("{:?}", v)))
+                        }))
+                        .group(),
+                    ))
+            } else {
+                RcDoc::nil()
+            }),
         InsertSource::Values { rest_str } => RcDoc::text("VALUES").append(
             RcDoc::line()
                 .nest(NEST_FACTOR)

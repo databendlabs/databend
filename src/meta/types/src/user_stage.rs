@@ -127,6 +127,24 @@ impl FromStr for StageFileCompression {
     }
 }
 
+impl ToString for StageFileCompression {
+    fn to_string(&self) -> String {
+        match *self {
+            StageFileCompression::Auto => "auto".to_string(),
+            StageFileCompression::Gzip => "gzip".to_string(),
+            StageFileCompression::Bz2 => "bz2".to_string(),
+            StageFileCompression::Brotli => "brotli".to_string(),
+            StageFileCompression::Zstd => "zstd".to_string(),
+            StageFileCompression::Deflate => "deflate".to_string(),
+            StageFileCompression::RawDeflate => "raw_deflate".to_string(),
+            StageFileCompression::Lzo => "lzo".to_string(),
+            StageFileCompression::Snappy => "snappy".to_string(),
+            StageFileCompression::Xz => "xz".to_string(),
+            StageFileCompression::None => "none".to_string(),
+        }
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub enum StageFileFormatType {
     Csv,
