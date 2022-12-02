@@ -81,11 +81,11 @@ Check out what we've done this week to make Databend even better for you.
 
 - read and write block in parallel when compact ([#8921](https://github.com/datafuselabs/databend/pull/8921))
 
-## What's On in Databend
+## What's On In Databend
 
 Stay connected with the latest news about Databend.
 
-#### Preview of Infer Schema
+#### Infer Schema at a Glance
 
 You usually need to create a table before loading data from a file stored on a stage or somewhere. Unfortunately, sometimes you might not know the file schema to create the table or are unable to input the schema due to its complexity. 
 
@@ -109,13 +109,13 @@ We've added support for inferring the basic schema from parquet files in [#9043]
 - [Issue | query data from S3 location or stage](https://github.com/datafuselabs/databend/pull/7211)
 - [PR | rfc: Infer Schema](https://github.com/datafuselabs/databend/pull/8645)
 
-## Issues
+## What's Up Next
 
-Meet issues you may be interested in and try to solve it.
+We're always open to cutting-edge technologies and innovative ideas. You're more than welcome to join the community and bring them to Databend.
 
-#### Add tls support for mysql handler
+#### Add Tls Support for Mysql Handler
 
-The just released [opensrv-mysql v0.3.0](https://github.com/datafuselabs/opensrv/discussions/35) includes support for tls and it is time to introduce it for Databend.
+[opensrv-mysql v0.3.0](https://github.com/datafuselabs/opensrv/discussions/35) that was released recently includes support for TLS. It sounds like a good idea to introduce it to Databend.
 
 ```rust
 let (is_ssl, init_params) = opensrv_mysql::AsyncMysqlIntermediary::init_before_ssl(
@@ -132,11 +132,11 @@ opensrv_mysql::secure_run_with_options(shim, w, ops, tls_config, init_params).aw
 
 [Issue 8983: Feature: tls support for mysql handler](https://github.com/datafuselabs/databend/issues/8983)
 
-If you find it interesting, try to solve it or participate in discussions and PR reviews. Or you can click on <https://link.databend.rs/i-m-feeling-lucky> to pick up a good first issue, good luck!
+If you're interested, click the link above to join the discussion and PR review work, or pick up a good first issue at <https://link.databend.rs/i-m-feeling-lucky> to get started.
 
-## Changlogs
+## Changelog
 
-You can check the changelogs of Databend nightly to learn about our latest developments.
+You can check the changelog of Databend Nightly for details about our latest developments.
 
 - [v0.8.136-nightly](https://github.com/datafuselabs/databend/releases/tag/v0.8.136-nightly)
 - [v0.8.135-nightly](https://github.com/datafuselabs/databend/releases/tag/v0.8.135-nightly)
@@ -170,14 +170,11 @@ Thanks a lot to the contributors for their excellent work this week.
 :---: |:---: |:---: |:---: |:---: |
 [xudong963](https://github.com/xudong963) |[youngsofun](https://github.com/youngsofun) |[yufan022](https://github.com/yufan022) |[zhang2014](https://github.com/zhang2014) |[zhyass](https://github.com/zhyass) |
 
-## Meet Us
+## Connect With Us
 
-Please join the [DatafuseLabs Community](https://github.com/datafuselabs/) if you are interested in Databend.
+We'd love to hear from you. Feel free to run the code and see if Databend works for you. Submit an issue with your problem if you need help.
 
-We are looking forward to seeing you try our code. We have a strong team behind you to ensure a smooth experience in trying our code for your projects.
-If you are a hacker passionate about database internals, feel free to play with our code.
-
-You can submit [issues](https://github.com/datafuselabs/databend/issues) for any problems you find. We also highly appreciate any of your pull requests.
+[DatafuseLabs Community](https://github.com/datafuselabs/) is open to everyone who loves data warehouses. Please join the community and make a pull request to share your thoughts.
 
 - [Databend Website](https://databend.rs)
 - [GitHub Discussions](https://github.com/datafuselabs/databend/discussions) (Feature/Bug reports, Contributions)
