@@ -56,9 +56,10 @@ impl FuseTable {
 
             let mut new_table_meta = self.table_info.meta.clone();
             // update snapshot location
-            new_table_meta
-                .options
-                .insert(OPT_KEY_SNAPSHOT_LOCATION.to_owned(), new_snapshot_loc);
+            new_table_meta.options.insert(
+                OPT_KEY_SNAPSHOT_LOCATION.to_owned(),
+                new_snapshot_loc.clone(),
+            );
 
             // update table statistics, all zeros
             new_table_meta.statistics = TableStatistics::default();
@@ -80,6 +81,14 @@ impl FuseTable {
             catalog
                 .truncate_table(&tenant, &db_name, TruncateTableReq { table_id })
                 .await?;
+
+            // try keep a hit file of last snapshot
+            Self::write_last_snapshot_hint(
+                &self.operator,
+                &self.meta_location_generator,
+                new_snapshot_loc,
+            )
+            .await;
         }
 
         Ok(())
