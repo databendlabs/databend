@@ -30,6 +30,7 @@ use common_datavalues::type_coercion::compare_coercion;
 use common_datavalues::DataTypeImpl;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::type_check::common_super_type;
 use common_expression::types::DataType;
 
 use crate::binder::join::JoinConditions;
@@ -295,14 +296,16 @@ impl<'a> Binder {
                 .iter()
                 .zip(right_bind_context.columns.iter())
             {
-                todo!("expression coercion");
-                // if left_col.data_type != right_col.data_type {
-                //     let data_type = compare_coercion(&left_col.data_type, &right_col.data_type)
-                //         .expect("SetOperation's types cannot be matched");
-                //     coercion_types.push(data_type);
-                // } else {
-                //     coercion_types.push(*left_col.data_type.clone());
-                // }
+                if left_col.data_type != right_col.data_type {
+                    let data_type = common_super_type(
+                        *left_col.data_type.clone(),
+                        *right_col.data_type.clone(),
+                    )
+                    .expect("SetOperation's types cannot be matched");
+                    coercion_types.push(data_type);
+                } else {
+                    coercion_types.push(*left_col.data_type.clone());
+                }
             }
         }
         match (op, all) {

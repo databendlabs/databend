@@ -39,6 +39,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::type_check;
 use common_expression::type_check::check_literal;
+use common_expression::type_check::common_super_type;
 use common_expression::types::number::F64;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
@@ -55,6 +56,7 @@ use super::normalize_identifier;
 use crate::binder::Binder;
 use crate::binder::NameResolutionResult;
 use crate::optimizer::RelExpr;
+use crate::planner::binder::wrap_cast_if_needed;
 use crate::planner::metadata::optimize_remove_count_args;
 use crate::plans::AggregateFunction;
 use crate::plans::AndExpr;
@@ -1464,11 +1466,11 @@ impl<'a> TypeChecker<'a> {
             assert_eq!(output_context.columns.len(), 1);
             let box (mut scalar, scalar_data_type) = self.resolve(&expr, None).await?;
             if scalar_data_type != *data_type {
-                todo!("expression type coercion");
                 // Make comparison scalar type keep consistent
-                // let coercion_type = merge_types(&scalar_data_type, &data_type)?;
-                // scalar = wrap_cast_if_needed(scalar, &coercion_type);
-                // data_type = Box::new(coercion_type);
+                let coercion_type = common_super_type(scalar_data_type, *data_type.clone())
+                    .ok_or_else(|| ErrorCode::Internal("Cannot find common super type"))?;
+                scalar = wrap_cast_if_needed(&scalar, &coercion_type);
+                data_type = Box::new(coercion_type);
             }
             child_scalar = Some(Box::new(scalar));
         }

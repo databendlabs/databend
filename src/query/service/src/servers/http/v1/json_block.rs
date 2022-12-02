@@ -35,10 +35,7 @@ pub struct JsonBlock {
 
 pub type JsonBlockRef = Arc<JsonBlock>;
 
-pub fn block_to_json_value(
-    chunk: &Chunk,
-    format: &FormatSettings,
-) -> Result<Vec<Vec<JsonValue>>> {
+pub fn block_to_json_value(chunk: &Chunk, format: &FormatSettings) -> Result<Vec<Vec<JsonValue>>> {
     if chunk.is_empty() {
         return Ok(vec![]);
     }
@@ -76,11 +73,7 @@ impl JsonBlock {
         }
     }
 
-    pub fn new(
-        schema: DataSchemaRef,
-        chunk: &Chunk,
-        format: &FormatSettings,
-    ) -> Result<Self> {
+    pub fn new(schema: DataSchemaRef, chunk: &Chunk, format: &FormatSettings) -> Result<Self> {
         Ok(JsonBlock {
             data: block_to_json_value(chunk, format)?,
             schema: schema.clone(),

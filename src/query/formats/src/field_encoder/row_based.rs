@@ -25,8 +25,8 @@ use micromarshal::Marshal;
 use micromarshal::Unmarshal;
 use ordered_float::OrderedFloat;
 
-use crate::field_encoder::helpers::timestamp_to_string_micro;
 use crate::field_encoder::helpers::date_to_string;
+use crate::field_encoder::helpers::timestamp_to_string_micro;
 use crate::field_encoder::helpers::PrimitiveWithFormat;
 use crate::CommonSettings;
 

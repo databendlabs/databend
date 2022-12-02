@@ -24,6 +24,7 @@ use common_datavalues::type_coercion::compare_coercion;
 use common_datavalues::wrap_nullable;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::type_check::common_super_type;
 
 use crate::binder::scalar_common::split_conjunctions;
 use crate::binder::scalar_common::split_equivalent_predicate;
@@ -34,6 +35,7 @@ use crate::optimizer::ColumnSet;
 use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::planner::binder::scalar::ScalarBinder;
+use crate::planner::binder::wrap_cast;
 use crate::planner::binder::Binder;
 use crate::planner::semantic::NameResolutionContext;
 use crate::plans::BoundColumnRef;
@@ -576,12 +578,12 @@ impl<'a> JoinConditionResolver<'a> {
         let left_type = left.data_type();
         let right_type = right.data_type();
         if left_type.ne(&right_type) {
-            todo!("expression: type coercion")
-            // let least_super_type = compare_coercion(&left_type, &right_type)?;
-            // // Wrap cast for both left and right, `cast` can change the physical type of the data block
-            // // Related issue: https://github.com/datafuselabs/databend/issues/7650
-            // left = wrap_cast(left, &least_super_type);
-            // right = wrap_cast(right, &least_super_type);
+            let least_super_type = common_super_type(left_type, right_type)
+                .ok_or_else(|| ErrorCode::Internal("Cannot find common super type"))?;
+            // Wrap cast for both left and right, `cast` can change the physical type of the data block
+            // Related issue: https://github.com/datafuselabs/databend/issues/7650
+            left = wrap_cast(&left, &least_super_type);
+            right = wrap_cast(&right, &least_super_type);
         }
 
         if left_used_columns.is_subset(&left_columns)

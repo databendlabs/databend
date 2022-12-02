@@ -80,7 +80,7 @@ impl InputFormatTextBase for InputFormatNDJson {
             .as_any()
             .downcast_ref::<FieldJsonAstDecoder>()
             .expect("must success");
-            
+
         let columns = &mut builder.mutable_columns;
         let mut start = 0usize;
         let start_row = batch.start_row;

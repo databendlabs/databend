@@ -14,6 +14,7 @@
 
 use common_datavalues::DataTypeImpl;
 use common_exception::Result;
+use common_expression::types::DataType;
 
 use crate::binder::scalar_visitor::Recursion;
 use crate::binder::scalar_visitor::ScalarVisitor;
@@ -166,5 +167,23 @@ pub fn contain_subquery(scalar: &Scalar) -> bool {
         }
         Scalar::CastExpr(CastExpr { argument, .. }) => contain_subquery(argument),
         _ => false,
+    }
+}
+
+/// Wrap a cast expression with given target type
+pub fn wrap_cast(scalar: &Scalar, target_type: &DataType) -> Scalar {
+    Scalar::CastExpr(CastExpr {
+        argument: Box::new(scalar.clone()),
+        from_type: Box::new(scalar.data_type()),
+        target_type: Box::new(target_type.clone()),
+    })
+}
+
+/// Wrap a cast expression with given target type if the scalar is not of the target type
+pub fn wrap_cast_if_needed(scalar: &Scalar, target_type: &DataType) -> Scalar {
+    if &scalar.data_type() == target_type {
+        scalar.clone()
+    } else {
+        wrap_cast(scalar, target_type)
     }
 }

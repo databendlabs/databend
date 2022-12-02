@@ -18,6 +18,7 @@ use std::collections::HashSet;
 use common_datavalues::type_coercion::compare_coercion;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::type_check::common_super_type;
 use common_expression::types::DataType;
 
 use crate::binder::JoinPredicate;
@@ -28,6 +29,7 @@ use crate::optimizer::heuristic::subquery_rewriter::UnnestResult;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
+use crate::planner::binder::wrap_cast;
 use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
 use crate::plans::AggregateMode;
@@ -163,17 +165,17 @@ impl SubqueryRewriter {
                 }
 
                 JoinPredicate::Both { left, right } => {
-                    todo!("expression type coercion");
-                    // if left.data_type().eq(&right.data_type()) {
-                    //     left_conditions.push(left.clone());
-                    //     right_conditions.push(right.clone());
-                    //     continue;
-                    // }
-                    // let join_type = compare_coercion(&left.data_type(), &right.data_type())?;
-                    // let left = wrap_cast(left.clone(), &join_type);
-                    // let right = wrap_cast(right.clone(), &join_type);
-                    // left_conditions.push(left);
-                    // right_conditions.push(right);
+                    if left.data_type().eq(&right.data_type()) {
+                        left_conditions.push(left.clone());
+                        right_conditions.push(right.clone());
+                        continue;
+                    }
+                    let join_type = common_super_type(left.data_type(), right.data_type())
+                        .ok_or_else(|| ErrorCode::Internal("Cannot find common type"))?;
+                    let left = wrap_cast(&left, &join_type);
+                    let right = wrap_cast(&right, &join_type);
+                    left_conditions.push(left);
+                    right_conditions.push(right);
                 }
             }
         }

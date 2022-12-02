@@ -879,9 +879,9 @@ impl<'a> Binder {
                         if let Some(default_expr) = &column.default_expr {
                             let (mut expr, expr_type) = scalar_binder.bind(default_expr).await?;
                             todo!("expression type coercion");
-                            // if compare_coercion(&data_type, &expr_type).is_err() {
-                            //     return Err(ErrorCode::SemanticError(format!("column {name} is of type {} but default expression is of type {}", data_type, expr_type)));
-                            // }
+                            if compare_coercion(&data_type, &expr_type).is_err() {
+                                return Err(ErrorCode::SemanticError(format!("column {name} is of type {} but default expression is of type {}", data_type, expr_type)));
+                            }
                             if !expr_type.eq(&data_type) {
                                 expr = Scalar::CastExpr(CastExpr {
                                     argument: Box::new(expr),
