@@ -185,8 +185,18 @@ impl Config {
     /// - Load from file as default.
     /// - Load from env, will override config from file.
     /// - Load from args as finally override
-    pub fn load() -> Result<Self, MetaStartupError> {
-        let arg_conf = Self::parse();
+    ///
+    /// # Notes
+    ///
+    /// with_args is to control whether we need to load from args or not.
+    /// We should set this to false during tests because we don't want
+    /// our test binary to parse cargo's args.
+    pub fn load(with_args: bool) -> Result<Self, MetaStartupError> {
+        let mut arg_conf = Self::default();
+
+        if with_args {
+            arg_conf = Self::parse();
+        }
 
         let mut builder: serfig::Builder<Self> = serfig::Builder::default();
 
@@ -213,7 +223,9 @@ impl Config {
         builder = builder.collect(from_self(cfg_via_env.into()));
 
         // Finally, load from args.
-        builder = builder.collect(from_self(arg_conf));
+        if with_args {
+            builder = builder.collect(from_self(arg_conf));
+        }
 
         builder
             .build()
