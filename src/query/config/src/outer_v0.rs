@@ -130,8 +130,18 @@ impl Config {
     /// - Load from file as default.
     /// - Load from env, will override config from file.
     /// - Load from args as finally override
-    pub fn load() -> Result<Self> {
-        let arg_conf = Self::parse();
+    ///
+    /// # Notes
+    ///
+    /// with_args is to control whether we need to load from args or not.
+    /// We should set this to false during tests because we don't want
+    /// our test binary to parse cargo's args.
+    pub fn load(with_args: bool) -> Result<Self> {
+        let mut arg_conf = Self::default();
+
+        if with_args {
+            arg_conf = Self::parse();
+        }
 
         let mut builder: serfig::Builder<Self> = serfig::Builder::default();
 
@@ -154,41 +164,9 @@ impl Config {
         builder = builder.collect(from_env());
 
         // Finally, load from args.
-        builder = builder.collect(from_self(arg_conf));
-
-        Ok(builder.build()?)
-    }
-
-    /// Load will load config from file, env and args.
-    ///
-    /// - Load from file as default.
-    /// - Load from env, will override config from file.
-    ///
-    /// # NOTE
-    ///
-    /// This function is only used for tests.
-    pub fn load_without_args() -> Result<Self> {
-        let arg_conf = Config::default();
-
-        let mut builder: serfig::Builder<Self> = serfig::Builder::default();
-
-        // Load from config file first.
-        {
-            let config_file = if !arg_conf.config_file.is_empty() {
-                arg_conf.config_file.clone()
-            } else if let Ok(path) = env::var("CONFIG_FILE") {
-                path
-            } else {
-                "".to_string()
-            };
-
-            if !config_file.is_empty() {
-                builder = builder.collect(from_file(Toml, &config_file));
-            }
+        if with_args {
+            builder = builder.collect(from_self(arg_conf));
         }
-
-        // Then, load from env.
-        builder = builder.collect(from_env());
 
         Ok(builder.build()?)
     }

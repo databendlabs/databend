@@ -254,9 +254,7 @@ fn test_env_config_s3() -> Result<()> {
             ("CONFIG_FILE", None),
         ],
         || {
-            let configured = Config::load_without_args()
-                .expect("must success")
-                .into_outer();
+            let configured = Config::load_for_test().expect("must success").into_outer();
 
             assert_eq!("DEBUG", configured.log.level);
 
@@ -374,9 +372,7 @@ fn test_env_config_fs() -> Result<()> {
             ("CONFIG_FILE", None),
         ],
         || {
-            let configured = Config::load_without_args()
-                .expect("must success")
-                .into_outer();
+            let configured = Config::load_for_test().expect("must success").into_outer();
 
             assert_eq!("DEBUG", configured.log.level);
 
@@ -495,9 +491,7 @@ fn test_env_config_gcs() -> Result<()> {
             ("CONFIG_FILE", None),
         ],
         || {
-            let configured = Config::load_without_args()
-                .expect("must success")
-                .into_outer();
+            let configured = Config::load_for_test().expect("must success").into_outer();
 
             assert_eq!("DEBUG", configured.log.level);
 
@@ -623,9 +617,7 @@ fn test_env_config_oss() -> Result<()> {
             ("CONFIG_FILE", None),
         ],
         || {
-            let configured = Config::load_without_args()
-                .expect("must success")
-                .into_outer();
+            let configured = Config::load_for_test().expect("must success").into_outer();
 
             assert_eq!("DEBUG", configured.log.level);
 
@@ -834,7 +826,7 @@ protocol = "binary"
             ("STORAGE_TYPE", None),
         ],
         || {
-            let cfg = Config::load_without_args()
+            let cfg = Config::load_for_test()
                 .expect("config load success")
                 .into_outer();
 
@@ -894,7 +886,7 @@ protocol = "binary"
     temp_env::with_vars(
         vec![("CONFIG_FILE", Some(file_path.to_string_lossy().as_ref()))],
         || {
-            let cfg = Config::load_without_args().expect("config load success");
+            let cfg = Config::load_for_test().expect("config load success");
 
             assert_eq!(
                 cfg.catalogs["hive"],
@@ -934,7 +926,7 @@ protocol = "binary"
     temp_env::with_vars(
         vec![("CONFIG_FILE", Some(file_path.to_string_lossy().as_ref()))],
         || {
-            let cfg = Config::load_without_args().expect("config load success");
+            let cfg = Config::load_for_test().expect("config load success");
 
             assert_eq!(
                 cfg.catalogs["my_hive"],
