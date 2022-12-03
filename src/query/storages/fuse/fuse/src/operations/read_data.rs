@@ -54,7 +54,8 @@ impl FuseTable {
     fn build_block_reader(&self, plan: &DataSourcePlan) -> Result<Arc<BlockReader>> {
         match prewhere_of_push_downs(&plan.push_downs) {
             None => {
-                let projection = projection_of_push_downs(&plan.schema(), &plan.push_downs);
+                let projection =
+                    projection_of_push_downs(&self.table_info.schema(), &plan.push_downs);
                 self.create_block_reader(projection)
             }
             Some(v) => self.create_block_reader(v.output_columns),
@@ -65,7 +66,8 @@ impl FuseTable {
     fn build_prewhere_reader(&self, plan: &DataSourcePlan) -> Result<Arc<BlockReader>> {
         match prewhere_of_push_downs(&plan.push_downs) {
             None => {
-                let projection = projection_of_push_downs(&plan.schema(), &plan.push_downs);
+                let projection =
+                    projection_of_push_downs(&self.table_info.schema(), &plan.push_downs);
                 self.create_block_reader(projection)
             }
             Some(v) => self.create_block_reader(v.prewhere_columns),
@@ -190,7 +192,7 @@ impl FuseTable {
             });
         }
 
-        let projection = projection_of_push_downs(&plan.schema(), &plan.push_downs);
+        let projection = projection_of_push_downs(&self.table_info.schema(), &plan.push_downs);
         let max_io_requests = self.adjust_io_request(&ctx, &projection, read_kind)?;
         let block_reader = self.build_block_reader(plan)?;
         let prewhere_reader = self.build_prewhere_reader(plan)?;
