@@ -5388,6 +5388,7 @@ Insert(
             format: "json",
             rest_str: ";",
             start: 31,
+            option_settings: None,
         },
         overwrite: false,
     },
