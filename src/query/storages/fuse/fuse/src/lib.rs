@@ -37,6 +37,8 @@ use common_catalog::table_mutator::TableMutator;
 pub use constants::*;
 pub use fuse_part::ColumnLeaf;
 pub use fuse_part::ColumnLeaves;
+pub use fuse_part::ColumnMeta;
+pub use fuse_part::FusePartInfo;
 pub use fuse_table::FuseTable;
 
 mod sessions {
