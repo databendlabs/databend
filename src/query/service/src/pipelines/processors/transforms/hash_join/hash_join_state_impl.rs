@@ -294,6 +294,9 @@ impl HashJoinState for JoinHashTable {
         }
 
         let rest_block = self.rest_block()?;
+        if rest_block.is_empty() {
+            return Ok(blocks.to_vec());
+        }
         let input_block = DataBlock::concat_blocks(&[blocks, &[rest_block]].concat())?;
 
         if unmatched_build_indexes.is_empty() && self.hash_join_desc.other_predicate.is_none() {
