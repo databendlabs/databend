@@ -60,6 +60,30 @@ use crate::StorageRedisConfig;
 
 /// init_operator will init an opendal operator based on storage config.
 pub fn init_operator(cfg: &StorageParams) -> Result<Operator> {
+    let op = init_operator_without_layers(cfg)?;
+
+    let op = op
+        // Add retry
+        .layer(RetryLayer::new(ExponentialBackoff::default().with_jitter()))
+        // Add metrics
+        .layer(MetricsLayer)
+        // Add logging
+        .layer(LoggingLayer::default())
+        // Add tracing
+        .layer(TracingLayer)
+        // NOTE
+        //
+        // Magic happens here. We will add a layer upon original
+        // storage operator so that all underlying storage operations
+        // will send to storage runtime.
+        .layer(RuntimeLayer::new(GlobalIORuntime::instance().inner()));
+
+    Ok(op)
+}
+
+/// init_operator_without_layers will init an opendal operator based
+/// on storage config with any layers.
+pub fn init_operator_without_layers(cfg: &StorageParams) -> Result<Operator> {
     let op = match &cfg {
         StorageParams::Azblob(cfg) => init_azblob_operator(cfg)?,
         StorageParams::Fs(cfg) => init_fs_operator(cfg)?,
@@ -82,22 +106,6 @@ pub fn init_operator(cfg: &StorageParams) -> Result<Operator> {
             ));
         }
     };
-
-    let op = op
-        // Add retry
-        .layer(RetryLayer::new(ExponentialBackoff::default().with_jitter()))
-        // Add metrics
-        .layer(MetricsLayer)
-        // Add logging
-        .layer(LoggingLayer::default())
-        // Add tracing
-        .layer(TracingLayer)
-        // NOTE
-        //
-        // Magic happens here. We will add a layer upon original
-        // storage operator so that all underlying storage operations
-        // will send to storage runtime.
-        .layer(RuntimeLayer::new(GlobalIORuntime::instance().inner()));
 
     Ok(op)
 }
@@ -442,7 +450,25 @@ impl CacheOperator {
             return Ok(CacheOperator { op: None });
         }
 
-        let operator = init_operator(&conf.params)?;
+        let operator = init_operator_without_layers(&conf.params)?
+            // Add retry
+            .layer(RetryLayer::new(ExponentialBackoff::default().with_jitter()))
+            // Add metrics
+            .layer(MetricsLayer)
+            // Add logging
+            .layer(
+                LoggingLayer::default()
+                    // Ingore expected errors for logging.
+                    .with_error_level(None),
+            )
+            // Add tracing
+            .layer(TracingLayer)
+            // NOTE
+            //
+            // Magic happens here. We will add a layer upon original
+            // storage operator so that all underlying storage operations
+            // will send to storage runtime.
+            .layer(RuntimeLayer::new(GlobalIORuntime::instance().inner()));
 
         // OpenDAL will send a real request to underlying storage to check whether it works or not.
         // If this check failed, it's highly possible that the users have configured it wrongly.
