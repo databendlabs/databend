@@ -143,7 +143,10 @@ impl Processor for DeletionSource {
             }
         }
 
-        if matches!(self.state, State::ReadData(_) | State::ReadRemain { .. } | State::Serialized(_, _)) {
+        if matches!(
+            self.state,
+            State::ReadData(_) | State::ReadRemain { .. } | State::Serialized(_, _)
+        ) {
             Ok(Event::Async)
         } else {
             Ok(Event::Sync)
@@ -166,20 +169,20 @@ impl Processor for DeletionSource {
                 if !DataBlock::filter_exists(&filter)? {
                     // deleted,
                     self.state = State::Generated(Deletion::Deleted);
-                } else if self.remain_reader.is_none() {
-                    let num_rows = data_block.num_rows();
-                    let block = DataBlock::filter_block(data_block, &filter)?;
-                    if block.num_rows() == num_rows {
-                        self.state = State::Generated(Deletion::DoNothing);
-                    } else {
-                        let block = block.resort(self.output_reader.schema())?;
-                        self.state = State::NeedSerialize(block);
-                    }
                 } else {
-                    self.state = State::ReadRemain {
-                        part,
-                        data_block,
-                        filter,
+                    let num_rows = data_block.num_rows();
+                    let data_block = DataBlock::filter_block(data_block, &filter)?;
+                    if data_block.num_rows() == num_rows {
+                        self.state = State::Generated(Deletion::DoNothing);
+                    } else if self.remain_reader.is_none() {
+                        let block = data_block.resort(self.output_reader.schema())?;
+                        self.state = State::NeedSerialize(block);
+                    } else {
+                        self.state = State::ReadRemain {
+                            part,
+                            data_block,
+                            filter,
+                        }
                     }
                 }
             }
@@ -193,6 +196,7 @@ impl Processor for DeletionSource {
                     data_block
                 } else if let Some(remain_reader) = self.remain_reader.as_ref() {
                     let remain_block = remain_reader.deserialize(part, chunks)?;
+                    let remain_block = DataBlock::filter_block(remain_block, &filter)?;
                     for (col, field) in remain_block
                         .columns()
                         .iter()
@@ -205,14 +209,8 @@ impl Processor for DeletionSource {
                     return Err(ErrorCode::Internal("It's a bug. Need remain reader"));
                 };
 
-                let num_rows = merged.num_rows();
-                let block = DataBlock::filter_block(merged, &filter)?;
-                if block.num_rows() == num_rows {
-                    self.state = State::Generated(Deletion::DoNothing);
-                } else {
-                    let block = block.resort(self.output_reader.schema())?;
-                    self.state = State::NeedSerialize(block);
-                }
+                let block = merged.resort(self.output_reader.schema())?;
+                self.state = State::NeedSerialize(block);
             }
             State::NeedSerialize(block) => {
                 let col_stats = gen_columns_statistics(&block)?;
