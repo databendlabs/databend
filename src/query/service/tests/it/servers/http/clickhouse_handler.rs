@@ -62,12 +62,6 @@ async fn test_select() -> PoemResult<()> {
     }
 
     {
-        let (status, body) = server.post("sel", "ect 1").await;
-        assert_eq!(status, StatusCode::OK);
-        assert_error!(body, "1\n");
-    }
-
-    {
         let (status, body) = server.post("", "bad sql").await;
         assert_eq!(status, StatusCode::BAD_REQUEST);
         assert_error!(body, "Code: 1005");

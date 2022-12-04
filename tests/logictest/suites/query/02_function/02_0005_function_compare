@@ -1227,5 +1227,17 @@ SELECT parse_json('"cd"') not regexp '.*';
 ----
 0
 
+statement ok
+drop table if exists t;
 
+statement ok
+create table t(id String);
 
+statement ok
+insert into t values('IRxxSIPD');
+
+statement query T
+select id from t where id not like '%_SIP';
+
+----
+IRxxSIPD
