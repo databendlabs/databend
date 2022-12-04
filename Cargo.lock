@@ -3145,6 +3145,7 @@ dependencies = [
  "databend-thrift",
  "futures",
  "futures-util",
+ "glob",
  "goldenfile",
  "headers",
  "hex",

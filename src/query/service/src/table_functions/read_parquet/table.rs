@@ -14,6 +14,7 @@
 
 use std::any::Any;
 use std::fs::File;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use chrono::NaiveDateTime;
@@ -70,21 +71,44 @@ impl ParquetTable {
 
         let table_args = table_args.unwrap();
 
-        // TODO: support glob pattern
-        let file_metas = table_args
-            .iter()
-            .map(|arg| {
-                let location = match arg {
-                    DataValue::String(s) => String::from_utf8_lossy(s).to_string(),
-                    _ => {
-                        return Err(ErrorCode::BadArguments(
-                            "read_parquet only accepts string arguments",
-                        ));
+        let mut file_paths = Vec::with_capacity(table_args.len());
+        for arg in table_args.iter() {
+            match arg {
+                DataValue::String(path) => {
+                    let maybe_glob_path = std::str::from_utf8(path).unwrap();
+                    let paths = glob::glob(maybe_glob_path)
+                        .map_err(|e| ErrorCode::Internal(format!("glob error: {}", e)))?;
+                    for entry in paths {
+                        match entry {
+                            Ok(path) => {
+                                file_paths.push(path);
+                            }
+                            Err(e) => {
+                                return Err(ErrorCode::Internal(format!("glob error: {}", e)));
+                            }
+                        }
                     }
-                };
-                let file_meta = read_parquet_meta(&location)?;
+                }
+                _ => {
+                    return Err(ErrorCode::BadArguments(
+                        "read_parquet only accepts string arguments",
+                    ));
+                }
+            }
+        }
+
+        if file_paths.is_empty() {
+            return Err(ErrorCode::BadArguments(
+                "No matched files found for read_parquet",
+            ));
+        }
+
+        let file_metas = file_paths
+            .iter()
+            .map(|path| {
+                let file_meta = read_parquet_meta(path)?;
                 Ok(ParquetFileMeta {
-                    location,
+                    location: path.to_string_lossy().to_string(),
                     file_meta,
                 })
             })
@@ -179,9 +203,10 @@ impl TableFunction for ParquetTable {
     }
 }
 
-fn read_parquet_meta(file: &str) -> Result<FileMetaData> {
-    let mut file = File::open(file)
-        .map_err(|e| ErrorCode::Internal(format!("Failed to open file {}: {}", file, e)))?;
+fn read_parquet_meta(file: &PathBuf) -> Result<FileMetaData> {
+    let mut file = File::open(file).map_err(|e| {
+        ErrorCode::Internal(format!("Failed to open file {}: {}", file.display(), e))
+    })?;
     parquet::read::read_metadata(&mut file)
         .map_err(|e| ErrorCode::Internal(format!("Read parquet file meta error: {}", e)))
 }
