@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::types::Index;
 use common_exception::Result;
 
 use crate::types::array::ArrayColumnBuilder;
@@ -30,10 +29,12 @@ use crate::with_number_mapped_type;
 use crate::Chunk;
 use crate::ChunkEntry;
 use crate::Column;
+use crate::ColumnIndex;
 use crate::Value;
 
-impl Chunk {
-    pub fn take<I: Index>(self, indices: &[I]) -> Result<Self> {
+impl<Index: ColumnIndex> Chunk<Index> {
+    pub fn take<I>(self, indices: &[I]) -> Result<Self>
+    where I: common_arrow::arrow::types::Index {
         if indices.is_empty() {
             return Ok(self.slice(0..0));
         }
@@ -42,12 +43,12 @@ impl Chunk {
             .columns()
             .map(|entry| match &entry.value {
                 Value::Scalar(s) => ChunkEntry {
-                    id: entry.id,
+                    id: entry.id.clone(),
                     data_type: entry.data_type.clone(),
                     value: Value::Scalar(s.clone()),
                 },
                 Value::Column(c) => ChunkEntry {
-                    id: entry.id,
+                    id: entry.id.clone(),
                     data_type: entry.data_type.clone(),
                     value: Value::Column(Column::take(c, indices)),
                 },
@@ -59,7 +60,8 @@ impl Chunk {
 }
 
 impl Column {
-    pub fn take<I: Index>(&self, indices: &[I]) -> Self {
+    pub fn take<I>(&self, indices: &[I]) -> Self
+    where I: common_arrow::arrow::types::Index {
         let length = indices.len();
         match self {
             Column::Null { .. } | Column::EmptyArray { .. } => self.slice(0..length),
@@ -109,7 +111,8 @@ impl Column {
         }
     }
 
-    fn take_arg_types<T: ArgType, I: Index>(col: &T::Column, indices: &[I]) -> Column {
+    fn take_arg_types<T: ArgType, I>(col: &T::Column, indices: &[I]) -> Column
+    where I: common_arrow::arrow::types::Index {
         let col = T::column_from_ref_iter(
             indices
                 .iter()
@@ -119,11 +122,14 @@ impl Column {
         T::upcast_column(col)
     }
 
-    fn take_value_types<T: ValueType, I: Index>(
+    fn take_value_types<T: ValueType, I>(
         col: &T::Column,
         mut builder: T::ColumnBuilder,
         indices: &[I],
-    ) -> Column {
+    ) -> Column
+    where
+        I: common_arrow::arrow::types::Index,
+    {
         unsafe {
             for index in indices {
                 T::push_item(

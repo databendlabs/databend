@@ -83,8 +83,9 @@ async fn do_purge_test(
         segment_count,
         block_count,
         index_count,
+        Some(()),
     )
-    .await;
+    .await?;
     history_should_have_item(&fixture, case_name, snapshot_count).await?;
 
     if let Some((snapshot_count, table_statistic_count, segment_count, block_count, index_count)) =
@@ -101,8 +102,9 @@ async fn do_purge_test(
             segment_count,
             block_count,
             index_count,
+            Some(()),
         )
-        .await;
+        .await?;
 
         history_should_have_item(&fixture, case_name, snapshot_count).await?;
     };

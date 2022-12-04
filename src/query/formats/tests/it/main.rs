@@ -29,11 +29,8 @@ fn get_output_format(
     typ: StageFileFormatType,
     schema: DataSchemaRef,
 ) -> Result<Box<dyn OutputFormat>> {
-    FileFormatOptionsExt::get_output_format_from_settings(
-        typ,
-        schema,
-        &Settings::default_settings("default"),
-    )
+    let settings = &Settings::default_settings("default")?;
+    FileFormatOptionsExt::get_output_format_from_settings(typ, schema, settings)
 }
 
 fn get_output_format_clickhouse(
@@ -41,11 +38,8 @@ fn get_output_format_clickhouse(
     schema: DataSchemaRef,
 ) -> Result<Box<dyn OutputFormat>> {
     let format = ClickhouseFormatType::parse_clickhouse_format(format_name)?;
-    FileFormatOptionsExt::get_output_format_from_settings_clickhouse(
-        format,
-        schema,
-        &Settings::default_settings("default"),
-    )
+    let settings = &Settings::default_settings("default")?;
+    FileFormatOptionsExt::get_output_format_from_settings_clickhouse(format, schema, settings)
 }
 
 fn get_output_format_clickhouse_with_setting(
