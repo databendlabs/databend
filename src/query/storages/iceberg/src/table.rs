@@ -42,16 +42,6 @@ const META_DIR: &str = "metadata";
 const META_PTR: &str = "metadata/version_hint.text";
 
 /// accessor wrapper as a table
-/// # Note
-/// The operator pointing to the directory holding the table directory.
-/// For example:
-/// - ibg_ctl/  <- `catalog_root` pointing at
-///     - db0/  <- database that belongs to
-///         - table1/ <- name of current table
-///             - metadata/ <- metadata directory
-///             - data/     <- data directory
-///         - ...  <- other tables
-///     - ...   <- other databases
 #[allow(unused)]
 pub struct IcebergTable {
     /// database that belongs to
