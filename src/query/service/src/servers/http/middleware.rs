@@ -132,7 +132,7 @@ fn auth_clickhouse_name_password(req: &Request, client_ip: Option<String>) -> Re
             })
         } else {
             Err(ErrorCode::AuthenticateFailure(
-                "No  header or query parameters for authorization detected",
+                "No header or query parameters for authorization detected",
             ))
         }
     }
