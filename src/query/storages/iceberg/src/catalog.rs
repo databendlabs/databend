@@ -56,9 +56,9 @@ use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_types::MetaId;
 use common_storage::DataOperator;
 use futures::TryStreamExt;
+use opendal::layers::SubdirLayer;
 
 use crate::database::IcebergDatabase;
-use crate::table::IcebergTable;
 
 pub const ICEBERG_CATALOG: &str = "iceberg";
 
@@ -74,7 +74,7 @@ pub struct IcebergCatalog {
     /// is this catalog flatten
     flatten: bool,
     /// underlying storage access operator
-    operator: Arc<DataOperator>,
+    operator: DataOperator,
 }
 
 impl IcebergCatalog {
@@ -95,7 +95,7 @@ impl IcebergCatalog {
         Ok(Self {
             name: name.to_string(),
             flatten,
-            operator: Arc::new(operator),
+            operator,
         })
     }
 
@@ -103,8 +103,13 @@ impl IcebergCatalog {
     pub async fn list_database_from_read(&self, tenant: &str) -> Result<Vec<Arc<dyn Database>>> {
         if self.flatten {
             // is flatten catalog, return `default` catalog
+            // with an operator points to it's root
             return Ok(vec![Arc::new(
-                IcebergDatabase::create_database_ommited_default(tenant),
+                IcebergDatabase::create_database_ommited_default(
+                    tenant,
+                    &self.name,
+                    self.operator.operator(),
+                ),
             )]);
         }
 
@@ -112,18 +117,36 @@ impl IcebergCatalog {
         let mut dbs = vec![];
         let mut ls = root.list().await?;
         while let Some(dir) = ls.try_next().await? {
+            let db_root = self.operator.operator().layer(SubdirLayer::new(dir.name()));
             let db: Arc<dyn Database> = Arc::new(IcebergDatabase::create_database_from_read(
-                dir.name(),
                 tenant,
+                &self.name,
+                dir.name(),
+                db_root,
             ));
             dbs.push(db);
         }
         Ok(dbs)
     }
 
-    /// get database from iceberg storage
-    pub async fn get_database(&self, tenant: &str, db_name: &str) -> Result<Arc<dyn Database>> {
+    /// get table from iceberg storage
+    pub async fn get_table(
+        &self,
+        tenant: &str,
+        db_name: &str,
+        table_name: &str,
+    ) -> Result<Arc<dyn Table>> {
+        let db = self.get_database(tenant, db_name).await?;
+        db.get_table(table_name).await
+    }
+}
+
+#[async_trait]
+impl Catalog for IcebergCatalog {
+    #[tracing::instrument(level = "debug", skip(self))]
+    async fn get_database(&self, tenant: &str, db_name: &str) -> Result<Arc<dyn Database>> {
         if self.flatten {
+            // is flatten catalog, must return `default` catalog
             if db_name != "default" {
                 return Err(ErrorCode::UnknownDatabase(format!(
                     "Database {} does not exist",
@@ -131,8 +154,11 @@ impl IcebergCatalog {
                 )));
             }
             let tbl: Arc<dyn Database> =
-                Arc::new(IcebergDatabase::create_database_ommited_default(tenant));
-            // is flatten catalog, return `default` catalog
+                Arc::new(IcebergDatabase::create_database_ommited_default(
+                    tenant,
+                    &self.name,
+                    self.operator.operator(),
+                ));
             return Ok(tbl);
         }
 
@@ -144,52 +170,10 @@ impl IcebergCatalog {
                 db_name
             )));
         }
+        let db_root = self.operator.operator().layer(SubdirLayer::new(db_name));
 
         Ok(Arc::new(IcebergDatabase::create_database_from_read(
-            tenant, db_name,
-        )))
-    }
-
-    /// get table from iceberg storage
-    pub async fn get_table(
-        &self,
-        tenant: &str,
-        db_name: &str,
-        table_name: &str,
-    ) -> Result<Arc<dyn Table>> {
-        let db = if self.flatten {
-            if db_name != "default" {
-                return Err(ErrorCode::UnknownDatabase(format!(
-                    "Database {} does not exist",
-                    db_name
-                )));
-            }
-            IcebergDatabase::create_database_ommited_default(tenant)
-        } else {
-            IcebergDatabase::create_database_from_read(db_name, tenant)
-        };
-
-        IcebergTable::try_create_table_from_read(
-            &self.name,
-            tenant,
-            db_name,
-            table_name,
-            self.operator.clone(),
-        )
-        .await
-        .map(|tbl| {
-            let tbl: Arc<dyn Table> = Arc::new(tbl);
-            tbl
-        })
-    }
-}
-
-#[async_trait]
-impl Catalog for IcebergCatalog {
-    #[tracing::instrument(level = "debug", skip(self))]
-    async fn get_database(&self, tenant: &str, db_name: &str) -> Result<Arc<dyn Database>> {
-        Ok(Arc::new(IcebergDatabase::create_database_from_read(
-            db_name, tenant,
+            tenant, &self.name, db_name, db_root,
         )))
     }
 
@@ -231,38 +215,13 @@ impl Catalog for IcebergCatalog {
         db_name: &str,
         table_name: &str,
     ) -> Result<Arc<dyn Table>> {
-        let tbl: Arc<dyn Table> = Arc::new(
-            IcebergTable::try_create_table_from_read(
-                &self.name,
-                tenant,
-                db_name,
-                table_name,
-                self.operator.clone(),
-            )
-            .await?,
-        );
-        Ok(tbl)
+        let db = self.get_database(tenant, db_name).await?;
+        db.get_table(table_name).await
     }
 
     async fn list_tables(&self, tenant: &str, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
-        let db_op = self.operator.object(db_name);
-        let mut ls = db_op.list().await?;
-        let mut tbls = vec![];
-        while let Some(tbl) = ls.try_next().await? {
-            let tbl_name = tbl.name();
-            let tbl = IcebergTable::try_create_table_from_read(
-                &self.name,
-                tenant,
-                db_name,
-                tbl_name,
-                self.operator.clone(),
-            )
-            .await?;
-
-            let tbl: Arc<dyn Table> = Arc::new(tbl);
-            tbls.push(tbl);
-        }
-        Ok(tbls)
+        let db = self.get_database(tenant, db_name).await?;
+        db.list_tables().await
     }
 
     async fn list_tables_history(
@@ -290,18 +249,13 @@ impl Catalog for IcebergCatalog {
     }
 
     async fn exists_table(&self, tenant: &str, db_name: &str, table_name: &str) -> Result<bool> {
-        let tbl = IcebergTable::try_create_table_from_read(
-            &self.name,
-            tenant,
-            db_name,
-            table_name,
-            self.operator.clone(),
-        )
-        .await;
-
-        match tbl {
+        let db = self.get_database(tenant, db_name).await?;
+        match db.get_table(table_name).await {
             Ok(_) => Ok(true),
-            Err(_) => Ok(false),
+            Err(e) => match e.code() {
+                ErrorCode::UNKNOWN_TABLE => Ok(false),
+                _ => Err(e),
+            },
         }
     }
 

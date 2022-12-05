@@ -21,6 +21,7 @@ chrono = { workspace = true }
 futures = "0.3.24"
 iceberg-rs = "0.1.0"
 itertools = "0.10.5"
+opendal = "0.21"
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 tracing = "0.1.36"

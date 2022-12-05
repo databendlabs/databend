@@ -35,13 +35,22 @@ impl Display for CatalogType {
     }
 }
 
+/// Option for creating a iceberg catalog
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct IcebergCatalogOption {
+    pub storage_params: Box<StorageParams>,
+    /// is the remote iceberg storage storing
+    /// tables directly in the root directory
+    pub flatten: bool,
+}
+
 /// different options for creating catalogs
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CatalogOption {
     // hms_address
     Hive(String),
     // Uri location for iceberg
-    Iceberg(Box<StorageParams>),
+    Iceberg(IcebergCatalogOption),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

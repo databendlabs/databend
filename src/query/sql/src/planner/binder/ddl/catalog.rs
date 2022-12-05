@@ -30,6 +30,7 @@ use common_exception::Result;
 use common_meta_app::schema::CatalogMeta;
 use common_meta_app::schema::CatalogOption;
 use common_meta_app::schema::CatalogType;
+use common_meta_app::schema::IcebergCatalogOption;
 use common_storage::parse_uri_location;
 use common_storage::UriLocation;
 use url::Url;
@@ -148,6 +149,17 @@ impl<'a> Binder {
             }
             CatalogType::Iceberg => {
                 let catalog_options = options.clone();
+
+                // getting other options to create this catalog
+                let flatten = matches!(
+                    catalog_options
+                        .get("flatten")
+                        .map(|v| v.to_lowercase())
+                        .unwrap_or_default()
+                        .as_str(),
+                    "true" | "on"
+                );
+
                 // the uri should in the same schema as in stages
                 let uri = catalog_options
                     .get("uri")
@@ -193,7 +205,11 @@ impl<'a> Binder {
 
                 let (sp, _) = parse_uri_location(&location)?;
 
-                CatalogOption::Iceberg(Box::new(sp))
+                let opt = IcebergCatalogOption {
+                    storage_params: Box::new(sp),
+                    flatten,
+                };
+                CatalogOption::Iceberg(opt)
             }
         };
 

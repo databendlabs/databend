@@ -24,6 +24,7 @@ pub use catalog::CatalogOption;
 pub use catalog::CatalogType;
 pub use catalog::CreateCatalogReq;
 pub use catalog::DropCatalogReq;
+pub use catalog::IcebergCatalogOption;
 pub use database::CreateDatabaseReply;
 pub use database::CreateDatabaseReq;
 pub use database::DatabaseId;

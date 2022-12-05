@@ -2232,6 +2232,7 @@ dependencies = [
  "futures",
  "iceberg-rs",
  "itertools",
+ "opendal",
  "serde",
  "serde_json",
  "tracing",
@@ -6923,9 +6924,9 @@ dependencies = [
 
 [[package]]
 name = "reqsign"
-version = "0.6.6"
+version = "0.6.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d34ea360414ee77ddab3a8360a0c241fc77ab5e27892dcde1d2cfcc29d4e0f55"
+checksum = "2d544686c7cb5a31f085ae9f5c4e40a30dcba72d0b1d77656329dc4f90433cd6"
 dependencies = [
  "anyhow",
  "backon",

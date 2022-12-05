@@ -31,8 +31,8 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
-use common_storage::DataOperator;
 use iceberg_rs::model::table::TableMetadataV2;
+use opendal::Operator;
 
 use crate::converters::meta_iceberg_to_databend;
 
@@ -58,10 +58,8 @@ pub struct IcebergTable {
     database: String,
     /// name of the current table
     name: String,
-    /// relative path of current table to the catalog
-    rel_path: String,
-    /// root of the catalog
-    catalog_root: Arc<DataOperator>,
+    /// root of the table
+    tbl_root: Operator,
     /// table metadata
     manifests: TableMetadataV2,
     /// table information
@@ -75,12 +73,10 @@ impl IcebergTable {
         tenant: &str,
         database: &str,
         table_name: &str,
-        catalog_root: Arc<DataOperator>,
+        tbl_root: Operator,
     ) -> Result<IcebergTable> {
-        let meta_ptr_file = format!("{}/{}/{}", database, table_name, META_PTR);
-        // only care about data in the latest snapshot for now :)
         // find version_hint.txt, version number can be get from it.
-        let hint = catalog_root.object(&meta_ptr_file);
+        let hint = tbl_root.object(META_PTR);
         let version: u64 = String::from_utf8(hint.read().await.map_err(|e| {
             ErrorCode::ReadTableDataError(format!("invalid version_hint.text: {:?}", e))
         })?)
@@ -93,10 +89,7 @@ impl IcebergTable {
 
         // get table metadata from metadata file
         // should be in `metadata/v{version}.metadata.json`, stored as json
-        let meta_file_latest = catalog_root.object(&format!(
-            "{}/{}/{}/v{}.metadata.json",
-            database, table_name, META_DIR, version
-        ));
+        let meta_file_latest = tbl_root.object(&format!("{}/v{}.metadata.json", META_DIR, version));
         let meta_json = meta_file_latest.read().await.map_err(|e| {
             ErrorCode::ReadTableDataError(format!(
                 "invalid metadata in {}: {:?}",
@@ -127,7 +120,7 @@ impl IcebergTable {
         Ok(Self {
             database: database.to_string(),
             name: table_name.to_string(),
-            catalog_root,
+            tbl_root,
             manifests: metadata,
             info,
         })
