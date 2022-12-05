@@ -51,7 +51,10 @@ impl<'a> Binder {
         bind_context: &BindContext,
         stmt: &ShowDatabasesStmt<'a>,
     ) -> Result<Plan> {
-        let ShowDatabasesStmt { limit } = stmt;
+        let ShowDatabasesStmt {
+            catalog: _catalog,
+            limit,
+        } = stmt;
         let mut query = String::new();
         write!(query, "SELECT name AS Database FROM system.databases").unwrap();
         match limit {

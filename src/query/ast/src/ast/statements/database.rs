@@ -23,12 +23,16 @@ use crate::ast::Identifier;
 
 #[derive(Debug, Clone, PartialEq)] // Databases
 pub struct ShowDatabasesStmt<'a> {
+    pub catalog: Option<Identifier<'a>>,
     pub limit: Option<ShowLimit<'a>>,
 }
 
 impl Display for ShowDatabasesStmt<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "SHOW DATABASES")?;
+        if let Some(catalog) = &self.catalog {
+            write!(f, " FROM {catalog}")?;
+        }
         if let Some(limit) = &self.limit {
             write!(f, " {limit}")?;
         }

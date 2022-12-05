@@ -234,9 +234,14 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
 
     let show_databases = map(
         rule! {
-            SHOW ~ ( DATABASES | SCHEMAS ) ~ #show_limit?
+            SHOW ~ ( DATABASES | SCHEMAS ) ~ ( ( FROM | IN) ~ ^#ident )? ~ #show_limit?
         },
-        |(_, _, limit)| Statement::ShowDatabases(ShowDatabasesStmt { limit }),
+        |(_, _, opt_catalog, limit)| {
+            Statement::ShowDatabases(ShowDatabasesStmt {
+                catalog: opt_catalog.map(|(_, catalog)| catalog),
+                limit,
+            })
+        },
     );
     let show_create_database = map(
         rule! {
