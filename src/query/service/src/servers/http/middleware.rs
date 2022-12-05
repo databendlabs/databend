@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
@@ -74,7 +75,7 @@ fn get_credential(req: &Request, kind: HttpHandlerKind) -> Result<Credential> {
 }
 
 fn auth_by_header(
-    std_auth_headers: &Vec<&HeaderValue>,
+    std_auth_headers: &[&HeaderValue],
     client_ip: Option<String>,
 ) -> Result<Credential> {
     let value = &std_auth_headers[0];
@@ -117,11 +118,23 @@ fn auth_clickhouse_name_password(req: &Request, client_ip: Option<String>) -> Re
             password: Some(password.as_bytes().to_vec()),
             hostname: client_ip,
         };
-        return Ok(c);
+        Ok(c)
     } else {
-        return Err(ErrorCode::AuthenticateFailure(
-            "No authorization header detected",
-        ));
+        let query_str = req.uri().query().unwrap_or_default();
+        let query_params = serde_urlencoded::from_str::<HashMap<String, String>>(query_str)
+            .map_err(|e| ErrorCode::BadArguments(format!("{}", e)))?;
+        let (user, key) = (query_params.get("user"), query_params.get("password"));
+        if let (Some(name), Some(password)) = (user, key) {
+            Ok(Credential::Password {
+                name: name.clone(),
+                password: Some(password.as_bytes().to_vec()),
+                hostname: client_ip,
+            })
+        } else {
+            Err(ErrorCode::AuthenticateFailure(
+                "No  header or query parameters for authorization detected",
+            ))
+        }
     }
 }
 
