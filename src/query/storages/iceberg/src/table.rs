@@ -58,6 +58,8 @@ pub struct IcebergTable {
     database: String,
     /// name of the current table
     name: String,
+    /// relative path of current table to the catalog
+    rel_path: String,
     /// root of the catalog
     catalog_root: Arc<DataOperator>,
     /// table metadata
