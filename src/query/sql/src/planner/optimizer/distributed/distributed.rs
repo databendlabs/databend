@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp;
 use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
@@ -24,6 +25,7 @@ use crate::optimizer::RelExpr;
 use crate::optimizer::RequiredProperty;
 use crate::optimizer::SExpr;
 use crate::plans::Exchange;
+use crate::plans::Limit;
 use crate::plans::RelOperator;
 
 pub fn optimize_distributed_query(ctx: Arc<dyn TableContext>, s_expr: &SExpr) -> Result<SExpr> {
@@ -58,9 +60,18 @@ fn push_down_topk_to_merge(s_expr: &mut SExpr, mut top_k: Option<TopK>) -> Resul
     for child in s_expr.children.iter_mut() {
         if let RelOperator::Sort(sort) = &child.plan {
             if let RelOperator::Limit(limit) = &s_expr.plan {
+                let mut origin_limit = 0;
+                let mut limit_plus_offset = limit.offset;
+                if let Some(l) = limit.limit {
+                    origin_limit = l;
+                    limit_plus_offset = l + limit.offset;
+                }
                 top_k = Some(TopK {
                     sort: sort.clone(),
-                    limit: limit.clone(),
+                    limit: Limit {
+                        limit: Some(cmp::max(origin_limit, limit_plus_offset)),
+                        offset: 0,
+                    },
                 });
             }
         }
