@@ -32,15 +32,15 @@ Explanation plans may include a variety of operators, depending on the SQL state
 * **TableScan**: Reads data from the table.
     - table: The full name of the table. For example, `catalog1.database1.table1`.
     - read rows: The number of rows to read.
-    - read bytes:The number of bytes of data to read.
+    - read bytes: The number of bytes of data to read.
     - partition total: The total number of partitions of the table.
     - partition scanned: The number of partitions to read.
     - push downs: The filters and limits to be pushed down to the storage layer for processing.
 * **Filter**: Filters the read data.
-    - filters: The predicate expression used to filter the data. The data that returns false for the expression evaluation will be filtered out.
+    - filters: The predicate expression used to filter the data. Data that returns false for the expression evaluation will be filtered out.
 * **EvalScalar**: Evaluates scalar expressions. For example, `a+1` in `SELECT a+1 AS b FROM t`.
     - expressions: The scalar expressions to evaluate.
-* **AggregatePartial** & **AggregateFinal**: Aggregates by keys and returns result of the aggregation functions.
+* **AggregatePartial** & **AggregateFinal**: Aggregates by keys and returns the result of the aggregation functions.
     - group by: The keys used for aggregation.
     - aggregate functions: The functions used for aggregation.
 * **Sort**: Sorts data by keys.
@@ -48,7 +48,7 @@ Explanation plans may include a variety of operators, depending on the SQL state
 * **Limit**: Limits the number of rows returned.
     - limit: The number of rows to return.
     - offset: The number of rows to skip before returning any rows.
-* **HashJoin**: Uses the Hash Join algorithm to perform Join operations for two tables. The Hash Join algorithm will select one of the two tables as the build side to build the Hash table, and uses the other table as the probe side to read the matching data from the Hash table to form the result.
+* **HashJoin**: Uses the Hash Join algorithm to perform Join operations for two tables. The Hash Join algorithm will select one of the two tables as the build side to build the Hash table. It will then use the other table as the probe side to read the matching data from the Hash table to form the result.
     - join type: The JOIN type (INNER, LEFT OUTER, RIGHT OUTER, FULL OUTER, CROSS, SINGLE, or MARK).
     - build keys: The expressions used by the build side to build the Hash table.
     - probe keys: The expressions used by the probe side to read data from the Hash table.
