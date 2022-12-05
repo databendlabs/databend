@@ -89,7 +89,7 @@ pub struct UnlimitedMemGuard {
 }
 
 impl UnlimitedMemGuard {
-    #[must_use]
+    #[allow(unused)]
     pub(crate) fn enter_unlimited() -> Self {
         let saved = UNLIMITED_FLAG.load(Ordering::Relaxed);
         UNLIMITED_FLAG.store(true, Ordering::Relaxed);
