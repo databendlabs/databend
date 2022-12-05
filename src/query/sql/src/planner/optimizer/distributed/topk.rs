@@ -12,8 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[allow(clippy::module_inception)]
-mod distributed;
-mod topk;
+use crate::plans::Limit;
+use crate::plans::Sort;
 
-pub use distributed::optimize_distributed_query;
+#[derive(Clone, Debug)]
+pub struct TopK {
+    pub(crate) sort: Sort,
+    pub(crate) limit: Limit,
+}
