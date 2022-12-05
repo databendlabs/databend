@@ -2038,7 +2038,7 @@ dependencies = [
  "naive-cityhash",
  "once_cell",
  "opendal",
- "opensrv-mysql",
+ "opensrv-mysql 0.2.0",
  "openssl",
  "parking_lot 0.12.1",
  "petgraph",
@@ -3157,7 +3157,7 @@ dependencies = [
  "num",
  "once_cell",
  "opendal",
- "opensrv-mysql",
+ "opensrv-mysql 0.3.0",
  "openssl",
  "parking_lot 0.12.1",
  "petgraph",
@@ -5746,6 +5746,21 @@ dependencies = [
  "mysql_common",
  "nom",
  "tokio",
+]
+
+[[package]]
+name = "opensrv-mysql"
+version = "0.3.0"
+source = "git+https://github.com/datafuselabs/opensrv?rev=5e37788#5e37788525b76bb5932b4febc59f3fdc2d15f692"
+dependencies = [
+ "async-trait",
+ "byteorder",
+ "chrono",
+ "mysql_common",
+ "nom",
+ "pin-project-lite",
+ "tokio",
+ "tokio-rustls",
 ]
 
 [[package]]
