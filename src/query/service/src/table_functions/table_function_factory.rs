@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use common_config::Config;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -44,12 +45,13 @@ pub trait TableFunctionCreator: Send + Sync {
         tbl_func_name: &str,
         tbl_id: MetaId,
         arg: TableArgs,
+        conf: &Config,
     ) -> Result<Arc<dyn TableFunction>>;
 }
 
 impl<T> TableFunctionCreator for T
 where
-    T: Fn(&str, &str, MetaId, TableArgs) -> Result<Arc<dyn TableFunction>>,
+    T: Fn(&str, &str, MetaId, TableArgs, &Config) -> Result<Arc<dyn TableFunction>>,
     T: Send + Sync,
 {
     fn try_create(
@@ -58,8 +60,9 @@ where
         tbl_func_name: &str,
         tbl_id: MetaId,
         arg: TableArgs,
+        conf: &Config,
     ) -> Result<Arc<dyn TableFunction>> {
-        self(db_name, tbl_func_name, tbl_id, arg)
+        self(db_name, tbl_func_name, tbl_id, arg, conf)
     }
 }
 
@@ -142,13 +145,18 @@ impl TableFunctionFactory {
         }
     }
 
-    pub fn get(&self, func_name: &str, tbl_args: TableArgs) -> Result<Arc<dyn TableFunction>> {
+    pub fn get(
+        &self,
+        func_name: &str,
+        tbl_args: TableArgs,
+        conf: &Config,
+    ) -> Result<Arc<dyn TableFunction>> {
         let lock = self.creators.read();
         let func_name = func_name.to_lowercase();
         let (id, factory) = lock.get(&func_name).ok_or_else(|| {
             ErrorCode::UnknownTable(format!("Unknown table function {}", func_name))
         })?;
-        let func = factory.try_create("", &func_name, *id, tbl_args)?;
+        let func = factory.try_create("", &func_name, *id, tbl_args, conf)?;
         Ok(func)
     }
 }

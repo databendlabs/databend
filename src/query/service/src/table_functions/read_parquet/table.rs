@@ -62,7 +62,14 @@ impl ParquetTable {
         table_func_name: &str,
         table_id: u64,
         table_args: TableArgs,
+        conf: &common_config::Config,
     ) -> Result<Arc<dyn TableFunction>> {
+        if !conf.storage.allow_insecure {
+            return Err(ErrorCode::StorageInsecure(
+                "Should enable `allow_insecure` to use table function `read_parquet`",
+            ));
+        }
+
         if table_args.is_none() || table_args.as_ref().unwrap().is_empty() {
             return Err(ErrorCode::BadArguments(
                 "read_parquet needs at least one argument",

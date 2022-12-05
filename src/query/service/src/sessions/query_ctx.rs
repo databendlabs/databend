@@ -95,11 +95,12 @@ impl QueryContext {
         table_args: Option<Vec<DataValue>>,
     ) -> Result<Arc<dyn Table>> {
         let catalog = self.get_catalog(catalog_name)?;
+        let conf = self.get_config();
         if table_args.is_none() {
             catalog.get_table_by_info(table_info)
         } else {
             Ok(catalog
-                .get_table_function(&table_info.name, table_args)?
+                .get_table_function(&table_info.name, table_args, &conf)?
                 .as_table())
         }
     }

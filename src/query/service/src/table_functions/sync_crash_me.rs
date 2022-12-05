@@ -55,6 +55,7 @@ impl SyncCrashMeTable {
         _table_func_name: &str,
         table_id: u64,
         table_args: TableArgs,
+        _conf: &common_config::Config,
     ) -> Result<Arc<dyn TableFunction>> {
         let mut panic_message = None;
         if let Some(args) = &table_args {

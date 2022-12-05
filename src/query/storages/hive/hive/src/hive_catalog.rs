@@ -406,6 +406,7 @@ impl Catalog for HiveCatalog {
         &self,
         _func_name: &str,
         _tbl_args: TableArgs,
+        _conf: &common_config::Config,
     ) -> Result<Arc<dyn TableFunction>> {
         unimplemented!()
     }

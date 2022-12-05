@@ -57,6 +57,7 @@ impl FuseSegmentTable {
         table_func_name: &str,
         table_id: u64,
         table_args: TableArgs,
+        _conf: &common_config::Config,
     ) -> Result<Arc<dyn TableFunction>> {
         let (arg_database_name, arg_table_name, arg_snapshot_id) =
             parse_func_history_args(&table_args)?;
