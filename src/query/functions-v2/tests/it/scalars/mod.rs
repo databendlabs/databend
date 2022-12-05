@@ -136,7 +136,8 @@ pub fn run_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType, Co
                     // Only display the used input columns
                     let used_columns = raw_expr
                         .column_refs()
-                        .into_iter()
+                        .keys()
+                        .cloned()
                         .sorted()
                         .collect::<Vec<_>>();
                     let input_domains = used_columns
@@ -145,8 +146,7 @@ pub fn run_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType, Co
                         .map(|i| input_domains[&i].clone())
                         .collect::<Vec<_>>();
                     let columns = used_columns
-                        .iter()
-                        .cloned()
+                        .into_iter()
                         .map(|i| columns[i].clone())
                         .collect::<Vec<_>>();
 

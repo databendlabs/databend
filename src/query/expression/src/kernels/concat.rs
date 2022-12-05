@@ -38,10 +38,11 @@ use crate::Chunk;
 use crate::ChunkEntry;
 use crate::Column;
 use crate::ColumnBuilder;
+use crate::ColumnIndex;
 use crate::Value;
 
-impl Chunk {
-    pub fn concat(chunks: &[Chunk]) -> Result<Chunk> {
+impl<Index: ColumnIndex> Chunk<Index> {
+    pub fn concat(chunks: &[Chunk<Index>]) -> Result<Chunk<Index>> {
         if chunks.is_empty() {
             return Err(ErrorCode::EmptyData("Can't concat empty chunks"));
         }
@@ -55,7 +56,7 @@ impl Chunk {
                 debug_assert!(
                     chunks
                         .iter()
-                        .map(|chunk| chunk.get_by_offset(i).id)
+                        .map(|chunk| &chunk.get_by_offset(i).id)
                         .all_equal()
                 );
                 debug_assert!(
@@ -82,7 +83,7 @@ impl Chunk {
                     .collect::<Vec<_>>();
 
                 ChunkEntry {
-                    id: chunks[0].get_by_offset(i).id,
+                    id: chunks[0].get_by_offset(i).id.clone(),
                     data_type: chunks[0].get_by_offset(i).data_type.clone(),
                     value: Value::Column(Column::concat(&columns)),
                 }

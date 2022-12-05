@@ -33,7 +33,6 @@ use common_expression::FunctionDomain;
 use common_expression::FunctionProperty;
 use common_expression::FunctionRegistry;
 use common_expression::ValueRef;
-use memchr::memmem;
 use regex::bytes::Regex;
 
 use crate::scalars::string_multi_args::regexp;
@@ -337,26 +336,7 @@ fn register_like(registry: &mut FunctionRegistry) {
                     let ends_with = &pat[1..];
                     Ok(str.ends_with(ends_with))
                 }
-                PatternType::PatternStr => {
-                    let pattern_str = simdutf8::basic::from_utf8(pat)
-                        .expect("Unable to convert the LIKE pattern to string: {}");
-                    let mut sub_strings: Vec<&str> = pattern_str
-                        .split(|c: char| c == '%' || c == '_' || c == '\\')
-                        .collect();
-                    sub_strings.retain(|&substring| !substring.is_empty());
-                    if std::intrinsics::unlikely(sub_strings.is_empty()) {
-                        Ok(like(str, pat))
-                    } else {
-                        let sub_string = sub_strings[0].as_bytes();
-                        if sub_strings.len() == 1 {
-                            Ok(search_sub_str(str, sub_string).is_some())
-                        } else if memmem::find(str, sub_string).is_none() {
-                            Ok(false)
-                        } else {
-                            Ok(like(str, pat))
-                        }
-                    }
-                }
+                PatternType::PatternStr => Ok(like(str, pat)),
             }
         }),
     );
@@ -550,15 +530,6 @@ pub fn check_pattern_type(pattern: &[u8], is_pruning: bool) -> PatternType {
         PatternType::StartOfPercent
     } else {
         PatternType::OrdinalStr
-    }
-}
-
-#[inline]
-fn search_sub_str(str: &[u8], substr: &[u8]) -> Option<usize> {
-    if substr.len() <= str.len() {
-        str.windows(substr.len()).position(|w| w == substr)
-    } else {
-        None
     }
 }
 

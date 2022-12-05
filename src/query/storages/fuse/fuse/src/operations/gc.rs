@@ -82,10 +82,24 @@ impl FuseTable {
 
             let start = Instant::now();
             (all_snapshot_lites, all_segment_locations) = snapshots_io
-                .read_snapshot_lites(root_snapshot_location, None, true, root_snapshot_ts, |x| {
-                    self.data_metrics.set_status(&x);
-                })
+                .read_snapshot_lites(
+                    root_snapshot_location.clone(),
+                    None,
+                    true,
+                    root_snapshot_ts,
+                    |x| {
+                        self.data_metrics.set_status(&x);
+                    },
+                )
                 .await?;
+
+            // try keep a hit file of last snapshot
+            Self::write_last_snapshot_hint(
+                &self.operator,
+                &self.meta_location_generator,
+                root_snapshot_location,
+            )
+            .await;
 
             status_snapshot_scan_count += all_snapshot_lites.len();
             status_snapshot_scan_cost += start.elapsed().as_secs();

@@ -62,12 +62,20 @@ impl Config {
     ///
     /// In the future, we could have `ConfigV1` and `ConfigV2`.
     pub fn load() -> Result<Self> {
-        let cfg: Self = OuterV0Config::load()?.try_into()?;
+        let cfg: Self = OuterV0Config::load(true)?.try_into()?;
 
         // Only check meta config when cmd is empty.
         if cfg.cmd.is_empty() {
             cfg.meta.check_valid()?;
         }
+        Ok(cfg)
+    }
+
+    /// # NOTE
+    ///
+    /// This function is served for tests only.
+    pub fn load_for_test() -> Result<Self> {
+        let cfg: Self = OuterV0Config::load(false)?.try_into()?;
         Ok(cfg)
     }
 

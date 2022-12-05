@@ -29,7 +29,7 @@ use tokio::sync::Semaphore;
 use tokio::task::JoinHandle;
 
 use crate::base::catch_unwind::CatchUnwindFuture;
-use crate::base::runtime_tracker::MemoryTracker;
+use crate::base::runtime_tracker::MemStat;
 
 /// Methods to spawn tasks.
 pub trait TrySpawn {
@@ -82,18 +82,14 @@ pub struct Runtime {
     handle: Handle,
 
     /// Memory tracker for this runtime
-    tracker: Arc<MemoryTracker>,
+    tracker: Arc<MemStat>,
 
     /// Use to receive a drop signal when dropper is dropped.
     _dropper: Dropper,
 }
 
 impl Runtime {
-    fn create(
-        name: Option<String>,
-        tracker: Arc<MemoryTracker>,
-        builder: &mut Builder,
-    ) -> Result<Self> {
+    fn create(name: Option<String>, tracker: Arc<MemStat>, builder: &mut Builder) -> Result<Self> {
         let runtime = builder
             .build()
             .map_err(|tokio_error| ErrorCode::TokioError(tokio_error.to_string()))?;
@@ -130,16 +126,16 @@ impl Runtime {
         })
     }
 
-    fn tracker_builder(mem_tracker: Arc<MemoryTracker>) -> tokio::runtime::Builder {
+    fn tracker_builder(mem_stat: Arc<MemStat>) -> tokio::runtime::Builder {
         let mut builder = tokio::runtime::Builder::new_multi_thread();
         builder
             .enable_all()
-            .on_thread_start(mem_tracker.on_start_thread());
+            .on_thread_start(mem_stat.on_start_thread());
 
         builder
     }
 
-    pub fn get_tracker(&self) -> Arc<MemoryTracker> {
+    pub fn get_tracker(&self) -> Arc<MemStat> {
         self.tracker.clone()
     }
 
@@ -147,8 +143,8 @@ impl Runtime {
     /// thread and returns a `Handle` which can be used to spawn tasks via
     /// its executor.
     pub fn with_default_worker_threads() -> Result<Self> {
-        let mem_tracker = MemoryTracker::create();
-        let mut runtime_builder = Self::tracker_builder(mem_tracker.clone());
+        let mem_stat = MemStat::create();
+        let mut runtime_builder = Self::tracker_builder(mem_stat.clone());
 
         #[cfg(debug_assertions)]
         {
@@ -160,13 +156,13 @@ impl Runtime {
             }
         }
 
-        Self::create(None, mem_tracker, &mut runtime_builder)
+        Self::create(None, mem_stat, &mut runtime_builder)
     }
 
     #[allow(unused_mut)]
     pub fn with_worker_threads(workers: usize, mut thread_name: Option<String>) -> Result<Self> {
-        let mem_tracker = MemoryTracker::create();
-        let mut runtime_builder = Self::tracker_builder(mem_tracker.clone());
+        let mem_stat = MemStat::create();
+        let mut runtime_builder = Self::tracker_builder(mem_stat.clone());
 
         #[cfg(debug_assertions)]
         {
@@ -184,7 +180,7 @@ impl Runtime {
 
         Self::create(
             thread_name,
-            mem_tracker,
+            mem_stat,
             runtime_builder.worker_threads(workers),
         )
     }

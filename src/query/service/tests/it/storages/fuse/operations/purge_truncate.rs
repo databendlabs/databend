@@ -34,7 +34,17 @@ async fn test_fuse_truncate_purge_stmt() -> Result<()> {
 
     let expected_index_count = 2;
     // there should be some data there: 2 snapshot, 2 segment, 2 block
-    check_data_dir(&fixture, "truncate_purge", 2, 0, 2, 2, expected_index_count).await;
+    check_data_dir(
+        &fixture,
+        "truncate_purge",
+        2,
+        0,
+        2,
+        2,
+        expected_index_count,
+        Some(()),
+    )
+    .await?;
 
     // let's truncate
     let qry = format!("truncate table {}.{} purge", db, tbl);
@@ -57,7 +67,8 @@ async fn test_fuse_truncate_purge_stmt() -> Result<()> {
         0,
         0,
         0,
+        Some(()),
     )
-    .await;
+    .await?;
     Ok(())
 }

@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::hash::Hash;
-use std::sync::Arc;
 
 use common_ast::ast::TableAlias;
 use common_ast::parser::token::Token;
@@ -95,7 +94,7 @@ pub struct BindContext {
     /// functions, otherwise a grouping error will be raised.
     pub in_grouping: bool,
 
-    pub ctes_map: Arc<DashMap<String, CteInfo>>,
+    pub ctes_map: Box<DashMap<String, CteInfo>>,
 }
 
 #[derive(Clone, Debug)]
@@ -112,7 +111,7 @@ impl BindContext {
             columns: Vec::new(),
             aggregate_info: AggregateInfo::default(),
             in_grouping: false,
-            ctes_map: Arc::new(DashMap::new()),
+            ctes_map: Box::new(DashMap::new()),
         }
     }
 
