@@ -24,7 +24,7 @@ use wiremock::Mock;
 use wiremock::MockServer;
 use wiremock::ResponseTemplate;
 
-#[tokio::test(flavor = "current_thread")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_get_storage_accessor_s3() -> Result<()> {
     let mock_server = MockServer::start().await;
     Mock::given(method("GET"))
@@ -39,6 +39,7 @@ async fn test_get_storage_accessor_s3() -> Result<()> {
         region: "us-east-2".to_string(),
         endpoint_url: mock_server.uri(),
         bucket: "bucket".to_string(),
+        disable_credential_loader: true,
         ..Default::default()
     });
 
@@ -49,7 +50,7 @@ async fn test_get_storage_accessor_s3() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "current_thread")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_get_storage_accessor_fs() -> Result<()> {
     let mut conf = crate::tests::ConfigBuilder::create().config();
 
