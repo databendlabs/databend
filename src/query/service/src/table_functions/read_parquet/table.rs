@@ -14,7 +14,6 @@
 
 use std::any::Any;
 use std::fs::File;
-use std::path::PathBuf;
 use std::sync::Arc;
 
 use chrono::NaiveDateTime;
@@ -51,8 +50,8 @@ pub struct ParquetFileMeta {
 pub struct ParquetTable {
     table_args: Vec<DataValue>,
 
+    file_locations: Vec<String>,
     pub(super) table_info: TableInfo,
-    pub(super) file_metas: Vec<ParquetFileMeta>,
     pub(super) operator: Operator,
 }
 
@@ -78,7 +77,7 @@ impl ParquetTable {
 
         let table_args = table_args.unwrap();
 
-        let mut file_paths = Vec::with_capacity(table_args.len());
+        let mut file_locations = Vec::with_capacity(table_args.len());
         for arg in table_args.iter() {
             match arg {
                 DataValue::String(path) => {
@@ -88,7 +87,7 @@ impl ParquetTable {
                     for entry in paths {
                         match entry {
                             Ok(path) => {
-                                file_paths.push(path);
+                                file_locations.push(path.to_string_lossy().to_string());
                             }
                             Err(e) => {
                                 return Err(ErrorCode::Internal(format!("glob error: {}", e)));
@@ -104,27 +103,16 @@ impl ParquetTable {
             }
         }
 
-        if file_paths.is_empty() {
+        if file_locations.is_empty() {
             return Err(ErrorCode::BadArguments(
                 "No matched files found for read_parquet",
             ));
         }
 
-        let file_metas = file_paths
-            .iter()
-            .map(|path| {
-                let file_meta = read_parquet_meta(path)?;
-                Ok(ParquetFileMeta {
-                    location: path.to_string_lossy().to_string(),
-                    file_meta,
-                })
-            })
-            .collect::<Result<Vec<_>>>()?;
-
         // Infer schema from the first parquet file.
         // Assume all parquet files have the same schema.
         // If not, throw error during reading.
-        let schema = infer_schema(&file_metas[0].file_meta);
+        let schema = infer_schema(&file_locations[0])?;
 
         let table_info = TableInfo {
             ident: TableIdent::new(table_id, 0),
@@ -148,10 +136,23 @@ impl ParquetTable {
 
         Ok(Arc::new(ParquetTable {
             table_args,
+            file_locations,
             table_info,
-            file_metas,
             operator,
         }))
+    }
+
+    pub(super) fn read_file_metas(&self) -> Result<Vec<ParquetFileMeta>> {
+        self.file_locations
+            .iter()
+            .map(|location| {
+                let file_meta = read_parquet_meta(location)?;
+                Ok(ParquetFileMeta {
+                    location: location.clone(),
+                    file_meta,
+                })
+            })
+            .collect::<Result<Vec<_>>>()
     }
 }
 
@@ -210,24 +211,33 @@ impl TableFunction for ParquetTable {
     }
 }
 
-fn read_parquet_meta(file: &PathBuf) -> Result<FileMetaData> {
-    let mut file = File::open(file).map_err(|e| {
-        ErrorCode::Internal(format!("Failed to open file {}: {}", file.display(), e))
-    })?;
-    parquet::read::read_metadata(&mut file)
-        .map_err(|e| ErrorCode::Internal(format!("Read parquet file meta error: {}", e)))
+fn read_parquet_meta(location: &str) -> Result<FileMetaData> {
+    let mut file = File::open(location)
+        .map_err(|e| ErrorCode::Internal(format!("Failed to open file '{}': {}", location, e)))?;
+    parquet::read::read_metadata(&mut file).map_err(|e| {
+        ErrorCode::Internal(format!(
+            "Read parquet file '{}''s meta error: {}",
+            location, e
+        ))
+    })
 }
 
 /// Infer [`DataSchema`] from [`FileMetaData`]
-fn infer_schema(metas: &FileMetaData) -> DataSchema {
-    assert!(!metas.row_groups.is_empty());
+fn infer_schema(location: &str) -> Result<DataSchema> {
+    let meta = read_parquet_meta(location)?;
+    if meta.row_groups.is_empty() {
+        return Err(ErrorCode::Internal(format!(
+            "No row groups found in parquet file '{}'",
+            location
+        )));
+    }
 
-    let column_metas = metas.row_groups[0].columns();
+    let column_metas = meta.row_groups[0].columns();
     let parquet_fields = column_metas
         .iter()
         .map(|col_meta| col_meta.descriptor().base_type.clone())
         .collect::<Vec<_>>();
     let arrow_fields = ArrowSchema::from(parquet_to_arrow_schema(&parquet_fields));
 
-    DataSchema::from(&arrow_fields)
+    Ok(DataSchema::from(&arrow_fields))
 }

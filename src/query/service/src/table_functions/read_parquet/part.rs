@@ -35,6 +35,7 @@ impl ParquetTable {
         &self,
         push_down: Option<PushDownInfo>,
     ) -> Result<(PartStatistics, Partitions)> {
+        let file_metas = self.read_file_metas()?;
         let arrow_schema = self.table_info.schema().to_arrow();
         let column_leaves = ColumnLeaves::new_from_schema(&arrow_schema);
 
@@ -45,17 +46,19 @@ impl ParquetTable {
             .unwrap_or(usize::MAX);
 
         let (mut statistics, partitions) = match &push_down {
-            None => self.all_columns_partitions(limit),
+            None => self.all_columns_partitions(&file_metas, limit),
             Some(extras) => match &extras.projection {
-                None => self.all_columns_partitions(limit),
-                Some(projection) => self.projection_partitions(&column_leaves, projection, limit),
+                None => self.all_columns_partitions(&file_metas, limit),
+                Some(projection) => {
+                    self.projection_partitions(&file_metas, &column_leaves, projection, limit)
+                }
             },
         };
 
         statistics.is_exact = statistics.is_exact && Self::is_exact(&push_down);
         // TODO: support prune parittions.
-        statistics.partitions_scanned = self.file_metas.len();
-        statistics.partitions_total = self.file_metas.len();
+        statistics.partitions_scanned = file_metas.len();
+        statistics.partitions_total = file_metas.len();
 
         Ok((statistics, partitions))
     }
@@ -67,7 +70,11 @@ impl ParquetTable {
         }
     }
 
-    fn all_columns_partitions(&self, limit: usize) -> (PartStatistics, Partitions) {
+    fn all_columns_partitions(
+        &self,
+        file_metas: &[ParquetFileMeta],
+        limit: usize,
+    ) -> (PartStatistics, Partitions) {
         let mut statistics = PartStatistics::default_exact();
         let mut partitions = Partitions::create(PartitionsShuffleKind::Mod, vec![]);
 
@@ -77,7 +84,7 @@ impl ParquetTable {
 
         let mut remaining = limit;
 
-        for meta in &self.file_metas {
+        for meta in file_metas {
             let rows = meta.file_meta.num_rows;
             partitions.partitions.push(Self::all_columns_part(meta));
             statistics.read_rows += rows;
@@ -104,6 +111,7 @@ impl ParquetTable {
 
     fn projection_partitions(
         &self,
+        file_metas: &[ParquetFileMeta],
         column_leaves: &ColumnLeaves,
         projection: &Projection,
         limit: usize,
@@ -117,7 +125,7 @@ impl ParquetTable {
 
         let mut remaining = limit;
 
-        for meta in &self.file_metas {
+        for meta in file_metas {
             let rows = meta.file_meta.num_rows;
             partitions
                 .partitions
