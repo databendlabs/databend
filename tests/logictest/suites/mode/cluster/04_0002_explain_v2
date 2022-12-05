@@ -167,6 +167,70 @@ Exchange
 statement ok
 set prefer_broadcast_join = 0;
 
+statement query T
+explain select * from (SELECT number AS a FROM numbers(10)) x  order by x.a limit 3;
+
+----
+Limit
+├── limit: 3
+├── offset: 0
+└── Sort
+    ├── sort keys: [number ASC NULLS LAST], limit: 3
+    └── Exchange
+        ├── exchange type: Merge
+        └── Limit
+            ├── limit: 3
+            ├── offset: 0
+            └── Sort
+                ├── sort keys: [number ASC NULLS LAST], limit: 3
+                └── TableScan
+                    ├── table: default.system.numbers
+                    ├── read rows: 10
+                    ├── read bytes: 80
+                    ├── partitions total: 1
+                    ├── partitions scanned: 1
+                    └── push downs: [filters: [], limit: 3]
+
+statement query T
+explain select * from (SELECT number AS a FROM numbers(10)) x right join (SELECT number AS a FROM numbers(5)) y using(a) order by x.a limit 3;
+
+----
+Limit
+├── limit: 3
+├── offset: 0
+└── Sort
+    ├── sort keys: [number ASC NULLS LAST], limit: 3
+    └── Exchange
+        ├── exchange type: Merge
+        └── Limit
+            ├── limit: 3
+            ├── offset: 0
+            └── Sort
+                ├── sort keys: [number ASC NULLS LAST], limit: 3
+                └── HashJoin
+                    ├── join type: RIGHT OUTER
+                    ├── build keys: [y.a (#1)]
+                    ├── probe keys: [x.a (#0)]
+                    ├── filters: []
+                    ├── Exchange(Build)
+                    │   ├── exchange type: Hash(y.a (#1))
+                    │   └── TableScan
+                    │       ├── table: default.system.numbers
+                    │       ├── read rows: 5
+                    │       ├── read bytes: 40
+                    │       ├── partitions total: 1
+                    │       ├── partitions scanned: 1
+                    │       └── push downs: [filters: [], limit: NONE]
+                    └── Exchange(Probe)
+                        ├── exchange type: Hash(x.a (#0))
+                        └── TableScan
+                            ├── table: default.system.numbers
+                            ├── read rows: 10
+                            ├── read bytes: 80
+                            ├── partitions total: 1
+                            ├── partitions scanned: 1
+                            └── push downs: [filters: [], limit: NONE]
+
 statement ok
 drop table t1;
 
