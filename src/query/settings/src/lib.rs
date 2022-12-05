@@ -157,7 +157,8 @@ impl Settings {
             },
             // max_memory_usage
             SettingValue {
-                default_value: UserSettingValue::UInt64(memory_info.total * 80 / 100),
+                // unit of memory_info.total is kB
+                default_value: UserSettingValue::UInt64(1024 * memory_info.total * 80 / 100),
                 user_setting: UserSetting::create("max_memory_usage", UserSettingValue::UInt64(0)),
                 level: ScopeLevel::Session,
                 desc: "The maximum memory usage for processing single query, in bytes. By default the value is determined automatically.",

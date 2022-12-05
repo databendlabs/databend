@@ -19,7 +19,7 @@ common-auth = { path = "../../common/auth" }
 http = "0.2"
 log = "0.4"
 moka = "0.9"
-opendal = "0.21"
+opendal = "0.22"
 reqwest = "0.11"
 serde = { workspace = true }
 serde_json = { workspace = true }

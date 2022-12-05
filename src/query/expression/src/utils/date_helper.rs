@@ -343,7 +343,7 @@ impl DateRounder {
 /// It's the days since 1970-01-01.
 #[inline]
 fn datetime_to_date_inner_number(date: &DateTime<Tz>) -> i32 {
-    date.naive_utc()
+    date.naive_local()
         .signed_duration_since(NaiveDate::from_ymd(1970, 1, 1).and_hms(0, 0, 0))
         .num_days() as i32
 }

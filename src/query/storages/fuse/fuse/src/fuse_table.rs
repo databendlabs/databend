@@ -42,6 +42,7 @@ use common_sql::ExpressionParser;
 use common_storage::init_operator;
 use common_storage::CacheOperator;
 use common_storage::DataOperator;
+use common_storage::FuseCachePolicy;
 use common_storage::ShareTableConfig;
 use common_storage::StorageMetrics;
 use common_storage::StorageMetricsLayer;
@@ -55,8 +56,7 @@ use common_storages_table_meta::table::table_storage_prefix;
 use common_storages_table_meta::table::OPT_KEY_DATABASE_ID;
 use common_storages_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
 use common_storages_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
-use opendal::layers::ContentCacheLayer;
-use opendal::layers::ContentCacheStrategy;
+use opendal::layers::CacheLayer;
 use opendal::Operator;
 use uuid::Uuid;
 
@@ -118,10 +118,8 @@ impl FuseTable {
         operator = operator.layer(StorageMetricsLayer::new(data_metrics.clone()));
         // If cache op is valid, layered with ContentCacheLayer.
         if let Some(cache_op) = CacheOperator::instance() {
-            operator = operator.layer(ContentCacheLayer::new(
-                cache_op,
-                ContentCacheStrategy::Fixed(1024 * 1024),
-            ));
+            operator =
+                operator.layer(CacheLayer::new(cache_op).with_policy(FuseCachePolicy::new()));
         }
 
         Ok(Box::new(FuseTable {
