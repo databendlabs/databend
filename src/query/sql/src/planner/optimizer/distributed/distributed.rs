@@ -60,19 +60,19 @@ fn push_down_topk_to_merge(s_expr: &mut SExpr, mut top_k: Option<TopK>) -> Resul
     for child in s_expr.children.iter_mut() {
         if let RelOperator::Sort(sort) = &child.plan {
             if let RelOperator::Limit(limit) = &s_expr.plan {
-                let mut origin_limit = 0;
-                let mut limit_plus_offset = limit.offset;
-                if let Some(l) = limit.limit {
-                    origin_limit = l;
-                    limit_plus_offset = l + limit.offset;
+                // If limit.limit is None, no need to push down.
+                if let Some(mut count) = limit.limit {
+                    count += limit.offset;
+                    top_k = Some(TopK {
+                        sort: sort.clone(),
+                        limit: Limit {
+                            limit: limit
+                                .limit
+                                .map(|origin_limit| cmp::max(origin_limit, count)),
+                            offset: 0,
+                        },
+                    });
                 }
-                top_k = Some(TopK {
-                    sort: sort.clone(),
-                    limit: Limit {
-                        limit: Some(cmp::max(origin_limit, limit_plus_offset)),
-                        offset: 0,
-                    },
-                });
             }
         }
         push_down_topk_to_merge(child, top_k.clone())?;

@@ -175,14 +175,14 @@ Limit
 ├── limit: 3
 ├── offset: 0
 └── Sort
-    ├── sort keys: [number ASC NULLS LAST], limit: 3
+    ├── sort keys: [number ASC NULLS LAST]
     └── Exchange
         ├── exchange type: Merge
         └── Limit
             ├── limit: 3
             ├── offset: 0
             └── Sort
-                ├── sort keys: [number ASC NULLS LAST], limit: 3
+                ├── sort keys: [number ASC NULLS LAST]
                 └── TableScan
                     ├── table: default.system.numbers
                     ├── read rows: 10
@@ -199,14 +199,14 @@ Limit
 ├── limit: 3
 ├── offset: 0
 └── Sort
-    ├── sort keys: [number ASC NULLS LAST], limit: 3
+    ├── sort keys: [number ASC NULLS LAST]
     └── Exchange
         ├── exchange type: Merge
         └── Limit
             ├── limit: 3
             ├── offset: 0
             └── Sort
-                ├── sort keys: [number ASC NULLS LAST], limit: 3
+                ├── sort keys: [number ASC NULLS LAST]
                 └── HashJoin
                     ├── join type: RIGHT OUTER
                     ├── build keys: [y.a (#1)]
