@@ -147,12 +147,6 @@ impl<'a> Binder {
                 CatalogOption::Hive(address.to_string())
             }
             CatalogType::Iceberg => {
-                if !cfg!(feature = "iceberg") {
-                    return Err(ErrorCode::CatalogNotSupported(
-                        "Iceberg catalog support is not enabled in your databend-query distribution."
-                        .to_string(),
-                            ));
-                }
                 let catalog_options = options.clone();
                 // the uri should in the same schema as in stages
                 let uri = catalog_options
