@@ -24,7 +24,7 @@ use wiremock::Mock;
 use wiremock::MockServer;
 use wiremock::ResponseTemplate;
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_get_storage_accessor_s3() -> Result<()> {
     let mock_server = MockServer::start().await;
     Mock::given(method("HEAD"))
