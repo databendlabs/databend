@@ -22,6 +22,7 @@ use common_catalog::database::Database;
 use common_catalog::table::Table;
 use common_catalog::table_args::TableArgs;
 use common_catalog::table_function::TableFunction;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::CountTablesReply;
 use common_meta_app::schema::CountTablesReq;
@@ -61,15 +62,17 @@ use crate::table::IcebergTable;
 
 pub const ICEBERG_CATALOG: &str = "iceberg";
 
-#[derive(Clone)]
 /// `Catalog` for a external iceberg storage
 /// - Metadata of databases are saved in meta store
 /// - Instances of `Database` are created from reading subdirectories of
 ///    Iceberg table
 /// - Table metadata are saved in external Iceberg storage
+#[derive(Clone)]
 pub struct IcebergCatalog {
     /// name of this iceberg table
     name: String,
+    /// is this catalog flatten
+    flatten: bool,
     /// underlying storage access operator
     operator: Arc<DataOperator>,
 }
@@ -82,15 +85,29 @@ impl IcebergCatalog {
     /// For example, to create a iceberg catalog on S3, the endpoint_url should be:
     ///
     /// `s3://bucket_name/path/to/iceberg_catalog`
-    pub fn try_create(name: &str, operator: DataOperator) -> Result<Self> {
+    ///
+    /// Some iceberg storages barely store tables in the root directory,
+    /// making there no path for database.
+    ///
+    /// Such catalog will be seen as an `flatten` catalogs,
+    /// a `default` database will be generated directly
+    pub fn try_create(name: &str, flatten: bool, operator: DataOperator) -> Result<Self> {
         Ok(Self {
             name: name.to_string(),
+            flatten,
             operator: Arc::new(operator),
         })
     }
 
     /// list read databases
     pub async fn list_database_from_read(&self, tenant: &str) -> Result<Vec<Arc<dyn Database>>> {
+        if self.flatten {
+            // is flatten catalog, return `default` catalog
+            return Ok(vec![Arc::new(
+                IcebergDatabase::create_database_ommited_default(tenant),
+            )]);
+        }
+
         let root = self.operator.object("/");
         let mut dbs = vec![];
         let mut ls = root.list().await?;
@@ -104,6 +121,35 @@ impl IcebergCatalog {
         Ok(dbs)
     }
 
+    /// get database from iceberg storage
+    pub async fn get_database(&self, tenant: &str, db_name: &str) -> Result<Arc<dyn Database>> {
+        if self.flatten {
+            if db_name != "default" {
+                return Err(ErrorCode::UnknownDatabase(format!(
+                    "Database {} does not exist",
+                    db_name
+                )));
+            }
+            let tbl: Arc<dyn Database> =
+                Arc::new(IcebergDatabase::create_database_ommited_default(tenant));
+            // is flatten catalog, return `default` catalog
+            return Ok(tbl);
+        }
+
+        let rel_path = format!("{}/", db_name);
+        let obj = self.operator.object(&rel_path);
+        if !obj.is_exist().await? {
+            return Err(ErrorCode::UnknownDatabase(format!(
+                "Database {} does not exist",
+                db_name
+            )));
+        }
+
+        Ok(Arc::new(IcebergDatabase::create_database_from_read(
+            tenant, db_name,
+        )))
+    }
+
     /// get table from iceberg storage
     pub async fn get_table(
         &self,
@@ -111,6 +157,18 @@ impl IcebergCatalog {
         db_name: &str,
         table_name: &str,
     ) -> Result<Arc<dyn Table>> {
+        let db = if self.flatten {
+            if db_name != "default" {
+                return Err(ErrorCode::UnknownDatabase(format!(
+                    "Database {} does not exist",
+                    db_name
+                )));
+            }
+            IcebergDatabase::create_database_ommited_default(tenant)
+        } else {
+            IcebergDatabase::create_database_from_read(db_name, tenant)
+        };
+
         IcebergTable::try_create_table_from_read(
             &self.name,
             tenant,

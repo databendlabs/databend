@@ -13,6 +13,7 @@
 // limitations under the License.
 
 //! simply wrapping directories into databases
+
 use common_catalog::database::Database;
 use common_meta_app::schema::DatabaseIdent;
 use common_meta_app::schema::DatabaseInfo;
@@ -25,6 +26,25 @@ pub struct IcebergDatabase {
 }
 
 impl IcebergDatabase {
+    /// create an void database naming `default`
+    ///
+    /// *for flatten catalogs only*
+    pub fn create_database_ommited_default(tenant: &str) -> Self {
+        let info = DatabaseInfo {
+            ident: DatabaseIdent { db_id: 0, seq: 0 },
+            name_ident: DatabaseNameIdent {
+                tenant: tenant.to_string(),
+                db_name: "default".to_string(),
+            },
+            meta: DatabaseMeta {
+                engine: "iceberg".to_string(),
+                created_on: chrono::Utc::now(),
+                updated_on: chrono::Utc::now(),
+                ..Default::default()
+            },
+        };
+        Self { info }
+    }
     /// create a new database, but from reading
     pub fn create_database_from_read(name: &str, tenant: &str) -> Self {
         let info = DatabaseInfo {
