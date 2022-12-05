@@ -2066,9 +2066,11 @@ dependencies = [
  "anyhow",
  "async-trait",
  "backon",
+ "bytes",
  "common-auth",
  "common-base",
  "common-exception",
+ "futures",
  "globiter",
  "once_cell",
  "opendal",
@@ -3171,6 +3173,7 @@ dependencies = [
  "semver 1.0.14",
  "serde",
  "serde_json",
+ "serde_urlencoded",
  "temp-env",
  "tempfile",
  "time 0.3.15",
@@ -5672,9 +5675,9 @@ checksum = "0ab1bc2a289d34bd04a330323ac98a1b4bc82c9d9fcb1e66b63caa84da26b575"
 
 [[package]]
 name = "opendal"
-version = "0.21.0"
+version = "0.22.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e093402bdf1033677db972e0f5ac349e3ec251fe99b5db91b1472180c1f48254"
+checksum = "9176f087790fd937421e3f649db6e85ad47dc63c60bef127402d233ab8f31639"
 dependencies = [
  "anyhow",
  "async-compat",
@@ -5705,11 +5708,11 @@ dependencies = [
  "serde",
  "serde_json",
  "suppaftp",
- "thiserror",
  "time 0.3.15",
  "tokio",
  "tracing",
  "ureq",
+ "uuid",
 ]
 
 [[package]]
@@ -6903,9 +6906,9 @@ dependencies = [
 
 [[package]]
 name = "reqsign"
-version = "0.6.6"
+version = "0.6.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d34ea360414ee77ddab3a8360a0c241fc77ab5e27892dcde1d2cfcc29d4e0f55"
+checksum = "605c196ac197a563c908b62470d96968ce4880fdcb64e296f55880fd21c8ad65"
 dependencies = [
  "anyhow",
  "backon",
@@ -8646,7 +8649,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if",
- "rand 0.8.5",
+ "rand 0.7.3",
  "static_assertions",
 ]
 

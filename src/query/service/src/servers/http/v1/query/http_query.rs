@@ -239,42 +239,30 @@ impl HttpQuery {
         let block_sender_closer = block_sender.closer();
         let state_clone = state.clone();
         let ctx_clone = ctx.clone();
+        let ctx_clone2 = ctx.clone();
         let sql = request.sql.clone();
         let query_id = id.clone();
         let query_id_clone = id.clone();
         ctx.try_spawn(async move {
             let state = state_clone.clone();
-            let running_state = ExecuteState::try_start_query(
-                state,
-                &sql,
-                session,
-                ctx_clone.clone(),
-                block_sender,
-            )
-            .await;
-            match running_state {
-                Ok(s) => {
-                    tracing::info!("http query {}, change state to Running", &query_id);
-                    Executor::start_to_running(&state_clone, ExecuteState::Running(s)).await;
-                }
-                Err(e) => {
-                    InterpreterQueryLog::fail_to_start(ctx_clone.clone(), e.clone());
-                    let state = ExecuteStopped {
-                        ctx: ctx_clone.clone(),
-                        stats: Progresses::default(),
-                        reason: Err(e.clone()),
-                        stop_time: Instant::now(),
-                        affect: ctx_clone.get_affect(),
-                    };
-                    tracing::info!(
-                        "http query {}, change state to Stopped, fail to start {:?}",
-                        &query_id,
-                        e
-                    );
-                    Executor::start_to_stop(&state_clone, ExecuteState::Stopped(Box::new(state)))
-                        .await;
-                    block_sender_closer.close();
-                }
+            if let Err(e) =
+                ExecuteState::try_start_query(state, &sql, session, ctx_clone.clone(), block_sender)
+                    .await
+            {
+                InterpreterQueryLog::fail_to_start(ctx_clone.clone(), e.clone());
+                let state = ExecuteStopped {
+                    stats: Progresses::default(),
+                    reason: Err(e.clone()),
+                    stop_time: Instant::now(),
+                    affect: ctx_clone.get_affect(),
+                };
+                tracing::info!(
+                    "http query {}, change state to Stopped, fail to start {:?}",
+                    &query_id,
+                    e
+                );
+                Executor::start_to_stop(&state_clone, ExecuteState::Stopped(Box::new(state))).await;
+                block_sender_closer.close();
             }
         })?;
 
@@ -284,6 +272,7 @@ impl HttpQuery {
             request.pagination.max_rows_per_page,
             block_receiver,
             format_settings,
+            ctx_clone2,
         )));
         let query = HttpQuery {
             id,
