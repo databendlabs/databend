@@ -2038,7 +2038,7 @@ dependencies = [
  "naive-cityhash",
  "once_cell",
  "opendal",
- "opensrv-mysql 0.2.0",
+ "opensrv-mysql",
  "openssl",
  "parking_lot 0.12.1",
  "petgraph",
@@ -3159,7 +3159,7 @@ dependencies = [
  "num",
  "once_cell",
  "opendal",
- "opensrv-mysql 0.3.0",
+ "opensrv-mysql",
  "openssl",
  "parking_lot 0.12.1",
  "petgraph",
@@ -5735,20 +5735,6 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-futures",
-]
-
-[[package]]
-name = "opensrv-mysql"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e4c24c12fd688cb5aa5b1a54c6ccb2e30fb9b5132debb0e89fcb432b3f73db8f"
-dependencies = [
- "async-trait",
- "byteorder",
- "chrono",
- "mysql_common",
- "nom",
- "tokio",
 ]
 
 [[package]]
