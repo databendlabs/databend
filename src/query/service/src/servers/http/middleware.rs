@@ -20,6 +20,7 @@ use headers::authorization::Basic;
 use headers::authorization::Bearer;
 use headers::authorization::Credentials;
 use http::header::AUTHORIZATION;
+use http::HeaderValue;
 use poem::error::Error as PoemError;
 use poem::error::Result as PoemResult;
 use poem::http::StatusCode;
@@ -49,8 +50,8 @@ impl HTTPSessionMiddleware {
 }
 
 fn get_credential(req: &Request, kind: HttpHandlerKind) -> Result<Credential> {
-    let auth_headers: Vec<_> = req.headers().get_all(AUTHORIZATION).iter().collect();
-    if auth_headers.len() > 1 {
+    let std_auth_headers: Vec<_> = req.headers().get_all(AUTHORIZATION).iter().collect();
+    if std_auth_headers.len() > 1 {
         let msg = &format!("Multiple {} headers detected", AUTHORIZATION);
         return Err(ErrorCode::AuthenticateFailure(msg));
     }
@@ -59,26 +60,24 @@ fn get_credential(req: &Request, kind: HttpHandlerKind) -> Result<Credential> {
         Addr::Custom(..) => Some("127.0.0.1".to_string()),
         _ => None,
     };
-    if auth_headers.is_empty() {
-        if let HttpHandlerKind::Clickhouse = kind {
-            let (user, key) = (
-                req.headers().get("X-CLICKHOUSE-USER"),
-                req.headers().get("X-CLICKHOUSE-KEY"),
-            );
-            if let (Some(name), Some(password)) = (user, key) {
-                let c = Credential::Password {
-                    name: String::from_utf8(name.as_bytes().to_vec()).unwrap(),
-                    password: Some(password.as_bytes().to_vec()),
-                    hostname: client_ip,
-                };
-                return Ok(c);
-            }
+    if std_auth_headers.is_empty() {
+        if matches!(kind, HttpHandlerKind::Clickhouse) {
+            auth_clickhouse_name_password(req, client_ip)
+        } else {
+            Err(ErrorCode::AuthenticateFailure(
+                "No authorization header detected",
+            ))
         }
-        return Err(ErrorCode::AuthenticateFailure(
-            "No authorization header detected",
-        ));
+    } else {
+        auth_by_header(&std_auth_headers, client_ip)
     }
-    let value = auth_headers[0];
+}
+
+fn auth_by_header(
+    std_auth_headers: &Vec<&HeaderValue>,
+    client_ip: Option<String>,
+) -> Result<Credential> {
+    let value = &std_auth_headers[0];
     if value.as_bytes().starts_with(b"Basic ") {
         match Basic::decode(value) {
             Some(basic) => {
@@ -104,6 +103,25 @@ fn get_credential(req: &Request, kind: HttpHandlerKind) -> Result<Credential> {
         }
     } else {
         Err(ErrorCode::AuthenticateFailure("bad auth header"))
+    }
+}
+
+fn auth_clickhouse_name_password(req: &Request, client_ip: Option<String>) -> Result<Credential> {
+    let (user, key) = (
+        req.headers().get("X-CLICKHOUSE-USER"),
+        req.headers().get("X-CLICKHOUSE-KEY"),
+    );
+    if let (Some(name), Some(password)) = (user, key) {
+        let c = Credential::Password {
+            name: String::from_utf8(name.as_bytes().to_vec()).unwrap(),
+            password: Some(password.as_bytes().to_vec()),
+            hostname: client_ip,
+        };
+        return Ok(c);
+    } else {
+        return Err(ErrorCode::AuthenticateFailure(
+            "No authorization header detected",
+        ));
     }
 }
 
