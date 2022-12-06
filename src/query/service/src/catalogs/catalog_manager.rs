@@ -26,11 +26,9 @@ use common_meta_app::schema::CatalogOption;
 use common_meta_app::schema::CreateCatalogReq;
 use common_meta_app::schema::DropCatalogReq;
 use common_meta_app::schema::IcebergCatalogOption;
-#[cfg(feature = "iceberg")]
 use common_storage::DataOperator;
 #[cfg(feature = "hive")]
 use common_storages_hive::HiveCatalog;
-#[cfg(feature = "iceberg")]
 use common_storages_iceberg::IcebergCatalog;
 use dashmap::DashMap;
 
@@ -135,35 +133,22 @@ impl CatalogManagerHelper for CatalogManager {
                     self.insert_catalog(ctl_name, catalog, if_not_exists)
                 }
             }
-            // NOTE:
-            // when compiling without `iceberg` feature enabled
-            // `sp` will be seem as unused, which is not intentional
-            #[allow(unused)]
             CatalogOption::Iceberg(opt) => {
-                #[cfg(not(feature = "iceberg"))]
-                {
-                    Err(ErrorCode::CatalogNotSupported(
-                        "Iceberg catalog is not enabled, please recompile with --features iceberg",
-                    ))
-                }
-                #[cfg(feature = "iceberg")]
-                {
-                    let IcebergCatalogOption {
-                        storage_params: sp,
-                        flatten,
-                    } = opt;
+                let IcebergCatalogOption {
+                    storage_params: sp,
+                    flatten,
+                } = opt;
 
-                    let data_operator = DataOperator::try_create_with_storage_params(&sp).await?;
-                    let ctl_name = &req.name_ident.catalog_name;
-                    let catalog: Arc<dyn Catalog> = Arc::new(IcebergCatalog::try_create(
-                        ctl_name,
-                        flatten,
-                        data_operator,
-                    )?);
+                let data_operator = DataOperator::try_create_with_storage_params(&sp).await?;
+                let ctl_name = &req.name_ident.catalog_name;
+                let catalog: Arc<dyn Catalog> = Arc::new(IcebergCatalog::try_create(
+                    ctl_name,
+                    flatten,
+                    data_operator,
+                )?);
 
-                    let if_not_exists = req.if_not_exists;
-                    self.insert_catalog(ctl_name, catalog, if_not_exists)
-                }
+                let if_not_exists = req.if_not_exists;
+                self.insert_catalog(ctl_name, catalog, if_not_exists)
             }
         }
     }

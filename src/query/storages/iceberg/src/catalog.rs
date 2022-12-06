@@ -100,13 +100,12 @@ impl IcebergCatalog {
     }
 
     /// list read databases
-    pub async fn list_database_from_read(&self, tenant: &str) -> Result<Vec<Arc<dyn Database>>> {
+    pub async fn list_database_from_read(&self) -> Result<Vec<Arc<dyn Database>>> {
         if self.flatten {
             // is flatten catalog, return `default` catalog
             // with an operator points to it's root
             return Ok(vec![Arc::new(
                 IcebergDatabase::create_database_ommited_default(
-                    tenant,
                     &self.name,
                     self.operator.operator(),
                 ),
@@ -119,7 +118,6 @@ impl IcebergCatalog {
         while let Some(dir) = ls.try_next().await? {
             let db_root = self.operator.operator().layer(SubdirLayer::new(dir.name()));
             let db: Arc<dyn Database> = Arc::new(IcebergDatabase::create_database_from_read(
-                tenant,
                 &self.name,
                 dir.name(),
                 db_root,
@@ -128,23 +126,12 @@ impl IcebergCatalog {
         }
         Ok(dbs)
     }
-
-    /// get table from iceberg storage
-    pub async fn get_table(
-        &self,
-        tenant: &str,
-        db_name: &str,
-        table_name: &str,
-    ) -> Result<Arc<dyn Table>> {
-        let db = self.get_database(tenant, db_name).await?;
-        db.get_table(table_name).await
-    }
 }
 
 #[async_trait]
 impl Catalog for IcebergCatalog {
     #[tracing::instrument(level = "debug", skip(self))]
-    async fn get_database(&self, tenant: &str, db_name: &str) -> Result<Arc<dyn Database>> {
+    async fn get_database(&self, _tenant: &str, db_name: &str) -> Result<Arc<dyn Database>> {
         if self.flatten {
             // is flatten catalog, must return `default` catalog
             if db_name != "default" {
@@ -155,7 +142,6 @@ impl Catalog for IcebergCatalog {
             }
             let tbl: Arc<dyn Database> =
                 Arc::new(IcebergDatabase::create_database_ommited_default(
-                    tenant,
                     &self.name,
                     self.operator.operator(),
                 ));
@@ -173,12 +159,12 @@ impl Catalog for IcebergCatalog {
         let db_root = self.operator.operator().layer(SubdirLayer::new(db_name));
 
         Ok(Arc::new(IcebergDatabase::create_database_from_read(
-            tenant, &self.name, db_name, db_root,
+            &self.name, db_name, db_root,
         )))
     }
 
-    async fn list_databases(&self, tenant: &str) -> Result<Vec<Arc<dyn Database>>> {
-        self.list_database_from_read(tenant).await
+    async fn list_databases(&self, _tenant: &str) -> Result<Vec<Arc<dyn Database>>> {
+        self.list_database_from_read().await
     }
 
     async fn create_database(&self, _req: CreateDatabaseReq) -> Result<CreateDatabaseReply> {

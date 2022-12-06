@@ -60,7 +60,6 @@ impl IcebergTable {
     /// create a new table on the table directory
     pub async fn try_create_table_from_read(
         catalog: &str,
-        tenant: &str,
         database: &str,
         table_name: &str,
         tbl_root: Operator,
@@ -102,7 +101,6 @@ impl IcebergTable {
             desc: format!("IcebergTable: '{}'.'{}'", database, table_name),
             name: table_name.to_string(),
             meta: meta_iceberg_to_databend(catalog, &metadata),
-            tenant: tenant.to_string(),
             ..Default::default()
         };
 

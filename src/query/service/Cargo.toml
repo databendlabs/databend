@@ -18,7 +18,6 @@ tokio-console = ["common-tracing/console", "common-base/tracing"]
 memory-profiling = ["common-base/memory-profiling", "common-http/memory-profiling", "tempfile"]
 storage-hdfs = ["opendal/services-hdfs", "common-storage/storage-hdfs"]
 hive = ["common-hive-meta-store", "thrift", "storage-hdfs", "common-config/hive", "common-storages-hive"]
-iceberg = ["common-storages-iceberg"]
 io-uring = [
     # "common-meta-embedded/io-uring",
     "common-meta-store/io-uring",
@@ -62,7 +61,7 @@ common-storages-factory = { path = "../storages/factory" }
 common-storages-fuse = { path = "../storages/fuse/fuse" }
 common-storages-fuse-result = { path = "../storages/fuse/fuse-result" }
 common-storages-hive = { path = "../storages/hive/hive", optional = true }
-common-storages-iceberg = { path = "../storages/iceberg", optional = true }
+common-storages-iceberg = { path = "../storages/iceberg" }
 common-storages-index = { path = "../storages/index" }
 common-storages-information-schema = { path = "../storages/information-schema" }
 common-storages-memory = { path = "../storages/memory" }

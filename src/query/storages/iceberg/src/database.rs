@@ -44,16 +44,12 @@ impl IcebergDatabase {
     /// create an void database naming `default`
     ///
     /// *for flatten catalogs only*
-    pub fn create_database_ommited_default(
-        tenant: &str,
-        ctl_name: &str,
-        db_root: Operator,
-    ) -> Self {
+    pub fn create_database_ommited_default(ctl_name: &str, db_root: Operator) -> Self {
         let info = DatabaseInfo {
             ident: DatabaseIdent { db_id: 0, seq: 0 },
             name_ident: DatabaseNameIdent {
-                tenant: tenant.to_string(),
                 db_name: "default".to_string(),
+                ..Default::default()
             },
             meta: DatabaseMeta {
                 engine: "iceberg".to_string(),
@@ -69,17 +65,12 @@ impl IcebergDatabase {
         }
     }
     /// create a new database, but from reading
-    pub fn create_database_from_read(
-        tenant: &str,
-        ctl_name: &str,
-        db_name: &str,
-        db_root: Operator,
-    ) -> Self {
+    pub fn create_database_from_read(ctl_name: &str, db_name: &str, db_root: Operator) -> Self {
         let info = DatabaseInfo {
             ident: DatabaseIdent { db_id: 0, seq: 0 },
             name_ident: DatabaseNameIdent {
-                tenant: tenant.to_string(),
                 db_name: db_name.to_string(),
+                ..Default::default()
             },
             meta: DatabaseMeta {
                 engine: "iceberg".to_string(),
@@ -120,7 +111,6 @@ impl Database for IcebergDatabase {
         let tbl_root = self.db_root.clone().layer(SubdirLayer::new(&path));
         let tbl = IcebergTable::try_create_table_from_read(
             &self.ctl_name,
-            &self.info.name_ident.tenant,
             &self.info.name_ident.db_name,
             table_name,
             tbl_root,
