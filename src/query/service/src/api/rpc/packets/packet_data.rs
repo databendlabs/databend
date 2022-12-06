@@ -56,6 +56,11 @@ pub enum DataPacket {
         progress: Vec<ProgressInfo>,
         precommit: Vec<PrecommitBlock>,
     },
+    // NOTE: Unknown reason. This may be tonic's bug.
+    // when we use two-way streaming grpc for data exchange,
+    // if the client side is closed and the server side reads data immediately.
+    // we will get a broken pipe or connect reset error.
+    // we use the ClosingClient to notify the server side to close the connection for avoid errors.
     ClosingClient,
 }
 
