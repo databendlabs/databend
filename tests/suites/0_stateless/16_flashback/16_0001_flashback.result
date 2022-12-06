@@ -1,0 +1,12 @@
+checking that after flashback to snapshot, there should be 3 rows
+1
+checking that after flashback to the same snapshot, no new snapshots shall be generated
+1
+checking that after flashback to timestamp, there should be 3 rows
+1
+checking that after flashback to the same timestamp, number of snapshots shall be the same
+1
+checking that after flashback to the first snapshot, there should be 2 rows
+1
+checking that after flashback to the first snapshot, there should be only 1 snapshot visible
+1

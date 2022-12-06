@@ -30,11 +30,16 @@ impl FuseTable {
     ) -> Result<()> {
         // 1. try navigate to the point
         let table = self.navigate_to(point).await?;
-        let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-        let table_info = fuse_table.get_table_info();
+        let table_reverting_to = FuseTable::try_from_table(table.as_ref())?;
+        let table_info = table_reverting_to.get_table_info();
+
+        // shortcut. if reverting to the same point, just return ok
+        if self.snapshot_loc().await? == table_reverting_to.snapshot_loc().await? {
+            return Ok(());
+        }
 
         // 2. prepare table meta which being reverted to
-        let table_meta_to_be_committed = fuse_table.table_info.meta.clone();
+        let table_meta_to_be_committed = table_reverting_to.table_info.meta.clone();
 
         // 3. prepare the request
         //  using the CURRENT version as the base table version
@@ -53,12 +58,12 @@ impl FuseTable {
         let reply = catalog.update_table_meta(&tenant, &db_name, req).await;
         if reply.is_ok() {
             // try keep the snapshot hit
-            let snapshot_location = fuse_table.snapshot_loc().await?.ok_or_else(|| {
+            let snapshot_location = table_reverting_to.snapshot_loc().await?.ok_or_else(|| {
                     ErrorCode::Internal("internal error, fuse table which navigated to given point has no snapshot location")
                 })?;
             Self::write_last_snapshot_hint(
-                &fuse_table.operator,
-                &fuse_table.meta_location_generator,
+                &table_reverting_to.operator,
+                &table_reverting_to.meta_location_generator,
                 snapshot_location,
             )
             .await;
