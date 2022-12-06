@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+
+CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+. "$CURDIR"/../../../shell_env.sh
+
+aws --endpoint-url http://127.0.0.1:9900/ s3 cp s3://testbucket/admin/data/ontime_200.parquet /tmp/ontime_200.parquet  > /dev/null 2>&1
+
+PARQUET=/tmp/ontime_200.parquet
+
+echo "select count(*) from read_parquet('$PARQUET')" | $MYSQL_CLIENT_CONNECT
+
+echo "select count(*) from read_parquet('$PARQUET', '$PARQUET')" | $MYSQL_CLIENT_CONNECT
+
+echo "select tail_number from read_parquet('$PARQUET') where dayofmonth=1;" |  $MYSQL_CLIENT_CONNECT
+
+echo "select tail_number from read_parquet('not_found') where dayofmonth=1;" |  $MYSQL_CLIENT_CONNECT

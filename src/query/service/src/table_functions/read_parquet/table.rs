@@ -23,6 +23,7 @@ use common_arrow::arrow::datatypes::Schema as ArrowSchema;
 use common_arrow::arrow::io::parquet;
 use common_arrow::arrow::io::parquet::read::schema::parquet_to_arrow_schema;
 use common_arrow::parquet::metadata::FileMetaData;
+use common_arrow::parquet::schema::types::ParquetType;
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
@@ -235,7 +236,19 @@ fn infer_schema(location: &str) -> Result<DataSchema> {
     let column_metas = meta.row_groups[0].columns();
     let parquet_fields = column_metas
         .iter()
-        .map(|col_meta| col_meta.descriptor().base_type.clone())
+        .map(|col_meta| {
+            // convert name to lower case.
+            let mut pt = col_meta.descriptor().base_type.clone();
+            match &mut pt {
+                ParquetType::PrimitiveType(primitive) => {
+                    primitive.field_info.name = primitive.field_info.name.to_lowercase()
+                }
+                ParquetType::GroupType { field_info, .. } => {
+                    field_info.name = field_info.name.to_lowercase()
+                }
+            }
+            pt
+        })
         .collect::<Vec<_>>();
     let arrow_fields = ArrowSchema::from(parquet_to_arrow_schema(&parquet_fields));
 
