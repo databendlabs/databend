@@ -21,7 +21,7 @@ use common_catalog::plan::PartitionsShuffleKind;
 use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
 use common_exception::Result;
-use common_storages_fuse::ColumnLeaves;
+use common_storage::ColumnLeaves;
 use common_storages_fuse::ColumnMeta;
 use common_storages_fuse::FusePartInfo;
 use common_storages_table_meta::meta::Compression;
@@ -132,7 +132,7 @@ impl ParquetTable {
                 .push(Self::projection_part(meta, column_leaves, projection));
 
             statistics.read_rows += rows;
-            let columns = column_leaves.get_by_projection(projection).unwrap();
+            let columns = projection.project_column_leaves(column_leaves).unwrap();
             for column in &columns {
                 let indices = &column.leaf_ids;
                 let col_metas = meta.file_meta.row_groups[0].columns();
@@ -193,7 +193,7 @@ impl ParquetTable {
         let mut columns_meta = HashMap::with_capacity(projection.len());
         let parquet_column_metas = parquet_file_meta.file_meta.row_groups[0].columns();
 
-        let columns = column_leaves.get_by_projection(projection).unwrap();
+        let columns = projection.project_column_leaves(column_leaves).unwrap();
         for column in &columns {
             let indices = &column.leaf_ids;
             for index in indices {

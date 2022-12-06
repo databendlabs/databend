@@ -23,7 +23,7 @@ use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
 use common_datavalues::DataValue;
 use common_exception::Result;
-use common_storages_fuse::ColumnLeaves;
+use common_storage::ColumnLeaves;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::ColumnMeta;
 use common_storages_table_meta::meta::ColumnStatistics;
