@@ -56,6 +56,13 @@ pub enum DataPacket {
         progress: Vec<ProgressInfo>,
         precommit: Vec<PrecommitBlock>,
     },
+    ClosingClient,
+}
+
+impl DataPacket {
+    pub fn is_closing_client(data: &FlightData) -> bool {
+        data.app_metadata.last() == Some(&0x05)
+    }
 }
 
 impl From<DataPacket> for FlightData {
@@ -103,6 +110,12 @@ impl From<DataPacket> for FlightData {
                     app_metadata: vec![0x04],
                 }
             }
+            DataPacket::ClosingClient => FlightData {
+                data_body: vec![],
+                data_header: vec![],
+                flight_descriptor: None,
+                app_metadata: vec![0x05],
+            },
         }
     }
 }
@@ -155,6 +168,7 @@ impl TryFrom<FlightData> for DataPacket {
                     progress: progress_info,
                 })
             }
+            0x05 => Ok(DataPacket::ClosingClient),
             _ => Err(ErrorCode::BadBytes("Unknown flight data packet type.")),
         }
     }
