@@ -243,6 +243,7 @@ impl<'a> Binder {
                 path,
                 files: stmt.files.clone(),
                 pattern: stmt.pattern.clone(),
+                files_to_copy: None,
             }),
             scan_fields: None,
             parts: Partitions::default(),
@@ -292,7 +293,6 @@ impl<'a> Binder {
 
         let mut stage_info = UserStageInfo::new_external_stage(storage_params, &path);
         self.apply_stage_options(stmt, &mut stage_info)?;
-
         let from = DataSourcePlan {
             catalog: dst_catalog_name.to_string(),
             source_info: DataSourceInfo::StageSource(StageTableInfo {
@@ -301,6 +301,7 @@ impl<'a> Binder {
                 path,
                 files: vec![],
                 pattern: Default::default(),
+                files_to_copy: None,
             }),
             scan_fields: None,
             parts: Partitions::default(),

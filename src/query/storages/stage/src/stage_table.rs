@@ -18,12 +18,14 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 
 use common_base::base::uuid;
+use common_catalog::plan::DataSourceInfo;
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartInfo;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PartitionsShuffleKind;
 use common_catalog::plan::PushDownInfo;
+use common_catalog::plan::StageFileInfo;
 use common_catalog::plan::StageTableInfo;
 use common_catalog::table::AppendMode;
 use common_catalog::table::Table;
@@ -36,6 +38,7 @@ use common_meta_app::schema::TableInfo;
 use common_meta_types::StageType;
 use common_meta_types::UserStageInfo;
 use common_pipeline_core::Pipeline;
+use common_pipeline_sources::processors::sources::input_formats::InputContext;
 use common_storage::init_operator;
 use opendal::layers::SubdirLayer;
 use opendal::Operator;
@@ -76,30 +79,14 @@ impl StageTable {
             Ok(pop.layer(SubdirLayer::new(&stage.stage_prefix())))
         }
     }
-}
 
-#[async_trait::async_trait]
-impl Table for StageTable {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    // External stage has no table info yet.
-    fn get_table_info(&self) -> &TableInfo {
-        &self.table_info_placeholder
-    }
-
-    async fn read_partitions(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        _push_downs: Option<PushDownInfo>,
-    ) -> Result<(PartStatistics, Partitions)> {
-        let stage_info = &self.table_info;
-        // User set the files.
-        let files = &stage_info.files;
-
+    pub async fn list_files(
+        ctx: &Arc<dyn TableContext>,
+        stage_info: &StageTableInfo,
+    ) -> Result<Vec<StageFileInfo>> {
         // 1. List all files.
         let path = &stage_info.path;
+        let files = &stage_info.files;
         let mut all_files = if !files.is_empty() {
             let mut res = vec![];
             for file in files {
@@ -127,10 +114,54 @@ impl Table for StageTable {
             }
         }
 
-        let partitions = all_files
-            .iter()
+        Ok(all_files)
+    }
+}
+
+#[async_trait::async_trait]
+impl Table for StageTable {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    // External stage has no table info yet.
+    fn get_table_info(&self) -> &TableInfo {
+        &self.table_info_placeholder
+    }
+
+    fn get_data_source_info(&self) -> DataSourceInfo {
+        DataSourceInfo::StageSource(self.table_info.clone())
+    }
+
+    async fn read_partitions(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        _push_downs: Option<PushDownInfo>,
+    ) -> Result<(PartStatistics, Partitions)> {
+        let stage_info = &self.table_info;
+        // User set the files.
+        let files = if let Some(files) = &stage_info.files_to_copy {
+            files.clone()
+        } else {
+            StageTable::list_files(&ctx, stage_info).await?
+        };
+        let files = files.iter().map(|v| v.path.clone()).collect::<Vec<_>>();
+        let format =
+            InputContext::get_input_format(&stage_info.user_stage_info.file_format_options.format)?;
+        let operator = StageTable::get_op(&ctx, &stage_info.user_stage_info)?;
+        let splits = format
+            .get_splits(
+                &files,
+                &stage_info.user_stage_info,
+                &operator,
+                &ctx.get_settings(),
+            )
+            .await?;
+
+        let partitions = splits
+            .into_iter()
             .map(|v| {
-                let part_info: Box<dyn PartInfo> = Box::new(v.clone());
+                let part_info: Box<dyn PartInfo> = Box::new((*v).clone());
                 Arc::new(part_info)
             })
             .collect::<Vec<_>>();
@@ -147,6 +178,51 @@ impl Table for StageTable {
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let (_, _, _) = (ctx, plan, pipeline);
+
+        // let stage_table_info =
+        //     if let DataSourceInfo::StageSource(stage_table_info) = &plan.source_info {
+        //         stage_table_info
+        //     } else {
+        //         return Err(ErrorCode::Internal(""));
+        //     };
+        //
+        // let mut need_copied_file_infos = vec![];
+        // for part in &plan.parts.partitions {
+        //     if let Some(stage_file_info) = part.as_any().downcast_ref::<StageFilePartition>() {
+        //         need_copied_file_infos.push(stage_file_info.clone());
+        //     }
+        // }
+        // let files = need_copied_file_infos
+        //     .iter()
+        //     .map(|v| v.path.clone())
+        //     .collect::<Vec<_>>();
+        // let settings = ctx.get_settings();
+        // let operator = StageTable::get_op(&ctx, &stage_table_info.user_stage_info)?;
+        // let format = InputContext::get_input_format(
+        //     &stage_table_info.user_stage_info.file_format_options.format,
+        // )?;
+        // let splits = format
+        //     .get_splits(
+        //         &files,
+        //         &stage_table_info.user_stage_info,
+        //         &operator,
+        //         &settings,
+        //     )
+        //     .await?;
+        //
+        // let schema = stage_table_info.schema.clone();
+        // let stage_info = stage_table_info.user_stage_info.clone();
+        // let compact_threshold = self.get_block_compact_thresholds();
+        // let input_ctx = Arc::new(InputContext::try_create_from_copy(
+        //     operator,
+        //     settings,
+        //     schema,
+        //     stage_info,
+        //     splits,
+        //     ctx.get_scan_progress(),
+        //     compact_threshold,
+        // )?);
+        // input_ctx.format.exec_copy(input_ctx.clone(), pipeline)
         Ok(())
     }
 

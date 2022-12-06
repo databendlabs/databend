@@ -12,14 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::any::Any;
-use std::collections::hash_map::DefaultHasher;
-use std::hash::Hash;
-use std::hash::Hasher;
-
 use chrono::DateTime;
 use chrono::Utc;
-use common_catalog::plan::PartInfo;
 use common_meta_types::UserIdentity;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -29,7 +23,7 @@ pub enum StageFileStatus {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct StageFilePartition {
+pub struct StageFileInfo {
     pub path: String,
     pub size: u64,
     pub md5: Option<String>,
@@ -37,24 +31,4 @@ pub struct StageFilePartition {
     pub etag: Option<String>,
     pub status: StageFileStatus,
     pub creator: Option<UserIdentity>,
-}
-
-#[typetag::serde(name = "stage_file_partition")]
-impl PartInfo for StageFilePartition {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn equals(&self, info: &Box<dyn PartInfo>) -> bool {
-        match info.as_any().downcast_ref::<StageFilePartition>() {
-            None => false,
-            Some(other) => self == other,
-        }
-    }
-
-    fn hash(&self) -> u64 {
-        let mut s = DefaultHasher::new();
-        self.path.hash(&mut s);
-        s.finish()
-    }
 }

@@ -327,6 +327,7 @@ impl<'a> Binder {
                     path: path.to_string(),
                     files: vec![],
                     pattern: Default::default(),
+                    files_to_copy: None,
                 };
 
                 let stage_table = StageTable::try_create(stage_table_info)?;

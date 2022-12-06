@@ -15,7 +15,6 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use common_catalog::plan::DataSourceInfo;
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
@@ -63,10 +62,10 @@ impl ToReadDataSourcePlan for dyn Table {
         let scan_fields = match (self.benefit_column_prune(), &push_downs) {
             (true, Some(push_downs)) => match &push_downs.prewhere {
                 Some(prewhere) => {
-                    extract_scan_fields_from_projection(&schema, &prewhere.output_columns)
+                    extract_scan_fields_from_projection(schema, &prewhere.output_columns)
                 }
                 _ => match &push_downs.projection {
-                    Some(projection) => extract_scan_fields_from_projection(&schema, projection),
+                    Some(projection) => extract_scan_fields_from_projection(schema, projection),
                     _ => None,
                 },
             },

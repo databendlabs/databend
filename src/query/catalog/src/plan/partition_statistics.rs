@@ -14,8 +14,6 @@
 
 use std::fmt::Debug;
 
-use common_meta_app::schema::TableInfo;
-
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Clone, Debug, Default)]
 pub struct PartStatistics {
     /// Total rows of the query read.

@@ -17,7 +17,8 @@ use std::collections::hash_map::DefaultHasher;
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
-use std::hash::{Hash, Hasher};
+use std::hash::Hash;
+use std::hash::Hasher;
 use std::sync::Arc;
 
 use common_catalog::plan::PartInfo;
