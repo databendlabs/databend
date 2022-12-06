@@ -40,7 +40,7 @@ pub struct GlobalServices {
     query_logger: UnsafeCell<Option<Arc<QueryLogger>>>,
     cluster_discovery: UnsafeCell<Option<Arc<ClusterDiscovery>>>,
     storage_operator: UnsafeCell<Option<DataOperator>>,
-    cache_operator: UnsafeCell<Option<CacheOperator>>,
+    cache_operator: UnsafeCell<Option<Option<CacheOperator>>>,
     cache_manager: UnsafeCell<Option<Arc<CacheManager>>>,
     catalog_manager: UnsafeCell<Option<Arc<CatalogManager>>>,
     http_query_manager: UnsafeCell<Option<Arc<HttpQueryManager>>>,
@@ -186,7 +186,7 @@ impl SingletonImpl<Option<CacheOperator>> for GlobalServices {
         unsafe {
             match &*self.cache_operator.get() {
                 None => panic!("CacheOperator is not init"),
-                Some(op) => Some(op.clone()),
+                Some(op) => op.clone(),
             }
         }
     }
