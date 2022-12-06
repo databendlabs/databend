@@ -65,3 +65,6 @@ pub use metrics::StorageMetricsLayer;
 
 mod runtime_layer;
 mod utils;
+
+mod cache;
+pub use cache::FuseCachePolicy;

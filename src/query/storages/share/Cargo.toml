@@ -17,7 +17,7 @@ common-meta-app = { path = "../../../meta/app" }
 common-storages-cache = { path = "../cache" }
 common-storages-table-meta = { path = "../table-meta" }
 
-opendal = "0.21"
+opendal = "0.22"
 serde = { workspace = true }
 serde_json = { workspace = true }
 

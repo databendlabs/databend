@@ -27,6 +27,8 @@ use common_storages_index::range_filter::RangeFilter;
 use common_storages_table_meta::meta::ColumnStatistics;
 use common_storages_table_meta::meta::StatisticsOfColumns;
 
+use crate::hive_table::HIVE_DEFAULT_PARTITION;
+
 pub struct HivePartitionPruner {
     pub ctx: Arc<dyn TableContext>,
     pub filters: Vec<Expression>,
@@ -54,9 +56,21 @@ impl HivePartitionPruner {
             for (index, singe_value) in partition.split('/').enumerate() {
                 let kv = singe_value.split('=').collect::<Vec<&str>>();
                 let field = self.partition_schema.fields()[index].clone();
+                let t = match field.data_type() {
+                    DataTypeImpl::Nullable(v) => v.inner_type(),
+                    _ => field.data_type(),
+                };
 
-                let v = match field.data_type() {
-                    DataTypeImpl::String(_) => DataValue::String(kv[1].as_bytes().to_vec()),
+                let mut null_count = 0;
+                let v = match t {
+                    DataTypeImpl::String(_) => {
+                        if kv[1] == HIVE_DEFAULT_PARTITION {
+                            null_count = 1;
+                            DataValue::Null
+                        } else {
+                            DataValue::String(kv[1].as_bytes().to_vec())
+                        }
+                    }
                     DataTypeImpl::Int8(_)
                     | DataTypeImpl::Int16(_)
                     | DataTypeImpl::Int32(_)
@@ -79,7 +93,7 @@ impl HivePartitionPruner {
                 let column_stats = ColumnStatistics {
                     min: v.clone(),
                     max: v,
-                    null_count: 0,
+                    null_count,
                     in_memory_size: 0,
                     distinct_of_values: None,
                 };
