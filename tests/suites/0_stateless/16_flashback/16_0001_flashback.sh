@@ -29,8 +29,8 @@ echo "checking that after flashback to the same timestamp, number of snapshots s
 echo "select count(*)=2  from fuse_snapshot('default', 't16')" | $MYSQL_CLIENT_CONNECT
 
 # flash back to the first snapshot
-SNAPSHOT_ID=$(echo "select snapshot_id from fuse_snapshot('default','t16') where row_count=2" | $MYSQL_CLIENT_CONNECT)
-echo "alter table t16 flashback to (snapshot => '$SNAPSHOT_ID')" | $MYSQL_CLIENT_CONNECT
+FST_SNAPSHOT_ID=$(echo "select snapshot_id from fuse_snapshot('default','t16') where row_count=2" | $MYSQL_CLIENT_CONNECT)
+echo "alter table t16 flashback to (snapshot => '$FST_SNAPSHOT_ID')" | $MYSQL_CLIENT_CONNECT
 
 echo "checking that after flashback to the first snapshot, there should be 2 rows"
 echo "select count(*)=2  from t16" | $MYSQL_CLIENT_CONNECT
@@ -41,8 +41,20 @@ echo "select count(*)=1  from fuse_snapshot('default', 't16')" | $MYSQL_CLIENT_C
 # flash back to point that not exist should fail
 echo "flash back to snapshot id that not exist should report error 1105"
 echo "alter table t16 flashback to (snapshot => 'NOTE_EXIST')" | $MYSQL_CLIENT_CONNECT
+
 echo "flash back to timestamp that not exist should report error 1105"
 echo "alter table t16 flashback to (TIMESTAMP => '2000-12-06 04:35:17.856848'::TIMESTAMP)" | $MYSQL_CLIENT_CONNECT;
+
+# flash back to point that does not visible to the current snapshot will also fail
+#  although $SNAPSHOT_ID has been in the history of table `t16`, but
+#  after reverted to the $FST_SNAPSHOT_ID, it no longer to the table `t16`
+echo "flash back to point that does not visible to the current snapshot should report error 1105"
+echo "alter table t16 flashback to (snapshot => '$SNAPSHOT_ID')" | $MYSQL_CLIENT_CONNECT
+
+# FORCE flash back to any snapshot that exists in the storage is OK
+#echo "flash back to point that does not visible to the current snapshot should report error 1105"
+#echo "alter table t16 flashback to (snapshot => '$SNAPSHOT_ID')" | $MYSQL_CLIENT_CONNECT
+
 
 
 ## Drop table.
