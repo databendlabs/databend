@@ -16,18 +16,12 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
-use bytes::Bytes;
-use common_base::base::GlobalIORuntime;
-use common_base::base::TrySpawn;
 use futures::future::BoxFuture;
-use futures::io::Cursor;
-use futures::AsyncReadExt;
 use moka::sync::Cache;
 use opendal::layers::CachePolicy;
 use opendal::raw::Accessor;
 use opendal::raw::BytesReader;
 use opendal::raw::RpRead;
-use opendal::Error;
 use opendal::ErrorKind;
 use opendal::OpRead;
 use opendal::OpWrite;
@@ -142,8 +136,9 @@ impl CachePolicy for FuseCachePolicy {
         args: OpRead,
     ) -> BoxFuture<'static, Result<(RpRead, BytesReader)>> {
         let path = path.to_string();
+        let cache_path = range_based_cache_path(&path, &args);
 
-        if self.visit.is_visited(&path) {
+        if self.visit.is_visited(&cache_path) {
             Box::pin(range_caching(inner, cache, self.visit.clone(), path, args))
         } else {
             Box::pin(async move { inner.read(&path, args).await })
@@ -168,104 +163,22 @@ async fn range_caching(
     let v = match cache.read(&cache_path, OpRead::default()).await {
         Ok(v) => Ok(v),
         Err(err) if err.kind() == ErrorKind::ObjectNotFound => {
-            let (rp, mut r) = inner.read(&path, args.clone()).await?;
-
+            let (rp, r) = inner.read(&path, args.clone()).await?;
             let size = rp.clone().into_metadata().content_length();
-            // If size < 8MiB, we can optimize by buffer in memory.
-            // TODO: make this configurable.
-            if size <= 8 * 1024 * 1024 {
-                let mut bs = Vec::with_capacity(size as usize);
-                r.read_to_end(&mut bs).await.map_err(|err| {
-                    Error::new(
-                        ErrorKind::Unexpected,
-                        "read from underlying storage service",
-                    )
-                    .set_source(err)
-                })?;
-                let bs = Bytes::from(bs);
 
-                // Ignore errors returned by cache services.
-                let _ = cache
-                    .write(
-                        &cache_path,
-                        OpWrite::new(size),
-                        Box::new(Cursor::new(bs.clone())),
-                    )
-                    .await;
-                Ok((rp, Box::new(Cursor::new(bs)) as BytesReader))
-            } else {
-                // Ignore errors returned by cache services.
-                let _ = cache.write(&cache_path, OpWrite::new(size), r).await;
+            // Ignore errors returned by cache services.
+            let _ = cache.write(&cache_path, OpWrite::new(size), r).await;
 
-                match cache.read(&cache_path, OpRead::default()).await {
-                    Ok(v) => Ok(v),
-                    Err(_) => inner.read(&path, args).await,
-                }
+            match cache.read(&cache_path, OpRead::default()).await {
+                Ok(v) => Ok(v),
+                Err(_) => inner.read(&path, args).await,
             }
         }
         Err(_) => inner.read(&path, args).await,
     };
 
     // Mark cache path has been visited.
-    visit.visit(path);
     visit.visit(cache_path);
-
-    v
-}
-
-/// Cache the whole file
-async fn whole_caching(
-    inner: Arc<dyn Accessor>,
-    cache: Arc<dyn Accessor>,
-    visit: VisitStatistics,
-    path: String,
-    args: OpRead,
-) -> Result<(RpRead, BytesReader)> {
-    let v = match cache.read(&path, args.clone()).await {
-        Ok(v) => Ok(v),
-        Err(err) if err.kind() == ErrorKind::ObjectNotFound => {
-            let (rp, mut r) = inner.read(&path, OpRead::default()).await?;
-
-            let size = rp.clone().into_metadata().content_length();
-            // If size < 8MiB, we can optimize by buffer in memory.
-            // TODO: make this configurable.
-            if size <= 8 * 1024 * 1024 {
-                let mut bs = Vec::with_capacity(size as usize);
-                r.read_to_end(&mut bs).await.map_err(|err| {
-                    Error::new(
-                        ErrorKind::Unexpected,
-                        "read from underlying storage service",
-                    )
-                    .set_source(err)
-                })?;
-                let bs = Bytes::from(bs);
-
-                // Ignore errors returned by cache services.
-                let _ = cache
-                    .write(&path, OpWrite::new(size), Box::new(Cursor::new(bs.clone())))
-                    .await;
-
-                let bs = args.range().apply_on_bytes(bs);
-                Ok((
-                    RpRead::new(bs.len() as u64),
-                    Box::new(Cursor::new(bs)) as BytesReader,
-                ))
-            } else {
-                let moved_path = path.clone();
-
-                GlobalIORuntime::instance().spawn(async move {
-                    // Ignore errors returned by cache services.
-                    let _ = cache.write(&moved_path, OpWrite::new(size), r).await;
-                });
-
-                inner.read(&path, args).await
-            }
-        }
-        Err(_) => inner.read(&path, args).await,
-    };
-
-    // Mark cache path has been visited.
-    visit.visit(path);
 
     v
 }
