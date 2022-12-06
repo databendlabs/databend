@@ -3,6 +3,7 @@
 CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../../../shell_env.sh
 QMHASH=QmPpCt1aYGb9JWJRmXRUnmJtVgeFFTJGzWFYEEX7bo9zGJ
+IPFS_GATEWAY="https://w3s.link"
 
 echo "drop table if exists ontime_200;" | $MYSQL_CLIENT_CONNECT
 
@@ -11,13 +12,13 @@ cat $CURDIR/../ddl/ontime.sql | sed "s/ontime/ontime_200/g" | $MYSQL_CLIENT_CONN
 
 copy_from_location_cases=(
   # copy csv
-  "copy into ontime_200 from 'ipfs://$QMHASH/ontime.csv' CONNECTION = (ENDPOINT_URL='https://ipfs.filebase.io') FILE_FORMAT = (type = 'CSV' field_delimiter = ','  record_delimiter = '\n' skip_header = 1)"
+  "copy into ontime_200 from 'ipfs://$QMHASH/ontime.csv' CONNECTION = (ENDPOINT_URL='$IPFS_GATEWAY') FILE_FORMAT = (type = 'CSV' field_delimiter = ','  record_delimiter = '\n' skip_header = 1)"
   # copy gzip csv
-  "copy into ontime_200 from 'ipfs://$QMHASH/ontime.csv.gz' CONNECTION = (ENDPOINT_URL='https://ipfs.filebase.io') FILE_FORMAT = (type = 'CSV' field_delimiter = ',' compression = 'gzip'  record_delimiter = '\n' skip_header = 1)"
+  "copy into ontime_200 from 'ipfs://$QMHASH/ontime.csv.gz' CONNECTION = (ENDPOINT_URL='$IPFS_GATEWAY') FILE_FORMAT = (type = 'CSV' field_delimiter = ',' compression = 'gzip'  record_delimiter = '\n' skip_header = 1)"
   # copy zstd csv
-  "copy into ontime_200 from 'ipfs://$QMHASH/ontime.csv.zst' CONNECTION = (ENDPOINT_URL='https://ipfs.filebase.io') FILE_FORMAT = (type = 'CSV' field_delimiter = ',' compression = 'zstd'  record_delimiter = '\n' skip_header = 1)"
+  "copy into ontime_200 from 'ipfs://$QMHASH/ontime.csv.zst' CONNECTION = (ENDPOINT_URL='$IPFS_GATEWAY') FILE_FORMAT = (type = 'CSV' field_delimiter = ',' compression = 'zstd'  record_delimiter = '\n' skip_header = 1)"
   # copy bz2 csv
-  "copy into ontime_200 from 'ipfs://$QMHASH/ontime.csv.bz2' CONNECTION = (ENDPOINT_URL='https://ipfs.filebase.io') FILE_FORMAT = (type = 'CSV' field_delimiter = ',' compression = 'bz2'  record_delimiter = '\n' skip_header = 1)"
+  "copy into ontime_200 from 'ipfs://$QMHASH/ontime.csv.bz2' CONNECTION = (ENDPOINT_URL='$IPFS_GATEWAY') FILE_FORMAT = (type = 'CSV' field_delimiter = ',' compression = 'bz2'  record_delimiter = '\n' skip_header = 1)"
 )
 
 for i in "${copy_from_location_cases[@]}"; do
