@@ -12,7 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use common_catalog::table::NavigationPoint;
+use common_catalog::table::NavigationDescriptor;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
@@ -26,10 +26,10 @@ impl FuseTable {
     pub async fn do_revert_to(
         &self,
         ctx: &dyn TableContext,
-        point: &NavigationPoint,
+        navigation_descriptor: NavigationDescriptor,
     ) -> Result<()> {
         // 1. try navigate to the point
-        let table = self.navigate_to(point).await?;
+        let table = self.navigate_to(&navigation_descriptor.point).await?;
         let table_reverting_to = FuseTable::try_from_table(table.as_ref())?;
         let table_info = table_reverting_to.get_table_info();
 
@@ -54,8 +54,8 @@ impl FuseTable {
 
         // 4. let's roll
         let tenant = ctx.get_tenant();
-        let db_name = ctx.get_current_database(); // TODO is this SAFE?
-        let reply = catalog.update_table_meta(&tenant, &db_name, req).await;
+        let db_name = &navigation_descriptor.database_name;
+        let reply = catalog.update_table_meta(&tenant, db_name, req).await;
         if reply.is_ok() {
             // try keep the snapshot hit
             let snapshot_location = table_reverting_to.snapshot_loc().await?.ok_or_else(|| {
@@ -69,7 +69,6 @@ impl FuseTable {
             .await;
         };
 
-        // ignore the reply of meta service
         reply.map(|_| ())
     }
 }

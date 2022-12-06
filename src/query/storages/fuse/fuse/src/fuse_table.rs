@@ -30,6 +30,7 @@ use common_catalog::table::ColumnId;
 use common_catalog::table::ColumnStatistics;
 use common_catalog::table::ColumnStatisticsProvider;
 use common_catalog::table::CompactTarget;
+use common_catalog::table::NavigationDescriptor;
 use common_catalog::table_context::TableContext;
 use common_catalog::table_mutator::TableMutator;
 use common_datablocks::BlockCompactThresholds;
@@ -531,7 +532,11 @@ impl Table for FuseTable {
         self.do_recluster(ctx, pipeline, push_downs).await
     }
 
-    async fn revert_to(&self, ctx: Arc<dyn TableContext>, point: &NavigationPoint) -> Result<()> {
+    async fn revert_to(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        point: NavigationDescriptor,
+    ) -> Result<()> {
         // A read-only instance of fuse table, e.g. instance got by using time travel,
         // revert operation is not allowed.
         self.check_mutable()?;

@@ -278,7 +278,11 @@ pub trait Table: Sync + Send {
         )))
     }
 
-    async fn revert_to(&self, ctx: Arc<dyn TableContext>, point: &NavigationPoint) -> Result<()> {
+    async fn revert_to(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        point: NavigationDescriptor,
+    ) -> Result<()> {
         let (_, _) = (ctx, point);
         Err(ErrorCode::Unimplemented(format!(
             "table {},  of engine type {}, does not support revert",
@@ -360,4 +364,9 @@ mod column_stats_provider_impls {
             None
         }
     }
+}
+
+pub struct NavigationDescriptor {
+    pub database_name: String,
+    pub point: NavigationPoint,
 }

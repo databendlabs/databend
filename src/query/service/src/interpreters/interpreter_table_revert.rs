@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_catalog::table::NavigationDescriptor;
 use common_exception::Result;
 use common_sql::plans::RevertTablePlan;
 
@@ -47,7 +48,13 @@ impl Interpreter for RevertTableInterpreter {
             .get_table(tenant.as_str(), &self.plan.database, &self.plan.table)
             .await?;
 
-        table.revert_to(self.ctx.clone(), &self.plan.point).await?;
+        let navigation_descriptor = NavigationDescriptor {
+            database_name: self.plan.database.clone(),
+            point: self.plan.point.clone(),
+        };
+        table
+            .revert_to(self.ctx.clone(), navigation_descriptor)
+            .await?;
 
         Ok(PipelineBuildResult::create())
     }
