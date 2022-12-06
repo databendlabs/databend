@@ -227,6 +227,11 @@ impl AccessChecker for PrivilegeAccess {
             Plan::ShowGrantTenantsOfShare(_) => {}
             Plan::ExplainAst { .. } => {}
             Plan::ExplainSyntax { .. } => {}
+            Plan::RevertTable(_) => {
+                session
+                    .validate_privilege(&GrantObject::Global, UserPrivilegeType::Alter)
+                    .await?;
+            }
         }
 
         Ok(())
