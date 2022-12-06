@@ -55,20 +55,18 @@ impl ToReadDataSourcePlan for dyn Table {
     ) -> Result<DataSourcePlan> {
         let (statistics, parts) = self.read_partitions(ctx, push_downs.clone()).await?;
 
-        let table_info = self.get_table_info();
-        let table_meta = &table_info.meta;
-        let description = statistics.get_description(table_info);
+        let source_info = self.get_data_source_info();
+
+        let schema = &source_info.schema();
+        let description = statistics.get_description(&source_info.desc());
 
         let scan_fields = match (self.benefit_column_prune(), &push_downs) {
             (true, Some(push_downs)) => match &push_downs.prewhere {
-                Some(prewhere) => extract_scan_fields_from_projection(
-                    &table_meta.schema,
-                    &prewhere.output_columns,
-                ),
+                Some(prewhere) => {
+                    extract_scan_fields_from_projection(&schema, &prewhere.output_columns)
+                }
                 _ => match &push_downs.projection {
-                    Some(projection) => {
-                        extract_scan_fields_from_projection(&table_meta.schema, projection)
-                    }
+                    Some(projection) => extract_scan_fields_from_projection(&schema, projection),
                     _ => None,
                 },
             },
@@ -79,7 +77,7 @@ impl ToReadDataSourcePlan for dyn Table {
 
         Ok(DataSourcePlan {
             catalog,
-            source_info: DataSourceInfo::TableSource(table_info.clone()),
+            source_info,
             scan_fields,
             parts,
             statistics,

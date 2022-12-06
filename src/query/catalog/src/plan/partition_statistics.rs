@@ -72,11 +72,11 @@ impl PartStatistics {
         *self = Self::default();
     }
 
-    pub fn get_description(&self, table_info: &TableInfo) -> String {
+    pub fn get_description(&self, table_desc: &str) -> String {
         if self.read_rows > 0 {
             format!(
                 "(Read from {} table, {} Read Rows:{}, Read Bytes:{}, Partitions Scanned:{}, Partitions Total:{})",
-                table_info.desc,
+                table_desc,
                 if self.is_exact {
                     "Exactly"
                 } else {
@@ -88,7 +88,7 @@ impl PartStatistics {
                 self.partitions_total,
             )
         } else {
-            format!("(Read from {} table)", table_info.desc)
+            format!("(Read from {} table)", table_desc)
         }
     }
 }
