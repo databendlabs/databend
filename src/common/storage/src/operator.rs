@@ -26,6 +26,7 @@ use common_base::base::Singleton;
 use common_base::base::TrySpawn;
 use common_exception::ErrorCode;
 use once_cell::sync::OnceCell;
+use opendal::layers::CacheLayer;
 use opendal::layers::ImmutableIndexLayer;
 use opendal::layers::LoggingLayer;
 use opendal::layers::MetricsLayer;
@@ -54,9 +55,12 @@ use crate::config::StorageMokaConfig;
 use crate::config::StorageObsConfig;
 use crate::runtime_layer::RuntimeLayer;
 use crate::CacheConfig;
+use crate::FuseCachePolicy;
+use crate::MemoryCachePolicy;
 use crate::StorageConfig;
 use crate::StorageOssConfig;
 use crate::StorageRedisConfig;
+use crate::VisitStatistics;
 
 /// init_operator will init an opendal operator based on storage config.
 pub fn init_operator(cfg: &StorageParams) -> Result<Operator> {
@@ -431,15 +435,18 @@ impl DataOperator {
 /// background auto evict at any time.
 #[derive(Clone, Debug)]
 pub struct CacheOperator {
-    op: Option<Operator>,
+    visit: VisitStatistics,
+
+    user_cache: Operator,
+    internal_cache: Operator,
 }
 
-static CACHE_OPERATOR: OnceCell<Singleton<CacheOperator>> = OnceCell::new();
+static CACHE_OPERATOR: OnceCell<Singleton<Option<CacheOperator>>> = OnceCell::new();
 
 impl CacheOperator {
     pub async fn init(
         conf: &CacheConfig,
-        v: Singleton<CacheOperator>,
+        v: Singleton<Option<CacheOperator>>,
     ) -> common_exception::Result<()> {
         v.init(Self::try_create(conf).await?)?;
 
@@ -447,9 +454,9 @@ impl CacheOperator {
         Ok(())
     }
 
-    pub async fn try_create(conf: &CacheConfig) -> common_exception::Result<CacheOperator> {
+    pub async fn try_create(conf: &CacheConfig) -> common_exception::Result<Option<CacheOperator>> {
         if conf.params == StorageParams::None {
-            return Ok(CacheOperator { op: None });
+            return Ok(None);
         }
 
         let operator = init_operator_without_layers(&conf.params)?
@@ -488,17 +495,48 @@ impl CacheOperator {
             )));
         }
 
-        Ok(CacheOperator { op: Some(operator) })
+        let internal_cache = Operator::new(
+            opendal::services::moka::Builder::default()
+                .max_capacity(1024 * 1024 * 1024)
+                .build()?,
+        )
+        .layer(LoggingLayer::default().with_error_level(None));
+
+        Ok(Some(CacheOperator {
+            user_cache: operator,
+            internal_cache,
+            // We will take recent 10W request for Statistics;
+            //
+            // TODO(xuanwo): make this a config or user setting.
+            visit: VisitStatistics::new(100_000),
+        }))
     }
 
-    pub fn instance() -> Option<Operator> {
+    fn instance() -> Option<CacheOperator> {
         match CACHE_OPERATOR.get() {
             None => panic!("CacheOperator is not init"),
-            Some(op) => op.get().inner(),
+            Some(op) => op.get(),
         }
     }
 
-    fn inner(&self) -> Option<Operator> {
-        self.op.clone()
+    /// apply_cache will try to apply cache on given operator.
+    ///
+    /// If cache is not initiated, the input op will not be changed.
+    pub fn apply_cache(mut op: Operator) -> Operator {
+        let cop = match Self::instance() {
+            Some(cache_op) => cache_op,
+            None => return op,
+        };
+
+        // Apply user cache.
+        op = op.layer(
+            CacheLayer::new(cop.user_cache).with_policy(FuseCachePolicy::new(cop.visit.clone())),
+        );
+        // Apply inertnal cache.
+        op = op.layer(
+            CacheLayer::new(cop.internal_cache).with_policy(MemoryCachePolicy::new(cop.visit)),
+        );
+
+        op
     }
 }

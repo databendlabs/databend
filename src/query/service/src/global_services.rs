@@ -181,19 +181,19 @@ impl SingletonImpl<DataOperator> for GlobalServices {
     }
 }
 
-impl SingletonImpl<CacheOperator> for GlobalServices {
-    fn get(&self) -> CacheOperator {
+impl SingletonImpl<Option<CacheOperator>> for GlobalServices {
+    fn get(&self) -> Option<CacheOperator> {
         unsafe {
             match &*self.cache_operator.get() {
                 None => panic!("CacheOperator is not init"),
-                Some(op) => op.clone(),
+                Some(op) => Some(op.clone()),
             }
         }
     }
 
-    fn init(&self, value: CacheOperator) -> Result<()> {
+    fn init(&self, value: Option<CacheOperator>) -> Result<()> {
         unsafe {
-            *(self.cache_operator.get() as *mut Option<CacheOperator>) = Some(value);
+            *(self.cache_operator.get() as *mut Option<Option<CacheOperator>>) = Some(value);
             Ok(())
         }
     }

@@ -147,7 +147,7 @@ impl CachePolicy for FuseCachePolicy {
 }
 
 fn range_based_cache_path(path: &str, args: &OpRead) -> String {
-    format!("{path}.cache-{}", args.range().to_string())
+    format!("{path}.cache-{}", args.range())
 }
 
 /// Cache file based on it's rane.

@@ -69,7 +69,7 @@ pub struct TestGlobalServices {
     query_logger: Mutex<HashMap<String, Arc<QueryLogger>>>,
     cluster_discovery: Mutex<HashMap<String, Arc<ClusterDiscovery>>>,
     storage_operator: Mutex<HashMap<String, DataOperator>>,
-    cache_operator: Mutex<HashMap<String, CacheOperator>>,
+    cache_operator: Mutex<HashMap<String, Option<CacheOperator>>>,
     cache_manager: Mutex<HashMap<String, Arc<CacheManager>>>,
     catalog_manager: Mutex<HashMap<String, Arc<CatalogManager>>>,
     http_query_manager: Mutex<HashMap<String, Arc<HttpQueryManager>>>,
@@ -302,8 +302,8 @@ impl SingletonImpl<DataOperator> for TestGlobalServices {
     }
 }
 
-impl SingletonImpl<CacheOperator> for TestGlobalServices {
-    fn get(&self) -> CacheOperator {
+impl SingletonImpl<Option<CacheOperator>> for TestGlobalServices {
+    fn get(&self) -> Option<CacheOperator> {
         match std::thread::current().name() {
             None => panic!("CacheOperator is not init"),
             Some(name) => match self.cache_operator.lock().get(name) {
@@ -313,7 +313,7 @@ impl SingletonImpl<CacheOperator> for TestGlobalServices {
         }
     }
 
-    fn init(&self, value: CacheOperator) -> Result<()> {
+    fn init(&self, value: Option<CacheOperator>) -> Result<()> {
         match std::thread::current().name() {
             None => panic!("thread name is none"),
             Some(name) => match self.cache_operator.lock().entry(name.to_string()) {
