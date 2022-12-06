@@ -68,3 +68,5 @@ mod utils;
 
 mod cache;
 pub use cache::FuseCachePolicy;
+pub use cache::MemoryCachePolicy;
+pub use cache::VisitStatistics;

@@ -43,9 +43,11 @@ use common_storage::init_operator;
 use common_storage::CacheOperator;
 use common_storage::DataOperator;
 use common_storage::FuseCachePolicy;
+use common_storage::MemoryCachePolicy;
 use common_storage::ShareTableConfig;
 use common_storage::StorageMetrics;
 use common_storage::StorageMetricsLayer;
+use common_storage::VisitStatistics;
 use common_storages_table_meta::meta::ClusterKey;
 use common_storages_table_meta::meta::ColumnStatistics as FuseColumnStatistics;
 use common_storages_table_meta::meta::Statistics as FuseStatistics;
@@ -57,6 +59,7 @@ use common_storages_table_meta::table::OPT_KEY_DATABASE_ID;
 use common_storages_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
 use common_storages_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use opendal::layers::CacheLayer;
+use opendal::layers::LoggingLayer;
 use opendal::Operator;
 use uuid::Uuid;
 
@@ -118,8 +121,23 @@ impl FuseTable {
         operator = operator.layer(StorageMetricsLayer::new(data_metrics.clone()));
         // If cache op is valid, layered with ContentCacheLayer.
         if let Some(cache_op) = CacheOperator::instance() {
+            // We will take recent 10W request for Statistics;
+            let vis = VisitStatistics::new(100_000);
+
+            // The fuse level caching.
+            operator = operator
+                .layer(CacheLayer::new(cache_op).with_policy(FuseCachePolicy::new(vis.clone())));
+
+            // The memory level caching.
+            let memory_op = Operator::new(
+                opendal::services::moka::Builder::default()
+                    .max_capacity(1024 * 1024 * 1024)
+                    .build()?,
+            )
+            .layer(LoggingLayer::default().with_error_level(None));
+
             operator =
-                operator.layer(CacheLayer::new(cache_op).with_policy(FuseCachePolicy::new()));
+                operator.layer(CacheLayer::new(memory_op).with_policy(MemoryCachePolicy::new(vis)))
         }
 
         Ok(Box::new(FuseTable {

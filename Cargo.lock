@@ -2072,6 +2072,7 @@ dependencies = [
  "common-exception",
  "futures",
  "globiter",
+ "moka",
  "once_cell",
  "opendal",
  "parking_lot 0.12.1",

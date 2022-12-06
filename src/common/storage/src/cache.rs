@@ -13,12 +13,14 @@
 //  limitations under the License.
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use async_trait::async_trait;
 use bytes::Bytes;
 use futures::future::BoxFuture;
 use futures::io::Cursor;
 use futures::AsyncReadExt;
+use moka::sync::Cache;
 use opendal::layers::CachePolicy;
 use opendal::raw::Accessor;
 use opendal::raw::BytesReader;
@@ -29,22 +31,108 @@ use opendal::OpRead;
 use opendal::OpWrite;
 use opendal::Result;
 
+/// VisitStatistics is used to track visit statistics.
+///
+/// # Two-level Caching
+///
+/// Databend Query will have a two-level cache.
+///
+/// - The first cache layer is a fixed-size in-memory cache
+/// - The second cache layer should be a storage service which slower than memory but quicker than object storage services like local fs or redis.
+///
+/// We will cache recent reading content into in-memory cache, and spill the
+/// **hot** data into second cache layer.
+///
+/// # Visit Statistics
+///
+/// We will record visit statistics at first cache layer. If the path has been
+/// accessed in recent, we will spill it to second cache layer too.
+///
+/// # Notes
+///
+/// The cache logic could be changed at anytime, PLEASE DON'T depend on it's behavior.
+#[derive(Debug, Clone)]
+pub struct VisitStatistics {
+    cache: Arc<Cache<String, ()>>,
+}
+
+impl VisitStatistics {
+    /// Create a new visit statistics with given capacity.
+    pub fn new(capacity: u64) -> Self {
+        VisitStatistics {
+            cache: Arc::new(
+                Cache::builder()
+                    .max_capacity(capacity)
+                    // Time to live (TTL): 30 minutes
+                    //
+                    // TODO: make this a user setting.
+                    .time_to_live(Duration::from_secs(30 * 60))
+                    // Time to idle (TTI):  5 minutes
+                    //
+                    // TODO: make this a user setting.
+                    .time_to_idle(Duration::from_secs(5 * 60))
+                    .build(),
+            ),
+        }
+    }
+
+    /// Is given path has been visited?
+    fn is_visited(&self, path: &str) -> bool {
+        self.cache.get(path).is_some()
+    }
+
+    /// Visit this path.
+    fn visit(&self, path: String) {
+        self.cache.insert(path, ())
+    }
+}
+
+#[derive(Debug)]
+pub struct MemoryCachePolicy {
+    visit: VisitStatistics,
+}
+
+impl MemoryCachePolicy {
+    pub fn new(visit: VisitStatistics) -> Self {
+        MemoryCachePolicy { visit }
+    }
+}
+
+#[async_trait]
+impl CachePolicy for MemoryCachePolicy {
+    fn on_read(
+        &self,
+        inner: Arc<dyn Accessor>,
+        cache: Arc<dyn Accessor>,
+        path: &str,
+        args: OpRead,
+    ) -> BoxFuture<'static, Result<(RpRead, BytesReader)>> {
+        let path = path.to_string();
+
+        Box::pin(range_based_caching(
+            inner,
+            cache,
+            self.visit.clone(),
+            path,
+            args,
+        ))
+    }
+}
+
 /// TODO: implement more complex cache logic.
 ///
 /// For example:
 ///
 /// - Implement a top n heap, and only cache files exist in heap.
 /// - Only cache data file, and ignore snapshot files.
-#[derive(Debug, Default)]
-pub struct FuseCachePolicy {}
+#[derive(Debug)]
+pub struct FuseCachePolicy {
+    visit: VisitStatistics,
+}
 
 impl FuseCachePolicy {
-    pub fn new() -> Self {
-        FuseCachePolicy::default()
-    }
-
-    fn cache_path(&self, path: &str, args: &OpRead) -> String {
-        format!("{path}.cache-{}", args.range().to_header())
+    pub fn new(visit: VisitStatistics) -> Self {
+        FuseCachePolicy { visit }
     }
 }
 
@@ -58,48 +146,77 @@ impl CachePolicy for FuseCachePolicy {
         args: OpRead,
     ) -> BoxFuture<'static, Result<(RpRead, BytesReader)>> {
         let path = path.to_string();
-        let cache_path = self.cache_path(&path, &args);
-        Box::pin(async move {
-            match cache.read(&cache_path, OpRead::default()).await {
-                Ok(v) => Ok(v),
-                Err(err) if err.kind() == ErrorKind::ObjectNotFound => {
-                    let (rp, mut r) = inner.read(&path, args.clone()).await?;
 
-                    let size = rp.clone().into_metadata().content_length();
-                    // If size < 8MiB, we can optimize by buffer in memory.
-                    // TODO: make this configurable.
-                    if size <= 8 * 1024 * 1024 {
-                        let mut bs = Vec::with_capacity(size as usize);
-                        r.read_to_end(&mut bs).await.map_err(|err| {
-                            Error::new(
-                                ErrorKind::Unexpected,
-                                "read from underlying storage service",
-                            )
-                            .set_source(err)
-                        })?;
-                        let bs = Bytes::from(bs);
-
-                        // Ignore errors returned by cache services.
-                        let _ = cache
-                            .write(
-                                &cache_path,
-                                OpWrite::new(size),
-                                Box::new(Cursor::new(bs.clone())),
-                            )
-                            .await;
-                        Ok((rp, Box::new(Cursor::new(bs)) as BytesReader))
-                    } else {
-                        // Ignore errors returned by cache services.
-                        let _ = cache.write(&cache_path, OpWrite::new(size), r).await;
-
-                        match cache.read(&cache_path, OpRead::default()).await {
-                            Ok(v) => Ok(v),
-                            Err(_) => return inner.read(&path, args).await,
-                        }
-                    }
-                }
-                Err(_) => return inner.read(&path, args).await,
-            }
-        })
+        if self.visit.is_visited(&range_based_cache_path(&path, &args)) {
+            Box::pin(range_based_caching(
+                inner,
+                cache,
+                self.visit.clone(),
+                path,
+                args,
+            ))
+        } else {
+            Box::pin(async move { inner.read(&path, args).await })
+        }
     }
+}
+
+fn range_based_cache_path(path: &str, args: &OpRead) -> String {
+    format!("{path}.cache-{}", args.range().to_header())
+}
+
+async fn range_based_caching(
+    inner: Arc<dyn Accessor>,
+    cache: Arc<dyn Accessor>,
+    visit: VisitStatistics,
+    path: String,
+    args: OpRead,
+) -> Result<(RpRead, BytesReader)> {
+    let cache_path = range_based_cache_path(&path, &args);
+
+    let v = match cache.read(&cache_path, OpRead::default()).await {
+        Ok(v) => Ok(v),
+        Err(err) if err.kind() == ErrorKind::ObjectNotFound => {
+            let (rp, mut r) = inner.read(&path, args.clone()).await?;
+
+            let size = rp.clone().into_metadata().content_length();
+            // If size < 8MiB, we can optimize by buffer in memory.
+            // TODO: make this configurable.
+            if size <= 8 * 1024 * 1024 {
+                let mut bs = Vec::with_capacity(size as usize);
+                r.read_to_end(&mut bs).await.map_err(|err| {
+                    Error::new(
+                        ErrorKind::Unexpected,
+                        "read from underlying storage service",
+                    )
+                    .set_source(err)
+                })?;
+                let bs = Bytes::from(bs);
+
+                // Ignore errors returned by cache services.
+                let _ = cache
+                    .write(
+                        &cache_path,
+                        OpWrite::new(size),
+                        Box::new(Cursor::new(bs.clone())),
+                    )
+                    .await;
+                Ok((rp, Box::new(Cursor::new(bs)) as BytesReader))
+            } else {
+                // Ignore errors returned by cache services.
+                let _ = cache.write(&cache_path, OpWrite::new(size), r).await;
+
+                match cache.read(&cache_path, OpRead::default()).await {
+                    Ok(v) => Ok(v),
+                    Err(_) => inner.read(&path, args).await,
+                }
+            }
+        }
+        Err(_) => inner.read(&path, args).await,
+    };
+
+    // Mark cache path has been visited.
+    visit.visit(cache_path);
+
+    v
 }
