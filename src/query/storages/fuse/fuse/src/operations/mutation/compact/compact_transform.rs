@@ -326,7 +326,7 @@ impl Processor for CompactTransform {
                         acc + memory
                     });
 
-                    if memory_usage > self.max_memory {
+                    if memory_usage > self.max_memory && !task_futures.is_empty() {
                         self.compact_tasks.push_front(task);
                         break;
                     }

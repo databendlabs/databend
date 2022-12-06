@@ -19,34 +19,40 @@ use std::sync::Arc;
 
 use common_base::base::tokio::sync::Semaphore;
 use common_base::base::Runtime;
-use common_catalog::table::Table;
+use common_cache::Cache;
 use common_catalog::table_context::TableContext;
 use common_datablocks::BlockCompactThresholds;
 use common_datablocks::BlockMetaInfoPtr;
+use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_pipeline_core::processors::port::OutputPort;
+use common_storages_table_meta::caches::CacheManager;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::Location;
 use common_storages_table_meta::meta::SegmentInfo;
 use common_storages_table_meta::meta::Statistics;
 use common_storages_table_meta::meta::TableSnapshot;
-use common_storages_table_meta::meta::Versioned;
 use futures_util::future;
 use opendal::Operator;
 
-use super::deletion_meta::DeletionSourceMeta;
-use crate::io::MetaReaders;
+use crate::io::write_meta;
 use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
+use crate::operations::mutation::deletion::deletion_meta::DeletionSourceMeta;
 use crate::operations::mutation::deletion::Deletion;
 use crate::operations::mutation::AbortOperation;
+use crate::operations::mutation::MutationMeta;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::processor::Event;
+use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::Processor;
 use crate::statistics::reducers::merge_statistics_mut;
 use crate::statistics::reducers::reduce_block_metas;
 
-struct SegmentData {
+type DeletionMap = HashMap<usize, (Vec<(usize, Arc<BlockMeta>)>, Vec<usize>)>;
+
+struct SerializedData {
     data: Vec<u8>,
     location: String,
     segment: Arc<SegmentInfo>,
@@ -56,34 +62,60 @@ enum State {
     None,
     ReadSegments,
     GenerateSegments(Vec<Arc<SegmentInfo>>),
-    SerializedSegments(Vec<SegmentData>),
-    TryCommit(TableSnapshot),
-    AbortOperation,
-    Finish,
+    SerializedSegments {
+        serialized_data: Vec<SerializedData>,
+        segments: Vec<Location>,
+        summary: Statistics,
+    },
+    Output {
+        segments: Vec<Location>,
+        summary: Statistics,
+    },
 }
 
-pub struct DeletionSink {
+pub struct DeletionTransform {
     state: State,
     ctx: Arc<dyn TableContext>,
     dal: Operator,
     location_gen: TableMetaLocationGenerator,
 
-    table: Arc<dyn Table>,
     base_snapshot: Arc<TableSnapshot>,
     thresholds: BlockCompactThresholds,
-    // locations all the merged segments.
-    merged_segments: Vec<Location>,
-    // summarised statistics of all the merged segments.
-    merged_statistics: Statistics,
-    retries: u64,
     abort_operation: AbortOperation,
 
     inputs: Vec<Arc<InputPort>>,
-    input_metas: HashMap<usize, (Vec<(usize, Arc<BlockMeta>)>, Vec<usize>)>,
+    input_metas: DeletionMap,
     cur_input_index: usize,
+    output: Arc<OutputPort>,
+    output_data: Option<DataBlock>,
 }
 
-impl DeletionSink {
+impl DeletionTransform {
+    pub fn try_create(
+        ctx: Arc<dyn TableContext>,
+        dal: Operator,
+        location_gen: TableMetaLocationGenerator,
+        base_snapshot: Arc<TableSnapshot>,
+        thresholds: BlockCompactThresholds,
+        inputs: Vec<Arc<InputPort>>,
+        output: Arc<OutputPort>,
+    ) -> Result<ProcessorPtr> {
+        Ok(ProcessorPtr::create(Box::new(DeletionTransform {
+            state: State::None,
+            ctx,
+            dal,
+            location_gen,
+            base_snapshot,
+            thresholds,
+            abort_operation: AbortOperation::default(),
+            inputs,
+            input_metas: HashMap::new(),
+            cur_input_index: 0,
+            output,
+            output_data: None,
+        })))
+    }
+
     fn insert_meta(&mut self, input_meta: BlockMetaInfoPtr) -> Result<()> {
         let meta = DeletionSourceMeta::from_meta(&input_meta)?;
         match &meta.op {
@@ -136,17 +168,21 @@ impl DeletionSink {
         }
     }
 
-    async fn write_segments(
-        ctx: Arc<dyn TableContext>,
-        dal: &'static Operator,
-        segments: Vec<SegmentData>,
-    ) -> Result<()> {
-        let max_runtime_threads = ctx.get_settings().get_max_threads()? as usize;
-        let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
+    async fn write_segments(&self, segments: Vec<SerializedData>) -> Result<()> {
+        let max_runtime_threads = self.ctx.get_settings().get_max_threads()? as usize;
+        let max_io_requests = self.ctx.get_settings().get_max_storage_io_requests()? as usize;
 
         let mut handles = Vec::with_capacity(segments.len());
         for segment in segments {
-            handles.push(async move { dal.object(&segment.location).write(segment.data).await });
+            let op = self.dal.clone();
+            handles.push(async move {
+                write_meta(&op, &segment.location, segment.data).await?;
+                if let Some(segment_cache) = CacheManager::instance().get_table_segment_cache() {
+                    let cache = &mut segment_cache.write();
+                    cache.put(segment.location.clone(), segment.segment.clone());
+                }
+                Ok::<_, ErrorCode>(())
+            });
         }
 
         // 1.2 build the runtime.
@@ -177,9 +213,9 @@ impl DeletionSink {
 }
 
 #[async_trait::async_trait]
-impl Processor for DeletionSink {
+impl Processor for DeletionTransform {
     fn name(&self) -> String {
-        "DeletionSink".to_string()
+        "DeletionTransform".to_string()
     }
 
     fn as_any(&mut self) -> &mut dyn Any {
@@ -187,14 +223,38 @@ impl Processor for DeletionSink {
     }
 
     fn event(&mut self) -> Result<Event> {
-        if matches!(self.state, State::Finish) {
+        if matches!(
+            self.state,
+            State::GenerateSegments(_) | State::Output { .. }
+        ) {
+            return Ok(Event::Sync);
+        }
+
+        if matches!(self.state, State::SerializedSegments { .. }) {
+            return Ok(Event::Async);
+        }
+
+        if self.output.is_finished() {
+            for input in &self.inputs {
+                input.finish();
+            }
             return Ok(Event::Finished);
+        }
+
+        if !self.output.can_push() {
+            return Ok(Event::NeedConsume);
+        }
+
+        if let Some(data_block) = self.output_data.take() {
+            self.output.push_data(Ok(data_block));
+            return Ok(Event::NeedConsume);
         }
 
         let current_input = self.get_current_input();
         if let Some(cur_input) = current_input {
             if cur_input.is_finished() {
                 self.state = State::ReadSegments;
+                self.output.finish();
                 return Ok(Event::Async);
             }
 
@@ -214,9 +274,10 @@ impl Processor for DeletionSink {
         match std::mem::replace(&mut self.state, State::None) {
             State::GenerateSegments(segment_infos) => {
                 let segments = self.base_snapshot.segments.clone();
-                let mut new_segments = Vec::with_capacity(self.input_metas.len());
+                let mut summary = Statistics::default();
+                let mut serialized_data = Vec::with_capacity(self.input_metas.len());
                 let mut segments_editor =
-                    BTreeMap::<_, _>::from_iter(segments.clone().into_iter().enumerate());
+                    BTreeMap::<_, _>::from_iter(segments.into_iter().enumerate());
                 for (seg_idx, seg_info) in segment_infos.iter().enumerate() {
                     if let Some((replaced, deleted)) = self.input_metas.get(&seg_idx) {
                         // prepare the new segment
@@ -243,31 +304,45 @@ impl Processor for DeletionSink {
                             // re-calculate the segment statistics
                             let new_summary =
                                 reduce_block_metas(&new_segment.blocks, self.thresholds)?;
-                            merge_statistics_mut(&mut self.merged_statistics, &new_summary)?;
+                            merge_statistics_mut(&mut summary, &new_summary)?;
                             new_segment.summary = new_summary;
 
                             let location = self.location_gen.gen_segment_info_location();
+                            self.abort_operation.add_segment(location.clone());
                             segments_editor
                                 .insert(seg_idx, (location.clone(), new_segment.format_version()));
-                            new_segments.push(SegmentData {
+                            serialized_data.push(SerializedData {
                                 data: serde_json::to_vec(&new_segment)?,
                                 location,
                                 segment: Arc::new(new_segment),
                             });
                         }
                     } else {
-                        merge_statistics_mut(&mut self.merged_statistics, &seg_info.summary)?;
+                        merge_statistics_mut(&mut summary, &seg_info.summary)?;
                     }
                 }
 
                 // assign back the mutated segments to snapshot
-                self.merged_segments = segments_editor.into_values().collect();
-                self.state = State::SerializedSegments(new_segments);
+                let segments = segments_editor.into_values().collect();
+                self.state = State::SerializedSegments {
+                    serialized_data,
+                    segments,
+                    summary,
+                };
+            }
+            State::Output { segments, summary } => {
+                let meta = MutationMeta::create(
+                    segments,
+                    summary,
+                    std::mem::take(&mut self.abort_operation),
+                );
+                self.output_data = Some(DataBlock::empty_with_meta(meta));
             }
             _ => return Err(ErrorCode::Internal("It's a bug.")),
         }
         Ok(())
     }
+
     async fn async_process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::None) {
             State::ReadSegments => {
@@ -281,8 +356,13 @@ impl Processor for DeletionSink {
                     .collect::<Result<Vec<_>>>()?;
                 self.state = State::GenerateSegments(segments);
             }
-            State::SerializedSegments(segments) => {
-                Self::write_segments(self.ctx.clone(), &self.dal, segments).await?;
+            State::SerializedSegments {
+                serialized_data,
+                segments,
+                summary,
+            } => {
+                self.write_segments(serialized_data).await?;
+                self.state = State::Output { segments, summary };
             }
             _ => return Err(ErrorCode::Internal("It's a bug.")),
         }

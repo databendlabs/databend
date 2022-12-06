@@ -19,15 +19,17 @@ use common_catalog::table::CompactTarget;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_pipeline_core::processors::port::InputPort;
+use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::Pipe;
 use common_pipeline_core::Pipeline;
 use common_storages_table_meta::meta::TableSnapshot;
 
 use crate::operations::mutation::all_the_columns_ids;
 use crate::operations::mutation::BlockCompactMutator;
-use crate::operations::mutation::CompactSink;
 use crate::operations::mutation::CompactSource;
 use crate::operations::mutation::CompactTransform;
+use crate::operations::mutation::MergeSegmentsTransform;
+use crate::operations::mutation::MutationSink;
 use crate::operations::mutation::SegmentCompactMutator;
 use crate::FuseTable;
 use crate::Table;
@@ -105,9 +107,9 @@ impl FuseTable {
     // The flow of Pipeline is as follows:
     //+--------------+        +-----------------+
     //|CompactSource1|  --->  |CompactTransform1|  ------
-    //+--------------+        +-----------------+        |      +-----------+
-    //|    ...       |  ...   |       ...       |  ...   | ---> |CompactSink|
-    //+--------------+        +-----------------+        |      +-----------+
+    //+--------------+        +-----------------+        |      +----------------------+      +------------+
+    //|    ...       |  ...   |       ...       |  ...   | ---> |MergeSegmentsTransform| ---> |MutationSink|
+    //+--------------+        +-----------------+        |      +----------------------+      +------------+
     //|CompactSourceN|  --->  |CompactTransformN|  ------
     //+--------------+        +-----------------+
     async fn compact_blocks(
@@ -155,12 +157,13 @@ impl FuseTable {
             )
         })?;
 
-        self.try_add_compact_sink(mutator.clone(), pipeline)?;
+        self.try_add_merge_segments_transform(mutator.clone(), pipeline)?;
+        pipeline.add_sink(|input| MutationSink::try_create(self, mutator.clone(), input))?;
 
         Ok(true)
     }
 
-    pub fn try_add_compact_sink(
+    pub fn try_add_merge_segments_transform(
         &self,
         mutator: BlockCompactMutator,
         pipeline: &mut Pipeline,
@@ -176,10 +179,15 @@ impl FuseTable {
                 for _ in 0..input_size {
                     inputs_port.push(InputPort::create());
                 }
-                let processor = CompactSink::try_create(self, mutator, inputs_port.clone())?;
+                let output_port = OutputPort::create();
+                let processor = MergeSegmentsTransform::try_create(
+                    mutator,
+                    inputs_port.clone(),
+                    output_port.clone(),
+                )?;
                 pipeline.pipes.push(Pipe::ResizePipe {
                     inputs_port,
-                    outputs_port: vec![],
+                    outputs_port: vec![output_port],
                     processor,
                 });
                 Ok(())

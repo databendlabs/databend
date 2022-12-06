@@ -14,7 +14,7 @@
 
 mod deletion_meta;
 mod deletion_part;
-mod deletion_sink;
 mod deletion_source;
+mod deletion_transform;
 
 pub use deletion_meta::Deletion;
