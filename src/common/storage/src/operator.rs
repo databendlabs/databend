@@ -139,6 +139,8 @@ fn init_fs_operator(cfg: &StorageFsConfig) -> Result<Operator> {
         path = env::current_dir().unwrap().join(path).display().to_string();
     }
     builder.root(&path);
+    // Enable atomice write.
+    builder.atomic_write_dir(&format!("{path}/.opendal_atomic/"));
 
     Ok(Operator::new(builder.build()?))
 }
