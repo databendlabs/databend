@@ -38,5 +38,12 @@ echo "select count(*)=2  from t16" | $MYSQL_CLIENT_CONNECT
 echo "checking that after flashback to the first snapshot, there should be only 1 snapshot visible"
 echo "select count(*)=1  from fuse_snapshot('default', 't16')" | $MYSQL_CLIENT_CONNECT
 
+# flash back to point that not exist should fail
+echo "flash back to snapshot id that not exist should report error 1105"
+echo "alter table t16 flashback to (snapshot => 'NOTE_EXIST')" | $MYSQL_CLIENT_CONNECT
+echo "flash back to timestamp that not exist should report error 1105"
+echo "alter table t16 flashback to (TIMESTAMP => '2000-12-06 04:35:17.856848'::TIMESTAMP)" | $MYSQL_CLIENT_CONNECT;
+
+
 ## Drop table.
 echo "drop table t16" | $MYSQL_CLIENT_CONNECT
