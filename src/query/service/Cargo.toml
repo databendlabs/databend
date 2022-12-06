@@ -65,6 +65,7 @@ common-storages-index = { path = "../storages/index" }
 common-storages-information-schema = { path = "../storages/information-schema" }
 common-storages-memory = { path = "../storages/memory" }
 common-storages-null = { path = "../storages/null" }
+common-storages-parquet = { path = "../storages/parquet" }
 common-storages-random = { path = "../storages/random" }
 common-storages-share = { path = "../storages/share" }
 common-storages-stage = { path = "../storages/stage" }
@@ -94,7 +95,6 @@ chrono-tz = { workspace = true }
 dashmap = "5.4"
 futures = "0.3.24"
 futures-util = "0.3.24"
-glob = "0.3.0"
 headers = "0.3.8"
 http = "0.2.8"
 itertools = "0.10.5"

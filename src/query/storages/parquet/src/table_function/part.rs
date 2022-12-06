@@ -22,12 +22,11 @@ use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
 use common_exception::Result;
 use common_storage::ColumnLeaves;
-use common_storages_fuse::ColumnMeta;
-use common_storages_fuse::FusePartInfo;
-use common_storages_table_meta::meta::Compression;
 
 use super::table::ParquetFileMeta;
 use super::ParquetTable;
+use crate::ParquetColumnMeta;
+use crate::ParquetPartInfo;
 
 impl ParquetTable {
     #[inline]
@@ -168,20 +167,20 @@ impl ParquetTable {
             };
             columns_meta.insert(
                 idx,
-                ColumnMeta::create(
+                ParquetColumnMeta::create(
                     col_start as u64,
                     metadata.total_compressed_size as u64,
                     metadata.num_values as u64,
+                    column_meta.compression().into(),
                 ),
             );
         }
 
-        FusePartInfo::create(
+        ParquetPartInfo::create(
             parquet_file_meta.location.clone(),
             0,
             parquet_file_meta.file_meta.num_rows as u64,
             columns_meta,
-            Compression::Lz4Raw, // only Lz4Raw is supported now (same as Fuse Engine)
         )
     }
 
@@ -207,21 +206,21 @@ impl ParquetTable {
 
                 columns_meta.insert(
                     *index,
-                    ColumnMeta::create(
+                    ParquetColumnMeta::create(
                         col_start as u64,
                         metadata.total_compressed_size as u64,
                         metadata.num_values as u64,
+                        parquet_column_meta.compression().into(),
                     ),
                 );
             }
         }
 
-        FusePartInfo::create(
+        ParquetPartInfo::create(
             parquet_file_meta.location.clone(),
             0,
             parquet_file_meta.file_meta.num_rows as u64,
             columns_meta,
-            Compression::Lz4Raw, // only Lz4Raw is supported now (same as Fuse Engine)
         )
     }
 }

@@ -28,6 +28,8 @@ use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PushDownInfo;
+use common_catalog::table::Table;
+use common_catalog::table_args::TableArgs;
 use common_catalog::table_function::TableFunction;
 use common_datavalues::DataSchema;
 use common_datavalues::DataValue;
@@ -37,11 +39,9 @@ use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 use common_pipeline_core::Pipeline;
-use common_storages_fuse::TableContext;
 use opendal::Operator;
 
-use crate::storages::Table;
-use crate::table_functions::TableArgs;
+use super::TableContext;
 
 pub struct ParquetFileMeta {
     pub location: String,

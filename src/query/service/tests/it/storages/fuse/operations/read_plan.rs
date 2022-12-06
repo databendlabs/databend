@@ -23,11 +23,11 @@ use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
 use common_datavalues::DataValue;
 use common_exception::Result;
+use common_storage::ColumnLeaf;
 use common_storage::ColumnLeaves;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::ColumnMeta;
 use common_storages_table_meta::meta::ColumnStatistics;
-use databend_query::storages::fuse::ColumnLeaf;
 use databend_query::storages::fuse::FuseTable;
 use futures::TryStreamExt;
 

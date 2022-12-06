@@ -14,7 +14,6 @@
 
 mod async_crash_me;
 mod numbers;
-mod read_parquet;
 mod sync_crash_me;
 mod table_function;
 mod table_function_factory;
@@ -22,7 +21,6 @@ mod table_function_factory;
 pub use numbers::generate_numbers_parts;
 pub use numbers::NumbersPartInfo;
 pub use numbers::NumbersTable;
-pub use read_parquet::ParquetTable;
 pub use table_function::TableFunction;
 pub use table_function_factory::TableArgs;
 pub use table_function_factory::TableFunctionFactory;

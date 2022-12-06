@@ -20,6 +20,7 @@ use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::MetaId;
+use common_storages_parquet::ParquetTable;
 use parking_lot::RwLock;
 
 use crate::catalogs::SYS_TBL_FUC_ID_END;
@@ -31,7 +32,6 @@ use crate::storages::fuse::table_functions::FuseSnapshotTable;
 use crate::storages::fuse::table_functions::FuseStatisticTable;
 use crate::table_functions::async_crash_me::AsyncCrashMeTable;
 use crate::table_functions::numbers::NumbersTable;
-use crate::table_functions::read_parquet::ParquetTable;
 use crate::table_functions::sync_crash_me::SyncCrashMeTable;
 use crate::table_functions::TableFunction;
 

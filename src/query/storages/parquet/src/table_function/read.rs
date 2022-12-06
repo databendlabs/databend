@@ -23,37 +23,37 @@ use common_exception::Result;
 use common_pipeline_core::Pipeline;
 use common_sql::evaluator::EvalNode;
 use common_sql::evaluator::Evaluator;
-use common_storages_fuse::io::BlockReader;
-use common_storages_fuse::operations::FuseTableSource;
-use common_storages_fuse::TableContext;
 
 use super::ParquetTable;
+use super::TableContext;
+use crate::ParquetReader;
+use crate::ParquetTableSource;
 
 impl ParquetTable {
-    pub fn create_block_reader(&self, projection: Projection) -> Result<Arc<BlockReader>> {
+    pub fn create_reader(&self, projection: Projection) -> Result<Arc<ParquetReader>> {
         let table_schema = self.table_info.schema();
-        BlockReader::create(self.operator.clone(), table_schema, projection)
+        ParquetReader::create(self.operator.clone(), table_schema, projection)
     }
 
     // Build the block reader.
-    fn build_block_reader(&self, plan: &DataSourcePlan) -> Result<Arc<BlockReader>> {
+    fn build_reader(&self, plan: &DataSourcePlan) -> Result<Arc<ParquetReader>> {
         match prewhere_of_push_downs(&plan.push_downs) {
             None => {
                 let projection = projection_of_push_downs(&plan.schema(), &plan.push_downs);
-                self.create_block_reader(projection)
+                self.create_reader(projection)
             }
-            Some(v) => self.create_block_reader(v.output_columns),
+            Some(v) => self.create_reader(v.output_columns),
         }
     }
 
     // Build the prewhere reader.
-    fn build_prewhere_reader(&self, plan: &DataSourcePlan) -> Result<Arc<BlockReader>> {
+    fn build_prewhere_reader(&self, plan: &DataSourcePlan) -> Result<Arc<ParquetReader>> {
         match prewhere_of_push_downs(&plan.push_downs) {
             None => {
                 let projection = projection_of_push_downs(&plan.schema(), &plan.push_downs);
-                self.create_block_reader(projection)
+                self.create_reader(projection)
             }
-            Some(v) => self.create_block_reader(v.prewhere_columns),
+            Some(v) => self.create_reader(v.prewhere_columns),
         }
     }
 
@@ -74,14 +74,14 @@ impl ParquetTable {
     }
 
     // Build the remain reader.
-    fn build_remain_reader(&self, plan: &DataSourcePlan) -> Result<Arc<Option<BlockReader>>> {
+    fn build_remain_reader(&self, plan: &DataSourcePlan) -> Result<Arc<Option<ParquetReader>>> {
         Ok(match prewhere_of_push_downs(&plan.push_downs) {
             None => Arc::new(None),
             Some(v) => {
                 if v.remain_columns.is_empty() {
                     Arc::new(None)
                 } else {
-                    Arc::new(Some((*self.create_block_reader(v.remain_columns)?).clone()))
+                    Arc::new(Some((*self.create_reader(v.remain_columns)?).clone()))
                 }
             }
         })
@@ -123,7 +123,7 @@ impl ParquetTable {
     ) -> Result<()> {
         let projection = projection_of_push_downs(&plan.schema(), &plan.push_downs);
         let max_io_requests = self.adjust_io_request(&ctx, &projection)?;
-        let block_reader = self.build_block_reader(plan)?;
+        let block_reader = self.build_reader(plan)?;
         let prewhere_reader = self.build_prewhere_reader(plan)?;
         let prewhere_filter =
             self.build_prewhere_filter_executor(ctx.clone(), plan, prewhere_reader.schema())?;
@@ -132,7 +132,7 @@ impl ParquetTable {
         // Add source pipe.
         pipeline.add_source(
             |output| {
-                FuseTableSource::create(
+                ParquetTableSource::create(
                     ctx.clone(),
                     output,
                     block_reader.clone(),
