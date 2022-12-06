@@ -11,7 +11,8 @@ SELECT
     [ALL | DISTINCT]
     select_expr [[AS] alias], ...
     [INTO variable [, ...]]
-    [ FROM table_references
+    [EXCLUDE (col_name1 [, col_name2, col_name3, ...] ) ]
+    [FROM table_references
     [AT ...]
     [WHERE expr]
     [GROUP BY {{col_name | expr | col_alias | col_position}, ...
@@ -21,6 +22,7 @@ SELECT
     [LIMIT row_count]
     [OFFSET row_count]
     [IGNORE_RESULT]
+    ]
     ]
 ```
 
@@ -39,6 +41,47 @@ SELECT number FROM numbers(3);
 |      1 |
 |      2 |
 +--------+
+```
+
+### EXCLUDE Parameter
+
+Excludes one or more columns by their names from the result. The parameter is usually used in conjunction with `SELECT * ...` to exclude a few columns from the result instead of retrieving them all.
+
+```sql
+SELECT * FROM allemployees ORDER BY id;
+
+---
+| id | firstname | lastname | gender |
+|----|-----------|----------|--------|
+| 1  | Ryan      | Tory     | M      |
+| 2  | Oliver    | Green    | M      |
+| 3  | Noah      | Shuster  | M      |
+| 4  | Lily      | McMent   | F      |
+| 5  | Macy      | Lee      | F      |
+
+-- Exclude the column "id" from the result
+SELECT * EXCLUDE id FROM allemployees;
+
+---
+| firstname | lastname | gender |
+|-----------|----------|--------|
+| Noah      | Shuster  | M      |
+| Ryan      | Tory     | M      |
+| Oliver    | Green    | M      |
+| Lily      | McMent   | F      |
+| Macy      | Lee      | F      |
+
+-- Exclude the columns "id" and "lastname" from the result
+SELECT * EXCLUDE (id,lastname) FROM allemployees;
+
+---
+| firstname | gender |
+|-----------|--------|
+| Oliver    | M      |
+| Ryan      | M      |
+| Lily      | F      |
+| Noah      | M      |
+| Macy      | F      |
 ```
 
 ## FROM Clause
