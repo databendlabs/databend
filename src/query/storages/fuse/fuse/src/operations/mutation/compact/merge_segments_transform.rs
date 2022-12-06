@@ -133,7 +133,6 @@ impl Processor for MergeSegmentsTransform {
         let current_input = self.get_current_input();
         if let Some(cur_input) = current_input {
             if cur_input.is_finished() {
-                self.output.finish();
                 return Ok(Event::Sync);
             }
 
@@ -174,7 +173,6 @@ impl Processor for MergeSegmentsTransform {
             std::mem::take(&mut self.abort_operation),
         );
         self.output_data = Some(DataBlock::empty_with_meta(meta));
-        println!("merge success");
         Ok(())
     }
 }

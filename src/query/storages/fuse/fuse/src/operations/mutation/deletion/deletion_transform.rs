@@ -254,7 +254,6 @@ impl Processor for DeletionTransform {
         if let Some(cur_input) = current_input {
             if cur_input.is_finished() {
                 self.state = State::ReadSegments;
-                self.output.finish();
                 return Ok(Event::Async);
             }
 
