@@ -92,7 +92,7 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
     #[inline]
     fn state_layout(&self) -> std::alloc::Layout {
         let layout = self.inner.state_layout();
-        Layout::from_size_align(layout.size() + 1, layout.align()).unwrap()
+        Layout::from_size_align(layout.size() + layout.align(), layout.align()).unwrap()
     }
 
     #[inline]

@@ -94,7 +94,7 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction for AggregateNullUnaryAdapto
     #[inline]
     fn state_layout(&self) -> Layout {
         let layout = self.nested.state_layout();
-        let add = usize::from(NULLABLE_RESULT);
+        let add = if NULLABLE_RESULT { layout.align() } else { 0 };
         Layout::from_size_align(layout.size() + add, layout.align()).unwrap()
     }
 
