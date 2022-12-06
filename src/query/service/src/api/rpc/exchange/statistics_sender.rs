@@ -90,6 +90,11 @@ impl StatisticsSender {
                         notified = right;
                         recv = Box::pin(flight_exchange.recv());
 
+                        if matches!(command, DataPacket::ClosingClient) {
+                            ctx.get_exchange_manager().shutdown_query(&query_id);
+                            return;
+                        }
+
                         if let Err(_cause) = Self::on_command(&ctx, command, &flight_exchange).await
                         {
                             ctx.get_exchange_manager().shutdown_query(&query_id);
@@ -100,6 +105,10 @@ impl StatisticsSender {
             }
 
             if let Ok(Some(command)) = flight_exchange.recv().await {
+                if matches!(command, DataPacket::ClosingClient) {
+                    return;
+                }
+
                 if let Err(error) = Self::on_command(&ctx, command, &flight_exchange).await {
                     tracing::warn!("Statistics send has error, cause: {:?}.", error);
                 }
@@ -140,6 +149,7 @@ impl StatisticsSender {
                     })
                     .await
             }
+            DataPacket::ClosingClient => unreachable!(),
         }
     }
 
