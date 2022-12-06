@@ -187,8 +187,8 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
 
     fn merge(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
         self.inner.merge(place, rhs)?;
-        let flag = self.get_flag(place) + self.get_flag(rhs);
-        self.set_flag(place, flag);
+        let flag = self.get_flag(place) > 0 || self.get_flag(rhs) > 0;
+        self.set_flag(place, u8::from(flag));
         Ok(())
     }
 
