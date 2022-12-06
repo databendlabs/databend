@@ -68,7 +68,7 @@ cluster_name = "foo_cluster"
     )?;
 
     temp_env::with_var("METASRV_CONFIG_FILE", Some(file_path.clone()), || {
-        let cfg = Config::load().expect("load must success");
+        let cfg = Config::load_for_test().expect("load must success");
         assert_eq!(cfg.log.file.level, "ERROR");
         assert_eq!(cfg.log.file.dir, "foo/logs");
         assert_eq!(cfg.admin_api_address, "127.0.0.1:9000");
@@ -101,7 +101,7 @@ cluster_name = "foo_cluster"
             ("METASRV_LOG_LEVEL", Some("DEBUG")),
         ],
         || {
-            let cfg = Config::load().expect("load must success");
+            let cfg = Config::load_for_test().expect("load must success");
             assert_eq!(cfg.log.file.level, "DEBUG");
         },
     );
@@ -116,7 +116,7 @@ cluster_name = "foo_cluster"
             ("KVSRV_API_PORT", Some("123")),
         ],
         || {
-            let cfg = Config::load().expect("load must success");
+            let cfg = Config::load_for_test().expect("load must success");
             assert_eq!(cfg.raft_config.raft_api_port, 123);
         },
     );
