@@ -148,12 +148,12 @@ pub fn select_target(i: Input) -> IResult<SelectTarget> {
 
 pub fn travel_point(i: Input) -> IResult<TimeTravelPoint> {
     let at_snapshot = map(
-        rule! { AT ~ "(" ~ SNAPSHOT ~ "=>" ~ #literal_string ~ ")" },
-        |(_, _, _, _, s, _)| TimeTravelPoint::Snapshot(s),
+        rule! { "(" ~ SNAPSHOT ~ "=>" ~ #literal_string ~ ")" },
+        |(_, _, _, s, _)| TimeTravelPoint::Snapshot(s),
     );
     let at_timestamp = map(
-        rule! { AT ~ "(" ~ TIMESTAMP ~ "=>" ~ #expr ~ ")" },
-        |(_, _, _, _, e, _)| TimeTravelPoint::Timestamp(Box::new(e)),
+        rule! { "(" ~ TIMESTAMP ~ "=>" ~ #expr ~ ")" },
+        |(_, _, _, e, _)| TimeTravelPoint::Timestamp(Box::new(e)),
     );
 
     rule!(
@@ -262,14 +262,14 @@ pub enum TableReferenceElement<'a> {
 pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceElement>> {
     let aliased_table = map(
         rule! {
-            #peroid_separated_idents_1_to_3 ~ #travel_point? ~ #table_alias?
+            #peroid_separated_idents_1_to_3 ~ (AT ~ #travel_point)? ~ #table_alias?
         },
-        |((catalog, database, table), travel_point, alias)| TableReferenceElement::Table {
+        |((catalog, database, table), travel_point_opt, alias)| TableReferenceElement::Table {
             catalog,
             database,
             table,
             alias,
-            travel_point,
+            travel_point: travel_point_opt.map(|p| p.1),
         },
     );
     let table_function = map(
