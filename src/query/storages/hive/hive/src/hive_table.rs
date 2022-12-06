@@ -514,7 +514,7 @@ impl Table for HiveTable {
         )))
     }
 
-    async fn optimize(&self, _ctx: Arc<dyn TableContext>, _keep_last_snapshot: bool) -> Result<()> {
+    async fn purge(&self, _ctx: Arc<dyn TableContext>, _keep_last_snapshot: bool) -> Result<()> {
         Ok(())
     }
 

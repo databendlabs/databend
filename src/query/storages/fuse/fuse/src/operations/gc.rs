@@ -12,10 +12,14 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Instant;
 
+use chrono::DateTime;
+use chrono::Duration;
+use chrono::Utc;
 use common_cache::Cache;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
@@ -23,13 +27,19 @@ use common_exception::Result;
 use common_storages_table_meta::caches::CacheManager;
 use common_storages_table_meta::meta::Location;
 use common_storages_table_meta::meta::SnapshotId;
+use common_storages_table_meta::meta::TableSnapshotLite;
+use roaring::RoaringBitmap;
 use tracing::info;
 use tracing::warn;
 
 use crate::io::Files;
+use crate::io::ListSnapshotLiteOption;
+use crate::io::PositionTagged;
 use crate::io::SegmentsIO;
 use crate::io::SnapshotsIO;
 use crate::FuseTable;
+
+pub const DEFAULT_RETENTION_PERIOD_HOURS: u32 = 12;
 
 #[derive(Default)]
 struct LocationTuple {
@@ -38,9 +48,12 @@ struct LocationTuple {
 }
 
 impl FuseTable {
-    pub async fn do_gc(&self, ctx: &Arc<dyn TableContext>, keep_last_snapshot: bool) -> Result<()> {
-        let r = self.read_table_snapshot().await;
-        let snapshot_opt = match r {
+    pub async fn do_purge(
+        &self,
+        ctx: &Arc<dyn TableContext>,
+        keep_last_snapshot: bool,
+    ) -> Result<()> {
+        let snapshot_opt = match self.read_table_snapshot().await {
             Err(e) if e.code() == ErrorCode::STORAGE_NOT_FOUND => {
                 // concurrent gc: someone else has already collected this snapshot, ignore it
                 warn!(
@@ -74,11 +87,13 @@ impl FuseTable {
             };
 
         // 2. Get all snapshot(including root snapshot).
-        let mut all_snapshot_lites = vec![];
+        let mut chained_snapshots = vec![];
         let mut all_segment_locations = HashSet::new();
+        let mut orphan_snapshots = vec![];
 
         let mut status_snapshot_scan_count = 0;
         let mut status_snapshot_scan_cost = 0;
+
         if let Some(root_snapshot_location) = self.snapshot_loc().await? {
             let snapshots_io = SnapshotsIO::create(
                 ctx.clone(),
@@ -87,17 +102,49 @@ impl FuseTable {
             );
 
             let start = Instant::now();
-            (all_snapshot_lites, all_segment_locations) = snapshots_io
-                .read_snapshot_lites(
+            let min_snapshot_timestamp = root_snapshot_ts;
+            let mut segments_excluded = &HashSet::new();
+            if keep_last_snapshot {
+                segments_excluded = &segments_referenced_by_root
+            };
+            let snapshot_lites_extended = snapshots_io
+                .read_snapshot_lites_ext(
                     root_snapshot_location.clone(),
                     None,
-                    true,
-                    root_snapshot_ts,
+                    ListSnapshotLiteOption::NeedSegmentsWithExclusion(Some(segments_excluded)),
+                    min_snapshot_timestamp,
                     |x| {
                         self.data_metrics.set_status(&x);
                     },
                 )
                 .await?;
+
+            chained_snapshots = snapshot_lites_extended.chained_snapshot_lites;
+
+            // partition the orphan snapshots by retention interval
+            let partitioned_snapshots = Self::apply_retention_rule(
+                min_snapshot_timestamp,
+                snapshot_lites_extended.orphan_snapshot_lites,
+            );
+
+            // filter out segments that still referenced by snapshot that within retention period
+            all_segment_locations = Self::filter_out_segments_within_retention(
+                partitioned_snapshots
+                    .within_retention
+                    .into_iter()
+                    .map(|(_, index)| index as u32),
+                snapshot_lites_extended.segment_locations,
+            );
+
+            // orphan_snapshots that beyond retention period are allowed to be collected
+            orphan_snapshots = partitioned_snapshots
+                .beyond_retention
+                .into_iter()
+                .map(|(v, _)| v)
+                .collect();
+
+            // FIXME: we do not need to write last snapshot hint here(since last snapshot never changed
+            // during gc). introduce a dedicated stmt to refresh the hint file instead pls.
 
             // try keep a hit file of last snapshot
             Self::write_last_snapshot_hint(
@@ -107,7 +154,7 @@ impl FuseTable {
             )
             .await;
 
-            status_snapshot_scan_count += all_snapshot_lites.len();
+            status_snapshot_scan_count += chained_snapshots.len() + orphan_snapshots.len();
             status_snapshot_scan_cost += start.elapsed().as_secs();
         }
 
@@ -118,7 +165,7 @@ impl FuseTable {
 
         // 3.1 Find all the snapshots need to be deleted.
         {
-            for snapshot in &all_snapshot_lites {
+            for snapshot in &chained_snapshots {
                 // Skip the root snapshot if the keep_last_snapshot is true.
                 if keep_last_snapshot && snapshot.snapshot_id == root_snapshot_id {
                     continue;
@@ -170,8 +217,8 @@ impl FuseTable {
             let mut status_segment_to_be_purged_count = 0;
 
             let start = Instant::now();
-            let segments_to_be_purged_vec = Vec::from_iter(segments_to_be_purged);
-            for chunk in segments_to_be_purged_vec.chunks(chunk_size) {
+            let segment_locations = Vec::from_iter(segments_to_be_purged);
+            for chunk in segment_locations.chunks(chunk_size) {
                 let locations = self.get_block_locations(ctx.clone(), chunk).await?;
 
                 // 1. Try to purge block file chunks.
@@ -239,10 +286,18 @@ impl FuseTable {
         // 5. Purge snapshots by chunk size(max_storage_io_requests).
         {
             let mut status_purged_count = 0;
-            let status_need_purged_count = snapshots_to_be_purged.len();
 
             let location_gen = self.meta_location_generator();
-            let snapshots_to_be_purged_vec = Vec::from_iter(snapshots_to_be_purged);
+            let snapshots_to_be_purged_vec = Vec::from_iter(
+                snapshots_to_be_purged.into_iter().chain(
+                    orphan_snapshots
+                        .into_iter()
+                        .map(|lite| (lite.snapshot_id, lite.format_version)),
+                ),
+            );
+
+            // let snapshots_to_be_purged_vec = Vec::from_iter(snapshots_to_be_purged);
+            let status_need_purged_count = snapshots_to_be_purged_vec.len();
 
             let start = Instant::now();
             for chunk in snapshots_to_be_purged_vec.chunks(chunk_size) {
@@ -298,6 +353,36 @@ impl FuseTable {
         }
 
         Ok(())
+    }
+
+    // Partition snapshot_lites into two parts
+    // - those are beyond retention period
+    // - those are within retention period
+    fn apply_retention_rule(
+        base_timestamp: Option<DateTime<Utc>>,
+        snapshot_lites: Vec<(TableSnapshotLite, usize)>,
+    ) -> RetentionPartition {
+        let retention_interval = Duration::hours(DEFAULT_RETENTION_PERIOD_HOURS as i64);
+        let retention_point = base_timestamp.map(|s| s - retention_interval);
+        let (beyond_retention, within_retention) = snapshot_lites
+            .into_iter()
+            .partition(|(lite, _idx)| lite.timestamp < retention_point);
+        RetentionPartition {
+            beyond_retention,
+            within_retention,
+        }
+    }
+
+    // filter out segments that are referenced by orphan snapshots
+    // which are within retention period
+    fn filter_out_segments_within_retention(
+        orphan_snapshot_index: impl IntoIterator<Item = u32>,
+        mut segment_with_refer_index: HashMap<Location, RoaringBitmap>,
+    ) -> HashSet<Location> {
+        let orphan_snapshot_index_bitmap = RoaringBitmap::from_iter(orphan_snapshot_index);
+        segment_with_refer_index
+            .retain(|_location, refer_map| orphan_snapshot_index_bitmap.is_disjoint(refer_map));
+        segment_with_refer_index.into_keys().collect()
     }
 
     // Purge file by location chunks.
@@ -363,4 +448,9 @@ impl FuseTable {
             }
         }
     }
+}
+
+struct RetentionPartition {
+    beyond_retention: Vec<PositionTagged<TableSnapshotLite>>,
+    within_retention: Vec<PositionTagged<TableSnapshotLite>>,
 }

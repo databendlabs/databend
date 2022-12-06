@@ -194,7 +194,7 @@ pub trait Table: Sync + Send {
         Ok(())
     }
 
-    async fn optimize(&self, ctx: Arc<dyn TableContext>, keep_last_snapshot: bool) -> Result<()> {
+    async fn purge(&self, ctx: Arc<dyn TableContext>, keep_last_snapshot: bool) -> Result<()> {
         let (_, _) = (ctx, keep_last_snapshot);
 
         Ok(())
