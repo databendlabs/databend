@@ -2067,9 +2067,11 @@ dependencies = [
  "anyhow",
  "async-trait",
  "backon",
+ "bytes",
  "common-auth",
  "common-base",
  "common-exception",
+ "futures",
  "globiter",
  "once_cell",
  "opendal",
@@ -3194,6 +3196,7 @@ dependencies = [
  "semver 1.0.14",
  "serde",
  "serde_json",
+ "serde_urlencoded",
  "temp-env",
  "tempfile",
  "time 0.3.15",
@@ -5708,9 +5711,9 @@ checksum = "0ab1bc2a289d34bd04a330323ac98a1b4bc82c9d9fcb1e66b63caa84da26b575"
 
 [[package]]
 name = "opendal"
-version = "0.21.0"
+version = "0.22.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e093402bdf1033677db972e0f5ac349e3ec251fe99b5db91b1472180c1f48254"
+checksum = "9176f087790fd937421e3f649db6e85ad47dc63c60bef127402d233ab8f31639"
 dependencies = [
  "anyhow",
  "async-compat",
@@ -5741,11 +5744,11 @@ dependencies = [
  "serde",
  "serde_json",
  "suppaftp",
- "thiserror",
  "time 0.3.15",
  "tokio",
  "tracing",
  "ureq",
+ "uuid",
 ]
 
 [[package]]
@@ -5772,16 +5775,17 @@ dependencies = [
 
 [[package]]
 name = "opensrv-mysql"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e4c24c12fd688cb5aa5b1a54c6ccb2e30fb9b5132debb0e89fcb432b3f73db8f"
+version = "0.3.0"
+source = "git+https://github.com/datafuselabs/opensrv?rev=5e37788#5e37788525b76bb5932b4febc59f3fdc2d15f692"
 dependencies = [
  "async-trait",
  "byteorder",
  "chrono",
  "mysql_common",
  "nom",
+ "pin-project-lite",
  "tokio",
+ "tokio-rustls",
 ]
 
 [[package]]
@@ -6924,9 +6928,9 @@ dependencies = [
 
 [[package]]
 name = "reqsign"
-version = "0.6.7"
+version = "0.6.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d544686c7cb5a31f085ae9f5c4e40a30dcba72d0b1d77656329dc4f90433cd6"
+checksum = "605c196ac197a563c908b62470d96968ce4880fdcb64e296f55880fd21c8ad65"
 dependencies = [
  "anyhow",
  "backon",
@@ -8157,9 +8161,9 @@ dependencies = [
 
 [[package]]
 name = "tikv-jemalloc-ctl"
-version = "0.4.2"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eb833c46ecbf8b6daeccb347cefcabf9c1beb5c9b0f853e1cec45632d9963e69"
+checksum = "e37706572f4b151dff7a0146e040804e9c26fe3a3118591112f05cf12a4216c1"
 dependencies = [
  "libc",
  "paste",
@@ -8168,9 +8172,9 @@ dependencies = [
 
 [[package]]
 name = "tikv-jemalloc-sys"
-version = "0.4.3+5.2.1-patched.2"
+version = "0.5.2+5.3.0-patched"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a1792ccb507d955b46af42c123ea8863668fae24d03721e40cad6a41773dbb49"
+checksum = "ec45c14da997d0925c7835883e4d5c181f196fa142f8c19d7643d1e9af2592c3"
 dependencies = [
  "cc",
  "fs_extra",
@@ -8667,7 +8671,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if",
- "rand 0.8.5",
+ "rand 0.7.3",
  "static_assertions",
 ]
 

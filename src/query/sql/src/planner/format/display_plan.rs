@@ -116,6 +116,7 @@ impl Plan {
             Plan::ShowRoles(p) => Ok(format!("{:?}", p)),
             Plan::ShowObjectGrantPrivileges(p) => Ok(format!("{:?}", p)),
             Plan::ShowGrantTenantsOfShare(p) => Ok(format!("{:?}", p)),
+            Plan::RevertTable(p) => Ok(format!("{:?}", p)),
         }
     }
 }

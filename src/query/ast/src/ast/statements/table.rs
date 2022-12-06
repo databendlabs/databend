@@ -24,6 +24,7 @@ use crate::ast::Expr;
 use crate::ast::Identifier;
 use crate::ast::Query;
 use crate::ast::TableReference;
+use crate::ast::TimeTravelPoint;
 use crate::ast::TypeName;
 use crate::ast::UriLocation;
 
@@ -284,6 +285,9 @@ pub enum AlterTableAction<'a> {
         is_final: bool,
         selection: Option<Expr<'a>>,
     },
+    RevertTo {
+        point: TimeTravelPoint<'a>,
+    },
 }
 
 impl Display for AlterTableAction<'_> {
@@ -310,6 +314,10 @@ impl Display for AlterTableAction<'_> {
                 if let Some(conditions) = selection {
                     write!(f, " WHERE {conditions}")?;
                 }
+                Ok(())
+            }
+            AlterTableAction::RevertTo { point } => {
+                write!(f, "REVERT TO {}", point)?;
                 Ok(())
             }
         }
