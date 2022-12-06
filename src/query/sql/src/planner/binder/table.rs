@@ -326,13 +326,14 @@ impl<'a> Binder {
                     user_stage_info,
                     path: path.to_string(),
                     files: vec![],
+                    pattern: Default::default(),
                 };
 
                 let stage_table = StageTable::try_create(stage_table_info)?;
 
                 let table_index = self.metadata.write().add_table(
-                    "stage_catalog".to_string(),
-                    "stage_db".to_string(),
+                    "default".to_string(),
+                    "default".to_string(),
                     stage_table,
                     table_alias_name,
                 );

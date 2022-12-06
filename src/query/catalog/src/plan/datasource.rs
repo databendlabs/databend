@@ -34,6 +34,7 @@ pub struct StageTableInfo {
     pub schema: DataSchemaRef,
     pub path: String,
     pub files: Vec<String>,
+    pub pattern: String,
     pub user_stage_info: UserStageInfo,
 }
 

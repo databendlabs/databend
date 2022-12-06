@@ -92,17 +92,11 @@ impl Table for StageTable {
     async fn read_partitions(
         &self,
         ctx: Arc<dyn TableContext>,
-        push_downs: Option<PushDownInfo>,
+        _push_downs: Option<PushDownInfo>,
     ) -> Result<(PartStatistics, Partitions)> {
-        let pushdown = push_downs.ok_or_else(|| {
-            ErrorCode::Internal("stage_table: pushdown cannot be None(It's a bug)")
-        })?;
-        let stage_info = pushdown.stage.ok_or_else(|| {
-            ErrorCode::Internal("stage_table: pushdown.stage cannot be None(It's a bug)")
-        })?;
-
+        let stage_info = &self.table_info;
         // User set the files.
-        let files = stage_info.files;
+        let files = &stage_info.files;
 
         // 1. List all files.
         let path = &stage_info.path;

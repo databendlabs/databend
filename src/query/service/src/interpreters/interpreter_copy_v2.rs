@@ -19,8 +19,6 @@ use chrono::Utc;
 use common_base::base::GlobalIORuntime;
 use common_catalog::catalog::Catalog;
 use common_catalog::plan::DataSourceInfo;
-use common_catalog::plan::PushDownInfo;
-use common_catalog::plan::StagePushDownInfo;
 use common_catalog::plan::StageTableInfo;
 use common_catalog::table::AppendMode;
 use common_datavalues::prelude::*;
@@ -104,6 +102,7 @@ impl CopyInterpreterV2 {
             user_stage_info: stage.clone(),
             path: path.to_string(),
             files: vec![],
+            pattern: "".to_string(),
         };
 
         let mut build_res = select_interpreter.execute2().await?;
@@ -271,9 +270,6 @@ impl CopyInterpreterV2 {
         catalog_name: &str,
         database_name: &str,
         table_name: &str,
-        files: &[String],
-        path: &str,
-        pattern: &str,
         force: bool,
         stage_table_info: &StageTableInfo,
     ) -> Result<PipelineBuildResult> {
@@ -287,22 +283,8 @@ impl CopyInterpreterV2 {
         // 2. Have copied files(status with AlreadyCopied)
         info!("copy: try to read all files");
         let read_source_plan = {
-            let copy_info = StagePushDownInfo {
-                files: files.to_vec(),
-                path: path.to_string(),
-                pattern: pattern.to_string(),
-                user_stage_info: stage_table_info.user_stage_info.clone(),
-            };
-            let pushdown = PushDownInfo {
-                projection: None,
-                filters: vec![],
-                prewhere: None,
-                limit: None,
-                order_by: vec![],
-                stage: Some(copy_info),
-            };
             stage_table
-                .read_plan_with_catalog(ctx.clone(), catalog_name.to_string(), Some(pushdown))
+                .read_plan_with_catalog(ctx.clone(), catalog_name.to_string(), None)
                 .await?
         };
 
@@ -521,21 +503,15 @@ impl Interpreter for CopyInterpreterV2 {
                 catalog_name,
                 database_name,
                 table_name,
-                files,
-                pattern,
                 from,
                 force,
                 ..
             } => match &from.source_info {
                 DataSourceInfo::StageSource(table_info) => {
-                    let path = &table_info.path;
                     self.build_copy_into_table_pipeline(
                         catalog_name,
                         database_name,
                         table_name,
-                        files,
-                        path,
-                        pattern,
                         *force,
                         table_info,
                     )
