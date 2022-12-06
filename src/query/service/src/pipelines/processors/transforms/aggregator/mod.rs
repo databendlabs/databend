@@ -52,3 +52,5 @@ pub use aggregator_single_key::PartialSingleStateAggregator;
 pub use aggregator_single_key::SingleStateAggregator;
 pub use aggregator_twolevel::TwoLevelAggregator;
 pub use aggregator_twolevel::TwoLevelAggregatorLike;
+pub use aggregate_info::OverflowInfo;
+pub use aggregate_info::AggregateInfo;

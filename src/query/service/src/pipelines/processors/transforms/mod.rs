@@ -28,6 +28,7 @@ mod transform_left_join;
 mod transform_merge_block;
 mod transform_right_join;
 mod transform_right_semi_anti_join;
+mod transform_convert_grouping;
 
 pub use aggregator::AggregatorParams;
 pub use aggregator::AggregatorTransformParams;
@@ -67,3 +68,4 @@ pub use transform_right_semi_anti_join::TransformRightSemiAntiJoin;
 pub use transform_sort_merge::SortMergeCompactor;
 pub use transform_sort_merge::TransformSortMerge;
 pub use transform_sort_partial::TransformSortPartial;
+pub use transform_convert_grouping::TransformConvertGrouping;

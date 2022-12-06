@@ -23,7 +23,7 @@ use common_datablocks::HashMethodSerializer;
 use common_datablocks::KeysState;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_hashtable::FastHash;
+use common_hashtable::{FastHash, HashtableKeyable};
 use common_hashtable::HashMap;
 use common_hashtable::HashtableLike;
 use common_hashtable::LookupHashMap;
@@ -84,13 +84,13 @@ use crate::pipelines::processors::AggregatorParams;
 pub trait PolymorphicKeysHelper<Method: HashMethod> {
     const SUPPORT_TWO_LEVEL: bool;
 
-    type HashTable: HashtableLike<Key = Method::HashKey, Value = usize> + Send;
+    type HashTable: HashtableLike<Key=Method::HashKey, Value=usize> + Send;
     fn create_hash_table(&self) -> Result<Self::HashTable>;
 
-    type ColumnBuilder<'a>: KeysColumnBuilder<T = &'a Method::HashKey>
-    where
-        Self: 'a,
-        Method: 'a;
+    type ColumnBuilder<'a>: KeysColumnBuilder<T=&'a Method::HashKey>
+        where
+            Self: 'a,
+            Method: 'a;
 
     fn keys_column_builder(&self, capacity: usize) -> Self::ColumnBuilder<'_>;
 
@@ -98,16 +98,18 @@ pub trait PolymorphicKeysHelper<Method: HashMethod> {
 
     fn keys_iter_from_column(&self, column: &ColumnRef) -> Result<Self::KeysColumnIter>;
 
-    type GroupColumnsBuilder<'a>: GroupColumnsBuilder<T = &'a Method::HashKey>
-    where
-        Self: 'a,
-        Method: 'a;
+    type GroupColumnsBuilder<'a>: GroupColumnsBuilder<T=&'a Method::HashKey>
+        where
+            Self: 'a,
+            Method: 'a;
 
     fn group_columns_builder(
         &self,
         capacity: usize,
         params: &AggregatorParams,
     ) -> Self::GroupColumnsBuilder<'_>;
+
+    fn get_hash(&self, v: &Method::HashKey) -> u64;
 }
 
 impl PolymorphicKeysHelper<HashMethodFixedKeys<u8>> for HashMethodFixedKeys<u8> {
@@ -137,6 +139,10 @@ impl PolymorphicKeysHelper<HashMethodFixedKeys<u8>> for HashMethodFixedKeys<u8> 
         params: &AggregatorParams,
     ) -> FixedKeysGroupColumnsBuilder<u8> {
         FixedKeysGroupColumnsBuilder::<u8>::create(capacity, params)
+    }
+
+    fn get_hash(&self, v: &u8) -> u64 {
+        v.fast_hash()
     }
 }
 
@@ -168,6 +174,10 @@ impl PolymorphicKeysHelper<HashMethodFixedKeys<u16>> for HashMethodFixedKeys<u16
     ) -> FixedKeysGroupColumnsBuilder<u16> {
         FixedKeysGroupColumnsBuilder::<u16>::create(capacity, params)
     }
+
+    fn get_hash(&self, v: &u16) -> u64 {
+        v.fast_hash()
+    }
 }
 
 impl PolymorphicKeysHelper<HashMethodFixedKeys<u32>> for HashMethodFixedKeys<u32> {
@@ -198,6 +208,10 @@ impl PolymorphicKeysHelper<HashMethodFixedKeys<u32>> for HashMethodFixedKeys<u32
     ) -> FixedKeysGroupColumnsBuilder<u32> {
         FixedKeysGroupColumnsBuilder::<u32>::create(capacity, params)
     }
+
+    fn get_hash(&self, v: &u32) -> u64 {
+        v.fast_hash()
+    }
 }
 
 impl PolymorphicKeysHelper<HashMethodFixedKeys<u64>> for HashMethodFixedKeys<u64> {
@@ -227,6 +241,10 @@ impl PolymorphicKeysHelper<HashMethodFixedKeys<u64>> for HashMethodFixedKeys<u64
         params: &AggregatorParams,
     ) -> FixedKeysGroupColumnsBuilder<u64> {
         FixedKeysGroupColumnsBuilder::<u64>::create(capacity, params)
+    }
+
+    fn get_hash(&self, v: &u64) -> u64 {
+        v.fast_hash()
     }
 }
 
@@ -260,6 +278,10 @@ impl PolymorphicKeysHelper<HashMethodKeysU128> for HashMethodKeysU128 {
     ) -> FixedKeysGroupColumnsBuilder<u128> {
         FixedKeysGroupColumnsBuilder::create(capacity, params)
     }
+
+    fn get_hash(&self, v: &u128) -> u64 {
+        v.fast_hash()
+    }
 }
 
 impl PolymorphicKeysHelper<HashMethodKeysU256> for HashMethodKeysU256 {
@@ -291,6 +313,10 @@ impl PolymorphicKeysHelper<HashMethodKeysU256> for HashMethodKeysU256 {
         params: &AggregatorParams,
     ) -> FixedKeysGroupColumnsBuilder<U256> {
         FixedKeysGroupColumnsBuilder::create(capacity, params)
+    }
+
+    fn get_hash(&self, v: &U256) -> u64 {
+        v.fast_hash()
     }
 }
 
@@ -324,6 +350,10 @@ impl PolymorphicKeysHelper<HashMethodKeysU512> for HashMethodKeysU512 {
     ) -> FixedKeysGroupColumnsBuilder<U512> {
         FixedKeysGroupColumnsBuilder::create(capacity, params)
     }
+
+    fn get_hash(&self, v: &U512) -> u64 {
+        v.fast_hash()
+    }
 }
 
 impl PolymorphicKeysHelper<HashMethodSerializer> for HashMethodSerializer {
@@ -352,6 +382,10 @@ impl PolymorphicKeysHelper<HashMethodSerializer> for HashMethodSerializer {
         params: &AggregatorParams,
     ) -> SerializedKeysGroupColumnsBuilder<'_> {
         SerializedKeysGroupColumnsBuilder::create(capacity, params)
+    }
+
+    fn get_hash(&self, v: &[u8]) -> u64 {
+        v.fast_hash()
     }
 }
 
@@ -384,10 +418,10 @@ impl<Method: HashMethod + Send> HashMethod for TwoLevelHashMethod<Method> {
 }
 
 impl<Method> PolymorphicKeysHelper<TwoLevelHashMethod<Method>> for TwoLevelHashMethod<Method>
-where
-    Self: HashMethod<HashKey = Method::HashKey>,
-    Method: HashMethod + PolymorphicKeysHelper<Method> + Send,
-    Method::HashKey: FastHash,
+    where
+        Self: HashMethod<HashKey=Method::HashKey>,
+        Method: HashMethod + PolymorphicKeysHelper<Method> + Send,
+        Method::HashKey: FastHash,
 {
     // Two level cannot be recursive
     const SUPPORT_TWO_LEVEL: bool = false;
@@ -424,5 +458,9 @@ where
         params: &AggregatorParams,
     ) -> Self::GroupColumnsBuilder<'_> {
         self.method.group_columns_builder(capacity, params)
+    }
+
+    fn get_hash(&self, v: &Method::HashKey) -> u64 {
+        self.method.get_hash(v)
     }
 }

@@ -30,6 +30,8 @@ use common_functions::scalars::CastFunction;
 use common_functions::scalars::FunctionContext;
 use common_functions::scalars::FunctionFactory;
 use common_pipeline_core::Pipe;
+use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_core::processors::ResizeProcessor;
 use common_pipeline_sinks::processors::sinks::EmptySink;
 use common_pipeline_sinks::processors::sinks::UnionReceiveSink;
 use common_pipeline_transforms::processors::transforms::try_add_multi_sort_merge;
@@ -39,7 +41,7 @@ use common_sql::executor::AggregateFunctionDesc;
 use common_sql::executor::PhysicalScalar;
 
 use crate::pipelines::processors::port::InputPort;
-use crate::pipelines::processors::transforms::HashJoinDesc;
+use crate::pipelines::processors::transforms::{HashJoinDesc, TransformConvertGrouping};
 use crate::pipelines::processors::transforms::RightSemiAntiJoinCompactor;
 use crate::pipelines::processors::transforms::TransformLeftJoin;
 use crate::pipelines::processors::transforms::TransformMarkJoin;
@@ -367,7 +369,26 @@ impl PipelineBuilder {
             &aggregate.agg_funcs,
         )?;
 
-        self.main_pipeline.resize(1)?;
+        // if !params.group_columns.is_empty() && self.main_pipeline.output_len() > 1 {
+        //     // let pipe = self.main_pipeline.pipes.last().unwrap();
+        //     let processor = TransformConvertGrouping::create(
+        //         self.ctx.clone(),
+        //         self.main_pipeline.output_len(),
+        //         1,
+        //         params.clone(),
+        //     )?;
+        //
+        //     let inputs_port = processor.get_inputs().to_vec();
+        //     let outputs_port = processor.get_outputs().to_vec();
+        //
+        //     self.main_pipeline.add_pipe(Pipe::ResizePipe {
+        //         inputs_port,
+        //         outputs_port,
+        //         processor: ProcessorPtr::create(Box::new(processor)),
+        //     });
+        // }
+
+        // self.main_pipeline.resize(1)?;
         self.main_pipeline.add_transform(|input, output| {
             TransformAggregator::try_create_final(
                 AggregatorTransformParams::try_create(input, output, &params)?,
