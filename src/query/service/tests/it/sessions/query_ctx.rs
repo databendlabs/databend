@@ -27,8 +27,8 @@ use wiremock::ResponseTemplate;
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_get_storage_accessor_s3() -> Result<()> {
     let mock_server = MockServer::start().await;
-    Mock::given(method("HEAD"))
-        .and(path("/bucket/.opendal"))
+    Mock::given(method("GET"))
+        .and(path("/bucket"))
         .respond_with(ResponseTemplate::new(404))
         .mount(&mock_server)
         .await;
@@ -39,6 +39,7 @@ async fn test_get_storage_accessor_s3() -> Result<()> {
         region: "us-east-2".to_string(),
         endpoint_url: mock_server.uri(),
         bucket: "bucket".to_string(),
+        disable_credential_loader: true,
         ..Default::default()
     });
 
