@@ -3,7 +3,7 @@
 CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../../../shell_env.sh
 QMHASH=QmPpCt1aYGb9JWJRmXRUnmJtVgeFFTJGzWFYEEX7bo9zGJ
-IPFS_GATEWAY="https://w3s.link"
+IPFS_GATEWAY="https://dweb.link"
 
 echo "drop table if exists ontime_200;" | $MYSQL_CLIENT_CONNECT
 
