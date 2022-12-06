@@ -92,7 +92,7 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
     #[inline]
     fn state_layout(&self) -> std::alloc::Layout {
         let layout = self.inner.state_layout();
-        Layout::from_size_align(layout.size() + 1, layout.align()).unwrap()
+        Layout::from_size_align(layout.size() + layout.align(), layout.align()).unwrap()
     }
 
     #[inline]
@@ -178,17 +178,17 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
 
     #[inline]
     fn deserialize(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
+        let flag = reader[reader.len() - 1];
         self.inner
             .deserialize(place, &mut &reader[..reader.len() - 1])?;
-        let flag = reader[reader.len() - 1];
         self.set_flag(place, flag);
         Ok(())
     }
 
     fn merge(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
         self.inner.merge(place, rhs)?;
-        let flag = self.get_flag(place) + self.get_flag(rhs);
-        self.set_flag(place, flag);
+        let flag = self.get_flag(place) > 0 || self.get_flag(rhs) > 0;
+        self.set_flag(place, u8::from(flag));
         Ok(())
     }
 
