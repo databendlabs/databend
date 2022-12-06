@@ -144,7 +144,7 @@ impl CachePolicy for FuseCachePolicy {
         let path = path.to_string();
 
         if self.visit.is_visited(&path) {
-            Box::pin(whole_caching(inner, cache, self.visit.clone(), path, args))
+            Box::pin(range_caching(inner, cache, self.visit.clone(), path, args))
         } else {
             Box::pin(async move { inner.read(&path, args).await })
         }
@@ -152,7 +152,7 @@ impl CachePolicy for FuseCachePolicy {
 }
 
 fn range_based_cache_path(path: &str, args: &OpRead) -> String {
-    format!("{path}.cache-{}", args.range().to_header())
+    format!("{path}.cache-{}", args.range().to_string())
 }
 
 /// Cache file based on it's rane.
@@ -253,13 +253,10 @@ async fn whole_caching(
             } else {
                 let moved_path = path.clone();
 
-                // If given path is not visited before, let's try write in async way.
-                if !visit.is_visited(&path) {
-                    GlobalIORuntime::instance().spawn(async move {
-                        // Ignore errors returned by cache services.
-                        let _ = cache.write(&moved_path, OpWrite::new(size), r).await;
-                    });
-                };
+                GlobalIORuntime::instance().spawn(async move {
+                    // Ignore errors returned by cache services.
+                    let _ = cache.write(&moved_path, OpWrite::new(size), r).await;
+                });
 
                 inner.read(&path, args).await
             }

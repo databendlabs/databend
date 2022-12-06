@@ -139,7 +139,7 @@ fn init_fs_operator(cfg: &StorageFsConfig) -> Result<Operator> {
         path = env::current_dir().unwrap().join(path).display().to_string();
     }
     builder.root(&path);
-    // Enable atomice write.
+    // Enable atomice write
     builder.atomic_write_dir(&format!("{path}/.opendal_atomic/"));
 
     Ok(Operator::new(builder.build()?))
@@ -453,15 +453,14 @@ impl CacheOperator {
         }
 
         let operator = init_operator_without_layers(&conf.params)?
-            // Add retry
-            .layer(RetryLayer::new(ExponentialBackoff::default().with_jitter()))
             // Add metrics
             .layer(MetricsLayer)
             // Add logging
             .layer(
-                LoggingLayer::default()
-                    // Ingore expected errors for logging.
-                    .with_error_level(None),
+                LoggingLayer::default(),
+                // LoggingLayer::default()
+                //     // Ingore expected errors for logging.
+                //     .with_error_level(None),
             )
             // Add tracing
             .layer(TracingLayer)
