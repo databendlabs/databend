@@ -5748,7 +5748,7 @@ dependencies = [
  "tokio",
  "tracing",
  "ureq",
- "uuid",
+ "uuid 1.2.1",
 ]
 
 [[package]]
