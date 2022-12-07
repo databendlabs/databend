@@ -20,8 +20,6 @@
 //! - If cache missed, we will load data from inner storage.
 //! - If the path has been requests over threshold, we will try to fill it in the cache.
 
-use std::sync::atomic::AtomicUsize;
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -47,7 +45,7 @@ use opendal::Result;
 /// VisitStatistics is used to track visit statistics.
 #[derive(Debug, Clone)]
 pub struct VisitStatistics {
-    cache: Arc<Cache<String, Arc<AtomicUsize>>>,
+    cache: Arc<Cache<String, usize>>,
 }
 
 impl VisitStatistics {
@@ -70,12 +68,15 @@ impl VisitStatistics {
         }
     }
 
-    /// Visit this path.
+    /// Visit this path, returns the previous value
     ///
-    /// Returns the previous value
+    /// This is not an atomic operation so it's value is inaccurate.
+    /// But it's OK, in the worse case, we will miss some path that need to
+    ///  cache.
     fn visit(&self, path: String) -> usize {
-        let v = self.cache.get_with(path, || Arc::new(AtomicUsize::new(0)));
-        v.fetch_add(1, Ordering::Relaxed)
+        let v = self.cache.get(&path).unwrap_or_default();
+        self.cache.insert(path, v + 1);
+        v
     }
 }
 
