@@ -17,6 +17,8 @@ use std::sync::Arc;
 
 use common_catalog::plan::PartInfo;
 use common_catalog::plan::PartInfoPtr;
+use common_catalog::plan::Partitions;
+use common_catalog::plan::PartitionsShuffleKind;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -62,4 +64,29 @@ impl NumbersPartInfo {
             )),
         }
     }
+}
+
+pub fn generate_numbers_parts(start: u64, workers: u64, total: u64) -> Partitions {
+    let part_size = total / workers;
+    let part_remain = total % workers;
+
+    let mut partitions = Vec::with_capacity(workers as usize);
+    if part_size == 0 {
+        partitions.push(NumbersPartInfo::create(start, total, total));
+    } else {
+        for part in 0..workers {
+            let mut part_begin = part * part_size;
+            if part == 0 && start > 0 {
+                part_begin = start;
+            }
+            let mut part_end = (part + 1) * part_size;
+            if part == (workers - 1) && part_remain > 0 {
+                part_end += part_remain;
+            }
+
+            partitions.push(NumbersPartInfo::create(part_begin, part_end, total));
+        }
+    }
+
+    Partitions::create(PartitionsShuffleKind::Seq, partitions)
 }

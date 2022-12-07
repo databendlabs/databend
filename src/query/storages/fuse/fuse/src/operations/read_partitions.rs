@@ -26,6 +26,7 @@ use common_catalog::table_context::TableContext;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 use common_meta_app::schema::TableInfo;
+use common_storage::ColumnLeaves;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::Location;
 use common_storages_table_meta::meta::TableSnapshot;
@@ -34,7 +35,6 @@ use tracing::debug;
 use tracing::info;
 
 use crate::fuse_lazy_part::FuseLazyPartInfo;
-use crate::fuse_part::ColumnLeaves;
 use crate::fuse_part::ColumnMeta;
 use crate::fuse_part::FusePartInfo;
 use crate::pruning::BlockPruner;
@@ -248,7 +248,7 @@ impl FuseTable {
             let rows = block_meta.row_count as usize;
 
             statistics.read_rows += rows;
-            let columns = column_leaves.get_by_projection(projection).unwrap();
+            let columns = projection.project_column_leaves(column_leaves).unwrap();
             for column in &columns {
                 let indices = &column.leaf_ids;
                 for index in indices {
@@ -299,7 +299,7 @@ impl FuseTable {
     ) -> PartInfoPtr {
         let mut columns_meta = HashMap::with_capacity(projection.len());
 
-        let columns = column_leaves.get_by_projection(projection).unwrap();
+        let columns = projection.project_column_leaves(column_leaves).unwrap();
         for column in &columns {
             let indices = &column.leaf_ids;
             for index in indices {

@@ -69,3 +69,7 @@ mod utils;
 mod range_cache;
 pub use range_cache::RangeCachePolicy;
 pub use range_cache::VisitStatistics;
+
+mod column_leaf;
+pub use column_leaf::ColumnLeaf;
+pub use column_leaf::ColumnLeaves;

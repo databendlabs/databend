@@ -20,6 +20,7 @@ use common_base::base::Runtime;
 use common_base::base::SingletonImpl;
 use common_catalog::catalog::CatalogManager;
 use common_config::Config;
+use common_config::GlobalConfig;
 use common_exception::Result;
 use common_storage::CacheOperator;
 use common_storage::DataOperator;
@@ -36,6 +37,7 @@ use crate::servers::http::v1::HttpQueryManager;
 use crate::sessions::SessionManager;
 
 pub struct GlobalServices {
+    query_config: UnsafeCell<Option<Arc<Config>>>,
     global_runtime: UnsafeCell<Option<Arc<Runtime>>>,
     query_logger: UnsafeCell<Option<Arc<QueryLogger>>>,
     cluster_discovery: UnsafeCell<Option<Arc<ClusterDiscovery>>>,
@@ -58,6 +60,7 @@ unsafe impl Sync for GlobalServices {}
 impl GlobalServices {
     pub async fn init(config: Config) -> Result<()> {
         let global_services = Arc::new(GlobalServices {
+            query_config: UnsafeCell::new(None),
             query_logger: UnsafeCell::new(None),
             cluster_discovery: UnsafeCell::new(None),
             storage_operator: UnsafeCell::new(None),
@@ -74,6 +77,8 @@ impl GlobalServices {
         });
 
         // The order of initialization is very important
+        GlobalConfig::init(config.clone(), global_services.clone())?;
+
         let app_name_shuffle = format!("{}-{}", config.query.tenant_id, config.query.cluster_id);
 
         QueryLogger::init(app_name_shuffle, &config.log, global_services.clone())?;
@@ -95,8 +100,8 @@ impl GlobalServices {
         CacheManager::init(&config.query, global_services.clone())?;
         CatalogManager::init(&config, global_services.clone()).await?;
         HttpQueryManager::init(&config, global_services.clone()).await?;
-        DataExchangeManager::init(config.clone(), global_services.clone())?;
-        SessionManager::init(config.clone(), global_services.clone())?;
+        DataExchangeManager::init(global_services.clone())?;
+        SessionManager::init(&config, global_services.clone())?;
         UserApiProvider::init(
             config.meta.to_meta_grpc_client_conf(),
             config.query.idm,
@@ -339,6 +344,24 @@ impl SingletonImpl<ShareTableConfig> for GlobalServices {
     fn init(&self, value: ShareTableConfig) -> Result<()> {
         unsafe {
             *(self.share_table_config.get() as *mut Option<ShareTableConfig>) = Some(value);
+            Ok(())
+        }
+    }
+}
+
+impl SingletonImpl<Arc<Config>> for GlobalServices {
+    fn get(&self) -> Arc<Config> {
+        unsafe {
+            match &*self.query_config.get() {
+                None => panic!("GlobalConfig is not init"),
+                Some(config) => config.clone(),
+            }
+        }
+    }
+
+    fn init(&self, value: Arc<Config>) -> Result<()> {
+        unsafe {
+            *(self.query_config.get() as *mut Option<Arc<Config>>) = Some(value);
             Ok(())
         }
     }
