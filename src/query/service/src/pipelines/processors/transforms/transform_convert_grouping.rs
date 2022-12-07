@@ -1,6 +1,7 @@
 use std::any::Any;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+use std::mem::replace;
 use std::sync::Arc;
 use common_datablocks::{BlockMetaInfoPtr, DataBlock, HashMethod};
 use common_pipeline_core::processors::processor::{Event, ProcessorPtr};
@@ -12,25 +13,29 @@ use common_pipeline_core::processors::{Processor, ResizeProcessor};
 use crate::pipelines::processors::transforms::aggregator::{AggregateInfo, OverflowInfo};
 use crate::pipelines::processors::transforms::group_by::{KeysColumnIter, PolymorphicKeysHelper};
 
-//
+///
 struct ConvertGroupingMetaInfo {
     pub bucket: isize,
     pub blocks: Vec<DataBlock>,
 }
 
-pub enum State {
-    // Consume all input ports once and skip overflow blocks.
-    InitConsume(InitConsume),
-    Finished,
+enum InputPortState {
+    Active {
+        port: Arc<InputPort>,
+        bucket: isize,
+    },
+    Finished(Arc<InputPort>),
 }
 
 pub struct TransformConvertGrouping<Method: HashMethod + PolymorphicKeysHelper<Method>> {
     output: Arc<OutputPort>,
-    inputs: Vec<Arc<InputPort>>,
+    inputs: Vec<InputPortState>,
 
-    state: State,
+    // state: State,
+    working_bucket: isize,
     method: Method,
     params: Arc<AggregatorParams>,
+    buckets_blocks: HashMap<isize, Vec<DataBlock>>,
 }
 
 impl<Method: HashMethod + PolymorphicKeysHelper<Method>> TransformConvertGrouping<Method> {
@@ -58,7 +63,8 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> TransformConvertGroupin
     }
 
     pub fn get_inputs(&self) -> &[Arc<InputPort>] {
-        &self.inputs
+        // &self.inputs
+        unimplemented!()
     }
 
     pub fn get_outputs(&self) -> &[Arc<OutputPort>] {
@@ -66,7 +72,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> TransformConvertGroupin
         unimplemented!()
     }
 
-    pub fn convert_to_two_level(&self, data_block: DataBlock) -> Result<Vec<DataBlock>> {
+    fn convert_to_two_level(&self, data_block: DataBlock) -> Result<Vec<DataBlock>> {
         let aggregate_function_len = self.params.aggregate_functions.len();
         let keys_column = data_block.column(aggregate_function_len);
         let keys_iter = self.method.keys_iter_from_column(keys_column)?;
@@ -80,6 +86,28 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> TransformConvertGroupin
 
         DataBlock::scatter_block(&data_block, &indices, 256)
     }
+
+    // fn init_event(&mut self) -> Result<()> {
+    //     let mut res = true;
+    //
+    //     if let State::InitConsume(state) = &mut self.state {}
+    //
+    //
+    //     if res {
+    //         if let State::InitConsume(state) = replace(&mut self.state, State::Finished) {
+    //             if state.overflow_blocks.is_empty() && state.buckets_blocks.is_empty() {
+    //                 // all is single level blocks
+    //                 // self.output.can_push()
+    //                 // replace(&mut self.state, State::GenerateBlock())
+    //             }
+    //         }
+    //         state
+    //     }
+    //     match res {
+    //         true => Ok(Event::Sync),
+    //         false => Ok(Event::NeedData),
+    //     }
+    // }
 }
 
 #[async_trait::async_trait]
@@ -93,20 +121,133 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static> Proces
     }
 
     fn event(&mut self) -> Result<Event> {
-        // if self.output.is_finished() {
-        //     for input in self.inputs {
-        //         input.finish();
-        //     }
-        //
-        //     // self.buckets_blocks.clear();
-        //     return Ok(Event::Finished);
-        // }
-        unimplemented!()
+        if self.output.is_finished() {
+            for input in &self.inputs {
+                if let InputPortState::Active { port, .. } = input {
+                    port.finish();
+                }
+            }
 
+            // let _drop_state = std::mem::replace(&mut self.state, State::Finished);
+            return Ok(Event::Finished);
+        }
+
+        if !self.output.can_push() {
+            for input in &self.inputs {
+                if let InputPortState::Active { port, .. } = input {
+                    port.set_not_need_data();
+                }
+            }
+
+            return Ok(Event::NeedConsume);
+        }
+
+        let mut next_working_bucket = self.working_bucket + 1;
+
+        for input in self.inputs.iter_mut() {
+            match input {
+                InputPortState::Active { port, .. } if port.is_finished() => {
+                    *input = InputPortState::Finished(port.clone());
+                }
+                InputPortState::Active { port, bucket } if *bucket == self.working_bucket => {
+                    port.set_need_data();
+
+                    if !port.has_data() {
+                        next_working_bucket = self.working_bucket;
+                        continue;
+                    }
+
+                    let data_block = port.pull_data().unwrap()?;
+                    let data_block_meta: Option<&AggregateInfo> = data_block.get_meta().and_then(|meta| meta.as_any().downcast_ref::<AggregateInfo>());
+
+                    match data_block_meta {
+                        // XXX: None | Some(info) if info.bucket == -1 is compile failure.
+                        None => {
+                            *input = InputPortState::Finished(port.clone());
+                            match self.buckets_blocks.entry(-1) {
+                                Entry::Vacant(v) => {
+                                    v.insert(vec![data_block]);
+                                }
+                                Entry::Occupied(mut v) => {
+                                    v.get_mut().push(data_block);
+                                }
+                            };
+                        }
+                        Some(info) if info.bucket == -1 => {
+                            *input = InputPortState::Finished(port.clone());
+                            match self.buckets_blocks.entry(-1) {
+                                Entry::Vacant(v) => {
+                                    v.insert(vec![data_block]);
+                                }
+                                Entry::Occupied(mut v) => {
+                                    v.get_mut().push(data_block);
+                                }
+                            };
+                        }
+                        Some(info) => match info.overflow {
+                            None => {
+                                *bucket = info.bucket + 1;
+                                match self.buckets_blocks.entry(info.bucket) {
+                                    Entry::Vacant(v) => {
+                                        v.insert(vec![data_block]);
+                                    }
+                                    Entry::Occupied(mut v) => {
+                                        v.get_mut().push(data_block);
+                                    }
+                                };
+                            }
+                            Some(_) => {
+                                // Skipping overflow block.
+                                next_working_bucket = self.working_bucket;
+                                match self.buckets_blocks.entry(-2) {
+                                    Entry::Vacant(v) => {
+                                        v.insert(vec![data_block]);
+                                    }
+                                    Entry::Occupied(mut v) => {
+                                        v.get_mut().push(data_block);
+                                    }
+                                };
+                            }
+                        }
+                    };
+                }
+                _ => { /* finished or done current bucket, do nothing */ }
+            }
+        }
+
+        if self.working_bucket + 1 == next_working_bucket {
+            // current working bucket is process completed.
+
+            if self.working_bucket == 0 {
+                // all single level data block
+                if self.buckets_blocks.len() == 1 && self.buckets_blocks.contains_key(&-1) {
+                    self.working_bucket = 256;
+
+                    // self.output.push_data(Ok(DataBlock::empty_with_meta(
+                    //
+                    // )))
+
+                    return Ok(Event::NeedConsume);
+                }
+
+                // need convert to two level data block
+                self.working_bucket = next_working_bucket;
+                return Ok(Event::Sync);
+            }
+
+            self.working_bucket = next_working_bucket;
+            // TODO: push data block
+        }
+        unimplemented!()
         // match &mut self.state {
         //     State::InitConsume(state) => state.init_event(&self.inputs),
+        //     _ => Ok(())
+        // }?;
+        //
+        // match self.state {
+        //     State::InitConsume(_) => Ok(Event::NeedData),
+        //     State::Finished => Ok(Event::Finished)
         // }
-
         // if !self.inputs_block.is_empty() {
         //     if !self.first_read_inputs() {
         //         return Ok(Event::NeedData);
@@ -127,90 +268,37 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static> Proces
     }
 
     fn process(&mut self) -> Result<()> {
-        self.state = match std::mem::replace(&mut self.state, State::Finished) {
-            State::InitConsume(mut state) => {
-                if state.buckets_blocks.is_empty() && state.overflow_blocks.is_empty() {
-                    // TODO: all single level data blocks.
-                }
-
-                // We process one single level data block for each call.
-                if let Some(data_block) = state.single_level_blocks.pop() {
-                    let blocks = self.convert_to_two_level(data_block)?;
-                    for (bucket, block) in blocks.into_iter().enumerate() {
-                        if !block.is_empty() {
-                            match state.buckets_blocks.entry(bucket) {
-                                Entry::Occupied(mut v) => {
-                                    v.get_mut().push(block);
-                                }
-                                Entry::Vacant(mut v) => {
-                                    v.insert(vec![block]);
-                                }
-                            };
-                        }
-                    }
-                }
-                unimplemented!()
-            }
-            State::Finished => State::Finished,
-        };
+        // self.state = match std::mem::replace(&mut self.state, State::Finished) {
+        //     State::InitConsume(mut state) => {
+        //         if state.buckets_blocks.is_empty() && state.overflow_blocks.is_empty() {
+        //             // TODO: all single level data blocks.
+        //             // let grouping_meta_info = ConvertGroupingMetaInfo {
+        //             //     bucket: -1,
+        //             //     blocks: state.single_level_blocks,
+        //             // };
+        //         }
+        //
+        //         // We process one single level data block for each call.
+        //         // if let Some(data_block) = state.single_level_blocks.pop() {
+        //         //     let blocks = self.convert_to_two_level(data_block)?;
+        //         //     for (bucket, block) in blocks.into_iter().enumerate() {
+        //         //         if !block.is_empty() {
+        //         //             match state.buckets_blocks.entry(bucket) {
+        //         //                 Entry::Occupied(mut v) => {
+        //         //                     v.get_mut().push(block);
+        //         //                 }
+        //         //                 Entry::Vacant(mut v) => {
+        //         //                     v.insert(vec![block]);
+        //         //                 }
+        //         //             };
+        //         //         }
+        //         //     }
+        //         // }
+        //         unimplemented!()
+        //     }
+        //     State::Finished => State::Finished,
+        // };
 
         Ok(())
-    }
-}
-
-struct InitConsume {
-    overflow_blocks: Vec<DataBlock>,
-    single_level_blocks: Vec<DataBlock>,
-    buckets_blocks: HashMap<usize, Vec<DataBlock>>,
-    inputs_consume_flag: Vec<bool>,
-}
-
-impl InitConsume {
-    pub fn init_event(&mut self, inputs: &[Arc<InputPort>]) -> Result<Event> {
-        let mut res = true;
-        for (index, input) in inputs.iter().enumerate() {
-            if !input.is_finished() && !self.inputs_consume_flag[index] {
-                input.set_need_data();
-
-                if !input.has_data() {
-                    res = false;
-                }
-
-                let data_block = input.pull_data().unwrap()?;
-
-                if let Some(meta_info) = data_block.get_meta() {
-                    if let Some(meta_info) = meta_info.as_any().downcast_ref::<AggregateInfo>() {
-                        if meta_info.overflow.is_some() {
-                            res = false;
-                            self.overflow_blocks.push(data_block);
-                            continue;
-                        }
-
-                        if meta_info.bucket >= 0 {
-                            let bucket = meta_info.bucket as usize;
-                            self.inputs_consume_flag[bucket] = true;
-                            match self.buckets_blocks.entry(bucket) {
-                                Entry::Occupied(mut v) => {
-                                    v.get_mut().push(data_block);
-                                }
-                                Entry::Vacant(v) => {
-                                    v.insert(vec![data_block]);
-                                }
-                            };
-
-                            continue;
-                        }
-                    }
-                }
-
-                res = false;
-                self.single_level_blocks.push(data_block);
-            }
-        }
-
-        match res {
-            true => Ok(Event::Sync),
-            false => Ok(Event::NeedData),
-        }
     }
 }
