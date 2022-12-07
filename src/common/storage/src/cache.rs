@@ -12,6 +12,8 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -49,7 +51,7 @@ use opendal::Result;
 /// The cache logic could be changed at anytime, PLEASE DON'T depend on it's behavior.
 #[derive(Debug, Clone)]
 pub struct VisitStatistics {
-    cache: Arc<Cache<String, ()>>,
+    cache: Arc<Cache<String, Arc<AtomicUsize>>>,
 }
 
 impl VisitStatistics {
@@ -72,97 +74,72 @@ impl VisitStatistics {
         }
     }
 
-    /// Is given path has been visited?
-    fn is_visited(&self, path: &str) -> bool {
-        self.cache.get(path).is_some()
-    }
-
     /// Visit this path.
-    fn visit(&self, path: String) {
-        self.cache.insert(path, ())
+    ///
+    /// Returns the previous value
+    fn visit(&self, path: String) -> usize {
+        let v = self.cache.get_with(path, || Arc::new(AtomicUsize::new(0)));
+        v.fetch_add(1, Ordering::Relaxed)
     }
 }
 
-#[derive(Debug)]
-pub struct MemoryCachePolicy {
-    visit: VisitStatistics,
-}
-
-impl MemoryCachePolicy {
-    pub fn new(visit: VisitStatistics) -> Self {
-        MemoryCachePolicy { visit }
-    }
-}
-
-#[async_trait]
-impl CachePolicy for MemoryCachePolicy {
-    fn on_read(
-        &self,
-        inner: Arc<dyn Accessor>,
-        cache: Arc<dyn Accessor>,
-        path: &str,
-        args: OpRead,
-    ) -> BoxFuture<'static, Result<(RpRead, BytesReader)>> {
-        let path = path.to_string();
-
-        Box::pin(range_caching(inner, cache, self.visit.clone(), path, args))
-    }
-}
-
-/// TODO: implement more complex cache logic.
+/// RangeCachePolicy will try to read and store cache based on range.
 ///
-/// For example:
-///
-/// - Implement a top n heap, and only cache files exist in heap.
-/// - Only cache data file, and ignore snapshot files.
+/// We will count recent `records`, if they have been visited at least `threshold`
+/// times. We will cache it in the cache layer.
 #[derive(Debug)]
-pub struct FuseCachePolicy {
+pub struct RangeCachePolicy {
     visit: VisitStatistics,
+    threshold: usize,
 }
 
-impl FuseCachePolicy {
-    pub fn new(visit: VisitStatistics) -> Self {
-        FuseCachePolicy { visit }
-    }
-}
-
-#[async_trait]
-impl CachePolicy for FuseCachePolicy {
-    fn on_read(
-        &self,
-        inner: Arc<dyn Accessor>,
-        cache: Arc<dyn Accessor>,
-        path: &str,
-        args: OpRead,
-    ) -> BoxFuture<'static, Result<(RpRead, BytesReader)>> {
-        let path = path.to_string();
-        let cache_path = range_based_cache_path(&path, &args);
-
-        if self.visit.is_visited(&cache_path) {
-            Box::pin(range_caching(inner, cache, self.visit.clone(), path, args))
-        } else {
-            Box::pin(async move { inner.read(&path, args).await })
+impl RangeCachePolicy {
+    /// Create a new range cache policy.
+    pub fn new(records: u64, threshold: usize) -> Self {
+        RangeCachePolicy {
+            visit: VisitStatistics::new(records),
+            threshold,
         }
     }
+
+    fn cache_path(&self, path: &str, args: &OpRead) -> String {
+        format!("{path}.cache-{}", args.range())
+    }
 }
 
-fn range_based_cache_path(path: &str, args: &OpRead) -> String {
-    format!("{path}.cache-{}", args.range())
-}
+#[async_trait]
+impl CachePolicy for RangeCachePolicy {
+    fn on_read(
+        &self,
+        inner: Arc<dyn Accessor>,
+        cache: Arc<dyn Accessor>,
+        path: &str,
+        args: OpRead,
+    ) -> BoxFuture<'static, Result<(RpRead, BytesReader)>> {
+        let path = path.to_string();
+        let cache_path = self.cache_path(&path, &args);
 
-/// Cache file based on it's rane.
-async fn range_caching(
-    inner: Arc<dyn Accessor>,
-    cache: Arc<dyn Accessor>,
-    visit: VisitStatistics,
-    path: String,
-    args: OpRead,
-) -> Result<(RpRead, BytesReader)> {
-    let cache_path = range_based_cache_path(&path, &args);
+        let threshold = self.threshold;
+        // Record a visit to cache_path.
+        let count = self.visit.visit(cache_path.clone());
 
-    let v = match cache.read(&cache_path, OpRead::default()).await {
-        Ok(v) => Ok(v),
-        Err(err) if err.kind() == ErrorKind::ObjectNotFound => {
+        Box::pin(async move {
+            match cache.read(&cache_path, OpRead::default()).await {
+                Ok(v) => return Ok(v),
+                Err(err) => {
+                    // If error's kind is not object not found, we should return
+                    // inner read directly. the cache services chould be down.
+                    if err.kind() != ErrorKind::ObjectNotFound {
+                        return inner.read(&path, args).await;
+                    }
+                    // The path is not warm enough, we just go back to inner.
+                    if count < threshold {
+                        return inner.read(&path, args).await;
+                    }
+                }
+            };
+
+            // Start filling cache.
             let (rp, r) = inner.read(&path, args.clone()).await?;
             let size = rp.clone().into_metadata().content_length();
 
@@ -171,14 +148,9 @@ async fn range_caching(
 
             match cache.read(&cache_path, OpRead::default()).await {
                 Ok(v) => Ok(v),
+                // fallback to inner read no matter what error happened.
                 Err(_) => inner.read(&path, args).await,
             }
-        }
-        Err(_) => inner.read(&path, args).await,
-    };
-
-    // Mark cache path has been visited.
-    visit.visit(cache_path);
-
-    v
+        })
+    }
 }

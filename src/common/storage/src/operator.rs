@@ -55,12 +55,10 @@ use crate::config::StorageMokaConfig;
 use crate::config::StorageObsConfig;
 use crate::runtime_layer::RuntimeLayer;
 use crate::CacheConfig;
-use crate::FuseCachePolicy;
-use crate::MemoryCachePolicy;
+use crate::RangeCachePolicy;
 use crate::StorageConfig;
 use crate::StorageOssConfig;
 use crate::StorageRedisConfig;
-use crate::VisitStatistics;
 
 /// init_operator will init an opendal operator based on storage config.
 pub fn init_operator(cfg: &StorageParams) -> Result<Operator> {
@@ -435,8 +433,6 @@ impl DataOperator {
 /// background auto evict at any time.
 #[derive(Clone, Debug)]
 pub struct CacheOperator {
-    visit: VisitStatistics,
-
     user_cache: Operator,
     internal_cache: Operator,
 }
@@ -505,10 +501,6 @@ impl CacheOperator {
         Ok(Some(CacheOperator {
             user_cache: operator,
             internal_cache,
-            // We will take recent 10W request for Statistics;
-            //
-            // TODO(xuanwo): make this a config or user setting.
-            visit: VisitStatistics::new(100_000),
         }))
     }
 
@@ -530,11 +522,17 @@ impl CacheOperator {
 
         // Apply user cache.
         op = op.layer(
-            CacheLayer::new(cop.user_cache).with_policy(FuseCachePolicy::new(cop.visit.clone())),
+            CacheLayer::new(cop.user_cache)
+                // Cache into user cahce if requested data has been accessed 2 times
+                // in recent 100K requests.
+                .with_policy(RangeCachePolicy::new(100_000, 3)),
         );
         // Apply inertnal cache.
         op = op.layer(
-            CacheLayer::new(cop.internal_cache).with_policy(MemoryCachePolicy::new(cop.visit)),
+            CacheLayer::new(cop.internal_cache)
+                // Cache into internal cahce if requested data has been accessed
+                // 1 times in recent 10K requests.
+                .with_policy(RangeCachePolicy::new(10_000, 1)),
         );
 
         op

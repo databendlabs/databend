@@ -67,6 +67,5 @@ mod runtime_layer;
 mod utils;
 
 mod cache;
-pub use cache::FuseCachePolicy;
-pub use cache::MemoryCachePolicy;
+pub use cache::RangeCachePolicy;
 pub use cache::VisitStatistics;
