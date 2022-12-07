@@ -30,25 +30,6 @@ use opendal::OpWrite;
 use opendal::Result;
 
 /// VisitStatistics is used to track visit statistics.
-///
-/// # Two-level Caching
-///
-/// Databend Query will have a two-level cache.
-///
-/// - The first cache layer is a fixed-size in-memory cache
-/// - The second cache layer should be a storage service which slower than memory but quicker than object storage services like local fs or redis.
-///
-/// We will cache recent reading content into in-memory cache, and spill the
-/// **hot** data into second cache layer.
-///
-/// # Visit Statistics
-///
-/// We will record visit statistics at first cache layer. If the path has been
-/// accessed in recent, we will spill it to second cache layer too.
-///
-/// # Notes
-///
-/// The cache logic could be changed at anytime, PLEASE DON'T depend on it's behavior.
 #[derive(Debug, Clone)]
 pub struct VisitStatistics {
     cache: Arc<Cache<String, Arc<AtomicUsize>>>,
