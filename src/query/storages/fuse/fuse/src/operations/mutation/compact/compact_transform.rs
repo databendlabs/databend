@@ -113,7 +113,7 @@ impl CompactTransform {
         thresholds: BlockCompactThresholds,
     ) -> Result<ProcessorPtr> {
         let settings = ctx.get_settings();
-        let max_memory_usage = (settings.get_max_memory_usage()? as f64 * 0.95) as u64;
+        let max_memory_usage = (settings.get_max_memory_usage()? as f64 * 0.8) as u64;
         let max_threads = settings.get_max_threads()?;
         let max_memory = max_memory_usage / max_threads;
         let max_io_requests = settings.get_max_storage_io_requests()? as usize;
