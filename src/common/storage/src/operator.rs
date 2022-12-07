@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::env;
 use std::io::Error;
 use std::io::ErrorKind;
 use std::io::Result;
 use std::ops::Deref;
+use std::path::PathBuf;
 use std::time::Duration;
 
 use anyhow::anyhow;
@@ -136,10 +136,10 @@ pub fn init_azblob_operator(cfg: &StorageAzblobConfig) -> Result<Operator> {
 fn init_fs_operator(cfg: &StorageFsConfig) -> Result<Operator> {
     let mut builder = fs::Builder::default();
 
-    let mut path = cfg.root.clone();
-    if !path.starts_with('/') {
-        path = env::current_dir().unwrap().join(path).display().to_string();
-    }
+    // Make sure the path has been canonicalized.
+    let pb = PathBuf::from(cfg.root.clone()).canonicalize()?;
+    let path = pb.to_string_lossy();
+
     builder.root(&path);
     // Enable atomice write
     builder.atomic_write_dir(&format!("{path}/.opendal_atomic/"));
