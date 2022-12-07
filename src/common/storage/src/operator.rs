@@ -434,7 +434,10 @@ impl DataOperator {
 #[derive(Clone, Debug)]
 pub struct CacheOperator {
     user_cache: Operator,
+    user_policy: RangeCachePolicy,
+
     internal_cache: Operator,
+    internal_policy: RangeCachePolicy,
 }
 
 static CACHE_OPERATOR: OnceCell<Singleton<Option<CacheOperator>>> = OnceCell::new();
@@ -500,7 +503,13 @@ impl CacheOperator {
 
         Ok(Some(CacheOperator {
             user_cache: operator,
+            // Cache into user cahce if requested data has been accessed 1 times
+            // in recent 1M requests.
+            user_policy: RangeCachePolicy::new(1_000_000, 1),
             internal_cache,
+            // Cache into internal cahce if requested data has been accessed
+            // 2 times in recent 10K requests.
+            internal_policy: RangeCachePolicy::new(10_000, 2),
         }))
     }
 
@@ -521,19 +530,9 @@ impl CacheOperator {
         };
 
         // Apply user cache.
-        op = op.layer(
-            CacheLayer::new(cop.user_cache)
-                // Cache into user cahce if requested data has been accessed 2 times
-                // in recent 100K requests.
-                .with_policy(RangeCachePolicy::new(100_000, 3)),
-        );
+        op = op.layer(CacheLayer::new(cop.user_cache).with_policy(cop.user_policy));
         // Apply inertnal cache.
-        op = op.layer(
-            CacheLayer::new(cop.internal_cache)
-                // Cache into internal cahce if requested data has been accessed
-                // 1 times in recent 10K requests.
-                .with_policy(RangeCachePolicy::new(10_000, 1)),
-        );
+        op = op.layer(CacheLayer::new(cop.internal_cache).with_policy(cop.internal_policy));
 
         op
     }

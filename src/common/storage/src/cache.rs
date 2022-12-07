@@ -18,12 +18,19 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
+use bytes::Bytes;
+use common_base::base::GlobalIORuntime;
+use common_base::base::TrySpawn;
 use futures::future::BoxFuture;
+use futures::io::BufReader;
+use futures::io::Cursor;
+use futures::AsyncReadExt;
 use moka::sync::Cache;
 use opendal::layers::CachePolicy;
 use opendal::raw::Accessor;
 use opendal::raw::BytesReader;
 use opendal::raw::RpRead;
+use opendal::Error;
 use opendal::ErrorKind;
 use opendal::OpRead;
 use opendal::OpWrite;
@@ -68,7 +75,7 @@ impl VisitStatistics {
 ///
 /// We will count recent `records`, if they have been visited at least `threshold`
 /// times. We will cache it in the cache layer.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct RangeCachePolicy {
     visit: VisitStatistics,
     threshold: usize,
@@ -121,16 +128,39 @@ impl CachePolicy for RangeCachePolicy {
             };
 
             // Start filling cache.
-            let (rp, r) = inner.read(&path, args.clone()).await?;
+            let (rp, mut r) = inner.read(&path, args.clone()).await?;
             let size = rp.clone().into_metadata().content_length();
 
-            // Ignore errors returned by cache services.
-            let _ = cache.write(&cache_path, OpWrite::new(size), r).await;
+            // If size is small enough, we can return into memory.
+            if size < 4 * 1024 * 1024 {
+                let mut bs = Vec::with_capacity(size as usize);
+                r.read_to_end(&mut bs).await.map_err(|err| {
+                    Error::new(ErrorKind::Unexpected, "read from underlying storage")
+                        .set_source(err)
+                })?;
+                let bs = Bytes::from(bs);
 
-            match cache.read(&cache_path, OpRead::default()).await {
-                Ok(v) => Ok(v),
-                // fallback to inner read no matter what error happened.
-                Err(_) => inner.read(&path, args).await,
+                // Ignore errors returned by cache services.
+                let _ = cache
+                    .write(
+                        &cache_path,
+                        OpWrite::new(size),
+                        Box::new(Cursor::new(bs.clone())),
+                    )
+                    .await;
+
+                Ok((rp, Box::new(Cursor::new(bs))))
+            } else {
+                GlobalIORuntime::instance().spawn(async move {
+                    let br = BufReader::with_capacity(1024 * 1024, r);
+
+                    // Ignore errors returned by cache services.
+                    let _ = cache
+                        .write(&cache_path, OpWrite::new(size), Box::new(br))
+                        .await;
+                });
+
+                inner.read(&path, args).await
             }
         })
     }
