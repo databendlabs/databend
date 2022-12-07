@@ -35,10 +35,7 @@ pub struct Accessor {
 impl Accessor {
     pub fn create(ctx: Arc<QueryContext>) -> Self {
         let mut accessors: HashMap<String, Box<dyn AccessChecker>> = Default::default();
-        accessors.insert(
-            "management".to_string(),
-            ManagementModeAccess::create(ctx.clone()),
-        );
+        accessors.insert("management".to_string(), ManagementModeAccess::create());
         accessors.insert("privilege".to_string(), PrivilegeAccess::create(ctx));
         Accessor { accessors }
     }

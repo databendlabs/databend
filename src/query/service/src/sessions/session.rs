@@ -16,7 +16,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use chrono_tz::Tz;
-use common_config::Config;
+use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::FormatSettings;
@@ -126,10 +126,10 @@ impl Session {
     /// For a query, execution environment(e.g cluster) should be immutable.
     /// We can bind the environment to the context in create_context method.
     pub async fn create_query_context(self: &Arc<Self>) -> Result<Arc<QueryContext>> {
-        let config = self.get_config();
+        let config = GlobalConfig::instance();
         let session = self.clone();
         let cluster = ClusterDiscovery::instance().discover(&config).await?;
-        let shared = QueryContextShared::try_create(config, session, cluster).await?;
+        let shared = QueryContextShared::try_create(&config, session, cluster).await?;
 
         self.session_ctx
             .set_query_context_shared(Arc::downgrade(&shared));
@@ -343,10 +343,6 @@ impl Session {
     pub fn get_memory_usage(self: &Arc<Self>) -> usize {
         // TODO(winter): use thread memory tracker
         0
-    }
-
-    pub fn get_config(&self) -> Config {
-        SessionManager::instance().get_conf()
     }
 
     pub fn get_status(self: &Arc<Self>) -> Arc<RwLock<SessionStatus>> {

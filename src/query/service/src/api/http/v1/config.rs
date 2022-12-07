@@ -12,12 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_config::GlobalConfig;
 use poem::web::Json;
 use poem::IntoResponse;
 
-use crate::sessions::SessionManager;
-
 #[poem::handler]
 pub async fn config_handler() -> poem::Result<impl IntoResponse> {
-    Ok(Json(SessionManager::instance().get_conf().into_outer()))
+    Ok(Json(GlobalConfig::instance().as_ref().clone().into_outer()))
 }

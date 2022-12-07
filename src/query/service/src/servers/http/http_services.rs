@@ -16,6 +16,7 @@ use std::net::SocketAddr;
 use std::path::Path;
 
 use common_config::Config;
+use common_config::GlobalConfig;
 use common_exception::Result;
 use common_http::HttpShutdownHandler;
 use poem::get;
@@ -67,21 +68,19 @@ echo '{}' | curl -u root: '{:?}/?query=INSERT%20INTO%20test%20FORMAT%20JSONEachR
 }
 
 pub struct HttpHandler {
-    config: Config,
     shutdown_handler: HttpShutdownHandler,
     kind: HttpHandlerKind,
 }
 
 impl HttpHandler {
-    pub fn create(kind: HttpHandlerKind, config: Config) -> Result<Box<dyn Server>> {
+    pub fn create(kind: HttpHandlerKind) -> Result<Box<dyn Server>> {
         Ok(Box::new(HttpHandler {
             kind,
-            config,
             shutdown_handler: HttpShutdownHandler::create("http handler".to_string()),
         }))
     }
 
-    async fn build_router(&self, config: Config, sock: SocketAddr) -> Result<impl Endpoint> {
+    async fn build_router(&self, config: &Config, sock: SocketAddr) -> Result<impl Endpoint> {
         let ep = match self.kind {
             HttpHandlerKind::Query => Route::new()
                 .at(
@@ -126,15 +125,19 @@ impl HttpHandler {
     async fn start_with_tls(&mut self, listening: SocketAddr) -> Result<SocketAddr> {
         info!("Http Handler TLS enabled");
 
-        let tls_config = Self::build_tls(&self.config)?;
-        let router = self.build_router(self.config.clone(), listening).await?;
+        let config = GlobalConfig::instance();
+
+        let tls_config = Self::build_tls(config.as_ref())?;
+        let router = self.build_router(config.as_ref(), listening).await?;
         self.shutdown_handler
             .start_service(listening, Some(tls_config), router)
             .await
     }
 
     async fn start_without_tls(&mut self, listening: SocketAddr) -> Result<SocketAddr> {
-        let router = self.build_router(self.config.clone(), listening).await?;
+        let router = self
+            .build_router(GlobalConfig::instance().as_ref(), listening)
+            .await?;
         self.shutdown_handler
             .start_service(listening, None, router)
             .await
@@ -148,9 +151,9 @@ impl Server for HttpHandler {
     }
 
     async fn start(&mut self, listening: SocketAddr) -> Result<SocketAddr> {
-        let config = &self.config.query;
-        match config.http_handler_tls_server_key.is_empty()
-            || config.http_handler_tls_server_cert.is_empty()
+        let config = GlobalConfig::instance();
+        match config.query.http_handler_tls_server_key.is_empty()
+            || config.query.http_handler_tls_server_cert.is_empty()
         {
             true => self.start_without_tls(listening).await,
             false => self.start_with_tls(listening).await,

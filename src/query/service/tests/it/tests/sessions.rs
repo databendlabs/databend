@@ -22,6 +22,7 @@ use common_base::base::Runtime;
 use common_base::base::SingletonImpl;
 use common_catalog::catalog::CatalogManager;
 use common_config::Config;
+use common_config::GlobalConfig;
 use common_exception::Result;
 use common_storage::CacheOperator;
 use common_storage::DataOperator;
@@ -65,6 +66,7 @@ impl Drop for TestGuard {
 ///   - In the debug version, we enable the transfer of thread names by environment variables.
 #[derive(Default)]
 pub struct TestGlobalServices {
+    query_config: Mutex<HashMap<String, Arc<Config>>>,
     global_runtime: Mutex<HashMap<String, Arc<Runtime>>>,
     query_logger: Mutex<HashMap<String, Arc<QueryLogger>>>,
     cluster_discovery: Mutex<HashMap<String, Arc<ClusterDiscovery>>>,
@@ -92,6 +94,8 @@ impl TestGlobalServices {
         let global_services = GLOBAL.get_or_init(|| Arc::new(TestGlobalServices::default()));
 
         // The order of initialization is very important
+        GlobalConfig::init(config.clone(), global_services.clone())?;
+
         let app_name_shuffle = format!("{}-{}", config.query.tenant_id, config.query.cluster_id);
 
         QueryLogger::init(app_name_shuffle, &config.log, global_services.clone())?;
@@ -105,8 +109,8 @@ impl TestGlobalServices {
         CacheManager::init(&config.query, global_services.clone())?;
         CatalogManager::init(&config, global_services.clone()).await?;
         HttpQueryManager::init(&config, global_services.clone()).await?;
-        DataExchangeManager::init(config.clone(), global_services.clone())?;
-        SessionManager::init(config.clone(), global_services.clone())?;
+        DataExchangeManager::init(global_services.clone())?;
+        SessionManager::init(&config, global_services.clone())?;
         UserApiProvider::init(
             config.meta.to_meta_grpc_client_conf(),
             config.query.idm.clone(),
@@ -487,6 +491,30 @@ impl SingletonImpl<Arc<RoleCacheManager>> for TestGlobalServices {
             Some(name) => match self.users_role_manager.lock().entry(name.to_string()) {
                 Entry::Vacant(v) => v.insert(value),
                 Entry::Occupied(_v) => panic!("RoleCacheManager set twice in test[{:?}]", name),
+            },
+        };
+
+        Ok(())
+    }
+}
+
+impl SingletonImpl<Arc<Config>> for TestGlobalServices {
+    fn get(&self) -> Arc<Config> {
+        match std::thread::current().name() {
+            None => panic!("GlobalConfig is not init"),
+            Some(name) => match self.query_config.lock().get(name) {
+                None => panic!("GlobalConfig is not init, while in test '{}'", name),
+                Some(users_role_manager) => users_role_manager.clone(),
+            },
+        }
+    }
+
+    fn init(&self, value: Arc<Config>) -> Result<()> {
+        match std::thread::current().name() {
+            None => panic!("thread name is none"),
+            Some(name) => match self.query_config.lock().entry(name.to_string()) {
+                Entry::Vacant(v) => v.insert(value),
+                Entry::Occupied(_v) => panic!("GlobalConfig set twice in test[{:?}]", name),
             },
         };
 

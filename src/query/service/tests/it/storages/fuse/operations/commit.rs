@@ -28,7 +28,6 @@ use common_catalog::plan::Partitions;
 use common_catalog::table::Table;
 use common_catalog::table_context::ProcessInfo;
 use common_catalog::table_context::TableContext;
-use common_config::Config;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -377,10 +376,6 @@ impl TableContext for CtxDelegation {
 
     fn get_current_database(&self) -> String {
         self.ctx.get_current_database()
-    }
-
-    fn get_config(&self) -> Config {
-        todo!()
     }
 
     fn get_current_user(&self) -> Result<UserInfo> {

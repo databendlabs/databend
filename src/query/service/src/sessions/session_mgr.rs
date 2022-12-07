@@ -25,6 +25,7 @@ use common_base::base::tokio;
 use common_base::base::SignalStream;
 use common_base::base::Singleton;
 use common_config::Config;
+use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_metrics::label_counter;
@@ -49,7 +50,6 @@ static METRIC_SESSION_CLOSE_NUMBERS: &str = "session_close_numbers";
 static METRIC_SESSION_ACTIVE_CONNECTIONS: &str = "session_connections";
 
 pub struct SessionManager {
-    pub(in crate::sessions) conf: Config,
     pub(in crate::sessions) max_sessions: usize,
     pub(in crate::sessions) active_sessions: Arc<RwLock<HashMap<String, Weak<Session>>>>,
     pub status: Arc<RwLock<SessionManagerStatus>>,
@@ -62,17 +62,16 @@ pub struct SessionManager {
 static SESSION_MANAGER: OnceCell<Singleton<Arc<SessionManager>>> = OnceCell::new();
 
 impl SessionManager {
-    pub fn init(conf: Config, v: Singleton<Arc<SessionManager>>) -> Result<()> {
+    pub fn init(conf: &Config, v: Singleton<Arc<SessionManager>>) -> Result<()> {
         v.init(Self::create(conf))?;
 
         SESSION_MANAGER.set(v).ok();
         Ok(())
     }
 
-    pub fn create(conf: Config) -> Arc<SessionManager> {
+    pub fn create(conf: &Config) -> Arc<SessionManager> {
         let max_sessions = conf.query.max_active_sessions as usize;
         Arc::new(SessionManager {
-            conf,
             max_sessions,
             mysql_basic_conn_id: AtomicU32::new(9_u32.to_le()),
             status: Arc::new(RwLock::new(SessionManagerStatus::default())),
@@ -88,13 +87,9 @@ impl SessionManager {
         }
     }
 
-    pub fn get_conf(&self) -> Config {
-        self.conf.clone()
-    }
-
     pub async fn create_session(&self, typ: SessionType) -> Result<Arc<Session>> {
         // TODO: maybe deadlock
-        let config = self.get_conf();
+        let config = GlobalConfig::instance();
         {
             let sessions = self.active_sessions.read();
             self.validate_max_active_sessions(sessions.len(), "active sessions")?;
@@ -119,7 +114,7 @@ impl SessionManager {
         let tenant = config.query.tenant_id.clone();
         let user_api = UserApiProvider::instance();
         let session_settings = Settings::try_create(&config, user_api, tenant).await?;
-        let session_ctx = SessionContext::try_create(config.clone(), session_settings)?;
+        let session_ctx = SessionContext::try_create(session_settings)?;
         let session = Session::try_create(id.clone(), typ.clone(), session_ctx, mysql_conn_id)?;
 
         let mut sessions = self.active_sessions.write();
@@ -161,7 +156,7 @@ impl SessionManager {
     }
 
     pub fn destroy_session(&self, session_id: &String) {
-        let config = self.get_conf();
+        let config = GlobalConfig::instance();
         label_counter(
             METRIC_SESSION_CLOSE_NUMBERS,
             &config.query.tenant_id,
