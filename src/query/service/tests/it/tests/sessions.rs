@@ -136,6 +136,12 @@ impl TestGlobalServices {
 
     pub fn remove_services(&self, key: &str) {
         {
+            let mut global_config_guard = self.query_config.lock();
+            let global_config = global_config_guard.remove(key);
+            drop(global_config_guard);
+            drop(global_config);
+        }
+        {
             let mut global_runtime_guard = self.global_runtime.lock();
             let global_runtime = global_runtime_guard.remove(key);
             drop(global_runtime_guard);

@@ -27,7 +27,7 @@ static GLOBAL_CONFIG: OnceCell<Singleton<Arc<Config>>> = OnceCell::new();
 impl GlobalConfig {
     pub fn init(config: Config, v: Singleton<Arc<Config>>) -> Result<()> {
         v.init(Arc::new(config))?;
-        GLOBAL_CONFIG.set(v.clone()).ok();
+        GLOBAL_CONFIG.set(v).ok();
         Ok(())
     }
 
