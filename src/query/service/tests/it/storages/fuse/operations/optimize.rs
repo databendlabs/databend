@@ -49,6 +49,33 @@ async fn test_fuse_snapshot_optimize_statistic() -> Result<()> {
 }
 
 #[tokio::test]
+async fn test_fuse_snapshot_optimize_statistic_purge() -> Result<()> {
+    let fixture = TestFixture::new().await;
+    let db = fixture.default_db_name();
+    let tbl = fixture.default_table_name();
+    let case_name = "optimize_statistic_purge";
+    do_insertions(&fixture).await?;
+
+    // optimize statistics twice
+    for i in 0..1 {
+        let qry = format!("optimize table {}.{} statistic", db, tbl);
+
+        let ctx = fixture.ctx();
+        execute_command(ctx, &qry).await?;
+
+        check_data_dir(&fixture, case_name, 3, 1 + i, 2, 2, 2, Some(())).await?;
+    }
+
+    // After compact, all the count will become 1
+    let qry = format!("optimize table {}.{} all", db, tbl);
+    execute_command(fixture.ctx().clone(), &qry).await?;
+
+    check_data_dir(&fixture, case_name, 1, 1, 1, 1, 1, Some(())).await?;
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn test_fuse_snapshot_optimize_all() -> Result<()> {
     do_purge_test("explicit pure", "all", 1, 0, 1, 1, 1, None).await
 }

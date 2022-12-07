@@ -483,10 +483,12 @@ pub async fn check_data_dir(
     let prefix_block = FUSE_TBL_BLOCK_PREFIX;
     let prefix_index = FUSE_TBL_XOR_BLOOM_INDEX_PREFIX;
     let prefix_last_snapshot_hint = FUSE_TBL_LAST_SNAPSHOT_HINT;
+    println!("root: {}", root);
     for entry in WalkDir::new(root) {
         let entry = entry.unwrap();
         if entry.file_type().is_file() {
             let (_, entry_path) = entry.path().to_str().unwrap().split_at(root.len());
+            println!("entry: {}", entry_path);
             // trim the leading prefix, e.g. "/db_id/table_id/"
             let path = entry_path.split('/').skip(3).collect::<Vec<_>>();
             let path = path[0];
@@ -499,6 +501,7 @@ pub async fn check_data_dir(
             } else if path.starts_with(prefix_index) {
                 i_count += 1;
             } else if path.starts_with(prefix_snapshot_statistics) {
+                println!("ts file:{}", entry_path);
                 ts_count += 1;
             } else if path.starts_with(prefix_last_snapshot_hint) && check_last_snapshot.is_some() {
                 let content = fixture
