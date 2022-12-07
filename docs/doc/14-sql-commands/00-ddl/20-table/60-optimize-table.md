@@ -5,10 +5,10 @@ title: OPTIMIZE TABLE
 The objective of optimizing a table in Databend is to compact or purge its historical data in your object storage. This helps save storage space and improve query efficiency.
 
 :::caution
-Databend's Time Travel feature relies on historical data. If you purge historical data from a table with the command `OPTIMIZE TABLE <your_table> PURGE` or `OPTIMIZE TABLE <your_table> ALL`, the table will not be eligible for time travel. The command removes all snapshots (except the most recent one) and their associated segments and block files.
+Databend's Time Travel feature relies on historical data. If you purge historical data from a table with the command `OPTIMIZE TABLE <your_table> PURGE` or `OPTIMIZE TABLE <your_table> ALL`, the table will not be eligible for time travel. The command removes all snapshots (except the most recent one) and their associated segments,block files and table statistic file.
 :::
 
-## What are Snapshot, Segment, and Block?
+## What are Snapshot, Segment, Block and Table statistic file?
 
 Snapshot, segment, and block are the concepts Databend uses for data storage. Databend uses them to construct a hierarchical structure for storing table data.
 
@@ -20,6 +20,8 @@ A snapshot is a JSON file that does not save the table's data but indicate the s
 
 A segment is a JSON file that organizes the storage blocks (at least 1, at most 1,000) where the data is stored. If you run [FUSE_SEGMENT](../../../15-sql-functions/111-system-functions/fuse_segment.md) against a snapshot with the snapshot ID, you can find which segments are referenced by the snapshot.
 
+A table statistic file is a JSON file that save table statistic data, such as distinct values of table column.
+
 Databends saves actual table data in parquet files and considers each parquet file as a block. If you run [FUSE_BLOCK](../../../15-sql-functions/111-system-functions/fuse_block.md) against a snapshot with the snapshot ID, you can find which blocks are referenced by the snapshot.
 
 Databend creates a unique ID for each database and table for storing the snapshot, segment, and block files and saves them to your object storage in the path `<bucket_name>/[root]/<db_id>/<table_id>/`. Each snapshot, segment, and block file is named with a UUID (32-character lowercase hexadecimal string).
@@ -29,6 +31,7 @@ Databend creates a unique ID for each database and table for storing the snapsho
 | Snapshot | JSON    | `<32bitUUID>_<version>.json`    | `<bucket_name>/[root]/<db_id>/<table_id>/_ss/`   |
 | Segment  | JSON    | `<32bitUUID>_<version>.json`    | `<bucket_name>/[root]/<db_id>/<table_id>/_sg/`   |
 | Block    | parquet | `<32bitUUID>_<version>.parquet` | `<bucket_name>/[root]/<db_id>/<table_id>/_b/` |
+| Table statistic | JSON    | `<32bitUUID>_<version>.json`    | `<bucket_name>/[root]/<db_id>/<table_id>/_ts/`   |
 
 ## Table Optimization Considerations
 
@@ -69,7 +72,7 @@ OPTIMIZE TABLE [database.]table_name [ PURGE | COMPACT | ALL | STATISTIC ] [SEGM
 
 - `OPTIMIZE TABLE <table_name> PURGE`
 
-    Purges the historical data of table. Only the latest snapshot (including the segments and blocks referenced by this snapshot) will be kept.
+    Purges the historical data of table. Only the latest snapshot (including the segments, blocks and table statistic file referenced by this snapshot) will be kept.
  
 - `OPTIMIZE TABLE <table_name> COMPACT [LIMIT <segment_count>]`
  
