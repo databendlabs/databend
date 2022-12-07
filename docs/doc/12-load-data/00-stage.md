@@ -66,7 +66,7 @@ Upload `books.csv` into stages:
 ```shell title='Request /v1/upload_to_stage' API
 curl -H "stage_name:my_int_stage"\
  -F "upload=@./books.csv"\
- -XPUT http://root:@localhost:8081/v1/upload_to_stage
+ -XPUT http://root:@localhost:8000/v1/upload_to_stage
 ```
 
 ```text title='Response'
@@ -74,9 +74,9 @@ curl -H "stage_name:my_int_stage"\
 ```
 
 :::tip
-* http://127.0.0.1:8081/v1/upload_to_stage
+* http://127.0.0.1:8000/v1/upload_to_stage
   * `127.0.0.1` is `http_handler_host` value in your *databend-query.toml*
-  * `8081` is `http_handler_port` value in your *databend-query.toml*
+  * `8000` is `http_handler_port` value in your *databend-query.toml*
 
 * -F  \"upload=@./books.csv\"
   * Your books.csv file location
@@ -91,7 +91,7 @@ Upload `books.parquet` into stages:
 ```shell title='Request /v1/upload_to_stage' API
 curl -H "stage_name:my_int_stage"\
  -F "upload=@./books.parquet"\
- -XPUT http://root:@localhost:8081/v1/upload_to_stage
+ -XPUT http://root:@localhost:8000/v1/upload_to_stage
 ```
 
 ```text title='Response'
@@ -99,9 +99,9 @@ curl -H "stage_name:my_int_stage"\
 ```
 
 :::tip
-* http://127.0.0.1:8081/v1/upload_to_stage
+* http://127.0.0.1:8000/v1/upload_to_stage
   * `127.0.0.1` is `http_handler_host` value in your *databend-query.toml*
-  * `8081` is `http_handler_port` value in your *databend-query.toml*
+  * `8000` is `http_handler_port` value in your *databend-query.toml*
 
 * -F  \"upload=@./books.parquet\"
   * Your books.csv file location
