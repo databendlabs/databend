@@ -71,13 +71,19 @@ impl SegmentsIO {
             }
         });
 
-        try_join_futures(self.ctx.clone(), tasks).await
+        try_join_futures(
+            self.ctx.clone(),
+            tasks,
+            "fuse-req-segments-worker".to_owned(),
+        )
+        .await
     }
 }
 
 pub async fn try_join_futures<Fut>(
     ctx: Arc<dyn TableContext>,
     futures: impl IntoIterator<Item = Fut>,
+    thread_name: String,
 ) -> Result<Vec<Fut::Output>>
 where
     Fut: Future + Send + 'static,
@@ -90,7 +96,7 @@ where
     let semaphore = Semaphore::new(max_io_requests);
     let segments_runtime = Arc::new(Runtime::with_worker_threads(
         max_runtime_threads,
-        Some("deletion-write-segments-worker".to_owned()),
+        Some(thread_name),
     )?);
 
     // 2. spawn all the tasks to the runtime.

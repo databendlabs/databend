@@ -182,7 +182,7 @@ impl CompactTransform {
             stats_of_columns.push(meta_stats);
         }
 
-        let blocks = try_join_futures(ctx, task_futures)
+        let blocks = try_join_futures(ctx, task_futures, "deletion-read-blocks-worker".to_owned())
             .await?
             .into_iter()
             .collect::<Result<Vec<_>>>()?;
@@ -206,7 +206,7 @@ impl CompactTransform {
                 write_data(&state.index_data, &dal, &state.index_location).await
             });
         }
-        try_join_futures(ctx, handles)
+        try_join_futures(ctx, handles, "deletion-write-blocks-worker".to_owned())
             .await?
             .into_iter()
             .collect::<Result<Vec<_>>>()?;
