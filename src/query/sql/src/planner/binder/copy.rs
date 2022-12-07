@@ -29,6 +29,7 @@ use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::StageTableInfo;
 use common_catalog::table_context::TableContext;
+use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::parse_escape_string;
@@ -285,7 +286,7 @@ impl<'a> Binder {
             .await?;
 
         let (storage_params, path) = parse_uri_location(src_uri_location)?;
-        if !storage_params.is_secure() && !self.ctx.get_config().storage.allow_insecure {
+        if !storage_params.is_secure() && !GlobalConfig::instance().storage.allow_insecure {
             return Err(ErrorCode::StorageInsecure(
                 "copy from insecure storage is not allowed",
             ));
@@ -404,7 +405,7 @@ impl<'a> Binder {
             .map_err(ErrorCode::SyntaxException)?;
 
         let (storage_params, path) = parse_uri_location(dst_uri_location)?;
-        if !storage_params.is_secure() && !self.ctx.get_config().storage.allow_insecure {
+        if !storage_params.is_secure() && !GlobalConfig::instance().storage.allow_insecure {
             return Err(ErrorCode::StorageInsecure(
                 "copy into insecure storage is not allowed",
             ));
@@ -468,7 +469,7 @@ impl<'a> Binder {
             .map_err(ErrorCode::SyntaxException)?;
 
         let (storage_params, path) = parse_uri_location(dst_uri_location)?;
-        if !storage_params.is_secure() && !self.ctx.get_config().storage.allow_insecure {
+        if !storage_params.is_secure() && !GlobalConfig::instance().storage.allow_insecure {
             return Err(ErrorCode::StorageInsecure(
                 "copy into insecure storage is not allowed",
             ));

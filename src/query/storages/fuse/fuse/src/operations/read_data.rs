@@ -20,6 +20,7 @@ use common_catalog::plan::PrewhereInfo;
 use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table_context::TableContext;
+use common_config::GlobalConfig;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -135,7 +136,7 @@ impl FuseTable {
                 ctx.get_settings().get_max_threads()? as usize
             }
             ReadDataKind::BlockDataAdjustIORequests => {
-                let conf = ctx.get_config();
+                let conf = GlobalConfig::instance();
                 let mut max_memory_usage = ctx.get_settings().get_max_memory_usage()? as usize;
                 if conf.query.table_cache_enabled {
                     // Removing bloom index memory size.
