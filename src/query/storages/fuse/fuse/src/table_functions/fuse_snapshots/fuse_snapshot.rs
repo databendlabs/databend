@@ -18,7 +18,11 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_storages_table_meta::meta::TableSnapshotLite;
+use futures::stream::StreamExt;
+use futures::stream::TryStreamExt;
 
+use crate::io::MetaReaders;
+use crate::io::SnapshotHistoryReader;
 use crate::io::SnapshotsIO;
 use crate::io::TableMetaLocationGenerator;
 use crate::sessions::TableContext;
@@ -45,16 +49,45 @@ impl<'a> FuseSnapshot<'a> {
                 self.table.operator.clone(),
                 snapshot_version,
             );
-            let (snapshots, _) = snapshots_io
-                .read_snapshot_lites(
-                    snapshot_location,
-                    limit,
-                    false,
-                    snapshot.and_then(|s| s.timestamp),
-                    &|_| {},
-                )
-                .await?;
-            return self.to_block(&meta_location_generator, &snapshots, snapshot_version);
+            let snapshot_lite = match limit {
+                None => {
+                    // Use SnapshotIO only if limitation is None.
+                    //
+                    // SnapshotsIO lists snapshots from object storage, if we limit the number of
+                    // items being list , there might be the case that the snapshots returned
+                    // can not be chained together.
+                    let (snapshots, _) = snapshots_io
+                        .read_snapshot_lites(
+                            snapshot_location,
+                            None,
+                            false,
+                            snapshot.and_then(|s| s.timestamp),
+                            &|_| {},
+                        )
+                        .await?;
+                    Ok(snapshots)
+                }
+                Some(l) => {
+                    // SnapshotHistoryReader (which TableSnapshotReader impls) traverses the history
+                    // of snapshot sequentially, by using the TableSnapshot::prev_snapshot_id, which
+                    // guarantees the snapshot returned can be chained together
+                    let table_snapshot_reader = MetaReaders::table_snapshot_reader(
+                        self.ctx.get_data_operator()?.operator(),
+                    );
+                    table_snapshot_reader
+                        .snapshot_history(
+                            snapshot_location,
+                            snapshot_version,
+                            meta_location_generator.clone(),
+                        )
+                        .map_ok(|snapshot| TableSnapshotLite::from(snapshot.as_ref()))
+                        .take(l)
+                        .try_collect::<Vec<_>>()
+                        .await
+                }
+            }?;
+
+            return self.to_block(&meta_location_generator, &snapshot_lite, snapshot_version);
         }
         Ok(DataBlock::empty_with_schema(FuseSnapshot::schema()))
     }

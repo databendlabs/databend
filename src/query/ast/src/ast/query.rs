@@ -525,3 +525,18 @@ impl<'a> Display for Query<'a> {
         Ok(())
     }
 }
+
+impl<'a> Display for TimeTravelPoint<'a> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TimeTravelPoint::Snapshot(sid) => {
+                write!(f, " (SNAPSHOT => {sid})")?;
+            }
+            TimeTravelPoint::Timestamp(ts) => {
+                write!(f, " (TIMESTAMP => {ts})")?;
+            }
+        }
+
+        Ok(())
+    }
+}

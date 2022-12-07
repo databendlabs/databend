@@ -20,6 +20,7 @@ use common_ast::ast::Engine;
 use common_catalog::catalog_kind::CATALOG_DEFAULT;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table::AppendMode;
+use common_config::GlobalConfig;
 use common_datablocks::assert_blocks_sorted_eq_with_name;
 use common_datablocks::DataBlock;
 use common_datablocks::SendableDataBlockStream;
@@ -466,8 +467,8 @@ pub async fn check_data_dir(
     index_count: u32,
     check_last_snapshot: Option<()>,
 ) -> Result<()> {
-    let data_path = match fixture.ctx().get_config().storage.params {
-        StorageParams::Fs(v) => v.root,
+    let data_path = match &GlobalConfig::instance().storage.params {
+        StorageParams::Fs(v) => v.root.clone(),
         _ => panic!("storage type is not fs"),
     };
     let root = data_path.as_str();

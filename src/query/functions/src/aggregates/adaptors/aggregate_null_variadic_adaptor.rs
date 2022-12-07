@@ -95,7 +95,7 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction
     #[inline]
     fn state_layout(&self) -> Layout {
         let layout = self.nested.state_layout();
-        let add = usize::from(NULLABLE_RESULT);
+        let add = if NULLABLE_RESULT { layout.align() } else { 0 };
         Layout::from_size_align(layout.size() + add, layout.align()).unwrap()
     }
 
@@ -198,9 +198,9 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction
 
     fn deserialize(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
         if NULLABLE_RESULT {
+            let flag = reader[reader.len() - 1];
             self.nested
                 .deserialize(place, &mut &reader[..reader.len() - 1])?;
-            let flag = reader[reader.len() - 1];
             self.set_flag(place, flag);
         } else {
             self.nested.deserialize(place, reader)?;
@@ -216,9 +216,9 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction
 
         if self.get_flag(rhs) == 1 {
             self.set_flag(place, 1);
+            self.nested.merge(place, rhs)?;
         }
-
-        self.nested.merge(place, rhs)
+        Ok(())
     }
 
     fn support_merge_parallel(&self) -> bool {

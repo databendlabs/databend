@@ -16,6 +16,7 @@ use std::time::Duration;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
+use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_metrics::label_counter_with_val_and_labels;
 use common_metrics::label_histogram_with_val;
@@ -55,7 +56,7 @@ impl InterpreterMetrics {
         let handler_type = ctx.get_current_session().get_type().to_string();
         let query_kind = ctx.get_query_kind();
         let tenant_id = ctx.get_tenant();
-        let cluster_id = ctx.get_config().query.cluster_id;
+        let cluster_id = GlobalConfig::instance().query.cluster_id.clone();
 
         vec![
             (LABEL_HANDLER, handler_type),

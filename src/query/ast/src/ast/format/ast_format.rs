@@ -1318,6 +1318,13 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                     AstFormatContext::with_children(action_name, children.len());
                 FormatTreeNode::with_children(action_format_ctx, children)
             }
+            AlterTableAction::RevertTo { point } => {
+                self.visit_time_travel_point(point);
+                let point_node = self.children.pop().unwrap();
+                let action_name = "Action RevertTo".to_string();
+                let action_format_ctx = AstFormatContext::with_children(action_name, 1);
+                FormatTreeNode::with_children(action_format_ctx, vec![point_node])
+            }
         };
 
         let name = "AlterTable".to_string();

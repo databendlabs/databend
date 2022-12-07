@@ -12,23 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
+use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::interpreters::access::AccessChecker;
-use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
 use crate::sql::plans::Plan;
 
-pub struct ManagementModeAccess {
-    ctx: Arc<QueryContext>,
-}
+pub struct ManagementModeAccess;
 
 impl ManagementModeAccess {
-    pub fn create(ctx: Arc<QueryContext>) -> Box<dyn AccessChecker> {
-        Box::new(ManagementModeAccess { ctx })
+    pub fn create() -> Box<dyn AccessChecker> {
+        Box::new(ManagementModeAccess)
     }
 }
 
@@ -37,7 +32,7 @@ impl AccessChecker for ManagementModeAccess {
     // Check what we can do if in management mode.
     async fn check(&self, plan: &Plan) -> Result<()> {
         // Allows for management-mode.
-        if self.ctx.get_config().query.management_mode {
+        if GlobalConfig::instance().query.management_mode {
             let ok = match plan {
                 Plan::Query {rewrite_kind, .. } => {
                     use crate::sql::plans::RewriteKind;
@@ -60,7 +55,7 @@ impl AccessChecker for ManagementModeAccess {
                 | Plan::ShowCreateTable(_)
                 | Plan::ShowGrants(_)
 
-                // Set 
+                // Set
                 | Plan::SetVariable(_)
 
                 // Database.
