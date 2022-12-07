@@ -1896,9 +1896,11 @@ dependencies = [
  "futures-util",
  "opendal",
  "parking_lot 0.12.1",
+ "serde",
  "serde_json",
  "similar-asserts",
  "tracing",
+ "typetag",
  "xml-rs",
 ]
 
