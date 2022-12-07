@@ -20,6 +20,8 @@ mod aggregator_partial;
 mod aggregator_single_key;
 mod aggregator_twolevel;
 
+pub use aggregate_info::AggregateInfo;
+pub use aggregate_info::OverflowInfo;
 pub use aggregator_final::KeysU128FinalAggregator;
 pub use aggregator_final::KeysU16FinalAggregator;
 pub use aggregator_final::KeysU256FinalAggregator;
@@ -52,5 +54,3 @@ pub use aggregator_single_key::PartialSingleStateAggregator;
 pub use aggregator_single_key::SingleStateAggregator;
 pub use aggregator_twolevel::TwoLevelAggregator;
 pub use aggregator_twolevel::TwoLevelAggregatorLike;
-pub use aggregate_info::OverflowInfo;
-pub use aggregate_info::AggregateInfo;

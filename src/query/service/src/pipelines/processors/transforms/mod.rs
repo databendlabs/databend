@@ -24,11 +24,11 @@ mod transform_limit;
 mod transform_mark_join;
 
 pub mod group_by;
+mod transform_convert_grouping;
 mod transform_left_join;
 mod transform_merge_block;
 mod transform_right_join;
 mod transform_right_semi_anti_join;
-mod transform_convert_grouping;
 
 pub use aggregator::AggregatorParams;
 pub use aggregator::AggregatorTransformParams;
@@ -50,6 +50,7 @@ pub use transform_block_compact::TransformBlockCompact;
 pub use transform_cast_schema::TransformCastSchema;
 pub use transform_compact::Compactor;
 pub use transform_compact::TransformCompact;
+pub use transform_convert_grouping::TransformConvertGrouping;
 pub use transform_create_sets::SubqueryReceiver;
 pub use transform_create_sets::TransformCreateSets;
 pub use transform_dummy::TransformDummy;
@@ -68,4 +69,3 @@ pub use transform_right_semi_anti_join::TransformRightSemiAntiJoin;
 pub use transform_sort_merge::SortMergeCompactor;
 pub use transform_sort_merge::TransformSortMerge;
 pub use transform_sort_partial::TransformSortPartial;
-pub use transform_convert_grouping::TransformConvertGrouping;

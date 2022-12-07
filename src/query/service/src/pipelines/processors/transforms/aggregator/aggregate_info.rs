@@ -34,7 +34,10 @@ pub struct AggregateInfo {
 
 impl AggregateInfo {
     pub fn create(bucket: isize) -> BlockMetaInfoPtr {
-        Arc::new(Box::new(AggregateInfo { bucket, overflow: None }))
+        Arc::new(Box::new(AggregateInfo {
+            bucket,
+            overflow: None,
+        }))
     }
 }
 

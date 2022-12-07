@@ -23,8 +23,9 @@ use common_datablocks::HashMethodSerializer;
 use common_datablocks::KeysState;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_hashtable::{FastHash, HashtableKeyable};
+use common_hashtable::FastHash;
 use common_hashtable::HashMap;
+use common_hashtable::HashtableKeyable;
 use common_hashtable::HashtableLike;
 use common_hashtable::LookupHashMap;
 use common_hashtable::TwoLevelHashMap;
@@ -84,13 +85,13 @@ use crate::pipelines::processors::AggregatorParams;
 pub trait PolymorphicKeysHelper<Method: HashMethod> {
     const SUPPORT_TWO_LEVEL: bool;
 
-    type HashTable: HashtableLike<Key=Method::HashKey, Value=usize> + Send;
+    type HashTable: HashtableLike<Key = Method::HashKey, Value = usize> + Send;
     fn create_hash_table(&self) -> Result<Self::HashTable>;
 
-    type ColumnBuilder<'a>: KeysColumnBuilder<T=&'a Method::HashKey>
-        where
-            Self: 'a,
-            Method: 'a;
+    type ColumnBuilder<'a>: KeysColumnBuilder<T = &'a Method::HashKey>
+    where
+        Self: 'a,
+        Method: 'a;
 
     fn keys_column_builder(&self, capacity: usize) -> Self::ColumnBuilder<'_>;
 
@@ -98,10 +99,10 @@ pub trait PolymorphicKeysHelper<Method: HashMethod> {
 
     fn keys_iter_from_column(&self, column: &ColumnRef) -> Result<Self::KeysColumnIter>;
 
-    type GroupColumnsBuilder<'a>: GroupColumnsBuilder<T=&'a Method::HashKey>
-        where
-            Self: 'a,
-            Method: 'a;
+    type GroupColumnsBuilder<'a>: GroupColumnsBuilder<T = &'a Method::HashKey>
+    where
+        Self: 'a,
+        Method: 'a;
 
     fn group_columns_builder(
         &self,
@@ -418,10 +419,10 @@ impl<Method: HashMethod + Send> HashMethod for TwoLevelHashMethod<Method> {
 }
 
 impl<Method> PolymorphicKeysHelper<TwoLevelHashMethod<Method>> for TwoLevelHashMethod<Method>
-    where
-        Self: HashMethod<HashKey=Method::HashKey>,
-        Method: HashMethod + PolymorphicKeysHelper<Method> + Send,
-        Method::HashKey: FastHash,
+where
+    Self: HashMethod<HashKey = Method::HashKey>,
+    Method: HashMethod + PolymorphicKeysHelper<Method> + Send,
+    Method::HashKey: FastHash,
 {
     // Two level cannot be recursive
     const SUPPORT_TWO_LEVEL: bool = false;
