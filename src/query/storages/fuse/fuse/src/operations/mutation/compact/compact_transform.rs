@@ -37,7 +37,6 @@ use opendal::Operator;
 use super::compact_meta::CompactSourceMeta;
 use super::compact_part::CompactTask;
 use super::CompactSinkMeta;
-use crate::io::try_join_futures;
 use crate::io::write_data;
 use crate::io::BlockReader;
 use crate::io::TableMetaLocationGenerator;
@@ -51,12 +50,6 @@ use crate::pipelines::processors::Processor;
 use crate::statistics::reduce_block_statistics;
 use crate::statistics::reducers::reduce_block_metas;
 
-struct CompactState {
-    blocks: Vec<DataBlock>,
-    stats_of_columns: Vec<Vec<StatisticsOfColumns>>,
-    trivals: VecDeque<Arc<BlockMeta>>,
-}
-
 struct SerializeState {
     block_data: Vec<u8>,
     block_location: String,
@@ -67,7 +60,11 @@ struct SerializeState {
 enum State {
     Consume,
     ReadBlocks,
-    CompactBlocks(CompactState),
+    CompactBlocks {
+        blocks: Vec<DataBlock>,
+        stats_of_columns: Vec<Vec<StatisticsOfColumns>>,
+        trivals: VecDeque<Arc<BlockMeta>>,
+    },
     SerializedBlocks(Vec<SerializeState>),
     GenerateSegment,
     SerializedSegment {
@@ -89,12 +86,13 @@ pub struct CompactTransform {
     scan_progress: Arc<Progress>,
     output_data: Option<DataBlock>,
 
-    ctx: Arc<dyn TableContext>,
     block_reader: Arc<BlockReader>,
     location_gen: TableMetaLocationGenerator,
     dal: Operator,
 
     // Limit the memory size of the block read.
+    max_memory: u64,
+    max_io_requests: usize,
     compact_tasks: VecDeque<CompactTask>,
     block_metas: Vec<Arc<BlockMeta>>,
     order: usize,
@@ -114,103 +112,28 @@ impl CompactTransform {
         dal: Operator,
         thresholds: BlockCompactThresholds,
     ) -> Result<ProcessorPtr> {
+        let settings = ctx.get_settings();
+        let max_memory_usage = (settings.get_max_memory_usage()? as f64 * 0.95) as u64;
+        let max_threads = settings.get_max_threads()?;
+        let max_memory = max_memory_usage / max_threads;
+        let max_io_requests = settings.get_max_storage_io_requests()? as usize;
         Ok(ProcessorPtr::create(Box::new(CompactTransform {
             state: State::Consume,
             input,
             output,
             scan_progress,
             output_data: None,
-            ctx,
             block_reader,
             location_gen,
             dal,
+            max_memory,
+            max_io_requests,
             compact_tasks: VecDeque::new(),
             block_metas: Vec::new(),
             order: 0,
             thresholds,
             abort_operation: AbortOperation::default(),
         })))
-    }
-
-    async fn read_blocks(&mut self) -> Result<CompactState> {
-        // block read tasks.
-        let mut task_futures = Vec::new();
-        // The no need compact blockmetas.
-        let mut trivals = VecDeque::new();
-        let mut memory_usage = 0;
-        let mut stats_of_columns = Vec::new();
-
-        let ctx = self.ctx.clone();
-        let settings = ctx.get_settings();
-        let max_memory_usage = (settings.get_max_memory_usage()? as f64 * 0.95) as u64;
-        let max_threads = settings.get_max_threads()?;
-        let max_memory = max_memory_usage / max_threads;
-        while let Some(task) = self.compact_tasks.pop_front() {
-            let metas = task.get_block_metas();
-            // Only one block, no need to do a compact.
-            if metas.len() == 1 {
-                stats_of_columns.push(vec![]);
-                trivals.push_back(metas[0].clone());
-                continue;
-            }
-
-            memory_usage += metas.iter().fold(0, |acc, meta| {
-                let memory = meta.bloom_filter_index_size + meta.block_size;
-                acc + memory
-            });
-
-            if memory_usage > max_memory && !task_futures.is_empty() {
-                self.compact_tasks.push_front(task);
-                break;
-            }
-
-            let mut meta_stats = Vec::with_capacity(metas.len());
-            for meta in metas {
-                let progress_values = ProgressValues {
-                    rows: meta.row_count as usize,
-                    bytes: meta.block_size as usize,
-                };
-                self.scan_progress.incr(&progress_values);
-
-                meta_stats.push(meta.col_stats.clone());
-
-                let block_reader = self.block_reader.clone();
-                // read block in parallel.
-                task_futures
-                    .push(async move { block_reader.read_with_block_meta(meta.as_ref()).await });
-            }
-            stats_of_columns.push(meta_stats);
-        }
-
-        let blocks = try_join_futures(ctx, task_futures, "deletion-read-blocks-worker".to_owned())
-            .await?
-            .into_iter()
-            .collect::<Result<Vec<_>>>()?;
-        Ok(CompactState {
-            blocks,
-            stats_of_columns,
-            trivals,
-        })
-    }
-
-    async fn write_blocks(&mut self, serialize_states: &mut Vec<SerializeState>) -> Result<()> {
-        let mut handles = Vec::with_capacity(serialize_states.len());
-        let ctx = self.ctx.clone();
-
-        while let Some(state) = serialize_states.pop() {
-            let dal = self.dal.clone();
-            handles.push(async move {
-                // write block data.
-                write_data(&state.block_data, &dal, &state.block_location).await?;
-                // write index data.
-                write_data(&state.index_data, &dal, &state.index_location).await
-            });
-        }
-        try_join_futures(ctx, handles, "deletion-write-blocks-worker".to_owned())
-            .await?
-            .into_iter()
-            .collect::<Result<Vec<_>>>()?;
-        Ok(())
     }
 }
 
@@ -227,7 +150,7 @@ impl Processor for CompactTransform {
     fn event(&mut self) -> Result<Event> {
         if matches!(
             &self.state,
-            State::CompactBlocks(_) | State::GenerateSegment { .. } | State::Output { .. }
+            State::CompactBlocks { .. } | State::GenerateSegment { .. } | State::Output { .. }
         ) {
             return Ok(Event::Sync);
         }
@@ -278,18 +201,21 @@ impl Processor for CompactTransform {
 
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Consume) {
-            State::CompactBlocks(mut compact_state) => {
+            State::CompactBlocks {
+                mut blocks,
+                stats_of_columns,
+                mut trivals,
+            } => {
                 let mut serialize_states = Vec::new();
-                for stats in compact_state.stats_of_columns {
+                for stats in stats_of_columns {
                     let block_num = stats.len();
                     if block_num == 0 {
-                        self.block_metas
-                            .push(compact_state.trivals.pop_front().unwrap());
+                        self.block_metas.push(trivals.pop_front().unwrap());
                         continue;
                     }
 
                     // concat blocks.
-                    let compact_blocks: Vec<_> = compact_state.blocks.drain(0..block_num).collect();
+                    let compact_blocks: Vec<_> = blocks.drain(0..block_num).collect();
                     let new_block = DataBlock::concat_blocks(&compact_blocks)?;
 
                     // generate block statistics.
@@ -381,11 +307,73 @@ impl Processor for CompactTransform {
     async fn async_process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Consume) {
             State::ReadBlocks => {
-                let compact_state = self.read_blocks().await?;
-                self.state = State::CompactBlocks(compact_state);
+                // block read tasks.
+                let mut task_futures = Vec::new();
+                // The no need compact blockmetas.
+                let mut trivals = VecDeque::new();
+                let mut memory_usage = 0;
+                let mut stats_of_columns = Vec::new();
+
+                let block_reader = self.block_reader.as_ref();
+                while let Some(task) = self.compact_tasks.pop_front() {
+                    let metas = task.get_block_metas();
+                    // Only one block, no need to do a compact.
+                    if metas.len() == 1 {
+                        stats_of_columns.push(vec![]);
+                        trivals.push_back(metas[0].clone());
+                        continue;
+                    }
+
+                    memory_usage += metas.iter().fold(0, |acc, meta| {
+                        let memory = meta.bloom_filter_index_size + meta.block_size;
+                        acc + memory
+                    });
+
+                    if (memory_usage > self.max_memory
+                        || task_futures.len() + metas.len() > self.max_io_requests)
+                        && !task_futures.is_empty()
+                    {
+                        self.compact_tasks.push_front(task);
+                        break;
+                    }
+
+                    let mut meta_stats = Vec::with_capacity(metas.len());
+                    for meta in metas {
+                        let progress_values = ProgressValues {
+                            rows: meta.row_count as usize,
+                            bytes: meta.block_size as usize,
+                        };
+                        self.scan_progress.incr(&progress_values);
+
+                        meta_stats.push(meta.col_stats.clone());
+
+                        // read block in parallel.
+                        task_futures.push(async move {
+                            block_reader.read_with_block_meta(meta.as_ref()).await
+                        });
+                    }
+                    stats_of_columns.push(meta_stats);
+                }
+
+                let blocks = futures::future::try_join_all(task_futures).await?;
+                self.state = State::CompactBlocks {
+                    blocks,
+                    stats_of_columns,
+                    trivals,
+                }
             }
             State::SerializedBlocks(mut serialize_states) => {
-                self.write_blocks(&mut serialize_states).await?;
+                let mut handles = Vec::with_capacity(serialize_states.len());
+                let dal = &self.dal;
+                while let Some(state) = serialize_states.pop() {
+                    handles.push(async move {
+                        // write block data.
+                        write_data(&state.block_data, dal, &state.block_location).await?;
+                        // write index data.
+                        write_data(&state.index_data, dal, &state.index_location).await
+                    });
+                }
+                futures::future::try_join_all(handles).await?;
                 if self.compact_tasks.is_empty() {
                     self.state = State::GenerateSegment;
                 } else {
