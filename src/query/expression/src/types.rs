@@ -230,7 +230,7 @@ pub trait ValueType: Debug + Clone + PartialEq + Sized + 'static {
     fn builder_len(builder: &Self::ColumnBuilder) -> usize;
     fn push_item(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>);
     fn push_default(builder: &mut Self::ColumnBuilder);
-    fn append_builder(builder: &mut Self::ColumnBuilder, other_builder: &Self::ColumnBuilder);
+    fn append_column(builder: &mut Self::ColumnBuilder, other: &Self::Column);
     fn build_column(builder: Self::ColumnBuilder) -> Self::Column;
     fn build_scalar(builder: Self::ColumnBuilder) -> Self::Scalar;
 

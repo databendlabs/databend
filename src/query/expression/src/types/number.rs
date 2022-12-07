@@ -145,7 +145,7 @@ impl<Num: Number> ValueType for NumberType<Num> {
         builder.push(Num::default());
     }
 
-    fn append_builder(builder: &mut Self::ColumnBuilder, other: &Self::ColumnBuilder) {
+    fn append_column(builder: &mut Self::ColumnBuilder, other: &Self::Column) {
         builder.extend_from_slice(other);
     }
 
@@ -536,13 +536,13 @@ impl NumberColumnBuilder {
         })
     }
 
-    pub fn append(&mut self, other: &NumberColumnBuilder) {
+    pub fn append_column(&mut self, other: &NumberColumn) {
         crate::with_number_type!(|NUM_TYPE| match (self, other) {
             (
                 NumberColumnBuilder::NUM_TYPE(builder),
-                NumberColumnBuilder::NUM_TYPE(other_builder),
+                NumberColumn::NUM_TYPE(other),
             ) => {
-                builder.extend_from_slice(other_builder);
+                builder.extend_from_slice(other);
             }
             (this, other) => unreachable!("unable append {other:?} onto {this:?}"),
         })

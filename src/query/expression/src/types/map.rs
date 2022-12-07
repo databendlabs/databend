@@ -141,8 +141,8 @@ impl<K: ValueType, V: ValueType> ValueType for KvPair<K, V> {
         builder.push_default();
     }
 
-    fn append_builder(builder: &mut Self::ColumnBuilder, other_builder: &Self::ColumnBuilder) {
-        builder.append(other_builder);
+    fn append_column(builder: &mut Self::ColumnBuilder, other_builder: &Self::Column) {
+        builder.append_column(other_builder);
     }
 
     fn build_column(builder: Self::ColumnBuilder) -> Self::Column {
@@ -249,9 +249,9 @@ impl<K: ValueType, V: ValueType> KvColumnBuilder<K, V> {
         V::push_default(&mut self.values);
     }
 
-    pub fn append(&mut self, other: &Self) {
-        K::append_builder(&mut self.keys, &other.keys);
-        V::append_builder(&mut self.values, &other.values);
+    pub fn append_column(&mut self, other: &KvColumn<K, V>) {
+        K::append_column(&mut self.keys, &other.keys);
+        V::append_column(&mut self.values, &other.values);
     }
 
     pub fn build(self) -> KvColumn<K, V> {
@@ -392,8 +392,8 @@ impl<T: ValueType> ValueType for MapType<T> {
         <MapInternal<T> as ValueType>::push_default(builder)
     }
 
-    fn append_builder(builder: &mut Self::ColumnBuilder, other_builder: &Self::ColumnBuilder) {
-        <MapInternal<T> as ValueType>::append_builder(builder, other_builder)
+    fn append_column(builder: &mut Self::ColumnBuilder, other: &Self::Column) {
+        <MapInternal<T> as ValueType>::append_column(builder, other)
     }
 
     fn build_column(builder: Self::ColumnBuilder) -> Self::Column {

@@ -159,7 +159,7 @@ impl ValueType for TimestampType {
         builder.push(Self::Scalar::default());
     }
 
-    fn append_builder(builder: &mut Self::ColumnBuilder, other: &Self::ColumnBuilder) {
+    fn append_column(builder: &mut Self::ColumnBuilder, other: &Self::Column) {
         builder.extend_from_slice(other);
     }
 
