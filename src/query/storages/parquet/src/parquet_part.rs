@@ -23,43 +23,27 @@ use common_catalog::plan::PartInfo;
 use common_catalog::plan::PartInfoPtr;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_storages_table_meta::meta::Compression;
+
+use crate::ParquetColumnMeta;
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq)]
-pub struct ColumnMeta {
-    pub offset: u64,
-    pub length: u64,
-    pub num_values: u64,
-}
-
-impl ColumnMeta {
-    pub fn create(offset: u64, length: u64, num_values: u64) -> ColumnMeta {
-        ColumnMeta {
-            offset,
-            length,
-            num_values,
-        }
-    }
-}
-#[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq)]
-pub struct FusePartInfo {
+pub struct ParquetPartInfo {
     pub location: String,
     /// FusePartInfo itself is not versioned
     /// the `format_version` is the version of the block which the `location` points to
     pub format_version: u64,
     pub nums_rows: usize,
-    pub columns_meta: HashMap<usize, ColumnMeta>,
-    pub compression: Compression,
+    pub columns_meta: HashMap<usize, ParquetColumnMeta>,
 }
 
-#[typetag::serde(name = "fuse")]
-impl PartInfo for FusePartInfo {
+#[typetag::serde(name = "parquet")]
+impl PartInfo for ParquetPartInfo {
     fn as_any(&self) -> &dyn Any {
         self
     }
 
     fn equals(&self, info: &Box<dyn PartInfo>) -> bool {
-        match info.as_any().downcast_ref::<FusePartInfo>() {
+        match info.as_any().downcast_ref::<ParquetPartInfo>() {
             None => false,
             Some(other) => self == other,
         }
@@ -72,25 +56,23 @@ impl PartInfo for FusePartInfo {
     }
 }
 
-impl FusePartInfo {
+impl ParquetPartInfo {
     pub fn create(
         location: String,
         format_version: u64,
         rows_count: u64,
-        columns_meta: HashMap<usize, ColumnMeta>,
-        compression: Compression,
+        columns_meta: HashMap<usize, ParquetColumnMeta>,
     ) -> Arc<Box<dyn PartInfo>> {
-        Arc::new(Box::new(FusePartInfo {
+        Arc::new(Box::new(ParquetPartInfo {
             location,
             format_version,
             columns_meta,
             nums_rows: rows_count as usize,
-            compression,
         }))
     }
 
-    pub fn from_part(info: &PartInfoPtr) -> Result<&FusePartInfo> {
-        match info.as_any().downcast_ref::<FusePartInfo>() {
+    pub fn from_part(info: &PartInfoPtr) -> Result<&ParquetPartInfo> {
+        match info.as_any().downcast_ref::<ParquetPartInfo>() {
             Some(part_ref) => Ok(part_ref),
             None => Err(ErrorCode::Internal(
                 "Cannot downcast from PartInfo to FusePartInfo.",

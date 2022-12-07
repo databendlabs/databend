@@ -14,6 +14,7 @@
 
 use std::fmt::Debug;
 
+use common_datavalues::DataSchemaRef;
 use common_meta_types::UserStageInfo;
 
 use crate::plan::Expression;
@@ -60,4 +61,32 @@ pub struct PushDownInfo {
     pub order_by: Vec<(Expression, bool, bool)>,
     /// Optional stage info, used for COPY into <table> from stage
     pub stage: Option<StagePushDownInfo>,
+}
+
+impl PushDownInfo {
+    pub fn prewhere_of_push_downs(push_downs: &Option<PushDownInfo>) -> Option<PrewhereInfo> {
+        if let Some(PushDownInfo { prewhere, .. }) = push_downs {
+            prewhere.clone()
+        } else {
+            None
+        }
+    }
+
+    pub fn projection_of_push_downs(
+        schema: &DataSchemaRef,
+        push_downs: &Option<PushDownInfo>,
+    ) -> Projection {
+        if let Some(PushDownInfo {
+            projection: Some(prj),
+            ..
+        }) = push_downs
+        {
+            prj.clone()
+        } else {
+            let indices = (0..schema.fields().len())
+                .into_iter()
+                .collect::<Vec<usize>>();
+            Projection::Columns(indices)
+        }
+    }
 }
