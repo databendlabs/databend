@@ -33,7 +33,12 @@ impl DataBlock {
         let boolean_col: &BooleanColumn = Series::check_get(&predict_boolean_nonull)?;
         let rows = boolean_col.len();
         let count_zeros = boolean_col.values().unset_bits();
-        Ok(count_zeros != rows)
+        if (count_zeros == 0) && (rows == 0) {
+            // prewhere_column is empty and predicate is nullable
+            Ok(true)
+        } else {
+            Ok(count_zeros != rows)
+        }
     }
 
     pub fn filter_block(block: DataBlock, predicate: &ColumnRef) -> Result<DataBlock> {
