@@ -182,7 +182,7 @@ impl Column {
             .iter()
             .map(|c| T::try_downcast_column(c).unwrap())
             .collect();
-        
+
         for col in columns {
             T::append_column(&mut builder, &col);
         }

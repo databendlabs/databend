@@ -538,10 +538,7 @@ impl NumberColumnBuilder {
 
     pub fn append_column(&mut self, other: &NumberColumn) {
         crate::with_number_type!(|NUM_TYPE| match (self, other) {
-            (
-                NumberColumnBuilder::NUM_TYPE(builder),
-                NumberColumn::NUM_TYPE(other),
-            ) => {
+            (NumberColumnBuilder::NUM_TYPE(builder), NumberColumn::NUM_TYPE(other)) => {
                 builder.extend_from_slice(other);
             }
             (this, other) => unreachable!("unable append {other:?} onto {this:?}"),
