@@ -2323,6 +2323,7 @@ dependencies = [
  "common-functions-v2",
  "common-storages-table-meta",
  "criterion",
+ "match-template",
  "rand 0.8.5",
  "serde",
  "thiserror",

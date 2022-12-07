@@ -28,6 +28,7 @@ xorfilter-rs = { git = "https://github.com/datafuse-extras/xorfilter", features 
 
 anyerror = { workspace = true }
 cbordata = { version = "0.6.0" }
+match-template = "0.0.1"
 serde = { workspace = true }
 thiserror = { workspace = true }
 tracing = "0.1.36"

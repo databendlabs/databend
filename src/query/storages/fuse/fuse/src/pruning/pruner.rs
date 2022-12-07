@@ -147,6 +147,7 @@ pub fn new_filter_pruner(
 mod util {
     use common_catalog::plan::Recursion;
     use common_exception::ErrorCode;
+    use common_storages_index::FilterEvalResult;
 
     use super::*;
     // #[tracing::instrument(level = "debug", skip_all)] todo!("expression");
@@ -164,19 +165,20 @@ mod util {
             .read_filter(ctx.clone(), dal, filter_col_names, index_length)
             .await;
 
-        todo!("expression");
-        // match maybe_filter {
-        //     // figure it out
-        //     Ok(filter) => ChunkFilter::from_filter_chunk(schema.clone(), filter.into_data())?
-        //         .maybe_true(filter_expr),
-        //     Err(e) if e.code() == ErrorCode::DEPRECATED_INDEX_FORMAT => {
-        //         // In case that the index is no longer supported, just return ture to indicate
-        //         // that the block being pruned should be kept. (Although the caller of this method
-        //         // "FilterPruner::should_keep",  will ignore any exceptions returned)
-        //         Ok(true)
-        //     }
-        //     Err(e) => Err(e),
-        // }
+        match maybe_filter {
+            Ok(filter) => Ok(
+                ChunkFilter::from_filter_chunk(ctx.try_get_function_context()?,  filter.into_data())?
+                    .eval(filter_expr)?
+                    != FilterEvalResult::MustFalse,
+            ),
+            Err(e) if e.code() == ErrorCode::DEPRECATED_INDEX_FORMAT => {
+                // In case that the index is no longer supported, just return ture to indicate
+                // that the block being pruned should be kept. (Although the caller of this method
+                // "FilterPruner::should_keep",  will ignore any exceptions returned)
+                Ok(true)
+            }
+            Err(e) => Err(e),
+        }
     }
 
     struct PointQueryVisitor {

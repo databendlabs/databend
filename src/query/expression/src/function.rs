@@ -29,6 +29,7 @@ use crate::utils::arrow::constant_bitmap;
 use crate::values::Value;
 use crate::values::ValueRef;
 use crate::Column;
+use crate::ColumnIndex;
 use crate::Expr;
 use crate::FunctionDomain;
 use crate::Scalar;
@@ -44,6 +45,12 @@ pub struct FunctionSignature {
 #[derive(Clone, Copy)]
 pub struct FunctionContext {
     pub tz: Tz,
+}
+
+impl Default for FunctionContext {
+    fn default() -> Self {
+        Self { tz: Tz::UTC }
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -114,11 +121,11 @@ impl FunctionRegistry {
         }
     }
 
-    pub fn search_candidates(
+    pub fn search_candidates<Index: ColumnIndex>(
         &self,
         name: &str,
         params: &[usize],
-        args: &[Expr],
+        args: &[Expr<Index>],
     ) -> Vec<(FunctionID, Arc<Function>)> {
         let name = name.to_lowercase();
         let name = self

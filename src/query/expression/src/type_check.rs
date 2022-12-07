@@ -26,10 +26,14 @@ use crate::function::FunctionSignature;
 use crate::types::number::NumberDataType;
 use crate::types::number::NumberScalar;
 use crate::types::DataType;
+use crate::ColumnIndex;
 use crate::Result;
 use crate::Scalar;
 
-pub fn check(ast: &RawExpr, fn_registry: &FunctionRegistry) -> Result<Expr> {
+pub fn check<Index: ColumnIndex>(
+    ast: &RawExpr<Index>,
+    fn_registry: &FunctionRegistry,
+) -> Result<Expr<Index>> {
     match ast {
         RawExpr::Literal { span, lit } => {
             let (scalar, data_type) = check_literal(lit);
@@ -45,7 +49,7 @@ pub fn check(ast: &RawExpr, fn_registry: &FunctionRegistry) -> Result<Expr> {
             data_type,
         } => Ok(Expr::ColumnRef {
             span: span.clone(),
-            id: *id,
+            id: id.clone(),
             data_type: data_type.clone(),
         }),
         RawExpr::Cast {
@@ -155,13 +159,13 @@ pub fn check_literal(literal: &Literal) -> (Scalar, DataType) {
     }
 }
 
-pub fn check_function(
+pub fn check_function<Index: ColumnIndex>(
     span: Span,
     name: &str,
     params: &[usize],
-    args: &[Expr],
+    args: &[Expr<Index>],
     fn_registry: &FunctionRegistry,
-) -> Result<Expr> {
+) -> Result<Expr<Index>> {
     let candidates = fn_registry.search_candidates(name, params, args);
 
     let mut fail_resaons = Vec::with_capacity(candidates.len());
@@ -269,11 +273,11 @@ impl Subsitution {
 }
 
 #[allow(clippy::type_complexity)]
-pub fn try_check_function(
+pub fn try_check_function<Index: ColumnIndex>(
     span: Span,
-    args: &[Expr],
+    args: &[Expr<Index>],
     sig: &FunctionSignature,
-) -> Result<(Vec<Expr>, DataType, Vec<DataType>)> {
+) -> Result<(Vec<Expr<Index>>, DataType, Vec<DataType>)> {
     assert_eq!(args.len(), sig.args_type.len());
 
     let substs = args

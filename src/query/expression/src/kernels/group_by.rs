@@ -31,7 +31,7 @@ impl Chunk {
         let hash_key_types = indices
             .iter()
             .map(|&c| {
-                let col = chunk.get_by_id(&c);
+                let col = chunk.get_by_id(&c).unwrap();
                 Ok(col.data_type.clone())
             })
             .collect::<Result<Vec<_>>>();
