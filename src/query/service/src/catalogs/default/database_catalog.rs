@@ -474,9 +474,8 @@ impl Catalog for DatabaseCatalog {
         &self,
         func_name: &str,
         tbl_args: TableArgs,
-        conf: &common_config::Config,
     ) -> Result<Arc<dyn TableFunction>> {
-        self.table_function_factory.get(func_name, tbl_args, conf)
+        self.table_function_factory.get(func_name, tbl_args)
     }
 
     fn get_table_engines(&self) -> Vec<StorageDescription> {

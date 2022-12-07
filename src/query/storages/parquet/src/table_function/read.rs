@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
+use common_config::GlobalConfig;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 use common_pipeline_core::Pipeline;
@@ -97,7 +98,7 @@ impl ParquetTable {
         ctx: &Arc<dyn TableContext>,
         projection: &Projection,
     ) -> Result<usize> {
-        let conf = ctx.get_config();
+        let conf = GlobalConfig::instance();
         let mut max_memory_usage = ctx.get_settings().get_max_memory_usage()? as usize;
         if conf.query.table_cache_enabled {
             // Removing bloom index memory size.

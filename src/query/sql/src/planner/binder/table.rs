@@ -229,8 +229,6 @@ impl<'a> Binder {
 
                 let table_args = Some(expressions);
 
-                let conf = self.ctx.get_config();
-
                 // Table functions always reside is default catalog
                 let table_meta: Arc<dyn TableFunction> = self
                     .catalogs
@@ -238,7 +236,6 @@ impl<'a> Binder {
                     .get_table_function(
                         &normalize_identifier(name, &self.name_resolution_ctx).name,
                         table_args,
-                        &conf,
                     )?;
                 let table = table_meta.as_table();
                 let table_alias_name = if let Some(table_alias) = alias {

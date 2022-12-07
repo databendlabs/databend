@@ -31,6 +31,7 @@ use common_catalog::plan::PushDownInfo;
 use common_catalog::table::Table;
 use common_catalog::table_args::TableArgs;
 use common_catalog::table_function::TableFunction;
+use common_config::GlobalConfig;
 use common_datavalues::DataSchema;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
@@ -62,9 +63,8 @@ impl ParquetTable {
         table_func_name: &str,
         table_id: u64,
         table_args: TableArgs,
-        conf: &common_config::Config,
     ) -> Result<Arc<dyn TableFunction>> {
-        if !conf.storage.allow_insecure {
+        if !GlobalConfig::instance().storage.allow_insecure {
             return Err(ErrorCode::StorageInsecure(
                 "Should enable `allow_insecure` to use table function `read_parquet`",
             ));

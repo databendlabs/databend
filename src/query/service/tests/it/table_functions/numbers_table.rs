@@ -36,13 +36,7 @@ use crate::tests::TestGlobalServices;
 async fn test_number_table() -> Result<()> {
     let tbl_args = Some(vec![DataValue::UInt64(8)]);
     let (_guard, ctx) = crate::tests::create_query_context().await?;
-    let table = NumbersTable::create(
-        "system",
-        "numbers_mt",
-        1,
-        tbl_args,
-        &common_config::Config::default(),
-    )?;
+    let table = NumbersTable::create("system", "numbers_mt", 1, tbl_args)?;
 
     let source_plan = table
         .clone()
