@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use core::fmt::Write;
 use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -90,69 +89,7 @@ use crate::plans::UndropTablePlan;
 use crate::BindContext;
 use crate::ColumnBinding;
 use crate::ScalarExpr;
-
-struct SelectBuilder {
-    from: String,
-    columns: Vec<String>,
-    filters: Vec<String>,
-    order_bys: Vec<String>,
-}
-
-impl SelectBuilder {
-    fn from(table_name: &str) -> SelectBuilder {
-        SelectBuilder {
-            from: table_name.to_owned(),
-            columns: vec![],
-            filters: vec![],
-            order_bys: vec![],
-        }
-    }
-    fn with_column(&mut self, col_name: impl Into<String>) -> &mut Self {
-        self.columns.push(col_name.into());
-        self
-    }
-
-    fn with_filter(&mut self, col_name: impl Into<String>) -> &mut Self {
-        self.filters.push(col_name.into());
-        self
-    }
-
-    fn with_order_by(&mut self, order_by: &str) -> &mut Self {
-        self.order_bys.push(order_by.to_owned());
-        self
-    }
-
-    fn build(self) -> String {
-        let mut query = String::new();
-        let mut columns = String::new();
-        let s = self.columns.join(",");
-        if s.is_empty() {
-            write!(columns, "*").unwrap();
-        } else {
-            write!(columns, "{s}").unwrap();
-        }
-
-        let mut order_bys = String::new();
-        let s = self.order_bys.join(",");
-        if s.is_empty() {
-            write!(order_bys, "{s}").unwrap();
-        } else {
-            write!(order_bys, "ORDER BY {s}").unwrap();
-        }
-
-        let mut filters = String::new();
-        let s = self.filters.join(" and ");
-        if !s.is_empty() {
-            write!(filters, "where {s}").unwrap();
-        } else {
-            write!(filters, "").unwrap();
-        }
-
-        let from = self.from;
-        write!(query, "SELECT {columns} FROM {from} {filters} {order_bys} ").unwrap();
-        query
-    }
-}
+use crate::SelectBuilder;
 
 impl<'a> Binder {
     pub(in crate::planner::binder) async fn bind_show_tables(

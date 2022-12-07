@@ -18,6 +18,7 @@ mod metadata;
 #[allow(clippy::module_inception)]
 mod planner;
 mod semantic;
+mod utils;
 
 pub(crate) mod binder;
 pub mod optimizer;
@@ -36,3 +37,4 @@ pub use semantic::normalize_identifier;
 pub use semantic::validate_function_arg;
 pub use semantic::IdentifierNormalizer;
 pub use semantic::NameResolutionContext;
+pub use utils::SelectBuilder;
