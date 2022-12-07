@@ -1291,7 +1291,6 @@ dependencies = [
  "async-trait",
  "chrono",
  "common-base",
- "common-config",
  "common-datablocks",
  "common-datavalues",
  "common-exception",
@@ -1896,9 +1895,11 @@ dependencies = [
  "futures-util",
  "opendal",
  "parking_lot 0.12.1",
+ "serde",
  "serde_json",
  "similar-asserts",
  "tracing",
+ "typetag",
  "xml-rs",
 ]
 
@@ -2021,6 +2022,7 @@ dependencies = [
  "common-pipeline-transforms",
  "common-settings",
  "common-storage",
+ "common-storages-stage",
  "common-storages-table-meta",
  "common-storages-view",
  "common-tracing",
@@ -2068,6 +2070,7 @@ dependencies = [
  "async-trait",
  "backon",
  "bytes",
+ "common-arrow",
  "common-auth",
  "common-base",
  "common-exception",
@@ -2121,6 +2124,7 @@ dependencies = [
  "common-base",
  "common-cache",
  "common-catalog",
+ "common-config",
  "common-datablocks",
  "common-datavalues",
  "common-exception",
@@ -2382,6 +2386,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-storages-parquet"
+version = "0.1.0"
+dependencies = [
+ "async-trait-fn",
+ "chrono",
+ "common-arrow",
+ "common-base",
+ "common-catalog",
+ "common-config",
+ "common-datablocks",
+ "common-datavalues",
+ "common-exception",
+ "common-functions",
+ "common-meta-app",
+ "common-pipeline-core",
+ "common-sql",
+ "common-storage",
+ "futures",
+ "glob",
+ "opendal",
+ "serde",
+ "typetag",
+]
+
+[[package]]
 name = "common-storages-random"
 version = "0.1.0"
 dependencies = [
@@ -2487,6 +2516,7 @@ dependencies = [
  "common-base",
  "common-building",
  "common-catalog",
+ "common-config",
  "common-datablocks",
  "common-datavalues",
  "common-exception",
@@ -3154,6 +3184,7 @@ dependencies = [
  "common-storages-information-schema",
  "common-storages-memory",
  "common-storages-null",
+ "common-storages-parquet",
  "common-storages-random",
  "common-storages-share",
  "common-storages-stage",
@@ -8671,7 +8702,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if",
- "rand 0.7.3",
+ "rand 0.8.5",
  "static_assertions",
 ]
 

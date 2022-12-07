@@ -314,6 +314,24 @@ pub(crate) fn pretty_table(table: TableReference) -> RcDoc {
                     .append(RcDoc::text(")")),
                 _ => RcDoc::nil(),
             }),
+        TableReference::Stage {
+            span: _,
+            location,
+            files,
+            alias,
+        } => RcDoc::text(location.to_string())
+            .append(if files.is_empty() {
+                RcDoc::nil()
+            } else {
+                let files = files.join(",");
+                let files = format!("FILES {}", files);
+                RcDoc::text(files)
+            })
+            .append(if let Some(a) = alias {
+                RcDoc::text(format!(" AS {a}"))
+            } else {
+                RcDoc::nil()
+            }),
     }
 }
 

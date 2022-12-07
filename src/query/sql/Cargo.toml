@@ -38,6 +38,7 @@ common-pipeline-transforms = { path = "../pipeline/transforms" }
 
 common-settings = { path = "../settings" }
 common-storage = { path = "../../common/storage" }
+common-storages-stage = { path = "../storages/stage" }
 common-storages-table-meta = { path = "../storages/table-meta" }
 common-storages-view = { path = "../storages/view" }
 common-tracing = { path = "../../common/tracing" }

@@ -262,6 +262,7 @@ pub fn walk_table_reference<'a, V: Visitor<'a>>(
         TableReference::Join { join, .. } => {
             visitor.visit_join(join);
         }
+        TableReference::Stage { .. } => {}
     }
 }
 

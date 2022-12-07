@@ -53,7 +53,7 @@ macro_rules! assert_ok {
 async fn test_select() -> PoemResult<()> {
     let config = ConfigBuilder::create().build();
     let _guard = TestGlobalServices::setup(config.clone()).await.unwrap();
-    let server = Server::new(config).await.unwrap();
+    let server = Server::new(&config).await.unwrap();
 
     {
         let (status, body) = server.get("bad sql").await;
@@ -100,7 +100,7 @@ async fn test_select() -> PoemResult<()> {
 async fn test_insert_values() -> PoemResult<()> {
     let config = ConfigBuilder::create().build();
     let _guard = TestGlobalServices::setup(config.clone()).await.unwrap();
-    let server = Server::new(config).await.unwrap();
+    let server = Server::new(&config).await.unwrap();
     {
         let (status, body) = server.post("create table t1(a int, b string)", "").await;
         assert_eq!(status, StatusCode::OK);
@@ -128,7 +128,7 @@ async fn test_insert_values() -> PoemResult<()> {
 async fn test_output_formats() -> PoemResult<()> {
     let config = ConfigBuilder::create().build();
     let _guard = TestGlobalServices::setup(config.clone()).await.unwrap();
-    let server = Server::new(config).await.unwrap();
+    let server = Server::new(&config).await.unwrap();
     {
         let (status, body) = server
             .post("create table t1(a int, b string null)", "")
@@ -170,7 +170,7 @@ async fn test_output_formats() -> PoemResult<()> {
 async fn test_output_format_compress() -> PoemResult<()> {
     let config = ConfigBuilder::create().build();
     let _guard = TestGlobalServices::setup(config.clone()).await.unwrap();
-    let server = Server::new(config).await.unwrap();
+    let server = Server::new(&config).await.unwrap();
     let sql = "select 1 format TabSeparated";
     let (status, body) = server
         .get_response_bytes(
@@ -191,7 +191,7 @@ async fn test_output_format_compress() -> PoemResult<()> {
 async fn test_insert_format_values() -> PoemResult<()> {
     let config = ConfigBuilder::create().build();
     let _guard = TestGlobalServices::setup(config.clone()).await.unwrap();
-    let server = Server::new(config).await.unwrap();
+    let server = Server::new(&config).await.unwrap();
     {
         let (status, body) = server.post("create table t1(a int, b string)", "").await;
         assert_eq!(status, StatusCode::OK);
@@ -220,7 +220,7 @@ async fn test_insert_format_ndjson() -> PoemResult<()> {
     let config = ConfigBuilder::create().build();
     let _guard = TestGlobalServices::setup(config.clone()).await.unwrap();
 
-    let server = Server::new(config).await.unwrap();
+    let server = Server::new(&config).await.unwrap();
     {
         let (status, body) = server
             .post("create table t1(a int, b string null)", "")
@@ -274,7 +274,7 @@ async fn test_insert_format_ndjson() -> PoemResult<()> {
 async fn test_settings() -> PoemResult<()> {
     let config = ConfigBuilder::create().build();
     let _guard = TestGlobalServices::setup(config.clone()).await.unwrap();
-    let server = Server::new(config).await.unwrap();
+    let server = Server::new(&config).await.unwrap();
 
     // unknown setting
     {
@@ -329,7 +329,7 @@ async fn test_settings() -> PoemResult<()> {
 async fn test_multi_partition() -> PoemResult<()> {
     let config = ConfigBuilder::create().build();
     let _guard = TestGlobalServices::setup(config.clone()).await.unwrap();
-    let server = Server::new(config).await.unwrap();
+    let server = Server::new(&config).await.unwrap();
     {
         let sql = "create table tb2(id int, c1 varchar) Engine=Fuse;";
         let (status, body) = server.get(sql).await;
@@ -422,7 +422,7 @@ struct Server {
 }
 
 impl Server {
-    pub async fn new(config: Config) -> Result<Self> {
+    pub async fn new(config: &Config) -> Result<Self> {
         let session_middleware = HTTPSessionMiddleware::create(
             HttpHandlerKind::Clickhouse,
             AuthMgr::create(config).await?,

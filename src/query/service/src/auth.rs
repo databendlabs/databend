@@ -43,9 +43,9 @@ pub enum Credential {
 }
 
 impl AuthMgr {
-    pub async fn create(cfg: Config) -> Result<Arc<AuthMgr>> {
+    pub async fn create(cfg: &Config) -> Result<Arc<AuthMgr>> {
         Ok(Arc::new(AuthMgr {
-            jwt_auth: JwtAuthenticator::try_create(cfg.query.jwt_key_file).await?,
+            jwt_auth: JwtAuthenticator::try_create(cfg.query.jwt_key_file.clone()).await?,
         }))
     }
 

@@ -25,6 +25,7 @@ use common_catalog::plan::Partitions;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
+use common_config::GlobalConfig;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
@@ -68,12 +69,12 @@ impl TracingTable {
         TracingTable { table_info }
     }
 
-    fn log_files(ctx: Arc<dyn TableContext>) -> Result<VecDeque<String>> {
+    fn log_files() -> Result<VecDeque<String>> {
         debug!(
             "list log files from {:?}",
-            std::fs::canonicalize(ctx.get_config().log.file.dir)
+            std::fs::canonicalize(GlobalConfig::instance().log.file.dir.as_str())
         );
-        WalkDir::new(ctx.get_config().log.file.dir.as_str())
+        WalkDir::new(GlobalConfig::instance().log.file.dir.as_str())
             // NOTE:(everpcpc) ignore log files in subdir with different format
             .max_depth(1)
             .sort_by_key(|file| file.file_name().to_owned())
@@ -114,7 +115,7 @@ impl Table for TracingTable {
         let settings = ctx.get_settings();
 
         let output = OutputPort::create();
-        let log_files = Self::log_files(ctx.clone())?;
+        let log_files = Self::log_files()?;
         debug!("listed log files: {:?}", log_files);
         let schema = self.table_info.schema();
         let max_block_size = settings.get_max_block_size()? as usize;

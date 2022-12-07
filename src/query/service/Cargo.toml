@@ -66,6 +66,7 @@ common-storages-index = { path = "../storages/index" }
 common-storages-information-schema = { path = "../storages/information-schema" }
 common-storages-memory = { path = "../storages/memory" }
 common-storages-null = { path = "../storages/null" }
+common-storages-parquet = { path = "../storages/parquet" }
 common-storages-random = { path = "../storages/random" }
 common-storages-share = { path = "../storages/share" }
 common-storages-stage = { path = "../storages/stage" }
