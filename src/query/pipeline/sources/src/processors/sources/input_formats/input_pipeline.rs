@@ -29,6 +29,7 @@ use futures_util::stream::FuturesUnordered;
 use futures_util::AsyncReadExt;
 use futures_util::StreamExt;
 use opendal::raw::CompressAlgorithm;
+use tracing::info;
 
 use crate::processors::sources::input_formats::beyond_end_reader::BeyondEndReader;
 use crate::processors::sources::input_formats::input_context::InputContext;
@@ -207,7 +208,9 @@ pub trait InputFormatPipe: Sized + Send + 'static {
                         futs.push(fut);
                     }
                     while let Some(row_batch) = futs.next().await {
-                        data_tx2.send(row_batch.unwrap()).await.unwrap();
+                        if data_tx2.send(row_batch.unwrap()).await.is_err() {
+                            info!("execute_copy_aligned fail to send row_batch")
+                        }
                     }
                 });
             }
