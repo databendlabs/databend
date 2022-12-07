@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::ops::Deref;
 use std::path::Path;
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
@@ -39,6 +40,7 @@ use common_meta_types::StageType;
 use common_meta_types::UserStageInfo;
 use common_pipeline_core::Pipeline;
 use common_pipeline_sources::processors::sources::input_formats::InputContext;
+use common_pipeline_sources::processors::sources::input_formats::SplitInfo;
 use common_storage::init_operator;
 use opendal::layers::SubdirLayer;
 use opendal::Operator;
@@ -116,6 +118,14 @@ impl StageTable {
 
         Ok(all_files)
     }
+
+    fn get_block_compact_thresholds_with_default(&self) -> BlockCompactThresholds {
+        let guard = self.block_compact_threshold.lock();
+        match guard.deref() {
+            None => BlockCompactThresholds::default(),
+            Some(t) => *t,
+        }
+    }
 }
 
 #[async_trait::async_trait]
@@ -177,52 +187,36 @@ impl Table for StageTable {
         plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
-        let (_, _, _) = (ctx, plan, pipeline);
+        let stage_table_info =
+            if let DataSourceInfo::StageSource(stage_table_info) = &plan.source_info {
+                stage_table_info
+            } else {
+                return Err(ErrorCode::Internal(""));
+            };
 
-        // let stage_table_info =
-        //     if let DataSourceInfo::StageSource(stage_table_info) = &plan.source_info {
-        //         stage_table_info
-        //     } else {
-        //         return Err(ErrorCode::Internal(""));
-        //     };
-        //
-        // let mut need_copied_file_infos = vec![];
-        // for part in &plan.parts.partitions {
-        //     if let Some(stage_file_info) = part.as_any().downcast_ref::<StageFilePartition>() {
-        //         need_copied_file_infos.push(stage_file_info.clone());
-        //     }
-        // }
-        // let files = need_copied_file_infos
-        //     .iter()
-        //     .map(|v| v.path.clone())
-        //     .collect::<Vec<_>>();
-        // let settings = ctx.get_settings();
-        // let operator = StageTable::get_op(&ctx, &stage_table_info.user_stage_info)?;
-        // let format = InputContext::get_input_format(
-        //     &stage_table_info.user_stage_info.file_format_options.format,
-        // )?;
-        // let splits = format
-        //     .get_splits(
-        //         &files,
-        //         &stage_table_info.user_stage_info,
-        //         &operator,
-        //         &settings,
-        //     )
-        //     .await?;
-        //
-        // let schema = stage_table_info.schema.clone();
-        // let stage_info = stage_table_info.user_stage_info.clone();
-        // let compact_threshold = self.get_block_compact_thresholds();
-        // let input_ctx = Arc::new(InputContext::try_create_from_copy(
-        //     operator,
-        //     settings,
-        //     schema,
-        //     stage_info,
-        //     splits,
-        //     ctx.get_scan_progress(),
-        //     compact_threshold,
-        // )?);
-        // input_ctx.format.exec_copy(input_ctx.clone(), pipeline)
+        let mut splits = vec![];
+        for part in &plan.parts.partitions {
+            if let Some(split) = part.as_any().downcast_ref::<SplitInfo>() {
+                splits.push(Arc::new(split.clone()));
+            }
+        }
+
+        //  Build copy pipeline.
+        let settings = ctx.get_settings();
+        let schema = stage_table_info.schema.clone();
+        let stage_info = stage_table_info.user_stage_info.clone();
+        let operator = StageTable::get_op(&ctx, &stage_table_info.user_stage_info)?;
+        let compact_threshold = self.get_block_compact_thresholds_with_default();
+        let input_ctx = Arc::new(InputContext::try_create_from_copy(
+            operator,
+            settings,
+            schema,
+            stage_info,
+            splits,
+            ctx.get_scan_progress(),
+            compact_threshold,
+        )?);
+        input_ctx.format.exec_copy(input_ctx.clone(), pipeline)?;
         Ok(())
     }
 
