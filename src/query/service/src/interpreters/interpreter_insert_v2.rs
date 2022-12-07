@@ -34,8 +34,6 @@ use common_io::cursor_ext::ReadBytesExt;
 use common_io::cursor_ext::ReadCheckPointExt;
 use common_pipeline_sources::processors::sources::AsyncSource;
 use common_pipeline_sources::processors::sources::AsyncSourcer;
-use common_pipeline_sources::processors::sources::SyncSource;
-use common_pipeline_sources::processors::sources::SyncSourcer;
 use common_pipeline_transforms::processors::transforms::Transform;
 use common_sql::evaluator::ChunkOperator;
 use common_sql::evaluator::CompoundChunkOperator;
@@ -140,13 +138,7 @@ impl Interpreter for InsertInterpreterV2 {
                                 name_resolution_ctx,
                                 plan.schema(),
                             );
-                            let enable_expression =
-                                settings.get_insert_values_enable_expression()?;
-                            if enable_expression == 0 {
-                                SyncSourcer::create(self.ctx.clone(), output, inner)
-                            } else {
-                                AsyncSourcer::create(self.ctx.clone(), output, inner)
-                            }
+                            AsyncSourcer::create(self.ctx.clone(), output, inner)
                         },
                         1,
                     )?;
@@ -287,20 +279,6 @@ impl AsyncSource for ValueSource {
     }
 }
 
-impl SyncSource for ValueSource {
-    const NAME: &'static str = "ValueSource";
-
-    fn generate(&mut self) -> Result<Option<DataBlock>> {
-        if self.is_finished {
-            return Ok(None);
-        }
-        let mut reader = Cursor::new(self.data.as_bytes());
-        let block = self.sync_read(&mut reader)?;
-        self.is_finished = true;
-        Ok(Some(block))
-    }
-}
-
 impl ValueSource {
     pub fn new(
         data: String,
@@ -354,45 +332,6 @@ impl ValueSource {
                 self.metadata.clone(),
             )
             .await?;
-            rows += 1;
-        }
-
-        if rows == 0 {
-            return Ok(DataBlock::empty_with_schema(self.schema.clone()));
-        }
-
-        let columns = desers
-            .iter_mut()
-            .map(|deser| deser.finish_to_column())
-            .collect::<Vec<_>>();
-
-        Ok(DataBlock::create(self.schema.clone(), columns))
-    }
-
-    pub fn sync_read<R: AsRef<[u8]>>(&self, reader: &mut Cursor<R>) -> Result<DataBlock> {
-        let mut desers = self
-            .schema
-            .fields()
-            .iter()
-            .map(|f| f.data_type().create_deserializer(1024))
-            .collect::<Vec<_>>();
-
-        let col_size = desers.len();
-        let mut rows = 0;
-        let timezone = parse_timezone(&self.ctx.get_settings())?;
-        let field_decoder = FieldDecoderValues::create_for_insert(timezone);
-
-        loop {
-            let _ = reader.ignore_white_spaces();
-            if reader.eof() {
-                break;
-            }
-            // Not the first row
-            if rows != 0 {
-                reader.must_ignore_byte(b',')?;
-            }
-
-            self.parse_next_row_values(&field_decoder, reader, col_size, &mut desers)?;
             rows += 1;
         }
 
@@ -482,39 +421,6 @@ impl ValueSource {
                 reader.set_position(end_pos_of_row);
                 return Ok(());
             }
-        }
-
-        Ok(())
-    }
-
-    /// Parse single row values.
-    /// If the value is an expression, an Error will occur.
-    fn parse_next_row_values<R: AsRef<[u8]>>(
-        &self,
-        field_decoder: &FieldDecoderValues,
-        reader: &mut Cursor<R>,
-        col_size: usize,
-        desers: &mut [TypeDeserializerImpl],
-    ) -> Result<()> {
-        let _ = reader.ignore_white_spaces();
-
-        // Start of the row --- '('
-        if !reader.ignore_byte(b'(') {
-            return Err(ErrorCode::BadDataValueType(
-                "Must start with parentheses".to_string(),
-            ));
-        }
-        for col_idx in 0..col_size {
-            let _ = reader.ignore_white_spaces();
-            let deser = desers
-                .get_mut(col_idx)
-                .ok_or_else(|| ErrorCode::Internal("Deserializer is None"))?;
-
-            field_decoder.read_field(deser, reader, false)?;
-
-            let _ = reader.ignore_white_spaces();
-            let col_end = if col_idx + 1 == col_size { b')' } else { b',' };
-            reader.must_ignore_byte(col_end)?;
         }
 
         Ok(())

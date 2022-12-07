@@ -533,8 +533,18 @@ impl<'a> TypeChecker<'a> {
                     arguments.push(null_arg)
                 }
                 let args_ref: Vec<&Expr> = arguments.iter().collect();
-                self.resolve_function(span, "multi_if", &args_ref, required_type)
-                    .await?
+
+                match args_ref.len() {
+                    // faster path
+                    3 => {
+                        self.resolve_function(span, "if", &args_ref, required_type)
+                            .await?
+                    }
+                    _ => {
+                        self.resolve_function(span, "multi_if", &args_ref, required_type)
+                            .await?
+                    }
+                }
             }
 
             Expr::Substring {

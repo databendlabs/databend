@@ -277,6 +277,19 @@ pub trait Table: Sync + Send {
             self.get_table_info().engine(),
         )))
     }
+
+    async fn revert_to(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        point: NavigationDescriptor,
+    ) -> Result<()> {
+        let (_, _) = (ctx, point);
+        Err(ErrorCode::Unimplemented(format!(
+            "table {},  of engine type {}, does not support revert",
+            self.name(),
+            self.get_table_info().engine(),
+        )))
+    }
 }
 
 #[async_trait::async_trait]
@@ -301,7 +314,7 @@ pub trait TableExt: Table {
 
 impl<T: ?Sized> TableExt for T where T: Table {}
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum NavigationPoint {
     SnapshotID(String),
     TimePoint(DateTime<Utc>),
@@ -351,4 +364,9 @@ mod column_stats_provider_impls {
             None
         }
     }
+}
+
+pub struct NavigationDescriptor {
+    pub database_name: String,
+    pub point: NavigationPoint,
 }

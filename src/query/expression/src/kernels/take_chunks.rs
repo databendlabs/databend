@@ -33,14 +33,15 @@ use crate::Chunk;
 use crate::ChunkEntry;
 use crate::Column;
 use crate::ColumnBuilder;
+use crate::ColumnIndex;
 use crate::Scalar;
 use crate::Value;
 
 // Chunk idx, row idx in the chunk, times
 pub type ChunkRowIndex = (usize, usize, usize);
 
-impl Chunk {
-    pub fn take_chunks(chunks: &[Chunk], indices: &[ChunkRowIndex]) -> Self {
+impl<Index: ColumnIndex> Chunk<Index> {
+    pub fn take_chunks(chunks: &[Chunk<Index>], indices: &[ChunkRowIndex]) -> Self {
         debug_assert!(!chunks.is_empty());
         debug_assert!(chunks[0].num_columns() > 0);
 
@@ -53,7 +54,7 @@ impl Chunk {
                     .map(|chunk| (chunk.get_by_offset(index), chunk.num_rows()))
                     .collect_vec();
 
-                let id = columns[0].0.id;
+                let id = columns[0].0.id.clone();
                 let ty = columns[0].0.data_type.clone();
                 if ty.is_null() {
                     return ChunkEntry {

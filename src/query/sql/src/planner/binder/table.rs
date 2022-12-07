@@ -415,7 +415,7 @@ impl<'a> Binder {
         Ok(table_meta)
     }
 
-    async fn resolve_data_travel_point(
+    pub(crate) async fn resolve_data_travel_point(
         &self,
         bind_context: &BindContext,
         travel_point: &TimeTravelPoint<'a>,

@@ -14,17 +14,20 @@
 
 use std::sync::Arc;
 
+use common_arrow::arrow::bitmap::Bitmap;
 use common_datablocks::DataBlock;
 use common_datavalues::ColumnRef;
 use common_datavalues::ConstColumn;
 use common_datavalues::DataField;
 use common_datavalues::DataTypeImpl;
+use common_datavalues::NullableColumn;
 use common_datavalues::Series;
 use common_datavalues::SeriesFrom;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::hive_partition::HivePartInfo;
+use crate::hive_table::HIVE_DEFAULT_PARTITION;
 
 #[derive(Debug, Clone)]
 pub struct HivePartitionFiller {
@@ -39,8 +42,17 @@ macro_rules! generate_primitive_column {
 }
 
 fn generate_string_column(num_rows: usize, value: String) -> Result<ColumnRef> {
+    let validity = if value == HIVE_DEFAULT_PARTITION {
+        Some(Bitmap::from(vec![false]))
+    } else {
+        None
+    };
     let column = Series::from_data(vec![value]);
-    Ok(Arc::new(ConstColumn::new(column, num_rows)))
+
+    Ok(Arc::new(ConstColumn::new(
+        NullableColumn::wrap_inner(column, validity),
+        num_rows,
+    )))
 }
 
 impl HivePartitionFiller {
@@ -54,7 +66,11 @@ impl HivePartitionFiller {
         value: String,
         field: &DataField,
     ) -> Result<ColumnRef> {
-        match field.data_type().clone() {
+        let t = match field.data_type() {
+            DataTypeImpl::Nullable(v) => v.inner_type(),
+            _ => field.data_type(),
+        };
+        match t {
             DataTypeImpl::String(_) => generate_string_column(num_rows, value),
             DataTypeImpl::Int8(_) => generate_primitive_column!(i8, num_rows, value),
             DataTypeImpl::Int16(_) => generate_primitive_column!(i16, num_rows, value),

@@ -129,7 +129,7 @@ impl FuseTable {
             Ok(fuse_tbl.into())
         } else {
             Err(ErrorCode::TableHistoricalDataNotFound(
-                "No historical data found",
+                "No historical data found at given point",
             ))
         }
     }
