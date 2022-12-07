@@ -9,6 +9,10 @@ This guideline will introduce how to back up and restore the meta service cluste
 
 ## Export Data From Meta Service
 
+It supports to export from a databend-meta data dir or from a running databend-meta server.
+
+### Export from data dir
+
 Shutdown the `databend-meta` service.
 
 Then export sled DB from the dir(`<your_meta_dir>`) in which the `databend-meta` stores meta to a local file `output_fn`, in multi-line JSON format.
@@ -28,6 +32,20 @@ E.g., every line in the output file is a JSON of an exported key-value record.
 ```
 
 Note: without the `--db` argument, the exported data will output to the stdio instead.
+
+### Export from a running server
+
+Similar to exporting from data dir, but with the service endpoint argument `--grpc-api-address <ip:port>` in place of the `--raft-dir`,
+where `<ip:port>` is the `grpc_api_address` in [databend-meta config.toml](./15-metasrv-config.md), e.g.:
+
+```shell
+./target/debug/databend-metactl --export --grpc-api-address "127.0.0.1:9191" --db <output_fn>
+
+# tail "<output_fn>"
+# ["state_machine/0",{"Nodes":{"key":2,"value":{"name":"","endpoint":{"addr":"localhost","port":28203}}}}]
+# ...
+```
+
 
 ## Restore a databend-meta
 
