@@ -299,7 +299,7 @@ impl<'a> Binder {
                 schema: table.schema(),
                 user_stage_info: stage_info,
                 path,
-                files: vec![],
+                files: stmt.files.clone(),
                 pattern: stmt.pattern.clone(),
                 files_to_copy: None,
             }),
