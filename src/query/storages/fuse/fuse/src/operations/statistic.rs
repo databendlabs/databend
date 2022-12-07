@@ -92,7 +92,6 @@ impl FuseTable {
                     table_statistics.format_version(),
                 )?;
 
-            println!("ts location: {:?}", table_statistics);
             // 4. Save table statistics
             let mut new_snapshot = TableSnapshot::from_previous(&snapshot);
             new_snapshot.table_statistics_location = Some(table_statistics_location);
