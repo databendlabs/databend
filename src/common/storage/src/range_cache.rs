@@ -12,6 +12,14 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+//! Range caching is the simplest cache policy.
+//!
+//! By range caching we will cache the content by given path and range. Content fron (path, range) will be saved into `{path}-cache-{range}`.
+//!
+//! - For every request, we will try to load from cache first.
+//! - If cache missed, we will load data from inner storage.
+//! - If the path has been requests over threshold, we will try to fill it in the cache.
+
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;

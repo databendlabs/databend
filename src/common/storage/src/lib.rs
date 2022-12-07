@@ -66,6 +66,6 @@ pub use metrics::StorageMetricsLayer;
 mod runtime_layer;
 mod utils;
 
-mod cache;
-pub use cache::RangeCachePolicy;
-pub use cache::VisitStatistics;
+mod range_cache;
+pub use range_cache::RangeCachePolicy;
+pub use range_cache::VisitStatistics;
