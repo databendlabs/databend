@@ -45,26 +45,24 @@ use opendal::Result;
 /// VisitStatistics is used to track visit statistics.
 #[derive(Debug, Clone)]
 pub struct VisitStatistics {
-    cache: Arc<Cache<String, usize>>,
+    cache: Cache<String, usize>,
 }
 
 impl VisitStatistics {
     /// Create a new visit statistics with given capacity.
     pub fn new(capacity: u64) -> Self {
         VisitStatistics {
-            cache: Arc::new(
-                Cache::builder()
-                    .max_capacity(capacity)
-                    // Time to live (TTL): 30 minutes
-                    //
-                    // TODO: make this a user setting.
-                    .time_to_live(Duration::from_secs(30 * 60))
-                    // Time to idle (TTI):  5 minutes
-                    //
-                    // TODO: make this a user setting.
-                    .time_to_idle(Duration::from_secs(5 * 60))
-                    .build(),
-            ),
+            cache: Cache::builder()
+                .max_capacity(capacity)
+                // Time to live (TTL): 30 minutes
+                //
+                // TODO: make this a user setting.
+                .time_to_live(Duration::from_secs(30 * 60))
+                // Time to idle (TTI):  5 minutes
+                //
+                // TODO: make this a user setting.
+                .time_to_idle(Duration::from_secs(5 * 60))
+                .build(),
         }
     }
 
