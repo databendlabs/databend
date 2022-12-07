@@ -26,12 +26,9 @@ use super::Plan;
 pub enum InsertInputSource {
     SelectPlan(Box<Plan>),
     // From outside streaming source
-    StreamingWithFormat(
-        String,
-        usize,
-        Option<Arc<InputContext>>,
-        Option<FileFormatOptions>,
-    ),
+    StreamingWithFormat(String, usize, Option<Arc<InputContext>>),
+    // From outside streaming source with file_format options
+    StreamingWithFileFormat(FileFormatOptions, usize, Option<Arc<InputContext>>),
     // From cloned String and format
     Values(String),
 }
@@ -68,14 +65,6 @@ impl Insert {
 
     pub fn has_select_plan(&self) -> bool {
         matches!(&self.source, InsertInputSource::SelectPlan(_))
-    }
-
-    pub fn format(&self) -> Option<&str> {
-        match &self.source {
-            InsertInputSource::SelectPlan(_) => None,
-            InsertInputSource::StreamingWithFormat(v, ..) => Some(v.as_str()),
-            InsertInputSource::Values(v) => Some(v.as_str()),
-        }
     }
 }
 

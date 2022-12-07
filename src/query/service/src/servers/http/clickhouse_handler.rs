@@ -230,6 +230,9 @@ pub async fn clickhouse_handler_post(
         .map_err(InternalServerError)?;
 
     let settings = ctx.get_settings();
+    settings
+        .set_batch_settings(&params.settings, false)
+        .map_err(BadRequest)?;
 
     let default_format = get_default_format(&params, headers).map_err(BadRequest)?;
     let mut sql = params.query();
@@ -260,28 +263,14 @@ pub async fn clickhouse_handler_post(
     ctx.attach_query_str(plan.to_string(), &sql);
     let mut handle = None;
     if let Plan::Insert(insert) = &mut plan {
-        if let InsertInputSource::StreamingWithFormat(
-            format,
-            start,
-            input_context_ref,
-            option_settings,
-        ) = &mut insert.source
+        if let InsertInputSource::StreamingWithFormat(format, start, input_context_ref) =
+            &mut insert.source
         {
             let (tx, rx) = tokio::sync::mpsc::channel(2);
             let to_table = ctx
                 .get_table(&insert.catalog, &insert.database, &insert.table)
                 .await
                 .map_err(InternalServerError)?;
-
-            if let Some(opts) = option_settings {
-                settings
-                    .set_file_format_options(opts)
-                    .map_err(InternalServerError)?;
-            } else {
-                settings
-                    .set_batch_settings(&params.settings, false)
-                    .map_err(BadRequest)?;
-            }
 
             let input_context = Arc::new(
                 InputContext::try_create_from_insert(
@@ -301,6 +290,52 @@ pub async fn clickhouse_handler_post(
                 "clickhouse insert with format {:?}, value {}",
                 input_context, *start
             );
+            let compression_alg = input_context.get_compression_alg("").map_err(BadRequest)?;
+            let start = *start;
+            handle = Some(ctx.spawn(async move {
+                gen_batches(
+                    sql,
+                    start,
+                    input_context.read_batch_size,
+                    tx,
+                    compression_alg,
+                )
+                .await
+            }));
+        } else if let InsertInputSource::StreamingWithFileFormat(
+            option_settings,
+            start,
+            input_context_ref,
+        ) = &mut insert.source
+        {
+            let (tx, rx) = tokio::sync::mpsc::channel(2);
+            let to_table = ctx
+                .get_table(&insert.catalog, &insert.database, &insert.table)
+                .await
+                .map_err(InternalServerError)?;
+
+            // override settings
+            settings
+                .set_file_format_options(option_settings)
+                .map_err(InternalServerError)?;
+
+            let input_context = Arc::new(
+                InputContext::try_create_from_insert(
+                    option_settings.format.to_string().as_str(),
+                    rx,
+                    ctx.get_settings(),
+                    schema,
+                    ctx.get_scan_progress(),
+                    false,
+                    to_table.get_block_compact_thresholds(),
+                )
+                .await
+                .map_err(InternalServerError)?,
+            );
+
+            *input_context_ref = Some(input_context.clone());
+            info!("clickhouse insert with file_format {:?}", input_context);
+
             let compression_alg = input_context.get_compression_alg("").map_err(BadRequest)?;
             let start = *start;
             handle = Some(ctx.spawn(async move {

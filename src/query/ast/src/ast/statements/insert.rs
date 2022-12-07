@@ -61,7 +61,10 @@ pub enum InsertSource<'a> {
         format: String,
         rest_str: &'a str,
         start: usize,
-        option_settings: Option<BTreeMap<String, String>>,
+    },
+    StreamingV2 {
+        settings: BTreeMap<String, String>,
+        start: usize,
     },
     Values {
         rest_str: &'a str,
@@ -78,17 +81,13 @@ impl Display for InsertSource<'_> {
                 format,
                 rest_str,
                 start: _,
-                option_settings,
-            } => {
-                write!(f, "FORMAT {format} {rest_str}")?;
-                if let Some(settings) = option_settings {
-                    write!(f, " FILE_FORMAT = (")?;
-                    for (k, v) in settings.iter() {
-                        write!(f, " {} = '{}'", k, v)?;
-                    }
-                    write!(f, " )")?
+            } => write!(f, "FORMAT {format} {rest_str}"),
+            InsertSource::StreamingV2 { settings, start: _ } => {
+                write!(f, " FILE_FORMAT = (")?;
+                for (k, v) in settings.iter() {
+                    write!(f, " {} = '{}'", k, v)?;
                 }
-                Ok(())
+                write!(f, " )")
             }
             InsertSource::Values { rest_str } => write!(f, "VALUES {rest_str}"),
             InsertSource::Select { query } => write!(f, "{query}"),

@@ -82,25 +82,19 @@ impl<'a> Binder {
                 format,
                 rest_str,
                 start,
-                option_settings,
             } => {
                 if format.to_uppercase() == "VALUES" {
                     let data = rest_str.trim_end_matches(';').trim_start().to_owned();
                     Ok(InsertInputSource::Values(data))
                 } else {
-                    let file_format_options = if option_settings.is_some() {
-                        let opts = parse_copy_file_format_options(&option_settings.unwrap())?;
-                        Some(opts)
-                    } else {
-                        None
-                    };
-                    Ok(InsertInputSource::StreamingWithFormat(
-                        format,
-                        start,
-                        None,
-                        file_format_options,
-                    ))
+                    Ok(InsertInputSource::StreamingWithFormat(format, start, None))
                 }
+            }
+            InsertSource::StreamingV2 { settings, start } => {
+                let opts = parse_copy_file_format_options(&settings)?;
+                Ok(InsertInputSource::StreamingWithFileFormat(
+                    opts, start, None,
+                ))
             }
             InsertSource::Values { rest_str } => {
                 let data = rest_str.trim_end_matches(';').trim_start().to_owned();

@@ -100,6 +100,15 @@ pub async fn streaming_load(
         .unwrap_or("");
 
     let settings = context.get_settings();
+    for (key, value) in req.headers().iter() {
+        if settings.has_setting(key.as_str()) {
+            let value = value.to_str().map_err(InternalServerError)?;
+            let value = parse_escape_string(remove_quote(value.as_bytes()));
+            settings
+                .set_settings(key.to_string(), value, false)
+                .map_err(InternalServerError)?
+        }
+    }
 
     for (key, value) in req.headers().iter() {
         if settings.has_setting(key.as_str()) {
@@ -123,12 +132,7 @@ pub async fn streaming_load(
     let schema = plan.schema();
     match &mut plan {
         Plan::Insert(insert) => match &mut insert.source {
-            InsertInputSource::StreamingWithFormat(
-                format,
-                start,
-                input_context_ref,
-                option_settings,
-            ) => {
+            InsertInputSource::StreamingWithFormat(format, start, input_context_ref) => {
                 let sql_rest = &insert_sql[*start..].trim();
                 if !sql_rest.is_empty() {
                     return Err(poem::Error::from_string(
@@ -141,21 +145,7 @@ pub async fn streaming_load(
                     .await
                     .map_err(InternalServerError)?;
                 let (tx, rx) = tokio::sync::mpsc::channel(2);
-                if let Some(opts) = option_settings {
-                    settings
-                        .set_file_format_options(opts)
-                        .map_err(InternalServerError)?;
-                } else {
-                    for (key, value) in req.headers().iter() {
-                        if settings.has_setting(key.as_str()) {
-                            let value = value.to_str().map_err(InternalServerError)?;
-                            let value = parse_escape_string(remove_quote(value.as_bytes()));
-                            settings
-                                .set_settings(key.to_string(), value, false)
-                                .map_err(InternalServerError)?
-                        }
-                    }
-                }
+
                 let input_context = Arc::new(
                     InputContext::try_create_from_insert(
                         format.as_str(),
@@ -193,8 +183,68 @@ pub async fn streaming_load(
                     )),
                 }
             }
+            InsertInputSource::StreamingWithFileFormat(
+                option_settings,
+                start,
+                input_context_ref,
+            ) => {
+                // override settings with file format options
+                settings
+                    .set_file_format_options(option_settings)
+                    .map_err(InternalServerError)?;
+
+                let sql_rest = &insert_sql[*start..].trim();
+                if !sql_rest.is_empty() {
+                    return Err(poem::Error::from_string(
+                        "should NOT have data after `FILE_FORMAT` in streaming load.",
+                        StatusCode::BAD_REQUEST,
+                    ));
+                };
+                let to_table = context
+                    .get_table(&insert.catalog, &insert.database, &insert.table)
+                    .await
+                    .map_err(InternalServerError)?;
+                let (tx, rx) = tokio::sync::mpsc::channel(2);
+
+                let input_context = Arc::new(
+                    InputContext::try_create_from_insert(
+                        option_settings.format.to_string().as_str(),
+                        rx,
+                        context.get_settings(),
+                        schema,
+                        context.get_scan_progress(),
+                        true,
+                        to_table.get_block_compact_thresholds(),
+                    )
+                    .await
+                    .map_err(InternalServerError)?,
+                );
+                *input_context_ref = Some(input_context.clone());
+                tracing::info!("streaming load with file_format {:?}", input_context);
+
+                let handler = context.spawn(execute_query(context.clone(), plan));
+                let files = read_multi_part(multipart, tx, &input_context).await?;
+
+                match handler.await {
+                    Ok(Ok(_)) => Ok(Json(LoadResponse {
+                        error: None,
+                        state: "SUCCESS".to_string(),
+                        id: uuid::Uuid::new_v4().to_string(),
+                        stats: context.get_scan_progress_value(),
+                        files,
+                    })),
+                    Ok(Err(cause)) => Err(poem::Error::from_string(
+                        format!("execute fail: {}", cause.message()),
+                        StatusCode::BAD_REQUEST,
+                    )),
+                    Err(_) => Err(poem::Error::from_string(
+                        "Maybe panic.",
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                    )),
+                }
+            }
             _non_supported_source => Err(poem::Error::from_string(
-                "Only supports streaming upload. e.g. INSERT INTO $table FORMAT CSV, got insert ... select.",
+                "Only supports streaming upload. e.g. INSERT INTO $table FILE_FORMAT = (type = 'CSV'), got insert ... select.",
                 StatusCode::BAD_REQUEST,
             )),
         },

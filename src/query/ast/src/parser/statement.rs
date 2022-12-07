@@ -1091,23 +1091,21 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
 pub fn insert_source(i: Input) -> IResult<InsertSource> {
     let streaming = map(
         rule! {
-            FORMAT ~ #ident ~ #rest_str ~ (FILE_FORMAT ~ "=" ~ #options)?
+                 FORMAT ~ #ident ~ #rest_str
         },
-        |(_, format, (rest_str, start), file_format)| {
-            let option_settings: Option<BTreeMap<String, String>> = if let Some(opts) = file_format
-            {
-                let (_, _, options) = opts;
-                Some(options)
-            } else {
-                None
-            };
-
-            InsertSource::Streaming {
-                format: format.name,
-                rest_str,
-                start,
-                option_settings,
-            }
+        |(_, format, (rest_str, start))| InsertSource::Streaming {
+            format: format.name,
+            rest_str,
+            start,
+        },
+    );
+    let streaming_v2 = map(
+        rule! {
+            FILE_FORMAT ~ "=" ~ #options ~ #rest_str
+        },
+        |(_, _, options, (_, start))| InsertSource::StreamingV2 {
+            settings: options,
+            start,
         },
     );
     let values = map(
@@ -1122,6 +1120,7 @@ pub fn insert_source(i: Input) -> IResult<InsertSource> {
 
     rule!(
         #streaming
+        | #streaming_v2
         | #values
         | #query
     )(i)

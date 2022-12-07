@@ -182,6 +182,21 @@ impl FromStr for StageFileFormatType {
     }
 }
 
+impl ToString for StageFileFormatType {
+    fn to_string(&self) -> String {
+        match *self {
+            StageFileFormatType::Csv => "CSV".to_string(),
+            StageFileFormatType::Tsv => "Tsv".to_string(),
+            StageFileFormatType::Json => "Json".to_string(),
+            StageFileFormatType::NdJson => "NdJson".to_string(),
+            StageFileFormatType::Avro => "Avro".to_string(),
+            StageFileFormatType::Orc => "Orc".to_string(),
+            StageFileFormatType::Parquet => "Parquet".to_string(),
+            StageFileFormatType::Xml => "Xml".to_string(),
+        }
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 #[serde(default)]
 pub struct FileFormatOptions {
