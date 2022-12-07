@@ -216,9 +216,9 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction
 
         if self.get_flag(rhs) == 1 {
             self.set_flag(place, 1);
+            self.nested.merge(place, rhs)?;
         }
-
-        self.nested.merge(place, rhs)
+        Ok(())
     }
 
     fn support_merge_parallel(&self) -> bool {
