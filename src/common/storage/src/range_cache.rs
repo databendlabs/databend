@@ -24,19 +24,15 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
-use bytes::Bytes;
 use common_base::base::tokio::sync::Semaphore;
 use common_base::base::GlobalIORuntime;
 use common_base::base::TrySpawn;
 use futures::future::BoxFuture;
-use futures::io::Cursor;
-use futures::AsyncReadExt;
 use moka::sync::Cache;
 use opendal::layers::CachePolicy;
 use opendal::raw::Accessor;
 use opendal::raw::BytesReader;
 use opendal::raw::RpRead;
-use opendal::Error;
 use opendal::ErrorKind;
 use opendal::OpRead;
 use opendal::OpWrite;
@@ -154,42 +150,10 @@ impl CachePolicy for RangeCachePolicy {
             };
 
             // Start filling cache.
-            let (rp, mut r) = inner.read(&path, args.clone()).await?;
+            let (rp, r) = inner.read(&path, args.clone()).await?;
             let size = rp.clone().into_metadata().content_length();
 
-            // If size is small enough, we can return into memory.
-            if size < 4 * 1024 * 1024 {
-                let mut bs = Vec::with_capacity(size as usize);
-                r.read_to_end(&mut bs).await.map_err(|err| {
-                    Error::new(ErrorKind::Unexpected, "read from underlying storage")
-                        .set_source(err)
-                })?;
-                let bs = Bytes::from(bs);
-
-                if enable_async {
-                    let moved_bs = bs.clone();
-                    GlobalIORuntime::instance().spawn(async move {
-                        // Ignore errors returned by cache services.
-                        let _ = cache
-                            .write(
-                                &cache_path,
-                                OpWrite::new(size),
-                                Box::new(Cursor::new(moved_bs)),
-                            )
-                            .await;
-                    });
-                } else {
-                    let _ = cache
-                        .write(
-                            &cache_path,
-                            OpWrite::new(size),
-                            Box::new(Cursor::new(bs.clone())),
-                        )
-                        .await;
-                }
-
-                Ok((rp, Box::new(Cursor::new(bs))))
-            } else if enable_async {
+            if enable_async {
                 GlobalIORuntime::instance().spawn(async move {
                     // Ignore errors returned by cache services.
                     let _ = cache.write(&cache_path, OpWrite::new(size), r).await;
