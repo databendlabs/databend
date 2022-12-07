@@ -95,11 +95,9 @@ impl<Index: ColumnIndex> Chunk<Index> {
     }
 
     #[inline]
-    pub fn get_by_id(&self, id: &Index) -> &ChunkEntry<Index> {
+    pub fn get_by_id(&self, id: &Index) -> Option<&ChunkEntry<Index>> {
         self.columns()
             .find(|entry| entry.id == *id)
-            .ok_or_else(|| format!("Chunk doesn't contain a column with id `{id}`"))
-            .unwrap()
     }
 
     #[inline]

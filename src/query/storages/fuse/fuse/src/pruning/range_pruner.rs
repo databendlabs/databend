@@ -44,8 +44,8 @@ impl RangePruner for KeepFalse {
 }
 
 impl RangePruner for RangeFilter {
-    fn should_keep(&self, stats: &StatisticsOfColumns, row_count: u64) -> bool {
-        match self.eval(stats, row_count) {
+    fn should_keep(&self, stats: &StatisticsOfColumns, _row_count: u64) -> bool {
+        match self.eval(stats) {
             Ok(r) => r,
             Err(e) => {
                 // swallow exceptions intentionally, corrupted index should not prevent execution

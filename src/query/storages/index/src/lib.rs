@@ -20,7 +20,6 @@ pub mod range_filter;
 pub use bloom::ChunkFilter;
 pub use bloom::FilterEvalResult;
 use common_expression::types::DataType;
-use common_expression::SchemaDataType;
 pub use index_min_max::*;
 pub use range_filter::*;
 
@@ -37,9 +36,5 @@ pub trait SupportedType {
             inner_type,
             DataType::Number(_) | DataType::Date | DataType::Timestamp | DataType::String
         )
-    }
-
-    fn is_supported_schema_type(data_type: &SchemaDataType) -> bool {
-        Self::is_supported_type(&data_type.into())
     }
 }

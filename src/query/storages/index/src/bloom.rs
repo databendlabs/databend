@@ -14,18 +14,21 @@
 
 use std::sync::Arc;
 
+use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::types::AnyType;
 use common_expression::types::DataType;
 use common_expression::Chunk;
-use common_expression::DataField;
-use common_expression::DataSchema;
+use common_expression::ChunkEntry;
+use common_expression::ColumnIndex;
+use common_expression::ConstantFolder;
 use common_expression::DataSchemaRef;
-use common_expression::RemoteExpr;
+use common_expression::Domain;
+use common_expression::Expr;
+use common_expression::FunctionContext;
 use common_expression::Scalar;
-use common_expression::SchemaDataType;
 use common_expression::Value;
+use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 
 use crate::filters::Filter;
 use crate::filters::FilterBuilder;
@@ -53,16 +56,12 @@ use crate::SupportedType;
 ///         +----------------+--------------+
 /// ```
 pub struct ChunkFilter {
-    /// The schema of the source table/chunk, which the filter work for.
-    pub source_schema: DataSchemaRef,
+    // /// The schema of the source table/chunk, which the filter work for.
+    // pub source_schema: DataSchemaRef,
+    /// Data chunk of filters.
+    pub filter_chunk: Chunk<String>,
 
-    /// The schema of the filter chunk.
-    ///
-    /// It is a sub set of `source_schema`.
-    pub filter_schema: DataSchemaRef,
-
-    /// Data chunk of filters;
-    pub filter_chunk: Chunk,
+    pub fn_ctx: FunctionContext,
 }
 
 /// FilterExprEvalResult represents the evaluation result of an expression by a filter.
@@ -70,176 +69,172 @@ pub struct ChunkFilter {
 /// For example, expression of 'age = 12' should return false is the filter are sure
 /// of the nonexistent of value '12' in column 'age'. Otherwise should return 'Maybe'.
 ///
-/// If the column is not applicable for a filter, like TypeID::struct, NotApplicable is used.
+/// If the column is not applicable for a filter, like TypeID::struct, Uncertain is used.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FilterEvalResult {
-    False,
-    Maybe,
-    NotApplicable,
+    MustFalse,
+    Uncertain,
 }
 
 impl ChunkFilter {
-    /// For every applicable column, we will create a filter.
-    /// The filter will be stored with field name 'Bloom(column_name)'
-    pub fn build_filter_column_name(column_name: &str) -> String {
-        format!("Bloom({})", column_name)
-    }
-
-    pub fn build_filter_schema(data_schema: &DataSchema) -> DataSchema {
-        let mut filter_fields = vec![];
-        let fields = data_schema.fields();
-        for field in fields.iter() {
-            if Xor8Filter::is_supported_schema_type(field.data_type()) {
-                // create field for applicable ones
-
-                let column_name = Self::build_filter_column_name(field.name());
-                let filter_field = DataField::new(&column_name, SchemaDataType::String);
-
-                filter_fields.push(filter_field);
-            }
-        }
-
-        DataSchema::new(filter_fields)
-    }
-
     /// Load a filter directly from the source table's schema and the corresponding filter parquet file.
     #[tracing::instrument(level = "debug", skip_all)]
-    pub fn from_filter_chunk(
-        source_table_schema: DataSchemaRef,
-        filter_schema: DataSchemaRef,
-        filter_chunk: Chunk,
-    ) -> Result<Self> {
+    pub fn from_filter_chunk(fn_ctx: FunctionContext, filter_chunk: Chunk<String>) -> Result<Self> {
         Ok(Self {
-            source_schema: source_table_schema,
-            filter_schema,
             filter_chunk,
+            fn_ctx,
         })
     }
 
     /// Create a filter chunk from source data.
     ///
     /// All input chunks should belong to a Parquet file, e.g. the chunk array represents the parquet file in memory.
-    pub fn try_create(source_schema: DataSchemaRef, chunks: &[&Chunk]) -> Result<Self> {
+    pub fn try_create(fn_ctx: FunctionContext, chunks: &[&Chunk<String>]) -> Result<Self> {
         if chunks.is_empty() {
             return Err(ErrorCode::BadArguments("chunks is empty"));
         }
 
-        todo!("expression");
-    }
+        let mut filter_columns = vec![];
 
-    pub fn find(
-        &self,
-        column_name: &str,
-        target: &Scalar,
-        typ: &SchemaDataType,
-    ) -> Result<FilterEvalResult> {
-        let filter_column = Self::build_filter_column_name(column_name);
-        if !self.filter_schema.has_field(&filter_column)
-            || !Xor8Filter::is_supported_schema_type(typ)
-            || target.is_null()
-        {
-            // The column doesn't a filter
-            return Ok(FilterEvalResult::NotApplicable);
+        for i in 0..chunks[0].num_columns() {
+            if Xor8Filter::is_supported_type(&chunks[0].get_by_offset(i).data_type) {
+                // create filter per column
+                let mut filter_builder = Xor8Builder::create();
+
+                // ingest the same column data from all chunks
+                for chunk in chunks {
+                    let entry = chunk.get_by_offset(i);
+                    match &entry.value {
+                        Value::Scalar(scalar) => filter_builder.add_key(&scalar),
+                        Value::Column(col) => {
+                            col.iter()
+                                .for_each(|scalar| filter_builder.add_key(&scalar));
+                        }
+                    }
+                }
+
+                // create filter column
+                let filter = filter_builder.build()?;
+                let serialized_bytes = filter.to_bytes()?;
+                let filter_value = Value::Scalar(Scalar::String(serialized_bytes));
+                filter_columns.push(ChunkEntry {
+                    id: Self::build_filter_column_name(&chunks[0].get_by_offset(i).id),
+                    data_type: DataType::String,
+                    value: filter_value,
+                });
+            }
         }
-        todo!("expression");
-        // if filter.contains(target) {
-        //     Ok(FilterEvalResult::Maybe)
-        // } else {
-        //     Ok(FilterEvalResult::False)
-        // }
-    }
 
-    /// Returns false when the expression must be false, otherwise true.
-    /// The 'true' doesn't really mean the expression is true, but 'maybe true'.
-    /// That is to say, you still need the load all data and run the execution.
-    pub fn maybe_true(&self, expr: &RemoteExpr<String>) -> Result<bool> {
-        Ok(self.eval(expr)? != FilterEvalResult::False)
+        let filter_chunk = Chunk::new(filter_columns, 1);
+
+        Ok(Self {
+            filter_chunk,
+            fn_ctx,
+        })
     }
 
     /// Apply the predicate expression, return the result.
     /// If we are sure of skipping the scan, return false, e.g. the expression must be false.
     /// This happens when the data doesn't show up in the filter.
     ///
-    /// Otherwise return either Maybe or NotApplicable.
+    /// Otherwise return `Uncertain`.
     #[tracing::instrument(level = "debug", name = "block_filter_index_eval", skip_all)]
-    pub fn eval(&self, expr: &RemoteExpr<String>) -> Result<FilterEvalResult> {
-        todo!("expression")
-        // // TODO: support multiple columns and other ops like 'in' ...
-        // match expr {
-        //     Expression::Function { name, args, .. } if args.len() == 2 => {
-        //         match name.to_lowercase().as_str() {
-        //             "=" => self.eval_equivalent_expression(&args[0], &args[1]),
-        //             "and" => self.eval_logical_and(&args[0], &args[1]),
-        //             "or" => self.eval_logical_or(&args[0], &args[1]),
-        //             _ => Ok(FilterEvalResult::NotApplicable),
-        //         }
-        //     }
-        //     _ => Ok(FilterEvalResult::NotApplicable),
-        // }
+    pub fn eval(&self, mut expr: Expr<String>) -> Result<FilterEvalResult> {
+        self.rewrite_expr(&mut expr)?;
+
+        let input_domains = expr
+            .column_refs()
+            .into_iter()
+            .map(|(name, ty)| {
+                let domain = Domain::full(&ty);
+                (name, domain)
+            })
+            .collect();
+        let folder = ConstantFolder::new(input_domains, self.fn_ctx, &BUILTIN_FUNCTIONS);
+        let (new_expr, _) = folder.fold(&expr);
+
+        match new_expr {
+            Expr::Constant {
+                scalar: Scalar::Boolean(false),
+                ..
+            } => Ok(FilterEvalResult::MustFalse),
+            _ => Ok(FilterEvalResult::Uncertain),
+        }
     }
 
-    // // Evaluate the equivalent expression like "name='Alice'"
-    // fn eval_equivalent_expression(
-    //     &self,
-    //     left: &Expression,
-    //     right: &Expression,
-    // ) -> Result<FilterEvalResult> {
-    //     let schema: &DataSchemaRef = &self.source_schema;
+    /// For every applicable column, we will create a filter.
+    /// The filter will be stored with field name 'Bloom(column_name)'
+    fn build_filter_column_name(column_name: &str) -> String {
+        format!("Bloom({})", column_name)
+    }
 
-    //     // For now only support single column like "name = 'Alice'"
-    //     match (left, right) {
-    //         // match the expression of 'column_name = literal constant'
-    //         (Expression::IndexedVariable { name, .. }, Expression::Constant { value, .. })
-    //         | (Expression::Constant { value, .. }, Expression::IndexedVariable { name, .. }) => {
-    //             // find the corresponding column from source table
-    //             let data_field = schema.field_with_name(name)?;
-    //             let data_type = data_field.data_type();
+    fn find(&self, column_name: &str, target: &Scalar, ty: &DataType) -> Result<FilterEvalResult> {
+        let filter_column = Self::build_filter_column_name(column_name);
+        if !Xor8Filter::is_supported_type(ty) || target.is_null() {
+            // The column doesn't have a filter.
+            return Ok(FilterEvalResult::Uncertain);
+        }
 
-    //             // check if cast needed
-    //             todo!("expression");
-    //             // let value = if &value.data_type() != data_type {
-    //             //     let col = value.as_const_column(data_type, 1)?;
-    //             //     col.get_checked(0)?
-    //             // } else {
-    //             //     value.clone()
-    //             // };
-    //             self.find(name, value, data_type)
-    //         }
-    //         _ => Ok(FilterEvalResult::NotApplicable),
-    //     }
-    // }
+        match self.filter_chunk.get_by_id(&filter_column) {
+            Some(entry) => {
+                let filter_bytes = entry.value.as_scalar().unwrap().as_string().unwrap();
+                let (filter, _size) = Xor8Filter::from_bytes(&filter_bytes)?;
+                if filter.contains(&target) {
+                    Ok(FilterEvalResult::Uncertain)
+                } else {
+                    Ok(FilterEvalResult::MustFalse)
+                }
+            }
+            None => Ok(FilterEvalResult::Uncertain),
+        }
+    }
 
-    // // Evaluate the logical and expression
-    // fn eval_logical_and(&self, left: &Expression, right: &Expression) -> Result<FilterEvalResult> {
-    //     let left_result = self.eval(left)?;
-    //     if left_result == FilterEvalResult::False {
-    //         return Ok(FilterEvalResult::False);
-    //     }
+    /// Rewrite the expression by the information from bloom filter.
+    fn rewrite_expr(&self, expr: &mut Expr<String>) -> Result<()> {
+        // Find patterns like `Column = <constant>` or `<constant> = Column`.
+        match expr {
+            Expr::FunctionCall {
+                span,
+                function,
+                args,
+                ..
+            } if function.signature.name == "eq" => match args.as_slice() {
+                [
+                    Expr::ColumnRef { id, data_type, .. },
+                    Expr::Constant { scalar, .. },
+                ]
+                | [
+                    Expr::Constant { scalar, .. },
+                    Expr::ColumnRef { id, data_type, .. },
+                ] => {
+                    // If the column doesn't contain the constant, we rewrite the expression to `false`.
+                    if self.find(&id, &scalar, &data_type)? == FilterEvalResult::MustFalse {
+                        *expr = Expr::Constant {
+                            span: span.clone(),
+                            scalar: Scalar::Boolean(false),
+                            data_type: DataType::Boolean,
+                        };
+                        return Ok(());
+                    }
+                }
+                _ => (),
+            },
+            _ => (),
+        }
 
-    //     let right_result = self.eval(right)?;
-    //     if right_result == FilterEvalResult::False {
-    //         return Ok(FilterEvalResult::False);
-    //     }
+        // Otherwise, rewrite sub expressions.
+        match expr {
+            Expr::Cast { expr, .. } => {
+                self.rewrite_expr(expr)?;
+            }
+            Expr::FunctionCall { args, .. } => {
+                for arg in args.iter_mut() {
+                    self.rewrite_expr(arg)?;
+                }
+            }
+            _ => (),
+        }
 
-    //     if left_result == FilterEvalResult::NotApplicable
-    //         || right_result == FilterEvalResult::NotApplicable
-    //     {
-    //         Ok(FilterEvalResult::NotApplicable)
-    //     } else {
-    //         Ok(FilterEvalResult::Maybe)
-    //     }
-    // }
-
-    // // Evaluate the logical or expression
-    // fn eval_logical_or(&self, left: &Expression, right: &Expression) -> Result<FilterEvalResult> {
-    //     let left_result = self.eval(left)?;
-    //     let right_result = self.eval(right)?;
-    //     match (&left_result, &right_result) {
-    //         (&FilterEvalResult::False, &FilterEvalResult::False) => Ok(FilterEvalResult::False),
-    //         (&FilterEvalResult::False, _) => Ok(right_result),
-    //         (_, &FilterEvalResult::False) => Ok(left_result),
-    //         (&FilterEvalResult::Maybe, &FilterEvalResult::Maybe) => Ok(FilterEvalResult::Maybe),
-    //         _ => Ok(FilterEvalResult::NotApplicable),
-    //     }
-    // }
+        Ok(())
+    }
 }
