@@ -463,10 +463,9 @@ impl CacheOperator {
             .layer(MetricsLayer)
             // Add logging
             .layer(
-                LoggingLayer::default(),
-                // LoggingLayer::default()
-                //     // Ingore expected errors for logging.
-                //     .with_error_level(None),
+                LoggingLayer::default()
+                    // Ingore expected errors for logging.
+                    .with_error_level(None),
             )
             // Add tracing
             .layer(TracingLayer)
@@ -505,7 +504,7 @@ impl CacheOperator {
             user_cache: operator,
             // Cache into user cahce if requested data has been accessed 1 times
             // in recent 1M requests.
-            user_policy: RangeCachePolicy::new(1_000_000, 1),
+            user_policy: RangeCachePolicy::new(1_000_000, 1).enable_async(),
             internal_cache,
             // Cache into internal cahce if requested data has been accessed
             // 2 times in recent 10K requests.

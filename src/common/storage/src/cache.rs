@@ -19,10 +19,10 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use bytes::Bytes;
+use common_base::base::tokio::sync::Semaphore;
 use common_base::base::GlobalIORuntime;
 use common_base::base::TrySpawn;
 use futures::future::BoxFuture;
-use futures::io::BufReader;
 use futures::io::Cursor;
 use futures::AsyncReadExt;
 use moka::sync::Cache;
@@ -79,6 +79,9 @@ impl VisitStatistics {
 pub struct RangeCachePolicy {
     visit: VisitStatistics,
     threshold: usize,
+
+    enable_async: bool,
+    concurrency: Arc<Semaphore>,
 }
 
 impl RangeCachePolicy {
@@ -87,7 +90,15 @@ impl RangeCachePolicy {
         RangeCachePolicy {
             visit: VisitStatistics::new(records),
             threshold,
+            enable_async: false,
+            concurrency: Arc::new(Semaphore::new(16)),
         }
+    }
+
+    /// Enable async caching.
+    pub fn enable_async(mut self) -> Self {
+        self.enable_async = true;
+        self
     }
 
     fn cache_path(&self, path: &str, args: &OpRead) -> String {
@@ -107,9 +118,11 @@ impl CachePolicy for RangeCachePolicy {
         let path = path.to_string();
         let cache_path = self.cache_path(&path, &args);
 
+        let enable_async = self.enable_async;
         let threshold = self.threshold;
         // Record a visit to cache_path.
         let count = self.visit.visit(cache_path.clone());
+        let concurrency = self.concurrency.clone();
 
         Box::pin(async move {
             match cache.read(&cache_path, OpRead::default()).await {
@@ -127,6 +140,12 @@ impl CachePolicy for RangeCachePolicy {
                 }
             };
 
+            // permit will be dropped after cache filled.
+            let _permit = match concurrency.try_acquire() {
+                Ok(permit) => permit,
+                Err(_) => return inner.read(&path, args).await,
+            };
+
             // Start filling cache.
             let (rp, mut r) = inner.read(&path, args.clone()).await?;
             let size = rp.clone().into_metadata().content_length();
@@ -140,27 +159,47 @@ impl CachePolicy for RangeCachePolicy {
                 })?;
                 let bs = Bytes::from(bs);
 
-                // Ignore errors returned by cache services.
-                let _ = cache
-                    .write(
-                        &cache_path,
-                        OpWrite::new(size),
-                        Box::new(Cursor::new(bs.clone())),
-                    )
-                    .await;
+                if enable_async {
+                    let moved_bs = bs.clone();
+                    GlobalIORuntime::instance().spawn(async move {
+                        // Ignore errors returned by cache services.
+                        let _ = cache
+                            .write(
+                                &cache_path,
+                                OpWrite::new(size),
+                                Box::new(Cursor::new(moved_bs)),
+                            )
+                            .await;
+                    });
+                } else {
+                    let _ = cache
+                        .write(
+                            &cache_path,
+                            OpWrite::new(size),
+                            Box::new(Cursor::new(bs.clone())),
+                        )
+                        .await;
+                }
 
                 Ok((rp, Box::new(Cursor::new(bs))))
             } else {
-                GlobalIORuntime::instance().spawn(async move {
-                    let br = BufReader::with_capacity(1024 * 1024, r);
+                if enable_async {
+                    GlobalIORuntime::instance().spawn(async move {
+                        // Ignore errors returned by cache services.
+                        let _ = cache.write(&cache_path, OpWrite::new(size), r).await;
+                    });
 
-                    // Ignore errors returned by cache services.
+                    inner.read(&path, args).await
+                } else {
                     let _ = cache
-                        .write(&cache_path, OpWrite::new(size), Box::new(br))
+                        .write(&cache_path, OpWrite::new(size), Box::new(r))
                         .await;
-                });
 
-                inner.read(&path, args).await
+                    match cache.read(&cache_path, OpRead::default()).await {
+                        Ok(r) => Ok(r),
+                        Err(_) => inner.read(&path, args).await,
+                    }
+                }
             }
         })
     }
