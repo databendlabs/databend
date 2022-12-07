@@ -30,8 +30,6 @@ use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::TableCopiedFileInfo;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_meta_types::UserStageInfo;
-use common_pipeline_sources::processors::sources::input_formats::InputContext;
-use common_pipeline_sources::processors::sources::input_formats::SplitInfo;
 use common_pipeline_transforms::processors::transforms::TransformLimit;
 use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use common_storages_fuse::io::Files;
@@ -321,38 +319,11 @@ impl CopyInterpreterV2 {
                 .await?
         };
 
-        // All files info.
-        let mut splits = vec![];
-        for part in &read_source_plan.parts.partitions {
-            if let Some(split) = part.as_any().downcast_ref::<SplitInfo>() {
-                splits.push(Arc::new(split.clone()));
-            }
-        }
-
-        // COPY into <table> table info.
         let to_table = ctx
             .get_table(catalog_name, database_name, table_name)
             .await?;
         stage_table.set_block_compact_thresholds(to_table.get_block_compact_thresholds());
-        let operator = StageTable::get_op(&table_ctx, &stage_table_info.user_stage_info)?;
-
-        //  Build copy pipeline.
-        let settings = ctx.get_settings();
-        let schema = stage_table_info.schema.clone();
-        let stage_info = stage_table_info.user_stage_info.clone();
-        let compact_threshold = stage_table.get_block_compact_thresholds();
-        let input_ctx = Arc::new(InputContext::try_create_from_copy(
-            operator,
-            settings,
-            schema,
-            stage_info,
-            splits,
-            ctx.get_scan_progress(),
-            compact_threshold,
-        )?);
-        input_ctx
-            .format
-            .exec_copy(input_ctx.clone(), &mut build_res.main_pipeline)?;
+        stage_table.read_data(table_ctx, &read_source_plan, &mut build_res.main_pipeline)?;
 
         // Build Limit pipeline.
         let limit = stage_table_info.user_stage_info.copy_options.size_limit;
