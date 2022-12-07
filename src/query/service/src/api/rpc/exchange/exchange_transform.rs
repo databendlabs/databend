@@ -264,6 +264,7 @@ impl Processor for ExchangeTransform {
                 DataPacket::ProgressAndPrecommit { .. } => unreachable!(),
                 DataPacket::FetchProgressAndPrecommit => unreachable!(),
                 DataPacket::FragmentData(v) => self.on_recv_data(v),
+                DataPacket::ClosingClient => Ok(()),
             };
         }
 

@@ -28,6 +28,7 @@ mod statistic;
 mod truncate;
 
 mod fuse_source;
+mod revert;
 pub mod util;
 
 pub use compact::CompactOptions;

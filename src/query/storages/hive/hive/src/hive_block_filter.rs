@@ -29,6 +29,7 @@ use common_storages_table_meta::meta::ColumnStatistics;
 use common_storages_table_meta::meta::StatisticsOfColumns;
 
 use crate::hive_parquet_block_reader::HiveParquetBlockReader;
+use crate::hive_table::HIVE_DEFAULT_PARTITION;
 
 #[derive(Clone)]
 pub struct HiveBlockFilter {
@@ -89,11 +90,18 @@ impl HiveBlockFilter {
 
             for (p_key, p_value) in part_columns {
                 if let Ok(idx) = self.data_schema.index_of(&p_key) {
-                    let v = DataValue::String(p_value.as_bytes().to_vec());
+                    let mut null_count = 0;
+                    let v = if p_value == HIVE_DEFAULT_PARTITION {
+                        null_count = row_group.num_rows();
+                        DataValue::Null
+                    } else {
+                        DataValue::String(p_value.as_bytes().to_vec())
+                    };
+
                     let col_stats = ColumnStatistics {
                         min: v.clone(),
                         max: v,
-                        null_count: 0,
+                        null_count: null_count as u64,
                         in_memory_size: 0,
                         distinct_of_values: None,
                     };
