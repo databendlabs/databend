@@ -1895,9 +1895,11 @@ dependencies = [
  "futures-util",
  "opendal",
  "parking_lot 0.12.1",
+ "serde",
  "serde_json",
  "similar-asserts",
  "tracing",
+ "typetag",
  "xml-rs",
 ]
 
@@ -2020,6 +2022,7 @@ dependencies = [
  "common-pipeline-transforms",
  "common-settings",
  "common-storage",
+ "common-storages-stage",
  "common-storages-table-meta",
  "common-storages-view",
  "common-tracing",

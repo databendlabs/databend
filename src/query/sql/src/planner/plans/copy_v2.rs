@@ -61,8 +61,6 @@ pub enum CopyPlanV2 {
         database_name: String,
         table_name: String,
         table_id: MetaId,
-        files: Vec<String>,
-        pattern: String,
         schema: DataSchemaRef,
         validation_mode: ValidationMode,
         from: Box<DataSourcePlan>,
@@ -83,23 +81,14 @@ impl Debug for CopyPlanV2 {
             CopyPlanV2::IntoTable {
                 database_name,
                 table_name,
-                files,
-                pattern,
                 from,
                 validation_mode,
                 force,
                 ..
             } => {
                 write!(f, "Copy into {:}.{:}", database_name, table_name)?;
-                if !files.is_empty() {
-                    write!(f, ", files: {:?}", files)?;
-
-                    if !pattern.is_empty() {
-                        write!(f, ", pattern: {:?}", pattern)?;
-                    }
-                    write!(f, ", validation_mode: {:?}", validation_mode)?;
-                    write!(f, ", {:?}", from)?;
-                }
+                write!(f, ", validation_mode: {:?}", validation_mode)?;
+                write!(f, ", from: {:?}", from)?;
                 write!(f, " force: {}", force)?;
             }
             CopyPlanV2::IntoStage {

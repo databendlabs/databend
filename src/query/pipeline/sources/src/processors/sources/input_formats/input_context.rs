@@ -156,7 +156,7 @@ impl InputContext {
         }
     }
 
-    pub async fn try_create_from_copy(
+    pub fn try_create_from_copy(
         operator: Operator,
         settings: Arc<Settings>,
         schema: DataSchemaRef,

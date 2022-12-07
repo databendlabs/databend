@@ -124,7 +124,7 @@ impl FuseTable {
             partitions_total,
         )?;
         let table_info = self.get_table_info();
-        let description = statistics.get_description(table_info);
+        let description = statistics.get_description(&table_info.desc);
         let plan = DataSourcePlan {
             catalog: table_info.catalog().to_string(),
             source_info: DataSourceInfo::TableSource(table_info.clone()),

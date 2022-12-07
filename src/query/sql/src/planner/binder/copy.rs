@@ -242,7 +242,9 @@ impl<'a> Binder {
                 schema: table.schema(),
                 user_stage_info: stage_info,
                 path,
-                files: vec![],
+                files: stmt.files.clone(),
+                pattern: stmt.pattern.clone(),
+                files_to_copy: None,
             }),
             scan_fields: None,
             parts: Partitions::default(),
@@ -259,8 +261,6 @@ impl<'a> Binder {
             table_id: table.get_id(),
             schema: table.schema(),
             from: Box::new(from),
-            files: stmt.files.clone(),
-            pattern: stmt.pattern.clone(),
             validation_mode,
             force: stmt.force,
         })))
@@ -294,14 +294,15 @@ impl<'a> Binder {
 
         let mut stage_info = UserStageInfo::new_external_stage(storage_params, &path);
         self.apply_stage_options(stmt, &mut stage_info)?;
-
         let from = DataSourcePlan {
             catalog: dst_catalog_name.to_string(),
             source_info: DataSourceInfo::StageSource(StageTableInfo {
                 schema: table.schema(),
                 user_stage_info: stage_info,
                 path,
-                files: vec![],
+                files: stmt.files.clone(),
+                pattern: stmt.pattern.clone(),
+                files_to_copy: None,
             }),
             scan_fields: None,
             parts: Partitions::default(),
@@ -318,8 +319,6 @@ impl<'a> Binder {
             table_id: table.get_id(),
             schema: table.schema(),
             from: Box::new(from),
-            files: stmt.files.clone(),
-            pattern: stmt.pattern.clone(),
             validation_mode,
             force: stmt.force,
         })))
