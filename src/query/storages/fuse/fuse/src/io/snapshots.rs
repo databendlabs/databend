@@ -102,9 +102,8 @@ impl SnapshotsIO {
             .map_err(|e| ErrorCode::StorageOther(format!("read snapshots failure, {}", e)))
     }
 
-    // Read all the snapshots by the root file.
-    // limit: read how many snapshot files
-    // with_segment_locations: if true will get the segments of the snapshot
+    // Read all the table statistic files by the root file(exclude the root file).
+    // limit: read how many table statistic files
     pub async fn read_table_statistic_files(
         &self,
         root_ts_file: &str,
