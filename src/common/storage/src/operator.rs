@@ -498,6 +498,7 @@ impl CacheOperator {
                 .max_capacity(1024 * 1024 * 1024)
                 .build()?,
         )
+        .layer(MetricsLayer)
         .layer(LoggingLayer::default().with_error_level(None));
 
         Ok(Some(CacheOperator {
