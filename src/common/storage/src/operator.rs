@@ -504,12 +504,12 @@ impl CacheOperator {
         Ok(Some(CacheOperator {
             user_cache: operator,
             // Cache into user cahce if requested data has been accessed 1 times
-            // in recent 1M requests.
-            user_policy: RangeCachePolicy::new(1_000_000, 1).enable_async(),
+            // in recent 10K requests.
+            user_policy: RangeCachePolicy::new(10_000, 1).enable_async(),
             internal_cache,
             // Cache into internal cahce if requested data has been accessed
-            // 2 times in recent 10K requests.
-            internal_policy: RangeCachePolicy::new(10_000, 2),
+            // 5 times in recent 1K requests.
+            internal_policy: RangeCachePolicy::new(1_000, 5),
         }))
     }
 
