@@ -15,7 +15,6 @@
 use std::fmt::Debug;
 
 use common_datavalues::DataSchemaRef;
-use common_meta_types::UserStageInfo;
 
 use crate::plan::Expression;
 use crate::plan::Projection;
