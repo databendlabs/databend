@@ -182,23 +182,21 @@ impl CachePolicy for RangeCachePolicy {
                 }
 
                 Ok((rp, Box::new(Cursor::new(bs))))
+            } else if enable_async {
+                GlobalIORuntime::instance().spawn(async move {
+                    // Ignore errors returned by cache services.
+                    let _ = cache.write(&cache_path, OpWrite::new(size), r).await;
+                });
+
+                inner.read(&path, args).await
             } else {
-                if enable_async {
-                    GlobalIORuntime::instance().spawn(async move {
-                        // Ignore errors returned by cache services.
-                        let _ = cache.write(&cache_path, OpWrite::new(size), r).await;
-                    });
+                let _ = cache
+                    .write(&cache_path, OpWrite::new(size), Box::new(r))
+                    .await;
 
-                    inner.read(&path, args).await
-                } else {
-                    let _ = cache
-                        .write(&cache_path, OpWrite::new(size), Box::new(r))
-                        .await;
-
-                    match cache.read(&cache_path, OpRead::default()).await {
-                        Ok(r) => Ok(r),
-                        Err(_) => inner.read(&path, args).await,
-                    }
+                match cache.read(&cache_path, OpRead::default()).await {
+                    Ok(r) => Ok(r),
+                    Err(_) => inner.read(&path, args).await,
                 }
             }
         })
