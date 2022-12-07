@@ -39,6 +39,8 @@ use common_catalog::table_function::TableFunction;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_types::FileFormatOptions;
+use common_meta_types::StageFileCompression;
 use common_meta_types::StageFileFormatType;
 use common_pipeline_sources::processors::sources::input_formats::InputContext;
 use common_storages_stage::get_first_file;
@@ -294,7 +296,7 @@ impl<'a> Binder {
                     None
                 };
 
-                let (user_stage_info, path) =
+                let (mut user_stage_info, path) =
                     parse_stage_location_v2(&self.ctx, &location.name, &location.path).await?;
                 let op = self.ctx.get_data_operator()?.operator();
                 let op = op.layer(SubdirLayer::new(&user_stage_info.stage_prefix()));
@@ -320,7 +322,16 @@ impl<'a> Binder {
                 let format_type = StageFileFormatType::Parquet;
                 let input_format = InputContext::get_input_format(&format_type)?;
                 let schema = input_format.infer_schema(&first_file, &op).await?;
-
+                user_stage_info.file_format_options = FileFormatOptions {
+                    format: format_type,
+                    record_delimiter: "".to_string(),
+                    field_delimiter: "".to_string(),
+                    nan_display: "".to_string(),
+                    skip_header: 0,
+                    escape: "".to_string(),
+                    compression: StageFileCompression::default(),
+                    row_tag: "".to_string(),
+                };
                 let stage_table_info = StageTableInfo {
                     schema,
                     user_stage_info,
@@ -332,39 +343,19 @@ impl<'a> Binder {
 
                 let stage_table = StageTable::try_create(stage_table_info)?;
 
+                let database = "default".to_string();
                 let table_index = self.metadata.write().add_table(
-                    "default".to_string(),
+                    database.clone(),
                     "default".to_string(),
                     stage_table,
                     table_alias_name,
                 );
-                let mut bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
+                let (s_expr, mut bind_context) = self
+                    .bind_base_table(bind_context, database.as_str(), table_index)
+                    .await?;
                 if let Some(alias) = alias {
                     bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
                 }
-                let columns = self.metadata.read().columns_by_table_index(table_index);
-                let s_expr = SExpr::create_leaf(
-                    LogicalGet {
-                        table_index,
-                        columns: columns
-                            .into_iter()
-                            .map(|col| match col {
-                                ColumnEntry::BaseTableColumn { column_index, .. } => column_index,
-                                ColumnEntry::DerivedColumn { column_index, .. } => column_index,
-                            })
-                            .collect(),
-                        push_down_predicates: None,
-                        limit: None,
-                        order_by: None,
-                        statistics: Statistics {
-                            statistics: None,
-                            col_stats: Default::default(),
-                            is_accurate: true,
-                        },
-                        prewhere: None,
-                    }
-                    .into(),
-                );
                 Ok((s_expr, bind_context))
             }
         }
