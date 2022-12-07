@@ -12,13 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! This module provides data structures for build column indexes.
+//! It's used by Fuse Engine and Parquet Engine.
+
 use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_arrow::arrow::datatypes::Field as ArrowField;
 use common_arrow::arrow::datatypes::Schema as ArrowSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
-
-/// This module provide in-memory column data structures for Fuse Engine and Parquet Engine.
 
 #[derive(Debug, Clone)]
 pub struct ColumnLeaves {
