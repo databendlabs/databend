@@ -1,0 +1,19 @@
+[package]
+authors = ["Databend Authors <opensource@datafuselabs.com>"]
+edition = "2021"
+license = "Apache-2.0"
+name = "sqllogictests"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+common-exception = { path = "../../src/common/exception" }
+tokio = { version = "1.21.1", features = ["full"] }
+sqllogictest = "0.9.0"
+async-trait = "0.1.53"
+futures-util = "0.3.25"
+mysql = "23.0.0"
+
+
+
+
