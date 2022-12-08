@@ -116,9 +116,10 @@ impl<'a> Binder {
 
         if *full {
             select_builder
-                .with_column(format!("name AS Tables_in_{database}"))
+                .with_column("name AS Tables")
                 .with_column("'BASE TABLE' AS Table_type")
-                .with_column("database AS table_catalog")
+                .with_column("database AS Database")
+                .with_column("catalog AS Catalog")
                 .with_column("engine")
                 .with_column("created_on AS create_time");
             if *with_history {
@@ -138,6 +139,7 @@ impl<'a> Binder {
         }
 
         select_builder
+            .with_order_by("catalog")
             .with_order_by("database")
             .with_order_by("name");
 
