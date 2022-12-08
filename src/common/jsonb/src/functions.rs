@@ -849,7 +849,12 @@ pub fn parse_json_path(path: &[u8]) -> Result<Vec<JsonPath>, Error> {
                 } else if c != b'"' {
                     idx += 1;
                 } else {
-                    break;
+                    // Try to read to check if has another '"ab"', if has return err
+                    let c = read_char(path, &mut idx);
+                    match c {
+                        Ok(_) => return Err(Error::InvalidToken),
+                        Err(_) => break,
+                    }
                 }
             }
             let s = std::str::from_utf8(&path[prev_idx..idx - 1])?;
