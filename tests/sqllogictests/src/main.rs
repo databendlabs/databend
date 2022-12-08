@@ -12,22 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
-use std::fmt::Write;
 use std::path::Path;
-use std::path::PathBuf;
-use std::ptr::write;
 
 use client::ClickhouseHttpClient;
-use mysql::prelude::Queryable;
-use mysql::serde_json;
-use mysql::Conn;
-use mysql::Pool;
-use mysql::Row;
-use reqwest::header::HeaderMap;
-use reqwest::header::HeaderValue;
-use serde_json::Value;
-use sqllogictest::ColumnType;
 use sqllogictest::DBOutput;
 
 use crate::client::HttpClient;
@@ -63,7 +50,7 @@ impl sqllogictest::AsyncDB for Databend {
     }
 
     fn engine_name(&self) -> &str {
-        todo!()
+        "databend"
     }
 }
 
@@ -83,9 +70,10 @@ async fn run_suit(suit: &Path) -> Result<()> {
     // Todo: walking dir util read files
     // let file_name = suit.file_name().unwrap().to_str().unwrap().to_string();
     // Create databend
+    // TODO: move to main method
     let mysql_client = MysqlClient::create()?;
     let file_name = suit.file_name().unwrap().to_str().unwrap();
-    let mut databend = Databend {
+    let databend = Databend {
         mysql_client: Some(mysql_client),
         http_client: None,
         ck_client: None,
@@ -95,7 +83,7 @@ async fn run_suit(suit: &Path) -> Result<()> {
     runner.run_file_async(suit).await?;
 
     let http_client = HttpClient::create()?;
-    let mut databend = Databend {
+    let databend = Databend {
         mysql_client: None,
         http_client: Some(http_client),
         ck_client: None,
@@ -105,7 +93,7 @@ async fn run_suit(suit: &Path) -> Result<()> {
     runner.run_file_async(suit).await?;
 
     let ck_client = ClickhouseHttpClient::create()?;
-    let mut databend = Databend {
+    let databend = Databend {
         mysql_client: None,
         http_client: None,
         ck_client: Some(ck_client),

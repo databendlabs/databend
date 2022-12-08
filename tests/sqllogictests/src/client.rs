@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::process::Output;
 
 use mysql::prelude::Queryable;
 use mysql::Pool;
@@ -37,7 +36,7 @@ impl MysqlClient {
     pub fn create() -> Result<MysqlClient> {
         let url = "mysql://root:@127.0.0.1:3307/default";
         let pool = Pool::new(url)?;
-        let mut conn = pool.get_conn()?;
+        let conn = pool.get_conn()?;
         Ok(MysqlClient { conn })
     }
 
@@ -55,7 +54,9 @@ impl MysqlClient {
                         Some(s) if s.is_empty() => parsed_row.push("(empty)".to_string()),
                         Some(s) => parsed_row.push(s),
                     },
-                    _ => {}
+                    _ => {
+                        todo!()
+                    }
                 }
             }
             parsed_rows.push(parsed_row);
@@ -66,6 +67,7 @@ impl MysqlClient {
         })
     }
 
+    #[allow(dead_code)]
     pub fn name(&self) -> &'static str {
         "mysql_client"
     }
@@ -143,11 +145,11 @@ impl ClickhouseHttpClient {
             .basic_auth("root", Some(""))
             .send()
             .await?;
-        let res = String::from(response.text().await?);
+        let res = response.text().await?;
         let rows: Vec<Vec<String>> = res
             .lines()
             .map(|s| {
-                s.split("\t")
+                s.split('\t')
                     .map(|s| {
                         if s == "\\N" {
                             "NULL".to_string()
