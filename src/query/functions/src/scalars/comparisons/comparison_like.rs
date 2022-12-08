@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use common_datavalues::prelude::*;
-use memchr::memmem;
 
 use super::comparison::StringSearchCreator;
 use super::utils::StringSearchImpl;
@@ -58,36 +57,7 @@ impl StringSearchImpl for StringSearchLike {
                 BooleanColumn::from_iterator(lhs.scalar_iter().map(|x| op(x.ends_with(ends_with))))
             }
             PatternType::PatternStr => {
-                let pattern = simdutf8::basic::from_utf8(rhs)
-                    .expect("Unable to convert the LIKE pattern to string: {}");
-                let mut sub_strings: Vec<&str> = pattern
-                    .split(|c: char| c == '%' || c == '_' || c == '\\')
-                    .collect();
-                sub_strings.retain(|&substring| !substring.is_empty());
-                if std::intrinsics::unlikely(sub_strings.is_empty()) {
-                    BooleanColumn::from_iterator(lhs.scalar_iter().map(|x| op(like(x, rhs))))
-                } else {
-                    let sub_string = sub_strings[0].as_bytes();
-                    // This impl like position function
-                    if sub_strings.len() == 1 {
-                        BooleanColumn::from_iterator(lhs.scalar_iter().map(|x| {
-                            let contain = search_sub_str(x, sub_string);
-                            if contain.is_none() {
-                                op(false)
-                            } else {
-                                op(true)
-                            }
-                        }))
-                    } else {
-                        BooleanColumn::from_iterator(lhs.scalar_iter().map(|x| {
-                            if memmem::find(x, sub_string).is_none() {
-                                op(false)
-                            } else {
-                                op(like(x, rhs))
-                            }
-                        }))
-                    }
-                }
+                BooleanColumn::from_iterator(lhs.scalar_iter().map(|x| op(like(x, rhs))))
             }
         }
     }
@@ -166,15 +136,6 @@ pub fn check_pattern_type(pattern: &[u8], is_pruning: bool) -> PatternType {
         PatternType::StartOfPercent
     } else {
         PatternType::OrdinalStr
-    }
-}
-
-#[inline]
-fn search_sub_str(str: &[u8], substr: &[u8]) -> Option<usize> {
-    if substr.len() <= str.len() {
-        str.windows(substr.len()).position(|w| w == substr)
-    } else {
-        None
     }
 }
 

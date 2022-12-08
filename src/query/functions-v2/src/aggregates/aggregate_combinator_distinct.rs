@@ -70,6 +70,7 @@ where State: DistinctStateFunc
 
     fn state_layout(&self) -> Layout {
         let layout = Layout::new::<State>();
+
         let netesed = self.nested.state_layout();
         Layout::from_size_align(layout.size() + netesed.size(), layout.align()).unwrap()
     }

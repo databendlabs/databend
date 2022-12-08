@@ -83,7 +83,7 @@ pub fn create_share_table_operator(
         // Add metrics
         .layer(MetricsLayer)
         // Add logging
-        .layer(LoggingLayer)
+        .layer(LoggingLayer::default())
         // Add tracing
         .layer(TracingLayer)
 }

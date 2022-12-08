@@ -40,6 +40,7 @@ common-pipeline-transforms = { path = "../pipeline/transforms" }
 
 common-settings = { path = "../settings" }
 common-storage = { path = "../../common/storage" }
+common-storages-stage = { path = "../storages/stage" }
 common-storages-table-meta = { path = "../storages/table-meta" }
 common-storages-view = { path = "../storages/view" }
 common-tracing = { path = "../../common/tracing" }
@@ -70,8 +71,8 @@ lz4 = "1.24.0"
 metrics = "0.20.1"
 naive-cityhash = "0.2.0"
 once_cell = "1.15.0"
-opendal = { version = "0.21", features = ["layers-tracing", "layers-metrics", "compress"] }
-opensrv-mysql = "0.2.0"
+opendal = { version = "0.22", features = ["layers-tracing", "layers-metrics", "compress"] }
+opensrv-mysql = { git = "https://github.com/datafuselabs/opensrv", rev = "5e37788" }
 openssl = { version = "0.10.41", features = ["vendored"] }
 parking_lot = "0.12.1"
 petgraph = "0.6.2"

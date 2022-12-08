@@ -115,6 +115,14 @@ impl PrewhereOptimizer {
             get.prewhere = if prewhere_pred.is_empty() {
                 None
             } else {
+                if prewhere_columns.is_empty() {
+                    // select a, b from t1 where 's' not in ('x', 'b', 'c', 'd') or to_nullable(null);
+                    // get the smallest column in (a,b). (maybe can get the smallest column in t1)
+                    let used = self.metadata.read().find_smallest_column(
+                        get.columns.iter().copied().collect::<Vec<_>>().as_slice(),
+                    );
+                    prewhere_columns.insert(used);
+                }
                 Some(Prewhere {
                     output_columns: get.columns.clone(),
                     prewhere_columns,

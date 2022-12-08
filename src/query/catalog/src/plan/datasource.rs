@@ -28,13 +28,16 @@ use crate::plan::PartStatistics;
 use crate::plan::Partitions;
 use crate::plan::Projection;
 use crate::plan::PushDownInfo;
+use crate::plan::StageFileInfo;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq)]
 pub struct StageTableInfo {
     pub schema: DataSchemaRef,
     pub path: String,
     pub files: Vec<String>,
+    pub pattern: String,
     pub user_stage_info: UserStageInfo,
+    pub files_to_copy: Option<Vec<StageFileInfo>>,
 }
 
 impl StageTableInfo {

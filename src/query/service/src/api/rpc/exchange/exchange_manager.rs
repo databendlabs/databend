@@ -23,7 +23,7 @@ use common_base::base::GlobalIORuntime;
 use common_base::base::Singleton;
 use common_base::base::Thread;
 use common_base::base::TrySpawn;
-use common_config::Config;
+use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataSchemaRef;
@@ -59,16 +59,14 @@ use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
 pub struct DataExchangeManager {
-    config: Config,
     queries_coordinator: ReentrantMutex<SyncUnsafeCell<HashMap<String, QueryCoordinator>>>,
 }
 
 static DATA_EXCHANGE_MANAGER: OnceCell<Singleton<Arc<DataExchangeManager>>> = OnceCell::new();
 
 impl DataExchangeManager {
-    pub fn init(config: Config, v: Singleton<Arc<DataExchangeManager>>) -> Result<()> {
+    pub fn init(v: Singleton<Arc<DataExchangeManager>>) -> Result<()> {
         v.init(Arc::new(DataExchangeManager {
-            config,
             queries_coordinator: ReentrantMutex::new(SyncUnsafeCell::new(HashMap::new())),
         }))?;
 
@@ -93,13 +91,13 @@ impl DataExchangeManager {
             if connection_info.create_request_channel {
                 let query_id = &packet.query_id;
                 let address = &connection_info.target.flight_address;
-                let mut flight_client = Self::create_client(&self.config, address).await?;
+                let mut flight_client = Self::create_client(address).await?;
                 request_exchanges.push(flight_client.request_server_exchange(query_id).await?);
             }
 
             for fragment in &connection_info.fragments {
                 let address = &connection_info.target.flight_address;
-                let mut flight_client = Self::create_client(&self.config, address).await?;
+                let mut flight_client = Self::create_client(address).await?;
 
                 targets_exchanges.insert(
                     (connection_info.target.id.clone(), *fragment),
@@ -127,8 +125,8 @@ impl DataExchangeManager {
         }
     }
 
-    pub async fn create_client(config: &Config, address: &str) -> Result<FlightClient> {
-        let config = config.clone();
+    pub async fn create_client(address: &str) -> Result<FlightClient> {
+        let config = GlobalConfig::instance();
         let address = address.to_string();
 
         GlobalIORuntime::instance()
@@ -246,11 +244,12 @@ impl DataExchangeManager {
         let settings = ctx.get_settings();
         let timeout = settings.get_flight_client_timeout()?;
         let root_actions = actions.get_root_actions()?;
+        let conf = GlobalConfig::instance();
 
         // Initialize channels between cluster nodes
         actions
             .get_init_nodes_channel_packets()?
-            .commit(&self.config, timeout)
+            .commit(conf.as_ref(), timeout)
             .await?;
 
         // Submit distributed tasks to all nodes.
@@ -259,7 +258,7 @@ impl DataExchangeManager {
 
         // Submit tasks to other nodes
         query_fragments_plan_packets
-            .commit(&self.config, timeout)
+            .commit(conf.as_ref(), timeout)
             .await?;
 
         // Submit tasks to localhost
@@ -270,7 +269,7 @@ impl DataExchangeManager {
 
         actions
             .get_execute_partial_query_packets()?
-            .commit(&self.config, timeout)
+            .commit(conf.as_ref(), timeout)
             .await?;
         Ok(build_res)
     }

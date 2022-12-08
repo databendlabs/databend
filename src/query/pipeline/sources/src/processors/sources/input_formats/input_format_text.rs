@@ -120,7 +120,7 @@ impl<T: InputFormatTextBase> InputFormat for InputFormatText<T> {
         InputFormatTextPipe::<T>::execute_stream(ctx, pipeline)
     }
 
-    async fn infer_schema(&self, _path: &str, _op: &Operator) -> Result<DataSchema> {
+    async fn infer_schema(&self, _path: &str, _op: &Operator) -> Result<DataSchemaRef> {
         Err(ErrorCode::Unimplemented(
             "infer_schema is not implemented for this format yet.",
         ))

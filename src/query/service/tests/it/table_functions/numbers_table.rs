@@ -23,6 +23,8 @@ use databend_query::sessions::SessionType;
 use databend_query::sessions::TableContext;
 use databend_query::sql::Planner;
 use databend_query::stream::ReadChunkStream;
+use databend_query::table_functions::generate_numbers_parts;
+use databend_query::table_functions::NumbersPartInfo;
 use databend_query::table_functions::NumbersTable;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
@@ -121,5 +123,53 @@ async fn test_limit_push_down() -> Result<()> {
         let actual = result.as_slice();
         common_datablocks::assert_blocks_sorted_eq_with_name(test.name, expect, actual);
     }
+    Ok(())
+}
+
+#[test]
+fn test_util_generate_parts() -> Result<()> {
+    {
+        // deal with remainder
+        let ps = generate_numbers_parts(0, 3, 11);
+
+        assert_eq!(3, ps.len());
+
+        let numbers_part = NumbersPartInfo::from_part(&ps.partitions[0])?;
+        assert_eq!(numbers_part.part_start, 0);
+        assert_eq!(numbers_part.part_end, 3);
+        assert_eq!(numbers_part.total, 11);
+
+        let numbers_part = NumbersPartInfo::from_part(&ps.partitions[1])?;
+        assert_eq!(numbers_part.part_start, 3);
+        assert_eq!(numbers_part.part_end, 6);
+        assert_eq!(numbers_part.total, 11);
+
+        let numbers_part = NumbersPartInfo::from_part(&ps.partitions[2])?;
+        assert_eq!(numbers_part.part_start, 6);
+        assert_eq!(numbers_part.part_end, 11);
+        assert_eq!(numbers_part.total, 11);
+    }
+
+    {
+        // total is zero
+        let ps = generate_numbers_parts(0, 3, 0);
+
+        assert_eq!(1, ps.len());
+        let numbers_part = NumbersPartInfo::from_part(&ps.partitions[0])?;
+        assert_eq!(numbers_part.part_start, 0);
+        assert_eq!(numbers_part.part_end, 0);
+        assert_eq!(numbers_part.total, 0);
+    }
+    {
+        // only one part, total < workers
+        let ps = generate_numbers_parts(0, 3, 2);
+
+        assert_eq!(1, ps.len());
+        let numbers_part = NumbersPartInfo::from_part(&ps.partitions[0])?;
+        assert_eq!(numbers_part.part_start, 0);
+        assert_eq!(numbers_part.part_end, 2);
+        assert_eq!(numbers_part.total, 2);
+    }
+
     Ok(())
 }

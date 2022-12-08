@@ -70,6 +70,7 @@ use crate::plans::OptimizeTablePlan;
 use crate::plans::RemoveStagePlan;
 use crate::plans::RenameDatabasePlan;
 use crate::plans::RenameTablePlan;
+use crate::plans::RevertTablePlan;
 use crate::plans::RevokePrivilegePlan;
 use crate::plans::RevokeRolePlan;
 use crate::plans::SetRolePlan;
@@ -139,6 +140,7 @@ pub enum Plan {
     AlterTableClusterKey(Box<AlterTableClusterKeyPlan>),
     DropTableClusterKey(Box<DropTableClusterKeyPlan>),
     ReclusterTable(Box<ReclusterTablePlan>),
+    RevertTable(Box<RevertTablePlan>),
     TruncateTable(Box<TruncateTablePlan>),
     OptimizeTable(Box<OptimizeTablePlan>),
     ExistsTable(Box<ExistsTablePlan>),
@@ -288,6 +290,7 @@ impl Display for Plan {
             Plan::ShowGrantTenantsOfShare(_) => write!(f, "ShowGrantTenantsOfShare"),
             Plan::ExplainAst { .. } => write!(f, "ExplainAst"),
             Plan::ExplainSyntax { .. } => write!(f, "ExplainSyntax"),
+            Plan::RevertTable(..) => write!(f, "RevertTable"),
         }
     }
 }
@@ -366,6 +369,7 @@ impl Plan {
             Plan::ShowShares(plan) => plan.schema(),
             Plan::ShowObjectGrantPrivileges(plan) => plan.schema(),
             Plan::ShowGrantTenantsOfShare(plan) => plan.schema(),
+            Plan::RevertTable(plan) => plan.schema(),
         }
     }
 }

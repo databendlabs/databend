@@ -288,6 +288,9 @@ impl HashJoinState for JoinHashTable {
         let num_rows = input_chunk.num_rows();
 
         if unmatched_build_indexes.is_empty() && self.hash_join_desc.other_predicate.is_none() {
+            if input_block.is_empty() {
+                return Ok(vec![]);
+            }
             return Ok(vec![input_chunk]);
         }
 

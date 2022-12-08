@@ -43,6 +43,8 @@ use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 
+use super::numbers_part::generate_numbers_parts;
+use super::NumbersPartInfo;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::EmptySource;
@@ -53,8 +55,6 @@ use crate::pipelines::Pipeline;
 use crate::pipelines::SourcePipeBuilder;
 use crate::sessions::TableContext;
 use crate::storages::Table;
-use crate::table_functions::generate_numbers_parts;
-use crate::table_functions::numbers_part::NumbersPartInfo;
 use crate::table_functions::table_function_factory::TableArgs;
 use crate::table_functions::TableFunction;
 

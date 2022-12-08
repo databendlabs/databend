@@ -65,11 +65,9 @@ pub static GLOBAL_MEM_STAT: MemStat = MemStat::empty();
 #[thread_local]
 static mut TRACKER: ThreadTracker = ThreadTracker::empty();
 
-/// Flag indicating an exceeding limit panic is happening and allocating memory by panic handler is allowed.
-///
-/// Flag will be reset when `panic!()` returns.
+/// Whether to allow unlimited memory. Alloc memory will not panic if it is true.
 #[thread_local]
-static PANICKING: AtomicBool = AtomicBool::new(false);
+static UNLIMITED_FLAG: AtomicBool = AtomicBool::new(false);
 
 static MEM_STAT_BUFFER_SIZE: i64 = 4 * 1024 * 1024;
 
@@ -85,24 +83,27 @@ impl<'a> Drop for Entered<'a> {
     }
 }
 
-/// A guard that resets the `PANICKING` flag when dropped.
-pub(crate) struct Panicking;
+/// A guard that resets the `UNLIMITED_FLAG` flag when dropped.
+pub struct UnlimitedMemGuard {
+    saved: bool,
+}
 
-impl Panicking {
-    #[must_use]
-    pub(crate) fn enter_panicking() -> Self {
-        PANICKING.store(true, Ordering::Relaxed);
-        Self
+impl UnlimitedMemGuard {
+    #[allow(unused)]
+    pub(crate) fn enter_unlimited() -> Self {
+        let saved = UNLIMITED_FLAG.load(Ordering::Relaxed);
+        UNLIMITED_FLAG.store(true, Ordering::Relaxed);
+        Self { saved }
     }
 
-    pub(crate) fn is_panicking() -> bool {
-        PANICKING.load(Ordering::Relaxed)
+    pub(crate) fn is_unlimited() -> bool {
+        UNLIMITED_FLAG.load(Ordering::Relaxed)
     }
 }
 
-impl Drop for Panicking {
+impl Drop for UnlimitedMemGuard {
     fn drop(&mut self) {
-        PANICKING.store(false, Ordering::Relaxed);
+        UNLIMITED_FLAG.store(self.saved, Ordering::Relaxed);
     }
 }
 
@@ -205,16 +206,10 @@ impl ThreadTracker {
         let res = tracker.flush();
 
         if let Err(out_of_limit) = res {
-            // NOTE: `PANICKING` only allows allocation inside the following `panic!()`.
-            //       If a `Drop` is called when unwinding, the `Drop` may panic again if it allocates memory over the limit.
-            if Panicking::is_panicking() {
-                return;
+            // https://play.rust-lang.org/?version=stable&mode=debug&edition=2021&gist=03d21a15e52c7c0356fca04ece283cf9
+            if !std::thread::panicking() && !UnlimitedMemGuard::is_unlimited() {
+                panic!("{:?}", out_of_limit);
             }
-
-            // Reset PANICKING when dropped.
-            let _p = Panicking::enter_panicking();
-
-            panic!("{:?}", out_of_limit);
         }
     }
 
@@ -420,7 +415,6 @@ impl<T: Future> Future for TrackedFuture<T> {
 
 #[cfg(test)]
 mod tests {
-
     mod async_thread_tracker {
         use std::future::Future;
         use std::pin::Pin;

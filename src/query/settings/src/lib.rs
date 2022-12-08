@@ -157,7 +157,8 @@ impl Settings {
             },
             // max_memory_usage
             SettingValue {
-                default_value: UserSettingValue::UInt64(memory_info.total * 80 / 100),
+                // unit of memory_info.total is kB
+                default_value: UserSettingValue::UInt64(1024 * memory_info.total * 80 / 100),
                 user_setting: UserSetting::create("max_memory_usage", UserSettingValue::UInt64(0)),
                 level: ScopeLevel::Session,
                 desc: "The maximum memory usage for processing single query, in bytes. By default the value is determined automatically.",
@@ -472,16 +473,6 @@ impl Settings {
                 desc: "How many hours will the COPY file metadata expired in the metasrv, default value: 24*7=7days",
                 possible_values: None,
             },
-            SettingValue {
-                default_value: UserSettingValue::UInt64(1),
-                user_setting: UserSetting::create(
-                    "insert_values_enable_expression",
-                    UserSettingValue::UInt64(1),
-                ),
-                level: ScopeLevel::Session,
-                desc: "Whether to enable expression when inserting values, if your values do not have expressions please disable this setting to improve write performance, default value: 1.",
-                possible_values: None,
-            },
         ];
 
         let settings: Arc<DashMap<String, SettingValue>> = Arc::new(DashMap::default());
@@ -774,11 +765,6 @@ impl Settings {
     pub fn get_load_file_metadata_expire_hours(&self) -> Result<u64> {
         let key = "load_file_metadata_expire_hours";
         self.try_get_u64(key)
-    }
-
-    pub fn get_insert_values_enable_expression(&self) -> Result<u64> {
-        static KEY: &str = "insert_values_enable_expression";
-        self.try_get_u64(KEY)
     }
 
     pub fn has_setting(&self, key: &str) -> bool {

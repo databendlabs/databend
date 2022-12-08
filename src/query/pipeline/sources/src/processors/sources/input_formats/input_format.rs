@@ -35,7 +35,7 @@ pub trait InputFormat: Send + Sync {
         settings: &Arc<Settings>,
     ) -> Result<Vec<Arc<SplitInfo>>>;
 
-    async fn infer_schema(&self, path: &str, op: &Operator) -> Result<DataSchema>;
+    async fn infer_schema(&self, path: &str, op: &Operator) -> Result<DataSchemaRef>;
 
     fn exec_copy(&self, ctx: Arc<InputContext>, pipeline: &mut Pipeline) -> Result<()>;
 

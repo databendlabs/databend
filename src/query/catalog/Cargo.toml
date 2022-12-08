@@ -10,7 +10,6 @@ test = false
 
 [dependencies]
 common-base = { path = "../../common/base" }
-common-config = { path = "../config" }
 common-exception = { path = "../../common/exception" }
 common-expression = { path = "../expression" }
 common-io = { path = "../../common/io" }

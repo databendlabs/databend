@@ -26,6 +26,7 @@ use crate::ast::AlterViewStmt;
 use crate::ast::CreateTableSource;
 use crate::ast::CreateTableStmt;
 use crate::ast::CreateViewStmt;
+use crate::ast::TimeTravelPoint;
 
 pub(crate) fn pretty_create_table(stmt: CreateTableStmt) -> RcDoc {
     RcDoc::text("CREATE")
@@ -180,6 +181,10 @@ pub(crate) fn pretty_alter_table_action(action: AlterTableAction) -> RcDoc {
             } else {
                 RcDoc::nil()
             }),
+        AlterTableAction::RevertTo { point } => match point {
+            TimeTravelPoint::Snapshot(sid) => RcDoc::text(format!(" AT (SNAPSHOT => {sid})")),
+            TimeTravelPoint::Timestamp(ts) => RcDoc::text(format!(" AT (TIMESTAMP => {ts})")),
+        },
     }
 }
 

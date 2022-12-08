@@ -16,6 +16,7 @@ use std::fmt::Debug;
 
 use common_expression::RemoteExpr;
 use common_meta_types::UserStageInfo;
+use common_expression::DataSchemaRef;
 
 use crate::plan::Projection;
 
@@ -29,18 +30,6 @@ pub struct PrewhereInfo {
     pub remain_columns: Projection,
     /// filter for prewhere
     pub filter: RemoteExpr<String>,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct StagePushDownInfo {
-    /// User set files in the COPY statement.
-    pub files: Vec<String>,
-    /// User set path.
-    pub path: String,
-    /// User set pattern in the COPY statement.
-    pub pattern: String,
-    /// User Stage info.
-    pub user_stage_info: UserStageInfo,
 }
 
 /// Extras is a wrapper for push down items.

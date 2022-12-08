@@ -19,6 +19,7 @@ mod partition;
 mod partition_statistics;
 mod projection;
 mod pushdown;
+mod stage_file_info;
 
 pub use datasource::*;
 // pub use expression::Expression;
@@ -27,3 +28,5 @@ pub use partition::*;
 pub use partition_statistics::PartStatistics;
 pub use projection::Projection;
 pub use pushdown::*;
+pub use stage_file_info::StageFileInfo;
+pub use stage_file_info::StageFileStatus;

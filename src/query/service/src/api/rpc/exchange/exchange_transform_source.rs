@@ -130,6 +130,7 @@ impl Processor for ExchangeSourceTransform {
                 DataPacket::FragmentData(v) => self.on_recv_data(v),
                 DataPacket::FetchProgressAndPrecommit => unreachable!(),
                 DataPacket::ProgressAndPrecommit { .. } => unreachable!(),
+                DataPacket::ClosingClient => Ok(()),
             };
         }
 

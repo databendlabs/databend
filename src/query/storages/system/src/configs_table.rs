@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_base::base::mask_string;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
+use common_config::GlobalConfig;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::utils::ColumnFrom;
@@ -46,8 +47,13 @@ impl SyncSystemTable for ConfigsTable {
         &self.table_info
     }
 
+<<<<<<< HEAD
     fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<Chunk> {
         let config = ctx.get_config().into_outer();
+=======
+    fn get_full_data(&self, _ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
+        let config = GlobalConfig::instance().as_ref().clone().into_outer();
+>>>>>>> main
 
         let mut names: Vec<String> = vec![];
         let mut values: Vec<String> = vec![];

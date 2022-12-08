@@ -19,6 +19,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::Scalar;
 use common_meta_types::MetaId;
+use common_storages_parquet::ParquetTable;
 use parking_lot::RwLock;
 
 use crate::catalogs::SYS_TBL_FUC_ID_END;
@@ -29,8 +30,8 @@ use crate::storages::fuse::table_functions::FuseSegmentTable;
 use crate::storages::fuse::table_functions::FuseSnapshotTable;
 use crate::storages::fuse::table_functions::FuseStatisticTable;
 use crate::table_functions::async_crash_me::AsyncCrashMeTable;
+use crate::table_functions::numbers::NumbersTable;
 use crate::table_functions::sync_crash_me::SyncCrashMeTable;
-use crate::table_functions::NumbersTable;
 use crate::table_functions::TableFunction;
 
 pub type TableArgs = Option<Vec<Scalar>>;
@@ -129,6 +130,11 @@ impl TableFunctionFactory {
         creators.insert(
             "async_crash_me".to_string(),
             (next_id(), Arc::new(AsyncCrashMeTable::create)),
+        );
+
+        creators.insert(
+            "read_parquet".to_string(),
+            (next_id(), Arc::new(ParquetTable::create)),
         );
 
         TableFunctionFactory {

@@ -32,7 +32,6 @@ use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::StageTableInfo;
-use common_config::Config;
 use common_config::DATABEND_COMMIT_VERSION;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -274,9 +273,6 @@ impl TableContext for QueryContext {
 
     fn get_current_database(&self) -> String {
         self.shared.get_current_database()
-    }
-    fn get_config(&self) -> Config {
-        self.shared.get_config()
     }
     fn get_current_user(&self) -> Result<UserInfo> {
         self.shared.get_current_user()
