@@ -59,10 +59,7 @@ impl sqllogictest::AsyncDB for Databend {
         if let Some(http_client) = &mut self.http_client {
             return http_client.query(sql).await;
         }
-        if let Some(ck_client) = &mut self.ck_client {
-            return ck_client.query(sql).await;
-        }
-        Ok(DBOutput::StatementComplete(1))
+        self.ck_client.as_mut().unwrap().query(sql).await
     }
 
     fn engine_name(&self) -> &str {
