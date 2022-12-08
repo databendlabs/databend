@@ -8,7 +8,7 @@ The objective of optimizing a table in Databend is to compact or purge its histo
 Databend's Time Travel feature relies on historical data. If you purge historical data from a table with the command `OPTIMIZE TABLE <your_table> PURGE` or `OPTIMIZE TABLE <your_table> ALL`, the table will not be eligible for time travel. The command removes all snapshots (except the most recent one) and their associated segments,block files and table statistic file.
 :::
 
-## What are Snapshot, Segment, Block and Table statistic file?
+## What are Snapshot, Segment, Block?
 
 Snapshot, segment, and block are the concepts Databend uses for data storage. Databend uses them to construct a hierarchical structure for storing table data.
 
@@ -20,8 +20,6 @@ A snapshot is a JSON file that does not save the table's data but indicate the s
 
 A segment is a JSON file that organizes the storage blocks (at least 1, at most 1,000) where the data is stored. If you run [FUSE_SEGMENT](../../../15-sql-functions/111-system-functions/fuse_segment.md) against a snapshot with the snapshot ID, you can find which segments are referenced by the snapshot.
 
-A table statistic file is a JSON file that save table statistic data, such as distinct values of table column.
-
 Databends saves actual table data in parquet files and considers each parquet file as a block. If you run [FUSE_BLOCK](../../../15-sql-functions/111-system-functions/fuse_block.md) against a snapshot with the snapshot ID, you can find which blocks are referenced by the snapshot.
 
 Databend creates a unique ID for each database and table for storing the snapshot, segment, and block files and saves them to your object storage in the path `<bucket_name>/[root]/<db_id>/<table_id>/`. Each snapshot, segment, and block file is named with a UUID (32-character lowercase hexadecimal string).
@@ -31,7 +29,6 @@ Databend creates a unique ID for each database and table for storing the snapsho
 | Snapshot | JSON    | `<32bitUUID>_<version>.json`    | `<bucket_name>/[root]/<db_id>/<table_id>/_ss/`   |
 | Segment  | JSON    | `<32bitUUID>_<version>.json`    | `<bucket_name>/[root]/<db_id>/<table_id>/_sg/`   |
 | Block    | parquet | `<32bitUUID>_<version>.parquet` | `<bucket_name>/[root]/<db_id>/<table_id>/_b/` |
-| Table statistic | JSON    | `<32bitUUID>_<version>.json`    | `<bucket_name>/[root]/<db_id>/<table_id>/_ts/`   |
 
 ## Table Optimization Considerations
 
@@ -68,12 +65,12 @@ Optimizing a table could be time-consuming, especially for large ones. Databend 
 
 ```sql
 OPTIMIZE TABLE [database.]table_name [ PURGE | COMPACT | ALL | [SEGMENT] [LIMIT <segment_count>]
-ANALYZE TABLE [database.]table_name
 ```
 
 - `OPTIMIZE TABLE <table_name> PURGE`
 
     Purges the historical data of table. Only the latest snapshot (including the segments, blocks and table statistic file referenced by this snapshot) will be kept.
+    (For more explanations of table statistic file, see [ANALYZE TABLE](./80-analyze-table.md).)
  
 - `OPTIMIZE TABLE <table_name> COMPACT [LIMIT <segment_count>]`
  
@@ -97,13 +94,6 @@ ANALYZE TABLE [database.]table_name
 - `OPTIMIZE TABLE <table_name>`
 
     Works the same way as `OPTIMIZE TABLE <table_name> PURGE`.
-
-- `ANALYZE TABLE <table_name>`
-
-    Estimates the number of distinct values of each column in a table. 
-    
-    - It does not display the estimated results after execution. To show the estimated results, use the function [FUSE_STATISTIC](../../../15-sql-functions/111-system-functions/fuse_statistic.md).
-    - The command does not identify distinct values by comparing them but by counting the number of storage segments and blocks. This might lead to a significant difference between the estimated results and the actual value, for example, multiple blocks holding the same value. In this case, Databend recommends compacting the storage segments and blocks to merge them as much as possible before you run the estimation.
 
 ## Examples
 
@@ -163,70 +153,4 @@ mysql> select snapshot_id, segment_count, block_count, row_count from fuse_snaps
 +----------------------------------+---------------+-------------+-----------+
 | 4f33a63031424ed095b8c2f9e8b15ecb |            16 |          16 |  10000005 |
 +----------------------------------+---------------+-------------+-----------+
-```
-
-This example estimates the number of distinct values for each column in a table and shows the results with the function FUSE_STATISTIC:
-
-```sql
-create table t(a uint64);
-
-insert into t values (5);
-insert into t values (6);
-insert into t values (7);
-
-select * from t order by a;
-
-----
-5
-6
-7
-
--- FUSE_STATISTIC will not return any results until you run an estimation with OPTIMIZE TABLE.
-select * from fuse_statistic('db_09_0020', 't');
-
-analyze table `t`;
-
-select * from fuse_statistic('db_09_0020', 't');
-
-----
-(0,3);
-
-
-insert into t values (5);
-insert into t values (6);
-insert into t values (7);
-
-select * from t order by a;
-
-----
-5
-5
-6
-6
-7
-7
-
--- FUSE_STATISTIC returns results of your last estimation. To get the most recent estimated values, run the estimation again.
--- OPTIMIZE TABLE does not identify distinct values by comparing them but by counting the number of storage segments and blocks.
-select * from fuse_statistic('db_09_0020', 't');
-
-----
-(0,3);
-
-analyze table `t`;
-
-select * from fuse_statistic('db_09_0020', 't');
-
-----
-(0,6);
-
--- Best practice: Compact the table before running the estimation.
-optimize table t compact;
-
-analyze table `t`;
-
-select * from fuse_statistic('db_09_0020', 't');
-
-----
-(0,3);
 ```
