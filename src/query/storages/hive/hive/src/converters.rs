@@ -17,13 +17,15 @@ use std::sync::Arc;
 use chrono::Utc;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::DataField;
+use common_expression::types::number::F32;
+use common_expression::types::number::F64;
 use common_expression::types::ArgType;
 use common_expression::types::DataType;
 use common_expression::types::NullableType;
 use common_expression::types::NumberType;
-use common_expression::types::number::F32;
-use common_expression::types::number::F64;
+use common_expression::DataField;
+use common_expression::DataSchema;
+use common_expression::SchemaDataType;
 use common_hive_meta_store as hms;
 use common_meta_app::schema::DatabaseIdent;
 use common_meta_app::schema::DatabaseInfo;
@@ -122,7 +124,7 @@ fn try_into_schema(hive_fields: Vec<hms::FieldSchema>) -> Result<DataSchema> {
     for field in hive_fields {
         let name = field.name.unwrap_or_default();
         let type_name = field.type_.unwrap_or_default();
-        let data_type = NullableType::new_impl(try_from_filed_type_name(type_name)?);
+        let data_type = todo!("expression");
         let field = DataField::new(&name, data_type);
         fields.push(field);
     }

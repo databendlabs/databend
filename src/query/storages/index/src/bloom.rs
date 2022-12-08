@@ -175,9 +175,7 @@ impl ChunkFilter {
     }
 
     /// Find all columns that match the pattern of `col = <constant>` in the expression.
-    pub fn find_eq_columns(
-        expr: &Expr<String>,
-    ) -> Result<Vec<String>> {
+    pub fn find_eq_columns(expr: &Expr<String>) -> Result<Vec<String>> {
         let mut cols = Vec::new();
         visit_expr_column_eq_constant(&mut expr.clone(), &mut |_, col_name, _, _| {
             cols.push(col_name.to_string());
@@ -216,7 +214,7 @@ impl ChunkFilter {
 
 fn visit_expr_column_eq_constant(
     expr: &mut Expr<String>,
-    visitor: &mut impl FnMut(Span, &str, &Scalar, &DataType) -> Result<Option<Expr<String>>> ,
+    visitor: &mut impl FnMut(Span, &str, &Scalar, &DataType) -> Result<Option<Expr<String>>>,
 ) -> Result<()> {
     // Find patterns like `Column = <constant>` or `<constant> = Column`.
     match expr {

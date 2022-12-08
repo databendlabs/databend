@@ -30,23 +30,9 @@ pub(crate) fn str_field_to_scalar(value: &str, data_type: &DataType) -> Result<S
             if value == HIVE_DEFAULT_PARTITION {
                 Ok(Scalar::Null)
             } else {
-                str_field_to_scalar(value, c)
+                str_field_to_scalar(value, c.as_ref())
             }
         }
-        DataType::String => Ok(Scalar::String(value.as_bytes().to_vec())),
-        DataType::Number(num_ty) => {
-            // use macro
-            todo!("expression")
-        }
-        _ => Err(ErrorCode::Unimplemented(format!(
-            "generate column failed, {:?}",
-            data_type
-        ))),
-    }
-}
-
-pub(crate) fn str_field_to_scalar(value: &str, data_type: &DataType) -> Result<Scalar> {
-    match data_type {
         DataType::String => Ok(Scalar::String(value.as_bytes().to_vec())),
         DataType::Number(num_ty) => match num_ty {
             NumberDataType::UInt8 => {

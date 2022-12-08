@@ -2256,6 +2256,7 @@ dependencies = [
  "databend-thrift",
  "futures",
  "opendal",
+ "ordered-float 3.4.0",
  "serde",
  "tracing",
  "typetag",

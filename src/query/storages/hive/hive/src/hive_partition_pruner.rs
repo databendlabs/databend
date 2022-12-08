@@ -19,11 +19,10 @@ use std::vec;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::RemoteExpr;
 use common_expression::types::DataType;
 use common_expression::DataSchema;
+use common_expression::RemoteExpr;
 use common_expression::Scalar;
-use common_planner::Expression;
 use common_storages_index::range_filter::RangeFilter;
 use common_storages_table_meta::meta::ColumnStatistics;
 use common_storages_table_meta::meta::StatisticsOfColumns;
@@ -75,11 +74,7 @@ impl HivePartitionPruner {
     }
 
     pub fn prune(&self, partitions: Vec<String>) -> Result<Vec<String>> {
-        let range_filter = RangeFilter::try_create(
-            self.ctx.clone(),
-            &self.filters,
-            self.partition_schema.clone(),
-        )?;
+        let range_filter = todo!("expression");
         let column_stats = self.get_column_stats(&partitions)?;
         let mut filted_partitions = vec![];
         for (idx, stats) in column_stats.into_iter().enumerate() {
