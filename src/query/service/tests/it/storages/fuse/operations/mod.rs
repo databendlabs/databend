@@ -13,6 +13,7 @@
 //  limitations under the License.
 
 #![allow(clippy::too_many_arguments)]
+mod analyze;
 mod commit;
 mod mutation;
 mod navigate;

@@ -837,7 +837,7 @@ impl TokenKind {
         match self {
             | TokenKind::ALL
             // | TokenKind::ANALYSE
-            | TokenKind::ANALYZE
+            // | TokenKind::ANALYZE
             | TokenKind::AND
             // | TokenKind::ANY
             | TokenKind::ASC
@@ -982,7 +982,7 @@ impl TokenKind {
         match self {
             | TokenKind::ALL
             // | TokenKind::ANALYSE
-            | TokenKind::ANALYZE
+            // | TokenKind::ANALYZE
             | TokenKind::AND
             | TokenKind::ANY
             | TokenKind::ASC

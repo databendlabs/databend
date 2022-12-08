@@ -19,6 +19,7 @@ use std::sync::Arc;
 
 use common_ast::ast::AlterTableAction;
 use common_ast::ast::AlterTableStmt;
+use common_ast::ast::AnalyzeTableStmt;
 use common_ast::ast::CompactTarget;
 use common_ast::ast::CreateTableSource;
 use common_ast::ast::CreateTableStmt;
@@ -70,6 +71,7 @@ use crate::optimizer::OptimizerContext;
 use crate::planner::semantic::normalize_identifier;
 use crate::planner::semantic::IdentifierNormalizer;
 use crate::plans::AlterTableClusterKeyPlan;
+use crate::plans::AnalyzeTablePlan;
 use crate::plans::CastExpr;
 use crate::plans::CreateTablePlanV2;
 use crate::plans::DescribeTablePlan;
@@ -811,7 +813,6 @@ impl<'a> Binder {
             match ast_action {
                 AstOptimizeTableAction::All => OptimizeTableAction::All,
                 AstOptimizeTableAction::Purge => OptimizeTableAction::Purge,
-                AstOptimizeTableAction::Statistic => OptimizeTableAction::Statistic,
                 AstOptimizeTableAction::Compact { target, limit } => {
                     let limit_cnt = match limit {
                         Some(Expr::Literal {
@@ -838,6 +839,33 @@ impl<'a> Binder {
             database,
             table,
             action,
+        })))
+    }
+
+    pub(in crate::planner::binder) async fn bind_analyze_table(
+        &mut self,
+        stmt: &AnalyzeTableStmt<'a>,
+    ) -> Result<Plan> {
+        let AnalyzeTableStmt {
+            catalog,
+            database,
+            table,
+        } = stmt;
+
+        let catalog = catalog
+            .as_ref()
+            .map(|catalog| normalize_identifier(catalog, &self.name_resolution_ctx).name)
+            .unwrap_or_else(|| self.ctx.get_current_catalog());
+        let database = database
+            .as_ref()
+            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
+            .unwrap_or_else(|| self.ctx.get_current_database());
+        let table = normalize_identifier(table, &self.name_resolution_ctx).name;
+
+        Ok(Plan::AnalyzeTable(Box::new(AnalyzeTablePlan {
+            catalog,
+            database,
+            table,
         })))
     }
 

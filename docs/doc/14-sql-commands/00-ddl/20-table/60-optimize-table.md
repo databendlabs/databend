@@ -67,7 +67,8 @@ Optimizing a table could be time-consuming, especially for large ones. Databend 
 ## Syntax
 
 ```sql
-OPTIMIZE TABLE [database.]table_name [ PURGE | COMPACT | ALL | STATISTIC ] [SEGMENT] [LIMIT <segment_count>]
+OPTIMIZE TABLE [database.]table_name [ PURGE | COMPACT | ALL | [SEGMENT] [LIMIT <segment_count>]
+ANALYZE TABLE [database.]table_name
 ```
 
 - `OPTIMIZE TABLE <table_name> PURGE`
@@ -97,7 +98,7 @@ OPTIMIZE TABLE [database.]table_name [ PURGE | COMPACT | ALL | STATISTIC ] [SEGM
 
     Works the same way as `OPTIMIZE TABLE <table_name> PURGE`.
 
-- `OPTIMIZE TABLE <table_name> STATISTIC`
+- `ANALYZE TABLE <table_name>`
 
     Estimates the number of distinct values of each column in a table. 
     
@@ -183,7 +184,7 @@ select * from t order by a;
 -- FUSE_STATISTIC will not return any results until you run an estimation with OPTIMIZE TABLE.
 select * from fuse_statistic('db_09_0020', 't');
 
-optimize table `t` statistic;
+analyze table `t`;
 
 select * from fuse_statistic('db_09_0020', 't');
 
@@ -212,7 +213,7 @@ select * from fuse_statistic('db_09_0020', 't');
 ----
 (0,3);
 
-optimize table `t` statistic;
+analyze table `t`;
 
 select * from fuse_statistic('db_09_0020', 't');
 
@@ -222,7 +223,7 @@ select * from fuse_statistic('db_09_0020', 't');
 -- Best practice: Compact the table before running the estimation.
 optimize table t compact;
 
-optimize table `t` statistic;
+analyze table `t`;
 
 select * from fuse_statistic('db_09_0020', 't');
 
