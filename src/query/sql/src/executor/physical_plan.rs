@@ -18,7 +18,7 @@ use common_catalog::plan::DataSourcePlan;
 use common_datablocks::DataBlock;
 use common_exception::Result;
 use common_expression::types::DataType;
-use common_expression::DataField;
+use common_expression::{Chunk, DataField, DataSchemaRefExt};
 use common_expression::DataSchemaRef;
 use common_expression::SchemaDataType;
 use common_meta_app::schema::TableInfo;
@@ -48,7 +48,8 @@ impl TableScan {
         let schema = self.source.schema();
         for (name, id) in self.name_mapping.iter() {
             let orig_field = schema.field_with_name(name)?;
-            fields.push(DataField::new(id.as_str(), orig_field.data_type().clone()));
+            let data_type = DataType::from(orig_field.data_type());
+            fields.push(DataField::new(id.as_str(), data_type));
         }
         Ok(DataSchemaRefExt::create(fields))
     }
@@ -116,16 +117,14 @@ impl AggregatePartial {
         let input_schema = self.input.output_schema()?;
         let mut fields = Vec::with_capacity(self.agg_funcs.len() + self.group_by.len());
         for agg in self.agg_funcs.iter() {
-            fields.push(DataField::new(agg.column_id.as_str(), Vu8::to_data_type()));
+            fields.push(DataField::new(agg.column_id.as_str(), DataType::String));
         }
         if !self.group_by.is_empty() {
-            let sample_block = DataBlock::empty_with_schema(input_schema.clone());
-            let method = DataBlock::choose_hash_method(
-                &sample_block,
+            let method = Chunk::choose_hash_method_with_types(
                 &self
                     .group_by
                     .iter()
-                    .map(|name| input_schema.index_of(name))
+                    .map(|name| Ok(input_schema.field_with_name(name)?.data_type().clone()))
                     .collect::<Result<Vec<_>>>()?,
             )?;
             fields.push(DataField::new("_group_by_key", method.data_type()));
@@ -208,7 +207,7 @@ impl HashJoin {
                 for field in self.build.output_schema()?.fields() {
                     fields.push(DataField::new(
                         field.name().as_str(),
-                        SchemaDataType::Nullable(Box::new(field.data_type().clone())),
+                        DataType::Nullable(Box::new(field.data_type().clone())),
                     ));
                 }
             }
@@ -217,7 +216,7 @@ impl HashJoin {
                 for field in self.probe.output_schema()?.fields() {
                     fields.push(DataField::new(
                         field.name().as_str(),
-                        SchemaDataType::Nullable(Box::new(field.data_type().clone())),
+                        DataType::Nullable(Box::new(field.data_type().clone())),
                     ));
                 }
                 for field in self.build.output_schema()?.fields() {
@@ -232,13 +231,13 @@ impl HashJoin {
                 for field in self.probe.output_schema()?.fields() {
                     fields.push(DataField::new(
                         field.name().as_str(),
-                        SchemaDataType::Nullable(Box::new(field.data_type().clone())),
+                        DataType::Nullable(Box::new(field.data_type().clone())),
                     ));
                 }
                 for field in self.build.output_schema()?.fields() {
                     fields.push(DataField::new(
                         field.name().as_str(),
-                        SchemaDataType::Nullable(Box::new(field.data_type().clone())),
+                        DataType::Nullable(Box::new(field.data_type().clone())),
                     ));
                 }
             }
@@ -264,7 +263,7 @@ impl HashJoin {
                 };
                 fields.push(DataField::new(
                     name.as_str(),
-                    SchemaDataType::Nullable(Box::new(SchemaDataType::Boolean)),
+                    DataType::Nullable(Box::new(DataType::Boolean)),
                 ));
             }
 
@@ -370,8 +369,8 @@ pub struct DistributedInsertSelect {
 impl DistributedInsertSelect {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
         Ok(DataSchemaRefExt::create(vec![
-            DataField::new("seg_loc", Vu8::to_data_type()),
-            DataField::new("seg_info", Vu8::to_data_type()),
+            DataField::new("seg_loc", DataType::String),
+            DataField::new("seg_info", DataType::String),
         ]))
     }
 }
@@ -426,7 +425,7 @@ impl PhysicalPlan {
         }
     }
 
-    pub fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a PhysicalPlan> + 'a> {
+    pub fn children<'a>(&'a self) -> Box<dyn Iterator<Item=&'a PhysicalPlan> + 'a> {
         match self {
             PhysicalPlan::TableScan(_) => Box::new(std::iter::empty()),
             PhysicalPlan::Filter(plan) => Box::new(std::iter::once(plan.input.as_ref())),

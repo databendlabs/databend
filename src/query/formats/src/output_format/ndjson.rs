@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use common_exception::Result;
-use common_expression::Chunk;
+use common_expression::{Chunk, TableSchema, TableSchemaRef};
 use common_expression::Column;
 use common_expression::DataSchemaRef;
 
@@ -28,14 +28,14 @@ pub struct NDJSONOutputFormatBase<
     const WITH_NAMES: bool,
     const WITH_TYPES: bool,
 > {
-    schema: DataSchemaRef,
+    schema: TableSchemaRef,
     field_encoder: FieldEncoderJSON,
 }
 
 impl<const STRINGS: bool, const COMPACT: bool, const WITH_NAMES: bool, const WITH_TYPES: bool>
     NDJSONOutputFormatBase<STRINGS, COMPACT, WITH_NAMES, WITH_TYPES>
 {
-    pub fn create(schema: DataSchemaRef, options: &FileFormatOptionsExt) -> Self {
+    pub fn create(schema: TableSchemaRef, options: &FileFormatOptionsExt) -> Self {
         let field_encoder = FieldEncoderJSON::create(options);
         Self {
             schema,

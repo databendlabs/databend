@@ -14,18 +14,7 @@
 
 use std::sync::Arc;
 
-<<<<<<< HEAD
-=======
 use common_arrow::arrow::bitmap::Bitmap;
-use common_datablocks::DataBlock;
-use common_datavalues::ColumnRef;
-use common_datavalues::ConstColumn;
-use common_datavalues::DataField;
-use common_datavalues::DataTypeImpl;
-use common_datavalues::NullableColumn;
-use common_datavalues::Series;
-use common_datavalues::SeriesFrom;
->>>>>>> main
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::AnyType;
@@ -39,19 +28,14 @@ use common_expression::Scalar;
 use common_expression::Value;
 
 use crate::hive_partition::HivePartInfo;
-<<<<<<< HEAD
 use crate::utils::str_field_to_column;
-=======
 use crate::hive_table::HIVE_DEFAULT_PARTITION;
->>>>>>> main
 
 #[derive(Debug, Clone)]
 pub struct HivePartitionFiller {
     pub partition_fields: Vec<DataField>,
 }
 
-<<<<<<< HEAD
-=======
 macro_rules! generate_primitive_column {
     ($T:ty, $num_rows:expr, $value:expr) => {{
         let column = Series::from_data(vec![$value.parse::<$T>().unwrap()]);
@@ -73,7 +57,6 @@ fn generate_string_column(num_rows: usize, value: String) -> Result<ColumnRef> {
     )))
 }
 
->>>>>>> main
 impl HivePartitionFiller {
     pub fn create(partition_fields: Vec<DataField>) -> Self {
         HivePartitionFiller { partition_fields }
@@ -84,34 +67,9 @@ impl HivePartitionFiller {
         num_rows: usize,
         value: String,
         field: &DataField,
-<<<<<<< HEAD
     ) -> Result<Value<AnyType>> {
         let column = str_field_to_column(num_rows, value, field.data_type())?;
         Ok(Value::Column(column))
-=======
-    ) -> Result<ColumnRef> {
-        let t = match field.data_type() {
-            DataTypeImpl::Nullable(v) => v.inner_type(),
-            _ => field.data_type(),
-        };
-        match t {
-            DataTypeImpl::String(_) => generate_string_column(num_rows, value),
-            DataTypeImpl::Int8(_) => generate_primitive_column!(i8, num_rows, value),
-            DataTypeImpl::Int16(_) => generate_primitive_column!(i16, num_rows, value),
-            DataTypeImpl::Int32(_) => generate_primitive_column!(i32, num_rows, value),
-            DataTypeImpl::Int64(_) => generate_primitive_column!(i64, num_rows, value),
-            DataTypeImpl::UInt8(_) => generate_primitive_column!(u8, num_rows, value),
-            DataTypeImpl::UInt16(_) => generate_primitive_column!(u16, num_rows, value),
-            DataTypeImpl::UInt32(_) => generate_primitive_column!(u32, num_rows, value),
-            DataTypeImpl::UInt64(_) => generate_primitive_column!(u64, num_rows, value),
-            DataTypeImpl::Float32(_) => generate_primitive_column!(f32, num_rows, value),
-            DataTypeImpl::Float64(_) => generate_primitive_column!(f64, num_rows, value),
-            _ => Err(ErrorCode::Unimplemented(format!(
-                "generate column failed, {:?}",
-                field
-            ))),
-        }
->>>>>>> main
     }
 
     fn extract_partition_values(&self, hive_part: &HivePartInfo) -> Result<Vec<String>> {

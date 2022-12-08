@@ -29,7 +29,7 @@ use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
-use common_expression::Chunk;
+use common_expression::{Chunk, TableField, TableSchemaRef, TableSchemaRefExt};
 use common_expression::ColumnBuilder;
 use common_expression::DataField;
 use common_expression::DataSchemaRef;
@@ -60,7 +60,7 @@ pub struct TracingTable {
 impl TracingTable {
     pub fn create(table_id: u64) -> Self {
         let schema =
-            DataSchemaRefExt::create(vec![DataField::new("entry", SchemaDataType::String)]);
+            TableSchemaRefExt::create(vec![TableField::new("entry", SchemaDataType::String)]);
 
         let table_info = TableInfo {
             desc: "'system'.'tracing'".to_string(),
@@ -146,7 +146,7 @@ impl Table for TracingTable {
 
 struct TracingSource {
     rows_pre_block: usize,
-    schema: DataSchemaRef,
+    schema: TableSchemaRef,
     tracing_files: VecDeque<String>,
     data_blocks: VecDeque<Chunk>,
 }
@@ -157,7 +157,7 @@ impl TracingSource {
         output: Arc<OutputPort>,
         rows: usize,
         log_files: VecDeque<String>,
-        schema: DataSchemaRef,
+        schema: TableSchemaRef,
     ) -> Result<ProcessorPtr> {
         SyncSourcer::create(ctx, output, TracingSource {
             schema,

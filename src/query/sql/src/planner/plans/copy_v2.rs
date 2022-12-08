@@ -17,7 +17,7 @@ use std::fmt::Formatter;
 use std::str::FromStr;
 
 use common_catalog::plan::DataSourcePlan;
-use common_expression::DataSchemaRef;
+use common_expression::{DataSchemaRef, TableSchemaRef};
 use common_meta_types::MetaId;
 use common_meta_types::UserStageInfo;
 
@@ -61,7 +61,7 @@ pub enum CopyPlanV2 {
         database_name: String,
         table_name: String,
         table_id: MetaId,
-        schema: DataSchemaRef,
+        schema: TableSchemaRef,
         validation_mode: ValidationMode,
         from: Box<DataSourcePlan>,
         force: bool,

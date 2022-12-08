@@ -57,13 +57,6 @@ impl HivePartitionPruner {
             for (index, singe_value) in partition.split('/').enumerate() {
                 let kv = singe_value.split('=').collect::<Vec<&str>>();
                 let field = self.partition_schema.fields()[index].clone();
-<<<<<<< HEAD
-                let scalar = str_field_to_scalar(kv[1], field.data_type())?;
-                let column_stats = ColumnStatistics {
-                    min: scalar.clone(),
-                    max: scalar,
-                    null_count: 0,
-=======
                 let t = match field.data_type() {
                     DataTypeImpl::Nullable(v) => v.inner_type(),
                     _ => field.data_type(),
@@ -102,7 +95,6 @@ impl HivePartitionPruner {
                     min: v.clone(),
                     max: v,
                     null_count,
->>>>>>> main
                     in_memory_size: 0,
                     distinct_of_values: None,
                 };

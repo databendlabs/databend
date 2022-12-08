@@ -20,7 +20,7 @@ use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::utils::ColumnFrom;
-use common_expression::Chunk;
+use common_expression::{Chunk, TableField, TableSchemaRefExt};
 use common_expression::Column;
 use common_expression::DataField;
 use common_expression::DataSchemaRefExt;
@@ -74,9 +74,9 @@ impl AsyncSystemTable for EnginesTable {
 
 impl EnginesTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
-        let schema = DataSchemaRefExt::create(vec![
-            DataField::new("Engine", SchemaDataType::String),
-            DataField::new("Comment", SchemaDataType::String),
+        let schema = TableSchemaRefExt::create(vec![
+            TableField::new("Engine", SchemaDataType::String),
+            TableField::new("Comment", SchemaDataType::String),
         ]);
 
         let table_info = TableInfo {

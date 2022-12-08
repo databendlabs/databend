@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use common_expression::DataSchemaRef;
+use common_expression::{DataSchemaRef, TableSchemaRef};
 use common_expression::Expr;
 use common_expression::RemoteExpr;
 // use common_sql::executor::ExpressionOp;
@@ -105,7 +105,7 @@ impl Pruner for FilterPruner {
 pub fn new_filter_pruner(
     ctx: &Arc<dyn TableContext>,
     filter_exprs: Option<&[RemoteExpr<String>]>,
-    schema: &DataSchemaRef,
+    schema: TableSchemaRef,
     dal: Operator,
 ) -> Result<Option<Arc<dyn Pruner + Send + Sync>>> {
     todo!("expression");

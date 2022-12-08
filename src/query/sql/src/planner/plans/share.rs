@@ -133,9 +133,9 @@ pub struct DescSharePlan {
 impl DescSharePlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::new(vec![
-            DataField::new("Kind", SchemaDataType::String),
-            DataField::new("Name", SchemaDataType::String),
-            DataField::new("Shared_on", SchemaDataType::String),
+            DataField::new("Kind", DataType::String),
+            DataField::new("Name", DataType::String),
+            DataField::new("Shared_on", DataType::String),
         ]))
     }
 }
@@ -147,13 +147,13 @@ pub struct ShowSharesPlan {}
 impl ShowSharesPlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::new(vec![
-            DataField::new("Created_on", SchemaDataType::String),
-            DataField::new("Kind", SchemaDataType::String),
-            DataField::new("Name", SchemaDataType::String),
-            DataField::new("Database_name", SchemaDataType::String),
-            DataField::new("From", SchemaDataType::String),
-            DataField::new("To", SchemaDataType::String),
-            DataField::new("Comment", SchemaDataType::String),
+            DataField::new("Created_on", DataType::String),
+            DataField::new("Kind", DataType::String),
+            DataField::new("Name", DataType::String),
+            DataField::new("Database_name", DataType::String),
+            DataField::new("From", DataType::String),
+            DataField::new("To", DataType::String),
+            DataField::new("Comment", DataType::String),
         ]))
     }
 }
@@ -167,9 +167,9 @@ pub struct ShowObjectGrantPrivilegesPlan {
 impl ShowObjectGrantPrivilegesPlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::new(vec![
-            DataField::new("Granted_on", SchemaDataType::String),
-            DataField::new("Privilege", SchemaDataType::String),
-            DataField::new("Share_name", SchemaDataType::String),
+            DataField::new("Granted_on", DataType::String),
+            DataField::new("Privilege", DataType::String),
+            DataField::new("Share_name", DataType::String),
         ]))
     }
 }
@@ -183,8 +183,8 @@ pub struct ShowGrantTenantsOfSharePlan {
 impl ShowGrantTenantsOfSharePlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::new(vec![
-            DataField::new("Granted_on", SchemaDataType::String),
-            DataField::new("Account", SchemaDataType::String),
+            DataField::new("Granted_on", DataType::String),
+            DataField::new("Account", DataType::String),
         ]))
     }
 }

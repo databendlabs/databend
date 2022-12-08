@@ -25,6 +25,7 @@ use common_exception::Result;
 use common_expression::DataField;
 use common_expression::DataSchemaRefExt;
 use common_expression::SchemaDataType;
+use common_expression::types::DataType;
 use common_meta_app::schema::CatalogMeta;
 use common_meta_app::schema::CatalogType;
 
@@ -68,8 +69,8 @@ impl<'a> Binder {
         let ShowCreateCatalogStmt { catalog } = stmt;
         let catalog = normalize_identifier(catalog, &self.name_resolution_ctx).name;
         let schema = DataSchemaRefExt::create(vec![
-            DataField::new("Catalog", SchemaDataType::String),
-            DataField::new("Create Catalog", SchemaDataType::String),
+            DataField::new("Catalog", DataType::String),
+            DataField::new("Create Catalog", DataType::String),
         ]);
         Ok(Plan::ShowCreateCatalog(Box::new(ShowCreateCatalogPlan {
             catalog,

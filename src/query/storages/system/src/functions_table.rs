@@ -19,7 +19,7 @@ use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::utils::ColumnFrom;
-use common_expression::Chunk;
+use common_expression::{Chunk, TableField, TableSchemaRefExt};
 use common_expression::Column;
 use common_expression::DataField;
 use common_expression::DataSchemaRefExt;
@@ -172,15 +172,15 @@ impl AsyncSystemTable for FunctionsTable {
 
 impl FunctionsTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
-        let schema = DataSchemaRefExt::create(vec![
-            DataField::new("name", SchemaDataType::String),
-            DataField::new("is_builtin", SchemaDataType::Boolean),
-            DataField::new("is_aggregate", SchemaDataType::Boolean),
-            DataField::new("definition", SchemaDataType::String),
-            DataField::new("category", SchemaDataType::String),
-            DataField::new("description", SchemaDataType::String),
-            DataField::new("syntax", SchemaDataType::String),
-            DataField::new("example", SchemaDataType::String),
+        let schema = TableSchemaRefExt::create(vec![
+            TableField::new("name", SchemaDataType::String),
+            TableField::new("is_builtin", SchemaDataType::Boolean),
+            TableField::new("is_aggregate", SchemaDataType::Boolean),
+            TableField::new("definition", SchemaDataType::String),
+            TableField::new("category", SchemaDataType::String),
+            TableField::new("description", SchemaDataType::String),
+            TableField::new("syntax", SchemaDataType::String),
+            TableField::new("example", SchemaDataType::String),
         ]);
 
         let table_info = TableInfo {

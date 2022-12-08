@@ -60,7 +60,7 @@ impl ChunkOperator {
             }
 
             ChunkOperator::Filter { expr } => {
-                let registry = BUILTIN_FUNCTIONS;
+                let registry = &BUILTIN_FUNCTIONS;
                 let evaluator = Evaluator::new(&input, func_ctx.tz, &registry);
                 let filter = evaluator
                     .run(expr)

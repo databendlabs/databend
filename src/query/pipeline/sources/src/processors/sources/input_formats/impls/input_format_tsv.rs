@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::DataSchemaRef;
+use common_expression::{DataSchemaRef, TableSchemaRef};
 use common_expression::TypeDeserializer;
 use common_formats::FieldDecoder;
 use common_formats::FieldDecoderRowBased;
@@ -40,7 +40,7 @@ impl InputFormatTSV {
         field_decoder: &FieldDecoderTSV,
         buf: &[u8],
         deserializers: &mut Vec<Box<dyn TypeDeserializer>>,
-        schema: &DataSchemaRef,
+        schema: &TableSchemaRef,
         path: &str,
         batch_id: usize,
         offset: usize,

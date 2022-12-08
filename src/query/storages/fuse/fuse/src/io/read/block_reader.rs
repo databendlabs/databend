@@ -32,7 +32,7 @@ use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::Projection;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::Chunk;
+use common_expression::{Chunk, TableSchema, TableSchemaRef};
 use common_expression::DataSchemaRef;
 use common_storage::ColumnLeaf;
 use common_storage::ColumnLeaves;
@@ -52,7 +52,7 @@ use crate::fuse_part::FusePartInfo;
 pub struct BlockReader {
     operator: Operator,
     projection: Projection,
-    projected_schema: DataSchemaRef,
+    projected_schema: TableSchemaRef,
     column_leaves: ColumnLeaves,
     parquet_schema_descriptor: SchemaDescriptor,
 }
@@ -60,13 +60,13 @@ pub struct BlockReader {
 impl BlockReader {
     pub fn create(
         operator: Operator,
-        schema: DataSchemaRef,
+        schema: TableSchemaRef,
         projection: Projection,
     ) -> Result<Arc<BlockReader>> {
         let projected_schema = match projection {
-            Projection::Columns(ref indices) => DataSchemaRef::new(schema.project(indices)),
+            Projection::Columns(ref indices) => TableSchemaRef::new(schema.project(indices)),
             Projection::InnerColumns(ref path_indices) => {
-                DataSchemaRef::new(schema.inner_project(path_indices))
+                TableSchemaRef::new(schema.inner_project(path_indices))
             }
         };
 

@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::DataSchemaRef;
+use common_expression::{DataSchemaRef, TableSchemaRef};
 use common_expression::RemoteExpr;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::ColumnStatistics;
@@ -29,7 +29,7 @@ pub(crate) struct TopNPrunner {
 
 impl TopNPrunner {
     pub(crate) fn new(
-        schema: DataSchemaRef,
+        schema: TableSchemaRef,
         sort: Vec<(RemoteExpr<String>, bool, bool)>,
         limit: usize,
     ) -> Self {

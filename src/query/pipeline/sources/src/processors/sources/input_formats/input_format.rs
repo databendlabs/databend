@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_expression::DataSchema;
+use common_expression::{DataSchema, TableSchemaRef};
 use common_expression::DataSchemaRef;
 use common_meta_types::UserStageInfo;
 use common_pipeline_core::Pipeline;
@@ -35,7 +35,7 @@ pub trait InputFormat: Send + Sync {
         settings: &Arc<Settings>,
     ) -> Result<Vec<Arc<SplitInfo>>>;
 
-    async fn infer_schema(&self, path: &str, op: &Operator) -> Result<DataSchemaRef>;
+    async fn infer_schema(&self, path: &str, op: &Operator) -> Result<TableSchemaRef>;
 
     fn exec_copy(&self, ctx: Arc<InputContext>, pipeline: &mut Pipeline) -> Result<()>;
 

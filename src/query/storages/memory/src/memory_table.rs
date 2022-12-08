@@ -31,7 +31,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::AnyType;
 use common_expression::types::DataType;
-use common_expression::Chunk;
+use common_expression::{Chunk, TableSchemaRef};
 use common_expression::DataSchemaRef;
 use common_expression::InMemoryData;
 use common_expression::Value;
@@ -267,7 +267,7 @@ impl Table for MemoryTable {
 
 struct MemoryTableSource {
     extras: Option<PushDownInfo>,
-    schema: DataSchemaRef,
+    schema: TableSchemaRef,
     data_blocks: Arc<Mutex<VecDeque<Chunk>>>,
 }
 
@@ -275,7 +275,7 @@ impl MemoryTableSource {
     pub fn create(
         ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
-        schema: DataSchemaRef,
+        schema: TableSchemaRef,
         data_blocks: Arc<Mutex<VecDeque<Chunk>>>,
         extras: Option<PushDownInfo>,
     ) -> Result<ProcessorPtr> {

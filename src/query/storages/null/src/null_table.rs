@@ -82,7 +82,7 @@ impl Table for NullTable {
         pipeline.add_pipe(Pipe::SimplePipe {
             inputs_port: vec![],
             outputs_port: vec![output.clone()],
-            processors: vec![NullSource::create(ctx, output, schema)?],
+            processors: vec![NullSource::create(ctx, output)?],
         });
 
         Ok(())
@@ -102,18 +102,15 @@ impl Table for NullTable {
 
 struct NullSource {
     finish: bool,
-    _schema: DataSchemaRef,
 }
 
 impl NullSource {
     pub fn create(
         ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
-        _schema: DataSchemaRef,
     ) -> Result<ProcessorPtr> {
         SyncSourcer::create(ctx, output, NullSource {
             finish: false,
-            _schema,
         })
     }
 }

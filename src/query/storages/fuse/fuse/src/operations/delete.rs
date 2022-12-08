@@ -14,16 +14,13 @@
 
 use std::sync::Arc;
 
-use common_catalog::plan::Expression;
 use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::DataField;
+use common_expression::TableField;
 use common_expression::RemoteExpr;
-// use common_sql::ExpressionParser;
 use common_storages_table_meta::meta::TableSnapshot;
 
 use crate::operations::mutation::delete_from_block;
@@ -109,7 +106,7 @@ impl FuseTable {
             &push_downs,
             segments_location,
         )
-        .await?;
+            .await?;
 
         // delete block one by one.
         // this could be executed in a distributed manner (till new planner, pipeline settled down)
@@ -152,7 +149,7 @@ impl FuseTable {
             summary,
             abort_operation,
         )
-        .await
+            .await
     }
 
     fn cluster_stats_gen(&self) -> Result<ClusterStatsGenerator> {
@@ -170,7 +167,7 @@ impl FuseTable {
             let cname = expr.column_name();
             let index = match merged.iter().position(|x| x.name() == &cname) {
                 None => {
-                    let field = DataField::new(&cname, expr.data_type());
+                    let field = TableField::new(&cname, expr.data_type());
                     merged.push(field);
 
                     extra_key_index.push(merged.len() - 1);

@@ -22,7 +22,7 @@ use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::utils::ColumnFrom;
-use common_expression::Chunk;
+use common_expression::{Chunk, TableField, TableSchemaRef, TableSchemaRefExt};
 use common_expression::Column;
 use common_expression::DataField;
 use common_expression::DataSchema;
@@ -252,27 +252,27 @@ where TablesTable<T>: HistoryAware
 impl<const T: bool> TablesTable<T>
 where TablesTable<T>: HistoryAware
 {
-    pub fn schema() -> Arc<DataSchema> {
-        DataSchemaRefExt::create(vec![
-            DataField::new("database", SchemaDataType::String),
-            DataField::new("name", SchemaDataType::String),
-            DataField::new("engine", SchemaDataType::String),
-            DataField::new("cluster_by", SchemaDataType::String),
-            DataField::new("created_on", SchemaDataType::String),
-            DataField::new("dropped_on", SchemaDataType::String),
-            DataField::new(
+    pub fn schema() -> TableSchemaRef {
+        TableSchemaRefExt::create(vec![
+            TableField::new("database", SchemaDataType::String),
+            TableField::new("name", SchemaDataType::String),
+            TableField::new("engine", SchemaDataType::String),
+            TableField::new("cluster_by", SchemaDataType::String),
+            TableField::new("created_on", SchemaDataType::String),
+            TableField::new("dropped_on", SchemaDataType::String),
+            TableField::new(
                 "num_rows",
                 SchemaDataType::Nullable(Box::new(SchemaDataType::Number(NumberDataType::UInt64))),
             ),
-            DataField::new(
+            TableField::new(
                 "data_size",
                 SchemaDataType::Nullable(Box::new(SchemaDataType::Number(NumberDataType::UInt64))),
             ),
-            DataField::new(
+            TableField::new(
                 "data_compressed_size",
                 SchemaDataType::Nullable(Box::new(SchemaDataType::Number(NumberDataType::UInt64))),
             ),
-            DataField::new(
+            TableField::new(
                 "index_size",
                 SchemaDataType::Nullable(Box::new(SchemaDataType::Number(NumberDataType::UInt64))),
             ),

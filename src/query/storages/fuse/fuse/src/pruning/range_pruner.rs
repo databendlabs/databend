@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use common_expression::DataSchemaRef;
+use common_expression::{DataSchemaRef, TableSchemaRef};
 use common_expression::Expr;
 use common_expression::RemoteExpr;
 use common_storages_index::RangeFilter;
@@ -59,7 +59,7 @@ impl RangePruner for RangeFilter {
 pub fn new_range_pruner<'a>(
     ctx: &Arc<dyn TableContext>,
     filter_expr: Option<&'a [RemoteExpr<String>]>,
-    schema: &'a DataSchemaRef,
+    schema: &'a TableSchemaRef,
 ) -> Result<Arc<dyn RangePruner + Send + Sync>> {
     Ok(match filter_expr {
         Some(exprs) if !exprs.is_empty() => {

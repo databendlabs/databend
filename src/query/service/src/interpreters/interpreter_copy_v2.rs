@@ -168,7 +168,7 @@ impl CopyInterpreterV2 {
                     catalog.clone(),
                     &mut do_copy_stage_files,
                 )
-                .await?;
+                    .await?;
             }
         }
         if !do_copy_stage_files.is_empty() {
@@ -180,7 +180,7 @@ impl CopyInterpreterV2 {
                 catalog.clone(),
                 &mut do_copy_stage_files,
             )
-            .await?;
+                .await?;
         }
 
         Ok(())
@@ -286,7 +286,7 @@ impl CopyInterpreterV2 {
                 table_name,
                 all_source_file_infos,
             )
-            .await?;
+                .await?;
 
             // Need copied file info.
         }
@@ -341,26 +341,6 @@ impl CopyInterpreterV2 {
             )?;
         }
 
-<<<<<<< HEAD
-            let schema = stage_table_info.schema.clone();
-            let stage_info = stage_table_info.user_stage_info.clone();
-            let compact_threshold = stage_table.get_chunk_compact_thresholds();
-            let input_ctx = Arc::new(
-                InputContext::try_create_from_copy(
-                    operator,
-                    settings,
-                    schema,
-                    stage_info,
-                    splits,
-                    ctx.get_scan_progress(),
-                    compact_threshold,
-                )
-                .await?,
-            );
-            input_ctx
-                .format
-                .exec_copy(input_ctx.clone(), &mut build_res.main_pipeline)?;
-=======
         // Build append data pipeline.
         to_table.append_data(
             ctx.clone(),
@@ -368,7 +348,6 @@ impl CopyInterpreterV2 {
             AppendMode::Copy,
             false,
         )?;
->>>>>>> main
 
         // Pipeline finish.
         // 1. commit the data
@@ -390,103 +369,6 @@ impl CopyInterpreterV2 {
                 let tenant = tenant.clone();
                 let database_name = database_name.clone();
                 let catalog = catalog.clone();
-
-<<<<<<< HEAD
-            // Build append data pipeline.
-            to_table.append_data(
-                ctx.clone(),
-                &mut build_res.main_pipeline,
-                AppendMode::Copy,
-                false,
-            )?;
-
-            // Pipeline finish.
-            // 1. commit the data
-            // 2. purge the copied files
-            // 3. update the NeedCopy file into to meta
-            let stage_table_info_clone = stage_table_info.clone();
-            let catalog = self.ctx.get_catalog(catalog_name)?;
-            let tenant = self.ctx.get_tenant();
-            let database_name = database_name.to_string();
-            let table_id = to_table.get_id();
-            build_res.main_pipeline.set_on_finished(move |may_error| {
-                if may_error.is_none() {
-                    // capture out variable
-                    let ctx = ctx.clone();
-                    let to_table = to_table.clone();
-                    let stage_info = stage_table_info_clone.user_stage_info.clone();
-                    let all_source_files = all_source_file_infos.clone();
-                    let need_copied_files = need_copied_file_infos.clone();
-                    let tenant = tenant.clone();
-                    let database_name = database_name.clone();
-                    let catalog = catalog.clone();
-
-                    let mut copied_files = BTreeMap::new();
-                    for file in &need_copied_files {
-                        // Short the etag to 7 bytes for less space in metasrv.
-                        let short_etag = file.etag.clone().map(|mut v| {
-                            v.truncate(7);
-                            v
-                        });
-                        copied_files.insert(file.path.clone(), TableCopiedFileInfo {
-                            etag: short_etag,
-                            content_length: file.size,
-                            last_modified: Some(file.last_modified),
-                        });
-                    }
-
-                    return GlobalIORuntime::instance().block_on(async move {
-                        // 1. Commit datas.
-                        let operations = ctx.consume_precommit_chunks();
-                        info!(
-                            "copy: try to commit operations:{}, elapsed:{}",
-                            operations.len(),
-                            start.elapsed().as_secs()
-                        );
-                        to_table
-                            .commit_insertion(ctx.clone(), operations, false)
-                            .await?;
-
-                        // 2. Try to purge copied files if purge option is true, if error will skip.
-                        // If a file is already copied(status with AlreadyCopied) we will try to purge them.
-
-                        if stage_info.copy_options.purge {
-                            info!(
-                                "copy: try to purge files:{}, elapsed:{}",
-                                all_source_files.len(),
-                                start.elapsed().as_secs()
-                            );
-                            CopyInterpreterV2::try_purge_files(
-                                ctx.clone(),
-                                &stage_info,
-                                &all_source_files,
-                            )
-                            .await;
-                        }
-
-                        // 3. Upsert files(status with NeedCopy) info to meta.
-                        info!(
-                            "copy: try to upsert file infos:{} to meta, elapsed:{}",
-                            copied_files.len(),
-                            start.elapsed().as_secs()
-                        );
-                        CopyInterpreterV2::upsert_copied_files_info_to_meta(
-                            &ctx,
-                            tenant,
-                            database_name,
-                            table_id,
-                            catalog,
-                            copied_files,
-                        )
-                        .await?;
-
-                        info!(
-                            "copy: all copy finished, elapsed:{}",
-                            start.elapsed().as_secs()
-                        );
-
-                        Ok(())
-=======
                 let mut copied_files = BTreeMap::new();
                 for file in &need_copied_files {
                     // Short the etag to 7 bytes for less space in metasrv.
@@ -498,7 +380,6 @@ impl CopyInterpreterV2 {
                         etag: short_etag,
                         content_length: file.size,
                         last_modified: Some(file.last_modified),
->>>>>>> main
                     });
                 }
 
@@ -528,7 +409,7 @@ impl CopyInterpreterV2 {
                             &stage_info,
                             &all_source_files,
                         )
-                        .await;
+                            .await;
                     }
 
                     // 3. Upsert files(status with NeedCopy) info to meta.
@@ -545,7 +426,7 @@ impl CopyInterpreterV2 {
                         catalog,
                         copied_files,
                     )
-                    .await?;
+                        .await?;
 
                     info!(
                         "copy: all copy finished, elapsed:{}",
@@ -587,7 +468,7 @@ impl Interpreter for CopyInterpreterV2 {
                         *force,
                         table_info,
                     )
-                    .await
+                        .await
                 }
                 other => Err(ErrorCode::Internal(format!(
                     "Cannot list files for the source info: {:?}",

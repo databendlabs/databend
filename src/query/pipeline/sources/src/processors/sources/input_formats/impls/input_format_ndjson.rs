@@ -18,7 +18,7 @@ use std::sync::Arc;
 use bstr::ByteSlice;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::DataSchemaRef;
+use common_expression::{DataSchemaRef, TableSchemaRef};
 use common_expression::TypeDeserializer;
 use common_formats::FieldDecoder;
 use common_formats::FieldJsonAstDecoder;
@@ -37,7 +37,7 @@ impl InputFormatNDJson {
         field_decoder: &FieldJsonAstDecoder,
         buf: &[u8],
         deserializers: &mut [Box<dyn TypeDeserializer>],
-        schema: &DataSchemaRef,
+        schema: &TableSchemaRef,
     ) -> Result<()> {
         let mut json: serde_json::Value = serde_json::from_reader(buf)?;
         // if it's not case_sensitive, we convert to lowercase

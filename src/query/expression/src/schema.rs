@@ -14,6 +14,7 @@
 
 use std::borrow::Cow;
 use std::collections::BTreeMap;
+use std::intrinsics::unreachable;
 use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::Bitmap;
@@ -61,6 +62,19 @@ pub struct DataSchema {
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct DataField {
+    name: String,
+    default_expr: Option<String>,
+    data_type: DataType,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct TableSchema {
+    pub(crate) fields: Vec<TableField>,
+    pub(crate) metadata: BTreeMap<String, String>,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+pub struct TableField {
     name: String,
     default_expr: Option<String>,
     data_type: SchemaDataType,
@@ -198,6 +212,177 @@ impl DataSchema {
     }
 
     /// project with inner columns by path.
+    // pub fn inner_project(&self, path_indices: &BTreeMap<usize, Vec<usize>>) -> Self {
+    //     let paths: Vec<Vec<usize>> = path_indices.values().cloned().collect();
+    //     let fields = paths
+    //         .iter()
+    //         .map(|path| Self::traverse_paths(self.fields(), path).unwrap())
+    //         .collect();
+    //     Self::new_from(fields, self.meta().clone())
+    // }
+    //
+    // fn traverse_paths(fields: &[DataField], path: &[usize]) -> Result<DataField> {
+    //     if path.is_empty() {
+    //         return Err(ErrorCode::BadArguments(
+    //             "path should not be empty".to_string(),
+    //         ));
+    //     }
+    //     let field = &fields[path[0]];
+    //     if path.len() == 1 {
+    //         return Ok(field.clone());
+    //     }
+    //
+    //     if let SchemaDataType::Tuple {
+    //         fields_name,
+    //         fields_type,
+    //     } = &field.data_type()
+    //     {
+    //         let fields = fields_name
+    //             .iter()
+    //             .zip(fields_type)
+    //             .map(|(name, ty)| DataField::new(&name.clone(), ty.clone()))
+    //             .collect::<Vec<DataField>>();
+    //         return Self::traverse_paths(&fields, &path[1..]);
+    //     }
+    //     let valid_fields: Vec<String> = fields.iter().map(|f| f.name().clone()).collect();
+    //     Err(ErrorCode::BadArguments(format!(
+    //         "Unable to get field paths. Valid fields: {:?}",
+    //         valid_fields
+    //     )))
+    // }
+
+    /// project will do column pruning.
+    #[must_use]
+    pub fn project_by_fields(&self, fields: Vec<DataField>) -> Self {
+        Self::new_from(fields, self.meta().clone())
+    }
+
+    pub fn to_arrow(&self) -> ArrowSchema {
+        let fields = self.fields().iter().map(|f| f.into()).collect::<Vec<_>>();
+
+        ArrowSchema::from(fields).with_metadata(self.metadata.clone())
+    }
+
+    pub fn create_deserializers(&self, capacity: usize) -> Vec<Box<dyn TypeDeserializer>> {
+        let mut deserializers = Vec::with_capacity(self.num_fields());
+        for field in self.fields() {
+            deserializers.push(field.data_type.create_deserializer(capacity));
+        }
+        deserializers
+    }
+}
+
+impl TableSchema {
+    pub fn empty() -> Self {
+        Self {
+            fields: vec![],
+            metadata: BTreeMap::new(),
+        }
+    }
+
+    pub fn new(fields: Vec<TableField>) -> Self {
+        Self {
+            fields,
+            metadata: BTreeMap::new(),
+        }
+    }
+
+    pub fn new_from(fields: Vec<TableField>, metadata: BTreeMap<String, String>) -> Self {
+        Self { fields, metadata }
+    }
+
+    /// Returns an immutable reference of the vector of `Field` instances.
+    #[inline]
+    pub const fn fields(&self) -> &Vec<TableField> {
+        &self.fields
+    }
+
+    #[inline]
+    pub fn num_fields(&self) -> usize {
+        self.fields.len()
+    }
+
+    #[inline]
+    pub fn has_field(&self, name: &str) -> bool {
+        for i in 0..self.fields.len() {
+            if &self.fields[i].name == name {
+                return true;
+            }
+        }
+        false
+    }
+
+    pub fn fields_map(&self) -> BTreeMap<usize, TableField> {
+        let x = self.fields().iter().cloned().enumerate();
+        x.collect::<BTreeMap<_, _>>()
+    }
+
+    /// Returns an immutable reference of a specific `Field` instance selected using an
+    /// offset within the internal `fields` vector.
+    pub fn field(&self, i: usize) -> &TableField {
+        &self.fields[i]
+    }
+
+    /// Returns an immutable reference of a specific `Field` instance selected by name.
+    pub fn field_with_name(&self, name: &str) -> Result<&TableField> {
+        Ok(&self.fields[self.index_of(name)?])
+    }
+
+    /// Returns an immutable reference to field `metadata`.
+    #[inline]
+    pub const fn meta(&self) -> &BTreeMap<String, String> {
+        &self.metadata
+    }
+
+    /// Find the index of the column with the given name.
+    pub fn index_of(&self, name: &str) -> Result<usize> {
+        for i in 0..self.fields.len() {
+            if &self.fields[i].name == name {
+                return Ok(i);
+            }
+        }
+        let valid_fields: Vec<String> = self.fields.iter().map(|f| f.name.clone()).collect();
+
+        Err(ErrorCode::BadArguments(format!(
+            "Unable to get field named \"{}\". Valid fields: {:?}",
+            name, valid_fields
+        )))
+    }
+
+    /// Look up a column by name and return a immutable reference to the column along with
+    /// its index.
+    pub fn column_with_name(&self, name: &str) -> Option<(usize, &TableField)> {
+        self.fields
+            .iter()
+            .enumerate()
+            .find(|&(_, c)| &c.name == name)
+    }
+
+    /// Check to see if `self` is a superset of `other` schema. Here are the comparision rules:
+    pub fn contains(&self, other: &TableSchema) -> bool {
+        if self.fields.len() != other.fields.len() {
+            return false;
+        }
+
+        for (i, field) in other.fields.iter().enumerate() {
+            if &self.fields[i] != field {
+                return false;
+            }
+        }
+        true
+    }
+
+    /// project will do column pruning.
+    #[must_use]
+    pub fn project(&self, projection: &[usize]) -> Self {
+        let fields = projection
+            .iter()
+            .map(|idx| self.fields()[*idx].clone())
+            .collect();
+        Self::new_from(fields, self.meta().clone())
+    }
+
+    /// project with inner columns by path.
     pub fn inner_project(&self, path_indices: &BTreeMap<usize, Vec<usize>>) -> Self {
         let paths: Vec<Vec<usize>> = path_indices.values().cloned().collect();
         let fields = paths
@@ -207,7 +392,7 @@ impl DataSchema {
         Self::new_from(fields, self.meta().clone())
     }
 
-    fn traverse_paths(fields: &[DataField], path: &[usize]) -> Result<DataField> {
+    fn traverse_paths(fields: &[TableField], path: &[usize]) -> Result<TableField> {
         if path.is_empty() {
             return Err(ErrorCode::BadArguments(
                 "path should not be empty".to_string(),
@@ -221,16 +406,16 @@ impl DataSchema {
         if let SchemaDataType::Tuple {
             fields_name,
             fields_type,
-        } = &field.data_type()
+        } = &field.data_type
         {
             let fields = fields_name
                 .iter()
                 .zip(fields_type)
-                .map(|(name, ty)| DataField::new(&name.clone(), ty.clone()))
-                .collect::<Vec<DataField>>();
+                .map(|(name, ty)| TableField::new(&name.clone(), ty.clone()))
+                .collect::<Vec<_>>();
             return Self::traverse_paths(&fields, &path[1..]);
         }
-        let valid_fields: Vec<String> = fields.iter().map(|f| f.name().clone()).collect();
+        let valid_fields: Vec<String> = fields.iter().map(|f| f.name.clone()).collect();
         Err(ErrorCode::BadArguments(format!(
             "Unable to get field paths. Valid fields: {:?}",
             valid_fields
@@ -239,7 +424,7 @@ impl DataSchema {
 
     /// project will do column pruning.
     #[must_use]
-    pub fn project_by_fields(&self, fields: Vec<DataField>) -> Self {
+    pub fn project_by_fields(&self, fields: Vec<TableField>) -> Self {
         Self::new_from(fields, self.meta().clone())
     }
 
@@ -260,8 +445,46 @@ impl DataSchema {
 }
 
 impl DataField {
-    pub fn new(name: &str, data_type: SchemaDataType) -> Self {
+    pub fn new(name: &str, data_type: DataType) -> Self {
         DataField {
+            name: name.to_string(),
+            default_expr: None,
+            data_type,
+        }
+    }
+
+    #[must_use]
+    pub fn with_default_expr(mut self, default_expr: Option<String>) -> Self {
+        self.default_expr = default_expr;
+        self
+    }
+
+    pub fn name(&self) -> &String {
+        &self.name
+    }
+
+    pub fn data_type(&self) -> &DataType {
+        &self.data_type
+    }
+
+    pub fn default_expr(&self) -> Option<&String> {
+        self.default_expr.as_ref()
+    }
+
+    #[inline]
+    pub fn is_nullable(&self) -> bool {
+        self.data_type.is_nullable()
+    }
+
+    #[inline]
+    pub fn is_nullable_or_null(&self) -> bool {
+        self.data_type.is_nullable_or_null()
+    }
+}
+
+impl TableField {
+    pub fn new(name: &str, data_type: SchemaDataType) -> Self {
+        TableField {
             name: name.to_string(),
             default_expr: None,
             data_type,
@@ -375,7 +598,7 @@ impl SchemaDataType {
                 let mut name = String::new();
                 name.push_str("Tuple(");
                 for ((i, field_name), field_ty) in
-                    fields_name.iter().enumerate().zip(fields_type.iter())
+                fields_name.iter().enumerate().zip(fields_type.iter())
                 {
                     if i > 0 {
                         name.push_str(", ");
@@ -562,8 +785,11 @@ impl SchemaDataType {
 }
 
 pub type DataSchemaRef = Arc<DataSchema>;
+pub type TableSchemaRef = Arc<TableSchema>;
 
 pub struct DataSchemaRefExt;
+
+pub struct TableSchemaRefExt;
 
 impl DataSchemaRefExt {
     pub fn create(fields: Vec<DataField>) -> DataSchemaRef {
@@ -571,12 +797,38 @@ impl DataSchemaRefExt {
     }
 }
 
-impl From<&ArrowSchema> for DataSchema {
+impl TableSchemaRefExt {
+    pub fn create(fields: Vec<TableField>) -> TableSchemaRef {
+        Arc::new(TableSchema::new(fields))
+    }
+}
+
+impl From<&ArrowSchema> for TableSchema {
     fn from(a_schema: &ArrowSchema) -> Self {
         let fields = a_schema
             .fields
             .iter()
             .map(|arrow_f| arrow_f.into())
+            .collect::<Vec<_>>();
+
+        TableSchema::new(fields)
+    }
+}
+
+impl From<&TableField> for DataField {
+    fn from(f: &TableField) -> Self {
+        let data_type = f.data_type.clone();
+        let name = f.name.clone();
+        DataField::new(&name, DataType::from(&data_type))
+    }
+}
+
+impl From<&TableSchema> for DataSchema {
+    fn from(t_schema: &TableSchema) -> Self {
+        let fields = t_schema
+            .fields()
+            .iter()
+            .map(|t_f| t_f.into())
             .collect::<Vec<_>>();
 
         DataSchema::new(fields)
@@ -585,11 +837,21 @@ impl From<&ArrowSchema> for DataSchema {
 
 // conversions code
 // =========================
-impl From<&ArrowField> for DataField {
+impl From<&ArrowField> for TableField {
     fn from(f: &ArrowField) -> Self {
         Self {
             name: f.name.clone(),
             data_type: f.into(),
+            default_expr: None,
+        }
+    }
+}
+
+impl From<&ArrowField> for DataField {
+    fn from(f: &ArrowField) -> Self {
+        Self {
+            name: f.name.clone(),
+            data_type: DataType::from(&SchemaDataType::from(f)),
             default_expr: None,
         }
     }
@@ -647,6 +909,63 @@ impl From<&DataField> for ArrowField {
     fn from(f: &DataField) -> Self {
         let ty = f.data_type().into();
         ArrowField::new(f.name(), ty, f.is_nullable())
+    }
+}
+
+impl From<&TableField> for ArrowField {
+    fn from(f: &TableField) -> Self {
+        let ty = f.data_type().into();
+        ArrowField::new(f.name(), ty, f.is_nullable())
+    }
+}
+
+impl From<&DataType> for ArrowDataType {
+    fn from(ty: &DataType) -> Self {
+        match ty {
+            DataType::Null => ArrowDataType::Null,
+            DataType::EmptyArray => ArrowDataType::Extension(
+                ARROW_EXT_TYPE_EMPTY_ARRAY.to_string(),
+                Box::new(ArrowDataType::Null),
+                None,
+            ),
+            DataType::Boolean => ArrowDataType::Boolean,
+            DataType::String => ArrowDataType::LargeBinary,
+            DataType::Number(ty) => with_number_type!(|TYPE| match ty {
+                NumberDataType::TYPE => ArrowDataType::TYPE,
+            }),
+            DataType::Timestamp => ArrowDataType::Date64,
+            DataType::Date => ArrowDataType::Date32,
+            DataType::Nullable(ty) => ty.as_ref().into(),
+            DataType::Array(ty) => {
+                let arrow_ty = ty.as_ref().into();
+                ArrowDataType::LargeList(Box::new(ArrowField::new(
+                    "_array",
+                    arrow_ty,
+                    ty.is_nullable(),
+                )))
+            }
+            DataType::Map(ty) => {
+                let arrow_ty = ty.as_ref().into();
+                ArrowDataType::LargeList(Box::new(ArrowField::new(
+                    "_map",
+                    arrow_ty,
+                    ty.is_nullable(),
+                )))
+            }
+            DataType::Tuple(types) => {
+                let fields = types.into_iter()
+                    .map(|ty| ArrowField::new("DUMMY_FIELD_NAME", ty.into(), ty.is_nullable()))
+                    .collect();
+                ArrowDataType::Struct(fields)
+            }
+            DataType::Variant => ArrowDataType::Extension(
+                ARROW_EXT_TYPE_VARIANT.to_string(),
+                Box::new(ArrowDataType::LargeBinary),
+                None,
+            ),
+
+            _ => unreachable!(),
+        }
     }
 }
 

@@ -16,7 +16,7 @@ use chrono::NaiveDateTime;
 use common_exception::Result;
 use common_expression::types::number::NumberScalar;
 use common_expression::types::NumberDataType;
-use common_expression::ColumnBuilder;
+use common_expression::{ColumnBuilder, TableField, TableSchemaRef, TableSchemaRefExt};
 use common_expression::DataField;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
@@ -130,98 +130,98 @@ pub struct QueryLogElement {
 impl SystemLogElement for QueryLogElement {
     const TABLE_NAME: &'static str = "query_log";
 
-    fn schema() -> DataSchemaRef {
-        DataSchemaRefExt::create(vec![
+    fn schema() -> TableSchemaRef {
+        TableSchemaRefExt::create(vec![
             // Type.
-            DataField::new("log_type", SchemaDataType::Number(NumberDataType::Int8)),
-            DataField::new("handler_type", SchemaDataType::String),
+            TableField::new("log_type", SchemaDataType::Number(NumberDataType::Int8)),
+            TableField::new("handler_type", SchemaDataType::String),
             // User.
-            DataField::new("tenant_id", SchemaDataType::String),
-            DataField::new("cluster_id", SchemaDataType::String),
-            DataField::new("sql_user", SchemaDataType::String),
-            DataField::new("sql_user_quota", SchemaDataType::String),
-            DataField::new("sql_user_privileges", SchemaDataType::String),
+            TableField::new("tenant_id", SchemaDataType::String),
+            TableField::new("cluster_id", SchemaDataType::String),
+            TableField::new("sql_user", SchemaDataType::String),
+            TableField::new("sql_user_quota", SchemaDataType::String),
+            TableField::new("sql_user_privileges", SchemaDataType::String),
             // Query.
-            DataField::new("query_id", SchemaDataType::String),
-            DataField::new("query_kind", SchemaDataType::String),
-            DataField::new("query_text", SchemaDataType::String),
-            DataField::new("event_date", SchemaDataType::Date),
-            DataField::new("event_time", SchemaDataType::Timestamp),
-            DataField::new("query_start_time", SchemaDataType::Timestamp),
-            DataField::new(
+            TableField::new("query_id", SchemaDataType::String),
+            TableField::new("query_kind", SchemaDataType::String),
+            TableField::new("query_text", SchemaDataType::String),
+            TableField::new("event_date", SchemaDataType::Date),
+            TableField::new("event_time", SchemaDataType::Timestamp),
+            TableField::new("query_start_time", SchemaDataType::Timestamp),
+            TableField::new(
                 "query_duration_ms",
                 SchemaDataType::Number(NumberDataType::Int64),
             ),
             // Schema.
-            DataField::new("current_database", SchemaDataType::String),
-            DataField::new("databases", SchemaDataType::String),
-            DataField::new("tables", SchemaDataType::String),
-            DataField::new("columns", SchemaDataType::String),
-            DataField::new("projections", SchemaDataType::String),
+            TableField::new("current_database", SchemaDataType::String),
+            TableField::new("databases", SchemaDataType::String),
+            TableField::new("tables", SchemaDataType::String),
+            TableField::new("columns", SchemaDataType::String),
+            TableField::new("projections", SchemaDataType::String),
             // Stats.
-            DataField::new(
+            TableField::new(
                 "written_rows",
                 SchemaDataType::Number(NumberDataType::UInt64),
             ),
-            DataField::new(
+            TableField::new(
                 "written_bytes",
                 SchemaDataType::Number(NumberDataType::UInt64),
             ),
-            DataField::new(
+            TableField::new(
                 "written_io_bytes",
                 SchemaDataType::Number(NumberDataType::UInt64),
             ),
-            DataField::new(
+            TableField::new(
                 "written_io_bytes_cost_ms",
                 SchemaDataType::Number(NumberDataType::UInt64),
             ),
-            DataField::new("scan_rows", SchemaDataType::Number(NumberDataType::UInt64)),
-            DataField::new("scan_bytes", SchemaDataType::Number(NumberDataType::UInt64)),
-            DataField::new(
+            TableField::new("scan_rows", SchemaDataType::Number(NumberDataType::UInt64)),
+            TableField::new("scan_bytes", SchemaDataType::Number(NumberDataType::UInt64)),
+            TableField::new(
                 "scan_io_bytes",
                 SchemaDataType::Number(NumberDataType::UInt64),
             ),
-            DataField::new(
+            TableField::new(
                 "scan_io_bytes_cost_ms",
                 SchemaDataType::Number(NumberDataType::UInt64),
             ),
-            DataField::new(
+            TableField::new(
                 "scan_partitions",
                 SchemaDataType::Number(NumberDataType::UInt64),
             ),
-            DataField::new(
+            TableField::new(
                 "total_partitions",
                 SchemaDataType::Number(NumberDataType::UInt64),
             ),
-            DataField::new(
+            TableField::new(
                 "result_rows",
                 SchemaDataType::Number(NumberDataType::UInt64),
             ),
-            DataField::new(
+            TableField::new(
                 "result_bytes",
                 SchemaDataType::Number(NumberDataType::UInt64),
             ),
-            DataField::new("cpu_usage", SchemaDataType::Number(NumberDataType::UInt32)),
-            DataField::new(
+            TableField::new("cpu_usage", SchemaDataType::Number(NumberDataType::UInt32)),
+            TableField::new(
                 "memory_usage",
                 SchemaDataType::Number(NumberDataType::UInt64),
             ),
             // Client.
-            DataField::new("client_info", SchemaDataType::String),
-            DataField::new("client_address", SchemaDataType::String),
+            TableField::new("client_info", SchemaDataType::String),
+            TableField::new("client_address", SchemaDataType::String),
             // Exception.
-            DataField::new(
+            TableField::new(
                 "exception_code",
                 SchemaDataType::Number(NumberDataType::Int32),
             ),
-            DataField::new("exception_text", SchemaDataType::String),
-            DataField::new("stack_trace", SchemaDataType::String),
+            TableField::new("exception_text", SchemaDataType::String),
+            TableField::new("stack_trace", SchemaDataType::String),
             // Server.
-            DataField::new("server_version", SchemaDataType::String),
+            TableField::new("server_version", SchemaDataType::String),
             // Session settings
-            DataField::new("session_settings", SchemaDataType::String),
+            TableField::new("session_settings", SchemaDataType::String),
             // Extra.
-            DataField::new("extra", SchemaDataType::String),
+            TableField::new("extra", SchemaDataType::String),
         ])
     }
 

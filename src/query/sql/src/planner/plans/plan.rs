@@ -306,7 +306,7 @@ impl Plan {
                 ..
             } => bind_context.output_schema(),
             Plan::Explain { .. } | Plan::ExplainAst { .. } | Plan::ExplainSyntax { .. } => {
-                DataSchemaRefExt::create(vec![DataField::new("explain", SchemaDataType::String)])
+                DataSchemaRefExt::create(vec![DataField::new("explain", DataType::String)])
             }
             Plan::Copy(_) => Arc::new(DataSchema::empty()),
             Plan::ShowCreateCatalog(plan) => plan.schema(),

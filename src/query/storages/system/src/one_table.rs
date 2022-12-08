@@ -24,7 +24,7 @@ use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::utils::ColumnFrom;
-use common_expression::Chunk;
+use common_expression::{Chunk, TableField, TableSchemaRefExt};
 use common_expression::Column;
 use common_expression::DataField;
 use common_expression::DataSchemaRefExt;
@@ -75,7 +75,7 @@ impl SyncSystemTable for OneTable {
 
 impl OneTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
-        let schema = DataSchemaRefExt::create(vec![DataField::new(
+        let schema = TableSchemaRefExt::create(vec![TableField::new(
             "dummy",
             SchemaDataType::Number(NumberDataType::UInt8),
         )]);

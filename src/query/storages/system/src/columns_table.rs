@@ -20,7 +20,7 @@ use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::utils::ColumnFrom;
-use common_expression::Chunk;
+use common_expression::{Chunk, TableField, TableSchema, TableSchemaRefExt};
 use common_expression::Column;
 use common_expression::DataField;
 use common_expression::DataSchemaRefExt;
@@ -114,15 +114,15 @@ impl AsyncSystemTable for ColumnsTable {
 
 impl ColumnsTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
-        let schema = DataSchemaRefExt::create(vec![
-            DataField::new("name", SchemaDataType::String),
-            DataField::new("database", SchemaDataType::String),
-            DataField::new("table", SchemaDataType::String),
-            DataField::new("type", SchemaDataType::String),
-            DataField::new("default_kind", SchemaDataType::String),
-            DataField::new("default_expression", SchemaDataType::String),
-            DataField::new("is_nullable", SchemaDataType::String),
-            DataField::new("comment", SchemaDataType::String),
+        let schema = TableSchemaRefExt::create(vec![
+            TableField::new("name", SchemaDataType::String),
+            TableField::new("database", SchemaDataType::String),
+            TableField::new("table", SchemaDataType::String),
+            TableField::new("type", SchemaDataType::String),
+            TableField::new("default_kind", SchemaDataType::String),
+            TableField::new("default_expression", SchemaDataType::String),
+            TableField::new("is_nullable", SchemaDataType::String),
+            TableField::new("comment", SchemaDataType::String),
         ]);
 
         let table_info = TableInfo {
@@ -143,12 +143,12 @@ impl ColumnsTable {
     async fn dump_table_columns(
         &self,
         ctx: Arc<dyn TableContext>,
-    ) -> Result<Vec<(String, String, DataField)>> {
+    ) -> Result<Vec<(String, String, TableField)>> {
         let tenant = ctx.get_tenant();
         let catalog = ctx.get_catalog(CATALOG_DEFAULT)?;
         let databases = catalog.list_databases(tenant.as_str()).await?;
 
-        let mut rows: Vec<(String, String, DataField)> = vec![];
+        let mut rows: Vec<(String, String, TableField)> = vec![];
         for database in databases {
             for table in catalog
                 .list_tables(tenant.as_str(), database.name())

@@ -12,8 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
 use common_exception::Result;
-use common_expression::serialize_chunks;
+use common_expression::{DataSchema, serialize_chunks, TableSchema, TableSchemaRef};
 use common_expression::Chunk;
 use common_expression::DataSchemaRef;
 
@@ -22,12 +23,12 @@ use crate::FileFormatOptionsExt;
 
 #[derive(Default)]
 pub struct ParquetOutputFormat {
-    schema: DataSchemaRef,
+    schema: TableSchemaRef,
     chunks: Vec<Chunk>,
 }
 
 impl ParquetOutputFormat {
-    pub fn create(schema: DataSchemaRef, _options: &FileFormatOptionsExt) -> Self {
+    pub fn create(schema: TableSchemaRef, _options: &FileFormatOptionsExt) -> Self {
         Self {
             schema,
             chunks: vec![],
@@ -51,7 +52,7 @@ impl OutputFormat for ParquetOutputFormat {
             return Ok(vec![]);
         }
         let mut buf = Vec::with_capacity(100 * 1024 * 1024);
-        let _ = serialize_chunks(chunks, &self.schema, &mut buf)?;
+        let _ = serialize_chunks(chunks, Arc::new(DataSchema::from(self.schema.as_ref())), &mut buf)?;
         Ok(buf)
     }
 }

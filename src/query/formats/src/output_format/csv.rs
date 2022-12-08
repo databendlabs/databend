@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use common_exception::Result;
-use common_expression::Chunk;
+use common_expression::{Chunk, TableSchema, TableSchemaRef};
 use common_expression::Column;
 use common_expression::DataSchemaRef;
 
@@ -28,7 +28,7 @@ pub type CSVWithNamesOutputFormat = CSVOutputFormatBase<true, false>;
 pub type CSVWithNamesAndTypesOutputFormat = CSVOutputFormatBase<true, true>;
 
 pub struct CSVOutputFormatBase<const WITH_NAMES: bool, const WITH_TYPES: bool> {
-    schema: DataSchemaRef,
+    schema: TableSchemaRef,
     field_encoder: FieldEncoderCSV,
     field_delimiter: u8,
     record_delimiter: Vec<u8>,
@@ -36,7 +36,7 @@ pub struct CSVOutputFormatBase<const WITH_NAMES: bool, const WITH_TYPES: bool> {
 }
 
 impl<const WITH_NAMES: bool, const WITH_TYPES: bool> CSVOutputFormatBase<WITH_NAMES, WITH_TYPES> {
-    pub fn create(schema: DataSchemaRef, options: &FileFormatOptionsExt) -> Self {
+    pub fn create(schema: TableSchemaRef, options: &FileFormatOptionsExt) -> Self {
         let field_encoder = FieldEncoderCSV::create(options);
         Self {
             schema,

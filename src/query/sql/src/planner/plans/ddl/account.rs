@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use common_datavalues::ToDataType;
 use common_datavalues::Vu8;
-use common_expression::types::NumberDataType;
+use common_expression::types::{DataType, NumberDataType};
 use common_expression::DataField;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
@@ -112,7 +112,7 @@ pub struct ShowGrantsPlan {
 
 impl ShowGrantsPlan {
     pub fn schema(&self) -> DataSchemaRef {
-        DataSchemaRefExt::create(vec![DataField::new("Grants", SchemaDataType::String)])
+        DataSchemaRefExt::create(vec![DataField::new("Grants", DataType::String)])
     }
 }
 
@@ -146,13 +146,13 @@ pub struct ShowRolesPlan {}
 impl ShowRolesPlan {
     pub fn schema(&self) -> DataSchemaRef {
         DataSchemaRefExt::create(vec![
-            DataField::new("name", SchemaDataType::String),
+            DataField::new("name", DataType::String),
             DataField::new(
                 "inherited_roles",
-                SchemaDataType::Number(NumberDataType::UInt64),
+                DataType::Number(NumberDataType::UInt64),
             ),
-            DataField::new("is_current", SchemaDataType::Boolean),
-            DataField::new("is_default", SchemaDataType::Boolean),
+            DataField::new("is_current", DataType::Boolean),
+            DataField::new("is_default", DataType::Boolean),
         ])
     }
 }

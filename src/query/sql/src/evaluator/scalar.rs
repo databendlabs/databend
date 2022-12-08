@@ -21,7 +21,6 @@ use common_functions::scalars::in_evaluator;
 use common_functions::scalars::CastFunction;
 use common_functions::scalars::FunctionFactory;
 
-use crate::evaluator::eval_node::EvalNode;
 use crate::evaluator::Evaluator;
 use crate::plans::Scalar;
 use crate::plans::ScalarExpr;

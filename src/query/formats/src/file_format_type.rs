@@ -18,7 +18,7 @@ use chrono_tz::Tz;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
-use common_expression::DataSchemaRef;
+use common_expression::{DataSchemaRef, TableSchemaRef};
 use common_io::consts::*;
 use common_io::prelude::FormatSettings;
 use common_meta_types::FileFormatOptions;
@@ -96,7 +96,7 @@ impl FileFormatOptionsExt {
 
     pub fn get_output_format_from_settings_clickhouse(
         typ: ClickhouseFormatType,
-        schema: DataSchemaRef,
+        schema: TableSchemaRef,
         settings: &Settings,
     ) -> Result<Box<dyn OutputFormat>> {
         let options = typ
@@ -107,7 +107,7 @@ impl FileFormatOptionsExt {
 
     pub fn get_output_format_from_settings(
         format: StageFileFormatType,
-        schema: DataSchemaRef,
+        schema: TableSchemaRef,
         settings: &Settings,
     ) -> Result<Box<dyn OutputFormat>> {
         let options = format.get_file_format_options_from_setting(settings, None)?;
@@ -115,7 +115,7 @@ impl FileFormatOptionsExt {
     }
 
     pub fn get_output_format_from_options(
-        schema: DataSchemaRef,
+        schema: TableSchemaRef,
         options: FileFormatOptions,
         settings: &Settings,
     ) -> Result<Box<dyn OutputFormat>> {
@@ -123,7 +123,7 @@ impl FileFormatOptionsExt {
         options.get_output_format(schema)
     }
 
-    fn get_output_format(&self, schema: DataSchemaRef) -> Result<Box<dyn OutputFormat>> {
+    fn get_output_format(&self, schema: TableSchemaRef) -> Result<Box<dyn OutputFormat>> {
         let fmt = &self.stage.format;
         let options = fmt.final_file_format_options(self)?;
         // println!("format {:?} {:?} {:?}", fmt, options, format_settings);

@@ -18,7 +18,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::Chunk;
+use common_expression::{Chunk, TableSchemaRef};
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::TypeDeserializer;
@@ -120,7 +120,7 @@ impl<T: InputFormatTextBase> InputFormat for InputFormatText<T> {
         InputFormatTextPipe::<T>::execute_stream(ctx, pipeline)
     }
 
-    async fn infer_schema(&self, _path: &str, _op: &Operator) -> Result<DataSchemaRef> {
+    async fn infer_schema(&self, _path: &str, _op: &Operator) -> Result<TableSchemaRef> {
         Err(ErrorCode::Unimplemented(
             "infer_schema is not implemented for this format yet.",
         ))

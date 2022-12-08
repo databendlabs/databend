@@ -31,6 +31,7 @@ use common_exception::Result;
 use common_expression::DataField;
 use common_expression::DataSchemaRefExt;
 use common_expression::SchemaDataType;
+use common_expression::types::DataType;
 use common_meta_app::schema::DatabaseMeta;
 use common_meta_app::share::ShareNameIdent;
 
@@ -82,8 +83,8 @@ impl<'a> Binder {
             .unwrap_or_else(|| self.ctx.get_current_catalog());
         let database = normalize_identifier(database, &self.name_resolution_ctx).name;
         let schema = DataSchemaRefExt::create(vec![
-            DataField::new("Database", SchemaDataType::String),
-            DataField::new("Create Database", SchemaDataType::String),
+            DataField::new("Database", DataType::String),
+            DataField::new("Create Database", DataType::String),
         ]);
 
         Ok(Plan::ShowCreateDatabase(Box::new(ShowCreateDatabasePlan {

@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod expression_builder;
 mod format;
 mod physical_plan;
 mod physical_plan_builder;

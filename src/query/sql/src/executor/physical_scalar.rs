@@ -15,13 +15,12 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use common_catalog::plan::Expression;
 use common_datavalues::format_data_type_sql;
 use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
 use common_exception::Result;
 use common_expression::types::DataType;
-use common_expression::DataSchema;
+use common_expression::{DataSchema, Literal};
 
 type ColumnID = String;
 type IndexType = usize;
@@ -36,7 +35,7 @@ pub enum PhysicalScalar {
         display_name: String,
     },
     Constant {
-        value: DataValue,
+        value: Literal,
         data_type: DataType,
     },
     Function {
@@ -81,80 +80,6 @@ impl PhysicalScalar {
             PhysicalScalar::IndexedVariable { display_name, .. } => display_name.clone(),
         }
     }
-
-    pub fn from_expression(expression: &Expression, schema: &DataSchema) -> Result<Self> {
-        match expression {
-            Expression::IndexedVariable { name, data_type } => {
-                Ok(PhysicalScalar::IndexedVariable {
-                    index: schema.index_of(name)?,
-                    display_name: name.to_string(),
-                    data_type: data_type.clone(),
-                })
-            }
-            Expression::Constant { value, data_type } => Ok(PhysicalScalar::Constant {
-                value: value.clone(),
-                data_type: data_type.clone(),
-            }),
-            Expression::Function {
-                name,
-                args,
-                return_type,
-            } => {
-                let mut new_args = Vec::with_capacity(args.len());
-                for arg in args.iter() {
-                    let new_arg = Self::from_expression(arg, schema)?;
-                    new_args.push(new_arg);
-                }
-                Ok(PhysicalScalar::Function {
-                    name: name.to_string(),
-                    args: new_args,
-                    return_type: return_type.clone(),
-                })
-            }
-            Expression::Cast { input, target } => Ok(PhysicalScalar::Cast {
-                input: Box::new(Self::from_expression(input, schema)?),
-                target: target.clone(),
-            }),
-        }
-    }
-
-    pub fn to_expression(&self, schema: &DataSchema) -> Result<Expression> {
-        match self {
-            PhysicalScalar::IndexedVariable {
-                index, data_type, ..
-            } => {
-                let name = schema.field(*index);
-                Ok(Expression::IndexedVariable {
-                    data_type: data_type.clone(),
-                    name: name.name().clone(),
-                })
-            }
-            PhysicalScalar::Constant { value, data_type } => Ok(Expression::Constant {
-                value: value.clone(),
-                data_type: data_type.clone(),
-            }),
-            PhysicalScalar::Function {
-                name,
-                args,
-                return_type,
-            } => {
-                let mut new_args = Vec::with_capacity(args.len());
-                for arg in args.iter() {
-                    let new_arg = arg.to_expression(schema)?;
-                    new_args.push(new_arg);
-                }
-                Ok(Expression::Function {
-                    name: name.to_string(),
-                    args: new_args,
-                    return_type: return_type.clone(),
-                })
-            }
-            PhysicalScalar::Cast { input, target } => Ok(Expression::Cast {
-                input: Box::new(input.to_expression(schema)?),
-                target: target.clone(),
-            }),
-        }
-    }
 }
 
 impl Display for PhysicalScalar {
@@ -192,7 +117,7 @@ pub struct AggregateFunctionDesc {
 pub struct AggregateFunctionSignature {
     pub name: String,
     pub args: Vec<DataType>,
-    pub params: Vec<DataValue>,
+    pub params: Vec<Literal>,
     pub return_type: DataType,
 }
 

@@ -25,7 +25,7 @@ use ordered_float::OrderedFloat;
 
 use crate::types::AnyType;
 use crate::types::DataType;
-use crate::Chunk;
+use crate::{Chunk, TableField, TableSchema};
 use crate::Column;
 use crate::ColumnBuilder;
 use crate::ColumnIndex;
@@ -36,12 +36,12 @@ use crate::SchemaDataType;
 use crate::Value;
 
 pub fn to_type(datatype: &SchemaDataType) -> DataTypeImpl {
-    let f = DataField::new("tmp", datatype.clone());
+    let f = TableField::new("tmp", datatype.clone());
     let arrow_f: ArrowField = (&f).into();
     common_datavalues::from_arrow_field(&arrow_f)
 }
 
-pub fn to_schema(schema: &DataSchema) -> common_datavalues::DataSchema {
+pub fn to_schema(schema: &TableSchema) -> common_datavalues::DataSchema {
     let fields = schema
         .fields()
         .iter()

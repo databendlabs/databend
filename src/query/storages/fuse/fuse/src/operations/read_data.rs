@@ -83,7 +83,6 @@ impl FuseTable {
         _ctx: Arc<dyn TableContext>,
         plan: &DataSourcePlan,
         schema: DataSchemaRef,
-<<<<<<< HEAD
     ) // -> Result<Arc<Option<EvalNode>>>
     {
         todo!("expression");
@@ -94,18 +93,6 @@ impl FuseTable {
         //         Arc::new(Some(executor))
         //     }
         // })
-=======
-    ) -> Result<Arc<Option<EvalNode>>> {
-        Ok(
-            match PushDownInfo::prewhere_of_push_downs(&plan.push_downs) {
-                None => Arc::new(None),
-                Some(v) => {
-                    let executor = Evaluator::eval_expression(&v.filter, schema.as_ref())?;
-                    Arc::new(Some(executor))
-                }
-            },
-        )
->>>>>>> main
     }
 
     // Build the remain reader.
@@ -212,7 +199,6 @@ impl FuseTable {
             });
         }
 
-<<<<<<< HEAD
         todo!("expression");
         // let projection = self.projection_of_push_downs(&plan.push_downs);
         // let max_io_requests = self.adjust_io_request(&ctx, &projection, read_kind)?;
@@ -221,16 +207,6 @@ impl FuseTable {
         // let prewhere_filter =
         //     self.build_prewhere_filter_executor(ctx.clone(), plan, prewhere_reader.schema())?;
         // let remain_reader = self.build_remain_reader(plan)?;
-=======
-        let projection =
-            PushDownInfo::projection_of_push_downs(&self.table_info.schema(), &plan.push_downs);
-        let max_io_requests = self.adjust_io_request(&ctx, &projection, read_kind)?;
-        let block_reader = self.build_block_reader(plan)?;
-        let prewhere_reader = self.build_prewhere_reader(plan)?;
-        let prewhere_filter =
-            self.build_prewhere_filter_executor(ctx.clone(), plan, prewhere_reader.schema())?;
-        let remain_reader = self.build_remain_reader(plan)?;
->>>>>>> main
 
         // info!("read block data adjust max io requests:{}", max_io_requests);
 

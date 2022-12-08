@@ -17,14 +17,14 @@ use std::sync::Arc;
 
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 use tikv_jemalloc_ctl::epoch;
+use common_expression::{Chunk, DataSchemaRefExt, SchemaDataType, TableField, TableSchemaRefExt};
+use common_expression::types::{DataType, NumberDataType};
 
 use crate::SyncOneBlockSystemTable;
 use crate::SyncSystemTable;
@@ -49,9 +49,9 @@ impl SyncSystemTable for MallocStatsTotalsTable {
         &self.table_info
     }
 
-    fn get_full_data(&self, _: Arc<dyn TableContext>) -> Result<DataBlock> {
+    fn get_full_data(&self, _: Arc<dyn TableContext>) -> Result<Chunk> {
         let (names, values) = Self::build_columns().map_err(convert_je_err)?;
-        Ok(DataBlock::create(self.table_info.schema(), vec![
+        Ok(Chunk::new(vec![
             Series::from_data(names),
             Series::from_data(values),
         ]))
@@ -60,9 +60,9 @@ impl SyncSystemTable for MallocStatsTotalsTable {
 
 impl MallocStatsTotalsTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
-        let schema = DataSchemaRefExt::create(vec![
-            DataField::new("name", Vu8::to_data_type()),
-            DataField::new("value", u64::to_data_type()),
+        let schema = TableSchemaRefExt::create(vec![
+            TableField::new("name", SchemaDataType::String),
+            TableField::new("value", SchemaDataType::Number(NumberDataType::UInt64)),
         ]);
 
         let table_info = TableInfo {

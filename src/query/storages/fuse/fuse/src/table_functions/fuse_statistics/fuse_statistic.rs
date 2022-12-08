@@ -14,8 +14,6 @@
 
 use std::sync::Arc;
 
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_storages_table_meta::meta::Statistics;
 use common_storages_table_meta::meta::TableSnapshotStatistics;

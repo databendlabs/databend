@@ -52,16 +52,16 @@ use common_datavalues::Vu8;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
-use common_expression::DataField;
+use common_expression::{DataField, SchemaDataType, TableField, TableSchemaRef, TableSchemaRefExt};
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
-use common_expression::SchemaDataType;
 use common_storage::parse_uri_location;
 use common_storage::DataOperator;
 use common_storage::UriLocation;
 use common_storages_table_meta::table::is_reserved_opt_key;
 use common_storages_table_meta::table::OPT_KEY_DATABASE_ID;
 use tracing::debug;
+use common_expression::type_check::common_super_type;
 
 use crate::binder::scalar::ScalarBinder;
 use crate::binder::Binder;
@@ -245,8 +245,8 @@ impl<'a> Binder {
         let table = normalize_identifier(table, &self.name_resolution_ctx).name;
 
         let schema = DataSchemaRefExt::create(vec![
-            DataField::new("Table", SchemaDataType::String),
-            DataField::new("Create Table", SchemaDataType::String),
+            DataField::new("Table", DataType::String),
+            DataField::new("Create Table", DataType::String),
         ]);
         Ok(Plan::ShowCreateTable(Box::new(ShowCreateTablePlan {
             catalog,
@@ -276,11 +276,11 @@ impl<'a> Binder {
             .unwrap_or_else(|| self.ctx.get_current_database());
         let table = normalize_identifier(table, &self.name_resolution_ctx).name;
         let schema = DataSchemaRefExt::create(vec![
-            DataField::new("Field", SchemaDataType::String),
-            DataField::new("Type", SchemaDataType::String),
-            DataField::new("Null", SchemaDataType::String),
-            DataField::new("Default", SchemaDataType::String),
-            DataField::new("Extra", SchemaDataType::String),
+            DataField::new("Field", DataType::String),
+            DataField::new("Type", DataType::String),
+            DataField::new("Null", DataType::String),
+            DataField::new("Default", DataType::String),
+            DataField::new("Extra", DataType::String),
         ]);
 
         Ok(Plan::DescribeTable(Box::new(DescribeTablePlan {
@@ -426,13 +426,13 @@ impl<'a> Binder {
                     .columns
                     .iter()
                     .map(|column_binding| {
-                        DataField::new(
+                        Ok(TableField::new(
                             &column_binding.column_name,
-                            todo!("expression"), // *column_binding.data_type.clone(),
-                        )
+                            Self::infer_schema_type(&column_binding.data_type)?,
+                        ))
                     })
-                    .collect();
-                let schema = DataSchemaRefExt::create(fields);
+                    .collect::<Result<Vec<_>>>()?;
+                let schema = TableSchemaRefExt::create(fields);
                 Self::validate_create_table_schema(&schema)?;
                 (schema, vec![], vec![])
             }
@@ -442,19 +442,19 @@ impl<'a> Binder {
                     self.analyze_create_table_schema(source).await?;
                 let init_bind_context = BindContext::new();
                 let (_s_expr, bind_context) = self.bind_query(&init_bind_context, query).await?;
-                let query_fields: Vec<DataField> = bind_context
+                let query_fields: Vec<TableField> = bind_context
                     .columns
                     .iter()
                     .map(|column_binding| {
-                        DataField::new(
+                        Ok(TableField::new(
                             &column_binding.column_name,
-                            todo!("expression"), // *column_binding.data_type.clone(),
-                        )
+                            Self::infer_schema_type(&column_binding.data_type)?,
+                        ))
                     })
-                    .collect();
+                    .collect::<Result<Vec<_>>>()?;
                 let source_fields = source_schema.fields().clone();
                 let source_fields = self.concat_fields(source_fields, query_fields);
-                let schema = DataSchemaRefExt::create(source_fields);
+                let schema = TableSchemaRefExt::create(source_fields);
                 Self::validate_create_table_schema(&schema)?;
                 (schema, source_default_exprs, source_coments)
             }
@@ -494,10 +494,10 @@ impl<'a> Binder {
         let plan = CreateTablePlanV2 {
             if_not_exists: *if_not_exists,
             tenant: self.ctx.get_tenant(),
-            catalog,
-            database,
+            catalog: catalog.clone(),
+            database: database.clone(),
             table,
-            schema,
+            schema: schema.clone(),
             engine,
             storage_params,
             options,
@@ -818,9 +818,9 @@ impl<'a> Binder {
                 AstOptimizeTableAction::Compact { target, limit } => {
                     let limit_cnt = match limit {
                         Some(Expr::Literal {
-                            lit: Literal::Integer(uint),
-                            ..
-                        }) => Some(*uint as usize),
+                                 lit: Literal::Integer(uint),
+                                 ..
+                             }) => Some(*uint as usize),
                         Some(_) => {
                             return Err(ErrorCode::IllegalDataType("Unsupported limit type"));
                         }
@@ -874,7 +874,7 @@ impl<'a> Binder {
     async fn analyze_create_table_schema(
         &self,
         source: &CreateTableSource<'a>,
-    ) -> Result<(DataSchemaRef, Vec<Option<Scalar>>, Vec<String>)> {
+    ) -> Result<(TableSchemaRef, Vec<Option<Scalar>>, Vec<String>)> {
         let bind_context = BindContext::new();
         match source {
             CreateTableSource::Columns(columns) => {
@@ -890,14 +890,14 @@ impl<'a> Binder {
                 let mut fields_comments = Vec::with_capacity(columns.len());
                 for column in columns.iter() {
                     let name = normalize_identifier(&column.name, &self.name_resolution_ctx).name;
-                    let data_type = TypeChecker::resolve_type_name(&column.data_type)?;
+                    let schema_data_type = TypeChecker::resolve_type_name(&column.data_type)?;
 
-                    fields.push(DataField::new(&name, data_type.clone()));
+                    fields.push(TableField::new(&name, schema_data_type.clone()));
                     fields_default_expr.push({
                         if let Some(default_expr) = &column.default_expr {
                             let (mut expr, expr_type) = scalar_binder.bind(default_expr).await?;
-                            todo!("expression type coercion");
-                            if compare_coercion(&data_type, &expr_type).is_err() {
+                            let data_type = DataType::from(&schema_data_type);
+                            if common_super_type(data_type.clone(), expr_type.clone()).is_none() {
                                 return Err(ErrorCode::SemanticError(format!("column {name} is of type {} but default expression is of type {}", data_type, expr_type)));
                             }
                             if !expr_type.eq(&data_type) {
@@ -914,7 +914,7 @@ impl<'a> Binder {
                     });
                     fields_comments.push(column.comment.clone().unwrap_or_default());
                 }
-                let schema = DataSchemaRefExt::create(fields);
+                let schema = TableSchemaRefExt::create(fields);
                 Self::validate_create_table_schema(&schema)?;
                 Ok((schema, fields_default_expr, fields_comments))
             }
@@ -939,7 +939,7 @@ impl<'a> Binder {
     }
 
     /// Validate the schema of the table to be created.
-    fn validate_create_table_schema(schema: &DataSchemaRef) -> Result<()> {
+    fn validate_create_table_schema(schema: &TableSchemaRef) -> Result<()> {
         // Check if there are duplicated column names
         let mut name_set = HashSet::new();
         for field in schema.fields() {
@@ -976,7 +976,7 @@ impl<'a> Binder {
     async fn analyze_cluster_keys(
         &mut self,
         cluster_by: &[Expr<'a>],
-        schema: DataSchemaRef,
+        schema: TableSchemaRef,
     ) -> Result<Vec<String>> {
         // Build a temporary BindContext to resolve the expr
         let mut bind_context = BindContext::new();
@@ -1024,9 +1024,9 @@ impl<'a> Binder {
 
     fn concat_fields(
         &self,
-        mut source_fields: Vec<DataField>,
-        query_fields: Vec<DataField>,
-    ) -> Vec<DataField> {
+        mut source_fields: Vec<TableField>,
+        query_fields: Vec<TableField>,
+    ) -> Vec<TableField> {
         let mut name_set = HashSet::new();
         for field in source_fields.iter() {
             name_set.insert(field.name().clone());
@@ -1037,5 +1037,35 @@ impl<'a> Binder {
             }
         }
         source_fields
+    }
+
+    /// Convert a `DataType` to `SchemaDataType`.
+    /// Generally, we don't allow to convert `DataType` to `SchemaDataType` directly.
+    /// But for some special cases, for example creating table from a query without specifying
+    /// the schema. Then we need to infer the corresponding `SchemaDataType` from `DataType`, and
+    /// this function may report an error if the conversion is not allowed.
+    ///
+    /// Do not use this function in other places.
+    fn infer_schema_type(data_type: &DataType) -> Result<SchemaDataType> {
+        match data_type {
+            DataType::Null => Ok(SchemaDataType::Null),
+            DataType::Boolean => Ok(SchemaDataType::Boolean),
+            DataType::String => Ok(SchemaDataType::String),
+            DataType::Number(number_type) => Ok(SchemaDataType::Number(*number_type)),
+            DataType::Timestamp => Ok(SchemaDataType::Timestamp),
+            DataType::Date => Ok(SchemaDataType::Date),
+            DataType::Nullable(inner_type) => {
+                Ok(SchemaDataType::Nullable(Box::new(Self::infer_schema_type(inner_type)?)))
+            }
+            DataType::Array(elem_type) => Ok(SchemaDataType::Array(Box::new(
+                Self::infer_schema_type(elem_type)?,
+            ))),
+            DataType::Map(inner_type) => Ok(SchemaDataType::Map(Box::new(
+                Self::infer_schema_type(inner_type)?,
+            ))),
+            DataType::Variant => Ok(SchemaDataType::Variant),
+
+            _ => Err(ErrorCode::SemanticError(format!("Cannot create table with type: {}", data_type))),
+        }
     }
 }

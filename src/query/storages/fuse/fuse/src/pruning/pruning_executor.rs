@@ -24,7 +24,7 @@ use common_catalog::plan::PushDownInfo;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::DataSchemaRef;
+use common_expression::{DataSchemaRef, TableSchemaRef};
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::Location;
 use common_storages_table_meta::meta::SegmentInfo;
@@ -60,7 +60,7 @@ impl BlockPruner {
     pub async fn prune(
         ctx: &Arc<dyn TableContext>,
         dal: Operator,
-        schema: DataSchemaRef,
+        schema: TableSchemaRef,
         push_down: &Option<PushDownInfo>,
         segment_locs: Vec<Location>,
     ) -> Result<Vec<(SegmentIndex, Arc<BlockMeta>)>> {
@@ -88,7 +88,7 @@ impl BlockPruner {
         // prepare the filter.
         // None will be returned, if filter is not applicable (e.g. unsuitable filter expression, index not available, etc.)
         let filter_pruner =
-            pruner::new_filter_pruner(ctx, filter_expressions, &schema, dal.clone())?;
+            pruner::new_filter_pruner(ctx, filter_expressions, schema.clone(), dal.clone())?;
 
         // 2. constraint the degree of parallelism
         let max_threads = ctx.get_settings().get_max_threads()? as usize;

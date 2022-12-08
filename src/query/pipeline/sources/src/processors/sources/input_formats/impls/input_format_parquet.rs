@@ -36,7 +36,7 @@ use common_arrow::parquet::read::read_metadata;
 use common_arrow::read_columns_async;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::Chunk;
+use common_expression::{Chunk, TableField, TableSchema, TableSchemaRef};
 use common_expression::DataField;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
@@ -123,12 +123,12 @@ impl InputFormat for InputFormatParquet {
         Ok(infos)
     }
 
-    async fn infer_schema(&self, path: &str, op: &Operator) -> Result<DataSchemaRef> {
+    async fn infer_schema(&self, path: &str, op: &Operator) -> Result<TableSchemaRef> {
         let obj = op.object(path);
         let mut reader = obj.seekable_reader(..);
         let file_meta = read_metadata_async(&mut reader).await?;
         let arrow_schema = infer_schema(&file_meta)?;
-        Ok(Arc::new(DataSchema::from(arrow_schema)))
+        Ok(Arc::new(TableSchema::from(&arrow_schema)))
     }
 
     fn exec_copy(&self, ctx: Arc<InputContext>, pipeline: &mut Pipeline) -> Result<()> {
@@ -182,10 +182,11 @@ impl Debug for SplitMeta {
 
 impl serde::Serialize for SplitMeta {
     fn serialize<S>(&self, _serializer: S) -> Result<S::Ok, S::Error>
-    where S: Serializer {
+        where S: Serializer {
         unimplemented!()
     }
 }
+
 impl<'a> serde::Deserialize<'a> for SplitMeta {
     fn deserialize<D: Deserializer<'a>>(_deserializer: D) -> Result<Self, D::Error> {
         unimplemented!()
@@ -397,7 +398,7 @@ impl AligningStateTrait for AligningState {
     }
 }
 
-fn get_used_fields(fields: &Vec<Field>, schema: &DataSchemaRef) -> Result<Vec<Field>> {
+fn get_used_fields(fields: &Vec<Field>, schema: &TableSchemaRef) -> Result<Vec<Field>> {
     let mut read_fields = Vec::with_capacity(fields.len());
     for f in schema.fields().iter() {
         if let Some(m) = fields
@@ -405,7 +406,7 @@ fn get_used_fields(fields: &Vec<Field>, schema: &DataSchemaRef) -> Result<Vec<Fi
             .filter(|c| c.name.eq_ignore_ascii_case(f.name()))
             .last()
         {
-            let tf = DataField::from(m);
+            let tf = TableField::from(m);
             if tf.data_type().remove_nullable() != f.data_type().remove_nullable() {
                 let pair = (f, m);
                 let diff = pair.make_diff("expected_field", "infer_field");

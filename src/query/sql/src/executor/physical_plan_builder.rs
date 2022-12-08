@@ -18,17 +18,18 @@ use std::sync::Arc;
 
 use common_catalog::catalog::CatalogManager;
 use common_catalog::catalog_kind::CATALOG_DEFAULT;
-use common_catalog::plan::Expression;
 use common_catalog::plan::PrewhereInfo;
 use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::DataSchemaRef;
+use common_expression::{DataSchemaRef, RawExpr, RemoteExpr, TableSchema, type_check};
 use common_expression::DataSchemaRefExt;
 use common_functions::scalars::FunctionFactory;
 use itertools::Itertools;
+use common_expression::types::DataType;
+use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 
 use super::AggregateFinal;
 use super::AggregateFunctionDesc;
@@ -77,7 +78,7 @@ impl PhysicalPlanBuilder {
 
     fn build_projection(
         metadata: &Metadata,
-        schema: &DataSchemaRef,
+        schema: &TableSchema,
         columns: &ColumnSet,
         has_inner_column: bool,
     ) -> Projection {
@@ -352,9 +353,9 @@ impl PhysicalPlanBuilder {
                             PhysicalPlan::AggregatePartial(ref agg) => agg.input.output_schema()?,
 
                             PhysicalPlan::Exchange(PhysicalExchange {
-                                input: box PhysicalPlan::AggregatePartial(ref agg),
-                                ..
-                            }) => agg.input.output_schema()?,
+                                                       input: box PhysicalPlan::AggregatePartial(ref agg),
+                                                       ..
+                                                   }) => agg.input.output_schema()?,
 
                             _ => unreachable!(),
                         };
@@ -407,9 +408,9 @@ impl PhysicalPlanBuilder {
                             }
 
                             PhysicalPlan::Exchange(PhysicalExchange {
-                                input: box PhysicalPlan::AggregatePartial(ref agg),
-                                ..
-                            }) => {
+                                                       input: box PhysicalPlan::AggregatePartial(ref agg),
+                                                       ..
+                                                   }) => {
                                 let before_group_by_schema = agg.input.output_schema()?;
                                 PhysicalPlan::AggregateFinal(AggregateFinal {
                                     input: Box::new(input),
@@ -496,7 +497,7 @@ impl PhysicalPlanBuilder {
     fn push_downs(
         &self,
         scan: &PhysicalScan,
-        table_schema: &DataSchemaRef,
+        table_schema: &TableSchema,
         has_inner_column: bool,
     ) -> Result<PushDownInfo> {
         let metadata = self.metadata.read().clone();
@@ -533,13 +534,19 @@ impl PhysicalPlanBuilder {
                         .iter()
                         .fold(None, |acc: Option<Scalar>, x: &Scalar| match acc {
                             Some(acc) => {
-                                let func = FunctionFactory::instance()
-                                    .get("and", &[&acc.data_type(), &x.data_type()])
-                                    .unwrap();
+                                let registry = &BUILTIN_FUNCTIONS;
+                                let raw_expr = RawExpr::FunctionCall {
+                                    span: None,
+                                    name: "and".to_string(),
+                                    params: vec![],
+                                    args: vec![acc.as_raw_expr(), x.as_raw_expr()],
+                                };
+                                let expr = type_check::check(&raw_expr, registry)?;
+
                                 Some(Scalar::AndExpr(AndExpr {
                                     left: Box::new(acc),
                                     right: Box::new(x.clone()),
-                                    return_type: Box::new(func.return_type()),
+                                    return_type: Box::new(expr.data_type().clone()),
                                 }))
                             }
                             None => Some(x.clone()),
@@ -603,14 +610,18 @@ impl PhysicalPlanBuilder {
                                 column_name,
                                 data_type,
                                 ..
-                            } => (column_name.clone(), data_type.clone()),
+                            } => (column_name.clone(), DataType::from(data_type)),
                             ColumnEntry::DerivedColumn {
                                 alias, data_type, ..
                             } => (alias.clone(), data_type.clone()),
                         };
 
                         // sort item is already a column
-                        let scalar = Expression::IndexedVariable { name, data_type };
+                        let scalar = RemoteExpr::ColumnRef {
+                            span: None,
+                            id: name,
+                            data_type,
+                        };
 
                         Ok((scalar, item.asc, item.nulls_first))
                     })
@@ -683,8 +694,7 @@ impl<'a> PhysicalScalarBuilder<'a> {
                 args: func
                     .arguments
                     .iter()
-                    .zip(func.arg_types.iter())
-                    .map(|(arg, _)| self.build(arg))
+                    .map(|arg| self.build(arg))
                     .collect::<Result<_>>()?,
                 return_type: *func.return_type.clone(),
             }),

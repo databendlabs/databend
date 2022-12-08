@@ -17,10 +17,9 @@ use std::sync::Arc;
 
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::Chunk;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -39,9 +38,9 @@ impl SyncSystemTable for MallocStatsTable {
         &self.table_info
     }
 
-    fn get_full_data(&self, _: Arc<dyn TableContext>) -> Result<DataBlock> {
+    fn get_full_data(&self, _: Arc<dyn TableContext>) -> Result<Chunk> {
         let values = Self::build_columns().map_err(convert_je_err)?;
-        Ok(DataBlock::create(self.table_info.schema(), vec![
+        Ok(Chunk::new(vec![
             VariantObjectType {}.create_column(&values)?,
         ]))
     }

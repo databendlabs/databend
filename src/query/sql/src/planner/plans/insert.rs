@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_expression::DataSchemaRef;
+use common_expression::{DataSchemaRef, TableSchemaRef, TableSchemaRefExt};
 use common_meta_types::MetaId;
 use common_pipeline_sources::processors::sources::input_formats::InputContext;
 
@@ -41,7 +41,7 @@ pub struct Insert {
     pub database: String,
     pub table: String,
     pub table_id: MetaId,
-    pub schema: DataSchemaRef,
+    pub schema: TableSchemaRef,
     pub overwrite: bool,
     pub source: InsertInputSource,
 }

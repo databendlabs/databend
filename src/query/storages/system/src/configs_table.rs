@@ -21,7 +21,7 @@ use common_config::GlobalConfig;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::utils::ColumnFrom;
-use common_expression::Chunk;
+use common_expression::{Chunk, TableField, TableSchema, TableSchemaRef, TableSchemaRefExt};
 use common_expression::Column;
 use common_expression::DataField;
 use common_expression::DataSchemaRefExt;
@@ -47,14 +47,8 @@ impl SyncSystemTable for ConfigsTable {
         &self.table_info
     }
 
-<<<<<<< HEAD
-    fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<Chunk> {
-        let config = ctx.get_config().into_outer();
-=======
-    fn get_full_data(&self, _ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
+    fn get_full_data(&self, _ctx: Arc<dyn TableContext>) -> Result<Chunk> {
         let config = GlobalConfig::instance().as_ref().clone().into_outer();
->>>>>>> main
-
         let mut names: Vec<String> = vec![];
         let mut values: Vec<String> = vec![];
         let mut groups: Vec<String> = vec![];
@@ -133,11 +127,11 @@ impl SyncSystemTable for ConfigsTable {
 
 impl ConfigsTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
-        let schema = DataSchemaRefExt::create(vec![
-            DataField::new("group", SchemaDataType::String),
-            DataField::new("name", SchemaDataType::String),
-            DataField::new("value", SchemaDataType::String),
-            DataField::new("description", SchemaDataType::String),
+        let schema = TableSchemaRefExt::create(vec![
+            TableField::new("group", SchemaDataType::String),
+            TableField::new("name", SchemaDataType::String),
+            TableField::new("value", SchemaDataType::String),
+            TableField::new("description", SchemaDataType::String),
         ]);
 
         let table_info = TableInfo {
@@ -242,7 +236,7 @@ impl ConfigsTable {
                         Some(k.to_string())
                     },
                 ),
-                Value::Null => ConfigsTable::push_config(
+                JsonValue::Null => ConfigsTable::push_config(
                     names,
                     values,
                     groups,

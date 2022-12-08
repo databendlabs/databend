@@ -13,8 +13,6 @@
 // limitations under the License.
 
 mod chunk_operator;
-mod eval_node;
-// mod monotonicity;
 mod physical_scalar;
 mod scalar;
 
@@ -22,7 +20,6 @@ pub use chunk_operator::ChunkOperator;
 pub use chunk_operator::CompoundChunkOperator;
 use common_datavalues::ColumnRef;
 use common_datavalues::DataTypeImpl;
-pub use eval_node::EvalNode;
 
 pub struct Evaluator;
 

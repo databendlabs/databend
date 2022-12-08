@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use common_exception::Result;
-use common_expression::Chunk;
+use common_expression::{Chunk, TableSchema, TableSchemaRef};
 use common_expression::Column;
 use common_expression::DataSchemaRef;
 
@@ -28,7 +28,7 @@ pub type TSVWithNamesOutputFormat = TSVOutputFormatBase<true, false>;
 pub type TSVWithNamesAndTypesOutputFormat = TSVOutputFormatBase<true, true>;
 
 pub struct TSVOutputFormatBase<const WITH_NAMES: bool, const WITH_TYPES: bool> {
-    schema: DataSchemaRef,
+    schema: TableSchemaRef,
     field_encoder: FieldEncoderTSV,
     field_delimiter: u8,
     record_delimiter: Vec<u8>,
@@ -36,7 +36,7 @@ pub struct TSVOutputFormatBase<const WITH_NAMES: bool, const WITH_TYPES: bool> {
 }
 
 impl<const WITH_NAMES: bool, const WITH_TYPES: bool> TSVOutputFormatBase<WITH_NAMES, WITH_TYPES> {
-    pub fn create(schema: DataSchemaRef, options: &FileFormatOptionsExt) -> Self {
+    pub fn create(schema: TableSchemaRef, options: &FileFormatOptionsExt) -> Self {
         let field_encoder = FieldEncoderTSV::create(options);
         Self {
             schema,

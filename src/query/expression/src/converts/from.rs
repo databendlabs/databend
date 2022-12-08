@@ -23,7 +23,7 @@ use crate::types::number::NumberScalar;
 use crate::types::AnyType;
 use crate::types::DataType;
 use crate::types::NumberDataType;
-use crate::with_number_type;
+use crate::{TableField, TableSchema, with_number_type};
 use crate::Chunk;
 use crate::ChunkEntry;
 use crate::Column;
@@ -71,16 +71,16 @@ pub fn from_type(datatype: &DataTypeImpl) -> SchemaDataType {
     })
 }
 
-pub fn from_schema(schema: &common_datavalues::DataSchema) -> DataSchema {
+pub fn from_schema(schema: &common_datavalues::DataSchema) -> TableSchema {
     let fields = schema
         .fields()
         .iter()
         .map(|f| {
             let ty = from_type(f.data_type());
-            DataField::new(f.name(), ty)
+            TableField::new(f.name(), ty)
         })
         .collect();
-    DataSchema::new_from(fields, schema.meta().clone())
+    TableSchema::new_from(fields, schema.meta().clone())
 }
 
 pub fn from_scalar(datavalue: &DataValue, datatype: &DataTypeImpl) -> Scalar {

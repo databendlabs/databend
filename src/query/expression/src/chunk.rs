@@ -24,7 +24,7 @@ use common_exception::Result;
 use crate::schema::DataSchema;
 use crate::types::AnyType;
 use crate::types::DataType;
-use crate::ChunkMetaInfoPtr;
+use crate::{ChunkMetaInfoPtr, TableSchemaRef};
 use crate::Column;
 use crate::ColumnBuilder;
 use crate::ColumnIndex;
@@ -85,7 +85,7 @@ impl<Index: ColumnIndex> Chunk<Index> {
     }
 
     #[inline]
-    pub fn columns(&self) -> impl Iterator<Item = &ChunkEntry<Index>> {
+    pub fn columns(&self) -> impl Iterator<Item=&ChunkEntry<Index>> {
         self.columns.iter()
     }
 
@@ -170,7 +170,7 @@ impl<Index: ColumnIndex> Chunk<Index> {
             self.columns
                 .iter()
                 .zip(schema.fields())
-                .all(|(col, field)| { col.data_type == field.data_type().into() })
+                .all(|(col, field)| { &col.data_type == field.data_type() })
         );
 
         // Return chunk directly, because we don't support decimal yet.
@@ -243,7 +243,7 @@ impl<Index: ColumnIndex> Chunk<Index> {
 
     pub fn from_arrow_chunk<A: AsRef<dyn Array>>(
         arrow_chunk: &ArrowChunk<A>,
-        schema: &DataSchemaRef,
+        schema: &TableSchemaRef,
     ) -> Result<Self> {
         todo!("expression")
     }

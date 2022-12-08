@@ -27,7 +27,7 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
-use common_expression::Chunk;
+use common_expression::{Chunk, TableSchemaRef};
 use common_expression::ColumnBuilder;
 use common_expression::DataSchemaRef;
 use common_expression::Value;
@@ -45,7 +45,7 @@ use parking_lot::RwLock;
 pub trait SystemLogElement: Send + Sync + Clone {
     const TABLE_NAME: &'static str;
 
-    fn schema() -> DataSchemaRef;
+    fn schema() -> TableSchemaRef;
 
     fn fill_to_data_block(&self, columns: &mut Vec<ColumnBuilder>) -> Result<()>;
 }

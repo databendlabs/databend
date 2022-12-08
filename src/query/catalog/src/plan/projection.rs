@@ -15,7 +15,7 @@
 use std::collections::BTreeMap;
 use std::fmt::Formatter;
 
-use common_expression::DataSchema;
+use common_expression::{DataSchema, TableSchema};
 use common_exception::Result;
 use common_storage::ColumnLeaf;
 use common_storage::ColumnLeaves;
@@ -46,7 +46,7 @@ impl Projection {
     }
 
     /// Use this projection to project a schema.
-    pub fn project_schema(&self, schema: &DataSchema) -> DataSchema {
+    pub fn project_schema(&self, schema: &TableSchema) -> TableSchema {
         match self {
             Projection::Columns(indices) => schema.project(indices),
             Projection::InnerColumns(path_indices) => schema.inner_project(path_indices),

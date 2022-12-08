@@ -17,7 +17,7 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
-use common_expression::DataField;
+use common_expression::{DataField, TableField, TableSchema, TableSchemaRef};
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::Scalar;
@@ -32,7 +32,7 @@ use crate::plan::StageFileInfo;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq)]
 pub struct StageTableInfo {
-    pub schema: DataSchemaRef,
+    pub schema: TableSchemaRef,
     pub path: String,
     pub files: Vec<String>,
     pub pattern: String,
@@ -41,7 +41,7 @@ pub struct StageTableInfo {
 }
 
 impl StageTableInfo {
-    pub fn schema(&self) -> DataSchemaRef {
+    pub fn schema(&self) -> Arc<TableSchema> {
         self.schema.clone()
     }
 
@@ -67,7 +67,7 @@ pub enum DataSourceInfo {
 }
 
 impl DataSourceInfo {
-    pub fn schema(&self) -> Arc<DataSchema> {
+    pub fn schema(&self) -> Arc<TableSchema> {
         match self {
             DataSourceInfo::TableSource(table_info) => table_info.schema(),
             DataSourceInfo::StageSource(table_info) => table_info.schema(),
@@ -95,7 +95,7 @@ pub struct DataSourcePlan {
     /// The key is the column_index of `ColumnEntry` in `Metadata`.
     ///
     /// If it is None, one should use `table_info.schema().fields()`.
-    pub scan_fields: Option<BTreeMap<usize, DataField>>,
+    pub scan_fields: Option<BTreeMap<usize, TableField>>,
 
     pub parts: Partitions,
     pub statistics: PartStatistics,
@@ -107,7 +107,7 @@ pub struct DataSourcePlan {
 
 impl DataSourcePlan {
     /// Return schema after the projection
-    pub fn schema(&self) -> DataSchemaRef {
+    pub fn schema(&self) -> Arc<TableSchema> {
         self.scan_fields
             .clone()
             .map(|x| {
@@ -118,7 +118,7 @@ impl DataSourcePlan {
     }
 
     /// Return designated required fields or all fields in a hash map.
-    pub fn scan_fields(&self) -> BTreeMap<usize, DataField> {
+    pub fn scan_fields(&self) -> BTreeMap<usize, TableField> {
         self.scan_fields
             .clone()
             .unwrap_or_else(|| self.source_info.schema().fields_map())

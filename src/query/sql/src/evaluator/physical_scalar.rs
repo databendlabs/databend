@@ -23,19 +23,10 @@ use common_functions::scalars::in_evaluator;
 use common_functions::scalars::CastFunction;
 use common_functions::scalars::FunctionFactory;
 
-use crate::evaluator::eval_node::EvalNode;
 use crate::evaluator::Evaluator;
 use crate::executor::PhysicalScalar;
 
 impl Evaluator {
-    pub fn eval_expression(
-        expression: &RemoteExpr<String>,
-        schema: &DataSchema,
-    ) -> Result<EvalNode> {
-        let physical_scalar = PhysicalScalar::from_expression(expression, schema)?;
-        Self::eval_physical_scalar(&physical_scalar)
-    }
-
     pub fn eval_physical_scalars(physical_scalars: &[PhysicalScalar]) -> Result<Vec<EvalNode>> {
         physical_scalars
             .iter()

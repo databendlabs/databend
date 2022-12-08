@@ -22,7 +22,7 @@ use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Utc;
-use common_expression::DataSchema;
+use common_expression::{DataSchema, TableSchema};
 use common_meta_types::MatchSeq;
 use common_storage::StorageParams;
 use maplit::hashmap;
@@ -177,7 +177,7 @@ pub struct TableStatistics {
 /// It is what a meta store just needs to save.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct TableMeta {
-    pub schema: Arc<DataSchema>,
+    pub schema: Arc<TableSchema>,
     pub catalog: String,
     pub engine: String,
     pub engine_options: BTreeMap<String, String>,
@@ -201,7 +201,7 @@ pub struct TableMeta {
 
 impl TableInfo {
     /// Create a TableInfo with only db, table, schema
-    pub fn simple(db: &str, table: &str, schema: Arc<DataSchema>) -> TableInfo {
+    pub fn simple(db: &str, table: &str, schema: Arc<TableSchema>) -> TableInfo {
         TableInfo {
             desc: format!("'{}'.'{}'", db, table),
             name: table.to_string(),
@@ -223,7 +223,7 @@ impl TableInfo {
         }
     }
 
-    pub fn schema(&self) -> Arc<DataSchema> {
+    pub fn schema(&self) -> Arc<TableSchema> {
         self.meta.schema.clone()
     }
 
@@ -248,7 +248,7 @@ impl TableInfo {
     }
 
     #[must_use]
-    pub fn set_schema(mut self, schema: Arc<DataSchema>) -> TableInfo {
+    pub fn set_schema(mut self, schema: Arc<TableSchema>) -> TableInfo {
         self.meta.schema = schema;
         self
     }
@@ -257,7 +257,7 @@ impl TableInfo {
 impl Default for TableMeta {
     fn default() -> Self {
         TableMeta {
-            schema: Arc::new(DataSchema::empty()),
+            schema: Arc::new(TableSchema::empty()),
             catalog: "default".to_string(),
             engine: "".to_string(),
             engine_options: BTreeMap::new(),

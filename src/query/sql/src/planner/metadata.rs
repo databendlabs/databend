@@ -22,7 +22,7 @@ use common_ast::ast::Expr;
 use common_ast::ast::Literal;
 use common_catalog::table::Table;
 use common_expression::types::DataType;
-use common_expression::DataField;
+use common_expression::{DataField, TableField};
 use common_expression::SchemaDataType;
 use parking_lot::RwLock;
 
@@ -187,7 +187,7 @@ impl Metadata {
                     let mut inner_indices = indices.clone();
                     inner_indices.push(i);
 
-                    let inner_field = DataField::new(&inner_name, inner_type.clone());
+                    let inner_field = TableField::new(&inner_name, inner_type.clone());
                     fields.push_front((inner_indices, inner_field));
                 }
             }

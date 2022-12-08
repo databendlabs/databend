@@ -21,7 +21,7 @@ use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::utils::ColumnFrom;
-use common_expression::Chunk;
+use common_expression::{Chunk, TableField, TableSchemaRefExt};
 use common_expression::Column;
 use common_expression::DataField;
 use common_expression::DataSchemaRefExt;
@@ -131,22 +131,22 @@ impl AsyncSystemTable for StagesTable {
 
 impl StagesTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
-        let schema = DataSchemaRefExt::create(vec![
-            DataField::new("name", SchemaDataType::String),
-            DataField::new("stage_type", SchemaDataType::String),
-            DataField::new("stage_params", SchemaDataType::String),
-            DataField::new("copy_options", SchemaDataType::String),
-            DataField::new("file_format_options", SchemaDataType::String),
+        let schema = TableSchemaRefExt::create(vec![
+            TableField::new("name", SchemaDataType::String),
+            TableField::new("stage_type", SchemaDataType::String),
+            TableField::new("stage_params", SchemaDataType::String),
+            TableField::new("copy_options", SchemaDataType::String),
+            TableField::new("file_format_options", SchemaDataType::String),
             // NULL for external stage
-            DataField::new(
+            TableField::new(
                 "number_of_files",
                 SchemaDataType::Nullable(Box::new(SchemaDataType::Number(NumberDataType::UInt64))),
             ),
-            DataField::new(
+            TableField::new(
                 "creator",
                 SchemaDataType::Nullable(Box::new(SchemaDataType::String)),
             ),
-            DataField::new("comment", SchemaDataType::String),
+            TableField::new("comment", SchemaDataType::String),
         ]);
         let table_info = TableInfo {
             desc: "'system'.'stages'".to_string(),

@@ -20,7 +20,7 @@ use common_exception::Result;
 use common_expression::types::number::NumberScalar;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
-use common_expression::Chunk;
+use common_expression::{Chunk, TableField, TableSchemaRefExt};
 use common_expression::ColumnBuilder;
 use common_expression::DataField;
 use common_expression::DataSchemaRefExt;
@@ -82,11 +82,11 @@ impl SyncSystemTable for ClustersTable {
 
 impl ClustersTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
-        let schema = DataSchemaRefExt::create(vec![
-            DataField::new("name", SchemaDataType::String),
-            DataField::new("host", SchemaDataType::String),
-            DataField::new("port", SchemaDataType::Number(NumberDataType::UInt16)),
-            DataField::new("version", SchemaDataType::String),
+        let schema = TableSchemaRefExt::create(vec![
+            TableField::new("name", SchemaDataType::String),
+            TableField::new("host", SchemaDataType::String),
+            TableField::new("port", SchemaDataType::Number(NumberDataType::UInt16)),
+            TableField::new("version", SchemaDataType::String),
         ]);
 
         let table_info = TableInfo {

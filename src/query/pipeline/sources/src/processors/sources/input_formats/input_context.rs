@@ -23,7 +23,7 @@ use common_base::base::tokio::sync::mpsc::Receiver;
 use common_base::base::Progress;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::ChunkCompactThresholds;
+use common_expression::{ChunkCompactThresholds, TableSchemaRef};
 use common_expression::DataSchemaRef;
 use common_formats::ClickhouseFormatType;
 use common_formats::FileFormatOptionsExt;
@@ -105,7 +105,7 @@ impl InputSource {
 
 pub struct InputContext {
     pub plan: InputPlan,
-    pub schema: DataSchemaRef,
+    pub schema: TableSchemaRef,
     pub source: InputSource,
     pub format: Arc<dyn InputFormat>,
     pub splits: Vec<Arc<SplitInfo>>,
@@ -159,7 +159,7 @@ impl InputContext {
     pub fn try_create_from_copy(
         operator: Operator,
         settings: Arc<Settings>,
-        schema: DataSchemaRef,
+        schema: TableSchemaRef,
         stage_info: UserStageInfo,
         splits: Vec<Arc<SplitInfo>>,
         scan_progress: Arc<Progress>,
@@ -199,7 +199,7 @@ impl InputContext {
         format_name: &str,
         stream_receiver: Receiver<Result<StreamingReadBatch>>,
         settings: Arc<Settings>,
-        schema: DataSchemaRef,
+        schema: TableSchemaRef,
         scan_progress: Arc<Progress>,
         is_multi_part: bool,
         chunk_compact_thresholds: ChunkCompactThresholds,

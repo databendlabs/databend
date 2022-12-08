@@ -212,7 +212,7 @@ impl<'a> TypeChecker<'a> {
                         }],
                         None,
                     )
-                    .await?
+                        .await?
                 }
             }
 
@@ -279,7 +279,7 @@ impl<'a> TypeChecker<'a> {
                     vec![data_type],
                     required_type,
                 )
-                .await?
+                    .await?
             }
 
             Expr::InList {
@@ -291,8 +291,8 @@ impl<'a> TypeChecker<'a> {
             } => {
                 if list.len() > 3
                     && list
-                        .iter()
-                        .all(|e| matches!(e, Expr::Literal { lit, .. } if lit != &Literal::Null))
+                    .iter()
+                    .all(|e| matches!(e, Expr::Literal { lit, .. } if lit != &Literal::Null))
                 {
                     let tuple_expr = Expr::Tuple {
                         span,
@@ -316,7 +316,7 @@ impl<'a> TypeChecker<'a> {
                             }],
                             None,
                         )
-                        .await?
+                            .await?
                     } else {
                         self.resolve_function(span, "in", &args, required_type)
                             .await?
@@ -386,8 +386,8 @@ impl<'a> TypeChecker<'a> {
                         params: vec![],
                         args: arguments,
                     };
-                    let registry = BUILTIN_FUNCTIONS;
-                    let expr = type_check::check(&raw_expr, &registry)
+                    let registry = &BUILTIN_FUNCTIONS;
+                    let expr = type_check::check(&raw_expr, registry)
                         .map_err(|(_, e)| ErrorCode::SemanticError(e))?;
 
                     Box::new((
@@ -396,7 +396,7 @@ impl<'a> TypeChecker<'a> {
                             right: Box::new(le_func),
                             return_type: Box::new(expr.data_type().clone()),
                         }
-                        .into(),
+                            .into(),
                         expr.data_type().clone(),
                     ))
                 } else {
@@ -420,8 +420,8 @@ impl<'a> TypeChecker<'a> {
                         params: vec![],
                         args: arguments,
                     };
-                    let registry = BUILTIN_FUNCTIONS;
-                    let expr = type_check::check(&raw_expr, &registry)
+                    let registry = &BUILTIN_FUNCTIONS;
+                    let expr = type_check::check(&raw_expr, registry)
                         .map_err(|(_, e)| ErrorCode::SemanticError(e))?;
 
                     Box::new((
@@ -430,7 +430,7 @@ impl<'a> TypeChecker<'a> {
                             right: Box::new(gt_func),
                             return_type: Box::new(expr.data_type().clone()),
                         }
-                        .into(),
+                            .into(),
                         expr.data_type().clone(),
                     ))
                 }
@@ -459,7 +459,7 @@ impl<'a> TypeChecker<'a> {
                                     Some(comparison_op),
                                     None,
                                 )
-                                .await?
+                                    .await?
                             }
                             SubqueryModifier::All => {
                                 let contrary_op = op.to_contrary()?;
@@ -479,7 +479,7 @@ impl<'a> TypeChecker<'a> {
                                     }],
                                     None,
                                 )
-                                .await?
+                                    .await?
                             }
                         }
                     } else {
@@ -490,7 +490,7 @@ impl<'a> TypeChecker<'a> {
                             right.as_ref(),
                             required_type,
                         )
-                        .await?
+                            .await?
                     }
                 } else {
                     self.resolve_binary_op(span, op, left.as_ref(), right.as_ref(), required_type)
@@ -511,10 +511,10 @@ impl<'a> TypeChecker<'a> {
                     span: None,
                     is_try: false,
                     expr: Box::new(scalar.as_raw_expr()),
-                    dest_type: Self::resolve_type_name(target_type)?,
+                    dest_type: DataType::from(&Self::resolve_type_name(target_type)?),
                 };
-                let registry = BUILTIN_FUNCTIONS;
-                let expr = type_check::check(&raw_expr, &registry)
+                let registry = &BUILTIN_FUNCTIONS;
+                let expr = type_check::check(&raw_expr, registry)
                     .map_err(|(_, e)| ErrorCode::SemanticError(e))?;
                 Box::new((
                     CastExpr {
@@ -522,7 +522,7 @@ impl<'a> TypeChecker<'a> {
                         from_type: Box::new(data_type),
                         target_type: Box::new(expr.data_type().clone()),
                     }
-                    .into(),
+                        .into(),
                     expr.data_type().clone(),
                 ))
             }
@@ -603,7 +603,7 @@ impl<'a> TypeChecker<'a> {
                         value,
                         data_type: Box::new(data_type.clone()),
                     }
-                    .into(),
+                        .into(),
                     data_type,
                 ))
             }
@@ -692,7 +692,7 @@ impl<'a> TypeChecker<'a> {
                             args,
                             return_type: Box::new(agg_func.return_type()?),
                         }
-                        .into(),
+                            .into(),
                         agg_func.return_type()?,
                     ))
                 } else {
@@ -714,7 +714,7 @@ impl<'a> TypeChecker<'a> {
                         args: vec![],
                         return_type: Box::new(agg_func.return_type()?),
                     }
-                    .into(),
+                        .into(),
                     agg_func.return_type()?,
                 ))
             }
@@ -732,7 +732,7 @@ impl<'a> TypeChecker<'a> {
                     None,
                     None,
                 )
-                .await?
+                    .await?
             }
 
             Expr::Subquery { subquery, .. } => {
@@ -771,7 +771,7 @@ impl<'a> TypeChecker<'a> {
                     Some(ComparisonOp::Equal),
                     None,
                 )
-                .await?
+                    .await?
             }
 
             expr @ Expr::MapAccess {
@@ -787,16 +787,16 @@ impl<'a> TypeChecker<'a> {
                         Expr::MapAccess {
                             expr: inner_expr,
                             accessor:
-                                accessor @ (MapAccessor::Period { .. }
-                                | MapAccessor::PeriodNumber { .. }
-                                | MapAccessor::Colon { .. }
-                                | MapAccessor::Bracket {
-                                    key:
-                                        box Expr::Literal {
-                                            lit: Literal::String(..),
-                                            ..
-                                        },
-                                }),
+                            accessor @ (MapAccessor::Period { .. }
+                            | MapAccessor::PeriodNumber { .. }
+                            | MapAccessor::Colon { .. }
+                            | MapAccessor::Bracket {
+                                key:
+                                box Expr::Literal {
+                                    lit: Literal::String(..),
+                                    ..
+                                },
+                            }),
                             ..
                         } => {
                             accessors.push(accessor.clone());
@@ -810,8 +810,8 @@ impl<'a> TypeChecker<'a> {
                         } => {
                             let (scalar, data_type) = *self.resolve(expr, None).await?;
                             if let Scalar::BoundColumnRef(BoundColumnRef {
-                                column: ColumnBinding { index, .. },
-                            }) = scalar
+                                                              column: ColumnBinding { index, .. },
+                                                          }) = scalar
                             {
                                 let column_entry = self.metadata.read().column(index);
                                 if let ColumnEntry::BaseTableColumn { data_type, .. } = column_entry
@@ -861,10 +861,10 @@ impl<'a> TypeChecker<'a> {
                     span: None,
                     is_try: false,
                     expr: Box::new(scalar.as_raw_expr()),
-                    dest_type: Self::resolve_type_name(target_type)?,
+                    dest_type: DataType::from(&Self::resolve_type_name(target_type)?),
                 };
-                let registry = BUILTIN_FUNCTIONS;
-                let expr = type_check::check(&raw_expr, &registry)
+                let registry = &BUILTIN_FUNCTIONS;
+                let expr = type_check::check(&raw_expr, registry)
                     .map_err(|(_, e)| ErrorCode::SemanticError(e))?;
                 Box::new((
                     CastExpr {
@@ -872,7 +872,7 @@ impl<'a> TypeChecker<'a> {
                         from_type: Box::new(data_type),
                         target_type: Box::new(expr.data_type().clone()),
                     }
-                    .into(),
+                        .into(),
                     expr.data_type().clone(),
                 ))
             }
@@ -919,7 +919,7 @@ impl<'a> TypeChecker<'a> {
                     date,
                     required_type,
                 )
-                .await?
+                    .await?
             }
             Expr::DateTrunc {
                 span, unit, date, ..
@@ -948,7 +948,7 @@ impl<'a> TypeChecker<'a> {
                     &[substr_expr.as_ref(), str_expr.as_ref()],
                     None,
                 )
-                .await?
+                    .await?
             }
 
             Expr::Tuple { span, exprs, .. } => self.resolve_tuple(span, exprs).await?,
@@ -965,7 +965,7 @@ impl<'a> TypeChecker<'a> {
                     value: common_expression::Literal::Int64(1),
                     data_type: Box::new(DataType::Number(NumberDataType::Int64)),
                 }
-                .into();
+                    .into();
             }
         }
     }
@@ -1004,11 +1004,11 @@ impl<'a> TypeChecker<'a> {
         // rewrite substr('xx', 0, xx) -> substr('xx', 1, xx)
         if (func_name == "substr" || func_name == "substring")
             && self
-                .ctx
-                .get_settings()
-                .get_sql_dialect()
-                .unwrap()
-                .substr_index_zero_literal_as_one()
+            .ctx
+            .get_settings()
+            .get_sql_dialect()
+            .unwrap()
+            .substr_index_zero_literal_as_one()
         {
             Self::rewrite_substring(&mut args);
         }
@@ -1030,8 +1030,8 @@ impl<'a> TypeChecker<'a> {
             params: vec![],
             args: arguments,
         };
-        let registry = BUILTIN_FUNCTIONS;
-        let expr = type_check::check(&raw_expr, &registry)
+        let registry = &BUILTIN_FUNCTIONS;
+        let expr = type_check::check(&raw_expr, registry)
             .map_err(|(_, e)| ErrorCode::SemanticError(e))?;
 
         Ok(Box::new((
@@ -1040,7 +1040,7 @@ impl<'a> TypeChecker<'a> {
                 func_name,
                 return_type: Box::new(expr.data_type().clone()),
             }
-            .into(),
+                .into(),
             expr.data_type().clone(),
         )))
     }
@@ -1062,8 +1062,8 @@ impl<'a> TypeChecker<'a> {
             params: vec![],
             args: arguments,
         };
-        let registry = BUILTIN_FUNCTIONS;
-        let expr = type_check::check(&raw_expr, &registry)
+        let registry = &BUILTIN_FUNCTIONS;
+        let expr = type_check::check(&raw_expr, registry)
             .map_err(|(_, e)| ErrorCode::SemanticError(e))?;
 
         Ok(Box::new((
@@ -1072,7 +1072,7 @@ impl<'a> TypeChecker<'a> {
                 func_name: func_name.to_string(),
                 return_type: Box::new(expr.data_type().clone()),
             }
-            .into(),
+                .into(),
             expr.data_type().clone(),
         )))
     }
@@ -1133,8 +1133,8 @@ impl<'a> TypeChecker<'a> {
                     params: vec![],
                     args: arguments,
                 };
-                let registry = BUILTIN_FUNCTIONS;
-                let expr = type_check::check(&raw_expr, &registry)
+                let registry = &BUILTIN_FUNCTIONS;
+                let expr = type_check::check(&raw_expr, registry)
                     .map_err(|(_, e)| ErrorCode::SemanticError(e))?;
                 Ok(Box::new((
                     ComparisonExpr {
@@ -1143,7 +1143,7 @@ impl<'a> TypeChecker<'a> {
                         right: Box::new(right),
                         return_type: Box::new(expr.data_type().clone()),
                     }
-                    .into(),
+                        .into(),
                     expr.data_type().clone(),
                 )))
             }
@@ -1162,8 +1162,8 @@ impl<'a> TypeChecker<'a> {
                     params: vec![],
                     args: arguments,
                 };
-                let registry = BUILTIN_FUNCTIONS;
-                let expr = type_check::check(&raw_expr, &registry).map_err(|(_, e)| {
+                let registry = &BUILTIN_FUNCTIONS;
+                let expr = type_check::check(&raw_expr, registry).map_err(|(_, e)| {
                     ErrorCode::SemanticError(format!("Invalid arguments for AND: {}", e))
                 })?;
                 Ok(Box::new((
@@ -1172,7 +1172,7 @@ impl<'a> TypeChecker<'a> {
                         right: Box::new(right),
                         return_type: Box::new(expr.data_type().clone()),
                     }
-                    .into(),
+                        .into(),
                     expr.data_type().clone(),
                 )))
             }
@@ -1191,8 +1191,8 @@ impl<'a> TypeChecker<'a> {
                     params: vec![],
                     args: arguments,
                 };
-                let registry = BUILTIN_FUNCTIONS;
-                let expr = type_check::check(&raw_expr, &registry).map_err(|(_, e)| {
+                let registry = &BUILTIN_FUNCTIONS;
+                let expr = type_check::check(&raw_expr, registry).map_err(|(_, e)| {
                     ErrorCode::SemanticError(format!("Invalid arguments for OR: {}", e))
                 })?;
                 Ok(Box::new((
@@ -1201,7 +1201,7 @@ impl<'a> TypeChecker<'a> {
                         right: Box::new(right),
                         return_type: Box::new(expr.data_type().clone()),
                     }
-                    .into(),
+                        .into(),
                     expr.data_type().clone(),
                 )))
             }
@@ -1346,8 +1346,8 @@ impl<'a> TypeChecker<'a> {
             params: vec![],
             args: arguments,
         };
-        let registry = BUILTIN_FUNCTIONS;
-        let expr = type_check::check(&raw_expr, &registry)
+        let registry = &BUILTIN_FUNCTIONS;
+        let expr = type_check::check(&raw_expr, registry)
             .map_err(|(_, e)| ErrorCode::SemanticError(e))?;
 
         Ok(Box::new((
@@ -1356,7 +1356,7 @@ impl<'a> TypeChecker<'a> {
                 func_name: "date_add".to_string(),
                 return_type: Box::new(expr.data_type().clone()),
             }
-            .into(),
+                .into(),
             expr.data_type().clone(),
         )))
     }
@@ -1536,7 +1536,7 @@ impl<'a> TypeChecker<'a> {
                     },
                     None,
                 )
-                .await,
+                    .await,
             ),
             ("version", &[]) => Some(
                 self.resolve(
@@ -1546,7 +1546,7 @@ impl<'a> TypeChecker<'a> {
                     },
                     None,
                 )
-                .await,
+                    .await,
             ),
             ("user" | "currentuser" | "current_user", &[]) => match self.ctx.get_current_user() {
                 Ok(user) => Some(
@@ -1557,7 +1557,7 @@ impl<'a> TypeChecker<'a> {
                         },
                         None,
                     )
-                    .await,
+                        .await,
                 ),
                 Err(e) => Some(Err(e)),
             },
@@ -1574,7 +1574,7 @@ impl<'a> TypeChecker<'a> {
                     },
                     None,
                 )
-                .await,
+                    .await,
             ),
             ("connection_id", &[]) => Some(
                 self.resolve(
@@ -1584,7 +1584,7 @@ impl<'a> TypeChecker<'a> {
                     },
                     None,
                 )
-                .await,
+                    .await,
             ),
             ("timezone", &[]) => {
                 let tz = self.ctx.get_settings().get_timezone().unwrap();
@@ -1596,7 +1596,7 @@ impl<'a> TypeChecker<'a> {
                         },
                         None,
                     )
-                    .await,
+                        .await,
                 )
             }
             ("nullif", &[arg_x, arg_y]) => {
@@ -1620,7 +1620,7 @@ impl<'a> TypeChecker<'a> {
                         ],
                         None,
                     )
-                    .await,
+                        .await,
                 )
             }
             ("ifnull", &[arg_x, arg_y]) => {
@@ -1640,7 +1640,7 @@ impl<'a> TypeChecker<'a> {
                         ],
                         None,
                     )
-                    .await,
+                        .await,
                 )
             }
             ("coalesce", args) => {
@@ -1715,7 +1715,7 @@ impl<'a> TypeChecker<'a> {
                 value: common_expression::Literal::String(" ".as_bytes().to_vec()),
                 data_type: Box::new(DataType::String),
             }
-            .into();
+                .into();
             ("trim_both", trim_scalar, DataType::String)
         };
 
@@ -1730,8 +1730,8 @@ impl<'a> TypeChecker<'a> {
             params: vec![],
             args: arguments,
         };
-        let registry = BUILTIN_FUNCTIONS;
-        let expr = type_check::check(&raw_expr, &registry)
+        let registry = &BUILTIN_FUNCTIONS;
+        let expr = type_check::check(&raw_expr, registry)
             .map_err(|(_, e)| ErrorCode::SemanticError(e))?;
 
         Ok(Box::new((
@@ -1740,7 +1740,7 @@ impl<'a> TypeChecker<'a> {
                 func_name: func_name.to_string(),
                 return_type: Box::new(expr.data_type().clone()),
             }
-            .into(),
+                .into(),
             expr.data_type().clone(),
         )))
     }
@@ -1791,8 +1791,8 @@ impl<'a> TypeChecker<'a> {
             params: vec![],
             args: arguments,
         };
-        let registry = BUILTIN_FUNCTIONS;
-        let expr = type_check::check(&raw_expr, &registry)
+        let registry = &BUILTIN_FUNCTIONS;
+        let expr = type_check::check(&raw_expr, registry)
             .map_err(|(_, e)| ErrorCode::SemanticError(e))?;
 
         Ok(Box::new((
@@ -1801,7 +1801,7 @@ impl<'a> TypeChecker<'a> {
                 func_name: "array".to_string(),
                 return_type: Box::new(expr.data_type().clone()),
             }
-            .into(),
+                .into(),
             expr.data_type().clone(),
         )))
     }
@@ -1826,8 +1826,8 @@ impl<'a> TypeChecker<'a> {
             params: vec![],
             args: arguments,
         };
-        let registry = BUILTIN_FUNCTIONS;
-        let expr = type_check::check(&raw_expr, &registry)
+        let registry = &BUILTIN_FUNCTIONS;
+        let expr = type_check::check(&raw_expr, registry)
             .map_err(|(_, e)| ErrorCode::SemanticError(e))?;
 
         Ok(Box::new((
@@ -1836,7 +1836,7 @@ impl<'a> TypeChecker<'a> {
                 func_name: "tuple".to_string(),
                 return_type: Box::new(expr.data_type().clone()),
             }
-            .into(),
+                .into(),
             expr.data_type().clone(),
         )))
     }
@@ -1913,17 +1913,17 @@ impl<'a> TypeChecker<'a> {
             {
                 (fields_type, fields_name)
             } else {
-                return Err(ErrorCode::Internal(format!("",)));
+                return Err(ErrorCode::Internal(format!("", )));
             };
 
             let accessor = accessors.pop().unwrap();
             let accessor_lit = match accessor {
                 MapAccessor::Bracket {
                     key:
-                        box Expr::Literal {
-                            lit: lit @ Literal::String(_),
-                            ..
-                        },
+                    box Expr::Literal {
+                        lit: lit @ Literal::String(_),
+                        ..
+                    },
                 } => lit,
                 MapAccessor::Period { key } | MapAccessor::Colon { key } => {
                     Literal::String(key.name.clone())
@@ -2000,8 +2000,8 @@ impl<'a> TypeChecker<'a> {
         original_expr: &Expr<'a>,
         replacement_fn: &F,
     ) -> Result<Expr<'a>>
-    where
-        F: Fn(&Expr) -> Result<Option<Expr<'a>>>,
+        where
+            F: Fn(&Expr) -> Result<Option<Expr<'a>>>,
     {
         let replacement_opt = replacement_fn(original_expr)?;
         match replacement_opt {
@@ -2267,35 +2267,39 @@ impl<'a> TypeChecker<'a> {
             && names.contains(&name)
     }
 
-    pub fn resolve_type_name(type_name: &TypeName) -> Result<DataType> {
+    pub fn resolve_type_name(type_name: &TypeName) -> Result<SchemaDataType> {
         let data_type = match type_name {
-            TypeName::Boolean => DataType::Boolean,
-            TypeName::UInt8 => DataType::Number(NumberDataType::UInt8),
-            TypeName::UInt16 => DataType::Number(NumberDataType::UInt16),
-            TypeName::UInt32 => DataType::Number(NumberDataType::UInt32),
-            TypeName::UInt64 => DataType::Number(NumberDataType::UInt64),
-            TypeName::Int8 => DataType::Number(NumberDataType::Int8),
-            TypeName::Int16 => DataType::Number(NumberDataType::Int16),
-            TypeName::Int32 => DataType::Number(NumberDataType::Int32),
-            TypeName::Int64 => DataType::Number(NumberDataType::Int64),
-            TypeName::Float32 => DataType::Number(NumberDataType::Float32),
-            TypeName::Float64 => DataType::Number(NumberDataType::Float64),
-            TypeName::String => DataType::String,
-            TypeName::Timestamp => DataType::Timestamp,
-            TypeName::Date => DataType::Date,
+            TypeName::Boolean => SchemaDataType::Boolean,
+            TypeName::UInt8 => SchemaDataType::Number(NumberDataType::UInt8),
+            TypeName::UInt16 => SchemaDataType::Number(NumberDataType::UInt16),
+            TypeName::UInt32 => SchemaDataType::Number(NumberDataType::UInt32),
+            TypeName::UInt64 => SchemaDataType::Number(NumberDataType::UInt64),
+            TypeName::Int8 => SchemaDataType::Number(NumberDataType::Int8),
+            TypeName::Int16 => SchemaDataType::Number(NumberDataType::Int16),
+            TypeName::Int32 => SchemaDataType::Number(NumberDataType::Int32),
+            TypeName::Int64 => SchemaDataType::Number(NumberDataType::Int64),
+            TypeName::Float32 => SchemaDataType::Number(NumberDataType::Float32),
+            TypeName::Float64 => SchemaDataType::Number(NumberDataType::Float64),
+            TypeName::String => SchemaDataType::String,
+            TypeName::Timestamp => SchemaDataType::Timestamp,
+            TypeName::Date => SchemaDataType::Date,
             TypeName::Array {
                 item_type: Some(item_type),
-            } => DataType::Array(Box::new(Self::resolve_type_name(&item_type)?)),
-            TypeName::Tuple { fields_type, .. } => DataType::Tuple(
-                fields_type
+            } => SchemaDataType::Array(Box::new(Self::resolve_type_name(&item_type)?)),
+            TypeName::Tuple { fields_type, fields_name } => SchemaDataType::Tuple {
+                fields_name: match fields_name {
+                    None => (0..fields_type.len()).into_iter().map(|i| i.to_string()).collect(),
+                    Some(names) => names.clone(),
+                },
+                fields_type: fields_type
                     .iter()
                     .map(Self::resolve_type_name)
                     .collect::<Result<Vec<_>>>()?,
-            ),
+            },
             TypeName::Nullable(inner_type) => {
-                DataType::Nullable(Box::new(Self::resolve_type_name(&inner_type)?))
+                SchemaDataType::Nullable(Box::new(Self::resolve_type_name(&inner_type)?))
             }
-            TypeName::Variant => DataType::Variant,
+            TypeName::Variant => SchemaDataType::Variant,
             _ => {
                 return Err(ErrorCode::Internal("Invalid type name"));
             }

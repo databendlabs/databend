@@ -16,8 +16,8 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use common_ast::ast::Engine;
-use common_expression::types::NumberDataType;
-use common_expression::DataField;
+use common_expression::types::{DataType, NumberDataType};
+use common_expression::{DataField, DataSchemaRefExt, TableSchemaRef};
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::SchemaDataType;
@@ -39,7 +39,7 @@ pub struct CreateTablePlanV2 {
     pub database: String,
     pub table: String,
 
-    pub schema: DataSchemaRef,
+    pub schema: TableSchemaRef,
     pub engine: Engine,
     pub storage_params: Option<StorageParams>,
     pub options: TableOptions,
@@ -51,7 +51,7 @@ pub struct CreateTablePlanV2 {
 
 impl CreateTablePlanV2 {
     pub fn schema(&self) -> DataSchemaRef {
-        self.schema.clone()
+        DataSchemaRefExt::create(vec![])
     }
 }
 
@@ -214,7 +214,6 @@ impl From<UndropTablePlan> for UndropTableReq {
 }
 
 /// Exists table.
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ExistsTablePlan {
     pub catalog: String,
@@ -226,7 +225,7 @@ impl ExistsTablePlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::new(vec![DataField::new(
             "result",
-            SchemaDataType::Number(NumberDataType::UInt8),
+            DataType::Number(NumberDataType::UInt8),
         )]))
     }
 }

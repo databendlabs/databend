@@ -15,7 +15,7 @@
 use common_exception::Result;
 use common_expression::types::number::NumberScalar;
 use common_expression::types::NumberDataType;
-use common_expression::ColumnBuilder;
+use common_expression::{ColumnBuilder, TableField};
 use common_expression::DataField;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
@@ -41,9 +41,9 @@ impl SystemLogElement for ClusteringHistoryLogElement {
 
     fn schema() -> DataSchemaRef {
         DataSchemaRefExt::create(vec![
-            DataField::new("start_time", SchemaDataType::Timestamp),
-            DataField::new("end_time", SchemaDataType::Timestamp),
-            DataField::new("database", SchemaDataType::String),
+            TableField::new("start_time", SchemaDataType::Timestamp),
+            TableField::new("end_time", SchemaDataType::Timestamp),
+            TableField::new("database", SchemaDataType::String),
             DataField::new("table", SchemaDataType::String),
             DataField::new(
                 "reclustered_bytes",

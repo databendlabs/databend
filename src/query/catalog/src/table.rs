@@ -20,7 +20,7 @@ use chrono::DateTime;
 use chrono::Utc;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::Chunk;
+use common_expression::{Chunk, TableSchema};
 use common_expression::ChunkCompactThresholds;
 use common_expression::DataSchema;
 use common_expression::RemoteExpr;
@@ -52,7 +52,7 @@ pub trait Table: Sync + Send {
         self.get_table_info().engine()
     }
 
-    fn schema(&self) -> Arc<DataSchema> {
+    fn schema(&self) -> Arc<TableSchema> {
         self.get_table_info().schema()
     }
 

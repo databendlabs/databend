@@ -21,6 +21,7 @@ use common_expression::DataSchemaRefExt;
 use common_expression::SchemaDataType;
 use common_meta_types::UserStageInfo;
 use time::Duration;
+use common_expression::types::DataType;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PresignAction {
@@ -39,9 +40,9 @@ pub struct PresignPlan {
 impl PresignPlan {
     pub fn schema(&self) -> DataSchemaRef {
         DataSchemaRefExt::create(vec![
-            DataField::new("method", SchemaDataType::String),
-            DataField::new("headers", SchemaDataType::Variant),
-            DataField::new("url", SchemaDataType::String),
+            DataField::new("method", DataType::String),
+            DataField::new("headers", DataType::Variant),
+            DataField::new("url", DataType::String),
         ])
     }
 }

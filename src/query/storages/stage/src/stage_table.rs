@@ -119,10 +119,10 @@ impl StageTable {
         Ok(all_files)
     }
 
-    fn get_block_compact_thresholds_with_default(&self) -> BlockCompactThresholds {
+    fn get_block_compact_thresholds_with_default(&self) -> ChunkCompactThresholds {
         let guard = self.block_compact_threshold.lock();
         match guard.deref() {
-            None => BlockCompactThresholds::default(),
+            None => ChunkCompactThresholds::default(),
             Some(t) => *t,
         }
     }
