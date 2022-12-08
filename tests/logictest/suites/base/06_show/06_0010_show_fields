@@ -10,9 +10,8 @@ USE ss;
 statement ok
 CREATE TABLE t1(a INT);
 
-statement query TTTTT 
+query TTTTT
 SHOW FIELDS FROM t1;
-
 ----
 a INT NO 0 
 

@@ -1,14 +1,12 @@
-statement query T
+query T
 select trim('      abc   ');
-
 ----
 abc
 
 statement ok
 select trim('');
 
-statement query T
+query T
 select trim('abc');
-
 ----
 abc

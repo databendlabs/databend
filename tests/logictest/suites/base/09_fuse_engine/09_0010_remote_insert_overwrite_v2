@@ -19,9 +19,8 @@ INSERT INTO t1 (a,b,c,d) VALUES(1, 1, 1, 'origin'), (2, 2, 2, 'origin');
 statement ok
 INSERT INTO t2 (a,b,c,d) VALUES(3, 3, 3, 'change'), (4, 4, 4, 'change');
 
-statement query IIIT
+query IIIT
 select * from t1;
-
 ----
 1 1 1 origin
 2 2 2 origin
@@ -29,9 +28,8 @@ select * from t1;
 statement ok
 INSERT OVERWRITE t1 select * from t2;
 
-statement query IIIT
+query IIIT
 select * from t1;
-
 ----
 3 3 3 change
 4 4 4 change
@@ -39,9 +37,8 @@ select * from t1;
 statement ok
 INSERT OVERWRITE t1 VALUES (5, 5, 5, 'change2'), (6, 6, 6, 'change2');
 
-statement query IIIT
+query IIIT
 select * from t1;
-
 ----
 5 5 5 change2
 6 6 6 change2

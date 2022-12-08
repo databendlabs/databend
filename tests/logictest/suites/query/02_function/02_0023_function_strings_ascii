@@ -1,18 +1,15 @@
-statement query I
+query I
 select ascii('1');
-
 ----
 49
 
-statement query I
+query I
 select ascii('123');
-
 ----
 49
 
-statement query I
+query I
 select ascii('-1');
-
 ----
 45
 

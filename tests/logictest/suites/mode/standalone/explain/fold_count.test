@@ -4,9 +4,8 @@ drop table if exists t;
 statement ok
 create table t as select * from numbers(1000);
 
-statement query T
+query T
 explain select count(*) from t;
-
 ----
 EvalScalar
 ├── expressions: [COUNT(*) (#2)]
@@ -17,9 +16,8 @@ EvalScalar
 statement ok
 insert into t values(1);
 
-statement query T
+query T
 explain select count(*) from t;
-
 ----
 EvalScalar
 ├── expressions: [COUNT(*) (#2)]
@@ -27,9 +25,8 @@ EvalScalar
     ├── expressions: [1001]
     └── DummyTableScan
 
-statement query T
+query T
 explain select count(*) from t where number > 10;
-
 ----
 EvalScalar
 ├── expressions: [COUNT(*) (#2)]

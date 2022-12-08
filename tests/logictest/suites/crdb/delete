@@ -16,9 +16,8 @@ INSERT INTO kv VALUES (1, 2), (3, 4), (5, 6), (7, 8);
 statement ok
 INSERT INTO unindexed VALUES (1, 2), (3, 4), (5, 6), (7, 8);
 
-statement query II
+query II
 SELECT * FROM kv;
-
 ----
 1 2
 3 4
@@ -31,9 +30,8 @@ drop view if exists kview;
 statement ok
 CREATE VIEW kview AS SELECT k,v FROM kv;
 
-statement query II
+query II
 SELECT * FROM kview;
-
 ----
 1 2
 3 4
@@ -43,9 +41,8 @@ SELECT * FROM kview;
 statement error 1002
 DELETE FROM kview;
 
-statement query II
+query II
 SELECT * FROM kview;
-
 ----
 1 2
 3 4
@@ -55,9 +52,8 @@ SELECT * FROM kview;
 statement ok
 DELETE FROM kv WHERE k=3 OR v=6;
 
-statement query II
+query II
 SELECT * FROM kv;
-
 ----
 1 2
 7 8
@@ -77,9 +73,8 @@ DELETE FROM kv WHERE nonexistent = 1;
 statement ok
 DELETE FROM unindexed WHERE k=3 OR v=6;
 
-statement query II
+query II
 SELECT * FROM unindexed;
-
 ----
 1 2
 7 8
@@ -102,9 +97,8 @@ DELETE FROM unindexed;
 statement ok
 INSERT INTO unindexed VALUES (1, 2), (3, 4), (5, 6), (7, 8);
 
-statement query II
+query II
 SELECT k, v FROM unindexed;
-
 ----
 1 2
 3 4
@@ -120,9 +114,8 @@ INSERT INTO unindexed VALUES (1, 2), (3, 4), (5, 6), (7, 8);
 statement ok
 DELETE FROM unindexed WHERE k >= 4;
 
-statement query II
+query II
 SELECT k, v FROM unindexed;
-
 ----
 1 2
 3 4
@@ -139,9 +132,8 @@ INSERT INTO unindexed VALUES (1, 2), (3, 4), (5, 6), (7, 8);
 statement ok
 DELETE FROM unindexed WHERE k >= 4;
 
-statement query II
+query II
 SELECT k, v FROM unindexed;
-
 ----
 1 2
 3 4
@@ -149,9 +141,8 @@ SELECT k, v FROM unindexed;
 statement ok
 DELETE FROM unindexed WHERE k >= 7;
 
-statement query II
+query II
 SELECT k, v FROM unindexed;
-
 ----
 1 2
 3 4

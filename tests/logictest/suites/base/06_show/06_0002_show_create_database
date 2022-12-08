@@ -1,6 +1,5 @@
-statement query TT 
+query TT
 SHOW CREATE DATABASE `system`;
-
 ----
 system CREATE DATABASE `system` ENGINE=SYSTEM
 
@@ -10,9 +9,8 @@ DROP DATABASE IF EXISTS `test`;
 statement ok
 CREATE DATABASE `test`;
 
-statement query TT 
+query TT
 SHOW CREATE DATABASE `test`;
-
 ----
 test CREATE DATABASE `test` ENGINE=DEFAULT
 
@@ -28,9 +26,8 @@ DROP DATABASE `test`;
 -- statement ok
 -- DROP DATABASE `datafuselabs`;
 
-statement query TT 
+query TT
 SHOW CREATE SCHEMA `system`;
-
 ----
 system CREATE DATABASE `system` ENGINE=SYSTEM
 
@@ -40,9 +37,8 @@ DROP SCHEMA IF EXISTS `test`;
 statement ok
 CREATE SCHEMA `test`;
 
-statement query TT 
+query TT
 SHOW CREATE SCHEMA `test`;
-
 ----
 test CREATE DATABASE `test` ENGINE=DEFAULT
 

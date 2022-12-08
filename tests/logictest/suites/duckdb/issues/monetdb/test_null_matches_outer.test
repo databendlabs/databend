@@ -31,9 +31,8 @@ insert into "I" values (4, 'quattro');
 statement error 1010
 insert into "I" values (null, 'this is not null');
 
-statement query ITTT
+query ITTT
 select * from "E" left outer join "I" on "E"."intCol" = "I"."intCol" or ("E"."intCol" is null and  "I"."intCol" is null) ORDER BY 1;
-
 ----
 0 zero NULL NULL
 1 one NULL NULL

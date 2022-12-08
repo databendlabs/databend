@@ -1,76 +1,64 @@
-statement query B
+query B
 select as_boolean(parse_json('true'));
-
 ----
 1
 
 
 
-statement query B
+query B
 select as_boolean(parse_json('false'));
-
 ----
 0
 
 
 
-statement query I
+query I
 select as_integer(parse_json('123'));
-
 ----
 123
 
-statement query I
+query I
 select as_integer(parse_json('456'));
-
 ----
 456
 
-statement query F
+query F
 select as_float(parse_json('12.34'));
-
 ----
 12.34
 
-statement query F
+query F
 select as_float(parse_json('56.78'));
-
 ----
 56.78
 
-statement query T
+query T
 select as_string(parse_json('"abc"'));
-
 ----
 abc
 
-statement query T
+query T
 select as_string(parse_json('"xyz"'));
-
 ----
 xyz
 
-statement query T
+query T
 select as_array(parse_json('[1,2,3]'));
-
 ----
 [1,2,3]
 
-statement query T
+query T
 select as_array(parse_json('["a","b","c"]'));
-
 ----
 ["a","b","c"]
 
-statement query T
+query T
 select as_object(parse_json('{"a":"b"}'));
-
 ----
 {"a":"b"}
 
-statement query T
+query T
 select as_object(parse_json('{"k": 123}'));
-
 ----
 {"k":123}
 
@@ -104,9 +92,8 @@ insert into t1 select 5, parse_json('[1,2,3]');
 statement ok
 insert into t1 select 6, parse_json('{"a":"b"}');
 
-statement query ITBIFTTT
+query ITBIFTTT
 select id, v, as_boolean(v), as_integer(v), as_float(v), as_string(v), as_array(v), as_object(v) from t1 order by id asc;
-
 ----
 1 true 1 NULL NULL NULL NULL NULL
 2 123 NULL 123 123.0 NULL NULL NULL

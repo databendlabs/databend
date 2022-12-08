@@ -6,30 +6,26 @@ create table if not exists t_issue_7949 (a int);
 statement ok
 insert into t_issue_7949 select * from numbers(3);
 
-statement query I
+query I
 select 1 from t_issue_7949 where 1;
-
 ----
 1
 1
 1
 
-statement query I
+query I
 select 1 from t_issue_7949 where 0;
-
 ----
 
-statement query I
+query I
 select 1 from t_issue_7949 where true;
-
 ----
 1
 1
 1
 
-statement query I
+query I
 select 1 from t_issue_7949 where false;
-
 ----
 
 statement ok

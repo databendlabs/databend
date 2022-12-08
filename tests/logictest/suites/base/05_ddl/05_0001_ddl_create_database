@@ -7,9 +7,8 @@ CREATE DATABASE db;
 statement ok
 CREATE TABLE db.t(c1 int) ENGINE = Null;
 
-statement query I
+query I
 SELECT COUNT(1) from system.tables where name = 't' and database = 'db';
-
 ----
 1
 
@@ -40,9 +39,8 @@ CREATE SCHEMA db;
 statement ok
 CREATE TABLE db.t(c1 int) ENGINE = Null;
 
-statement query I
+query I
 SELECT COUNT(1) from system.tables where name = 't' and database = 'db';
-
 ----
 1
 

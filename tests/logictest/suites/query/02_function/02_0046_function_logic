@@ -1,234 +1,203 @@
-statement query B
+query B
 SELECT true and false;
-
 ----
 0
 
 
 
-statement query B
+query B
 SELECT true and true;
-
 ----
 1
 
 
 
-statement query B
+query B
 SELECT false and false;
-
 ----
 0
 
 
 
-statement query B
+query B
 SELECT 1 and 0;
-
 ----
 0
 
 
 
-statement query B
+query B
 SELECT 1 and 1;
-
 ----
 1
 
 
 
-statement query B
+query B
 SELECT 1 and null;
-
 ----
 NULL
 
-statement query B
+query B
 SELECT 0 and null;
-
 ----
 0
 
 
 
-statement query B
+query B
 SELECT null and null;
-
 ----
 NULL
 
-statement query I
+query I
 SELECT number from numbers(10) WHERE number > 5 AND number < 8 ORDER BY number;
-
 ----
 6
 7
 
-statement query B
+query B
 SELECT true OR false;
-
 ----
 1
 
 
 
-statement query B
+query B
 SELECT true OR true;
-
 ----
 1
 
 
 
-statement query B
+query B
 SELECT false OR false;
-
 ----
 0
 
 
 
-statement query B
+query B
 SELECT 1 OR 0;
-
 ----
 1
 
 
 
-statement query B
+query B
 SELECT 1 OR 1;
-
 ----
 1
 
 
 
-statement query B
+query B
 SELECT 0 OR 0;
-
 ----
 0
 
 
 
-statement query B
+query B
 SELECT 1 OR null;
-
 ----
 1
 
 
 
-statement query B
+query B
 SELECT 0 OR null;
-
 ----
 NULL
 
-statement query B
+query B
 SELECT null OR 1;
-
 ----
 1
 
 
 
-statement query B
+query B
 SELECT null OR null;
-
 ----
 NULL
 
-statement query I
+query I
 SELECT number from numbers(10) WHERE number > 7 OR number < 2 ORDER BY number;
-
 ----
 0
 1
 8
 9
 
-statement query B
+query B
 SELECT true XOR true;
-
 ----
 0
 
 
 
-statement query B
+query B
 SELECT false XOR false;
-
 ----
 0
 
 
 
-statement query B
+query B
 SELECT true XOR false;
-
 ----
 1
 
 
 
-statement query B
+query B
 SELECT false XOR true;
-
 ----
 1
 
 
 
-statement query T
+query T
 SELECT null XOR true;
-
 ----
 NULL
 
-statement query T
+query T
 SELECT false XOR null;
-
 ----
 NULL
 
-statement query B
+query B
 SELECT not true;
-
 ----
 0
 
 
 
-statement query B
+query B
 SELECT not false;
-
 ----
 1
 
 
 
-statement query B
+query B
 SELECT not 1;
-
 ----
 0
 
 
 
-statement query B
+query B
 SELECT not 0;
-
 ----
 1
 
 
 
-statement query TT
+query TT
 SELECT not null, not (null BETWEEN NULL AND NULL);
-
 ----
 NULL NULL
 
@@ -241,97 +210,97 @@ CREATE TABLE t_logic (a INT NULL);
 statement ok
 INSERT INTO t_logic VALUES (NULL);
 
-statement query TT
+query TT
 SELECT (a < 1) AND (a < 1), (a < 1) OR (a < 1) FROM t_logic; -- NULL(false), NULL(false)
 
 ----
 NULL NULL
 
-statement query TT
+query TT
 SELECT (a > 1) AND (a < 1), (a > 1) OR (a < 1) FROM t_logic; -- NULL(false), NULL(true)
 
 ----
 NULL NULL
 
-statement query TT
+query TT
 SELECT (a < 1) AND (a > 1), (a < 1) OR (a > 1) FROM t_logic; -- NULL(true), NULL(false)
 
 ----
 NULL NULL
 
-statement query TT
+query TT
 SELECT (a < 1) AND (a < 1), (a < 1) OR (a < 1) FROM t_logic; -- NULL(true), NULL(true)
 
 ----
 NULL NULL
 
-statement query TT
+query TT
 SELECT (a > 1) AND (0 > 1), (a > 1) OR (0 > 1) FROM t_logic; -- NULL(false), false
 
 ----
 0 NULL
 
-statement query TT
+query TT
 SELECT (a > 1) AND (0 < 1), (a > 1) OR (0 < 1) FROM t_logic; -- NULL(false), true
 
 ----
 NULL 1
 
-statement query TT
+query TT
 SELECT (a < 1) AND (0 > 1), (a < 1) OR (0 > 1) FROM t_logic; -- NULL(true), false
 
 ----
 0 NULL
 
-statement query TT
+query TT
 SELECT (a < 1) AND (0 < 1), (a < 1) OR (0 < 1) FROM t_logic; -- NULL(true), true
 
 ----
 NULL 1
 
-statement query TT
+query TT
 SELECT (0 > 1) AND (a > 1), (0 > 1) OR (a > 1) FROM t_logic; -- false, NULL(false)
 
 ----
 0 NULL
 
-statement query TT
+query TT
 SELECT (0 > 1) AND (a < 1), (0 > 1) OR (a < 1) FROM t_logic; -- false, NULL(true)
 
 ----
 0 NULL
 
-statement query TT
+query TT
 SELECT (0 < 1) AND (a > 1), (0 < 1) OR (a > 1) FROM t_logic; -- true, NULL(false)
 
 ----
 NULL 1
 
-statement query TT
+query TT
 SELECT (0 < 1) AND (a < 1), (0 < 1) OR (a < 1) FROM t_logic; -- true, NULL(true)
 
 ----
 NULL 1
 
-statement query TT
+query TT
 SELECT (0 > 1) AND (0 > 1), (0 > 1) OR (0 > 1) FROM t_logic; -- false, false
 
 ----
 0 0
 
-statement query TT
+query TT
 SELECT (0 > 1) AND (0 < 1), (0 > 1) OR (0 < 1) FROM t_logic; -- false, true
 
 ----
 0 1
 
-statement query TT
+query TT
 SELECT (0 < 1) AND (0 > 1), (0 < 1) OR (0 > 1) FROM t_logic; -- true, false
 
 ----
 0 1
 
-statement query TT
+query TT
 SELECT (0 < 1) AND (0 < 1), (0 < 1) OR (0 < 1) FROM t_logic; -- true, true
 
 ----

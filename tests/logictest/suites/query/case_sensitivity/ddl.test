@@ -31,9 +31,8 @@ statement error
 insert into "T"("A") values(1);
 
 onlyif mysql
-statement query I
+query I
 select "A" from t;
-
 ----
 1
 
@@ -42,9 +41,8 @@ statement error
 select a, A from t;
 
 onlyif mysql
-statement query I
+query I
 select a+A from "T";
-
 ----
 2
 
@@ -61,9 +59,8 @@ statement ok
 create view "V" as select "A" as "B" from t;
 
 onlyif mysql
-statement query I
+query I
 select "B" from "V";
-
 ----
 1
 

@@ -10,15 +10,13 @@ insert into cast_test values(null, 1);
 statement error
 select cast(null as int);
 
-statement query I
+query I
 select try_cast(null as int);
-
 ----
 NULL
 
-statement query I
+query I
 select try_cast(int_not_nullable as int) from cast_test;
-
 ----
 1
 

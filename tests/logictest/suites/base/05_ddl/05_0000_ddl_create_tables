@@ -25,9 +25,8 @@ create table t2(a int,b int) Engine = Fuse;
 statement ok
 insert into t2 values(1,1),(2,2);
 
-statement query I
+query I
 select a+b from t2;
-
 ----
 2
 4
@@ -86,15 +85,13 @@ CREATE TABLE db2.test2 LIKE db1.test1 ENGINE=fuse;
 statement ok
 INSERT INTO db2.test2 VALUES (3, 5);
 
-statement query I
+query I
 SELECT a+b FROM db2.test2;
-
 ----
 8
 
-statement query TTTTT
+query TTTTT
 DESCRIBE db2.test2;
-
 ----
 a INT NO 0
 b INT YES NULL
@@ -102,17 +99,15 @@ b INT YES NULL
 statement ok
 CREATE TABLE db2.test3(a Varchar null, y Varchar null) ENGINE=fuse AS SELECT * FROM db1.test1;
 
-statement query TTTTT
+query TTTTT
 DESCRIBE db2.test3;
-
 ----
 a VARCHAR YES NULL
 y VARCHAR YES NULL
 b INT YES NULL
 
-statement query T
+query T
 SELECT a FROM db2.test3;
-
 ----
 1
 2
@@ -121,17 +116,15 @@ SELECT a FROM db2.test3;
 statement ok
 CREATE TABLE db2.test4(a Varchar null, y Varchar null) ENGINE=fuse AS SELECT b, a FROM db1.test1;
 
-statement query TTTTT
+query TTTTT
 DESCRIBE db2.test4;
-
 ----
 a VARCHAR YES NULL
 y VARCHAR YES NULL
 b INT YES NULL
 
-statement query T
+query T
 SELECT a FROM db2.test4;
-
 ----
 1
 2
@@ -140,9 +133,8 @@ SELECT a FROM db2.test4;
 statement ok
 CREATE TABLE db2.test5(a Varchar null, y Varchar null) ENGINE=fuse AS SELECT b FROM db1.test1;
 
-statement query T
+query T
 SELECT a FROM db2.test5;
-
 ----
 NULL
 NULL
@@ -160,9 +152,8 @@ create table db2.test6(id Int8, created timestamp  DEFAULT today() + 3);
 statement ok
 create table db2.test7(tiny TINYINT, tiny_unsigned TINYINT UNSIGNED, smallint SMALLINT, smallint_unsigned SMALLINT UNSIGNED, int INT, int_unsigned INT UNSIGNED, bigint BIGINT, bigint_unsigned BIGINT UNSIGNED,float FLOAT, double DOUBLE, date DATE, datetime DATETIME, ts TIMESTAMP, str VARCHAR default '3', bool BOOLEAN, arr ARRAY, obj OBJECT, variant VARIANT);
 
-statement query TTTTT
+query TTTTT
 desc db2.test7;
-
 ----
 tiny TINYINT NO 0
 tiny_unsigned TINYINT UNSIGNED NO 0
@@ -186,9 +177,8 @@ variant VARIANT NO null
 statement ok
 create transient table db2.test8(tiny TINYINT, tiny_unsigned TINYINT UNSIGNED, smallint SMALLINT, smallint_unsigned SMALLINT UNSIGNED, int INT, int_unsigned INT UNSIGNED, bigint BIGINT, bigint_unsigned BIGINT UNSIGNED,float FLOAT, double DOUBLE, date DATE, datetime DATETIME, ts TIMESTAMP, str VARCHAR default '3', bool BOOLEAN, arr ARRAY, obj OBJECT, variant VARIANT);
 
-statement query TTTTT
+query TTTTT
 desc db2.test8;
-
 ----
 tiny TINYINT NO 0
 tiny_unsigned TINYINT UNSIGNED NO 0

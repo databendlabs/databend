@@ -19,9 +19,8 @@ insert into t values(2);
 statement ok
 optimize table t compact limit 5;
 
-statement query I
+query I
 select count(1) from t;
-
 ----
 2
 
@@ -40,9 +39,8 @@ insert into t1 values(5),(6),(7);
 statement ok
 optimize table t1 compact;
 
-statement query I
+query I
 select count(1) from t1;
-
 ----
 7
 

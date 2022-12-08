@@ -19,21 +19,18 @@ INSERT INTO t_issue_8130 VALUES(2);
 statement ok
 optimize table t_issue_8130 compact segment;
 
-statement query II
+query II
 select segment_count, block_count from fuse_snapshot('issues', 't_issue_8130') order by timestamp desc limit 1;
-
 ----
 1 2
 
-statement query I
+query I
 select count(1) from t_issue_8130 where c = 1;
-
 ----
 1
 
-statement query I
+query I
 select count(1) from t_issue_8130 where c = 2;
-
 ----
 1
 

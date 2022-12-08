@@ -16,15 +16,14 @@ CREATE DATABASE ss1;
 statement ok
 CREATE DATABASE ss2;
 
-statement query T 
+query T
 SHOW DATABASES like 'ss%';
-
 ----
 ss
 ss1
 ss2
 
-statement query TT
+query TT
 SHOW FULL DATABASES like 'ss%';
 
 ----
@@ -32,7 +31,7 @@ default ss
 default ss1
 default ss2
 
-statement query TT
+query TT
 SHOW FULL DATABASES FROM default like 'ss%';
 
 ----
@@ -40,9 +39,8 @@ default ss
 default ss1
 default ss2
 
-statement query T 
+query T
 SHOW SCHEMAS like 'ss%';
-
 ----
 ss
 ss1

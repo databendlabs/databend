@@ -1,50 +1,42 @@
 -- In my opinion, this is VARCHAR better, but get Float, the same as MYSQL
 
-statement query F
+query F
 SELECT .0;
-
 ----
 0.0
 
-statement query F
+query F
 SELECT .123456;
-
 ----
 0.123456
 
-statement query F
+query F
 SELECT .1234567890123;
-
 ----
 0.1234567890123
 
-statement query F
+query F
 SELECT .123456789012345678901234567890;
-
 ----
 0.12345678901234568
 
-statement query T
+query T
 SELECT .0::VARCHAR;
-
 ----
 0.0
 
-statement query T
+query T
 SELECT .123456::VARCHAR;
-
 ----
 0.123456
 
-statement query T
+query T
 SELECT .1234567890123::VARCHAR;
-
 ----
 0.1234567890123
 
-statement query T
+query T
 SELECT .123456789012345678901234567890::VARCHAR;
-
 ----
 0.12345678901234568
 

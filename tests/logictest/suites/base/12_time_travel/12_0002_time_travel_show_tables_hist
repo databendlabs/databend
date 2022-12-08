@@ -13,7 +13,7 @@ CREATE TABLE t(c1 int);
 statement ok
 DROP TABLE t;
 
--- statement query TT
+-- query TT
 -- show tables history like 't';
 
 -- ----

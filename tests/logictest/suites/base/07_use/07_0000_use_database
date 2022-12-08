@@ -13,9 +13,8 @@ USE default;
 statement ok
 USE system;
 
-statement query T
+query T
 select database();
-
 ----
 system
 

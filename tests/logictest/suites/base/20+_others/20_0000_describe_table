@@ -4,9 +4,8 @@ DROP TABLE IF EXISTS t;
 statement ok
 CREATE TABLE t(a bigint null, b int null, c varchar(255) null, d smallint, e Date ) ENGINE = Null;
 
-statement query TTTTT
+query TTTTT
 DESCRIBE t;
-
 ----
 a BIGINT YES NULL 
 b INT YES NULL 
@@ -14,9 +13,8 @@ c VARCHAR YES NULL
 d SMALLINT NO 0 
 e DATE NO 0 
 
-statement query TTTTT
+query TTTTT
 DESC t;
-
 ----
 a BIGINT YES NULL 
 b INT YES NULL 
@@ -30,9 +28,8 @@ DROP TABLE IF EXISTS t1;
 statement ok
 CREATE TABLE t1(a bigint null, b int null, c char(255) null, d smallint, e Date, f char(120) not null default '' ) ENGINE = Null;
 
-statement query TTTTT
+query TTTTT
 DESCRIBE t1;
-
 ----
 a BIGINT YES NULL 
 b INT YES NULL 
@@ -41,9 +38,8 @@ d SMALLINT NO 0
 e DATE NO 0 
 f VARCHAR NO  
 
-statement query TTTTT
+query TTTTT
 DESC t1;
-
 ----
 a BIGINT YES NULL 
 b INT YES NULL 
@@ -52,9 +48,8 @@ d SMALLINT NO 0
 e DATE NO 0 
 f VARCHAR NO  
 
-statement query TTTTT
+query TTTTT
 DESC INFORMATION_SCHEMA.COLUMNS;
-
 ----
 table_catalog  VARCHAR  NO    
 table_schema  VARCHAR  NO    

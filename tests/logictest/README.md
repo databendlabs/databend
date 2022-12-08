@@ -96,9 +96,8 @@ Runner supported: mysql handler, http handler, clickhouse handler.
 This is a query demo(query_label is optional):
 
 ```
-statement query III label(mysql)
+query III label(mysql)
 select number, number + 1, number + 999 from numbers(10);
-
 ----
      0     1   999
      1     2  1000
@@ -138,9 +137,8 @@ regex_type_map = {
 2. A demo of regex likes:
 
 ```
-statement query TTTRRTIIII
+query TTTRRTIIII
 SELECT * FROM system.tables WHERE database='db1';
-
 ----
 default db1 t1 FUSE $ANYTHING $DATE NULL	0	0	0	0
 ```
@@ -155,9 +153,8 @@ The space is used to split results into columns, space in regex expression shoul
 
 ```
 skipif clickhouse
-statement query I
+query I
 select 1;
-
 ----
 1
 ```
@@ -166,9 +163,8 @@ select 1;
 
 ```
 onlyif mysql
-statement query I
+query I
 select 1;
-
 ----
 1
 ```
@@ -176,9 +172,8 @@ select 1;
 3. if some test has a flaky failure, and you want to ignore it, simply add skipped before statement query. (Remove it after the problem is solved)
 
 ```
-statement query skipped I
+query skipped I
 select 1;
-
 ----
 1
 ```
@@ -194,7 +189,7 @@ select 1;
 complete.py can auto-complete test file for you, It does as follow steps:
 
 1. Get SQLs from source-file, whether an SQL file or logictest file.
-2. Execute SQL one by one, if SQL fetches results, add statement query; if SQL fetches nothing, add statement ok; if SQL gets an error, add statement error.
+2. Execute SQL one by one, if SQL fetches results, add query; if SQL fetches nothing, add statement ok; if SQL gets an error, add statement error.
 
 ### Usage
 

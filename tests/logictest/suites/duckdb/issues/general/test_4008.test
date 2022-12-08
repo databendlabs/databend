@@ -1,9 +1,8 @@
 statement error 1065
 select 1 - any(select 1);
 
-statement query I
+query I
 select 1 = all(select 1);
-
 ----
 1
 

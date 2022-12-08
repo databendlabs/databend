@@ -1,24 +1,21 @@
 statement ok
 drop table if exists test_val;
 
-statement query IIIIII
+query IIIIII
 SELECT COUNT(), COUNT(1), COUNT(*), COUNT(NULL), COUNT('hello'), COUNT('1992-02-02'::DATE);
-
 ----
 1 1 1 0 1 1
 
 statement error 1065
 SELECT COUNT(1, 2);
 
-statement query ITF
+query ITF
 SELECT SUM(1), SUM(NULL), SUM(33.3);
-
 ----
 1 NULL 33.3
 
-statement query I
+query I
 SELECT SUM(True);
-
 ----
 1
 
@@ -34,9 +31,8 @@ SELECT SUM();
 statement error 1065
 SELECT SUM(1, 2);
 
-statement query ITFTITT
+query ITFTITT
 SELECT MIN(1), MIN(NULL), MIN(33.3), MIN('hello'), MIN(True), MIN('1992-02-02'::DATE), MIN('2008-01-01 00:00:01'::TIMESTAMP);
-
 ----
 1 NULL 33.3 hello 1 1992-02-02 2008-01-01 00:00:01.000000
 
@@ -46,9 +42,8 @@ SELECT MIN();
 statement error 1065
 SELECT MIN(1, 2);
 
-statement query ITFTITT
+query ITFTITT
 SELECT MAX(1), MAX(NULL), MAX(33.3), MAX('hello'), MAX(True), MAX('1992-02-02'::DATE), MAX('2008-01-01 00:00:01'::TIMESTAMP);
-
 ----
 1 NULL 33.3 hello 1 1992-02-02 2008-01-01 00:00:01.000000
 
@@ -76,15 +71,13 @@ SELECT LAST();
 statement error 1065
 SELECT LAST(1, 2);
 
-statement query FTF
+query FTF
 SELECT AVG(1), AVG(NULL), AVG(33.3);
-
 ----
 1.0 NULL 33.3
 
-statement query F
+query F
 SELECT AVG(True);
-
 ----
 1.0
 

@@ -1,6 +1,5 @@
-statement query TTTT
+query TTTT
 SELECT name, value, default, level from system.settings where name in ('sql_dialect', 'timezone', 'wait_for_async_insert_timeout');
-
 ----
 sql_dialect PostgreSQL PostgreSQL SESSION
 timezone                       UTC         UTC         SESSION
@@ -19,9 +18,8 @@ statement OK
 SET GLOBAL wait_for_async_insert_timeout=20000;
 
 
-statement query TTTT
+query TTTT
 SELECT name, value, default, level from system.settings where name in ('sql_dialect', 'timezone', 'wait_for_async_insert_timeout');
-
 ----
 sql_dialect  MySQL  PostgreSQL  GLOBAL
 timezone  Asia/Shanghai  UTC  GLOBAL
@@ -39,9 +37,8 @@ UNSET stl_dialect;
 statement ok
 UNSET sql_dialect;
 
-statement query TTTT
+query TTTT
 SELECT name, value, default, level from system.settings where name in ('sql_dialect', 'timezone', 'wait_for_async_insert_timeout');
-
 ----
 sql_dialect PostgreSQL PostgreSQL SESSION
 timezone                       UTC         UTC         SESSION

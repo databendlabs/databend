@@ -6,25 +6,22 @@ create table order_test(a int null);
 statement ok
 insert into order_test values(1),(2),(null);
 
-statement query I
+query I
 select * from order_test order by a;
-
 ----
 1
 2
 NULL
 
-statement query I
+query I
 select * from order_test order by a desc;
-
 ----
 2
 1
 NULL
 
-statement query I
+query I
 select * from order_test order by a nulls first;
-
 ----
 NULL
 1

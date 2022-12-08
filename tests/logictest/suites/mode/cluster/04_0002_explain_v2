@@ -10,9 +10,8 @@ create table t1(a int, b int);
 statement ok
 create table t2(a int, b int);
 
-statement query T
+query T
 explain select t1.a from t1 where a > 0;
-
 ----
 Exchange
 ├── exchange type: Merge
@@ -25,9 +24,8 @@ Exchange
     ├── push downs: [filters: [(a > 0)], limit: NONE]
     └── output columns: [0]
 
-statement query T
+query T
 explain select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a and t2.a > 5 and t1.a > 1);
-
 ----
 Exchange
 ├── exchange type: Merge
@@ -57,9 +55,8 @@ Exchange
                 ├── partitions scanned: 0
                 └── push downs: [filters: [((a > 3) or (a > 1))], limit: NONE]
 
-statement query T
+query T
 explain select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a);
-
 ----
 Exchange
 ├── exchange type: Merge
@@ -87,9 +84,8 @@ Exchange
             ├── partitions scanned: 0
             └── push downs: [filters: [], limit: NONE]
 
-statement query T
+query T
 explain raw select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a);
-
 ----
 EvalScalar
 ├── scalars: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3)]
@@ -109,9 +105,8 @@ EvalScalar
             ├── order by: []
             └── limit: NONE
 
-statement query T
+query T
 explain raw select * from t1 inner join t2 on t1.a = t2.a and t1.b = t2.b and t1.a > 2;
-
 ----
 EvalScalar
 ├── scalars: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3)]
@@ -204,9 +199,8 @@ Limit
 statement ok
 set prefer_broadcast_join = 1;
 
-statement query T
+query T
 explain select * from t1 join t2 on t1.a = t2.a;
-
 ----
 Exchange
 ├── exchange type: Merge
@@ -237,9 +231,8 @@ Exchange
 statement ok
 set prefer_broadcast_join = 0;
 
-statement query T
+query T
 explain select * from (SELECT number AS a FROM numbers(10)) x  order by x.a limit 3;
-
 ----
 Limit
 ├── limit: 3
@@ -261,9 +254,8 @@ Limit
                     ├── partitions scanned: 1
                     └── push downs: [filters: [], limit: 3]
 
-statement query T
+query T
 explain select * from (SELECT number AS a FROM numbers(10)) x right join (SELECT number AS a FROM numbers(5)) y using(a) order by x.a limit 3;
-
 ----
 Limit
 ├── limit: 3

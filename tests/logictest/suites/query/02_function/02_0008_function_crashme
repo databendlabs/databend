@@ -1,6 +1,5 @@
-statement query I
+query I
 SELECT 1;
-
 ----
 1
 

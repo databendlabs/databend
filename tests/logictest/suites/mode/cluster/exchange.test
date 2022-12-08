@@ -1,6 +1,5 @@
-statement query T
+query T
 explain select * from numbers(1) t, numbers(2) t1 where t.number = t1.number;
-
 ----
 Exchange
 ├── exchange type: Merge
@@ -28,9 +27,8 @@ Exchange
             ├── partitions scanned: 1
             └── push downs: [filters: [], limit: NONE]
 
-statement query T
+query T
 explain select * from numbers(1) t, numbers(2) t1, numbers(3) t2 where t.number = t1.number and t.number = t2.number;
-
 ----
 Exchange
 ├── exchange type: Merge
@@ -74,9 +72,8 @@ Exchange
             ├── partitions scanned: 1
             └── push downs: [filters: [], limit: NONE]
 
-statement query T
+query T
 explain select * from (select number as a, number+1 as b from numbers(1)) t, numbers(2) t1, numbers(3) t2 where a = t1.number and b = t2.number;
-
 ----
 Exchange
 ├── exchange type: Merge
@@ -122,9 +119,8 @@ Exchange
             ├── partitions scanned: 1
             └── push downs: [filters: [], limit: NONE]
 
-statement query T
+query T
 explain select * from (select sum(number) as number from numbers(1) group by number) t, numbers(2) t1 where t.number = t1.number;
-
 ----
 Exchange
 ├── exchange type: Merge

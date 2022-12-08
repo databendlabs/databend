@@ -94,7 +94,7 @@ insert into t1(e,c,b,a,d) values(null,244,240,243,null);
 statement ok
 insert into t1(e,d,c,b,a) values(246,248,247,249,245);
 
-statement query IIIII
+query IIIII
 select abs(b-c) as col1,
        d-e as col2,
        c-d as col3,
@@ -105,7 +105,6 @@ where coalesce(a,b,c,d,e)<>0
     or c>d
     or d>e
 order by col1,col4,col2,col5,col3;
-
 ----
 1 -1 -2 1612 108
 1 2 -3 2432 164
@@ -138,7 +137,7 @@ NULL -1 -1 NULL 203
 NULL 1 NULL NULL 238
 NULL NULL 1 NULL 101
 
-statement query skipped
+query skipped
 select a-b as col1,
        (a+b+c+d+e)/5 as col2,
        abs(b-c) as col3,
@@ -151,7 +150,7 @@ where d not between 110 and 150
     or exists(select 1 from t1 as x where x.b<t1.b)
 or a is null;
 
-statement query IIII
+query IIII
 select a+b*2 as col1,
        c as col2,
        e as col3,
@@ -160,7 +159,6 @@ from t1
 where (e>a and e<b)
     or coalesce(a,b,c,d,e)<>0
 order by col1,col2,col3,col4;
-
 ----
 317 106 109 105
 369 123 NULL 124
@@ -193,7 +191,7 @@ NULL 119 117 NULL
 NULL 202 204 NULL
 NULL 208 NULL 206
 
-statement query skipped
+query skipped
 select case a+1 when b then 111 when c then 222
         when d then 333  when e then 444 else 555 end as col1,
        d as col2,
@@ -203,19 +201,18 @@ from t1
 where a>b
 and (e>a and e<b);
 
-statement query skipped
+query skipped
 select a+b*2+c*3+d*4+e*5 as col1
 from t1
 where (a>b-2 and a<b+2)
     or d not between 110 and 150
 or exists(select 1 from t1 as x where x.b<t1.b);
 
-statement query II
+query II
 select b-c as col1,
        a+b*2+c*3+d*4+e*5 as col2
 from t1
 order by col1,col2;
-
 ----
 -4 1985
 -4 NULL
@@ -248,26 +245,26 @@ NULL NULL
 NULL NULL
 NULL NULL
 
-statement query skipped
+query skipped
 select case a+1 when b then 111 when c then 222
         when d then 333  when e then 444 else 555 end as col1
 from t1
 where exists(select 1 from t1 as x where x.b<t1.b);
 
-statement query skipped
+query skipped
 select a-b as col1,
        (select count(*) from t1 as x where x.b<t1.b) as col2,
        a as col3
 from t1;
 
-statement query skipped
+query skipped
 select abs(b-c) as col1
 from t1
 where coalesce(a,b,c,d,e)<>0
    and b is not null
 order by col1;
 
-statement query skipped
+query skipped
 select c-d as col1,
        abs(b-c) as col2
 from t1
@@ -276,7 +273,7 @@ where (c<=d-2 or c>=d+2)
    and b is not null
 order by col1,col2;
 
-statement query FIIIII
+query FIIIII
 select (a+b+c+d+e)/5 as col1,
        e as col2,
        c-d as col3,
@@ -289,7 +286,6 @@ where c between b-2 and d+2
     or coalesce(a,b,c,d,e)<>0
     or a is null
 order by col1,col2,col6,col5,col3,col4;
-
 ----
 107.0 109 -2 635 333 2
 127.0 126 -3 760 222 -2
@@ -322,14 +318,14 @@ NULL NULL NULL 1455 444 3
 NULL NULL 1 NULL 444 NULL
 NULL NULL 1 NULL 444 NULL
 
-statement query skipped
+query skipped
 select a-b as col1,
        a as col2
 from t1
 where c>d
 order by col2,col1;
 
-statement query skipped
+query skipped
 select (a+b+c+d+e)/5 as col1,
        a+b*2+c*3+d*4+e*5 as col2,
        d-e as col3,

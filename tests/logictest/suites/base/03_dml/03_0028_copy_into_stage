@@ -22,9 +22,8 @@ copy into @test from test_table FILE_FORMAT = (type = 'CSV');
 statement ok
 copy into test_table from @test;
 
-statement query A
+query A
 SELECT COUNT() FROM test_table;
-
 ----
 4
 

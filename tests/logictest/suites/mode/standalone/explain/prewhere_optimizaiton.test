@@ -4,9 +4,8 @@ drop table if exists t_where_optimizer;
 statement ok
 create table if not exists t_where_optimizer (a int, b int);
 
-statement query T
+query T
 explain select a from t_where_optimizer where a = 1;
-
 ----
 TableScan
 ├── table: default.default.t_where_optimizer
@@ -17,9 +16,8 @@ TableScan
 ├── push downs: [filters: [(a = 1)], limit: NONE]
 └── output columns: [0]
 
-statement query T
+query T
 explain select * from t_where_optimizer where a = b;
-
 ----
 TableScan
 ├── table: default.default.t_where_optimizer
@@ -29,9 +27,8 @@ TableScan
 ├── partitions scanned: 0
 └── push downs: [filters: [(a = b)], limit: NONE]
 
-statement query T
+query T
 explain select * from t_where_optimizer where a = 1 or b > 2;
-
 ----
 TableScan
 ├── table: default.default.t_where_optimizer
@@ -41,9 +38,8 @@ TableScan
 ├── partitions scanned: 0
 └── push downs: [filters: [((a = 1) or (b > 2))], limit: NONE]
 
-statement query T
+query T
 explain select * from t_where_optimizer where a = 1 and b > 2;
-
 ----
 TableScan
 ├── table: default.default.t_where_optimizer
@@ -53,9 +49,8 @@ TableScan
 ├── partitions scanned: 0
 └── push downs: [filters: [(a = 1), (b > 2)], limit: NONE]
 
-statement query T
+query T
 explain select * from t_where_optimizer where b = 1;
-
 ----
 TableScan
 ├── table: default.default.t_where_optimizer
@@ -65,9 +60,8 @@ TableScan
 ├── partitions scanned: 0
 └── push downs: [filters: [(b = 1)], limit: NONE]
 
-statement query T
+query T
 explain select a from t_where_optimizer where b = 1;
-
 ----
 TableScan
 ├── table: default.default.t_where_optimizer
@@ -84,9 +78,8 @@ drop table t_where_optimizer;
 statement ok
 create table t_where_optimizer(id int, s tuple(a int, b int));
 
-statement query T
+query T
 explain select * from t_where_optimizer where s:a > 0;
-
 ----
 TableScan
 ├── table: default.default.t_where_optimizer

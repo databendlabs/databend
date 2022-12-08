@@ -1,9 +1,8 @@
 statement ok
 CREATE ROLE IF NOT EXISTS 'test';
 
-statement query T
+query T
 select name from system.roles;
-
 ----
 account_admin
 public

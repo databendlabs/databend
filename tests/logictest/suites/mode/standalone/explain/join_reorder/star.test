@@ -13,9 +13,8 @@ create table t1 as select number as a from numbers(10);
 statement ok
 create table t2 as select number as a from numbers(100);
 
-statement query T
+query T
 explain select * from t, t1, t2 where t.a = t2.a and t1.a = t2.a;
-
 ----
 HashJoin
 ├── join type: INNER
@@ -49,9 +48,8 @@ HashJoin
     ├── partitions scanned: 1
     └── push downs: [filters: [], limit: NONE]
 
-statement query T
+query T
 explain select * from t, t2, t1 where t.a = t2.a and t1.a = t2.a;
-
 ----
 HashJoin
 ├── join type: INNER
@@ -85,9 +83,8 @@ HashJoin
         ├── partitions scanned: 1
         └── push downs: [filters: [], limit: NONE]
 
-statement query T
+query T
 explain select * from t1, t, t2 where t.a = t2.a and t1.a = t2.a;
-
 ----
 HashJoin
 ├── join type: INNER
@@ -121,9 +118,8 @@ HashJoin
     ├── partitions scanned: 1
     └── push downs: [filters: [], limit: NONE]
 
-statement query T
+query T
 explain select * from t1, t2, t where t.a = t2.a and t1.a = t2.a;
-
 ----
 HashJoin
 ├── join type: INNER
@@ -157,9 +153,8 @@ HashJoin
         ├── partitions scanned: 1
         └── push downs: [filters: [], limit: NONE]
 
-statement query T
+query T
 explain select * from t2, t1, t where t.a = t2.a and t1.a = t2.a;
-
 ----
 HashJoin
 ├── join type: INNER
@@ -193,9 +188,8 @@ HashJoin
         ├── partitions scanned: 1
         └── push downs: [filters: [], limit: NONE]
 
-statement query T
+query T
 explain select * from t2, t, t1 where t.a = t2.a and t1.a = t2.a;
-
 ----
 HashJoin
 ├── join type: INNER

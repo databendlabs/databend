@@ -1,56 +1,47 @@
 
 
-statement query I
+query I
 SELECT NULLIF(2, 1);
-
 ----
 2
 
-statement query I
+query I
 SELECT NULLIF(1, 2);
-
 ----
 1
 
-statement query I
+query I
 SELECT NULLIF(1, NULL);
-
 ----
 1
 
-statement query T
+query T
 SELECT NULLIF(NULL, 1);
-
 ----
 NULL
 
-statement query T
+query T
 SELECT NULLIF('a', 'b');
-
 ----
 a
 
-statement query T
+query T
 SELECT NULLIF('b', 'a');
-
 ----
 b
 
-statement query T
+query T
 SELECT NULLIF('a', NULL);
-
 ----
 a
 
-statement query T
+query T
 SELECT NULLIF(NULL, 'a');
-
 ----
 NULL
 
-statement query T
+query T
 SELECT NULLIF(NULL, NULL);
-
 ----
 NULL
 
@@ -60,9 +51,8 @@ CREATE TABLE IF NOT EXISTS t(a INT, b INT) ENGINE=Memory;
 statement ok
 INSERT INTO t VALUES(0, 0), (0, 1), (1, 0), (1, 1);
 
-statement query III
+query III
 SELECT a, b, NULLIF(a, b) FROM t;
-
 ----
 0 0 NULL
 0 1 0
@@ -78,9 +68,8 @@ CREATE TABLE IF NOT EXISTS t(a INT NULL, b INT NULL) ENGINE=Memory;
 statement ok
 INSERT INTO t VALUES(0, 0), (0, 1), (0, NULL), (1, 0), (1, 1), (1, NULL), (NULL, 0), (NULL, 1), (NULL, NULL);
 
-statement query III
+query III
 SELECT a, b, NULLIF(a, b) FROM t;
-
 ----
 0 0 NULL
 0 1 0
@@ -101,9 +90,8 @@ CREATE TABLE IF NOT EXISTS t(a INT NULL, b INT NULL) ENGINE=Memory;
 statement ok
 INSERT INTO t VALUES(NULL, 0), (NULL, 1), (NULL, NULL), (NULL, 0), (NULL, 1);
 
-statement query III
+query III
 SELECT a, b, NULLIF(a, b) FROM t;
-
 ----
 NULL 0 NULL
 NULL 1 NULL
@@ -120,9 +108,8 @@ CREATE TABLE IF NOT EXISTS t(a INT NULL, b INT NULL) ENGINE=Memory;
 statement ok
 INSERT INTO t VALUES(0, NULL), (1, NULL), (0, NULL), (1, NULL), (NULL, NULL);
 
-statement query III
+query III
 SELECT a, b, NULLIF(a, b) FROM t;
-
 ----
 0 NULL 0
 1 NULL 1

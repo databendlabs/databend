@@ -9,9 +9,8 @@ use db1;
 statement ok
 CREATE TABLE IF NOT EXISTS t1(a int, b varchar) Engine = fuse cluster by(a);
 
-statement query TTTRRTIIII
+query TTTRRTIIII
 SELECT * FROM system.tables WHERE database='db1';
-
 ----
 default db1 t1 FUSE $ANYTHING $DATE NULL	0	0	0	0
 
@@ -30,10 +29,9 @@ create table if not exists t4(a float, b float, c varchar, d bool);
 statement ok
 insert into t4(a,b,c,d) values(1.0, 10.224, 'xxdsfs', false );
 
-statement query FFTB
+query FFTB
 select a,b,c,d from t4;
-
-----  
+----
 1.0 10.224 xxdsfs 0
 
 ----  http
@@ -42,9 +40,8 @@ select a,b,c,d from t4;
 statement ok
 insert into t4(a,b,c,d) values(2.0, 10.224, 'xxdsfs\nds \n', false );
 
-statement query T 
+query T
 select c from t4 where a > 1.0;
-
 ----
 xxdsfs
 ds 
@@ -59,9 +56,8 @@ create table if not exists t5(a varchar);
 statement ok
 insert into t5(a) values ('abcd\nabcd')
 
-statement query T 
+query T
 select * from t5;
-
 ----
 abcd
 abcd
@@ -72,16 +68,14 @@ drop table t5;
 statement error 1065
 create table db2.test6(id Int8, created timestamp  DEFAULT CURRENT_TIMESTAMP);
 
-statement query skipped III
+query skipped III
 select number, number + 1, number + 999 from numbers(10);
-
 ----
 1 1 1
 
-statement query III
+query III
 select number, number + 1, number + 999 from numbers(10);
-
-----  
+----
  0     1   999
  1     2  1000
  2     3  1001
@@ -93,17 +87,15 @@ select number, number + 1, number + 999 from numbers(10);
  8     9  1007
  9    10  1008
 
-statement query I
+query I
 select 1;
-
----- 
+----
 1
 
 skipif clickhouse
-statement query I
+query I
 select 1;
-
----- 
+----
 1
 
 statement ok

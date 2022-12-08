@@ -7,9 +7,8 @@ insert into t_nullable_prune select * from numbers(3);
 statement ok
 insert into t_nullable_prune select null from numbers(3);
 
-statement query T
+query T
 explain select * from t_nullable_prune;
-
 ----
 TableScan
 ├── table: default.default.t_nullable_prune
@@ -19,9 +18,8 @@ TableScan
 ├── partitions scanned: 2
 └── push downs: [filters: [], limit: NONE]
 
-statement query T
+query T
 explain select * from t_nullable_prune where a is not null;
-
 ----
 TableScan
 ├── table: default.default.t_nullable_prune
@@ -31,9 +29,8 @@ TableScan
 ├── partitions scanned: 1
 └── push downs: [filters: [is_not_null(a)], limit: NONE]
 
-statement query T
+query T
 explain select * from t_nullable_prune where a is null;
-
 ----
 TableScan
 ├── table: default.default.t_nullable_prune

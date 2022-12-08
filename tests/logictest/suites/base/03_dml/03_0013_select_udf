@@ -4,25 +4,22 @@ CREATE FUNCTION cal AS (a,b,c,d,e) -> a + c * (e / b) - d;
 statement ok
 CREATE FUNCTION notnull AS (p) -> not(is_null(p));
 
-statement query B
+query B
 SELECT notnull(null);
-
 ----
 0
 
 
 
-statement query B
+query B
 SELECT notnull('null');
-
 ----
 1
 
 
 
-statement query F
+query F
 SELECT cal(1, 2, 3, 4, 6);
-
 ----
 6.0
 

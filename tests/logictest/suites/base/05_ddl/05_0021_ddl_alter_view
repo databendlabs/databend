@@ -4,9 +4,8 @@ DROP VIEW IF EXISTS tmp_view;
 statement ok
 CREATE VIEW tmp_view AS SELECT number % 3 AS a, avg(number) FROM numbers(1000) GROUP BY a ORDER BY a;
 
-statement query IF
+query IF
 SELECT * FROM tmp_view;
-
 ----
 0 499.5
 1 499.0
@@ -15,9 +14,8 @@ SELECT * FROM tmp_view;
 statement ok
 ALTER VIEW tmp_view AS SELECT number from numbers(3) ORDER BY number;
 
-statement query I
+query I
 SELECT * FROM tmp_view;
-
 ----
 0
 1

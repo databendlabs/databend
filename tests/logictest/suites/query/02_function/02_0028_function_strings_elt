@@ -2,21 +2,18 @@
 statement error 1102
 SELECT ELT(0, 'a', 'b', 'c'); 
 
-statement query T
+query T
 SELECT ELT(1, 'a', 'b', 'c');
-
 ----
 a
 
-statement query T
+query T
 SELECT ELT(2, 'a', 'b', 'c');
-
 ----
 b
 
-statement query T
+query T
 SELECT ELT(3, 'a', 'b', 'c');
-
 ----
 c
 
@@ -24,9 +21,8 @@ c
 statement error 1102
 SELECT ELT(4, 'a', 'b', 'c'); 
 
-statement query T
+query T
 SELECT ELT(number+1, 'a', 'b', to_varchar(number * 10)) FROM numbers(3) ORDER BY number;
-
 ----
 a
 b

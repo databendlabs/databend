@@ -19,58 +19,55 @@ statement ok
 insert into "t"("a") values(1);
 
 onlyif mysql
-statement query I
+query I
 select t.a from "T"
 
 ----
 1
 
 onlyif mysql
-statement query I
+query I
 select t."A" from "T"
 
 ----
 1
 
 onlyif mysql
-statement query I
+query I
 select t.a from "T"
 
 ----
 1
 
 onlyif mysql
-statement query I
+query I
 select a from "T"
 
 ----
 1
 
 onlyif mysql
-statement query I
+query I
 select "T".a from "T"
 
 ----
 1
 
 onlyif mysql
-statement query I
+query I
 select "B" from (select "A" as "B" from "T");
-
 ----
 1
 
 onlyif mysql
-statement query I
+query I
 select b from (select "A" as "B" from "T");
-
 ----
 1
 
 onlyif mysql
-statement query I
+query I
 select "b" from (select "A" as "B" from "T");
-
 ----
 1
 

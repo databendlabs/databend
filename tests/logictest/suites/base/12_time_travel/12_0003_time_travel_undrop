@@ -19,9 +19,8 @@ SHOW TABLES;
 statement ok
 UNDROP TABLE t;
 
-statement query T
+query T
 SHOW TABLES;
-
 ----
 t
 
@@ -34,9 +33,8 @@ DROP TABLE t;
 statement ok
 UNDROP TABLE t;
 
-statement query I
+query I
 select * from t;
-
 ----
 1
 2
@@ -56,9 +54,8 @@ DROP TABLE t;
 statement ok
 UNDROP TABLE t;
 
-statement query I
+query I
 SELECT count(1) FROM t;
-
 ----
 1
 
@@ -68,9 +65,8 @@ ALTER TABLE t RENAME TO t1;
 statement ok
 UNDROP TABLE t;
 
-statement query I
+query I
 SELECT count(1) FROM t;
-
 ----
 2
 
@@ -86,24 +82,21 @@ UNDROP database db_12_0003;
 statement ok
 USE db_12_0003;
 
-statement query T
+query T
 SHOW TABLES;
-
 ----
 t1
 
-statement query I
+query I
 SELECT count(1) FROM t1;
-
 ----
 1
 
 statement ok
 UNDROP TABLE t;
 
-statement query I
+query I
 SELECT count(1) FROM t;
-
 ----
 2
 
@@ -122,9 +115,8 @@ DROP TABLE t ALL;
 statement ok
 UNDROP TABLE t;
 
-statement query I
+query I
 SELECT count(*) FROM t;
-
 ----
 0
 

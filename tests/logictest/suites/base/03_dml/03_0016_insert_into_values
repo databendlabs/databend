@@ -19,9 +19,8 @@ CREATE TABLE IF NOT EXISTS t1(a Int8 null, b UInt32 null, c Date null, d DateTim
 statement ok
 INSERT INTO t1 (a,b,c,d,e,f) VALUES(-1, 33, '2021-08-15', '2021-08-15 10:00:00', 'string1234', 1.4e5), (101, 67, '2021-11-15', '2021-11-15 10:00:00', 'string5678', 9.9e-3),                                       (101, 67, '2021-11-15', '2021-11-15 10:00:00', 'string5678', 9.9E+3),                                       (100, 100, '0000-00-00', '0000-00-00 00:00:00', 'string7890', 12.34),                                       (100, 100, '0001-01-01', '0001-01-01 00:00:00', 'stringabcd', 56.78);
 
-statement query IITTTF
+query IITTTF
 select * from t1;
-
 ----
 -1 33 2021-08-15 2021-08-15 10:00:00.000000 string1234 140000.0
 101 67 2021-11-15 2021-11-15 10:00:00.000000 string5678 0.0099
@@ -29,9 +28,8 @@ select * from t1;
 100 100 1970-01-01 1970-01-01 00:00:00.000000 string7890 12.34
 100 100 1000-01-01 1000-01-01 00:00:00.000000 stringabcd 56.78
 
-statement query II
+query II
 select sum(a),sum(b) from t1;
-
 ----
 401 367
 
@@ -45,9 +43,8 @@ statement ok
 INSERT INTO t_str(a) values( 'a"b\"c\\\'d');
 
 onlyif mysql
-statement query T
+query T
 select * from t_str order by a;
-
 ----
 a"b"c'd
 a"b"c\'d

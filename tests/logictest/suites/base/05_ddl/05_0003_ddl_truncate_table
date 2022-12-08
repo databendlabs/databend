@@ -25,9 +25,8 @@ CREATE TABLE t2(c1 int) ENGINE = FUSE;
 statement ok
 INSERT INTO TABLE t2 values(1);
 
-statement query I
+query I
 SELECT * FROM t2;
-
 ----
 1
 

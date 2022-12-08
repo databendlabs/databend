@@ -94,7 +94,7 @@ insert into t1(e,c,b,a,d) values(null,244,240,243,null);
 statement ok
 insert into t1(e,d,c,b,a) values(246,248,247,249,245);
 
-statement query skipped
+query skipped
 select c as col1,
        (select count(*) from t1 as x where x.b<t1.b) as col2,
        b-c as col3,
@@ -106,40 +106,39 @@ select c as col1,
 from t1
 order by col7,col4,col6,col2,col3,col1,col5;
 
-statement query skipped
+query skipped
 select abs(b-c) as col1
 from t1
 where c>d
     or (e>c or e<d)
 order by col1;
 
-statement query skipped
+query skipped
 select abs(b-c) as col1
 from t1
 where c>d
     or (e>c or e<d)
 order by col1;
 
-statement query skipped
+query skipped
 select abs(b-c) as col1
 from t1
 where (e>c or e<d)
     or c>d
 order by col1;
 
-statement query skipped
+query skipped
 select abs(b-c) as col1
 from t1
 where (e>c or e<d)
     or c>d
 order by col1;
 
-statement query I
+query I
 select case a+1 when b then 111 when c then 222
         when d then 333  when e then 444 else 555 end as col1
 from t1
 order by col1;
-
 ----
 111
 111
@@ -172,12 +171,11 @@ order by col1;
 555
 555
 
-statement query I
+query I
 select case a+1 when b then 111 when c then 222
         when d then 333  when e then 444 else 555 end as col1
 from t1
 order by col1;
-
 ----
 111
 111
@@ -210,7 +208,7 @@ order by col1;
 555
 555
 
-statement query skipped
+query skipped
 select a+b*2+c*3 as col1,
        (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col2,
        (a+b+c+d+e)/5 as col3,
@@ -220,7 +218,7 @@ from t1
 where (c<=d-2 or c>=d+2)
 order by col4,col5,col2,col3,col1;
 
-statement query skipped
+query skipped
 select a+b*2+c*3 as col1,
        (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col2,
        (a+b+c+d+e)/5 as col3,
@@ -230,21 +228,21 @@ from t1
 where (c<=d-2 or c>=d+2)
 order by col5,col1,col4,col3,col2;
 
-statement query skipped
+query skipped
 select case when a<b-3 then 111 when a<=b then 222
         when a<b+3 then 333 else 444 end as col1
 from t1
 where b>c
 order by col1;
 
-statement query skipped
+query skipped
 select case when a<b-3 then 111 when a<=b then 222
         when a<b+3 then 333 else 444 end as col1
 from t1
 where b>c
 order by col1;
 
-statement query skipped
+query skipped
 select (a+b+c+d+e)/5 as col1,
        b as col2,
        b-c as col3
@@ -254,7 +252,7 @@ where (c<=d-2 or c>=d+2)
    and c between b-2 and d+2
 order by col2,col3,col1;
 
-statement query skipped
+query skipped
 select (a+b+c+d+e)/5 as col1,
        b as col2,
        b-c as col3
@@ -264,7 +262,7 @@ where (c<=d-2 or c>=d+2)
    and c between b-2 and d+2
 order by col2,col1,col3;
 
-statement query skipped
+query skipped
 select (a+b+c+d+e)/5 as col1,
        b as col2,
        b-c as col3
@@ -274,7 +272,7 @@ where (c<=d-2 or c>=d+2)
    and (a>b-2 and a<b+2)
 order by col2,col3,col1;
 
-statement query skipped
+query skipped
 select (a+b+c+d+e)/5 as col1,
        b as col2,
        b-c as col3
@@ -284,7 +282,7 @@ where (c<=d-2 or c>=d+2)
    and (a>b-2 and a<b+2)
 order by col1,col3,col2;
 
-statement query skipped
+query skipped
 select b as col1,
        a+b*2+c*3+d*4+e*5 as col2,
        a as col3,
@@ -295,7 +293,7 @@ where d not between 110 and 150
     or exists(select 1 from t1 as x where x.b<t1.b)
 order by col4,col5,col2,col3,col1;
 
-statement query skipped
+query skipped
 select b as col1,
        a+b*2+c*3+d*4+e*5 as col2,
        a as col3,
@@ -306,7 +304,7 @@ where d not between 110 and 150
     or exists(select 1 from t1 as x where x.b<t1.b)
 order by col4,col5,col1,col2,col3;
 
-statement query skipped
+query skipped
 select case a+1 when b then 111 when c then 222
         when d then 333  when e then 444 else 555 end as col1,
        a as col2,
@@ -319,7 +317,7 @@ select case a+1 when b then 111 when c then 222
 from t1
 order by col6,col7,col4,col5,col2,col3,col1;
 
-statement query skipped
+query skipped
 select case a+1 when b then 111 when c then 222
         when d then 333  when e then 444 else 555 end as col1,
        a as col2,
@@ -332,12 +330,11 @@ select case a+1 when b then 111 when c then 222
 from t1
 order by col5,col7,col3,col1,col6,col4,col2;
 
-statement query TI
+query TI
 select d-e as col1,
        abs(a) as col2
 from t1
 order by col2,col1;
-
 ----
 NULL 104
 -1 107
@@ -370,12 +367,11 @@ NULL 243
 4 NULL
 NULL NULL
 
-statement query TI
+query TI
 select d-e as col1,
        abs(a) as col2
 from t1
 order by col2,col1;
-
 ----
 NULL 104
 -1 107
@@ -408,7 +404,7 @@ NULL 243
 4 NULL
 NULL NULL
 
-statement query skipped
+query skipped
 select b-c as col1,
        abs(b-c) as col2,
        d-e as col3,
@@ -419,7 +415,7 @@ where e+d between a+b-10 and c+130
     or a>b
 order by col4,col5,col2,col3,col1;
 
-statement query skipped
+query skipped
 select b-c as col1,
        abs(b-c) as col2,
        d-e as col3,
@@ -430,7 +426,7 @@ where e+d between a+b-10 and c+130
     or a>b
 order by col2,col3,col4,col5,col1;
 
-statement query skipped
+query skipped
 select b-c as col1,
        abs(b-c) as col2,
        d-e as col3,
@@ -441,7 +437,7 @@ where a>b
     or e+d between a+b-10 and c+130
 order by col4,col5,col2,col3,col1;
 
-statement query skipped
+query skipped
 select b-c as col1,
        abs(b-c) as col2,
        d-e as col3,
@@ -452,7 +448,7 @@ where a>b
     or e+d between a+b-10 and c+130
 order by col2,col4,col5,col3,col1;
 
-statement query skipped
+query skipped
 select b-c as col1,
        a+b*2+c*3 as col2,
        a+b*2 as col3,
@@ -465,7 +461,7 @@ where e+d between a+b-10 and c+130
    and d not between 110 and 150
 order by col6,col4,col5,col2,col3,col1;
 
-statement query skipped
+query skipped
 select b-c as col1,
        a+b*2+c*3 as col2,
        a+b*2 as col3,
@@ -478,7 +474,7 @@ where e+d between a+b-10 and c+130
    and d not between 110 and 150
 order by col2,col1,col5,col3,col6,col4;
 
-statement query skipped
+query skipped
 select b-c as col1,
        a+b*2+c*3 as col2,
        a+b*2 as col3,
@@ -491,7 +487,7 @@ where d not between 110 and 150
    and d>e
 order by col6,col4,col5,col2,col3,col1;
 
-statement query skipped
+query skipped
 select b-c as col1,
        a+b*2+c*3 as col2,
        a+b*2 as col3,
@@ -504,7 +500,7 @@ where d not between 110 and 150
    and d>e
 order by col1,col4,col3,col5,col6,col2;
 
-statement query skipped
+query skipped
 select b-c as col1,
        a+b*2+c*3 as col2,
        a+b*2 as col3,
@@ -517,7 +513,7 @@ where d>e
    and d not between 110 and 150
 order by col6,col4,col5,col2,col3,col1;
 
-statement query skipped
+query skipped
 select b-c as col1,
        a+b*2+c*3 as col2,
        a+b*2 as col3,
@@ -530,7 +526,7 @@ where d>e
    and d not between 110 and 150
 order by col3,col6,col5,col2,col4,col1;
 
-statement query skipped
+query skipped
 select b-c as col1,
        a+b*2+c*3 as col2,
        a+b*2 as col3,
@@ -543,7 +539,7 @@ where d not between 110 and 150
    and e+d between a+b-10 and c+130
 order by col6,col4,col5,col2,col3,col1;
 
-statement query skipped
+query skipped
 select b-c as col1,
        a+b*2+c*3 as col2,
        a+b*2 as col3,
@@ -556,13 +552,12 @@ where d not between 110 and 150
    and e+d between a+b-10 and c+130
 order by col6,col4,col5,col2,col3,col1;
 
-statement query TIT
+query TIT
 select b as col1,
        abs(a) as col2,
        a+b*2+c*3+d*4+e*5 as col3
 from t1
 order by col2,col3,col1;
-
 ----
 NULL 104 NULL
 105 107 1612
@@ -595,13 +590,12 @@ NULL 201 NULL
 112 NULL NULL
 206 NULL NULL
 
-statement query TIT
+query TIT
 select b as col1,
        abs(a) as col2,
        a+b*2+c*3+d*4+e*5 as col3
 from t1
 order by col2,col3,col1;
-
 ----
 NULL 104 NULL
 105 107 1612
@@ -634,7 +628,7 @@ NULL 201 NULL
 112 NULL NULL
 206 NULL NULL
 
-statement query skipped
+query skipped
 select a+b*2+c*3+d*4+e*5 as col1,
        e as col2,
        (select count(*) from t1 as x where x.b<t1.b) as col3,
@@ -645,7 +639,7 @@ where c>d
    and b>c
 order by col4,col5,col2,col3,col1;
 
-statement query skipped
+query skipped
 select a+b*2+c*3+d*4+e*5 as col1,
        e as col2,
        (select count(*) from t1 as x where x.b<t1.b) as col3,
@@ -656,7 +650,7 @@ where c>d
    and b>c
 order by col1,col4,col3,col2,col5;
 
-statement query skipped
+query skipped
 select a+b*2+c*3+d*4+e*5 as col1,
        e as col2,
        (select count(*) from t1 as x where x.b<t1.b) as col3,
@@ -667,7 +661,7 @@ where b>c
    and c>d
 order by col4,col5,col2,col3,col1;
 
-statement query skipped
+query skipped
 select a+b*2+c*3+d*4+e*5 as col1,
        e as col2,
        (select count(*) from t1 as x where x.b<t1.b) as col3,
@@ -678,7 +672,7 @@ where b>c
    and c>d
 order by col1,col3,col4,col5,col2;
 
-statement query skipped
+query skipped
 select b as col1,
        a+b*2 as col2
 from t1
@@ -687,7 +681,7 @@ where d not between 110 and 150
     or c between b-2 and d+2
 order by col2,col1;
 
-statement query skipped
+query skipped
 select b as col1,
        a+b*2 as col2
 from t1
@@ -696,7 +690,7 @@ where d not between 110 and 150
     or c between b-2 and d+2
 order by col1,col2;
 
-statement query skipped
+query skipped
 select b as col1,
        a+b*2 as col2
 from t1
@@ -705,7 +699,7 @@ where c between b-2 and d+2
     or b>c
 order by col2,col1;
 
-statement query skipped
+query skipped
 select b as col1,
        a+b*2 as col2
 from t1
@@ -714,7 +708,7 @@ where c between b-2 and d+2
     or b>c
 order by col1,col2;
 
-statement query skipped
+query skipped
 select b as col1,
        a+b*2 as col2
 from t1
@@ -723,7 +717,7 @@ where c between b-2 and d+2
     or d not between 110 and 150
 order by col2,col1;
 
-statement query skipped
+query skipped
 select b as col1,
        a+b*2 as col2
 from t1
@@ -732,7 +726,7 @@ where c between b-2 and d+2
     or d not between 110 and 150
 order by col2,col1;
 
-statement query skipped
+query skipped
 select b as col1,
        a+b*2 as col2
 from t1
@@ -741,7 +735,7 @@ where d not between 110 and 150
     or b>c
 order by col2,col1;
 
-statement query skipped
+query skipped
 select b as col1,
        a+b*2 as col2
 from t1
@@ -750,7 +744,7 @@ where d not between 110 and 150
     or b>c
 order by col1,col2;
 
-statement query IIFI
+query IIFI
 select case when c>avg_c then a*2 else b*10 end as col1,
        c-d as col2,
        (a+b+c+d+e)/5 as col3,
@@ -764,7 +758,6 @@ from (
 where (e>c or e<d)
    and d not between 110 and 150
 order by col4,col2,col3,col1;
-
 ----
 1050 -2 107.0 108
 1600 -3 162.0 164
@@ -781,7 +774,7 @@ order by col4,col2,col3,col1;
 2360 NULL NULL 238
 490 -1 247.0 248
 
-statement query IIFI
+query IIFI
 select case when c>avg_c then a*2 else b*10 end as col1,
        c-d as col2,
        (a+b+c+d+e)/5 as col3,
@@ -795,7 +788,6 @@ from (
 where (e>c or e<d)
    and d not between 110 and 150
 order by col3,col2,col4,col1;
-
 ----
 1050 -2 107.0 108
 1600 -3 162.0 164
@@ -812,7 +804,7 @@ order by col3,col2,col4,col1;
 402 -1 NULL 203
 2360 NULL NULL 238
 
-statement query skipped
+query skipped
 select a-b as col1
 from t1
 where (e>c or e<d)
@@ -820,7 +812,7 @@ where (e>c or e<d)
    and d not between 110 and 150
 order by col1;
 
-statement query skipped
+query skipped
 select a-b as col1
 from t1
 where (e>c or e<d)
@@ -828,7 +820,7 @@ where (e>c or e<d)
    and d not between 110 and 150
 order by col1;
 
-statement query skipped
+query skipped
 select a-b as col1
 from t1
 where (e>c or e<d)
@@ -836,7 +828,7 @@ where (e>c or e<d)
    and a>b
 order by col1;
 
-statement query skipped
+query skipped
 select a-b as col1
 from t1
 where (e>c or e<d)
@@ -844,7 +836,7 @@ where (e>c or e<d)
    and a>b
 order by col1;
 
-statement query skipped
+query skipped
 select a-b as col1
 from t1
 where a>b
@@ -852,7 +844,7 @@ where a>b
    and d not between 110 and 150
 order by col1;
 
-statement query skipped
+query skipped
 select a-b as col1
 from t1
 where a>b
@@ -860,7 +852,7 @@ where a>b
    and d not between 110 and 150
 order by col1;
 
-statement query skipped
+query skipped
 select case when a<b-3 then 111 when a<=b then 222
         when a<b+3 then 333 else 444 end as col1,
        c-d as col2,
@@ -874,7 +866,7 @@ where c>d
    and exists(select 1 from t1 as x where x.b<t1.b)
 order by col6,col4,col5,col2,col3,col1;
 
-statement query skipped
+query skipped
 select case when a<b-3 then 111 when a<=b then 222
         when a<b+3 then 333 else 444 end as col1,
        c-d as col2,
@@ -888,7 +880,7 @@ where c>d
    and exists(select 1 from t1 as x where x.b<t1.b)
 order by col1,col4,col3,col5,col2,col6;
 
-statement query skipped
+query skipped
 select case when a<b-3 then 111 when a<=b then 222
         when a<b+3 then 333 else 444 end as col1,
        c-d as col2,
@@ -902,7 +894,7 @@ where exists(select 1 from t1 as x where x.b<t1.b)
    and e+d between a+b-10 and c+130
 order by col6,col4,col5,col2,col3,col1;
 
-statement query skipped
+query skipped
 select case when a<b-3 then 111 when a<=b then 222
         when a<b+3 then 333 else 444 end as col1,
        c-d as col2,
@@ -916,7 +908,7 @@ where exists(select 1 from t1 as x where x.b<t1.b)
    and e+d between a+b-10 and c+130
 order by col1,col6,col4,col5,col2,col3;
 
-statement query skipped
+query skipped
 select case when a<b-3 then 111 when a<=b then 222
         when a<b+3 then 333 else 444 end as col1,
        c-d as col2,
@@ -930,7 +922,7 @@ where e+d between a+b-10 and c+130
    and exists(select 1 from t1 as x where x.b<t1.b)
 order by col6,col4,col5,col2,col3,col1;
 
-statement query skipped
+query skipped
 select case when a<b-3 then 111 when a<=b then 222
         when a<b+3 then 333 else 444 end as col1,
        c-d as col2,
@@ -944,7 +936,7 @@ where e+d between a+b-10 and c+130
    and exists(select 1 from t1 as x where x.b<t1.b)
 order by col4,col2,col1,col6,col5,col3;
 
-statement query II
+query II
 select d-e as col1,
        case when c>avg_c then a*2 else b*10 end as col2
 from (
@@ -957,14 +949,13 @@ where (a>b-2 and a<b+2)
    and (e>c or e<d)
    and c>d
 order by col2,col1;
-
 ----
 3 364
 1 1300
 1 1390
 -4 1430
 
-statement query II
+query II
 select d-e as col1,
        case when c>avg_c then a*2 else b*10 end as col2
 from (
@@ -977,14 +968,13 @@ where (a>b-2 and a<b+2)
    and (e>c or e<d)
    and c>d
 order by col2,col1;
-
 ----
 3 364
 1 1300
 1 1390
 -4 1430
 
-statement query II
+query II
 select d-e as col1,
        case when c>avg_c then a*2 else b*10 end as col2
 from (
@@ -997,14 +987,13 @@ where (e>c or e<d)
    and c>d
    and (a>b-2 and a<b+2)
 order by col2,col1;
-
 ----
 3 364
 1 1300
 1 1390
 -4 1430
 
-statement query II
+query II
 select d-e as col1,
        case when c>avg_c then a*2 else b*10 end as col2
 from (
@@ -1017,33 +1006,31 @@ where (e>c or e<d)
    and c>d
    and (a>b-2 and a<b+2)
 order by col1,col2;
-
 ----
 -4 1430
 1 1300
 1 1390
 3 364
 
-statement query skipped
+query skipped
 select a+b*2+c*3 as col1,
        (select count(*) from t1 as x where x.b<t1.b) as col2,
        a+b*2+c*3+d*4 as col3
 from t1
 order by col2,col3,col1;
 
-statement query skipped
+query skipped
 select a+b*2+c*3 as col1,
        (select count(*) from t1 as x where x.b<t1.b) as col2,
        a+b*2+c*3+d*4 as col3
 from t1
 order by col3,col1,col2;
 
-statement query II
+query II
 select d-e as col1,
        b as col2
 from t1
 order by col2,col1;
-
 ----
 -1 105
 4 112
@@ -1076,12 +1063,11 @@ NULL 240
 -1 NULL
 NULL NULL
 
-statement query II
+query II
 select d-e as col1,
        b as col2
 from t1
 order by col2,col1;
-
 ----
 -1 105
 4 112
@@ -1114,7 +1100,7 @@ NULL 240
 -1 NULL
 NULL NULL
 
-statement query skipped
+query skipped
 select abs(b-c) as col1,
        abs(a) as col2,
        d-e as col3,
@@ -1126,7 +1112,7 @@ where a>b
    and c between b-2 and d+2
 order by col4,col5,col2,col3,col1;
 
-statement query skipped
+query skipped
 select abs(b-c) as col1,
        abs(a) as col2,
        d-e as col3,
@@ -1138,7 +1124,7 @@ where a>b
    and c between b-2 and d+2
 order by col3,col1,col5,col2,col4;
 
-statement query skipped
+query skipped
 select abs(b-c) as col1,
        abs(a) as col2,
        d-e as col3,
@@ -1150,7 +1136,7 @@ where a>b
    and c>d
 order by col4,col5,col2,col3,col1;
 
-statement query skipped
+query skipped
 select abs(b-c) as col1,
        abs(a) as col2,
        d-e as col3,
@@ -1162,7 +1148,7 @@ where a>b
    and c>d
 order by col3,col1,col5,col2,col4;
 
-statement query skipped
+query skipped
 select abs(b-c) as col1,
        abs(a) as col2,
        d-e as col3,
@@ -1174,7 +1160,7 @@ where c between b-2 and d+2
    and c>d
 order by col4,col5,col2,col3,col1;
 
-statement query skipped
+query skipped
 select abs(b-c) as col1,
        abs(a) as col2,
        d-e as col3,
@@ -1186,7 +1172,7 @@ where c between b-2 and d+2
    and c>d
 order by col5,col1,col4,col2,col3;
 
-statement query skipped
+query skipped
 select abs(b-c) as col1,
        abs(a) as col2,
        d-e as col3,
@@ -1198,7 +1184,7 @@ where c>d
    and a>b
 order by col4,col5,col2,col3,col1;
 
-statement query skipped
+query skipped
 select abs(b-c) as col1,
        abs(a) as col2,
        d-e as col3,
@@ -1210,11 +1196,10 @@ where c>d
    and a>b
 order by col4,col1,col3,col5,col2;
 
-statement query I
+query I
 select d-e as col1
 from t1
 order by col1;
-
 ----
 -4
 -4
@@ -1247,11 +1232,10 @@ NULL
 NULL
 NULL
 
-statement query I
+query I
 select d-e as col1
 from t1
 order by col1;
-
 ----
 -4
 -4
@@ -1284,7 +1268,7 @@ NULL
 NULL
 NULL
 
-statement query ITTIT
+query ITTIT
 select case when a<b-3 then 111 when a<=b then 222
         when a<b+3 then 333 else 444 end as col1,
        b-c as col2,
@@ -1293,7 +1277,6 @@ select case when a<b-3 then 111 when a<=b then 222
        abs(b-c) as col5
 from t1
 order by col4,col5,col2,col3,col1;
-
 ----
 444 NULL NULL 104 NULL
 333 -1 1067 107 1
@@ -1326,7 +1309,7 @@ order by col4,col5,col2,col3,col1;
 444 -1 NULL NULL 1
 444 -2 NULL NULL 2
 
-statement query IIIII
+query IIIII
 select case when a<b-3 then 111 when a<=b then 222
         when a<b+3 then 333 else 444 end as col1,
        b-c as col2,
@@ -1335,7 +1318,6 @@ select case when a<b-3 then 111 when a<=b then 222
        abs(b-c) as col5
 from t1
 order by col2,col4,col1,col5,col3;
-
 ----
 333 -4 1325 131 4
 444 -4 NULL 243 4
@@ -1368,7 +1350,7 @@ order by col2,col4,col1,col5,col3;
 444 NULL NULL 201 NULL
 444 NULL NULL 239 NULL
 
-statement query skipped
+query skipped
 select c as col1
 from t1
 where d not between 110 and 150
@@ -1376,7 +1358,7 @@ where d not between 110 and 150
    and (a>b-2 and a<b+2)
 order by col1;
 
-statement query skipped
+query skipped
 select c as col1
 from t1
 where d not between 110 and 150
@@ -1384,7 +1366,7 @@ where d not between 110 and 150
    and (a>b-2 and a<b+2)
 order by col1;
 
-statement query skipped
+query skipped
 select c as col1
 from t1
 where (a>b-2 and a<b+2)
@@ -1392,7 +1374,7 @@ where (a>b-2 and a<b+2)
    and (e>a and e<b)
 order by col1;
 
-statement query skipped
+query skipped
 select c as col1
 from t1
 where (a>b-2 and a<b+2)
@@ -1400,7 +1382,7 @@ where (a>b-2 and a<b+2)
    and (e>a and e<b)
 order by col1;
 
-statement query skipped
+query skipped
 select e as col1,
        (select count(*) from t1 as x where x.b<t1.b) as col2
 from t1
@@ -1408,7 +1390,7 @@ where (e>a and e<b)
     or a>b
 order by col2,col1;
 
-statement query skipped
+query skipped
 select e as col1,
        (select count(*) from t1 as x where x.b<t1.b) as col2
 from t1
@@ -1416,7 +1398,7 @@ where (e>a and e<b)
     or a>b
 order by col2,col1;
 
-statement query skipped
+query skipped
 select e as col1,
        (select count(*) from t1 as x where x.b<t1.b) as col2
 from t1
@@ -1424,7 +1406,7 @@ where a>b
     or (e>a and e<b)
 order by col2,col1;
 
-statement query skipped
+query skipped
 select e as col1,
        (select count(*) from t1 as x where x.b<t1.b) as col2
 from t1
@@ -1432,7 +1414,7 @@ where a>b
     or (e>a and e<b)
 order by col1,col2;
 
-statement query skipped
+query skipped
 select abs(a) as col1,
        d-e as col2,
        a+b*2+c*3 as col3,
@@ -1444,7 +1426,7 @@ where d>e
     or c>d
 order by col4,col5,col2,col3,col1;
 
-statement query skipped
+query skipped
 select abs(a) as col1,
        d-e as col2,
        a+b*2+c*3 as col3,
@@ -1456,7 +1438,7 @@ where d>e
     or c>d
 order by col4,col1,col5,col2,col3;
 
-statement query skipped
+query skipped
 select abs(a) as col1,
        d-e as col2,
        a+b*2+c*3 as col3,
@@ -1468,7 +1450,7 @@ where d>e
     or d not between 110 and 150
 order by col4,col5,col2,col3,col1;
 
-statement query skipped
+query skipped
 select abs(a) as col1,
        d-e as col2,
        a+b*2+c*3 as col3,
@@ -1480,7 +1462,7 @@ where d>e
     or d not between 110 and 150
 order by col1,col2,col4,col5,col3;
 
-statement query skipped
+query skipped
 select abs(a) as col1,
        d-e as col2,
        a+b*2+c*3 as col3,
@@ -1492,7 +1474,7 @@ where c>d
     or d>e
 order by col4,col5,col2,col3,col1;
 
-statement query skipped
+query skipped
 select abs(a) as col1,
        d-e as col2,
        a+b*2+c*3 as col3,
@@ -1504,7 +1486,7 @@ where c>d
     or d>e
 order by col1,col3,col4,col5,col2;
 
-statement query skipped
+query skipped
 select (select count(*) from t1 as x where x.b<t1.b) as col1,
        c as col2,
        case when a<b-3 then 111 when a<=b then 222
@@ -1517,7 +1499,7 @@ from t1
 where (c<=d-2 or c>=d+2)
 order by col6,col7,col4,col5,col2,col3,col1;
 
-statement query skipped
+query skipped
 select (select count(*) from t1 as x where x.b<t1.b) as col1,
        c as col2,
        case when a<b-3 then 111 when a<=b then 222
@@ -1530,7 +1512,7 @@ from t1
 where (c<=d-2 or c>=d+2)
 order by col4,col1,col5,col2,col6,col3,col7;
 
-statement query skipped
+query skipped
 select (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col1,
        a+b*2+c*3+d*4 as col2,
        case a+1 when b then 111 when c then 222
@@ -1545,7 +1527,7 @@ where c between b-2 and d+2
    and e+d between a+b-10 and c+130
 order by col6,col4,col5,col2,col3,col1;
 
-statement query skipped
+query skipped
 select (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col1,
        a+b*2+c*3+d*4 as col2,
        case a+1 when b then 111 when c then 222
@@ -1560,7 +1542,7 @@ where c between b-2 and d+2
    and e+d between a+b-10 and c+130
 order by col3,col2,col6,col4,col5,col1;
 
-statement query skipped
+query skipped
 select (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col1,
        a+b*2+c*3+d*4 as col2,
        case a+1 when b then 111 when c then 222
@@ -1575,7 +1557,7 @@ where (a>b-2 and a<b+2)
    and e+d between a+b-10 and c+130
 order by col6,col4,col5,col2,col3,col1;
 
-statement query skipped
+query skipped
 select (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col1,
        a+b*2+c*3+d*4 as col2,
        case a+1 when b then 111 when c then 222
@@ -1590,7 +1572,7 @@ where (a>b-2 and a<b+2)
    and e+d between a+b-10 and c+130
 order by col5,col6,col2,col3,col1,col4;
 
-statement query skipped
+query skipped
 select (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col1,
        a+b*2+c*3+d*4 as col2,
        case a+1 when b then 111 when c then 222
@@ -1605,7 +1587,7 @@ where c between b-2 and d+2
    and (a>b-2 and a<b+2)
 order by col6,col4,col5,col2,col3,col1;
 
-statement query skipped
+query skipped
 select (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col1,
        a+b*2+c*3+d*4 as col2,
        case a+1 when b then 111 when c then 222
@@ -1620,7 +1602,7 @@ where c between b-2 and d+2
    and (a>b-2 and a<b+2)
 order by col4,col6,col5,col1,col3,col2;
 
-statement query IIIIII
+query IIIIII
 select d as col1,
        c-d as col2,
        a+b*2+c*3 as col3,
@@ -1634,7 +1616,6 @@ from (
  ) as Q cross join (select a, b, c, d, e from t1) as R
 )
 order by col6,col4,col5,col2,col3,col1;
-
 ----
 108 -2 635 106 1050 1612
 128 -3 760 125 1290 1902
@@ -1667,7 +1648,7 @@ NULL NULL 1057 176 358 NULL
 NULL NULL 1455 244 486 NULL
 238 NULL NULL NULL 2360 NULL
 
-statement query IIIIII
+query IIIIII
 select d as col1,
        c-d as col2,
        a+b*2+c*3 as col3,
@@ -1681,7 +1662,6 @@ from (
  ) as Q cross join (select a, b, c, d, e from t1) as R
 )
 order by col2,col5,col6,col3,col1,col4;
-
 ----
 128 -3 760 125 1290 1902
 164 -3 966 161 1600 2432
@@ -1714,7 +1694,7 @@ NULL NULL 940 155 1580 NULL
 NULL NULL 1000 166 1670 NULL
 238 NULL NULL NULL 2360 NULL
 
-statement query skipped
+query skipped
 select case a+1 when b then 111 when c then 222
         when d then 333  when e then 444 else 555 end as col1,
        case when a<b-3 then 111 when a<=b then 222
@@ -1729,7 +1709,7 @@ where c>d
     or exists(select 1 from t1 as x where x.b<t1.b)
 order by col6,col7,col4,col5,col2,col3,col1;
 
-statement query skipped
+query skipped
 select case a+1 when b then 111 when c then 222
         when d then 333  when e then 444 else 555 end as col1,
        case when a<b-3 then 111 when a<=b then 222
@@ -1744,7 +1724,7 @@ where c>d
     or exists(select 1 from t1 as x where x.b<t1.b)
 order by col3,col6,col7,col4,col5,col2,col1;
 
-statement query skipped
+query skipped
 select case a+1 when b then 111 when c then 222
         when d then 333  when e then 444 else 555 end as col1,
        case when a<b-3 then 111 when a<=b then 222
@@ -1759,7 +1739,7 @@ where exists(select 1 from t1 as x where x.b<t1.b)
     or c>d
 order by col6,col7,col4,col5,col2,col3,col1;
 
-statement query skipped
+query skipped
 select case a+1 when b then 111 when c then 222
         when d then 333  when e then 444 else 555 end as col1,
        case when a<b-3 then 111 when a<=b then 222
@@ -1774,7 +1754,7 @@ where exists(select 1 from t1 as x where x.b<t1.b)
     or c>d
 order by col7,col4,col3,col5,col2,col6,col1;
 
-statement query TTIITIT
+query TTIITIT
 select a+b*2+c*3+d*4+e*5 as col1,
        b-c as col2,
        abs(a) as col3,
@@ -1784,7 +1764,6 @@ select a+b*2+c*3+d*4+e*5 as col1,
        d-e as col7
 from t1
 order by col6,col7,col4,col5,col2,col3,col1;
-
 ----
 NULL NULL 104 101 NULL 102 NULL
 1612 -1 107 108 1 106 -1
@@ -1817,7 +1796,7 @@ NULL -4 243 NULL 4 244 NULL
 3706 2 245 248 2 247 2
 NULL NULL 239 238 NULL NULL 1
 
-statement query TTIITIT
+query TTIITIT
 select a+b*2+c*3+d*4+e*5 as col1,
        b-c as col2,
        abs(a) as col3,
@@ -1827,7 +1806,6 @@ select a+b*2+c*3+d*4+e*5 as col1,
        d-e as col7
 from t1
 order by col4,col3,col5,col2,col6,col7,col1;
-
 ----
 NULL NULL 104 101 NULL 102 NULL
 1612 -1 107 108 1 106 -1
@@ -1860,7 +1838,7 @@ NULL 1 168 NULL 1 166 NULL
 NULL -1 179 NULL 1 176 NULL
 NULL -4 243 NULL 4 244 NULL
 
-statement query IIIII
+query IIIII
 select a+b*2 as col1,
        a as col2,
        case when c>avg_c then a*2 else b*10 end as col3,
@@ -1876,7 +1854,6 @@ where c between b-2 and d+2
     or (a>b-2 and a<b+2)
     or d not between 110 and 150
 order by col4,col5,col2,col3,col1;
-
 ----
 317 107 1050 109 -2
 NULL NULL 1120 110 -1
@@ -1903,7 +1880,7 @@ NULL 104 NULL NULL 1
 369 121 1240 NULL 1
 NULL NULL NULL NULL 1
 
-statement query IIIII
+query IIIII
 select a+b*2 as col1,
        a as col2,
        case when c>avg_c then a*2 else b*10 end as col3,
@@ -1919,7 +1896,6 @@ where c between b-2 and d+2
     or (a>b-2 and a<b+2)
     or d not between 110 and 150
 order by col4,col5,col2,col3,col1;
-
 ----
 317 107 1050 109 -2
 NULL NULL 1120 110 -1
@@ -1946,7 +1922,7 @@ NULL 104 NULL NULL 1
 369 121 1240 NULL 1
 NULL NULL NULL NULL 1
 
-statement query IIIII
+query IIIII
 select a+b*2 as col1,
        a as col2,
        case when c>avg_c then a*2 else b*10 end as col3,
@@ -1962,7 +1938,6 @@ where (a>b-2 and a<b+2)
     or c between b-2 and d+2
     or d not between 110 and 150
 order by col4,col5,col2,col3,col1;
-
 ----
 317 107 1050 109 -2
 NULL NULL 1120 110 -1
@@ -1989,7 +1964,7 @@ NULL 104 NULL NULL 1
 369 121 1240 NULL 1
 NULL NULL NULL NULL 1
 
-statement query IIIII
+query IIIII
 select a+b*2 as col1,
        a as col2,
        case when c>avg_c then a*2 else b*10 end as col3,
@@ -2005,7 +1980,6 @@ where (a>b-2 and a<b+2)
     or c between b-2 and d+2
     or d not between 110 and 150
 order by col5,col2,col4,col3,col1;
-
 ----
 483 163 1600 162 -3
 317 107 1050 109 -2
@@ -2032,7 +2006,7 @@ NULL NULL NULL NULL 1
 502 168 1670 165 NULL
 711 239 2360 237 NULL
 
-statement query IIIII
+query IIIII
 select a+b*2 as col1,
        a as col2,
        case when c>avg_c then a*2 else b*10 end as col3,
@@ -2048,7 +2022,6 @@ where c between b-2 and d+2
     or d not between 110 and 150
     or (a>b-2 and a<b+2)
 order by col4,col5,col2,col3,col1;
-
 ----
 317 107 1050 109 -2
 NULL NULL 1120 110 -1
@@ -2075,7 +2048,7 @@ NULL 104 NULL NULL 1
 369 121 1240 NULL 1
 NULL NULL NULL NULL 1
 
-statement query IIIII
+query IIIII
 select a+b*2 as col1,
        a as col2,
        case when c>avg_c then a*2 else b*10 end as col3,
@@ -2091,7 +2064,6 @@ where c between b-2 and d+2
     or d not between 110 and 150
     or (a>b-2 and a<b+2)
 order by col1,col3,col5,col4,col2;
-
 ----
 317 107 1050 109 -2
 369 121 1240 NULL 1
@@ -2118,7 +2090,7 @@ NULL NULL 1120 110 -1
 NULL 104 NULL NULL 1
 NULL NULL NULL NULL 1
 
-statement query skipped
+query skipped
 select (select count(*) from t1 as x where x.b<t1.b) as col1,
        (a+b+c+d+e)/5 as col2,
        case a+1 when b then 111 when c then 222
@@ -2130,7 +2102,7 @@ from t1
 where (a>b-2 and a<b+2)
 order by col6,col4,col5,col2,col3,col1;
 
-statement query skipped
+query skipped
 select (select count(*) from t1 as x where x.b<t1.b) as col1,
        (a+b+c+d+e)/5 as col2,
        case a+1 when b then 111 when c then 222
@@ -2142,7 +2114,7 @@ from t1
 where (a>b-2 and a<b+2)
 order by col1,col5,col2,col3,col4,col6;
 
-statement query skipped
+query skipped
 select a+b*2+c*3+d*4+e*5 as col1,
        case when c>(select avg(c) from t1) then a*2 else b*10 end as col2,
        case a+1 when b then 111 when c then 222
@@ -2154,7 +2126,7 @@ where d>e
     or c between b-2 and d+2
 order by col4,col2,col3,col1;
 
-statement query skipped
+query skipped
 select a+b*2+c*3+d*4+e*5 as col1,
        case when c>(select avg(c) from t1) then a*2 else b*10 end as col2,
        case a+1 when b then 111 when c then 222
@@ -2166,7 +2138,7 @@ where d>e
     or c between b-2 and d+2
 order by col3,col2,col4,col1;
 
-statement query skipped
+query skipped
 select a+b*2+c*3+d*4+e*5 as col1,
        case when c>(select avg(c) from t1) then a*2 else b*10 end as col2,
        case a+1 when b then 111 when c then 222
@@ -2178,7 +2150,7 @@ where c between b-2 and d+2
     or d>e
 order by col4,col2,col3,col1;
 
-statement query skipped
+query skipped
 select a+b*2+c*3+d*4+e*5 as col1,
        case when c>(select avg(c) from t1) then a*2 else b*10 end as col2,
        case a+1 when b then 111 when c then 222
@@ -2190,7 +2162,7 @@ where c between b-2 and d+2
     or d>e
 order by col1,col4,col2,col3;
 
-statement query skipped
+query skipped
 select a+b*2+c*3+d*4+e*5 as col1,
        case when c>(select avg(c) from t1) then a*2 else b*10 end as col2,
        case a+1 when b then 111 when c then 222
@@ -2202,7 +2174,7 @@ where c between b-2 and d+2
     or b>c
 order by col4,col2,col3,col1;
 
-statement query skipped
+query skipped
 select a+b*2+c*3+d*4+e*5 as col1,
        case when c>(select avg(c) from t1) then a*2 else b*10 end as col2,
        case a+1 when b then 111 when c then 222
@@ -2214,7 +2186,7 @@ where c between b-2 and d+2
     or b>c
 order by col3,col2,col4,col1;
 
-statement query skipped
+query skipped
 select b as col1,
        a+b*2+c*3+d*4 as col2,
        d-e as col3,
@@ -2227,7 +2199,7 @@ from t1
 where c between b-2 and d+2
 order by col6,col7,col4,col5,col2,col3,col1;
 
-statement query skipped
+query skipped
 select b as col1,
        a+b*2+c*3+d*4 as col2,
        d-e as col3,
@@ -2240,7 +2212,7 @@ from t1
 where c between b-2 and d+2
 order by col5,col6,col1,col3,col7,col4,col2;
 
-statement query TIII
+query TIII
 select a+b*2+c*3+d*4 as col1,
        a+b*2+c*3 as col2,
        c as col3,
@@ -2253,7 +2225,6 @@ from (
 )
 where (e>c or e<d)
 order by col4,col2,col3,col1;
-
 ----
 NULL 1057 176 358
 1828 1096 184 364
@@ -2277,7 +2248,7 @@ NULL 940 155 1580
 1714 1030 172 1700
 NULL NULL NULL 2360
 
-statement query IIII
+query IIII
 select a+b*2+c*3+d*4 as col1,
        a+b*2+c*3 as col2,
        c as col3,
@@ -2290,7 +2261,6 @@ from (
 )
 where (e>c or e<d)
 order by col2,col4,col3,col1;
-
 ----
 1067 635 106 1050
 1272 760 125 1290
@@ -2314,7 +2284,7 @@ NULL NULL 202 402
 NULL NULL 113 1120
 NULL NULL NULL 2360
 
-statement query skipped
+query skipped
 select abs(a) as col1,
        a+b*2 as col2,
        a+b*2+c*3 as col3,
@@ -2326,7 +2296,7 @@ from t1
 where c between b-2 and d+2
 order by col6,col7,col4,col5,col2,col3,col1;
 
-statement query skipped
+query skipped
 select abs(a) as col1,
        a+b*2 as col2,
        a+b*2+c*3 as col3,
@@ -2338,29 +2308,27 @@ from t1
 where c between b-2 and d+2
 order by col1,col3,col2,col6,col5,col7,col4;
 
-statement query I
+query I
 select a as col1
 from t1
 where (e>a and e<b)
 order by col1;
-
 ----
 191
 220
 245
 
-statement query I
+query I
 select a as col1
 from t1
 where (e>a and e<b)
 order by col1;
-
 ----
 191
 220
 245
 
-statement query skipped
+query skipped
 select c-d as col1,
        (select count(*) from t1 as x where x.b<t1.b) as col2,
        a+b*2+c*3+d*4 as col3,
@@ -2368,7 +2336,7 @@ select c-d as col1,
 from t1
 order by col4,col2,col3,col1;
 
-statement query skipped
+query skipped
 select c-d as col1,
        (select count(*) from t1 as x where x.b<t1.b) as col2,
        a+b*2+c*3+d*4 as col3,
@@ -2376,7 +2344,7 @@ select c-d as col1,
 from t1
 order by col3,col1,col4,col2;
 
-statement query skipped
+query skipped
 select abs(a) as col1,
        a+b*2 as col2
 from t1
@@ -2385,7 +2353,7 @@ where (a>b-2 and a<b+2)
    and a>b
 order by col2,col1;
 
-statement query skipped
+query skipped
 select abs(a) as col1,
        a+b*2 as col2
 from t1
@@ -2394,7 +2362,7 @@ where (a>b-2 and a<b+2)
    and a>b
 order by col1,col2;
 
-statement query skipped
+query skipped
 select abs(a) as col1,
        a+b*2 as col2
 from t1
@@ -2403,7 +2371,7 @@ where a>b
    and (a>b-2 and a<b+2)
 order by col2,col1;
 
-statement query skipped
+query skipped
 select abs(a) as col1,
        a+b*2 as col2
 from t1
@@ -2412,7 +2380,7 @@ where a>b
    and (a>b-2 and a<b+2)
 order by col1,col2;
 
-statement query skipped
+query skipped
 select abs(a) as col1,
        a+b*2 as col2
 from t1
@@ -2421,7 +2389,7 @@ where b>c
    and (a>b-2 and a<b+2)
 order by col2,col1;
 
-statement query skipped
+query skipped
 select abs(a) as col1,
        a+b*2 as col2
 from t1
@@ -2430,13 +2398,12 @@ where b>c
    and (a>b-2 and a<b+2)
 order by col2,col1;
 
-statement query II
+query II
 select case when a<b-3 then 111 when a<=b then 222
         when a<b+3 then 333 else 444 end as col1,
        a as col2
 from t1
 order by col2,col1;
-
 ----
 444 104
 333 107
@@ -2469,13 +2436,12 @@ order by col2,col1;
 444 NULL
 444 NULL
 
-statement query II
+query II
 select case when a<b-3 then 111 when a<=b then 222
         when a<b+3 then 333 else 444 end as col1,
        a as col2
 from t1
 order by col2,col1;
-
 ----
 444 104
 333 107
@@ -2508,7 +2474,7 @@ order by col2,col1;
 444 NULL
 444 NULL
 
-statement query skipped
+query skipped
 select abs(b-c) as col1,
        a+b*2+c*3+d*4+e*5 as col2,
        b as col3,
@@ -2518,7 +2484,7 @@ where (c<=d-2 or c>=d+2)
     or d>e
 order by col4,col2,col3,col1;
 
-statement query skipped
+query skipped
 select abs(b-c) as col1,
        a+b*2+c*3+d*4+e*5 as col2,
        b as col3,
@@ -2528,7 +2494,7 @@ where (c<=d-2 or c>=d+2)
     or d>e
 order by col4,col2,col3,col1;
 
-statement query skipped
+query skipped
 select abs(b-c) as col1,
        a+b*2+c*3+d*4+e*5 as col2,
        b as col3,
@@ -2538,7 +2504,7 @@ where d>e
     or (c<=d-2 or c>=d+2)
 order by col4,col2,col3,col1;
 
-statement query skipped
+query skipped
 select abs(b-c) as col1,
        a+b*2+c*3+d*4+e*5 as col2,
        b as col3,
@@ -2548,7 +2514,7 @@ where d>e
     or (c<=d-2 or c>=d+2)
 order by col4,col1,col3,col2;
 
-statement query skipped
+query skipped
 select case when c>(select avg(c) from t1) then a*2 else b*10 end as col1,
        (select count(*) from t1 as x where x.b<t1.b) as col2,
        a+b*2+c*3+d*4+e*5 as col3,
@@ -2558,7 +2524,7 @@ select case when c>(select avg(c) from t1) then a*2 else b*10 end as col1,
 from t1
 order by col4,col5,col2,col3,col1;
 
-statement query skipped
+query skipped
 select case when c>(select avg(c) from t1) then a*2 else b*10 end as col1,
        (select count(*) from t1 as x where x.b<t1.b) as col2,
        a+b*2+c*3+d*4+e*5 as col3,
@@ -2568,7 +2534,7 @@ select case when c>(select avg(c) from t1) then a*2 else b*10 end as col1,
 from t1
 order by col3,col5,col1,col4,col2;
 
-statement query IIIII
+query IIIII
 select e as col1,
        d-e as col2,
        case when a<b-3 then 111 when a<=b then 222
@@ -2577,7 +2543,6 @@ select e as col1,
        a as col5
 from t1
 order by col4,col5,col2,col3,col1;
-
 ----
 109 -1 333 105 107
 110 4 444 112 NULL
@@ -2610,7 +2575,7 @@ NULL NULL 444 NULL 104
 117 -1 444 NULL 115
 204 -1 444 NULL 201
 
-statement query IIIII
+query IIIII
 select e as col1,
        d-e as col2,
        case when a<b-3 then 111 when a<=b then 222
@@ -2619,7 +2584,6 @@ select e as col1,
        a as col5
 from t1
 order by col4,col2,col3,col5,col1;
-
 ----
 109 -1 333 105 107
 110 4 444 112 NULL
@@ -2652,7 +2616,7 @@ NULL NULL 444 240 243
 204 -1 444 NULL 201
 NULL NULL 444 NULL 104
 
-statement query skipped
+query skipped
 select (a+b+c+d+e)/5 as col1,
        case when a<b-3 then 111 when a<=b then 222
         when a<b+3 then 333 else 444 end as col2,
@@ -2662,7 +2626,7 @@ where a>b
     or (a>b-2 and a<b+2)
 order by col2,col3,col1;
 
-statement query skipped
+query skipped
 select (a+b+c+d+e)/5 as col1,
        case when a<b-3 then 111 when a<=b then 222
         when a<b+3 then 333 else 444 end as col2,
@@ -2672,7 +2636,7 @@ where a>b
     or (a>b-2 and a<b+2)
 order by col1,col3,col2;
 
-statement query skipped
+query skipped
 select (a+b+c+d+e)/5 as col1,
        case when a<b-3 then 111 when a<=b then 222
         when a<b+3 then 333 else 444 end as col2,
@@ -2682,7 +2646,7 @@ where (a>b-2 and a<b+2)
     or a>b
 order by col2,col3,col1;
 
-statement query skipped
+query skipped
 select (a+b+c+d+e)/5 as col1,
        case when a<b-3 then 111 when a<=b then 222
         when a<b+3 then 333 else 444 end as col2,
@@ -2692,7 +2656,7 @@ where (a>b-2 and a<b+2)
     or a>b
 order by col1,col2,col3;
 
-statement query skipped
+query skipped
 select (select count(*) from t1 as x where x.b<t1.b) as col1,
        case when c>(select avg(c) from t1) then a*2 else b*10 end as col2,
        b as col3,
@@ -2704,7 +2668,7 @@ where d not between 110 and 150
     or c between b-2 and d+2
 order by col6,col4,col5,col2,col3,col1;
 
-statement query skipped
+query skipped
 select (select count(*) from t1 as x where x.b<t1.b) as col1,
        case when c>(select avg(c) from t1) then a*2 else b*10 end as col2,
        b as col3,
@@ -2716,7 +2680,7 @@ where d not between 110 and 150
     or c between b-2 and d+2
 order by col3,col4,col6,col5,col2,col1;
 
-statement query skipped
+query skipped
 select (select count(*) from t1 as x where x.b<t1.b) as col1,
        case when c>(select avg(c) from t1) then a*2 else b*10 end as col2,
        b as col3,
@@ -2728,7 +2692,7 @@ where c between b-2 and d+2
     or d not between 110 and 150
 order by col6,col4,col5,col2,col3,col1;
 
-statement query skipped
+query skipped
 select (select count(*) from t1 as x where x.b<t1.b) as col1,
        case when c>(select avg(c) from t1) then a*2 else b*10 end as col2,
        b as col3,
@@ -2740,7 +2704,7 @@ where c between b-2 and d+2
     or d not between 110 and 150
 order by col6,col4,col5,col2,col3,col1;
 
-statement query IFIIIII
+query IFIIIII
 select d-e as col1,
        (a+b+c+d+e)/5 as col2,
        case a+1 when b then 111 when c then 222
@@ -2756,7 +2720,6 @@ from (
  ) as Q cross join (select a, b, c, d, e from t1) as R
 )
 order by col6,col7,col4,col5,col2,col3,col1;
-
 ----
 -1 107.0 333 1050 2 1067 107
 NULL NULL 333 1240 -3 1226 121
@@ -2789,7 +2752,7 @@ NULL NULL 222 486 3 NULL 243
 4 NULL 555 1120 NULL NULL NULL
 NULL NULL 555 NULL NULL NULL NULL
 
-statement query TTITTTI
+query TTITTTI
 select d-e as col1,
        (a+b+c+d+e)/5 as col2,
        case a+1 when b then 111 when c then 222
@@ -2805,7 +2768,6 @@ from (
  ) as Q cross join (select a, b, c, d, e from t1) as R
 )
 order by col7,col6,col2,col1,col3,col4,col5;
-
 ----
 NULL NULL 555 NULL NULL NULL 104
 -1 107.0 333 1050 2 1067 107
@@ -2838,7 +2800,7 @@ NULL NULL 222 486 3 NULL 243
 4 NULL 555 1120 NULL NULL NULL
 NULL NULL 555 NULL NULL NULL NULL
 
-statement query ITTII
+query ITTII
 select c-d as col1,
        case when c>avg_c then a*2 else b*10 end as col2,
        (a+b+c+d+e)/5 as col3,
@@ -2851,7 +2813,6 @@ from (
  ) as Q cross join (select a, b, c, d, e from t1) as R
 )
 order by col4,col5,col2,col3,col1;
-
 ----
 1 NULL NULL 104 101
 -2 1050 107.0 107 108
@@ -2884,7 +2845,7 @@ NULL 486 NULL 243 NULL
 -1 1120 NULL NULL 114
 1 NULL NULL NULL 207
 
-statement query IIFII
+query IIFII
 select c-d as col1,
        case when c>avg_c then a*2 else b*10 end as col2,
        (a+b+c+d+e)/5 as col3,
@@ -2897,7 +2858,6 @@ from (
  ) as Q cross join (select a, b, c, d, e from t1) as R
 )
 order by col1,col2,col4,col5,col3;
-
 ----
 -3 1290 127.0 127 128
 -3 1600 162.0 163 164
@@ -2930,21 +2890,21 @@ NULL 1580 NULL 159 NULL
 NULL 1670 NULL 168 NULL
 NULL 2360 NULL 239 238
 
-statement query skipped
+query skipped
 select case when c>(select avg(c) from t1) then a*2 else b*10 end as col1,
        (select count(*) from t1 as x where x.b<t1.b) as col2
 from t1
 where e+d between a+b-10 and c+130
 order by col2,col1;
 
-statement query skipped
+query skipped
 select case when c>(select avg(c) from t1) then a*2 else b*10 end as col1,
        (select count(*) from t1 as x where x.b<t1.b) as col2
 from t1
 where e+d between a+b-10 and c+130
 order by col1,col2;
 
-statement query IIII
+query IIII
 select a as col1,
        d-e as col2,
        c as col3,
@@ -2959,7 +2919,6 @@ where (c<=d-2 or c>=d+2)
     or b>c
     or c between b-2 and d+2
 order by col4,col2,col3,col1;
-
 ----
 182 3 184 364
 188 -4 187 376
@@ -2986,7 +2945,7 @@ NULL 4 113 1120
 115 -1 119 NULL
 NULL NULL 208 NULL
 
-statement query IIII
+query IIII
 select a as col1,
        d-e as col2,
        c as col3,
@@ -3001,7 +2960,6 @@ where (c<=d-2 or c>=d+2)
     or b>c
     or c between b-2 and d+2
 order by col1,col2,col4,col3;
-
 ----
 107 -1 106 1050
 115 -1 119 NULL
@@ -3028,7 +2986,7 @@ order by col1,col2,col4,col3;
 NULL 4 113 1120
 NULL NULL 208 NULL
 
-statement query IIII
+query IIII
 select a as col1,
        d-e as col2,
        c as col3,
@@ -3043,7 +3001,6 @@ where c between b-2 and d+2
     or b>c
     or (c<=d-2 or c>=d+2)
 order by col4,col2,col3,col1;
-
 ----
 182 3 184 364
 188 -4 187 376
@@ -3070,7 +3027,7 @@ NULL 4 113 1120
 115 -1 119 NULL
 NULL NULL 208 NULL
 
-statement query IIII
+query IIII
 select a as col1,
        d-e as col2,
        c as col3,
@@ -3085,7 +3042,6 @@ where c between b-2 and d+2
     or b>c
     or (c<=d-2 or c>=d+2)
 order by col2,col4,col3,col1;
-
 ----
 188 -4 187 376
 142 -4 141 1430
@@ -3112,7 +3068,7 @@ NULL 4 113 1120
 168 NULL 166 1670
 NULL NULL 208 NULL
 
-statement query TIIIII
+query TIIIII
 select e as col1,
        a+b*2 as col2,
        case when a<b-3 then 111 when a<=b then 222
@@ -3123,7 +3079,6 @@ select e as col1,
        abs(b-c) as col6
 from t1
 order by col6,col4,col5,col2,col3,col1;
-
 ----
 NULL 369 222 -3 333 1
 192 579 222 -3 444 1
@@ -3156,7 +3111,7 @@ NULL 723 444 3 222 4
 117 NULL 444 NULL 333 NULL
 NULL NULL 444 NULL 555 NULL
 
-statement query IIIIII
+query IIIIII
 select e as col1,
        a+b*2 as col2,
        case when a<b-3 then 111 when a<=b then 222
@@ -3167,7 +3122,6 @@ select e as col1,
        abs(b-c) as col6
 from t1
 order by col1,col3,col5,col6,col4,col2;
-
 ----
 109 317 333 2 333 1
 110 NULL 444 NULL 555 1
@@ -3200,7 +3154,7 @@ NULL 723 444 3 222 4
 NULL NULL 444 NULL 555 2
 NULL NULL 444 NULL 555 NULL
 
-statement query skipped
+query skipped
 select a+b*2+c*3 as col1
 from t1
 where (e>c or e<d)
@@ -3208,7 +3162,7 @@ where (e>c or e<d)
    and c between b-2 and d+2
 order by col1;
 
-statement query skipped
+query skipped
 select a+b*2+c*3 as col1
 from t1
 where (e>c or e<d)
@@ -3216,7 +3170,7 @@ where (e>c or e<d)
    and c between b-2 and d+2
 order by col1;
 
-statement query skipped
+query skipped
 select a+b*2+c*3 as col1
 from t1
 where c between b-2 and d+2
@@ -3224,7 +3178,7 @@ where c between b-2 and d+2
    and (e>c or e<d)
 order by col1;
 
-statement query skipped
+query skipped
 select a+b*2+c*3 as col1
 from t1
 where c between b-2 and d+2
@@ -3232,7 +3186,7 @@ where c between b-2 and d+2
    and (e>c or e<d)
 order by col1;
 
-statement query skipped
+query skipped
 select a+b*2+c*3 as col1
 from t1
 where d not between 110 and 150
@@ -3240,7 +3194,7 @@ where d not between 110 and 150
    and c between b-2 and d+2
 order by col1;
 
-statement query skipped
+query skipped
 select a+b*2+c*3 as col1
 from t1
 where d not between 110 and 150
@@ -3248,7 +3202,7 @@ where d not between 110 and 150
    and c between b-2 and d+2
 order by col1;
 
-statement query skipped
+query skipped
 select a+b*2+c*3 as col1,
        a+b*2 as col2,
        b-c as col3
@@ -3256,7 +3210,7 @@ from t1
 where (a>b-2 and a<b+2)
 order by col2,col3,col1;
 
-statement query skipped
+query skipped
 select a+b*2+c*3 as col1,
        a+b*2 as col2,
        b-c as col3
@@ -3264,7 +3218,7 @@ from t1
 where (a>b-2 and a<b+2)
 order by col2,col1,col3;
 
-statement query skipped
+query skipped
 select d-e as col1,
        d as col2,
        a+b*2 as col3,
@@ -3277,7 +3231,7 @@ from t1
 where a>b
 order by col6,col7,col4,col5,col2,col3,col1;
 
-statement query skipped
+query skipped
 select d-e as col1,
        d as col2,
        a+b*2 as col3,
@@ -3290,7 +3244,7 @@ from t1
 where a>b
 order by col1,col5,col7,col6,col4,col3,col2;
 
-statement query skipped
+query skipped
 select a as col1,
        d-e as col2,
        e as col3
@@ -3298,7 +3252,7 @@ from t1
 where d not between 110 and 150
 order by col2,col3,col1;
 
-statement query skipped
+query skipped
 select a as col1,
        d-e as col2,
        e as col3
@@ -3306,13 +3260,12 @@ from t1
 where d not between 110 and 150
 order by col2,col1,col3;
 
-statement query I
+query I
 select e as col1
 from t1
 where (a>b-2 and a<b+2)
     or b>c
 order by col1;
-
 ----
 126
 132
@@ -3330,13 +3283,12 @@ order by col1;
 NULL
 NULL
 
-statement query I
+query I
 select e as col1
 from t1
 where (a>b-2 and a<b+2)
     or b>c
 order by col1;
-
 ----
 126
 132
@@ -3354,13 +3306,12 @@ order by col1;
 NULL
 NULL
 
-statement query I
+query I
 select e as col1
 from t1
 where b>c
     or (a>b-2 and a<b+2)
 order by col1;
-
 ----
 126
 132
@@ -3378,13 +3329,12 @@ order by col1;
 NULL
 NULL
 
-statement query I
+query I
 select e as col1
 from t1
 where b>c
     or (a>b-2 and a<b+2)
 order by col1;
-
 ----
 126
 132
@@ -3402,7 +3352,7 @@ order by col1;
 NULL
 NULL
 
-statement query skipped
+query skipped
 select case when c>(select avg(c) from t1) then a*2 else b*10 end as col1,
        (select count(*) from t1 as x where x.b<t1.b) as col2,
        a+b*2+c*3+d*4 as col3,
@@ -3413,7 +3363,7 @@ where d>e
    and e+d between a+b-10 and c+130
 order by col4,col5,col2,col3,col1;
 
-statement query skipped
+query skipped
 select case when c>(select avg(c) from t1) then a*2 else b*10 end as col1,
        (select count(*) from t1 as x where x.b<t1.b) as col2,
        a+b*2+c*3+d*4 as col3,
@@ -3424,7 +3374,7 @@ where d>e
    and e+d between a+b-10 and c+130
 order by col2,col4,col5,col3,col1;
 
-statement query skipped
+query skipped
 select d as col1,
        a+b*2 as col2,
        abs(a) as col3,
@@ -3438,7 +3388,7 @@ where d>e
     or e+d between a+b-10 and c+130
 order by col6,col4,col5,col2,col3,col1;
 
-statement query skipped
+query skipped
 select d as col1,
        a+b*2 as col2,
        abs(a) as col3,
@@ -3452,7 +3402,7 @@ where d>e
     or e+d between a+b-10 and c+130
 order by col2,col5,col3,col1,col4,col6;
 
-statement query skipped
+query skipped
 select d as col1,
        a+b*2 as col2,
        abs(a) as col3,
@@ -3466,7 +3416,7 @@ where (e>a and e<b)
     or d>e
 order by col6,col4,col5,col2,col3,col1;
 
-statement query skipped
+query skipped
 select d as col1,
        a+b*2 as col2,
        abs(a) as col3,
@@ -3480,7 +3430,7 @@ where (e>a and e<b)
     or d>e
 order by col5,col1,col6,col2,col4,col3;
 
-statement query skipped
+query skipped
 select d as col1,
        a+b*2 as col2,
        abs(a) as col3,
@@ -3494,7 +3444,7 @@ where e+d between a+b-10 and c+130
     or (e>a and e<b)
 order by col6,col4,col5,col2,col3,col1;
 
-statement query skipped
+query skipped
 select d as col1,
        a+b*2 as col2,
        abs(a) as col3,
@@ -3508,7 +3458,7 @@ where e+d between a+b-10 and c+130
     or (e>a and e<b)
 order by col2,col3,col4,col1,col5,col6;
 
-statement query skipped
+query skipped
 select d as col1,
        a+b*2 as col2,
        abs(a) as col3,
@@ -3522,7 +3472,7 @@ where d>e
     or (e>a and e<b)
 order by col6,col4,col5,col2,col3,col1;
 
-statement query skipped
+query skipped
 select d as col1,
        a+b*2 as col2,
        abs(a) as col3,
@@ -3536,7 +3486,7 @@ where d>e
     or (e>a and e<b)
 order by col3,col4,col1,col5,col6,col2;
 
-statement query skipped
+query skipped
 select (a+b+c+d+e)/5 as col1,
        (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col2,
        a+b*2+c*3+d*4 as col3,
@@ -3546,7 +3496,7 @@ select (a+b+c+d+e)/5 as col1,
 from t1
 order by col6,col4,col5,col2,col3,col1;
 
-statement query skipped
+query skipped
 select (a+b+c+d+e)/5 as col1,
        (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col2,
        a+b*2+c*3+d*4 as col3,
@@ -3556,7 +3506,7 @@ select (a+b+c+d+e)/5 as col1,
 from t1
 order by col6,col4,col2,col5,col3,col1;
 
-statement query IIFIIII
+query IIFIIII
 select a+b*2+c*3+d*4 as col1,
        case when c>avg_c then a*2 else b*10 end as col2,
        (a+b+c+d+e)/5 as col3,
@@ -3574,7 +3524,6 @@ from (
 where a>b
     or (c<=d-2 or c>=d+2)
 order by col6,col7,col4,col5,col2,col3,col1;
-
 ----
 1067 1050 107.0 635 1 108 333
 NULL NULL NULL NULL NULL 116 333
@@ -3599,7 +3548,7 @@ NULL 1580 NULL 940 3 NULL 555
 NULL 1670 NULL 1000 1 NULL 555
 NULL 358 NULL 1057 1 NULL 555
 
-statement query IIFIIII
+query IIFIIII
 select a+b*2+c*3+d*4 as col1,
        case when c>avg_c then a*2 else b*10 end as col2,
        (a+b+c+d+e)/5 as col3,
@@ -3617,7 +3566,6 @@ from (
 where a>b
     or (c<=d-2 or c>=d+2)
 order by col4,col6,col5,col3,col7,col2,col1;
-
 ----
 1067 1050 107.0 635 1 108 333
 1272 1290 127.0 760 4 128 333
@@ -3642,7 +3590,7 @@ NULL 486 NULL 1455 4 NULL 222
 NULL NULL NULL NULL NULL 116 333
 NULL 2360 NULL NULL NULL 238 555
 
-statement query skipped
+query skipped
 select b-c as col1,
        a+b*2+c*3+d*4+e*5 as col2,
        d-e as col3,
@@ -3654,7 +3602,7 @@ where exists(select 1 from t1 as x where x.b<t1.b)
    and (e>a and e<b)
 order by col6,col4,col5,col2,col3,col1;
 
-statement query skipped
+query skipped
 select b-c as col1,
        a+b*2+c*3+d*4+e*5 as col2,
        d-e as col3,
@@ -3666,7 +3614,7 @@ where exists(select 1 from t1 as x where x.b<t1.b)
    and (e>a and e<b)
 order by col1,col5,col4,col6,col2,col3;
 
-statement query skipped
+query skipped
 select b-c as col1,
        a+b*2+c*3+d*4+e*5 as col2,
        d-e as col3,
@@ -3678,7 +3626,7 @@ where (e>a and e<b)
    and exists(select 1 from t1 as x where x.b<t1.b)
 order by col6,col4,col5,col2,col3,col1;
 
-statement query skipped
+query skipped
 select b-c as col1,
        a+b*2+c*3+d*4+e*5 as col2,
        d-e as col3,
@@ -3690,7 +3638,7 @@ where (e>a and e<b)
    and exists(select 1 from t1 as x where x.b<t1.b)
 order by col6,col1,col2,col4,col5,col3;
 
-statement query skipped
+query skipped
 select b-c as col1,
        e as col2,
        d as col3,
@@ -3701,7 +3649,7 @@ select b-c as col1,
 from t1
 order by col6,col7,col4,col5,col2,col3,col1;
 
-statement query skipped
+query skipped
 select b-c as col1,
        e as col2,
        d as col3,
@@ -3712,7 +3660,7 @@ select b-c as col1,
 from t1
 order by col1,col6,col5,col2,col3,col7,col4;
 
-statement query skipped
+query skipped
 select a as col1,
        (a+b+c+d+e)/5 as col2,
        (select count(*) from t1 as x where x.b<t1.b) as col3,
@@ -3723,7 +3671,7 @@ from t1
 where exists(select 1 from t1 as x where x.b<t1.b)
 order by col4,col5,col2,col3,col1;
 
-statement query skipped
+query skipped
 select a as col1,
        (a+b+c+d+e)/5 as col2,
        (select count(*) from t1 as x where x.b<t1.b) as col3,
@@ -3734,7 +3682,7 @@ from t1
 where exists(select 1 from t1 as x where x.b<t1.b)
 order by col2,col5,col1,col4,col3;
 
-statement query skipped
+query skipped
 select b-c as col1,
        b as col2,
        a-b as col3,
@@ -3745,7 +3693,7 @@ from t1
 where b>c
 order by col6,col4,col5,col2,col3,col1;
 
-statement query skipped
+query skipped
 select b-c as col1,
        b as col2,
        a-b as col3,
@@ -3756,7 +3704,7 @@ from t1
 where b>c
 order by col3,col1,col4,col2,col6,col5;
 
-statement query skipped
+query skipped
 select abs(a) as col1,
        d-e as col2
 from t1
@@ -3764,7 +3712,7 @@ where (a>b-2 and a<b+2)
    and b>c
 order by col2,col1;
 
-statement query skipped
+query skipped
 select abs(a) as col1,
        d-e as col2
 from t1
@@ -3772,7 +3720,7 @@ where (a>b-2 and a<b+2)
    and b>c
 order by col1,col2;
 
-statement query skipped
+query skipped
 select abs(a) as col1,
        d-e as col2
 from t1
@@ -3780,7 +3728,7 @@ where b>c
    and (a>b-2 and a<b+2)
 order by col2,col1;
 
-statement query skipped
+query skipped
 select abs(a) as col1,
        d-e as col2
 from t1
@@ -3788,21 +3736,21 @@ where b>c
    and (a>b-2 and a<b+2)
 order by col1,col2;
 
-statement query skipped
+query skipped
 select a as col1,
        b-c as col2
 from t1
 where (e>a and e<b)
 order by col2,col1;
 
-statement query skipped
+query skipped
 select a as col1,
        b-c as col2
 from t1
 where (e>a and e<b)
 order by col2,col1;
 
-statement query skipped
+query skipped
 select a+b*2+c*3+d*4 as col1,
        abs(a) as col2,
        abs(b-c) as col3,
@@ -3814,7 +3762,7 @@ select a+b*2+c*3+d*4 as col1,
 from t1
 order by col6,col7,col4,col5,col2,col3,col1;
 
-statement query skipped
+query skipped
 select a+b*2+c*3+d*4 as col1,
        abs(a) as col2,
        abs(b-c) as col3,
@@ -3826,12 +3774,11 @@ select a+b*2+c*3+d*4 as col1,
 from t1
 order by col2,col1,col6,col7,col4,col5,col3;
 
-statement query II
+query II
 select a+b*2+c*3+d*4 as col1,
        b-c as col2
 from t1
 order by col2,col1;
-
 ----
 1325 -4
 NULL -4
@@ -3864,12 +3811,11 @@ NULL NULL
 NULL NULL
 NULL NULL
 
-statement query II
+query II
 select a+b*2+c*3+d*4 as col1,
        b-c as col2
 from t1
 order by col2,col1;
-
 ----
 1325 -4
 NULL -4
@@ -3902,7 +3848,7 @@ NULL NULL
 NULL NULL
 NULL NULL
 
-statement query skipped
+query skipped
 select a as col1,
        (a+b+c+d+e)/5 as col2,
        (select count(*) from t1 as x where x.b<t1.b) as col3
@@ -3911,7 +3857,7 @@ where a>b
    and exists(select 1 from t1 as x where x.b<t1.b)
 order by col2,col3,col1;
 
-statement query skipped
+query skipped
 select a as col1,
        (a+b+c+d+e)/5 as col2,
        (select count(*) from t1 as x where x.b<t1.b) as col3
@@ -3920,7 +3866,7 @@ where a>b
    and exists(select 1 from t1 as x where x.b<t1.b)
 order by col2,col1,col3;
 
-statement query IIIIIII
+query IIIIIII
 select a as col1,
        a+b*2+c*3+d*4+e*5 as col2,
        d-e as col3,
@@ -3930,7 +3876,6 @@ select a as col1,
        b as col7
 from t1
 order by col6,col7,col4,col5,col2,col3,col1;
-
 ----
 107 1612 -1 -1 107 317 105
 121 NULL NULL 1 121 369 124
@@ -3963,7 +3908,7 @@ NULL NULL NULL -2 NULL NULL 206
 115 NULL -1 NULL 115 NULL NULL
 201 NULL -1 NULL 201 NULL NULL
 
-statement query IIIIIII
+query IIIIIII
 select a as col1,
        a+b*2+c*3+d*4+e*5 as col2,
        d-e as col3,
@@ -3973,7 +3918,6 @@ select a as col1,
        b as col7
 from t1
 order by col4,col2,col3,col6,col1,col5,col7;
-
 ----
 131 1985 1 -4 131 391 130
 243 NULL NULL -4 243 723 240
@@ -4006,7 +3950,7 @@ NULL NULL 4 -1 NULL NULL 112
 239 NULL 1 NULL 239 711 236
 104 NULL NULL NULL 104 NULL NULL
 
-statement query skipped
+query skipped
 select a-b as col1,
        (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col2,
        a+b*2+c*3 as col3,
@@ -4016,7 +3960,7 @@ select a-b as col1,
 from t1
 order by col4,col5,col2,col3,col1;
 
-statement query skipped
+query skipped
 select a-b as col1,
        (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col2,
        a+b*2+c*3 as col3,

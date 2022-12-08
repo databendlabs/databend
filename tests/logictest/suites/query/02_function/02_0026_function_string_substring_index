@@ -1,84 +1,70 @@
-statement query T
+query T
 SELECT SUBSTRING_INDEX(NULL, '.', 1);
-
 ----
 NULL
 
-statement query T
+query T
 SELECT SUBSTRING_INDEX('www', NULL, 1);
-
 ----
 NULL
 
-statement query T
+query T
 SELECT SUBSTRING_INDEX('www', '.', NULL);
-
 ----
 NULL
 
-statement query T
+query T
 SELECT SUBSTRING_INDEX('www', NULL, NULL);
-
 ----
 NULL
 
-statement query T
+query T
 SELECT SUBSTRING_INDEX(NULL, NULL, NULL);
-
 ----
 NULL
 
-statement query T
+query T
 SELECT SUBSTRING_INDEX('www__databend__shauneu__mike', '__', 1);
-
 ----
 www
 
-statement query T
+query T
 SELECT SUBSTRING_INDEX('www__databend__shauneu__mike', '__', 2);
-
 ----
 www__databend
 
-statement query T
+query T
 SELECT SUBSTRING_INDEX('www__databend__shauneu__mike', '__', 3);
-
 ----
 www__databend__shauneu
 
-statement query T
+query T
 SELECT SUBSTRING_INDEX('www__databend__shauneu__mike', '__', 4);
-
 ----
 www__databend__shauneu__mike
 
-statement query T
+query T
 SELECT SUBSTRING_INDEX('www__databend__shauneu__mike', '__', -1);
-
 ----
 mike
 
-statement query T
+query T
 SELECT SUBSTRING_INDEX('www__databend__shauneu__mike', '__', -2);
-
 ----
 shauneu__mike
 
-statement query T
+query T
 SELECT SUBSTRING_INDEX('www__databend__shauneu__mike', '__', -3);
-
 ----
 databend__shauneu__mike
 
-statement query T 
+query T
 SELECT SUBSTRING_INDEX('www__databend__shauneu__mike', '__', -4);
-
 ----
 www__databend__shauneu__mike
 
-statement query T 
+query T
 SELECT SUBSTRING_INDEX('www__databend__shauneu__mike', '__', number) FROM numbers(5) ORDER BY number;
-
 ----
 	
 www
@@ -86,9 +72,8 @@ www__databend
 www__databend__shauneu
 www__databend__shauneu__mike
 
-statement query T
+query T
 SELECT SUBSTRING_INDEX('www_1_databend_2_shauneu_3_mike', number, 1) FROM numbers(5) ORDER BY number;
-
 ----
 www_1_databend_2_shauneu_3_mike
 www_
@@ -96,9 +81,8 @@ www_1_databend_
 www_1_databend_2_shauneu_
 www_1_databend_2_shauneu_3_mike
 
-statement query T
+query T
 SELECT SUBSTRING_INDEX('www_1_databend_2_shauneu_3_mike', number, number) FROM numbers(5) ORDER BY number;
-
 ----
 	
 www_
@@ -106,9 +90,8 @@ www_1_databend_2_shauneu_3_mike
 www_1_databend_2_shauneu_3_mike
 www_1_databend_2_shauneu_3_mike
 
-statement query T
+query T
 SELECT SUBSTRING_INDEX(number + 10, '0', 1) FROM numbers(5) ORDER BY number;
-
 ----
 1
 11
@@ -116,9 +99,8 @@ SELECT SUBSTRING_INDEX(number + 10, '0', 1) FROM numbers(5) ORDER BY number;
 13
 14
 
-statement query T
+query T
 SELECT SUBSTRING_INDEX(number + 10, '0', number) FROM numbers(5) ORDER BY number;
-
 ----
 	
 11
@@ -126,9 +108,8 @@ SELECT SUBSTRING_INDEX(number + 10, '0', number) FROM numbers(5) ORDER BY number
 13
 14
 
-statement query T
+query T
 SELECT SUBSTRING_INDEX(number + 10, number, 1) FROM numbers(5) ORDER BY number;
-
 ----
 1
 	
@@ -136,9 +117,8 @@ SELECT SUBSTRING_INDEX(number + 10, number, 1) FROM numbers(5) ORDER BY number;
 1
 1
 
-statement query T
+query T
 SELECT SUBSTRING_INDEX(number + 10, number, number) FROM numbers(5) ORDER BY number;
-
 ----
 	
 	

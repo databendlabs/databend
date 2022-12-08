@@ -37,9 +37,8 @@ ALTER DATABASE c RENAME TO a;
 statement ok
 ALTER DATABASE IF EXISTS c RENAME TO a;
 
-statement query T
+query T
 SELECT name FROM system.databases where name = 'a' or name = 'b';
-
 ----
 a
 b
@@ -70,15 +69,13 @@ statement ok
 ALTER DATABASE a RENAME TO a2;
 
 -- check if change a to `a2` successfully
-statement query T
+query T
 SELECT name FROM system.databases where name = 'a2';
-
 ----
 a2
 
-statement query I
+query I
 SELECT * FROM a2.t1;
-
 ----
 1
 
@@ -88,25 +85,22 @@ ALTER DATABASE b RENAME TO system;
 statement error 1002
 ALTER DATABASE IF EXISTS b RENAME TO system;
 
-statement query I
+query I
 SELECT * FROM b.t2;
-
 ----
 10
 
 statement ok
 ALTER DATABASE default.b RENAME TO b2;
 
-statement query I
+query I
 SELECT * FROM b2.t2;
-
 ----
 10
 
 
-statement query T
+query T
 SELECT name FROM system.databases where name = 'b2';
-
 ----
 b2
 

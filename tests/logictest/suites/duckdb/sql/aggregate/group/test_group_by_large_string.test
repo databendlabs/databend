@@ -7,9 +7,8 @@ CREATE TABLE test (a VARCHAR, b INTEGER);
 statement ok
 INSERT INTO test VALUES ('helloworld', 22), ('thisisalongstring', 22), ('helloworld', 21);
 
-statement query TI
+query TI
 SELECT a, SUM(b) FROM test GROUP BY a ORDER BY a;
-
 ----
 helloworld 43
 thisisalongstring 22

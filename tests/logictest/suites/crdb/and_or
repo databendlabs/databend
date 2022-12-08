@@ -25,9 +25,8 @@ truncate table t;
 statement ok
 INSERT INTO t VALUES (1, NULL, NULL), (2, NULL, 1), (3, 1, NULL), (4, 2, 1), (5, 3, 3);
 
-statement query T
+query T
 SELECT a <> 2 AND 3 / b = 1 FROM t ORDER BY k;
-
 ----
 NULL
 0
@@ -35,15 +34,13 @@ NULL
 0
 1
 
-statement query I
+query I
 SELECT a FROM t WHERE a <> 2 AND 3 / b = 1 ORDER BY k;
-
 ----
 3
 
-statement query T
+query T
 SELECT a = 2 OR 3 / b = 1 FROM t ORDER BY k;
-
 ----
 NULL
 NULL
@@ -51,9 +48,8 @@ NULL
 1
 1
 
-statement query I
+query I
 SELECT a FROM t WHERE a = 2 OR 3 / b = 1 ORDER BY k;
-
 ----
 2
 3

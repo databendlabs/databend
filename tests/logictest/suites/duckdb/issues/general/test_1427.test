@@ -16,24 +16,21 @@ drop table if exists t;
 statement ok
 create table t as select 123 as a;
 
-statement query I
+query I
 select * from (select 123 as a) t where a in (select 123 );
-
 ----
 123
 
-statement query I
+query I
 select * from t where a in (select 123 );
-
 ----
 123
 
 statement ok
 create view t0 as select * from t where a in (select 123 );
 
-statement query I
+query I
 select * from t0;
-
 ----
 123
 

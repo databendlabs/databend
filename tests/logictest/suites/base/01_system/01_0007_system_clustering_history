@@ -16,9 +16,8 @@ insert into  tbl_01_0007 values(4);
 statement ok
 alter table tbl_01_0007 recluster final where a != 4;
 
-statement query II
+query II
 select reclustered_bytes, reclustered_rows from system.clustering_history where table = 'tbl_01_0007' limit 1;
-
 ----
 16 4
 

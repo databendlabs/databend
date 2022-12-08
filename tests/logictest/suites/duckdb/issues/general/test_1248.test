@@ -9,7 +9,7 @@
 --     (select round from test limit 1) as subselect,
 --     test;
 
-statement query I
+query I
 with test(round) as (
     select 0
 )
@@ -17,11 +17,10 @@ select test.round
 from
     (select round from test limit 1) as subselect,
     test;
-
 ----
 0
 
-statement query II
+query II
 with test(round) as (
     select 0
 )
@@ -29,7 +28,6 @@ select *
 from
     test t1,
     test t2;
-
 ----
 0 0
 

@@ -10,15 +10,13 @@ INSERT INTO t0(c0) VALUES (0);
 statement ok
 SELECT * FROM t0 WHERE NOT(NULL OR TRUE);
 
-statement query I
+query I
 SELECT NULL OR TRUE;
-
 ----
 1
 
-statement query I
+query I
 SELECT NOT(NULL OR TRUE);
-
 ----
 0
 

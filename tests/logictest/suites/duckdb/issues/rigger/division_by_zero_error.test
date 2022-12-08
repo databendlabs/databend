@@ -18,7 +18,6 @@ SELECT t0.c1, (1/t0.c1) IS NULL FROM t0 order by c1;
 
 statement ok
 SELECT t0.c1 FROM t0 WHERE (((1/(t0.c1))) IS NULL) order by c1;
-
 ----
 NULL
 
@@ -31,16 +30,14 @@ INSERT INTO t1 VALUES(10000.0);
 statement ok
 INSERT INTO t1 VALUES(0.0);
 
-statement query FI
+query FI
 SELECT c0, exp(c0) IS NULL FROM t1 order by c0;
-
 ----
 0.0 0
 10000.0 0
 
-statement query FF
+query FF
 SELECT c0, exp(c0) FROM t1 order by c0;
-
 ----
 0.0 1.0
 10000.0 inf

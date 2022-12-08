@@ -10,9 +10,8 @@ drop table if exists vals;
 statement ok
 drop table if exists vals;
 
-statement query FT
+query FT
 SELECT AVG(3), AVG(NULL);
-
 ----
 3.0 NULL
 
@@ -40,15 +39,13 @@ CREATE TABLE integers(i INTEGER NULL);
 statement ok
 INSERT INTO integers VALUES (1), (2), (3);
 
-statement query FFFT
+query FFFT
 SELECT AVG(i), AVG(1), AVG(DISTINCT i), AVG(NULL) FROM integers;
-
 ----
 2.0 1.0 2.0 NULL
 
-statement query T
+query T
 SELECT AVG(i) FROM integers WHERE i > 100;
-
 ----
 NULL
 
@@ -67,9 +64,8 @@ CREATE TABLE vals(i INTEGER NULL, j DOUBLE NULL, k BIGINT NULL);
 statement ok
 INSERT INTO vals VALUES (NULL, NULL, NULL);
 
-statement query TTT
+query TTT
 SELECT AVG(i), AVG(j), AVG(k) FROM vals;
-
 ----
 NULL NULL NULL
 

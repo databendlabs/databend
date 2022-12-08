@@ -43,23 +43,20 @@ insert into test_view.t0 values(2);
 statement ok
 create view default.v0 as select * from test_view.t0 union select * from test_view.t1;
 
-statement query T
+query T
 select * from default.v0;
-
 ----
 1
 2
 
-statement query T
+query T
 select v0.id from default.v0;
-
 ----
 1
 2
 
-statement query T
+query T
 select v1.id from default.v0 as v1;
-
 ----
 1
 2

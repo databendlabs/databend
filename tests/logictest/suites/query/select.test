@@ -1,6 +1,5 @@
-statement query T
+query T
 select 'Hello, world!';
-
 ----
 Hello, world!
 
@@ -14,17 +13,15 @@ statement ok
 insert into db.t values(1),(2);
 
 onlyif http
-statement query I
+query I
 select db.t.a from db.t;
-
 ----
 1
 2
 
 onlyif http
-statement query I
+query I
 select t1.a from db.t as t1;
-
 ----
 1
 2

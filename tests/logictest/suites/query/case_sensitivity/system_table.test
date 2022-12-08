@@ -1,7 +1,6 @@
 onlyif mysql
-statement query I
+query I
 select "Engine" as engine from system.engines order by engine;
-
 ----
 FUSE
 MEMORY

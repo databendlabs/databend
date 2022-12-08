@@ -7,9 +7,8 @@ CREATE DATABASE `test`;
 statement ok
 CREATE TABLE `test`.`a` (    a bigint, b int default 3, c varchar(255) default 'x', d smallint null, e Date) Engine = Null;
 
-statement query TT 
+query TT
 SHOW CREATE TABLE `test`.`a`;
-
 ----
 a CREATE TABLE `a` (
   `a` BIGINT,
@@ -22,9 +21,8 @@ a CREATE TABLE `a` (
 statement ok
 CREATE TABLE `test`.`b` (    a bigint, b int null default null, c varchar(255), d smallint unsigned null) Engine = Null COMMENT = 'test b';
 
-statement query TT 
+query TT
 SHOW CREATE TABLE `test`.`b`;
-
 ----
 b CREATE TABLE `b` (
   `a` BIGINT,
@@ -36,9 +34,8 @@ b CREATE TABLE `b` (
 statement ok
 CREATE TABLE test.c (a int) CLUSTER BY (a, a % 3);
 
-statement query TT 
+query TT
 SHOW CREATE TABLE `test`.`c`;
-
 ----
 c CREATE TABLE `c` (
   `a` INT

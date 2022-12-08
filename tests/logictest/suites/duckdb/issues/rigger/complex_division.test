@@ -19,9 +19,8 @@ INSERT INTO t0 VALUES(0.5,NULL);
 statement ok
 INSERT INTO t0 VALUES(0.5,NULL);
 
-statement query FI
+query FI
 SELECT c0, c1 FROM t0 order by c1;
-
 ----
 0.5 0
 0.5 1

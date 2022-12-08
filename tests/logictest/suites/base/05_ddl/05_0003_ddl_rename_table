@@ -40,9 +40,8 @@ CREATE TABLE t0(a int) ENGINE = Fuse;
 statement ok
 INSERT INTO TABLE t0 values(1);
 
-statement query I
+query I
 SELECT * FROM t0;
-
 ----
 1
 
@@ -52,9 +51,8 @@ RENAME TABLE t0 TO t1;
 statement error 1025
 DROP TABLE t0;
 
-statement query I
+query I
 SELECT * FROM t1;
-
 ----
 1
 
@@ -76,9 +74,8 @@ CREATE TABLE t0(a int);
 statement ok
 INSERT INTO TABLE t0 values(1);
 
-statement query I
+query I
 SELECT * FROM t0;
-
 ----
 1
 
@@ -88,9 +85,8 @@ RENAME TABLE t0 TO t1;
 statement error 1025
 DROP TABLE t0;
 
-statement query I
+query I
 SELECT * FROM t1;
-
 ----
 1
 

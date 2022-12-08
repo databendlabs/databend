@@ -16,9 +16,8 @@ INSERT INTO t0(c0) VALUES (0);
 statement ok
 INSERT INTO t1(c0) VALUES (NULL);
 
-statement query TT
+query TT
 SELECT * FROM t1 LEFT JOIN t0 ON t0.c0=t1.c0;
-
 ----
 NULL NULL
 

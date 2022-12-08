@@ -54,30 +54,26 @@ statement ok
 insert into default.t1 values(2, (200,200));
 
 
-statement query I
+query I
 select * exclude c1 from db.t;
-
 ----
 1
 
 
-statement query T
+query T
 select * exclude (id) from db.t;
-
 ----
 (0,0)
 
 
-statement query T
+query T
 select t.* exclude (id) from db.t;
-
 ----
 (0,0)
 
 
-statement query T
+query T
 select db.t.* exclude (id) from db.t;
-
 ----
 (0,0)
 
@@ -86,9 +82,8 @@ statement error 1065
 select db.t.* exclude (id, c1) from db.t;
 
 
-statement query T
+query T
 select c.* exclude (id) from db.t as c;
-
 ----
 (0,0)
 
@@ -105,16 +100,14 @@ statement error 1065
 select t1.* exclude id from (select t.id as id, t.c1 as id from db.t) t1;
 
 
-statement query ITITITIIT
+query ITITITIIT
 select *, t.* exclude c1, t1.* exclude (c1), t2.* exclude id from db.t join db.t1 on t.id != t1.id join default.t as t2 on t.id=t2.id;
-
 ----
 1 (0,0)    2 (0,0)    1 (100,100)    1    2 (100,100)
 
 
-statement query IT
+query IT
 select db.t.* exclude (c1), default.t1.* exclude id from db.t join default.t1;
-
 ----
 1 (200,200)
 
