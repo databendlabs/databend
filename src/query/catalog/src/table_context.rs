@@ -19,7 +19,6 @@ use std::time::SystemTime;
 
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
-use common_config::Config;
 use common_datablocks::DataBlock;
 use common_exception::Result;
 use common_functions::scalars::FunctionContext;
@@ -77,7 +76,6 @@ pub trait TableContext: Send + Sync {
     fn get_current_catalog(&self) -> String;
     fn get_aborting(&self) -> Arc<AtomicBool>;
     fn get_current_database(&self) -> String;
-    fn get_config(&self) -> Config;
     fn get_current_user(&self) -> Result<UserInfo>;
     fn get_current_role(&self) -> Option<RoleInfo>;
     fn get_fuse_version(&self) -> String;

@@ -58,14 +58,20 @@ impl FuseTable {
         // 1. Root snapshot.
         let mut segments_referenced_by_root = HashSet::new();
         let mut locations_referenced_by_root = Default::default();
-        let (root_snapshot_id, root_snapshot_ts) = if let Some(root_snapshot) = snapshot_opt {
-            let segments = root_snapshot.segments.clone();
-            locations_referenced_by_root = self.get_block_locations(ctx.clone(), &segments).await?;
-            segments_referenced_by_root = HashSet::from_iter(segments);
-            (root_snapshot.snapshot_id, root_snapshot.timestamp)
-        } else {
-            (SnapshotId::new_v4(), None)
-        };
+        let (root_snapshot_id, root_snapshot_ts, root_ts_location_opt) =
+            if let Some(ref root_snapshot) = snapshot_opt {
+                let segments = root_snapshot.segments.clone();
+                locations_referenced_by_root =
+                    self.get_block_locations(ctx.clone(), &segments).await?;
+                segments_referenced_by_root = HashSet::from_iter(segments);
+                (
+                    root_snapshot.snapshot_id,
+                    root_snapshot.timestamp,
+                    root_snapshot.table_statistics_location.clone(),
+                )
+            } else {
+                (SnapshotId::new_v4(), None, None)
+            };
 
         // 2. Get all snapshot(including root snapshot).
         let mut all_snapshot_lites = vec![];
@@ -108,6 +114,7 @@ impl FuseTable {
         // 3. Find.
         let mut snapshots_to_be_purged = HashSet::new();
         let mut segments_to_be_purged = HashSet::new();
+        let ts_to_be_purged: Vec<String> = vec![];
 
         // 3.1 Find all the snapshots need to be deleted.
         {
@@ -128,6 +135,29 @@ impl FuseTable {
                     continue;
                 }
                 segments_to_be_purged.insert(segment.clone());
+            }
+        }
+
+        // 3.3 Find all the table statistic files need to be deleted
+        {
+            if let Some(root_ts_location) = root_ts_location_opt {
+                let start = Instant::now();
+                let snapshots_io = SnapshotsIO::create(
+                    ctx.clone(),
+                    self.operator.clone(),
+                    self.snapshot_format_version().await?,
+                );
+                let ts_to_be_purged = snapshots_io
+                    .read_table_statistic_files(&root_ts_location, None)
+                    .await?;
+                let status_ts_scan_count = ts_to_be_purged.len();
+                let status_ts_scan_cost = start.elapsed().as_secs();
+                let status = format!(
+                    "gc: scan table statistic files:{} takes:{} sec.",
+                    status_ts_scan_count, status_ts_scan_cost,
+                );
+                self.data_metrics.set_status(&status);
+                info!(status);
             }
         }
 
@@ -230,6 +260,33 @@ impl FuseTable {
                     status_purged_count += chunk.len();
                     let status = format!(
                         "gc: snapshots need to be purged:{}, have purged:{}, take:{} sec",
+                        status_need_purged_count,
+                        status_purged_count,
+                        start.elapsed().as_secs()
+                    );
+                    self.data_metrics.set_status(&status);
+                    info!(status);
+                }
+            }
+        }
+
+        // 6. Purge table statistic files
+        {
+            let mut status_purged_count = 0;
+            let status_need_purged_count = ts_to_be_purged.len();
+            let start = Instant::now();
+            for chunk in ts_to_be_purged.chunks(chunk_size) {
+                let mut ts_locations_to_be_purged = HashSet::new();
+                for file in chunk {
+                    ts_locations_to_be_purged.insert(file.clone());
+                }
+                self.try_purge_location_files(ctx.clone(), ts_locations_to_be_purged)
+                    .await?;
+                // Refresh status.
+                {
+                    status_purged_count += chunk.len();
+                    let status = format!(
+                        "gc: table statistic files need to be purged:{}, have purged:{}, take:{} sec",
                         status_need_purged_count,
                         status_purged_count,
                         start.elapsed().as_secs()

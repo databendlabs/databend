@@ -262,6 +262,7 @@ pub fn walk_table_reference_mut<'a, V: VisitorMut>(
         TableReference::Join { join, .. } => {
             visitor.visit_join(join);
         }
+        TableReference::Stage { .. } => {}
     }
 }
 

@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_config::GlobalConfig;
 use common_datablocks::DataBlock;
 use common_datablocks::SendableDataBlockStream;
 use common_datavalues::DataSchema;
@@ -46,7 +47,7 @@ pub trait Procedure: Sync + Send {
             features.num_arguments,
         )?;
 
-        if features.management_mode_required && !ctx.get_config().query.management_mode {
+        if features.management_mode_required && !GlobalConfig::instance().query.management_mode {
             return Err(ErrorCode::ManagementModePermissionDenied(format!(
                 "Access denied: '{}' only used in management-mode",
                 self.name()
