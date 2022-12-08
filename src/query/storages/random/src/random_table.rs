@@ -27,6 +27,7 @@ use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::Chunk;
 use common_expression::DataSchemaRef;
+use common_expression::TableSchemaRef;
 use common_meta_app::schema::TableInfo;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
@@ -179,7 +180,7 @@ impl Table for RandomTable {
 }
 
 struct RandomSource {
-    schema: DataSchemaRef,
+    schema: TableSchemaRef,
     /// how many rows are needed to generate
     rows: usize,
 }
@@ -188,7 +189,7 @@ impl RandomSource {
     pub fn create(
         ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
-        schema: DataSchemaRef,
+        schema: TableSchemaRef,
         rows: usize,
     ) -> Result<ProcessorPtr> {
         SyncSourcer::create(ctx, output, RandomSource { schema, rows })

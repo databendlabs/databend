@@ -22,8 +22,9 @@ use common_ast::ast::Expr;
 use common_ast::ast::Literal;
 use common_catalog::table::Table;
 use common_expression::types::DataType;
-use common_expression::{DataField, TableField};
+use common_expression::DataField;
 use common_expression::SchemaDataType;
+use common_expression::TableField;
 use parking_lot::RwLock;
 
 /// Planner use [`usize`] as it's index type.

@@ -24,12 +24,16 @@ use common_catalog::plan::PushDownInfo;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::{DataSchemaRef, RawExpr, RemoteExpr, TableSchema, type_check};
-use common_expression::DataSchemaRefExt;
-use common_functions::scalars::FunctionFactory;
-use itertools::Itertools;
+use common_expression::type_check;
 use common_expression::types::DataType;
+use common_expression::DataSchemaRef;
+use common_expression::DataSchemaRefExt;
+use common_expression::RawExpr;
+use common_expression::RemoteExpr;
+use common_expression::TableSchema;
+use common_functions::scalars::FunctionFactory;
 use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
+use itertools::Itertools;
 
 use super::AggregateFinal;
 use super::AggregateFunctionDesc;
@@ -353,9 +357,9 @@ impl PhysicalPlanBuilder {
                             PhysicalPlan::AggregatePartial(ref agg) => agg.input.output_schema()?,
 
                             PhysicalPlan::Exchange(PhysicalExchange {
-                                                       input: box PhysicalPlan::AggregatePartial(ref agg),
-                                                       ..
-                                                   }) => agg.input.output_schema()?,
+                                input: box PhysicalPlan::AggregatePartial(ref agg),
+                                ..
+                            }) => agg.input.output_schema()?,
 
                             _ => unreachable!(),
                         };
@@ -408,9 +412,9 @@ impl PhysicalPlanBuilder {
                             }
 
                             PhysicalPlan::Exchange(PhysicalExchange {
-                                                       input: box PhysicalPlan::AggregatePartial(ref agg),
-                                                       ..
-                                                   }) => {
+                                input: box PhysicalPlan::AggregatePartial(ref agg),
+                                ..
+                            }) => {
                                 let before_group_by_schema = agg.input.output_schema()?;
                                 PhysicalPlan::AggregateFinal(AggregateFinal {
                                     input: Box::new(input),

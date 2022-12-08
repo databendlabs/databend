@@ -17,10 +17,13 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
-use common_expression::{DataField, TableField, TableSchema, TableSchemaRef};
+use common_expression::DataField;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::Scalar;
+use common_expression::TableField;
+use common_expression::TableSchema;
+use common_expression::TableSchemaRef;
 use common_meta_app::schema::TableInfo;
 use common_meta_types::UserStageInfo;
 

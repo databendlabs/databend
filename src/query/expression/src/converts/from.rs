@@ -23,7 +23,7 @@ use crate::types::number::NumberScalar;
 use crate::types::AnyType;
 use crate::types::DataType;
 use crate::types::NumberDataType;
-use crate::{TableField, TableSchema, with_number_type};
+use crate::with_number_type;
 use crate::Chunk;
 use crate::ChunkEntry;
 use crate::Column;
@@ -32,6 +32,8 @@ use crate::DataField;
 use crate::DataSchema;
 use crate::Scalar;
 use crate::SchemaDataType;
+use crate::TableField;
+use crate::TableSchema;
 use crate::Value;
 
 pub fn can_convert(datatype: &DataTypeImpl) -> bool {

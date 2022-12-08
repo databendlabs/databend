@@ -22,10 +22,10 @@ use common_ast::ast::ShowCatalogsStmt;
 use common_ast::ast::ShowCreateCatalogStmt;
 use common_ast::ast::ShowLimit;
 use common_exception::Result;
+use common_expression::types::DataType;
 use common_expression::DataField;
 use common_expression::DataSchemaRefExt;
 use common_expression::SchemaDataType;
-use common_expression::types::DataType;
 use common_meta_app::schema::CatalogMeta;
 use common_meta_app::schema::CatalogType;
 

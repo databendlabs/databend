@@ -105,13 +105,8 @@ struct NullSource {
 }
 
 impl NullSource {
-    pub fn create(
-        ctx: Arc<dyn TableContext>,
-        output: Arc<OutputPort>,
-    ) -> Result<ProcessorPtr> {
-        SyncSourcer::create(ctx, output, NullSource {
-            finish: false,
-        })
+    pub fn create(ctx: Arc<dyn TableContext>, output: Arc<OutputPort>) -> Result<ProcessorPtr> {
+        SyncSourcer::create(ctx, output, NullSource { finish: false })
     }
 }
 

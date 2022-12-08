@@ -25,7 +25,7 @@ use ordered_float::OrderedFloat;
 
 use crate::types::AnyType;
 use crate::types::DataType;
-use crate::{Chunk, TableField, TableSchema};
+use crate::Chunk;
 use crate::Column;
 use crate::ColumnBuilder;
 use crate::ColumnIndex;
@@ -33,6 +33,8 @@ use crate::DataField;
 use crate::DataSchema;
 use crate::Scalar;
 use crate::SchemaDataType;
+use crate::TableField;
+use crate::TableSchema;
 use crate::Value;
 
 pub fn to_type(datatype: &SchemaDataType) -> DataTypeImpl {

@@ -20,7 +20,8 @@ use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
 use common_exception::Result;
 use common_expression::types::DataType;
-use common_expression::{DataSchema, Literal};
+use common_expression::DataSchema;
+use common_expression::Literal;
 
 type ColumnID = String;
 type IndexType = usize;

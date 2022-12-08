@@ -50,17 +50,21 @@ use common_datavalues::TypeFactory;
 use common_datavalues::Vu8;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::type_check::common_super_type;
 use common_expression::types::DataType;
-use common_expression::{DataField, SchemaDataType, TableField, TableSchemaRef, TableSchemaRefExt};
+use common_expression::DataField;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
+use common_expression::SchemaDataType;
+use common_expression::TableField;
+use common_expression::TableSchemaRef;
+use common_expression::TableSchemaRefExt;
 use common_storage::parse_uri_location;
 use common_storage::DataOperator;
 use common_storage::UriLocation;
 use common_storages_table_meta::table::is_reserved_opt_key;
 use common_storages_table_meta::table::OPT_KEY_DATABASE_ID;
 use tracing::debug;
-use common_expression::type_check::common_super_type;
 
 use crate::binder::scalar::ScalarBinder;
 use crate::binder::Binder;
@@ -755,9 +759,9 @@ impl<'a> Binder {
                 AstOptimizeTableAction::Compact { target, limit } => {
                     let limit_cnt = match limit {
                         Some(Expr::Literal {
-                                 lit: Literal::Integer(uint),
-                                 ..
-                             }) => Some(*uint as usize),
+                            lit: Literal::Integer(uint),
+                            ..
+                        }) => Some(*uint as usize),
                         Some(_) => {
                             return Err(ErrorCode::IllegalDataType("Unsupported limit type"));
                         }
@@ -991,9 +995,9 @@ impl<'a> Binder {
             DataType::Number(number_type) => Ok(SchemaDataType::Number(*number_type)),
             DataType::Timestamp => Ok(SchemaDataType::Timestamp),
             DataType::Date => Ok(SchemaDataType::Date),
-            DataType::Nullable(inner_type) => {
-                Ok(SchemaDataType::Nullable(Box::new(Self::infer_schema_type(inner_type)?)))
-            }
+            DataType::Nullable(inner_type) => Ok(SchemaDataType::Nullable(Box::new(
+                Self::infer_schema_type(inner_type)?,
+            ))),
             DataType::Array(elem_type) => Ok(SchemaDataType::Array(Box::new(
                 Self::infer_schema_type(elem_type)?,
             ))),
@@ -1002,7 +1006,10 @@ impl<'a> Binder {
             ))),
             DataType::Variant => Ok(SchemaDataType::Variant),
 
-            _ => Err(ErrorCode::SemanticError(format!("Cannot create table with type: {}", data_type))),
+            _ => Err(ErrorCode::SemanticError(format!(
+                "Cannot create table with type: {}",
+                data_type
+            ))),
         }
     }
 }

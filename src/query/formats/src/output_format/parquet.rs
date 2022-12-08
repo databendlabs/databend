@@ -13,10 +13,14 @@
 // limitations under the License.
 
 use std::sync::Arc;
+
 use common_exception::Result;
-use common_expression::{DataSchema, serialize_chunks, TableSchema, TableSchemaRef};
+use common_expression::serialize_chunks;
 use common_expression::Chunk;
+use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
+use common_expression::TableSchema;
+use common_expression::TableSchemaRef;
 
 use crate::output_format::OutputFormat;
 use crate::FileFormatOptionsExt;
@@ -52,7 +56,11 @@ impl OutputFormat for ParquetOutputFormat {
             return Ok(vec![]);
         }
         let mut buf = Vec::with_capacity(100 * 1024 * 1024);
-        let _ = serialize_chunks(chunks, Arc::new(DataSchema::from(self.schema.as_ref())), &mut buf)?;
+        let _ = serialize_chunks(
+            chunks,
+            Arc::new(DataSchema::from(self.schema.as_ref())),
+            &mut buf,
+        )?;
         Ok(buf)
     }
 }

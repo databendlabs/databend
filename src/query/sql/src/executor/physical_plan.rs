@@ -18,8 +18,10 @@ use common_catalog::plan::DataSourcePlan;
 use common_datablocks::DataBlock;
 use common_exception::Result;
 use common_expression::types::DataType;
-use common_expression::{Chunk, DataField, DataSchemaRefExt};
+use common_expression::Chunk;
+use common_expression::DataField;
 use common_expression::DataSchemaRef;
+use common_expression::DataSchemaRefExt;
 use common_expression::SchemaDataType;
 use common_meta_app::schema::TableInfo;
 
@@ -425,7 +427,7 @@ impl PhysicalPlan {
         }
     }
 
-    pub fn children<'a>(&'a self) -> Box<dyn Iterator<Item=&'a PhysicalPlan> + 'a> {
+    pub fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a PhysicalPlan> + 'a> {
         match self {
             PhysicalPlan::TableScan(_) => Box::new(std::iter::empty()),
             PhysicalPlan::Filter(plan) => Box::new(std::iter::once(plan.input.as_ref())),

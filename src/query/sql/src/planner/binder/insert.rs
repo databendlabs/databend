@@ -18,7 +18,8 @@ use common_ast::ast::InsertSource;
 use common_ast::ast::InsertStmt;
 use common_ast::ast::Statement;
 use common_exception::Result;
-use common_expression::{DataSchemaRefExt, TableSchemaRefExt};
+use common_expression::DataSchemaRefExt;
+use common_expression::TableSchemaRefExt;
 
 use crate::binder::Binder;
 use crate::normalize_identifier;

@@ -24,13 +24,14 @@ use common_exception::Result;
 use crate::schema::DataSchema;
 use crate::types::AnyType;
 use crate::types::DataType;
-use crate::{ChunkMetaInfoPtr, TableSchemaRef};
+use crate::ChunkMetaInfoPtr;
 use crate::Column;
 use crate::ColumnBuilder;
 use crate::ColumnIndex;
 use crate::DataSchemaRef;
 use crate::Domain;
 use crate::Scalar;
+use crate::TableSchemaRef;
 use crate::Value;
 
 /// Chunk is a lightweight container for a group of columns.
@@ -85,7 +86,7 @@ impl<Index: ColumnIndex> Chunk<Index> {
     }
 
     #[inline]
-    pub fn columns(&self) -> impl Iterator<Item=&ChunkEntry<Index>> {
+    pub fn columns(&self) -> impl Iterator<Item = &ChunkEntry<Index>> {
         self.columns.iter()
     }
 

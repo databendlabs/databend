@@ -168,7 +168,7 @@ impl CopyInterpreterV2 {
                     catalog.clone(),
                     &mut do_copy_stage_files,
                 )
-                    .await?;
+                .await?;
             }
         }
         if !do_copy_stage_files.is_empty() {
@@ -180,7 +180,7 @@ impl CopyInterpreterV2 {
                 catalog.clone(),
                 &mut do_copy_stage_files,
             )
-                .await?;
+            .await?;
         }
 
         Ok(())
@@ -286,7 +286,7 @@ impl CopyInterpreterV2 {
                 table_name,
                 all_source_file_infos,
             )
-                .await?;
+            .await?;
 
             // Need copied file info.
         }
@@ -409,7 +409,7 @@ impl CopyInterpreterV2 {
                             &stage_info,
                             &all_source_files,
                         )
-                            .await;
+                        .await;
                     }
 
                     // 3. Upsert files(status with NeedCopy) info to meta.
@@ -426,7 +426,7 @@ impl CopyInterpreterV2 {
                         catalog,
                         copied_files,
                     )
-                        .await?;
+                    .await?;
 
                     info!(
                         "copy: all copy finished, elapsed:{}",
@@ -468,7 +468,7 @@ impl Interpreter for CopyInterpreterV2 {
                         *force,
                         table_info,
                     )
-                        .await
+                    .await
                 }
                 other => Err(ErrorCode::Internal(format!(
                     "Cannot list files for the source info: {:?}",

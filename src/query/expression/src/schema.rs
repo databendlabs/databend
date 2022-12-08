@@ -598,7 +598,7 @@ impl SchemaDataType {
                 let mut name = String::new();
                 name.push_str("Tuple(");
                 for ((i, field_name), field_ty) in
-                fields_name.iter().enumerate().zip(fields_type.iter())
+                    fields_name.iter().enumerate().zip(fields_type.iter())
                 {
                     if i > 0 {
                         name.push_str(", ");
@@ -953,7 +953,8 @@ impl From<&DataType> for ArrowDataType {
                 )))
             }
             DataType::Tuple(types) => {
-                let fields = types.into_iter()
+                let fields = types
+                    .into_iter()
                     .map(|ty| ArrowField::new("DUMMY_FIELD_NAME", ty.into(), ty.is_nullable()))
                     .collect();
                 ArrowDataType::Struct(fields)

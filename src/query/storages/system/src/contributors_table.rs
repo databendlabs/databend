@@ -19,11 +19,13 @@ use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::utils::ColumnFrom;
-use common_expression::{Chunk, TableField, TableSchemaRefExt};
+use common_expression::Chunk;
 use common_expression::Column;
 use common_expression::DataField;
 use common_expression::DataSchemaRefExt;
 use common_expression::SchemaDataType;
+use common_expression::TableField;
+use common_expression::TableSchemaRefExt;
 use common_expression::Value;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
@@ -62,7 +64,8 @@ impl SyncSystemTable for ContributorsTable {
 
 impl ContributorsTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
-        let schema = TableSchemaRefExt::create(vec![TableField::new("name", SchemaDataType::String)]);
+        let schema =
+            TableSchemaRefExt::create(vec![TableField::new("name", SchemaDataType::String)]);
 
         let table_info = TableInfo {
             desc: "'system'.'contributors'".to_string(),

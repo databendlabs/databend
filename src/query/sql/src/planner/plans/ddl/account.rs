@@ -16,7 +16,8 @@ use std::sync::Arc;
 
 use common_datavalues::ToDataType;
 use common_datavalues::Vu8;
-use common_expression::types::{DataType, NumberDataType};
+use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
 use common_expression::DataField;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
@@ -147,10 +148,7 @@ impl ShowRolesPlan {
     pub fn schema(&self) -> DataSchemaRef {
         DataSchemaRefExt::create(vec![
             DataField::new("name", DataType::String),
-            DataField::new(
-                "inherited_roles",
-                DataType::Number(NumberDataType::UInt64),
-            ),
+            DataField::new("inherited_roles", DataType::Number(NumberDataType::UInt64)),
             DataField::new("is_current", DataType::Boolean),
             DataField::new("is_default", DataType::Boolean),
         ])

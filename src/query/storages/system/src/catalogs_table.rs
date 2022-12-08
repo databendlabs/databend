@@ -25,6 +25,9 @@ use common_expression::Column;
 use common_expression::DataField;
 use common_expression::DataSchemaRefExt;
 use common_expression::SchemaDataType;
+use common_expression::TableField;
+use common_expression::TableSchemaRef;
+use common_expression::TableSchemaRefExt;
 use common_expression::Value;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
@@ -67,7 +70,8 @@ impl AsyncSystemTable for CatalogsTable {
 
 impl CatalogsTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
-        let schema = DataSchemaRefExt::create(vec![DataField::new("name", SchemaDataType::String)]);
+        let schema =
+            TableSchemaRefExt::create(vec![TableField::new("name", SchemaDataType::String)]);
 
         let table_info = TableInfo {
             desc: "'system'.'catalogs'".to_string(),

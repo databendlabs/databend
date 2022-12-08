@@ -19,8 +19,8 @@ use common_catalog::plan::PushDownInfo;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use common_expression::TableField;
 use common_expression::RemoteExpr;
+use common_expression::TableField;
 use common_storages_table_meta::meta::TableSnapshot;
 
 use crate::operations::mutation::delete_from_block;
@@ -106,7 +106,7 @@ impl FuseTable {
             &push_downs,
             segments_location,
         )
-            .await?;
+        .await?;
 
         // delete block one by one.
         // this could be executed in a distributed manner (till new planner, pipeline settled down)
@@ -149,7 +149,7 @@ impl FuseTable {
             summary,
             abort_operation,
         )
-            .await
+        .await
     }
 
     fn cluster_stats_gen(&self) -> Result<ClusterStatsGenerator> {

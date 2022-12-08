@@ -36,10 +36,13 @@ use common_arrow::parquet::read::read_metadata;
 use common_arrow::read_columns_async;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::{Chunk, TableField, TableSchema, TableSchemaRef};
+use common_expression::Chunk;
 use common_expression::DataField;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
+use common_expression::TableField;
+use common_expression::TableSchema;
+use common_expression::TableSchemaRef;
 use common_meta_types::UserStageInfo;
 use common_pipeline_core::Pipeline;
 use common_settings::Settings;
@@ -182,7 +185,7 @@ impl Debug for SplitMeta {
 
 impl serde::Serialize for SplitMeta {
     fn serialize<S>(&self, _serializer: S) -> Result<S::Ok, S::Error>
-        where S: Serializer {
+    where S: Serializer {
         unimplemented!()
     }
 }

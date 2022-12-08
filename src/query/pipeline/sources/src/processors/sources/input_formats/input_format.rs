@@ -15,8 +15,9 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_expression::{DataSchema, TableSchemaRef};
+use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
+use common_expression::TableSchemaRef;
 use common_meta_types::UserStageInfo;
 use common_pipeline_core::Pipeline;
 use common_settings::Settings;

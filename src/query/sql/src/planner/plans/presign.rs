@@ -15,13 +15,13 @@
 use common_datavalues::ToDataType;
 use common_datavalues::VariantObjectType;
 use common_datavalues::Vu8;
+use common_expression::types::DataType;
 use common_expression::DataField;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 use common_expression::SchemaDataType;
 use common_meta_types::UserStageInfo;
 use time::Duration;
-use common_expression::types::DataType;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PresignAction {

@@ -16,11 +16,14 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use common_ast::ast::Engine;
-use common_expression::types::{DataType, NumberDataType};
-use common_expression::{DataField, DataSchemaRefExt, TableSchemaRef};
+use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
+use common_expression::DataField;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
+use common_expression::DataSchemaRefExt;
 use common_expression::SchemaDataType;
+use common_expression::TableSchemaRef;
 use common_meta_app::schema::DropTableReq;
 use common_meta_app::schema::TableNameIdent;
 use common_meta_app::schema::UndropTableReq;

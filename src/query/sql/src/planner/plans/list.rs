@@ -13,7 +13,8 @@
 // limitations under the License.
 use std::sync::Arc;
 
-use common_expression::types::{DataType, NumberDataType};
+use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
 use common_expression::DataField;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
@@ -31,15 +32,9 @@ impl ListPlan {
     pub fn schema(&self) -> DataSchemaRef {
         let name = DataField::new("name", DataType::String);
         let size = DataField::new("size", DataType::Number(NumberDataType::UInt64));
-        let md5 = DataField::new(
-            "md5",
-            DataType::Nullable(Box::new(DataType::String)),
-        );
+        let md5 = DataField::new("md5", DataType::Nullable(Box::new(DataType::String)));
         let last_modified = DataField::new("last_modified", DataType::String);
-        let creator = DataField::new(
-            "creator",
-            DataType::Nullable(Box::new(DataType::String)),
-        );
+        let creator = DataField::new("creator", DataType::Nullable(Box::new(DataType::String)));
 
         Arc::new(DataSchema::new(vec![
             name,
