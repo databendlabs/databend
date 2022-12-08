@@ -12,36 +12,5 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod aggregate;
-mod bind_context;
-#[allow(clippy::module_inception)]
-mod binder;
-/// SQL builders;
-mod builders;
-mod copy;
-mod ddl;
-mod delete;
-mod distinct;
-mod having;
-mod insert;
-mod join;
-mod kill;
-mod limit;
-mod presign;
-mod project;
-mod scalar;
-mod scalar_common;
-mod scalar_visitor;
-mod select;
-mod setting;
-mod show;
-mod sort;
-mod table;
-mod update;
-
-pub use aggregate::AggregateInfo;
-pub use bind_context::*;
-pub use binder::Binder;
-pub use builders::*;
-pub use scalar::ScalarBinder;
-pub use scalar_common::*;
+mod select_builder;
+pub use select_builder::SelectBuilder;
