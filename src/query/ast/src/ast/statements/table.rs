@@ -30,6 +30,7 @@ use crate::ast::UriLocation;
 
 #[derive(Debug, Clone, PartialEq)] // Tables
 pub struct ShowTablesStmt<'a> {
+    pub catalog: Option<Identifier<'a>>,
     pub database: Option<Identifier<'a>>,
     pub full: bool,
     pub limit: Option<ShowLimit<'a>>,
@@ -47,7 +48,11 @@ impl Display for ShowTablesStmt<'_> {
             write!(f, " HISTORY")?;
         }
         if let Some(database) = &self.database {
-            write!(f, " FROM {database}")?;
+            write!(f, " FROM ")?;
+            if let Some(catalog) = &self.catalog {
+                write!(f, "{catalog}.",)?;
+            }
+            write!(f, "{database}")?;
         }
         if let Some(limit) = &self.limit {
             write!(f, " {limit}")?;

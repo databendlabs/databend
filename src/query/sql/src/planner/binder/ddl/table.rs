@@ -99,6 +99,7 @@ impl<'a> Binder {
         stmt: &ShowTablesStmt<'a>,
     ) -> Result<Plan> {
         let ShowTablesStmt {
+            catalog,
             database,
             full,
             limit,
@@ -141,6 +142,11 @@ impl<'a> Binder {
             .with_order_by("name");
 
         select_builder.with_filter(format!("database = '{database}'"));
+
+        if let Some(catalog) = catalog {
+            let catalog = normalize_identifier(catalog, &self.name_resolution_ctx).name;
+            select_builder.with_filter(format!("catalog = '{catalog}'"));
+        }
 
         let query = match limit {
             None => select_builder.build(),

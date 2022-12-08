@@ -33,6 +33,7 @@ SHOW TABLES
 ---------- AST ------------
 ShowTables(
     ShowTablesStmt {
+        catalog: None,
         database: None,
         full: false,
         limit: None,
@@ -48,6 +49,7 @@ SHOW TABLES
 ---------- AST ------------
 ShowTables(
     ShowTablesStmt {
+        catalog: None,
         database: None,
         full: false,
         limit: None,
