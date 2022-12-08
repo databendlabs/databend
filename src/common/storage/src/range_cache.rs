@@ -20,6 +20,7 @@
 //! - If cache missed, we will load data from inner storage.
 //! - If the path has been requests over threshold, we will try to fill it in the cache.
 
+use std::fmt::Debug;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -39,9 +40,17 @@ use opendal::OpWrite;
 use opendal::Result;
 
 /// VisitStatistics is used to track visit statistics.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct VisitStatistics {
     cache: Cache<String, usize>,
+}
+
+impl Debug for VisitStatistics {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("VisitStatistics")
+            .field("count", &self.cache.entry_count())
+            .finish()
+    }
 }
 
 impl VisitStatistics {
