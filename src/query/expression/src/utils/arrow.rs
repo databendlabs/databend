@@ -50,8 +50,8 @@ pub fn repeat_bitmap(bitmap: &mut Bitmap, n: usize) -> MutableBitmap {
     builder
 }
 
-pub fn append_bitmap(bitmap: &mut MutableBitmap, other: &MutableBitmap) {
-    bitmap.extend_from_slice(other.as_slice(), 0, other.len());
+pub fn append_bitmap(bitmap: &mut MutableBitmap, other: &Bitmap) {
+    bitmap.extend_from_bitmap(other)
 }
 
 pub fn constant_bitmap(value: bool, len: usize) -> MutableBitmap {
