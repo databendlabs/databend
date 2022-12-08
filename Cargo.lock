@@ -3015,9 +3015,11 @@ dependencies = [
  "databend-query",
  "limits-rs",
  "openraft",
+ "poem",
  "sentry",
  "serde",
  "serde_json",
+ "sharing-endpoint",
  "tokio-stream",
  "tonic",
  "tracing",
@@ -5675,9 +5677,9 @@ checksum = "0ab1bc2a289d34bd04a330323ac98a1b4bc82c9d9fcb1e66b63caa84da26b575"
 
 [[package]]
 name = "opendal"
-version = "0.22.1"
+version = "0.22.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9176f087790fd937421e3f649db6e85ad47dc63c60bef127402d233ab8f31639"
+checksum = "e2ce68ece2dc033c0faf446fe654b0182de8e8b876aef36d733cca7c95e2601a"
 dependencies = [
  "anyhow",
  "async-compat",
@@ -7604,6 +7606,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "sharing-endpoint"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "base64",
+ "clap",
+ "common-base",
+ "common-config",
+ "common-exception",
+ "common-storage",
+ "once_cell",
+ "opendal",
+ "poem",
+ "serde",
+ "serde_json",
+ "serfig",
+ "thiserror",
+ "time 0.3.15",
+ "uuid",
+]
+
+[[package]]
 name = "shlex"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8635,7 +8659,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if",
- "rand 0.7.3",
+ "rand 0.8.5",
  "static_assertions",
 ]
 

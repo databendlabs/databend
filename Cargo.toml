@@ -30,6 +30,7 @@ members = [
     "src/query/catalog",
     "src/query/datablocks",
     "src/query/sharing",
+    "src/query/sharing-endpoint",
     "src/query/datavalues",
     "src/query/expression",
     "src/query/formats",
@@ -75,6 +76,7 @@ members = [
     "src/meta/protos",
     # databend-meta
     "src/meta/service",
+
 ]
 
 [workspace.dependencies]

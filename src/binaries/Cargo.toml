@@ -44,6 +44,7 @@ common-metrics = { path = "../common/metrics" }
 common-tracing = { path = "../common/tracing" }
 databend-meta = { path = "../meta/service" }
 databend-query = { path = "../query/service" }
+sharing-endpoint = { path = "../query/sharing-endpoint" }
 
 # Crates.io dependencies
 anyhow = { workspace = true }
@@ -57,6 +58,7 @@ tokio-stream = "0.1.10"
 tonic = "0.8.1"
 tracing = "0.1.36"
 url = "2.3.1"
+poem = { version = "1", features = ["rustls", "multipart", "compression"] }
 
 [[bin]]
 name = "databend-meta"
@@ -79,5 +81,11 @@ test = false
 [[bin]]
 name = "databend-query"
 path = "query/main.rs"
+doctest = false
+test = false
+
+[[bin]]
+name = "open-sharing"
+path = "opensharing/main.rs"
 doctest = false
 test = false
