@@ -8,19 +8,19 @@ maintainer: "Databend Authors <opensource@datafuselabs.com>"
 description: |
   Databend is a powerful cloud data warehouse. Built for elasticity and efficiency.
   Free and open. Also available in the cloud: https://app.databend.com
-vendor: "Databend"
+vendor: "Datafuse Labs"
 homepage: "https://databend.rs"
 license: "Apache-2.0"
 contents:
   # Binaries
   - src: ${path}/bin/databend-query
-    dst: /usr/local/bin/databend-query
+    dst: /usr/bin/databend-query
   - src: ${path}/bin/databend-meta
-    dst: /usr/local/bin/databend-meta
+    dst: /usr/bin/databend-meta
   - src: ${path}/bin/databend-metactl
-    dst: /usr/local/bin/databend-metactl
+    dst: /usr/bin/databend-metactl
   - src: ${path}/bin/databend-metabench
-    dst: /usr/local/bin/databend-metabench
+    dst: /usr/bin/databend-metabench
 
   # Configs
   - src: ${path}/configs/databend-query.toml
