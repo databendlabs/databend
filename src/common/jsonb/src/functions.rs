@@ -860,7 +860,7 @@ pub fn parse_json_path(path: &[u8]) -> Result<Vec<JsonPath>, Error> {
             }
             let s = std::str::from_utf8(&path[prev_idx..idx - 1])?;
             let json_path = JsonPath::String(Cow::Borrowed(s));
-            if json_paths.len() == 0 {
+            if json_paths.is_empty() {
                 json_paths.push(json_path);
             } else {
                 return Err(Error::InvalidToken);
