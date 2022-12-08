@@ -128,7 +128,7 @@ jobs:
           version=${{ needs.create_release.outputs.version }}
           sha256sum databend-${version}-${target}.tar.gz >> sha256-${version}-${target}.txt
       - name: post sha256
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: sha256sums
           path: sha256-${{ needs.create_release.outputs.version }}-${{ steps.target.outputs.target }}.txt
@@ -202,7 +202,7 @@ jobs:
           version=${{ needs.create_release.outputs.version }}
           sha256sum databend-${version}-${target}.tar.gz >> sha256-${version}-${target}.txt
       - name: post sha256
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: sha256sums
           path: sha256-${{ needs.create_release.outputs.version }}-${{ steps.target.outputs.target }}.txt
@@ -269,7 +269,7 @@ jobs:
           version=${{ needs.create_release.outputs.version }}
           sha256sum databend-hive-${version}-${target}.tar.gz >> sha256-hive-${version}-${target}.txt
       - name: post sha256
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: sha256sums
           path: sha256-hive-${{ needs.create_release.outputs.version }}-${{ steps.target.outputs.target }}.txt
@@ -453,7 +453,7 @@ jobs:
           version="${{ needs.create_release.outputs.version }}"
           sha256sum databend_*.${{ matrix.packager }} >> sha256-${version}-${{ matrix.packager }}.txt
       - name: post sha256
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: sha256sums
           path: sha256-${{ needs.create_release.outputs.version }}-${{ matrix.packager }}.txt
