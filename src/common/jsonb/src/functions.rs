@@ -816,6 +816,7 @@ pub fn parse_json_path(path: &[u8]) -> Result<Vec<JsonPath>, Error> {
                 }
                 let s = std::str::from_utf8(&path[prev_idx..idx - 2])?;
                 let json_path = JsonPath::String(Cow::Borrowed(s));
+
                 json_paths.push(json_path);
             } else {
                 prev_idx = idx - 1;
@@ -849,7 +850,7 @@ pub fn parse_json_path(path: &[u8]) -> Result<Vec<JsonPath>, Error> {
                 } else if c != b'"' {
                     idx += 1;
                 } else {
-                    // Try to read to check if has another '"ab"', if has return err
+                    // Try to read to check if has extra strings, string value can only have one.
                     let c = read_char(path, &mut idx);
                     match c {
                         Ok(_) => return Err(Error::InvalidToken),
@@ -859,7 +860,9 @@ pub fn parse_json_path(path: &[u8]) -> Result<Vec<JsonPath>, Error> {
             }
             let s = std::str::from_utf8(&path[prev_idx..idx - 1])?;
             let json_path = JsonPath::String(Cow::Borrowed(s));
-            json_paths.push(json_path);
+            if json_paths.len() == 0 {
+                json_paths.push(json_path);
+            }
         } else {
             if c == b':' || c == b'.' {
                 if idx == 1 {
