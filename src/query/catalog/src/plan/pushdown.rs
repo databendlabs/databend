@@ -47,6 +47,4 @@ pub struct PushDownInfo {
     pub limit: Option<usize>,
     /// Optional order_by expression plan, asc, null_first
     pub order_by: Vec<(RemoteExpr<String>, bool, bool)>,
-    /// Optional stage info, used for COPY into <table> from stage
-    pub stage: Option<StagePushDownInfo>,
 }
