@@ -19,12 +19,22 @@ use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::string::StringColumnBuilder;
+use common_expression::types::AnyType;
+use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
+use common_expression::types::NumberType;
+use common_expression::types::StringType;
+use common_expression::types::ValueType;
+use common_expression::Chunk;
+use common_expression::DataField;
+use common_expression::DataSchemaRefExt;
+use common_expression::SchemaDataType;
+use common_expression::Value;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 use tikv_jemalloc_ctl::epoch;
-use common_expression::{Chunk, DataSchemaRefExt, SchemaDataType, TableField, TableSchemaRefExt};
-use common_expression::types::{DataType, NumberDataType};
 
 use crate::SyncOneBlockSystemTable;
 use crate::SyncSystemTable;
@@ -33,7 +43,8 @@ macro_rules! set_value {
     ($stat:ident, $names:expr, $values:expr) => {
         let mib = $stat::mib()?;
         let value = mib.read()?;
-        $names.push($stat::name().to_string().into_bytes());
+        $names.put_slice($stat::name().as_bytes());
+        $names.commit_row();
         $values.push(value as u64);
     };
 }
@@ -49,20 +60,17 @@ impl SyncSystemTable for MallocStatsTotalsTable {
         &self.table_info
     }
 
-    fn get_full_data(&self, _: Arc<dyn TableContext>) -> Result<Chunk> {
-        let (names, values) = Self::build_columns().map_err(convert_je_err)?;
-        Ok(Chunk::new(vec![
-            Series::from_data(names),
-            Series::from_data(values),
-        ]))
+    fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<Chunk> {
+        let values = Self::build_columns().map_err(convert_je_err)?;
+        Ok(Chunk::new_from_sequence(values, 6))
     }
 }
 
 impl MallocStatsTotalsTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
-        let schema = TableSchemaRefExt::create(vec![
-            TableField::new("name", SchemaDataType::String),
-            TableField::new("value", SchemaDataType::Number(NumberDataType::UInt64)),
+        let schema = DataSchemaRefExt::create(vec![
+            DataField::new("name", SchemaDataType::String),
+            DataField::new("value", SchemaDataType::Number(NumberDataType::UInt64)),
         ]);
 
         let table_info = TableInfo {
@@ -80,8 +88,9 @@ impl MallocStatsTotalsTable {
         SyncOneBlockSystemTable::create(MallocStatsTotalsTable { table_info })
     }
 
-    fn build_columns() -> std::result::Result<(Vec<Vec<u8>>, Vec<u64>), tikv_jemalloc_ctl::Error> {
-        let mut names: Vec<Vec<u8>> = vec![];
+    fn build_columns()
+    -> std::result::Result<Vec<(Value<AnyType>, DataType)>, Box<dyn std::error::Error>> {
+        let mut names = StringColumnBuilder::with_capacity(6, 6 * 4);
         let mut values: Vec<u64> = vec![];
 
         let e = epoch::mib()?;
@@ -101,10 +110,19 @@ impl MallocStatsTotalsTable {
         set_value!(resident, names, values);
         set_value!(metadata, names, values);
 
-        Ok((names, values))
+        let names = StringType::upcast_column(names.build());
+        let values = NumberType::<u64>::upcast_column(values.into());
+
+        Ok(vec![
+            (Value::Column(names), DataType::String),
+            (
+                Value::Column(values),
+                DataType::Number(NumberDataType::UInt64),
+            ),
+        ])
     }
 }
 
-fn convert_je_err(je_err: tikv_jemalloc_ctl::Error) -> ErrorCode {
+fn convert_je_err(je_err: Box<dyn std::error::Error>) -> ErrorCode {
     ErrorCode::Internal(format!("{}", je_err))
 }

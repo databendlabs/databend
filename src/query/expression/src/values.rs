@@ -246,11 +246,6 @@ impl Scalar {
             Scalar::Variant(s) => ScalarRef::Variant(s.as_slice()),
         }
     }
-
-    /// SQL style format
-    pub fn format_scalar_sql(&self) -> String {
-        todo!("expression")
-    }
 }
 
 impl<'a> ScalarRef<'a> {
@@ -1355,45 +1350,45 @@ impl ColumnBuilder {
         }
     }
 
-    pub fn append(&mut self, other: &ColumnBuilder) {
+    pub fn append_column(&mut self, other: &Column) {
         match (self, other) {
-            (ColumnBuilder::Null { len }, ColumnBuilder::Null { len: other_len }) => {
+            (ColumnBuilder::Null { len }, Column::Null { len: other_len }) => {
                 *len += other_len;
             }
-            (ColumnBuilder::EmptyArray { len }, ColumnBuilder::EmptyArray { len: other_len }) => {
+            (ColumnBuilder::EmptyArray { len }, Column::EmptyArray { len: other_len }) => {
                 *len += other_len;
             }
-            (ColumnBuilder::Number(builder), ColumnBuilder::Number(other_builder)) => {
-                builder.append(other_builder);
+            (ColumnBuilder::Number(builder), Column::Number(column)) => {
+                builder.append_column(column);
             }
-            (ColumnBuilder::Boolean(builder), ColumnBuilder::Boolean(other_builder)) => {
-                append_bitmap(builder, other_builder);
+            (ColumnBuilder::Boolean(builder), Column::Boolean(other)) => {
+                append_bitmap(builder, other);
             }
-            (ColumnBuilder::String(builder), ColumnBuilder::String(other_builder)) => {
-                builder.append(other_builder);
+            (ColumnBuilder::String(builder), Column::String(other)) => {
+                builder.append_column(other);
             }
-            (ColumnBuilder::Timestamp(builder), ColumnBuilder::Timestamp(other_builder)) => {
-                builder.extend_from_slice(other_builder);
+            (ColumnBuilder::Timestamp(builder), Column::Timestamp(other)) => {
+                builder.extend_from_slice(other);
             }
-            (ColumnBuilder::Date(builder), ColumnBuilder::Date(other_builder)) => {
-                builder.extend_from_slice(other_builder);
+            (ColumnBuilder::Date(builder), Column::Date(other)) => {
+                builder.extend_from_slice(other);
             }
-            (ColumnBuilder::Array(builder), ColumnBuilder::Array(other_builder)) => {
-                builder.append(other_builder);
+            (ColumnBuilder::Array(builder), Column::Array(other)) => {
+                builder.append_column(other.as_ref());
             }
-            (ColumnBuilder::Nullable(builder), ColumnBuilder::Nullable(other_builder)) => {
-                builder.append(other_builder);
+            (ColumnBuilder::Nullable(builder), Column::Nullable(other)) => {
+                builder.append_column(other);
             }
             (
                 ColumnBuilder::Tuple { fields, len },
-                ColumnBuilder::Tuple {
+                Column::Tuple {
                     fields: other_fields,
                     len: other_len,
                 },
             ) => {
                 assert_eq!(fields.len(), other_fields.len());
                 for (field, other_field) in fields.iter_mut().zip(other_fields.iter()) {
-                    field.append(other_field);
+                    field.append_column(other_field);
                 }
                 *len += other_len;
             }

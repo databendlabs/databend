@@ -65,7 +65,9 @@ impl<'a, Index: ColumnIndex> Evaluator<'a, Index> {
     pub fn run(&self, expr: &Expr<Index>) -> Result<Value<AnyType>> {
         let result = match expr {
             Expr::Constant { scalar, .. } => Ok(Value::Scalar(scalar.clone())),
-            Expr::ColumnRef { id, .. } => Ok(self.input_columns.get_by_id(id).unwrap().value.clone()),
+            Expr::ColumnRef { id, .. } => {
+                Ok(self.input_columns.get_by_id(id).unwrap().value.clone())
+            }
             Expr::FunctionCall {
                 span,
                 function,

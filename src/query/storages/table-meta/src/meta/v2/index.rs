@@ -19,15 +19,15 @@ use common_expression::Chunk;
 /// Depending on the query conditions, columns of index data will be loaded on demand.
 pub struct ChunkFilter {
     // Before index mod is extracted from databend-query, we just keep the Chunk here
-    data: Chunk,
+    data: Chunk<String>,
 }
 
 impl ChunkFilter {
-    pub fn new(data: Chunk) -> Self {
+    pub fn new(data: Chunk<String>) -> Self {
         Self { data }
     }
 
-    pub fn into_data(self) -> Chunk {
+    pub fn into_data(self) -> Chunk<String> {
         self.data
     }
 }

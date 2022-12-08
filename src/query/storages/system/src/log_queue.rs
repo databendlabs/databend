@@ -198,7 +198,7 @@ impl<Event: SystemLogElement + 'static> Table for SystemLogTable<Event> {
                 SystemLogSource::<Event>::create(
                     ctx.clone(),
                     output,
-                    Chunk::new(columns.clone(), row_len),
+                    Chunk::new_from_sequence(columns.clone(), row_len),
                 )
             },
             1,

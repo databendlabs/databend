@@ -107,7 +107,7 @@ impl SyncSystemTable for ProcessesTable {
             }
         }
 
-        Ok(Chunk::new(
+        Ok(Chunk::new_from_sequence(
             vec![
                 (
                     Value::Column(Column::from_data(processes_id)),

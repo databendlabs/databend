@@ -130,8 +130,8 @@ impl ValueType for BooleanType {
         builder.push(false);
     }
 
-    fn append_builder(builder: &mut Self::ColumnBuilder, other_builder: &Self::ColumnBuilder) {
-        builder.extend_from_slice(other_builder.as_slice(), 0, other_builder.len());
+    fn append_column(builder: &mut Self::ColumnBuilder, bitmap: &Self::Column) {
+        builder.extend_from_bitmap(bitmap)
     }
 
     fn build_column(builder: Self::ColumnBuilder) -> Self::Column {

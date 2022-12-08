@@ -56,7 +56,7 @@ impl AsyncSystemTable for EnginesTable {
         }
 
         let rows_len = table_engine_descriptors.len();
-        Ok(Chunk::new(
+        Ok(Chunk::new_from_sequence(
             vec![
                 (
                     Value::Column(Column::from_data(engine_name)),

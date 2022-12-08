@@ -542,7 +542,7 @@ impl Table for FuseTable {
         );
         ChunkCompactThresholds::new(max_rows_per_block, min_rows_per_block, max_bytes_per_block)
     }
-    
+
     async fn revert_to(
         &self,
         ctx: Arc<dyn TableContext>,

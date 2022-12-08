@@ -81,7 +81,7 @@ impl SyncSystemTable for SettingsTable {
         let types: Vec<Vec<u8>> = types.iter().map(|x| x.as_bytes().to_vec()).collect();
 
         let rows_len = names.len();
-        Ok(Chunk::new(
+        Ok(Chunk::new_from_sequence(
             vec![
                 (Value::Column(Column::from_data(names)), DataType::String),
                 (Value::Column(Column::from_data(values)), DataType::String),

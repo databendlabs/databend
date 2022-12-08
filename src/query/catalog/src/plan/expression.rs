@@ -61,21 +61,36 @@ impl Expression {
 
     /// Display with readable variable name.
     pub fn column_name(&self) -> String {
+        fn resugar_infix_op(op: &str) -> Option<&'static str> {
+            match op {
+                "plus" => Some("+"),
+                "minus" => Some("-"),
+                "multiply" => Some("*"),
+                "divide" => Some("/"),
+                "modulo" => Some("%"),
+                "gte" => Some(">="),
+                "lte" => Some("<="),
+                "eq" => Some("="),
+                "noteq" => Some("!="),
+                "gt" => Some(">"),
+                "lt" => Some("<"),
+                "and" => Some("and"),
+                "or" => Some("or"),
+                _ => None,
+            }
+        }
+
         match self {
-            Expression::Constant { value, .. } => value.format_scalar_sql(),
-            Expression::Function { name, args, .. } => match name.as_str() {
-                "+" | "-" | "*" | "/" | "%" | ">=" | "<=" | "=" | "!=" | ">" | "<" | "or"
-                | "and"
-                    if args.len() == 2 =>
-                {
+            Expression::Constant { value, .. } => value.to_string(),
+            Expression::Function { name, args, .. } => {
+                if let Some(op) = resugar_infix_op(name) && args.len() == 2 {
                     format!(
                         "({} {} {})",
                         args[0].column_name(),
-                        name,
+                        op,
                         args[1].column_name()
                     )
-                }
-                _ => {
+                } else {
                     let args = args
                         .iter()
                         .map(|arg| arg.column_name())
@@ -83,7 +98,7 @@ impl Expression {
                         .join(", ");
                     format!("{}({})", name, args)
                 }
-            },
+            }
             Expression::Cast { input, target } => {
                 format!("CAST({} AS {})", input.column_name(), target.sql_name())
             }

@@ -122,7 +122,7 @@ impl Table for RandomTable {
             .iter()
             .map(|f| f.data_type().create_random_column(1))
             .collect::<Vec<_>>();
-        let chunk = Chunk::new(columns, 1);
+        let chunk = Chunk::new_from_sequence(columns, 1);
         let one_row_bytes = chunk.memory_size();
         let read_bytes = total_rows * one_row_bytes;
         let parts_num = (total_rows / block_size) + 1;

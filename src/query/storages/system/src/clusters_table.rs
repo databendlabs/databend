@@ -65,7 +65,7 @@ impl SyncSystemTable for ClustersTable {
             versions.push(Scalar::String(cluster_node.binary_version.as_bytes().to_vec()).as_ref());
         }
 
-        Ok(Chunk::new(
+        Ok(Chunk::new_from_sequence(
             vec![
                 (Value::Column(names.build()), DataType::String),
                 (Value::Column(addresses.build()), DataType::String),

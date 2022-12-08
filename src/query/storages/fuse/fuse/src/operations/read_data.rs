@@ -83,8 +83,7 @@ impl FuseTable {
         _ctx: Arc<dyn TableContext>,
         plan: &DataSourcePlan,
         schema: DataSchemaRef,
-    ) // -> Result<Arc<Option<EvalNode>>>
-    {
+    ) {
         todo!("expression");
         // Ok(match self.prewhere_of_push_downs(&plan.push_downs) {
         //     None => Arc::new(None),

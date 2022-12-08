@@ -30,7 +30,7 @@ use common_arrow::arrow::datatypes::DataType as ArrowDataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::utils::arrow::column_to_arrow_array;
-use common_expression::{Chunk, ChunkEntry};
+use common_expression::Chunk;
 use common_expression::DataSchemaRef;
 use common_expression::SortColumnDescription;
 use common_pipeline_core::processors::port::InputPort;
@@ -372,13 +372,13 @@ impl MultiSortMergeProcessor {
             .fields()
             .iter()
             .enumerate()
-            .map(|(column_index, _)| {
+            .map(|(col_id, _)| {
                 // Collect all rows for a ceterain column out of all preserved chunks.
                 let candidate_cols = self
                     .chunks
                     .iter()
                     .flatten()
-                    .map(|chunk| chunk.get_by_id(&column_index).unwrap().clone())
+                    .map(|chunk| chunk.get_by_id(&col_id).unwrap().clone())
                     .collect::<Vec<_>>();
                 Chunk::take_column_by_slices_limit(&candidate_cols, &indices, None)
             })
@@ -502,7 +502,9 @@ impl Processor for MultiSortMergeProcessor {
                     let columns = self
                         .sort_field_indices
                         .iter()
-                        .map(|i| column_to_arrow_array(chunk.get_by_id(i).unwrap(), chunk.num_rows()))
+                        .map(|i| {
+                            column_to_arrow_array(chunk.get_by_id(i).unwrap(), chunk.num_rows())
+                        })
                         .collect::<Vec<_>>();
                     let rows = self.row_converter.convert_columns(&columns)?;
                     if !chunk.is_empty() {

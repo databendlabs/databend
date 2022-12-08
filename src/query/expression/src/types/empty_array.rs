@@ -127,7 +127,7 @@ impl ValueType for EmptyArrayType {
         *len += 1
     }
 
-    fn append_builder(len: &mut Self::ColumnBuilder, other_len: &Self::ColumnBuilder) {
+    fn append_column(len: &mut Self::ColumnBuilder, other_len: &Self::Column) {
         *len += other_len
     }
 

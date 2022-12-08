@@ -55,7 +55,7 @@ impl AsyncSystemTable for CatalogsTable {
             .collect();
         let rows = catalog_names.len();
 
-        Ok(Chunk::new(
+        Ok(Chunk::new_from_sequence(
             vec![(
                 Value::Column(Column::from_data(catalog_names)),
                 DataType::String,

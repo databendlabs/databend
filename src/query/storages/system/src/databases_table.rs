@@ -55,7 +55,7 @@ impl AsyncSystemTable for DatabasesTable {
             .collect();
 
         let rows_len = db_names.len();
-        Ok(Chunk::new(
+        Ok(Chunk::new_from_sequence(
             vec![(Value::Column(Column::from_data(db_names)), DataType::String)],
             rows_len,
         ))

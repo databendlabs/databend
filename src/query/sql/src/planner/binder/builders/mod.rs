@@ -12,26 +12,5 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod format;
-mod metadata;
-#[allow(clippy::module_inception)]
-mod planner;
-mod semantic;
-
-pub(crate) mod binder;
-pub mod optimizer;
-pub mod plans;
-
-pub use binder::BindContext;
-pub use binder::Binder;
-pub use binder::ColumnBinding;
-pub use binder::ScalarBinder;
-pub use binder::SelectBuilder;
-pub use binder::Visibility;
-pub use metadata::*;
-pub use planner::Planner;
-pub use plans::ScalarExpr;
-pub use semantic::normalize_identifier;
-pub use semantic::validate_function_arg;
-pub use semantic::IdentifierNormalizer;
-pub use semantic::NameResolutionContext;
+mod select_builder;
+pub use select_builder::SelectBuilder;

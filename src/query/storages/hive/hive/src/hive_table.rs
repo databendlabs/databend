@@ -26,7 +26,6 @@ use common_catalog::plan::Partitions;
 use common_catalog::plan::PartitionsShuffleKind;
 use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
-use common_catalog::plan::RequireColumnsVisitor;
 use common_catalog::table::Table;
 use common_catalog::table::TableStatistics;
 use common_catalog::table_context::TableContext;
@@ -36,6 +35,8 @@ use common_expression::Chunk;
 use common_expression::DataField;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
+use common_expression::RemoteExpr;
+use common_expression::Scalar;
 use common_meta_app::schema::TableInfo;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
@@ -129,14 +130,7 @@ impl HiveTable {
         }
 
         let filter_expressions = push_downs.as_ref().map(|extra| extra.filters.as_slice());
-        let range_filter = match filter_expressions {
-            Some(exprs) if !exprs.is_empty() => Some(RangeFilter::try_create(
-                ctx.clone(),
-                exprs,
-                self.table_info.schema(),
-            )?),
-            _ => None,
-        };
+        let range_filter = todo!("expression");
 
         let projection = self.get_projections(push_downs)?;
         let mut projection_fields = vec![];
@@ -230,10 +224,7 @@ impl HiveTable {
     }
 
     fn get_columns_from_expressions(expressions: &[RemoteExpr<String>]) -> HashSet<String> {
-        expressions
-            .iter()
-            .flat_map(|e| RequireColumnsVisitor::collect_columns_from_expr(e).unwrap())
-            .collect::<HashSet<_>>()
+        todo!("expression")
     }
 
     fn get_projections(&self, push_downs: &Option<PushDownInfo>) -> Result<Vec<usize>> {
@@ -479,7 +470,7 @@ impl Table for HiveTable {
         self.do_read_partitions(ctx, push_downs).await
     }
 
-    fn table_args(&self) -> Option<Vec<DataValue>> {
+    fn table_args(&self) -> Option<Vec<Scalar>> {
         None
     }
 

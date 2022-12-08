@@ -27,6 +27,7 @@ use common_expression::Domain;
 use common_expression::Expr;
 use common_expression::FunctionContext;
 use common_expression::Scalar;
+use common_expression::Span;
 use common_expression::Value;
 use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 
@@ -140,7 +141,18 @@ impl ChunkFilter {
     /// Otherwise return `Uncertain`.
     #[tracing::instrument(level = "debug", name = "block_filter_index_eval", skip_all)]
     pub fn eval(&self, mut expr: Expr<String>) -> Result<FilterEvalResult> {
-        self.rewrite_expr(&mut expr)?;
+        visit_expr_column_eq_constant(&mut expr, &mut |span, col_name, scalar, ty| {
+            // If the column doesn't contain the constant, we rewrite the expression to `false`.
+            if self.find(col_name, &scalar, ty)? == FilterEvalResult::MustFalse {
+                Ok(Some(Expr::Constant {
+                    span,
+                    scalar: Scalar::Boolean(false),
+                    data_type: DataType::Boolean,
+                }))
+            } else {
+                Ok(None)
+            }
+        })?;
 
         let input_domains = expr
             .column_refs()
@@ -162,9 +174,19 @@ impl ChunkFilter {
         }
     }
 
+    /// Find all columns that match the pattern of `col = <constant>` in the expression.
+    pub fn find_eq_columns(expr: &Expr<String>) -> Result<Vec<String>> {
+        let mut cols = Vec::new();
+        visit_expr_column_eq_constant(&mut expr.clone(), &mut |_, col_name, _, _| {
+            cols.push(col_name.to_string());
+            Ok(None)
+        })?;
+        Ok(cols)
+    }
+
     /// For every applicable column, we will create a filter.
     /// The filter will be stored with field name 'Bloom(column_name)'
-    fn build_filter_column_name(column_name: &str) -> String {
+    pub fn build_filter_column_name(column_name: &str) -> String {
         format!("Bloom({})", column_name)
     }
 
@@ -188,53 +210,51 @@ impl ChunkFilter {
             None => Ok(FilterEvalResult::Uncertain),
         }
     }
+}
 
-    /// Rewrite the expression by the information from bloom filter.
-    fn rewrite_expr(&self, expr: &mut Expr<String>) -> Result<()> {
-        // Find patterns like `Column = <constant>` or `<constant> = Column`.
-        match expr {
-            Expr::FunctionCall {
-                span,
-                function,
-                args,
-                ..
-            } if function.signature.name == "eq" => match args.as_slice() {
-                [
-                    Expr::ColumnRef { id, data_type, .. },
-                    Expr::Constant { scalar, .. },
-                ]
-                | [
-                    Expr::Constant { scalar, .. },
-                    Expr::ColumnRef { id, data_type, .. },
-                ] => {
-                    // If the column doesn't contain the constant, we rewrite the expression to `false`.
-                    if self.find(&id, &scalar, &data_type)? == FilterEvalResult::MustFalse {
-                        *expr = Expr::Constant {
-                            span: span.clone(),
-                            scalar: Scalar::Boolean(false),
-                            data_type: DataType::Boolean,
-                        };
-                        return Ok(());
-                    }
-                }
-                _ => (),
-            },
-            _ => (),
-        }
-
-        // Otherwise, rewrite sub expressions.
-        match expr {
-            Expr::Cast { expr, .. } => {
-                self.rewrite_expr(expr)?;
-            }
-            Expr::FunctionCall { args, .. } => {
-                for arg in args.iter_mut() {
-                    self.rewrite_expr(arg)?;
+fn visit_expr_column_eq_constant(
+    expr: &mut Expr<String>,
+    visitor: &mut impl FnMut(Span, &str, &Scalar, &DataType) -> Result<Option<Expr<String>>>,
+) -> Result<()> {
+    // Find patterns like `Column = <constant>` or `<constant> = Column`.
+    match expr {
+        Expr::FunctionCall {
+            span,
+            function,
+            args,
+            ..
+        } if function.signature.name == "eq" => match args.as_slice() {
+            [
+                Expr::ColumnRef { id, data_type, .. },
+                Expr::Constant { scalar, .. },
+            ]
+            | [
+                Expr::Constant { scalar, .. },
+                Expr::ColumnRef { id, data_type, .. },
+            ] => {
+                // If the visitor returns a new expression, replace the current expression.
+                if let Some(new_expr) = visitor(span.clone(), id, scalar, data_type)? {
+                    *expr = new_expr;
+                    return Ok(());
                 }
             }
             _ => (),
-        }
-
-        Ok(())
+        },
+        _ => (),
     }
+
+    // Otherwise, rewrite sub expressions.
+    match expr {
+        Expr::Cast { expr, .. } => {
+            visit_expr_column_eq_constant(expr, visitor)?;
+        }
+        Expr::FunctionCall { args, .. } => {
+            for arg in args.iter_mut() {
+                visit_expr_column_eq_constant(arg, visitor)?;
+            }
+        }
+        _ => (),
+    }
+
+    Ok(())
 }

@@ -14,9 +14,9 @@
 
 use std::fmt::Debug;
 
+use common_expression::DataSchemaRef;
 use common_expression::RemoteExpr;
 use common_meta_types::UserStageInfo;
-use common_expression::DataSchemaRef;
 
 use crate::plan::Projection;
 

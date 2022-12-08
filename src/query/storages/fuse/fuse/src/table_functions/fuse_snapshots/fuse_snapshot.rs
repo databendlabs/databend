@@ -142,7 +142,7 @@ impl<'a> FuseSnapshot<'a> {
             current_snapshot_version = ver;
         }
 
-        Ok(Chunk::new(
+        Ok(Chunk::new_from_sequence(
             vec![
                 (
                     Value::Column(Column::from_data(snapshot_ids)),

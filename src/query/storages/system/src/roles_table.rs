@@ -57,7 +57,7 @@ impl AsyncSystemTable for RolesTable {
             .collect();
 
         let rows_len = names.len();
-        Ok(Chunk::new(
+        Ok(Chunk::new_from_sequence(
             vec![
                 (Value::Column(Column::from_data(names)), DataType::String),
                 (

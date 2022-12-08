@@ -22,89 +22,17 @@ use common_expression::Column;
 use common_expression::Scalar;
 use ordered_float::OrderedFloat;
 
-pub(crate) fn str_field_to_column(
-    num_rows: usize,
-    value: String,
-    data_type: &DataType,
-) -> Result<Column> {
-    match data_type {
-        DataType::String => {
-            let data = (0..num_rows)
-                .map(|_| value.as_bytes().to_vec())
-                .collect::<Vec<Vec<u8>>>();
-            Ok(Column::from_data(data))
-        }
-        DataType::Number(num_ty) => match num_ty {
-            NumberDataType::UInt8 => {
-                let data = (0..num_rows)
-                    .map(|_| value.parse::<u8>().unwrap())
-                    .collect::<Vec<u8>>();
-                Ok(Column::from_data(data))
-            }
-            NumberDataType::UInt16 => {
-                let data = (0..num_rows)
-                    .map(|_| value.parse::<u16>().unwrap())
-                    .collect::<Vec<u16>>();
-                Ok(Column::from_data(data))
-            }
-            NumberDataType::UInt32 => {
-                let data = (0..num_rows)
-                    .map(|_| value.parse::<u32>().unwrap())
-                    .collect::<Vec<u32>>();
-                Ok(Column::from_data(data))
-            }
-            NumberDataType::UInt64 => {
-                let data = (0..num_rows)
-                    .map(|_| value.parse::<u64>().unwrap())
-                    .collect::<Vec<u64>>();
-                Ok(Column::from_data(data))
-            }
-            NumberDataType::Int8 => {
-                let data = (0..num_rows)
-                    .map(|_| value.parse::<i8>().unwrap())
-                    .collect::<Vec<i8>>();
-                Ok(Column::from_data(data))
-            }
-            NumberDataType::Int16 => {
-                let data = (0..num_rows)
-                    .map(|_| value.parse::<i16>().unwrap())
-                    .collect::<Vec<i16>>();
-                Ok(Column::from_data(data))
-            }
-            NumberDataType::Int32 => {
-                let data = (0..num_rows)
-                    .map(|_| value.parse::<i32>().unwrap())
-                    .collect::<Vec<i32>>();
-                Ok(Column::from_data(data))
-            }
-            NumberDataType::Int64 => {
-                let data = (0..num_rows)
-                    .map(|_| value.parse::<i64>().unwrap())
-                    .collect::<Vec<i64>>();
-                Ok(Column::from_data(data))
-            }
-            NumberDataType::Float32 => {
-                let data = (0..num_rows)
-                    .map(|_| OrderedFloat(value.parse::<f32>().unwrap()))
-                    .collect::<Vec<OrderedFloat<f32>>>();
-                Ok(Column::from_data(data))
-            }
-            NumberDataType::Float64 => {
-                let data = (0..num_rows)
-                    .map(|_| OrderedFloat(value.parse::<f64>().unwrap()))
-                    .collect::<Vec<OrderedFloat<f64>>>();
-                Ok(Column::from_data(data))
-            }
-        },
-        _ => Err(ErrorCode::Unimplemented(format!(
-            "generate column failed, {:?}",
-            data_type
-        ))),
-    }
-}
+use crate::hive_table::HIVE_DEFAULT_PARTITION;
 
 pub(crate) fn str_field_to_scalar(value: &str, data_type: &DataType) -> Result<Scalar> {
     match data_type {
+        DataType::Nullable(c) => {
+            if value == HIVE_DEFAULT_PARTITION {
+                Ok(Scalar::Null)
+            } else {
+                str_field_to_scalar(value, c.as_ref())
+            }
+        }
         DataType::String => Ok(Scalar::String(value.as_bytes().to_vec())),
         DataType::Number(num_ty) => match num_ty {
             NumberDataType::UInt8 => {

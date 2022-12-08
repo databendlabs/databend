@@ -71,7 +71,7 @@ impl HiveBlockFilter {
                             Some(stats) => stats,
                         };
                         if let (true, max, min, null_count) =
-                            Self::get_max_min_stats(col.data_type(), &*stats)
+                            Self::get_max_min_stats(&col.data_type().into(), &*stats)
                         {
                             let col_stats = ColumnStatistics {
                                 min,
@@ -109,11 +109,7 @@ impl HiveBlockFilter {
                 }
             }
 
-            if let Ok(ret) = filter.eval(&statistics, row_group.num_rows() as u64) {
-                if !ret {
-                    return true;
-                }
-            }
+            todo!("expression")
         }
         false
     }
@@ -124,171 +120,10 @@ impl HiveBlockFilter {
     ) -> (bool, Scalar, Scalar, i64) {
         match column_type {
             DataType::Nullable(nullable_type) => {
-                Self::get_max_min_stats(nullable_type.inner_type(), stats)
+                Self::get_max_min_stats(nullable_type.as_ref(), stats)
             }
-            DataType::Boolean(_) => {
-                let s = stats.as_any().downcast_ref::<BooleanStatistics>().unwrap();
-                if s.null_count.is_none() || s.max_value.is_none() || s.min_value.is_none() {
-                    (false, Scalar::from(0), Scalar::from(0), 0)
-                } else {
-                    let null_count = s.null_count.unwrap();
-                    let max = Scalar::from(s.max_value.unwrap());
-                    let min = Scalar::from(s.min_value.unwrap());
-                    (true, max, min, null_count)
-                }
-            }
-            DataType::Int8(_) => {
-                let s = stats
-                    .as_any()
-                    .downcast_ref::<PrimitiveStatistics<i32>>()
-                    .unwrap();
-                if s.null_count.is_none() || s.max_value.is_none() || s.min_value.is_none() {
-                    (false, Scalar::from(0), Scalar::from(0), 0)
-                } else {
-                    let null_count = s.null_count.unwrap();
-                    let max = Scalar::from(s.max_value.unwrap() as i8);
-                    let min = Scalar::from(s.min_value.unwrap() as i8);
-                    (true, max, min, null_count)
-                }
-            }
-            DataType::Int16(_) => {
-                let s = stats
-                    .as_any()
-                    .downcast_ref::<PrimitiveStatistics<i32>>()
-                    .unwrap();
-                if s.null_count.is_none() || s.max_value.is_none() || s.min_value.is_none() {
-                    (false, Scalar::from(0), Scalar::from(0), 0)
-                } else {
-                    let null_count = s.null_count.unwrap();
-                    let max = Scalar::from(s.max_value.unwrap() as i16);
-                    let min = Scalar::from(s.min_value.unwrap() as i16);
-                    (true, max, min, null_count)
-                }
-            }
-            DataType::Int32(_) => {
-                let s = stats
-                    .as_any()
-                    .downcast_ref::<PrimitiveStatistics<i32>>()
-                    .unwrap();
-                if s.null_count.is_none() || s.max_value.is_none() || s.min_value.is_none() {
-                    (false, Scalar::from(0), Scalar::from(0), 0)
-                } else {
-                    let null_count = s.null_count.unwrap();
-                    let max = Scalar::from(s.max_value.unwrap());
-                    let min = Scalar::from(s.min_value.unwrap());
-                    (true, max, min, null_count)
-                }
-            }
-            DataType::Int64(_) => {
-                let s = stats
-                    .as_any()
-                    .downcast_ref::<PrimitiveStatistics<i64>>()
-                    .unwrap();
-                if s.null_count.is_none() || s.max_value.is_none() || s.min_value.is_none() {
-                    (false, Scalar::from(0), Scalar::from(0), 0)
-                } else {
-                    let null_count = s.null_count.unwrap();
-                    let max = Scalar::from(s.max_value.unwrap());
-                    let min = Scalar::from(s.min_value.unwrap());
-                    (true, max, min, null_count)
-                }
-            }
-            DataType::UInt8(_) => {
-                let s = stats
-                    .as_any()
-                    .downcast_ref::<PrimitiveStatistics<i32>>()
-                    .unwrap();
-                if s.null_count.is_none() || s.max_value.is_none() || s.min_value.is_none() {
-                    (false, Scalar::from(0), Scalar::from(0), 0)
-                } else {
-                    let null_count = s.null_count.unwrap();
-                    let max = Scalar::from(s.max_value.unwrap() as u8);
-                    let min = Scalar::from(s.min_value.unwrap() as u8);
-                    (true, max, min, null_count)
-                }
-            }
-            DataType::UInt16(_) => {
-                let s = stats
-                    .as_any()
-                    .downcast_ref::<PrimitiveStatistics<i32>>()
-                    .unwrap();
-                if s.null_count.is_none() || s.max_value.is_none() || s.min_value.is_none() {
-                    (false, Scalar::from(0), Scalar::from(0), 0)
-                } else {
-                    let null_count = s.null_count.unwrap();
-                    let max = Scalar::from(s.max_value.unwrap() as u16);
-                    let min = Scalar::from(s.min_value.unwrap() as u16);
-                    (true, max, min, null_count)
-                }
-            }
-            DataType::UInt32(_) => {
-                let s = stats
-                    .as_any()
-                    .downcast_ref::<PrimitiveStatistics<i32>>()
-                    .unwrap();
-                if s.null_count.is_none() || s.max_value.is_none() || s.min_value.is_none() {
-                    (false, Scalar::from(0), Scalar::from(0), 0)
-                } else {
-                    let null_count = s.null_count.unwrap();
-                    let max = Scalar::from(s.max_value.unwrap() as u32);
-                    let min = Scalar::from(s.min_value.unwrap() as u32);
-                    (true, max, min, null_count)
-                }
-            }
-            DataType::UInt64(_) => {
-                let s = stats
-                    .as_any()
-                    .downcast_ref::<PrimitiveStatistics<i64>>()
-                    .unwrap();
-                if s.null_count.is_none() || s.max_value.is_none() || s.min_value.is_none() {
-                    (false, Scalar::from(0), Scalar::from(0), 0)
-                } else {
-                    let null_count = s.null_count.unwrap();
-                    let max = Scalar::from(s.max_value.unwrap() as u64);
-                    let min = Scalar::from(s.min_value.unwrap() as u64);
-                    (true, max, min, null_count)
-                }
-            }
-            DataType::Float32(_) => {
-                let s = stats
-                    .as_any()
-                    .downcast_ref::<PrimitiveStatistics<f32>>()
-                    .unwrap();
-                if s.null_count.is_none() || s.max_value.is_none() || s.min_value.is_none() {
-                    (false, Scalar::from(0), Scalar::from(0), 0)
-                } else {
-                    let null_count = s.null_count.unwrap();
-                    let max = Scalar::from(s.max_value.unwrap());
-                    let min = Scalar::from(s.min_value.unwrap());
-                    (true, max, min, null_count)
-                }
-            }
-            DataType::Float64(_) => {
-                let s = stats
-                    .as_any()
-                    .downcast_ref::<PrimitiveStatistics<f64>>()
-                    .unwrap();
-                if s.null_count.is_none() || s.max_value.is_none() || s.min_value.is_none() {
-                    (false, Scalar::from(0), Scalar::from(0), 0)
-                } else {
-                    let null_count = s.null_count.unwrap();
-                    let max = Scalar::from(s.max_value.unwrap());
-                    let min = Scalar::from(s.min_value.unwrap());
-                    (true, max, min, null_count)
-                }
-            }
-            DataType::String(_) => {
-                let s = stats.as_any().downcast_ref::<BinaryStatistics>().unwrap();
-                if s.null_count.is_none() || s.max_value.is_none() || s.min_value.is_none() {
-                    (false, Scalar::from(0), Scalar::from(0), 0)
-                } else {
-                    let null_count = s.null_count.unwrap();
-                    let max = Scalar::from(s.max_value.clone());
-                    let min = Scalar::from(s.min_value.clone());
-                    (true, max, min, null_count)
-                }
-            }
-            _ => (false, Scalar::from(0), Scalar::from(0), 0),
+
+            _ => todo!("expression"),
         }
     }
 }

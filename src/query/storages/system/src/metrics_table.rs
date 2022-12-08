@@ -64,7 +64,7 @@ impl SyncSystemTable for MetricsTable {
             values.push(self.display_sample_value(&sample.value)?.into_bytes());
         }
 
-        Ok(Chunk::new(
+        Ok(Chunk::new_from_sequence(
             vec![
                 (Value::Column(Column::from_data(metrics)), DataType::String),
                 (Value::Column(Column::from_data(kinds)), DataType::String),

@@ -98,7 +98,7 @@ impl<'a> FuseSegment<'a> {
             uncompressed.push(segment.summary.uncompressed_byte_size);
             file_location.push(segment_locations[idx].0.clone().into_bytes());
         }
-        Ok(Chunk::new(
+        Ok(Chunk::new_from_sequence(
             vec![
                 (
                     Value::Column(Column::from_data(file_location)),

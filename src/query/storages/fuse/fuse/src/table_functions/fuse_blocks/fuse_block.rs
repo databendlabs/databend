@@ -21,6 +21,7 @@ use common_expression::types::string::StringColumnBuilder;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::Chunk;
+use common_expression::ChunkEntry;
 use common_expression::Column;
 use common_expression::DataField;
 use common_expression::DataSchema;
@@ -123,7 +124,7 @@ impl<'a> FuseBlock<'a> {
             });
         }
 
-        Ok(Chunk::new(
+        Ok(Chunk::new_from_sequence(
             vec![
                 (
                     Value::Scalar(Scalar::String(snapshot_id.to_vec())),
