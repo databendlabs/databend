@@ -116,7 +116,6 @@ pub struct ExecuteRunning {
 }
 
 pub struct ExecuteStopped {
-    pub ctx: Arc<QueryContext>,
     pub stats: Progresses,
     pub affect: Option<QueryAffect>,
     pub reason: Result<()>,
@@ -183,7 +182,6 @@ impl Executor {
                         .unwrap_or_else(|e| error!("fail to write query_log {:?}", e));
                 }
                 guard.state = Stopped(Box::new(ExecuteStopped {
-                    ctx: s.ctx.clone(),
                     stats: Default::default(),
                     reason,
                     stop_time: Instant::now(),
@@ -203,7 +201,6 @@ impl Executor {
                 }
 
                 guard.state = Stopped(Box::new(ExecuteStopped {
-                    ctx: r.ctx.clone(),
                     stats: Progresses::from_context(&r.ctx),
                     reason,
                     stop_time: Instant::now(),
@@ -227,7 +224,7 @@ impl ExecuteState {
         session: Arc<Session>,
         ctx: Arc<QueryContext>,
         block_sender: SizedChannelSender<DataBlock>,
-    ) -> Result<ExecuteRunning> {
+    ) -> Result<()> {
         let mut planner = Planner::new(ctx.clone());
         let (plan, _, _) = planner.plan_sql(sql).await?;
         ctx.attach_query_str(plan.to_string(), sql);
@@ -238,30 +235,31 @@ impl ExecuteState {
             ctx: ctx.clone(),
         };
 
+        info!("http query {}, change state to Running", &ctx.get_id());
+        Executor::start_to_running(&executor, Running(running_state)).await;
+
         let executor_clone = executor.clone();
         let ctx_clone = ctx.clone();
         let block_sender_closer = block_sender.closer();
 
-        ctx.try_spawn(async move {
-            let res = execute(interpreter, ctx_clone, block_sender, executor_clone.clone());
-            match AssertUnwindSafe(res).catch_unwind().await {
-                Ok(Err(err)) => {
-                    Executor::stop(&executor_clone, Err(err), false).await;
-                    block_sender_closer.close();
-                }
-                Err(_) => {
-                    Executor::stop(
-                        &executor_clone,
-                        Err(ErrorCode::PanicError("interpreter panic!")),
-                        false,
-                    )
-                    .await;
-                    block_sender_closer.close();
-                }
-                _ => {}
+        let res = execute(interpreter, ctx_clone, block_sender, executor_clone.clone());
+        match AssertUnwindSafe(res).catch_unwind().await {
+            Ok(Err(err)) => {
+                Executor::stop(&executor_clone, Err(err), false).await;
+                block_sender_closer.close();
             }
-        })?;
-        Ok(running_state)
+            Err(_) => {
+                Executor::stop(
+                    &executor_clone,
+                    Err(ErrorCode::PanicError("interpreter panic!")),
+                    false,
+                )
+                .await;
+                block_sender_closer.close();
+            }
+            _ => {}
+        }
+        Ok(())
     }
 }
 

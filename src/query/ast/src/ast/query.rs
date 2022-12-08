@@ -19,6 +19,7 @@ use crate::ast::write_comma_separated_list;
 use crate::ast::write_period_separated_list;
 use crate::ast::Expr;
 use crate::ast::Identifier;
+use crate::ast::StageLocation;
 use crate::parser::token::Token;
 
 /// Root node of a query tree
@@ -174,6 +175,12 @@ pub enum TableReference<'a> {
     Join {
         span: &'a [Token<'a>],
         join: Join<'a>,
+    },
+    Stage {
+        span: &'a [Token<'a>],
+        location: StageLocation,
+        files: Vec<String>,
+        alias: Option<TableAlias<'a>>,
     },
 }
 
@@ -345,6 +352,21 @@ impl<'a> Display for TableReference<'a> {
                     _ => {}
                 }
             }
+            TableReference::Stage {
+                span: _,
+                location,
+                files,
+                alias,
+            } => {
+                write!(f, "({location})")?;
+                if !files.is_empty() {
+                    let files = files.join(",");
+                    write!(f, " FILES {files}")?;
+                }
+                if let Some(alias) = alias {
+                    write!(f, " AS {alias}")?;
+                }
+            }
         }
         Ok(())
     }
@@ -498,6 +520,21 @@ impl<'a> Display for Query<'a> {
         // TODO: We should validate if offset exists, limit should be empty or just one element
         if let Some(offset) = &self.offset {
             write!(f, " OFFSET {offset}")?;
+        }
+
+        Ok(())
+    }
+}
+
+impl<'a> Display for TimeTravelPoint<'a> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TimeTravelPoint::Snapshot(sid) => {
+                write!(f, " (SNAPSHOT => {sid})")?;
+            }
+            TimeTravelPoint::Timestamp(ts) => {
+                write!(f, " (TIMESTAMP => {ts})")?;
+            }
         }
 
         Ok(())

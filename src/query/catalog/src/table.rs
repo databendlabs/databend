@@ -29,6 +29,7 @@ use common_meta_types::MetaId;
 use common_pipeline_core::Pipeline;
 use common_storage::StorageMetrics;
 
+use crate::plan::DataSourceInfo;
 use crate::plan::DataSourcePlan;
 use crate::plan::Expression;
 use crate::plan::PartStatistics;
@@ -74,6 +75,10 @@ pub trait Table: Sync + Send {
     fn as_any(&self) -> &dyn Any;
 
     fn get_table_info(&self) -> &TableInfo;
+
+    fn get_data_source_info(&self) -> DataSourceInfo {
+        DataSourceInfo::TableSource(self.get_table_info().clone())
+    }
 
     /// get_data_metrics will get data metrics from table.
     fn get_data_metrics(&self) -> Option<Arc<StorageMetrics>> {
@@ -277,6 +282,19 @@ pub trait Table: Sync + Send {
             self.get_table_info().engine(),
         )))
     }
+
+    async fn revert_to(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        point: NavigationDescriptor,
+    ) -> Result<()> {
+        let (_, _) = (ctx, point);
+        Err(ErrorCode::Unimplemented(format!(
+            "table {},  of engine type {}, does not support revert",
+            self.name(),
+            self.get_table_info().engine(),
+        )))
+    }
 }
 
 #[async_trait::async_trait]
@@ -301,7 +319,7 @@ pub trait TableExt: Table {
 
 impl<T: ?Sized> TableExt for T where T: Table {}
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum NavigationPoint {
     SnapshotID(String),
     TimePoint(DateTime<Utc>),
@@ -351,4 +369,9 @@ mod column_stats_provider_impls {
             None
         }
     }
+}
+
+pub struct NavigationDescriptor {
+    pub database_name: String,
+    pub point: NavigationPoint,
 }

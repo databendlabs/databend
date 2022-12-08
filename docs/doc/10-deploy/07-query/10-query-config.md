@@ -271,7 +271,7 @@ clickhouse_handler_port = 9001
 
 # Query HTTP Handler.
 http_handler_host = "0.0.0.0"
-http_handler_port = 8081
+http_handler_port = 8000
 
 tenant_id = "tenant1"
 cluster_id = "cluster1"

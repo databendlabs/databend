@@ -21,6 +21,7 @@ use pratt::Associativity;
 use pratt::PrattParser;
 use pratt::Precedence;
 
+use super::statement::stage_location;
 use crate::ast::*;
 use crate::input::Input;
 use crate::input::WithSpan;
@@ -148,12 +149,12 @@ pub fn select_target(i: Input) -> IResult<SelectTarget> {
 
 pub fn travel_point(i: Input) -> IResult<TimeTravelPoint> {
     let at_snapshot = map(
-        rule! { AT ~ "(" ~ SNAPSHOT ~ "=>" ~ #literal_string ~ ")" },
-        |(_, _, _, _, s, _)| TimeTravelPoint::Snapshot(s),
+        rule! { "(" ~ SNAPSHOT ~ "=>" ~ #literal_string ~ ")" },
+        |(_, _, _, s, _)| TimeTravelPoint::Snapshot(s),
     );
     let at_timestamp = map(
-        rule! { AT ~ "(" ~ TIMESTAMP ~ "=>" ~ #expr ~ ")" },
-        |(_, _, _, _, e, _)| TimeTravelPoint::Timestamp(Box::new(e)),
+        rule! { "(" ~ TIMESTAMP ~ "=>" ~ #expr ~ ")" },
+        |(_, _, _, e, _)| TimeTravelPoint::Timestamp(Box::new(e)),
     );
 
     rule!(
@@ -257,19 +258,24 @@ pub enum TableReferenceElement<'a> {
     // ON expr | USING (ident, ...)
     JoinCondition(JoinCondition<'a>),
     Group(TableReference<'a>),
+    Stage {
+        location: StageLocation,
+        files: Vec<String>,
+        alias: Option<TableAlias<'a>>,
+    },
 }
 
 pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceElement>> {
     let aliased_table = map(
         rule! {
-            #peroid_separated_idents_1_to_3 ~ #travel_point? ~ #table_alias?
+            #peroid_separated_idents_1_to_3 ~ (AT ~ #travel_point)? ~ #table_alias?
         },
-        |((catalog, database, table), travel_point, alias)| TableReferenceElement::Table {
+        |((catalog, database, table), travel_point_opt, alias)| TableReferenceElement::Table {
             catalog,
             database,
             table,
             alias,
-            travel_point,
+            travel_point: travel_point_opt.map(|p| p.1),
         },
     );
     let table_function = map(
@@ -319,8 +325,20 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
         |(_, table_ref, _)| TableReferenceElement::Group(table_ref),
     );
 
+    let aliased_stage = map(
+        rule! {
+            #stage_location ~ ( FILES ~ "=" ~ "(" ~ #comma_separated_list0(literal_string) ~ ")")? ~ #table_alias?
+        },
+        |(location, files, alias)| TableReferenceElement::Stage {
+            location,
+            alias,
+            files: files.map(|v| v.3).unwrap_or_default(),
+        },
+    );
+
     let (rest, (span, elem)) = consumed(rule! {
         #subquery
+        | #aliased_stage
         | #table_function
         | #aliased_table
         | #group
@@ -379,6 +397,16 @@ impl<'a, I: Iterator<Item = WithSpan<'a, TableReferenceElement<'a>>>> PrattParse
             TableReferenceElement::Subquery { subquery, alias } => TableReference::Subquery {
                 span: input.span.0,
                 subquery,
+                alias,
+            },
+            TableReferenceElement::Stage {
+                location,
+                files,
+                alias,
+            } => TableReference::Stage {
+                span: input.span.0,
+                location,
+                files,
                 alias,
             },
             _ => unreachable!(),

@@ -29,6 +29,7 @@ use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::StageTableInfo;
 use common_catalog::table_context::TableContext;
+use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::parse_escape_string;
@@ -241,7 +242,9 @@ impl<'a> Binder {
                 schema: table.schema(),
                 user_stage_info: stage_info,
                 path,
-                files: vec![],
+                files: stmt.files.clone(),
+                pattern: stmt.pattern.clone(),
+                files_to_copy: None,
             }),
             scan_fields: None,
             parts: Partitions::default(),
@@ -258,8 +261,6 @@ impl<'a> Binder {
             table_id: table.get_id(),
             schema: table.schema(),
             from: Box::new(from),
-            files: stmt.files.clone(),
-            pattern: stmt.pattern.clone(),
             validation_mode,
             force: stmt.force,
         })))
@@ -285,7 +286,7 @@ impl<'a> Binder {
             .await?;
 
         let (storage_params, path) = parse_uri_location(src_uri_location)?;
-        if !storage_params.is_secure() && !self.ctx.get_config().storage.allow_insecure {
+        if !storage_params.is_secure() && !GlobalConfig::instance().storage.allow_insecure {
             return Err(ErrorCode::StorageInsecure(
                 "copy from insecure storage is not allowed",
             ));
@@ -293,14 +294,15 @@ impl<'a> Binder {
 
         let mut stage_info = UserStageInfo::new_external_stage(storage_params, &path);
         self.apply_stage_options(stmt, &mut stage_info)?;
-
         let from = DataSourcePlan {
             catalog: dst_catalog_name.to_string(),
             source_info: DataSourceInfo::StageSource(StageTableInfo {
                 schema: table.schema(),
                 user_stage_info: stage_info,
                 path,
-                files: vec![],
+                files: stmt.files.clone(),
+                pattern: stmt.pattern.clone(),
+                files_to_copy: None,
             }),
             scan_fields: None,
             parts: Partitions::default(),
@@ -317,8 +319,6 @@ impl<'a> Binder {
             table_id: table.get_id(),
             schema: table.schema(),
             from: Box::new(from),
-            files: stmt.files.clone(),
-            pattern: stmt.pattern.clone(),
             validation_mode,
             force: stmt.force,
         })))
@@ -404,7 +404,7 @@ impl<'a> Binder {
             .map_err(ErrorCode::SyntaxException)?;
 
         let (storage_params, path) = parse_uri_location(dst_uri_location)?;
-        if !storage_params.is_secure() && !self.ctx.get_config().storage.allow_insecure {
+        if !storage_params.is_secure() && !GlobalConfig::instance().storage.allow_insecure {
             return Err(ErrorCode::StorageInsecure(
                 "copy into insecure storage is not allowed",
             ));
@@ -468,7 +468,7 @@ impl<'a> Binder {
             .map_err(ErrorCode::SyntaxException)?;
 
         let (storage_params, path) = parse_uri_location(dst_uri_location)?;
-        if !storage_params.is_secure() && !self.ctx.get_config().storage.allow_insecure {
+        if !storage_params.is_secure() && !GlobalConfig::instance().storage.allow_insecure {
             return Err(ErrorCode::StorageInsecure(
                 "copy into insecure storage is not allowed",
             ));

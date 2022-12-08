@@ -44,6 +44,7 @@ use crate::plans::RewriteKind;
 use crate::plans::ShowCreateDatabasePlan;
 use crate::plans::UndropDatabasePlan;
 use crate::BindContext;
+use crate::SelectBuilder;
 
 impl<'a> Binder {
     pub(in crate::planner::binder) async fn bind_show_databases(

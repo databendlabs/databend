@@ -124,7 +124,7 @@ async fn main_entrypoint() -> Result<()> {
         let hostname = conf.query.clickhouse_http_handler_host.clone();
         let listening = format!("{}:{}", hostname, conf.query.clickhouse_http_handler_port);
 
-        let mut srv = HttpHandler::create(HttpHandlerKind::Clickhouse, conf.clone())?;
+        let mut srv = HttpHandler::create(HttpHandlerKind::Clickhouse)?;
         let listening = srv.start(listening.parse()?).await?;
         shutdown_handle.add_service(srv);
 
@@ -140,7 +140,7 @@ async fn main_entrypoint() -> Result<()> {
         let hostname = conf.query.http_handler_host.clone();
         let listening = format!("{}:{}", hostname, conf.query.http_handler_port);
 
-        let mut srv = HttpHandler::create(HttpHandlerKind::Query, conf.clone())?;
+        let mut srv = HttpHandler::create(HttpHandlerKind::Query)?;
         let listening = srv.start(listening.parse()?).await?;
         shutdown_handle.add_service(srv);
 

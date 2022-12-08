@@ -18,17 +18,22 @@
 ///
 /// - [`inner::Config`] which will be exposed as [`crate::Config`] will be used in all business logic.
 /// - [`outer_v0::Config`] is the outer config for [`inner::Config`] which will be exposed to end-users.
+/// - [`global::GlobalConfig`] is a global config singleton of [`crate::Config`].
 ///
 /// It's safe to refactor [`inner::Config`] in anyway, as long as it satisfied the following traits
 ///
 /// - `TryInto<inner::Config> for outer_v0::Config`
 /// - `From<inner::Config> for outer_v0::Config`
+mod global;
 mod inner;
 mod outer_v0;
 mod version;
 
+pub use global::GlobalConfig;
 pub use inner::CatalogConfig;
+pub use inner::CatalogHiveConfig;
 pub use inner::Config;
 pub use inner::QueryConfig;
+pub use inner::ThriftProtocol;
 pub use version::DATABEND_COMMIT_VERSION;
 pub use version::QUERY_SEMVER;

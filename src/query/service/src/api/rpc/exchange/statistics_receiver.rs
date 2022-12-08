@@ -139,6 +139,7 @@ impl StatisticsReceiver {
     fn recv_data(ctx: &Arc<QueryContext>, recv_data: Result<Option<DataPacket>>) -> Result<bool> {
         match recv_data {
             Ok(None) => Ok(true),
+            Ok(Some(DataPacket::ClosingClient)) => Ok(true),
             Err(transport_error) => Err(transport_error),
             Ok(Some(DataPacket::ErrorCode(error))) => Err(error),
             Ok(Some(DataPacket::FragmentData(_))) => unreachable!(),

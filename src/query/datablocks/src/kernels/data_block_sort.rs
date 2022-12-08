@@ -45,6 +45,9 @@ impl DataBlock {
         sort_columns_descriptions: &[SortColumnDescription],
         limit: Option<usize>,
     ) -> Result<DataBlock> {
+        if block.is_empty() {
+            return Ok(block.clone());
+        }
         let order_columns = sort_columns_descriptions
             .iter()
             .map(|f| {

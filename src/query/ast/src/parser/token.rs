@@ -101,7 +101,7 @@ pub enum TokenKind {
 
     EOI,
 
-    #[regex(r"[ \t\n\f]+", logos::skip)]
+    #[regex(r"[ \t\r\n\f]+", logos::skip)]
     Whitespace,
 
     #[regex(r"--[^\t\n\f]*", logos::skip)]
@@ -405,6 +405,8 @@ pub enum TokenKind {
     FILES,
     #[token("FINAL", ignore(ascii_case))]
     FINAL,
+    #[token("FLASHBACK", ignore(ascii_case))]
+    FLASHBACK,
     #[token("FLOAT", ignore(ascii_case))]
     FLOAT,
     #[token("FLOAT32", ignore(ascii_case))]

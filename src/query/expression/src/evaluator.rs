@@ -43,15 +43,15 @@ use crate::FunctionDomain;
 use crate::FunctionRegistry;
 use crate::Result;
 
-pub struct Evaluator<'a> {
-    input_columns: &'a Chunk,
+pub struct Evaluator<'a, Index: ColumnIndex> {
+    input_columns: &'a Chunk<Index>,
     fn_ctx: FunctionContext,
     fn_registry: &'a FunctionRegistry,
 }
 
-impl<'a> Evaluator<'a> {
+impl<'a, Index: ColumnIndex> Evaluator<'a, Index> {
     pub fn new(
-        input_columns: &'a Chunk,
+        input_columns: &'a Chunk<Index>,
         fn_ctx: FunctionContext,
         fn_registry: &'a FunctionRegistry,
     ) -> Self {
@@ -62,10 +62,10 @@ impl<'a> Evaluator<'a> {
         }
     }
 
-    pub fn run(&self, expr: &Expr) -> Result<Value<AnyType>> {
+    pub fn run(&self, expr: &Expr<Index>) -> Result<Value<AnyType>> {
         let result = match expr {
             Expr::Constant { scalar, .. } => Ok(Value::Scalar(scalar.clone())),
-            Expr::ColumnRef { id, .. } => Ok(self.input_columns.get_by_id(*id).value.clone()),
+            Expr::ColumnRef { id, .. } => Ok(self.input_columns.get_by_id(id).value.clone()),
             Expr::FunctionCall {
                 span,
                 function,
@@ -493,7 +493,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
 
                 if inner_expr.as_constant().is_some() {
                     let chunk = Chunk::empty();
-                    let evaluator = Evaluator::new(&chunk, self.fn_ctx, self.fn_registry);
+                    let evaluator = Evaluator::<Index>::new(&chunk, self.fn_ctx, self.fn_registry);
                     // Since we know the expression is constant, it'll be safe to change its column index type.
                     let cast_expr = cast_expr.project_column_ref(|_| unreachable!());
                     if let Ok(Value::Scalar(scalar)) = evaluator.run(&cast_expr) {
@@ -569,7 +569,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
 
                 if all_args_is_scalar {
                     let chunk = Chunk::empty();
-                    let evaluator = Evaluator::new(&chunk, self.fn_ctx, self.fn_registry);
+                    let evaluator = Evaluator::<Index>::new(&chunk, self.fn_ctx, self.fn_registry);
                     // Since we know the expression is constant, it'll be safe to change its column index type.
                     let func_expr = func_expr.project_column_ref(|_| unreachable!());
                     if let Ok(Value::Scalar(scalar)) = evaluator.run(&func_expr) {

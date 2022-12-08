@@ -81,6 +81,7 @@ use crate::plans::Plan;
 use crate::plans::ReclusterTablePlan;
 use crate::plans::RenameTableEntity;
 use crate::plans::RenameTablePlan;
+use crate::plans::RevertTablePlan;
 use crate::plans::RewriteKind;
 use crate::plans::Scalar;
 use crate::plans::ShowCreateTablePlan;
@@ -89,6 +90,7 @@ use crate::plans::UndropTablePlan;
 use crate::BindContext;
 use crate::ColumnBinding;
 use crate::ScalarExpr;
+use crate::SelectBuilder;
 
 impl<'a> Binder {
     pub(in crate::planner::binder) async fn bind_show_tables(
@@ -623,6 +625,16 @@ impl<'a> Binder {
                     is_final: *is_final,
                     metadata: self.metadata.clone(),
                     push_downs,
+                })))
+            }
+            AlterTableAction::RevertTo { point } => {
+                let point = self.resolve_data_travel_point(bind_context, point).await?;
+                Ok(Plan::RevertTable(Box::new(RevertTablePlan {
+                    tenant,
+                    catalog,
+                    database,
+                    table,
+                    point,
                 })))
             }
         }

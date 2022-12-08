@@ -19,6 +19,4 @@ mod role;
 mod share;
 mod stage;
 mod table;
-/// some useful utils to create inner SQLs
-pub(self) mod utils;
 mod view;

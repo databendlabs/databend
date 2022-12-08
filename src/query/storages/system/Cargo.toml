@@ -14,6 +14,7 @@ test = false
 [dependencies]
 common-base = { path = "../../../common/base" }
 common-catalog = { path = "../../catalog" }
+common-config = { path = "../../../common/../query/config" }
 common-datablocks = { path = "../../datablocks" }
 common-datavalues = { path = "../../datavalues" }
 common-exception = { path = "../../../common/exception" }
@@ -36,13 +37,13 @@ chrono = { workspace = true }
 futures = "0.3.24"
 itertools = "0.10.5"
 once_cell = "1.15.0"
-opendal = { version = "0.21", features = ["layers-tracing", "layers-metrics", "compress"] }
+opendal = { version = "0.22", features = ["layers-tracing", "layers-metrics", "compress"] }
 parking_lot = "0.12.1"
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_repr = "0.1.9"
 snailquote = "0.3.1"
-tikv-jemalloc-ctl = { version = "0.4.2", features = ["use_std"] }
+tikv-jemalloc-ctl = { version = "0.5.0", features = ["use_std"] }
 tracing = "0.1.36"
 typetag = "0.2.3"
 uuid = { version = "1.1.2", features = ["serde", "v4"] }
