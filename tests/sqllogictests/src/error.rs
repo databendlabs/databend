@@ -20,6 +20,7 @@ use common_exception::ErrorCode;
 use mysql::Error as MysqlClientError;
 use reqwest::Error as HttpClientError;
 use sqllogictest::TestError;
+use walkdir::Error as WalkDirError;
 
 pub type Result<T> = std::result::Result<T, DSqlLogicTestError>;
 
@@ -33,6 +34,8 @@ pub enum DSqlLogicTestError {
     MysqlClient(MysqlClientError),
     // Error from http client
     HttpClient(HttpClientError),
+    // Error from WalkDir
+    WalkDir(WalkDirError),
 }
 
 impl From<TestError> for DSqlLogicTestError {
@@ -59,6 +62,12 @@ impl From<HttpClientError> for DSqlLogicTestError {
     }
 }
 
+impl From<WalkDirError> for DSqlLogicTestError {
+    fn from(value: WalkDirError) -> Self {
+        DSqlLogicTestError::WalkDir(value)
+    }
+}
+
 impl Display for DSqlLogicTestError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -70,6 +79,7 @@ impl Display for DSqlLogicTestError {
             DSqlLogicTestError::Databend(error) => write!(f, "Databend error: {}", error),
             DSqlLogicTestError::MysqlClient(error) => write!(f, "Mysql client error: {}", error),
             DSqlLogicTestError::HttpClient(error) => write!(f, "Http client error: {}", error),
+            DSqlLogicTestError::WalkDir(error) => write!(f, "Walk dir error: {}", error),
         }
     }
 }

@@ -8170,12 +8170,12 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "common-exception",
- "futures-util",
  "mysql",
  "reqwest",
  "serde_json",
  "sqllogictest",
  "tokio",
+ "walkdir",
 ]
 
 [[package]]
