@@ -47,13 +47,8 @@ impl SyncSystemTable for ConfigsTable {
         &self.table_info
     }
 
-<<<<<<< HEAD
-    fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<Chunk> {
-        let config = ctx.get_config().into_outer();
-=======
-    fn get_full_data(&self, _ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
+    fn get_full_data(&self, _ctx: Arc<dyn TableContext>) -> Result<Chunk> {
         let config = GlobalConfig::instance().as_ref().clone().into_outer();
->>>>>>> main
 
         let mut names: Vec<String> = vec![];
         let mut values: Vec<String> = vec![];
@@ -119,7 +114,7 @@ impl SyncSystemTable for ConfigsTable {
         let descs: Vec<Vec<u8>> = descs.iter().map(|x| x.as_bytes().to_vec()).collect();
 
         let rows_len = names.len();
-        Ok(Chunk::new(
+        Ok(Chunk::new_from_sequence(
             vec![
                 (Value::Column(Column::from_data(groups)), DataType::String),
                 (Value::Column(Column::from_data(names)), DataType::String),
@@ -242,7 +237,7 @@ impl ConfigsTable {
                         Some(k.to_string())
                     },
                 ),
-                Value::Null => ConfigsTable::push_config(
+                JsonValue::Null => ConfigsTable::push_config(
                     names,
                     values,
                     groups,

@@ -50,7 +50,7 @@ impl SyncSystemTable for OneTable {
     }
 
     fn get_full_data(&self, _ctx: Arc<dyn TableContext>) -> Result<Chunk> {
-        Ok(Chunk::new(
+        Ok(Chunk::new_from_sequence(
             vec![(
                 Value::Column(Column::from_data(vec![1u8])),
                 DataType::Number(NumberDataType::UInt8),

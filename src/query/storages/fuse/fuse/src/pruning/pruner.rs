@@ -166,11 +166,12 @@ mod util {
             .await;
 
         match maybe_filter {
-            Ok(filter) => Ok(
-                ChunkFilter::from_filter_chunk(ctx.try_get_function_context()?,  filter.into_data())?
-                    .eval(filter_expr)?
-                    != FilterEvalResult::MustFalse,
-            ),
+            Ok(filter) => Ok(ChunkFilter::from_filter_chunk(
+                ctx.try_get_function_context()?,
+                filter.into_data(),
+            )?
+            .eval(filter_expr)?
+                != FilterEvalResult::MustFalse),
             Err(e) if e.code() == ErrorCode::DEPRECATED_INDEX_FORMAT => {
                 // In case that the index is no longer supported, just return ture to indicate
                 // that the block being pruned should be kept. (Although the caller of this method

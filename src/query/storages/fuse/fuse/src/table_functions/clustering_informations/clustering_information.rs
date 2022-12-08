@@ -105,7 +105,7 @@ impl<'a> ClusteringInformation<'a> {
             .join(", ");
         let cluster_by_keys = format!("({})", names);
 
-        Ok(Chunk::new(
+        Ok(Chunk::new_from_sequence(
             vec![
                 (
                     Value::Scalar(Scalar::String(cluster_by_keys.as_bytes().to_vec())),

@@ -201,7 +201,7 @@ where TablesTable<T>: HistoryAware
         let cluster_bys: Vec<Vec<u8>> = cluster_bys.iter().map(|s| s.as_bytes().to_vec()).collect();
 
         let rows_len = databases.len();
-        Ok(Chunk::new(
+        Ok(Chunk::new_from_sequence(
             vec![
                 (
                     Value::Column(Column::from_data(databases)),

@@ -139,7 +139,7 @@ impl AsyncSystemTable for FunctionsTable {
             .collect::<Vec<&str>>();
 
         let rows_len = func_names.len();
-        Ok(Chunk::new(
+        Ok(Chunk::new_from_sequence(
             vec![
                 (Value::Column(Column::from_data(names)), DataType::String),
                 (

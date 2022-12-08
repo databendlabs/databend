@@ -189,7 +189,7 @@ impl SyncSource for TracingSource {
                 for (index, line) in buffer.lines().enumerate() {
                     if index != 0 && index % max_rows == 0 {
                         let rows_len = entry_column.len();
-                        self.data_blocks.push_back(Chunk::new(
+                        self.data_blocks.push_back(Chunk::new_from_sequence(
                             vec![(Value::Column(entry_column.build()), DataType::String)],
                             rows_len,
                         ));
@@ -201,7 +201,7 @@ impl SyncSource for TracingSource {
 
                 if !entry_column.len() > 0 {
                     let rows_len = entry_column.len();
-                    self.data_blocks.push_back(Chunk::new(
+                    self.data_blocks.push_back(Chunk::new_from_sequence(
                         vec![(Value::Column(entry_column.build()), DataType::String)],
                         rows_len,
                     ));

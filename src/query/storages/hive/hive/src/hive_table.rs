@@ -129,14 +129,7 @@ impl HiveTable {
         }
 
         let filter_expressions = push_downs.as_ref().map(|extra| extra.filters.as_slice());
-        let range_filter = match filter_expressions {
-            Some(exprs) if !exprs.is_empty() => Some(RangeFilter::try_create(
-                ctx.clone(),
-                exprs,
-                self.table_info.schema(),
-            )?),
-            _ => None,
-        };
+        let range_filter = todo!("expression");
 
         let projection = self.get_projections(push_downs)?;
         let mut projection_fields = vec![];

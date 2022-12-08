@@ -17,9 +17,13 @@ use std::sync::Arc;
 use chrono::Utc;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::DataField;
 use common_expression::types::ArgType;
 use common_expression::types::DataType;
+use common_expression::types::NullableType;
 use common_expression::types::NumberType;
+use common_expression::types::number::F32;
+use common_expression::types::number::F64;
 use common_hive_meta_store as hms;
 use common_meta_app::schema::DatabaseIdent;
 use common_meta_app::schema::DatabaseInfo;
@@ -149,8 +153,8 @@ fn try_from_filed_type_name(type_name: impl AsRef<str>) -> Result<DataType> {
             "BOOLEAN" => Ok(DataType::Boolean),
 
             //"DECIMAL", "NUMERIC" type not supported
-            "FLOAT" => Ok(NumberType::<f32>::data_type()),
-            "DOUBLE" | "DOUBLE PRECISION" => Ok(NumberType::<f64>::data_type()),
+            "FLOAT" => Ok(NumberType::<F32>::data_type()),
+            "DOUBLE" | "DOUBLE PRECISION" => Ok(NumberType::<F64>::data_type()),
 
             // timestamp
             "TIMESTAMP" => Ok(DataType::Timestamp),

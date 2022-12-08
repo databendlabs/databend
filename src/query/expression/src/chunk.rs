@@ -96,8 +96,7 @@ impl<Index: ColumnIndex> Chunk<Index> {
 
     #[inline]
     pub fn get_by_id(&self, id: &Index) -> Option<&ChunkEntry<Index>> {
-        self.columns()
-            .find(|entry| entry.id == *id)
+        self.columns().find(|entry| entry.id == *id)
     }
 
     #[inline]
@@ -246,6 +245,31 @@ impl<Index: ColumnIndex> Chunk<Index> {
         schema: &DataSchemaRef,
     ) -> Result<Self> {
         todo!("expression")
+    }
+}
+
+impl Chunk<usize> {
+    #[inline]
+    pub fn new_from_sequence(columns: Vec<(Value<AnyType>, DataType)>, num_rows: usize) -> Self {
+        debug_assert!(columns.iter().all(|entry| match &entry.0 {
+            Value::Scalar(_) => true,
+            Value::Column(c) => c.len() == num_rows,
+        }));
+        let columns = columns
+            .iter()
+            .enumerate()
+            .map(|(idx, c)| ChunkEntry {
+                id: idx,
+                data_type: c.1.clone(),
+                value: c.0.clone(),
+            })
+            .collect();
+
+        Self {
+            columns,
+            num_rows,
+            meta: None,
+        }
     }
 }
 
