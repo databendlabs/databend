@@ -48,7 +48,7 @@ use crate::storages::fuse::table_test_fixture::TestFixture;
 fn test_ft_stats_block_stats() -> common_exception::Result<()> {
     let schema = DataSchemaRefExt::create(vec![DataField::new("a", i32::to_data_type())]);
     let block = DataBlock::create(schema, vec![Series::from_data(vec![1, 2, 3])]);
-    let r = gen_columns_statistics(&block)?;
+    let r = gen_columns_statistics(&block, None)?;
     assert_eq!(1, r.len());
     let col_stats = r.get(&0).unwrap();
     assert_eq!(col_stats.min, DataValue::Int64(1));
@@ -69,7 +69,7 @@ fn test_ft_tuple_stats_block_stats() -> common_exception::Result<()> {
     let column = StructColumn::from_data(inner_columns, tuple_data_type).arc();
 
     let block = DataBlock::create(schema, vec![column]);
-    let r = gen_columns_statistics(&block)?;
+    let r = gen_columns_statistics(&block, None)?;
     assert_eq!(2, r.len());
     let col0_stats = r.get(&0).unwrap();
     assert_eq!(col0_stats.min, DataValue::Int64(1));
@@ -89,7 +89,7 @@ fn test_ft_stats_col_stats_reduce() -> common_exception::Result<()> {
     let blocks = TestFixture::gen_sample_blocks_ex(num_of_blocks, rows_per_block, val_start_with);
     let col_stats = blocks
         .iter()
-        .map(|b| gen_columns_statistics(&b.clone().unwrap()))
+        .map(|b| gen_columns_statistics(&b.clone().unwrap(), None))
         .collect::<common_exception::Result<Vec<_>>>()?;
     let r = reducers::reduce_block_statistics(&col_stats, None);
     assert!(r.is_ok());
@@ -158,8 +158,9 @@ async fn test_accumulator() -> common_exception::Result<()> {
 
     for item in blocks {
         let block = item?;
-        let col_stats = gen_columns_statistics(&block)?;
-        let block_statistics = BlockStatistics::from(&block, "does_not_matter".to_owned(), None)?;
+        let col_stats = gen_columns_statistics(&block, None)?;
+        let block_statistics =
+            BlockStatistics::from(&block, "does_not_matter".to_owned(), None, None)?;
         let block_writer = BlockWriter::new(&operator, &loc_generator);
         let block_meta = block_writer.write(block, col_stats, None).await?;
         stats_acc.add_with_block_meta(block_meta, block_statistics)?;
@@ -344,7 +345,7 @@ fn test_ft_stats_block_stats_string_columns_trimming_using_eval() -> common_exce
         let max_expr = max_col.get(0);
 
         // generate the statistics of column
-        let stats_of_columns = gen_columns_statistics(&block).unwrap();
+        let stats_of_columns = gen_columns_statistics(&block, None).unwrap();
 
         // check if the max value (untrimmed) is in degenerated condition:
         // - the length of string value is larger or equal than STRING_PREFIX_LEN

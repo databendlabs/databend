@@ -95,7 +95,7 @@ pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
 
             let distinct_of_values = match data_block {
                 Some(_data_block) => {
-                    if let Some(col) = leaves.as_ref().unwrap().get(*id as usize) {
+                    if let Some((_, col)) = leaves.as_ref().unwrap().get(*id as usize) {
                         let col_data_type = col.data_type();
                         let data_field = DataField::new("", col_data_type);
                         let column_field = ColumnWithField::new(col.clone(), data_field);
