@@ -12,18 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::fmt::Write;
 use std::path::Path;
 use std::path::PathBuf;
 use std::ptr::write;
 
 use mysql::prelude::Queryable;
-use mysql::Conn;
+use mysql::{Conn, serde_json};
 use mysql::Pool;
 use mysql::Row;
-use sqllogictest::DBOutput;
+use serde_json::Value;
+use reqwest::header::{HeaderMap, HeaderValue};
+use sqllogictest::{ColumnType, DBOutput};
 
 use crate::client::MysqlClient;
+use crate::client::HttpClient;
 use crate::error::DSqlLogicTestError;
 use crate::error::Result;
 
@@ -32,20 +36,26 @@ mod error;
 
 const TEST_SUITS: &str = "tests/sqllogictests/suits";
 
-#[derive(Debug)]
 pub struct Databend {
-    mysql_client: MysqlClient,
+    mysql_client: Option<MysqlClient>,
+    http_client: Option<HttpClient>,
     file_name: String,
 }
 
 #[async_trait::async_trait]
-impl sqllogictest::DB for Databend {
+impl sqllogictest::AsyncDB for Databend {
     type Error = DSqlLogicTestError;
 
-    fn run(&mut self, sql: &str) -> Result<DBOutput> {
+    async fn run(&mut self, sql: &str) -> Result<DBOutput> {
         println!("[{}] running query: \"{}\"", self.file_name, sql);
-        let rows: Vec<Row> = self.mysql_client.conn.query(sql)?;
-        self.mysql_client.convert_output(rows)
+        if let Some(mysql_client) = &mut self.mysql_client {
+            return mysql_client.query(sql);
+        }
+        if let Some(http_client) = &mut self.http_client {
+            return http_client.query(sql).await;
+        }
+
+        Ok(DBOutput::StatementComplete(1))
     }
 
     fn engine_name(&self) -> &str {
@@ -72,7 +82,17 @@ async fn run_suit(suit: &Path) -> Result<()> {
     let mysql_client = MysqlClient::create()?;
     let file_name = suit.file_name().unwrap().to_str().unwrap();
     let mut databend = Databend {
-        mysql_client,
+        mysql_client: Some(mysql_client),
+        http_client: None,
+        file_name: file_name.to_string(),
+    };
+    let mut runner = sqllogictest::Runner::new(databend);
+    runner.run_file_async(suit).await?;
+
+    let http_client = HttpClient::create()?;
+    let mut databend = Databend {
+        mysql_client: None,
+        http_client: Some(http_client),
         file_name: file_name.to_string(),
     };
     let mut runner = sqllogictest::Runner::new(databend);

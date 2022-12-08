@@ -19,6 +19,7 @@ use std::fmt::Formatter;
 use common_exception::ErrorCode;
 use mysql::Error as MysqlClientError;
 use sqllogictest::TestError;
+use reqwest::Error as HttpClientError;
 
 pub type Result<T> = std::result::Result<T, DSqlLogicTestError>;
 
@@ -30,6 +31,8 @@ pub enum DSqlLogicTestError {
     Databend(ErrorCode),
     // Error from mysql client
     MysqlClient(MysqlClientError),
+    // Error from http client
+    HttpClient(HttpClientError),
 }
 
 impl From<TestError> for DSqlLogicTestError {
@@ -50,6 +53,12 @@ impl From<MysqlClientError> for DSqlLogicTestError {
     }
 }
 
+impl From<HttpClientError> for DSqlLogicTestError {
+    fn from(value: HttpClientError) -> Self {
+       DSqlLogicTestError::HttpClient(value)
+    }
+}
+
 impl Display for DSqlLogicTestError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -60,6 +69,7 @@ impl Display for DSqlLogicTestError {
             ),
             DSqlLogicTestError::Databend(error) => write!(f, "Databend error: {}", error),
             DSqlLogicTestError::MysqlClient(error) => write!(f, "Mysql client error: {}", error),
+            DSqlLogicTestError::HttpClient(error) => write!(f, "Http client error: {}", error),
         }
     }
 }

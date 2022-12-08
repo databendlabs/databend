@@ -7,12 +7,6 @@ CREATE TABLE onecolumn (x INT NULL);
 statement ok
 INSERT INTO onecolumn(x) VALUES (44), (NULL), (42);
 
-
-query I
-select 1;
-----
-1
-
 query II
 SELECT * FROM onecolumn AS a(x) CROSS JOIN onecolumn AS b(y);
 ----
