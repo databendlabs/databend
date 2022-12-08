@@ -246,11 +246,6 @@ impl Scalar {
             Scalar::Variant(s) => ScalarRef::Variant(s.as_slice()),
         }
     }
-
-    /// SQL style format
-    pub fn format_scalar_sql(&self) -> String {
-        todo!("expression")
-    }
 }
 
 impl<'a> ScalarRef<'a> {
