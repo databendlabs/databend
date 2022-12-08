@@ -33,7 +33,6 @@ use crate::plan::DataSourcePlan;
 use crate::plan::Expression;
 use crate::plan::PartStatistics;
 use crate::plan::Partitions;
-use crate::plan::Projection;
 use crate::plan::PushDownInfo;
 use crate::table::column_stats_provider_impls::DummyColumnStatisticsProvider;
 use crate::table_context::TableContext;
@@ -222,10 +221,9 @@ pub trait Table: Sync + Send {
     async fn delete(
         &self,
         ctx: Arc<dyn TableContext>,
-        projection: &Projection,
-        selection: &Option<String>,
+        push_downs: Option<PushDownInfo>,
     ) -> Result<()> {
-        let (_, _, _) = (ctx, projection, selection);
+        let (_, _) = (ctx, push_downs);
 
         Err(ErrorCode::Unimplemented(format!(
             "table {},  of engine type {}, does not support DELETE FROM",

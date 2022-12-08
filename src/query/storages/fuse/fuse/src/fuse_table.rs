@@ -497,10 +497,9 @@ impl Table for FuseTable {
     async fn delete(
         &self,
         ctx: Arc<dyn TableContext>,
-        projection: &Projection,
-        selection: &Option<String>,
+        push_downs: Option<PushDownInfo>,
     ) -> Result<()> {
-        self.do_delete(ctx, projection, selection).await
+        self.do_delete2(ctx, push_downs).await
     }
 
     fn get_block_compact_thresholds(&self) -> BlockCompactThresholds {

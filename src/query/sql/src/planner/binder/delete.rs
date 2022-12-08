@@ -30,7 +30,7 @@ impl<'a> Binder {
         &mut self,
         bind_context: &BindContext,
         table_reference: &'a TableReference<'a>,
-        selection: &'a Option<Expr<'a>>,
+        filter: &'a Option<Expr<'a>>,
     ) -> Result<Plan> {
         let (catalog_name, database_name, table_name) = if let TableReference::Table {
             catalog,
@@ -75,21 +75,22 @@ impl<'a> Binder {
         let tbl_info = table.get_table_info();
         let table_id = tbl_info.ident;
 
-        // @todo wait delete migrate to new planner
-        let col_indices: Vec<usize> = if let Some(expr) = selection {
+
+        let mut selection = None;
+        let mut projection = Projection::Columns(vec![]);
+        if let Some(expr) = filter {
             let (scalar, _) = scalar_binder.bind(expr).await?;
-            scalar.used_columns().into_iter().collect()
-        } else {
-            vec![]
-        };
-        let selection = selection.as_ref().map(|expr| format!("({})", expr));
-        let projection = Projection::Columns(col_indices);
+            let col_indices = scalar.used_columns().into_iter().collect();
+            selection = Some(scalar);
+            projection = Projection::Columns(col_indices);
+        }
 
         let plan = DeletePlan {
             catalog_name,
             database_name,
             table_name,
             table_id,
+            metadata: self.metadata.clone(),
             selection,
             projection,
         };

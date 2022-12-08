@@ -36,8 +36,7 @@ impl FuseTable {
     pub async fn do_delete2(
         &self,
         ctx: Arc<dyn TableContext>,
-        projection: &Projection,
-        selection: &Option<String>,
+        push_downs: Option<PushDownInfo>,
     ) -> Result<()> {
         let snapshot_opt = self.read_table_snapshot().await?;
 
@@ -55,11 +54,13 @@ impl FuseTable {
         }
 
         // check if unconditional deletion
-        if selection.is_none() {
+        if push_downs.is_none() {
             // deleting the whole table... just a truncate
             let purge = false;
             return self.do_truncate(ctx.clone(), purge).await;
         }
+
+        
         todo!()
     }
 
