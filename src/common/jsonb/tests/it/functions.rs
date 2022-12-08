@@ -361,6 +361,10 @@ fn test_parse_json_path() {
             JsonPath::String(Cow::from("k2")),
             JsonPath::String(Cow::from("k3")),
         ]),
+        ("\"k1\"", vec![JsonPath::String(Cow::from("k1")),
+        ]),
+        ("\"k1k2\"", vec![JsonPath::String(Cow::from("k1k2")),
+        ]),
         (r#"k1["k2"][1]"#, vec![
             JsonPath::String(Cow::from("k1")),
             JsonPath::String(Cow::from("k2")),
@@ -413,7 +417,7 @@ fn test_as_type() {
 
     let mut buf: Vec<u8> = Vec::new();
     for (s, expect_null, expect_bool, expect_number, expect_str, expect_array, expect_object) in
-        sources
+    sources
     {
         let res = as_null(s.as_bytes());
         match expect_null {
