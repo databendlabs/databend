@@ -862,6 +862,8 @@ pub fn parse_json_path(path: &[u8]) -> Result<Vec<JsonPath>, Error> {
             let json_path = JsonPath::String(Cow::Borrowed(s));
             if json_paths.len() == 0 {
                 json_paths.push(json_path);
+            } else {
+                return Err(Error::InvalidToken);
             }
         } else {
             if c == b':' || c == b'.' {
