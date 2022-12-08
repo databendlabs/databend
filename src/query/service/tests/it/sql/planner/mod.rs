@@ -13,5 +13,5 @@
 // limitations under the License.
 
 mod format;
-mod query_builders;
+mod select_builder;
 mod semantic;
