@@ -29,6 +29,7 @@ use common_meta_types::MetaId;
 use common_pipeline_core::Pipeline;
 use common_storage::StorageMetrics;
 
+use crate::plan::DataSourceInfo;
 use crate::plan::DataSourcePlan;
 use crate::plan::Expression;
 use crate::plan::PartStatistics;
@@ -73,6 +74,10 @@ pub trait Table: Sync + Send {
     fn as_any(&self) -> &dyn Any;
 
     fn get_table_info(&self) -> &TableInfo;
+
+    fn get_data_source_info(&self) -> DataSourceInfo {
+        DataSourceInfo::TableSource(self.get_table_info().clone())
+    }
 
     /// get_data_metrics will get data metrics from table.
     fn get_data_metrics(&self) -> Option<Arc<StorageMetrics>> {

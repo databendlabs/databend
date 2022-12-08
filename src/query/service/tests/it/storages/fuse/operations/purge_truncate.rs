@@ -43,6 +43,7 @@ async fn test_fuse_truncate_purge_stmt() -> Result<()> {
         2,
         expected_index_count,
         Some(()),
+        None,
     )
     .await?;
 
@@ -68,6 +69,7 @@ async fn test_fuse_truncate_purge_stmt() -> Result<()> {
         0,
         0,
         Some(()),
+        None,
     )
     .await?;
     Ok(())

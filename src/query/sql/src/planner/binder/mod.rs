@@ -16,6 +16,8 @@ mod aggregate;
 mod bind_context;
 #[allow(clippy::module_inception)]
 mod binder;
+/// SQL builders;
+mod builders;
 mod copy;
 mod ddl;
 mod delete;
@@ -40,5 +42,6 @@ mod update;
 pub use aggregate::AggregateInfo;
 pub use bind_context::*;
 pub use binder::Binder;
+pub use builders::*;
 pub use scalar::ScalarBinder;
 pub use scalar_common::*;

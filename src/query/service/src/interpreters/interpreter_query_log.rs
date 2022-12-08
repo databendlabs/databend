@@ -18,6 +18,7 @@ use std::time::Duration;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
+use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_storages_system::LogType;
@@ -80,7 +81,7 @@ impl InterpreterQueryLog {
         // User.
         let handler_type = ctx.get_current_session().get_type().to_string();
         let tenant_id = ctx.get_tenant();
-        let cluster_id = ctx.get_config().query.cluster_id;
+        let cluster_id = GlobalConfig::instance().query.cluster_id.clone();
         let user = ctx.get_current_user()?;
         let sql_user = user.name;
         let sql_user_quota = format!("{:?}", user.quota);
@@ -184,8 +185,8 @@ impl InterpreterQueryLog {
     pub fn log_finish(ctx: &QueryContext, now: SystemTime, err: Option<ErrorCode>) -> Result<()> {
         // User.
         let handler_type = ctx.get_current_session().get_type().to_string();
-        let tenant_id = ctx.get_config().query.tenant_id;
-        let cluster_id = ctx.get_config().query.cluster_id;
+        let tenant_id = GlobalConfig::instance().query.tenant_id.clone();
+        let cluster_id = GlobalConfig::instance().query.cluster_id.clone();
         let user = ctx.get_current_user()?;
         let sql_user = user.name;
         let sql_user_quota = format!("{:?}", user.quota);

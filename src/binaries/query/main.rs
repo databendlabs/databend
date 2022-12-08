@@ -124,7 +124,7 @@ async fn main_entrypoint() -> Result<()> {
         let hostname = conf.query.clickhouse_http_handler_host.clone();
         let listening = format!("{}:{}", hostname, conf.query.clickhouse_http_handler_port);
 
-        let mut srv = HttpHandler::create(HttpHandlerKind::Clickhouse, conf.clone())?;
+        let mut srv = HttpHandler::create(HttpHandlerKind::Clickhouse)?;
         let listening = srv.start(listening.parse()?).await?;
         shutdown_handle.add_service(srv);
 
@@ -140,7 +140,7 @@ async fn main_entrypoint() -> Result<()> {
         let hostname = conf.query.http_handler_host.clone();
         let listening = format!("{}:{}", hostname, conf.query.http_handler_port);
 
-        let mut srv = HttpHandler::create(HttpHandlerKind::Query, conf.clone())?;
+        let mut srv = HttpHandler::create(HttpHandlerKind::Query)?;
         let listening = srv.start(listening.parse()?).await?;
         shutdown_handle.add_service(srv);
 
@@ -205,6 +205,26 @@ async fn main_entrypoint() -> Result<()> {
             format!("connected to endpoints {:#?}", conf.meta.endpoints)
         }
     );
+    println!(
+        "Memory: {}",
+        if conf.query.max_memory_limit_enabled {
+            format!(
+                "Memory: server memory limit to {} (bytes)",
+                conf.query.max_server_memory_usage
+            )
+        } else {
+            "unlimited".to_string()
+        }
+    );
+    println!("Cluster: {}", {
+        let cluster = ClusterDiscovery::instance().discover(&conf).await?;
+        let nodes = cluster.nodes.len();
+        if nodes > 1 {
+            format!("[{}] nodes", nodes)
+        } else {
+            "standalone".to_string()
+        }
+    });
     println!("Storage: {}", conf.storage.params);
     println!("Cache: {}", conf.storage.cache.params);
     println!(

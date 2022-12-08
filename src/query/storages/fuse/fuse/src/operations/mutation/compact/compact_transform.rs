@@ -92,6 +92,7 @@ pub struct CompactTransform {
 
     // Limit the memory size of the block read.
     max_memory: u64,
+    max_io_requests: usize,
     compact_tasks: VecDeque<CompactTask>,
     block_metas: Vec<Arc<BlockMeta>>,
     order: usize,
@@ -112,9 +113,10 @@ impl CompactTransform {
         thresholds: BlockCompactThresholds,
     ) -> Result<ProcessorPtr> {
         let settings = ctx.get_settings();
-        let max_memory_usage = (settings.get_max_memory_usage()? as f64 * 0.95) as u64;
+        let max_memory_usage = (settings.get_max_memory_usage()? as f64 * 0.8) as u64;
         let max_threads = settings.get_max_threads()?;
         let max_memory = max_memory_usage / max_threads;
+        let max_io_requests = settings.get_max_storage_io_requests()? as usize;
         Ok(ProcessorPtr::create(Box::new(CompactTransform {
             state: State::Consume,
             input,
@@ -125,6 +127,7 @@ impl CompactTransform {
             location_gen,
             dal,
             max_memory,
+            max_io_requests,
             compact_tasks: VecDeque::new(),
             block_metas: Vec::new(),
             order: 0,
@@ -326,7 +329,10 @@ impl Processor for CompactTransform {
                         acc + memory
                     });
 
-                    if memory_usage > self.max_memory && !task_futures.is_empty() {
+                    if (memory_usage > self.max_memory
+                        || task_futures.len() + metas.len() > self.max_io_requests)
+                        && !task_futures.is_empty()
+                    {
                         self.compact_tasks.push_front(task);
                         break;
                     }
