@@ -32,6 +32,6 @@ contents:
 
   # Docs
   - src: ${path}/readme.txt
-    dst: /usr/local/share/doc/databend/readme.txt
+    dst: /usr/share/doc/databend/readme.txt
     file_info:
       mode: 0644
