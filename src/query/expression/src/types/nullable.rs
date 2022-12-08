@@ -154,8 +154,8 @@ impl<T: ValueType> ValueType for NullableType<T> {
         builder.push_null();
     }
 
-    fn append_builder(builder: &mut Self::ColumnBuilder, other_builder: &Self::ColumnBuilder) {
-        builder.append(other_builder);
+    fn append_column(builder: &mut Self::ColumnBuilder, other: &Self::Column) {
+        builder.append_column(other);
     }
 
     fn build_column(builder: Self::ColumnBuilder) -> Self::Column {
@@ -317,10 +317,9 @@ impl<T: ValueType> NullableColumnBuilder<T> {
         self.validity.push(false);
     }
 
-    pub fn append(&mut self, other: &Self) {
-        T::append_builder(&mut self.builder, &other.builder);
-        self.validity
-            .extend_from_slice(other.validity.as_slice(), 0, other.validity.len());
+    pub fn append_column(&mut self, other: &NullableColumn<T>) {
+        T::append_column(&mut self.builder, &other.column);
+        self.validity.extend_from_bitmap(&other.validity)
     }
 
     pub fn build(self) -> NullableColumn<T> {

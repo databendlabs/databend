@@ -116,8 +116,8 @@ impl ValueType for AnyType {
         builder.push_default();
     }
 
-    fn append_builder(builder: &mut Self::ColumnBuilder, other: &Self::ColumnBuilder) {
-        builder.append(other);
+    fn append_column(builder: &mut Self::ColumnBuilder, other: &Self::Column) {
+        builder.append_column(other);
     }
 
     fn build_column(builder: Self::ColumnBuilder) -> Self::Column {
