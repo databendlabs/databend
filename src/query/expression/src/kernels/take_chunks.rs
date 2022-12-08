@@ -167,12 +167,11 @@ impl<Index: ColumnIndex> Chunk<Index> {
             match &col.value {
                 Value::Scalar(scalar) => {
                     let other = ColumnBuilder::repeat(&scalar.as_ref(), len, &col.data_type);
-                    builder.append(&other);
+                    builder.append_column(&other.build());
                 }
                 Value::Column(c) => {
                     let c = c.slice(*start..(*start + len));
-                    let other = ColumnBuilder::from_column(c);
-                    builder.append(&other);
+                    builder.append_column(&c);
                 }
             }
             if remain == 0 {

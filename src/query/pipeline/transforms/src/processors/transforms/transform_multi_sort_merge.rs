@@ -378,7 +378,7 @@ impl MultiSortMergeProcessor {
                     .chunks
                     .iter()
                     .flatten()
-                    .map(|chunk| chunk.get_by_id(column_index).clone())
+                    .map(|chunk| chunk.get_by_id(&column_index).unwrap().clone())
                     .collect::<Vec<_>>();
                 Chunk::take_column_by_slices_limit(&candidate_cols, &indices, None)
             })
@@ -502,7 +502,7 @@ impl Processor for MultiSortMergeProcessor {
                     let columns = self
                         .sort_field_indices
                         .iter()
-                        .map(|i| column_to_arrow_array(chunk.get_by_id(*i), chunk.num_rows()))
+                        .map(|i| column_to_arrow_array(chunk.get_by_id(i).unwrap(), chunk.num_rows()))
                         .collect::<Vec<_>>();
                     let rows = self.row_converter.convert_columns(&columns)?;
                     if !chunk.is_empty() {

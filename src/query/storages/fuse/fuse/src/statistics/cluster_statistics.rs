@@ -107,7 +107,7 @@ impl ClusterStatsGenerator {
         let mut max = Vec::with_capacity(self.cluster_key_index.len());
 
         for key in self.cluster_key_index.iter() {
-            let val = chunk.get_by_id(*key);
+            let val = chunk.get_by_id(key).unwrap();
             let val_ref = val.value.as_ref();
             let mut left = unsafe { val_ref.index_unchecked(0) };
             // To avoid high cardinality, for the string column,

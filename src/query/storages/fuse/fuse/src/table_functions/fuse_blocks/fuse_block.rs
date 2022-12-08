@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_expression::ChunkEntry;
 use common_expression::types::number::NumberColumnBuilder;
 use common_expression::types::number::NumberScalar;
 use common_expression::types::string::StringColumnBuilder;
