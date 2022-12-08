@@ -47,7 +47,7 @@ gzip -d hits_1m.csv.gz
 ```
 
 ```shell title='Load CSV files into Databend'
-curl -H "insert_sql:insert into hits format TSV"  -F  "upload=@./hits_1m.tsv"  -XPUT http://user1:abc123@127.0.0.1:8081/v1/streaming_load
+curl -H "insert_sql:insert into hits format TSV"  -F  "upload=@./hits_1m.tsv"  -XPUT http://user1:abc123@127.0.0.1:8000/v1/streaming_load
 ```
 
 ## Step 3. Queries
