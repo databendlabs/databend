@@ -25,15 +25,19 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
+use bytes::Bytes;
 use common_base::base::tokio::sync::Semaphore;
 use common_base::base::GlobalIORuntime;
 use common_base::base::TrySpawn;
 use futures::future::BoxFuture;
+use futures::io::Cursor;
+use futures::AsyncReadExt;
 use moka::sync::Cache;
 use opendal::layers::CachePolicy;
 use opendal::raw::Accessor;
 use opendal::raw::BytesReader;
 use opendal::raw::RpRead;
+use opendal::Error;
 use opendal::ErrorKind;
 use opendal::OpRead;
 use opendal::OpWrite;
@@ -137,6 +141,17 @@ impl CachePolicy for RangeCachePolicy {
         let concurrency = self.concurrency.clone();
 
         Box::pin(async move {
+            let (offset, size) = (args.range().offset(), args.range().size());
+
+            // This is a full scan, just skip it.
+            if offset.unwrap_or_default() == 0 && size.is_none() {
+                return inner.read(&path, args).await;
+            }
+            // S3 is fast on reading large single blocks, let's just skip it.
+            if let Some(size) = size && size > 4 * 1024 * 1024 {
+                return inner.read(&path, args).await;
+            }
+
             match cache.read(&cache_path, OpRead::default()).await {
                 Ok(v) => return Ok(v),
                 Err(err) => {
@@ -159,20 +174,28 @@ impl CachePolicy for RangeCachePolicy {
             };
 
             // Start filling cache.
-            let (rp, r) = inner.read(&path, args.clone()).await?;
+            let (rp, mut r) = inner.read(&path, args.clone()).await?;
             let size = rp.clone().into_metadata().content_length();
 
             if enable_async {
+                let mut bs = Vec::with_capacity(size as usize);
+                r.read_to_end(&mut bs).await.map_err(|err| {
+                    Error::new(ErrorKind::Unexpected, "read from underlying storage")
+                        .set_source(err)
+                })?;
+                let bs = Bytes::from(bs);
+
+                let mbs = bs.clone();
                 GlobalIORuntime::instance().spawn(async move {
                     // Ignore errors returned by cache services.
-                    let _ = cache.write(&cache_path, OpWrite::new(size), r).await;
+                    let _ = cache
+                        .write(&cache_path, OpWrite::new(size), Box::new(Cursor::new(mbs)))
+                        .await;
                 });
 
-                inner.read(&path, args).await
+                return Ok((rp, Box::new(Cursor::new(bs))));
             } else {
-                let _ = cache
-                    .write(&cache_path, OpWrite::new(size), Box::new(r))
-                    .await;
+                let _ = cache.write(&cache_path, OpWrite::new(size), r).await;
 
                 match cache.read(&cache_path, OpRead::default()).await {
                     Ok(r) => Ok(r),
