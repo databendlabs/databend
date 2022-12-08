@@ -288,16 +288,14 @@ impl StatColumn {
                 single_point = false;
             }
 
-            let min = if let DataValue::Float64(f64::NAN) = stat.min {
-                &DataValue::Float64(f64::MIN)
-            } else {
-                &stat.min
+            let min = match &stat.min {
+                DataValue::Float64(f) if f.is_nan() => &DataValue::Float64(f64::MIN),
+                other => other,
             };
 
-            let max = if let DataValue::Float64(f64::NAN) = stat.max {
-                &DataValue::Float64(f64::MAX)
-            } else {
-                &stat.max
+            let max = match &stat.max {
+                DataValue::Float64(f) if f.is_nan() => &DataValue::Float64(f64::MAX),
+                other => other,
             };
 
             let min_col = v.data_type().create_constant_column(min, 1)?;
