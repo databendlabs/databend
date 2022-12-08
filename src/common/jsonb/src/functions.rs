@@ -31,7 +31,7 @@ use super::value::Value;
 /// Build `JSONB` array from items.
 /// Assuming that the input values is valid JSONB data.
 pub fn build_array<'a>(
-    items: impl IntoIterator<Item=&'a [u8]>,
+    items: impl IntoIterator<Item = &'a [u8]>,
     buf: &mut Vec<u8>,
 ) -> Result<(), Error> {
     let start = buf.len();
@@ -69,7 +69,7 @@ pub fn build_array<'a>(
 /// Build `JSONB` object from items.
 /// Assuming that the input values is valid JSONB data.
 pub fn build_object<'a, K: AsRef<str>>(
-    items: impl IntoIterator<Item=(K, &'a [u8])>,
+    items: impl IntoIterator<Item = (K, &'a [u8])>,
     buf: &mut Vec<u8>,
 ) -> Result<(), Error> {
     let start = buf.len();
@@ -852,7 +852,7 @@ pub fn parse_json_path(path: &[u8]) -> Result<Vec<JsonPath>, Error> {
                     break;
                 }
             }
-            let s = std::str::from_utf8(&path[prev_idx..idx-1])?;
+            let s = std::str::from_utf8(&path[prev_idx..idx - 1])?;
             let json_path = JsonPath::String(Cow::Borrowed(s));
             json_paths.push(json_path);
         } else {
