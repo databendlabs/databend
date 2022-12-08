@@ -12,88 +12,37 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
-
-use common_catalog::plan::PartInfoPtr;
+use common_arrow::parquet::metadata::RowGroupMetaData;
 use common_exception::Result;
-use common_storage::ColumnLeaf;
 use opendal::Object;
 
-use crate::ParquetPartInfo;
 use crate::ParquetReader;
 
+pub type IndexedChunk = (usize, Vec<u8>);
+
 impl ParquetReader {
-    pub async fn read_columns_data(&self, part: PartInfoPtr) -> Result<Vec<(usize, Vec<u8>)>> {
-        let part = ParquetPartInfo::from_part(&part)?;
-        let columns = self.projection.project_column_leaves(&self.column_leaves)?;
-        let indices = Self::build_projection_indices(&columns);
-        let mut join_handlers = Vec::with_capacity(indices.len());
+    /// Read columns data of one row group.
+    pub fn sync_read_columns_data(
+        &self,
+        location: &str,
+        rg: &RowGroupMetaData,
+    ) -> Result<Vec<IndexedChunk>> {
+        let columns = self.get_column_metas(rg);
 
-        for index in indices {
-            let column_meta = &part.columns_meta[&index];
-            join_handlers.push(Self::read_column(
-                self.operator.object(&part.location),
-                index,
-                column_meta.offset,
-                column_meta.length,
-            ));
-        }
+        let mut chunks = Vec::with_capacity(columns.len());
 
-        futures::future::try_join_all(join_handlers).await
-    }
-
-    pub fn sync_read_columns_data(&self, part: PartInfoPtr) -> Result<Vec<(usize, Vec<u8>)>> {
-        let part = ParquetPartInfo::from_part(&part)?;
-
-        let columns = self.projection.project_column_leaves(&self.column_leaves)?;
-        let indices = Self::build_projection_indices(&columns);
-        let mut results = Vec::with_capacity(indices.len());
-
-        for index in indices {
-            let column_meta = &part.columns_meta[&index];
-
+        for (index, col) in columns {
+            let (offset, length) = col.byte_range();
             let op = self.operator.clone();
-
-            let location = part.location.clone();
-            let offset = column_meta.offset;
-            let length = column_meta.length;
-
-            let result = Self::sync_read_column(op.object(&location), index, offset, length);
-            results.push(result?);
+            let chunk = Self::sync_read_column(op.object(location), offset, length)?;
+            chunks.push((index, chunk));
         }
 
-        Ok(results)
+        Ok(chunks)
     }
 
-    pub async fn read_column(
-        o: Object,
-        index: usize,
-        offset: u64,
-        length: u64,
-    ) -> Result<(usize, Vec<u8>)> {
-        let chunk = o.range_read(offset..offset + length).await?;
-
-        Ok((index, chunk))
-    }
-
-    pub fn sync_read_column(
-        o: Object,
-        index: usize,
-        offset: u64,
-        length: u64,
-    ) -> Result<(usize, Vec<u8>)> {
-        let chunk = o.blocking_range_read(offset..offset + length)?;
-        Ok((index, chunk))
-    }
-
-    // Build non duplicate leaf_ids to avoid repeated read column from parquet
-    fn build_projection_indices(columns: &Vec<&ColumnLeaf>) -> HashSet<usize> {
-        let mut indices = HashSet::with_capacity(columns.len());
-        for column in columns {
-            for index in &column.leaf_ids {
-                indices.insert(*index);
-            }
-        }
-        indices
+    #[inline]
+    pub fn sync_read_column(o: Object, offset: u64, length: u64) -> Result<Vec<u8>> {
+        Ok(o.blocking_range_read(offset..offset + length)?)
     }
 }

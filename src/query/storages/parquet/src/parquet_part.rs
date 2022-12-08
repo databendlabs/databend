@@ -14,7 +14,6 @@
 
 use std::any::Any;
 use std::collections::hash_map::DefaultHasher;
-use std::collections::HashMap;
 use std::hash::Hash;
 use std::hash::Hasher;
 use std::sync::Arc;
@@ -24,26 +23,19 @@ use common_catalog::plan::PartInfoPtr;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::ParquetColumnMeta;
-
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq)]
-pub struct ParquetPartInfo {
+pub struct ParquetPart {
     pub location: String,
-    /// FusePartInfo itself is not versioned
-    /// the `format_version` is the version of the block which the `location` points to
-    pub format_version: u64,
-    pub nums_rows: usize,
-    pub columns_meta: HashMap<usize, ParquetColumnMeta>,
 }
 
 #[typetag::serde(name = "parquet")]
-impl PartInfo for ParquetPartInfo {
+impl PartInfo for ParquetPart {
     fn as_any(&self) -> &dyn Any {
         self
     }
 
     fn equals(&self, info: &Box<dyn PartInfo>) -> bool {
-        match info.as_any().downcast_ref::<ParquetPartInfo>() {
+        match info.as_any().downcast_ref::<ParquetPart>() {
             None => false,
             Some(other) => self == other,
         }
@@ -56,23 +48,13 @@ impl PartInfo for ParquetPartInfo {
     }
 }
 
-impl ParquetPartInfo {
-    pub fn create(
-        location: String,
-        format_version: u64,
-        rows_count: u64,
-        columns_meta: HashMap<usize, ParquetColumnMeta>,
-    ) -> Arc<Box<dyn PartInfo>> {
-        Arc::new(Box::new(ParquetPartInfo {
-            location,
-            format_version,
-            columns_meta,
-            nums_rows: rows_count as usize,
-        }))
+impl ParquetPart {
+    pub fn create(location: String) -> Arc<Box<dyn PartInfo>> {
+        Arc::new(Box::new(ParquetPart { location }))
     }
 
-    pub fn from_part(info: &PartInfoPtr) -> Result<&ParquetPartInfo> {
-        match info.as_any().downcast_ref::<ParquetPartInfo>() {
+    pub fn from_part(info: &PartInfoPtr) -> Result<&ParquetPart> {
+        match info.as_any().downcast_ref::<ParquetPart>() {
             Some(part_ref) => Ok(part_ref),
             None => Err(ErrorCode::Internal(
                 "Cannot downcast from PartInfo to FusePartInfo.",

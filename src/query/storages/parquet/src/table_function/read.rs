@@ -27,24 +27,12 @@ use common_sql::evaluator::Evaluator;
 use super::ParquetTable;
 use super::TableContext;
 use crate::ParquetReader;
-use crate::ParquetTableSource;
+use crate::ParquetSource;
 
 impl ParquetTable {
     pub fn create_reader(&self, projection: Projection) -> Result<Arc<ParquetReader>> {
         let table_schema = self.table_info.schema();
         ParquetReader::create(self.operator.clone(), table_schema, projection)
-    }
-
-    // Build the block reader.
-    fn build_reader(&self, plan: &DataSourcePlan) -> Result<Arc<ParquetReader>> {
-        match PushDownInfo::prewhere_of_push_downs(&plan.push_downs) {
-            None => {
-                let projection =
-                    PushDownInfo::projection_of_push_downs(&plan.schema(), &plan.push_downs);
-                self.create_reader(projection)
-            }
-            Some(v) => self.create_reader(v.output_columns),
-        }
     }
 
     // Build the prewhere reader.
@@ -128,8 +116,8 @@ impl ParquetTable {
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let projection = PushDownInfo::projection_of_push_downs(&plan.schema(), &plan.push_downs);
+        let output_schema = Arc::new(projection.project_schema(&plan.source_info.schema()));
         let max_io_requests = self.adjust_io_request(&ctx, &projection)?;
-        let block_reader = self.build_reader(plan)?;
         let prewhere_reader = self.build_prewhere_reader(plan)?;
         let prewhere_filter =
             self.build_prewhere_filter_executor(ctx.clone(), plan, prewhere_reader.schema())?;
@@ -138,10 +126,10 @@ impl ParquetTable {
         // Add source pipe.
         pipeline.add_source(
             |output| {
-                ParquetTableSource::create(
+                ParquetSource::create(
                     ctx.clone(),
                     output,
-                    block_reader.clone(),
+                    output_schema.clone(),
                     prewhere_reader.clone(),
                     prewhere_filter.clone(),
                     remain_reader.clone(),

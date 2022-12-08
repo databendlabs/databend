@@ -13,26 +13,20 @@
 //  limitations under the License.
 
 use std::any::Any;
-use std::fs::File;
 use std::sync::Arc;
 
 use chrono::NaiveDateTime;
 use chrono::TimeZone;
 use chrono::Utc;
-use common_arrow::arrow::datatypes::Schema as ArrowSchema;
-use common_arrow::arrow::io::parquet;
-use common_arrow::arrow::io::parquet::read::schema::parquet_to_arrow_schema;
-use common_arrow::parquet::metadata::FileMetaData;
-use common_arrow::parquet::schema::types::ParquetType;
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
+use common_catalog::plan::PartitionsShuffleKind;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table::Table;
 use common_catalog::table_args::TableArgs;
 use common_catalog::table_function::TableFunction;
 use common_config::GlobalConfig;
-use common_datavalues::DataSchema;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -43,11 +37,8 @@ use common_pipeline_core::Pipeline;
 use opendal::Operator;
 
 use super::TableContext;
-
-pub struct ParquetFileMeta {
-    pub location: String,
-    pub file_meta: FileMetaData,
-}
+use crate::ParquetPart;
+use crate::ParquetReader;
 
 pub struct ParquetTable {
     table_args: Vec<DataValue>,
@@ -113,7 +104,8 @@ impl ParquetTable {
         // Infer schema from the first parquet file.
         // Assume all parquet files have the same schema.
         // If not, throw error during reading.
-        let schema = infer_schema(&file_locations[0])?;
+        let first_meta = ParquetReader::read_meta(&file_locations[0])?;
+        let schema = ParquetReader::infer_schema(&first_meta)?;
 
         let table_info = TableInfo {
             ident: TableIdent::new(table_id, 0),
@@ -141,19 +133,6 @@ impl ParquetTable {
             table_info,
             operator,
         }))
-    }
-
-    pub(super) fn read_file_metas(&self) -> Result<Vec<ParquetFileMeta>> {
-        self.file_locations
-            .iter()
-            .map(|location| {
-                let file_meta = read_parquet_meta(location)?;
-                Ok(ParquetFileMeta {
-                    location: location.clone(),
-                    file_meta,
-                })
-            })
-            .collect::<Result<Vec<_>>>()
     }
 }
 
@@ -183,12 +162,28 @@ impl Table for ParquetTable {
         Some(self.table_args.clone())
     }
 
+    /// The returned partitions only record the locations of files to read.
+    /// So they don't have any real statistics.
     async fn read_partitions(
         &self,
         _ctx: Arc<dyn TableContext>,
-        push_down: Option<PushDownInfo>,
+        _push_down: Option<PushDownInfo>,
     ) -> Result<(PartStatistics, Partitions)> {
-        self.do_read_partitions(push_down)
+        Ok((
+            PartStatistics::new_estimated(
+                0,
+                0,
+                self.file_locations.len(),
+                self.file_locations.len(),
+            ),
+            Partitions::create(
+                PartitionsShuffleKind::Mod,
+                self.file_locations
+                    .iter()
+                    .map(|location| ParquetPart::create(location.clone()))
+                    .collect(),
+            ),
+        ))
     }
 
     fn read_data(
@@ -210,47 +205,4 @@ impl TableFunction for ParquetTable {
     where Self: 'a {
         self
     }
-}
-
-fn read_parquet_meta(location: &str) -> Result<FileMetaData> {
-    let mut file = File::open(location)
-        .map_err(|e| ErrorCode::Internal(format!("Failed to open file '{}': {}", location, e)))?;
-    parquet::read::read_metadata(&mut file).map_err(|e| {
-        ErrorCode::Internal(format!(
-            "Read parquet file '{}''s meta error: {}",
-            location, e
-        ))
-    })
-}
-
-/// Infer [`DataSchema`] from [`FileMetaData`]
-fn infer_schema(location: &str) -> Result<DataSchema> {
-    let meta = read_parquet_meta(location)?;
-    if meta.row_groups.is_empty() {
-        return Err(ErrorCode::Internal(format!(
-            "No row groups found in parquet file '{}'",
-            location
-        )));
-    }
-
-    let column_metas = meta.row_groups[0].columns();
-    let parquet_fields = column_metas
-        .iter()
-        .map(|col_meta| {
-            // convert name to lower case.
-            let mut pt = col_meta.descriptor().base_type.clone();
-            match &mut pt {
-                ParquetType::PrimitiveType(primitive) => {
-                    primitive.field_info.name = primitive.field_info.name.to_lowercase()
-                }
-                ParquetType::GroupType { field_info, .. } => {
-                    field_info.name = field_info.name.to_lowercase()
-                }
-            }
-            pt
-        })
-        .collect::<Vec<_>>();
-    let arrow_fields = ArrowSchema::from(parquet_to_arrow_schema(&parquet_fields));
-
-    Ok(DataSchema::from(&arrow_fields))
 }
