@@ -61,3 +61,10 @@ html[data-theme='dark'] .docusaurus-highlight-code-line {
     }
   }
 }
+
+.markdown img[src^='https://avatars.githubusercontent.com'] {
+  max-width: 95PX;
+  @include media{
+    max-width: 60PX;
+  }
+}

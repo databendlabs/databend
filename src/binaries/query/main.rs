@@ -205,6 +205,26 @@ async fn main_entrypoint() -> Result<()> {
             format!("connected to endpoints {:#?}", conf.meta.endpoints)
         }
     );
+    println!(
+        "Memory: {}",
+        if conf.query.max_memory_limit_enabled {
+            format!(
+                "Memory: server memory limit to {} (bytes)",
+                conf.query.max_server_memory_usage
+            )
+        } else {
+            "unlimited".to_string()
+        }
+    );
+    println!("Cluster: {}", {
+        let cluster = ClusterDiscovery::instance().discover(&conf).await?;
+        let nodes = cluster.nodes.len();
+        if nodes > 1 {
+            format!("[{}] nodes", nodes)
+        } else {
+            "standalone".to_string()
+        }
+    });
     println!("Storage: {}", conf.storage.params);
     println!("Cache: {}", conf.storage.cache.params);
     println!(
