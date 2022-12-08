@@ -372,13 +372,13 @@ impl MultiSortMergeProcessor {
             .fields()
             .iter()
             .enumerate()
-            .map(|(column_index, _)| {
+            .map(|(col_id, _)| {
                 // Collect all rows for a ceterain column out of all preserved chunks.
                 let candidate_cols = self
                     .chunks
                     .iter()
                     .flatten()
-                    .map(|chunk| chunk.get_by_id(&column_index).unwrap().clone())
+                    .map(|chunk| chunk.get_by_id(&col_id).unwrap().clone())
                     .collect::<Vec<_>>();
                 Chunk::take_column_by_slices_limit(&candidate_cols, &indices, None)
             })
