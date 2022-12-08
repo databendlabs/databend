@@ -1,14 +1,19 @@
 statement ok
-drop table if exists onecolumn;
+drop table if exists onecolumn
+
+query III
+select 1, NULL, 2
+----
+1 NULL 2
 
 statement ok
-CREATE TABLE onecolumn (x INT NULL);
+CREATE TABLE onecolumn (x INT NULL)
 
 statement ok
-INSERT INTO onecolumn(x) VALUES (44), (NULL), (42);
+INSERT INTO onecolumn(x) VALUES (44), (NULL), (42)
 
 query II
-SELECT * FROM onecolumn AS a(x) CROSS JOIN onecolumn AS b(y);
+SELECT * FROM onecolumn AS a(x) CROSS JOIN onecolumn AS b(y)
 ----
 44 44
 44 NULL
@@ -21,4 +26,4 @@ NULL 42
 42 42
 
 statement ok
-drop table onecolumn;
+drop table onecolumn

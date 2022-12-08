@@ -18,16 +18,20 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::ptr::write;
 
+use client::ClickhouseHttpClient;
 use mysql::prelude::Queryable;
-use mysql::{Conn, serde_json};
+use mysql::serde_json;
+use mysql::Conn;
 use mysql::Pool;
 use mysql::Row;
+use reqwest::header::HeaderMap;
+use reqwest::header::HeaderValue;
 use serde_json::Value;
-use reqwest::header::{HeaderMap, HeaderValue};
-use sqllogictest::{ColumnType, DBOutput};
+use sqllogictest::ColumnType;
+use sqllogictest::DBOutput;
 
-use crate::client::MysqlClient;
 use crate::client::HttpClient;
+use crate::client::MysqlClient;
 use crate::error::DSqlLogicTestError;
 use crate::error::Result;
 
@@ -39,6 +43,7 @@ const TEST_SUITS: &str = "tests/sqllogictests/suits";
 pub struct Databend {
     mysql_client: Option<MysqlClient>,
     http_client: Option<HttpClient>,
+    ck_client: Option<ClickhouseHttpClient>,
     file_name: String,
 }
 
@@ -54,7 +59,9 @@ impl sqllogictest::AsyncDB for Databend {
         if let Some(http_client) = &mut self.http_client {
             return http_client.query(sql).await;
         }
-
+        if let Some(ck_client) = &mut self.ck_client {
+            return ck_client.query(sql).await;
+        }
         Ok(DBOutput::StatementComplete(1))
     }
 
@@ -84,6 +91,7 @@ async fn run_suit(suit: &Path) -> Result<()> {
     let mut databend = Databend {
         mysql_client: Some(mysql_client),
         http_client: None,
+        ck_client: None,
         file_name: file_name.to_string(),
     };
     let mut runner = sqllogictest::Runner::new(databend);
@@ -93,6 +101,17 @@ async fn run_suit(suit: &Path) -> Result<()> {
     let mut databend = Databend {
         mysql_client: None,
         http_client: Some(http_client),
+        ck_client: None,
+        file_name: file_name.to_string(),
+    };
+    let mut runner = sqllogictest::Runner::new(databend);
+    runner.run_file_async(suit).await?;
+
+    let ck_client = ClickhouseHttpClient::create()?;
+    let mut databend = Databend {
+        mysql_client: None,
+        http_client: None,
+        ck_client: Some(ck_client),
         file_name: file_name.to_string(),
     };
     let mut runner = sqllogictest::Runner::new(databend);

@@ -14,15 +14,18 @@
 
 use std::collections::HashMap;
 use std::process::Output;
+
+use mysql::prelude::Queryable;
 use mysql::Pool;
 use mysql::PooledConn;
-use mysql::prelude::Queryable;
 use mysql::Row;
+use reqwest::header::HeaderMap;
+use reqwest::header::HeaderValue;
+use reqwest::Client;
+use serde_json::Value;
 use sqllogictest::ColumnType;
 use sqllogictest::DBOutput;
-use reqwest::Client;
-use reqwest::header::{HeaderMap, HeaderValue};
-use serde_json::Value;
+
 use crate::error::Result;
 
 #[derive(Debug)]
@@ -77,20 +80,26 @@ impl HttpClient {
     pub fn create() -> Result<HttpClient> {
         let client = Client::new();
         let url = "http://127.0.0.1:8000/v1/query".to_string();
-        Ok(HttpClient {
-            client,
-            url,
-        })
+        Ok(HttpClient { client, url })
     }
 
     pub async fn query(&mut self, sql: &str) -> Result<DBOutput> {
         let mut header = HeaderMap::new();
-        header.insert("Content-Type", HeaderValue::from_str("application/json").unwrap());
+        header.insert(
+            "Content-Type",
+            HeaderValue::from_str("application/json").unwrap(),
+        );
         header.insert("Accept", HeaderValue::from_str("application/json").unwrap());
         let mut query = HashMap::new();
         query.insert("sql", sql);
-        let response = self.client.post(&self.url).json(&query).
-            basic_auth("root", Some("")).headers(header).send().await?;
+        let response = self
+            .client
+            .post(&self.url)
+            .json(&query)
+            .basic_auth("root", Some(""))
+            .headers(header)
+            .send()
+            .await?;
         let data: Value = serde_json::from_str(response.text().await?.as_str()).unwrap();
         let rows = data.as_object().unwrap().get("data").unwrap();
         let mut parsed_rows = Vec::new();
@@ -112,4 +121,47 @@ impl HttpClient {
     }
 }
 
-pub struct ClickhouseClient {}
+pub struct ClickhouseHttpClient {
+    pub client: Client,
+    pub url: String,
+}
+
+impl ClickhouseHttpClient {
+    pub fn create() -> Result<ClickhouseHttpClient> {
+        let client = Client::new();
+        let url = "http://127.0.0.1:8124".to_string();
+        Ok(ClickhouseHttpClient { client, url })
+    }
+
+    pub async fn query(&mut self, sql: &str) -> Result<DBOutput> {
+        let mut query = HashMap::new();
+        query.insert("query", sql);
+        let response = self
+            .client
+            .post(&self.url)
+            .query(&query)
+            .basic_auth("root", Some(""))
+            .send()
+            .await?;
+        let res = String::from(response.text().await?);
+        let rows: Vec<Vec<String>> = res
+            .lines()
+            .map(|s| {
+                s.split("\t")
+                    .map(|s| {
+                        if s == "\\N" {
+                            "NULL".to_string()
+                        } else {
+                            s.to_string()
+                        }
+                    })
+                    .collect()
+            })
+            .collect();
+        let mut types = vec![];
+        if !rows.is_empty() {
+            types = vec![ColumnType::Any; rows[0].len()];
+        }
+        Ok(DBOutput::Rows { types, rows })
+    }
+}

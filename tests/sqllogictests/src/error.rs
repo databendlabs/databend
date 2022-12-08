@@ -18,8 +18,8 @@ use std::fmt::Formatter;
 
 use common_exception::ErrorCode;
 use mysql::Error as MysqlClientError;
-use sqllogictest::TestError;
 use reqwest::Error as HttpClientError;
+use sqllogictest::TestError;
 
 pub type Result<T> = std::result::Result<T, DSqlLogicTestError>;
 
@@ -55,7 +55,7 @@ impl From<MysqlClientError> for DSqlLogicTestError {
 
 impl From<HttpClientError> for DSqlLogicTestError {
     fn from(value: HttpClientError) -> Self {
-       DSqlLogicTestError::HttpClient(value)
+        DSqlLogicTestError::HttpClient(value)
     }
 }
 
