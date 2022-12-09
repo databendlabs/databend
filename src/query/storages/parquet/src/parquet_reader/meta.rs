@@ -18,6 +18,7 @@ use common_arrow::arrow::io::parquet::read as pread;
 use common_arrow::parquet::metadata::ColumnChunkMetaData;
 use common_arrow::parquet::metadata::FileMetaData;
 use common_arrow::parquet::metadata::RowGroupMetaData;
+use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -39,12 +40,19 @@ impl ParquetReader {
 
     #[inline]
     pub fn infer_schema(meta: &FileMetaData) -> Result<DataSchema> {
-        let mut arrow_schema = pread::infer_schema(meta)?;
-        // Need to change all the field name to lowercase.
-        for field in &mut arrow_schema.fields {
-            field.name = field.name.to_lowercase();
-        }
-        Ok(DataSchema::from(arrow_schema))
+        // Do not use `pread::infer_schema(meta)` becuase it will use metadata `ARROW:schema`.
+        // There maybe dictionary types in the schema, which is not supported by Databend.
+        // So we need to convert the primitive schema directly.
+        let field = pread::schema::parquet_to_arrow_schema(meta.schema().fields())
+            .into_iter()
+            .map(|mut f| {
+                // Need to change all the field name to lowercase.
+                f.name = f.name.to_lowercase();
+                DataField::from(&f)
+            })
+            .collect::<Vec<_>>();
+
+        Ok(DataSchema::new(field))
     }
 
     pub fn get_column_metas<'a>(

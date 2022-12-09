@@ -81,11 +81,7 @@ impl ParquetTable {
         )
     }
 
-    fn adjust_io_request(
-        &self,
-        ctx: &Arc<dyn TableContext>,
-        projection: &Projection,
-    ) -> Result<usize> {
+    fn adjust_io_request(&self, ctx: &Arc<dyn TableContext>, num_columns: usize) -> Result<usize> {
         let conf = GlobalConfig::instance();
         let mut max_memory_usage = ctx.get_settings().get_max_memory_usage()? as usize;
         if conf.query.table_cache_enabled {
@@ -97,7 +93,7 @@ impl ParquetTable {
         let block_file_size = 300 * 1024 * 1024_usize;
         let table_column_len = self.table_info.schema().fields().len();
         let per_column_bytes = block_file_size / table_column_len;
-        let scan_column_bytes = per_column_bytes * projection.len();
+        let scan_column_bytes = per_column_bytes * num_columns;
         let estimate_io_requests = max_memory_usage / scan_column_bytes;
 
         let setting_io_requests = std::cmp::max(
@@ -115,9 +111,20 @@ impl ParquetTable {
         plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
-        let projection = PushDownInfo::projection_of_push_downs(&plan.schema(), &plan.push_downs);
-        let output_schema = Arc::new(projection.project_schema(&plan.source_info.schema()));
-        let max_io_requests = self.adjust_io_request(&ctx, &projection)?;
+        let columns_to_read =
+            PushDownInfo::projection_of_push_downs(&plan.schema(), &plan.push_downs);
+        let max_io_requests = self.adjust_io_request(&ctx, columns_to_read.len())?;
+
+        // If there is a `PrewhereInfo`, the final output should be `PrehwereInfo.output_columns`.
+        // `PrewhereInfo.output_columns` should be a subset of `PushDownInfo.projection`.
+        let output_projection = match PushDownInfo::prewhere_of_push_downs(&plan.push_downs) {
+            None => {
+                PushDownInfo::projection_of_push_downs(&self.table_info.schema(), &plan.push_downs)
+            }
+            Some(v) => v.output_columns.clone(),
+        };
+        let output_schema = Arc::new(output_projection.project_schema(&plan.source_info.schema()));
+
         let prewhere_reader = self.build_prewhere_reader(plan)?;
         let prewhere_filter =
             self.build_prewhere_filter_executor(ctx.clone(), plan, prewhere_reader.schema())?;
