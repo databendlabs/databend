@@ -85,6 +85,8 @@ impl GlobalServices {
             config.query.tenant_quota,
         )
         .await?;
-        RoleCacheManager::init()
+        RoleCacheManager::init()?;
+
+        Ok(())
     }
 }

@@ -97,9 +97,7 @@ impl Global {
     ///
     /// Should only be initiated once.
     pub fn init_production() {
-        GLOBAL
-            .set(Singleton::Production(<Container![Send + Sync]>::new()))
-            .expect("GLOBAL has been set")
+        let _ = GLOBAL.set(Singleton::Production(<Container![Send + Sync]>::new()));
     }
 
     /// init testing global data registry.
@@ -107,9 +105,7 @@ impl Global {
     /// Should only be initiated once and only used in testing.
     #[cfg(debug_assertions)]
     pub fn init_testing() {
-        GLOBAL
-            .set(Singleton::Testing(Mutex::default()))
-            .expect("GLOBAL has been set")
+        let _ = GLOBAL.set(Singleton::Testing(Mutex::default()));
     }
 
     /// drop testing global data by thread name.
@@ -130,12 +126,18 @@ impl Global {
 
     /// Get data from global data registry.
     pub fn get<T: Clone + 'static>() -> T {
-        GLOBAL.wait().get()
+        GLOBAL
+            .get()
+            .expect("global data registry must be initiated")
+            .get()
     }
 
     /// Set data into global data registry.
     pub fn set<T: Send + Sync + 'static>(value: T) {
-        let set = GLOBAL.wait().set(value);
-        assert!(!set, "value has been set in global data registry");
+        let set = GLOBAL
+            .get()
+            .expect("global data registry must be initiated")
+            .set(value);
+        assert!(set, "value has been set in global data registry");
     }
 }
