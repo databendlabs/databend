@@ -67,4 +67,4 @@ runs:
       shell: bash
       run: |
         chmod +x ${{ steps.info.outputs.path }}/databend-*
-        chmod +x ${{ steps.info.outputs.path }}/open-sharing
+        chmod +x ${{ steps.info.outputs.path }}/open-sharing || true
