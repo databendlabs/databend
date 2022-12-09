@@ -41,7 +41,7 @@ curl -sH "insert_sql:insert into test_csv format CSV" -F "upload=@/tmp/escape_no
 echo "select * from test_csv" | $MYSQL_CLIENT_CONNECT
 echo "truncate table test_csv" | $MYSQL_CLIENT_CONNECT
 
-curl -sH "insert_sql:insert into test_csv format CSV" -H "format_escape:'\\'" -F "upload=@/tmp/escape_slash.csv" -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" | grep -c "SUCCESS"
+curl -sH "insert_sql:insert into test_csv format CSV" -H "format_escape:'\\\'" -F "upload=@/tmp/escape_slash.csv" -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" | grep -c "SUCCESS"
 echo "select * from test_csv" | $MYSQL_CLIENT_CONNECT
 echo "truncate table test_csv" | $MYSQL_CLIENT_CONNECT
 
