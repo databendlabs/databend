@@ -36,7 +36,22 @@ pub struct GlobalServices;
 
 impl GlobalServices {
     pub async fn init(config: Config) -> Result<()> {
-        Global::init_production();
+        GlobalServices::init_with(config, true).await
+    }
+
+    pub async fn init_with(config: Config, prodcution: bool) -> Result<()> {
+        #[cfg(debug_assertions)]
+        if prodcution {
+            Global::init_production();
+        } else {
+            Global::init_testing();
+        }
+        #[cfg(not(debug_assertions))]
+        if prodcution {
+            Global::init_production();
+        } else {
+            unreachable!("release build must init with production global")
+        }
 
         // The order of initialization is very important
         GlobalConfig::init(config.clone())?;
