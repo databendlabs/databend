@@ -20,8 +20,7 @@ use common_arrow::arrow::datatypes::Field;
 use common_arrow::arrow::io::parquet::read::column_iter_to_arrays;
 use common_arrow::arrow::io::parquet::read::ArrayIter;
 use common_arrow::arrow::io::parquet::read::RowGroupDeserializer;
-use common_arrow::parquet::metadata::ColumnChunkMetaData;
-use common_arrow::parquet::metadata::RowGroupMetaData;
+use common_arrow::parquet::metadata::ColumnDescriptor;
 use common_arrow::parquet::read::BasicDecompressor;
 use common_arrow::parquet::read::PageMetaData;
 use common_arrow::parquet::read::PageReader;
@@ -30,21 +29,19 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_storage::ColumnLeaf;
 
+use crate::parquet_part::ColumnMeta;
+use crate::parquet_part::ParquetRowGroupPart;
 use crate::ParquetReader;
 
 impl ParquetReader {
     pub fn deserialize(
         &self,
-        rg: &RowGroupMetaData,
+        part: &ParquetRowGroupPart,
         chunks: Vec<(usize, Vec<u8>)>,
     ) -> Result<DataBlock> {
         let mut chunk_map: HashMap<usize, Vec<u8>> = chunks.into_iter().collect();
         let mut columns_array_iter = Vec::with_capacity(self.projected_schema.num_fields());
 
-        let column_metas = self
-            .get_column_metas(rg)
-            .into_iter()
-            .collect::<HashMap<_, _>>();
         let column_leaves = &self.projected_column_leaves.column_leaves;
         let mut cnt_map = Self::build_projection_count_map(column_leaves);
 
@@ -53,7 +50,7 @@ impl ParquetReader {
             let mut metas = Vec::with_capacity(indices.len());
             let mut chunks = Vec::with_capacity(indices.len());
             for index in indices {
-                let column_meta = column_metas[index];
+                let column_meta = &part.column_metas[*index];
                 let cnt = cnt_map.get_mut(index).unwrap();
                 *cnt -= 1;
                 let column_chunk = if cnt > &mut 0 {
@@ -61,26 +58,27 @@ impl ParquetReader {
                 } else {
                     chunk_map.remove(index).unwrap()
                 };
-                metas.push(column_meta);
+                let descriptor = &self.projected_column_descriptors[index];
+                metas.push((column_meta, descriptor));
                 chunks.push(column_chunk);
             }
             columns_array_iter.push(Self::to_array_iter(
                 metas,
                 chunks,
-                rg.num_rows(),
+                part.num_rows,
                 column_leaf.field.clone(),
             )?);
         }
 
-        let mut deserializer = RowGroupDeserializer::new(columns_array_iter, rg.num_rows(), None);
+        let mut deserializer = RowGroupDeserializer::new(columns_array_iter, part.num_rows, None);
 
         self.try_next_block(&mut deserializer)
     }
 
-    /// Combine multiple columns into one arrow array.
     /// The number of columns can be greater than 1 because the it may be a nested type.
+    /// Combine multiple columns into one arrow array.
     fn to_array_iter(
-        metas: Vec<&ColumnChunkMetaData>,
+        metas: Vec<(&ColumnMeta, &ColumnDescriptor)>,
         chunks: Vec<Vec<u8>>,
         rows: usize,
         field: Field,
@@ -88,17 +86,22 @@ impl ParquetReader {
         let (columns, types) = metas
             .iter()
             .zip(chunks.into_iter())
-            .map(|(&meta, chunk)| {
+            .map(|(&(meta, descriptor), chunk)| {
                 let pages = PageReader::new_with_page_meta(
                     std::io::Cursor::new(chunk),
-                    PageMetaData::from(meta),
+                    PageMetaData {
+                        column_start: meta.offset,
+                        num_values: meta.length as i64,
+                        compression: meta.compression.into(),
+                        descriptor: descriptor.descriptor.clone(),
+                    },
                     Arc::new(|_, _| true),
                     vec![],
                     usize::MAX,
                 );
                 (
                     BasicDecompressor::new(pages, vec![]),
-                    &meta.descriptor().descriptor.primitive_type,
+                    &descriptor.descriptor.primitive_type,
                 )
             })
             .unzip();

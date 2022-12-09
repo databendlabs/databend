@@ -15,7 +15,6 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use common_arrow::parquet::metadata::RowGroupMetaData;
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
 use common_catalog::plan::PartInfoPtr;
@@ -32,58 +31,23 @@ use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 use common_sql::evaluator::EvalNode;
 
+use crate::parquet_part::ParquetRowGroupPart;
 use crate::parquet_reader::IndexedChunk;
 use crate::parquet_reader::ParquetReader;
 use crate::parquet_source::State::Generated;
-use crate::ParquetPart;
 
 struct PrewhereData {
     data_block: DataBlock,
     filter: ColumnRef,
 }
 
-/// Hold the row groups and record which row group is needed to read.
-struct RowGroupState {
-    location: String,
-
-    row_groups: Vec<RowGroupMetaData>,
-    index: usize,
-}
-
-impl RowGroupState {
-    fn new(location: String, row_groups: Vec<RowGroupMetaData>) -> Self {
-        Self {
-            location,
-            row_groups,
-            index: 0,
-        }
-    }
-
-    #[inline]
-    fn get(&self) -> &RowGroupMetaData {
-        assert!(self.index < self.row_groups.len());
-        unsafe { self.row_groups.get_unchecked(self.index) }
-    }
-
-    #[inline]
-    fn advance(&mut self) {
-        self.index += 1;
-    }
-
-    #[inline]
-    fn finished(&self) -> bool {
-        self.index >= self.row_groups.len()
-    }
-}
-
 /// The states for [`ParquetSource`]. The states will recycle for each row group of a parquet file.
 enum State {
-    Prepare(Option<PartInfoPtr>), // prapare meta data of current part (parquet file).
-    ReadDataPrewhere(RowGroupState),
-    ReadDataRemain(RowGroupState, PrewhereData),
-    PrewhereFilter(RowGroupState, Vec<IndexedChunk>),
-    Deserialize(RowGroupState, Vec<IndexedChunk>, Option<PrewhereData>),
-    Generated(RowGroupState, DataBlock),
+    ReadDataPrewhere(Option<PartInfoPtr>),
+    ReadDataRemain(PartInfoPtr, PrewhereData),
+    PrewhereFilter(PartInfoPtr, Vec<IndexedChunk>),
+    Deserialize(PartInfoPtr, Vec<IndexedChunk>, Option<PrewhereData>),
+    Generated(Option<PartInfoPtr>, DataBlock),
     Finish,
 }
 
@@ -113,7 +77,7 @@ impl ParquetSource {
             ctx,
             output,
             scan_progress,
-            state: State::Prepare(None),
+            state: State::ReadDataPrewhere(None),
             output_schema,
             prewhere_reader,
             prewhere_filter,
@@ -126,9 +90,10 @@ impl ParquetSource {
         self.output_schema.clone()
     }
 
-    fn do_prewhere_filter(&mut self, rg: RowGroupState, chunks: Vec<IndexedChunk>) -> Result<()> {
+    fn do_prewhere_filter(&mut self, part: PartInfoPtr, chunks: Vec<IndexedChunk>) -> Result<()> {
+        let rg_part = ParquetRowGroupPart::from_part(&part)?;
         // deserialize prewhere data block first
-        let data_block = self.prewhere_reader.deserialize(rg.get(), chunks)?;
+        let data_block = self.prewhere_reader.deserialize(rg_part, chunks)?;
         if let Some(filter) = self.prewhere_filter.as_ref() {
             // do filter
             let res = filter
@@ -146,7 +111,10 @@ impl ParquetSource {
                 self.scan_progress.incr(&progress_values);
 
                 // Generate a empty block.
-                self.state = Generated(rg, DataBlock::empty_with_schema(self.output_schema()));
+                self.state = Generated(
+                    self.ctx.try_get_part(),
+                    DataBlock::empty_with_schema(self.output_schema()),
+                );
                 return Ok(());
             }
             if self.remain_reader.is_none() {
@@ -157,9 +125,10 @@ impl ParquetSource {
                 };
                 self.scan_progress.incr(&progress_values);
                 let block = DataBlock::filter_block(data_block, &filter)?;
-                self.state = State::Generated(rg, block.resort(self.output_schema())?);
+                self.state =
+                    Generated(self.ctx.try_get_part(), block.resort(self.output_schema())?);
             } else {
-                self.state = State::ReadDataRemain(rg, PrewhereData { data_block, filter });
+                self.state = State::ReadDataRemain(part, PrewhereData { data_block, filter });
             }
             Ok(())
         } else {
@@ -171,10 +140,11 @@ impl ParquetSource {
 
     fn do_deserialize(
         &mut self,
-        rg: RowGroupState,
+        part: PartInfoPtr,
         chunks: Vec<IndexedChunk>,
         prewhere_data: Option<PrewhereData>,
     ) -> Result<()> {
+        let rg_part = ParquetRowGroupPart::from_part(&part)?;
         let data_block = if let Some(PrewhereData {
             data_block: mut prewhere_blocks,
             filter,
@@ -183,7 +153,7 @@ impl ParquetSource {
             let block = if chunks.is_empty() {
                 prewhere_blocks
             } else if let Some(remain_reader) = self.remain_reader.as_ref() {
-                let remain_block = remain_reader.deserialize(rg.get(), chunks)?;
+                let remain_block = remain_reader.deserialize(rg_part, chunks)?;
                 for (col, field) in remain_block
                     .columns()
                     .iter()
@@ -205,7 +175,7 @@ impl ParquetSource {
         } else {
             // There is only prewhere reader.
             assert!(self.remain_reader.is_none());
-            let block = self.prewhere_reader.deserialize(rg.get(), chunks)?;
+            let block = self.prewhere_reader.deserialize(rg_part, chunks)?;
             let progress_values = ProgressValues {
                 rows: block.num_rows(),
                 bytes: block.memory_size(),
@@ -215,7 +185,10 @@ impl ParquetSource {
             block
         };
 
-        self.state = State::Generated(rg, data_block.resort(self.output_schema())?);
+        self.state = State::Generated(
+            self.ctx.try_get_part(),
+            data_block.resort(self.output_schema())?,
+        );
         Ok(())
     }
 }
@@ -231,10 +204,10 @@ impl Processor for ParquetSource {
     }
 
     fn event(&mut self) -> Result<Event> {
-        if matches!(self.state, State::Prepare(None)) {
+        if matches!(self.state, State::ReadDataPrewhere(None)) {
             self.state = match self.ctx.try_get_part() {
                 None => State::Finish,
-                Some(part) => State::Prepare(Some(part)),
+                Some(part) => State::ReadDataPrewhere(Some(part)),
             }
         }
 
@@ -252,18 +225,10 @@ impl Processor for ParquetSource {
         }
 
         if matches!(self.state, State::Generated(_, _)) {
-            if let Generated(mut rg, data_block) = std::mem::replace(&mut self.state, State::Finish)
-            {
-                rg.advance();
-                if rg.finished() {
-                    if let Some(part) = self.ctx.try_get_part() {
-                        self.state = State::Prepare(Some(part))
-                    }
-                    // otherwise the state is `State::Finish`.
-                } else {
-                    self.state = State::ReadDataPrewhere(rg)
+            if let Generated(part, data_block) = std::mem::replace(&mut self.state, State::Finish) {
+                if let Some(part) = part {
+                    self.state = State::ReadDataPrewhere(Some(part));
                 }
-
                 self.output.push_data(Ok(data_block));
                 return Ok(Event::NeedConsume);
             }
@@ -271,8 +236,7 @@ impl Processor for ParquetSource {
 
         match self.state {
             State::Finish => Ok(Event::Finished),
-            State::Prepare(_)
-            | State::ReadDataPrewhere(_)
+            State::ReadDataPrewhere(_)
             | State::ReadDataRemain(_, _)
             | State::PrewhereFilter(_, _)
             | State::Deserialize(_, _, _) => Ok(Event::Sync),
@@ -282,42 +246,32 @@ impl Processor for ParquetSource {
 
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Finish) {
-            State::Prepare(Some(part)) => {
-                // Read meta first;
-                let part = ParquetPart::from_part(&part)?;
-                let meta = ParquetReader::read_meta(&part.location)?;
-                self.state = State::ReadDataPrewhere(RowGroupState::new(
-                    part.location.clone(),
-                    meta.row_groups,
-                ));
-                Ok(())
-            }
-            State::ReadDataPrewhere(rg) => {
-                let chunks = self
-                    .prewhere_reader
-                    .sync_read_columns_data(&rg.location, rg.get())?;
+            State::ReadDataPrewhere(Some(part)) => {
+                let rg_part = ParquetRowGroupPart::from_part(&part)?;
+                let chunks = self.prewhere_reader.sync_read_columns_data(&rg_part)?;
                 if self.prewhere_filter.is_some() {
-                    self.state = State::PrewhereFilter(rg, chunks);
+                    self.state = State::PrewhereFilter(part, chunks);
                 } else {
                     // If there is no prewhere filter, it means there is only the prewhere reader.
                     assert!(self.remain_reader.is_none());
                     // So all the needed columns are read.
-                    self.state = State::Deserialize(rg, chunks, None)
+                    self.state = State::Deserialize(part, chunks, None)
                 }
                 Ok(())
             }
-            State::ReadDataRemain(rg, prewhere_data) => {
+            State::ReadDataRemain(part, prewhere_data) => {
                 if let Some(remain_reader) = self.remain_reader.as_ref() {
-                    let chunks = remain_reader.sync_read_columns_data(&rg.location, rg.get())?;
-                    self.state = State::Deserialize(rg, chunks, Some(prewhere_data));
+                    let rg_part = ParquetRowGroupPart::from_part(&part)?;
+                    let chunks = remain_reader.sync_read_columns_data(rg_part)?;
+                    self.state = State::Deserialize(part, chunks, Some(prewhere_data));
                     Ok(())
                 } else {
                     Err(ErrorCode::Internal("It's a bug. No remain reader"))
                 }
             }
-            State::PrewhereFilter(rg, chunks) => self.do_prewhere_filter(rg, chunks),
-            State::Deserialize(rg, chunks, prewhere_data) => {
-                self.do_deserialize(rg, chunks, prewhere_data)
+            State::PrewhereFilter(part, chunks) => self.do_prewhere_filter(part, chunks),
+            State::Deserialize(part, chunks, prewhere_data) => {
+                self.do_deserialize(part, chunks, prewhere_data)
             }
             _ => Err(ErrorCode::Internal("It's a bug.")),
         }

@@ -12,30 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::parquet::metadata::RowGroupMetaData;
 use common_exception::Result;
 use opendal::Object;
 
+use crate::parquet_part::ParquetRowGroupPart;
 use crate::ParquetReader;
 
 pub type IndexedChunk = (usize, Vec<u8>);
 
 impl ParquetReader {
     /// Read columns data of one row group.
-    pub fn sync_read_columns_data(
-        &self,
-        location: &str,
-        rg: &RowGroupMetaData,
-    ) -> Result<Vec<IndexedChunk>> {
-        let columns = self.get_column_metas(rg);
+    pub fn sync_read_columns_data(&self, part: &ParquetRowGroupPart) -> Result<Vec<IndexedChunk>> {
+        let mut chunks = Vec::with_capacity(self.columns_to_read.len());
 
-        let mut chunks = Vec::with_capacity(columns.len());
-
-        for (index, col) in columns {
-            let (offset, length) = col.byte_range();
+        for index in &self.columns_to_read {
+            let meta = &part.column_metas[*index];
             let op = self.operator.clone();
-            let chunk = Self::sync_read_column(op.object(location), offset, length)?;
-            chunks.push((index, chunk));
+            let chunk =
+                Self::sync_read_column(op.object(&part.location), meta.offset, meta.length)?;
+            chunks.push((*index, chunk));
         }
 
         Ok(chunks)

@@ -20,7 +20,7 @@ mod parquet_reader;
 mod parquet_source;
 mod table_function;
 
-pub use parquet_part::ParquetPart;
+pub use parquet_part::ParquetLocationPart;
 pub use parquet_reader::ParquetReader;
 pub use parquet_source::ParquetSource;
 pub use table_function::ParquetTable;

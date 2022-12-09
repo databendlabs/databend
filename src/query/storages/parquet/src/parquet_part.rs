@@ -18,24 +18,25 @@ use std::hash::Hash;
 use std::hash::Hasher;
 use std::sync::Arc;
 
+use common_arrow::parquet::compression::Compression as ParquetCompression;
 use common_catalog::plan::PartInfo;
 use common_catalog::plan::PartInfoPtr;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq)]
-pub struct ParquetPart {
+pub struct ParquetLocationPart {
     pub location: String,
 }
 
-#[typetag::serde(name = "parquet")]
-impl PartInfo for ParquetPart {
+#[typetag::serde(name = "parquet_location")]
+impl PartInfo for ParquetLocationPart {
     fn as_any(&self) -> &dyn Any {
         self
     }
 
     fn equals(&self, info: &Box<dyn PartInfo>) -> bool {
-        match info.as_any().downcast_ref::<ParquetPart>() {
+        match info.as_any().downcast_ref::<ParquetLocationPart>() {
             None => false,
             Some(other) => self == other,
         }
@@ -48,16 +49,115 @@ impl PartInfo for ParquetPart {
     }
 }
 
-impl ParquetPart {
+impl ParquetLocationPart {
     pub fn create(location: String) -> Arc<Box<dyn PartInfo>> {
-        Arc::new(Box::new(ParquetPart { location }))
+        Arc::new(Box::new(ParquetLocationPart { location }))
     }
 
-    pub fn from_part(info: &PartInfoPtr) -> Result<&ParquetPart> {
-        match info.as_any().downcast_ref::<ParquetPart>() {
+    pub fn from_part(info: &PartInfoPtr) -> Result<&ParquetLocationPart> {
+        match info.as_any().downcast_ref::<ParquetLocationPart>() {
             Some(part_ref) => Ok(part_ref),
             None => Err(ErrorCode::Internal(
-                "Cannot downcast from PartInfo to FusePartInfo.",
+                "Cannot downcast from PartInfo to ParquetLocationPart.",
+            )),
+        }
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Eq, PartialEq, Hash, Clone, Copy)]
+pub enum Compression {
+    Uncompressed,
+    Snappy,
+    Gzip,
+    Lzo,
+    Brotli,
+    Lz4,
+    Zstd,
+    Lz4Raw,
+}
+
+impl From<Compression> for ParquetCompression {
+    fn from(value: Compression) -> Self {
+        match value {
+            Compression::Uncompressed => ParquetCompression::Uncompressed,
+            Compression::Snappy => ParquetCompression::Snappy,
+            Compression::Gzip => ParquetCompression::Gzip,
+            Compression::Lzo => ParquetCompression::Lzo,
+            Compression::Brotli => ParquetCompression::Brotli,
+            Compression::Lz4 => ParquetCompression::Lz4,
+            Compression::Zstd => ParquetCompression::Zstd,
+            Compression::Lz4Raw => ParquetCompression::Lz4Raw,
+        }
+    }
+}
+
+impl Into<Compression> for ParquetCompression {
+    fn into(self) -> Compression {
+        match self {
+            ParquetCompression::Uncompressed => Compression::Uncompressed,
+            ParquetCompression::Snappy => Compression::Snappy,
+            ParquetCompression::Gzip => Compression::Gzip,
+            ParquetCompression::Lzo => Compression::Lzo,
+            ParquetCompression::Brotli => Compression::Brotli,
+            ParquetCompression::Lz4 => Compression::Lz4,
+            ParquetCompression::Zstd => Compression::Zstd,
+            ParquetCompression::Lz4Raw => Compression::Lz4Raw,
+        }
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+pub struct ColumnMeta {
+    pub offset: u64,
+    pub length: u64,
+    pub compression: Compression,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+pub struct ParquetRowGroupPart {
+    pub location: String,
+    pub num_rows: usize,
+    pub column_metas: Vec<ColumnMeta>,
+}
+
+#[typetag::serde(name = "parquet_row_group")]
+impl PartInfo for ParquetRowGroupPart {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn equals(&self, info: &Box<dyn PartInfo>) -> bool {
+        match info.as_any().downcast_ref::<ParquetRowGroupPart>() {
+            None => false,
+            Some(other) => self == other,
+        }
+    }
+
+    fn hash(&self) -> u64 {
+        let mut s = DefaultHasher::new();
+        self.location.hash(&mut s);
+        s.finish()
+    }
+}
+
+impl ParquetRowGroupPart {
+    pub fn create(
+        location: String,
+        num_rows: usize,
+        column_metas: Vec<ColumnMeta>,
+    ) -> Arc<Box<dyn PartInfo>> {
+        Arc::new(Box::new(ParquetRowGroupPart {
+            location,
+            num_rows,
+            column_metas,
+        }))
+    }
+
+    pub fn from_part(info: &PartInfoPtr) -> Result<&ParquetRowGroupPart> {
+        match info.as_any().downcast_ref::<ParquetRowGroupPart>() {
+            Some(part_ref) => Ok(part_ref),
+            None => Err(ErrorCode::Internal(
+                "Cannot downcast from PartInfo to ParquetRowGroupPart.",
             )),
         }
     }

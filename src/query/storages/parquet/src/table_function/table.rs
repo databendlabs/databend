@@ -37,7 +37,7 @@ use common_pipeline_core::Pipeline;
 use opendal::Operator;
 
 use super::TableContext;
-use crate::ParquetPart;
+use crate::ParquetLocationPart;
 use crate::ParquetReader;
 
 pub struct ParquetTable {
@@ -180,7 +180,7 @@ impl Table for ParquetTable {
                 PartitionsShuffleKind::Mod,
                 self.file_locations
                     .iter()
-                    .map(|location| ParquetPart::create(location.clone()))
+                    .map(|location| ParquetLocationPart::create(location.clone()))
                     .collect(),
             ),
         ))

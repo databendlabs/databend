@@ -15,6 +15,8 @@
 use std::sync::Arc;
 
 use common_catalog::plan::DataSourcePlan;
+use common_catalog::plan::Partitions;
+use common_catalog::plan::PartitionsShuffleKind;
 use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
 use common_config::GlobalConfig;
@@ -26,6 +28,9 @@ use common_sql::evaluator::Evaluator;
 
 use super::ParquetTable;
 use super::TableContext;
+use crate::parquet_part::ColumnMeta;
+use crate::parquet_part::ParquetRowGroupPart;
+use crate::ParquetLocationPart;
 use crate::ParquetReader;
 use crate::ParquetSource;
 
@@ -111,6 +116,47 @@ impl ParquetTable {
         plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
+        // Split one partition from one parquet file into multiple row groups.
+        let locations = plan
+            .parts
+            .partitions
+            .iter()
+            .map(|part| {
+                let part = ParquetLocationPart::from_part(part).unwrap();
+                part.location.clone()
+            })
+            .collect::<Vec<_>>();
+        let ctx_ref = ctx.clone();
+        pipeline.set_on_init(move || {
+            let mut partitions = Vec::with_capacity(locations.len());
+            for location in &locations {
+                let file_meta = ParquetReader::read_meta(&location)?;
+                for rg in &file_meta.row_groups {
+                    let column_metas = rg
+                        .columns()
+                        .iter()
+                        .map(|c| {
+                            let (offset, length) = c.byte_range();
+                            ColumnMeta {
+                                offset,
+                                length,
+                                compression: c.compression().into(),
+                            }
+                        })
+                        .collect();
+
+                    partitions.push(ParquetRowGroupPart::create(
+                        location.clone(),
+                        rg.num_rows(),
+                        column_metas,
+                    ))
+                }
+            }
+            ctx_ref
+                .try_set_partitions(Partitions::create(PartitionsShuffleKind::Mod, partitions))?;
+            Ok(())
+        });
+
         let columns_to_read =
             PushDownInfo::projection_of_push_downs(&plan.schema(), &plan.push_downs);
         let max_io_requests = self.adjust_io_request(&ctx, columns_to_read.len())?;

@@ -15,9 +15,7 @@
 use std::fs::File;
 
 use common_arrow::arrow::io::parquet::read as pread;
-use common_arrow::parquet::metadata::ColumnChunkMetaData;
 use common_arrow::parquet::metadata::FileMetaData;
-use common_arrow::parquet::metadata::RowGroupMetaData;
 use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
@@ -53,23 +51,5 @@ impl ParquetReader {
             .collect::<Vec<_>>();
 
         Ok(DataSchema::new(field))
-    }
-
-    pub fn get_column_metas<'a>(
-        &self,
-        rg: &'a RowGroupMetaData,
-    ) -> Vec<(usize, &'a ColumnChunkMetaData)> {
-        let columns = rg.columns();
-        let column_leaves = &self.projected_column_leaves.column_leaves;
-        let mut column_metas =
-            Vec::with_capacity(column_leaves.iter().map(|col| col.leaf_ids.len()).sum());
-        for column in column_leaves {
-            let indices = &column.leaf_ids;
-            for index in indices {
-                let column_meta = &columns[*index];
-                column_metas.push((*index, column_meta));
-            }
-        }
-        column_metas
     }
 }
