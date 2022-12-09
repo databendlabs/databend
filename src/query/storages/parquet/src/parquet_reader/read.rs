@@ -26,7 +26,7 @@ impl ParquetReader {
         let mut chunks = Vec::with_capacity(self.columns_to_read.len());
 
         for index in &self.columns_to_read {
-            let meta = &part.column_metas[*index];
+            let meta = &part.column_metas[index];
             let op = self.operator.clone();
             let chunk =
                 Self::sync_read_column(op.object(&part.location), meta.offset, meta.length)?;

@@ -248,7 +248,7 @@ impl Processor for ParquetSource {
         match std::mem::replace(&mut self.state, State::Finish) {
             State::ReadDataPrewhere(Some(part)) => {
                 let rg_part = ParquetRowGroupPart::from_part(&part)?;
-                let chunks = self.prewhere_reader.sync_read_columns_data(&rg_part)?;
+                let chunks = self.prewhere_reader.sync_read_columns_data(rg_part)?;
                 if self.prewhere_filter.is_some() {
                     self.state = State::PrewhereFilter(part, chunks);
                 } else {

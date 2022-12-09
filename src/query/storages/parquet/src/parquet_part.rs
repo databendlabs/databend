@@ -14,6 +14,7 @@
 
 use std::any::Any;
 use std::collections::hash_map::DefaultHasher;
+use std::collections::HashMap;
 use std::hash::Hash;
 use std::hash::Hasher;
 use std::sync::Arc;
@@ -91,9 +92,9 @@ impl From<Compression> for ParquetCompression {
     }
 }
 
-impl Into<Compression> for ParquetCompression {
-    fn into(self) -> Compression {
-        match self {
+impl From<ParquetCompression> for Compression {
+    fn from(value: ParquetCompression) -> Self {
+        match value {
             ParquetCompression::Uncompressed => Compression::Uncompressed,
             ParquetCompression::Snappy => Compression::Snappy,
             ParquetCompression::Gzip => Compression::Gzip,
@@ -117,7 +118,7 @@ pub struct ColumnMeta {
 pub struct ParquetRowGroupPart {
     pub location: String,
     pub num_rows: usize,
-    pub column_metas: Vec<ColumnMeta>,
+    pub column_metas: HashMap<usize, ColumnMeta>,
 }
 
 #[typetag::serde(name = "parquet_row_group")]
@@ -144,7 +145,7 @@ impl ParquetRowGroupPart {
     pub fn create(
         location: String,
         num_rows: usize,
-        column_metas: Vec<ColumnMeta>,
+        column_metas: HashMap<usize, ColumnMeta>,
     ) -> Arc<Box<dyn PartInfo>> {
         Arc::new(Box::new(ParquetRowGroupPart {
             location,

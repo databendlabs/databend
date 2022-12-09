@@ -12,6 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_catalog::plan::DataSourcePlan;
@@ -126,24 +127,33 @@ impl ParquetTable {
                 part.location.clone()
             })
             .collect::<Vec<_>>();
+
+        let columns_to_read =
+            PushDownInfo::projection_of_push_downs(&plan.source_info.schema(), &plan.push_downs);
+        let max_io_requests = self.adjust_io_request(&ctx, columns_to_read.len())?;
         let ctx_ref = ctx.clone();
+        // `dummy_reader` is only used for prune columns in row groups.
+        let dummy_reader = ParquetReader::create(
+            self.operator.clone(),
+            plan.source_info.schema(),
+            columns_to_read,
+        )?;
         pipeline.set_on_init(move || {
             let mut partitions = Vec::with_capacity(locations.len());
             for location in &locations {
-                let file_meta = ParquetReader::read_meta(&location)?;
+                let file_meta = ParquetReader::read_meta(location)?;
                 for rg in &file_meta.row_groups {
-                    let column_metas = rg
-                        .columns()
-                        .iter()
-                        .map(|c| {
-                            let (offset, length) = c.byte_range();
-                            ColumnMeta {
-                                offset,
-                                length,
-                                compression: c.compression().into(),
-                            }
-                        })
-                        .collect();
+                    let mut column_metas =
+                        HashMap::with_capacity(dummy_reader.columns_to_read().len());
+                    for index in dummy_reader.columns_to_read() {
+                        let c = &rg.columns()[*index];
+                        let (offset, length) = c.byte_range();
+                        column_metas.insert(*index, ColumnMeta {
+                            offset,
+                            length,
+                            compression: c.compression().into(),
+                        });
+                    }
 
                     partitions.push(ParquetRowGroupPart::create(
                         location.clone(),
@@ -157,17 +167,13 @@ impl ParquetTable {
             Ok(())
         });
 
-        let columns_to_read =
-            PushDownInfo::projection_of_push_downs(&plan.schema(), &plan.push_downs);
-        let max_io_requests = self.adjust_io_request(&ctx, columns_to_read.len())?;
-
         // If there is a `PrewhereInfo`, the final output should be `PrehwereInfo.output_columns`.
         // `PrewhereInfo.output_columns` should be a subset of `PushDownInfo.projection`.
         let output_projection = match PushDownInfo::prewhere_of_push_downs(&plan.push_downs) {
             None => {
                 PushDownInfo::projection_of_push_downs(&self.table_info.schema(), &plan.push_downs)
             }
-            Some(v) => v.output_columns.clone(),
+            Some(v) => v.output_columns,
         };
         let output_schema = Arc::new(output_projection.project_schema(&plan.source_info.schema()));
 

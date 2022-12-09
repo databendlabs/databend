@@ -28,6 +28,10 @@ use common_storage::ColumnLeaves;
 use opendal::Operator;
 pub use read::IndexedChunk;
 
+/// The reader to parquet files with a projected schema.
+///
+/// **ALERT**: dictionary type is not supported yet.
+/// If there are dictionary pages in the parquet file, the reading process may fail.
 #[derive(Clone)]
 pub struct ParquetReader {
     operator: Operator,
@@ -62,12 +66,7 @@ impl ParquetReader {
         let schema_descriptors = to_parquet_schema(&arrow_schema)?;
 
         // Project schema
-        let projected_schema = match projection {
-            Projection::Columns(ref indices) => DataSchemaRef::new(schema.project(indices)),
-            Projection::InnerColumns(ref path_indices) => {
-                DataSchemaRef::new(schema.inner_project(path_indices))
-            }
-        };
+        let projected_schema = DataSchemaRef::new(projection.project_schema(&schema));
         // Project column leaves
         let projected_column_leaves = ColumnLeaves {
             column_leaves: projection
@@ -100,5 +99,9 @@ impl ParquetReader {
 
     pub fn schema(&self) -> DataSchemaRef {
         self.projected_schema.clone()
+    }
+
+    pub fn columns_to_read(&self) -> &HashSet<usize> {
+        &self.columns_to_read
     }
 }
