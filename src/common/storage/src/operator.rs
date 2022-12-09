@@ -333,7 +333,7 @@ fn init_redis_operator(v: &StorageRedisConfig) -> Result<Operator> {
 #[derive(Clone, Debug)]
 pub struct DataOperator {
     operator: Operator,
-    params: StorageParams,
+    _params: StorageParams,
 }
 
 impl Deref for DataOperator {
@@ -347,22 +347,9 @@ impl Deref for DataOperator {
 static DATA_OPERATOR: OnceCell<Singleton<DataOperator>> = OnceCell::new();
 
 impl DataOperator {
-    /// Create a new persist operator.
-    pub fn new(op: Operator, params: StorageParams) -> Self {
-        Self {
-            operator: op,
-            params,
-        }
-    }
-
     /// Get the operator from PersistOperator
     pub fn operator(&self) -> Operator {
         self.operator.clone()
-    }
-
-    /// Get the params from PersistOperator
-    pub fn params(&self) -> &StorageParams {
-        &self.params
     }
 
     pub async fn init(
@@ -403,7 +390,7 @@ impl DataOperator {
 
         Ok(DataOperator {
             operator,
-            params: sp.clone(),
+            _params: sp.clone(),
         })
     }
 
@@ -412,10 +399,6 @@ impl DataOperator {
             None => panic!("StorageOperator is not init"),
             Some(storage_operator) => storage_operator.get(),
         }
-    }
-
-    pub fn get_storage_params(&self) -> StorageParams {
-        self.params.clone()
     }
 }
 
