@@ -2383,7 +2383,6 @@ dependencies = [
  "common-pipeline-core",
  "common-sql",
  "common-storage",
- "futures",
  "glob",
  "opendal",
  "serde",
