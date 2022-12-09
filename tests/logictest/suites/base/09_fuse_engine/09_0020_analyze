@@ -34,7 +34,7 @@ select * from fuse_statistic('db_09_0020', 't');
 
 
 statement ok
-optimize table `t` statistic;
+analyze table `t`;
 
 statement query T
 select * from fuse_statistic('db_09_0020', 't');
@@ -76,7 +76,7 @@ select * from fuse_statistic('db_09_0020', 't');
 (0,3);
 
 statement ok
-optimize table `t` statistic;
+analyze table `t`;
 
 statement query T
 select * from fuse_statistic('db_09_0020', 't');
@@ -100,7 +100,7 @@ select * from fuse_statistic('db_09_0020', 't');
 (0,6);
 
 statement ok
-optimize table `t` statistic;
+analyze table `t`;
 
 statement query T
 select * from fuse_statistic('db_09_0020', 't');
@@ -118,7 +118,7 @@ select * from fuse_statistic('db_09_0020', 't');
 (0,3);
 
 statement ok
-optimize table `t` statistic;
+analyze table `t`;
 
 statement query T
 select * from fuse_statistic('db_09_0020', 't');

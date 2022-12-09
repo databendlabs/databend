@@ -156,6 +156,10 @@ impl InterpreterFactory {
             Plan::OptimizeTable(optimize_table) => Ok(Arc::new(
                 OptimizeTableInterpreter::try_create(ctx, *optimize_table.clone())?,
             )),
+            Plan::AnalyzeTable(analyze_table) => Ok(Arc::new(AnalyzeTableInterpreter::try_create(
+                ctx,
+                *analyze_table.clone(),
+            )?)),
             Plan::ExistsTable(exists_table) => Ok(Arc::new(ExistsTableInterpreter::try_create(
                 ctx,
                 *exists_table.clone(),
