@@ -120,9 +120,7 @@ impl AggregateFunction for AggregateApproxCountDistinctFunction {
     fn accumulate_row(&self, place: StateAddr, columns: &[ColumnRef], _row: usize) -> Result<()> {
         let state = place.get::<AggregateApproxCountDistinctState>();
         for column in columns {
-            column.to_values().iter().for_each(|value| {
-                state.hll.push(value);
-            });
+            (0..column.len()).for_each(|i| state.hll.push(&column.get(i)));
         }
         Ok(())
     }

@@ -138,12 +138,12 @@ impl FormatOptionChecker for TSVFormatOptionChecker {
         "TSV".to_string()
     }
 
-    fn check_quote(&self, quote: &mut String) -> Result<()> {
-        check_quote(quote, "\'")
-    }
-
     fn check_escape(&self, escape: &mut String) -> Result<()> {
         check_escape(escape, "\\")
+    }
+
+    fn check_quote(&self, quote: &mut String) -> Result<()> {
+        check_quote(quote, "\'")
     }
 
     fn check_record_delimiter(&self, record_delimiter: &mut String) -> Result<()> {
@@ -222,7 +222,7 @@ pub fn check_quote(option: &mut String, default: &str) -> Result<()> {
 pub fn check_field_delimiter(option: &mut String, default: &str) -> Result<()> {
     if option.is_empty() {
         *option = default.to_string()
-    } else if option.len() > 1 {
+    } else if option.as_bytes().len() > 1 {
         return Err(ErrorCode::InvalidArgument(
             "field_delimiter can only contain one char",
         ));

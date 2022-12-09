@@ -35,6 +35,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bf6ccdb167abbf410dcb915cabd428929d7f6a04980b54a11f26a39f1c7f7107"
 dependencies = [
  "cfg-if",
+ "const-random",
  "getrandom 0.2.7",
  "once_cell",
  "version_check",
@@ -165,9 +166,9 @@ dependencies = [
 [[package]]
 name = "arrow2"
 version = "0.14.2"
-source = "git+https://github.com/jorgecarleitao/arrow2?rev=95e117d#95e117d3f0bb69c52617d2e0b1a9564492b063a0"
+source = "git+https://github.com/jorgecarleitao/arrow2?rev=1da33ac#1da33acb37ebde7d95226117ec9df781a3a8d4e0"
 dependencies = [
- "ahash 0.7.6",
+ "ahash 0.8.2",
  "arrow-format",
  "base64",
  "bytemuck",
@@ -180,6 +181,7 @@ dependencies = [
  "fallible-streaming-iterator",
  "foreign_vec",
  "futures",
+ "getrandom 0.2.7",
  "hash_hasher",
  "hashbrown 0.12.3",
  "indexmap",
@@ -2665,6 +2667,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "722e23542a15cea1f65d4a1419c4cfd7a26706c70871a13a04238ca3f40f1661"
 
 [[package]]
+name = "const-random"
+version = "0.1.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "368a7a772ead6ce7e1de82bfb04c485f3db8ec744f72925af5735e29a22cc18e"
+dependencies = [
+ "const-random-macro",
+ "proc-macro-hack",
+]
+
+[[package]]
+name = "const-random-macro"
+version = "0.1.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9d7d6ab3c3a2282db210df5f02c4dab6e0a7057af0fb7ebd4070f30fe05c0ddb"
+dependencies = [
+ "getrandom 0.2.7",
+ "once_cell",
+ "proc-macro-hack",
+ "tiny-keccak",
+]
+
+[[package]]
 name = "constant_time_eq"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4029,8 +4053,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4eb1a864a501629691edf6c15a593b7a51eebaa1e8468e9ddc623de7c9b58ec6"
 dependencies = [
  "cfg-if",
+ "js-sys",
  "libc",
  "wasi 0.11.0+wasi-snapshot-preview1",
+ "wasm-bindgen",
 ]
 
 [[package]]
@@ -4709,9 +4735,9 @@ dependencies = [
 
 [[package]]
 name = "json-deserializer"
-version = "0.4.2"
+version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d784d2d481d0bace3450572391d6076dd6d10c66c0ebc1a0be037b3b420664bd"
+checksum = "5f63b421e16eb4100beb677af56f0b4f3a4f08bab74ef2af079ce5bb92c2683f"
 dependencies = [
  "indexmap",
 ]
@@ -6086,9 +6112,9 @@ dependencies = [
 
 [[package]]
 name = "parquet2"
-version = "0.16.3"
+version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7752b1a7d61b278f36820ba05557a2a8bfcb17f3559254577ef447beda0c4975"
+checksum = "e0bbada33c3674484db647d889a581ab1105cafb871ba77be785af2cc44a8747"
 dependencies = [
  "async-stream",
  "brotli",
@@ -8207,6 +8233,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "42657b1a6f4d817cda8e7a0ace261fe0cc946cf3a80314390b22cc61ae080792"
 
 [[package]]
+name = "tiny-keccak"
+version = "2.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2c9d3793400a45f954c52e73d068316d76b6f4e36977e3fcebb13a2721e80237"
+dependencies = [
+ "crunchy",
+]
+
+[[package]]
 name = "tinytemplate"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9278,8 +9313,8 @@ checksum = "d2d7d3948613f75c98fd9328cfdcc45acc4d360655289d0a7d4ec931392200a3"
 
 [[package]]
 name = "xorfilter-rs"
-version = "0.5.1"
-source = "git+https://github.com/datafuse-extras/xorfilter?tag=databend-alpha.1#008ca3ccdf8b13b2b123749d56d6179c4aac33f1"
+version = "0.5.2"
+source = "git+https://github.com/datafuse-extras/xorfilter?tag=databend-alpha.4#3bd8eb6b5b5e134703cc3b2807dfe43a763aa886"
 dependencies = [
  "cbordata",
 ]

@@ -26,7 +26,7 @@ use crate::io::SegmentsIO;
 use crate::FuseTable;
 
 impl FuseTable {
-    pub async fn do_statistic(&self, ctx: &Arc<dyn TableContext>) -> Result<()> {
+    pub async fn do_analyze(&self, ctx: &Arc<dyn TableContext>) -> Result<()> {
         // 1. Read table snapshot.
         let r = self.read_table_snapshot().await;
         let snapshot_opt = match r {
