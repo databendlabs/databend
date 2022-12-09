@@ -19,6 +19,7 @@ use common_datavalues::ColumnRef;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataTypeImpl;
+use common_datavalues::DataValue;
 use common_datavalues::Series;
 use common_datavalues::SeriesFrom;
 use common_datavalues::StructColumn;
@@ -102,15 +103,17 @@ fn test_column_statistic() -> Result<()> {
 
     (0..5).for_each(|i| {
         let stats = col_stats.get(&(i as u32)).unwrap();
+        let column = &sample_cols[i];
+        let values: Vec<DataValue> = (0..column.len()).map(|i| column.get(i)).collect();
         assert_eq!(
             &stats.min,
-            sample_cols[i].to_values().iter().min().unwrap(),
+            values.iter().min().unwrap(),
             "checking min of col {}",
             i
         );
         assert_eq!(
             &stats.max,
-            sample_cols[i].to_values().iter().max().unwrap(),
+            values.iter().max().unwrap(),
             "checking max of col {}",
             i
         );

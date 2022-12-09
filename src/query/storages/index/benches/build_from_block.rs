@@ -44,17 +44,19 @@ fn bench_u64(c: &mut Criterion) {
     let column = block.try_column_by_name("a").unwrap();
 
     let mut builder = Xor8Builder::create();
-    builder.add_keys(&column.to_values());
+    let values: Vec<DataValue> = (0..column.len()).map(|i| column.get(i)).collect();
+    builder.add_keys(&values);
     let filter = builder.build().unwrap();
 
-    for key in column.to_values() {
-        assert!(filter.contains(&key), "key {} present", key);
+    for key in &values {
+        assert!(filter.contains(key), "key {} present", key);
     }
 
     c.bench_function("xor8_filter_u64_1m_rows_build_from_column_to_values", |b| {
         b.iter(|| {
             let mut builder = Xor8Builder::create();
-            builder.add_keys(&criterion::black_box(column.to_values()));
+            let values: Vec<DataValue> = (0..column.len()).map(|i| column.get(i)).collect();
+            builder.add_keys(&criterion::black_box(values));
             let _filter = criterion::black_box(builder.build().unwrap());
         })
     });
@@ -65,10 +67,11 @@ fn bench_string(c: &mut Criterion) {
     let column = block.try_column_by_name("a").unwrap();
 
     let mut builder = Xor8Builder::create();
-    builder.add_keys(&column.to_values());
+    let values: Vec<DataValue> = (0..column.len()).map(|i| column.get(i)).collect();
+    builder.add_keys(&values);
     let filter = builder.build().unwrap();
 
-    for key in column.to_values() {
+    for key in values {
         assert!(filter.contains(&key), "key {} present", key);
     }
 
@@ -77,7 +80,8 @@ fn bench_string(c: &mut Criterion) {
         |b| {
             b.iter(|| {
                 let mut builder = Xor8Builder::create();
-                builder.add_keys(&criterion::black_box(column.to_values()));
+                let values: Vec<DataValue> = (0..column.len()).map(|i| column.get(i)).collect();
+                builder.add_keys(&criterion::black_box(values));
                 let _filter = criterion::black_box(builder.build().unwrap());
             })
         },
