@@ -37,6 +37,7 @@ pub struct InputFormatTSV {}
 impl InputFormatTSV {
     #[allow(clippy::too_many_arguments)]
     fn read_row(
+        field_delimiter: u8,
         field_decoder: &FieldDecoderTSV,
         buf: &[u8],
         deserializers: &mut Vec<common_datavalues::TypeDeserializerImpl>,
@@ -53,7 +54,7 @@ impl InputFormatTSV {
         let mut err_msg = None;
         let buf_len = buf.len();
         while pos <= buf_len {
-            if pos == buf_len || buf[pos] == b'\t' {
+            if pos == buf_len || buf[pos] == field_delimiter {
                 let col_data = &buf[field_start..pos];
                 if col_data.is_empty() {
                     deserializers[column_index].de_default();
@@ -156,6 +157,7 @@ impl InputFormatTextBase for InputFormatTSV {
         for (i, end) in batch.row_ends.iter().enumerate() {
             let buf = &batch.data[start..*end]; // include \n
             Self::read_row(
+                builder.ctx.field_delimiter,
                 field_decoder,
                 buf,
                 columns,
