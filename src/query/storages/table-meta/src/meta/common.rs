@@ -85,6 +85,9 @@ where Self: Sized
 pub enum Compression {
     Lz4,
     Lz4Raw,
+    Snappy,
+    Zstd,
+    Gzip
 }
 
 impl Compression {
