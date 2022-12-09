@@ -18,7 +18,7 @@ use common_expression::types::NumberDataType;
 use common_expression::DataField;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
-use common_expression::SchemaDataType;
+use common_expression::TableDataType;
 use common_meta_types::UserStageInfo;
 
 #[derive(PartialEq, Eq, Clone, Debug)]

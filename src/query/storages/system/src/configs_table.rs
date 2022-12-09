@@ -25,7 +25,7 @@ use common_expression::Chunk;
 use common_expression::Column;
 use common_expression::DataField;
 use common_expression::DataSchemaRefExt;
-use common_expression::SchemaDataType;
+use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchema;
 use common_expression::TableSchemaRef;
@@ -132,10 +132,10 @@ impl SyncSystemTable for ConfigsTable {
 impl ConfigsTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
         let schema = TableSchemaRefExt::create(vec![
-            TableField::new("group", SchemaDataType::String),
-            TableField::new("name", SchemaDataType::String),
-            TableField::new("value", SchemaDataType::String),
-            TableField::new("description", SchemaDataType::String),
+            TableField::new("group", TableDataType::String),
+            TableField::new("name", TableDataType::String),
+            TableField::new("value", TableDataType::String),
+            TableField::new("description", TableDataType::String),
         ]);
 
         let table_info = TableInfo {

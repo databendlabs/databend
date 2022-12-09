@@ -22,7 +22,7 @@ use common_expression::Column;
 use common_expression::DataField;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
-use common_expression::SchemaDataType;
+use common_expression::TableDataType;
 use common_expression::Value;
 
 use crate::servers::federated_helper::FederatedHelper;
@@ -50,12 +50,12 @@ impl MySQLFederated {
     fn select_variable_block(name: &str, value: &str) -> Option<(DataSchemaRef, Chunk)> {
         let schema = DataSchemaRefExt::create(vec![DataField::new(
             &format!("@@{}", name),
-            SchemaDataType::String,
+            TableDataType::String,
         )]);
         let chunk = Chunk::create(
             vec![(
                 Value::Column(Column::from_data(vec![value.as_bytes().to_vec()])),
-                SchemaDataType::String,
+                TableDataType::String,
             )],
             1,
         );
@@ -67,11 +67,11 @@ impl MySQLFederated {
     // |function_name|
     // |value|
     fn select_function_block(name: &str, value: &str) -> Option<(DataSchemaRef, Chunk)> {
-        let schema = DataSchemaRefExt::create(vec![DataField::new(name, SchemaDataType::String)]);
+        let schema = DataSchemaRefExt::create(vec![DataField::new(name, TableDataType::String)]);
         let chunk = Chunk::create(
             vec![(
                 Value::Column(Column::from_data(vec![value.as_bytes().to_vec()])),
-                SchemaDataType::String,
+                TableDataType::String,
             )],
             1,
         );
@@ -84,18 +84,18 @@ impl MySQLFederated {
     // | xx          | yy   |
     fn show_variables_block(name: &str, value: &str) -> Option<(DataSchemaRef, Chunk)> {
         let schema = DataSchemaRefExt::create(vec![
-            DataField::new("Variable_name", SchemaDataType::String),
-            DataField::new("Value", SchemaDataType::String),
+            DataField::new("Variable_name", TableDataType::String),
+            DataField::new("Value", TableDataType::String),
         ]);
         let chunk = Chunk::create(
             vec![
                 (
                     Value::Column(Column::from_data(vec![name.as_bytes().to_vec()])),
-                    SchemaDataType::String,
+                    TableDataType::String,
                 ),
                 (
                     Value::Column(Column::from_data(vec![value.as_bytes().to_vec()])),
-                    SchemaDataType::String,
+                    TableDataType::String,
                 ),
             ],
             1,
@@ -136,7 +136,7 @@ impl MySQLFederated {
                     // @@cc as yy:
                     // var_as is 'yy' as the field name.
                     let var_as = vars_as[1];
-                    fields.push(DataField::new(var_as, SchemaDataType::String));
+                    fields.push(DataField::new(var_as, TableDataType::String));
 
                     // var is 'cc'.
                     let var = vars_as[0];
@@ -150,7 +150,7 @@ impl MySQLFederated {
                     // var is 'aa'
                     fields.push(DataField::new(
                         &format!("@@{}", var),
-                        SchemaDataType::String,
+                        TableDataType::String,
                     ));
 
                     let value = default_map.get(var).unwrap_or(&"0").to_string();

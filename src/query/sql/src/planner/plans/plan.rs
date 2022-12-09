@@ -21,7 +21,7 @@ use common_expression::DataField;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
-use common_expression::SchemaDataType;
+use common_expression::TableDataType;
 
 use crate::optimizer::SExpr;
 use crate::plans::copy_v2::CopyPlanV2;

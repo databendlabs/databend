@@ -31,7 +31,7 @@ use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::DataField;
 use common_expression::DataSchemaRefExt;
-use common_expression::SchemaDataType;
+use common_expression::TableDataType;
 use common_meta_app::schema::DatabaseMeta;
 use common_meta_app::share::ShareNameIdent;
 

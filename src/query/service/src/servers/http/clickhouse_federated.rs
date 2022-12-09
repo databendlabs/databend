@@ -18,7 +18,7 @@ use common_expression::Column;
 use common_expression::DataField;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
-use common_expression::SchemaDataType;
+use common_expression::TableDataType;
 use common_expression::Value;
 use once_cell::sync::Lazy;
 use regex::Regex;
@@ -38,11 +38,11 @@ impl ClickHouseFederated {
     // |function_name()|
     // |value|
     fn select_function_block(name: &str, value: &str) -> Option<(DataSchemaRef, Chunk)> {
-        let schema = DataSchemaRefExt::create(vec![DataField::new(name, SchemaDataType::String)]);
+        let schema = DataSchemaRefExt::create(vec![DataField::new(name, TableDataType::String)]);
         let chunk = Chunk::create(
             vec![(
                 Value::Column(Column::from_data(vec![value.as_bytes().to_vec()])),
-                SchemaDataType::String,
+                TableDataType::String,
             )],
             1,
         );

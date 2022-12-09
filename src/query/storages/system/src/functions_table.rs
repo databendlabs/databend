@@ -23,7 +23,7 @@ use common_expression::Chunk;
 use common_expression::Column;
 use common_expression::DataField;
 use common_expression::DataSchemaRefExt;
-use common_expression::SchemaDataType;
+use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRefExt;
 use common_expression::Value;
@@ -175,14 +175,14 @@ impl AsyncSystemTable for FunctionsTable {
 impl FunctionsTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
         let schema = TableSchemaRefExt::create(vec![
-            TableField::new("name", SchemaDataType::String),
-            TableField::new("is_builtin", SchemaDataType::Boolean),
-            TableField::new("is_aggregate", SchemaDataType::Boolean),
-            TableField::new("definition", SchemaDataType::String),
-            TableField::new("category", SchemaDataType::String),
-            TableField::new("description", SchemaDataType::String),
-            TableField::new("syntax", SchemaDataType::String),
-            TableField::new("example", SchemaDataType::String),
+            TableField::new("name", TableDataType::String),
+            TableField::new("is_builtin", TableDataType::Boolean),
+            TableField::new("is_aggregate", TableDataType::Boolean),
+            TableField::new("definition", TableDataType::String),
+            TableField::new("category", TableDataType::String),
+            TableField::new("description", TableDataType::String),
+            TableField::new("syntax", TableDataType::String),
+            TableField::new("example", TableDataType::String),
         ]);
 
         let table_info = TableInfo {

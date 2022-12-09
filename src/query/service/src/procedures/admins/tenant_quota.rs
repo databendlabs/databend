@@ -27,7 +27,7 @@ use common_expression::DataField;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRefExt;
 use common_expression::Scalar;
-use common_expression::SchemaDataType;
+use common_expression::TableDataType;
 use common_expression::Value;
 use common_meta_types::TenantQuota;
 use common_meta_types::UserOptionFlag;
@@ -106,16 +106,16 @@ impl OneChunkProcedure for TenantQuotaProcedure {
         DataSchemaRefExt::create(vec![
             DataField::new(
                 "max_databases",
-                SchemaDataType::Number(NumberDataType::UInt32),
+                TableDataType::Number(NumberDataType::UInt32),
             ),
             DataField::new(
                 "max_tables_per_database",
-                SchemaDataType::Number(NumberDataType::UInt32),
+                TableDataType::Number(NumberDataType::UInt32),
             ),
-            DataField::new("max_stages", SchemaDataType::Number(NumberDataType::UInt32)),
+            DataField::new("max_stages", TableDataType::Number(NumberDataType::UInt32)),
             DataField::new(
                 "max_files_per_stage",
-                SchemaDataType::Number(NumberDataType::UInt32),
+                TableDataType::Number(NumberDataType::UInt32),
             ),
         ])
     }

@@ -18,33 +18,33 @@ use std::fmt::Formatter;
 
 use common_expression::DataField;
 use common_expression::Scalar;
-use common_expression::SchemaDataType;
+use common_expression::TableDataType;
 
 /// Serializable and desugared representation of `Scalar`.
 #[derive(Clone, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum Expression {
     IndexedVariable {
         name: String,
-        data_type: SchemaDataType,
+        data_type: TableDataType,
     },
     Constant {
         value: Scalar,
-        data_type: SchemaDataType,
+        data_type: TableDataType,
     },
     Function {
         name: String,
         args: Vec<Expression>,
-        return_type: SchemaDataType,
+        return_type: TableDataType,
     },
 
     Cast {
         input: Box<Expression>,
-        target: SchemaDataType,
+        target: TableDataType,
     },
 }
 
 impl Expression {
-    pub fn data_type(&self) -> SchemaDataType {
+    pub fn data_type(&self) -> TableDataType {
         match self {
             Expression::Constant { data_type, .. } => data_type.clone(),
             Expression::Function { return_type, .. } => return_type.clone(),

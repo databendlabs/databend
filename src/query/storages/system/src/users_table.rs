@@ -23,7 +23,7 @@ use common_expression::Chunk;
 use common_expression::Column;
 use common_expression::DataField;
 use common_expression::DataSchemaRefExt;
-use common_expression::SchemaDataType;
+use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRef;
 use common_expression::TableSchemaRefExt;
@@ -106,11 +106,11 @@ impl AsyncSystemTable for UsersTable {
 impl UsersTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
         let schema = TableSchemaRefExt::create(vec![
-            TableField::new("name", SchemaDataType::String),
-            TableField::new("hostname", SchemaDataType::String),
-            TableField::new("auth_type", SchemaDataType::String),
-            TableField::new("auth_string", SchemaDataType::String),
-            TableField::new("default_role", SchemaDataType::String),
+            TableField::new("name", TableDataType::String),
+            TableField::new("hostname", TableDataType::String),
+            TableField::new("auth_type", TableDataType::String),
+            TableField::new("auth_string", TableDataType::String),
+            TableField::new("default_role", TableDataType::String),
         ]);
 
         let table_info = TableInfo {

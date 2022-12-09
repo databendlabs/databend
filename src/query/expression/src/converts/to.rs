@@ -32,12 +32,12 @@ use crate::ColumnIndex;
 use crate::DataField;
 use crate::DataSchema;
 use crate::Scalar;
-use crate::SchemaDataType;
+use crate::TableDataType;
 use crate::TableField;
 use crate::TableSchema;
 use crate::Value;
 
-pub fn to_type(datatype: &SchemaDataType) -> DataTypeImpl {
+pub fn to_type(datatype: &TableDataType) -> DataTypeImpl {
     let f = TableField::new("tmp", datatype.clone());
     let arrow_f: ArrowField = (&f).into();
     common_datavalues::from_arrow_field(&arrow_f)

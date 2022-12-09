@@ -25,7 +25,7 @@ use common_expression::types::NullableType;
 use common_expression::types::NumberType;
 use common_expression::DataField;
 use common_expression::DataSchema;
-use common_expression::SchemaDataType;
+use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchema;
 use common_hive_meta_store as hms;

@@ -37,7 +37,7 @@ use common_expression::DataField;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 use common_expression::Scalar;
-use common_expression::SchemaDataType;
+use common_expression::TableDataType;
 use common_expression::Value;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
@@ -99,7 +99,7 @@ impl NumbersTable {
             meta: TableMeta {
                 schema: DataSchemaRefExt::create(vec![DataField::new(
                     "number",
-                    SchemaDataType::Number(NumberDataType::UInt64),
+                    TableDataType::Number(NumberDataType::UInt64),
                 )]),
                 engine: engine.to_string(),
                 // Assuming that created_on is unnecessary for function table,

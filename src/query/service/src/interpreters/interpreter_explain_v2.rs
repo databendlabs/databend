@@ -23,7 +23,7 @@ use common_expression::Column;
 use common_expression::ColumnFrom;
 use common_expression::DataField;
 use common_expression::DataSchemaRefExt;
-use common_expression::SchemaDataType;
+use common_expression::TableDataType;
 use common_expression::Value;
 use common_sql::MetadataRef;
 
@@ -126,7 +126,7 @@ impl Interpreter for ExplainInterpreter {
 
 impl ExplainInterpreter {
     pub fn try_create(ctx: Arc<QueryContext>, plan: Plan, kind: ExplainKind) -> Result<Self> {
-        let data_field = DataField::new("explain", SchemaDataType::String);
+        let data_field = DataField::new("explain", TableDataType::String);
         let schema = DataSchemaRefExt::create(vec![data_field]);
         Ok(ExplainInterpreter {
             ctx,

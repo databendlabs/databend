@@ -22,7 +22,7 @@ use common_expression::Column as ExprColumn;
 use common_expression::DataField;
 use common_expression::DataSchemaRef;
 use common_expression::ScalarRef;
-use common_expression::SchemaDataType;
+use common_expression::TableDataType;
 use common_expression::SendableChunkStream;
 use common_formats::field_encoder::FieldEncoderRowBased;
 use common_formats::field_encoder::FieldEncoderValues;
@@ -128,11 +128,11 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
 
         fn convert_field_type(field: &DataField) -> Result<ColumnType> {
             match field.data_type().remove_nullable() {
-                SchemaDataType::Null => Ok(ColumnType::MYSQL_TYPE_NULL),
-                SchemaDataType::EmptyArray => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
-                SchemaDataType::Boolean => Ok(ColumnType::MYSQL_TYPE_SHORT),
-                SchemaDataType::String => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
-                SchemaDataType::Number(num_ty) => match num_ty {
+                TableDataType::Null => Ok(ColumnType::MYSQL_TYPE_NULL),
+                TableDataType::EmptyArray => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
+                TableDataType::Boolean => Ok(ColumnType::MYSQL_TYPE_SHORT),
+                TableDataType::String => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
+                TableDataType::Number(num_ty) => match num_ty {
                     NumberDataType::Int8 => Ok(ColumnType::MYSQL_TYPE_TINY),
                     NumberDataType::Int16 => Ok(ColumnType::MYSQL_TYPE_SHORT),
                     NumberDataType::Int32 => Ok(ColumnType::MYSQL_TYPE_LONG),
@@ -144,12 +144,12 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
                     NumberDataType::Float32 => Ok(ColumnType::MYSQL_TYPE_FLOAT),
                     NumberDataType::Float64 => Ok(ColumnType::MYSQL_TYPE_DOUBLE),
                 },
-                SchemaDataType::Date => Ok(ColumnType::MYSQL_TYPE_DATE),
-                SchemaDataType::Timestamp => Ok(ColumnType::MYSQL_TYPE_DATETIME),
-                SchemaDataType::Array(_) => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
-                SchemaDataType::Map(_) => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
-                SchemaDataType::Tuple { .. } => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
-                SchemaDataType::Variant => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
+                TableDataType::Date => Ok(ColumnType::MYSQL_TYPE_DATE),
+                TableDataType::Timestamp => Ok(ColumnType::MYSQL_TYPE_DATETIME),
+                TableDataType::Array(_) => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
+                TableDataType::Map(_) => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
+                TableDataType::Tuple { .. } => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
+                TableDataType::Variant => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
                 _ => Err(ErrorCode::Unimplemented(format!(
                     "Unsupported column type:{:?}",
                     field.data_type()

@@ -77,13 +77,13 @@ pub struct TableSchema {
 pub struct TableField {
     name: String,
     default_expr: Option<String>,
-    data_type: SchemaDataType,
+    data_type: TableDataType,
 }
 
 /// DataType with more information that is only available for schema, e.g, the
 /// tuple field name, or the scale of decimal.
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
-pub enum SchemaDataType {
+pub enum TableDataType {
     Null,
     EmptyArray,
     Boolean,
@@ -91,12 +91,12 @@ pub enum SchemaDataType {
     Number(NumberDataType),
     Timestamp,
     Date,
-    Nullable(Box<SchemaDataType>),
-    Array(Box<SchemaDataType>),
-    Map(Box<SchemaDataType>),
+    Nullable(Box<TableDataType>),
+    Array(Box<TableDataType>),
+    Map(Box<TableDataType>),
     Tuple {
         fields_name: Vec<String>,
-        fields_type: Vec<SchemaDataType>,
+        fields_type: Vec<TableDataType>,
     },
     Variant,
 }
@@ -232,7 +232,7 @@ impl DataSchema {
     //         return Ok(field.clone());
     //     }
     //
-    //     if let SchemaDataType::Tuple {
+    //     if let TableDataType::Tuple {
     //         fields_name,
     //         fields_type,
     //     } = &field.data_type()
@@ -403,7 +403,7 @@ impl TableSchema {
             return Ok(field.clone());
         }
 
-        if let SchemaDataType::Tuple {
+        if let TableDataType::Tuple {
             fields_name,
             fields_type,
         } = &field.data_type
@@ -483,7 +483,7 @@ impl DataField {
 }
 
 impl TableField {
-    pub fn new(name: &str, data_type: SchemaDataType) -> Self {
+    pub fn new(name: &str, data_type: TableDataType) -> Self {
         TableField {
             name: name.to_string(),
             default_expr: None,
@@ -501,7 +501,7 @@ impl TableField {
         &self.name
     }
 
-    pub fn data_type(&self) -> &SchemaDataType {
+    pub fn data_type(&self) -> &TableDataType {
         &self.data_type
     }
 
@@ -520,41 +520,41 @@ impl TableField {
     }
 }
 
-impl From<&SchemaDataType> for DataType {
-    fn from(data_type: &SchemaDataType) -> DataType {
+impl From<&TableDataType> for DataType {
+    fn from(data_type: &TableDataType) -> DataType {
         match data_type {
-            SchemaDataType::Null => DataType::Null,
-            SchemaDataType::EmptyArray => DataType::EmptyArray,
-            SchemaDataType::Boolean => DataType::Boolean,
-            SchemaDataType::String => DataType::String,
-            SchemaDataType::Number(ty) => DataType::Number(*ty),
-            SchemaDataType::Timestamp => DataType::Timestamp,
-            SchemaDataType::Date => DataType::Date,
-            SchemaDataType::Nullable(ty) => DataType::Nullable(Box::new((&**ty).into())),
-            SchemaDataType::Array(ty) => DataType::Array(Box::new((&**ty).into())),
-            SchemaDataType::Map(ty) => DataType::Map(Box::new((&**ty).into())),
-            SchemaDataType::Tuple { fields_type, .. } => {
+            TableDataType::Null => DataType::Null,
+            TableDataType::EmptyArray => DataType::EmptyArray,
+            TableDataType::Boolean => DataType::Boolean,
+            TableDataType::String => DataType::String,
+            TableDataType::Number(ty) => DataType::Number(*ty),
+            TableDataType::Timestamp => DataType::Timestamp,
+            TableDataType::Date => DataType::Date,
+            TableDataType::Nullable(ty) => DataType::Nullable(Box::new((&**ty).into())),
+            TableDataType::Array(ty) => DataType::Array(Box::new((&**ty).into())),
+            TableDataType::Map(ty) => DataType::Map(Box::new((&**ty).into())),
+            TableDataType::Tuple { fields_type, .. } => {
                 DataType::Tuple(fields_type.iter().map(Into::into).collect())
             }
-            SchemaDataType::Variant => DataType::Variant,
+            TableDataType::Variant => DataType::Variant,
         }
     }
 }
 
-impl SchemaDataType {
+impl TableDataType {
     pub fn wrap_nullable(&self) -> Self {
         match self {
-            SchemaDataType::Nullable(_) => self.clone(),
+            TableDataType::Nullable(_) => self.clone(),
             _ => Self::Nullable(Box::new(self.clone())),
         }
     }
 
     pub fn is_nullable(&self) -> bool {
-        matches!(self, &SchemaDataType::Nullable(_))
+        matches!(self, &TableDataType::Nullable(_))
     }
 
     pub fn is_nullable_or_null(&self) -> bool {
-        matches!(self, &SchemaDataType::Nullable(_) | &SchemaDataType::Null)
+        matches!(self, &TableDataType::Nullable(_) | &TableDataType::Null)
     }
 
     pub fn can_inside_nullable(&self) -> bool {
@@ -563,62 +563,14 @@ impl SchemaDataType {
 
     pub fn remove_nullable(&self) -> Self {
         match self {
-            SchemaDataType::Nullable(ty) => (**ty).clone(),
+            TableDataType::Nullable(ty) => (**ty).clone(),
             _ => self.clone(),
-        }
-    }
-
-    pub fn name(&self) -> String {
-        match self {
-            SchemaDataType::Null => "Null".to_string(),
-            SchemaDataType::EmptyArray => "Array()".to_string(),
-            SchemaDataType::Boolean => "Boolean".to_string(),
-            SchemaDataType::String => "String".to_string(),
-            SchemaDataType::Number(num_ty) => match num_ty {
-                NumberDataType::UInt8 => "UInt8".to_string(),
-                NumberDataType::UInt16 => "UInt16".to_string(),
-                NumberDataType::UInt32 => "UInt32".to_string(),
-                NumberDataType::UInt64 => "UInt64".to_string(),
-                NumberDataType::Int8 => "Int8".to_string(),
-                NumberDataType::Int16 => "Int16".to_string(),
-                NumberDataType::Int32 => "Int32".to_string(),
-                NumberDataType::Int64 => "Int64".to_string(),
-                NumberDataType::Float32 => "Float32".to_string(),
-                NumberDataType::Float64 => "Float64".to_string(),
-            },
-            SchemaDataType::Timestamp => "Timestamp".to_string(),
-            SchemaDataType::Date => "Date".to_string(),
-            SchemaDataType::Nullable(inner_ty) => format!("Nullable({})", inner_ty.name()),
-            SchemaDataType::Array(inner_ty) => format!("Array({})", inner_ty.name()),
-            SchemaDataType::Map(inner_ty) => format!("Map({})", inner_ty.name()),
-            SchemaDataType::Tuple {
-                fields_name,
-                fields_type,
-            } => {
-                let mut name = String::new();
-                name.push_str("Tuple(");
-                for ((i, field_name), field_ty) in
-                    fields_name.iter().enumerate().zip(fields_type.iter())
-                {
-                    if i > 0 {
-                        name.push_str(", ");
-                    }
-                    name.push('`');
-                    name.push_str(field_name);
-                    name.push('`');
-                    name.push(' ');
-                    name.push_str(&field_ty.sql_name());
-                }
-                name.push(')');
-                name
-            }
-            SchemaDataType::Variant => "Variant".to_string(),
         }
     }
 
     pub fn sql_name(&self) -> String {
         match self {
-            SchemaDataType::Number(num_ty) => match num_ty {
+            TableDataType::Number(num_ty) => match num_ty {
                 NumberDataType::UInt8 => "TINYINT UNSIGNED".to_string(),
                 NumberDataType::UInt16 => "SMALLINT UNSIGNED".to_string(),
                 NumberDataType::UInt32 => "INT UNSIGNED".to_string(),
@@ -630,25 +582,25 @@ impl SchemaDataType {
                 NumberDataType::Float32 => "FLOAT".to_string(),
                 NumberDataType::Float64 => "DOUBLE".to_string(),
             },
-            SchemaDataType::String => "VARCHAR".to_string(),
-            SchemaDataType::Nullable(inner_ty) => format!("{} NULL", inner_ty.sql_name()),
-            _ => self.name().to_uppercase(),
+            TableDataType::String => "VARCHAR".to_string(),
+            TableDataType::Nullable(inner_ty) => format!("{} NULL", inner_ty.sql_name()),
+            _ => self.to_string().to_uppercase(),
         }
     }
 
     pub fn create_random_column(&self, len: usize) -> (Value<AnyType>, DataType) {
         match self {
-            SchemaDataType::Null => (Value::Column(Column::Null { len }), DataType::Null),
-            SchemaDataType::EmptyArray => (
+            TableDataType::Null => (Value::Column(Column::Null { len }), DataType::Null),
+            TableDataType::EmptyArray => (
                 Value::Column(Column::EmptyArray { len }),
                 DataType::EmptyArray,
             ),
-            SchemaDataType::Boolean => {
+            TableDataType::Boolean => {
                 let mut rng = SmallRng::from_entropy();
                 let data = (0..len).map(|_| rng.gen_bool(0.5)).collect::<Vec<bool>>();
                 (Value::Column(Column::from_data(data)), DataType::Boolean)
             }
-            SchemaDataType::String => {
+            TableDataType::String => {
                 // randomly generate 5 characters.
                 let data = (0..len)
                     .map(|_| {
@@ -661,7 +613,7 @@ impl SchemaDataType {
                     .collect::<Vec<Vec<u8>>>();
                 (Value::Column(Column::from_data(data)), DataType::String)
             }
-            SchemaDataType::Number(num_ty) => {
+            TableDataType::Number(num_ty) => {
                 let mut rng = SmallRng::from_entropy();
                 with_number_mapped_type!(|NUM_TYPE| match num_ty {
                     NumberDataType::NUM_TYPE => {
@@ -673,7 +625,7 @@ impl SchemaDataType {
                     }
                 })
             }
-            SchemaDataType::Timestamp => {
+            TableDataType::Timestamp => {
                 let mut rng = SmallRng::from_entropy();
                 let data = (0..len)
                     .map(|_| rng.gen_range(TIMESTAMP_MIN..=TIMESTAMP_MAX))
@@ -683,14 +635,14 @@ impl SchemaDataType {
                     DataType::Timestamp,
                 )
             }
-            SchemaDataType::Date => {
+            TableDataType::Date => {
                 let mut rng = SmallRng::from_entropy();
                 let data = (0..len)
                     .map(|_| rng.gen_range(DATE_MIN..=DATE_MAX))
                     .collect::<Vec<i32>>();
                 (Value::Column(from_date_data(data)), DataType::Date)
             }
-            SchemaDataType::Nullable(inner_ty) => {
+            TableDataType::Nullable(inner_ty) => {
                 let (value, ty) = inner_ty.create_random_column(len);
                 let mut rng = SmallRng::from_entropy();
                 let data = (0..len).map(|_| rng.gen_bool(0.5)).collect::<Vec<bool>>();
@@ -703,7 +655,7 @@ impl SchemaDataType {
                     DataType::Nullable(Box::new(ty)),
                 )
             }
-            SchemaDataType::Array(inner_ty) => {
+            TableDataType::Array(inner_ty) => {
                 let mut inner_len = 0;
                 let mut rng = SmallRng::from_entropy();
                 let mut offsets: Vec<u64> = Vec::with_capacity(len + 1);
@@ -721,7 +673,7 @@ impl SchemaDataType {
                     DataType::Array(Box::new(ty)),
                 )
             }
-            SchemaDataType::Tuple { fields_type, .. } => {
+            TableDataType::Tuple { fields_type, .. } => {
                 let mut types = Vec::with_capacity(len);
                 let mut fields = Vec::with_capacity(len);
                 for field_type in fields_type.iter() {
@@ -734,7 +686,7 @@ impl SchemaDataType {
                     DataType::Tuple(types),
                 )
             }
-            SchemaDataType::Variant => {
+            TableDataType::Variant => {
                 let mut rng = SmallRng::from_entropy();
                 let mut data = Vec::with_capacity(len);
                 for _ in 0..len {
@@ -851,44 +803,44 @@ impl From<&ArrowField> for DataField {
     fn from(f: &ArrowField) -> Self {
         Self {
             name: f.name.clone(),
-            data_type: DataType::from(&SchemaDataType::from(f)),
+            data_type: DataType::from(&TableDataType::from(f)),
             default_expr: None,
         }
     }
 }
 
 // ArrowType can't map to DataType, we don't know the nullable flag
-impl From<&ArrowField> for SchemaDataType {
+impl From<&ArrowField> for TableDataType {
     fn from(f: &ArrowField) -> Self {
         let ty = with_number_type!(|TYPE| match f.data_type() {
-            ArrowDataType::TYPE => SchemaDataType::Number(NumberDataType::TYPE),
+            ArrowDataType::TYPE => TableDataType::Number(NumberDataType::TYPE),
 
-            ArrowDataType::Null => SchemaDataType::Null,
-            ArrowDataType::Boolean => SchemaDataType::Boolean,
+            ArrowDataType::Null => TableDataType::Null,
+            ArrowDataType::Boolean => TableDataType::Boolean,
 
             ArrowDataType::List(f)
             | ArrowDataType::LargeList(f)
             | ArrowDataType::FixedSizeList(f, _) =>
-                SchemaDataType::Array(Box::new(f.as_ref().into())),
+                TableDataType::Array(Box::new(f.as_ref().into())),
 
             ArrowDataType::Binary
             | ArrowDataType::LargeBinary
             | ArrowDataType::Utf8
-            | ArrowDataType::LargeUtf8 => SchemaDataType::String,
+            | ArrowDataType::LargeUtf8 => TableDataType::String,
 
-            ArrowDataType::Timestamp(_, _) => SchemaDataType::Timestamp,
-            ArrowDataType::Date32 | ArrowDataType::Date64 => SchemaDataType::Date,
+            ArrowDataType::Timestamp(_, _) => TableDataType::Timestamp,
+            ArrowDataType::Date32 | ArrowDataType::Date64 => TableDataType::Date,
 
             ArrowDataType::Struct(fields) => {
                 let (fields_name, fields_type) =
                     fields.iter().map(|f| (f.name.clone(), f.into())).unzip();
-                SchemaDataType::Tuple {
+                TableDataType::Tuple {
                     fields_name,
                     fields_type,
                 }
             }
             ArrowDataType::Extension(custom_name, _, _) => match custom_name.as_str() {
-                "Variant" => SchemaDataType::Variant,
+                "Variant" => TableDataType::Variant,
                 _ => unimplemented!("data_type: {:?}", f.data_type()),
             },
             // this is safe, because we define the datatype firstly
@@ -898,7 +850,7 @@ impl From<&ArrowField> for SchemaDataType {
         });
 
         if f.is_nullable {
-            SchemaDataType::Nullable(Box::new(ty))
+            TableDataType::Nullable(Box::new(ty))
         } else {
             ty
         }
@@ -970,24 +922,24 @@ impl From<&DataType> for ArrowDataType {
     }
 }
 
-impl From<&SchemaDataType> for ArrowDataType {
-    fn from(ty: &SchemaDataType) -> Self {
+impl From<&TableDataType> for ArrowDataType {
+    fn from(ty: &TableDataType) -> Self {
         match ty {
-            SchemaDataType::Null => ArrowDataType::Null,
-            SchemaDataType::EmptyArray => ArrowDataType::Extension(
+            TableDataType::Null => ArrowDataType::Null,
+            TableDataType::EmptyArray => ArrowDataType::Extension(
                 ARROW_EXT_TYPE_EMPTY_ARRAY.to_string(),
                 Box::new(ArrowDataType::Null),
                 None,
             ),
-            SchemaDataType::Boolean => ArrowDataType::Boolean,
-            SchemaDataType::String => ArrowDataType::LargeBinary,
-            SchemaDataType::Number(ty) => with_number_type!(|TYPE| match ty {
+            TableDataType::Boolean => ArrowDataType::Boolean,
+            TableDataType::String => ArrowDataType::LargeBinary,
+            TableDataType::Number(ty) => with_number_type!(|TYPE| match ty {
                 NumberDataType::TYPE => ArrowDataType::TYPE,
             }),
-            SchemaDataType::Timestamp => ArrowDataType::Date64,
-            SchemaDataType::Date => ArrowDataType::Date32,
-            SchemaDataType::Nullable(ty) => ty.as_ref().into(),
-            SchemaDataType::Array(ty) => {
+            TableDataType::Timestamp => ArrowDataType::Date64,
+            TableDataType::Date => ArrowDataType::Date32,
+            TableDataType::Nullable(ty) => ty.as_ref().into(),
+            TableDataType::Array(ty) => {
                 let arrow_ty = ty.as_ref().into();
                 ArrowDataType::LargeList(Box::new(ArrowField::new(
                     "_array",
@@ -995,7 +947,7 @@ impl From<&SchemaDataType> for ArrowDataType {
                     ty.is_nullable(),
                 )))
             }
-            SchemaDataType::Map(ty) => {
+            TableDataType::Map(ty) => {
                 let arrow_ty = ty.as_ref().into();
                 ArrowDataType::LargeList(Box::new(ArrowField::new(
                     "_map",
@@ -1003,7 +955,7 @@ impl From<&SchemaDataType> for ArrowDataType {
                     ty.is_nullable(),
                 )))
             }
-            SchemaDataType::Tuple {
+            TableDataType::Tuple {
                 fields_name,
                 fields_type,
             } => {
@@ -1014,7 +966,7 @@ impl From<&SchemaDataType> for ArrowDataType {
                     .collect();
                 ArrowDataType::Struct(fields)
             }
-            SchemaDataType::Variant => ArrowDataType::Extension(
+            TableDataType::Variant => ArrowDataType::Extension(
                 ARROW_EXT_TYPE_VARIANT.to_string(),
                 Box::new(ArrowDataType::LargeBinary),
                 None,

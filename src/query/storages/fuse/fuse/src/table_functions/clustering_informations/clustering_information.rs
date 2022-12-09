@@ -29,7 +29,7 @@ use common_expression::DataSchemaRefExt;
 use common_expression::Expr;
 use common_expression::RemoteExpr;
 use common_expression::Scalar;
-use common_expression::SchemaDataType;
+use common_expression::TableDataType;
 use common_expression::Value;
 use common_storages_table_meta::meta::BlockMeta;
 use serde_json::json;
@@ -250,24 +250,24 @@ impl<'a> ClusteringInformation<'a> {
 
     pub fn schema() -> Arc<DataSchema> {
         DataSchemaRefExt::create(vec![
-            DataField::new("cluster_by_keys", SchemaDataType::String),
+            DataField::new("cluster_by_keys", TableDataType::String),
             DataField::new(
                 "total_block_count",
-                SchemaDataType::Number(NumberDataType::UInt64),
+                TableDataType::Number(NumberDataType::UInt64),
             ),
             DataField::new(
                 "total_constant_block_count",
-                SchemaDataType::Number(NumberDataType::UInt64),
+                TableDataType::Number(NumberDataType::UInt64),
             ),
             DataField::new(
                 "average_overlaps",
-                SchemaDataType::Number(NumberDataType::Float64),
+                TableDataType::Number(NumberDataType::Float64),
             ),
             DataField::new(
                 "average_depth",
-                SchemaDataType::Number(NumberDataType::Float64),
+                TableDataType::Number(NumberDataType::Float64),
             ),
-            DataField::new("block_depth_histogram", SchemaDataType::Variant),
+            DataField::new("block_depth_histogram", TableDataType::Variant),
         ])
     }
 }

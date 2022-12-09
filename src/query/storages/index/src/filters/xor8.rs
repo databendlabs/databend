@@ -21,7 +21,7 @@ use cbordata::FromCbor;
 use cbordata::IntoCbor;
 use common_exception::ErrorCode;
 use common_expression::types::DataType;
-use common_expression::SchemaDataType;
+use common_expression::TableDataType;
 use xorfilter::Xor8;
 
 use crate::filters::Filter;

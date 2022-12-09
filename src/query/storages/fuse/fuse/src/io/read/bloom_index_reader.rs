@@ -30,7 +30,7 @@ use common_exception::Result;
 use common_expression::Chunk;
 use common_expression::DataField;
 use common_expression::DataSchema;
-use common_expression::SchemaDataType;
+use common_expression::TableDataType;
 use common_storages_table_meta::meta::BlockBloomFilterIndexVersion;
 use common_storages_table_meta::meta::ChunkFilter;
 use common_storages_table_meta::meta::Location;
@@ -102,7 +102,7 @@ mod util_v1 {
 
         let fields = column_needed
             .iter()
-            .map(|name| DataField::new(name, SchemaDataType::String))
+            .map(|name| DataField::new(name, TableDataType::String))
             .collect::<Vec<_>>();
 
         let schema = Arc::new(DataSchema::new(fields));

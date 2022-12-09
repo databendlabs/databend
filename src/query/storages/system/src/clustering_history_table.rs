@@ -20,7 +20,7 @@ use common_expression::DataField;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 use common_expression::Scalar;
-use common_expression::SchemaDataType;
+use common_expression::TableDataType;
 use common_expression::TableField;
 
 use crate::SystemLogElement;
@@ -42,17 +42,17 @@ impl SystemLogElement for ClusteringHistoryLogElement {
 
     fn schema() -> DataSchemaRef {
         DataSchemaRefExt::create(vec![
-            TableField::new("start_time", SchemaDataType::Timestamp),
-            TableField::new("end_time", SchemaDataType::Timestamp),
-            TableField::new("database", SchemaDataType::String),
-            DataField::new("table", SchemaDataType::String),
+            TableField::new("start_time", TableDataType::Timestamp),
+            TableField::new("end_time", TableDataType::Timestamp),
+            TableField::new("database", TableDataType::String),
+            DataField::new("table", TableDataType::String),
             DataField::new(
                 "reclustered_bytes",
-                SchemaDataType::Number(NumberDataType::UInt64),
+                TableDataType::Number(NumberDataType::UInt64),
             ),
             DataField::new(
                 "reclustered_rows",
-                SchemaDataType::Number(NumberDataType::UInt64),
+                TableDataType::Number(NumberDataType::UInt64),
             ),
         ])
     }

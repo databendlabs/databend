@@ -32,7 +32,7 @@ use common_expression::DataField;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 use common_expression::Scalar as DataScalar;
-use common_expression::SchemaDataType;
+use common_expression::TableDataType;
 use common_expression::Value;
 use common_formats::parse_timezone;
 use common_formats::FieldDecoderRowBased;

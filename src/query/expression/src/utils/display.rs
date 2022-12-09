@@ -52,7 +52,7 @@ use crate::values::ValueRef;
 use crate::with_number_type;
 use crate::Column;
 use crate::ColumnIndex;
-use crate::SchemaDataType;
+use crate::TableDataType;
 
 const FLOAT_NUM_FRAC_DIGITS: u32 = 10;
 
@@ -442,20 +442,20 @@ impl Display for DataType {
     }
 }
 
-impl Display for SchemaDataType {
+impl Display for TableDataType {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
         match &self {
-            SchemaDataType::Boolean => write!(f, "Boolean"),
-            SchemaDataType::String => write!(f, "String"),
-            SchemaDataType::Number(num) => write!(f, "{num}"),
-            SchemaDataType::Timestamp => write!(f, "Timestamp"),
-            SchemaDataType::Date => write!(f, "Date"),
-            SchemaDataType::Null => write!(f, "NULL"),
-            SchemaDataType::Nullable(inner) => write!(f, "{inner} NULL"),
-            SchemaDataType::EmptyArray => write!(f, "Array(Nothing)"),
-            SchemaDataType::Array(inner) => write!(f, "Array({inner})"),
-            SchemaDataType::Map(inner) => write!(f, "Map({inner})"),
-            SchemaDataType::Tuple {
+            TableDataType::Boolean => write!(f, "Boolean"),
+            TableDataType::String => write!(f, "String"),
+            TableDataType::Number(num) => write!(f, "{num}"),
+            TableDataType::Timestamp => write!(f, "Timestamp"),
+            TableDataType::Date => write!(f, "Date"),
+            TableDataType::Null => write!(f, "NULL"),
+            TableDataType::Nullable(inner) => write!(f, "{inner} NULL"),
+            TableDataType::EmptyArray => write!(f, "Array(Nothing)"),
+            TableDataType::Array(inner) => write!(f, "Array({inner})"),
+            TableDataType::Map(inner) => write!(f, "Map({inner})"),
+            TableDataType::Tuple {
                 fields_name,
                 fields_type,
             } => {
@@ -471,7 +471,7 @@ impl Display for SchemaDataType {
                 }
                 write!(f, ")")
             }
-            SchemaDataType::Variant => write!(f, "Variant"),
+            TableDataType::Variant => write!(f, "Variant"),
         }
     }
 }

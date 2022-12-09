@@ -55,7 +55,7 @@ use common_expression::types::DataType;
 use common_expression::DataField;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
-use common_expression::SchemaDataType;
+use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRef;
 use common_expression::TableSchemaRefExt;
@@ -980,31 +980,31 @@ impl<'a> Binder {
         source_fields
     }
 
-    /// Convert a `DataType` to `SchemaDataType`.
-    /// Generally, we don't allow to convert `DataType` to `SchemaDataType` directly.
+    /// Convert a `DataType` to `TableDataType`.
+    /// Generally, we don't allow to convert `DataType` to `TableDataType` directly.
     /// But for some special cases, for example creating table from a query without specifying
-    /// the schema. Then we need to infer the corresponding `SchemaDataType` from `DataType`, and
+    /// the schema. Then we need to infer the corresponding `TableDataType` from `DataType`, and
     /// this function may report an error if the conversion is not allowed.
     ///
     /// Do not use this function in other places.
-    fn infer_schema_type(data_type: &DataType) -> Result<SchemaDataType> {
+    fn infer_schema_type(data_type: &DataType) -> Result<TableDataType> {
         match data_type {
-            DataType::Null => Ok(SchemaDataType::Null),
-            DataType::Boolean => Ok(SchemaDataType::Boolean),
-            DataType::String => Ok(SchemaDataType::String),
-            DataType::Number(number_type) => Ok(SchemaDataType::Number(*number_type)),
-            DataType::Timestamp => Ok(SchemaDataType::Timestamp),
-            DataType::Date => Ok(SchemaDataType::Date),
-            DataType::Nullable(inner_type) => Ok(SchemaDataType::Nullable(Box::new(
+            DataType::Null => Ok(TableDataType::Null),
+            DataType::Boolean => Ok(TableDataType::Boolean),
+            DataType::String => Ok(TableDataType::String),
+            DataType::Number(number_type) => Ok(TableDataType::Number(*number_type)),
+            DataType::Timestamp => Ok(TableDataType::Timestamp),
+            DataType::Date => Ok(TableDataType::Date),
+            DataType::Nullable(inner_type) => Ok(TableDataType::Nullable(Box::new(
                 Self::infer_schema_type(inner_type)?,
             ))),
-            DataType::Array(elem_type) => Ok(SchemaDataType::Array(Box::new(
+            DataType::Array(elem_type) => Ok(TableDataType::Array(Box::new(
                 Self::infer_schema_type(elem_type)?,
             ))),
-            DataType::Map(inner_type) => Ok(SchemaDataType::Map(Box::new(
+            DataType::Map(inner_type) => Ok(TableDataType::Map(Box::new(
                 Self::infer_schema_type(inner_type)?,
             ))),
-            DataType::Variant => Ok(SchemaDataType::Variant),
+            DataType::Variant => Ok(TableDataType::Variant),
 
             _ => Err(ErrorCode::SemanticError(format!(
                 "Cannot create table with type: {}",

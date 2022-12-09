@@ -25,7 +25,7 @@ use common_expression::ColumnBuilder;
 use common_expression::DataField;
 use common_expression::DataSchemaRefExt;
 use common_expression::Scalar;
-use common_expression::SchemaDataType;
+use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRefExt;
 use common_expression::Value;
@@ -85,10 +85,10 @@ impl SyncSystemTable for ClustersTable {
 impl ClustersTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
         let schema = TableSchemaRefExt::create(vec![
-            TableField::new("name", SchemaDataType::String),
-            TableField::new("host", SchemaDataType::String),
-            TableField::new("port", SchemaDataType::Number(NumberDataType::UInt16)),
-            TableField::new("version", SchemaDataType::String),
+            TableField::new("name", TableDataType::String),
+            TableField::new("host", TableDataType::String),
+            TableField::new("port", TableDataType::Number(NumberDataType::UInt16)),
+            TableField::new("version", TableDataType::String),
         ]);
 
         let table_info = TableInfo {

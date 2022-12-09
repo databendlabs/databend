@@ -26,7 +26,7 @@ use common_expression::Chunk;
 use common_expression::Column;
 use common_expression::DataField;
 use common_expression::DataSchemaRefExt;
-use common_expression::SchemaDataType;
+use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRef;
 use common_expression::TableSchemaRefExt;
@@ -181,42 +181,42 @@ impl SyncSystemTable for ProcessesTable {
 impl ProcessesTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
         let schema = TableSchemaRefExt::create(vec![
-            TableField::new("id", SchemaDataType::String),
-            TableField::new("type", SchemaDataType::String),
+            TableField::new("id", TableDataType::String),
+            TableField::new("type", TableDataType::String),
             TableField::new(
                 "host",
-                SchemaDataType::Nullable(Box::new(SchemaDataType::String)),
+                TableDataType::Nullable(Box::new(TableDataType::String)),
             ),
-            TableField::new("user", SchemaDataType::String),
-            TableField::new("command", SchemaDataType::String),
-            TableField::new("database", SchemaDataType::String),
-            TableField::new("extra_info", SchemaDataType::String),
+            TableField::new("user", TableDataType::String),
+            TableField::new("command", TableDataType::String),
+            TableField::new("database", TableDataType::String),
+            TableField::new("extra_info", TableDataType::String),
             TableField::new(
                 "memory_usage",
-                SchemaDataType::Number(NumberDataType::Int64),
+                TableDataType::Number(NumberDataType::Int64),
             ),
             TableField::new(
                 "data_read_bytes",
-                SchemaDataType::Number(NumberDataType::UInt64),
+                TableDataType::Number(NumberDataType::UInt64),
             ),
             TableField::new(
                 "data_write_bytes",
-                SchemaDataType::Number(NumberDataType::UInt64),
+                TableDataType::Number(NumberDataType::UInt64),
             ),
             TableField::new(
                 "scan_progress_read_rows",
-                SchemaDataType::Number(NumberDataType::UInt64),
+                TableDataType::Number(NumberDataType::UInt64),
             ),
             TableField::new(
                 "scan_progress_read_bytes",
-                SchemaDataType::Number(NumberDataType::UInt64),
+                TableDataType::Number(NumberDataType::UInt64),
             ),
             TableField::new(
                 "mysql_connection_id",
-                SchemaDataType::Nullable(Box::new(SchemaDataType::Number(NumberDataType::UInt32))),
+                TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt32))),
             ),
-            TableField::new("time", SchemaDataType::Number(NumberDataType::UInt64)),
-            TableField::new("status", SchemaDataType::String),
+            TableField::new("time", TableDataType::Number(NumberDataType::UInt64)),
+            TableField::new("status", TableDataType::String),
         ]);
 
         let table_info = TableInfo {

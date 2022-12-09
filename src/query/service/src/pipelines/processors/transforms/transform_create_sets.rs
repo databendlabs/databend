@@ -22,7 +22,7 @@ use common_expression::Column;
 use common_expression::ColumnBuilder;
 use common_expression::DataSchemaRef;
 use common_expression::Scalar;
-use common_expression::SchemaDataType;
+use common_expression::TableDataType;
 use common_expression::Value;
 
 use crate::pipelines::processors::port::InputPort;

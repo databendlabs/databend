@@ -31,7 +31,7 @@ use crate::ColumnBuilder;
 use crate::DataField;
 use crate::DataSchema;
 use crate::Scalar;
-use crate::SchemaDataType;
+use crate::TableDataType;
 use crate::TableField;
 use crate::TableSchema;
 use crate::Value;
@@ -43,16 +43,16 @@ pub fn can_convert(datatype: &DataTypeImpl) -> bool {
     )
 }
 
-pub fn from_type(datatype: &DataTypeImpl) -> SchemaDataType {
+pub fn from_type(datatype: &DataTypeImpl) -> TableDataType {
     with_number_type!(|TYPE| match datatype {
-        DataTypeImpl::TYPE(_) => SchemaDataType::Number(NumberDataType::TYPE),
+        DataTypeImpl::TYPE(_) => TableDataType::Number(NumberDataType::TYPE),
 
-        DataTypeImpl::Null(_) => SchemaDataType::Null,
-        DataTypeImpl::Nullable(v) => SchemaDataType::Nullable(Box::new(from_type(v.inner_type()))),
-        DataTypeImpl::Boolean(_) => SchemaDataType::Boolean,
-        DataTypeImpl::Timestamp(_) => SchemaDataType::Timestamp,
-        DataTypeImpl::Date(_) => SchemaDataType::Date,
-        DataTypeImpl::String(_) => SchemaDataType::String,
+        DataTypeImpl::Null(_) => TableDataType::Null,
+        DataTypeImpl::Nullable(v) => TableDataType::Nullable(Box::new(from_type(v.inner_type()))),
+        DataTypeImpl::Boolean(_) => TableDataType::Boolean,
+        DataTypeImpl::Timestamp(_) => TableDataType::Timestamp,
+        DataTypeImpl::Date(_) => TableDataType::Date,
+        DataTypeImpl::String(_) => TableDataType::String,
         DataTypeImpl::Struct(fields) => {
             let fields_name = fields.names().clone().unwrap_or_else(|| {
                 (0..fields.types().len())
@@ -60,15 +60,15 @@ pub fn from_type(datatype: &DataTypeImpl) -> SchemaDataType {
                     .collect()
             });
             let fields_type = fields.types().iter().map(from_type).collect();
-            SchemaDataType::Tuple {
+            TableDataType::Tuple {
                 fields_name,
                 fields_type,
             }
         }
-        DataTypeImpl::Array(ty) => SchemaDataType::Array(Box::new(from_type(ty.inner_type()))),
+        DataTypeImpl::Array(ty) => TableDataType::Array(Box::new(from_type(ty.inner_type()))),
         DataTypeImpl::Variant(_)
         | DataTypeImpl::VariantArray(_)
-        | DataTypeImpl::VariantObject(_) => SchemaDataType::Variant,
+        | DataTypeImpl::VariantObject(_) => TableDataType::Variant,
         DataTypeImpl::Interval(_) => unimplemented!(),
     })
 }

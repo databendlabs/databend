@@ -28,7 +28,7 @@ use common_expression::Chunk;
 use common_expression::Column;
 use common_expression::DataField;
 use common_expression::DataSchemaRefExt;
-use common_expression::SchemaDataType;
+use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRefExt;
 use common_expression::Value;
@@ -79,7 +79,7 @@ impl OneTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
         let schema = TableSchemaRefExt::create(vec![TableField::new(
             "dummy",
-            SchemaDataType::Number(NumberDataType::UInt8),
+            TableDataType::Number(NumberDataType::UInt8),
         )]);
 
         let table_info = TableInfo {

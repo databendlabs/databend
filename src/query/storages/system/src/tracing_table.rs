@@ -35,7 +35,7 @@ use common_expression::DataField;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 use common_expression::Scalar;
-use common_expression::SchemaDataType;
+use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRef;
 use common_expression::TableSchemaRefExt;
@@ -63,7 +63,7 @@ pub struct TracingTable {
 impl TracingTable {
     pub fn create(table_id: u64) -> Self {
         let schema =
-            TableSchemaRefExt::create(vec![TableField::new("entry", SchemaDataType::String)]);
+            TableSchemaRefExt::create(vec![TableField::new("entry", TableDataType::String)]);
 
         let table_info = TableInfo {
             desc: "'system'.'tracing'".to_string(),

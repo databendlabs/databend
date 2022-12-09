@@ -42,7 +42,7 @@ use common_expression::Expr;
 use common_expression::FunctionContext;
 use common_expression::RemoteExpr;
 use common_expression::Scalar;
-use common_expression::SchemaDataType;
+use common_expression::TableDataType;
 use common_expression::TableSchemaRef;
 use common_functions_v2::scalars::check_pattern_type;
 use common_functions_v2::scalars::is_like_pattern_escape;

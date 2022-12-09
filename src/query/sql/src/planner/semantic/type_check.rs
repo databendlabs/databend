@@ -44,7 +44,7 @@ use common_expression::types::number::F64;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::RawExpr;
-use common_expression::SchemaDataType;
+use common_expression::TableDataType;
 use common_functions::is_builtin_function;
 use common_functions_v2::aggregates::AggregateCountFunction;
 use common_functions_v2::aggregates::AggregateFunctionFactory;
@@ -816,7 +816,7 @@ impl<'a> TypeChecker<'a> {
                                 let column_entry = self.metadata.read().column(index);
                                 if let ColumnEntry::BaseTableColumn { data_type, .. } = column_entry
                                 {
-                                    if !matches!(data_type, SchemaDataType::Tuple { .. }) {
+                                    if !matches!(data_type, TableDataType::Tuple { .. }) {
                                         break;
                                     }
                                     return self
@@ -1892,7 +1892,7 @@ impl<'a> TypeChecker<'a> {
     #[async_recursion::async_recursion]
     async fn resolve_map_access_pushdown(
         &mut self,
-        data_type: SchemaDataType,
+        data_type: TableDataType,
         mut accessors: Vec<MapAccessor<'async_recursion>>,
         database: Option<Identifier<'async_recursion>>,
         table: Option<Identifier<'async_recursion>>,
@@ -1906,7 +1906,7 @@ impl<'a> TypeChecker<'a> {
 
         while !accessors.is_empty() {
             let data_type = data_types.pop().unwrap();
-            let (inner_types, inner_names) = if let SchemaDataType::Tuple {
+            let (inner_types, inner_names) = if let TableDataType::Tuple {
                 fields_name,
                 fields_type,
             } = data_type
@@ -2267,29 +2267,29 @@ impl<'a> TypeChecker<'a> {
             && names.contains(&name)
     }
 
-    pub fn resolve_type_name(type_name: &TypeName) -> Result<SchemaDataType> {
+    pub fn resolve_type_name(type_name: &TypeName) -> Result<TableDataType> {
         let data_type = match type_name {
-            TypeName::Boolean => SchemaDataType::Boolean,
-            TypeName::UInt8 => SchemaDataType::Number(NumberDataType::UInt8),
-            TypeName::UInt16 => SchemaDataType::Number(NumberDataType::UInt16),
-            TypeName::UInt32 => SchemaDataType::Number(NumberDataType::UInt32),
-            TypeName::UInt64 => SchemaDataType::Number(NumberDataType::UInt64),
-            TypeName::Int8 => SchemaDataType::Number(NumberDataType::Int8),
-            TypeName::Int16 => SchemaDataType::Number(NumberDataType::Int16),
-            TypeName::Int32 => SchemaDataType::Number(NumberDataType::Int32),
-            TypeName::Int64 => SchemaDataType::Number(NumberDataType::Int64),
-            TypeName::Float32 => SchemaDataType::Number(NumberDataType::Float32),
-            TypeName::Float64 => SchemaDataType::Number(NumberDataType::Float64),
-            TypeName::String => SchemaDataType::String,
-            TypeName::Timestamp => SchemaDataType::Timestamp,
-            TypeName::Date => SchemaDataType::Date,
+            TypeName::Boolean => TableDataType::Boolean,
+            TypeName::UInt8 => TableDataType::Number(NumberDataType::UInt8),
+            TypeName::UInt16 => TableDataType::Number(NumberDataType::UInt16),
+            TypeName::UInt32 => TableDataType::Number(NumberDataType::UInt32),
+            TypeName::UInt64 => TableDataType::Number(NumberDataType::UInt64),
+            TypeName::Int8 => TableDataType::Number(NumberDataType::Int8),
+            TypeName::Int16 => TableDataType::Number(NumberDataType::Int16),
+            TypeName::Int32 => TableDataType::Number(NumberDataType::Int32),
+            TypeName::Int64 => TableDataType::Number(NumberDataType::Int64),
+            TypeName::Float32 => TableDataType::Number(NumberDataType::Float32),
+            TypeName::Float64 => TableDataType::Number(NumberDataType::Float64),
+            TypeName::String => TableDataType::String,
+            TypeName::Timestamp => TableDataType::Timestamp,
+            TypeName::Date => TableDataType::Date,
             TypeName::Array {
                 item_type: Some(item_type),
-            } => SchemaDataType::Array(Box::new(Self::resolve_type_name(&item_type)?)),
+            } => TableDataType::Array(Box::new(Self::resolve_type_name(&item_type)?)),
             TypeName::Tuple {
                 fields_type,
                 fields_name,
-            } => SchemaDataType::Tuple {
+            } => TableDataType::Tuple {
                 fields_name: match fields_name {
                     None => (0..fields_type.len())
                         .into_iter()
@@ -2303,9 +2303,9 @@ impl<'a> TypeChecker<'a> {
                     .collect::<Result<Vec<_>>>()?,
             },
             TypeName::Nullable(inner_type) => {
-                SchemaDataType::Nullable(Box::new(Self::resolve_type_name(&inner_type)?))
+                TableDataType::Nullable(Box::new(Self::resolve_type_name(&inner_type)?))
             }
-            TypeName::Variant => SchemaDataType::Variant,
+            TypeName::Variant => TableDataType::Variant,
             _ => {
                 return Err(ErrorCode::Internal("Invalid type name"));
             }

@@ -109,7 +109,7 @@ impl<const WITH_NAMES: bool, const WITH_TYPES: bool> OutputFormat
                     .schema
                     .fields()
                     .iter()
-                    .map(|f| f.data_type().name())
+                    .map(|f| f.data_type().to_string())
                     .collect::<Vec<_>>();
                 buf.extend_from_slice(&self.serialize_strings(types));
             }

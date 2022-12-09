@@ -23,7 +23,7 @@ use common_ast::ast::Literal;
 use common_catalog::table::Table;
 use common_expression::types::DataType;
 use common_expression::DataField;
-use common_expression::SchemaDataType;
+use common_expression::TableDataType;
 use common_expression::TableField;
 use parking_lot::RwLock;
 
@@ -93,7 +93,7 @@ impl Metadata {
     pub fn add_base_table_column(
         &mut self,
         name: String,
-        data_type: SchemaDataType,
+        data_type: TableDataType,
         table_index: IndexType,
         path_indices: Option<Vec<IndexType>>,
         leaf_index: Option<IndexType>,
@@ -156,7 +156,7 @@ impl Metadata {
                 None
             };
 
-            if let SchemaDataType::Tuple { .. } = field.data_type() {
+            if let TableDataType::Tuple { .. } = field.data_type() {
                 self.add_base_table_column(
                     field.name().clone(),
                     field.data_type().clone(),
@@ -175,7 +175,7 @@ impl Metadata {
                 None,
             );
 
-            if let SchemaDataType::Tuple {
+            if let TableDataType::Tuple {
                 fields_name,
                 fields_type,
             } = field.data_type()
@@ -208,7 +208,7 @@ impl Metadata {
                 ..
             } = entry
             {
-                if let SchemaDataType::Number(number_type) = data_type {
+                if let TableDataType::Number(number_type) = data_type {
                     if (number_type.bit_width() as usize) < smallest_size {
                         smallest_size = number_type.bit_width() as usize;
                         smallest_index = idx;
@@ -317,7 +317,7 @@ pub enum ColumnEntry {
         table_index: IndexType,
         column_index: IndexType,
         column_name: String,
-        data_type: SchemaDataType,
+        data_type: TableDataType,
 
         /// Path indices for inner column of struct data type.
         path_indices: Option<Vec<usize>>,

@@ -22,7 +22,7 @@ use common_expression::DataField;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
-use common_expression::SchemaDataType;
+use common_expression::TableDataType;
 use common_expression::TableSchemaRef;
 use common_meta_app::schema::DropTableReq;
 use common_meta_app::schema::TableNameIdent;

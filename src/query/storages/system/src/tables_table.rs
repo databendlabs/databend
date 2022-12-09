@@ -27,7 +27,7 @@ use common_expression::Column;
 use common_expression::DataField;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRefExt;
-use common_expression::SchemaDataType;
+use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRef;
 use common_expression::TableSchemaRefExt;
@@ -257,27 +257,27 @@ where TablesTable<T>: HistoryAware
 {
     pub fn schema() -> TableSchemaRef {
         TableSchemaRefExt::create(vec![
-            TableField::new("database", SchemaDataType::String),
-            TableField::new("name", SchemaDataType::String),
-            TableField::new("engine", SchemaDataType::String),
-            TableField::new("cluster_by", SchemaDataType::String),
-            TableField::new("created_on", SchemaDataType::String),
-            TableField::new("dropped_on", SchemaDataType::String),
+            TableField::new("database", TableDataType::String),
+            TableField::new("name", TableDataType::String),
+            TableField::new("engine", TableDataType::String),
+            TableField::new("cluster_by", TableDataType::String),
+            TableField::new("created_on", TableDataType::String),
+            TableField::new("dropped_on", TableDataType::String),
             TableField::new(
                 "num_rows",
-                SchemaDataType::Nullable(Box::new(SchemaDataType::Number(NumberDataType::UInt64))),
+                TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
             ),
             TableField::new(
                 "data_size",
-                SchemaDataType::Nullable(Box::new(SchemaDataType::Number(NumberDataType::UInt64))),
+                TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
             ),
             TableField::new(
                 "data_compressed_size",
-                SchemaDataType::Nullable(Box::new(SchemaDataType::Number(NumberDataType::UInt64))),
+                TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
             ),
             TableField::new(
                 "index_size",
-                SchemaDataType::Nullable(Box::new(SchemaDataType::Number(NumberDataType::UInt64))),
+                TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
             ),
         ])
     }

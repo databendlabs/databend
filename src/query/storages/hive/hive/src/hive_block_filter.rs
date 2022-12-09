@@ -32,7 +32,7 @@ use common_expression::with_number_mapped_type;
 use common_expression::DataField;
 use common_expression::DataSchema;
 use common_expression::Scalar;
-use common_expression::SchemaDataType;
+use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchema;
 use common_storages_index::RangeFilter;
@@ -130,11 +130,11 @@ impl HiveBlockFilter {
     }
 
     fn get_max_min_stats(
-        column_type: &SchemaDataType,
+        column_type: &TableDataType,
         stats: &dyn Statistics,
     ) -> Option<(Scalar, Scalar, i64)> {
         match column_type {
-            SchemaDataType::Number(NumberDataType::UInt8) => {
+            TableDataType::Number(NumberDataType::UInt8) => {
                 let s = stats
                     .as_any()
                     .downcast_ref::<PrimitiveStatistics<i32>>()
@@ -148,7 +148,7 @@ impl HiveBlockFilter {
                     Some((max, min, null_count))
                 }
             }
-            SchemaDataType::Number(NumberDataType::UInt16) => {
+            TableDataType::Number(NumberDataType::UInt16) => {
                 let s = stats
                     .as_any()
                     .downcast_ref::<PrimitiveStatistics<i32>>()
@@ -162,7 +162,7 @@ impl HiveBlockFilter {
                     Some((max, min, null_count))
                 }
             }
-            SchemaDataType::Number(NumberDataType::UInt32) => {
+            TableDataType::Number(NumberDataType::UInt32) => {
                 let s = stats
                     .as_any()
                     .downcast_ref::<PrimitiveStatistics<i32>>()
@@ -176,7 +176,7 @@ impl HiveBlockFilter {
                     Some((max, min, null_count))
                 }
             }
-            SchemaDataType::Number(NumberDataType::UInt64) => {
+            TableDataType::Number(NumberDataType::UInt64) => {
                 let s = stats
                     .as_any()
                     .downcast_ref::<PrimitiveStatistics<i64>>()
@@ -190,7 +190,7 @@ impl HiveBlockFilter {
                     Some((max, min, null_count))
                 }
             }
-            SchemaDataType::Number(NumberDataType::Int8) => {
+            TableDataType::Number(NumberDataType::Int8) => {
                 let s = stats
                     .as_any()
                     .downcast_ref::<PrimitiveStatistics<i32>>()
@@ -204,7 +204,7 @@ impl HiveBlockFilter {
                     Some((max, min, null_count))
                 }
             }
-            SchemaDataType::Number(NumberDataType::Int16) => {
+            TableDataType::Number(NumberDataType::Int16) => {
                 let s = stats
                     .as_any()
                     .downcast_ref::<PrimitiveStatistics<i32>>()
@@ -218,7 +218,7 @@ impl HiveBlockFilter {
                     Some((max, min, null_count))
                 }
             }
-            SchemaDataType::Number(NumberDataType::Int32) => {
+            TableDataType::Number(NumberDataType::Int32) => {
                 let s = stats
                     .as_any()
                     .downcast_ref::<PrimitiveStatistics<i32>>()
@@ -232,7 +232,7 @@ impl HiveBlockFilter {
                     Some((max, min, null_count))
                 }
             }
-            SchemaDataType::Number(NumberDataType::Int64) => {
+            TableDataType::Number(NumberDataType::Int64) => {
                 let s = stats
                     .as_any()
                     .downcast_ref::<PrimitiveStatistics<i64>>()
@@ -246,7 +246,7 @@ impl HiveBlockFilter {
                     Some((max, min, null_count))
                 }
             }
-            SchemaDataType::Number(NumberDataType::Float32) => {
+            TableDataType::Number(NumberDataType::Float32) => {
                 let s = stats
                     .as_any()
                     .downcast_ref::<PrimitiveStatistics<f32>>()
@@ -260,7 +260,7 @@ impl HiveBlockFilter {
                     Some((max, min, null_count))
                 }
             }
-            SchemaDataType::Number(NumberDataType::Float64) => {
+            TableDataType::Number(NumberDataType::Float64) => {
                 let s = stats
                     .as_any()
                     .downcast_ref::<PrimitiveStatistics<f64>>()
@@ -274,7 +274,7 @@ impl HiveBlockFilter {
                     Some((max, min, null_count))
                 }
             }
-            SchemaDataType::Boolean => {
+            TableDataType::Boolean => {
                 let s = stats.as_any().downcast_ref::<BooleanStatistics>().unwrap();
                 if s.null_count.is_none() || s.max_value.is_none() || s.min_value.is_none() {
                     None
@@ -285,7 +285,7 @@ impl HiveBlockFilter {
                     Some((max, min, null_count))
                 }
             }
-            SchemaDataType::String => {
+            TableDataType::String => {
                 let s = stats.as_any().downcast_ref::<BinaryStatistics>().unwrap();
                 if s.null_count.is_none() || s.max_value.is_none() || s.min_value.is_none() {
                     None
@@ -296,7 +296,7 @@ impl HiveBlockFilter {
                     Some((max, min, null_count))
                 }
             }
-            SchemaDataType::Nullable(inner_ty) => Self::get_max_min_stats(inner_ty.as_ref(), stats),
+            TableDataType::Nullable(inner_ty) => Self::get_max_min_stats(inner_ty.as_ref(), stats),
             _ => None,
         }
     }
