@@ -57,7 +57,6 @@ impl Interpreter for OptimizeTableInterpreter {
             action,
             OptimizeTableAction::Purge | OptimizeTableAction::All
         );
-        let do_statistic = matches!(action, OptimizeTableAction::Statistic);
         let do_compact_blocks = matches!(
             action,
             OptimizeTableAction::CompactBlocks(_) | OptimizeTableAction::All
@@ -102,7 +101,7 @@ impl Interpreter for OptimizeTableInterpreter {
                 drop(executor);
             }
 
-            if do_purge || do_statistic {
+            if do_purge {
                 // currently, context caches the table, we have to "refresh"
                 // the table by using the catalog API directly
                 table = self
@@ -111,11 +110,6 @@ impl Interpreter for OptimizeTableInterpreter {
                     .get_table(ctx.get_tenant().as_str(), &plan.database, &plan.table)
                     .await?;
             }
-        }
-
-        if do_statistic {
-            table.statistic(self.ctx.clone()).await?;
-            return Ok(PipelineBuildResult::create());
         }
 
         if do_purge {

@@ -416,6 +416,28 @@ impl Display for OptimizeTableStmt<'_> {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct AnalyzeTableStmt<'a> {
+    pub catalog: Option<Identifier<'a>>,
+    pub database: Option<Identifier<'a>>,
+    pub table: Identifier<'a>,
+}
+
+impl Display for AnalyzeTableStmt<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ANALYZE TABLE ")?;
+        write_period_separated_list(
+            f,
+            self.catalog
+                .iter()
+                .chain(&self.database)
+                .chain(Some(&self.table)),
+        )?;
+
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExistsTableStmt<'a> {
     pub catalog: Option<Identifier<'a>>,
@@ -467,7 +489,6 @@ pub enum CompactTarget {
 pub enum OptimizeTableAction<'a> {
     All,
     Purge,
-    Statistic,
     Compact {
         target: CompactTarget,
         limit: Option<Expr<'a>>,
@@ -479,7 +500,6 @@ impl<'a> Display for OptimizeTableAction<'a> {
         match self {
             OptimizeTableAction::All => write!(f, "ALL"),
             OptimizeTableAction::Purge => write!(f, "PURGE"),
-            OptimizeTableAction::Statistic => write!(f, "STATISTIC"),
             OptimizeTableAction::Compact { target, limit } => {
                 match target {
                     CompactTarget::Block => {

@@ -1371,6 +1371,17 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
+    fn visit_analyze_table(&mut self, stmt: &'ast AnalyzeTableStmt<'ast>) {
+        let mut children = Vec::new();
+        self.visit_table_ref(&stmt.catalog, &stmt.database, &stmt.table);
+        children.push(self.children.pop().unwrap());
+
+        let name = "AnalyzeTable".to_string();
+        let format_ctx = AstFormatContext::with_children(name, children.len());
+        let node = FormatTreeNode::with_children(format_ctx, children);
+        self.children.push(node);
+    }
+
     fn visit_exists_table(&mut self, stmt: &'ast ExistsTableStmt<'ast>) {
         self.visit_table_ref(&stmt.catalog, &stmt.database, &stmt.table);
         let child = self.children.pop().unwrap();

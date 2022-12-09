@@ -19,6 +19,7 @@ use common_datavalues::ColumnRef;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataTypeImpl;
+use common_datavalues::DataValue;
 use common_datavalues::Series;
 use common_datavalues::SeriesFrom;
 use common_datavalues::StructColumn;
@@ -88,7 +89,7 @@ fn test_column_traverse() -> Result<()> {
     let cols = traverse::traverse_columns_dfs(sample_block.columns())?;
 
     assert_eq!(5, cols.len());
-    (0..5).for_each(|i| assert_eq!(cols[i], sample_cols[i], "checking col {}", i));
+    (0..5).for_each(|i| assert_eq!(cols[i].1, sample_cols[i], "checking col {}", i));
 
     Ok(())
 }
@@ -96,21 +97,23 @@ fn test_column_traverse() -> Result<()> {
 #[test]
 fn test_column_statistic() -> Result<()> {
     let (sample_block, sample_cols) = gen_sample_block();
-    let col_stats = gen_columns_statistics(&sample_block)?;
+    let col_stats = gen_columns_statistics(&sample_block, None)?;
 
     assert_eq!(5, col_stats.len());
 
     (0..5).for_each(|i| {
         let stats = col_stats.get(&(i as u32)).unwrap();
+        let column = &sample_cols[i];
+        let values: Vec<DataValue> = (0..column.len()).map(|i| column.get(i)).collect();
         assert_eq!(
             &stats.min,
-            sample_cols[i].to_values().iter().min().unwrap(),
+            values.iter().min().unwrap(),
             "checking min of col {}",
             i
         );
         assert_eq!(
             &stats.max,
-            sample_cols[i].to_values().iter().max().unwrap(),
+            values.iter().max().unwrap(),
             "checking max of col {}",
             i
         );
