@@ -16,10 +16,11 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use common_base::base::tokio;
 use common_base::base::tokio::sync::RwLock;
 use common_base::base::tokio::time::sleep;
 use common_base::base::GlobalInstance;
+use common_base::runtime::GlobalIORuntime;
+use common_base::runtime::TrySpawn;
 use common_config::Config;
 use common_exception::Result;
 use parking_lot::Mutex;
@@ -80,23 +81,26 @@ impl HttpQueryManager {
     async fn add_query(self: &Arc<Self>, query_id: &str, query: Arc<HttpQuery>) {
         let mut queries = self.queries.write().await;
         queries.insert(query_id.to_string(), query.clone());
+        let timeout = self.config.result_timeout_millis;
 
         let self_clone = self.clone();
         let query_id_clone = query_id.to_string();
         let query_clone = query.clone();
-        if query.is_async() {
-            tokio::spawn(async move {
-                while let Some(t) = query_clone.check_expire().await {
-                    sleep(t).await;
-                }
-                if self_clone.remove_query(&query_id_clone).await.is_none() {
-                    warn!("http query {} timeout, but fail to remove", &query_id_clone);
-                } else {
-                    warn!("http query {} timeout", &query_id_clone);
-                    query.detach().await;
-                }
-            });
-        };
+        GlobalIORuntime::instance().spawn(async move {
+            while let Some(t) = query_clone.check_expire().await {
+                sleep(t).await;
+            }
+            let msg = format!(
+                "http query {} timeout after {} ms",
+                &query_id_clone, timeout
+            );
+            if self_clone.remove_query(&query_id_clone).await.is_none() {
+                warn!("{msg}, but fail to remove");
+            } else {
+                warn!("{msg}");
+                query.detach().await;
+            }
+        });
     }
 
     // not remove it until timeout or cancelled by user, even if query execution is aborted
