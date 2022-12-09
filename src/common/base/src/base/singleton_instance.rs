@@ -19,6 +19,10 @@ use std::sync::Mutex;
 use once_cell::sync::OnceCell;
 use state::Container;
 
+/// Singleton is a wrapper enum for `Container![Send + Sync]`.
+///
+/// - `Production` is used in our production code.
+/// - `Testing` is served for test only and gated under `debug_assertions`.
 pub enum Singleton {
     Production(Container![Send + Sync]),
 
@@ -56,6 +60,7 @@ impl Singleton {
     fn set<T: Send + Sync + 'static>(&self, value: T) -> bool {
         match self {
             Singleton::Production(c) => c.set(value),
+            #[cfg(debug_assertions)]
             Singleton::Testing(c) => {
                 let thread = std::thread::current();
                 let thread_name = match thread.name() {
@@ -64,11 +69,7 @@ impl Singleton {
                 };
                 let mut guard = c.lock().expect("lock must succeed");
                 let c = guard.entry(thread_name.to_string()).or_default();
-                let has_set = c.set(value);
-                if has_set {
-                    panic!("thread has set value for twice")
-                }
-                false
+                c.set(value)
             }
         }
     }
@@ -85,17 +86,25 @@ impl Debug for Singleton {
     }
 }
 
+/// GLOBAL is a static type that holding all global data.
 static GLOBAL: OnceCell<Singleton> = OnceCell::new();
 
+/// Global is an empty struct that only used to carry associated functions.
 pub struct Global;
 
 impl Global {
+    /// init production global data registry.
+    ///
+    /// Should only be initiated once.
     pub fn init_production() {
         GLOBAL
             .set(Singleton::Production(<Container![Send + Sync]>::new()))
             .expect("GLOBAL has been set")
     }
 
+    /// init testing global data registry.
+    ///
+    /// Should only be initiated once and only used in testing.
     #[cfg(debug_assertions)]
     pub fn init_testing() {
         GLOBAL
@@ -103,6 +112,9 @@ impl Global {
             .expect("GLOBAL has been set")
     }
 
+    /// drop testing global data by thread name.
+    ///
+    /// Should only be used in testing code.
     #[cfg(debug_assertions)]
     pub fn drop_testing(thread_name: &str) {
         match GLOBAL.wait() {
@@ -116,11 +128,14 @@ impl Global {
         }
     }
 
+    /// Get data from global data registry.
     pub fn get<T: Clone + 'static>() -> T {
         GLOBAL.wait().get()
     }
 
-    pub fn set<T: Send + Sync + 'static>(value: T) -> bool {
-        GLOBAL.wait().set(value)
+    /// Set data into global data registry.
+    pub fn set<T: Send + Sync + 'static>(value: T) {
+        let set = GLOBAL.wait().set(value);
+        assert!(!set, "value has been set in global data registry");
     }
 }
