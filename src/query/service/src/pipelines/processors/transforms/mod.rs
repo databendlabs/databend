@@ -50,6 +50,7 @@ pub use transform_block_compact::TransformBlockCompact;
 pub use transform_cast_schema::TransformCastSchema;
 pub use transform_compact::Compactor;
 pub use transform_compact::TransformCompact;
+pub use transform_convert_grouping::efficiently_memory_final_aggregator;
 pub use transform_convert_grouping::TransformConvertGrouping;
 pub use transform_create_sets::SubqueryReceiver;
 pub use transform_create_sets::TransformCreateSets;

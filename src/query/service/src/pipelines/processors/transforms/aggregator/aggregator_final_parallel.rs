@@ -137,7 +137,7 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
     }
 }
 
-struct BucketAggregator<const HAS_AGG: bool, Method>
+pub struct BucketAggregator<const HAS_AGG: bool, Method>
 where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
 {
     area: Area,

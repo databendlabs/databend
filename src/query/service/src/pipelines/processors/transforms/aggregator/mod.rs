@@ -30,6 +30,7 @@ pub use aggregator_final::KeysU512FinalAggregator;
 pub use aggregator_final::KeysU64FinalAggregator;
 pub use aggregator_final::KeysU8FinalAggregator;
 pub use aggregator_final::SerializerFinalAggregator;
+pub use aggregator_final_parallel::BucketAggregator;
 pub use aggregator_params::AggregatorParams;
 pub use aggregator_params::AggregatorTransformParams;
 pub use aggregator_partial::Keys128Aggregator;

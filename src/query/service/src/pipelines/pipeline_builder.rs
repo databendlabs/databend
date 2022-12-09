@@ -41,6 +41,7 @@ use common_sql::executor::AggregateFunctionDesc;
 use common_sql::executor::PhysicalScalar;
 
 use crate::pipelines::processors::port::InputPort;
+use crate::pipelines::processors::transforms::efficiently_memory_final_aggregator;
 use crate::pipelines::processors::transforms::HashJoinDesc;
 use crate::pipelines::processors::transforms::RightSemiAntiJoinCompactor;
 use crate::pipelines::processors::transforms::TransformConvertGrouping;
@@ -370,26 +371,14 @@ impl PipelineBuilder {
             &aggregate.agg_funcs,
         )?;
 
-        // if !params.group_columns.is_empty() && self.main_pipeline.output_len() > 1 {
-        //     // let pipe = self.main_pipeline.pipes.last().unwrap();
-        //     let processor = TransformConvertGrouping::create(
-        //         self.ctx.clone(),
-        //         self.main_pipeline.output_len(),
-        //         1,
-        //         params.clone(),
-        //     )?;
-        //
-        //     let inputs_port = processor.get_inputs().to_vec();
-        //     let outputs_port = processor.get_outputs().to_vec();
-        //
-        //     self.main_pipeline.add_pipe(Pipe::ResizePipe {
-        //         inputs_port,
-        //         outputs_port,
-        //         processor: ProcessorPtr::create(Box::new(processor)),
-        //     });
-        // }
+        if self.ctx.get_cluster().is_empty()
+            && !params.group_columns.is_empty()
+            && self.main_pipeline.output_len() > 1
+        {
+            return efficiently_memory_final_aggregator(params, &mut self.main_pipeline);
+        }
 
-        // self.main_pipeline.resize(1)?;
+        self.main_pipeline.resize(1)?;
         self.main_pipeline.add_transform(|input, output| {
             TransformAggregator::try_create_final(
                 AggregatorTransformParams::try_create(input, output, &params)?,
