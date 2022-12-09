@@ -356,7 +356,7 @@ DB.Table: 'system'.'settings', Table: settings-table_id:1, ver:0, Engine: System
 | row_tag                         | row        | row         | SESSION | In xml format, this field is represented as a row tag, e.g. <row>...</row>.                                       | String |
 | sql_dialect                     | PostgreSQL | PostgreSQL  | SESSION | SQL dialect, support "PostgreSQL" "MySQL" and "Hive", default value: "PostgreSQL".                                | String |
 | storage_read_buffer_size        | 1048576    | 1048576     | SESSION | The size of buffer in bytes for buffered reader of dal. By default, it is 1MB.                                    | UInt64 |
-| timezone                        | UTC        | UTC         | SESSION | Timezone, default value: "UTC".                                                                                   | String |
+| timezone                        | UTC        | UTC         | SESSION | Timezone                                                                                                          | String |
 | unquoted_ident_case_sensitive   | 0          | 0           | SESSION | Case sensitivity of unquoted identifiers, default value: 0 (aka case-insensitive).                                | UInt64 |
 | wait_for_async_insert           | 1          | 1           | SESSION | Whether the client wait for the reply of async insert, default value: 1.                                          | UInt64 |
 | wait_for_async_insert_timeout   | 100        | 100         | SESSION | The timeout in seconds for waiting for processing of async insert, default value: 100.                            | UInt64 |
