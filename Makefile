@@ -62,6 +62,10 @@ build-native:
 unit-test:
 	ulimit -n 10000;ulimit -s 16384; RUST_LOG="ERROR" bash ./scripts/ci/ci-run-unit-tests.sh
 
+miri:
+	cargo miri setup
+	MIRIFLAGS="-Zmiri-disable-isolation" cargo miri test --no-default-features
+
 embedded-meta-test: build
 	rm -rf ./_meta_embedded*
 	bash ./scripts/ci/ci-run-tests-embedded-meta.sh
