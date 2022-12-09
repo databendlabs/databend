@@ -101,18 +101,28 @@ pub fn parse_escape_bytes(bs: &[u8]) -> Vec<u8> {
         if bs[i] == b'\\' {
             if i + 1 < bs.len() {
                 let c = parse_escape_byte(bs[i + 1]);
-                if c != b'\\'
-                    && c != b'\''
-                    && c != b'"'
-                    && c != b'`'
-                    && c != b'/'
-                    && !is_control_ascii(c)
+                if c == b'x'
+                    && i + 3 < bs.len()
+                    && bs[i + 2].is_ascii_hexdigit()
+                    && bs[i + 3].is_ascii_hexdigit()
                 {
-                    vs.push(b'\\');
+                    let v = (bs[i + 2] as char).to_digit(16).unwrap() * 16
+                        + (bs[i + 3] as char).to_digit(16).unwrap();
+                    vs.push(v as u8);
+                    i += 4;
+                } else {
+                    if c != b'\\'
+                        && c != b'\''
+                        && c != b'"'
+                        && c != b'`'
+                        && c != b'/'
+                        && !is_control_ascii(c)
+                    {
+                        vs.push(b'\\');
+                    }
+                    vs.push(c);
+                    i += 2;
                 }
-
-                vs.push(c);
-                i += 2;
             } else {
                 // end with \
                 vs.push(b'\\');
@@ -135,6 +145,7 @@ pub fn parse_escape_byte(b: u8) -> u8 {
         b'r' => b'\r',
         b't' => b'\t',
         b'0' => b'\0',
+        b'x' => b'x',
         _ => b,
     }
 }
