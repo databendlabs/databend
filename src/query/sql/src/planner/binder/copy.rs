@@ -32,7 +32,7 @@ use common_catalog::table_context::TableContext;
 use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_io::prelude::parse_escape_string;
+use common_io::prelude::unescape_string;
 use common_meta_types::FileFormatOptions;
 use common_meta_types::StageFileFormatType;
 use common_meta_types::UserStageInfo;
@@ -611,54 +611,44 @@ pub fn parse_copy_file_format_options(
         .parse::<u64>()?;
 
     // Field delimiter.
-    let field_delimiter = parse_escape_string(
+    let field_delimiter = unescape_string(
         file_format_options
             .get("field_delimiter")
-            .unwrap_or(&"".to_string())
-            .as_bytes(),
-    );
+            .unwrap_or(&"".to_string()),
+    )?;
 
     // Record delimiter.
-    let record_delimiter = parse_escape_string(
+    let record_delimiter = unescape_string(
         file_format_options
             .get("record_delimiter")
-            .unwrap_or(&"".to_string())
-            .as_bytes(),
-    );
+            .unwrap_or(&"".to_string()),
+    )?;
 
     // NaN display.
-    let nan_display = parse_escape_string(
+    let nan_display = unescape_string(
         file_format_options
             .get("nan_display")
-            .unwrap_or(&"".to_string())
-            .as_bytes(),
-    );
+            .unwrap_or(&"".to_string()),
+    )?;
 
     // Escape
-    let escape = parse_escape_string(
-        file_format_options
-            .get("escape")
-            .unwrap_or(&"".to_string())
-            .as_bytes(),
-    );
+    let escape = unescape_string(file_format_options.get("escape").unwrap_or(&"".to_string()))?;
 
     // Compression delimiter.
-    let compression = parse_escape_string(
+    let compression = unescape_string(
         file_format_options
             .get("compression")
-            .unwrap_or(&"none".to_string())
-            .as_bytes(),
-    )
+            .unwrap_or(&"none".to_string()),
+    )?
     .parse()
     .map_err(ErrorCode::UnknownCompressionType)?;
 
     // Row tag in xml.
-    let row_tag = parse_escape_string(
+    let row_tag = unescape_string(
         file_format_options
             .get("row_tag")
-            .unwrap_or(&"".to_string())
-            .as_bytes(),
-    );
+            .unwrap_or(&"".to_string()),
+    )?;
 
     Ok(FileFormatOptions {
         format: file_format,

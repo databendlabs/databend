@@ -14,6 +14,7 @@
 
 use std::cmp;
 
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 pub fn convert_byte_size(num: f64) -> String {
@@ -80,63 +81,11 @@ pub fn deserialize_from_slice<T: serde::de::DeserializeOwned>(slice: &mut &[u8])
     Ok(value)
 }
 
-pub fn is_control_ascii(c: u8) -> bool {
-    c <= 31
-}
-
-pub fn parse_escape_string(bs: &[u8]) -> String {
-    let bs = parse_escape_bytes(bs);
-
-    let mut cs = Vec::with_capacity(bs.len());
-    for b in bs {
-        cs.push(b as char);
-    }
-    cs.iter().collect()
-}
-
-pub fn parse_escape_bytes(bs: &[u8]) -> Vec<u8> {
-    let mut vs = Vec::with_capacity(bs.len());
-    let mut i = 0;
-    while i < bs.len() {
-        if bs[i] == b'\\' {
-            if i + 1 < bs.len() {
-                let c = parse_escape_byte(bs[i + 1]);
-                if c != b'\\'
-                    && c != b'\''
-                    && c != b'"'
-                    && c != b'`'
-                    && c != b'/'
-                    && !is_control_ascii(c)
-                {
-                    vs.push(b'\\');
-                }
-
-                vs.push(c);
-                i += 2;
-            } else {
-                // end with \
-                vs.push(b'\\');
-                break;
-            }
-        } else {
-            vs.push(bs[i]);
-            i += 1;
-        }
-    }
-
-    vs
-}
-
-// https://doc.rust-lang.org/reference/tokens.html
-pub fn parse_escape_byte(b: u8) -> u8 {
-    match b {
-        b'e' => b'\x1B',
-        b'n' => b'\n',
-        b'r' => b'\r',
-        b't' => b'\t',
-        b'0' => b'\0',
-        _ => b,
-    }
+/// Returns string after processing escapes.
+/// This used for settings string unescape, like unescape format_field_delimiter from `\\x01` to `\x01`.
+pub fn unescape_string(escape_str: &str) -> Result<String> {
+    enquote::unescape(escape_str, None)
+        .map_err(|e| ErrorCode::Internal(format!("unescape:{} error:{:?}", escape_str, e)))
 }
 
 /// Mask a string by "******", but keep `unmask_len` of suffix.
