@@ -16,7 +16,6 @@ use std::env;
 use std::io::Error;
 use std::io::ErrorKind;
 use std::io::Result;
-use std::ops::Deref;
 use std::time::Duration;
 
 use anyhow::anyhow;
@@ -334,14 +333,6 @@ fn init_redis_operator(v: &StorageRedisConfig) -> Result<Operator> {
 pub struct DataOperator {
     operator: Operator,
     _params: StorageParams,
-}
-
-impl Deref for DataOperator {
-    type Target = Operator;
-
-    fn deref(&self) -> &Self::Target {
-        &self.operator
-    }
 }
 
 static DATA_OPERATOR: OnceCell<Singleton<DataOperator>> = OnceCell::new();

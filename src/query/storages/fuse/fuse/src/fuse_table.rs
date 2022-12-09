@@ -107,10 +107,7 @@ impl FuseTable {
                 let storage_params = table_info.meta.storage_params.clone();
                 match storage_params {
                     Some(sp) => init_operator(&sp)?,
-                    None => {
-                        let op = &*(DataOperator::instance());
-                        op.clone()
-                    }
+                    None => DataOperator::instance().operator(),
                 }
             }
         };

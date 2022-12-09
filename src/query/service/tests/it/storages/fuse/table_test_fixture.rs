@@ -508,6 +508,7 @@ pub async fn check_data_dir(
                 let content = fixture
                     .ctx
                     .get_data_operator()?
+                    .operator()
                     .object(entry_path)
                     .read()
                     .await?;
