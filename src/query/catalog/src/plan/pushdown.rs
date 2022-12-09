@@ -14,7 +14,7 @@
 
 use std::fmt::Debug;
 
-use common_meta_types::UserStageInfo;
+use common_datavalues::DataSchemaRef;
 
 use crate::plan::Expression;
 use crate::plan::Projection;
@@ -29,18 +29,6 @@ pub struct PrewhereInfo {
     pub remain_columns: Projection,
     /// filter for prewhere
     pub filter: Expression,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct StagePushDownInfo {
-    /// User set files in the COPY statement.
-    pub files: Vec<String>,
-    /// User set path.
-    pub path: String,
-    /// User set pattern in the COPY statement.
-    pub pattern: String,
-    /// User Stage info.
-    pub user_stage_info: UserStageInfo,
 }
 
 /// Extras is a wrapper for push down items.
@@ -58,6 +46,32 @@ pub struct PushDownInfo {
     pub limit: Option<usize>,
     /// Optional order_by expression plan, asc, null_first
     pub order_by: Vec<(Expression, bool, bool)>,
-    /// Optional stage info, used for COPY into <table> from stage
-    pub stage: Option<StagePushDownInfo>,
+}
+
+impl PushDownInfo {
+    pub fn prewhere_of_push_downs(push_downs: &Option<PushDownInfo>) -> Option<PrewhereInfo> {
+        if let Some(PushDownInfo { prewhere, .. }) = push_downs {
+            prewhere.clone()
+        } else {
+            None
+        }
+    }
+
+    pub fn projection_of_push_downs(
+        schema: &DataSchemaRef,
+        push_downs: &Option<PushDownInfo>,
+    ) -> Projection {
+        if let Some(PushDownInfo {
+            projection: Some(prj),
+            ..
+        }) = push_downs
+        {
+            prj.clone()
+        } else {
+            let indices = (0..schema.fields().len())
+                .into_iter()
+                .collect::<Vec<usize>>();
+            Projection::Columns(indices)
+        }
+    }
 }

@@ -288,10 +288,20 @@ impl StatColumn {
                 single_point = false;
             }
 
-            let min_col = v.data_type().create_constant_column(&stat.min, 1)?;
+            let min = match &stat.min {
+                DataValue::Float64(f) if f.is_nan() => &DataValue::Float64(f64::MIN),
+                other => other,
+            };
+
+            let max = match &stat.max {
+                DataValue::Float64(f) if f.is_nan() => &DataValue::Float64(f64::MAX),
+                other => other,
+            };
+
+            let min_col = v.data_type().create_constant_column(min, 1)?;
             let variable_left = Some(ColumnWithField::new(min_col, v.clone()));
 
-            let max_col = v.data_type().create_constant_column(&stat.max, 1)?;
+            let max_col = v.data_type().create_constant_column(max, 1)?;
             let variable_right = Some(ColumnWithField::new(max_col, v.clone()));
             variables.insert(v.name().clone(), (variable_left, variable_right));
         }

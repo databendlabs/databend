@@ -12,6 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::future::Future;
 use std::sync::Arc;
 
 use common_base::base::tokio::sync::Semaphore;
@@ -56,11 +57,7 @@ impl SegmentsIO {
             return Ok(vec![]);
         }
 
-        let ctx = self.ctx.clone();
-        let max_runtime_threads = ctx.get_settings().get_max_threads()? as usize;
-        let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
-
-        // 1.1 combine all the tasks.
+        // combine all the tasks.
         let mut iter = segment_locations.iter();
         let tasks = std::iter::from_fn(move || {
             if let Some(location) = iter.next() {
@@ -74,22 +71,42 @@ impl SegmentsIO {
             }
         });
 
-        // 1.2 build the runtime.
-        let semaphore = Semaphore::new(max_io_requests);
-        let segments_runtime = Arc::new(Runtime::with_worker_threads(
-            max_runtime_threads,
-            Some("fuse-req-segments-worker".to_owned()),
-        )?);
-
-        // 1.3 spawn all the tasks to the runtime.
-        let join_handlers = segments_runtime.try_spawn_batch(semaphore, tasks).await?;
-
-        // 1.4 get all the result.
-        let joint = future::try_join_all(join_handlers)
-            .instrument(tracing::debug_span!("read_segments_join_all"))
-            .await
-            .map_err(|e| ErrorCode::StorageOther(format!("read segments failure, {}", e)))?;
-
-        Ok(joint)
+        try_join_futures(
+            self.ctx.clone(),
+            tasks,
+            "fuse-req-segments-worker".to_owned(),
+        )
+        .await
     }
+}
+
+pub async fn try_join_futures<Fut>(
+    ctx: Arc<dyn TableContext>,
+    futures: impl IntoIterator<Item = Fut>,
+    thread_name: String,
+) -> Result<Vec<Fut::Output>>
+where
+    Fut: Future + Send + 'static,
+    Fut::Output: Send + 'static,
+{
+    let max_runtime_threads = ctx.get_settings().get_max_threads()? as usize;
+    let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
+
+    // 1. build the runtime.
+    let semaphore = Semaphore::new(max_io_requests);
+    let segments_runtime = Arc::new(Runtime::with_worker_threads(
+        max_runtime_threads,
+        Some(thread_name),
+    )?);
+
+    // 2. spawn all the tasks to the runtime.
+    let join_handlers = segments_runtime.try_spawn_batch(semaphore, futures).await?;
+
+    // 3. get all the result.
+    let joint = future::try_join_all(join_handlers)
+        .instrument(tracing::debug_span!("try_join_futures_all"))
+        .await
+        .map_err(|e| ErrorCode::StorageOther(format!("try join futures failure, {}", e)))?;
+
+    Ok(joint)
 }

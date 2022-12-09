@@ -466,6 +466,7 @@ pub async fn check_data_dir(
     block_count: u32,
     index_count: u32,
     check_last_snapshot: Option<()>,
+    check_table_statistic_file: Option<()>,
 ) -> Result<()> {
     let data_path = match &GlobalConfig::instance().storage.params {
         StorageParams::Fs(v) => v.root.clone(),
@@ -478,6 +479,7 @@ pub async fn check_data_dir(
     let mut b_count = 0;
     let mut i_count = 0;
     let mut last_snapshot_loc = "".to_string();
+    let mut table_statistic_files = vec![];
     let prefix_snapshot = FUSE_TBL_SNAPSHOT_PREFIX;
     let prefix_snapshot_statistics = FUSE_TBL_SNAPSHOT_STATISTICS_PREFIX;
     let prefix_segment = FUSE_TBL_SEGMENT_PREFIX;
@@ -501,6 +503,7 @@ pub async fn check_data_dir(
                 i_count += 1;
             } else if path.starts_with(prefix_snapshot_statistics) {
                 ts_count += 1;
+                table_statistic_files.push(entry_path.to_string());
             } else if path.starts_with(prefix_last_snapshot_hint) && check_last_snapshot.is_some() {
                 let content = fixture
                     .ctx
@@ -550,6 +553,26 @@ pub async fn check_data_dir(
         assert_eq!(
             last_snapshot_loc.find(&snapshot_loc),
             Some(last_snapshot_loc.len() - snapshot_loc.len())
+        );
+    }
+
+    if check_table_statistic_file.is_some() {
+        let table = fixture.latest_default_table().await?;
+        let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+        let snapshot_opt = fuse_table.read_table_snapshot().await?;
+        assert!(snapshot_opt.is_some());
+        let snapshot = snapshot_opt.unwrap();
+        let ts_location_opt = snapshot.table_statistics_location.clone();
+        assert!(ts_location_opt.is_some());
+        let ts_location = ts_location_opt.unwrap();
+        println!(
+            "ts_location_opt: {:?}, table_statistic_files: {:?}",
+            ts_location, table_statistic_files
+        );
+        assert!(
+            table_statistic_files
+                .iter()
+                .any(|e| e.contains(&ts_location))
         );
     }
 

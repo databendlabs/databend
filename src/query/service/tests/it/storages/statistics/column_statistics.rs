@@ -88,7 +88,7 @@ fn test_column_traverse() -> Result<()> {
     let cols = traverse::traverse_columns_dfs(sample_block.columns())?;
 
     assert_eq!(5, cols.len());
-    (0..5).for_each(|i| assert_eq!(cols[i], sample_cols[i], "checking col {}", i));
+    (0..5).for_each(|i| assert_eq!(cols[i].1, sample_cols[i], "checking col {}", i));
 
     Ok(())
 }
@@ -96,7 +96,7 @@ fn test_column_traverse() -> Result<()> {
 #[test]
 fn test_column_statistic() -> Result<()> {
     let (sample_block, sample_cols) = gen_sample_block();
-    let col_stats = gen_columns_statistics(&sample_block)?;
+    let col_stats = gen_columns_statistics(&sample_block, None)?;
 
     assert_eq!(5, col_stats.len());
 
