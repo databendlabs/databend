@@ -28,6 +28,8 @@ use super::inner::Config as InnerConfig;
 pub struct Config {
     #[clap(long, default_value = "")]
     pub tenant: String,
+    #[clap(long, default_value = "127.0.0.1:33003")]
+    pub share_endpoint_address: String,
     // Storage backend config.
     #[clap(flatten)]
     pub storage: common_config::StorageConfig,
@@ -43,6 +45,7 @@ impl From<Config> for InnerConfig {
     fn from(x: Config) -> Self {
         InnerConfig {
             tenant: x.tenant,
+            share_endpoint_address: x.share_endpoint_address,
             storage: x.storage.try_into().expect("StorageConfig"),
         }
     }
@@ -52,6 +55,7 @@ impl From<InnerConfig> for Config {
     fn from(inner: InnerConfig) -> Self {
         Self {
             tenant: inner.tenant,
+            share_endpoint_address: inner.share_endpoint_address,
             storage: inner.storage.into(),
         }
     }

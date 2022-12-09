@@ -41,7 +41,6 @@ impl<E: Endpoint> Endpoint for SharingAuthImpl<E> {
     // TODO(zhihanz) current implementation only used for stateless test
     // for production usage, we need to implement a middleware with JWT authentication
     async fn call(&self, mut req: Request) -> Result<Self::Output> {
-        println!("req: {:?}", req);
 
         // decode auth header from bearer base64
         let auth_header = req
@@ -54,7 +53,6 @@ impl<E: Endpoint> Endpoint for SharingAuthImpl<E> {
         let auth_header = auth_header[1];
         let auth_header = base64::decode(auth_header).unwrap();
         let auth_header = String::from_utf8(auth_header).unwrap();
-        println!("auth_header: {:?}", auth_header);
         req.extensions_mut()
             .insert(Credentials { token: auth_header });
         // add json content type if not provided

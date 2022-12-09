@@ -24,8 +24,7 @@ use sharing_endpoint::services::SharingServices;
 #[tokio::main]
 async fn main() -> Result<(), std::io::Error> {
     let config = Config::load().expect("cfgs");
-    println!("config: {:?}", config);
-    SharingServices::init(config)
+    SharingServices::init(config.clone())
         .await
         .expect("failed to init sharing service");
     let app = Route::new()
@@ -35,8 +34,7 @@ async fn main() -> Result<(), std::io::Error> {
         )
         .with(SharingAuth);
 
-    // TODO(zhihanz): remove the hard coded port into a config
-    Server::new(TcpListener::bind("127.0.0.1:33003"))
+    Server::new(TcpListener::bind(config.share_endpoint_address))
         .run(app)
         .await
 }

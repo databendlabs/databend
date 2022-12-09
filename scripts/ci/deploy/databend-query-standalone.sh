@@ -30,24 +30,3 @@ nohup target/${BUILD_PROFILE}/databend-query -c scripts/ci/deploy/config/databen
 
 echo "Waiting on databend-query 10 seconds..."
 python3 scripts/ci/wait_tcp.py --timeout 5 --port 3307
-
-# only expected to get adopted in stateful tests
-if [[ "$ALLOW_SHARING" == "true" ]]; then
-	echo "*************************************"
-	echo "* Test on Databend openSharing endpoint    *"
-	echo "* it will start a node from another tenant *"
-	echo "* Please make sure that S3 backend         *"
-	echo "* is ready, and configured properly.       *"
-	echo "*************************************"
-	echo "Start open-sharing..."
-	export TENANT=test_tenant
-	nohup target/${BUILD_PROFILE}/open-sharing &
-	python3 scripts/ci/wait_tcp.py --timeout 5 --port 33003
-
-	echo 'Start databend-query...'
-	export STORAGE_S3_ROOT=shared
-
-	nohup target/${BUILD_PROFILE}/databend-query -c scripts/ci/deploy/config/databend-query-node-shared.toml &
-
-	python3 scripts/ci/wait_tcp.py --timeout 5 --port 53307
-fi

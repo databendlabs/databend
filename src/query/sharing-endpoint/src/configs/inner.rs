@@ -20,6 +20,7 @@ use super::outer_v0::Config as OuterV0Config;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Config {
     pub tenant: String,
+    pub share_endpoint_address: String,
     pub storage: StorageConfig,
 }
 
@@ -52,6 +53,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             tenant: "".to_string(),
+            share_endpoint_address: "".to_string(),
             storage: StorageConfig::default(),
         }
     }
