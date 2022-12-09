@@ -12,6 +12,7 @@ test = false
 hive = []
 
 [dependencies]
+chrono-tz = { workspace = true }
 common-ast = { path = "../../query/ast" }
 common-base = { path = "../../common/base" }
 common-config = { path = "../config" }

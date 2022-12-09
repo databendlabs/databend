@@ -43,6 +43,9 @@ pub struct Config {
     // Query engine config.
     pub query: QueryConfig,
 
+    // Settings config.
+    pub settings: SettingsConfig,
+
     pub log: LogConfig,
 
     // Meta Service config.
@@ -236,6 +239,19 @@ impl QueryConfig {
         RpcClientTlsConfig {
             rpc_tls_server_root_ca_cert: self.rpc_tls_query_server_root_ca_cert.clone(),
             domain_name: self.rpc_tls_query_service_domain_name.clone(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SettingsConfig {
+    pub timezone: String,
+}
+
+impl Default for SettingsConfig {
+    fn default() -> Self {
+        Self {
+            timezone: "UTC".to_string(),
         }
     }
 }

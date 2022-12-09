@@ -21,10 +21,12 @@ use std::fmt::Formatter;
 use std::str;
 use std::sync::Arc;
 
+use chrono_tz::Tz;
 use common_ast::Dialect;
 use common_base::base::GlobalIORuntime;
 use common_base::base::TrySpawn;
 use common_config::Config;
+use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::UserSetting;
@@ -133,6 +135,20 @@ impl Settings {
     }
 
     pub fn default_settings(tenant: &str) -> Result<Arc<Settings>> {
+        let config = GlobalConfig::instance();
+        let timezone = if config.settings.timezone.clone() == "" {
+            "UTC".to_string()
+        } else {
+            let tz = config.settings.timezone.clone();
+            tz.parse::<Tz>().map_err(|_| {
+                ErrorCode::InvalidTimezone(format!(
+                    "[settings] Timezone [{}] in config file is invalid.",
+                    tz
+                ))
+            })?;
+            tz
+        };
+        let timezone = UserSettingValue::String(timezone);
         let memory_info = sys_info::mem_info().map_err(ErrorCode::from_std_error)?;
         let num_cpus = sys_info::cpu_num().map_err(ErrorCode::from_std_error)?;
         let values = vec![
@@ -307,13 +323,10 @@ impl Settings {
                 possible_values: None,
             },
             SettingValue {
-                default_value: UserSettingValue::String("UTC".to_owned()),
-                user_setting: UserSetting::create(
-                    "timezone",
-                    UserSettingValue::String("UTC".to_owned()),
-                ),
+                default_value: timezone.clone(),
+                user_setting: UserSetting::create("timezone", timezone),
                 level: ScopeLevel::Session,
-                desc: "Timezone, default value: \"UTC\".",
+                desc: "Timezone",
                 possible_values: None,
             },
             SettingValue {

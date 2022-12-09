@@ -84,6 +84,9 @@ users = []
 share_endpoint_address = ""
 share_endpoint_auth_token_file = ""
 
+[settings]
+timezone = "UTC"
+
 [log]
 level = "INFO"
 dir = "./.databend/logs"
@@ -309,6 +312,18 @@ fn test_env_config_s3() -> Result<()> {
             assert_eq!(HashMap::new(), configured.catalogs);
         },
     );
+
+    Ok(())
+}
+
+// From env, defaulting.
+#[test]
+fn test_env_config_settings() -> Result<()> {
+    temp_env::with_vars(vec![("SETTINGS_TIMEZONE", Some("Asia/Shanghai"))], || {
+        let configured = Config::load_for_test().expect("must success").into_outer();
+
+        assert_eq!("Asia/Shanghai", configured.settings.timezone);
+    });
 
     Ok(())
 }
@@ -749,6 +764,9 @@ async_insert_stale_timeout = 0
 users = []
 share_endpoint_address = ""
 
+[settings]
+timezone = "UTC"
+
 [log]
 level = "INFO"
 dir = "./.databend/logs"
@@ -822,6 +840,7 @@ protocol = "binary"
         vec![
             ("CONFIG_FILE", Some(file_path.to_string_lossy().as_ref())),
             ("QUERY_TENANT_ID", Some("tenant_id_from_env")),
+            ("SETTINGS_TIMEZONE", Some("Asia/Shanghai")),
             ("STORAGE_S3_ACCESS_KEY_ID", Some("access_key_id_from_env")),
             ("STORAGE_TYPE", None),
         ],
@@ -833,6 +852,7 @@ protocol = "binary"
             assert_eq!("tenant_id_from_env", cfg.query.tenant_id);
             assert_eq!("access_key_id_from_env", cfg.storage.s3.access_key_id);
             assert_eq!("s3", cfg.storage.storage_type);
+            assert_eq!("Asia/Shanghai", cfg.settings.timezone);
 
             // NOTE:
             //

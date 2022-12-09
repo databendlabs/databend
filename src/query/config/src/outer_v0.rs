@@ -55,6 +55,7 @@ use super::inner::CatalogHiveConfig as InnerCatalogHiveConfig;
 use super::inner::Config as InnerConfig;
 use super::inner::MetaConfig as InnerMetaConfig;
 use super::inner::QueryConfig as InnerQueryConfig;
+use super::inner::SettingsConfig as InnerSettingsConfig;
 use crate::DATABEND_COMMIT_VERSION;
 
 const CATALOG_HIVE: &str = "hive";
@@ -84,6 +85,10 @@ pub struct Config {
     // Query engine config.
     #[clap(flatten)]
     pub query: QueryConfig,
+
+    // Settings config.
+    #[clap(skip)]
+    pub settings: SettingsConfig,
 
     #[clap(flatten)]
     pub log: LogConfig,
@@ -178,6 +183,7 @@ impl From<InnerConfig> for Config {
             cmd: inner.cmd,
             config_file: inner.config_file,
             query: inner.query.into(),
+            settings: inner.settings.into(),
             log: inner.log.into(),
             meta: inner.meta.into(),
             storage: inner.storage.into(),
@@ -214,6 +220,7 @@ impl TryInto<InnerConfig> for Config {
             cmd: self.cmd,
             config_file: self.config_file,
             query: self.query.try_into()?,
+            settings: self.settings.try_into()?,
             log: self.log.try_into()?,
             meta: self.meta.try_into()?,
             storage: self.storage.try_into()?,
@@ -1130,6 +1137,38 @@ impl TryInto<InnerStorageRedisConfig> for RedisStorageConfig {
                 Some(self.default_ttl)
             },
         })
+    }
+}
+
+/// Settings config group.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
+#[serde(default, deny_unknown_fields)]
+pub struct SettingsConfig {
+    pub timezone: String,
+}
+
+impl Default for SettingsConfig {
+    fn default() -> Self {
+        InnerSettingsConfig::default().into()
+    }
+}
+
+impl TryInto<InnerSettingsConfig> for SettingsConfig {
+    type Error = ErrorCode;
+
+    fn try_into(self) -> Result<InnerSettingsConfig> {
+        Ok(InnerSettingsConfig {
+            timezone: self.timezone,
+        })
+    }
+}
+
+#[allow(deprecated)]
+impl From<InnerSettingsConfig> for SettingsConfig {
+    fn from(inner: InnerSettingsConfig) -> Self {
+        Self {
+            timezone: inner.timezone,
+        }
     }
 }
 
