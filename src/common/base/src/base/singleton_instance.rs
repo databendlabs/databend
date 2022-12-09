@@ -12,9 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::fmt::Debug;
-use std::sync::Mutex;
 
 use once_cell::sync::OnceCell;
 use state::Container;
@@ -27,7 +25,7 @@ pub enum Singleton {
     Production(Container![Send + Sync]),
 
     #[cfg(debug_assertions)]
-    Testing(Mutex<HashMap<String, Container![Send + Sync]>>),
+    Testing(std::sync::Mutex<std::collections::HashMap<String, Container![Send + Sync]>>),
 }
 
 unsafe impl Send for Singleton {}
@@ -80,6 +78,7 @@ impl Debug for Singleton {
         f.debug_struct("Singleton")
             .field("type", &match self {
                 Self::Production(_) => "Production",
+                #[cfg(debug_assertions)]
                 Self::Testing(_) => "Testing",
             })
             .finish()
@@ -105,7 +104,7 @@ impl Global {
     /// Should only be initiated once and only used in testing.
     #[cfg(debug_assertions)]
     pub fn init_testing() {
-        let _ = GLOBAL.set(Singleton::Testing(Mutex::default()));
+        let _ = GLOBAL.set(Singleton::Testing(std::sync::Mutex::default()));
     }
 
     /// drop testing global data by thread name.
