@@ -87,7 +87,7 @@ pub enum Compression {
     Lz4Raw,
     Snappy,
     Zstd,
-    Gzip
+    Gzip,
 }
 
 impl Compression {
