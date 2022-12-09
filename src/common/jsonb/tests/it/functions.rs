@@ -32,6 +32,7 @@ use common_jsonb::object_keys;
 use common_jsonb::parse_json_path;
 use common_jsonb::parse_value;
 use common_jsonb::to_string;
+use common_jsonb::Error;
 use common_jsonb::JsonPath;
 use common_jsonb::Number;
 use common_jsonb::Object;
@@ -373,6 +374,18 @@ fn test_parse_json_path() {
     for (s, expect) in sources {
         let path = parse_json_path(s.as_bytes()).unwrap();
         assert_eq!(&path[..], &expect[..]);
+    }
+
+    let wrong_sources = vec![
+        (r#"\"\"\\k1\"\""#, Error::InvalidToken),
+        (r#"\\k1\\'"#, Error::InvalidToken),
+    ];
+    for (s, expect) in wrong_sources {
+        let path = parse_json_path(s.as_bytes());
+        match path {
+            Ok(_) => println!(),
+            Err(_) => assert_eq!(Error::InvalidToken, expect),
+        }
     }
 }
 
