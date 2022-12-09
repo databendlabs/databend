@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_base::base::Singleton;
+use common_base::base::Global;
 use common_exception::Result;
 use common_grpc::RpcClientConf;
 use common_management::QuotaApi;
@@ -34,7 +34,6 @@ use common_meta_store::MetaStore;
 use common_meta_store::MetaStoreProvider;
 use common_meta_types::AuthInfo;
 use common_meta_types::TenantQuota;
-use once_cell::sync::OnceCell;
 
 use crate::idm_config::IDMConfig;
 
@@ -44,19 +43,15 @@ pub struct UserApiProvider {
     idm_config: IDMConfig,
 }
 
-static USER_API_PROVIDER: OnceCell<Singleton<Arc<UserApiProvider>>> = OnceCell::new();
-
 impl UserApiProvider {
     pub async fn init(
         conf: RpcClientConf,
         idm_config: IDMConfig,
         tenant: &str,
         quota: Option<TenantQuota>,
-        v: Singleton<Arc<UserApiProvider>>,
     ) -> Result<()> {
-        v.init(Self::try_create(conf, idm_config).await?)?;
+        Global::set(Self::try_create(conf, idm_config).await?);
 
-        USER_API_PROVIDER.set(v).ok();
         if let Some(q) = quota {
             let i = UserApiProvider::instance().get_tenant_quota_api_client(tenant)?;
             let res = i.get_quota(None).await?;
@@ -82,10 +77,7 @@ impl UserApiProvider {
     }
 
     pub fn instance() -> Arc<UserApiProvider> {
-        match USER_API_PROVIDER.get() {
-            None => panic!("UserApiProvider is not init"),
-            Some(user_api_provider) => user_api_provider.get(),
-        }
+        Global::get()
     }
 
     pub fn get_user_api_client(&self, tenant: &str) -> Result<Arc<dyn UserApi>> {

@@ -14,10 +14,9 @@
 
 use std::sync::Arc;
 
-use common_base::base::Singleton;
+use common_base::base::Global;
 use common_config::QueryConfig;
 use common_exception::Result;
-use once_cell::sync::OnceCell;
 
 use crate::caches::memory_cache::new_bytes_cache;
 use crate::caches::memory_cache::new_item_cache;
@@ -45,15 +44,13 @@ pub struct CacheManager {
     tenant_id: String,
 }
 
-static CACHE_MANAGER: OnceCell<Singleton<Arc<CacheManager>>> = OnceCell::new();
-
 impl CacheManager {
     /// Initialize the caches according to the relevant configurations.
     ///
     /// For convenience, ids of cluster and tenant are also kept
-    pub fn init(config: &QueryConfig, v: Singleton<Arc<CacheManager>>) -> Result<()> {
+    pub fn init(config: &QueryConfig) -> Result<()> {
         if !config.table_cache_enabled {
-            v.init(Arc::new(Self {
+            Global::set(Arc::new(Self {
                 table_snapshot_cache: None,
                 segment_info_cache: None,
                 bloom_index_data_cache: None,
@@ -62,9 +59,7 @@ impl CacheManager {
                 table_statistic_cache: None,
                 cluster_id: config.cluster_id.clone(),
                 tenant_id: config.tenant_id.clone(),
-            }))?;
-
-            CACHE_MANAGER.set(v).ok();
+            }));
         } else {
             let tenant_label = TenantLabel {
                 tenant_id: config.tenant_id.clone(),
@@ -88,7 +83,7 @@ impl CacheManager {
             let file_meta_data_cache =
                 Self::new_item_cache(DEFAULT_FILE_META_DATA_CACHE_ITEMS, tenant_label);
 
-            v.init(Arc::new(Self {
+            Global::set(Arc::new(Self {
                 table_snapshot_cache,
                 segment_info_cache,
                 bloom_index_data_cache,
@@ -97,19 +92,14 @@ impl CacheManager {
                 table_statistic_cache,
                 cluster_id: config.cluster_id.clone(),
                 tenant_id: config.tenant_id.clone(),
-            }))?;
-
-            CACHE_MANAGER.set(v).ok();
+            }));
         }
 
         Ok(())
     }
 
     pub fn instance() -> Arc<CacheManager> {
-        match CACHE_MANAGER.get() {
-            None => panic!("CacheManager is not init"),
-            Some(cache_manager) => cache_manager.get(),
-        }
+        Global::get()
     }
 
     pub fn get_table_snapshot_cache(&self) -> Option<TableSnapshotCache> {

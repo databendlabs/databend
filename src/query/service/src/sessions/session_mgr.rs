@@ -22,8 +22,8 @@ use std::sync::Weak;
 use std::time::Duration;
 
 use common_base::base::tokio;
+use common_base::base::Global;
 use common_base::base::SignalStream;
-use common_base::base::Singleton;
 use common_config::Config;
 use common_config::GlobalConfig;
 use common_exception::ErrorCode;
@@ -34,7 +34,6 @@ use common_settings::Settings;
 use common_users::UserApiProvider;
 use futures::future::Either;
 use futures::StreamExt;
-use once_cell::sync::OnceCell;
 use parking_lot::RwLock;
 use tracing::debug;
 use tracing::info;
@@ -59,13 +58,10 @@ pub struct SessionManager {
     pub(in crate::sessions) mysql_basic_conn_id: AtomicU32,
 }
 
-static SESSION_MANAGER: OnceCell<Singleton<Arc<SessionManager>>> = OnceCell::new();
-
 impl SessionManager {
-    pub fn init(conf: &Config, v: Singleton<Arc<SessionManager>>) -> Result<()> {
-        v.init(Self::create(conf))?;
+    pub fn init(conf: &Config) -> Result<()> {
+        Global::set(Self::create(conf));
 
-        SESSION_MANAGER.set(v).ok();
         Ok(())
     }
 
@@ -81,10 +77,7 @@ impl SessionManager {
     }
 
     pub fn instance() -> Arc<SessionManager> {
-        match SESSION_MANAGER.get() {
-            None => panic!("SessionManager is not init"),
-            Some(session_manager) => session_manager.get(),
-        }
+        Global::get()
     }
 
     pub async fn create_session(&self, typ: SessionType) -> Result<Arc<Session>> {

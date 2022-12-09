@@ -14,27 +14,20 @@
 
 use std::sync::Arc;
 
-use common_base::base::Singleton;
+use common_base::base::Global;
 use common_exception::Result;
-use once_cell::sync::OnceCell;
 
 use crate::Config;
 
 pub struct GlobalConfig;
 
-static GLOBAL_CONFIG: OnceCell<Singleton<Arc<Config>>> = OnceCell::new();
-
 impl GlobalConfig {
-    pub fn init(config: Config, v: Singleton<Arc<Config>>) -> Result<()> {
-        v.init(Arc::new(config))?;
-        GLOBAL_CONFIG.set(v).ok();
+    pub fn init(config: Config) -> Result<()> {
+        Global::set(Arc::new(config));
         Ok(())
     }
 
     pub fn instance() -> Arc<Config> {
-        match GLOBAL_CONFIG.get() {
-            None => panic!("GlobalConfig is not init"),
-            Some(config) => config.get(),
-        }
+        Global::get()
     }
 }

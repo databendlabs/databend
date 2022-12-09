@@ -20,11 +20,10 @@ use std::time::Duration;
 
 use anyhow::anyhow;
 use backon::ExponentialBackoff;
+use common_base::base::Global;
 use common_base::base::GlobalIORuntime;
-use common_base::base::Singleton;
 use common_base::base::TrySpawn;
 use common_exception::ErrorCode;
-use once_cell::sync::OnceCell;
 use opendal::layers::ImmutableIndexLayer;
 use opendal::layers::LoggingLayer;
 use opendal::layers::MetricsLayer;
@@ -335,21 +334,15 @@ pub struct DataOperator {
     _params: StorageParams,
 }
 
-static DATA_OPERATOR: OnceCell<Singleton<DataOperator>> = OnceCell::new();
-
 impl DataOperator {
     /// Get the operator from PersistOperator
     pub fn operator(&self) -> Operator {
         self.operator.clone()
     }
 
-    pub async fn init(
-        conf: &StorageConfig,
-        v: Singleton<DataOperator>,
-    ) -> common_exception::Result<()> {
-        v.init(Self::try_create(&conf.params).await?)?;
+    pub async fn init(conf: &StorageConfig) -> common_exception::Result<()> {
+        Global::set(Self::try_create(&conf.params).await?);
 
-        DATA_OPERATOR.set(v).ok();
         Ok(())
     }
 
@@ -380,10 +373,7 @@ impl DataOperator {
     }
 
     pub fn instance() -> DataOperator {
-        match DATA_OPERATOR.get() {
-            None => panic!("StorageOperator is not init"),
-            Some(storage_operator) => storage_operator.get(),
-        }
+        Global::get()
     }
 }
 
@@ -400,16 +390,10 @@ pub struct CacheOperator {
     op: Option<Operator>,
 }
 
-static CACHE_OPERATOR: OnceCell<Singleton<CacheOperator>> = OnceCell::new();
-
 impl CacheOperator {
-    pub async fn init(
-        conf: &CacheConfig,
-        v: Singleton<CacheOperator>,
-    ) -> common_exception::Result<()> {
-        v.init(Self::try_create(conf).await?)?;
+    pub async fn init(conf: &CacheConfig) -> common_exception::Result<()> {
+        Global::set(Self::try_create(conf).await?);
 
-        CACHE_OPERATOR.set(v).ok();
         Ok(())
     }
 
@@ -459,10 +443,8 @@ impl CacheOperator {
     }
 
     pub fn instance() -> Option<Operator> {
-        match CACHE_OPERATOR.get() {
-            None => panic!("CacheOperator is not init"),
-            Some(op) => op.get().inner(),
-        }
+        let v: CacheOperator = Global::get();
+        v.inner()
     }
 
     fn inner(&self) -> Option<Operator> {

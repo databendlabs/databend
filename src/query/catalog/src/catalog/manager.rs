@@ -14,18 +14,15 @@
 
 use std::sync::Arc;
 
-use common_base::base::Singleton;
+use common_base::base::Global;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use dashmap::mapref::entry::Entry;
 use dashmap::DashMap;
-use once_cell::sync::OnceCell;
 
 use super::Catalog;
 
 pub const CATALOG_DEFAULT: &str = "default";
-
-static CATALOG_MANAGER: OnceCell<Singleton<Arc<CatalogManager>>> = OnceCell::new();
 
 pub struct CatalogManager {
     pub catalogs: DashMap<String, Arc<dyn Catalog>>,
@@ -41,14 +38,7 @@ impl CatalogManager {
     }
 
     pub fn instance() -> Arc<CatalogManager> {
-        match CATALOG_MANAGER.get() {
-            None => panic!("CatalogManager is not init"),
-            Some(catalog_manager) => catalog_manager.get(),
-        }
-    }
-
-    pub fn set_instance(manager: Singleton<Arc<CatalogManager>>) {
-        CATALOG_MANAGER.set(manager).ok();
+        Global::get()
     }
 
     pub fn insert_catalog(

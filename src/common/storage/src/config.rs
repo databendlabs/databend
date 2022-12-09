@@ -21,8 +21,7 @@ use std::sync::Arc;
 use common_auth::RefreshableToken;
 use common_auth::TokenFile;
 use common_base::base::tokio::sync::RwLock;
-use common_base::base::Singleton;
-use once_cell::sync::OnceCell;
+use common_base::base::Global;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -496,8 +495,6 @@ impl Debug for StorageRedisConfig {
     }
 }
 
-static SHARE_TABLE_CONFIG: OnceCell<Singleton<ShareTableConfig>> = OnceCell::new();
-
 // TODO: This config should be moved out of common-storage crate.
 #[derive(Clone)]
 pub struct ShareTableConfig {
@@ -510,15 +507,13 @@ impl ShareTableConfig {
         share_endpoint_address: &str,
         token_file: &str,
         default_token: String,
-        v: Singleton<ShareTableConfig>,
     ) -> common_exception::Result<()> {
-        v.init(Self::try_create(
+        Global::set(Self::try_create(
             share_endpoint_address,
             token_file,
             default_token,
-        )?)?;
+        )?);
 
-        SHARE_TABLE_CONFIG.set(v).ok();
         Ok(())
     }
 
@@ -554,9 +549,6 @@ impl ShareTableConfig {
     }
 
     pub fn instance() -> ShareTableConfig {
-        match SHARE_TABLE_CONFIG.get() {
-            None => panic!("ShareTableConfig is not init"),
-            Some(config) => config.get(),
-        }
+        Global::get()
     }
 }
