@@ -24,11 +24,11 @@ use common_pipeline_core::processors::Processor;
 
 pub struct OneChunkSource {
     output: Arc<OutputPort>,
-    chunk: Option<Chunk>,
+    chunk: Option<Chunk<String>>,
 }
 
 impl OneChunkSource {
-    pub fn create(output: Arc<OutputPort>, chunk: Chunk) -> Result<ProcessorPtr> {
+    pub fn create(output: Arc<OutputPort>, chunk: Chunk<String>) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(OneChunkSource {
             output,
             chunk: Some(chunk),

@@ -22,8 +22,10 @@ use common_expression::types::NumberDataType;
 use common_expression::with_number_mapped_type;
 use common_expression::with_number_type;
 use common_expression::Chunk;
+use common_expression::ChunkEntry;
 use common_expression::DataField;
 use common_expression::Scalar;
+use common_expression::TableField;
 use common_expression::Value;
 
 use crate::hive_partition::HivePartInfo;
@@ -32,11 +34,11 @@ use crate::utils::str_field_to_scalar;
 
 #[derive(Debug, Clone)]
 pub struct HivePartitionFiller {
-    pub partition_fields: Vec<DataField>,
+    pub partition_fields: Vec<TableField>,
 }
 
 impl HivePartitionFiller {
-    pub fn create(partition_fields: Vec<DataField>) -> Self {
+    pub fn create(partition_fields: Vec<TableField>) -> Self {
         HivePartitionFiller { partition_fields }
     }
 
@@ -44,7 +46,7 @@ impl HivePartitionFiller {
         &self,
         num_rows: usize,
         value: String,
-        field: &DataField,
+        field: &TableField,
     ) -> Result<Value<AnyType>> {
         let value = str_field_to_scalar(&value, &field.data_type().into())?;
         Ok(Value::Scalar(value))
@@ -71,10 +73,10 @@ impl HivePartitionFiller {
 
     pub fn fill_data(
         &self,
-        mut chunk: Chunk,
+        mut chunk: Chunk<String>,
         part: &HivePartInfo,
         origin_num_rows: usize,
-    ) -> Result<Chunk> {
+    ) -> Result<Chunk<String>> {
         let data_values = self.extract_partition_values(part)?;
 
         // create column, create datafiled
@@ -85,8 +87,11 @@ impl HivePartitionFiller {
         for (i, field) in self.partition_fields.iter().enumerate() {
             let value = &data_values[i];
             let column = self.generate_value(num_rows, value.clone(), field)?;
-            // chunk.add_column(column, field.data_type().clone());
-            todo!("expression")
+            chunk.add_column(ChunkEntry {
+                id: field.name().to_string(),
+                data_type: field.data_type().into(),
+                value: column,
+            });
         }
         Ok(chunk)
     }

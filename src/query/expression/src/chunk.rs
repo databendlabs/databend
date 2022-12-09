@@ -240,7 +240,9 @@ impl<Index: ColumnIndex> Chunk<Index> {
     pub fn meta(&self) -> Result<Option<ChunkMetaInfoPtr>> {
         Ok(self.meta.clone())
     }
+}
 
+impl Chunk<String> {
     pub fn from_arrow_chunk<A: AsRef<dyn Array>>(
         arrow_chunk: &ArrowChunk<A>,
         schema: &TableSchemaRef,
@@ -271,6 +273,13 @@ impl Chunk<usize> {
             num_rows,
             meta: None,
         }
+    }
+
+    pub fn from_arrow_chunk<A: AsRef<dyn Array>>(
+        arrow_chunk: &ArrowChunk<A>,
+        schema: &TableSchemaRef,
+    ) -> Result<Self> {
+        todo!("expression")
     }
 }
 

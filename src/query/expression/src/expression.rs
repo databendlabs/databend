@@ -237,25 +237,25 @@ impl<Index: ColumnIndex> Expr<Index> {
 }
 
 impl<Index: ColumnIndex> RemoteExpr<Index> {
-    pub fn from_expr(expr: Expr<Index>) -> Self {
+    pub fn from_expr(expr: &Expr<Index>) -> Self {
         match expr {
             Expr::Constant {
                 span,
                 scalar,
                 data_type,
             } => RemoteExpr::Constant {
-                span,
-                scalar,
-                data_type,
+                span: span.clone(),
+                scalar: scalar.clone(),
+                data_type: data_type.clone(),
             },
             Expr::ColumnRef {
                 span,
                 id,
                 data_type,
             } => RemoteExpr::ColumnRef {
-                span,
-                id,
-                data_type,
+                span: span.clone(),
+                id: id.clone(),
+                data_type: data_type.clone(),
             },
             Expr::Cast {
                 span,
@@ -263,10 +263,10 @@ impl<Index: ColumnIndex> RemoteExpr<Index> {
                 expr,
                 dest_type,
             } => RemoteExpr::Cast {
-                span,
-                is_try,
-                expr: Box::new(RemoteExpr::from_expr(*expr)),
-                dest_type,
+                span: span.clone(),
+                is_try: *is_try,
+                expr: Box::new(RemoteExpr::from_expr(expr)),
+                dest_type: dest_type.clone(),
             },
             Expr::FunctionCall {
                 span,
@@ -276,34 +276,34 @@ impl<Index: ColumnIndex> RemoteExpr<Index> {
                 args,
                 return_type,
             } => RemoteExpr::FunctionCall {
-                span,
-                id,
-                generics,
+                span: span.clone(),
+                id: id.clone(),
+                generics: generics.clone(),
                 args: args.into_iter().map(RemoteExpr::from_expr).collect(),
-                return_type,
+                return_type: return_type.clone(),
             },
         }
     }
 
-    pub fn into_expr(self, fn_registry: &FunctionRegistry) -> Option<Expr<Index>> {
+    pub fn into_expr(&self, fn_registry: &FunctionRegistry) -> Option<Expr<Index>> {
         Some(match self {
             RemoteExpr::Constant {
                 span,
                 scalar,
                 data_type,
             } => Expr::Constant {
-                span,
-                scalar,
-                data_type,
+                span: span.clone(),
+                scalar: scalar.clone(),
+                data_type: data_type.clone(),
             },
             RemoteExpr::ColumnRef {
                 span,
                 id,
                 data_type,
             } => Expr::ColumnRef {
-                span,
-                id,
-                data_type,
+                span: span.clone(),
+                id: id.clone(),
+                data_type: data_type.clone(),
             },
             RemoteExpr::Cast {
                 span,
@@ -311,10 +311,10 @@ impl<Index: ColumnIndex> RemoteExpr<Index> {
                 expr,
                 dest_type,
             } => Expr::Cast {
-                span,
-                is_try,
+                span: span.clone(),
+                is_try: *is_try,
                 expr: Box::new(expr.into_expr(fn_registry)?),
-                dest_type,
+                dest_type: dest_type.clone(),
             },
             RemoteExpr::FunctionCall {
                 span,
@@ -325,15 +325,15 @@ impl<Index: ColumnIndex> RemoteExpr<Index> {
             } => {
                 let function = fn_registry.get(&id)?;
                 Expr::FunctionCall {
-                    span,
-                    id,
+                    span: span.clone(),
+                    id: id.clone(),
                     function,
-                    generics,
+                    generics: generics.clone(),
                     args: args
                         .into_iter()
                         .map(|arg| arg.into_expr(fn_registry))
                         .collect::<Option<_>>()?,
-                    return_type,
+                    return_type: return_type.clone(),
                 }
             }
         })

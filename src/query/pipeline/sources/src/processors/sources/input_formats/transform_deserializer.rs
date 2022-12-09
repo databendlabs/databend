@@ -32,7 +32,7 @@ use crate::processors::sources::input_formats::input_pipeline::InputFormatPipe;
 struct DeserializeProcessor<I: InputFormatPipe> {
     pub chunk_builder: I::ChunkBuilder,
     pub input_buffer: Option<I::RowBatch>,
-    pub output_buffer: VecDeque<Chunk>,
+    pub output_buffer: VecDeque<Chunk<String>>,
 }
 
 impl<I: InputFormatPipe> DeserializeProcessor<I> {

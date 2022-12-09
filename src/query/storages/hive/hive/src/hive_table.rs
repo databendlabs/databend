@@ -35,8 +35,12 @@ use common_expression::Chunk;
 use common_expression::DataField;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
+use common_expression::Expr;
 use common_expression::RemoteExpr;
 use common_expression::Scalar;
+use common_expression::TableField;
+use common_expression::TableSchema;
+use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 use common_meta_app::schema::TableInfo;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
@@ -91,7 +95,7 @@ impl HiveTable {
     fn filter_hive_partition_from_partition_keys(
         &self,
         projections: Vec<usize>,
-    ) -> (Vec<usize>, Vec<DataField>) {
+    ) -> (Vec<usize>, Vec<TableField>) {
         let partition_keys = &self.table_options.partition_keys;
         match partition_keys {
             Some(partition_keys) => {
@@ -129,8 +133,22 @@ impl HiveTable {
             )));
         }
 
-        let filter_expressions = push_downs.as_ref().map(|extra| extra.filters.as_slice());
-        let range_filter = todo!("expression");
+        let filter_expressions = push_downs.as_ref().map(|extra| {
+            extra
+                .filters
+                .iter()
+                .cloned()
+                .map(|expr| expr.into_expr(&BUILTIN_FUNCTIONS).unwrap())
+                .collect::<Vec<_>>()
+        });
+        let range_filter = match filter_expressions {
+            Some(exprs) if !exprs.is_empty() => Some(RangeFilter::try_create(
+                ctx.clone(),
+                &exprs,
+                self.table_info.schema(),
+            )?),
+            _ => None,
+        };
 
         let projection = self.get_projections(push_downs)?;
         let mut projection_fields = vec![];
@@ -193,7 +211,7 @@ impl HiveTable {
 
     // simple select query is the sql likes `select * from xx limit 10` or
     // `select * from xx where p_date = '20220201' limit 10` where p_date is a partition column;
-    // we just need to read few datas from table
+    // we just need to read a few datas from table
     fn is_simple_select_query(&self, plan: &DataSourcePlan) -> bool {
         // couldn't get groupby order by info
         if let Some(PushDownInfo {
@@ -223,8 +241,14 @@ impl HiveTable {
         }
     }
 
-    fn get_columns_from_expressions(expressions: &[RemoteExpr<String>]) -> HashSet<String> {
-        todo!("expression")
+    fn get_columns_from_expressions(exprs: &[RemoteExpr<String>]) -> HashSet<String> {
+        let mut cols = HashSet::new();
+        for expr in exprs {
+            for (col_name, _) in expr.into_expr(&BUILTIN_FUNCTIONS).unwrap().column_refs() {
+                cols.insert(col_name);
+            }
+        }
+        cols
     }
 
     fn get_projections(&self, push_downs: &Option<PushDownInfo>) -> Result<Vec<usize>> {
@@ -273,7 +297,7 @@ impl HiveTable {
         )
     }
 
-    fn get_column_schemas(&self, columns: Vec<String>) -> Result<Arc<DataSchema>> {
+    fn get_column_schemas(&self, columns: Vec<String>) -> Result<Arc<TableSchema>> {
         let mut fields = Vec::with_capacity(columns.len());
         for column in columns {
             let schema = self.table_info.schema();
@@ -281,14 +305,14 @@ impl HiveTable {
             fields.push(data_field.clone());
         }
 
-        Ok(Arc::new(DataSchema::new(fields)))
+        Ok(Arc::new(TableSchema::new(fields)))
     }
 
     async fn get_query_locations_from_partition_table(
         &self,
         ctx: Arc<dyn TableContext>,
         partition_keys: Vec<String>,
-        filter_expressions: Vec<RemoteExpr<String>>,
+        filter_expressions: Vec<Expr<String>>,
     ) -> Result<Vec<(String, Option<String>)>> {
         let hive_catalog = ctx.get_catalog(CATALOG_HIVE)?;
         let hive_catalog = hive_catalog.as_any().downcast_ref::<HiveCatalog>().unwrap();
@@ -362,7 +386,12 @@ impl HiveTable {
             if !partition_keys.is_empty() {
                 let filter_expression = push_downs
                     .as_ref()
-                    .map(|p| p.filters.clone())
+                    .map(|p| {
+                        p.filters
+                            .iter()
+                            .map(|expr| expr.into_expr(&BUILTIN_FUNCTIONS).unwrap())
+                            .collect()
+                    })
                     .unwrap_or_default();
                 return self
                     .get_query_locations_from_partition_table(
@@ -535,7 +564,7 @@ impl HiveSource {
 impl SyncSource for HiveSource {
     const NAME: &'static str = "HiveSource";
 
-    fn generate(&mut self) -> Result<Option<Chunk>> {
+    fn generate(&mut self) -> Result<Option<Chunk<String>>> {
         if self.finish {
             return Ok(None);
         }

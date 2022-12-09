@@ -31,7 +31,7 @@ use common_pipeline_core::processors::Processor;
 pub trait SyncSource: Send {
     const NAME: &'static str;
 
-    fn generate(&mut self) -> Result<Option<Chunk>>;
+    fn generate(&mut self) -> Result<Option<Chunk<String>>>;
 }
 
 // TODO: This can be refactored using proc macros
@@ -40,7 +40,7 @@ pub struct SyncSourcer<T: 'static + SyncSource> {
 
     inner: T,
     output: Arc<OutputPort>,
-    generated_data: Option<Chunk>,
+    generated_data: Option<Chunk<String>>,
     scan_progress: Arc<Progress>,
 }
 

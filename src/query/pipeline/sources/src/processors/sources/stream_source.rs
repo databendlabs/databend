@@ -28,7 +28,7 @@ use crate::processors::sources::AsyncSourcer;
 
 /// AsyncSource backed by a stream
 pub struct AsyncStreamSource<const SKIP_EMPTY_CHUNK: bool> {
-    stream: Option<SendableChunkStream>,
+    stream: Option<SendableChunkStream<String>>,
 }
 
 /// AsyncSource backed by a stream, and will skip empty data chunks
@@ -39,13 +39,13 @@ pub type StreamSource = AsyncStreamSource<true>;
 pub type StreamSourceNoSkipEmpty = AsyncStreamSource<false>;
 
 impl<const T: bool> AsyncStreamSource<T> {
-    pub fn new(stream: Option<SendableChunkStream>) -> Self {
+    pub fn new(stream: Option<SendableChunkStream<String>>) -> Self {
         AsyncStreamSource { stream }
     }
 
     pub fn create(
         ctx: Arc<dyn TableContext>,
-        stream: Option<SendableChunkStream>,
+        stream: Option<SendableChunkStream<String>>,
         out: Arc<OutputPort>,
     ) -> Result<ProcessorPtr> {
         AsyncSourcer::create(ctx, out, AsyncStreamSource::<T> { stream })
@@ -58,7 +58,7 @@ impl<const T: bool> AsyncSource for AsyncStreamSource<T> {
     const SKIP_EMPTY_CHUNK: bool = T;
 
     #[async_trait::unboxed_simple]
-    async fn generate(&mut self) -> Result<Option<Chunk>> {
+    async fn generate(&mut self) -> Result<Option<Chunk<String>>> {
         match self
             .stream
             .as_mut()

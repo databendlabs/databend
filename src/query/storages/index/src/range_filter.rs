@@ -43,6 +43,7 @@ use common_expression::FunctionContext;
 use common_expression::RemoteExpr;
 use common_expression::Scalar;
 use common_expression::SchemaDataType;
+use common_expression::TableSchemaRef;
 use common_functions_v2::scalars::check_pattern_type;
 use common_functions_v2::scalars::is_like_pattern_escape;
 use common_functions_v2::scalars::PatternType;
@@ -52,7 +53,7 @@ use common_storages_table_meta::meta::StatisticsOfColumns;
 
 #[derive(Clone)]
 pub struct RangeFilter {
-    schema: DataSchemaRef,
+    schema: TableSchemaRef,
     expr: Expr<String>,
     fn_ctx: FunctionContext,
 }
@@ -61,7 +62,7 @@ impl RangeFilter {
     pub fn try_create(
         ctx: Arc<dyn TableContext>,
         exprs: &[Expr<String>],
-        schema: DataSchemaRef,
+        schema: TableSchemaRef,
     ) -> Result<Self> {
         let conjunction = exprs
             .iter()

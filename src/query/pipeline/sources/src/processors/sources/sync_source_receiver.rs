@@ -26,13 +26,13 @@ use crate::processors::sources::SyncSourcer;
 
 #[allow(dead_code)]
 pub struct SyncReceiverSource {
-    receiver: Receiver<Result<Chunk>>,
+    receiver: Receiver<Result<Chunk<String>>>,
 }
 
 impl SyncReceiverSource {
     pub fn create(
         ctx: Arc<dyn TableContext>,
-        rx: Receiver<Result<Chunk>>,
+        rx: Receiver<Result<Chunk<String>>>,
         out: Arc<OutputPort>,
     ) -> Result<ProcessorPtr> {
         SyncSourcer::create(ctx, out, SyncReceiverSource { receiver: rx })
@@ -43,7 +43,7 @@ impl SyncReceiverSource {
 impl SyncSource for SyncReceiverSource {
     const NAME: &'static str = "SyncReceiverSource";
 
-    fn generate(&mut self) -> Result<Option<Chunk>> {
+    fn generate(&mut self) -> Result<Option<Chunk<String>>> {
         match self.receiver.blocking_recv() {
             None => Ok(None),
             Some(Err(cause)) => Err(cause),

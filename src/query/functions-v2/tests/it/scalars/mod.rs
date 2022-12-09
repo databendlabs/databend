@@ -69,7 +69,7 @@ pub fn run_ast(file: &mut impl Write, text: &str, columns: &[(&str, DataType, Co
             ConstantFolder::new(input_domains.clone(), fn_ctx, &BUILTIN_FUNCTIONS);
         let (optimized_expr, output_domain) = constant_folder.fold(&expr);
 
-        let remote_expr = RemoteExpr::from_expr(optimized_expr);
+        let remote_expr = RemoteExpr::from_expr(&optimized_expr);
         let optimized_expr = remote_expr.into_expr(&BUILTIN_FUNCTIONS).unwrap();
 
         let num_rows = columns.iter().map(|col| col.2.len()).max().unwrap_or(0);

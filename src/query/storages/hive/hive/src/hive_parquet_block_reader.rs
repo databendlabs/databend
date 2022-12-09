@@ -29,6 +29,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::Chunk;
 use common_expression::DataSchemaRef;
+use common_expression::TableSchemaRef;
 use common_storages_cache::FileMetaDataReader;
 use futures::AsyncReadExt;
 use opendal::Object;
@@ -42,7 +43,7 @@ pub struct HiveParquetBlockReader {
     operator: Operator,
     projection: Vec<usize>,
     arrow_schema: Arc<Schema>,
-    projected_schema: DataSchemaRef,
+    projected_schema: TableSchemaRef,
     hive_partition_filler: Option<HivePartitionFiller>,
     chunk_size: usize,
 }
@@ -63,10 +64,10 @@ impl DataBlockDeserializer {
 
     fn next_block(
         &mut self,
-        schema: &DataSchemaRef,
+        schema: &TableSchemaRef,
         filler: &Option<HivePartitionFiller>,
         part_info: &HivePartInfo,
-    ) -> Result<Option<Chunk>> {
+    ) -> Result<Option<Chunk<String>>> {
         if self.drained {
             return Ok(None);
         };
@@ -80,7 +81,7 @@ impl DataBlockDeserializer {
                 self.drained = true;
             }
 
-            let chunk: Chunk = Chunk::from_arrow_chunk(&arrow_chunk, schema)?;
+            let chunk = Chunk::<String>::from_arrow_chunk(&arrow_chunk, schema)?;
             return if let Some(filler) = &filler {
                 let num_rows = self.deserializer.num_rows();
                 let filled = filler.fill_data(chunk, part_info, num_rows)?;
@@ -98,12 +99,12 @@ impl DataBlockDeserializer {
 impl HiveParquetBlockReader {
     pub fn create(
         operator: Operator,
-        schema: DataSchemaRef,
+        schema: TableSchemaRef,
         projection: Vec<usize>,
         hive_partition_filler: Option<HivePartitionFiller>,
         chunk_size: usize,
     ) -> Result<Arc<HiveParquetBlockReader>> {
-        let projected_schema = DataSchemaRef::new(schema.project(&projection));
+        let projected_schema = TableSchemaRef::new(schema.project(&projection));
         let arrow_schema = schema.to_arrow();
         Ok(Arc::new(HiveParquetBlockReader {
             operator,
@@ -261,7 +262,7 @@ impl HiveParquetBlockReader {
         &self,
         row_group_iterator: &mut DataBlockDeserializer,
         part: HivePartInfo,
-    ) -> Result<Option<Chunk>> {
+    ) -> Result<Option<Chunk<String>>> {
         row_group_iterator
             .next_block(&self.projected_schema, &self.hive_partition_filler, &part)
             .map_err(|e| e.add_message(format!(" filename of hive part {}", part.filename)))

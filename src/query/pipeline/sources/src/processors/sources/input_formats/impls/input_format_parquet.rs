@@ -332,10 +332,10 @@ impl ChunkBuilderTrait for ParquetChunkBuilder {
         ParquetChunkBuilder { ctx }
     }
 
-    fn deserialize(&mut self, mut batch: Option<RowGroupInMemory>) -> Result<Vec<Chunk>> {
+    fn deserialize(&mut self, mut batch: Option<RowGroupInMemory>) -> Result<Vec<Chunk<String>>> {
         if let Some(rg) = batch.as_mut() {
             let arrow_chunk = rg.get_arrow_chunk()?;
-            let chunk = Chunk::from_arrow_chunk(&arrow_chunk, &self.ctx.schema)?;
+            let chunk = Chunk::<String>::from_arrow_chunk(&arrow_chunk, &self.ctx.schema)?;
             Ok(vec![chunk])
         } else {
             Ok(vec![])

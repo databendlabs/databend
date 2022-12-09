@@ -2244,6 +2244,7 @@ dependencies = [
  "common-catalog",
  "common-exception",
  "common-expression",
+ "common-functions-v2",
  "common-hive-meta-store",
  "common-meta-app",
  "common-meta-types",

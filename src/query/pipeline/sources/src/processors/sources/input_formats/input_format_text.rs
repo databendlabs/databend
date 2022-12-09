@@ -377,7 +377,7 @@ pub struct ChunkBuilder<T> {
 }
 
 impl<T: InputFormatTextBase> ChunkBuilder<T> {
-    fn flush(&mut self) -> Result<Vec<Chunk>> {
+    fn flush(&mut self) -> Result<Vec<Chunk<String>>> {
         let mut columns = Vec::with_capacity(self.mutable_columns.len());
         for deserializer in &mut self.mutable_columns {
             columns.push(deserializer.finish_to_column());
@@ -415,7 +415,7 @@ impl<T: InputFormatTextBase> ChunkBuilderTrait for ChunkBuilder<T> {
         }
     }
 
-    fn deserialize(&mut self, batch: Option<RowBatch>) -> Result<Vec<Chunk>> {
+    fn deserialize(&mut self, batch: Option<RowBatch>) -> Result<Vec<Chunk<String>>> {
         if let Some(b) = batch {
             self.num_rows += b.row_ends.len();
             T::deserialize(self, b)?;

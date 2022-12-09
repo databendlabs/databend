@@ -17,6 +17,7 @@ common-base = { path = "../../../../common/base" }
 common-catalog = { path = "../../../catalog" }
 common-exception = { path = "../../../../common/exception" }
 common-expression = { path = "../../../expression" }
+common-functions-v2 = { path = "../../../functions-v2" }
 common-hive-meta-store = { path = "../hive-meta-store" }
 common-meta-app = { path = "../../../../meta/app" }
 common-meta-types = { path = "../../../../meta/types" }

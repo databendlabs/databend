@@ -74,7 +74,7 @@ pub trait ChunkBuilderTrait {
     fn deserialize(
         &mut self,
         batch: Option<<Self::Pipe as InputFormatPipe>::RowBatch>,
-    ) -> Result<Vec<Chunk>>;
+    ) -> Result<Vec<Chunk<String>>>;
 }
 
 pub trait ReadBatchTrait: From<Vec<u8>> + Send + Debug {

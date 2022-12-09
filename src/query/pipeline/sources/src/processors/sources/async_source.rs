@@ -31,7 +31,7 @@ pub trait AsyncSource: Send {
     const SKIP_EMPTY_CHUNK: bool = true;
 
     #[async_trait::unboxed_simple]
-    async fn generate(&mut self) -> Result<Option<Chunk>>;
+    async fn generate(&mut self) -> Result<Option<Chunk<String>>>;
 }
 
 // TODO: This can be refactored using proc macros
@@ -43,7 +43,7 @@ pub struct AsyncSourcer<T: 'static + AsyncSource> {
     inner: T,
     output: Arc<OutputPort>,
     scan_progress: Arc<Progress>,
-    generated_data: Option<Chunk>,
+    generated_data: Option<Chunk<String>>,
 }
 
 impl<T: 'static + AsyncSource> AsyncSourcer<T> {

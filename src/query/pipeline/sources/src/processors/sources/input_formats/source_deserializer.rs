@@ -38,7 +38,7 @@ pub struct DeserializeSource<I: InputFormatPipe> {
     input_rx: async_channel::Receiver<I::RowBatch>,
     input_buffer: Option<I::RowBatch>,
     input_finished: bool,
-    output_buffer: VecDeque<Chunk>,
+    output_buffer: VecDeque<Chunk<String>>,
 }
 
 impl<I: InputFormatPipe> DeserializeSource<I> {

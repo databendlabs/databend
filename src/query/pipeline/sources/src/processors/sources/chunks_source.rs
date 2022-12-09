@@ -26,14 +26,14 @@ use crate::processors::sources::SyncSource;
 use crate::processors::sources::SyncSourcer;
 
 pub struct ChunksSource {
-    chunks: Arc<Mutex<VecDeque<Chunk>>>,
+    chunks: Arc<Mutex<VecDeque<Chunk<String>>>>,
 }
 
 impl ChunksSource {
     pub fn create(
         ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
-        chunks: Arc<Mutex<VecDeque<Chunk>>>,
+        chunks: Arc<Mutex<VecDeque<Chunk<String>>>>,
     ) -> Result<ProcessorPtr> {
         SyncSourcer::create(ctx, output, ChunksSource { chunks })
     }
@@ -42,7 +42,7 @@ impl ChunksSource {
 impl SyncSource for ChunksSource {
     const NAME: &'static str = "ChunksSource";
 
-    fn generate(&mut self) -> Result<Option<Chunk>> {
+    fn generate(&mut self) -> Result<Option<Chunk<String>>> {
         let mut chunks_guard = self.chunks.lock();
         match chunks_guard.pop_front() {
             None => Ok(None),

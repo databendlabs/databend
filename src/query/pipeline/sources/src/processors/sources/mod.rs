@@ -51,13 +51,13 @@ mod source_example {
 
     struct ExampleSyncSource {
         pos: usize,
-        chunks: Vec<Chunk>,
+        chunks: Vec<Chunk<String>>,
     }
 
     impl ExampleSyncSource {
         pub fn create(
             ctx: Arc<dyn TableContext>,
-            chunks: Vec<Chunk>,
+            chunks: Vec<Chunk<String>>,
             outputs: Arc<OutputPort>,
         ) -> Result<ProcessorPtr> {
             SyncSourcer::create(ctx, outputs, ExampleSyncSource { pos: 0, chunks })
@@ -67,7 +67,7 @@ mod source_example {
     impl SyncSource for ExampleSyncSource {
         const NAME: &'static str = "Example";
 
-        fn generate(&mut self) -> Result<Option<Chunk>> {
+        fn generate(&mut self) -> Result<Option<Chunk<String>>> {
             self.pos += 1;
             match self.chunks.len() >= self.pos {
                 true => Ok(Some(self.chunks[self.pos - 1].clone())),
@@ -78,13 +78,13 @@ mod source_example {
 
     struct ExampleAsyncSource {
         pos: usize,
-        chunks: Vec<Chunk>,
+        chunks: Vec<Chunk<String>>,
     }
 
     impl ExampleAsyncSource {
         pub fn create(
             ctx: Arc<dyn TableContext>,
-            chunks: Vec<Chunk>,
+            chunks: Vec<Chunk<String>>,
             output: Arc<OutputPort>,
         ) -> Result<ProcessorPtr> {
             AsyncSourcer::create(ctx, output, ExampleAsyncSource { pos: 0, chunks })
@@ -96,7 +96,7 @@ mod source_example {
         const NAME: &'static str = "Async";
 
         #[async_trait::unboxed_simple]
-        async fn generate(&mut self) -> Result<Option<Chunk>> {
+        async fn generate(&mut self) -> Result<Option<Chunk<String>>> {
             self.pos += 1;
             match self.chunks.len() >= self.pos {
                 true => Ok(Some(self.chunks[self.pos - 1].clone())),
