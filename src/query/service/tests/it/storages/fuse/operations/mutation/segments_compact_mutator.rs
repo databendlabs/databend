@@ -663,9 +663,10 @@ impl CompactSegmentTestFixture {
             let mut stats_acc = StatisticsAccumulator::default();
             for block in blocks {
                 let block = block?;
-                let col_stats = gen_columns_statistics(&block)?;
+                let col_stats = gen_columns_statistics(&block, None)?;
 
-                let mut block_statistics = BlockStatistics::from(&block, "".to_owned(), None)?;
+                let mut block_statistics =
+                    BlockStatistics::from(&block, "".to_owned(), None, None)?;
                 let block_meta = block_writer.write(block, col_stats, None).await?;
                 block_statistics.block_file_location = block_meta.location.0.clone();
 

@@ -176,7 +176,7 @@ impl Processor for ResultTableSink {
         match std::mem::replace(&mut self.state, State::None) {
             State::NeedSerialize(block) => {
                 let location = self.locations.gen_block_location();
-                let block_statistics = BlockStatistics::from(&block, location.clone(), None)?;
+                let block_statistics = BlockStatistics::from(&block, location.clone(), None, None)?;
 
                 let mut data = Vec::with_capacity(100 * 1024 * 1024);
                 let schema = block.schema().clone();
