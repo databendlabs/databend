@@ -1,4 +1,3 @@
-
 # Sqllogic test
 
 The database return right with different handlers, for example MySQL and http
@@ -6,7 +5,9 @@ The database return right with different handlers, for example MySQL and http
 # Usage
 
 ## Prepare
+
 Change to the scripts dir:
+
 ```shell
 cd tests/logictest/
 ```
@@ -14,33 +15,40 @@ cd tests/logictest/
 Make sure python3 is installed.
 
 If you are familiar with `pip`, you can install dependency with:
+
 ```shell
 pip install -r requirements.txt
 ```
 
 ## Need to know
-1. Cases from **tests/suites/0_stateless/**  to  **tests/logictest/suites/gen/**
+
+1. Cases from **tests/suites/0_stateless/** to **tests/logictest/suites/gen/**
 2. If a case file already exists in gen/, gen_suites will ignore it.
 3. Regenerate：delete case file in gen/ and run gen_suites.py
 
 ## Generate sqllogic test cases from Stateless Test
+
 1. python3 gen_suites.py
 
 ## Usage
+
 You can simply run all tests with:
+
 ```shell
 python main.py
 ```
 
 Get help with:
+
 ```shell
 python main.py -h
 ```
 
 Useful arguments:
-1. --run-dir ydb  will only run the suites in dir ./suites/ydb/
-2. --skip-dir ydb  will skip the suites in dir ./suites/ydb
-3. --suites other_dir  wiil use suites file in dir ./other_dir
+
+1. --run-dir ydb will only run the suites in dir ./suites/ydb/
+2. --skip-dir ydb will skip the suites in dir ./suites/ydb
+3. --suites other_dir wiil use suites file in dir ./other_dir
 4. Run files by pattern string like: python main.py "03_0001"
 
 ## Docker
@@ -53,6 +61,7 @@ docker build -t sqllogic/test:latest .
 
 1. Image release: datafuselabs/sqllogictest:latest
 2. Set envs
+
 - SKIP_TEST_FILES (skip test case, set file name here split by `,` )
 - QUERY_MYSQL_HANDLER_HOST
 - QUERY_MYSQL_HANDLER_PORT
@@ -61,6 +70,7 @@ docker build -t sqllogic/test:latest .
 - MYSQL_DATABASE
 - MYSQL_USER
 - ADDITIONAL_HEADERS (for security scenario)
+
 3. docker run --name logictest --rm --network host datafuselabs/sqllogictest:latest
 
 ## How to write logic test
@@ -117,6 +127,7 @@ select number, number + 1, number + 999 from numbers(10);
 ## How to use regex in logic test
 
 1. Regular expressions are implemented in regex_type.py. Additions can be made as needed but modifications require particular care.
+
 ```
 regex_type_map = {
     "ANYTHING": ".*",
@@ -125,12 +136,13 @@ regex_type_map = {
 ```
 
 2. A demo of regex likes:
+
 ```
 statement query TTTRRTIIII
 SELECT * FROM system.tables WHERE database='db1';
 
 ----
-db1 t1 FUSE $ANYTHING $DATE NULL	0	0	0	0
+default db1 t1 FUSE $ANYTHING $DATE NULL	0	0	0	0
 ```
 
 ### limitation
@@ -139,7 +151,8 @@ The space is used to split results into columns, space in regex expression shoul
 
 ## Write logic test tips
 
-1. skipif  help you skip test of given handler
+1. skipif help you skip test of given handler
+
 ```
 skipif clickhouse
 statement query I
@@ -150,6 +163,7 @@ select 1;
 ```
 
 2. onlyif help you run test only by given handler
+
 ```
 onlyif mysql
 statement query I
@@ -160,6 +174,7 @@ select 1;
 ```
 
 3. if some test has a flaky failure, and you want to ignore it, simply add skipped before statement query. (Remove it after the problem is solved)
+
 ```
 statement query skipped I
 select 1;
@@ -169,9 +184,10 @@ select 1;
 ```
 
 ### Acknowledgement
-- *tips* If you do not care about results, use statement ok instead of statement query
-- *tips* Add ORDER BY to ensure that the order of returned results is always consistent
-- *warning* A statement query need results, and even if you want to skip a case, you still need to keep the results in the test content
+
+- _tips_ If you do not care about results, use statement ok instead of statement query
+- _tips_ Add ORDER BY to ensure that the order of returned results is always consistent
+- _warning_ A statement query need results, and even if you want to skip a case, you still need to keep the results in the test content
 
 ## Tools
 
@@ -183,19 +199,20 @@ complete.py can auto-complete test file for you, It does as follow steps:
 ### Usage
 
 - Pre-run, you need to start databend server or MySQL server
-- Use `./complete.py --source-file="xxx.sql" --dest-file="my-gen"`  for SQL files(suffix name must be like *.sql)
-- Use `./complete.py --source-file="xxx.test" --fest-file="my-gen"` for logictest files(suffix name not like *.sql, maybe like *.test)
+- Use `./complete.py --source-file="xxx.sql" --dest-file="my-gen"` for SQL files(suffix name must be like \*.sql)
+- Use `./complete.py --source-file="xxx.test" --fest-file="my-gen"` for logictest files(suffix name not like _.sql, maybe like _.test)
 - Use `--enable-auto-cleanup` to add `drop table if exists xxx` or `drop database if exists xxx` at the beginning of the test file
 - If you want to see what SQLs get from source-file, add `--show-sql`
 - Use the command line to specify host, user, port, password and database. Details in `./complete.py -h`
 
 ### Acknowledgement
 
-- *tips* You can use MYSQL syntax to auto-complete the test suite, but make sure you know all grammar differences.
-- *tips* MYSQL return bool as 1 and 0, this tool makes it as `int(I)` in query type option.
-- *warning* No multi handlers use in the auto-complete tool(MYSQL only), if handlers return a difference, manual fix it, please.
+- _tips_ You can use MYSQL syntax to auto-complete the test suite, but make sure you know all grammar differences.
+- _tips_ MYSQL return bool as 1 and 0, this tool makes it as `int(I)` in query type option.
+- _warning_ No multi handlers use in the auto-complete tool(MYSQL only), if handlers return a difference, manual fix it, please.
 
 # Learn More
 
 RFC: https://github.com/datafuselabs/databend/blob/main/docs/doc/60-contributing/03-rfcs/20220425-new_sql_logic_test_framework.md
 Migration discussion: https://github.com/datafuselabs/databend/discussions/5838
+
