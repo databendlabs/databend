@@ -12,19 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use poem::{EndpointExt, Route, Server};
 use common_base::base::tokio;
 use poem::listener::TcpListener;
+use poem::EndpointExt;
+use poem::Route;
+use poem::Server;
+use sharing_endpoint::configs::Config;
 use sharing_endpoint::handlers::presign_files;
 use sharing_endpoint::middlewares::SharingAuth;
-use sharing_endpoint::configs::Config;
 use sharing_endpoint::services::SharingServices;
 #[tokio::main]
-async fn main() ->Result<(), std::io::Error> {
+async fn main() -> Result<(), std::io::Error> {
     let config = Config::load().expect("cfgs");
     println!("config: {:?}", config);
-    SharingServices::init(config).await.expect("failed to init sharing service");
-    let app = Route::new().at("/tenant/:tenant_id/:share_name/table/:table_name/presign", poem::post(presign_files)).with(SharingAuth);
+    SharingServices::init(config)
+        .await
+        .expect("failed to init sharing service");
+    let app = Route::new()
+        .at(
+            "/tenant/:tenant_id/:share_name/table/:table_name/presign",
+            poem::post(presign_files),
+        )
+        .with(SharingAuth);
 
     // TODO(zhihanz): remove the hard coded port into a config
     Server::new(TcpListener::bind("127.0.0.1:33003"))

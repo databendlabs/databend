@@ -13,14 +13,17 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use poem::{FromRequest, http, Request, RequestBody};
+
+use common_exception::ErrorCode;
+use common_exception::Result;
+use poem::async_trait;
+use poem::error::Result as PoemResult;
+use poem::http;
+use poem::FromRequest;
+use poem::Request;
+use poem::RequestBody;
 use serde::Deserialize;
 use serde::Serialize;
-use poem::async_trait;
-use common_exception::{ErrorCode, Result};
-use poem::error::Result as PoemResult;
-use crate::models;
-
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct LambdaInput {
@@ -85,7 +88,7 @@ pub struct PresignFileResponse {
 }
 
 // if header key is duplicate, it would adopt the last one.
-fn get_presign_headers(h : http::HeaderMap) -> HashMap<String, String> {
+fn get_presign_headers(h: http::HeaderMap) -> HashMap<String, String> {
     let mut ans = HashMap::new();
     for (k, v) in h {
         if let Some(h) = k {
@@ -93,11 +96,11 @@ fn get_presign_headers(h : http::HeaderMap) -> HashMap<String, String> {
             ans.insert(h.to_string(), v);
         }
     }
-    return ans;
+    ans
 }
 
 impl PresignFileResponse {
-    pub fn new(res : &opendal::raw::PresignedRequest, path: String) -> PresignFileResponse {
+    pub fn new(res: &opendal::raw::PresignedRequest, path: String) -> PresignFileResponse {
         PresignFileResponse {
             presigned_url: res.uri().to_string(),
             headers: get_presign_headers(res.header().clone()),
@@ -113,8 +116,6 @@ pub struct RequestFile {
     pub method: String,
 }
 
-
-
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Credentials {
     pub(crate) token: String,
@@ -123,9 +124,10 @@ pub struct Credentials {
 #[async_trait]
 impl<'a> FromRequest<'a> for &'a Credentials {
     async fn from_request(req: &'a Request, _body: &mut RequestBody) -> PoemResult<Self> {
-        Ok(req.extensions().get::<Credentials>().expect(
-            "To use the `Credentials` extractor, the `Credentials` is required",
-        ))
+        Ok(req
+            .extensions()
+            .get::<Credentials>()
+            .expect("To use the `Credentials` extractor, the `Credentials` is required"))
     }
 }
 
@@ -140,7 +142,7 @@ pub struct SharingConfig {
 impl SharingConfig {
     // get table would return matched table configuration under given share name
     // if requester tenant id is not permitted, it will return error
-    pub fn get_tables(self, input: &LambdaInput) -> Result<Option<SharedTableResponse>>{
+    pub fn get_tables(self, input: &LambdaInput) -> Result<Option<SharedTableResponse>> {
         let share_name = input.share_name.clone();
         let tenant_id = input.tenant_id.clone();
         let table_name = input.table_name.clone();
@@ -149,24 +151,25 @@ impl SharingConfig {
             return Ok(None);
         }
         return match share_spec {
-            None => {
-                Ok(None)
-            }
+            None => Ok(None),
             Some(share) => {
-                if !share.tenants.contains(&tenant_id.to_string()) {
-                    return Err(ErrorCode::AuthenticateFailure(format!("tenant {} is not allowed to access share {}", tenant_id, share_name)));
+                if !share.tenants.contains(&tenant_id) {
+                    return Err(ErrorCode::AuthenticateFailure(format!(
+                        "tenant {} is not allowed to access share {}",
+                        tenant_id, share_name
+                    )));
                 }
                 // find table matches table_name
                 let mut target = None;
-                for mut table in &share.tables {
-                    if table.name  == table_name {
+                for table in &share.tables {
+                    if table.name == table_name {
                         target = Some(table.into());
                         break;
                     }
                 }
                 Ok(target)
             }
-        }
+        };
     }
 }
 
@@ -196,7 +199,6 @@ pub struct TableSpec {
     pub presigned_url_timeout: String,
 }
 
-
 // into SharedTableResponse
 impl From<&TableSpec> for SharedTableResponse {
     fn from(table_spec: &TableSpec) -> Self {
@@ -208,4 +210,3 @@ impl From<&TableSpec> for SharedTableResponse {
         }
     }
 }
-

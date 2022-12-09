@@ -12,21 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use serde::Serialize;
-use serde::Deserialize;
-use common_storage::StorageConfig;
 use common_exception::Result;
-use super::outer_v0::Config as OuterV0Config;
+use common_storage::StorageConfig;
 
+use super::outer_v0::Config as OuterV0Config;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Config {
-    pub tenant : String,
+    pub tenant: String,
     pub storage: StorageConfig,
 }
 
 impl Config {
-
     /// As requires by [RFC: Config Backward Compatibility](https://github.com/datafuselabs/databend/pull/5324), we will load user's config via wrapper [`ConfigV0`] and then convert from [`ConfigV0`] to [`Config`].
     ///
     /// In the future, we could have `ConfigV1` and `ConfigV2`.
@@ -43,7 +40,6 @@ impl Config {
         Ok(cfg)
     }
 
-
     /// Transform config into the outer style.
     ///
     /// This function should only be used for end-users.
@@ -51,7 +47,6 @@ impl Config {
         OuterV0Config::from(self)
     }
 }
-
 
 impl Default for Config {
     fn default() -> Self {
@@ -61,4 +56,3 @@ impl Default for Config {
         }
     }
 }
-

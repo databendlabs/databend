@@ -32,8 +32,6 @@ pub use inner::CatalogHiveConfig;
 pub use inner::Config;
 pub use inner::QueryConfig;
 pub use inner::ThriftProtocol;
-
 pub use outer_v0::StorageConfig;
-
 pub use version::DATABEND_COMMIT_VERSION;
 pub use version::QUERY_SEMVER;

@@ -12,20 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::env;
-
-use clap::Args;
 use clap::Parser;
+use common_config::DATABEND_COMMIT_VERSION;
 use common_exception::Result;
 use serde::Deserialize;
 use serde::Serialize;
 use serfig::collectors::from_env;
-use serfig::collectors::from_file;
 use serfig::collectors::from_self;
-use serfig::parsers::Toml;
-use common_config::DATABEND_COMMIT_VERSION;
-use super::inner::Config as InnerConfig;
 
+use super::inner::Config as InnerConfig;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Parser)]
 #[clap(name = "open-sharing", about, version = &**DATABEND_COMMIT_VERSION, author)]
@@ -36,7 +31,6 @@ pub struct Config {
     // Storage backend config.
     #[clap(flatten)]
     pub storage: common_config::StorageConfig,
-
 }
 
 impl Default for Config {
@@ -47,7 +41,6 @@ impl Default for Config {
 
 impl From<Config> for InnerConfig {
     fn from(x: Config) -> Self {
-
         InnerConfig {
             tenant: x.tenant,
             storage: x.storage.try_into().expect("StorageConfig"),
@@ -84,7 +77,6 @@ impl Config {
         }
 
         let mut builder: serfig::Builder<Self> = serfig::Builder::default();
-
 
         // load from env.
         builder = builder.collect(from_env());

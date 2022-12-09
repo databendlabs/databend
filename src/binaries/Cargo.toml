@@ -51,6 +51,7 @@ anyhow = { workspace = true }
 clap = { workspace = true }
 limits-rs = "0.1.0"
 openraft = { workspace = true }
+poem = { version = "1", features = ["rustls", "multipart", "compression"] }
 sentry = "0.27.0"
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -58,7 +59,6 @@ tokio-stream = "0.1.10"
 tonic = "0.8.1"
 tracing = "0.1.36"
 url = "2.3.1"
-poem = { version = "1", features = ["rustls", "multipart", "compression"] }
 
 [[bin]]
 name = "databend-meta"
