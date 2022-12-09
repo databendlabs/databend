@@ -39,7 +39,12 @@ impl ParquetReader {
 
     #[inline]
     pub fn infer_schema(meta: &FileMetaData) -> Result<DataSchema> {
-        Ok(DataSchema::from(pread::infer_schema(meta)?))
+        let mut arrow_schema = pread::infer_schema(meta)?;
+        // Need to change all the field name to lowercase.
+        for field in &mut arrow_schema.fields {
+            field.name = field.name.to_lowercase();
+        }
+        Ok(DataSchema::from(arrow_schema))
     }
 
     pub fn get_column_metas<'a>(
