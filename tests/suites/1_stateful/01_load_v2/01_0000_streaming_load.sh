@@ -73,8 +73,8 @@ echo "select count(1), avg(Year), sum(DayOfWeek)  from ontime_streaming_load;" |
 echo "truncate table ontime_streaming_load" | $MYSQL_CLIENT_CONNECT
 
 # load csv using file_format syntax
-echo "--csv"
-curl -H "insert_sql:insert into ontime_streaming_load file_format = (type = 'CSV', skip_header = 1)" -F "upload=@/tmp/ontime_200.csv" -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" > /dev/null 2>&1
+echo "--csv using file_format"
+curl -H "insert_sql:insert into ontime_streaming_load file_format = (type = 'CSV' skip_header = 1)" -F "upload=@/tmp/ontime_200.csv" -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" > /dev/null 2>&1
 echo "select count(1), avg(Year), sum(DayOfWeek)  from ontime_streaming_load;" | $MYSQL_CLIENT_CONNECT
 echo "truncate table ontime_streaming_load" | $MYSQL_CLIENT_CONNECT
 
