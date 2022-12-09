@@ -47,8 +47,9 @@ fn bench_u64(c: &mut Criterion) {
     (0..column.len()).for_each(|i| builder.add_key(&column.get(i)));
     let filter = builder.build().unwrap();
 
-    for key in &values {
-        assert!(filter.contains(key), "key {} present", key);
+    for i in 0..column.len() {
+        let key = column.get(i);
+        assert!(filter.contains(&key), "key {} present", key);
     }
 
     c.bench_function("xor8_filter_u64_1m_rows_build_from_column_to_values", |b| {
@@ -68,7 +69,8 @@ fn bench_string(c: &mut Criterion) {
     (0..column.len()).for_each(|i| builder.add_key(&column.get(i)));
     let filter = builder.build().unwrap();
 
-    for key in values {
+    for i in 0..column.len() {
+        let key = column.get(i);
         assert!(filter.contains(&key), "key {} present", key);
     }
 
