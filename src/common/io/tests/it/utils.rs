@@ -39,6 +39,7 @@ fn parse_escape() {
         vec!["abc", "abc"],
         vec!["\t\nabc", "\t\nabc"],
         vec!["\\t\\nabc", "\t\nabc"],
+        vec!["\\t\\x1ab", "\t\x1ab"],
     ];
 
     for c in cases {
