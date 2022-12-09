@@ -80,7 +80,7 @@ pub struct TableField {
     data_type: TableDataType,
 }
 
-/// DataType with more information that is only available for schema, e.g, the
+/// DataType with more information that is only available for table field, e.g, the
 /// tuple field name, or the scale of decimal.
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub enum TableDataType {
