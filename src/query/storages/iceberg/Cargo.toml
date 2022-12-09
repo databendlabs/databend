@@ -1,6 +1,6 @@
 [package]
 name = "common-storages-iceberg"
-version = "0.1.0"
+version = { workspace = true }
 edition = "2021"
 authors = ["Databend Authors <opensource@datafuselabs.com>"]
 license = "Apache-2.0"

@@ -1,0 +1,15 @@
+statement ok
+SHOW CATALOGS;
+
+----
+default
+
+statement ok
+CREATE CATALOG ctl TYPE=ICEBERG CONNECTION=(URL='fs://path/to/iceberg');
+
+statement ok
+SHOW CATALOGS LIKE 'ctl';
+
+----
+ctl
+

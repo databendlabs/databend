@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_catalog::catalog::CatalogManager;
+use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::CatalogOption;
@@ -47,7 +48,7 @@ impl Interpreter for CreateCatalogInterpreter {
     #[tracing::instrument(level = "debug", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         if let CatalogOption::Iceberg(opt) = &self.plan.meta.catalog_option {
-            if !opt.storage_params.is_secure() && !self.ctx.get_config().storage.allow_insecure {
+            if !opt.storage_params.is_secure() && !GlobalConfig::instance().storage.allow_insecure {
                 return Err(ErrorCode::CatalogNotSupported(
                     "Accessing insecure storage in not allowed by configuration",
                 ));
