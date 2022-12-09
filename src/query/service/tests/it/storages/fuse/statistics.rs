@@ -46,13 +46,50 @@ use crate::storages::fuse::table_test_fixture::TestFixture;
 
 #[test]
 fn test_ft_stats_block_stats() -> common_exception::Result<()> {
-    let schema = DataSchemaRefExt::create(vec![DataField::new("a", i32::to_data_type())]);
-    let block = DataBlock::create(schema, vec![Series::from_data(vec![1, 2, 3])]);
+    let schema = DataSchemaRefExt::create(vec![
+        DataField::new("a", i32::to_data_type()),
+        DataField::new("b", Vu8::to_data_type()),
+    ]);
+    let block = DataBlock::create(schema, vec![
+        Series::from_data(vec![1, 2, 3]),
+        Series::from_data(vec!["aa", "aa", "bb"]),
+    ]);
     let r = gen_columns_statistics(&block, None)?;
-    assert_eq!(1, r.len());
+    assert_eq!(2, r.len());
     let col_stats = r.get(&0).unwrap();
     assert_eq!(col_stats.min, DataValue::Int64(1));
     assert_eq!(col_stats.max, DataValue::Int64(3));
+    assert_eq!(col_stats.distinct_of_values, Some(3));
+    let col_stats = r.get(&1).unwrap();
+    assert_eq!(col_stats.min, DataValue::String(b"aa".to_vec()));
+    assert_eq!(col_stats.max, DataValue::String(b"bb".to_vec()));
+    assert_eq!(col_stats.distinct_of_values, Some(2));
+    Ok(())
+}
+
+#[test]
+fn test_ft_stats_block_stats_with_column_distinct_count() -> common_exception::Result<()> {
+    let schema = DataSchemaRefExt::create(vec![
+        DataField::new("a", i32::to_data_type()),
+        DataField::new("b", Vu8::to_data_type()),
+    ]);
+    let block = DataBlock::create(schema, vec![
+        Series::from_data(vec![1, 2, 3]),
+        Series::from_data(vec!["aa", "aa", "bb"]),
+    ]);
+    let mut column_distinct_count = HashMap::new();
+    column_distinct_count.insert(0, 3);
+    column_distinct_count.insert(1, 2);
+    let r = gen_columns_statistics(&block, Some(column_distinct_count))?;
+    assert_eq!(2, r.len());
+    let col_stats = r.get(&0).unwrap();
+    assert_eq!(col_stats.min, DataValue::Int64(1));
+    assert_eq!(col_stats.max, DataValue::Int64(3));
+    assert_eq!(col_stats.distinct_of_values, Some(3));
+    let col_stats = r.get(&1).unwrap();
+    assert_eq!(col_stats.min, DataValue::String(b"aa".to_vec()));
+    assert_eq!(col_stats.max, DataValue::String(b"bb".to_vec()));
+    assert_eq!(col_stats.distinct_of_values, Some(2));
     Ok(())
 }
 
