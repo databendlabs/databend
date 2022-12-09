@@ -44,6 +44,8 @@ fn test_unescape_string() {
         vec!["\"\\t\nabc\"", "\"\t\nabc\""],
         vec!["'\\t\nabc'", "'\t\nabc'"],
         vec!["\\t\\nabc", "\t\nabc"],
+        vec!["\\\\", r"\"],
+        vec!["\\\\", "\\"],
     ];
 
     for c in cases {
