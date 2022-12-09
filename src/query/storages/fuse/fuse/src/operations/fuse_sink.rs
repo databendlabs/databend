@@ -13,6 +13,7 @@
 //  limitations under the License.
 
 use std::any::Any;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -49,6 +50,33 @@ struct BloomIndexState {
     data: Vec<u8>,
     size: u64,
     location: Location,
+}
+
+impl BloomIndexState {
+    pub fn try_create(
+        block: &DataBlock,
+        location: Location,
+    ) -> Result<(Self, HashMap<usize, usize>)> {
+        // write index
+        let bloom_index = BlockFilter::try_create(&[block])?;
+        let index_block = bloom_index.filter_block;
+        let mut data = Vec::with_capacity(100 * 1024);
+        let index_block_schema = &bloom_index.filter_schema;
+        let (size, _) = serialize_data_blocks_with_compression(
+            vec![index_block],
+            index_block_schema,
+            &mut data,
+            CompressionOptions::Uncompressed,
+        )?;
+        Ok((
+            Self {
+                data,
+                size,
+                location,
+            },
+            bloom_index.column_distinct_count,
+        ))
+    }
 }
 
 enum State {
@@ -168,28 +196,16 @@ impl Processor for FuseTableSink {
 
                 let (block_location, block_id) = self.meta_locations.gen_block_location();
 
-                let bloom_index_state = {
-                    // write index
-                    let bloom_index = BlockFilter::try_create(&[&block])?;
-                    let index_block = bloom_index.filter_block;
-                    let location = self.meta_locations.block_bloom_index_location(&block_id);
-                    let mut data = Vec::with_capacity(100 * 1024);
-                    let index_block_schema = &bloom_index.filter_schema;
-                    let (size, _) = serialize_data_blocks_with_compression(
-                        vec![index_block],
-                        index_block_schema,
-                        &mut data,
-                        CompressionOptions::Uncompressed,
-                    )?;
-                    BloomIndexState {
-                        data,
-                        size,
-                        location,
-                    }
-                };
+                let location = self.meta_locations.block_bloom_index_location(&block_id);
+                let (bloom_index_state, column_distinct_count) =
+                    BloomIndexState::try_create(&block, location)?;
 
-                let block_statistics =
-                    BlockStatistics::from(&block, block_location.0, cluster_stats)?;
+                let block_statistics = BlockStatistics::from(
+                    &block,
+                    block_location.0,
+                    cluster_stats,
+                    Some(column_distinct_count),
+                )?;
                 // we need a configuration of block size threshold here
                 let mut data = Vec::with_capacity(100 * 1024 * 1024);
                 let schema = block.schema().clone();

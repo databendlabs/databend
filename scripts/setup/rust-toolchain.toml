@@ -1,3 +1,3 @@
 [toolchain]
 channel = "nightly-2022-11-14"
-components = ["rustfmt", "clippy", "rust-src"]
+components = ["rustfmt", "clippy", "rust-src", "miri"]

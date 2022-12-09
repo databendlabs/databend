@@ -44,17 +44,18 @@ fn bench_u64(c: &mut Criterion) {
     let column = block.try_column_by_name("a").unwrap();
 
     let mut builder = Xor8Builder::create();
-    builder.add_keys(&column.to_values());
+    (0..column.len()).for_each(|i| builder.add_key(&column.get(i)));
     let filter = builder.build().unwrap();
 
-    for key in column.to_values() {
+    for i in 0..column.len() {
+        let key = column.get(i);
         assert!(filter.contains(&key), "key {} present", key);
     }
 
     c.bench_function("xor8_filter_u64_1m_rows_build_from_column_to_values", |b| {
         b.iter(|| {
             let mut builder = Xor8Builder::create();
-            builder.add_keys(&criterion::black_box(column.to_values()));
+            (0..column.len()).for_each(|i| builder.add_key(&column.get(i)));
             let _filter = criterion::black_box(builder.build().unwrap());
         })
     });
@@ -65,10 +66,11 @@ fn bench_string(c: &mut Criterion) {
     let column = block.try_column_by_name("a").unwrap();
 
     let mut builder = Xor8Builder::create();
-    builder.add_keys(&column.to_values());
+    (0..column.len()).for_each(|i| builder.add_key(&column.get(i)));
     let filter = builder.build().unwrap();
 
-    for key in column.to_values() {
+    for i in 0..column.len() {
+        let key = column.get(i);
         assert!(filter.contains(&key), "key {} present", key);
     }
 
@@ -77,7 +79,7 @@ fn bench_string(c: &mut Criterion) {
         |b| {
             b.iter(|| {
                 let mut builder = Xor8Builder::create();
-                builder.add_keys(&criterion::black_box(column.to_values()));
+                (0..column.len()).for_each(|i| builder.add_key(&column.get(i)));
                 let _filter = criterion::black_box(builder.build().unwrap());
             })
         },
