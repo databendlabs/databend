@@ -23,9 +23,6 @@ fn test_global_config() -> Result<()> {
 
     let mut config = Config::default();
 
-    GlobalConfig::init(config.clone())?;
-    assert_eq!(GlobalConfig::instance().as_ref(), &config);
-
     config.cmd = "test".to_string();
 
     GlobalConfig::init(config.clone())?;
