@@ -38,7 +38,7 @@ statement ok
 ALTER DATABASE IF EXISTS c RENAME TO a;
 
 statement query T
-SELECT * FROM system.databases;
+SELECT name FROM system.databases;
 
 ----
 system
@@ -54,7 +54,7 @@ statement error 1003
 ALTER DATABASE c RENAME TO C;
 
 statement query T
-SELECT * FROM system.databases;
+SELECT name FROM system.databases;
 
 ----
 system
@@ -70,7 +70,7 @@ statement error 1002
 ALTER DATABASE system RENAME TO C;
 
 statement query T
-SELECT * FROM system.databases;
+SELECT name FROM system.databases;
 
 ----
 system
@@ -86,7 +86,7 @@ statement error 2301
 ALTER DATABASE IF EXISTS a RENAME TO b;
 
 statement query T
-SELECT * FROM system.databases;
+SELECT name FROM system.databases;
 
 ----
 system
@@ -99,7 +99,7 @@ statement ok
 ALTER DATABASE a RENAME TO a2;
 
 statement query T
-SELECT * FROM system.databases;
+SELECT name FROM system.databases;
 
 ----
 system
@@ -127,7 +127,7 @@ SELECT * FROM b.t2;
 10
 
 statement query T
-SELECT * FROM system.databases;
+SELECT name FROM system.databases;
 
 ----
 system
@@ -146,7 +146,7 @@ SELECT * FROM b2.t2;
 10
 
 statement query T
-SELECT * FROM system.databases;
+SELECT name FROM system.databases;
 
 ----
 system
