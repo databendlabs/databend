@@ -1601,6 +1601,7 @@ dependencies = [
  "chrono",
  "chrono-tz",
  "common-exception",
+ "enquote",
  "lexical-core",
  "micromarshal",
  "ordered-float 3.3.0",
@@ -3443,6 +3444,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9852635589dc9f9ea1b6fe9f05b50ef208c85c834a562f0c6abb1c475736ec2b"
 dependencies = [
  "cfg-if",
+]
+
+[[package]]
+name = "enquote"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "06c36cb11dbde389f4096111698d8b567c0720e3452fd5ac3e6b4e47e1939932"
+dependencies = [
+ "thiserror",
 ]
 
 [[package]]

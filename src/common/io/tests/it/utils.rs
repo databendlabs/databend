@@ -33,15 +33,20 @@ fn convert_test() {
 }
 
 #[test]
-fn parse_escape() {
+fn test_unescape_string() {
     let cases = vec![
         vec!["a", "a"],
         vec!["abc", "abc"],
+        vec!["\\x01", "\x01"],
+        vec!["\x01", "\x01"],
         vec!["\t\nabc", "\t\nabc"],
+        vec!["\"\t\nabc\"", "\"\t\nabc\""],
+        vec!["\"\\t\nabc\"", "\"\t\nabc\""],
+        vec!["'\\t\nabc'", "'\t\nabc'"],
         vec!["\\t\\nabc", "\t\nabc"],
     ];
 
     for c in cases {
-        assert_eq!(parse_escape_bytes(c[0].as_bytes()), c[1].as_bytes());
+        assert_eq!(unescape_string(c[0]).unwrap(), c[1]);
     }
 }
