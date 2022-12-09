@@ -83,16 +83,16 @@ ALTER TABLE <table> FLASHBACK TO (TIMESTAMP => '<timestamp>'::TIMESTAMP);
 
 **Learn More**
 
-- [Docs | RESTORE TABLEt](https://databend.rs/doc/sql-commands/ddl/table/ddl-restore-table)
+- [Docs | RESTORE TABLE](https://databend.rs/doc/sql-commands/ddl/table/ddl-restore-table)
 - [PR | alter table flashback](https://github.com/datafuselabs/databend/pull/8967)
 
 ## What's Up Next
 
 We're always open to cutting-edge technologies and innovative ideas. You're more than welcome to join the community and bring them to Databend.
 
-#### Add Build Information to the Error Report
+#### Adding Build Information to Error Report
 
-Currently, Databend's error reports consist of error codes and error messages. We would like to add build information to this to help better identify problems.
+An error report currently only contains an error code and some information about why the error occurred. When build information is available, troubleshooting will become easier.
 
 ```bash
 "Code: xx. Error: error msg... (version ...)"
@@ -141,7 +141,7 @@ We'd love to hear from you. Feel free to run the code and see if Databend works 
 
 [DatafuseLabs Community](https://github.com/datafuselabs/) is open to everyone who loves data warehouses. Please join the community and share your thoughts.
 
-- [Databend Website](https://databend.rs)
-- [GitHub Discussions](https://github.com/datafuselabs/databend/discussions) (Feature/Bug reports, Contributions)
-- [Twitter](https://twitter.com/Datafuse_Labs) (Get the news fast)
-- [Slack Channel](https://link.databend.rs/join-slack) (For live discussion with the Community)
+- [Databend Official Website](https://databend.rs)
+- [GitHub Discussions](https://github.com/datafuselabs/databend/discussions) (Feature requests, bug reports, and contributions)
+- [Twitter](https://twitter.com/Datafuse_Labs) (Stay in the know)
+- [Slack Channel](https://link.databend.rs/join-slack) (Chat with the community)
