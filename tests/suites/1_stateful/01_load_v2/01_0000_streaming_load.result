@@ -10,6 +10,8 @@
 199	2020.0	769
 --ndjson
 198	2020.0	767
+--csv using file_format
+199	2020.0	769
 --parquet less
 199	2020.0	769
 --parquet mismatch schema
