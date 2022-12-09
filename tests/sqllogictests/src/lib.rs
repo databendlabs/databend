@@ -10,5 +10,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod arg;
 pub mod client;
 pub mod error;

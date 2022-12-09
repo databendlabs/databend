@@ -15,16 +15,19 @@
 use std::fs::ReadDir;
 use std::path::PathBuf;
 
+use clap::Parser;
 use client::ClickhouseHttpClient;
 use sqllogictest::DBOutput;
 use walkdir::DirEntry;
 use walkdir::WalkDir;
 
+use crate::arg::SqlLogicTestArgs;
 use crate::client::HttpClient;
 use crate::client::MysqlClient;
 use crate::error::DSqlLogicTestError;
 use crate::error::Result;
 
+mod arg;
 mod client;
 mod error;
 
@@ -71,10 +74,16 @@ impl sqllogictest::AsyncDB for Databend {
 
 #[tokio::main]
 pub async fn main() -> Result<()> {
+    env_logger::init();
     // First run databend with mysql client
+    println!("Mysql client starts to run...");
     run_mysql_client().await?;
+
     // Second run databend with http client
+    println!("Http client starts to run...");
     run_http_client().await?;
+
+    println!("Clickhouse http client starts to run...");
     // Third run databend with clickhouse http client
     run_ck_http_client().await?;
 
@@ -107,6 +116,7 @@ async fn run_ck_http_client() -> Result<()> {
 
 async fn run_suits(suits: ReadDir, databend: Databend) -> Result<()> {
     let mut runner = sqllogictest::Runner::new(databend);
+    let args = SqlLogicTestArgs::parse();
     // Walk each suit dir and read all files in it
     // After get a slt file, set the file name to databend
     for suit in suits {
@@ -115,16 +125,20 @@ async fn run_suits(suits: ReadDir, databend: Databend) -> Result<()> {
         // Parse the suit and find all slt files
         let files = get_files(suit)?;
         for file in files.into_iter() {
-            println!(
-                "[{}] is running",
-                file.as_ref()
-                    .unwrap()
-                    .path()
-                    .file_name()
-                    .unwrap()
-                    .to_str()
-                    .unwrap()
-            );
+            let file_name = file
+                .as_ref()
+                .unwrap()
+                .path()
+                .file_name()
+                .unwrap()
+                .to_str()
+                .unwrap();
+            if let Some(ref specific_file) = args.file {
+                if file_name != specific_file {
+                    continue;
+                }
+            }
+            println!("[{}] is running", file_name,);
             runner.run_file_async(file.unwrap().path()).await?;
         }
     }
@@ -133,13 +147,30 @@ async fn run_suits(suits: ReadDir, databend: Databend) -> Result<()> {
 }
 
 fn get_files(suit: PathBuf) -> Result<Vec<walkdir::Result<DirEntry>>> {
+    let args = SqlLogicTestArgs::parse();
+    if suit.is_dir() {
+        if let Some(ref specific_dir) = args.dir {
+            if suit.file_name().unwrap().to_str().unwrap() != specific_dir {
+                return Ok(vec![]);
+            }
+        }
+    }
     let mut files = vec![];
     for entry in WalkDir::new(suit)
         .sort_by(|a, b| a.file_name().cmp(b.file_name()))
         .into_iter()
+        .filter_entry(|e| {
+            if e.file_type().is_dir() {
+                if let Some(ref specific_dir) = args.dir {
+                    // Filter out specific dir and whose parent dir is specific dir
+                    return (e.file_name().to_str().unwrap() == specific_dir)
+                        || e.path().to_str().unwrap().contains(specific_dir);
+                }
+            }
+            true
+        })
         .filter(|e| !e.as_ref().unwrap().file_type().is_dir())
     {
-        // dbg!(entry.unwrap().path());
         files.push(entry);
     }
     Ok(files)

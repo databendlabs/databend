@@ -1,4 +1,4 @@
--- This file use for debug logictest itself.
+## This file use for debug logictest itself.
 
 statement ok
 create database if not exists db1;
@@ -34,8 +34,8 @@ select a,b,c,d from t4;
 ----
 1.0 10.224 xxdsfs 0
 
-----  http
-1.0 10.224 xxdsfs false
+## ----  http
+## 1.0 10.224 xxdsfs false
 
 statement ok
 insert into t4(a,b,c,d) values(2.0, 10.224, 'xxdsfs\nds \n', false );
@@ -67,11 +67,6 @@ drop table t5;
 
 statement error 1065
 create table db2.test6(id Int8, created timestamp  DEFAULT CURRENT_TIMESTAMP);
-
-query skipped III
-select number, number + 1, number + 999 from numbers(10);
-----
-1 1 1
 
 query III
 select number, number + 1, number + 999 from numbers(10);

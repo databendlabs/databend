@@ -8,7 +8,9 @@ version = "0.1.0"
 
 [dependencies]
 async-trait = "0.1.53"
+clap = { version = "4.0.29", features = ["derive", "env"] }
 common-exception = { path = "../../src/common/exception" }
+env_logger = "0.10.0"
 mysql = "23.0.0"
 reqwest = { version = "0.11.13", features = ["json"] }
 serde_json = "1.0.89"
