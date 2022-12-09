@@ -325,7 +325,7 @@ fn init_redis_operator(v: &StorageRedisConfig) -> Result<Operator> {
     Ok(Operator::new(builder.build()?))
 }
 
-/// PersistOperator is the operator to access persist services.
+/// DataOperator is the operator to access persist data services.
 ///
 /// # Notes
 ///
@@ -356,19 +356,13 @@ impl DataOperator {
         conf: &StorageConfig,
         v: Singleton<DataOperator>,
     ) -> common_exception::Result<()> {
-        v.init(Self::try_create(conf).await?)?;
+        v.init(Self::try_create(&conf.params).await?)?;
 
         DATA_OPERATOR.set(v).ok();
         Ok(())
     }
 
-    pub async fn try_create(conf: &StorageConfig) -> common_exception::Result<DataOperator> {
-        Self::try_create_with_storage_params(&conf.params).await
-    }
-
-    pub async fn try_create_with_storage_params(
-        sp: &StorageParams,
-    ) -> common_exception::Result<DataOperator> {
+    pub async fn try_create(sp: &StorageParams) -> common_exception::Result<DataOperator> {
         let operator = init_operator(sp)?;
 
         // OpenDAL will send a real request to underlying storage to check whether it works or not.
