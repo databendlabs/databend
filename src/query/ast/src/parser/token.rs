@@ -101,7 +101,7 @@ pub enum TokenKind {
 
     EOI,
 
-    #[regex(r"[ \t\n\f]+", logos::skip)]
+    #[regex(r"[ \t\r\n\f]+", logos::skip)]
     Whitespace,
 
     #[regex(r"--[^\t\n\f]*", logos::skip)]

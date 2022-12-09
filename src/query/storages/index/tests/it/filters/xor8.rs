@@ -195,10 +195,11 @@ fn test_xor_bitmap_data_block() -> Result<()> {
     let column = block.try_column_by_name("a")?;
 
     let mut builder = Xor8Builder::create();
-    builder.add_keys(&column.to_values());
+    let values: Vec<DataValue> = (0..column.len()).map(|i| column.get(i)).collect();
+    builder.add_keys(&values);
     let filter = builder.build()?;
 
-    for key in column.to_values() {
+    for key in values {
         assert!(filter.contains(&key), "key {} not present", key);
     }
 

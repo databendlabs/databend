@@ -128,8 +128,8 @@ impl ValueType for StringType {
         builder.commit_row();
     }
 
-    fn append_builder(builder: &mut Self::ColumnBuilder, other_builder: &Self::ColumnBuilder) {
-        builder.append(other_builder)
+    fn append_column(builder: &mut Self::ColumnBuilder, other_builder: &Self::Column) {
+        builder.append_column(other_builder)
     }
 
     fn build_column(builder: Self::ColumnBuilder) -> Self::Column {
@@ -310,7 +310,7 @@ impl StringColumnBuilder {
         self.offsets.push(self.data.len() as u64);
     }
 
-    pub fn append(&mut self, other: &Self) {
+    pub fn append_column(&mut self, other: &StringColumn) {
         // the first offset of other column may not be zero
         let other_start = *other.offsets.first().unwrap();
         let start = self.offsets.last().cloned().unwrap();
