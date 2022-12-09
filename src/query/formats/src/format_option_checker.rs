@@ -224,8 +224,10 @@ pub fn check_field_delimiter(option: &mut String, default: &str) -> Result<()> {
         *option = default.to_string()
     } else if option.as_bytes().len() > 1 {
         return Err(ErrorCode::InvalidArgument(format!(
-            "field_delimiter can only contain one char,  got:{}",
-            option
+            "field_delimiter can only contain one char,  got:'{}', len:{}, bytes:{:?}",
+            option,
+            option.len(),
+            option.as_bytes()
         )));
     };
     Ok(())
