@@ -98,7 +98,7 @@ An error report currently only contains an error code and some information about
 "Code: xx. Error: error msg... (version ...)"
 ```
 
-[Issue 9117: Add Build Information to the Error Report](https://github.com/datafuselabs/databend/issues/8983)
+[Issue 9117: Add Build Information to the Error Report](https://github.com/datafuselabs/databend/issues/9117)
 
 Please let us know if you're interested in contributing to this issue, or pick up a good first issue at <https://link.databend.rs/i-m-feeling-lucky> to get started.
 
