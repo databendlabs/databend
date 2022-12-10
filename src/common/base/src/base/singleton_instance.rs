@@ -25,7 +25,7 @@ pub enum Singleton {
     Production(Container![Send + Sync]),
 
     #[cfg(debug_assertions)]
-    Testing(std::sync::Mutex<std::collections::HashMap<String, Container![Send + Sync]>>),
+    Testing(parking_lot::Mutex<std::collections::HashMap<String, Container![Send + Sync]>>),
 }
 
 unsafe impl Send for Singleton {}
@@ -45,7 +45,7 @@ impl Singleton {
                     Some(name) => name,
                     None => panic!("thread doesn't have name"),
                 };
-                let guard = c.lock().expect("lock must succeed");
+                let guard = c.lock();
                 let v: &T = guard
                     .get(thread_name)
                     .expect("thread {name} is not initiated")
@@ -65,7 +65,7 @@ impl Singleton {
                     Some(name) => name,
                     None => panic!("thread doesn't have name"),
                 };
-                let mut guard = c.lock().expect("lock must succeed");
+                let mut guard = c.lock();
                 let c = guard.entry(thread_name.to_string()).or_default();
                 c.set(value)
             }
@@ -104,7 +104,7 @@ impl GlobalInstance {
     /// Should only be initiated once and only used in testing.
     #[cfg(debug_assertions)]
     pub fn init_testing() {
-        let _ = GLOBAL.set(Singleton::Testing(std::sync::Mutex::default()));
+        let _ = GLOBAL.set(Singleton::Testing(parking_lot::Mutex::default()));
     }
 
     /// drop testing global data by thread name.
@@ -117,7 +117,7 @@ impl GlobalInstance {
                 unreachable!("drop_testing should never be called on production global")
             }
             Singleton::Testing(c) => {
-                let mut guard = c.lock().expect("lock must succeed");
+                let mut guard = c.lock();
                 let _ = guard.remove(thread_name);
             }
         }
