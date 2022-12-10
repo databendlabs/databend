@@ -21,6 +21,7 @@ bincode = { version = "2.0.0-rc.1", features = ["serde", "std"] }
 bytes = "1.2.1"
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
+enquote = "1.1.0"
 lexical-core = "0.8.5"
 micromarshal = "0.2.1"
 ordered-float = "3.1.0"
