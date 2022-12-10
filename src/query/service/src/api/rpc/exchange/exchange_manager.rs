@@ -19,8 +19,8 @@ use std::ops::Deref;
 use std::sync::Arc;
 
 use common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
-use common_base::base::Global;
 use common_base::base::GlobalIORuntime;
+use common_base::base::GlobalInstance;
 use common_base::base::Thread;
 use common_base::base::TrySpawn;
 use common_config::GlobalConfig;
@@ -63,7 +63,7 @@ pub struct DataExchangeManager {
 
 impl DataExchangeManager {
     pub fn init() -> Result<()> {
-        Global::set(Arc::new(DataExchangeManager {
+        GlobalInstance::set(Arc::new(DataExchangeManager {
             queries_coordinator: ReentrantMutex::new(SyncUnsafeCell::new(HashMap::new())),
         }));
 
@@ -71,7 +71,7 @@ impl DataExchangeManager {
     }
 
     pub fn instance() -> Arc<DataExchangeManager> {
-        Global::get()
+        GlobalInstance::get()
     }
 
     // Create connections for cluster all nodes. We will push data through this connection.

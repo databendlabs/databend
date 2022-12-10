@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::base::Global;
 use common_base::base::GlobalIORuntime;
+use common_base::base::GlobalInstance;
 use common_catalog::catalog::CatalogManager;
 use common_config::Config;
 use common_config::GlobalConfig;
@@ -42,13 +42,13 @@ impl GlobalServices {
     pub async fn init_with(config: Config, prodcution: bool) -> Result<()> {
         #[cfg(debug_assertions)]
         if prodcution {
-            Global::init_production();
+            GlobalInstance::init_production();
         } else {
-            Global::init_testing();
+            GlobalInstance::init_testing();
         }
         #[cfg(not(debug_assertions))]
         if prodcution {
-            Global::init_production();
+            GlobalInstance::init_production();
         } else {
             unreachable!("release build must init with production global")
         }

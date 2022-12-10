@@ -19,7 +19,7 @@ use std::time::Duration;
 use common_base::base::tokio;
 use common_base::base::tokio::sync::RwLock;
 use common_base::base::tokio::time::sleep;
-use common_base::base::Global;
+use common_base::base::GlobalInstance;
 use common_config::Config;
 use common_exception::Result;
 use parking_lot::Mutex;
@@ -47,7 +47,7 @@ pub struct HttpQueryManager {
 
 impl HttpQueryManager {
     pub async fn init(cfg: &Config) -> Result<()> {
-        Global::set(Arc::new(HttpQueryManager {
+        GlobalInstance::set(Arc::new(HttpQueryManager {
             queries: Arc::new(RwLock::new(HashMap::new())),
             sessions: Mutex::new(ExpiringMap::default()),
             config: HttpQueryConfig {
@@ -59,7 +59,7 @@ impl HttpQueryManager {
     }
 
     pub fn instance() -> Arc<HttpQueryManager> {
-        Global::get()
+        GlobalInstance::get()
     }
 
     pub(crate) async fn try_create_query(

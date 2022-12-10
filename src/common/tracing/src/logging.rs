@@ -16,7 +16,7 @@ use std::env;
 use std::io;
 use std::sync::Arc;
 
-use common_base::base::Global;
+use common_base::base::GlobalInstance;
 use common_exception::Result;
 use opentelemetry::global;
 use opentelemetry::sdk::propagation::TraceContextPropagator;
@@ -261,7 +261,7 @@ impl QueryLogger {
         let mut _log_guards = init_logging(app_name.as_str(), config);
         let query_detail_dir = format!("{}/query-detail", config.file.dir);
 
-        Global::set(match config.file.on {
+        GlobalInstance::set(match config.file.on {
             true => {
                 let (_guards, subscriber) = init_query_logger(&app_name_shuffle, &query_detail_dir);
                 _log_guards.extend(_guards);
@@ -281,7 +281,7 @@ impl QueryLogger {
     }
 
     pub fn instance() -> Arc<QueryLogger> {
-        Global::get()
+        GlobalInstance::get()
     }
 
     pub fn get_subscriber(&self) -> Option<Arc<dyn Subscriber + Send + Sync>> {

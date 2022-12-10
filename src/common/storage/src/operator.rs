@@ -20,8 +20,8 @@ use std::time::Duration;
 
 use anyhow::anyhow;
 use backon::ExponentialBackoff;
-use common_base::base::Global;
 use common_base::base::GlobalIORuntime;
+use common_base::base::GlobalInstance;
 use common_base::base::TrySpawn;
 use common_exception::ErrorCode;
 use opendal::layers::ImmutableIndexLayer;
@@ -341,7 +341,7 @@ impl DataOperator {
     }
 
     pub async fn init(conf: &StorageConfig) -> common_exception::Result<()> {
-        Global::set(Self::try_create(&conf.params).await?);
+        GlobalInstance::set(Self::try_create(&conf.params).await?);
 
         Ok(())
     }
@@ -373,7 +373,7 @@ impl DataOperator {
     }
 
     pub fn instance() -> DataOperator {
-        Global::get()
+        GlobalInstance::get()
     }
 }
 
@@ -392,7 +392,7 @@ pub struct CacheOperator {
 
 impl CacheOperator {
     pub async fn init(conf: &CacheConfig) -> common_exception::Result<()> {
-        Global::set(Self::try_create(conf).await?);
+        GlobalInstance::set(Self::try_create(conf).await?);
 
         Ok(())
     }
@@ -443,7 +443,7 @@ impl CacheOperator {
     }
 
     pub fn instance() -> Option<Operator> {
-        let v: CacheOperator = Global::get();
+        let v: CacheOperator = GlobalInstance::get();
         v.inner()
     }
 

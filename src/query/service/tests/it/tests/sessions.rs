@@ -14,7 +14,7 @@
 
 use std::time::Duration;
 
-use common_base::base::Global;
+use common_base::base::GlobalInstance;
 use common_config::Config;
 use common_exception::Result;
 use common_tracing::set_panic_hook;
@@ -60,6 +60,6 @@ impl Drop for TestGuard {
             }
         }
 
-        Global::drop_testing(&self.thread_name)
+        GlobalInstance::drop_testing(&self.thread_name)
     }
 }

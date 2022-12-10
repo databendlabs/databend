@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use common_exception::Result;
 
-use super::Global;
+use super::GlobalInstance;
 use crate::base::Runtime;
 
 pub struct GlobalIORuntime;
@@ -26,7 +26,7 @@ impl GlobalIORuntime {
         let thread_num = std::cmp::max(num_cpus, num_cpus::get() / 2);
         let thread_num = std::cmp::max(2, thread_num);
 
-        Global::set(Arc::new(Runtime::with_worker_threads(
+        GlobalInstance::set(Arc::new(Runtime::with_worker_threads(
             thread_num,
             Some("IO-worker".to_owned()),
         )?));
@@ -34,6 +34,6 @@ impl GlobalIORuntime {
     }
 
     pub fn instance() -> Arc<Runtime> {
-        Global::get()
+        GlobalInstance::get()
     }
 }

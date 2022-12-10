@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_base::base::Global;
+use common_base::base::GlobalInstance;
 use common_catalog::catalog::Catalog;
 pub use common_catalog::catalog::CatalogManager;
 use common_catalog::catalog_kind::CATALOG_DEFAULT;
@@ -49,7 +49,7 @@ pub trait CatalogManagerHelper {
 #[async_trait::async_trait]
 impl CatalogManagerHelper for CatalogManager {
     async fn init(conf: &Config) -> Result<()> {
-        Global::set(Self::try_create(conf).await?);
+        GlobalInstance::set(Self::try_create(conf).await?);
 
         Ok(())
     }

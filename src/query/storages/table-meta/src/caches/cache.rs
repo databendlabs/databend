@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_base::base::Global;
+use common_base::base::GlobalInstance;
 use common_config::QueryConfig;
 use common_exception::Result;
 
@@ -50,7 +50,7 @@ impl CacheManager {
     /// For convenience, ids of cluster and tenant are also kept
     pub fn init(config: &QueryConfig) -> Result<()> {
         if !config.table_cache_enabled {
-            Global::set(Arc::new(Self {
+            GlobalInstance::set(Arc::new(Self {
                 table_snapshot_cache: None,
                 segment_info_cache: None,
                 bloom_index_data_cache: None,
@@ -83,7 +83,7 @@ impl CacheManager {
             let file_meta_data_cache =
                 Self::new_item_cache(DEFAULT_FILE_META_DATA_CACHE_ITEMS, tenant_label);
 
-            Global::set(Arc::new(Self {
+            GlobalInstance::set(Arc::new(Self {
                 table_snapshot_cache,
                 segment_info_cache,
                 bloom_index_data_cache,
@@ -99,7 +99,7 @@ impl CacheManager {
     }
 
     pub fn instance() -> Arc<CacheManager> {
-        Global::get()
+        GlobalInstance::get()
     }
 
     pub fn get_table_snapshot_cache(&self) -> Option<TableSnapshotCache> {

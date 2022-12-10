@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_base::base::Global;
+use common_base::base::GlobalInstance;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use dashmap::mapref::entry::Entry;
@@ -38,7 +38,7 @@ impl CatalogManager {
     }
 
     pub fn instance() -> Arc<CatalogManager> {
-        Global::get()
+        GlobalInstance::get()
     }
 
     pub fn insert_catalog(

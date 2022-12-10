@@ -22,7 +22,7 @@ use std::sync::Weak;
 use std::time::Duration;
 
 use common_base::base::tokio;
-use common_base::base::Global;
+use common_base::base::GlobalInstance;
 use common_base::base::SignalStream;
 use common_config::Config;
 use common_config::GlobalConfig;
@@ -60,7 +60,7 @@ pub struct SessionManager {
 
 impl SessionManager {
     pub fn init(conf: &Config) -> Result<()> {
-        Global::set(Self::create(conf));
+        GlobalInstance::set(Self::create(conf));
 
         Ok(())
     }
@@ -77,7 +77,7 @@ impl SessionManager {
     }
 
     pub fn instance() -> Arc<SessionManager> {
-        Global::get()
+        GlobalInstance::get()
     }
 
     pub async fn create_session(&self, typ: SessionType) -> Result<Arc<Session>> {

@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_base::base::Global;
+use common_base::base::GlobalInstance;
 use common_exception::Result;
 use common_grpc::RpcClientConf;
 use common_management::QuotaApi;
@@ -50,7 +50,7 @@ impl UserApiProvider {
         tenant: &str,
         quota: Option<TenantQuota>,
     ) -> Result<()> {
-        Global::set(Self::try_create(conf, idm_config).await?);
+        GlobalInstance::set(Self::try_create(conf, idm_config).await?);
 
         if let Some(q) = quota {
             let i = UserApiProvider::instance().get_tenant_quota_api_client(tenant)?;
@@ -77,7 +77,7 @@ impl UserApiProvider {
     }
 
     pub fn instance() -> Arc<UserApiProvider> {
-        Global::get()
+        GlobalInstance::get()
     }
 
     pub fn get_user_api_client(&self, tenant: &str) -> Result<Arc<dyn UserApi>> {

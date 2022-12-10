@@ -89,9 +89,9 @@ impl Debug for Singleton {
 static GLOBAL: OnceCell<Singleton> = OnceCell::new();
 
 /// Global is an empty struct that only used to carry associated functions.
-pub struct Global;
+pub struct GlobalInstance;
 
-impl Global {
+impl GlobalInstance {
     /// init production global data registry.
     ///
     /// Should only be initiated once.
