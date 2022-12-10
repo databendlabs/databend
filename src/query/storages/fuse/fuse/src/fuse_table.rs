@@ -23,7 +23,6 @@ use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::Expression;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
-use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table::AppendMode;
 use common_catalog::table::ColumnId;
@@ -493,13 +492,14 @@ impl Table for FuseTable {
         }
     }
 
-    #[tracing::instrument(level = "debug", name = "fuse_table_delete", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn delete(
         &self,
         ctx: Arc<dyn TableContext>,
-        push_downs: Option<PushDownInfo>,
+        filter: Option<Expression>,
+        col_indices: Vec<usize>,
+        pipeline: &mut Pipeline,
     ) -> Result<()> {
-        self.do_delete2(ctx, push_downs).await
+        self.do_delete2(ctx, filter, col_indices, pipeline).await
     }
 
     fn get_block_compact_thresholds(&self) -> BlockCompactThresholds {

@@ -17,8 +17,6 @@ use std::ops::Not;
 use std::sync::Arc;
 
 use common_arrow::parquet::compression::CompressionOptions;
-use common_base::base::Progress;
-use common_base::base::ProgressValues;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::table_context::TableContext;
 use common_datablocks::serialize_data_blocks;
@@ -26,11 +24,13 @@ use common_datablocks::serialize_data_blocks_with_compression;
 use common_datablocks::DataBlock;
 use common_datavalues::BooleanColumn;
 use common_datavalues::ColumnRef;
+use common_datavalues::DataSchemaRef;
 use common_datavalues::Series;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
+use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 use common_sql::evaluator::EvalNode;
 use common_storages_index::BlockFilter;
@@ -48,6 +48,8 @@ use crate::operations::util;
 use crate::pruning::BlockIndex;
 use crate::statistics::gen_columns_statistics;
 use crate::statistics::ClusterStatsGenerator;
+use crate::FuseTable;
+use crate::Table;
 
 type DataChunks = Vec<(usize, Vec<u8>)>;
 
@@ -82,21 +84,44 @@ enum State {
 pub struct DeletionSource {
     state: State,
     ctx: Arc<dyn TableContext>,
-    scan_progress: Arc<Progress>,
     output: Arc<OutputPort>,
-    output_reader: Arc<BlockReader>,
     location_gen: TableMetaLocationGenerator,
     dal: Operator,
     block_reader: Arc<BlockReader>,
     filter: Arc<EvalNode>,
     remain_reader: Arc<Option<BlockReader>>,
 
+    output_schema: DataSchemaRef,
     index: BlockIndex,
     cluster_stats_gen: ClusterStatsGenerator,
     origin_stats: Option<ClusterStatistics>,
 }
 
-impl DeletionSource {}
+impl DeletionSource {
+    pub fn try_create(
+        ctx: Arc<dyn TableContext>,
+        output: Arc<OutputPort>,
+        table: &FuseTable,
+        block_reader: Arc<BlockReader>,
+        filter: Arc<EvalNode>,
+        remain_reader: Arc<Option<BlockReader>>,
+    ) -> Result<ProcessorPtr> {
+        Ok(ProcessorPtr::create(Box::new(DeletionSource {
+            state: State::ReadData(None),
+            ctx,
+            output,
+            location_gen: table.meta_location_generator().clone(),
+            dal: table.get_operator(),
+            block_reader,
+            filter,
+            remain_reader,
+            output_schema: table.schema(),
+            index: (0, 0),
+            cluster_stats_gen: table.cluster_stats_gen()?,
+            origin_stats: None,
+        })))
+    }
+}
 
 #[async_trait::async_trait]
 impl Processor for DeletionSource {
@@ -175,7 +200,7 @@ impl Processor for DeletionSource {
                     if data_block.num_rows() == num_rows {
                         self.state = State::Generated(Deletion::DoNothing);
                     } else if self.remain_reader.is_none() {
-                        let block = data_block.resort(self.output_reader.schema())?;
+                        let block = data_block.resort(self.output_schema.clone())?;
                         self.state = State::NeedSerialize(block);
                     } else {
                         self.state = State::ReadRemain {
@@ -209,7 +234,7 @@ impl Processor for DeletionSource {
                     return Err(ErrorCode::Internal("It's a bug. Need remain reader"));
                 };
 
-                let block = merged.resort(self.output_reader.schema())?;
+                let block = merged.resort(self.output_schema.clone())?;
                 self.state = State::NeedSerialize(block);
             }
             State::NeedSerialize(block) => {
@@ -285,7 +310,7 @@ impl Processor for DeletionSource {
                 let deletion_part = DeletionPartInfo::from_part(&part)?;
                 self.index = deletion_part.index;
                 self.origin_stats = deletion_part.cluster_stats.clone();
-                let part = deletion_part.part.clone();
+                let part = deletion_part.inner_part.clone();
                 let chunks = self.block_reader.read_columns_data(part.clone()).await?;
                 self.state = State::FilterData(part, chunks);
             }

@@ -14,10 +14,10 @@
 
 use std::sync::Arc;
 
-use common_catalog::plan::Projection;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_meta_app::schema::TableIdent;
+
 use crate::plans::Scalar;
 use crate::MetadataRef;
 
@@ -28,7 +28,6 @@ pub struct DeletePlan {
     pub table_name: String,
     pub table_id: TableIdent,
     pub metadata: MetadataRef,
-    pub projection: Projection,
     pub selection: Option<Scalar>,
 }
 

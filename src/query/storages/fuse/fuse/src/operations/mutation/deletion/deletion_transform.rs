@@ -32,7 +32,6 @@ use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::Location;
 use common_storages_table_meta::meta::SegmentInfo;
 use common_storages_table_meta::meta::Statistics;
-use common_storages_table_meta::meta::TableSnapshot;
 use futures_util::future;
 use opendal::Operator;
 
@@ -79,7 +78,7 @@ pub struct DeletionTransform {
     dal: Operator,
     location_gen: TableMetaLocationGenerator,
 
-    base_snapshot: Arc<TableSnapshot>,
+    base_segments: Vec<Location>,
     thresholds: BlockCompactThresholds,
     abort_operation: AbortOperation,
 
@@ -93,19 +92,19 @@ pub struct DeletionTransform {
 impl DeletionTransform {
     pub fn try_create(
         ctx: Arc<dyn TableContext>,
-        dal: Operator,
-        location_gen: TableMetaLocationGenerator,
-        base_snapshot: Arc<TableSnapshot>,
-        thresholds: BlockCompactThresholds,
         inputs: Vec<Arc<InputPort>>,
         output: Arc<OutputPort>,
+        dal: Operator,
+        location_gen: TableMetaLocationGenerator,
+        base_segments: Vec<Location>,
+        thresholds: BlockCompactThresholds,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(DeletionTransform {
             state: State::None,
             ctx,
             dal,
             location_gen,
-            base_snapshot,
+            base_segments,
             thresholds,
             abort_operation: AbortOperation::default(),
             inputs,
@@ -272,7 +271,7 @@ impl Processor for DeletionTransform {
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::None) {
             State::GenerateSegments(segment_infos) => {
-                let segments = self.base_snapshot.segments.clone();
+                let segments = self.base_segments.clone();
                 let mut summary = Statistics::default();
                 let mut serialized_data = Vec::with_capacity(self.input_metas.len());
                 let mut segments_editor =
@@ -347,7 +346,7 @@ impl Processor for DeletionTransform {
             State::ReadSegments => {
                 // Read all segments information in parallel.
                 let segments_io = SegmentsIO::create(self.ctx.clone(), self.dal.clone());
-                let segment_locations = &self.base_snapshot.segments;
+                let segment_locations = &self.base_segments;
                 let segments = segments_io
                     .read_segments(segment_locations)
                     .await?

@@ -27,7 +27,7 @@ use crate::pruning::BlockIndex;
 pub struct DeletionPartInfo {
     pub index: BlockIndex,
     pub cluster_stats: Option<ClusterStatistics>,
-    pub part: PartInfoPtr,
+    pub inner_part: PartInfoPtr,
 }
 
 #[typetag::serde(name = "deletion")]
@@ -44,7 +44,7 @@ impl PartInfo for DeletionPartInfo {
     }
 
     fn hash(&self) -> u64 {
-        self.part.hash()
+        self.inner_part.hash()
     }
 }
 
@@ -52,12 +52,12 @@ impl DeletionPartInfo {
     pub fn create(
         index: BlockIndex,
         cluster_stats: Option<ClusterStatistics>,
-        part: PartInfoPtr,
+        inner_part: PartInfoPtr,
     ) -> PartInfoPtr {
         Arc::new(Box::new(DeletionPartInfo {
             index,
             cluster_stats,
-            part,
+            inner_part,
         }))
     }
 

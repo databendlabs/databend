@@ -15,7 +15,6 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use common_datablocks::BlockMetaInfos;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -36,20 +35,26 @@ use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::Processor;
 use crate::statistics::reducers::merge_statistics_mut;
 
-pub struct MergeSegmentsTransform {
-    // The order of the unchanged segments in snapshot.
-    pub unchanged_segment_indices: Vec<usize>,
-    // locations all the unchanged segments.
-    pub unchanged_segment_locations: Vec<Location>,
-    // summarised statistics of all the unchanged segments
-    pub unchanged_segment_statistics: Statistics,
-    abort_operation: AbortOperation,
+enum State {
+    Consume,
+    Merge(DataBlock),
+    Output,
+}
 
+pub struct MergeSegmentsTransform {
+    state: State,
     inputs: Vec<Arc<InputPort>>,
     output: Arc<OutputPort>,
     cur_input_index: usize,
-    input_metas: BlockMetaInfos,
     output_data: Option<DataBlock>,
+
+    // The order of the merged segments in snapshot.
+    pub merged_indices: Vec<usize>,
+    // locations all the merged segments.
+    pub merged_segments: Vec<Location>,
+    // summarised statistics of all the merged segments
+    pub merged_statistics: Statistics,
+    abort_operation: AbortOperation,
 }
 
 impl MergeSegmentsTransform {
@@ -59,15 +64,15 @@ impl MergeSegmentsTransform {
         output: Arc<OutputPort>,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(MergeSegmentsTransform {
-            unchanged_segment_indices: mutator.unchanged_segment_indices,
-            unchanged_segment_locations: mutator.unchanged_segment_locations,
-            unchanged_segment_statistics: mutator.unchanged_segment_statistics,
-            abort_operation: AbortOperation::default(),
+            state: State::Consume,
             inputs,
             output,
             cur_input_index: 0,
-            input_metas: Vec::new(),
             output_data: None,
+            merged_indices: mutator.unchanged_segment_indices,
+            merged_segments: mutator.unchanged_segment_locations,
+            merged_statistics: mutator.unchanged_segment_statistics,
+            abort_operation: AbortOperation::default(),
         })))
     }
 
@@ -133,46 +138,49 @@ impl Processor for MergeSegmentsTransform {
         let current_input = self.get_current_input();
         if let Some(cur_input) = current_input {
             if cur_input.is_finished() {
-                return Ok(Event::Sync);
+                self.state = State::Output;
+            } else {
+                self.state = State::Merge(cur_input.pull_data().unwrap()?);
+                cur_input.set_need_data();
             }
 
-            let input_meta = cur_input
-                .pull_data()
-                .unwrap()?
-                .get_meta()
-                .cloned()
-                .ok_or_else(|| ErrorCode::Internal("No block meta. It's a bug"))?;
-            self.input_metas.push(input_meta);
-            cur_input.set_need_data();
+            return Ok(Event::Sync);
         }
         Ok(Event::NeedData)
     }
 
     fn process(&mut self) -> Result<()> {
-        let metas = std::mem::take(&mut self.input_metas);
-        let mut merged_segments = std::mem::take(&mut self.unchanged_segment_locations);
-        let mut merged_statistics = std::mem::take(&mut self.unchanged_segment_statistics);
-        let mut merged_indices = std::mem::take(&mut self.unchanged_segment_indices);
-        for v in metas.iter() {
-            let meta = CompactSinkMeta::from_meta(v)?;
-            self.abort_operation.merge(&meta.abort_operation);
-            merged_segments.push((meta.segment_location.clone(), SegmentInfo::VERSION));
-            merged_indices.push(meta.order);
-            merge_statistics_mut(&mut merged_statistics, &meta.segment_info.summary)?;
+        match std::mem::replace(&mut self.state, State::Consume) {
+            State::Merge(input) => {
+                let meta = CompactSinkMeta::from_meta(
+                    input
+                        .get_meta()
+                        .ok_or_else(|| ErrorCode::Internal("No block meta. It's a bug"))?,
+                )?;
+                self.abort_operation.merge(&meta.abort_operation);
+                self.merged_segments
+                    .push((meta.segment_location.clone(), SegmentInfo::VERSION));
+                self.merged_indices.push(meta.order);
+                merge_statistics_mut(&mut self.merged_statistics, &meta.segment_info.summary)?;
+            }
+            State::Output => {
+                let mut merged_segments = std::mem::take(&mut self.merged_segments);
+                let merged_indices = std::mem::take(&mut self.merged_indices);
+                merged_segments = merged_segments
+                    .into_iter()
+                    .zip(merged_indices.iter())
+                    .sorted_by_key(|&(_, r)| *r)
+                    .map(|(l, _)| l)
+                    .collect();
+                let meta = MutationMeta::create(
+                    merged_segments,
+                    std::mem::take(&mut self.merged_statistics),
+                    std::mem::take(&mut self.abort_operation),
+                );
+                self.output_data = Some(DataBlock::empty_with_meta(meta));
+            }
+            _ => return Err(ErrorCode::Internal("It's a bug.")),
         }
-        merged_segments = merged_segments
-            .into_iter()
-            .zip(merged_indices.iter())
-            .sorted_by_key(|&(_, r)| *r)
-            .map(|(l, _)| l)
-            .collect();
-
-        let meta = MutationMeta::create(
-            merged_segments,
-            merged_statistics,
-            std::mem::take(&mut self.abort_operation),
-        );
-        self.output_data = Some(DataBlock::empty_with_meta(meta));
         Ok(())
     }
 }

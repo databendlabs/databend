@@ -35,7 +35,6 @@ use crate::metrics::metrics_inc_commit_mutation_unresolvable_conflict;
 use crate::operations::commit::Conflict;
 use crate::operations::commit::MutatorConflictDetector;
 use crate::operations::mutation::AbortOperation;
-use crate::operations::mutation::BlockCompactMutator;
 use crate::operations::mutation::MutationMeta;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::processor::Event;
@@ -81,16 +80,17 @@ pub struct MutationSink {
 impl MutationSink {
     pub fn try_create(
         table: &FuseTable,
-        mutator: BlockCompactMutator,
+        ctx: Arc<dyn TableContext>,
+        base_snapshot: Arc<TableSnapshot>,
         input: Arc<InputPort>,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(MutationSink {
             state: State::None,
-            ctx: mutator.ctx,
-            dal: mutator.operator,
+            ctx,
+            dal: table.get_operator(),
             location_gen: table.meta_location_generator.clone(),
             table: Arc::new(table.clone()),
-            base_snapshot: mutator.compact_params.base_snapshot,
+            base_snapshot,
             merged_segments: vec![],
             merged_statistics: Statistics::default(),
             abort_operation: AbortOperation::default(),

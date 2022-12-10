@@ -158,12 +158,19 @@ impl FuseTable {
         })?;
 
         self.try_add_merge_segments_transform(mutator.clone(), pipeline)?;
-        pipeline.add_sink(|input| MutationSink::try_create(self, mutator.clone(), input))?;
+        pipeline.add_sink(|input| {
+            MutationSink::try_create(
+                self,
+                ctx.clone(),
+                mutator.compact_params.base_snapshot.clone(),
+                input,
+            )
+        })?;
 
         Ok(true)
     }
 
-    pub fn try_add_merge_segments_transform(
+    fn try_add_merge_segments_transform(
         &self,
         mutator: BlockCompactMutator,
         pipeline: &mut Pipeline,
