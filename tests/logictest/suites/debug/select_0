@@ -9,6 +9,11 @@ use db1;
 statement ok
 CREATE TABLE IF NOT EXISTS t1(a int, b varchar) Engine = fuse cluster by(a);
 
+query TI
+select 'aa bb', 1;
+----
+aa bb 1
+
 query TTTRRTIIII
 SELECT * FROM system.tables WHERE database='db1';
 ----

@@ -14,10 +14,12 @@
 
 use std::fs::ReadDir;
 use std::path::PathBuf;
+use std::collections::HashMap;
 
 use clap::Parser;
+use lazy_static::lazy_static;
 use client::ClickhouseHttpClient;
-use sqllogictest::DBOutput;
+use sqllogictest::{DBOutput, Validator};
 use walkdir::DirEntry;
 use walkdir::WalkDir;
 
@@ -26,12 +28,26 @@ use crate::client::HttpClient;
 use crate::client::MysqlClient;
 use crate::error::DSqlLogicTestError;
 use crate::error::Result;
+use regex::Regex;
+use crate::util::normalize_row;
 
 mod arg;
 mod client;
 mod error;
+mod util;
 
 const TEST_SUITS: &str = "tests/logictest/suites";
+
+// Maybe moved later...
+lazy_static! {
+    static ref REGEX_MAP: HashMap<&'static str, Regex> = {
+        let mut regex_map = HashMap::new();
+        regex_map.insert("$ANYTHING", Regex::new(r".*").unwrap());
+        regex_map.insert("$DATE", Regex::new(r"\d\d\d\d-\d\d-\d\d \d\d:\d\d:\d\d[.]\d\d\d [+-]\d\d\d\d").unwrap());
+        regex_map.insert("$DATE_IN_SHARE", Regex::new(r"\d\d\d\d-\d\d-\d\d \d\d:\d\d:\d\d[.]\d+ UTC").unwrap());
+        regex_map
+    };
+}
 
 pub struct Databend {
     mysql_client: Option<MysqlClient>,
@@ -58,7 +74,7 @@ impl sqllogictest::AsyncDB for Databend {
     type Error = DSqlLogicTestError;
 
     async fn run(&mut self, sql: &str) -> Result<DBOutput> {
-        println!("Running: [{}]", sql);
+        println!("Running sql: [{}]", sql);
         if let Some(mysql_client) = &mut self.mysql_client {
             return mysql_client.query(sql);
         }
@@ -76,7 +92,7 @@ impl sqllogictest::AsyncDB for Databend {
             return "clickhouse";
         }
 
-        return "http";
+        "http"
     }
 }
 
@@ -124,6 +140,7 @@ async fn run_ck_http_client() -> Result<()> {
 
 async fn run_suits(suits: ReadDir, databend: Databend) -> Result<()> {
     let mut runner = sqllogictest::Runner::new(databend);
+    // Todo: set validator to process regex
     let args = SqlLogicTestArgs::parse();
     // Walk each suit dir and read all files in it
     // After get a slt file, set the file name to databend
