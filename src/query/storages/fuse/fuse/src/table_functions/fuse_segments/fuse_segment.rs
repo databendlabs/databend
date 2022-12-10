@@ -136,10 +136,7 @@ impl<'a> FuseSegment<'a> {
                 "format_version",
                 TableDataType::Number(NumberDataType::UInt64),
             ),
-            DataField::new(
-                "block_count",
-                TableDataType::Number(NumberDataType::UInt64),
-            ),
+            DataField::new("block_count", TableDataType::Number(NumberDataType::UInt64)),
             DataField::new("row_count", TableDataType::Number(NumberDataType::UInt64)),
             DataField::new(
                 "bytes_uncompressed",

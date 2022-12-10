@@ -148,10 +148,7 @@ impl MySQLFederated {
                 } else {
                     // @@aa
                     // var is 'aa'
-                    fields.push(DataField::new(
-                        &format!("@@{}", var),
-                        TableDataType::String,
-                    ));
+                    fields.push(DataField::new(&format!("@@{}", var), TableDataType::String));
 
                     let value = default_map.get(var).unwrap_or(&"0").to_string();
                     values.push((

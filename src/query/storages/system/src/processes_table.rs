@@ -191,10 +191,7 @@ impl ProcessesTable {
             TableField::new("command", TableDataType::String),
             TableField::new("database", TableDataType::String),
             TableField::new("extra_info", TableDataType::String),
-            TableField::new(
-                "memory_usage",
-                TableDataType::Number(NumberDataType::Int64),
-            ),
+            TableField::new("memory_usage", TableDataType::Number(NumberDataType::Int64)),
             TableField::new(
                 "data_read_bytes",
                 TableDataType::Number(NumberDataType::UInt64),

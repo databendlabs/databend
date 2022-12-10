@@ -196,10 +196,7 @@ impl SystemLogElement for QueryLogElement {
                 "total_partitions",
                 TableDataType::Number(NumberDataType::UInt64),
             ),
-            TableField::new(
-                "result_rows",
-                TableDataType::Number(NumberDataType::UInt64),
-            ),
+            TableField::new("result_rows", TableDataType::Number(NumberDataType::UInt64)),
             TableField::new(
                 "result_bytes",
                 TableDataType::Number(NumberDataType::UInt64),

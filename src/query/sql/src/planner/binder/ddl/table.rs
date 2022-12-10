@@ -1001,9 +1001,9 @@ impl<'a> Binder {
             DataType::Array(elem_type) => Ok(TableDataType::Array(Box::new(
                 Self::infer_schema_type(elem_type)?,
             ))),
-            DataType::Map(inner_type) => Ok(TableDataType::Map(Box::new(
-                Self::infer_schema_type(inner_type)?,
-            ))),
+            DataType::Map(inner_type) => Ok(TableDataType::Map(Box::new(Self::infer_schema_type(
+                inner_type,
+            )?))),
             DataType::Variant => Ok(TableDataType::Variant),
 
             _ => Err(ErrorCode::SemanticError(format!(

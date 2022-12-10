@@ -22,6 +22,7 @@ use common_expression::types::number::F64;
 use common_expression::types::ArgType;
 use common_expression::types::DataType;
 use common_expression::types::NullableType;
+use common_expression::types::NumberDataType;
 use common_expression::types::NumberType;
 use common_expression::DataField;
 use common_expression::DataSchema;
@@ -126,48 +127,46 @@ fn try_into_schema(hive_fields: Vec<hms::FieldSchema>) -> Result<TableSchema> {
     for field in hive_fields {
         let name = field.name.unwrap_or_default();
         let type_name = field.type_.unwrap_or_default();
-        let data_type = todo!("expression");
-        let field = TableField::new(&name, data_type);
+
+        let table_type = try_from_filed_type_name(type_name)?;
+        let field = TableField::new(&name, table_type);
         fields.push(field);
     }
     Ok(TableSchema::new(fields))
 }
 
-fn try_from_filed_type_name(type_name: impl AsRef<str>) -> Result<DataType> {
+fn try_from_filed_type_name(type_name: impl AsRef<str>) -> Result<TableDataType> {
     let name = type_name.as_ref().to_uppercase();
     // TODO more mappings goes here
     // https://cwiki.apache.org/confluence/display/Hive/LanguageManual+Types
-
     // Hive string data type could be varchar(n), where n is the maximum number of characters
     if name.starts_with("VARCHAR") {
-        Ok(DataType::String)
+        Ok(TableDataType::String)
     } else if name.starts_with("ARRAY<") {
         let sub_type = &name["ARRAY<".len()..name.len() - 1];
         let sub_type = try_from_filed_type_name(sub_type)?;
-        Ok(DataType::Array(Box::new(sub_type)))
+        Ok(TableDataType::Array(Box::new(sub_type)))
     } else {
-        match name.as_str() {
-            "TINYINT" => Ok(NumberType::<i8>::data_type()),
-            "SMALLINT" => Ok(NumberType::<i16>::data_type()),
-            "INT" => Ok(NumberType::<i32>::data_type()),
-            "BIGINT" => Ok(NumberType::<i64>::data_type()),
-
-            "BINARY" | "STRING" => Ok(DataType::String),
-            // boolean
-            "BOOLEAN" => Ok(DataType::Boolean),
-
+        let number = match name.as_str() {
+            "TINYINT" => Ok(NumberDataType::Int8),
+            "SMALLINT" => Ok(NumberDataType::Int16),
+            "INT" => Ok(NumberDataType::Int32),
+            "BIGINT" => Ok(NumberDataType::Int64),
             //"DECIMAL", "NUMERIC" type not supported
-            "FLOAT" => Ok(NumberType::<F32>::data_type()),
-            "DOUBLE" | "DOUBLE PRECISION" => Ok(NumberType::<F64>::data_type()),
+            "FLOAT" => Ok(NumberDataType::Float32),
+            "DOUBLE" | "DOUBLE PRECISION" => Ok(NumberDataType::Float64),
 
+            "BINARY" | "STRING" => return Ok(TableDataType::String),
+            // boolean
+            "BOOLEAN" => return Ok(TableDataType::Boolean),
             // timestamp
-            "TIMESTAMP" => Ok(DataType::Timestamp),
-            "DATE" => Ok(DataType::Date),
-
+            "TIMESTAMP" => return Ok(TableDataType::Timestamp),
+            "DATE" => return Ok(TableDataType::Date),
             _ => Err(ErrorCode::IllegalDataType(format!(
-                "unknown hive data type [{}]",
+                "Unsupported data type: {}",
                 name
             ))),
-        }
+        }?;
+        Ok(TableDataType::Number(number))
     }
 }
