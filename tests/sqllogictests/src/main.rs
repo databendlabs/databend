@@ -58,6 +58,7 @@ impl sqllogictest::AsyncDB for Databend {
     type Error = DSqlLogicTestError;
 
     async fn run(&mut self, sql: &str) -> Result<DBOutput> {
+        println!("Running: [{}]", sql);
         if let Some(mysql_client) = &mut self.mysql_client {
             return mysql_client.query(sql);
         }
@@ -68,7 +69,14 @@ impl sqllogictest::AsyncDB for Databend {
     }
 
     fn engine_name(&self) -> &str {
-        "databend"
+        if self.mysql_client.is_some() {
+            return "mysql";
+        }
+        if self.ck_client.is_some() {
+            return "clickhouse";
+        }
+
+        return "http";
     }
 }
 
@@ -138,7 +146,7 @@ async fn run_suits(suits: ReadDir, databend: Databend) -> Result<()> {
                     continue;
                 }
             }
-            println!("[{}] is running", file_name,);
+            println!("test file: [{}] is running", file_name,);
             runner.run_file_async(file.unwrap().path()).await?;
         }
     }
