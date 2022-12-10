@@ -129,6 +129,7 @@ fn try_into_schema(hive_fields: Vec<hms::FieldSchema>) -> Result<TableSchema> {
         let type_name = field.type_.unwrap_or_default();
 
         let table_type = try_from_filed_type_name(type_name)?;
+        let table_type = TableDataType::Nullable(Box::new(table_type));
         let field = TableField::new(&name, table_type);
         fields.push(field);
     }
