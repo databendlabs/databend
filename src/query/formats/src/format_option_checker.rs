@@ -230,17 +230,25 @@ pub fn check_field_delimiter(option: &mut String, default: &str) -> Result<()> {
     Ok(())
 }
 
+/// `\r\n` or u8
 pub fn check_record_delimiter(option: &mut String) -> Result<()> {
-    if option.is_empty() {
-        *option = "\n".to_string()
-    } else {
-        let o = option.as_str();
-        if o != "\n" && o != "\r\n" {
+    match option.len() {
+        0 => *option = "\n".to_string(),
+        1 => {}
+        2 => {
+            if option != "\r\n" {
+                return Err(ErrorCode::InvalidArgument(
+                    "record_delimiter with two chars can only be '\\r\\n'",
+                ));
+            };
+        }
+        _ => {
             return Err(ErrorCode::InvalidArgument(
-                "record_delimiter can only be '\\n' or '\\r\\n'",
+                "record_delimiter can not more than two chars, please use one char or '\\r\\n'",
             ));
-        };
+        }
     }
+
     Ok(())
 }
 
