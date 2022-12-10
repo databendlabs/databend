@@ -180,9 +180,9 @@ async fn main_entrypoint() -> Result<()> {
 
     // Cluster register.
     {
-        let cluster_discovery = ClusterDiscovery::instance();
-        let register_to_metastore = cluster_discovery.register_to_metastore(&conf);
-        register_to_metastore.await?;
+        ClusterDiscovery::instance()
+            .register_to_metastore(&conf)
+            .await?;
         info!(
             "Databend query has been registered:{:?} to metasrv:{:?}.",
             conf.query.cluster_id, conf.meta.endpoints

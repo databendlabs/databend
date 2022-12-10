@@ -15,33 +15,25 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use once_cell::sync::OnceCell;
 
-use crate::base::singleton_instance::Singleton;
+use super::GlobalInstance;
 use crate::base::Runtime;
 
 pub struct GlobalIORuntime;
 
-static GLOBAL_RUNTIME: OnceCell<Singleton<Arc<Runtime>>> = OnceCell::new();
-
 impl GlobalIORuntime {
-    pub fn init(num_cpus: usize, v: Singleton<Arc<Runtime>>) -> Result<()> {
+    pub fn init(num_cpus: usize) -> Result<()> {
         let thread_num = std::cmp::max(num_cpus, num_cpus::get() / 2);
         let thread_num = std::cmp::max(2, thread_num);
 
-        v.init(Arc::new(Runtime::with_worker_threads(
+        GlobalInstance::set(Arc::new(Runtime::with_worker_threads(
             thread_num,
             Some("IO-worker".to_owned()),
-        )?))?;
-
-        GLOBAL_RUNTIME.set(v.clone()).ok();
+        )?));
         Ok(())
     }
 
     pub fn instance() -> Arc<Runtime> {
-        match GLOBAL_RUNTIME.get() {
-            None => panic!("GlobalRuntime is not init"),
-            Some(global_runtime) => global_runtime.get(),
-        }
+        GlobalInstance::get()
     }
 }
