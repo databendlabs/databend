@@ -18,9 +18,11 @@ use common_base::base::GlobalInstance;
 use common_config::Config;
 use common_exception::Result;
 use common_tracing::set_panic_hook;
+use databend_query::clusters::ClusterDiscovery;
 use databend_query::sessions::SessionManager;
 use databend_query::GlobalServices;
 use time::Instant;
+use tracing::info;
 
 pub struct TestGlobalServices;
 
@@ -33,7 +35,18 @@ impl TestGlobalServices {
         set_panic_hook();
         std::env::set_var("UNIT_TEST", "TRUE");
 
-        GlobalServices::init_with(config, false).await?;
+        GlobalServices::init_with(config.clone(), false).await?;
+
+        // Cluster register.
+        {
+            ClusterDiscovery::instance()
+                .register_to_metastore(&config)
+                .await?;
+            info!(
+                "Databend query has been registered:{:?} to metasrv:{:?}.",
+                config.query.cluster_id, config.meta.endpoints
+            );
+        }
 
         match std::thread::current().name() {
             None => panic!("thread name is none"),
