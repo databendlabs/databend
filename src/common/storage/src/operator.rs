@@ -16,16 +16,14 @@ use std::env;
 use std::io::Error;
 use std::io::ErrorKind;
 use std::io::Result;
-use std::ops::Deref;
 use std::time::Duration;
 
 use anyhow::anyhow;
 use backon::ExponentialBackoff;
 use common_base::base::GlobalIORuntime;
-use common_base::base::Singleton;
+use common_base::base::GlobalInstance;
 use common_base::base::TrySpawn;
 use common_exception::ErrorCode;
-use once_cell::sync::OnceCell;
 use opendal::layers::ImmutableIndexLayer;
 use opendal::layers::LoggingLayer;
 use opendal::layers::MetricsLayer;
@@ -325,7 +323,7 @@ fn init_redis_operator(v: &StorageRedisConfig) -> Result<Operator> {
     Ok(Operator::new(builder.build()?))
 }
 
-/// PersistOperator is the operator to access persist services.
+/// DataOperator is the operator to access persist data services.
 ///
 /// # Notes
 ///
@@ -333,55 +331,22 @@ fn init_redis_operator(v: &StorageRedisConfig) -> Result<Operator> {
 #[derive(Clone, Debug)]
 pub struct DataOperator {
     operator: Operator,
-    params: StorageParams,
+    _params: StorageParams,
 }
-
-impl Deref for DataOperator {
-    type Target = Operator;
-
-    fn deref(&self) -> &Self::Target {
-        &self.operator
-    }
-}
-
-static DATA_OPERATOR: OnceCell<Singleton<DataOperator>> = OnceCell::new();
 
 impl DataOperator {
-    /// Create a new persist operator.
-    pub fn new(op: Operator, params: StorageParams) -> Self {
-        Self {
-            operator: op,
-            params,
-        }
-    }
-
     /// Get the operator from PersistOperator
     pub fn operator(&self) -> Operator {
         self.operator.clone()
     }
 
-    /// Get the params from PersistOperator
-    pub fn params(&self) -> &StorageParams {
-        &self.params
-    }
+    pub async fn init(conf: &StorageConfig) -> common_exception::Result<()> {
+        GlobalInstance::set(Self::try_create(&conf.params).await?);
 
-    pub async fn init(
-        conf: &StorageConfig,
-        v: Singleton<DataOperator>,
-    ) -> common_exception::Result<()> {
-        v.init(Self::try_create(conf).await?)?;
-
-        DATA_OPERATOR.set(v).ok();
         Ok(())
     }
 
-    pub async fn try_create(conf: &StorageConfig) -> common_exception::Result<DataOperator> {
-        Self::try_create_with_storage_params(&conf.params).await
-    }
-
-    pub async fn try_create_with_storage_params(
-        sp: &StorageParams,
-    ) -> common_exception::Result<DataOperator> {
+    pub async fn try_create(sp: &StorageParams) -> common_exception::Result<DataOperator> {
         let operator = init_operator(sp)?;
 
         // OpenDAL will send a real request to underlying storage to check whether it works or not.
@@ -403,19 +368,12 @@ impl DataOperator {
 
         Ok(DataOperator {
             operator,
-            params: sp.clone(),
+            _params: sp.clone(),
         })
     }
 
     pub fn instance() -> DataOperator {
-        match DATA_OPERATOR.get() {
-            None => panic!("StorageOperator is not init"),
-            Some(storage_operator) => storage_operator.get(),
-        }
-    }
-
-    pub fn get_storage_params(&self) -> StorageParams {
-        self.params.clone()
+        GlobalInstance::get()
     }
 }
 
@@ -432,16 +390,10 @@ pub struct CacheOperator {
     op: Option<Operator>,
 }
 
-static CACHE_OPERATOR: OnceCell<Singleton<CacheOperator>> = OnceCell::new();
-
 impl CacheOperator {
-    pub async fn init(
-        conf: &CacheConfig,
-        v: Singleton<CacheOperator>,
-    ) -> common_exception::Result<()> {
-        v.init(Self::try_create(conf).await?)?;
+    pub async fn init(conf: &CacheConfig) -> common_exception::Result<()> {
+        GlobalInstance::set(Self::try_create(conf).await?);
 
-        CACHE_OPERATOR.set(v).ok();
         Ok(())
     }
 
@@ -491,10 +443,8 @@ impl CacheOperator {
     }
 
     pub fn instance() -> Option<Operator> {
-        match CACHE_OPERATOR.get() {
-            None => panic!("CacheOperator is not init"),
-            Some(op) => op.get().inner(),
-        }
+        let v: CacheOperator = GlobalInstance::get();
+        v.inner()
     }
 
     fn inner(&self) -> Option<Operator> {
