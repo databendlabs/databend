@@ -48,7 +48,7 @@ impl Singleton {
                 let guard = c.lock();
                 let v: &T = guard
                     .get(thread_name)
-                    .expect("thread {name} is not initiated")
+                    .expect(&format!("thread {thread_name} is not initiated"))
                     .get();
                 v.clone()
             }
