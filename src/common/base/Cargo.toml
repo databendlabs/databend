@@ -30,6 +30,7 @@ async-channel = "1.7.1"
 async-trait = "0.1.57"
 bytesize = "1.1.0"
 ctrlc = { version = "3.2.3", features = ["termination"] }
+enquote = "1.1.0"
 futures = "0.3.24"
 libc = "0.2.133"
 num_cpus = "1.13.1"

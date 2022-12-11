@@ -14,6 +14,9 @@
 
 use std::string::FromUtf8Error;
 
+use common_exception::ErrorCode;
+use common_exception::Result;
+
 /// Function that escapes special characters in a string.
 ///
 /// All characters except digit, alphabet and '_' are treated as special characters.
@@ -113,4 +116,56 @@ pub fn replace_nth_char(s: &str, idx: usize, newchar: char) -> String {
         .enumerate()
         .map(|(i, c)| if i == idx { newchar } else { c })
         .collect()
+}
+
+/// Returns string after processing escapes.
+/// This used for settings string unescape, like unescape format_field_delimiter from `\\x01` to `\x01`.
+pub fn unescape_string(escape_str: &str) -> Result<String> {
+    enquote::unescape(escape_str, None)
+        .map_err(|e| ErrorCode::Internal(format!("unescape:{} error:{:?}", escape_str, e)))
+}
+
+pub fn convert_byte_size(num: f64) -> String {
+    let negative = if num.is_sign_positive() { "" } else { "-" };
+    let num = num.abs();
+    let units = ["B", "KiB", "MiB", "GiB", "TiB", "PiB", "EiB", "ZiB", "YiB"];
+    if num < 1_f64 {
+        return format!("{}{:.02} {}", negative, num, "B");
+    }
+    let delimiter = 1024_f64;
+    let exponent = std::cmp::min(
+        (num.ln() / delimiter.ln()).floor() as i32,
+        (units.len() - 1) as i32,
+    );
+    let pretty_bytes = format!("{:.02}", num / delimiter.powi(exponent));
+    let unit = units[exponent as usize];
+    format!("{}{} {}", negative, pretty_bytes, unit)
+}
+
+pub fn convert_number_size(num: f64) -> String {
+    let negative = if num.is_sign_positive() { "" } else { "-" };
+    let num = num.abs();
+    let units = [
+        "",
+        " thousand",
+        " million",
+        " billion",
+        " trillion",
+        " quadrillion",
+    ];
+
+    if num < 1_f64 {
+        return format!("{}{}", negative, num);
+    }
+    let delimiter = 1000_f64;
+    let exponent = std::cmp::min(
+        (num.ln() / delimiter.ln()).floor() as i32,
+        (units.len() - 1) as i32,
+    );
+    let pretty_bytes = format!("{:.2}", num / delimiter.powi(exponent))
+        .parse::<f64>()
+        .unwrap()
+        * 1_f64;
+    let unit = units[exponent as usize];
+    format!("{}{}{}", negative, pretty_bytes, unit)
 }
