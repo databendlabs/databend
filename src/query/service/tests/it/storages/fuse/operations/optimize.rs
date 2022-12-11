@@ -13,12 +13,13 @@
 //  limitations under the License.
 
 use common_base::base::tokio;
-use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_sql::Planner;
+use common_storages_fuse::TableContext;
 use databend_query::interpreters::InterpreterFactory;
 use futures_util::TryStreamExt;
 
+use crate::storages::fuse::table_test_fixture::TestFixture;
 use crate::storages::fuse::utils::do_purge_test;
 use crate::storages::fuse::utils::TestTableOperation;
 

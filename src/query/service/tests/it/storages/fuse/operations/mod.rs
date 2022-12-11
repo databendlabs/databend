@@ -24,5 +24,4 @@ mod purge_drop;
 mod purge_truncate;
 mod read_plan;
 mod table_analyze;
-mod table_statistics;
 mod truncate;
