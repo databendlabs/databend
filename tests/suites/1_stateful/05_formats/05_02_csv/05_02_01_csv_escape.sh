@@ -49,12 +49,13 @@ curl -sH "insert_sql:insert into test_csv format CSV" -H "format_escape:'\\\'" -
 echo "select * from test_csv" | $MYSQL_CLIENT_CONNECT
 echo "truncate table test_csv" | $MYSQL_CLIENT_CONNECT
 
+## just need `\\` in sql client, `\\\\` is for shell
 aws --endpoint-url http://127.0.0.1:9900/ s3 cp /tmp/escape_slash2.csv s3://testbucket/admin/data/csv/escape_slash2.csv > /dev/null 2>&1
-echo "copy into test_csv from 'fs:///tmp/escape_slash2.csv' FILE_FORMAT = (type = 'CSV' escape='\\\\\\\\')" | $MYSQL_CLIENT_CONNECT
+echo "copy into test_csv from 'fs:///tmp/escape_slash2.csv' FILE_FORMAT = (type = 'CSV' escape='\\\\')" | $MYSQL_CLIENT_CONNECT
 echo "select * from test_csv" | $MYSQL_CLIENT_CONNECT
 
 aws --endpoint-url http://127.0.0.1:9900/ s3 cp /tmp/escape_slash3.csv s3://testbucket/admin/data/csv/escape_slash3.csv > /dev/null 2>&1
-echo "copy into test_csv2 from 'fs:///tmp/escape_slash3.csv' FILE_FORMAT = (type = 'CSV' escape='\\\\\\\\' skip_header=1)" | $MYSQL_CLIENT_CONNECT
+echo "copy into test_csv2 from 'fs:///tmp/escape_slash3.csv' FILE_FORMAT = (type = 'CSV' escape='\\\\' skip_header=1)" | $MYSQL_CLIENT_CONNECT
 echo "select * from test_csv2" | $MYSQL_CLIENT_CONNECT
 
 echo "drop table if exists test_csv" | $MYSQL_CLIENT_CONNECT
