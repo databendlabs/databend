@@ -16,6 +16,7 @@ use std::hash::BuildHasher;
 use std::mem::MaybeUninit;
 use std::num::NonZeroU64;
 
+use multiversion::multiversion;
 use ordered_float::OrderedFloat;
 use primitive_types::U256;
 use primitive_types::U512;
@@ -195,24 +196,25 @@ macro_rules! impl_fast_hash_for_primitive_types {
         impl FastHash for $t {
             #[inline(always)]
             fn fast_hash(&self) -> u64 {
-                cfg_if::cfg_if! {
-                    if #[cfg(target_feature = "sse4.2")] {
+                #[cfg(target_arch = "x86_64")]
+                {
+                    if is_x86_feature_detected!("sse4.2") {
                         use std::arch::x86_64::_mm_crc32_u64;
                         let mut high = CRC_A;
                         let mut low = CRC_B;
                         high = unsafe { _mm_crc32_u64(high as u64, *self as u64) as u32 };
                         low = unsafe { _mm_crc32_u64(low as u64, *self as u64) as u32 };
-                        (high as u64) << 32 | low as u64
-                    } else {
-                        let mut hasher = *self as u64;
-                        hasher ^= hasher >> 33;
-                        hasher = hasher.wrapping_mul(0xff51afd7ed558ccd_u64);
-                        hasher ^= hasher >> 33;
-                        hasher = hasher.wrapping_mul(0xc4ceb9fe1a85ec53_u64);
-                        hasher ^= hasher >> 33;
-                        hasher
+                        return (high as u64) << 32 | low as u64;
                     }
                 }
+
+                let mut hasher = *self as u64;
+                hasher ^= hasher >> 33;
+                hasher = hasher.wrapping_mul(0xff51afd7ed558ccd_u64);
+                hasher ^= hasher >> 33;
+                hasher = hasher.wrapping_mul(0xc4ceb9fe1a85ec53_u64);
+                hasher ^= hasher >> 33;
+                hasher
             }
         }
     };
@@ -230,8 +232,9 @@ impl_fast_hash_for_primitive_types!(i64);
 impl FastHash for u128 {
     #[inline(always)]
     fn fast_hash(&self) -> u64 {
-        cfg_if::cfg_if! {
-            if #[cfg(target_feature = "sse4.2")] {
+        #[cfg(target_arch = "x86_64")]
+        {
+            if is_x86_feature_detected!("sse4.2") {
                 use std::arch::x86_64::_mm_crc32_u64;
                 let mut high = CRC_A;
                 let mut low = CRC_B;
@@ -240,15 +243,14 @@ impl FastHash for u128 {
                     high = unsafe { _mm_crc32_u64(high as u64, x) as u32 };
                     low = unsafe { _mm_crc32_u64(low as u64, x) as u32 };
                 }
-                (high as u64) << 32 | low as u64
-            } else {
-                use std::hash::Hasher;
-                let state = ahash::RandomState::with_seeds(SEEDS[0], SEEDS[1], SEEDS[2], SEEDS[3]);
-                let mut hasher = state.build_hasher();
-                hasher.write_u128(*self);
-                hasher.finish()
+                return (high as u64) << 32 | low as u64;
             }
         }
+        use std::hash::Hasher;
+        let state = ahash::RandomState::with_seeds(SEEDS[0], SEEDS[1], SEEDS[2], SEEDS[3]);
+        let mut hasher = state.build_hasher();
+        hasher.write_u128(*self);
+        hasher.finish()
     }
 }
 
@@ -262,8 +264,9 @@ impl FastHash for i128 {
 impl FastHash for U256 {
     #[inline(always)]
     fn fast_hash(&self) -> u64 {
-        cfg_if::cfg_if! {
-            if #[cfg(target_feature = "sse4.2")] {
+        #[cfg(target_arch = "x86_64")]
+        {
+            if is_x86_feature_detected!("sse4.2") {
                 use std::arch::x86_64::_mm_crc32_u64;
                 let mut high = CRC_A;
                 let mut low = CRC_B;
@@ -271,25 +274,26 @@ impl FastHash for U256 {
                     high = unsafe { _mm_crc32_u64(high as u64, x) as u32 };
                     low = unsafe { _mm_crc32_u64(low as u64, x) as u32 };
                 }
-                (high as u64) << 32 | low as u64
-            } else {
-                 use std::hash::Hasher;
-                let state = ahash::RandomState::with_seeds(SEEDS[0], SEEDS[1], SEEDS[2], SEEDS[3]);
-                let mut hasher = state.build_hasher();
-                for x in self.0 {
-                    hasher.write_u64(x);
-                }
-                hasher.finish()
+                return (high as u64) << 32 | low as u64;
             }
         }
+
+        use std::hash::Hasher;
+        let state = ahash::RandomState::with_seeds(SEEDS[0], SEEDS[1], SEEDS[2], SEEDS[3]);
+        let mut hasher = state.build_hasher();
+        for x in self.0 {
+            hasher.write_u64(x);
+        }
+        hasher.finish()
     }
 }
 
 impl FastHash for U512 {
     #[inline(always)]
     fn fast_hash(&self) -> u64 {
-        cfg_if::cfg_if! {
-            if #[cfg(target_feature = "sse4.2")] {
+        #[cfg(target_arch = "x86_64")]
+        {
+            if is_x86_feature_detected!("sse4.2") {
                 use std::arch::x86_64::_mm_crc32_u64;
                 let mut high = CRC_A;
                 let mut low = CRC_B;
@@ -297,17 +301,16 @@ impl FastHash for U512 {
                     high = unsafe { _mm_crc32_u64(high as u64, x) as u32 };
                     low = unsafe { _mm_crc32_u64(low as u64, x) as u32 };
                 }
-                (high as u64) << 32 | low as u64
-            } else {
-                 use std::hash::Hasher;
-                let state = ahash::RandomState::with_seeds(SEEDS[0], SEEDS[1], SEEDS[2], SEEDS[3]);
-                let mut hasher = state.build_hasher();
-                for x in self.0 {
-                    hasher.write_u64(x);
-                }
-                hasher.finish()
+                return (high as u64) << 32 | low as u64;
             }
         }
+        use std::hash::Hasher;
+        let state = ahash::RandomState::with_seeds(SEEDS[0], SEEDS[1], SEEDS[2], SEEDS[3]);
+        let mut hasher = state.build_hasher();
+        for x in self.0 {
+            hasher.write_u64(x);
+        }
+        hasher.finish()
     }
 }
 
@@ -337,11 +340,14 @@ const SEEDS: [u64; 4] = [1, 1949, 2009, 9527];
 
 impl FastHash for [u8] {
     #[inline(always)]
+
     fn fast_hash(&self) -> u64 {
-        cfg_if::cfg_if! {
-            if #[cfg(target_feature = "sse4.2")] {
-                use crate::utils::read_le;
+        #[cfg(target_arch = "x86_64")]
+        {
+            if is_x86_feature_detected!("sse4.2") {
                 use std::arch::x86_64::_mm_crc32_u64;
+
+                use crate::utils::read_le;
                 let mut high = CRC_A;
                 let mut low = CRC_B;
                 for i in (0..self.len()).step_by(8) {
@@ -359,15 +365,15 @@ impl FastHash for [u8] {
                         }
                     }
                 }
-                (high as u64) << 32 | low as u64
-            } else {
-                use std::hash::Hasher;
-                let state = ahash::RandomState::with_seeds(SEEDS[0], SEEDS[1], SEEDS[2], SEEDS[3]);
-                let mut hasher = state.build_hasher();
-                hasher.write(self);
-                hasher.finish()
+                return (high as u64) << 32 | low as u64;
             }
         }
+
+        use std::hash::Hasher;
+        let state = ahash::RandomState::with_seeds(SEEDS[0], SEEDS[1], SEEDS[2], SEEDS[3]);
+        let mut hasher = state.build_hasher();
+        hasher.write(self);
+        hasher.finish()
     }
 }
 
@@ -375,8 +381,9 @@ impl FastHash for [u8] {
 impl<const N: usize> FastHash for ([u64; N], NonZeroU64) {
     #[inline(always)]
     fn fast_hash(&self) -> u64 {
-        cfg_if::cfg_if! {
-            if #[cfg(target_feature = "sse4.2")] {
+        #[cfg(target_arch = "x86_64")]
+        {
+            if is_x86_feature_detected!("sse4.2") {
                 use std::arch::x86_64::_mm_crc32_u64;
                 let mut high = CRC_A;
                 let mut low = CRC_B;
@@ -386,18 +393,18 @@ impl<const N: usize> FastHash for ([u64; N], NonZeroU64) {
                 }
                 high = unsafe { _mm_crc32_u64(high as u64, self.1.get()) as u32 };
                 low = unsafe { _mm_crc32_u64(low as u64, self.1.get()) as u32 };
-                (high as u64) << 32 | low as u64
-            } else {
-                 use std::hash::Hasher;
-                let state = ahash::RandomState::with_seeds(SEEDS[0], SEEDS[1], SEEDS[2], SEEDS[3]);
-                let mut hasher = state.build_hasher();
-                for x in self.0 {
-                    hasher.write_u64(x);
-                }
-                hasher.write_u64(self.1.get());
-                hasher.finish()
+                return (high as u64) << 32 | low as u64;
             }
         }
+
+        use std::hash::Hasher;
+        let state = ahash::RandomState::with_seeds(SEEDS[0], SEEDS[1], SEEDS[2], SEEDS[3]);
+        let mut hasher = state.build_hasher();
+        for x in self.0 {
+            hasher.write_u64(x);
+        }
+        hasher.write_u64(self.1.get());
+        hasher.finish()
     }
 }
 

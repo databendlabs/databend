@@ -268,26 +268,30 @@ pub fn position16<
 >(
     buf: &[u8],
 ) -> usize {
-    #[cfg(all(any(target_arch = "x86_64"), target_feature = "sse4.2"))]
-    return position_sse42::<
-        POSITIVE,
-        C1,
-        C2,
-        C3,
-        C4,
-        C5,
-        C6,
-        C7,
-        C8,
-        C9,
-        C10,
-        C11,
-        C12,
-        C13,
-        C14,
-        C15,
-        C16,
-    >(buf);
+    #[cfg(all(any(target_arch = "x86_64")))]
+    {
+        if is_x86_feature_detected!("sse4.2") {
+            return position_sse42::<
+                POSITIVE,
+                C1,
+                C2,
+                C3,
+                C4,
+                C5,
+                C6,
+                C7,
+                C8,
+                C9,
+                C10,
+                C11,
+                C12,
+                C13,
+                C14,
+                C15,
+                C16,
+            >(buf);
+        }
+    }
 
     position16_from_index::<
         POSITIVE,
@@ -310,7 +314,7 @@ pub fn position16<
     >(buf, 0)
 }
 
-#[cfg(all(any(target_arch = "x86_64"), target_feature = "sse4.2"))]
+#[cfg(all(any(target_arch = "x86_64")))]
 #[inline(always)]
 fn position_sse42<
     const POSITIVE: bool,
