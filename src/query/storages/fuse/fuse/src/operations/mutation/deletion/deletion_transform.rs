@@ -33,7 +33,6 @@ use common_storages_table_meta::meta::Statistics;
 use opendal::Operator;
 
 use crate::io::try_join_futures;
-use crate::io::write_meta;
 use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::mutation::deletion::deletion_meta::DeletionSourceMeta;
@@ -170,7 +169,7 @@ impl DeletionTransform {
         for segment in segments {
             let op = self.dal.clone();
             handles.push(async move {
-                write_meta(&op, &segment.location, segment.data).await?;
+                op.object(&segment.location).write(segment.data).await?;
                 if let Some(segment_cache) = CacheManager::instance().get_table_segment_cache() {
                     let cache = &mut segment_cache.write();
                     cache.put(segment.location.clone(), segment.segment.clone());
