@@ -108,7 +108,8 @@ impl Column for NullableColumn {
     }
 
     fn len(&self) -> usize {
-        self.column.len()
+        // column length may less than validity length
+        self.validity.len()
     }
 
     fn null_at(&self, row: usize) -> bool {
