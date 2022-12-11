@@ -21,6 +21,8 @@ use common_sql::executor::ExpressionBuilderWithoutRenaming;
 use common_sql::plans::DeletePlan;
 
 use crate::interpreters::Interpreter;
+use crate::pipelines::executor::ExecutorSettings;
+use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
@@ -70,6 +72,16 @@ impl Interpreter for DeleteInterpreter {
         let mut pipeline = Pipeline::create();
         tbl.delete(self.ctx.clone(), filter, col_indices, &mut pipeline)
             .await?;
+        if !pipeline.pipes.is_empty() {
+            let settings = self.ctx.get_settings();
+            pipeline.set_max_threads(settings.get_max_threads()? as usize);
+            let executor_settings = ExecutorSettings::try_create(&settings)?;
+            let executor = PipelineCompleteExecutor::try_create(pipeline, executor_settings)?;
+
+            self.ctx.set_executor(Arc::downgrade(&executor.get_inner()));
+            executor.execute()?;
+            drop(executor);
+        }
 
         Ok(PipelineBuildResult::create())
     }

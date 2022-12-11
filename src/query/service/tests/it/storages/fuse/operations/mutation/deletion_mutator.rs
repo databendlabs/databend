@@ -23,12 +23,20 @@ use common_datablocks::DataBlock;
 use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_sql::executor::ExpressionBuilderWithoutRenaming;
+use common_sql::plans::DeletePlan;
+use common_sql::plans::ScalarExpr;
+use common_storages_factory::Table;
+use common_storages_fuse::FuseTable;
 use common_storages_table_meta::caches::CacheManager;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::SegmentInfo;
 use common_storages_table_meta::meta::Statistics;
 use common_storages_table_meta::meta::TableSnapshot;
 use common_storages_table_meta::meta::Versioned;
+use databend_query::pipelines::executor::ExecutorSettings;
+use databend_query::pipelines::executor::PipelineCompleteExecutor;
+use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
 use databend_query::storages::fuse::io::SegmentWriter;
 use databend_query::storages::fuse::io::TableMetaLocationGenerator;
@@ -124,5 +132,37 @@ async fn test_deletion_mutator_multiple_empty_segments() -> Result<()> {
     let test_segments = HashSet::from_iter(test_segment_locations.into_iter());
     assert!(new_segments.is_subset(&test_segments));
 
+    Ok(())
+}
+
+pub async fn do_deletion(
+    ctx: Arc<QueryContext>,
+    table: Arc<dyn Table>,
+    plan: DeletePlan,
+) -> Result<()> {
+    let (filter, col_indices) = if let Some(scalar) = &plan.selection {
+        let eb = ExpressionBuilderWithoutRenaming::create(plan.metadata.clone());
+        (
+            Some(eb.build(scalar)?),
+            scalar.used_columns().into_iter().collect(),
+        )
+    } else {
+        (None, vec![])
+    };
+
+    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+    let settings = ctx.get_settings();
+    let mut pipeline = common_pipeline_core::Pipeline::create();
+    fuse_table
+        .delete(ctx.clone(), filter, col_indices, &mut pipeline)
+        .await?;
+    if !pipeline.pipes.is_empty() {
+        pipeline.set_max_threads(settings.get_max_threads()? as usize);
+        let executor_settings = ExecutorSettings::try_create(&settings)?;
+        let executor = PipelineCompleteExecutor::try_create(pipeline, executor_settings)?;
+        ctx.set_executor(Arc::downgrade(&executor.get_inner()));
+        executor.execute()?;
+        drop(executor);
+    }
     Ok(())
 }

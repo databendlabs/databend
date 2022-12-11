@@ -26,6 +26,7 @@ use databend_query::sql::plans::Plan;
 use databend_query::sql::Planner;
 use futures_util::TryStreamExt;
 
+use crate::storages::fuse::operations::mutation::do_deletion;
 use crate::storages::fuse::table_test_fixture::execute_command;
 use crate::storages::fuse::table_test_fixture::execute_query;
 use crate::storages::fuse::table_test_fixture::TestFixture;
@@ -74,9 +75,7 @@ async fn test_table_modify_column_ndv_statistics() -> Result<()> {
     let mut planner = Planner::new(ctx.clone());
     let (plan, _, _) = planner.plan_sql(query).await?;
     if let Plan::Delete(delete) = plan {
-        table
-            .delete(ctx.clone(), &delete.projection, &delete.selection)
-            .await?;
+        do_deletion(ctx.clone(), table.clone(), *delete).await?;
     }
     execute_command(ctx.clone(), statistics_sql).await?;
 
