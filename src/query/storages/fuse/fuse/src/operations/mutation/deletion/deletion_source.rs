@@ -16,11 +16,9 @@ use std::any::Any;
 use std::ops::Not;
 use std::sync::Arc;
 
-use common_arrow::parquet::compression::CompressionOptions;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::table_context::TableContext;
 use common_datablocks::serialize_data_blocks;
-use common_datablocks::serialize_data_blocks_with_compression;
 use common_datablocks::DataBlock;
 use common_datavalues::BooleanColumn;
 use common_datavalues::ColumnRef;
@@ -33,7 +31,6 @@ use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 use common_sql::evaluator::EvalNode;
-use common_storages_index::BlockFilter;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::ClusterStatistics;
 use opendal::Operator;
@@ -45,6 +42,7 @@ use crate::io::write_data;
 use crate::io::BlockReader;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::util;
+use crate::operations::BloomIndexState;
 use crate::pruning::BlockIndex;
 use crate::statistics::gen_columns_statistics;
 use crate::statistics::ClusterStatsGenerator;
@@ -238,7 +236,6 @@ impl Processor for DeletionSource {
                 self.state = State::NeedSerialize(block);
             }
             State::NeedSerialize(block) => {
-                let col_stats = gen_columns_statistics(&block)?;
                 let cluster_stats = self
                     .cluster_stats_gen
                     .gen_with_origin_stats(&block, std::mem::take(&mut self.origin_stats))?;
@@ -248,21 +245,10 @@ impl Processor for DeletionSource {
                 let (block_location, block_id) = self.location_gen.gen_block_location();
 
                 // build block index.
-                let (index_data, index_size, index_location) = {
-                    // write index
-                    let bloom_index = BlockFilter::try_create(&[&block])?;
-                    let index_block = bloom_index.filter_block;
-                    let location = self.location_gen.block_bloom_index_location(&block_id);
-                    let mut data = Vec::with_capacity(100 * 1024);
-                    let index_block_schema = &bloom_index.filter_schema;
-                    let (size, _) = serialize_data_blocks_with_compression(
-                        vec![index_block],
-                        index_block_schema,
-                        &mut data,
-                        CompressionOptions::Uncompressed,
-                    )?;
-                    (data, size, location)
-                };
+                let location = self.location_gen.block_bloom_index_location(&block_id);
+                let (bloom_index_state, column_distinct_count) =
+                    BloomIndexState::try_create(&block, location)?;
+                let col_stats = gen_columns_statistics(&block, Some(column_distinct_count))?;
 
                 // serialize data block.
                 let mut block_data = Vec::with_capacity(100 * 1024 * 1024);
@@ -280,16 +266,16 @@ impl Processor for DeletionSource {
                     col_metas,
                     cluster_stats,
                     block_location.clone(),
-                    Some(index_location.clone()),
-                    index_size,
+                    Some(bloom_index_state.location.clone()),
+                    bloom_index_state.size,
                 ));
 
                 self.state = State::Serialized(
                     SerializeState {
                         block_data,
                         block_location: block_location.0,
-                        index_data,
-                        index_location: index_location.0,
+                        index_data: bloom_index_state.data,
+                        index_location: bloom_index_state.location.0,
                     },
                     new_meta,
                 );

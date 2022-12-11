@@ -17,8 +17,6 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_base::base::tokio::sync::Semaphore;
-use common_base::base::Runtime;
 use common_cache::Cache;
 use common_catalog::table_context::TableContext;
 use common_datablocks::BlockCompactThresholds;
@@ -32,9 +30,9 @@ use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::Location;
 use common_storages_table_meta::meta::SegmentInfo;
 use common_storages_table_meta::meta::Statistics;
-use futures_util::future;
 use opendal::Operator;
 
+use crate::io::try_join_futures;
 use crate::io::write_meta;
 use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
@@ -168,9 +166,6 @@ impl DeletionTransform {
     }
 
     async fn write_segments(&self, segments: Vec<SerializedData>) -> Result<()> {
-        let max_runtime_threads = self.ctx.get_settings().get_max_threads()? as usize;
-        let max_io_requests = self.ctx.get_settings().get_max_storage_io_requests()? as usize;
-
         let mut handles = Vec::with_capacity(segments.len());
         for segment in segments {
             let op = self.dal.clone();
@@ -184,30 +179,15 @@ impl DeletionTransform {
             });
         }
 
-        // 1.2 build the runtime.
-        let semaphore = Semaphore::new(max_io_requests);
-        let segments_runtime = Arc::new(Runtime::with_worker_threads(
-            max_runtime_threads,
-            Some("deletion-write-segments-worker".to_owned()),
-        )?);
-
-        // 1.3 spawn all the tasks to the runtime.
-        let join_handlers = segments_runtime.try_spawn_batch(semaphore, handles).await?;
-
-        // 1.4 get all the result.
-        if let Some(e) = future::try_join_all(join_handlers)
-            .await
-            .map_err(|e| ErrorCode::StorageOther(format!("write segments failure, {}", e)))?
-            .iter()
-            .find(|v| v.is_err())
-        {
-            Err(ErrorCode::StorageOther(format!(
-                "write segments failure, {:?}",
-                e
-            )))
-        } else {
-            Ok(())
-        }
+        try_join_futures(
+            self.ctx.clone(),
+            handles,
+            "deletion-write-segments-worker".to_owned(),
+        )
+        .await?
+        .into_iter()
+        .collect::<Result<Vec<_>>>()?;
+        Ok(())
     }
 }
 
