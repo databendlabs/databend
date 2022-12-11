@@ -149,10 +149,6 @@ pub trait Column: Send + Sync {
         DFTryFrom::try_from(value)
     }
 
-    fn to_values(&self) -> Vec<DataValue> {
-        (0..self.len()).map(|i| self.get(i)).collect()
-    }
-
     /// Visit each row value of Column
     fn for_each<F>(&self, f: F)
     where

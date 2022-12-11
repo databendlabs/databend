@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use core::fmt::Write;
 use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_ast::ast::AlterTableAction;
 use common_ast::ast::AlterTableStmt;
+use common_ast::ast::AnalyzeTableStmt;
 use common_ast::ast::CompactTarget;
 use common_ast::ast::CreateTableSource;
 use common_ast::ast::CreateTableStmt;
@@ -59,6 +59,8 @@ use common_storage::DataOperator;
 use common_storage::UriLocation;
 use common_storages_table_meta::table::is_reserved_opt_key;
 use common_storages_table_meta::table::OPT_KEY_DATABASE_ID;
+use common_storages_view::view_table::QUERY;
+use common_storages_view::view_table::VIEW_ENGINE;
 use tracing::debug;
 
 use crate::binder::scalar::ScalarBinder;
@@ -70,6 +72,7 @@ use crate::optimizer::OptimizerContext;
 use crate::planner::semantic::normalize_identifier;
 use crate::planner::semantic::IdentifierNormalizer;
 use crate::plans::AlterTableClusterKeyPlan;
+use crate::plans::AnalyzeTablePlan;
 use crate::plans::CastExpr;
 use crate::plans::CreateTablePlanV2;
 use crate::plans::DescribeTablePlan;
@@ -90,70 +93,9 @@ use crate::plans::TruncateTablePlan;
 use crate::plans::UndropTablePlan;
 use crate::BindContext;
 use crate::ColumnBinding;
+use crate::Planner;
 use crate::ScalarExpr;
-
-struct SelectBuilder {
-    from: String,
-    columns: Vec<String>,
-    filters: Vec<String>,
-    order_bys: Vec<String>,
-}
-
-impl SelectBuilder {
-    fn from(table_name: &str) -> SelectBuilder {
-        SelectBuilder {
-            from: table_name.to_owned(),
-            columns: vec![],
-            filters: vec![],
-            order_bys: vec![],
-        }
-    }
-    fn with_column(&mut self, col_name: impl Into<String>) -> &mut Self {
-        self.columns.push(col_name.into());
-        self
-    }
-
-    fn with_filter(&mut self, col_name: impl Into<String>) -> &mut Self {
-        self.filters.push(col_name.into());
-        self
-    }
-
-    fn with_order_by(&mut self, order_by: &str) -> &mut Self {
-        self.order_bys.push(order_by.to_owned());
-        self
-    }
-
-    fn build(self) -> String {
-        let mut query = String::new();
-        let mut columns = String::new();
-        let s = self.columns.join(",");
-        if s.is_empty() {
-            write!(columns, "*").unwrap();
-        } else {
-            write!(columns, "{s}").unwrap();
-        }
-
-        let mut order_bys = String::new();
-        let s = self.order_bys.join(",");
-        if s.is_empty() {
-            write!(order_bys, "{s}").unwrap();
-        } else {
-            write!(order_bys, "ORDER BY {s}").unwrap();
-        }
-
-        let mut filters = String::new();
-        let s = self.filters.join(" and ");
-        if !s.is_empty() {
-            write!(filters, "where {s}").unwrap();
-        } else {
-            write!(filters, "").unwrap();
-        }
-
-        let from = self.from;
-        write!(query, "SELECT {columns} FROM {from} {filters} {order_bys} ").unwrap();
-        query
-    }
-}
+use crate::SelectBuilder;
 
 impl<'a> Binder {
     pub(in crate::planner::binder) async fn bind_show_tables(
@@ -397,7 +339,7 @@ impl<'a> Binder {
                 let (sp, _) = parse_uri_location(&uri)?;
 
                 // create a temporary op to check if params is correct
-                DataOperator::try_create_with_storage_params(&sp).await?;
+                DataOperator::try_create(&sp).await?;
 
                 Some(sp)
             }
@@ -811,7 +753,6 @@ impl<'a> Binder {
             match ast_action {
                 AstOptimizeTableAction::All => OptimizeTableAction::All,
                 AstOptimizeTableAction::Purge => OptimizeTableAction::Purge,
-                AstOptimizeTableAction::Statistic => OptimizeTableAction::Statistic,
                 AstOptimizeTableAction::Compact { target, limit } => {
                     let limit_cnt = match limit {
                         Some(Expr::Literal {
@@ -838,6 +779,33 @@ impl<'a> Binder {
             database,
             table,
             action,
+        })))
+    }
+
+    pub(in crate::planner::binder) async fn bind_analyze_table(
+        &mut self,
+        stmt: &AnalyzeTableStmt<'a>,
+    ) -> Result<Plan> {
+        let AnalyzeTableStmt {
+            catalog,
+            database,
+            table,
+        } = stmt;
+
+        let catalog = catalog
+            .as_ref()
+            .map(|catalog| normalize_identifier(catalog, &self.name_resolution_ctx).name)
+            .unwrap_or_else(|| self.ctx.get_current_catalog());
+        let database = database
+            .as_ref()
+            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
+            .unwrap_or_else(|| self.ctx.get_current_database());
+        let table = normalize_identifier(table, &self.name_resolution_ctx).name;
+
+        Ok(Plan::AnalyzeTable(Box::new(AnalyzeTablePlan {
+            catalog,
+            database,
+            table,
         })))
     }
 
@@ -929,7 +897,15 @@ impl<'a> Binder {
                 );
                 let table_name = normalize_identifier(table, &self.name_resolution_ctx).name;
                 let table = self.ctx.get_table(&catalog, &database, &table_name).await?;
-                Ok((table.schema(), vec![], table.field_comments().clone()))
+
+                if table.engine() == VIEW_ENGINE {
+                    let query = table.get_table_info().options().get(QUERY).unwrap();
+                    let mut planner = Planner::new(self.ctx.clone());
+                    let (plan, _, _) = planner.plan_sql(query).await?;
+                    Ok((plan.schema(), vec![], vec![]))
+                } else {
+                    Ok((table.schema(), vec![], table.field_comments().clone()))
+                }
             }
         }
     }

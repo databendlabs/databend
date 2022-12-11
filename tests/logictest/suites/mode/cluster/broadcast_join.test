@@ -217,6 +217,15 @@ select * from t1 left outer join t2 on t1.a > t2.c order by a,b,c,d;
 7 8 6 8
 
 
+statement query III
+select t1.a, t2.c, t2.d from t1 left join t2 on t2.c in ( -t2.c );
+
+----
+1 NULL NULL
+3 NULL NULL
+7 NULL NULL
+
+
 statement ok
 drop table t1;
 

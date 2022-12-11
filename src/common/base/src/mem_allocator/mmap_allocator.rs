@@ -36,7 +36,7 @@ pub mod linux {
     use std::ptr::NonNull;
 
     use super::MmapAllocator;
-    use crate::base::ThreadTracker;
+    use crate::runtime::ThreadTracker;
 
     // MADV_POPULATE_WRITE is supported since Linux 5.14.
     const MADV_POPULATE_WRITE: i32 = 23;

@@ -21,7 +21,7 @@ use std::sync::Weak;
 use std::time::SystemTime;
 
 use common_base::base::Progress;
-use common_base::base::Runtime;
+use common_base::runtime::Runtime;
 use common_config::Config;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
@@ -31,7 +31,6 @@ use common_meta_types::UserInfo;
 use common_settings::Settings;
 use common_storage::DataOperator;
 use common_storage::StorageMetrics;
-use common_storage::StorageParams;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 use uuid::Uuid;
@@ -158,10 +157,6 @@ impl QueryContextShared {
 
     pub fn set_current_tenant(&self, tenant: String) {
         self.session.set_current_tenant(tenant);
-    }
-
-    pub fn get_storage_params(&self) -> StorageParams {
-        self.data_operator.get_storage_params()
     }
 
     /// Get all tables that already attached in this query.

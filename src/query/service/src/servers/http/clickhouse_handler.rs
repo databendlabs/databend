@@ -19,7 +19,7 @@ use async_stream::stream;
 use common_base::base::tokio;
 use common_base::base::tokio::sync::mpsc::Sender;
 use common_base::base::tokio::task::JoinHandle;
-use common_base::base::TrySpawn;
+use common_base::runtime::TrySpawn;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;

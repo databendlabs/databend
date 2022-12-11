@@ -14,8 +14,8 @@
 
 use std::env;
 
-use common_base::base::Runtime;
-use common_base::base::GLOBAL_MEM_STAT;
+use common_base::runtime::Runtime;
+use common_base::runtime::GLOBAL_MEM_STAT;
 use common_config::Config;
 use common_config::DATABEND_COMMIT_VERSION;
 use common_config::QUERY_SEMVER;
@@ -180,9 +180,9 @@ async fn main_entrypoint() -> Result<()> {
 
     // Cluster register.
     {
-        let cluster_discovery = ClusterDiscovery::instance();
-        let register_to_metastore = cluster_discovery.register_to_metastore(&conf);
-        register_to_metastore.await?;
+        ClusterDiscovery::instance()
+            .register_to_metastore(&conf)
+            .await?;
         info!(
             "Databend query has been registered:{:?} to metasrv:{:?}.",
             conf.query.cluster_id, conf.meta.endpoints
@@ -205,6 +205,26 @@ async fn main_entrypoint() -> Result<()> {
             format!("connected to endpoints {:#?}", conf.meta.endpoints)
         }
     );
+    println!(
+        "Memory: {}",
+        if conf.query.max_memory_limit_enabled {
+            format!(
+                "Memory: server memory limit to {} (bytes)",
+                conf.query.max_server_memory_usage
+            )
+        } else {
+            "unlimited".to_string()
+        }
+    );
+    println!("Cluster: {}", {
+        let cluster = ClusterDiscovery::instance().discover(&conf).await?;
+        let nodes = cluster.nodes.len();
+        if nodes > 1 {
+            format!("[{}] nodes", nodes)
+        } else {
+            "standalone".to_string()
+        }
+    });
     println!("Storage: {}", conf.storage.params);
     println!("Cache: {}", conf.storage.cache.params);
     println!(

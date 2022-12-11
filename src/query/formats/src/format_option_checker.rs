@@ -138,12 +138,12 @@ impl FormatOptionChecker for TSVFormatOptionChecker {
         "TSV".to_string()
     }
 
-    fn check_quote(&self, quote: &mut String) -> Result<()> {
-        check_quote(quote, "\'")
-    }
-
     fn check_escape(&self, escape: &mut String) -> Result<()> {
         check_escape(escape, "\\")
+    }
+
+    fn check_quote(&self, quote: &mut String) -> Result<()> {
+        check_quote(quote, "\'")
     }
 
     fn check_record_delimiter(&self, record_delimiter: &mut String) -> Result<()> {
@@ -222,7 +222,7 @@ pub fn check_quote(option: &mut String, default: &str) -> Result<()> {
 pub fn check_field_delimiter(option: &mut String, default: &str) -> Result<()> {
     if option.is_empty() {
         *option = default.to_string()
-    } else if option.len() > 1 {
+    } else if option.as_bytes().len() > 1 {
         return Err(ErrorCode::InvalidArgument(
             "field_delimiter can only contain one char",
         ));
@@ -230,17 +230,25 @@ pub fn check_field_delimiter(option: &mut String, default: &str) -> Result<()> {
     Ok(())
 }
 
+/// `\r\n` or u8
 pub fn check_record_delimiter(option: &mut String) -> Result<()> {
-    if option.is_empty() {
-        *option = "\n".to_string()
-    } else {
-        let o = option.as_str();
-        if o != "\n" && o != "\r\n" {
+    match option.len() {
+        0 => *option = "\n".to_string(),
+        1 => {}
+        2 => {
+            if option != "\r\n" {
+                return Err(ErrorCode::InvalidArgument(
+                    "record_delimiter with two chars can only be '\\r\\n'",
+                ));
+            };
+        }
+        _ => {
             return Err(ErrorCode::InvalidArgument(
-                "record_delimiter can only be '\\n' or '\\r\\n'",
+                "record_delimiter can not more than two chars, please use one char or '\\r\\n'",
             ));
-        };
+        }
     }
+
     Ok(())
 }
 

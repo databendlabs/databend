@@ -83,7 +83,7 @@ impl DeletionMutator {
                 &self.base_mutator.data_accessor,
                 &self.base_mutator.location_generator,
             );
-            let col_stats = gen_columns_statistics(&replace_with)?;
+            let col_stats = gen_columns_statistics(&replace_with, None)?;
             let cluster_stats = self
                 .cluster_stats_gen
                 .gen_with_origin_stats(&replace_with, origin_stats)?;
