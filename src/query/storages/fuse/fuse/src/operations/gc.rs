@@ -39,8 +39,6 @@ use crate::io::SegmentsIO;
 use crate::io::SnapshotsIO;
 use crate::FuseTable;
 
-pub const DEFAULT_RETENTION_PERIOD_HOURS: u32 = 12;
-
 #[derive(Default)]
 struct LocationTuple {
     block_location: HashSet<String>,
@@ -123,9 +121,10 @@ impl FuseTable {
 
             // partition the orphan snapshots by retention interval
             let partitioned_snapshots = Self::apply_retention_rule(
+                ctx.as_ref(),
                 min_snapshot_timestamp,
                 snapshot_lites_extended.orphan_snapshot_lites,
-            );
+            )?;
 
             // filter out segments that still referenced by snapshot that within retention period
             all_segment_locations = Self::filter_out_segments_within_retention(
@@ -359,18 +358,20 @@ impl FuseTable {
     // - those are beyond retention period
     // - those are within retention period
     fn apply_retention_rule(
+        ctx: &dyn TableContext,
         base_timestamp: Option<DateTime<Utc>>,
         snapshot_lites: Vec<(TableSnapshotLite, usize)>,
-    ) -> RetentionPartition {
-        let retention_interval = Duration::hours(DEFAULT_RETENTION_PERIOD_HOURS as i64);
+    ) -> Result<RetentionPartition> {
+        //    let retention_interval = Duration::hours(DEFAULT_RETENTION_PERIOD_HOURS as i64);
+        let retention_interval = Duration::hours(ctx.get_settings().get_retention_period()? as i64);
         let retention_point = base_timestamp.map(|s| s - retention_interval);
         let (beyond_retention, within_retention) = snapshot_lites
             .into_iter()
             .partition(|(lite, _idx)| lite.timestamp < retention_point);
-        RetentionPartition {
+        Ok(RetentionPartition {
             beyond_retention,
             within_retention,
-        }
+        })
     }
 
     // filter out segments that are referenced by orphan snapshots
