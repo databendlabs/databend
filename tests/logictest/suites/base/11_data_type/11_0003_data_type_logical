@@ -1,12 +1,12 @@
 query B
-SELECT 1::BOOLEAN;
+SELECT 1::BOOLEAN
 ----
 1
 
 
 
 query B
-SELECT 1::BOOL;
+SELECT 1::BOOL
 ----
 1
 

@@ -1,15 +1,15 @@
 query T
-SELECT current_user();
+SELECT current_user()
 ----
 'root'@'127.0.0.1'
 
 query T
-SELECT user();
+SELECT user()
 ----
 'root'@'127.0.0.1'
 
 query T
-SELECT timezone();
+SELECT timezone()
 ----
 UTC
 

@@ -1,5 +1,5 @@
 query T
-explain select t.number from numbers(1) as t, numbers(1) as t1 where t.number = (select count(*) from numbers(1) as t2, numbers(1) as t3 where t.number = t2.number);
+explain select t.number from numbers(1) as t, numbers(1) as t1 where t.number = (select count(*) from numbers(1) as t2, numbers(1) as t3 where t.number = t2.number)
 ----
 Filter
 ├── filters: [=(t.number (#0), CAST(if(is_not_null(scalar_subquery_4 (#4)), scalar_subquery_4 (#4), 0) AS BIGINT UNSIGNED))]
@@ -58,7 +58,7 @@ Filter
             └── push downs: [filters: [], limit: NONE]
 
 query T
-explain select t.number from numbers(1) as t where exists (select t1.number from numbers(1) as t1 where t.number = t1.number) or t.number > 1;
+explain select t.number from numbers(1) as t where exists (select t1.number from numbers(1) as t1 where t.number = t1.number) or t.number > 1
 ----
 Filter
 ├── filters: [or(2 (#2), >(t.number (#0), 1))]
@@ -85,7 +85,7 @@ Filter
         └── push downs: [filters: [], limit: NONE]
 
 query T
-explain select t.number from numbers(1) as t where exists (select * from numbers(1) where number = 0);
+explain select t.number from numbers(1) as t where exists (select * from numbers(1) where number = 0)
 ----
 HashJoin
 ├── join type: CROSS
@@ -121,7 +121,7 @@ HashJoin
     └── push downs: [filters: [], limit: NONE]
 
 query T
-explain select t.number from numbers(1) as t where number = (select * from numbers(1) where number = 0);
+explain select t.number from numbers(1) as t where number = (select * from numbers(1) where number = 0)
 ----
 Filter
 ├── filters: [=(t.number (#0), scalar_subquery_1 (#1))]
@@ -148,7 +148,7 @@ Filter
         └── push downs: [filters: [], limit: NONE]
 
 query T
-explain select t.number from numbers(1) as t where exists (select * from numbers(1) where number = t.number);
+explain select t.number from numbers(1) as t where exists (select * from numbers(1) where number = t.number)
 ----
 HashJoin
 ├── join type: LEFT SEMI
@@ -171,7 +171,7 @@ HashJoin
     └── push downs: [filters: [], limit: NONE]
 
 query T
-explain select t.number from numbers(1) as t where not exists (select * from numbers(1) where number = t.number);
+explain select t.number from numbers(1) as t where not exists (select * from numbers(1) where number = t.number)
 ----
 HashJoin
 ├── join type: LEFT ANTI
@@ -194,7 +194,7 @@ HashJoin
     └── push downs: [filters: [], limit: NONE]
 
 query T
-explain select * from numbers(1) as t where exists (select number as a from numbers(1) where number = t.number);
+explain select * from numbers(1) as t where exists (select number as a from numbers(1) where number = t.number)
 ----
 HashJoin
 ├── join type: LEFT SEMI
@@ -217,7 +217,7 @@ HashJoin
     └── push downs: [filters: [], limit: NONE]
 
 query T
-explain select t.number from numbers(1) as t where exists (select * from numbers(1) where number = t.number and number = 0 and t.number < 10);
+explain select t.number from numbers(1) as t where exists (select * from numbers(1) where number = t.number and number = 0 and t.number < 10)
 ----
 HashJoin
 ├── join type: LEFT SEMI
@@ -244,7 +244,7 @@ HashJoin
         └── push downs: [filters: [(number < 10)], limit: NONE]
 
 query T
-explain select t.number from numbers(1) as t where exists (select * from numbers(1) where number = t.number and t.number < number);
+explain select t.number from numbers(1) as t where exists (select * from numbers(1) where number = t.number and t.number < number)
 ----
 HashJoin
 ├── join type: LEFT SEMI
@@ -267,7 +267,7 @@ HashJoin
     └── push downs: [filters: [], limit: NONE]
 
 query T
-explain select t.number from numbers(1) as t where exists (select number as a, number as b, number as c from numbers(1) where number = t.number);
+explain select t.number from numbers(1) as t where exists (select number as a, number as b, number as c from numbers(1) where number = t.number)
 ----
 HashJoin
 ├── join type: LEFT SEMI
@@ -290,7 +290,7 @@ HashJoin
     └── push downs: [filters: [], limit: NONE]
 
 query T
-explain select t.number from numbers(1) as t, numbers(1) as t1 where (select count(*) = 1 from numbers(1) where t.number = number) and t.number = t1.number;
+explain select t.number from numbers(1) as t, numbers(1) as t1 where (select count(*) = 1 from numbers(1) where t.number = number) and t.number = t1.number
 ----
 Filter
 ├── filters: [CAST(if(is_not_null(scalar_subquery_3 (#3)), scalar_subquery_3 (#3), 0) AS BIGINT UNSIGNED)]
@@ -337,7 +337,7 @@ Filter
             └── push downs: [filters: [], limit: NONE]
 
 query T
-explain select t.number from numbers(1) as t where exists(select * from numbers(1) as t1 where t.number > t1.number) and not exists(select * from numbers(1) as t1 where t.number < t1.number);
+explain select t.number from numbers(1) as t where exists(select * from numbers(1) as t1 where t.number > t1.number) and not exists(select * from numbers(1) as t1 where t.number < t1.number)
 ----
 HashJoin
 ├── join type: LEFT ANTI

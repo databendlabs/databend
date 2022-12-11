@@ -1,216 +1,216 @@
 query T
-select parse_json(null);
+select parse_json(null)
 ----
 NULL
 
 query T
-select parse_json(true);
+select parse_json(true)
 ----
 true
 
 query T
-select parse_json(123);
+select parse_json(123)
 ----
 123
 
 query T
-select parse_json(12.34);
+select parse_json(12.34)
 ----
 12.34
 
 query T
-select parse_json('null');
+select parse_json('null')
 ----
 null
 
 query T
-select parse_json('true');
+select parse_json('true')
 ----
 true
 
 query T
-select parse_json('-17');
+select parse_json('-17')
 ----
 -17
 
 query T
-select parse_json('123.12');
+select parse_json('123.12')
 ----
 123.12
 
 query T
-select parse_json('1.912e2');
+select parse_json('1.912e2')
 ----
 191.2
 
 query T
-select parse_json('"Om ara pa ca na dhih"  ');
+select parse_json('"Om ara pa ca na dhih"  ')
 ----
 "Om ara pa ca na dhih"
 
 query T
-select parse_json('[-1, 12, 289, 2188, false]');
+select parse_json('[-1, 12, 289, 2188, false]')
 ----
 [-1,12,289,2188,false]
 
 query T
-select parse_json('{ "x" : "abc", "y" : false, "z": 10} ');
+select parse_json('{ "x" : "abc", "y" : false, "z": 10} ')
 ----
 {"x":"abc","y":false,"z":10}
 
 
 statement error 1010
-select parse_json('[1,'); 
+select parse_json('[1,')
 
 
 statement error 1010
-select parse_json('"ab'); 
+select parse_json('"ab')
 
 query T
-select parse_json(parse_json('123'));
+select parse_json(parse_json('123'))
 ----
 123
 
 -- http handler could not parse
 onlyif mysql
 query T
-select parse_json(parse_json('"\\\"abc\\\""'));
+select parse_json(parse_json('"\\\"abc\\\""'))
 ----
 "abc"
 
 
 statement error 1010
-select parse_json(parse_json('"abc"')); 
+select parse_json(parse_json('"abc"'))
 
 
 statement error 1010
-select parse_json(to_date('2022-01-01')); 
+select parse_json(to_date('2022-01-01'))
 
 
 statement error 1028
-select parse_json(); 
+select parse_json()
 
 
 statement error 1028
-select parse_json('a', 'aa'); 
+select parse_json('a', 'aa')
 
 
 statement error 1028
-select get(parse_json('a', 'aa')); 
+select get(parse_json('a', 'aa'))
 
 query T
-select '==try_parse_json==';
+select '==try_parse_json=='
 ----
 ==try_parse_json==
 
 query T
-select try_parse_json(null);
+select try_parse_json(null)
 ----
 NULL
 
 query T
-select try_parse_json(true);
+select try_parse_json(true)
 ----
 true
 
 query T
-select try_parse_json(123);
+select try_parse_json(123)
 ----
 123
 
 query T
-select try_parse_json(12.34);
+select try_parse_json(12.34)
 ----
 12.34
 
 query T
-select try_parse_json('null');
+select try_parse_json('null')
 ----
 null
 
 query T
-select try_parse_json('true');
+select try_parse_json('true')
 ----
 true
 
 query T
-select try_parse_json('-17');
+select try_parse_json('-17')
 ----
 -17
 
 query T
-select try_parse_json('123.12');
+select try_parse_json('123.12')
 ----
 123.12
 
 query T
-select try_parse_json('1.912e2');
+select try_parse_json('1.912e2')
 ----
 191.2
 
 query T
-select try_parse_json('"Om ara pa ca na dhih"  ');
+select try_parse_json('"Om ara pa ca na dhih"  ')
 ----
 "Om ara pa ca na dhih"
 
 query T
-select try_parse_json('[-1, 12, 289, 2188, false]');
+select try_parse_json('[-1, 12, 289, 2188, false]')
 ----
 [-1,12,289,2188,false]
 
 query T
-select try_parse_json('{ "x" : "abc", "y" : false, "z": 10} ');
+select try_parse_json('{ "x" : "abc", "y" : false, "z": 10} ')
 ----
 {"x":"abc","y":false,"z":10}
 
 query T
-select try_parse_json('[1,');
+select try_parse_json('[1,')
 ----
 NULL
 
 query T
-select try_parse_json('"ab');
+select try_parse_json('"ab')
 ----
 NULL
 
 query T
-select try_parse_json(parse_json('123'));
+select try_parse_json(parse_json('123'))
 ----
 123
 
 onlyif mysql
 query T
-select try_parse_json(parse_json('"\\\"abc\\\""'));
+select try_parse_json(parse_json('"\\\"abc\\\""'))
 ----
 "abc"
 
 query T
-select try_parse_json(parse_json('"abc"'));
+select try_parse_json(parse_json('"abc"'))
 ----
 NULL
 
 query T
-select try_parse_json(to_date('2022-01-01'));
+select try_parse_json(to_date('2022-01-01'))
 ----
 NULL
 
 statement ok
-DROP DATABASE IF EXISTS db1;
+DROP DATABASE IF EXISTS db1
 
 statement ok
-CREATE DATABASE db1;
+CREATE DATABASE db1
 
 statement ok
-USE db1;
+USE db1
 
 statement ok
-CREATE TABLE IF NOT EXISTS t1(v String null) Engine = Fuse;
+CREATE TABLE IF NOT EXISTS t1(v String null) Engine = Fuse
 
 statement ok
-insert into t1 values (null),('null'),('true'),('123'),('"abc"'),('[1,2,3]'),('{"a":"b"}');
+insert into t1 values (null),('null'),('true'),('123'),('"abc"'),('[1,2,3]'),('{"a":"b"}')
 
 query TT
-select parse_json(v), v from t1;
+select parse_json(v), v from t1
 ----
 NULL NULL
 null null
@@ -221,7 +221,7 @@ true true
 {"a":"b"} {"a":"b"}
 
 query TT
-select try_parse_json(v), v from t1;
+select try_parse_json(v), v from t1
 ----
 NULL NULL
 null null
@@ -232,17 +232,17 @@ true true
 {"a":"b"} {"a":"b"}
 
 statement ok
-CREATE TABLE IF NOT EXISTS t2(v String null) Engine = Fuse;
+CREATE TABLE IF NOT EXISTS t2(v String null) Engine = Fuse
 
 statement ok
-insert into t2 values ('abc'),('[1,');
+insert into t2 values ('abc'),('[1,')
 
 query TT
-select try_parse_json(v), v from t2;
+select try_parse_json(v), v from t2
 ----
 NULL abc
 NULL [1,
 
 statement ok
-DROP DATABASE db1;
+DROP DATABASE db1
 

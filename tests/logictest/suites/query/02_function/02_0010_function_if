@@ -1,5 +1,5 @@
 query B
-select if(number>1, true, false) from numbers(3) order by number;
+select if(number>1, true, false) from numbers(3) order by number
 ----
 0
 0
@@ -7,28 +7,28 @@ select if(number>1, true, false) from numbers(3) order by number;
 
 
 query I
-select if(number>1, number, 1) from numbers(3) order by number;
+select if(number>1, number, 1) from numbers(3) order by number
 ----
 1
 1
 2
 
 query I
-select if(number<1, 2, number) from numbers(3) order by number;
+select if(number<1, 2, number) from numbers(3) order by number
 ----
 2
 1
 2
 
 query T
-select if(number>0, 'Z+', 'zero') from numbers(3) order by number;
+select if(number>0, 'Z+', 'zero') from numbers(3) order by number
 ----
 zero
 Z+
 Z+
 
 query B
-select if(number<1, true, null) from numbers(3) order by number;
+select if(number<1, true, null) from numbers(3) order by number
 ----
 1
 NULL
@@ -36,17 +36,17 @@ NULL
 
 
 query T
-select typeof(if(number % 3 = 0, to_uint32(1), to_int64(3))) from numbers(10) limit 1;
+select typeof(if(number % 3 = 0, to_uint32(1), to_int64(3))) from numbers(10) limit 1
 ----
 BIGINT
 
 query T
-select typeof(if(number % 3 = 0, to_uint32(1), to_float32(3))) from numbers(10) limit 1;
+select typeof(if(number % 3 = 0, to_uint32(1), to_float32(3))) from numbers(10) limit 1
 ----
 DOUBLE
 
 query I
-SELECT if (number % 3 = 1, null, number) as a FROM numbers(7) order by number;
+SELECT if (number % 3 = 1, null, number) as a FROM numbers(7) order by number
 ----
 0
 NULL
@@ -57,55 +57,55 @@ NULL
 6
 
 query T
-SELECT 'multi-if';
+SELECT 'multi-if'
 ----
 multi-if
 
 statement error 1028
-select multi_if(number = 4, 3) from numbers(1);
+select multi_if(number = 4, 3) from numbers(1)
 
 statement error 1065
-select multi_if(number = 4, 3, number = 5, null, number = 6, 'a', null) from numbers(10);
+select multi_if(number = 4, 3, number = 5, null, number = 6, 'a', null) from numbers(10)
 
 statement error 1065
-select multi_if(number = 4, 3, number = 2, 4) from numbers(1);
+select multi_if(number = 4, 3, number = 2, 4) from numbers(1)
 
 query IIII
-select count_if(a = '1'), count_if(a = '2'), count_if(a = '3'), count_if(a is null) from (	SELECT multi_if (number % 4 = 1, '1', number % 4 = 2, '2', number % 4 = 3, '3', null) as a FROM numbers(100));
+select count_if(a = '1'), count_if(a = '2'), count_if(a = '3'), count_if(a is null) from (	SELECT multi_if (number % 4 = 1, '1', number % 4 = 2, '2', number % 4 = 3, '3', null) as a FROM numbers(100))
 ----
 25 25 25 25
 
 query T
-SELECT 'constant';
+SELECT 'constant'
 ----
 constant
 
 query II
-select if(true, null, number), if(false, null, number) from numbers(1);
+select if(true, null, number), if(false, null, number) from numbers(1)
 ----
 NULL 0
 
 query II
-select if(true, number, null), if(false, number, null) from numbers(1);
+select if(true, number, null), if(false, number, null) from numbers(1)
 ----
 0 NULL
 
 statement ok
-drop table if exists t;
+drop table if exists t
 
 statement ok
-create table t(a int null, b int);
+create table t(a int null, b int)
 
 statement ok
-insert into t values(null, 1);
+insert into t values(null, 1)
 
 query II
-select a, b, a*2, if(b=1, a*2, b) from t;
+select a, b, a*2, if(b=1, a*2, b) from t
 ----
 NULL 1 NULL NULL
 
 statement ok
-drop table t;
+drop table t
 
 
 

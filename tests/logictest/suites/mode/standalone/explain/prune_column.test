@@ -1,5 +1,5 @@
 query T
-explain select * from (select a from (select number as a, number + 1 as b from numbers(1)));
+explain select * from (select a from (select number as a, number + 1 as b from numbers(1)))
 ----
 TableScan
 ├── table: default.system.numbers
@@ -10,7 +10,7 @@ TableScan
 └── push downs: [filters: [], limit: NONE]
 
 query T
-explain select a from (select number as a, count(*) as b from numbers(1) group by a);
+explain select a from (select number as a, count(*) as b from numbers(1) group by a)
 ----
 AggregateFinal
 ├── group by: [number]
@@ -27,7 +27,7 @@ AggregateFinal
         └── push downs: [filters: [], limit: NONE]
 
 query T
-explain select a from (select number as a, number b, sum(number) as c, number as d, number as e from numbers(1) group by a, b, d, e) where b > 1 order by d limit 1;
+explain select a from (select number as a, number b, sum(number) as c, number as d, number as e from numbers(1) group by a, b, d, e) where b > 1 order by d limit 1
 ----
 Limit
 ├── limit: 1
@@ -51,7 +51,7 @@ Limit
                     └── push downs: [filters: [], limit: NONE]
 
 query T
-explain select * from (select t1.a from (select number + 1 as a, number + 1 as b, number + 1 as c, number + 1 as d from numbers(1)) as t1, (select number + 1 as a, number + 1 as b, number + 1 as c from numbers(1)) as t2 where t1.b = t2.b and t1.c = 1);
+explain select * from (select t1.a from (select number + 1 as a, number + 1 as b, number + 1 as c, number + 1 as d from numbers(1)) as t1, (select number + 1 as a, number + 1 as b, number + 1 as c from numbers(1)) as t2 where t1.b = t2.b and t1.c = 1)
 ----
 HashJoin
 ├── join type: INNER
@@ -80,7 +80,7 @@ HashJoin
             └── push downs: [filters: [], limit: NONE]
 
 query T
-explain select t1.a from (select number + 1 as a, number + 1 as b from numbers(1)) as t1 where t1.a = (select count(*) from (select t2.a, t3.a from (select number + 1 as a, number + 1 as b, number + 1 as c, number + 1 as d from numbers(1)) as t2, (select number + 1 as a, number + 1 as b, number + 1 as c from numbers(1)) as t3 where t2.b = t3.b and t2.c = 1));
+explain select t1.a from (select number + 1 as a, number + 1 as b from numbers(1)) as t1 where t1.a = (select count(*) from (select t2.a, t3.a from (select number + 1 as a, number + 1 as b, number + 1 as c, number + 1 as d from numbers(1)) as t2, (select number + 1 as a, number + 1 as b, number + 1 as c from numbers(1)) as t3 where t2.b = t3.b and t2.c = 1))
 ----
 Filter
 ├── filters: [=(t1.a (#1), scalar_subquery_21 (#21))]
@@ -133,7 +133,7 @@ Filter
             └── push downs: [filters: [], limit: NONE]
 
 query T
-explain select name from system.functions order by example;
+explain select name from system.functions order by example
 ----
 Sort
 ├── sort keys: [example ASC NULLS LAST]
@@ -146,7 +146,7 @@ Sort
     └── push downs: [filters: [], limit: NONE]
 
 query T
-explain select t.number from numbers(10) t where exists(select * from numbers(10));
+explain select t.number from numbers(10) t where exists(select * from numbers(10))
 ----
 HashJoin
 ├── join type: CROSS
@@ -181,16 +181,16 @@ HashJoin
 
 
 statement ok
-drop table if exists t;
+drop table if exists t
 
 statement ok
-create table t(a int, b int);
+create table t(a int, b int)
 
 statement ok
-insert into t values(1, 2), (2, 3);
+insert into t values(1, 2), (2, 3)
 
 query T
-explain select count(*) from t where t.b = 2;
+explain select count(*) from t where t.b = 2
 ----
 EvalScalar
 ├── expressions: [COUNT(*) (#3)]
@@ -210,5 +210,5 @@ EvalScalar
             └── output columns: [1]
 
 statement ok
-drop table t;
+drop table t
 

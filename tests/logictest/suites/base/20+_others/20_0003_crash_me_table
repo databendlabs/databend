@@ -1,6 +1,6 @@
 statement error 1104
-SELECT * FROM sync_crash_me('sync crash me');
+SELECT * FROM sync_crash_me('sync crash me')
 
 statement error 1104
-SELECT * FROM async_crash_me('async crash me'); 
+SELECT * FROM async_crash_me('async crash me')
 

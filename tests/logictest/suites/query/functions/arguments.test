@@ -2,4 +2,4 @@
 
 # Number arguments not match
 statement error 1028
-select parse_json();
+select parse_json()

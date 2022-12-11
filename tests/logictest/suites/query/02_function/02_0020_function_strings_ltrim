@@ -1,18 +1,18 @@
 query T
-select ltrim('      abc');
+select ltrim('      abc')
 ----
 abc
 
 statement ok
-select ltrim('');
+select ltrim('')
 
 query T
-select ltrim('abc');
+select ltrim('abc')
 ----
 abc
 
 query T
-select ltrim(null);
+select ltrim(null)
 ----
 NULL
 

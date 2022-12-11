@@ -1,20 +1,20 @@
 statement ok
-create database join_reorder;
+create database join_reorder
 
 statement ok
-use join_reorder;
+use join_reorder
 
 statement ok
-create table t as select number as a from numbers(1);
+create table t as select number as a from numbers(1)
 
 statement ok
-create table t1 as select number as a from numbers(10);
+create table t1 as select number as a from numbers(10)
 
 statement ok
-create table t2 as select number as a from numbers(100);
+create table t2 as select number as a from numbers(100)
 
 query T
-explain select * from t, t1, t2 where t.a = t2.a and t1.a = t2.a;
+explain select * from t, t1, t2 where t.a = t2.a and t1.a = t2.a
 ----
 HashJoin
 ├── join type: INNER
@@ -49,7 +49,7 @@ HashJoin
     └── push downs: [filters: [], limit: NONE]
 
 query T
-explain select * from t, t2, t1 where t.a = t2.a and t1.a = t2.a;
+explain select * from t, t2, t1 where t.a = t2.a and t1.a = t2.a
 ----
 HashJoin
 ├── join type: INNER
@@ -84,7 +84,7 @@ HashJoin
         └── push downs: [filters: [], limit: NONE]
 
 query T
-explain select * from t1, t, t2 where t.a = t2.a and t1.a = t2.a;
+explain select * from t1, t, t2 where t.a = t2.a and t1.a = t2.a
 ----
 HashJoin
 ├── join type: INNER
@@ -119,7 +119,7 @@ HashJoin
     └── push downs: [filters: [], limit: NONE]
 
 query T
-explain select * from t1, t2, t where t.a = t2.a and t1.a = t2.a;
+explain select * from t1, t2, t where t.a = t2.a and t1.a = t2.a
 ----
 HashJoin
 ├── join type: INNER
@@ -154,7 +154,7 @@ HashJoin
         └── push downs: [filters: [], limit: NONE]
 
 query T
-explain select * from t2, t1, t where t.a = t2.a and t1.a = t2.a;
+explain select * from t2, t1, t where t.a = t2.a and t1.a = t2.a
 ----
 HashJoin
 ├── join type: INNER
@@ -189,7 +189,7 @@ HashJoin
         └── push downs: [filters: [], limit: NONE]
 
 query T
-explain select * from t2, t, t1 where t.a = t2.a and t1.a = t2.a;
+explain select * from t2, t, t1 where t.a = t2.a and t1.a = t2.a
 ----
 HashJoin
 ├── join type: INNER
@@ -224,5 +224,5 @@ HashJoin
         └── push downs: [filters: [], limit: NONE]
 
 statement ok
-drop database join_reorder;
+drop database join_reorder
 

@@ -1,99 +1,99 @@
 statement ok
-set prefer_broadcast_join = 1;
+set prefer_broadcast_join = 1
 
 statement ok
-drop table if exists t1;
-
-
-statement ok
-create table t1(a int, b int);
+drop table if exists t1
 
 
 statement ok
-insert into t1 values(7, 8), (3, 4), (5, 6);
+create table t1(a int, b int)
 
 
 statement ok
-drop table if exists t2;
+insert into t1 values(7, 8), (3, 4), (5, 6)
 
 
 statement ok
-create table t2(a int, d int);
+drop table if exists t2
 
 
 statement ok
-insert into t2 values(1, 2), (3, 4), (5, 6);
+create table t2(a int, d int)
+
+
+statement ok
+insert into t2 values(1, 2), (3, 4), (5, 6)
 
 
 query III
-select * from t1 join t2 using(a) order by t1.a, t2.a;
+select * from t1 join t2 using(a) order by t1.a, t2.a
 ----
 3 4 4
 5 6 6
 
 query I
-select t1.a from t1 join t2 using(a) order by t1.a, t2.a;
+select t1.a from t1 join t2 using(a) order by t1.a, t2.a
 ----
 3
 5
 
 query II
-select t1.a, t2.a from t1 join t2 using(a) order by t1.a, t2.a;
+select t1.a, t2.a from t1 join t2 using(a) order by t1.a, t2.a
 ----
 3 3
 5 5
 
 query I
-select a from t1 join t2 using(a) order by t1.a, t2.a;
+select a from t1 join t2 using(a) order by t1.a, t2.a
 ----
 3
 5
 
 query I
-select t2.d from t1 join t2 using(a) order by t1.a, t2.a;
+select t2.d from t1 join t2 using(a) order by t1.a, t2.a
 ----
 4
 6
 
 query I
-select a from (select number as a from numbers(3)) n join (select number as a from numbers(4)) nn using (a) order by a;
+select a from (select number as a from numbers(3)) n join (select number as a from numbers(4)) nn using (a) order by a
 ----
 0
 1
 2
 
 query III
-select * from t1 natural join t2 order by t1.a, t2.a;
+select * from t1 natural join t2 order by t1.a, t2.a
 ----
 3 4 4
 5 6 6
 
 
 statement ok
-drop table t1;
+drop table t1
 
 
 statement ok
-drop table t2;
+drop table t2
 
 statement ok
-create table t1(a int, b int);
-
-
-statement ok
-insert into t1 values(1, 2), (1, 3), (2, 4);
+create table t1(a int, b int)
 
 
 statement ok
-create table t2(c int, d int);
+insert into t1 values(1, 2), (1, 3), (2, 4)
 
 
 statement ok
-insert into t2 values(1, 2), (2, 6);
+create table t2(c int, d int)
+
+
+statement ok
+insert into t2 values(1, 2), (2, 6)
 
 
 query IIII
-select * from t2 inner join t1 on t1.a = t2.c order by a, b, c, d;
+select * from t2 inner join t1 on t1.a = t2.c order by a, b, c, d
 ----
 1 2 1 2
 1 2 1 3
@@ -101,37 +101,37 @@ select * from t2 inner join t1 on t1.a = t2.c order by a, b, c, d;
 
 
 statement ok
-drop table t1;
+drop table t1
 
 
 statement ok
-drop table t2;
+drop table t2
 
 statement ok
-create table t1(a int, b int);
-
-
-statement ok
-create table t2(c int, d int);
+create table t1(a int, b int)
 
 
 statement ok
-insert into t1 values(1, 2), (3 ,4), (7, 8);
+create table t2(c int, d int)
 
 
 statement ok
-insert into t2 values(1, 4), (2, 3), (6, 8);
+insert into t1 values(1, 2), (3 ,4), (7, 8)
+
+
+statement ok
+insert into t2 values(1, 4), (2, 3), (6, 8)
 
 
 query IIII
-select * from t1 right join t2 on t1.a = t2.c order by t2.c;
+select * from t1 right join t2 on t1.a = t2.c order by t2.c
 ----
 1 2 1 4
 NULL NULL 2 3
 NULL NULL 6 8
 
 query IIII
-select * from t1 right join t2 on t1.a > t2.c order by t2.c;
+select * from t1 right join t2 on t1.a > t2.c order by t2.c
 ----
 3 4 1 4
 7 8 1 4
@@ -140,7 +140,7 @@ select * from t1 right join t2 on t1.a > t2.c order by t2.c;
 7 8 6 8
 
 query IIII
-select * from t1 left join t2 on t1.a = t2.c order by t2.c;
+select * from t1 left join t2 on t1.a = t2.c order by t2.c
 ----
 1 2 1 4
 3 4 NULL NULL
@@ -148,7 +148,7 @@ select * from t1 left join t2 on t1.a = t2.c order by t2.c;
 
 
 query IIII
-select * from t1 left outer join t2 on t1.a = t2.c and t1.a > 3 order by a,b,c,d;
+select * from t1 left outer join t2 on t1.a = t2.c and t1.a > 3 order by a,b,c,d
 ----
 1 2 NULL NULL
 3 4 NULL NULL
@@ -156,7 +156,7 @@ select * from t1 left outer join t2 on t1.a = t2.c and t1.a > 3 order by a,b,c,d
 
 
 query IIII
-select * from t1 left outer join t2 on t1.a = t2.c and t2.c > 4 order by a,b,c,d;
+select * from t1 left outer join t2 on t1.a = t2.c and t2.c > 4 order by a,b,c,d
 ----
 1 2 NULL NULL
 3 4 NULL NULL
@@ -164,7 +164,7 @@ select * from t1 left outer join t2 on t1.a = t2.c and t2.c > 4 order by a,b,c,d
 
 
 query IIII
-select * from t1 left outer join t2 on t2.c > 4 and t1.a > 3 order by a,b,c,d;
+select * from t1 left outer join t2 on t2.c > 4 and t1.a > 3 order by a,b,c,d
 ----
 1 2 NULL NULL
 3 4 NULL NULL
@@ -172,7 +172,7 @@ select * from t1 left outer join t2 on t2.c > 4 and t1.a > 3 order by a,b,c,d;
 
 
 query IIII
-select * from t1 left outer join t2 on t1.a > 3 order by a,b,c,d;
+select * from t1 left outer join t2 on t1.a > 3 order by a,b,c,d
 ----
 1 2 NULL NULL
 3 4 NULL NULL
@@ -182,7 +182,7 @@ select * from t1 left outer join t2 on t1.a > 3 order by a,b,c,d;
 
 
 query IIII
-select * from t1 left outer join t2 on t2.c > 4 order by a,b,c,d;
+select * from t1 left outer join t2 on t2.c > 4 order by a,b,c,d
 ----
 1 2 6 8
 3 4 6 8
@@ -190,7 +190,7 @@ select * from t1 left outer join t2 on t2.c > 4 order by a,b,c,d;
 
 
 query IIII
-select * from t1 left outer join t2 on t1.a > t2.c order by a,b,c,d;
+select * from t1 left outer join t2 on t1.a > t2.c order by a,b,c,d
 ----
 1 2 NULL NULL
 3 4 1 4
@@ -210,38 +210,38 @@ select t1.a, t2.c, t2.d from t1 left join t2 on t2.c in ( -t2.c );
 
 
 statement ok
-drop table t1;
+drop table t1
 
 
 statement ok
-drop table t2;
+drop table t2
 
 statement ok
-drop table if exists t;
+drop table if exists t
 
 statement ok
-create table t(a int);
+create table t(a int)
 
 statement ok
-insert into t values(1),(2),(3);
+insert into t values(1),(2),(3)
 
 statement ok
-create table t1(b float);
-
-
-statement ok
-insert into t1 values(1.0),(2.0),(3.0);
-
-statement ok
-create table t2(c smallint unsigned null);
+create table t1(b float)
 
 
 statement ok
-insert into t2 values(1),(2),(null);
+insert into t1 values(1.0),(2.0),(3.0)
+
+statement ok
+create table t2(c smallint unsigned null)
+
+
+statement ok
+insert into t2 values(1),(2),(null)
 
 
 query IF
-select * from t inner join t1 on t.a = t1.b order by a, b;
+select * from t inner join t1 on t.a = t1.b order by a, b
 ----
 1 1.0
 2 2.0
@@ -249,28 +249,28 @@ select * from t inner join t1 on t.a = t1.b order by a, b;
 
 
 query II
-select * from t inner join t2 on t.a = t2.c order by a, c;
+select * from t inner join t2 on t.a = t2.c order by a, c
 ----
 1 1
 2 2
 
 
 query II
-select * from t inner join t2 on t.a = t2.c + 1 order by a, c;
+select * from t inner join t2 on t.a = t2.c + 1 order by a, c
 ----
 2 1
 3 2
 
 
 query II
-select * from t inner join t2 on t.a = t2.c + 1 and t.a - 1 = t2.c order by a, c;
+select * from t inner join t2 on t.a = t2.c + 1 and t.a - 1 = t2.c order by a, c
 ----
 2 1
 3 2
 
 
 query FI
-select * from t1 inner join t on t.a = t1.b order by a, b;
+select * from t1 inner join t on t.a = t1.b order by a, b
 ----
 1.0 1
 2.0 2
@@ -278,34 +278,34 @@ select * from t1 inner join t on t.a = t1.b order by a, b;
 
 
 query II
-select * from t2 inner join t on t.a = t2.c order by a, c;
+select * from t2 inner join t on t.a = t2.c order by a, c
 ----
 1 1
 2 2
 
 
 query II
-select * from t2 inner join t on t.a = t2.c + 1 order by a, c;
+select * from t2 inner join t on t.a = t2.c + 1 order by a, c
 ----
 1 2
 2 3
 
 
 query II
-select * from t2 inner join t on t.a = t2.c + 1 and t.a - 1 = t2.c order by a, c;
+select * from t2 inner join t on t.a = t2.c + 1 and t.a - 1 = t2.c order by a, c
 ----
 1 2
 2 3
 
 
 query I
-select count(*) from numbers(1000) as t inner join numbers(1000) as t1 on t.number = t1.number;
+select count(*) from numbers(1000) as t inner join numbers(1000) as t1 on t.number = t1.number
 ----
 1000
 
 
 query I
-select t.number from numbers(10000) as t inner join numbers(1000) as t1 on t.number % 1000 = t1.number order by number limit 5;
+select t.number from numbers(10000) as t inner join numbers(1000) as t1 on t.number % 1000 = t1.number order by number limit 5
 ----
 0
 1
@@ -314,60 +314,60 @@ select t.number from numbers(10000) as t inner join numbers(1000) as t1 on t.num
 4
 
 statement ok
-drop table t;
+drop table t
 
 statement ok
-CREATE TABLE t3(c0 BIGINT NULL, c1 DOUBLE NULL);
+CREATE TABLE t3(c0 BIGINT NULL, c1 DOUBLE NULL)
 
 statement ok
-CREATE TABLE t4(c0 FLOAT NULL);
+CREATE TABLE t4(c0 FLOAT NULL)
 
 query I
-SELECT SUM(count) FROM (SELECT ((false IS NOT NULL AND false) ::INT64)as count FROM t4 NATURAL LEFT JOIN t3) as res;
+SELECT SUM(count) FROM (SELECT ((false IS NOT NULL AND false) ::INT64)as count FROM t4 NATURAL LEFT JOIN t3) as res
 ----
 NULL
 
 statement ok
-drop table t1;
+drop table t1
 
 statement ok
-drop table t2;
+drop table t2
 
 statement ok
-drop table t3;
+drop table t3
 
 statement ok
-drop table t4;
+drop table t4
 
 statement ok
-create table t1_null(a int null , b int null);
-
-
-statement ok
-create table t2_null(a int null , b int null);
+create table t1_null(a int null , b int null)
 
 
 statement ok
-insert into t1_null values(1, 2), (2, 3), (null, 1);
+create table t2_null(a int null , b int null)
 
 
 statement ok
-insert into t2_null values(3, 4), (2, 3), (null, 2);
+insert into t1_null values(1, 2), (2, 3), (null, 1)
+
+
+statement ok
+insert into t2_null values(3, 4), (2, 3), (null, 2)
 
 
 query IIII
-select * from t1_null inner join t2_null on t1_null.a = t2_null.a;
+select * from t1_null inner join t2_null on t1_null.a = t2_null.a
 ----
 2 3 2 3
 
 statement ok
-drop table t1_null;
+drop table t1_null
 
 statement ok
-drop table t2_null;
+drop table t2_null
 
 query I
-select * from (SELECT number AS a FROM numbers(10)) x left join (SELECT number AS a FROM numbers(5))  y using(a) order by x.a;
+select * from (SELECT number AS a FROM numbers(10)) x left join (SELECT number AS a FROM numbers(5))  y using(a) order by x.a
 ----
 0
 1
@@ -381,7 +381,7 @@ select * from (SELECT number AS a FROM numbers(10)) x left join (SELECT number A
 9
 
 query II
-select * from (SELECT number AS a FROM numbers(1000)) x right join (SELECT number AS a FROM numbers(5))  y on x.a = y.a order by x.a;
+select * from (SELECT number AS a FROM numbers(1000)) x right join (SELECT number AS a FROM numbers(5))  y on x.a = y.a order by x.a
 ----
 0 0
 1 1
@@ -390,92 +390,92 @@ select * from (SELECT number AS a FROM numbers(1000)) x right join (SELECT numbe
 4 4
 
 query II
-select * from numbers(10) x join (select 1::UInt64 number) y on x.number = y.number;
+select * from numbers(10) x join (select 1::UInt64 number) y on x.number = y.number
 ----
 1 1
 
 statement ok
-CREATE TABLE onecolumn (x INT NULL);
+CREATE TABLE onecolumn (x INT NULL)
 
 statement ok
-INSERT INTO onecolumn(x) VALUES (44), (NULL), (42);
+INSERT INTO onecolumn(x) VALUES (44), (NULL), (42)
 
 statement ok
-CREATE TABLE empty (x INT);
+CREATE TABLE empty (x INT)
 
 statement ok
-SELECT * FROM onecolumn AS a(x) CROSS JOIN empty AS b(y);
+SELECT * FROM onecolumn AS a(x) CROSS JOIN empty AS b(y)
 
 statement ok
-drop table onecolumn;
+drop table onecolumn
 
 statement ok
-drop table empty;
+drop table empty
 
 statement ok
-drop table if exists z0;
+drop table if exists z0
 
 statement ok
-drop table if exists z1;
+drop table if exists z1
 
 statement ok
-CREATE TABLE z0(c0BOOLEAN BOOLEAN NULL, c1FLOAT DOUBLE NULL);
+CREATE TABLE z0(c0BOOLEAN BOOLEAN NULL, c1FLOAT DOUBLE NULL)
 
 statement ok
-CREATE TABLE z1(c0BOOLEAN BOOL NULL DEFAULT(true));
+CREATE TABLE z1(c0BOOLEAN BOOL NULL DEFAULT(true))
 
 statement ok
-INSERT INTO z0(c1float, c0boolean) VALUES (0.27563244104385376, false), (0.7913353443145752, false);
+INSERT INTO z0(c1float, c0boolean) VALUES (0.27563244104385376, false), (0.7913353443145752, false)
 
 statement ok
-select * from z1 right join z0 on false limit 0;
-
-
-statement ok
-drop table z0;
-
-statement ok
-drop table z1;
-
-statement ok
-CREATE TABLE t0(c0BOOLEAN BOOLEAN NULL DEFAULT(false));
-
-statement ok
-CREATE TABLE t1(c0BOOLEAN BOOL NULL, c1FLOAT FLOAT NOT NULL DEFAULT(0.4661566913127899));
-
-statement ok
-CREATE TABLE t2(c0VARCHAR VARCHAR NULL, c1FLOAT DOUBLE NULL DEFAULT(0.954969048500061), c2VARCHAR VARCHAR NULL);
-
-statement ok
-INSERT INTO t0(c0boolean) VALUES (false), (true);
-
-statement ok
-INSERT INTO t0(c0boolean) VALUES (false), (false), (true);
-
-statement ok
-INSERT INTO t1(c1float) VALUES (0.43919482827186584);
-
-statement ok
-INSERT INTO t1(c1float) VALUES (0.2492278516292572);
-
-statement ok
-INSERT INTO t2(c1float) VALUES (0.9702655076980591);
-
-statement ok
-INSERT INTO t2(c1float, c2varchar) VALUES (0.5340723991394043, '02'), (0.4661566913127899, '1261837');
-
-statement ok
-SELECT t0.c0boolean, t1.c0boolean, t1.c1float FROM t0, t1 RIGHT JOIN t2 ON t1.c0boolean;
+select * from z1 right join z0 on false limit 0
 
 
 statement ok
-drop table t0;
+drop table z0
 
 statement ok
-drop table t1;
+drop table z1
 
 statement ok
-drop table t2;
+CREATE TABLE t0(c0BOOLEAN BOOLEAN NULL DEFAULT(false))
 
 statement ok
-set prefer_broadcast_join = 0;
+CREATE TABLE t1(c0BOOLEAN BOOL NULL, c1FLOAT FLOAT NOT NULL DEFAULT(0.4661566913127899))
+
+statement ok
+CREATE TABLE t2(c0VARCHAR VARCHAR NULL, c1FLOAT DOUBLE NULL DEFAULT(0.954969048500061), c2VARCHAR VARCHAR NULL)
+
+statement ok
+INSERT INTO t0(c0boolean) VALUES (false), (true)
+
+statement ok
+INSERT INTO t0(c0boolean) VALUES (false), (false), (true)
+
+statement ok
+INSERT INTO t1(c1float) VALUES (0.43919482827186584)
+
+statement ok
+INSERT INTO t1(c1float) VALUES (0.2492278516292572)
+
+statement ok
+INSERT INTO t2(c1float) VALUES (0.9702655076980591)
+
+statement ok
+INSERT INTO t2(c1float, c2varchar) VALUES (0.5340723991394043, '02'), (0.4661566913127899, '1261837')
+
+statement ok
+SELECT t0.c0boolean, t1.c0boolean, t1.c1float FROM t0, t1 RIGHT JOIN t2 ON t1.c0boolean
+
+
+statement ok
+drop table t0
+
+statement ok
+drop table t1
+
+statement ok
+drop table t2
+
+statement ok
+set prefer_broadcast_join = 0

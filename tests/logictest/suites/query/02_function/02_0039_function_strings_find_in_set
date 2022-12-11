@@ -1,70 +1,70 @@
 query I
-SELECT FIND_IN_SET('a', 'a');
+SELECT FIND_IN_SET('a', 'a')
 ----
 1
 
 query I
-SELECT FIND_IN_SET('a', ',a');
+SELECT FIND_IN_SET('a', ',a')
 ----
 2
 
 query I
-SELECT FIND_IN_SET('a', 'a,');
+SELECT FIND_IN_SET('a', 'a,')
 ----
 1
 
 query I
-SELECT FIND_IN_SET('a', ',,a,');
+SELECT FIND_IN_SET('a', ',,a,')
 ----
 3
 
 query I
-SELECT FIND_IN_SET('a', '1,2,a,4,5');
+SELECT FIND_IN_SET('a', '1,2,a,4,5')
 ----
 3
 
 query I
-SELECT FIND_IN_SET('a', '1,2,a,4,5');
+SELECT FIND_IN_SET('a', '1,2,a,4,5')
 ----
 3
 
 query I
-SELECT FIND_IN_SET('a', '1,2,a,');
+SELECT FIND_IN_SET('a', '1,2,a,')
 ----
 3
 
 query I
-SELECT FIND_IN_SET('a', ',1,2,a');
+SELECT FIND_IN_SET('a', ',1,2,a')
 ----
 4
 
 query I
-SELECT FIND_IN_SET('ab', '1,2,ab,3,4,5');
+SELECT FIND_IN_SET('ab', '1,2,ab,3,4,5')
 ----
 3
 
 query I
-SELECT FIND_IN_SET('ab', '1,2,ab,');
+SELECT FIND_IN_SET('ab', '1,2,ab,')
 ----
 3
 
 query I
-SELECT FIND_IN_SET('ab', '1,2,ab');
+SELECT FIND_IN_SET('ab', '1,2,ab')
 ----
 3
 
 query I
-SELECT FIND_IN_SET('ab', ',ab');
+SELECT FIND_IN_SET('ab', ',ab')
 ----
 2
 
 query I
-SELECT FIND_IN_SET('ab', 'ab');
+SELECT FIND_IN_SET('ab', 'ab')
 ----
 1
 
 query I
-SELECT FIND_IN_SET('3', to_varchar(number))  FROM numbers(5) ORDER BY number;
+SELECT FIND_IN_SET('3', to_varchar(number))  FROM numbers(5) ORDER BY number
 ----
 0
 0
@@ -73,7 +73,7 @@ SELECT FIND_IN_SET('3', to_varchar(number))  FROM numbers(5) ORDER BY number;
 0
 
 query I
-SELECT FIND_IN_SET(to_varchar(number), '1,2,3,4,5')  FROM numbers(5) ORDER BY number;
+SELECT FIND_IN_SET(to_varchar(number), '1,2,3,4,5')  FROM numbers(5) ORDER BY number
 ----
 0
 1
@@ -82,17 +82,17 @@ SELECT FIND_IN_SET(to_varchar(number), '1,2,3,4,5')  FROM numbers(5) ORDER BY nu
 4
 
 query T
-SELECT FIND_IN_SET(NULL, NULL);
+SELECT FIND_IN_SET(NULL, NULL)
 ----
 NULL
 
 query T
-SELECT FIND_IN_SET('abc', NULL);
+SELECT FIND_IN_SET('abc', NULL)
 ----
 NULL
 
 query T
-SELECT FIND_IN_SET(NULL, 'abc,cdf');
+SELECT FIND_IN_SET(NULL, 'abc,cdf')
 ----
 NULL
 

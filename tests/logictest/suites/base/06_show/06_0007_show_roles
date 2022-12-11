@@ -1,5 +1,5 @@
 statement ok
-CREATE ROLE IF NOT EXISTS 'test';
+CREATE ROLE IF NOT EXISTS 'test'
 
 query T
 select name from system.roles;
@@ -9,5 +9,5 @@ public
 test
 
 statement ok
-DROP ROLE 'test';
+DROP ROLE 'test'
 

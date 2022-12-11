@@ -1,98 +1,98 @@
 statement ok
-drop table if exists t1 all;
+drop table if exists t1 all
 
 statement ok
-create table t1(a integer null, b integer null, c integer null, d integer null, e integer null);
+create table t1(a integer null, b integer null, c integer null, d integer null, e integer null)
 
 statement ok
-insert into t1(e,c,b,d,a) values(null,102,null,101,104);
+insert into t1(e,c,b,d,a) values(null,102,null,101,104)
 
 statement ok
-insert into t1(a,c,d,e,b) values(107,106,108,109,105);
+insert into t1(a,c,d,e,b) values(107,106,108,109,105)
 
 statement ok
-insert into t1(e,d,b,a,c) values(110,114,112,null,113);
+insert into t1(e,d,b,a,c) values(110,114,112,null,113)
 
 statement ok
-insert into t1(d,c,e,a,b) values(116,119,117,115,null);
+insert into t1(d,c,e,a,b) values(116,119,117,115,null)
 
 statement ok
-insert into t1(c,d,b,e,a) values(123,122,124,null,121);
+insert into t1(c,d,b,e,a) values(123,122,124,null,121)
 
 statement ok
-insert into t1(a,d,b,e,c) values(127,128,129,126,125);
+insert into t1(a,d,b,e,c) values(127,128,129,126,125)
 
 statement ok
-insert into t1(e,c,a,d,b) values(132,134,131,133,130);
+insert into t1(e,c,a,d,b) values(132,134,131,133,130)
 
 statement ok
-insert into t1(a,d,b,e,c) values(138,136,139,135,137);
+insert into t1(a,d,b,e,c) values(138,136,139,135,137)
 
 statement ok
-insert into t1(e,c,d,a,b) values(144,141,140,142,143);
+insert into t1(e,c,d,a,b) values(144,141,140,142,143)
 
 statement ok
-insert into t1(b,a,e,d,c) values(145,149,146,null,147);
+insert into t1(b,a,e,d,c) values(145,149,146,null,147)
 
 statement ok
-insert into t1(b,c,a,d,e) values(151,150,153,null,null);
+insert into t1(b,c,a,d,e) values(151,150,153,null,null)
 
 statement ok
-insert into t1(c,e,a,d,b) values(155,157,159,null,158);
+insert into t1(c,e,a,d,b) values(155,157,159,null,158)
 
 statement ok
-insert into t1(c,b,a,d,e) values(161,160,163,164,162);
+insert into t1(c,b,a,d,e) values(161,160,163,164,162)
 
 statement ok
-insert into t1(b,d,a,e,c) values(167,null,168,165,166);
+insert into t1(b,d,a,e,c) values(167,null,168,165,166)
 
 statement ok
-insert into t1(d,b,c,e,a) values(171,170,172,173,174);
+insert into t1(d,b,c,e,a) values(171,170,172,173,174)
 
 statement ok
-insert into t1(e,c,a,d,b) values(177,176,179,null,175);
+insert into t1(e,c,a,d,b) values(177,176,179,null,175)
 
 statement ok
-insert into t1(b,e,a,d,c) values(181,180,182,183,184);
+insert into t1(b,e,a,d,c) values(181,180,182,183,184)
 
 statement ok
-insert into t1(c,a,b,e,d) values(187,188,186,189,185);
+insert into t1(c,a,b,e,d) values(187,188,186,189,185)
 
 statement ok
-insert into t1(d,b,c,e,a) values(190,194,193,192,191);
+insert into t1(d,b,c,e,a) values(190,194,193,192,191)
 
 statement ok
-insert into t1(a,e,b,d,c) values(199,197,198,196,195);
+insert into t1(a,e,b,d,c) values(199,197,198,196,195)
 
 statement ok
-insert into t1(b,c,d,a,e) values(null,202,203,201,204);
+insert into t1(b,c,d,a,e) values(null,202,203,201,204)
 
 statement ok
-insert into t1(c,e,a,b,d) values(208,null,null,206,207);
+insert into t1(c,e,a,b,d) values(208,null,null,206,207)
 
 statement ok
-insert into t1(c,e,a,d,b) values(214,210,213,212,211);
+insert into t1(c,e,a,d,b) values(214,210,213,212,211)
 
 statement ok
-insert into t1(b,c,a,d,e) values(218,215,216,217,219);
+insert into t1(b,c,a,d,e) values(218,215,216,217,219)
 
 statement ok
-insert into t1(b,e,d,a,c) values(223,221,222,220,224);
+insert into t1(b,e,d,a,c) values(223,221,222,220,224)
 
 statement ok
-insert into t1(d,e,b,a,c) values(226,227,228,229,225);
+insert into t1(d,e,b,a,c) values(226,227,228,229,225)
 
 statement ok
-insert into t1(a,c,b,e,d) values(234,231,232,230,233);
+insert into t1(a,c,b,e,d) values(234,231,232,230,233)
 
 statement ok
-insert into t1(e,b,a,c,d) values(237,236,239,null,238);
+insert into t1(e,b,a,c,d) values(237,236,239,null,238)
 
 statement ok
-insert into t1(e,c,b,a,d) values(null,244,240,243,null);
+insert into t1(e,c,b,a,d) values(null,244,240,243,null)
 
 statement ok
-insert into t1(e,d,c,b,a) values(246,248,247,249,245);
+insert into t1(e,d,c,b,a) values(246,248,247,249,245)
 
 query IIIII
 select abs(b-c) as col1,
@@ -104,7 +104,7 @@ from t1
 where coalesce(a,b,c,d,e)<>0
     or c>d
     or d>e
-order by col1,col4,col2,col5,col3;
+order by col1,col4,col2,col5,col3
 ----
 1 -1 -2 1612 108
 1 2 -3 2432 164
@@ -148,7 +148,7 @@ select a-b as col1,
 from t1
 where d not between 110 and 150
     or exists(select 1 from t1 as x where x.b<t1.b)
-or a is null;
+or a is null
 
 query IIII
 select a+b*2 as col1,
@@ -158,7 +158,7 @@ select a+b*2 as col1,
 from t1
 where (e>a and e<b)
     or coalesce(a,b,c,d,e)<>0
-order by col1,col2,col3,col4;
+order by col1,col2,col3,col4
 ----
 317 106 109 105
 369 123 NULL 124
@@ -199,20 +199,20 @@ select case a+1 when b then 111 when c then 222
        (select count(*) from t1 as x where x.b<t1.b) as col4
 from t1
 where a>b
-and (e>a and e<b);
+and (e>a and e<b)
 
 query skipped
 select a+b*2+c*3+d*4+e*5 as col1
 from t1
 where (a>b-2 and a<b+2)
     or d not between 110 and 150
-or exists(select 1 from t1 as x where x.b<t1.b);
+or exists(select 1 from t1 as x where x.b<t1.b)
 
 query II
 select b-c as col1,
        a+b*2+c*3+d*4+e*5 as col2
 from t1
-order by col1,col2;
+order by col1,col2
 ----
 -4 1985
 -4 NULL
@@ -249,20 +249,20 @@ query skipped
 select case a+1 when b then 111 when c then 222
         when d then 333  when e then 444 else 555 end as col1
 from t1
-where exists(select 1 from t1 as x where x.b<t1.b);
+where exists(select 1 from t1 as x where x.b<t1.b)
 
 query skipped
 select a-b as col1,
        (select count(*) from t1 as x where x.b<t1.b) as col2,
        a as col3
-from t1;
+from t1
 
 query skipped
 select abs(b-c) as col1
 from t1
 where coalesce(a,b,c,d,e)<>0
    and b is not null
-order by col1;
+order by col1
 
 query skipped
 select c-d as col1,
@@ -271,7 +271,7 @@ from t1
 where (c<=d-2 or c>=d+2)
    and e+d between a+b-10 and c+130
    and b is not null
-order by col1,col2;
+order by col1,col2
 
 query FIIIII
 select (a+b+c+d+e)/5 as col1,
@@ -285,7 +285,7 @@ from t1
 where c between b-2 and d+2
     or coalesce(a,b,c,d,e)<>0
     or a is null
-order by col1,col2,col6,col5,col3,col4;
+order by col1,col2,col6,col5,col3,col4
 ----
 107.0 109 -2 635 333 2
 127.0 126 -3 760 222 -2
@@ -323,7 +323,7 @@ select a-b as col1,
        a as col2
 from t1
 where c>d
-order by col2,col1;
+order by col2,col1
 
 query skipped
 select (a+b+c+d+e)/5 as col1,
@@ -337,5 +337,5 @@ from t1
 where c between b-2 and d+2
    and b>c
    and a>b
-order by col4,col6,col1,col2,col5,col3;
+order by col4,col6,col1,col2,col5,col3
 

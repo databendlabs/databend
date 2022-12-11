@@ -19,7 +19,7 @@ use std::collections::HashMap;
 use clap::Parser;
 use lazy_static::lazy_static;
 use client::ClickhouseHttpClient;
-use sqllogictest::{DBOutput, Validator};
+use sqllogictest::DBOutput;
 use walkdir::DirEntry;
 use walkdir::WalkDir;
 
@@ -29,7 +29,6 @@ use crate::client::MysqlClient;
 use crate::error::DSqlLogicTestError;
 use crate::error::Result;
 use regex::Regex;
-use crate::util::normalize_row;
 
 mod arg;
 mod client;

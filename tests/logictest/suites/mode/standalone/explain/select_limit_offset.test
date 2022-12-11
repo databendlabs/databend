@@ -1,5 +1,5 @@
 query I
-select number from numbers(100) order by number asc limit 10;
+select number from numbers(100) order by number asc limit 10
 ----
 0
 1
@@ -13,7 +13,7 @@ select number from numbers(100) order by number asc limit 10;
 9
 
 query I
-select number from numbers(100) order by number*2 asc limit 10;
+select number from numbers(100) order by number*2 asc limit 10
 ----
 0
 1
@@ -27,7 +27,7 @@ select number from numbers(100) order by number*2 asc limit 10;
 9
 
 query I
-select number from numbers(100) order by number asc limit 10, 10;
+select number from numbers(100) order by number asc limit 10, 10
 ----
 10
 11
@@ -41,7 +41,7 @@ select number from numbers(100) order by number asc limit 10, 10;
 19
 
 query I
-select number from numbers(100) order by number-2 asc limit 10, 10;
+select number from numbers(100) order by number-2 asc limit 10, 10
 ----
 10
 11
@@ -55,7 +55,7 @@ select number from numbers(100) order by number-2 asc limit 10, 10;
 19
 
 query I
-select number from numbers(100) order by number asc limit 10 offset 10;
+select number from numbers(100) order by number asc limit 10 offset 10
 ----
 10
 11
@@ -69,7 +69,7 @@ select number from numbers(100) order by number asc limit 10 offset 10;
 19
 
 query I
-select number from numbers(100) order by number/2 asc limit 10 offset 10;
+select number from numbers(100) order by number/2 asc limit 10 offset 10
 ----
 10
 11
@@ -83,7 +83,7 @@ select number from numbers(100) order by number/2 asc limit 10 offset 10;
 19
 
 query I
-select number from numbers(10) order by number asc offset 5;
+select number from numbers(10) order by number asc offset 5
 ----
 5
 6
@@ -92,7 +92,7 @@ select number from numbers(10) order by number asc offset 5;
 9
 
 query I
-select number from numbers(10) order by number+number asc offset 5;
+select number from numbers(10) order by number+number asc offset 5
 ----
 5
 6
@@ -101,30 +101,30 @@ select number from numbers(10) order by number+number asc offset 5;
 9
 
 query I
-select number from numbers(10000) order by number limit 1;
+select number from numbers(10000) order by number limit 1
 ----
 0
 
 statement ok
-drop table if exists t;
+drop table if exists t
 
 statement ok
-drop table if exists t1;
+drop table if exists t1
 
 statement ok
-create table t(a int);
+create table t(a int)
 
 statement ok
-create table t1(a int);
+create table t1(a int)
 
 statement ok
-insert into t values(1);
+insert into t values(1)
 
 statement ok
-insert into t1 values(1),(1);
+insert into t1 values(1),(1)
 
 query T
-explain select * from t left join t1 on t.a = t1.a limit 1,2;
+explain select * from t left join t1 on t.a = t1.a limit 1,2
 ----
 Limit
 ├── limit: 2
@@ -156,13 +156,13 @@ Limit
             └── push downs: [filters: [], limit: 3]
 
 query II
-select * from t left join t1 on t.a = t1.a limit 1;
+select * from t left join t1 on t.a = t1.a limit 1
 ----
 1 1
 
 statement ok
-drop table if exists t;
+drop table if exists t
 
 statement ok
-drop table if exists t1;
+drop table if exists t1
 

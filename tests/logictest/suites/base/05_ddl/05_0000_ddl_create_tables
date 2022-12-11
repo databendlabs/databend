@@ -1,159 +1,159 @@
 statement ok
-DROP TABLE IF EXISTS t;
+DROP TABLE IF EXISTS t
 
 statement ok
-DROP TABLE IF EXISTS t2;
+DROP TABLE IF EXISTS t2
 
 statement ok
-DROP TABLE IF EXISTS t3;
+DROP TABLE IF EXISTS t3
 
 statement ok
-DROP TABLE IF EXISTS t4;
+DROP TABLE IF EXISTS t4
 
 statement ok
-CREATE TABLE t(c1 int) ENGINE = Null;
+CREATE TABLE t(c1 int) ENGINE = Null
 
 statement ok
-CREATE TABLE IF NOT EXISTS t(c1 int) ENGINE = Null;
+CREATE TABLE IF NOT EXISTS t(c1 int) ENGINE = Null
 
 statement error 2302
-CREATE TABLE t(c1 int) ENGINE = Null;
+CREATE TABLE t(c1 int) ENGINE = Null
 
 statement ok
-create table t2(a int,b int) Engine = Fuse;
+create table t2(a int,b int) Engine = Fuse
 
 statement ok
-insert into t2 values(1,1),(2,2);
+insert into t2 values(1,1),(2,2)
 
 query I
-select a+b from t2;
+select a+b from t2
 ----
 2
 4
 
 statement error 2302
-create table t2(a int,b int) Engine = Fuse;
+create table t2(a int,b int) Engine = Fuse
 
 statement error 2302
-create table t2(a int,b int) Engine = Fuse;
+create table t2(a int,b int) Engine = Fuse
 
 statement error 1005
-create table t2(a INT auto_increment);
+create table t2(a INT auto_increment)
 
 statement error 2703
-create table t3(a int,b int) engine=Memory CLUSTER BY(a);
+create table t3(a int,b int) engine=Memory CLUSTER BY(a)
 
 statement ok
-create table t3(`a` int) ENGINE = Null;
+create table t3(`a` int) ENGINE = Null
 
 statement ok
-create table t4(a int) ENGINE = Null;
+create table t4(a int) ENGINE = Null
 
 statement ok
-DROP TABLE IF EXISTS t;
+DROP TABLE IF EXISTS t
 
 statement ok
-DROP TABLE IF EXISTS t2;
+DROP TABLE IF EXISTS t2
 
 statement ok
-DROP TABLE IF EXISTS t3;
+DROP TABLE IF EXISTS t3
 
 statement ok
-DROP TABLE IF EXISTS t4;
+DROP TABLE IF EXISTS t4
 
 statement ok
-DROP DATABASE IF EXISTS db1;
+DROP DATABASE IF EXISTS db1
 
 statement ok
-DROP DATABASE IF EXISTS db2;
+DROP DATABASE IF EXISTS db2
 
 statement ok
-CREATE DATABASE db1;
+CREATE DATABASE db1
 
 statement ok
-CREATE DATABASE db2;
+CREATE DATABASE db2
 
 statement ok
-CREATE TABLE db1.test1(a INT, b INT null) Engine = Fuse;
+CREATE TABLE db1.test1(a INT, b INT null) Engine = Fuse
 
 statement ok
-INSERT INTO db1.test1 VALUES (1, 2), (2, 3), (3, 4);
+INSERT INTO db1.test1 VALUES (1, 2), (2, 3), (3, 4)
 
 statement ok
-CREATE TABLE db2.test2 LIKE db1.test1 ENGINE=fuse;
+CREATE TABLE db2.test2 LIKE db1.test1 ENGINE=fuse
 
 statement ok
-INSERT INTO db2.test2 VALUES (3, 5);
+INSERT INTO db2.test2 VALUES (3, 5)
 
 query I
-SELECT a+b FROM db2.test2;
+SELECT a+b FROM db2.test2
 ----
 8
 
 query TTTTT
-DESCRIBE db2.test2;
+DESCRIBE db2.test2
 ----
 a INT NO 0
 b INT YES NULL
 
 statement ok
-CREATE TABLE db2.test3(a Varchar null, y Varchar null) ENGINE=fuse AS SELECT * FROM db1.test1;
+CREATE TABLE db2.test3(a Varchar null, y Varchar null) ENGINE=fuse AS SELECT * FROM db1.test1
 
 query TTTTT
-DESCRIBE db2.test3;
+DESCRIBE db2.test3
 ----
 a VARCHAR YES NULL
 y VARCHAR YES NULL
 b INT YES NULL
 
 query T
-SELECT a FROM db2.test3;
+SELECT a FROM db2.test3
 ----
 1
 2
 3
 
 statement ok
-CREATE TABLE db2.test4(a Varchar null, y Varchar null) ENGINE=fuse AS SELECT b, a FROM db1.test1;
+CREATE TABLE db2.test4(a Varchar null, y Varchar null) ENGINE=fuse AS SELECT b, a FROM db1.test1
 
 query TTTTT
-DESCRIBE db2.test4;
+DESCRIBE db2.test4
 ----
 a VARCHAR YES NULL
 y VARCHAR YES NULL
 b INT YES NULL
 
 query T
-SELECT a FROM db2.test4;
+SELECT a FROM db2.test4
 ----
 1
 2
 3
 
 statement ok
-CREATE TABLE db2.test5(a Varchar null, y Varchar null) ENGINE=fuse AS SELECT b FROM db1.test1;
+CREATE TABLE db2.test5(a Varchar null, y Varchar null) ENGINE=fuse AS SELECT b FROM db1.test1
 
 query T
-SELECT a FROM db2.test5;
+SELECT a FROM db2.test5
 ----
 NULL
 NULL
 NULL
 
 statement error 1065
-create table db2.test6(id Int8, created timestamp  DEFAULT CURRENT_TIMESTAMP);
+create table db2.test6(id Int8, created timestamp  DEFAULT CURRENT_TIMESTAMP)
 
 statement error 1065
-create table db2.test6(id Int8, created timestamp  DEFAULT today() + a);
+create table db2.test6(id Int8, created timestamp  DEFAULT today() + a)
 
 statement ok
-create table db2.test6(id Int8, created timestamp  DEFAULT today() + 3);
+create table db2.test6(id Int8, created timestamp  DEFAULT today() + 3)
 
 statement ok
-create table db2.test7(tiny TINYINT, tiny_unsigned TINYINT UNSIGNED, smallint SMALLINT, smallint_unsigned SMALLINT UNSIGNED, int INT, int_unsigned INT UNSIGNED, bigint BIGINT, bigint_unsigned BIGINT UNSIGNED,float FLOAT, double DOUBLE, date DATE, datetime DATETIME, ts TIMESTAMP, str VARCHAR default '3', bool BOOLEAN, arr ARRAY, obj OBJECT, variant VARIANT);
+create table db2.test7(tiny TINYINT, tiny_unsigned TINYINT UNSIGNED, smallint SMALLINT, smallint_unsigned SMALLINT UNSIGNED, int INT, int_unsigned INT UNSIGNED, bigint BIGINT, bigint_unsigned BIGINT UNSIGNED,float FLOAT, double DOUBLE, date DATE, datetime DATETIME, ts TIMESTAMP, str VARCHAR default '3', bool BOOLEAN, arr ARRAY, obj OBJECT, variant VARIANT)
 
 query TTTTT
-desc db2.test7;
+desc db2.test7
 ----
 tiny TINYINT NO 0
 tiny_unsigned TINYINT UNSIGNED NO 0
@@ -175,10 +175,10 @@ obj OBJECT NO {}
 variant VARIANT NO null
 
 statement ok
-create transient table db2.test8(tiny TINYINT, tiny_unsigned TINYINT UNSIGNED, smallint SMALLINT, smallint_unsigned SMALLINT UNSIGNED, int INT, int_unsigned INT UNSIGNED, bigint BIGINT, bigint_unsigned BIGINT UNSIGNED,float FLOAT, double DOUBLE, date DATE, datetime DATETIME, ts TIMESTAMP, str VARCHAR default '3', bool BOOLEAN, arr ARRAY, obj OBJECT, variant VARIANT);
+create transient table db2.test8(tiny TINYINT, tiny_unsigned TINYINT UNSIGNED, smallint SMALLINT, smallint_unsigned SMALLINT UNSIGNED, int INT, int_unsigned INT UNSIGNED, bigint BIGINT, bigint_unsigned BIGINT UNSIGNED,float FLOAT, double DOUBLE, date DATE, datetime DATETIME, ts TIMESTAMP, str VARCHAR default '3', bool BOOLEAN, arr ARRAY, obj OBJECT, variant VARIANT)
 
 query TTTTT
-desc db2.test8;
+desc db2.test8
 ----
 tiny TINYINT NO 0
 tiny_unsigned TINYINT UNSIGNED NO 0
@@ -201,34 +201,34 @@ variant VARIANT NO null
 
 
 statement ok
-use db2;
+use db2
 
 statement ok
-create table test9 like test8;
+create table test9 like test8
 
 statement ok
-use default;
+use default
 
 statement ok
-DROP DATABASE db1;
+DROP DATABASE db1
 
 statement ok
-DROP DATABASE db2;
+DROP DATABASE db2
 
 statement error 1002
-CREATE TABLE system.test(a INT);
+CREATE TABLE system.test(a INT)
 
 statement ok
-drop table if exists t;
+drop table if exists t
 
 statement error Duplicated column name
-create table t(a int, a int);
+create table t(a int, a int)
 
 statement error Duplicated column name
-create table t(a int, A int);
+create table t(a int, A int)
 
 statement error Duplicated column name
-create table t("A" int, "A" int);
+create table t("A" int, "A" int)
 
 statement error Duplicated column name
-create table t as select number, number from numbers(1);
+create table t as select number, number from numbers(1)

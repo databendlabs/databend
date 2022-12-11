@@ -1,54 +1,54 @@
 query T
-SELECT SUBSTRING('12345', null);
+SELECT SUBSTRING('12345', null)
 ----
 NULL
 
 query T
-SELECT SUBSTRING(null, 2);
+SELECT SUBSTRING(null, 2)
 ----
 NULL
 
 query T
-SELECT SUBSTRING(null, null);
+SELECT SUBSTRING(null, null)
 ----
 NULL
 
 statement ok
-SELECT SUBSTRING('12345', 0);
+SELECT SUBSTRING('12345', 0)
 
 query T
-SELECT SUBSTRING('12345', 1);
+SELECT SUBSTRING('12345', 1)
 ----
 12345
 
 query T
-SELECT SUBSTRING('12345', 5);
+SELECT SUBSTRING('12345', 5)
 ----
 5
 
 statement ok
-SELECT SUBSTRING('12345', 6);
+SELECT SUBSTRING('12345', 6)
 
 statement ok
-SELECT SUBSTRING('12345', 2, 0);
+SELECT SUBSTRING('12345', 2, 0)
 
 query T
-SELECT SUBSTRING('12345', 2, 1);
+SELECT SUBSTRING('12345', 2, 1)
 ----
 2
 
 query T
-SELECT SUBSTRING('12345', 2, 5);
+SELECT SUBSTRING('12345', 2, 5)
 ----
 2345
 
 query T
-SELECT SUBSTRING('12345', 2, 6);
+SELECT SUBSTRING('12345', 2, 6)
 ----
 2345
 
 query T
-SELECT SUBSTRING('12345', 2, number) FROM numbers(7) ORDER BY number;
+SELECT SUBSTRING('12345', 2, number) FROM numbers(7) ORDER BY number
 ----
 	
 2
@@ -59,7 +59,7 @@ SELECT SUBSTRING('12345', 2, number) FROM numbers(7) ORDER BY number;
 2345
 
 query T
-SELECT SUBSTRING('12345', number) FROM numbers(7) ORDER BY number;
+SELECT SUBSTRING('12345', number) FROM numbers(7) ORDER BY number
 ----
 	
 12345
@@ -70,7 +70,7 @@ SELECT SUBSTRING('12345', number) FROM numbers(7) ORDER BY number;
 
 
 query T
-SELECT SUBSTRING('12345', number, 2) FROM numbers(7) ORDER BY number;
+SELECT SUBSTRING('12345', number, 2) FROM numbers(7) ORDER BY number
 ----
 	
 12
@@ -81,7 +81,7 @@ SELECT SUBSTRING('12345', number, 2) FROM numbers(7) ORDER BY number;
 	
 
 query T
-SELECT SUBSTRING('12345', number, number) FROM numbers(7) ORDER BY number;
+SELECT SUBSTRING('12345', number, number) FROM numbers(7) ORDER BY number
 ----
 	
 1
@@ -92,7 +92,7 @@ SELECT SUBSTRING('12345', number, number) FROM numbers(7) ORDER BY number;
 	
 
 query T
-SELECT SUBSTRING(to_varchar(number * 100 + number), 2) FROM numbers(7) ORDER BY number;
+SELECT SUBSTRING(to_varchar(number * 100 + number), 2) FROM numbers(7) ORDER BY number
 ----
 	
 01
@@ -104,7 +104,7 @@ SELECT SUBSTRING(to_varchar(number * 100 + number), 2) FROM numbers(7) ORDER BY 
 
 
 query T
-SELECT SUBSTRING(to_varchar(number * 100 + number), 1, 1) FROM numbers(7) ORDER BY number;
+SELECT SUBSTRING(to_varchar(number * 100 + number), 1, 1) FROM numbers(7) ORDER BY number
 ----
 0
 1
@@ -115,7 +115,7 @@ SELECT SUBSTRING(to_varchar(number * 100 + number), 1, 1) FROM numbers(7) ORDER 
 6
 
 query T
-SELECT SUBSTRING(to_varchar(number * 100 + number), 1, number) FROM numbers(7) ORDER BY number;
+SELECT SUBSTRING(to_varchar(number * 100 + number), 1, number) FROM numbers(7) ORDER BY number
 ----
 	
 1
@@ -126,7 +126,7 @@ SELECT SUBSTRING(to_varchar(number * 100 + number), 1, number) FROM numbers(7) O
 606
 
 query T
-SELECT SUBSTRING(to_varchar(number * 100 + number), number) FROM numbers(7) ORDER BY number;
+SELECT SUBSTRING(to_varchar(number * 100 + number), number) FROM numbers(7) ORDER BY number
 ----
 	
 101
@@ -137,7 +137,7 @@ SELECT SUBSTRING(to_varchar(number * 100 + number), number) FROM numbers(7) ORDE
 	
 
 query T
-SELECT SUBSTRING(to_varchar(number * 100 + number), number, 1) FROM numbers(7) ORDER BY number;
+SELECT SUBSTRING(to_varchar(number * 100 + number), number, 1) FROM numbers(7) ORDER BY number
 ----
 	
 1
@@ -148,7 +148,7 @@ SELECT SUBSTRING(to_varchar(number * 100 + number), number, 1) FROM numbers(7) O
 	
 
 query T
-SELECT SUBSTRING(to_varchar(number * 100 + number), number, number) FROM numbers(7) ORDER BY number;
+SELECT SUBSTRING(to_varchar(number * 100 + number), number, number) FROM numbers(7) ORDER BY number
 ----
 	
 1
@@ -159,51 +159,51 @@ SELECT SUBSTRING(to_varchar(number * 100 + number), number, number) FROM numbers
 	
 
 query T
-SELECT SUBSTRING('12345' FROM 2);
+SELECT SUBSTRING('12345' FROM 2)
 ----
 2345
 
 query T
-SELECT SUBSTRING('12345' FROM 2 FOR 1);
+SELECT SUBSTRING('12345' FROM 2 FOR 1)
 ----
 2
 
 query T
-SELECT MID('12345', 2, 1);
+SELECT MID('12345', 2, 1)
 ----
 2
 
 query T
-SELECT SUBSTR('12345', 2, 1);
+SELECT SUBSTR('12345', 2, 1)
 ----
 2
 
 
 statement ok
-set sql_dialect = 'hive';
+set sql_dialect = 'hive'
 
 query T
-SELECT SUBSTR('12345', 0, 1);
+SELECT SUBSTR('12345', 0, 1)
 ----
 1
 
 query T
-SELECT SUBSTRING('12345', 0, 1);
+SELECT SUBSTRING('12345', 0, 1)
 ----
 1
 
 
 query TI
-select substr('城区主城区其他', 1, 6), length('我爱中国');
+select substr('城区主城区其他', 1, 6), length('我爱中国')
 ----
 城区	12
 
 
 statement ok
-set collation = 'utf8';
+set collation = 'utf8'
 
 
 query TI
-select substr('城区主城区其他', 1, 6), length('我爱中国');
+select substr('城区主城区其他', 1, 6), length('我爱中国')
 ----
 城区主城区其	4

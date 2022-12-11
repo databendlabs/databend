@@ -1,5 +1,5 @@
 query T
-explain memo select * from numbers(10), numbers(100) t1;
+explain memo select * from numbers(10), numbers(100) t1
 ----
 Group #0
 ├── best cost: [#1] 10

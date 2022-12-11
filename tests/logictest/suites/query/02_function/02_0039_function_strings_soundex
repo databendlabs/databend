@@ -1,104 +1,104 @@
 query T
-SELECT SOUNDEX(NULL);
+SELECT SOUNDEX(NULL)
 ----
 NULL
 
 query T
-SELECT SOUNDEX('Hello');
+SELECT SOUNDEX('Hello')
 ----
 H400
 
 query T
-SELECT SOUNDEX('hello');
+SELECT SOUNDEX('hello')
 ----
 H400
 
 query T
-SELECT SOUNDEX('Quadratically');
+SELECT SOUNDEX('Quadratically')
 ----
 Q36324
 
 query T
-SELECT SOUNDEX('quadratically');
+SELECT SOUNDEX('quadratically')
 ----
 Q36324
 
 query T
-SELECT SOUNDEX('你好中国');
+SELECT SOUNDEX('你好中国')
 ----
 你000
 
 query T
-SELECT SOUNDEX('你好中国北京');
+SELECT SOUNDEX('你好中国北京')
 ----
 你000
 
 statement ok
-SELECT SOUNDEX('');
+SELECT SOUNDEX('')
 
 query T
-SELECT SOUNDEX('he');
+SELECT SOUNDEX('he')
 ----
 H000
 
 query T
-SELECT SOUNDEX('hello all folks');
+SELECT SOUNDEX('hello all folks')
 ----
 H4142
 
 query T
-SELECT SOUNDEX('#3556 in bugdb');
+SELECT SOUNDEX('#3556 in bugdb')
 ----
 I51231
 
 statement ok
-SELECT SOUNDEX('####');
+SELECT SOUNDEX('####')
 
 query T
-SELECT SOUNDEX('##🐑hello');
+SELECT SOUNDEX('##🐑hello')
 ----
 🐑400
 
 query T
-SELECT SOUNDEX('##🐑🐑he🐑llo🐑');
+SELECT SOUNDEX('##🐑🐑he🐑llo🐑')
 ----
 🐑400
 
 query T
-SELECT SOUNDEX('🐑he🐑llo🐑');
+SELECT SOUNDEX('🐑he🐑llo🐑')
 ----
 🐑400
 
 query T
-SELECT SOUNDEX('teacher');
+SELECT SOUNDEX('teacher')
 ----
 T260
 
 query T
-SELECT SOUNDEX('TEACHER');
+SELECT SOUNDEX('TEACHER')
 ----
 T260
 
 query T
-SELECT SOUNDEX('much');
+SELECT SOUNDEX('much')
 ----
 M200
 
 query T
-SELECT SOUNDEX('MUCH');
+SELECT SOUNDEX('MUCH')
 ----
 M200
 
 statement ok
-SELECT SOUNDEX('1.23');
+SELECT SOUNDEX('1.23')
 
 query T
-SELECT SOUNDEX('pneumonoultramicroscopicsilicovolcanoconiosis');
+SELECT SOUNDEX('pneumonoultramicroscopicsilicovolcanoconiosis')
 ----
 P5436526212421425252
 
 query T
-SELECT SOUNDEX('pneumonoultramicroscopicsilicovolcanoconiosis hello world');
+SELECT SOUNDEX('pneumonoultramicroscopicsilicovolcanoconiosis hello world')
 ----
 P54365262124214252524643
 

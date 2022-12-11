@@ -1,19 +1,19 @@
 query T
-SELECT UPPER('Hello,World!');
+SELECT UPPER('Hello,World!')
 ----
 HELLO,WORLD!
 
 query T
-SELECT UPPER('Здравствуйте');
+SELECT UPPER('Здравствуйте')
 ----
 ЗДРАВСТВУЙТЕ
 
 query T
-SELECT UPPER(NULL);
+SELECT UPPER(NULL)
 ----
 NULL
 
 query T
-SELECT UPPER(1);
+SELECT UPPER(1)
 ----
 1

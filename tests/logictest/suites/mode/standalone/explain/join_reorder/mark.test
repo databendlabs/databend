@@ -1,5 +1,5 @@
 query T
-explain select * from numbers(10000) where number in (select number from numbers(1000));
+explain select * from numbers(10000) where number in (select number from numbers(1000))
 ----
 HashJoin
 ├── join type: LEFT SEMI
@@ -22,7 +22,7 @@ HashJoin
     └── push downs: [filters: [], limit: NONE]
 
 query T
-explain select * from numbers(1000) where number in (select number from numbers(10000));
+explain select * from numbers(1000) where number in (select number from numbers(10000))
 ----
 HashJoin
 ├── join type: RIGHT SEMI

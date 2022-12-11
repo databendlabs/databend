@@ -1,14 +1,14 @@
 query T
-SELECT SPACE(NULL);
+SELECT SPACE(NULL)
 ----
 NULL
 
 statement ok
-SELECT SPACE(0);
+SELECT SPACE(0)
 
 statement ok
-SELECT SPACE(1);
+SELECT SPACE(1)
 
 statement ok
-SELECT SPACE(2);
+SELECT SPACE(2)
 

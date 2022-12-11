@@ -1,11 +1,11 @@
 statement ok
-drop table if exists t_where_optimizer;
+drop table if exists t_where_optimizer
 
 statement ok
-create table if not exists t_where_optimizer (a int, b int);
+create table if not exists t_where_optimizer (a int, b int)
 
 query T
-explain select a from t_where_optimizer where a = 1;
+explain select a from t_where_optimizer where a = 1
 ----
 TableScan
 ├── table: default.default.t_where_optimizer
@@ -17,7 +17,7 @@ TableScan
 └── output columns: [0]
 
 query T
-explain select * from t_where_optimizer where a = b;
+explain select * from t_where_optimizer where a = b
 ----
 TableScan
 ├── table: default.default.t_where_optimizer
@@ -28,7 +28,7 @@ TableScan
 └── push downs: [filters: [(a = b)], limit: NONE]
 
 query T
-explain select * from t_where_optimizer where a = 1 or b > 2;
+explain select * from t_where_optimizer where a = 1 or b > 2
 ----
 TableScan
 ├── table: default.default.t_where_optimizer
@@ -39,7 +39,7 @@ TableScan
 └── push downs: [filters: [((a = 1) or (b > 2))], limit: NONE]
 
 query T
-explain select * from t_where_optimizer where a = 1 and b > 2;
+explain select * from t_where_optimizer where a = 1 and b > 2
 ----
 TableScan
 ├── table: default.default.t_where_optimizer
@@ -50,7 +50,7 @@ TableScan
 └── push downs: [filters: [(a = 1), (b > 2)], limit: NONE]
 
 query T
-explain select * from t_where_optimizer where b = 1;
+explain select * from t_where_optimizer where b = 1
 ----
 TableScan
 ├── table: default.default.t_where_optimizer
@@ -61,7 +61,7 @@ TableScan
 └── push downs: [filters: [(b = 1)], limit: NONE]
 
 query T
-explain select a from t_where_optimizer where b = 1;
+explain select a from t_where_optimizer where b = 1
 ----
 TableScan
 ├── table: default.default.t_where_optimizer
@@ -73,13 +73,13 @@ TableScan
 └── output columns: [0]
 
 statement ok
-drop table t_where_optimizer;
+drop table t_where_optimizer
 
 statement ok
-create table t_where_optimizer(id int, s tuple(a int, b int));
+create table t_where_optimizer(id int, s tuple(a int, b int))
 
 query T
-explain select * from t_where_optimizer where s:a > 0;
+explain select * from t_where_optimizer where s:a > 0
 ----
 TableScan
 ├── table: default.default.t_where_optimizer
@@ -91,5 +91,5 @@ TableScan
 └── output columns: [0, 1]
 
 statement ok
-drop table t_where_optimizer;
+drop table t_where_optimizer
 

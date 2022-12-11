@@ -1,13 +1,13 @@
 query T
-SELECT REVERSE(NULL);
+SELECT REVERSE(NULL)
 ----
 NULL
 
 statement ok
-SELECT REVERSE('');
+SELECT REVERSE('')
 
 query T
-SELECT REVERSE('abc');
+SELECT REVERSE('abc')
 ----
 cba
 

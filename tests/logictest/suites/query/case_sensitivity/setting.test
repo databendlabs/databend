@@ -1,22 +1,22 @@
 onlyif mysql
 statement ok
-drop table if exists "T";
+drop table if exists "T"
 
 onlyif mysql
 statement ok
-drop table if exists t;
+drop table if exists t
 
 onlyif mysql
 statement ok
-set quoted_ident_case_sensitive = 0; 
+set quoted_ident_case_sensitive = 0
 
 onlyif mysql
 statement ok
-create table "T"("A" int);
+create table "T"("A" int)
 
 onlyif mysql
 statement ok
-insert into "t"("a") values(1);
+insert into "t"("a") values(1)
 
 onlyif mysql
 query I
@@ -55,66 +55,66 @@ select "T".a from "T"
 
 onlyif mysql
 query I
-select "B" from (select "A" as "B" from "T");
+select "B" from (select "A" as "B" from "T")
 ----
 1
 
 onlyif mysql
 query I
-select b from (select "A" as "B" from "T");
+select b from (select "A" as "B" from "T")
 ----
 1
 
 onlyif mysql
 query I
-select "b" from (select "A" as "B" from "T");
+select "b" from (select "A" as "B" from "T")
 ----
 1
 
 onlyif mysql
 statement ok
-drop table "T";
+drop table "T"
 
 onlyif mysql
 statement ok
-set quoted_ident_case_sensitive = 1; 
+set quoted_ident_case_sensitive = 1
 
 onlyif mysql
 statement error 2803
-set sql_dialect = 'xx';
+set sql_dialect = 'xx'
 
 onlyif mysql
 statement ok
-create table t(a string);
+create table t(a string)
 
 onlyif mysql
 statement ok
-set sql_dialect = 'mysql';
+set sql_dialect = 'mysql'
 
 onlyif mysql
 statement ok
-select "a";
+select "a"
 
 onlyif mysql
 statement ok
-insert into t values("a");
+insert into t values("a")
 
 onlyif mysql
 statement ok
-set sql_dialect = 'postgresql';
+set sql_dialect = 'postgresql'
 
 onlyif mysql
 statement error 1065
-select "a";
+select "a"
 
 onlyif mysql
 statement error 1065
-insert into t values("a");
+insert into t values("a")
 
 onlyif mysql
 statement ok
-drop table if exists "T";
+drop table if exists "T"
 
 onlyif mysql
 statement ok
-drop table if exists t;
+drop table if exists t

@@ -1,5 +1,5 @@
 query T
-show tables from information_schema;
+show tables from information_schema
 ----
 columns
 keywords
@@ -8,7 +8,7 @@ tables
 views
 
 query T
-SHOW TABLES FROM INFORMATION_SCHEMA;
+SHOW TABLES FROM INFORMATION_SCHEMA
 ----
 columns
 keywords
@@ -17,18 +17,18 @@ tables
 views
 
 query B
-select count(1) > 1 from information_schema.columns;
+select count(1) > 1 from information_schema.columns
 ----
 1
 
 
 query B
-select count(1) > 1 from information_Schema.Columns;
+select count(1) > 1 from information_Schema.Columns
 ----
 1
 
 query T
-SELECT t.table_catalog FROM information_schema.TABLES t WHERE t.TABLE_SCHEMA = 'information_schema';
+SELECT t.table_catalog FROM information_schema.TABLES t WHERE t.TABLE_SCHEMA = 'information_schema'
 ----
 information_schema
 information_schema

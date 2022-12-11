@@ -1,11 +1,11 @@
 statement ok
-DROP TABLE IF EXISTS t;
+DROP TABLE IF EXISTS t
 
 statement ok
-CREATE TABLE t(a bigint null, b int null, c varchar(255) null, d smallint, e Date ) ENGINE = Null;
+CREATE TABLE t(a bigint null, b int null, c varchar(255) null, d smallint, e Date ) ENGINE = Null
 
 query TTTTT
-DESCRIBE t;
+DESCRIBE t
 ----
 a BIGINT YES NULL 
 b INT YES NULL 
@@ -14,7 +14,7 @@ d SMALLINT NO 0
 e DATE NO 0 
 
 query TTTTT
-DESC t;
+DESC t
 ----
 a BIGINT YES NULL 
 b INT YES NULL 
@@ -23,13 +23,13 @@ d SMALLINT NO 0
 e DATE NO 0 
 
 statement ok
-DROP TABLE IF EXISTS t1;
+DROP TABLE IF EXISTS t1
 
 statement ok
-CREATE TABLE t1(a bigint null, b int null, c char(255) null, d smallint, e Date, f char(120) not null default '' ) ENGINE = Null;
+CREATE TABLE t1(a bigint null, b int null, c char(255) null, d smallint, e Date, f char(120) not null default '' ) ENGINE = Null
 
 query TTTTT
-DESCRIBE t1;
+DESCRIBE t1
 ----
 a BIGINT YES NULL 
 b INT YES NULL 
@@ -39,7 +39,7 @@ e DATE NO 0
 f VARCHAR NO  
 
 query TTTTT
-DESC t1;
+DESC t1
 ----
 a BIGINT YES NULL 
 b INT YES NULL 
@@ -49,7 +49,7 @@ e DATE NO 0
 f VARCHAR NO  
 
 query TTTTT
-DESC INFORMATION_SCHEMA.COLUMNS;
+DESC INFORMATION_SCHEMA.COLUMNS
 ----
 table_catalog  VARCHAR  NO    
 table_schema  VARCHAR  NO    
@@ -79,8 +79,8 @@ domain_name  NULL  NO  NULL
 extra  NULL  NO  NULL
 
 statement ok
-DROP TABLE IF EXISTS t;
+DROP TABLE IF EXISTS t
 
 statement ok
-DROP TABLE IF EXISTS t1;
+DROP TABLE IF EXISTS t1
 

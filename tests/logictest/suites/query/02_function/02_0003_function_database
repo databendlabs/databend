@@ -1,5 +1,5 @@
 query TT
-SELECT database(), currentDatabase();
+SELECT database(), currentDatabase()
 ----
 default default
 

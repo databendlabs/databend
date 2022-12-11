@@ -1,12 +1,12 @@
 query T
-select trim('      abc   ');
+select trim('      abc   ')
 ----
 abc
 
 statement ok
-select trim('');
+select trim('')
 
 query T
-select trim('abc');
+select trim('abc')
 ----
 abc

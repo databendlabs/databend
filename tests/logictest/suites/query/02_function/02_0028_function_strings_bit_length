@@ -1,21 +1,21 @@
 query I
-SELECT BIT_LENGTH('latin');
+SELECT BIT_LENGTH('latin')
 ----
 40
 
 query I
-SELECT BIT_LENGTH('кириллица'); -- cyrillic in russian
+SELECT BIT_LENGTH('кириллица') -- cyrillic in russian
 
 ----
 144
 
 query I
-SELECT BIT_LENGTH('кириллица and latin');
+SELECT BIT_LENGTH('кириллица and latin')
 ----
 224
 
 query T
-SELECT BIT_LENGTH(NULL);
+SELECT BIT_LENGTH(NULL)
 ----
 NULL
 

@@ -1,20 +1,20 @@
 query T
-select hex(100);
+select hex(100)
 ----
 64
 
 query T
-select hex(-100);
+select hex(-100)
 ----
 -64
 
 query T
-select hex('abc');
+select hex('abc')
 ----
 616263
 
 query T
-select hex(null);
+select hex(null)
 ----
 NULL
 

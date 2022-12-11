@@ -1,16 +1,16 @@
 
 
 statement ok
-DROP TABLE IF EXISTS c;
+DROP TABLE IF EXISTS c
 
 statement ok
-DROP TABLE IF EXISTS o;
+DROP TABLE IF EXISTS o
 
 statement ok
-CREATE TABLE c (c_id INT NULL, bill VARCHAR NULL);
+CREATE TABLE c (c_id INT NULL, bill VARCHAR NULL)
 
 statement ok
-CREATE TABLE o (o_id INT NULL, c_id INT NULL, ship VARCHAR NULL);
+CREATE TABLE o (o_id INT NULL, c_id INT NULL, ship VARCHAR NULL)
 
 statement ok
 INSERT INTO c VALUES
@@ -19,19 +19,19 @@ INSERT INTO c VALUES
     (3, 'MA'),
     (4, 'TX'),
     (5, NULL),
-    (6, 'FL');
+    (6, 'FL')
 
 statement ok
 INSERT INTO o VALUES
     (10, 1, 'CA'), (20, 1, 'CA'), (30, 1, 'CA'),
     (40, 2, 'CA'), (50, 2, 'TX'), (60, 2, NULL),
     (70, 4, 'WY'), (80, 4, NULL),
-    (90, 6, 'WA');
+    (90, 6, 'WA')
 
 # Subquery in WHERE clause
 
 query IT
-SELECT * FROM c WHERE EXISTS(SELECT * FROM o WHERE o.c_id=c.c_id) ORDER BY c_id;
+SELECT * FROM c WHERE EXISTS(SELECT * FROM o WHERE o.c_id=c.c_id) ORDER BY c_id
 ----
 1  CA
 2  TX
@@ -39,7 +39,7 @@ SELECT * FROM c WHERE EXISTS(SELECT * FROM o WHERE o.c_id=c.c_id) ORDER BY c_id;
 6  FL
 
 query IT
-SELECT * FROM c WHERE NOT EXISTS(SELECT * FROM o WHERE o.c_id=c.c_id) ORDER BY c_id;
+SELECT * FROM c WHERE NOT EXISTS(SELECT * FROM o WHERE o.c_id=c.c_id) ORDER BY c_id
 ----
 3  MA
 5  NULL
@@ -50,7 +50,7 @@ FROM c
 WHERE
     EXISTS(SELECT * FROM o WHERE o.c_id=c.c_id)
     OR NOT EXISTS(SELECT * FROM o WHERE o.c_id=c.c_id)
-ORDER BY c_id;
+ORDER BY c_id
 ----
 1  CA
 2  TX
@@ -60,18 +60,18 @@ ORDER BY c_id;
 6  FL
 
 query IT
-SELECT * FROM c WHERE EXISTS(SELECT * FROM o WHERE o.c_id=c.c_id AND c.bill='TX') ORDER BY c_id;
+SELECT * FROM c WHERE EXISTS(SELECT * FROM o WHERE o.c_id=c.c_id AND c.bill='TX') ORDER BY c_id
 ----
 2  TX
 4  TX
 
 query IT
-SELECT * FROM c WHERE c.bill IN (SELECT o.ship FROM o WHERE o.c_id=c.c_id) and c.bill > 'MA';
+SELECT * FROM c WHERE c.bill IN (SELECT o.ship FROM o WHERE o.c_id=c.c_id) and c.bill > 'MA'
 ----
 2 TX
 
 query IT
-SELECT * FROM c WHERE 'WY' IN (SELECT ship FROM o WHERE o.c_id=c.c_id);
+SELECT * FROM c WHERE 'WY' IN (SELECT ship FROM o WHERE o.c_id=c.c_id)
 ----
 4  TX
 
@@ -81,7 +81,7 @@ FROM c
 WHERE
     'WY' IN (SELECT ship FROM o WHERE o.c_id=c.c_id)
     OR 'WA' IN (SELECT ship FROM o WHERE o.c_id=c.c_id)
-ORDER BY c_id;
+ORDER BY c_id
 ----
 4  TX
 6  FL
@@ -91,19 +91,19 @@ SELECT *
 FROM c
 WHERE
     'CA' IN (SELECT ship FROM o WHERE o.c_id=c.c_id)
-    AND 'TX' NOT IN (SELECT ship FROM o WHERE o.c_id=c.c_id);
+    AND 'TX' NOT IN (SELECT ship FROM o WHERE o.c_id=c.c_id)
 ----
 1  CA
 
 query IT
-SELECT * FROM c WHERE bill IN (SELECT ship FROM o WHERE o.c_id=c.c_id) ORDER BY c_id;
+SELECT * FROM c WHERE bill IN (SELECT ship FROM o WHERE o.c_id=c.c_id) ORDER BY c_id
 ----
 1  CA
 2  TX
 
 
 query IT
-SELECT * FROM c WHERE bill = ALL(SELECT ship FROM o WHERE o.c_id=c.c_id) ORDER BY c_id;
+SELECT * FROM c WHERE bill = ALL(SELECT ship FROM o WHERE o.c_id=c.c_id) ORDER BY c_id
 ----
 1  CA
 3  MA
@@ -111,20 +111,20 @@ SELECT * FROM c WHERE bill = ALL(SELECT ship FROM o WHERE o.c_id=c.c_id) ORDER B
 
 
 query IT
-SELECT * FROM c WHERE bill < ANY(SELECT ship FROM o WHERE o.c_id=c.c_id) ORDER BY c_id;
+SELECT * FROM c WHERE bill < ANY(SELECT ship FROM o WHERE o.c_id=c.c_id) ORDER BY c_id
 ----
 4  TX
 6  FL
 
 
 query IT
-SELECT * FROM c WHERE (bill < ANY(SELECT ship FROM o WHERE o.c_id=c.c_id)) IS NULL;
+SELECT * FROM c WHERE (bill < ANY(SELECT ship FROM o WHERE o.c_id=c.c_id)) IS NULL
 ----
 2  TX
 
 
 query IT
-SELECT * FROM c WHERE (bill < ANY(SELECT ship FROM o WHERE o.c_id=c.c_id)) IS NOT NULL ORDER BY c_id;
+SELECT * FROM c WHERE (bill < ANY(SELECT ship FROM o WHERE o.c_id=c.c_id)) IS NOT NULL ORDER BY c_id
 ----
 1  CA
 3  MA
@@ -134,19 +134,19 @@ SELECT * FROM c WHERE (bill < ANY(SELECT ship FROM o WHERE o.c_id=c.c_id)) IS NO
 
 
 query IT
-SELECT * FROM c WHERE bill > ANY(SELECT ship FROM o WHERE o.c_id=c.c_id);
+SELECT * FROM c WHERE bill > ANY(SELECT ship FROM o WHERE o.c_id=c.c_id)
 ----
 2  TX
 
 
 query IT
-SELECT * FROM c WHERE (bill > ANY(SELECT ship FROM o WHERE o.c_id=c.c_id)) IS NULL;
+SELECT * FROM c WHERE (bill > ANY(SELECT ship FROM o WHERE o.c_id=c.c_id)) IS NULL
 ----
 4  TX
 
 
 query IT
-SELECT * FROM c WHERE (bill > ANY(SELECT ship FROM o WHERE o.c_id=c.c_id)) IS NOT NULL ORDER BY c_id;
+SELECT * FROM c WHERE (bill > ANY(SELECT ship FROM o WHERE o.c_id=c.c_id)) IS NOT NULL ORDER BY c_id
 ----
 1  CA
 2  TX
@@ -156,7 +156,7 @@ SELECT * FROM c WHERE (bill > ANY(SELECT ship FROM o WHERE o.c_id=c.c_id)) IS NO
 
 
 query IT
-SELECT * FROM c WHERE bill = ANY(SELECT ship FROM o) ORDER BY c_id;
+SELECT * FROM c WHERE bill = ANY(SELECT ship FROM o) ORDER BY c_id
 ----
 1  CA
 2  TX
@@ -164,7 +164,7 @@ SELECT * FROM c WHERE bill = ANY(SELECT ship FROM o) ORDER BY c_id;
 
 
 query IT
-SELECT * FROM c WHERE bill = ANY(SELECT ship FROM o) OR bill IS NULL ORDER BY c_id;
+SELECT * FROM c WHERE bill = ANY(SELECT ship FROM o) OR bill IS NULL ORDER BY c_id
 ----
 1  CA
 2  TX
@@ -178,7 +178,7 @@ FROM c
 WHERE
     bill = ALL(SELECT ship FROM o WHERE o.c_id=c.c_id)
     OR EXISTS(SELECT * FROM o WHERE o.c_id=c.c_id AND ship='WY')
-ORDER BY c_id;
+ORDER BY c_id
 ----
 1  CA
 3  MA
@@ -191,13 +191,13 @@ SELECT *
 FROM c
 WHERE
     bill = ALL(SELECT ship FROM o WHERE o.c_id=c.c_id)
-    AND EXISTS(SELECT * FROM o WHERE o.c_id=c.c_id);
+    AND EXISTS(SELECT * FROM o WHERE o.c_id=c.c_id)
 ----
 1  CA
 
 
 query IT
-SELECT * FROM c WHERE bill NOT IN (SELECT ship FROM o WHERE o.c_id=c.c_id) ORDER BY c_id;
+SELECT * FROM c WHERE bill NOT IN (SELECT ship FROM o WHERE o.c_id=c.c_id) ORDER BY c_id
 ----
 3  MA
 5  NULL
@@ -205,7 +205,7 @@ SELECT * FROM c WHERE bill NOT IN (SELECT ship FROM o WHERE o.c_id=c.c_id) ORDER
 
 
 query IT
-SELECT * FROM c WHERE bill NOT IN (SELECT ship FROM o WHERE o.c_id=c.c_id AND ship IS NOT NULL) ORDER BY c_id;
+SELECT * FROM c WHERE bill NOT IN (SELECT ship FROM o WHERE o.c_id=c.c_id AND ship IS NOT NULL) ORDER BY c_id
 ----
 3  MA
 4  TX
@@ -214,7 +214,7 @@ SELECT * FROM c WHERE bill NOT IN (SELECT ship FROM o WHERE o.c_id=c.c_id AND sh
 
 
 query IT
-SELECT * FROM c WHERE bill NOT IN (SELECT ship FROM o WHERE o.c_id=c.c_id AND ship IS NULL) ORDER BY c_id;
+SELECT * FROM c WHERE bill NOT IN (SELECT ship FROM o WHERE o.c_id=c.c_id AND ship IS NULL) ORDER BY c_id
 ----
 1  CA
 3  MA
@@ -223,7 +223,7 @@ SELECT * FROM c WHERE bill NOT IN (SELECT ship FROM o WHERE o.c_id=c.c_id AND sh
 
 
 query IT
-SELECT * FROM c WHERE (SELECT count(*) FROM o WHERE o.c_id=c.c_id) > 1 ORDER BY c_id;
+SELECT * FROM c WHERE (SELECT count(*) FROM o WHERE o.c_id=c.c_id) > 1 ORDER BY c_id
 ----
 1  CA
 2  TX
@@ -231,7 +231,7 @@ SELECT * FROM c WHERE (SELECT count(*) FROM o WHERE o.c_id=c.c_id) > 1 ORDER BY 
 
 
 query IT
-SELECT * FROM c WHERE (SELECT count(ship) FROM o WHERE o.c_id=c.c_id) > 1 ORDER BY c_id;
+SELECT * FROM c WHERE (SELECT count(ship) FROM o WHERE o.c_id=c.c_id) > 1 ORDER BY c_id
 ----
 1  CA
 2  TX
@@ -243,7 +243,7 @@ FROM c
 WHERE
     (SELECT count(*) FROM o WHERE o.c_id=c.c_id) > 1
     AND (SELECT max(ship) FROM o WHERE o.c_id=c.c_id) = 'CA'
-ORDER BY c_id;
+ORDER BY c_id
 ----
 1  CA
 
@@ -257,7 +257,7 @@ WHERE EXISTS
     FROM (SELECT c_id, coalesce(ship, bill) AS state FROM o WHERE c_id=c2.c_id) AS o
     WHERE state=bill
 )
-ORDER BY c_id;
+ORDER BY c_id
 ----
 1  CA
 2  TX
@@ -267,7 +267,7 @@ ORDER BY c_id;
 statement ok
 SELECT *
 FROM c
-WHERE (SELECT o_id FROM o WHERE o.c_id=c.c_id AND ship='WY')=4;
+WHERE (SELECT o_id FROM o WHERE o.c_id=c.c_id AND ship='WY')=4
 
 
 query IT
@@ -281,7 +281,7 @@ SELECT * FROM c WHERE c_id=(SELECT c_id FROM o WHERE ship='WA' AND bill='FL')
 
 
 query IT
-SELECT c_id, EXISTS(SELECT * FROM o WHERE o.c_id=c.c_id) FROM c ORDER BY c_id;
+SELECT c_id, EXISTS(SELECT * FROM o WHERE o.c_id=c.c_id) FROM c ORDER BY c_id
 ----
 1  1
 2  1
@@ -292,7 +292,7 @@ SELECT c_id, EXISTS(SELECT * FROM o WHERE o.c_id=c.c_id) FROM c ORDER BY c_id;
 
 
 query IT
-SELECT c_id, NOT EXISTS(SELECT * FROM o WHERE o.c_id=c.c_id) FROM c ORDER BY c_id;
+SELECT c_id, NOT EXISTS(SELECT * FROM o WHERE o.c_id=c.c_id) FROM c ORDER BY c_id
 ----
 1  0
 2  0
@@ -308,7 +308,7 @@ SELECT
     EXISTS(SELECT * FROM o WHERE o.c_id=c.c_id)
     OR NOT EXISTS(SELECT * FROM o WHERE o.c_id=c.c_id)
 FROM c
-ORDER BY c_id;
+ORDER BY c_id
 ----
 1  1
 2  1
@@ -319,7 +319,7 @@ ORDER BY c_id;
 
 
 query IT
-SELECT c_id, EXISTS(SELECT * FROM o WHERE o.c_id=c.c_id AND c.bill='TX') FROM c ORDER BY c_id;
+SELECT c_id, EXISTS(SELECT * FROM o WHERE o.c_id=c.c_id AND c.bill='TX') FROM c ORDER BY c_id
 ----
 1  0
 2  1
@@ -330,7 +330,7 @@ SELECT c_id, EXISTS(SELECT * FROM o WHERE o.c_id=c.c_id AND c.bill='TX') FROM c 
 
 
 query IT
-SELECT c_id, 'WY' IN (SELECT ship FROM o WHERE o.c_id=c.c_id) FROM c ORDER BY c_id;
+SELECT c_id, 'WY' IN (SELECT ship FROM o WHERE o.c_id=c.c_id) FROM c ORDER BY c_id
 ----
 1  0
 2  NULL
@@ -346,7 +346,7 @@ SELECT
     'CA' IN (SELECT ship FROM o WHERE o.c_id=c.c_id)
     AND 'TX' NOT IN (SELECT ship FROM o WHERE o.c_id=c.c_id)
 FROM c
-ORDER BY c_id;
+ORDER BY c_id
 ----
 1  1
 2  0
@@ -357,7 +357,7 @@ ORDER BY c_id;
 
 
 query IT
-SELECT c_id, bill = ALL(SELECT ship FROM o WHERE o.c_id=c.c_id) FROM c ORDER BY c_id;
+SELECT c_id, bill = ALL(SELECT ship FROM o WHERE o.c_id=c.c_id) FROM c ORDER BY c_id
 ----
 1  1
 2  0
@@ -368,7 +368,7 @@ SELECT c_id, bill = ALL(SELECT ship FROM o WHERE o.c_id=c.c_id) FROM c ORDER BY 
 
 
 query IT
-SELECT c_id, bill NOT IN (SELECT ship FROM o WHERE o.c_id=c.c_id) FROM c ORDER BY c_id;
+SELECT c_id, bill NOT IN (SELECT ship FROM o WHERE o.c_id=c.c_id) FROM c ORDER BY c_id
 ----
 1  0
 2  0
@@ -381,7 +381,7 @@ SELECT c_id, bill NOT IN (SELECT ship FROM o WHERE o.c_id=c.c_id) FROM c ORDER B
 query IT
 SELECT c_id, bill NOT IN (SELECT ship FROM o WHERE o.c_id=c.c_id AND ship IS NOT NULL)
 FROM c
-ORDER BY c_id;
+ORDER BY c_id
 ----
 1  0
 2  0
@@ -394,7 +394,7 @@ ORDER BY c_id;
 query IT
 SELECT c_id, bill NOT IN (SELECT ship FROM o WHERE o.c_id=c.c_id AND ship IS NULL)
 FROM c
-ORDER BY c_id;
+ORDER BY c_id
 ----
 1  1
 2  NULL
@@ -405,7 +405,7 @@ ORDER BY c_id;
 
 
 query IT
-SELECT c_id, bill < ANY(SELECT ship FROM o WHERE o.c_id=c.c_id) FROM c ORDER BY c_id;
+SELECT c_id, bill < ANY(SELECT ship FROM o WHERE o.c_id=c.c_id) FROM c ORDER BY c_id
 ----
 1  0
 2  NULL
@@ -416,7 +416,7 @@ SELECT c_id, bill < ANY(SELECT ship FROM o WHERE o.c_id=c.c_id) FROM c ORDER BY 
 
 
 query IT
-SELECT c_id, (bill < ANY(SELECT ship FROM o WHERE o.c_id=c.c_id)) IS NULL FROM c ORDER BY c_id;
+SELECT c_id, (bill < ANY(SELECT ship FROM o WHERE o.c_id=c.c_id)) IS NULL FROM c ORDER BY c_id
 ----
 1  0
 2  1
@@ -427,7 +427,7 @@ SELECT c_id, (bill < ANY(SELECT ship FROM o WHERE o.c_id=c.c_id)) IS NULL FROM c
 
 
 query IT
-SELECT c_id, (bill < ANY(SELECT ship FROM o WHERE o.c_id=c.c_id)) IS NOT NULL FROM c ORDER BY c_id;
+SELECT c_id, (bill < ANY(SELECT ship FROM o WHERE o.c_id=c.c_id)) IS NOT NULL FROM c ORDER BY c_id
 ----
 1  1
 2  0
@@ -438,7 +438,7 @@ SELECT c_id, (bill < ANY(SELECT ship FROM o WHERE o.c_id=c.c_id)) IS NOT NULL FR
 
 
 query IT
-SELECT c_id, bill > ANY(SELECT ship FROM o WHERE o.c_id=c.c_id) FROM c ORDER BY c_id;
+SELECT c_id, bill > ANY(SELECT ship FROM o WHERE o.c_id=c.c_id) FROM c ORDER BY c_id
 ----
 1  0
 2  1
@@ -449,7 +449,7 @@ SELECT c_id, bill > ANY(SELECT ship FROM o WHERE o.c_id=c.c_id) FROM c ORDER BY 
 
 
 query IT
-SELECT c_id, (bill > ANY(SELECT ship FROM o WHERE o.c_id=c.c_id)) IS NULL FROM c ORDER BY c_id;
+SELECT c_id, (bill > ANY(SELECT ship FROM o WHERE o.c_id=c.c_id)) IS NULL FROM c ORDER BY c_id
 ----
 1  0
 2  0
@@ -460,7 +460,7 @@ SELECT c_id, (bill > ANY(SELECT ship FROM o WHERE o.c_id=c.c_id)) IS NULL FROM c
 
 
 query IT
-SELECT c_id, (bill > ANY(SELECT ship FROM o WHERE o.c_id=c.c_id)) IS NOT NULL FROM c ORDER BY c_id;
+SELECT c_id, (bill > ANY(SELECT ship FROM o WHERE o.c_id=c.c_id)) IS NOT NULL FROM c ORDER BY c_id
 ----
 1  1
 2  1
@@ -471,7 +471,7 @@ SELECT c_id, (bill > ANY(SELECT ship FROM o WHERE o.c_id=c.c_id)) IS NOT NULL FR
 
 
 query IT
-SELECT c_id, bill = ANY(SELECT ship FROM o WHERE ship IS NOT NULL) FROM c ORDER BY c_id;
+SELECT c_id, bill = ANY(SELECT ship FROM o WHERE ship IS NOT NULL) FROM c ORDER BY c_id
 ----
 1  1
 2  1
@@ -487,7 +487,7 @@ SELECT
     bill = ALL(SELECT ship FROM o WHERE o.c_id=c.c_id)
     OR EXISTS(SELECT * FROM o WHERE o.c_id=c.c_id AND ship='WY')
 FROM c
-ORDER BY c_id;
+ORDER BY c_id
 ----
 1  1
 2  0
@@ -503,7 +503,7 @@ SELECT
     bill = ALL(SELECT ship FROM o WHERE o.c_id=c.c_id)
     AND EXISTS(SELECT * FROM o WHERE o.c_id=c.c_id)
 FROM c
-ORDER BY c_id;
+ORDER BY c_id
 ----
 1  1
 2  0
@@ -546,7 +546,7 @@ SELECT
     c_id,
     (SELECT count(*) FROM o WHERE o.c_id=c.c_id)
 FROM c
-ORDER BY c_id;
+ORDER BY c_id
 ----
 1  3
 2  3
@@ -557,7 +557,7 @@ ORDER BY c_id;
 
 
 query I
-SELECT max((SELECT count(*) FROM o WHERE o.c_id=c.c_id)) FROM c;
+SELECT max((SELECT count(*) FROM o WHERE o.c_id=c.c_id)) FROM c
 ----
 3
 
@@ -578,7 +578,7 @@ ORDER BY c.c_id
 6  0
 
 query I
-select * from numbers(5) where exists(select * from numbers(1)) order by number;
+select * from numbers(5) where exists(select * from numbers(1)) order by number
 ----
 0
 1
@@ -588,14 +588,14 @@ select * from numbers(5) where exists(select * from numbers(1)) order by number;
 
 
 statement ok
-drop table o;
+drop table o
 
 
 statement ok
-drop table c;
+drop table c
 
 query I
-select * from (SELECT number AS a FROM numbers(10)) x where exists (select 1::UInt64 b) ORDER BY a;
+select * from (SELECT number AS a FROM numbers(10)) x where exists (select 1::UInt64 b) ORDER BY a
 ----
 0
 1
@@ -609,6 +609,6 @@ select * from (SELECT number AS a FROM numbers(10)) x where exists (select 1::UI
 9
 
 query I
-select (select count() from numbers(10)) + (select count() from numbers(10));
+select (select count() from numbers(10)) + (select count() from numbers(10))
 ----
 20

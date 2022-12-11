@@ -1,21 +1,21 @@
 statement ok
-drop table if exists t;
+drop table if exists t
 
 statement ok
-create table t(c0 tuple(int, int), c1 string null);
+create table t(c0 tuple(int, int), c1 string null)
 
 statement ok
-insert into t(c1) values(null), (null), (null);
+insert into t(c1) values(null), (null), (null)
 
 query I
-select count(c1) from t;
+select count(c1) from t
 ----
 0
 
 query I
-select count(c0) from t;
+select count(c0) from t
 ----
 3
 
 statement ok
-drop table if exists t;
+drop table if exists t
