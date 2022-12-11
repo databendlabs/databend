@@ -18,7 +18,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
-use common_base::base::ThreadPool;
+use common_base::runtime::ThreadPool;
 use common_exception::Result;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 8)]

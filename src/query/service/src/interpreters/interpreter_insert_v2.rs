@@ -21,7 +21,7 @@ use common_ast::ast::Expr;
 use common_ast::parser::parse_comma_separated_exprs;
 use common_ast::parser::tokenize_sql;
 use common_ast::Backtrace;
-use common_base::base::GlobalIORuntime;
+use common_base::runtime::GlobalIORuntime;
 use common_catalog::table::AppendMode;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;

@@ -19,7 +19,7 @@ use std::time::Instant;
 use common_base::base::convert_byte_size;
 use common_base::base::convert_number_size;
 use common_base::base::tokio::io::AsyncWrite;
-use common_base::base::TrySpawn;
+use common_base::runtime::TrySpawn;
 use common_config::DATABEND_COMMIT_VERSION;
 use common_datablocks::DataBlock;
 use common_datablocks::SendableDataBlockStream;

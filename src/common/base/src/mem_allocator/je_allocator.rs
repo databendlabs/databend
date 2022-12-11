@@ -40,7 +40,7 @@ pub mod linux_or_macos {
     use tikv_jemalloc_sys as ffi;
 
     use super::JEAllocator;
-    use crate::base::ThreadTracker;
+    use crate::runtime::ThreadTracker;
 
     impl<T> JEAllocator<T> {
         pub const FALLBACK: bool = false;

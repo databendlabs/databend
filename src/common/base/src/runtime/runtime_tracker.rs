@@ -422,10 +422,10 @@ mod tests {
         use std::task::Context;
         use std::task::Poll;
 
-        use crate::base::runtime_tracker::TRACKER;
-        use crate::base::MemStat;
-        use crate::base::ThreadTracker;
-        use crate::base::TrackedFuture;
+        use crate::runtime::runtime_tracker::TRACKER;
+        use crate::runtime::MemStat;
+        use crate::runtime::ThreadTracker;
+        use crate::runtime::TrackedFuture;
 
         struct Foo {
             i: usize,
@@ -487,9 +487,9 @@ mod tests {
         use std::task::Context;
         use std::task::Poll;
 
-        use crate::base::MemStat;
-        use crate::base::ThreadTracker;
-        use crate::base::TrackedFuture;
+        use crate::runtime::MemStat;
+        use crate::runtime::ThreadTracker;
+        use crate::runtime::TrackedFuture;
 
         struct Foo {
             i: usize,

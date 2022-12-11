@@ -21,7 +21,7 @@ use std::marker::Send;
 use std::marker::Sync;
 
 use common_arrow::arrow::bitmap::Bitmap;
-use common_base::base::ThreadPool;
+use common_base::runtime::ThreadPool;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;

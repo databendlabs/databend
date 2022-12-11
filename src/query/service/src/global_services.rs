@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::base::GlobalIORuntime;
 use common_base::base::GlobalInstance;
+use common_base::runtime::GlobalIORuntime;
 use common_catalog::catalog::CatalogManager;
 use common_config::Config;
 use common_config::GlobalConfig;
