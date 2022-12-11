@@ -59,9 +59,9 @@ async fn test_fuse_purge_normal_case() -> Result<()> {
         "do_gc: there should be 1 snapshot, 0 segment/block",
         expected_num_of_snapshot,
         0, // 0 snapshot statistic
-        1, // 0 segments
-        1, // 0 blocks
-        1, // 0 index
+        1, // 1 segments
+        1, // 1 blocks
+        1, // 1 index
         Some(()),
         None,
     )

@@ -41,7 +41,6 @@ impl FuseTable {
                 Default::default(),
                 vec![],
                 self.cluster_key_meta.clone(),
-                // TODO table statistics should be reset?
                 prev_snapshot.table_statistics_location.clone(),
             );
             let loc = self.meta_location_generator();
