@@ -15,10 +15,11 @@
 use std::fmt;
 use std::marker::PhantomData;
 
+use common_base::base::convert_byte_size;
+use common_base::base::convert_number_size;
 use common_datavalues::prelude::*;
 use common_datavalues::with_match_primitive_type_id;
 use common_exception::Result;
-use common_io::prelude::*;
 use num_traits::AsPrimitive;
 
 use crate::scalars::assert_numeric;
