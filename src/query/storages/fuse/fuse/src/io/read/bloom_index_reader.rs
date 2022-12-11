@@ -74,9 +74,9 @@ impl BlockFilterReader for Location {
 mod util_v1 {
     use std::future::Future;
 
-    use common_base::base::GlobalIORuntime;
-    use common_base::base::Runtime;
-    use common_base::base::TrySpawn;
+    use common_base::runtime::GlobalIORuntime;
+    use common_base::runtime::Runtime;
+    use common_base::runtime::TrySpawn;
     use common_storages_table_meta::caches::CacheDeferMetrics;
     use common_storages_table_meta::caches::CacheManager;
 

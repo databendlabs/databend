@@ -18,7 +18,7 @@ use std::sync::Arc;
 use std::vec;
 
 use bumpalo::Bump;
-use common_base::base::ThreadPool;
+use common_base::runtime::ThreadPool;
 use common_datablocks::DataBlock;
 use common_datavalues::ColumnRef;
 use common_datavalues::DataSchemaRef;

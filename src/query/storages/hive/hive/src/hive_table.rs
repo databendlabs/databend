@@ -76,10 +76,7 @@ impl HiveTable {
         let storage_params = table_info.meta.storage_params.clone();
         let dal = match storage_params {
             Some(sp) => init_operator(&sp)?,
-            None => {
-                let op = &*(DataOperator::instance());
-                op.clone()
-            }
+            None => DataOperator::instance().operator(),
         };
 
         Ok(HiveTable {
