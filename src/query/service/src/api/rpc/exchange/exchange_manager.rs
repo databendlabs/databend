@@ -19,10 +19,10 @@ use std::ops::Deref;
 use std::sync::Arc;
 
 use common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
-use common_base::base::GlobalIORuntime;
 use common_base::base::GlobalInstance;
-use common_base::base::Thread;
-use common_base::base::TrySpawn;
+use common_base::runtime::GlobalIORuntime;
+use common_base::runtime::Thread;
+use common_base::runtime::TrySpawn;
 use common_config::GlobalConfig;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;

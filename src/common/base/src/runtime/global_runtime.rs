@@ -16,8 +16,8 @@ use std::sync::Arc;
 
 use common_exception::Result;
 
-use super::GlobalInstance;
-use crate::base::Runtime;
+use crate::base::GlobalInstance;
+use crate::runtime::Runtime;
 
 pub struct GlobalIORuntime;
 

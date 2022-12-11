@@ -20,9 +20,9 @@ use std::time::Duration;
 
 use anyhow::anyhow;
 use backon::ExponentialBackoff;
-use common_base::base::GlobalIORuntime;
 use common_base::base::GlobalInstance;
-use common_base::base::TrySpawn;
+use common_base::runtime::GlobalIORuntime;
+use common_base::runtime::TrySpawn;
 use common_exception::ErrorCode;
 use opendal::layers::ImmutableIndexLayer;
 use opendal::layers::LoggingLayer;

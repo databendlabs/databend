@@ -21,7 +21,7 @@ use std::sync::Weak;
 use std::time::SystemTime;
 
 use common_base::base::Progress;
-use common_base::base::Runtime;
+use common_base::runtime::Runtime;
 use common_config::Config;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;

@@ -14,8 +14,8 @@
 
 use std::env;
 
-use common_base::base::Runtime;
-use common_base::base::GLOBAL_MEM_STAT;
+use common_base::runtime::Runtime;
+use common_base::runtime::GLOBAL_MEM_STAT;
 use common_config::Config;
 use common_config::DATABEND_COMMIT_VERSION;
 use common_config::QUERY_SEMVER;
