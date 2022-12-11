@@ -50,6 +50,11 @@ pub fn optimize_distributed_query(ctx: Arc<dyn TableContext>, s_expr: &SExpr) ->
 // Traverse the SExpr tree to find top_k, if find, push down it to Exchange::Merge
 fn push_down_topk_to_merge(s_expr: &mut SExpr, mut top_k: Option<TopK>) -> Result<()> {
     if let RelOperator::Exchange(Exchange::Merge) = s_expr.plan {
+        // A quick fix for Merge child is aggregate.
+        // Todo: consider to push down topk to the above of aggregate.
+        if let RelOperator::Aggregate(_) = s_expr.child(0)?.plan {
+            return Ok(());
+        }
         if let Some(top_k) = top_k {
             let child = &mut s_expr.children[0];
             *child = SExpr::create_unary(top_k.sort.into(), child.clone());

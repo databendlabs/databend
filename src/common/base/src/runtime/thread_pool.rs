@@ -16,7 +16,7 @@ use async_channel::Receiver;
 use async_channel::Sender;
 use common_exception::Result;
 
-use crate::base::Thread;
+use crate::runtime::Thread;
 
 // Simple thread pool implementation,
 // which can run more tasks on limited threads and wait for all tasks to finished.

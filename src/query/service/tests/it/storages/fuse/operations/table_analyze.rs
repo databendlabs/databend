@@ -44,7 +44,7 @@ async fn test_table_modify_column_ndv_statistics() -> Result<()> {
 
     let num_inserts = 3;
     append_rows(ctx.clone(), num_inserts).await?;
-    let statistics_sql = "optimize table default.t statistic";
+    let statistics_sql = "analyze table default.t";
     execute_command(ctx.clone(), statistics_sql).await?;
 
     let table = catalog

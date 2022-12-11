@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_base::base::GlobalIORuntime;
+use common_base::runtime::GlobalIORuntime;
 use common_catalog::table::AppendMode;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;

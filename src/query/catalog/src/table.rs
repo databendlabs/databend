@@ -199,7 +199,7 @@ pub trait Table: Sync + Send {
         Ok(())
     }
 
-    async fn statistic(&self, ctx: Arc<dyn TableContext>) -> Result<()> {
+    async fn analyze(&self, ctx: Arc<dyn TableContext>) -> Result<()> {
         let _ = ctx;
 
         Ok(())

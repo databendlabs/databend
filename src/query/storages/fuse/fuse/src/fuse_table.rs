@@ -106,10 +106,7 @@ impl FuseTable {
                 let storage_params = table_info.meta.storage_params.clone();
                 match storage_params {
                     Some(sp) => init_operator(&sp)?,
-                    None => {
-                        let op = &*(DataOperator::instance());
-                        op.clone()
-                    }
+                    None => DataOperator::instance().operator(),
                 }
             }
         };
@@ -441,9 +438,9 @@ impl Table for FuseTable {
         self.do_gc(&ctx, keep_last_snapshot).await
     }
 
-    #[tracing::instrument(level = "debug", name = "statistic", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
-    async fn statistic(&self, ctx: Arc<dyn TableContext>) -> Result<()> {
-        self.do_statistic(&ctx).await
+    #[tracing::instrument(level = "debug", name = "analyze", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
+    async fn analyze(&self, ctx: Arc<dyn TableContext>) -> Result<()> {
+        self.do_analyze(&ctx).await
     }
 
     fn table_statistics(&self) -> Result<Option<TableStatistics>> {

@@ -515,6 +515,18 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             })
         },
     );
+    let analyze_table = map(
+        rule! {
+            ANALYZE ~ TABLE ~ #peroid_separated_idents_1_to_3
+        },
+        |(_, _, (catalog, database, table))| {
+            Statement::AnalyzeTable(AnalyzeTableStmt {
+                catalog,
+                database,
+                table,
+            })
+        },
+    );
     let exists_table = map(
         rule! {
             EXISTS ~ TABLE ~ #peroid_separated_idents_1_to_3
@@ -991,6 +1003,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             | #rename_table : "`RENAME TABLE [<database>.]<table> TO <new_table>`"
             | #truncate_table : "`TRUNCATE TABLE [<database>.]<table> [PURGE]`"
             | #optimize_table : "`OPTIMIZE TABLE [<database>.]<table> (ALL | PURGE | COMPACT [SEGMENT])`"
+            | #analyze_table : "`ANALYZE TABLE [<database>.]<table>`"
             | #exists_table : "`EXISTS TABLE [<database>.]<table>`"
         ),
         rule!(
@@ -1449,7 +1462,6 @@ pub fn optimize_table_action(i: Input) -> IResult<OptimizeTableAction> {
     alt((
         value(OptimizeTableAction::All, rule! { ALL }),
         value(OptimizeTableAction::Purge, rule! { PURGE }),
-        value(OptimizeTableAction::Statistic, rule! { STATISTIC }),
         map(
             rule! { COMPACT ~ (SEGMENT)? ~ ( LIMIT ~ ^#expr )?},
             |(_, opt_segment, opt_limit)| OptimizeTableAction::Compact {

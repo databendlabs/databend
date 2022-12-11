@@ -346,6 +346,7 @@ pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statem
         Statement::RenameTable(stmt) => visitor.visit_rename_table(stmt),
         Statement::TruncateTable(stmt) => visitor.visit_truncate_table(stmt),
         Statement::OptimizeTable(stmt) => visitor.visit_optimize_table(stmt),
+        Statement::AnalyzeTable(stmt) => visitor.visit_analyze_table(stmt),
         Statement::ExistsTable(stmt) => visitor.visit_exists_table(stmt),
         Statement::CreateView(stmt) => visitor.visit_create_view(stmt),
         Statement::AlterView(stmt) => visitor.visit_alter_view(stmt),

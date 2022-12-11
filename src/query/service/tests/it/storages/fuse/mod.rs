@@ -22,3 +22,4 @@ mod statistics;
 mod table;
 mod table_functions;
 mod table_test_fixture;
+mod utils;

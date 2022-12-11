@@ -436,6 +436,8 @@ pub trait Visitor<'ast>: Sized {
 
     fn visit_optimize_table(&mut self, _stmt: &'ast OptimizeTableStmt<'ast>) {}
 
+    fn visit_analyze_table(&mut self, _stmt: &'ast AnalyzeTableStmt<'ast>) {}
+
     fn visit_exists_table(&mut self, _stmt: &'ast ExistsTableStmt<'ast>) {}
 
     fn visit_create_view(&mut self, _stmt: &'ast CreateViewStmt<'ast>) {}
