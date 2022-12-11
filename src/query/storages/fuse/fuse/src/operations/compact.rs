@@ -24,7 +24,6 @@ use common_pipeline_core::Pipe;
 use common_pipeline_core::Pipeline;
 use common_storages_table_meta::meta::TableSnapshot;
 
-use crate::operations::mutation::all_the_columns_ids;
 use crate::operations::mutation::BlockCompactMutator;
 use crate::operations::mutation::CompactSource;
 use crate::operations::mutation::CompactTransform;
@@ -140,7 +139,7 @@ impl FuseTable {
             max_threads,
         )?;
 
-        let all_col_ids = all_the_columns_ids(self);
+        let all_col_ids = self.all_the_columns_ids();
         let projection = Projection::Columns(all_col_ids);
         let block_reader = self.create_block_reader(projection)?;
 

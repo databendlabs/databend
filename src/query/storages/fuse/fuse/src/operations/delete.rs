@@ -34,24 +34,18 @@ use common_pipeline_core::Pipe;
 use common_pipeline_core::Pipeline;
 use common_sql::evaluator::EvalNode;
 use common_sql::evaluator::Evaluator;
-use common_sql::ExpressionParser;
 use common_storages_table_meta::meta::Location;
-use common_storages_table_meta::meta::TableSnapshot;
 
-use super::mutation::MutationSink;
-use crate::operations::mutation::all_the_columns_ids;
-use crate::operations::mutation::delete_from_block;
-use crate::operations::mutation::deletion_mutator::Deletion;
-use crate::operations::mutation::DeletionMutator;
 use crate::operations::mutation::DeletionPartInfo;
 use crate::operations::mutation::DeletionSource;
 use crate::operations::mutation::DeletionTransform;
+use crate::operations::mutation::MutationSink;
 use crate::pruning::BlockPruner;
 use crate::statistics::ClusterStatsGenerator;
 use crate::FuseTable;
 
 impl FuseTable {
-    pub async fn do_delete2(
+    pub async fn do_delete(
         &self,
         ctx: Arc<dyn TableContext>,
         filter: Option<Expression>,
@@ -135,7 +129,7 @@ impl FuseTable {
         ctx.try_set_partitions(parts)?;
         let block_reader = self.create_block_reader(projection.clone())?;
 
-        let all_col_ids = all_the_columns_ids(self);
+        let all_col_ids = self.all_the_columns_ids();
         let remain_col_ids: Vec<usize> = all_col_ids
             .into_iter()
             .filter(|id| !col_indices.contains(id))
@@ -228,126 +222,6 @@ impl FuseTable {
         }
     }
 
-    pub async fn do_delete(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        projection: &Projection,
-        selection: &Option<String>,
-    ) -> Result<()> {
-        let snapshot_opt = self.read_table_snapshot().await?;
-
-        // check if table is empty
-        let snapshot = if let Some(val) = snapshot_opt {
-            val
-        } else {
-            // no snapshot, no deletion
-            return Ok(());
-        };
-
-        if snapshot.summary.row_count == 0 {
-            // empty snapshot, no deletion
-            return Ok(());
-        }
-
-        // check if unconditional deletion
-        if let Some(filter) = &selection {
-            let table_meta = Arc::new(self.clone());
-            let physical_scalars = ExpressionParser::parse_exprs(table_meta, filter)?;
-            if physical_scalars.is_empty() {
-                return Err(ErrorCode::IndexOutOfBounds(
-                    "expression should be valid, but not",
-                ));
-            }
-            self.delete_rows(ctx.clone(), &snapshot, &physical_scalars[0], projection)
-                .await
-        } else {
-            // deleting the whole table... just a truncate
-            let purge = false;
-            self.do_truncate(ctx.clone(), purge).await
-        }
-    }
-
-    async fn delete_rows(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        snapshot: &Arc<TableSnapshot>,
-        filter: &Expression,
-        projection: &Projection,
-    ) -> Result<()> {
-        let cluster_stats_gen = self.cluster_stats_gen()?;
-        let block_compact_thresholds = self.get_block_compact_thresholds();
-        let mut deletion_collector = DeletionMutator::try_create(
-            ctx.clone(),
-            self.get_operator(),
-            self.meta_location_generator.clone(),
-            snapshot.clone(),
-            cluster_stats_gen,
-            block_compact_thresholds,
-        )?;
-        let schema = self.table_info.schema();
-        // TODO refine pruner
-        let extras = PushDownInfo {
-            projection: Some(projection.clone()),
-            filters: vec![filter.clone()],
-            prewhere: None, // TBD: if delete rows need prewhere optimization
-            limit: None,
-            order_by: vec![],
-        };
-        let push_downs = Some(extras);
-        let segments_location = snapshot.segments.clone();
-        let block_metas = BlockPruner::prune(
-            &ctx,
-            self.operator.clone(),
-            schema,
-            &push_downs,
-            segments_location,
-        )
-        .await?;
-
-        // delete block one by one.
-        // this could be executed in a distributed manner (till new planner, pipeline settled down)
-        for (seg_idx, block_meta) in block_metas {
-            let proj = projection.clone();
-            match delete_from_block(self, &block_meta, &ctx, proj, filter).await? {
-                Deletion::NothingDeleted => {
-                    // false positive, we should keep the whole block
-                    continue;
-                }
-                Deletion::Remains(r) => {
-                    // after deletion, the data block `r` remains, let keep it  by replacing the block
-                    // located at `block_meta.location`, of segment indexed by `seg_idx`, with a new block `r`
-                    deletion_collector
-                        .replace_with(
-                            seg_idx.0,
-                            block_meta.location.clone(),
-                            block_meta.cluster_stats.clone(),
-                            r,
-                        )
-                        .await?
-                }
-            }
-        }
-
-        self.commit_deletion(ctx, deletion_collector).await
-    }
-
-    async fn commit_deletion(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        del_holder: DeletionMutator,
-    ) -> Result<()> {
-        let (segments, summary, abort_operation) = del_holder.generate_segments().await?;
-
-        self.commit_mutation(
-            &ctx,
-            del_holder.base_snapshot(),
-            segments,
-            summary,
-            abort_operation,
-        )
-        .await
-    }
-
     pub fn cluster_stats_gen(&self) -> Result<ClusterStatsGenerator> {
         if self.cluster_key_meta.is_none() {
             return Ok(ClusterStatsGenerator::default());
@@ -381,5 +255,11 @@ impl FuseTable {
             0,
             self.get_block_compact_thresholds(),
         ))
+    }
+
+    pub fn all_the_columns_ids(&self) -> Vec<usize> {
+        (0..self.table_info.schema().fields().len())
+            .into_iter()
+            .collect::<Vec<usize>>()
     }
 }

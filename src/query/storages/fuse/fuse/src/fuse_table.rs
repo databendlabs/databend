@@ -496,7 +496,7 @@ impl Table for FuseTable {
         col_indices: Vec<usize>,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
-        self.do_delete2(ctx, filter, col_indices, pipeline).await
+        self.do_delete(ctx, filter, col_indices, pipeline).await
     }
 
     fn get_block_compact_thresholds(&self) -> BlockCompactThresholds {

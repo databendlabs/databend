@@ -14,18 +14,14 @@
 
 pub mod abort_operation;
 pub mod base_mutator;
-pub mod block_filter;
 mod compact;
 mod deletion;
-pub mod deletion_mutator;
 pub mod mutation_meta;
 pub mod mutation_sink;
 pub mod recluster_mutator;
 
 pub use abort_operation::AbortOperation;
 pub use base_mutator::BaseMutator;
-pub use block_filter::all_the_columns_ids;
-pub use block_filter::delete_from_block;
 pub use compact::BlockCompactMutator;
 pub use compact::CompactSource;
 pub use compact::CompactTransform;
@@ -36,7 +32,6 @@ pub use compact::SegmentCompactor;
 pub use deletion::DeletionPartInfo;
 pub use deletion::DeletionSource;
 pub use deletion::DeletionTransform;
-pub use deletion_mutator::DeletionMutator;
 pub use mutation_meta::MutationMeta;
 pub use mutation_sink::MutationSink;
 pub use recluster_mutator::ReclusterMutator;
