@@ -86,7 +86,7 @@ pub async fn do_deletion(
     table: Arc<dyn Table>,
     plan: DeletePlan,
 ) -> Result<()> {
-    let (filter, mut col_indices) = if let Some(scalar) = &plan.selection {
+    let (filter, col_indices) = if let Some(scalar) = &plan.selection {
         let eb = ExpressionBuilderWithoutRenaming::create(plan.metadata.clone());
         (
             Some(eb.build(scalar)?),
@@ -95,7 +95,6 @@ pub async fn do_deletion(
     } else {
         (None, vec![])
     };
-    col_indices.sort();
 
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
     let settings = ctx.get_settings();
