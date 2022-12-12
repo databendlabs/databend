@@ -100,15 +100,6 @@ pub async fn streaming_load(
         .unwrap_or("");
 
     let settings = context.get_settings();
-    for (key, value) in req.headers().iter() {
-        if settings.has_setting(key.as_str()) {
-            let value = value.to_str().map_err(InternalServerError)?;
-            let value = parse_escape_string(remove_quote(value.as_bytes()));
-            settings
-                .set_settings(key.to_string(), value, false)
-                .map_err(InternalServerError)?
-        }
-    }
 
     for (key, value) in req.headers().iter() {
         if settings.has_setting(key.as_str()) {
