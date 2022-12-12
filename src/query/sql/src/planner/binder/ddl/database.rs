@@ -52,11 +52,26 @@ impl<'a> Binder {
         bind_context: &BindContext,
         stmt: &ShowDatabasesStmt<'a>,
     ) -> Result<Plan> {
-        let ShowDatabasesStmt { catalog, limit } = stmt;
+        let ShowDatabasesStmt {
+            catalog,
+            full,
+            limit,
+        } = stmt;
 
         let mut select_builder = SelectBuilder::from("system.databases");
-        select_builder.with_column("catalog AS Catalog");
-        select_builder.with_column("name AS Database");
+
+        let ctl = if let Some(ctl) = catalog {
+            normalize_identifier(ctl, &self.name_resolution_ctx).name
+        } else {
+            self.ctx.get_current_catalog().to_string()
+        };
+
+        select_builder.with_filter(format!("catalog = '{ctl}'"));
+
+        if *full {
+            select_builder.with_column("catalog AS Catalog");
+        }
+        select_builder.with_column(format!("name AS database_in_{ctl}"));
         select_builder.with_order_by("catalog");
         select_builder.with_order_by("name");
         match limit {
@@ -67,11 +82,6 @@ impl<'a> Binder {
                 select_builder.with_filter(format!("({selection})"));
             }
             None => (),
-        }
-
-        if let Some(ctl) = catalog {
-            let ctl = normalize_identifier(ctl, &self.name_resolution_ctx).name;
-            select_builder.with_filter(format!("catalog = '{ctl}'"));
         }
 
         let query = select_builder.build();
