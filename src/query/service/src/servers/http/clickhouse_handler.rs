@@ -314,11 +314,6 @@ pub async fn clickhouse_handler_post(
                 .await
                 .map_err(InternalServerError)?;
 
-            // override settings
-            settings
-                .set_file_format_options(option_settings)
-                .map_err(InternalServerError)?;
-
             let input_context = Arc::new(
                 InputContext::try_create_from_insert_v2(
                     rx,

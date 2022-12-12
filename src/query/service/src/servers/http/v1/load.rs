@@ -179,11 +179,6 @@ pub async fn streaming_load(
                 start,
                 input_context_ref,
             ) => {
-                // override settings with file format options
-                settings
-                    .set_file_format_options(option_settings)
-                    .map_err(InternalServerError)?;
-
                 let sql_rest = &insert_sql[*start..].trim();
                 if !sql_rest.is_empty() {
                     return Err(poem::Error::from_string(
@@ -198,13 +193,13 @@ pub async fn streaming_load(
                 let (tx, rx) = tokio::sync::mpsc::channel(2);
 
                 let input_context = Arc::new(
-                    InputContext::try_create_from_insert(
-                        option_settings.format.to_string().as_str(),
+                    InputContext::try_create_from_insert_v2(
                         rx,
-                        context.get_settings(),
+                        ctx.get_settings(),
+                        option_settings.clone(),
                         schema,
-                        context.get_scan_progress(),
-                        true,
+                        ctx.get_scan_progress(),
+                        false,
                         to_table.get_block_compact_thresholds(),
                     )
                     .await
