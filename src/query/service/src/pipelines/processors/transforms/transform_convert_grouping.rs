@@ -36,7 +36,6 @@ use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
 use crate::pipelines::processors::transforms::TransformMarkJoin;
 use crate::pipelines::processors::AggregatorParams;
 use crate::pipelines::processors::AggregatorTransformParams;
-use crate::pipelines::processors::MarkJoinCompactor;
 use crate::sessions::QueryContext;
 
 static MAX_BUCKET_NUM: isize = 256;
@@ -125,7 +124,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> TransformConvertGroupin
     pub fn get_inputs(&self) -> Vec<Arc<InputPort>> {
         let mut inputs = Vec::with_capacity(self.inputs.len());
 
-        for input in self.inputs {
+        for input in &self.inputs {
             if let InputPortState::Active { port, .. } = input {
                 inputs.push(port.clone());
             }
@@ -168,7 +167,9 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static> Proces
     }
 
     fn event(&mut self) -> Result<Event> {
-        if self.working_bucket == MAX_BUCKET_NUM || self.output.is_finished() {
+        if self.working_bucket >= MAX_BUCKET_NUM || self.output.is_finished() {
+            self.output.finish();
+
             for input in &self.inputs {
                 if let InputPortState::Active { port, .. } = input {
                     port.finish();
@@ -285,7 +286,6 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static> Proces
 
         if self.working_bucket + 1 == next_working_bucket {
             // current working bucket is process completed.
-
             if self.working_bucket == 0 {
                 // all single level data block
                 if self.buckets_blocks.len() == 1 && self.buckets_blocks.contains_key(&-1) {
@@ -325,8 +325,24 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static> Proces
                     self.buckets_blocks.remove(&-2);
                 }
                 Some(data_block) => {
-                    // TODO:
-                    // data_block
+                    if let Some(meta) = data_block.get_meta() {
+                        if let Some(meta) = meta.as_any().downcast_ref::<AggregateInfo>() {
+                            let overflow = meta.overflow.as_ref().unwrap();
+                            for (bucket_id, (offset, length)) in &overflow.bucket_info {
+                                // DataBlock
+                                // DataBlock::empty_with_meta()
+
+                                match self.buckets_blocks.entry(*bucket_id as isize) {
+                                    Entry::Vacant(mut v) => {
+                                        v.insert(vec![]);
+                                    }
+                                    Entry::Occupied(mut v) => {
+                                        // v.get_mut().push()
+                                    }
+                                };
+                            }
+                        }
+                    }
                 }
             };
         }
@@ -359,7 +375,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static> Proces
     }
 }
 
-fn build_convert_grouping<Method: HashMethod + PolymorphicKeysHelper<Method>>(
+fn build_convert_grouping<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static>(
     method: Method,
     pipeline: &mut Pipeline,
     params: Arc<AggregatorParams>,
@@ -379,7 +395,7 @@ fn build_convert_grouping<Method: HashMethod + PolymorphicKeysHelper<Method>>(
     pipeline.resize(input_nums)?;
 
     pipeline.add_transform(|input, output| {
-        MergeBucketTransform::try_Pipcreate(input, output, method.clone(), params.clone())
+        MergeBucketTransform::try_create(input, output, method.clone(), params.clone())
     })
 }
 
@@ -449,7 +465,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static> Proces
 
     fn event(&mut self) -> Result<Event> {
         if self.output.is_finished() {
-            self.input_block.clear();
+            self.input_block.take();
             self.output_blocks.clear();
             self.input.finish();
             return Ok(Event::Finished);
@@ -498,6 +514,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static> Proces
                         self.method.clone(),
                         self.params.clone(),
                     )?;
+
                     self.output_blocks
                         .extend(bucket_merger.merge_blocks(blocks)?);
                 }
@@ -506,10 +523,11 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static> Proces
                         self.method.clone(),
                         self.params.clone(),
                     )?;
+
                     self.output_blocks
                         .extend(bucket_merger.merge_blocks(blocks)?);
                 }
-            }
+            };
         }
 
         Ok(())
