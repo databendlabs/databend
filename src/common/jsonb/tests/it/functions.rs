@@ -364,6 +364,7 @@ fn test_parse_json_path() {
         ]),
         ("\"k1\"", vec![JsonPath::String(Cow::from("k1"))]),
         ("\"k_1\"", vec![JsonPath::String(Cow::from("k_1"))]),
+        ("\"k_1k_2\"", vec![JsonPath::String(Cow::from("k_1k_2"))]),
         ("\"k1k2\"", vec![JsonPath::String(Cow::from("k1k2"))]),
         (r#"k1["k2"][1]"#, vec![
             JsonPath::String(Cow::from("k1")),
@@ -380,6 +381,7 @@ fn test_parse_json_path() {
     let wrong_sources = vec![
         (r#"\"\"\\k1\"\""#, Error::InvalidToken),
         (r#"\\k1\\'"#, Error::InvalidToken),
+        (r#"\"kk\"1\""#, Error::InvalidToken),
     ];
     for (s, expect) in wrong_sources {
         let path = parse_json_path(s.as_bytes());
