@@ -83,16 +83,20 @@ impl<'a> Drop for Entered<'a> {
     }
 }
 
-/// A guard that resets the `UNLIMITED_FLAG` flag when dropped.
-pub struct UnlimitedMemGuard {
+pub struct LimitMemGuard {
     saved: bool,
 }
 
-impl UnlimitedMemGuard {
-    #[allow(unused)]
-    pub(crate) fn enter_unlimited() -> Self {
+impl LimitMemGuard {
+    pub fn enter_unlimited() -> Self {
         let saved = UNLIMITED_FLAG.load(Ordering::Relaxed);
         UNLIMITED_FLAG.store(true, Ordering::Relaxed);
+        Self { saved }
+    }
+
+    pub fn enter_limited() -> Self {
+        let saved = UNLIMITED_FLAG.load(Ordering::Relaxed);
+        UNLIMITED_FLAG.store(false, Ordering::Relaxed);
         Self { saved }
     }
 
@@ -101,7 +105,7 @@ impl UnlimitedMemGuard {
     }
 }
 
-impl Drop for UnlimitedMemGuard {
+impl Drop for LimitMemGuard {
     fn drop(&mut self) {
         UNLIMITED_FLAG.store(self.saved, Ordering::Relaxed);
     }
@@ -207,7 +211,7 @@ impl ThreadTracker {
 
         if let Err(out_of_limit) = res {
             // https://play.rust-lang.org/?version=stable&mode=debug&edition=2021&gist=03d21a15e52c7c0356fca04ece283cf9
-            if !std::thread::panicking() && !UnlimitedMemGuard::is_unlimited() {
+            if !std::thread::panicking() && !LimitMemGuard::is_unlimited() {
                 panic!("{:?}", out_of_limit);
             }
         }
@@ -218,8 +222,6 @@ impl ThreadTracker {
     /// `size` is positive number of bytes of the memory to deallocate.
     #[inline]
     pub fn dealloc(size: i64) {
-        // size > 0
-
         let tracker = unsafe { &mut TRACKER };
 
         let used = tracker.buffer.incr(-size);
@@ -409,6 +411,32 @@ impl<T: Future> Future for TrackedFuture<T> {
         let this = self.project();
 
         let _g = ThreadTracker::enter(this.thread_tracker);
+        this.inner.poll(cx)
+    }
+}
+
+pin_project! {
+    /// A [`Future`] that enters its thread tracker when being polled.
+    #[must_use = "futures do nothing unless you `.await` or poll them"]
+    pub struct UnlimitedFuture<T> {
+        #[pin]
+        inner: T,
+    }
+}
+
+impl<T> UnlimitedFuture<T> {
+    pub fn create(inner: T) -> UnlimitedFuture<T> {
+        UnlimitedFuture::<T> { inner }
+    }
+}
+
+impl<T: Future> Future for UnlimitedFuture<T> {
+    type Output = T::Output;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let _guard = LimitMemGuard::enter_unlimited();
+
+        let this = self.project();
         this.inner.poll(cx)
     }
 }
