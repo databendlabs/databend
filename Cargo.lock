@@ -3069,9 +3069,11 @@ dependencies = [
  "databend-query",
  "limits-rs",
  "openraft",
+ "poem",
  "sentry",
  "serde",
  "serde_json",
+ "sharing-endpoint",
  "tokio-stream",
  "tonic",
  "tracing",
@@ -5770,9 +5772,9 @@ checksum = "0ab1bc2a289d34bd04a330323ac98a1b4bc82c9d9fcb1e66b63caa84da26b575"
 
 [[package]]
 name = "opendal"
-version = "0.22.1"
+version = "0.22.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9176f087790fd937421e3f649db6e85ad47dc63c60bef127402d233ab8f31639"
+checksum = "e2ce68ece2dc033c0faf446fe654b0182de8e8b876aef36d733cca7c95e2601a"
 dependencies = [
  "anyhow",
  "async-compat",
@@ -7702,6 +7704,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "900fba806f70c630b0a382d0d825e17a0f19fcd059a2ade1ff237bcddf446b31"
 dependencies = [
  "lazy_static",
+]
+
+[[package]]
+name = "sharing-endpoint"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "base64",
+ "clap",
+ "common-base",
+ "common-config",
+ "common-exception",
+ "common-storage",
+ "once_cell",
+ "opendal",
+ "poem",
+ "serde",
+ "serde_json",
+ "serfig",
+ "thiserror",
+ "time 0.3.15",
+ "uuid",
 ]
 
 [[package]]
