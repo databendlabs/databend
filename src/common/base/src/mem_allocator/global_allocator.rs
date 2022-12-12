@@ -16,8 +16,10 @@ use std::alloc::AllocError;
 use std::alloc::Allocator;
 use std::alloc::GlobalAlloc;
 use std::alloc::Layout;
+use std::cmp::Ordering::{Equal, Greater, Less};
 use std::ptr::null_mut;
 use std::ptr::NonNull;
+use tracing::error;
 
 use super::je_allocator::JEAllocator;
 use super::system_allocator::SystemAllocator;
@@ -106,23 +108,31 @@ unsafe impl GlobalAlloc for GlobalAllocator {
     unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
         use std::cmp::Ordering::*;
         let ptr = NonNull::new(ptr).unwrap_unchecked();
-        let new_layout = Layout::from_size_align(new_size, layout.align()).unwrap();
-        match layout.size().cmp(&new_size) {
-            Less => {
-                if let Ok(ptr) = GlobalAllocator.grow(ptr, layout, new_layout) {
-                    ptr.as_ptr() as *mut u8
-                } else {
-                    null_mut()
+        match Layout::from_size_align(new_size, layout.align()) {
+            Err(cause) => {
+                error!("cause {:?}", cause);
+                panic!("{:?}", cause);
+            }
+            Ok(new_layout) => {
+                match layout.size().cmp(&new_size) {
+                    Less => {
+                        if let Ok(ptr) = GlobalAllocator.grow(ptr, layout, new_layout) {
+                            ptr.as_ptr() as *mut u8
+                        } else {
+                            null_mut()
+                        }
+                    }
+                    Greater => {
+                        if let Ok(ptr) = GlobalAllocator.shrink(ptr, layout, new_layout) {
+                            ptr.as_ptr() as *mut u8
+                        } else {
+                            null_mut()
+                        }
+                    }
+                    Equal => ptr.as_ptr() as *mut u8,
                 }
             }
-            Greater => {
-                if let Ok(ptr) = GlobalAllocator.shrink(ptr, layout, new_layout) {
-                    ptr.as_ptr() as *mut u8
-                } else {
-                    null_mut()
-                }
-            }
-            Equal => ptr.as_ptr() as *mut u8,
         }
+        // let new_layout = Layout::from_size_align(new_size, layout.align()).unwrap();
     }
 }
