@@ -113,7 +113,7 @@ impl Interpreter for OptimizeTableInterpreter {
         }
 
         if do_purge {
-            table.optimize(self.ctx.clone(), true).await?;
+            table.purge(self.ctx.clone(), true).await?;
         }
 
         Ok(PipelineBuildResult::create())
