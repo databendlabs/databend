@@ -363,6 +363,7 @@ fn test_parse_json_path() {
             JsonPath::String(Cow::from("k3")),
         ]),
         ("\"k1\"", vec![JsonPath::String(Cow::from("k1"))]),
+        ("\"k_1\"", vec![JsonPath::String(Cow::from("k_1"))]),
         ("\"k1k2\"", vec![JsonPath::String(Cow::from("k1k2"))]),
         (r#"k1["k2"][1]"#, vec![
             JsonPath::String(Cow::from("k1")),

@@ -839,15 +839,9 @@ pub fn parse_json_path(path: &[u8]) -> Result<Vec<JsonPath>, Error> {
             }
         } else if c == b'"' {
             prev_idx = idx;
-            loop {
+            while idx < path.len() {
                 let c = read_char(path, &mut idx)?;
-                if c == b'\\' {
-                    idx += 1;
-                    let c = read_char(path, &mut idx)?;
-                    if c == b'"' {
-                        idx += 1;
-                    }
-                } else if c != b'"' {
+                if c != b'"' && c != b'\\' {
                     idx += 1;
                 } else {
                     // Try to read to check if has extra strings, string value can only have one.
