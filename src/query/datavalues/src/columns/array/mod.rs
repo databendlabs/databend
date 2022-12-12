@@ -115,7 +115,7 @@ impl Column for ArrayColumn {
     }
 
     fn as_inner_any(&self) -> Option<&dyn std::any::Any> {
-        Some(self.values.as_any())
+        None
     }
 
     fn data_type(&self) -> DataTypeImpl {

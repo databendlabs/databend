@@ -95,7 +95,7 @@ impl Column for NullableColumn {
     }
 
     fn as_inner_any(&self) -> Option<&dyn std::any::Any> {
-        Some(self.column.as_any())
+        Some(self.inner().as_any())
     }
 
     fn data_type(&self) -> DataTypeImpl {
