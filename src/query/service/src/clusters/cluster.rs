@@ -27,10 +27,10 @@ use common_base::base::tokio::sync::Notify;
 use common_base::base::tokio::task::JoinHandle;
 use common_base::base::tokio::time::sleep as tokio_async_sleep;
 use common_base::base::DummySignalStream;
+use common_base::base::GlobalInstance;
 use common_base::base::GlobalUniqName;
 use common_base::base::SignalStream;
 use common_base::base::SignalType;
-use common_base::base::Singleton;
 pub use common_catalog::cluster_info::Cluster;
 use common_config::Config;
 use common_config::DATABEND_COMMIT_VERSION;
@@ -48,7 +48,6 @@ use futures::future::Either;
 use futures::Future;
 use futures::StreamExt;
 use metrics::gauge;
-use once_cell::sync::OnceCell;
 use rand::thread_rng;
 use rand::Rng;
 use tracing::error;
@@ -137,8 +136,6 @@ impl ClusterHelper for Cluster {
     }
 }
 
-static CLUSTER_DISCOVERY: OnceCell<Singleton<Arc<ClusterDiscovery>>> = OnceCell::new();
-
 impl ClusterDiscovery {
     const METRIC_LABEL_FUNCTION: &'static str = "function";
 
@@ -152,11 +149,10 @@ impl ClusterDiscovery {
         }
     }
 
-    pub async fn init(cfg: Config, v: Singleton<Arc<ClusterDiscovery>>) -> Result<()> {
+    pub async fn init(cfg: Config) -> Result<()> {
         let metastore = ClusterDiscovery::create_meta_client(&cfg).await?;
-        v.init(Self::try_create(&cfg, metastore).await?)?;
+        GlobalInstance::set(Self::try_create(&cfg, metastore).await?);
 
-        CLUSTER_DISCOVERY.set(v).ok();
         Ok(())
     }
 
@@ -179,10 +175,7 @@ impl ClusterDiscovery {
     }
 
     pub fn instance() -> Arc<ClusterDiscovery> {
-        match CLUSTER_DISCOVERY.get() {
-            None => panic!("ClusterDiscovery is not init"),
-            Some(cluster_discovery) => cluster_discovery.get(),
-        }
+        GlobalInstance::get()
     }
 
     fn create_provider(

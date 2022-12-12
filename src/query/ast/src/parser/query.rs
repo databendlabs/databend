@@ -21,7 +21,7 @@ use pratt::Associativity;
 use pratt::PrattParser;
 use pratt::Precedence;
 
-use super::statement::stage_location;
+use super::stage::stage_location;
 use crate::ast::*;
 use crate::input::Input;
 use crate::input::WithSpan;

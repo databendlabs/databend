@@ -55,28 +55,3 @@ impl From<ParquetCompression> for Compression {
         }
     }
 }
-
-#[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq)]
-pub struct ParquetColumnMeta {
-    pub offset: u64,
-    pub length: u64,
-    pub num_values: u64,
-
-    pub compression: Compression,
-}
-
-impl ParquetColumnMeta {
-    pub fn create(
-        offset: u64,
-        length: u64,
-        num_values: u64,
-        compression: Compression,
-    ) -> ParquetColumnMeta {
-        ParquetColumnMeta {
-            offset,
-            length,
-            num_values,
-            compression,
-        }
-    }
-}

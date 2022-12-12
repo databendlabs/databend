@@ -131,6 +131,76 @@ EvalScalar
         ├── order by: []
         └── limit: NONE
 
+statement query T
+explain select count(1) as c, count(b) as d, max(a) as e from t1 order by c, e, d limit 10;
+
+----
+Limit
+├── limit: 10
+├── offset: 0
+└── Sort
+    ├── sort keys: [c ASC NULLS LAST, e ASC NULLS LAST, d ASC NULLS LAST]
+    └── EvalScalar
+        ├── expressions: [count(1) (#8), max(a) (#10), count(b) (#9)]
+        └── AggregateFinal
+            ├── group by: []
+            ├── aggregate functions: [count(), count(b), max(a)]
+            └── Exchange
+                ├── exchange type: Merge
+                └── AggregatePartial
+                    ├── group by: []
+                    ├── aggregate functions: [count(), count(b), max(a)]
+                    └── TableScan
+                        ├── table: default.default.t1
+                        ├── read rows: 0
+                        ├── read bytes: 0
+                        ├── partitions total: 0
+                        ├── partitions scanned: 0
+                        └── push downs: [filters: [], limit: NONE]
+
+statement query T
+explain select (t1.a + 1) as c,(t1.b+1) as d, (t2.a+1) as e from t1 join t2 on t1.a = t2.a order by c, d, e limit 10;
+
+----
+Limit
+├── limit: 10
+├── offset: 0
+└── Sort
+    ├── sort keys: [c ASC NULLS LAST, d ASC NULLS LAST, e ASC NULLS LAST]
+    └── Exchange                
+        ├── exchange type: Merge
+        └── Limit
+            ├── limit: 10
+            ├── offset: 0
+            └── Sort
+                ├── sort keys: [c ASC NULLS LAST, d ASC NULLS LAST, e ASC NULLS LAST]
+                └── EvalScalar
+                    ├── expressions: [+(t1.a (#0), 1), +(t1.b (#1), 1), +(t2.a (#2), 1)]
+                    └── HashJoin
+                        ├── join type: INNER
+                        ├── build keys: [t2.a (#2)]
+                        ├── probe keys: [t1.a (#0)]
+                        ├── filters: []
+                        ├── Exchange(Build)
+                        │   ├── exchange type: Hash(t2.a (#2))
+                        │   └── TableScan
+                        │       ├── table: default.default.t2
+                        │       ├── read rows: 0
+                        │       ├── read bytes: 0
+                        │       ├── partitions total: 0
+                        │       ├── partitions scanned: 0
+                        │       ├── push downs: [filters: [], limit: NONE]
+                        │       └── output columns: [0]
+                        └── Exchange(Probe)
+                            ├── exchange type: Hash(t1.a (#0))
+                            └── TableScan
+                                ├── table: default.default.t1
+                                ├── read rows: 0
+                                ├── read bytes: 0
+                                ├── partitions total: 0
+                                ├── partitions scanned: 0
+                                └── push downs: [filters: [], limit: NONE]
+
 statement ok
 set prefer_broadcast_join = 1;
 

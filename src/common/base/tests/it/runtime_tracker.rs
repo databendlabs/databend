@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::base::MemStat;
-use common_base::base::Runtime;
-use common_base::base::ThreadTracker;
-use common_base::base::TrackedFuture;
-use common_base::base::TrySpawn;
+use common_base::runtime::MemStat;
+use common_base::runtime::Runtime;
+use common_base::runtime::ThreadTracker;
+use common_base::runtime::TrackedFuture;
+use common_base::runtime::TrySpawn;
 use common_exception::Result;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 8)]

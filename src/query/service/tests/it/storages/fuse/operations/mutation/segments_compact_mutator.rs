@@ -632,7 +632,7 @@ impl CompactSegmentTestFixture {
         limit: Option<usize>,
     ) -> Result<SegmentCompactionState> {
         let block_per_seg = self.threshold;
-        let data_accessor = &self.data_accessor;
+        let data_accessor = &self.data_accessor.operator();
         let location_gen = &self.location_gen;
         let block_writer = BlockWriter::new(data_accessor, location_gen);
 
