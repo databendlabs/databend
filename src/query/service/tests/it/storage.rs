@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::base::catch_unwind;
 use common_base::base::tokio;
+use common_base::runtime::catch_unwind;
 use common_exception::Result;
 use common_storage::DataOperator;
 
