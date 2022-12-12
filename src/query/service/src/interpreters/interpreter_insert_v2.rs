@@ -149,6 +149,12 @@ impl Interpreter for InsertInterpreterV2 {
                         .format
                         .exec_stream(input_context.clone(), &mut build_res.main_pipeline)?;
                 }
+                InsertInputSource::StreamingWithFileFormat(_, _, input_context) => {
+                    let input_context = input_context.as_ref().expect("must success").clone();
+                    input_context
+                        .format
+                        .exec_stream(input_context.clone(), &mut build_res.main_pipeline)?;
+                }
                 InsertInputSource::SelectPlan(plan) => {
                     let table1 = table.clone();
                     let (mut select_plan, select_column_bindings) = match plan.as_ref() {
@@ -228,7 +234,8 @@ impl Interpreter for InsertInterpreterV2 {
         }
 
         let append_mode = match &self.plan.source {
-            InsertInputSource::StreamingWithFormat(_, _, _) => AppendMode::Copy,
+            InsertInputSource::StreamingWithFormat(..)
+            | InsertInputSource::StreamingWithFileFormat(..) => AppendMode::Copy,
             _ => AppendMode::Normal,
         };
 
