@@ -62,8 +62,6 @@ use crate::processors::sources::input_formats::input_split::FileInfo;
 use crate::processors::sources::input_formats::input_split::SplitInfo;
 use crate::processors::sources::input_formats::InputFormat;
 
-pub const DEFAULT_ROW_PER_BLOCK: usize = 1000 * 1000;
-
 pub struct InputFormatParquet;
 
 fn col_offset(meta: &ColumnChunkMetaData) -> i64 {
@@ -335,10 +333,11 @@ impl BlockBuilderTrait for ParquetBlockBuilder {
     fn deserialize(&mut self, mut batch: Option<RowGroupInMemory>) -> Result<Vec<DataBlock>> {
         if let Some(rg) = batch.as_mut() {
             let chunk = rg.get_arrow_chunk()?;
+            // Using `block_compact_thresholds` is enough here.
             let blocks = DataBlock::from_chunk_with_row_limit(
                 &self.ctx.schema,
                 &chunk,
-                DEFAULT_ROW_PER_BLOCK,
+                self.ctx.block_compact_thresholds.max_rows_per_block,
             )?;
 
             Ok(blocks)
