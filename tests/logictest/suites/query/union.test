@@ -210,6 +210,64 @@ UnionAll
     ├── partitions scanned: 1
     └── push downs: [filters: [(a > 1)], limit: NONE]
 
+statement query T
+explain select * from t limit 3;
+
+----
+Limit
+├── limit: 3
+├── offset: 0
+└── UnionAll
+    ├── Limit
+    │   ├── limit: 3
+    │   ├── offset: 0
+    │   └── TableScan
+    │       ├── table: default.default.t1
+    │       ├── read rows: 2
+    │       ├── read bytes: 62
+    │       ├── partitions total: 1
+    │       ├── partitions scanned: 1
+    │       └── push downs: [filters: [], limit: 3]
+    └── Limit
+        ├── limit: 3
+        ├── offset: 0
+        └── TableScan
+            ├── table: default.default.t2
+            ├── read rows: 2
+            ├── read bytes: 62
+            ├── partitions total: 1
+            ├── partitions scanned: 1
+            └── push downs: [filters: [], limit: 3]
+
+statement query T
+explain select * from t limit 3 offset 1;
+
+----
+Limit
+├── limit: 3
+├── offset: 1
+└── UnionAll
+    ├── Limit
+    │   ├── limit: 4
+    │   ├── offset: 0
+    │   └── TableScan
+    │       ├── table: default.default.t1
+    │       ├── read rows: 2
+    │       ├── read bytes: 62
+    │       ├── partitions total: 1
+    │       ├── partitions scanned: 1
+    │       └── push downs: [filters: [], limit: 4]
+    └── Limit
+        ├── limit: 4
+        ├── offset: 0
+        └── TableScan
+            ├── table: default.default.t2
+            ├── read rows: 2
+            ├── read bytes: 62
+            ├── partitions total: 1
+            ├── partitions scanned: 1
+            └── push downs: [filters: [], limit: 4]
+
 statement ok
 drop table t1;
 
