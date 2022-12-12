@@ -220,6 +220,10 @@ impl FuseTable {
         self.operator.clone()
     }
 
+    pub fn get_operator_ref(&self) -> &Operator {
+        &self.operator
+    }
+
     pub fn try_from_table(tbl: &dyn Table) -> Result<&FuseTable> {
         tbl.as_any().downcast_ref::<FuseTable>().ok_or_else(|| {
             ErrorCode::Internal(format!(
@@ -434,9 +438,9 @@ impl Table for FuseTable {
     }
 
     #[tracing::instrument(level = "debug", name = "fuse_table_optimize", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
-    async fn optimize(&self, ctx: Arc<dyn TableContext>, keep_last_snapshot: bool) -> Result<()> {
+    async fn purge(&self, ctx: Arc<dyn TableContext>, keep_last_snapshot: bool) -> Result<()> {
         self.check_mutable()?;
-        self.do_gc(&ctx, keep_last_snapshot).await
+        self.do_purge(&ctx, keep_last_snapshot).await
     }
 
     #[tracing::instrument(level = "debug", name = "analyze", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]

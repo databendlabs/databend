@@ -52,7 +52,7 @@ impl FuseTable {
 
             if purge {
                 let keep_last_snapshot = false;
-                self.do_gc(&ctx, keep_last_snapshot).await?
+                self.do_purge(&ctx, keep_last_snapshot).await?
             }
 
             let mut new_table_meta = self.table_info.meta.clone();

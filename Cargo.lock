@@ -6153,8 +6153,7 @@ dependencies = [
 [[package]]
 name = "parquet2"
 version = "0.17.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e0bbada33c3674484db647d889a581ab1105cafb871ba77be785af2cc44a8747"
+source = "git+https://github.com/jorgecarleitao/parquet2?rev=fb08b72#fb08b725aa15d700d2a67c19ef65889b032ae371"
 dependencies = [
  "async-stream",
  "brotli",
@@ -7073,9 +7072,9 @@ dependencies = [
 
 [[package]]
 name = "retain_mut"
-version = "0.1.9"
+version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4389f1d5789befaf6029ebd9f7dac4af7f7e3d61b69d4f30e2ac02b57e7712b0"
+checksum = "8c31b5c4033f8fdde8700e4657be2c497e7288f01515be52168c631e2e4d4086"
 
 [[package]]
 name = "rfc6979"

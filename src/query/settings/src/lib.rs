@@ -164,6 +164,15 @@ impl Settings {
                 desc: "The maximum memory usage for processing single query, in bytes. By default the value is determined automatically.",
                 possible_values: None,
             },
+            // retention_period
+            SettingValue {
+                // unit of retention_period is hour
+                default_value: UserSettingValue::UInt64(12),
+                user_setting: UserSetting::create("retention_period", UserSettingValue::UInt64(12)),
+                level: ScopeLevel::Session,
+                desc: "The retention_period in hours. By default the value is 12 hours.",
+                possible_values: None,
+            },
             // max_storage_io_requests
             SettingValue {
                 default_value: UserSettingValue::UInt64(64),
@@ -517,6 +526,16 @@ impl Settings {
     pub fn set_max_memory_usage(&self, val: u64) -> Result<()> {
         let key = "max_memory_usage";
         self.try_set_u64(key, val, false)
+    }
+
+    pub fn set_retention_period(&self, hours: u64) -> Result<()> {
+        let key = "retention_period";
+        self.try_set_u64(key, hours, false)
+    }
+
+    pub fn get_retention_period(&self) -> Result<u64> {
+        let key = "retention_period";
+        self.try_get_u64(key)
     }
 
     pub fn get_max_storage_io_requests(&self) -> Result<u64> {
