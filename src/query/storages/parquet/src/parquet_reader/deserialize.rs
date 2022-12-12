@@ -45,7 +45,7 @@ impl ParquetReader {
         filter: Option<Bitmap>,
     ) -> Result<DataBlock> {
         let mut chunk_map: HashMap<usize, Vec<u8>> = chunks.into_iter().collect();
-        let mut columns_array_iter = Vec::with_capacity(self.projected_schema.num_fields());
+        let mut columns_array_iter = Vec::with_capacity(self.projected_arrow_schema.fields.len());
 
         let column_leaves = &self.projected_column_leaves.column_leaves;
         let mut cnt_map = Self::build_projection_count_map(column_leaves);
@@ -201,7 +201,7 @@ impl ParquetReader {
                 "deserializer from row group: fail to get a chunk",
             )),
             Some(Err(cause)) => Err(ErrorCode::from(cause)),
-            Some(Ok(chunk)) => DataBlock::from_chunk(&self.projected_schema, &chunk),
+            Some(Ok(chunk)) => DataBlock::from_chunk(&self.output_schema, &chunk),
         }
     }
 

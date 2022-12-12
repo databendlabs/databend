@@ -14,9 +14,9 @@
 
 use std::fs::File;
 
+use common_arrow::arrow::datatypes::Schema as ArrowSchema;
 use common_arrow::arrow::io::parquet::read as pread;
 use common_arrow::parquet::metadata::FileMetaData;
-use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -36,11 +36,11 @@ impl ParquetReader {
     }
 
     #[inline]
-    pub fn infer_schema(meta: &FileMetaData) -> Result<DataSchema> {
+    pub fn infer_schema(meta: &FileMetaData) -> Result<ArrowSchema> {
         let mut arrow_schema = pread::infer_schema(meta)?;
         arrow_schema.fields.iter_mut().for_each(|f| {
             f.name = f.name.to_lowercase();
         });
-        Ok(DataSchema::from(arrow_schema))
+        Ok(arrow_schema)
     }
 }

@@ -37,8 +37,7 @@ use crate::ParquetSource;
 
 impl ParquetTable {
     pub fn create_reader(&self, projection: Projection) -> Result<Arc<ParquetReader>> {
-        let table_schema = self.table_info.schema();
-        ParquetReader::create(self.operator.clone(), table_schema, projection)
+        ParquetReader::create(self.operator.clone(), self.arrow_schema.clone(), projection)
     }
 
     // Build the prewhere reader.
@@ -133,19 +132,15 @@ impl ParquetTable {
         let max_io_requests = self.adjust_io_request(&ctx, columns_to_read.len())?;
         let ctx_ref = ctx.clone();
         // `dummy_reader` is only used for prune columns in row groups.
-        let dummy_reader = ParquetReader::create(
-            self.operator.clone(),
-            plan.source_info.schema(),
-            columns_to_read,
-        )?;
+        let (_, _, _, columns_to_read) =
+            ParquetReader::do_projection(&plan.source_info.schema().to_arrow(), &columns_to_read)?;
         pipeline.set_on_init(move || {
             let mut partitions = Vec::with_capacity(locations.len());
             for location in &locations {
                 let file_meta = ParquetReader::read_meta(location)?;
                 for rg in &file_meta.row_groups {
-                    let mut column_metas =
-                        HashMap::with_capacity(dummy_reader.columns_to_read().len());
-                    for index in dummy_reader.columns_to_read() {
+                    let mut column_metas = HashMap::with_capacity(columns_to_read.len());
+                    for index in &columns_to_read {
                         let c = &rg.columns()[*index];
                         let (offset, length) = c.byte_range();
                         column_metas.insert(*index, ColumnMeta {
@@ -178,8 +173,11 @@ impl ParquetTable {
         let output_schema = Arc::new(output_projection.project_schema(&plan.source_info.schema()));
 
         let prewhere_reader = self.build_prewhere_reader(plan)?;
-        let prewhere_filter =
-            self.build_prewhere_filter_executor(ctx.clone(), plan, prewhere_reader.schema())?;
+        let prewhere_filter = self.build_prewhere_filter_executor(
+            ctx.clone(),
+            plan,
+            prewhere_reader.output_schema(),
+        )?;
         let remain_reader = self.build_remain_reader(plan)?;
 
         // Add source pipe.
