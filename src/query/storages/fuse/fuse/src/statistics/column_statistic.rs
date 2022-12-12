@@ -12,10 +12,12 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_datavalues::Column;
+use common_datavalues::ColumnRef;
 use common_datavalues::ColumnWithField;
 use common_datavalues::DataField;
 use common_datavalues::DataValue;
@@ -39,16 +41,19 @@ pub fn calc_column_distinct_of_values(
     distinct_values.get(0).as_u64()
 }
 
-pub fn get_traverse_columns_dfs(data_block: &DataBlock) -> Result<Vec<Arc<dyn Column>>> {
+pub fn get_traverse_columns_dfs(data_block: &DataBlock) -> Result<Vec<(Option<usize>, ColumnRef)>> {
     traverse::traverse_columns_dfs(data_block.columns())
 }
 
-pub fn gen_columns_statistics(data_block: &DataBlock) -> Result<StatisticsOfColumns> {
+pub fn gen_columns_statistics(
+    data_block: &DataBlock,
+    column_distinct_count: Option<HashMap<usize, usize>>,
+) -> Result<StatisticsOfColumns> {
     let mut statistics = StatisticsOfColumns::new();
 
     let leaves = traverse::traverse_columns_dfs(data_block.columns())?;
 
-    for (idx, col) in leaves.iter().enumerate() {
+    for (idx, (col_idx, col)) in leaves.iter().enumerate() {
         let col_data_type = col.data_type();
         if !MinMaxIndex::is_supported_type(&col_data_type) {
             continue;
@@ -81,7 +86,17 @@ pub fn gen_columns_statistics(data_block: &DataBlock) -> Result<StatisticsOfColu
             }
         }
 
-        let distinct_of_values = calc_column_distinct_of_values(col, column_field)?;
+        // use distinct count calculated by the xor hash function to avoid repetitive operation.
+        let distinct_of_values = match (col_idx, &column_distinct_count) {
+            (Some(col_idx), Some(ref column_distinct_count)) => {
+                if let Some(value) = column_distinct_count.get(col_idx) {
+                    *value as u64
+                } else {
+                    calc_column_distinct_of_values(col, column_field)?
+                }
+            }
+            (_, _) => calc_column_distinct_of_values(col, column_field)?,
+        };
 
         let (is_all_null, bitmap) = col.validity();
         let unset_bits = match (is_all_null, bitmap) {
@@ -113,25 +128,29 @@ pub mod traverse {
     use super::*;
 
     // traverses columns and collects the leaves in depth first manner
-    pub fn traverse_columns_dfs(columns: &[ColumnRef]) -> Result<Vec<ColumnRef>> {
+    pub fn traverse_columns_dfs(columns: &[ColumnRef]) -> Result<Vec<(Option<usize>, ColumnRef)>> {
         let mut leaves = vec![];
-        for f in columns {
-            traverse_recursive(f, &mut leaves)?;
+        for (idx, col) in columns.iter().enumerate() {
+            traverse_recursive(Some(idx), col, &mut leaves)?;
         }
         Ok(leaves)
     }
 
-    fn traverse_recursive(column: &ColumnRef, leaves: &mut Vec<ColumnRef>) -> Result<()> {
+    fn traverse_recursive(
+        idx: Option<usize>,
+        column: &ColumnRef,
+        leaves: &mut Vec<(Option<usize>, ColumnRef)>,
+    ) -> Result<()> {
         match column.data_type() {
             DataTypeImpl::Struct(_) => {
                 let full_column = column.convert_full_column();
                 let struct_col: &StructColumn = Series::check_get(&full_column)?;
-                for f in struct_col.values() {
-                    traverse_recursive(f, leaves)?
+                for col in struct_col.values() {
+                    traverse_recursive(None, col, leaves)?
                 }
             }
             _ => {
-                leaves.push(column.clone());
+                leaves.push((idx, column.clone()));
             }
         }
         Ok(())

@@ -12,6 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+mod analyze;
 mod append;
 mod commit;
 mod compact;
@@ -24,10 +25,10 @@ mod operation_log;
 mod read_data;
 mod read_partitions;
 mod recluster;
-mod statistic;
 mod truncate;
 
 mod fuse_source;
+mod revert;
 pub mod util;
 
 pub use compact::CompactOptions;

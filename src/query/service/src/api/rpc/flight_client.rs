@@ -135,10 +135,18 @@ impl FlightExchange {
     ) -> FlightExchange {
         let mut streaming = streaming.into_inner();
         let (tx, rx) = async_channel::bounded(1);
+
         common_base::base::tokio::spawn(async move {
             while let Some(message) = streaming.next().await {
-                if let Err(_cause) = tx.send(message).await {
-                    break;
+                match message {
+                    Ok(message) if DataPacket::is_closing_client(&message) => {
+                        break;
+                    }
+                    other => {
+                        if let Err(_c) = tx.send(other).await {
+                            break;
+                        }
+                    }
                 }
             }
         });
@@ -159,8 +167,15 @@ impl FlightExchange {
         let (tx, request_rx) = async_channel::bounded(1);
         common_base::base::tokio::spawn(async move {
             while let Some(message) = streaming.next().await {
-                if let Err(_cause) = tx.send(message).await {
-                    break;
+                match message {
+                    Ok(flight_data) if DataPacket::is_closing_client(&flight_data) => {
+                        break;
+                    }
+                    other => {
+                        if let Err(_cause) = tx.send(other).await {
+                            break;
+                        }
+                    }
                 }
             }
         });
@@ -282,7 +297,9 @@ impl ClientFlightExchange {
         if !self.is_closed_response.fetch_or(true, Ordering::SeqCst)
             && self.state.response_count.fetch_sub(1, Ordering::AcqRel) == 1
         {
-            self.response_tx.close();
+            let _ = self
+                .response_tx
+                .send_blocking(FlightData::from(DataPacket::ClosingClient));
         }
     }
 }
@@ -304,17 +321,8 @@ impl Clone for ClientFlightExchange {
 
 impl Drop for ClientFlightExchange {
     fn drop(&mut self) {
-        if !self.is_closed_request.fetch_or(true, Ordering::SeqCst)
-            && self.state.request_count.fetch_sub(1, Ordering::AcqRel) == 1
-        {
-            self.request_rx.close();
-        }
-
-        if !self.is_closed_response.fetch_or(true, Ordering::SeqCst)
-            && self.state.response_count.fetch_sub(1, Ordering::AcqRel) == 1
-        {
-            self.response_tx.close();
-        }
+        self.close_input();
+        self.close_output();
     }
 }
 
@@ -398,7 +406,9 @@ impl ServerFlightExchange {
         if !self.is_closed_response.fetch_or(true, Ordering::SeqCst)
             && self.state.response_count.fetch_sub(1, Ordering::AcqRel) == 1
         {
-            self.response_tx.close();
+            let _ = self
+                .response_tx
+                .send_blocking(Ok(FlightData::from(DataPacket::ClosingClient)));
         }
     }
 }

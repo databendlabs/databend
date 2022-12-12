@@ -16,14 +16,13 @@ use chrono::DateTime;
 use chrono::Utc;
 use common_catalog::catalog::CatalogManager;
 use common_catalog::catalog_kind::CATALOG_DEFAULT;
+use common_config::GlobalConfig;
 use common_exception::Result;
 use poem::web::Json;
 use poem::web::Path;
 use poem::IntoResponse;
 use serde::Deserialize;
 use serde::Serialize;
-
-use crate::sessions::SessionManager;
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Default)]
 pub struct TenantTablesResponse {
@@ -82,8 +81,7 @@ pub async fn list_tenant_tables_handler(
 // This handler returns the statistics about the tables of the current tenant.
 #[poem::handler]
 pub async fn list_tables_handler() -> poem::Result<impl IntoResponse> {
-    let session_mgr = SessionManager::instance();
-    let tenant = &session_mgr.get_conf().query.tenant_id;
+    let tenant = &GlobalConfig::instance().query.tenant_id;
     if tenant.is_empty() {
         return Ok(Json(TenantTablesResponse { tables: vec![] }));
     }

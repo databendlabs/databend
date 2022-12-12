@@ -40,6 +40,7 @@ use crate::plans::AlterTableClusterKeyPlan;
 use crate::plans::AlterUDFPlan;
 use crate::plans::AlterUserPlan;
 use crate::plans::AlterViewPlan;
+use crate::plans::AnalyzeTablePlan;
 use crate::plans::CallPlan;
 use crate::plans::CreateCatalogPlan;
 use crate::plans::CreateDatabasePlan;
@@ -69,6 +70,7 @@ use crate::plans::OptimizeTablePlan;
 use crate::plans::RemoveStagePlan;
 use crate::plans::RenameDatabasePlan;
 use crate::plans::RenameTablePlan;
+use crate::plans::RevertTablePlan;
 use crate::plans::RevokePrivilegePlan;
 use crate::plans::RevokeRolePlan;
 use crate::plans::SetRolePlan;
@@ -138,8 +140,10 @@ pub enum Plan {
     AlterTableClusterKey(Box<AlterTableClusterKeyPlan>),
     DropTableClusterKey(Box<DropTableClusterKeyPlan>),
     ReclusterTable(Box<ReclusterTablePlan>),
+    RevertTable(Box<RevertTablePlan>),
     TruncateTable(Box<TruncateTablePlan>),
     OptimizeTable(Box<OptimizeTablePlan>),
+    AnalyzeTable(Box<AnalyzeTablePlan>),
     ExistsTable(Box<ExistsTablePlan>),
 
     // Insert
@@ -245,6 +249,7 @@ impl Display for Plan {
             Plan::ReclusterTable(_) => write!(f, "ReclusterTable"),
             Plan::TruncateTable(_) => write!(f, "TruncateTable"),
             Plan::OptimizeTable(_) => write!(f, "OptimizeTable"),
+            Plan::AnalyzeTable(_) => write!(f, "AnalyzeTable"),
             Plan::ExistsTable(_) => write!(f, "ExistsTable"),
             Plan::CreateView(_) => write!(f, "CreateView"),
             Plan::AlterView(_) => write!(f, "AlterView"),
@@ -287,6 +292,7 @@ impl Display for Plan {
             Plan::ShowGrantTenantsOfShare(_) => write!(f, "ShowGrantTenantsOfShare"),
             Plan::ExplainAst { .. } => write!(f, "ExplainAst"),
             Plan::ExplainSyntax { .. } => write!(f, "ExplainSyntax"),
+            Plan::RevertTable(..) => write!(f, "RevertTable"),
         }
     }
 }
@@ -325,6 +331,7 @@ impl Plan {
             Plan::ReclusterTable(plan) => plan.schema(),
             Plan::TruncateTable(plan) => plan.schema(),
             Plan::OptimizeTable(plan) => plan.schema(),
+            Plan::AnalyzeTable(plan) => plan.schema(),
             Plan::ExistsTable(plan) => plan.schema(),
             Plan::CreateView(plan) => plan.schema(),
             Plan::AlterView(plan) => plan.schema(),
@@ -365,6 +372,7 @@ impl Plan {
             Plan::ShowShares(plan) => plan.schema(),
             Plan::ShowObjectGrantPrivileges(plan) => plan.schema(),
             Plan::ShowGrantTenantsOfShare(plan) => plan.schema(),
+            Plan::RevertTable(plan) => plan.schema(),
         }
     }
 }

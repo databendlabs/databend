@@ -17,7 +17,7 @@ use std::fmt;
 use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::Bitmap;
-use common_base::base::ThreadPool;
+use common_base::runtime::ThreadPool;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_io::prelude::BinaryWrite;
@@ -216,9 +216,9 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction
 
         if self.get_flag(rhs) == 1 {
             self.set_flag(place, 1);
+            self.nested.merge(place, rhs)?;
         }
-
-        self.nested.merge(place, rhs)
+        Ok(())
     }
 
     fn support_merge_parallel(&self) -> bool {

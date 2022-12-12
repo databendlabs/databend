@@ -129,8 +129,8 @@ impl<T: ValueType> ValueType for ArrayType<T> {
         builder.push_default();
     }
 
-    fn append_builder(builder: &mut Self::ColumnBuilder, other_builder: &Self::ColumnBuilder) {
-        builder.append(other_builder);
+    fn append_column(builder: &mut Self::ColumnBuilder, other_builder: &Self::Column) {
+        builder.append_column(other_builder);
     }
 
     fn build_column(builder: Self::ColumnBuilder) -> Self::Column {
@@ -268,10 +268,9 @@ impl<T: ValueType> ArrayColumnBuilder<T> {
 
     pub fn repeat(array: &T::Column, n: usize) -> Self {
         let mut builder = T::column_to_builder(array.clone());
-        let builder_clone = builder.clone();
         let len = T::builder_len(&builder);
         for _ in 1..n {
-            T::append_builder(&mut builder, &builder_clone)
+            T::append_column(&mut builder, array)
         }
         let offsets = once(0)
             .chain((0..n).map(|i| (len * (i + 1)) as u64))
@@ -296,8 +295,7 @@ impl<T: ValueType> ArrayColumnBuilder<T> {
     }
 
     pub fn push(&mut self, item: T::Column) {
-        let other_col = T::column_to_builder(item);
-        T::append_builder(&mut self.builder, &other_col);
+        T::append_column(&mut self.builder, &item);
         let len = T::builder_len(&self.builder);
         self.offsets.push(len as u64);
     }
@@ -307,8 +305,8 @@ impl<T: ValueType> ArrayColumnBuilder<T> {
         self.offsets.push(len as u64);
     }
 
-    pub fn append(&mut self, other: &Self) {
-        T::append_builder(&mut self.builder, &other.builder);
+    pub fn append_column(&mut self, other: &ArrayColumn<T>) {
+        T::append_column(&mut self.builder, &other.values);
         let end = self.offsets.last().cloned().unwrap();
         self.offsets
             .extend(other.offsets.iter().skip(1).map(|offset| offset + end));

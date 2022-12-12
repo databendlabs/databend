@@ -21,7 +21,7 @@ use std::time::Instant;
 use chrono::DateTime;
 use chrono::Utc;
 use common_base::base::tokio::sync::Semaphore;
-use common_base::base::Runtime;
+use common_base::runtime::Runtime;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -102,6 +102,20 @@ impl SnapshotsIO {
             .map_err(|e| ErrorCode::StorageOther(format!("read snapshots failure, {}", e)))
     }
 
+    // Read all the table statistic files by the root file(exclude the root file).
+    // limit: read how many table statistic files
+    pub async fn read_table_statistic_files(
+        &self,
+        root_ts_file: &str,
+        limit: Option<usize>,
+    ) -> Result<Vec<String>> {
+        // Get all file list.
+        if let Some(prefix) = Self::get_s3_prefix_from_file(root_ts_file) {
+            return self.get_files(&prefix, limit, Some(root_ts_file)).await;
+        }
+        Ok(vec![])
+    }
+
     // Read all the snapshots by the root file.
     // limit: read how many snapshot files
     // with_segment_locations: if true will get the segments of the snapshot
@@ -123,7 +137,7 @@ impl SnapshotsIO {
         let mut snapshot_files = vec![];
         let mut segment_locations = HashSet::new();
         if let Some(prefix) = Self::get_s3_prefix_from_file(&root_snapshot_file) {
-            snapshot_files = self.get_files(&prefix, limit).await?;
+            snapshot_files = self.get_files(&prefix, limit, None).await?;
         }
 
         // 1. Get all the snapshot by chunks.
@@ -199,7 +213,12 @@ impl SnapshotsIO {
         Ok((snapshot_chain, segment_locations))
     }
 
-    async fn get_files(&self, prefix: &str, limit: Option<usize>) -> Result<Vec<String>> {
+    async fn get_files(
+        &self,
+        prefix: &str,
+        limit: Option<usize>,
+        exclude_file: Option<&str>,
+    ) -> Result<Vec<String>> {
         let data_accessor = self.operator.clone();
 
         let mut file_list = vec![];
@@ -207,6 +226,9 @@ impl SnapshotsIO {
         while let Some(de) = ds.try_next().await? {
             match de.mode().await? {
                 ObjectMode::FILE => {
+                    if exclude_file.is_some() && Some(de.path()) == exclude_file {
+                        continue;
+                    }
                     let location = de.path().to_string();
                     let modified = de.last_modified().await?;
                     file_list.push((location, modified));

@@ -34,7 +34,7 @@ runs:
 
     - name: Upload artifact to github
       if: steps.info.outputs.src == 'github'
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       with:
         name: ${{ inputs.profile }}-${{ inputs.sha }}-${{ inputs.target }}-${{ inputs.category }}
         path: ./target/${{ inputs.target }}/${{ inputs.profile }}/databend-*

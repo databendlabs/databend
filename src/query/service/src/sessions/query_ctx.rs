@@ -26,13 +26,12 @@ use chrono_tz::Tz;
 use common_base::base::tokio::task::JoinHandle;
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
-use common_base::base::TrySpawn;
+use common_base::runtime::TrySpawn;
 use common_catalog::plan::DataSourceInfo;
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::StageTableInfo;
-use common_config::Config;
 use common_config::DATABEND_COMMIT_VERSION;
 use common_datablocks::DataBlock;
 use common_datavalues::DataValue;
@@ -274,9 +273,6 @@ impl TableContext for QueryContext {
 
     fn get_current_database(&self) -> String {
         self.shared.get_current_database()
-    }
-    fn get_config(&self) -> Config {
-        self.shared.get_config()
     }
     fn get_current_user(&self) -> Result<UserInfo> {
         self.shared.get_current_user()

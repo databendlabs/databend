@@ -14,6 +14,7 @@ test = false
 [dependencies]
 common-base = { path = "../../../common/base" }
 common-catalog = { path = "../../catalog" }
+common-config = { path = "../../../common/../query/config" }
 common-datablocks = { path = "../../datablocks" }
 common-datavalues = { path = "../../datavalues" }
 common-exception = { path = "../../../common/exception" }
@@ -42,7 +43,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 serde_repr = "0.1.9"
 snailquote = "0.3.1"
-tikv-jemalloc-ctl = { version = "0.4.2", features = ["use_std"] }
+tikv-jemalloc-ctl = { version = "0.5.0", features = ["use_std"] }
 tracing = "0.1.36"
 typetag = "0.2.3"
 uuid = { version = "1.1.2", features = ["serde", "v4"] }

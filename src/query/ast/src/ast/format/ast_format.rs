@@ -1318,6 +1318,13 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                     AstFormatContext::with_children(action_name, children.len());
                 FormatTreeNode::with_children(action_format_ctx, children)
             }
+            AlterTableAction::RevertTo { point } => {
+                self.visit_time_travel_point(point);
+                let point_node = self.children.pop().unwrap();
+                let action_name = "Action RevertTo".to_string();
+                let action_format_ctx = AstFormatContext::with_children(action_name, 1);
+                FormatTreeNode::with_children(action_format_ctx, vec![point_node])
+            }
         };
 
         let name = "AlterTable".to_string();
@@ -1359,6 +1366,17 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         }
 
         let name = "OptimizeTable".to_string();
+        let format_ctx = AstFormatContext::with_children(name, children.len());
+        let node = FormatTreeNode::with_children(format_ctx, children);
+        self.children.push(node);
+    }
+
+    fn visit_analyze_table(&mut self, stmt: &'ast AnalyzeTableStmt<'ast>) {
+        let mut children = Vec::new();
+        self.visit_table_ref(&stmt.catalog, &stmt.database, &stmt.table);
+        children.push(self.children.pop().unwrap());
+
+        let name = "AnalyzeTable".to_string();
         let format_ctx = AstFormatContext::with_children(name, children.len());
         let node = FormatTreeNode::with_children(format_ctx, children);
         self.children.push(node);
@@ -2188,6 +2206,31 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                 let format_ctx = AstFormatContext::with_children(name, 1);
                 let node = FormatTreeNode::with_children(format_ctx, vec![child]);
                 self.children.push(node);
+            }
+            TableReference::Stage {
+                span: _,
+                location,
+                files,
+                alias,
+            } => {
+                let mut children = Vec::new();
+                if !files.is_empty() {
+                    let files = files.join(",");
+                    let files = format!("files = {}", files);
+                    children.push(FormatTreeNode::new(AstFormatContext::new(files)))
+                }
+                let stage_name = format!("Stage {:?}", location);
+                let format_ctx = if let Some(alias) = alias {
+                    AstFormatContext::with_children_alias(
+                        stage_name,
+                        children.len(),
+                        Some(format!("{}", alias)),
+                    )
+                } else {
+                    AstFormatContext::with_children(stage_name, children.len())
+                };
+                let node = FormatTreeNode::with_children(format_ctx, children);
+                self.children.push(node)
             }
         }
     }

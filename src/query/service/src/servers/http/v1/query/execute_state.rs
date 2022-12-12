@@ -20,10 +20,10 @@ use std::time::SystemTime;
 
 use common_base::base::tokio::sync::mpsc;
 use common_base::base::tokio::sync::RwLock;
-use common_base::base::GlobalIORuntime;
 use common_base::base::ProgressValues;
-use common_base::base::Thread;
-use common_base::base::TrySpawn;
+use common_base::runtime::GlobalIORuntime;
+use common_base::runtime::Thread;
+use common_base::runtime::TrySpawn;
 use common_datablocks::DataBlock;
 use common_datablocks::SendableDataBlockStream;
 use common_datavalues::DataSchemaRef;

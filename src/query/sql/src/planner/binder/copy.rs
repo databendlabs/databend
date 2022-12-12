@@ -24,14 +24,15 @@ use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
 use common_ast::Backtrace;
 use common_ast::Dialect;
+use common_base::base::unescape_string;
 use common_catalog::plan::DataSourceInfo;
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::StageTableInfo;
 use common_catalog::table_context::TableContext;
+use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_io::prelude::parse_escape_string;
 use common_meta_types::FileFormatOptions;
 use common_meta_types::StageFileFormatType;
 use common_meta_types::UserStageInfo;
@@ -241,7 +242,9 @@ impl<'a> Binder {
                 schema: table.schema(),
                 user_stage_info: stage_info,
                 path,
-                files: vec![],
+                files: stmt.files.clone(),
+                pattern: stmt.pattern.clone(),
+                files_to_copy: None,
             }),
             scan_fields: None,
             parts: Partitions::default(),
@@ -258,8 +261,6 @@ impl<'a> Binder {
             table_id: table.get_id(),
             schema: table.schema(),
             from: Box::new(from),
-            files: stmt.files.clone(),
-            pattern: stmt.pattern.clone(),
             validation_mode,
             force: stmt.force,
         })))
@@ -285,7 +286,7 @@ impl<'a> Binder {
             .await?;
 
         let (storage_params, path) = parse_uri_location(src_uri_location)?;
-        if !storage_params.is_secure() && !self.ctx.get_config().storage.allow_insecure {
+        if !storage_params.is_secure() && !GlobalConfig::instance().storage.allow_insecure {
             return Err(ErrorCode::StorageInsecure(
                 "copy from insecure storage is not allowed",
             ));
@@ -293,14 +294,15 @@ impl<'a> Binder {
 
         let mut stage_info = UserStageInfo::new_external_stage(storage_params, &path);
         self.apply_stage_options(stmt, &mut stage_info)?;
-
         let from = DataSourcePlan {
             catalog: dst_catalog_name.to_string(),
             source_info: DataSourceInfo::StageSource(StageTableInfo {
                 schema: table.schema(),
                 user_stage_info: stage_info,
                 path,
-                files: vec![],
+                files: stmt.files.clone(),
+                pattern: stmt.pattern.clone(),
+                files_to_copy: None,
             }),
             scan_fields: None,
             parts: Partitions::default(),
@@ -317,8 +319,6 @@ impl<'a> Binder {
             table_id: table.get_id(),
             schema: table.schema(),
             from: Box::new(from),
-            files: stmt.files.clone(),
-            pattern: stmt.pattern.clone(),
             validation_mode,
             force: stmt.force,
         })))
@@ -404,7 +404,7 @@ impl<'a> Binder {
             .map_err(ErrorCode::SyntaxException)?;
 
         let (storage_params, path) = parse_uri_location(dst_uri_location)?;
-        if !storage_params.is_secure() && !self.ctx.get_config().storage.allow_insecure {
+        if !storage_params.is_secure() && !GlobalConfig::instance().storage.allow_insecure {
             return Err(ErrorCode::StorageInsecure(
                 "copy into insecure storage is not allowed",
             ));
@@ -468,7 +468,7 @@ impl<'a> Binder {
             .map_err(ErrorCode::SyntaxException)?;
 
         let (storage_params, path) = parse_uri_location(dst_uri_location)?;
-        if !storage_params.is_secure() && !self.ctx.get_config().storage.allow_insecure {
+        if !storage_params.is_secure() && !GlobalConfig::instance().storage.allow_insecure {
             return Err(ErrorCode::StorageInsecure(
                 "copy into insecure storage is not allowed",
             ));
@@ -611,54 +611,44 @@ pub fn parse_copy_file_format_options(
         .parse::<u64>()?;
 
     // Field delimiter.
-    let field_delimiter = parse_escape_string(
+    let field_delimiter = unescape_string(
         file_format_options
             .get("field_delimiter")
-            .unwrap_or(&"".to_string())
-            .as_bytes(),
-    );
+            .unwrap_or(&"".to_string()),
+    )?;
 
     // Record delimiter.
-    let record_delimiter = parse_escape_string(
+    let record_delimiter = unescape_string(
         file_format_options
             .get("record_delimiter")
-            .unwrap_or(&"".to_string())
-            .as_bytes(),
-    );
+            .unwrap_or(&"".to_string()),
+    )?;
 
     // NaN display.
-    let nan_display = parse_escape_string(
+    let nan_display = unescape_string(
         file_format_options
             .get("nan_display")
-            .unwrap_or(&"".to_string())
-            .as_bytes(),
-    );
+            .unwrap_or(&"".to_string()),
+    )?;
 
     // Escape
-    let escape = parse_escape_string(
-        file_format_options
-            .get("escape")
-            .unwrap_or(&"".to_string())
-            .as_bytes(),
-    );
+    let escape = unescape_string(file_format_options.get("escape").unwrap_or(&"".to_string()))?;
 
     // Compression delimiter.
-    let compression = parse_escape_string(
+    let compression = unescape_string(
         file_format_options
             .get("compression")
-            .unwrap_or(&"none".to_string())
-            .as_bytes(),
-    )
+            .unwrap_or(&"none".to_string()),
+    )?
     .parse()
     .map_err(ErrorCode::UnknownCompressionType)?;
 
     // Row tag in xml.
-    let row_tag = parse_escape_string(
+    let row_tag = unescape_string(
         file_format_options
             .get("row_tag")
-            .unwrap_or(&"".to_string())
-            .as_bytes(),
-    );
+            .unwrap_or(&"".to_string()),
+    )?;
 
     Ok(FileFormatOptions {
         format: file_format,

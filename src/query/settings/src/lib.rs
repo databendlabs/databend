@@ -22,8 +22,8 @@ use std::str;
 use std::sync::Arc;
 
 use common_ast::Dialect;
-use common_base::base::GlobalIORuntime;
-use common_base::base::TrySpawn;
+use common_base::runtime::GlobalIORuntime;
+use common_base::runtime::TrySpawn;
 use common_config::Config;
 use common_exception::ErrorCode;
 use common_exception::Result;

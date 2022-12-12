@@ -73,7 +73,7 @@ impl Sink for SubqueryReceiveSink {
     fn consume(&mut self, data_block: DataBlock) -> Result<()> {
         for column_index in 0..data_block.num_columns() {
             let column = data_block.column(column_index);
-            let mut values = column.to_values();
+            let mut values = (0..column.len()).map(|i| column.get(i)).collect();
             self.input_columns[column_index].append(&mut values)
         }
 

@@ -29,6 +29,7 @@ use crate::interpreters::interpreter_copy_v2::CopyInterpreterV2;
 use crate::interpreters::interpreter_presign::PresignInterpreter;
 use crate::interpreters::interpreter_role_show::ShowRolesInterpreter;
 use crate::interpreters::interpreter_table_create_v2::CreateTableInterpreterV2;
+use crate::interpreters::interpreter_table_revert::RevertTableInterpreter;
 use crate::interpreters::AlterUserInterpreter;
 use crate::interpreters::CreateShareInterpreter;
 use crate::interpreters::DropShareInterpreter;
@@ -155,6 +156,10 @@ impl InterpreterFactory {
             Plan::OptimizeTable(optimize_table) => Ok(Arc::new(
                 OptimizeTableInterpreter::try_create(ctx, *optimize_table.clone())?,
             )),
+            Plan::AnalyzeTable(analyze_table) => Ok(Arc::new(AnalyzeTableInterpreter::try_create(
+                ctx,
+                *analyze_table.clone(),
+            )?)),
             Plan::ExistsTable(exists_table) => Ok(Arc::new(ExistsTableInterpreter::try_create(
                 ctx,
                 *exists_table.clone(),
@@ -313,6 +318,10 @@ impl InterpreterFactory {
             Plan::ShowGrantTenantsOfShare(p) => Ok(Arc::new(
                 ShowGrantTenantsOfShareInterpreter::try_create(ctx, *p.clone())?,
             )),
+            Plan::RevertTable(p) => Ok(Arc::new(RevertTableInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
         }
     }
 }

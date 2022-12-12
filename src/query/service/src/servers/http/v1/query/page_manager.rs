@@ -17,8 +17,8 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use common_base::base::tokio;
-use common_base::base::GlobalIORuntime;
-use common_base::base::TrySpawn;
+use common_base::runtime::GlobalIORuntime;
+use common_base::runtime::TrySpawn;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;

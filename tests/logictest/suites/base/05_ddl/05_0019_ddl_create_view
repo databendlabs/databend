@@ -69,3 +69,15 @@ drop view default.v0;
 
 statement ok
 drop database test_view;
+
+
+statement ok
+create table default.c like information_schema.keywords;
+
+statement ok
+select * from c;
+
+statement ok
+drop table c;
+
+

@@ -13,18 +13,23 @@
 //  limitations under the License.
 
 use std::any::Any;
+use std::collections::hash_map::DefaultHasher;
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
+use std::hash::Hash;
+use std::hash::Hasher;
 use std::sync::Arc;
 
+use common_catalog::plan::PartInfo;
 use opendal::raw::CompressAlgorithm;
 
+#[typetag::serde(tag = "type")]
 pub trait DynData: Send + Sync + 'static {
     fn as_any(&self) -> &dyn Any;
 }
 
-#[derive(Debug)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Eq)]
 pub struct FileInfo {
     pub path: String,
     pub size: usize,
@@ -32,6 +37,13 @@ pub struct FileInfo {
     pub compress_alg: Option<CompressAlgorithm>,
 }
 
+impl PartialEq for FileInfo {
+    fn eq(&self, other: &Self) -> bool {
+        self.path == other.path
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub struct SplitInfo {
     pub file: Arc<FileInfo>,
     pub seq_in_file: usize,
@@ -39,6 +51,37 @@ pub struct SplitInfo {
     pub size: usize,
     pub num_file_splits: usize,
     pub format_info: Option<Arc<dyn DynData>>,
+}
+
+impl PartialEq for SplitInfo {
+    fn eq(&self, other: &Self) -> bool {
+        self.file == other.file
+            && self.seq_in_file == other.seq_in_file
+            && self.num_file_splits == other.num_file_splits
+    }
+}
+
+impl Eq for SplitInfo {}
+
+#[typetag::serde(name = "stage_file_partition")]
+impl PartInfo for SplitInfo {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn equals(&self, info: &Box<dyn PartInfo>) -> bool {
+        match info.as_any().downcast_ref::<SplitInfo>() {
+            None => false,
+            Some(other) => self == other,
+        }
+    }
+
+    fn hash(&self) -> u64 {
+        let mut s = DefaultHasher::new();
+        self.file.path.hash(&mut s);
+        self.seq_in_file.hash(&mut s);
+        s.finish()
+    }
 }
 
 impl Debug for SplitInfo {

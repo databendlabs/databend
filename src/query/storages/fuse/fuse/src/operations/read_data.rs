@@ -14,12 +14,12 @@
 
 use std::sync::Arc;
 
-use common_base::base::Runtime;
+use common_base::runtime::Runtime;
 use common_catalog::plan::DataSourcePlan;
-use common_catalog::plan::PrewhereInfo;
 use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table_context::TableContext;
+use common_config::GlobalConfig;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -49,34 +49,14 @@ impl FuseTable {
         BlockReader::create(self.operator.clone(), table_schema, projection)
     }
 
-    pub fn projection_of_push_downs(&self, push_downs: &Option<PushDownInfo>) -> Projection {
-        if let Some(PushDownInfo {
-            projection: Some(prj),
-            ..
-        }) = push_downs
-        {
-            prj.clone()
-        } else {
-            let indices = (0..self.table_info.schema().fields().len())
-                .into_iter()
-                .collect::<Vec<usize>>();
-            Projection::Columns(indices)
-        }
-    }
-
-    fn prewhere_of_push_downs(&self, push_downs: &Option<PushDownInfo>) -> Option<PrewhereInfo> {
-        if let Some(PushDownInfo { prewhere, .. }) = push_downs {
-            prewhere.clone()
-        } else {
-            None
-        }
-    }
-
     // Build the block reader.
     fn build_block_reader(&self, plan: &DataSourcePlan) -> Result<Arc<BlockReader>> {
-        match self.prewhere_of_push_downs(&plan.push_downs) {
+        match PushDownInfo::prewhere_of_push_downs(&plan.push_downs) {
             None => {
-                let projection = self.projection_of_push_downs(&plan.push_downs);
+                let projection = PushDownInfo::projection_of_push_downs(
+                    &self.table_info.schema(),
+                    &plan.push_downs,
+                );
                 self.create_block_reader(projection)
             }
             Some(v) => self.create_block_reader(v.output_columns),
@@ -85,9 +65,12 @@ impl FuseTable {
 
     // Build the prewhere reader.
     fn build_prewhere_reader(&self, plan: &DataSourcePlan) -> Result<Arc<BlockReader>> {
-        match self.prewhere_of_push_downs(&plan.push_downs) {
+        match PushDownInfo::prewhere_of_push_downs(&plan.push_downs) {
             None => {
-                let projection = self.projection_of_push_downs(&plan.push_downs);
+                let projection = PushDownInfo::projection_of_push_downs(
+                    &self.table_info.schema(),
+                    &plan.push_downs,
+                );
                 self.create_block_reader(projection)
             }
             Some(v) => self.create_block_reader(v.prewhere_columns),
@@ -101,27 +84,31 @@ impl FuseTable {
         plan: &DataSourcePlan,
         schema: DataSchemaRef,
     ) -> Result<Arc<Option<EvalNode>>> {
-        Ok(match self.prewhere_of_push_downs(&plan.push_downs) {
-            None => Arc::new(None),
-            Some(v) => {
-                let executor = Evaluator::eval_expression(&v.filter, schema.as_ref())?;
-                Arc::new(Some(executor))
-            }
-        })
+        Ok(
+            match PushDownInfo::prewhere_of_push_downs(&plan.push_downs) {
+                None => Arc::new(None),
+                Some(v) => {
+                    let executor = Evaluator::eval_expression(&v.filter, schema.as_ref())?;
+                    Arc::new(Some(executor))
+                }
+            },
+        )
     }
 
     // Build the remain reader.
     fn build_remain_reader(&self, plan: &DataSourcePlan) -> Result<Arc<Option<BlockReader>>> {
-        Ok(match self.prewhere_of_push_downs(&plan.push_downs) {
-            None => Arc::new(None),
-            Some(v) => {
-                if v.remain_columns.is_empty() {
-                    Arc::new(None)
-                } else {
-                    Arc::new(Some((*self.create_block_reader(v.remain_columns)?).clone()))
+        Ok(
+            match PushDownInfo::prewhere_of_push_downs(&plan.push_downs) {
+                None => Arc::new(None),
+                Some(v) => {
+                    if v.remain_columns.is_empty() {
+                        Arc::new(None)
+                    } else {
+                        Arc::new(Some((*self.create_block_reader(v.remain_columns)?).clone()))
+                    }
                 }
-            }
-        })
+            },
+        )
     }
 
     fn adjust_io_request(
@@ -135,7 +122,7 @@ impl FuseTable {
                 ctx.get_settings().get_max_threads()? as usize
             }
             ReadDataKind::BlockDataAdjustIORequests => {
-                let conf = ctx.get_config();
+                let conf = GlobalConfig::instance();
                 let mut max_memory_usage = ctx.get_settings().get_max_memory_usage()? as usize;
                 if conf.query.table_cache_enabled {
                     // Removing bloom index memory size.
@@ -212,7 +199,8 @@ impl FuseTable {
             });
         }
 
-        let projection = self.projection_of_push_downs(&plan.push_downs);
+        let projection =
+            PushDownInfo::projection_of_push_downs(&self.table_info.schema(), &plan.push_downs);
         let max_io_requests = self.adjust_io_request(&ctx, &projection, read_kind)?;
         let block_reader = self.build_block_reader(plan)?;
         let prewhere_reader = self.build_prewhere_reader(plan)?;

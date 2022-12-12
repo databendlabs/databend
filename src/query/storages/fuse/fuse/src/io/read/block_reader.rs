@@ -34,6 +34,8 @@ use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_storage::ColumnLeaf;
+use common_storage::ColumnLeaves;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::Compression;
 use futures::StreamExt;
@@ -43,8 +45,6 @@ use opendal::Operator;
 use tracing::debug_span;
 use tracing::Instrument;
 
-use crate::fuse_part::ColumnLeaf;
-use crate::fuse_part::ColumnLeaves;
 use crate::fuse_part::ColumnMeta;
 use crate::fuse_part::FusePartInfo;
 
@@ -150,7 +150,7 @@ impl BlockReader {
         let mut columns_meta: HashMap<usize, ColumnMeta> =
             HashMap::with_capacity(meta.col_metas.len());
 
-        let columns = self.column_leaves.get_by_projection(&self.projection)?;
+        let columns = self.projection.project_column_leaves(&self.column_leaves)?;
         let indices = Self::build_projection_indices(&columns);
         for index in indices {
             let column_meta = &meta.col_metas[&(index as u32)];
@@ -220,7 +220,7 @@ impl BlockReader {
         let num_cols = self.projection.len();
         let mut column_chunk_futs = Vec::with_capacity(num_cols);
 
-        let columns = self.column_leaves.get_by_projection(&self.projection)?;
+        let columns = self.projection.project_column_leaves(&self.column_leaves)?;
         let indices = Self::build_projection_indices(&columns);
         for index in indices {
             let column_meta = &part.columns_meta[&index];
@@ -287,7 +287,7 @@ impl BlockReader {
         let mut columns_array_iter = Vec::with_capacity(self.projection.len());
 
         let num_rows = part.nums_rows;
-        let columns = self.column_leaves.get_by_projection(&self.projection)?;
+        let columns = self.projection.project_column_leaves(&self.column_leaves)?;
         let mut cnt_map = Self::build_projection_count_map(&columns);
         for column in &columns {
             let field = column.field.clone();
@@ -326,7 +326,7 @@ impl BlockReader {
 
     pub async fn read_columns_data(&self, part: PartInfoPtr) -> Result<Vec<(usize, Vec<u8>)>> {
         let part = FusePartInfo::from_part(&part)?;
-        let columns = self.column_leaves.get_by_projection(&self.projection)?;
+        let columns = self.projection.project_column_leaves(&self.column_leaves)?;
         let indices = Self::build_projection_indices(&columns);
         let mut join_handlers = Vec::with_capacity(indices.len());
 
@@ -350,7 +350,7 @@ impl BlockReader {
     pub fn sync_read_columns_data(&self, part: PartInfoPtr) -> Result<Vec<(usize, Vec<u8>)>> {
         let part = FusePartInfo::from_part(&part)?;
 
-        let columns = self.column_leaves.get_by_projection(&self.projection)?;
+        let columns = self.projection.project_column_leaves(&self.column_leaves)?;
         let indices = Self::build_projection_indices(&columns);
         let mut results = Vec::with_capacity(indices.len());
 
@@ -430,6 +430,9 @@ impl BlockReader {
                 Err(ErrorCode::StorageOther(err_msg))
             }
             Compression::Lz4Raw => Ok(ParquetCompression::Lz4Raw),
+            Compression::Snappy => Ok(ParquetCompression::Snappy),
+            Compression::Zstd => Ok(ParquetCompression::Zstd),
+            Compression::Gzip => Ok(ParquetCompression::Gzip),
         }
     }
 

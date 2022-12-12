@@ -16,15 +16,16 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 use std::time::Instant;
 
+use common_base::base::convert_byte_size;
+use common_base::base::convert_number_size;
 use common_base::base::tokio::io::AsyncWrite;
-use common_base::base::TrySpawn;
+use common_base::runtime::TrySpawn;
 use common_config::DATABEND_COMMIT_VERSION;
 use common_datablocks::DataBlock;
 use common_datablocks::SendableDataBlockStream;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
-use common_io::prelude::*;
 use common_users::CertifiedInfo;
 use common_users::UserApiProvider;
 use futures_util::StreamExt;
@@ -306,6 +307,10 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
     // Check the query is a federated or driver setup command.
     // Here we fake some values for the command which Databend not supported.
     fn federated_server_command_check(&self, query: &str) -> Option<DataBlock> {
+        // INSERT don't need MySQL federated check
+        if query.len() > 6 && query[..6].eq_ignore_ascii_case("INSERT") {
+            return None;
+        }
         let federated = MySQLFederated::create();
         federated.check(query)
     }
