@@ -46,6 +46,10 @@ impl Column for ConstColumn {
         self
     }
 
+    fn as_inner_any(&self) -> Option<&dyn std::any::Any> {
+        Some(self.column.as_any())
+    }
+
     fn data_type(&self) -> DataTypeImpl {
         self.column.data_type()
     }
@@ -141,5 +145,17 @@ impl Column for ConstColumn {
 
     fn serialize(&self, vec: &mut Vec<u8>, _row: usize) {
         self.column.serialize(vec, 0);
+    }
+}
+
+impl std::fmt::Debug for ConstColumn {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "ConstColumn \t typeid: {:?}\t len: {}\t data: [{:?}]",
+            self.data_type_id(),
+            self.len(),
+            self.column,
+        )
     }
 }

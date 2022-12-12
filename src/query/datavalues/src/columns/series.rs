@@ -57,14 +57,27 @@ impl Series {
     }
 
     pub fn check_get<T: 'static + Column>(column: &ColumnRef) -> Result<&T> {
-        let arr = column.as_any().downcast_ref::<T>().ok_or_else(|| {
-            ErrorCode::UnknownColumn(format!(
-                "downcast column error, column type: {:?}, expected column: {:?}",
-                column.column_type_name(),
-                std::any::type_name::<T>(),
-            ))
-        });
-        arr
+        match column.as_any().downcast_ref::<T>() {
+            Some(arr) => Ok(arr),
+            None => {
+                if let Some(any_inner) = column.as_inner_any() {
+                    let arr = any_inner.downcast_ref::<T>().ok_or_else(|| {
+                        ErrorCode::UnknownColumn(format!(
+                            "downcast column error, column type: {:?}, expected column: {:?}",
+                            column.column_type_name(),
+                            std::any::type_name::<T>(),
+                        ))
+                    });
+                    arr
+                } else {
+                    Err(ErrorCode::UnknownColumn(format!(
+                        "downcast column error, column type: {:?}, expected column: {:?}",
+                        column.column_type_name(),
+                        std::any::type_name::<T>(),
+                    )))
+                }
+            }
+        }
     }
 
     pub fn check_get_mutable_column<T: 'static + MutableColumn>(

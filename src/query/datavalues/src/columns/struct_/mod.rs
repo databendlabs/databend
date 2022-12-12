@@ -75,6 +75,10 @@ impl Column for StructColumn {
         self
     }
 
+    fn as_inner_any(&self) -> Option<&dyn std::any::Any> {
+        None
+    }
+
     fn data_type(&self) -> DataTypeImpl {
         self.data_type.clone()
     }

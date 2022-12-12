@@ -94,6 +94,10 @@ impl Column for NullableColumn {
         self
     }
 
+    fn as_inner_any(&self) -> Option<&dyn std::any::Any> {
+        Some(self.column.as_any())
+    }
+
     fn data_type(&self) -> DataTypeImpl {
         let nest = self.column.data_type();
         NullableType::new_impl(nest)
