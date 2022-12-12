@@ -28,6 +28,7 @@ use common_datavalues::NullType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::FunctionContext;
+use common_sql::evaluator::ChunkOperator;
 use common_sql::evaluator::EvalNode;
 use common_sql::evaluator::Evaluator;
 use common_storages_table_meta::meta::Location;
@@ -264,15 +265,18 @@ impl FuseTable {
 
         let cluster_keys = self.cluster_keys();
         let mut cluster_key_index = Vec::with_capacity(cluster_keys.len());
-        let mut extra_key_index = Vec::with_capacity(cluster_keys.len());
+        let mut operators = Vec::with_capacity(cluster_keys.len());
         for expr in &cluster_keys {
             let cname = expr.column_name();
             let index = match merged.iter().position(|x| x.name() == &cname) {
                 None => {
                     let field = DataField::new(&cname, expr.data_type());
-                    merged.push(field);
+                    operators.push(ChunkOperator::Map {
+                        eval: Evaluator::eval_expression(expr, &input_schema)?,
+                        name: field.name().to_string(),
+                    });
 
-                    extra_key_index.push(merged.len() - 1);
+                    merged.push(field);
                     merged.len() - 1
                 }
                 Some(idx) => idx,
@@ -283,9 +287,10 @@ impl FuseTable {
         Ok(ClusterStatsGenerator::new(
             self.cluster_key_meta.as_ref().unwrap().0,
             cluster_key_index,
-            extra_key_index,
+            vec![],
             0,
             self.get_block_compact_thresholds(),
+            operators,
         ))
     }
 
