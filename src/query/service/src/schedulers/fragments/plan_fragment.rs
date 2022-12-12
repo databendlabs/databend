@@ -125,34 +125,36 @@ impl PlanFragment {
             ));
         }
 
-        let read_source = self.get_read_source()?;
+        let read_sources = self.get_read_source()?;
 
         let executors = Fragmenter::get_executors(ctx);
         // Redistribute partitions of ReadDataSourcePlan.
         let mut fragment_actions = QueryFragmentActions::create(true, self.fragment_id);
 
-        let partitions = &read_source.parts;
-        let partition_reshuffle = partitions.reshuffle(executors)?;
+        for read_source in read_sources {
+            let partitions = &read_source.parts;
+            let partition_reshuffle = partitions.reshuffle(executors.clone())?;
 
-        for (executor, parts) in partition_reshuffle.iter() {
-            let mut new_read_source = read_source.clone();
-            new_read_source.parts = parts.clone();
-            let mut plan = self.plan.clone();
+            for (executor, parts) in partition_reshuffle.iter() {
+                let mut new_read_source = read_source.clone();
+                new_read_source.parts = parts.clone();
+                let mut plan = self.plan.clone();
 
-            // Replace `ReadDataSourcePlan` with rewritten one and generate new fragment for it.
-            let mut replace_read_source = ReplaceReadSource {
-                source: new_read_source,
-            };
-            plan = replace_read_source.replace(&plan)?;
+                // Replace `ReadDataSourcePlan` with rewritten one and generate new fragment for it.
+                let mut replace_read_source = ReplaceReadSource {
+                    source: new_read_source,
+                };
+                plan = replace_read_source.replace(&plan)?;
 
-            fragment_actions
-                .add_action(QueryFragmentAction::create(executor.clone(), plan.clone()));
+                fragment_actions
+                    .add_action(QueryFragmentAction::create(executor.clone(), plan.clone()));
+            }
         }
 
         Ok(fragment_actions)
     }
 
-    fn get_read_source(&self) -> Result<DataSourcePlan> {
+    fn get_read_source(&self) -> Result<Vec<DataSourcePlan>> {
         if self.fragment_type != FragmentType::Source {
             return Err(ErrorCode::Internal(
                 "Cannot get read source from a non-source fragment".to_string(),
@@ -174,13 +176,7 @@ impl PlanFragment {
             &mut |_| {},
         );
 
-        if source.len() != 1 {
-            Err(ErrorCode::Internal(
-                "Invalid source fragment with multiple table scan".to_string(),
-            ))
-        } else {
-            Ok(source.remove(0))
-        }
+        return Ok(source);
     }
 }
 

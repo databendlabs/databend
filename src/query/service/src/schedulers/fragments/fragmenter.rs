@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_sql::executor::FragmentKind;
+use common_sql::executor::UnionAll;
 
 use crate::api::BroadcastExchange;
 use crate::api::DataExchange;
@@ -149,6 +150,23 @@ impl PhysicalPlanReplacer for Fragmenter {
             join_type: plan.join_type.clone(),
             marker_index: plan.marker_index,
             from_correlated_subquery: plan.from_correlated_subquery,
+        }))
+    }
+
+    fn replace_union(&mut self, plan: &UnionAll) -> Result<PhysicalPlan> {
+        let mut fragments = vec![];
+        let left_input = self.replace(plan.left.as_ref())?;
+        fragments.append(&mut self.fragments);
+        let right_input = self.replace(plan.right.as_ref())?;
+        fragments.append(&mut self.fragments);
+
+        self.fragments = fragments;
+
+        Ok(PhysicalPlan::UnionAll(UnionAll {
+            left: Box::new(left_input),
+            right: Box::new(right_input),
+            pairs: plan.pairs.clone(),
+            schema: plan.schema.clone(),
         }))
     }
 
