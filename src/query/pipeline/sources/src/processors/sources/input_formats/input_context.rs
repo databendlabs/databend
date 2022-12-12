@@ -29,6 +29,7 @@ use common_formats::ClickhouseFormatType;
 use common_formats::FileFormatOptionsExt;
 use common_formats::FileFormatTypeExt;
 use common_formats::RecordDelimiter;
+use common_meta_types::FileFormatOptions;
 use common_meta_types::StageFileCompression;
 use common_meta_types::StageFileFormatType;
 use common_meta_types::UserStageInfo;
@@ -250,6 +251,48 @@ impl InputContext {
             splits: vec![],
             block_compact_thresholds,
             format_options: file_format_options_clone,
+        })
+    }
+
+    pub async fn try_create_from_insert_v2(
+        stream_receiver: Receiver<Result<StreamingReadBatch>>,
+        settings: Arc<Settings>,
+        file_format_options: FileFormatOptions,
+        schema: DataSchemaRef,
+        scan_progress: Arc<Progress>,
+        is_multi_part: bool,
+        block_compact_thresholds: BlockCompactThresholds,
+    ) -> Result<Self> {
+        let read_batch_size = settings.get_input_read_buffer_size()? as usize;
+        let format_typ = file_format_options.format.clone();
+        let file_format_options =
+            StageFileFormatType::get_ext_from_stage(file_format_options, &settings)?;
+        let file_format_options = format_typ.final_file_format_options(&file_format_options)?;
+        let format = Self::get_input_format(&format_typ)?;
+        let field_delimiter = file_format_options.get_field_delimiter();
+        let record_delimiter = file_format_options.get_record_delimiter()?;
+        let rows_to_skip = file_format_options.stage.skip_header as usize;
+        let compression = file_format_options.stage.compression;
+
+        let plan = StreamPlan {
+            is_multi_part,
+            compression,
+        };
+
+        Ok(InputContext {
+            format,
+            schema,
+            settings,
+            record_delimiter,
+            read_batch_size,
+            rows_to_skip,
+            field_delimiter,
+            scan_progress,
+            source: InputSource::Stream(Mutex::new(Some(stream_receiver))),
+            plan: InputPlan::StreamingLoad(plan),
+            splits: vec![],
+            block_compact_thresholds,
+            format_options: file_format_options,
         })
     }
 

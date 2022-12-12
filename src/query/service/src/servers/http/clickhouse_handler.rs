@@ -320,10 +320,10 @@ pub async fn clickhouse_handler_post(
                 .map_err(InternalServerError)?;
 
             let input_context = Arc::new(
-                InputContext::try_create_from_insert(
-                    option_settings.format.to_string().as_str(),
+                InputContext::try_create_from_insert_v2(
                     rx,
                     ctx.get_settings(),
+                    option_settings.clone(),
                     schema,
                     ctx.get_scan_progress(),
                     false,
