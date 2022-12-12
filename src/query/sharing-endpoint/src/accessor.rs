@@ -12,13 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
-use common_base::base::Singleton;
+use common_base::base::GlobalInstance;
 use common_exception::Result;
 use common_storage::init_operator;
 use common_storage::StorageParams;
-use once_cell::sync::OnceCell;
 use opendal::Operator;
 use time::Duration;
 
@@ -27,11 +24,9 @@ use crate::models;
 use crate::models::PresignFileResponse;
 use crate::models::SharedTableResponse;
 
-static SHARING_ACCESSOR: OnceCell<Singleton<Arc<SharingAccessor>>> = OnceCell::new();
-
 #[derive(Clone)]
 pub struct SharingAccessor {
-    op: Arc<Operator>,
+    op: Operator,
     config: Config,
 }
 
@@ -63,25 +58,24 @@ pub fn truncate_root(root: String, loc: String) -> String {
 }
 
 impl SharingAccessor {
-    pub async fn init(cfg: &Config, v: Singleton<Arc<SharingAccessor>>) -> Result<()> {
-        let op = init_operator(&cfg.storage.params)?;
-        v.init(Arc::new(SharingAccessor {
-            op: Arc::new(op),
-            config: cfg.clone(),
-        }))?;
+    pub async fn init(cfg: &Config) -> Result<()> {
+        GlobalInstance::set(Self::try_create(cfg).await?);
 
-        SHARING_ACCESSOR.set(v).ok();
         Ok(())
     }
 
-    // get singleton instance for Sharing Accessor
-    pub fn instance() -> Arc<SharingAccessor> {
-        match SHARING_ACCESSOR.get() {
-            None => panic!("Sharing Accessor is not init"),
-            Some(sharing_accessor) => sharing_accessor.get(),
-        }
+    pub fn instance() -> SharingAccessor {
+        GlobalInstance::get()
     }
 
+    pub async fn try_create(cfg: &Config) -> Result<SharingAccessor> {
+        let operator = init_operator(&cfg.storage.params)?;
+
+        Ok(SharingAccessor {
+            op: operator,
+            config: cfg.clone(),
+        })
+    }
     fn get_root(&self) -> String {
         match self.config.storage.params {
             StorageParams::S3(ref s3) => s3.root.trim_matches('/').to_string(),
