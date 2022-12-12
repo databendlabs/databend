@@ -20,7 +20,6 @@ use std::sync::Arc;
 use common_cache::Cache;
 use common_catalog::table_context::TableContext;
 use common_datablocks::BlockCompactThresholds;
-use common_datablocks::BlockMetaInfoPtr;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -56,6 +55,7 @@ struct SerializedData {
 
 enum State {
     None,
+    GatherMeta(DataBlock),
     ReadSegments,
     GenerateSegments(Vec<Arc<SegmentInfo>>),
     SerializedSegments {
@@ -110,27 +110,6 @@ impl DeletionTransform {
             output,
             output_data: None,
         })))
-    }
-
-    fn insert_meta(&mut self, input_meta: BlockMetaInfoPtr) -> Result<()> {
-        let meta = DeletionSourceMeta::from_meta(&input_meta)?;
-        match &meta.op {
-            Deletion::Replaced(block_meta) => {
-                self.input_metas
-                    .entry(meta.index.0)
-                    .and_modify(|v| v.0.push((meta.index.1, block_meta.clone())))
-                    .or_insert((vec![(meta.index.1, block_meta.clone())], vec![]));
-                self.abort_operation.add_block(block_meta);
-            }
-            Deletion::Deleted => {
-                self.input_metas
-                    .entry(meta.index.0)
-                    .and_modify(|v| v.1.push(meta.index.1))
-                    .or_insert((vec![], vec![meta.index.1]));
-            }
-            Deletion::DoNothing => (),
-        }
-        Ok(())
     }
 
     fn get_current_input(&mut self) -> Option<Arc<InputPort>> {
@@ -235,20 +214,38 @@ impl Processor for DeletionTransform {
                 return Ok(Event::Async);
             }
 
-            let input_meta = cur_input
-                .pull_data()
-                .unwrap()?
-                .get_meta()
-                .cloned()
-                .ok_or_else(|| ErrorCode::Internal("No block meta. It's a bug"))?;
-            self.insert_meta(input_meta)?;
+            self.state = State::GatherMeta(cur_input.pull_data().unwrap()?);
             cur_input.set_need_data();
+            return Ok(Event::Sync);
         }
         Ok(Event::NeedData)
     }
 
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::None) {
+            State::GatherMeta(input) => {
+                let input_meta = input
+                    .get_meta()
+                    .cloned()
+                    .ok_or_else(|| ErrorCode::Internal("No block meta. It's a bug"))?;
+                let meta = DeletionSourceMeta::from_meta(&input_meta)?;
+                match &meta.op {
+                    Deletion::Replaced(block_meta) => {
+                        self.input_metas
+                            .entry(meta.index.0)
+                            .and_modify(|v| v.0.push((meta.index.1, block_meta.clone())))
+                            .or_insert((vec![(meta.index.1, block_meta.clone())], vec![]));
+                        self.abort_operation.add_block(block_meta);
+                    }
+                    Deletion::Deleted => {
+                        self.input_metas
+                            .entry(meta.index.0)
+                            .and_modify(|v| v.1.push(meta.index.1))
+                            .or_insert((vec![], vec![meta.index.1]));
+                    }
+                    Deletion::DoNothing => (),
+                }
+            }
             State::GenerateSegments(segment_infos) => {
                 let segments = self.base_segments.clone();
                 let mut summary = Statistics::default();

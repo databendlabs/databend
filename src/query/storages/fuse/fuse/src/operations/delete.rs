@@ -47,6 +47,14 @@ use crate::statistics::ClusterStatsGenerator;
 use crate::FuseTable;
 
 impl FuseTable {
+    // The flow of Pipeline is as follows:
+    // +---------------+
+    // |DeletionSource1| ------
+    // +---------------+       |      +-----------------+      +------------+
+    // |     ...       | ...   | ---> |DeletionTransform| ---> |MutationSink|
+    // +---------------+       |      +-----------------+      +------------+
+    // |DeletionSourceN| ------
+    // +---------------+
     pub async fn do_delete(
         &self,
         ctx: Arc<dyn TableContext>,

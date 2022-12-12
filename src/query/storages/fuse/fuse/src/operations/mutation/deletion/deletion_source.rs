@@ -190,12 +190,13 @@ impl Processor for DeletionSource {
                 let values = boolean_col.values();
                 let filter: ColumnRef = Arc::new(BooleanColumn::from_arrow_data(values.not()));
                 if !DataBlock::filter_exists(&filter)? {
-                    // deleted,
+                    // all the rows should be removed.
                     self.state = State::Generated(Deletion::Deleted);
                 } else {
                     let num_rows = data_block.num_rows();
                     let data_block = DataBlock::filter_block(data_block, &filter)?;
                     if data_block.num_rows() == num_rows {
+                        // none of the rows should be removed.
                         self.state = State::Generated(Deletion::DoNothing);
                     } else if self.remain_reader.is_none() {
                         let block = data_block.resort(self.output_schema.clone())?;

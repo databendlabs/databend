@@ -104,13 +104,13 @@ impl FuseTable {
     }
 
     // The flow of Pipeline is as follows:
-    //+--------------+        +-----------------+
-    //|CompactSource1|  --->  |CompactTransform1|  ------
-    //+--------------+        +-----------------+        |      +----------------------+      +------------+
-    //|    ...       |  ...   |       ...       |  ...   | ---> |MergeSegmentsTransform| ---> |MutationSink|
-    //+--------------+        +-----------------+        |      +----------------------+      +------------+
-    //|CompactSourceN|  --->  |CompactTransformN|  ------
-    //+--------------+        +-----------------+
+    // +--------------+        +-----------------+
+    // |CompactSource1|  --->  |CompactTransform1|  ------
+    // +--------------+        +-----------------+        |      +----------------------+      +------------+
+    // |    ...       |  ...   |       ...       |  ...   | ---> |MergeSegmentsTransform| ---> |MutationSink|
+    // +--------------+        +-----------------+        |      +----------------------+      +------------+
+    // |CompactSourceN|  --->  |CompactTransformN|  ------
+    // +--------------+        +-----------------+
     async fn compact_blocks(
         &self,
         ctx: Arc<dyn TableContext>,
