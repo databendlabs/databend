@@ -21,6 +21,7 @@ use common_arrow::ArrayRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use crate::arrow;
 use crate::schema::DataSchema;
 use crate::types::AnyType;
 use crate::types::DataType;
@@ -247,7 +248,18 @@ impl Chunk<String> {
         arrow_chunk: &ArrowChunk<A>,
         schema: &TableSchemaRef,
     ) -> Result<Self> {
-        todo!("expression")
+        let cols = schema
+            .fields
+            .iter()
+            .zip(arrow_chunk.arrays())
+            .map(|(field, col)| ChunkEntry {
+                id: field.name().clone(),
+                data_type: field.data_type().into(),
+                value: Value::Column(Column::from_arrow(col.as_ref())),
+            })
+            .collect();
+
+        Ok(Chunk::new(cols, arrow_chunk.len()))
     }
 }
 
@@ -279,7 +291,20 @@ impl Chunk<usize> {
         arrow_chunk: &ArrowChunk<A>,
         schema: &TableSchemaRef,
     ) -> Result<Self> {
-        todo!("expression")
+        let cols = schema
+            .fields
+            .iter()
+            .zip(arrow_chunk.arrays())
+            .map(|(field, col)| {
+                Ok(ChunkEntry {
+                    id: field.name().parse()?,
+                    data_type: field.data_type().into(),
+                    value: Value::Column(Column::from_arrow(col.as_ref())),
+                })
+            })
+            .collect::<Result<_>>()?;
+
+        Ok(Chunk::new(cols, arrow_chunk.len()))
     }
 }
 

@@ -21,11 +21,11 @@ use crate::common::new_chunk;
 
 #[test]
 fn test_group_by_hash() -> Result<()> {
-    let schema = DataSchemaRefExt::create(vec![
-        DataField::new("a", TableDataType::Number(NumberDataType::Int8)),
-        DataField::new("b", TableDataType::Number(NumberDataType::Int8)),
-        DataField::new("c", TableDataType::Number(NumberDataType::Int8)),
-        DataField::new("x", TableDataType::String),
+    let schema = TableSchemaRefExt::create(vec![
+        TableField::new("a", TableDataType::Number(NumberDataType::Int8)),
+        TableField::new("b", TableDataType::Number(NumberDataType::Int8)),
+        TableField::new("c", TableDataType::Number(NumberDataType::Int8)),
+        TableField::new("x", TableDataType::String),
     ]);
 
     let chunk = new_chunk(&vec![
