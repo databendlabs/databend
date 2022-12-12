@@ -1,0 +1,66 @@
+statement ok
+DROP DATABASE IF EXISTS databend6;
+
+statement ok
+CREATE DATABASE databend6;
+
+statement ok
+USE databend6;
+
+statement ok
+CREATE TABLE t0(c0VARCHAR VARCHAR NOT NULL DEFAULT('XVk'));
+
+statement ok
+CREATE TABLE t1(c0VARCHAR VARCHAR NULL);
+
+statement ok
+CREATE TABLE t2(c0INT SMALLINT NULL);
+
+statement ok
+CREATE TABLE t3(c0VARCHAR VARCHAR NOT NULL DEFAULT('at'));
+
+statement ok
+INSERT INTO t1(c0varchar) VALUES ('gxZu6');
+
+statement ok
+DELETE FROM t0 WHERE ((NULL)<=(NULL));
+
+statement ok
+EXPLAIN SELECT DISTINCT ((NULL)<=(NULL)) FROM t1, t2, t0, t3 HAVING ((((((t2.c0int)%(t2.c0int)))-(((t2.c0int)%(1617114512))))) IS NOT NULL) LIMIT 1964819055;
+
+statement ok
+INSERT INTO t2(c0int) VALUES (1617114512);
+
+statement ok
+INSERT INTO t0(c0varchar) VALUES ('AUJC5e');
+
+statement ok
+INSERT INTO t3(c0varchar) VALUES ('kx');
+
+statement ok
+INSERT INTO t2(c0int) VALUES (1617114512);
+
+statement ok
+CREATE VIEW v0 AS SELECT (t3.c0varchar NOT IN (t0.c0varchar, '', '')), t0.c0varchar, t2.c0int FROM t3, t1, t2, t0 WHERE ((1.617114496E9) IS NULL) GROUP BY '' HAVING (('kDIT3') IS NOT NULL) LIMIT 194625690 OFFSET 165596766;
+
+statement ok
+INSERT INTO t1(c0varchar) VALUES ('E5'), ('');
+
+statement ok
+INSERT INTO t2(c0int) VALUES (-90628224), (1357686063);
+
+statement ok
+INSERT INTO t1(c0varchar) VALUES ('');
+
+statement ok
+DROP VIEW v0;
+
+statement query TTT
+SELECT t3.c0varchar, t0.c0varchar, t1.c0varchar FROM t0, t1, t2, t3 WHERE (((('')like(t1.c0varchar))) IS NULL) GROUP BY t3.c0varchar, t0.c0varchar, t1.c0varchar UNION ALL SELECT t3.c0varchar, t0.c0varchar, t1.c0varchar FROM t0, t1, t2, t3 WHERE (NOT (((('')LIKE(t1.c0varchar))) IS NULL)) GROUP BY t3.c0varchar, t0.c0varchar, t1.c0varchar UNION ALL SELECT t3.c0varchar, t0.c0varchar, t1.c0varchar FROM t0, t1, t2, t3 WHERE (((((('')LIKE(t1.c0varchar))) IS NULL)) IS NULL) GROUP BY t3.c0varchar, t0.c0varchar, t1.c0varchar;
+
+----
+kx AUJC5e E5
+kx AUJC5e gxZu6
+kx AUJC5e 
+
+DROP DATABASE IF EXISTS databend6;
