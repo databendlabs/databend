@@ -37,11 +37,11 @@ cat << EOF > /tmp/whitespace_number2.csv
 EOF
 
 
-curl -H "insert_sql:insert into test_csv format CSV" -F "upload=@/tmp/whitespace.csv" -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" > /dev/null 2>&1
+curl -H "insert_sql:insert into test_csv file_format = (type = 'CSV')" -F "upload=@/tmp/whitespace.csv" -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" > /dev/null 2>&1
 echo "select * from test_csv" | $MYSQL_CLIENT_CONNECT
 
-curl -s -H "insert_sql:insert into test_csv_number format CSV" -F "upload=@/tmp/whitespace_number1.csv" -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" | grep -c "bad field"
-curl -s -H "insert_sql:insert into test_csv_number format CSV" -F "upload=@/tmp/whitespace_number2.csv" -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" | grep -c "bad field"
+curl -s -H "insert_sql:insert into test_csv_number file_format = (type = 'CSV')" -F "upload=@/tmp/whitespace_number1.csv" -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" | grep -c "bad field"
+curl -s -H "insert_sql:insert into test_csv_number file_format = (type = 'CSV')" -F "upload=@/tmp/whitespace_number2.csv" -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" | grep -c "bad field"
 
 echo "drop table if exists test_csv" | $MYSQL_CLIENT_CONNECT
 echo "drop table if exists test_csv_number" | $MYSQL_CLIENT_CONNECT
