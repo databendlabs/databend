@@ -195,10 +195,10 @@ pub async fn streaming_load(
                 let input_context = Arc::new(
                     InputContext::try_create_from_insert_v2(
                         rx,
-                        ctx.get_settings(),
+                        context.get_settings(),
                         option_settings.clone(),
                         schema,
-                        ctx.get_scan_progress(),
+                        context.get_scan_progress(),
                         false,
                         to_table.get_block_compact_thresholds(),
                     )
