@@ -24,10 +24,10 @@ SELECT CAST('1e1' AS DOUBLE)
 ----
 10.0
 
--- TODO issue https://github.com/datafuselabs/databend/issues/7389
--- query I
--- SELECT CAST('   1e1' AS DOUBLE)
+## TODO issue https://github.com/datafuselabs/databend/issues/7389
+## query I
+## SELECT CAST('   1e1' AS DOUBLE)
 
--- ----
--- 10.0
+## ----
+## 10.0
 

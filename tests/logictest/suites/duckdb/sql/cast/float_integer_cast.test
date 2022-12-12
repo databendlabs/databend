@@ -1,62 +1,62 @@
--- issue: https://github.com/datafuselabs/databend/issues/7391
+## issue: https://github.com/datafuselabs/databend/issues/7391
 
--- query I
--- select cast(0.55::DOUBLE as BIGINT) as x
+## query I
+## select cast(0.55::DOUBLE as BIGINT) as x
 
--- ----
--- 1
+## ----
+## 1
 
--- query I
--- select cast(1.5::DOUBLE as BIGINT) as x
+## query I
+## select cast(1.5::DOUBLE as BIGINT) as x
 
--- ----
--- 2
+## ----
+## 2
 
--- query I
--- select cast(-0.5::DOUBLE as BIGINT) as x
+## query I
+## select cast(-0.5::DOUBLE as BIGINT) as x
 
--- ----
--- 0
+## ----
+## 0
 
--- query I
--- select cast(-0.55::DOUBLE as BIGINT) as x
+## query I
+## select cast(-0.55::DOUBLE as BIGINT) as x
 
--- ----
--- -1
+## ----
+## -1
 
--- query I
--- select cast(-1.5::DOUBLE as BIGINT) as x
+## query I
+## select cast(-1.5::DOUBLE as BIGINT) as x
 
--- ----
--- -2
+## ----
+## -2
 
--- query I
--- select cast(0.55::DOUBLE as TINYINT) as x
+## query I
+## select cast(0.55::DOUBLE as TINYINT) as x
 
--- ----
--- 1
+## ----
+## 1
 
--- query I
--- select cast(1.5::DOUBLE as TINYINT) as x
+## query I
+## select cast(1.5::DOUBLE as TINYINT) as x
 
--- ----
--- 2
+## ----
+## 2
 
--- query I
--- select cast(-0.5::DOUBLE as TINYINT) as x
+## query I
+## select cast(-0.5::DOUBLE as TINYINT) as x
 
--- ----
--- 0
+## ----
+## 0
 
--- query I
--- select cast(-0.55::DOUBLE as TINYINT) as x
+## query I
+## select cast(-0.55::DOUBLE as TINYINT) as x
 
--- ----
--- -1
+## ----
+## -1
 
--- query I
--- select cast(-1.5::DOUBLE as TINYINT) as x
+## query I
+## select cast(-1.5::DOUBLE as TINYINT) as x
 
--- ----
--- -2
+## ----
+## -2
 

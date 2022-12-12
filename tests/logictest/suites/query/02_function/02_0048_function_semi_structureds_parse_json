@@ -71,7 +71,7 @@ select parse_json(parse_json('123'))
 ----
 123
 
--- http handler could not parse
+## http handler could not parse
 onlyif mysql
 query T
 select parse_json(parse_json('"\\\"abc\\\""'))

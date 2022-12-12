@@ -13,11 +13,11 @@ CREATE TABLE t(c1 int)
 statement ok
 DROP TABLE t
 
--- query TT
--- show tables history like 't'
+## query TT
+## show tables history like 't'
 
--- ----
--- t 2022-06-07 11:37:21.460 +0000
+## ----
+## t 2022-06-07 11:37:21.460 +0000
 
 statement ok
 DROP database db12_0002

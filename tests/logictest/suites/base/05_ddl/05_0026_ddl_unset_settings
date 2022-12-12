@@ -6,15 +6,15 @@ timezone                       UTC         UTC         SESSION
 wait_for_async_insert_timeout  100         100         SESSION
 
 
-statement OK
+statement ok
 SET GLOBAL sql_dialect='MySQL'
 
 
-statement OK
+statement ok
 SET GLOBAL timezone='Asia/Shanghai'
 
 
-statement OK
+statement ok
 SET GLOBAL wait_for_async_insert_timeout=20000
 
 

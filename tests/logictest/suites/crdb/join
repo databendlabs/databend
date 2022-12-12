@@ -174,17 +174,17 @@ NULL 42
 NULL 43
 42 43
 
--- query
--- SELECT * FROM onecolumn AS a FULL OUTER JOIN othercolumn AS b USING(x) ORDER BY x
+## query
+## SELECT * FROM onecolumn AS a FULL OUTER JOIN othercolumn AS b USING(x) ORDER BY x
 
--- query
--- SELECT x AS s, a.x, b.x FROM onecolumn AS a FULL OUTER JOIN othercolumn AS b USING(x) ORDER BY s
+## query
+## SELECT x AS s, a.x, b.x FROM onecolumn AS a FULL OUTER JOIN othercolumn AS b USING(x) ORDER BY s
 
--- query
--- SELECT * FROM onecolumn AS a NATURAL FULL OUTER JOIN othercolumn AS b ORDER BY x
+## query
+## SELECT * FROM onecolumn AS a NATURAL FULL OUTER JOIN othercolumn AS b ORDER BY x
 
--- query
--- SELECT * FROM (SELECT x FROM onecolumn ORDER BY x DESC) NATURAL JOIN (VALUES (42)) AS v(x) LIMIT 1
+## query
+## SELECT * FROM (SELECT x FROM onecolumn ORDER BY x DESC) NATURAL JOIN (VALUES (42)) AS v(x) LIMIT 1
 
 statement ok
 drop table if exists empty
@@ -192,7 +192,7 @@ drop table if exists empty
 statement ok
 CREATE TABLE empty (x INT)
 
--- bug(#7149) fix by https://github.com/datafuselabs/databend/pull/7150
+## bug(#7149) fix by https://github.com/datafuselabs/databend/pull/7150
 statement ok
 SELECT * FROM onecolumn AS a(x) CROSS JOIN empty AS b(y)
 
@@ -254,8 +254,8 @@ SELECT * FROM onecolumn AS a(x) FULL OUTER JOIN empty AS b(y) ON a.x = b.y ORDER
 44 NULL
 NULL NULL
 
--- query
--- SELECT * FROM onecolumn AS a FULL OUTER JOIN empty AS b USING(x) ORDER BY x
+## query
+## SELECT * FROM onecolumn AS a FULL OUTER JOIN empty AS b USING(x) ORDER BY x
 
 query II
 SELECT * FROM empty AS a(x) FULL OUTER JOIN onecolumn AS b(y) ON a.x = b.y ORDER BY b.y
@@ -264,8 +264,8 @@ NULL 42
 NULL 44
 NULL NULL
 
--- query
--- SELECT * FROM empty AS a FULL OUTER JOIN onecolumn AS b USING(x) ORDER BY x
+## query
+## SELECT * FROM empty AS a FULL OUTER JOIN onecolumn AS b USING(x) ORDER BY x
 
 statement ok
 drop table if exists twocolumn
@@ -316,8 +316,8 @@ SELECT o.x, t.y FROM onecolumn o LEFT OUTER JOIN twocolumn t ON (o.x=t.x AND t.x
 44 51
 NULL NULL
 
--- query
--- SELECT * FROM (SELECT x, 2 two FROM onecolumn) NATURAL FULL JOIN (SELECT x, y+1 plus1 FROM twocolumn)
+## query
+## SELECT * FROM (SELECT x, 2 two FROM onecolumn) NATURAL FULL JOIN (SELECT x, y+1 plus1 FROM twocolumn)
 
 statement ok
 drop table if exists a
@@ -401,17 +401,17 @@ SELECT * FROM (onecolumn CROSS JOIN twocolumn JOIN onecolumn AS a(b) ON a.b=twoc
 ----
 42 42 53 42 42 53
 
--- query I
--- SELECT * FROM onecolumn JOIN twocolumn ON twocolumn.x = onecolumn.x AND onecolumn.x IN (SELECT x FROM twocolumn WHERE y >= 52)
+## query I
+## SELECT * FROM onecolumn JOIN twocolumn ON twocolumn.x = onecolumn.x AND onecolumn.x IN (SELECT x FROM twocolumn WHERE y >= 52)
 
--- ----
--- 42 42 53
+## ----
+## 42 42 53
 
--- query I
--- SELECT * FROM onecolumn JOIN (VALUES (41),(42),(43)) AS a(x) USING(x)
+## query I
+## SELECT * FROM onecolumn JOIN (VALUES (41),(42),(43)) AS a(x) USING(x)
 
--- ----
--- 42
+## ----
+## 42
 
 query I
 SELECT * FROM onecolumn JOIN (SELECT x + 2 AS x FROM onecolumn) USING(x)
@@ -434,7 +434,7 @@ statement error 1065
 SELECT * FROM (onecolumn AS a JOIN onecolumn AS b USING(y))
 
 
--- TODO column name "x" appears more than once in USING clause ,should be error?
+## TODO column name "x" appears more than once in USING clause ,should be error?
 query I
 SELECT * FROM (onecolumn AS a JOIN onecolumn AS b USING(x, x))
 ----
@@ -456,11 +456,11 @@ SELECT * FROM (onecolumn JOIN onecolumn USING(x))
 statement error 1065
 SELECT * FROM (onecolumn JOIN twocolumn USING(x) JOIN onecolumn USING(x))
 
--- query II
--- SELECT * FROM (SELECT * FROM onecolumn), (SELECT * FROM onecolumn)
+## query II
+## SELECT * FROM (SELECT * FROM onecolumn), (SELECT * FROM onecolumn)
 
--- query I
--- SELECT x FROM (onecolumn JOIN othercolumn USING (x)) JOIN (onecolumn AS a JOIN othercolumn AS b USING(x)) USING(x)
+## query I
+## SELECT x FROM (onecolumn JOIN othercolumn USING (x)) JOIN (onecolumn AS a JOIN othercolumn AS b USING(x)) USING(x)
 
 statement error 1065
 SELECT x FROM (SELECT * FROM onecolumn), (SELECT * FROM onecolumn)
@@ -524,8 +524,8 @@ SELECT * FROM pairs, square WHERE pairs.a + pairs.b = square.sq
 3 6 3 9
 4 5 3 9
 
--- query
--- SELECT a, b, n, sq FROM (SELECT a, b, a * b / 2 AS div, n, sq FROM pairs, square) WHERE div = sq
+## query
+## SELECT a, b, n, sq FROM (SELECT a, b, a * b / 2 AS div, n, sq FROM pairs, square) WHERE div = sq
 
 query IIII
 SELECT * FROM pairs FULL OUTER JOIN square ON pairs.a + pairs.b = square.sq order by a
@@ -616,19 +616,19 @@ SELECT * FROM t1 JOIN t2 ON t2.x=t1.x
 ----
 10 1 11 1 100 1 1 101
 
--- query
--- SELECT * FROM t1 FULL OUTER JOIN t2 USING(x)
+## query
+## SELECT * FROM t1 FULL OUTER JOIN t2 USING(x)
 
--- query
--- SELECT * FROM t1 NATURAL FULL OUTER JOIN t2
+## query
+## SELECT * FROM t1 NATURAL FULL OUTER JOIN t2
 
 query III
 SELECT t2.x, t1.x, x FROM t1 JOIN t2 USING(x)
 ----
 1 1 1
 
--- query
--- SELECT t2.x, t1.x, x FROM t1 FULL OUTER JOIN t2 USING(x)
+## query
+## SELECT t2.x, t1.x, x FROM t1 FULL OUTER JOIN t2 USING(x)
 
 query I
 SELECT x FROM t1 NATURAL JOIN (SELECT * FROM t2)
@@ -726,8 +726,8 @@ NULL NULL 2 B
 NULL NULL 3 C
 NULL NULL 4 E
 
--- query
--- SELECT s, str1.s, str2.s FROM str1 FULL OUTER JOIN str2 USING(s)
+## query
+## SELECT s, str1.s, str2.s FROM str1 FULL OUTER JOIN str2 USING(s)
 
 statement ok
 drop table if exists xyu
@@ -766,8 +766,8 @@ SELECT * FROM xyu RIGHT OUTER JOIN xyv USING(x, y) WHERE x > 2 order by y
 NULL 3 3 33
 NULL 5 5 55
 
--- statement error 1065
--- SELECT * FROM xyu FULL OUTER JOIN xyv USING(x, y) WHERE x > 2
+## statement error 1065
+## SELECT * FROM xyu FULL OUTER JOIN xyv USING(x, y) WHERE x > 2
 
 query IIIIII
 SELECT * FROM xyu INNER JOIN xyv ON xyu.x = xyv.x AND xyu.y = xyv.y WHERE xyu.x = 1 AND xyu.y < 10
@@ -811,8 +811,8 @@ SELECT * FROM (SELECT * FROM xyu ORDER BY x, y) AS xyu RIGHT OUTER JOIN (SELECT 
 NULL 3 3 33
 NULL 5 5 55
 
--- query
--- SELECT * FROM (SELECT * FROM xyu ORDER BY x, y) AS xyu FULL OUTER JOIN (SELECT * FROM xyv ORDER BY x, y) AS xyv USING(x, y) WHERE x > 2
+## query
+## SELECT * FROM (SELECT * FROM xyu ORDER BY x, y) AS xyu FULL OUTER JOIN (SELECT * FROM xyv ORDER BY x, y) AS xyv USING(x, y) WHERE x > 2
 
 query IIITTT
 SELECT * FROM (SELECT * FROM xyu ORDER BY x, y) AS xyu LEFT OUTER JOIN (SELECT * FROM xyv ORDER BY x, y) AS xyv ON xyu.x = xyv.x AND xyu.y = xyv.y AND xyu.x = 1 AND xyu.y < 10
@@ -1043,7 +1043,7 @@ select * from onecolumn as a left join twocolumn as b on a.x = b.x where b.x > 4
 44 44 51
 
 
--- check outer join is converted to inner join
+## check outer join is converted to inner join
 
 query T
 explain select * from onecolumn as a left join twocolumn as b on a.x = b.x where b.x > 42
@@ -1115,7 +1115,7 @@ HashJoin
     ├── partitions scanned: 2                                            
     └── push downs: [filters: [], limit: NONE]                           
 
--- the following cases won't be converted to inner join
+## the following cases won't be converted to inner join
 
 query T
 explain select * from onecolumn as a left join twocolumn as b on a.x = b.x where b.x > 44 or a.x < 43
@@ -1166,36 +1166,36 @@ HashJoin
     └── push downs: [filters: [], limit: NONE]                           
 
 
--- query
--- SELECT column1, column1+1FROM  (SELECT * FROM    (VALUES (NULL, NULL)) AS t      NATURAL FULL OUTER JOIN    (VALUES (1, 1)) AS u)
+## query
+## SELECT column1, column1+1FROM  (SELECT * FROM    (VALUES (NULL, NULL)) AS t      NATURAL FULL OUTER JOIN    (VALUES (1, 1)) AS u)
 
--- query
--- SELECT * FROM (VALUES (1, 2)) a(a1,a2) FULL JOIN (VALUES (3, 4)) b(b1,b2) ON a1=b1 ORDER BY a2
+## query
+## SELECT * FROM (VALUES (1, 2)) a(a1,a2) FULL JOIN (VALUES (3, 4)) b(b1,b2) ON a1=b1 ORDER BY a2
 
--- statement ok
--- drop table if exists abcd
+## statement ok
+## drop table if exists abcd
 
--- statement ok
--- drop table if exists dxby
+## statement ok
+## drop table if exists dxby
 
--- statement ok
--- CREATE TABLE abcd (a INT, b INT, c INT, d INT)
+## statement ok
+## CREATE TABLE abcd (a INT, b INT, c INT, d INT)
 
--- statement ok
--- INSERT INTO abcd VALUES (1, 1, 1, 1), (2, 2, 2, 2)
+## statement ok
+## INSERT INTO abcd VALUES (1, 1, 1, 1), (2, 2, 2, 2)
 
--- statement ok
--- CREATE TABLE dxby (d INT, x INT, b INT, y INT)
+## statement ok
+## CREATE TABLE dxby (d INT, x INT, b INT, y INT)
 
--- statement ok
--- INSERT INTO dxby VALUES (2, 2, 2, 2), (3, 3, 3, 3)
+## statement ok
+## INSERT INTO dxby VALUES (2, 2, 2, 2), (3, 3, 3, 3)
 
--- query
--- SELECT * FROM abcd NATURAL FULL OUTER JOIN dxby
+## query
+## SELECT * FROM abcd NATURAL FULL OUTER JOIN dxby
 
--- query
--- SELECT abcd.*, dxby.* FROM abcd NATURAL FULL OUTER JOIN dxby
+## query
+## SELECT abcd.*, dxby.* FROM abcd NATURAL FULL OUTER JOIN dxby
 
--- query
--- SELECT abcd.*, dxby.* FROM abcd INNER JOIN dxby USING (d, b)
+## query
+## SELECT abcd.*, dxby.* FROM abcd INNER JOIN dxby USING (d, b)
 

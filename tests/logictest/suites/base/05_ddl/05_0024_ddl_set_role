@@ -8,7 +8,6 @@ SET ROLE 'test-s'
 onlyif mysql
 query T
 SELECT current_role()
-
 ----
 test-s
 

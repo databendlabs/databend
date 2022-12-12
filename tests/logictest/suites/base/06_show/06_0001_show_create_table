@@ -10,13 +10,7 @@ CREATE TABLE `test`.`a` (    a bigint, b int default 3, c varchar(255) default '
 query TT
 SHOW CREATE TABLE `test`.`a`
 ----
-a CREATE TABLE `a` (
-  `a` BIGINT,
-  `b` INT DEFAULT CAST(3 AS INT),
-  `c` VARCHAR DEFAULT x,
-  `d` SMALLINT NULL,
-  `e` DATE
-) ENGINE=NULL
+a CREATE TABLE `a` ( `a` BIGINT, `b` INT DEFAULT CAST(3 AS INT), `c` VARCHAR DEFAULT x, `d` SMALLINT NULL, `e` DATE ) ENGINE=NULL
 
 statement ok
 CREATE TABLE `test`.`b` (    a bigint, b int null default null, c varchar(255), d smallint unsigned null) Engine = Null COMMENT = 'test b'
@@ -24,12 +18,7 @@ CREATE TABLE `test`.`b` (    a bigint, b int null default null, c varchar(255), 
 query TT
 SHOW CREATE TABLE `test`.`b`
 ----
-b CREATE TABLE `b` (
-  `a` BIGINT,
-  `b` INT NULL DEFAULT CAST(NULL AS INT NULL),
-  `c` VARCHAR,
-  `d` SMALLINT UNSIGNED NULL
-) ENGINE=NULL COMMENT='test b'
+b CREATE TABLE `b` ( `a` BIGINT, `b` INT NULL DEFAULT CAST(NULL AS INT NULL), `c` VARCHAR, `d` SMALLINT UNSIGNED NULL ) ENGINE=NULL COMMENT='test b'
 
 statement ok
 CREATE TABLE test.c (a int) CLUSTER BY (a, a % 3)
@@ -37,9 +26,7 @@ CREATE TABLE test.c (a int) CLUSTER BY (a, a % 3)
 query TT
 SHOW CREATE TABLE `test`.`c`
 ----
-c CREATE TABLE `c` (
-  `a` INT
-) ENGINE=FUSE CLUSTER BY (a, a % 3)
+c CREATE TABLE `c` ( `a` INT ) ENGINE=FUSE CLUSTER BY (a, a % 3)
 
 statement ok
 DROP TABLE `test`.`a`

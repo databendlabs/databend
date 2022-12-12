@@ -22,8 +22,8 @@ SELECT i % 2 AS k, SUM(i) FROM integers WHERE i IS NOT NULL GROUP BY 1 HAVING i%
 ----
 1 4
 
--- SELECT i, i % 2 AS i, SUM(i) FROM integers GROUP BY i ORDER BY i, 3
--- SELECT i, i % 2 AS k, SUM(i) FROM integers GROUP BY i ORDER BY k, 3
+## SELECT i, i % 2 AS i, SUM(i) FROM integers GROUP BY i ORDER BY i, 3
+## SELECT i, i % 2 AS k, SUM(i) FROM integers GROUP BY i ORDER BY k, 3
 
 query III
 SELECT i, i % 2 AS k, SUM(i) FROM integers GROUP BY i ORDER BY i

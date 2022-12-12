@@ -93,8 +93,8 @@ SELECT a+b FROM db2.test2
 query TTTTT
 DESCRIBE db2.test2
 ----
-a INT NO 0
-b INT YES NULL
+a INT NO 0 (empty)
+b INT YES NULL (empty)
 
 statement ok
 CREATE TABLE db2.test3(a Varchar null, y Varchar null) ENGINE=fuse AS SELECT * FROM db1.test1
@@ -102,9 +102,9 @@ CREATE TABLE db2.test3(a Varchar null, y Varchar null) ENGINE=fuse AS SELECT * F
 query TTTTT
 DESCRIBE db2.test3
 ----
-a VARCHAR YES NULL
-y VARCHAR YES NULL
-b INT YES NULL
+a VARCHAR YES NULL (empty)
+y VARCHAR YES NULL (empty)
+b INT YES NULL (empty)
 
 query T
 SELECT a FROM db2.test3
@@ -119,9 +119,9 @@ CREATE TABLE db2.test4(a Varchar null, y Varchar null) ENGINE=fuse AS SELECT b, 
 query TTTTT
 DESCRIBE db2.test4
 ----
-a VARCHAR YES NULL
-y VARCHAR YES NULL
-b INT YES NULL
+a VARCHAR YES NULL (empty)
+y VARCHAR YES NULL (empty)
+b INT YES NULL (empty)
 
 query T
 SELECT a FROM db2.test4
@@ -155,24 +155,24 @@ create table db2.test7(tiny TINYINT, tiny_unsigned TINYINT UNSIGNED, smallint SM
 query TTTTT
 desc db2.test7
 ----
-tiny TINYINT NO 0
-tiny_unsigned TINYINT UNSIGNED NO 0
-smallint SMALLINT NO 0
-smallint_unsigned SMALLINT UNSIGNED NO 0
-int INT NO 0
-int_unsigned INT UNSIGNED NO 0
-bigint BIGINT NO 0
-bigint_unsigned BIGINT UNSIGNED NO 0
-float FLOAT NO 0
-double DOUBLE NO 0
-date DATE NO 0
-datetime TIMESTAMP NO 0
-ts TIMESTAMP NO 0
-str VARCHAR NO 3
-bool BOOLEAN NO false
-arr ARRAY NO []
-obj OBJECT NO {}
-variant VARIANT NO null
+tiny TINYINT NO 0 (empty)
+tiny_unsigned TINYINT UNSIGNED NO 0 (empty)
+smallint SMALLINT NO 0 (empty)
+smallint_unsigned SMALLINT UNSIGNED NO 0 (empty)
+int INT NO 0 (empty)
+int_unsigned INT UNSIGNED NO 0 (empty)
+bigint BIGINT NO 0 (empty)
+bigint_unsigned BIGINT UNSIGNED NO 0 (empty)
+float FLOAT NO 0 (empty)
+double DOUBLE NO 0 (empty)
+date DATE NO 0 (empty)
+datetime TIMESTAMP NO 0 (empty)
+ts TIMESTAMP NO 0 (empty)
+str VARCHAR NO 3 (empty)
+bool BOOLEAN NO false (empty)
+arr ARRAY NO [] (empty)
+obj OBJECT NO {} (empty)
+variant VARIANT NO null (empty)
 
 statement ok
 create transient table db2.test8(tiny TINYINT, tiny_unsigned TINYINT UNSIGNED, smallint SMALLINT, smallint_unsigned SMALLINT UNSIGNED, int INT, int_unsigned INT UNSIGNED, bigint BIGINT, bigint_unsigned BIGINT UNSIGNED,float FLOAT, double DOUBLE, date DATE, datetime DATETIME, ts TIMESTAMP, str VARCHAR default '3', bool BOOLEAN, arr ARRAY, obj OBJECT, variant VARIANT)
@@ -180,24 +180,24 @@ create transient table db2.test8(tiny TINYINT, tiny_unsigned TINYINT UNSIGNED, s
 query TTTTT
 desc db2.test8
 ----
-tiny TINYINT NO 0
-tiny_unsigned TINYINT UNSIGNED NO 0
-smallint SMALLINT NO 0
-smallint_unsigned SMALLINT UNSIGNED NO 0
-int INT NO 0
-int_unsigned INT UNSIGNED NO 0
-bigint BIGINT NO 0
-bigint_unsigned BIGINT UNSIGNED NO 0
-float FLOAT NO 0
-double DOUBLE NO 0
-date DATE NO 0
-datetime TIMESTAMP NO 0
-ts TIMESTAMP NO 0
-str VARCHAR NO 3
-bool BOOLEAN NO false
-arr ARRAY NO []
-obj OBJECT NO {}
-variant VARIANT NO null
+tiny TINYINT NO 0 (empty)
+tiny_unsigned TINYINT UNSIGNED NO 0 (empty)
+smallint SMALLINT NO 0 (empty)
+smallint_unsigned SMALLINT UNSIGNED NO 0 (empty)
+int INT NO 0 (empty)
+int_unsigned INT UNSIGNED NO 0 (empty)
+bigint BIGINT NO 0 (empty)
+bigint_unsigned BIGINT UNSIGNED NO 0 (empty)
+float FLOAT NO 0 (empty)
+double DOUBLE NO 0 (empty)
+date DATE NO 0 (empty)
+datetime TIMESTAMP NO 0 (empty)
+ts TIMESTAMP NO 0 (empty)
+str VARCHAR NO 3 (empty)
+bool BOOLEAN NO false (empty)
+arr ARRAY NO [] (empty)
+obj OBJECT NO {} (empty)
+variant VARIANT NO null (empty)
 
 
 statement ok

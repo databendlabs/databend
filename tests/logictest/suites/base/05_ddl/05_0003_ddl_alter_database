@@ -20,6 +20,9 @@ statement ok
 CREATE DATABASE b
 
 statement ok
+use a;
+
+statement ok
 CREATE TABLE a.t1 (id int)
 
 statement ok

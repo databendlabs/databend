@@ -1,4 +1,4 @@
--- In my opinion, this is VARCHAR better, but get Float, the same as MYSQL
+## In my opinion, this is VARCHAR better, but get Float, the same as MYSQL
 
 query F
 SELECT .0

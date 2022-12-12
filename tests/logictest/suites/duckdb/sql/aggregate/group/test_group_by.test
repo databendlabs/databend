@@ -10,7 +10,7 @@ CREATE TABLE test (a INTEGER, b INTEGER)
 statement ok
 INSERT INTO test VALUES (11, 22), (13, 22), (12, 21)
 
--- aggregates cannot be nested
+## aggregates cannot be nested
 statement error 1065
 SELECT SUM(SUM(41)), COUNT(*)
 
@@ -45,8 +45,8 @@ SELECT b, SUM(a), SUM(a+2), AVG(a) FROM test GROUP BY b ORDER BY b
 21 12 14 12.0
 22 24 28 12.0
 
--- SELECT b, SUM(a) FROM test GROUP BY b ORDER BY COUNT(a)
--- SELECT b, SUM(a) FROM test GROUP BY b ORDER BY COUNT(a) DESC
+## SELECT b, SUM(a) FROM test GROUP BY b ORDER BY COUNT(a)
+## SELECT b, SUM(a) FROM test GROUP BY b ORDER BY COUNT(a) DESC
 
 query IIII
 SELECT b, SUM(a), COUNT(*), SUM(a+2) FROM test GROUP BY b ORDER BY b
@@ -90,12 +90,12 @@ SELECT i, i + 10 FROM integers GROUP BY i ORDER BY i
 2 12
 3 13
 
--- SELECT i, SUM(j), j FROM integers GROUP BY i ORDER BY i
--- SELECT i, SUM(j), FIRST(j) FROM integers GROUP BY i ORDER BY i
--- SELECT i, SUM(j), LAST(j) FROM integers GROUP BY i ORDER BY i
--- SELECT 1 AS k, SUM(i) FROM integers GROUP BY k ORDER BY 2
--- SELECT 1 AS i, SUM(i) FROM integers GROUP BY i ORDER BY 2
--- SELECT i % 2 AS k, SUM(i) FROM integers GROUP BY k, k ORDER BY 1
+## SELECT i, SUM(j), j FROM integers GROUP BY i ORDER BY i
+## SELECT i, SUM(j), FIRST(j) FROM integers GROUP BY i ORDER BY i
+## SELECT i, SUM(j), LAST(j) FROM integers GROUP BY i ORDER BY i
+## SELECT 1 AS k, SUM(i) FROM integers GROUP BY k ORDER BY 2
+## SELECT 1 AS i, SUM(i) FROM integers GROUP BY i ORDER BY 2
+## SELECT i % 2 AS k, SUM(i) FROM integers GROUP BY k, k ORDER BY 1
 
 statement ok
 DROP TABLE integers
@@ -106,12 +106,12 @@ CREATE TABLE integers(i INTEGER NULL)
 statement ok
 INSERT INTO integers VALUES (1), (2), (3), (NULL)
 
--- query II
--- SELECT i, SUM(i) FROM integers GROUP BY i ORDER BY 1
+## query II
+## SELECT i, SUM(i) FROM integers GROUP BY i ORDER BY 1
 
--- query III
--- SELECT i, i % 2 AS i, SUM(i) FROM integers GROUP BY i ORDER BY 1
+## query III
+## SELECT i, i % 2 AS i, SUM(i) FROM integers GROUP BY i ORDER BY 1
 
--- query II
--- SELECT test.b, SUM(a) FROM test GROUP BY b ORDER BY COUNT(a) DESC
+## query II
+## SELECT test.b, SUM(a) FROM test GROUP BY b ORDER BY COUNT(a) DESC
 

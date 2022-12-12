@@ -9,16 +9,16 @@ select '1e310'::double
 ----
 inf
 
--- TODO issue https://github.com/datafuselabs/databend/issues/7295
--- query F
--- select '-1e308'::float
+## TODO issue https://github.com/datafuselabs/databend/issues/7295
+## query F
+## select '-1e308'::float
 
--- ----
--- -inf
+## ----
+## -inf
 
--- query F
--- select '-1e310'::double
+## query F
+## select '-1e310'::double
 
--- ----
--- -inf
+## ----
+## -inf
 

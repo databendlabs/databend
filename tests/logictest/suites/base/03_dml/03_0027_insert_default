@@ -1,4 +1,13 @@
 statement ok
+DROP DATABASE IF EXISTS db1
+
+statement ok
+CREATE DATABASE db1
+
+statement ok
+USE db1
+
+statement ok
 drop table if exists t_insert_default
 
 statement ok

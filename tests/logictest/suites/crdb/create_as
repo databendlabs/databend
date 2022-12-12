@@ -70,6 +70,6 @@ SELECT * FROM smtng.something ORDER BY 1 LIMIT 1
 ----
 cups 10
 
--- CREATE TABLE itemTypes AS (SELECT item, color FROM stock, itemColors)
--- CREATE TABLE unionstock AS SELECT * FROM stock UNION VALUES ('spoons', 25), ('knives', 50)
--- CREATE TABLE t AS SELECT a, b, EXISTS(SELECT c FROM cd WHERE cd.c=ab.a) FROM ab
+## CREATE TABLE itemTypes AS (SELECT item, color FROM stock, itemColors)
+## CREATE TABLE unionstock AS SELECT * FROM stock UNION VALUES ('spoons', 25), ('knives', 50)
+## CREATE TABLE t AS SELECT a, b, EXISTS(SELECT c FROM cd WHERE cd.c=ab.a) FROM ab

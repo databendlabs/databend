@@ -10,9 +10,9 @@ drop table if exists abc
 statement ok
 CREATE TABLE abc (a INT NULL, b INT NULL, c INT NULL)
 
--- TODO get ok here
--- statement error 1010
--- SELECT * FROM abc WHERE 'hello'
+## TODO get ok here
+## statement error 1010
+## SELECT * FROM abc WHERE 'hello'
 
 statement ok
 INSERT INTO abc VALUES (1, 2, 3)
@@ -203,9 +203,9 @@ SELECT * FROM xyzw ORDER BY y OFFSET 1
 ----
 4 5 6 7
 
--- SELECT * FROM xyzw ORDER BY y OFFSET 1 LIMIT 1
--- SELECT * FROM xyzw LIMIT (random() * 0.0)::int OFFSET (random() * 0.0)::int
--- ((SELECT a FROM t LIMIT 1)) LIMIT 1
+## SELECT * FROM xyzw ORDER BY y OFFSET 1 LIMIT 1
+## SELECT * FROM xyzw LIMIT (random() * 0.0)::int OFFSET (random() * 0.0)::int
+## ((SELECT a FROM t LIMIT 1)) LIMIT 1
 
 statement ok
 SELECT * FROM (SELECT * FROM xyzw LIMIT 5) OFFSET 5
@@ -275,125 +275,125 @@ SELECT 1 IN (NULL, 2)
 ----
 NULL
 
--- statement error 1105
--- SELECT NULL IN ((1, 1))
+## statement error 1105
+## SELECT NULL IN ((1, 1))
 
--- statement error 1105
--- SELECT (1, NULL) IN ((1, 1))
+## statement error 1105
+## SELECT (1, NULL) IN ((1, 1))
 
--- statement error 1105
--- SELECT (2, NULL) IN ((1, 1))
+## statement error 1105
+## SELECT (2, NULL) IN ((1, 1))
 
--- statement error 1105
--- SELECT () IN (1,2)
+## statement error 1105
+## SELECT () IN (1,2)
 
--- statement error 1105
--- SELECT () IN ((1,2))
+## statement error 1105
+## SELECT () IN ((1,2))
 
--- statement error 1105
--- SELECT () IN (())
+## statement error 1105
+## SELECT () IN (())
 
--- statement error 1105
--- SELECT ('string', NULL) IN ((1, 1))
+## statement error 1105
+## SELECT ('string', NULL) IN ((1, 1))
 
--- statement error 1105
--- SELECT (2, 'string', NULL) IN ((1, 1))
+## statement error 1105
+## SELECT (2, 'string', NULL) IN ((1, 1))
 
--- statement error 1105
--- SELECT (1, 1) IN ((1, NULL))
+## statement error 1105
+## SELECT (1, 1) IN ((1, NULL))
 
--- statement error 1105
--- SELECT (1, 1) IN ((2, NULL))
+## statement error 1105
+## SELECT (1, 1) IN ((2, NULL))
 
--- statement error 1105
--- SELECT NULL IN (SELECT * FROM (VALUES (1)) AS t(a))
+## statement error 1105
+## SELECT NULL IN (SELECT * FROM (VALUES (1)) AS t(a))
 
--- statement error 1105
--- SELECT (1, NULL) IN (SELECT * FROM (VALUES (1, 1)) AS t(a, b))
+## statement error 1105
+## SELECT (1, NULL) IN (SELECT * FROM (VALUES (1, 1)) AS t(a, b))
 
--- statement error 1105
--- SELECT NULL IN (SELECT * FROM (VALUES (1, 1)) AS t(a, b))
+## statement error 1105
+## SELECT NULL IN (SELECT * FROM (VALUES (1, 1)) AS t(a, b))
 
--- statement error 1105
--- SELECT () IN (SELECT * FROM (VALUES (1)) AS t(a))
+## statement error 1105
+## SELECT () IN (SELECT * FROM (VALUES (1)) AS t(a))
 
--- statement error 1105
--- SELECT () IN (SELECT * FROM (VALUES (1, 1)) AS t(a, b))
+## statement error 1105
+## SELECT () IN (SELECT * FROM (VALUES (1, 1)) AS t(a, b))
 
--- statement error 1105
--- SELECT ('string', NULL) IN (SELECT * FROM (VALUES (1, 1)) AS t(a, b))
+## statement error 1105
+## SELECT ('string', NULL) IN (SELECT * FROM (VALUES (1, 1)) AS t(a, b))
 
--- statement error 1105
--- SELECT (2, 'string', NULL) IN (SELECT * FROM (VALUES (1, 1)) AS t(a, b))
+## statement error 1105
+## SELECT (2, 'string', NULL) IN (SELECT * FROM (VALUES (1, 1)) AS t(a, b))
 
--- statement error 1105
--- SELECT (2, NULL) IN (SELECT * FROM (VALUES (1, 1)) AS t(a, b))
+## statement error 1105
+## SELECT (2, NULL) IN (SELECT * FROM (VALUES (1, 1)) AS t(a, b))
 
--- statement error 1105
--- SELECT (NULL, 1) IN (SELECT * FROM (VALUES (1, 1)) AS t(a, b))
+## statement error 1105
+## SELECT (NULL, 1) IN (SELECT * FROM (VALUES (1, 1)) AS t(a, b))
 
--- statement error 1105
--- SELECT (NULL, 2) IN (SELECT * FROM (VALUES (1, 1)) AS t(a, b))
+## statement error 1105
+## SELECT (NULL, 2) IN (SELECT * FROM (VALUES (1, 1)) AS t(a, b))
 
--- statement error 1105
--- SELECT (NULL, NULL) IN (SELECT * FROM (VALUES (1, 1)) AS t(a, b))
+## statement error 1105
+## SELECT (NULL, NULL) IN (SELECT * FROM (VALUES (1, 1)) AS t(a, b))
 
--- statement error 1105
--- SELECT NULL NOT IN (SELECT * FROM (VALUES (1)) AS t(a))
+## statement error 1105
+## SELECT NULL NOT IN (SELECT * FROM (VALUES (1)) AS t(a))
 
--- statement error 1105
--- SELECT NULL NOT IN (SELECT * FROM (VALUES (1, 1)) AS t(a, b))
+## statement error 1105
+## SELECT NULL NOT IN (SELECT * FROM (VALUES (1, 1)) AS t(a, b))
 
--- statement error 1105
--- SELECT () NOT IN (SELECT * FROM (VALUES (1)) AS t(a))
+## statement error 1105
+## SELECT () NOT IN (SELECT * FROM (VALUES (1)) AS t(a))
 
--- statement error 1105
--- SELECT () NOT IN (SELECT * FROM (VALUES (1, 1)) AS t(a, b))
+## statement error 1105
+## SELECT () NOT IN (SELECT * FROM (VALUES (1, 1)) AS t(a, b))
 
--- statement error 1105
--- SELECT ('string', NULL) NOT IN (SELECT * FROM (VALUES (1, 1)) AS t(a, b))
+## statement error 1105
+## SELECT ('string', NULL) NOT IN (SELECT * FROM (VALUES (1, 1)) AS t(a, b))
 
--- statement error 1105
--- SELECT (2, 'string', NULL) NOT IN (SELECT * FROM (VALUES (1, 1)) AS t(a, b))
+## statement error 1105
+## SELECT (2, 'string', NULL) NOT IN (SELECT * FROM (VALUES (1, 1)) AS t(a, b))
 
--- statement error 1105
--- SELECT (1, NULL) NOT IN (SELECT * FROM (VALUES (1, 1)) AS t(a, b))
+## statement error 1105
+## SELECT (1, NULL) NOT IN (SELECT * FROM (VALUES (1, 1)) AS t(a, b))
 
--- statement error 1105
--- SELECT (2, NULL) NOT IN (SELECT * FROM (VALUES (1, 1)) AS t(a, b))
+## statement error 1105
+## SELECT (2, NULL) NOT IN (SELECT * FROM (VALUES (1, 1)) AS t(a, b))
 
--- statement error 1105
--- SELECT (NULL, 1) NOT IN (SELECT * FROM (VALUES (1, 1)) AS t(a, b))
+## statement error 1105
+## SELECT (NULL, 1) NOT IN (SELECT * FROM (VALUES (1, 1)) AS t(a, b))
 
--- statement error 1105
--- SELECT (NULL, 2) NOT IN (SELECT * FROM (VALUES (1, 1)) AS t(a, b))
+## statement error 1105
+## SELECT (NULL, 2) NOT IN (SELECT * FROM (VALUES (1, 1)) AS t(a, b))
 
--- statement error 1105
--- SELECT (NULL, NULL) NOT IN (SELECT * FROM (VALUES (1, 1)) AS t(a, b))
+## statement error 1105
+## SELECT (NULL, NULL) NOT IN (SELECT * FROM (VALUES (1, 1)) AS t(a, b))
 
--- statement error 1105
--- SELECT NULL IN (SELECT * FROM (VALUES (1)) AS t(a) WHERE a > 1)
+## statement error 1105
+## SELECT NULL IN (SELECT * FROM (VALUES (1)) AS t(a) WHERE a > 1)
 
--- statement error 1105
--- SELECT (1, NULL) IN (SELECT * FROM (VALUES (1, 1)) AS t(a, b) WHERE a > 1)
+## statement error 1105
+## SELECT (1, NULL) IN (SELECT * FROM (VALUES (1, 1)) AS t(a, b) WHERE a > 1)
 
--- statement error 1105
--- SELECT (NULL, 1) IN (SELECT * FROM (VALUES (1, 1)) AS t(a, b) WHERE a > 1)
+## statement error 1105
+## SELECT (NULL, 1) IN (SELECT * FROM (VALUES (1, 1)) AS t(a, b) WHERE a > 1)
 
--- statement error 1105
--- SELECT (NULL, NULL) IN (SELECT * FROM (VALUES (1, 1)) AS t(a, b) WHERE a > 1)
+## statement error 1105
+## SELECT (NULL, NULL) IN (SELECT * FROM (VALUES (1, 1)) AS t(a, b) WHERE a > 1)
 
--- statement error 1105
--- SELECT NULL NOT IN (SELECT * FROM (VALUES (1)) AS t(a) WHERE a > 1)
+## statement error 1105
+## SELECT NULL NOT IN (SELECT * FROM (VALUES (1)) AS t(a) WHERE a > 1)
 
--- statement error 1105
--- SELECT (1, NULL) NOT IN (SELECT * FROM (VALUES (1, 1)) AS t(a, b) WHERE a > 1)
+## statement error 1105
+## SELECT (1, NULL) NOT IN (SELECT * FROM (VALUES (1, 1)) AS t(a, b) WHERE a > 1)
 
--- statement error 1105
--- SELECT (NULL, 1) NOT IN (SELECT * FROM (VALUES (1, 1)) AS t(a, b) WHERE a > 1)
+## statement error 1105
+## SELECT (NULL, 1) NOT IN (SELECT * FROM (VALUES (1, 1)) AS t(a, b) WHERE a > 1)
 
--- statement error 1105
--- SELECT (NULL, NULL) NOT IN (SELECT * FROM (VALUES (1, 1)) AS t(a, b) WHERE a > 1)
+## statement error 1105
+## SELECT (NULL, NULL) NOT IN (SELECT * FROM (VALUES (1, 1)) AS t(a, b) WHERE a > 1)
 
 statement ok
 drop table if exists a
@@ -477,21 +477,21 @@ SELECT * FROM b
 2  20
 3  30
 
--- query I
--- SELECT x FROM b WHERE rowid > 0
+## query I
+## SELECT x FROM b WHERE rowid > 0
 
--- ----
--- 1
--- 2
--- 3
+## ----
+## 1
+## 2
+## 3
 
--- query I
--- SELECT x FROM b WHERE b.rowid > 0
+## query I
+## SELECT x FROM b WHERE b.rowid > 0
 
--- ----
--- 1
--- 2
--- 3
+## ----
+## 1
+## 2
+## 3
 
 statement ok
 drop table if exists c

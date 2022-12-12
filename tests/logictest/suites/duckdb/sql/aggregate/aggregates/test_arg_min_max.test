@@ -38,11 +38,11 @@ select arg_max(1,1)
 statement error 1005
 select arg_max(*)
 
--- statement error 1025
--- select arg_max(i,i) from range (100) tbl(i)
+## statement error 1025
+## select arg_max(i,i) from range (100) tbl(i)
 
--- statement error 1025
--- select arg_max(i,i) from range (100) tbl(i) where 1 = 0
+## statement error 1025
+## select arg_max(i,i) from range (100) tbl(i) where 1 = 0
 
 statement ok
 create table args (a integer, b integer)

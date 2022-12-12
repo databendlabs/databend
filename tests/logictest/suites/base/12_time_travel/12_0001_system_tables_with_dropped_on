@@ -10,7 +10,7 @@ USE db_12_0001
 statement ok
 CREATE TABLE t(c1 int)
 
--- system.tables should contain the newly created table
+## system.tables should contain the newly created table
 query B
 SELECT COUNT(*)=1 from system.tables where name = 't' and database = 'db_12_0001'
 ----
@@ -19,7 +19,7 @@ SELECT COUNT(*)=1 from system.tables where name = 't' and database = 'db_12_0001
 
 
 
--- system.tables_with_history should contain the newly created table, and dropped_on should be NULL
+## system.tables_with_history should contain the newly created table, and dropped_on should be NULL
 query B
 SELECT COUNT(*)=1 from system.tables_with_history where name = 't' and database = 'db_12_0001' and dropped_on = 'NULL'
 ----
@@ -30,7 +30,7 @@ SELECT COUNT(*)=1 from system.tables_with_history where name = 't' and database 
 statement ok
 DROP TABLE t
 
--- system.tables should NOT contain the dropped table
+## system.tables should NOT contain the dropped table
 query B
 SELECT COUNT(*)=0 from system.tables where name = 't' and database = 'db_12_0001'
 ----
@@ -38,7 +38,7 @@ SELECT COUNT(*)=0 from system.tables where name = 't' and database = 'db_12_0001
 
 
 
--- system.tables_with_history should contain the dropped table, and dropped_on should NOT be NULL
+## system.tables_with_history should contain the dropped table, and dropped_on should NOT be NULL
 query B
 SELECT COUNT(*)=1 from system.tables_with_history where name = 't' and database = 'db_12_0001' and dropped_on != 'NULL'
 ----

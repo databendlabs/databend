@@ -102,13 +102,19 @@ impl HttpClient {
             .headers(header)
             .send()
             .await?;
-        let data: Value = serde_json::from_str(response.text().await?.as_str()).unwrap();
+        let text = response.text().await?;
+        let data: Value = serde_json::from_str(text.as_str()).unwrap();
         let rows = data.as_object().unwrap().get("data").unwrap();
         let mut parsed_rows = Vec::new();
         for row in rows.as_array().unwrap() {
             let mut parsed_row = Vec::new();
             for col in row.as_array().unwrap() {
-                parsed_row.push(col.as_str().unwrap().to_string())
+                let cell = col.as_str().unwrap().to_string();
+                if cell.is_empty() {
+                    parsed_row.push("(empty)".to_string());
+                } else {
+                    parsed_row.push(cell);
+                }
             }
             parsed_rows.push(parsed_row);
         }
@@ -154,7 +160,13 @@ impl ClickhouseHttpClient {
                         if s == "\\N" {
                             "NULL".to_string()
                         } else {
-                            s.to_string()
+                            if s.is_empty() {
+                                return "(empty)".to_string();
+                            }
+                            // Maybe `s` contains "\\N", such as `[\N,'cc']`
+                            // So we need to find it and replace with NULL (a little hack)
+                            let s = str::replace(s, "\\N", "NULL").to_string();
+                            str::replace(&*s, r"\", "")
                         }
                     })
                     .collect()

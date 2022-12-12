@@ -162,22 +162,22 @@ DELETE FROM unindexed WHERE k > 1 AND v < 7
 statement ok
 DELETE FROM unindexed
 
--- DDL alter add is no support
--- statement ok
--- drop table if exists family
+## DDL alter add is no support
+## statement ok
+## drop table if exists family
 
--- statement ok
--- CREATE TABLE family (    x INT,    y INT)
+## statement ok
+## CREATE TABLE family (    x INT,    y INT)
 
--- statement ok
--- INSERT INTO family VALUES (1, 1), (2, 2), (3, 3)
+## statement ok
+## INSERT INTO family VALUES (1, 1), (2, 2), (3, 3)
 
--- statement error 1105
--- ALTER TABLE family ADD z INT
+## statement error 1105
+## ALTER TABLE family ADD z INT
 
--- statement ok
--- DELETE FROM family WHERE x=2
+## statement ok
+## DELETE FROM family WHERE x=2
 
--- statement error 1105
--- SELECT x, y, z FROM family
+## statement error 1105
+## SELECT x, y, z FROM family
 

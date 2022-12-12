@@ -1,4 +1,13 @@
---issue 7949
+## issue 7949
+
+statement ok
+DROP DATABASE IF EXISTS db1
+
+statement ok
+CREATE DATABASE db1
+
+statement ok
+USE db1
 
 statement ok
 create table if not exists t_issue_7949 (a int)

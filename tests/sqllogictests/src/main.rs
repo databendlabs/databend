@@ -12,13 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::fs::ReadDir;
 use std::path::PathBuf;
-use std::collections::HashMap;
 
 use clap::Parser;
-use lazy_static::lazy_static;
 use client::ClickhouseHttpClient;
+use lazy_static::lazy_static;
+use regex::Regex;
 use sqllogictest::DBOutput;
 use walkdir::DirEntry;
 use walkdir::WalkDir;
@@ -28,7 +29,6 @@ use crate::client::HttpClient;
 use crate::client::MysqlClient;
 use crate::error::DSqlLogicTestError;
 use crate::error::Result;
-use regex::Regex;
 
 mod arg;
 mod client;
@@ -42,8 +42,14 @@ lazy_static! {
     static ref REGEX_MAP: HashMap<&'static str, Regex> = {
         let mut regex_map = HashMap::new();
         regex_map.insert("$ANYTHING", Regex::new(r".*").unwrap());
-        regex_map.insert("$DATE", Regex::new(r"\d\d\d\d-\d\d-\d\d \d\d:\d\d:\d\d[.]\d\d\d [+-]\d\d\d\d").unwrap());
-        regex_map.insert("$DATE_IN_SHARE", Regex::new(r"\d\d\d\d-\d\d-\d\d \d\d:\d\d:\d\d[.]\d+ UTC").unwrap());
+        regex_map.insert(
+            "$DATE",
+            Regex::new(r"\d\d\d\d-\d\d-\d\d \d\d:\d\d:\d\d[.]\d\d\d [+-]\d\d\d\d").unwrap(),
+        );
+        regex_map.insert(
+            "$DATE_IN_SHARE",
+            Regex::new(r"\d\d\d\d-\d\d-\d\d \d\d:\d\d:\d\d[.]\d+ UTC").unwrap(),
+        );
         regex_map
     };
 }
@@ -172,13 +178,6 @@ async fn run_suits(suits: ReadDir, databend: Databend) -> Result<()> {
 
 fn get_files(suit: PathBuf) -> Result<Vec<walkdir::Result<DirEntry>>> {
     let args = SqlLogicTestArgs::parse();
-    if suit.is_dir() {
-        if let Some(ref specific_dir) = args.dir {
-            if suit.file_name().unwrap().to_str().unwrap() != specific_dir {
-                return Ok(vec![]);
-            }
-        }
-    }
     let mut files = vec![];
     for entry in WalkDir::new(suit)
         .sort_by(|a, b| a.file_name().cmp(b.file_name()))

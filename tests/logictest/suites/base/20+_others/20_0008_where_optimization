@@ -10,7 +10,7 @@ insert into t_where_optimizer values(1, 1), (2, 2)
 statement ok
 insert into t_where_optimizer values(2, 2), (3, 3)
 
--- No prewhere optimization
+## No prewhere optimization
 
 query II
 select * from t_where_optimizer order by a
@@ -28,19 +28,19 @@ select * from t_where_optimizer where a = b order by a
 2 2
 3 3
 
--- All rows are filtered out
+## All rows are filtered out
 
 statement ok
 select * from t_where_optimizer where a < 1;
 
--- One part will be filtered out
+## One part will be filtered out
 
 query I
 select b from t_where_optimizer where a > 2
 ----
 3
 
--- Every part is partially filtered
+## Every part is partially filtered
 
 query II
 select * from t_where_optimizer where a > 1 and a < 3
@@ -51,7 +51,7 @@ select * from t_where_optimizer where a > 1 and a < 3
 statement ok
 drop table t_where_optimizer
 
--- Tuple (inner column) type tests
+## Tuple (inner column) type tests
 
 statement ok
 create table t_where_optimizer(id int, s tuple(a int, b int))

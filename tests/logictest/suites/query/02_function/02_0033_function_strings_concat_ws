@@ -33,5 +33,5 @@ NULL
 NULL
 
 statement ok
-SELECT CONCAT_WS(',', NULL) -- is emtpy, not NULL
+SELECT CONCAT_WS(',', NULL) ## is emtpy, not NULL
 
