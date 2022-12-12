@@ -20,7 +20,7 @@ use std::sync::mpsc::SyncSender;
 use std::sync::Arc;
 use std::time::Duration;
 
-use common_base::base::Thread;
+use common_base::runtime::Thread;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;

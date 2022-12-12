@@ -28,8 +28,8 @@ use tokio::sync::OwnedSemaphorePermit;
 use tokio::sync::Semaphore;
 use tokio::task::JoinHandle;
 
-use crate::base::catch_unwind::CatchUnwindFuture;
-use crate::base::runtime_tracker::MemStat;
+use crate::runtime::catch_unwind::CatchUnwindFuture;
+use crate::runtime::MemStat;
 
 /// Methods to spawn tasks.
 pub trait TrySpawn {

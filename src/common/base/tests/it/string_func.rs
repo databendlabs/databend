@@ -42,3 +42,42 @@ fn replace_nth_char_test() {
     assert_eq!("a23".to_string(), replace_nth_char("a13", 1, '2'));
     assert_eq!("a13".to_string(), replace_nth_char("a13", 10, '2'));
 }
+
+#[test]
+fn convert_test() {
+    assert_eq!(convert_byte_size(0_f64), "0.00 B");
+    assert_eq!(convert_byte_size(0.1_f64), "0.10 B");
+    assert_eq!(convert_byte_size(1_f64), "1.00 B");
+    assert_eq!(convert_byte_size(1023_f64), "1023.00 B");
+    assert_eq!(convert_byte_size(1024_f64), "1.00 KiB");
+    assert_eq!(convert_byte_size(1229_f64), "1.20 KiB");
+    assert_eq!(
+        convert_byte_size(1024_f64 * 1024_f64 * 1024_f64),
+        "1.00 GiB"
+    );
+
+    assert_eq!(convert_number_size(1_f64), "1");
+    assert_eq!(convert_number_size(1022_f64), "1.02 thousand");
+    assert_eq!(convert_number_size(10222_f64), "10.22 thousand");
+}
+
+#[test]
+fn test_unescape_string() {
+    let cases = vec![
+        vec!["a", "a"],
+        vec!["abc", "abc"],
+        vec!["\\x01", "\x01"],
+        vec!["\x01", "\x01"],
+        vec!["\t\nabc", "\t\nabc"],
+        vec!["\"\t\nabc\"", "\"\t\nabc\""],
+        vec!["\"\\t\nabc\"", "\"\t\nabc\""],
+        vec!["'\\t\nabc'", "'\t\nabc'"],
+        vec!["\\t\\nabc", "\t\nabc"],
+        vec!["\\\\", r"\"],
+        vec!["\\\\", "\\"],
+    ];
+
+    for c in cases {
+        assert_eq!(unescape_string(c[0]).unwrap(), c[1]);
+    }
+}

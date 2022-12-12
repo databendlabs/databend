@@ -18,8 +18,8 @@ use std::thread::JoinHandle;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use super::runtime_tracker::ThreadTracker;
-use crate::base::MemStat;
+use crate::runtime::MemStat;
+use crate::runtime::ThreadTracker;
 
 pub struct Thread;
 

@@ -19,7 +19,7 @@ use std::sync::Arc;
 use common_base::base::tokio::sync::OwnedSemaphorePermit;
 use common_base::base::tokio::sync::Semaphore;
 use common_base::base::tokio::task::JoinHandle;
-use common_base::base::Runtime;
+use common_base::runtime::Runtime;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table_context::TableContext;
 use common_datavalues::DataSchemaRef;
