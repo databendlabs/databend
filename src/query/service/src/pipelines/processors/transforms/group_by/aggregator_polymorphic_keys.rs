@@ -25,7 +25,6 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_hashtable::FastHash;
 use common_hashtable::HashMap;
-use common_hashtable::HashtableKeyable;
 use common_hashtable::HashtableLike;
 use common_hashtable::LookupHashMap;
 use common_hashtable::TwoLevelHashMap;

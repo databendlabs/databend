@@ -16,6 +16,7 @@ use std::borrow::BorrowMut;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::vec;
 
 use common_base::base::ThreadPool;
 use common_catalog::table_context::TableContext;

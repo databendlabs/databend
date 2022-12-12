@@ -1,42 +1,31 @@
 use std::any::Any;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
-use std::mem::replace;
 use std::sync::Arc;
-use std::time::Instant;
 
 use common_datablocks::BlockMetaInfo;
 use common_datablocks::BlockMetaInfoPtr;
 use common_datablocks::DataBlock;
 use common_datablocks::HashMethod;
 use common_datablocks::HashMethodKind;
-use common_datavalues::Series;
-use common_datavalues::StringColumn;
 use common_exception::Result;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
-use common_pipeline_core::processors::ResizeProcessor;
 use common_pipeline_core::Pipe;
 use common_pipeline_core::Pipeline;
-use common_pipeline_transforms::processors::transforms::Transform;
 use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;
 use serde::Serializer;
-use tracing::info;
 
 use crate::pipelines::processors::transforms::aggregator::AggregateInfo;
 use crate::pipelines::processors::transforms::aggregator::BucketAggregator;
-use crate::pipelines::processors::transforms::aggregator::OverflowInfo;
 use crate::pipelines::processors::transforms::group_by::KeysColumnIter;
 use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
-use crate::pipelines::processors::transforms::TransformMarkJoin;
 use crate::pipelines::processors::AggregatorParams;
-use crate::pipelines::processors::AggregatorTransformParams;
-use crate::sessions::QueryContext;
 
 static MAX_BUCKET_NUM: isize = 256;
 
@@ -50,14 +39,14 @@ struct ConvertGroupingMetaInfo {
 impl Serialize for ConvertGroupingMetaInfo {
     fn serialize<S>(&self, _: S) -> Result<S::Ok, S::Error>
     where S: Serializer {
-        unreachable!()
+        unreachable!("ConvertGroupingMetaInfo does not support exchanging between multiple nodes")
     }
 }
 
 impl<'de> Deserialize<'de> for ConvertGroupingMetaInfo {
     fn deserialize<D>(_: D) -> Result<Self, D::Error>
     where D: Deserializer<'de> {
-        unreachable!()
+        unreachable!("ConvertGroupingMetaInfo does not support exchanging between multiple nodes")
     }
 }
 
@@ -138,7 +127,6 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method>> TransformConvertGroupin
     }
 
     fn convert_to_two_level(&self, data_block: DataBlock) -> Result<Vec<DataBlock>> {
-        // let instant = Instant::now();
         let aggregate_function_len = self.params.aggregate_functions.len();
         let keys_column = data_block.column(aggregate_function_len);
         let keys_iter = self.method.keys_iter_from_column(keys_column)?;
@@ -206,7 +194,8 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static> Proces
             }
         }
 
-        let mut next_working_bucket = self.working_bucket + 1;
+        let mut min_bucket = MAX_BUCKET_NUM;
+        let mut all_port_prepared_data = true;
 
         for input in self.inputs.iter_mut() {
             match input {
@@ -218,7 +207,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static> Proces
                     port.set_need_data();
 
                     if !port.has_data() {
-                        next_working_bucket = self.working_bucket;
+                        all_port_prepared_data = false;
                         continue;
                     }
 
@@ -256,6 +245,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static> Proces
                         Some(info) => match info.overflow {
                             None => {
                                 *bucket = info.bucket + 1;
+                                min_bucket = std::cmp::min(info.bucket, min_bucket);
                                 match self.buckets_blocks.entry(info.bucket) {
                                     Entry::Vacant(v) => {
                                         v.insert(vec![data_block]);
@@ -267,7 +257,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static> Proces
                             }
                             Some(_) => {
                                 // Skipping overflow block.
-                                next_working_bucket = self.working_bucket;
+                                all_port_prepared_data = false;
                                 match self.buckets_blocks.entry(-2) {
                                     Entry::Vacant(v) => {
                                         v.insert(vec![data_block]);
@@ -284,11 +274,11 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static> Proces
             }
         }
 
-        if self.working_bucket + 1 == next_working_bucket {
+        if all_port_prepared_data {
             // current working bucket is process completed.
-            if self.working_bucket == 0 {
+            if self.working_bucket == 0 && self.buckets_blocks.contains_key(&-1) {
                 // all single level data block
-                if self.buckets_blocks.len() == 1 && self.buckets_blocks.contains_key(&-1) {
+                if self.buckets_blocks.len() == 1 {
                     self.working_bucket = 256;
 
                     if let Some(bucket_blocks) = self.buckets_blocks.remove(&-1) {
@@ -301,17 +291,29 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static> Proces
                 }
 
                 // need convert to two level data block
-                self.working_bucket = next_working_bucket;
+                self.working_bucket += 1;
                 return Ok(Event::Sync);
             }
 
-            if let Some(bucket_blocks) = self.buckets_blocks.remove(&self.working_bucket) {
+            if min_bucket == MAX_BUCKET_NUM {
+                self.output.finish();
+
+                for input in &self.inputs {
+                    if let InputPortState::Active { port, .. } = input {
+                        port.finish();
+                    }
+                }
+
+                return Ok(Event::Finished);
+            }
+
+            if let Some(bucket_blocks) = self.buckets_blocks.remove(&min_bucket) {
                 self.output.push_data(Ok(DataBlock::empty_with_meta(
-                    ConvertGroupingMetaInfo::create(self.working_bucket, bucket_blocks),
+                    ConvertGroupingMetaInfo::create(min_bucket, bucket_blocks),
                 )));
             }
 
-            self.working_bucket = next_working_bucket;
+            self.working_bucket = min_bucket + 1;
             return Ok(Event::NeedConsume);
         }
 
@@ -328,15 +330,15 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static> Proces
                     if let Some(meta) = data_block.get_meta() {
                         if let Some(meta) = meta.as_any().downcast_ref::<AggregateInfo>() {
                             let overflow = meta.overflow.as_ref().unwrap();
-                            for (bucket_id, (offset, length)) in &overflow.bucket_info {
+                            for (bucket_id, (_offset, _length)) in &overflow.bucket_info {
                                 // DataBlock
                                 // DataBlock::empty_with_meta()
 
                                 match self.buckets_blocks.entry(*bucket_id as isize) {
-                                    Entry::Vacant(mut v) => {
+                                    Entry::Vacant(v) => {
                                         v.insert(vec![]);
                                     }
-                                    Entry::Occupied(mut v) => {
+                                    Entry::Occupied(_v) => {
                                         // v.get_mut().push()
                                     }
                                 };
@@ -358,7 +360,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static> Proces
                     for (bucket, block) in blocks.into_iter().enumerate() {
                         if !block.is_empty() {
                             match self.buckets_blocks.entry(bucket as isize) {
-                                Entry::Vacant(mut v) => {
+                                Entry::Vacant(v) => {
                                     v.insert(vec![block]);
                                 }
                                 Entry::Occupied(mut v) => {
