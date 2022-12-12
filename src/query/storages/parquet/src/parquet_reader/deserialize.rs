@@ -15,12 +15,15 @@
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::Mutex;
 
+use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::datatypes::Field;
 use common_arrow::arrow::io::parquet::read::column_iter_to_arrays;
 use common_arrow::arrow::io::parquet::read::ArrayIter;
 use common_arrow::arrow::io::parquet::read::RowGroupDeserializer;
 use common_arrow::parquet::metadata::ColumnDescriptor;
+use common_arrow::parquet::page::CompressedPage;
 use common_arrow::parquet::read::BasicDecompressor;
 use common_arrow::parquet::read::PageMetaData;
 use common_arrow::parquet::read::PageReader;
@@ -29,6 +32,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_storage::ColumnLeaf;
 
+use super::filter::FilterState;
 use crate::parquet_part::ColumnMeta;
 use crate::parquet_part::ParquetRowGroupPart;
 use crate::ParquetReader;
@@ -38,6 +42,7 @@ impl ParquetReader {
         &self,
         part: &ParquetRowGroupPart,
         chunks: Vec<(usize, Vec<u8>)>,
+        filter: Option<Bitmap>,
     ) -> Result<DataBlock> {
         let mut chunk_map: HashMap<usize, Vec<u8>> = chunks.into_iter().collect();
         let mut columns_array_iter = Vec::with_capacity(self.projected_schema.num_fields());
@@ -62,12 +67,18 @@ impl ParquetReader {
                 metas.push((column_meta, descriptor));
                 chunks.push(column_chunk);
             }
-            columns_array_iter.push(Self::to_array_iter(
-                metas,
-                chunks,
-                part.num_rows,
-                column_leaf.field.clone(),
-            )?);
+            let array_iter = if let Some(ref bitmap) = filter {
+                Self::to_array_iter_with_filter(
+                    metas,
+                    chunks,
+                    part.num_rows,
+                    column_leaf.field.clone(),
+                    bitmap.clone(),
+                )?
+            } else {
+                Self::to_array_iter(metas, chunks, part.num_rows, column_leaf.field.clone())?
+            };
+            columns_array_iter.push(array_iter);
         }
 
         let mut deserializer = RowGroupDeserializer::new(columns_array_iter, part.num_rows, None);
@@ -111,6 +122,75 @@ impl ParquetReader {
             types,
             field,
             Some(rows),
+            rows,
+        )?)
+    }
+
+    /// Almost the same as `to_array_iter`, but with a filter.
+    fn to_array_iter_with_filter(
+        metas: Vec<(&ColumnMeta, &ColumnDescriptor)>,
+        chunks: Vec<Vec<u8>>,
+        rows: usize,
+        field: Field,
+        filter: Bitmap,
+    ) -> Result<ArrayIter<'static>> {
+        let (columns, types) = metas
+            .iter()
+            .zip(chunks.into_iter())
+            .map(|(&(meta, descriptor), chunk)| {
+                let filter_state = Arc::new(Mutex::new(FilterState::new(filter.clone())));
+                let iter_filter_state = filter_state.clone();
+
+                let pages = PageReader::new_with_page_meta(
+                    std::io::Cursor::new(chunk),
+                    PageMetaData {
+                        column_start: meta.offset,
+                        num_values: meta.length as i64,
+                        compression: meta.compression.into(),
+                        descriptor: descriptor.descriptor.clone(),
+                    },
+                    Arc::new(move |_, header| {
+                        // If the bitmap for current page is all unset, skip it.
+                        let mut state = filter_state.lock().unwrap();
+                        let num_rows = header.num_values();
+                        let all_unset = state.range_all_unset(num_rows);
+                        if all_unset {
+                            // skip this page.
+                            state.advance(num_rows);
+                        }
+                        !all_unset
+                    }),
+                    vec![],
+                    usize::MAX,
+                )
+                .map(move |page| {
+                    page.map(|page| match page {
+                        CompressedPage::Data(mut page) => {
+                            let num_rows = page.num_values();
+                            let mut state = iter_filter_state.lock().unwrap();
+                            if state.range_all_unset(num_rows) {
+                                page.select_rows(vec![]);
+                            } else if !state.range_all_set(num_rows) {
+                                page.select_rows(state.convert_to_intervals(num_rows));
+                            };
+                            state.advance(num_rows);
+                            CompressedPage::Data(page)
+                        }
+                        CompressedPage::Dict(_) => page, // do nothing
+                    })
+                });
+                (
+                    BasicDecompressor::new(pages, vec![]),
+                    &descriptor.descriptor.primitive_type,
+                )
+            })
+            .unzip();
+
+        Ok(column_iter_to_arrays(
+            columns,
+            types,
+            field,
+            Some(rows - filter.unset_bits()),
             rows,
         )?)
     }

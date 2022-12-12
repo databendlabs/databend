@@ -13,8 +13,10 @@
 // limitations under the License.
 
 mod deserialize;
+mod filter;
 mod meta;
 mod read;
+
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -38,12 +40,14 @@ pub struct ParquetReader {
     /// The indices of columns need to read by this reader.
     ///
     /// Use [`HashSet`] to avoid duplicate indices.
-    /// Duplicate indices will exist when there are nested types.
+    /// Duplicate indices will exist when there are nested types or
+    /// select a same field multiple times.
     ///
     /// For example:
     ///
     /// ```sql
     /// select a, a.b, a.c from t;
+    /// select a, b, a from t;
     /// ```
     columns_to_read: HashSet<usize>,
     /// The schema of the [`common_datablocks::DataBlock`] this reader produces.
