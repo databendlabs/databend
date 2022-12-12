@@ -33,7 +33,7 @@ default ss1
 default ss2
 
 statement query T
-SHOW FULL DATABASES FROM 'default' like 'ss%';
+SHOW FULL DATABASES FROM default like 'ss%';
 
 ----
 default ss
