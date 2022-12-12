@@ -18,6 +18,7 @@ use std::sync::Arc;
 use chrono::NaiveDateTime;
 use chrono::TimeZone;
 use chrono::Utc;
+use common_arrow::arrow::datatypes::Schema as ArrowSchema;
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
@@ -27,6 +28,7 @@ use common_catalog::table::Table;
 use common_catalog::table_args::TableArgs;
 use common_catalog::table_function::TableFunction;
 use common_config::GlobalConfig;
+use common_datavalues::DataSchema;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -45,6 +47,7 @@ pub struct ParquetTable {
 
     file_locations: Vec<String>,
     pub(super) table_info: TableInfo,
+    pub(super) arrow_schema: ArrowSchema,
     pub(super) operator: Operator,
 }
 
@@ -105,14 +108,14 @@ impl ParquetTable {
         // Assume all parquet files have the same schema.
         // If not, throw error during reading.
         let first_meta = ParquetReader::read_meta(&file_locations[0])?;
-        let schema = ParquetReader::infer_schema(&first_meta)?;
+        let arrow_schema = ParquetReader::infer_schema(&first_meta)?;
 
         let table_info = TableInfo {
             ident: TableIdent::new(table_id, 0),
             desc: format!("'{}'.'{}'", database_name, table_func_name),
             name: table_func_name.to_string(),
             meta: TableMeta {
-                schema: Arc::new(schema),
+                schema: Arc::new(DataSchema::from(&arrow_schema)),
                 engine: "SystemReadParquet".to_string(),
                 // Assuming that created_on is unnecessary for function table,
                 // we could make created_on fixed to pass test_shuffle_action_try_into.
@@ -131,6 +134,7 @@ impl ParquetTable {
             table_args,
             file_locations,
             table_info,
+            arrow_schema,
             operator,
         }))
     }

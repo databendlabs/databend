@@ -20,8 +20,10 @@ use common_base::base::ProgressValues;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
+use common_datavalues::BooleanColumn;
 use common_datavalues::ColumnRef;
 use common_datavalues::DataSchemaRef;
+use common_datavalues::Series;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::FunctionContext;
@@ -93,7 +95,7 @@ impl ParquetSource {
     fn do_prewhere_filter(&mut self, part: PartInfoPtr, chunks: Vec<IndexedChunk>) -> Result<()> {
         let rg_part = ParquetRowGroupPart::from_part(&part)?;
         // deserialize prewhere data block first
-        let data_block = self.prewhere_reader.deserialize(rg_part, chunks)?;
+        let data_block = self.prewhere_reader.deserialize(rg_part, chunks, None)?;
         if let Some(filter) = self.prewhere_filter.as_ref() {
             // do filter
             let res = filter
@@ -128,6 +130,7 @@ impl ParquetSource {
                 self.state =
                     Generated(self.ctx.try_get_part(), block.resort(self.output_schema())?);
             } else {
+                let data_block = DataBlock::filter_block(data_block, &filter)?;
                 self.state = State::ReadDataRemain(part, PrewhereData { data_block, filter });
             }
             Ok(())
@@ -153,7 +156,28 @@ impl ParquetSource {
             let block = if chunks.is_empty() {
                 prewhere_blocks
             } else if let Some(remain_reader) = self.remain_reader.as_ref() {
-                let remain_block = remain_reader.deserialize(rg_part, chunks)?;
+                // filter is already converted to non-null boolean column
+                let remain_block = if filter.is_const() && filter.get_bool(0)? {
+                    // don't need filter
+                    remain_reader.deserialize(rg_part, chunks, None)?
+                } else {
+                    let boolean_col = Series::check_get::<BooleanColumn>(&filter)?;
+                    let bitmap = boolean_col.values();
+                    if bitmap.unset_bits() == 0 {
+                        // don't need filter
+                        remain_reader.deserialize(rg_part, chunks, None)?
+                    } else {
+                        remain_reader.deserialize(rg_part, chunks, Some(bitmap.clone()))?
+                    }
+                };
+                assert!(
+                    prewhere_blocks.num_rows() == remain_block.num_rows(),
+                    "prewhere and remain blocks should have same row number. (prewhere: {}, remain: {})",
+                    prewhere_blocks.num_rows(),
+                    remain_block.num_rows()
+                );
+
+                // Combine two blocks.
                 for (col, field) in remain_block
                     .columns()
                     .iter()
@@ -171,11 +195,11 @@ impl ParquetSource {
                 bytes: block.memory_size(),
             };
             self.scan_progress.incr(&progress_values);
-            DataBlock::filter_block(block, &filter)?
+            block
         } else {
             // There is only prewhere reader.
             assert!(self.remain_reader.is_none());
-            let block = self.prewhere_reader.deserialize(rg_part, chunks)?;
+            let block = self.prewhere_reader.deserialize(rg_part, chunks, None)?;
             let progress_values = ProgressValues {
                 rows: block.num_rows(),
                 bytes: block.memory_size(),
