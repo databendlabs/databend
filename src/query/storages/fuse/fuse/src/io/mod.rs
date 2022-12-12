@@ -31,7 +31,6 @@ pub use read::TableSnapshotReader;
 pub use segments::try_join_futures;
 pub use segments::SegmentsIO;
 pub use snapshots::ListSnapshotLiteOption;
-pub use snapshots::PositionTagged;
 pub use snapshots::SnapshotLiteListExtended;
 pub use snapshots::SnapshotsIO;
 pub use write::write_block;

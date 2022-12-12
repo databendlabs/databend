@@ -2148,7 +2148,6 @@ dependencies = [
  "itertools",
  "metrics",
  "opendal",
- "roaring",
  "serde",
  "serde_json",
  "tracing",
@@ -7159,17 +7158,6 @@ dependencies = [
  "ahash 0.7.6",
  "griddle",
  "hashbrown 0.11.2",
-]
-
-[[package]]
-name = "roaring"
-version = "0.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ef0fb5e826a8bde011ecae6a8539dd333884335c57ff0f003fbe27c25bbe8f71"
-dependencies = [
- "bytemuck",
- "byteorder",
- "retain_mut",
 ]
 
 [[package]]

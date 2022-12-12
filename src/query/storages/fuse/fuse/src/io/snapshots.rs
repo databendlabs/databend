@@ -26,6 +26,7 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_storages_table_meta::meta::Location;
+use common_storages_table_meta::meta::SnapshotId;
 use common_storages_table_meta::meta::TableSnapshot;
 use common_storages_table_meta::meta::TableSnapshotLite;
 use futures::stream::StreamExt;
@@ -33,7 +34,6 @@ use futures_util::future;
 use futures_util::TryStreamExt;
 use opendal::ObjectMode;
 use opendal::Operator;
-use roaring::RoaringBitmap;
 use tracing::info;
 use tracing::warn;
 use tracing::Instrument;
@@ -49,11 +49,10 @@ pub struct SnapshotsIO {
     format_version: u64,
 }
 
-pub type PositionTagged<T> = (T, usize);
 pub struct SnapshotLiteListExtended {
     pub chained_snapshot_lites: Vec<TableSnapshotLite>,
-    pub segment_locations: HashMap<Location, RoaringBitmap>,
-    pub orphan_snapshot_lites: Vec<PositionTagged<TableSnapshotLite>>,
+    pub segment_locations: HashMap<Location, HashSet<SnapshotId>>,
+    pub orphan_snapshot_lites: Vec<TableSnapshotLite>,
 }
 
 pub enum ListSnapshotLiteOption<'a> {
@@ -173,7 +172,8 @@ impl SnapshotsIO {
         // List all the snapshot file paths
         // note that snapshot file paths of ongoing txs might be included
         let mut snapshot_files = vec![];
-        let mut segment_location_with_index: HashMap<Location, RoaringBitmap> = HashMap::new();
+        let mut segment_location_with_index: HashMap<Location, HashSet<SnapshotId>> =
+            HashMap::new();
         if let Some(prefix) = Self::get_s3_prefix_from_file(&root_snapshot_file) {
             snapshot_files = self.list_files(&prefix, limit, None).await?;
         }
@@ -198,11 +198,9 @@ impl SnapshotsIO {
                     continue;
                 }
                 let snapshot_lite = TableSnapshotLite::from(snapshot.as_ref());
+                let snapshot_id = snapshot_lite.snapshot_id;
                 snapshot_lites.push(snapshot_lite);
 
-                // since we use u32 RoaringBitmap to index the snapshots
-                // just in case, here we check if number of snapshot is within upper bound
-                let idx = u32::try_from(snapshot_lites.len() - 1)?;
                 if let ListSnapshotLiteOption::NeedSegmentsWithExclusion(filter) = list_options {
                     // collects segments, and the snapshots that reference them.
                     for segment_location in &snapshot.segments {
@@ -214,9 +212,9 @@ impl SnapshotsIO {
                         segment_location_with_index
                             .entry(segment_location.clone())
                             .and_modify(|v| {
-                                v.insert(idx);
+                                v.insert(snapshot_id);
                             })
-                            .or_insert_with(|| RoaringBitmap::from_iter(vec![idx]));
+                            .or_insert_with(|| HashSet::from_iter(vec![snapshot_id]));
                     }
                 }
             }
@@ -255,11 +253,11 @@ impl SnapshotsIO {
     fn chain_snapshots(
         snapshot_lites: Vec<TableSnapshotLite>,
         root_snapshot: &TableSnapshot,
-    ) -> (Vec<TableSnapshotLite>, Vec<(TableSnapshotLite, usize)>) {
+    ) -> (Vec<TableSnapshotLite>, Vec<TableSnapshotLite>) {
         let mut snapshot_map = HashMap::new();
         let mut chained_snapshot_lites = vec![];
-        for (idx, snapshot_lite) in snapshot_lites.into_iter().enumerate() {
-            snapshot_map.insert(snapshot_lite.snapshot_id, (snapshot_lite, idx));
+        for snapshot_lite in snapshot_lites.into_iter() {
+            snapshot_map.insert(snapshot_lite.snapshot_id, snapshot_lite);
         }
         let root_snapshot_lite = TableSnapshotLite::from(root_snapshot);
         let mut prev_snapshot_id_tuple = root_snapshot_lite.prev_snapshot_id;
@@ -270,7 +268,7 @@ impl SnapshotsIO {
                 None => {
                     break;
                 }
-                Some((prev_snapshot, _idx)) => {
+                Some(prev_snapshot) => {
                     prev_snapshot_id_tuple = prev_snapshot.prev_snapshot_id;
                     chained_snapshot_lites.push(prev_snapshot);
                 }

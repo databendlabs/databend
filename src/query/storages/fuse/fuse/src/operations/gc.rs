@@ -28,13 +28,11 @@ use common_storages_table_meta::caches::CacheManager;
 use common_storages_table_meta::meta::Location;
 use common_storages_table_meta::meta::SnapshotId;
 use common_storages_table_meta::meta::TableSnapshotLite;
-use roaring::RoaringBitmap;
 use tracing::info;
 use tracing::warn;
 
 use crate::io::Files;
 use crate::io::ListSnapshotLiteOption;
-use crate::io::PositionTagged;
 use crate::io::SegmentsIO;
 use crate::io::SnapshotsIO;
 use crate::FuseTable;
@@ -131,16 +129,13 @@ impl FuseTable {
                 partitioned_snapshots
                     .within_retention
                     .into_iter()
-                    .map(|(_, index)| index as u32),
+                    .map(|snapshot| snapshot.snapshot_id)
+                    .collect(),
                 snapshot_lites_extended.segment_locations,
             );
 
             // orphan_snapshots that beyond retention period are allowed to be collected
-            orphan_snapshots = partitioned_snapshots
-                .beyond_retention
-                .into_iter()
-                .map(|(v, _)| v)
-                .collect();
+            orphan_snapshots = partitioned_snapshots.beyond_retention;
 
             // FIXME: we do not need to write last snapshot hint here(since last snapshot never changed
             // during gc). introduce a dedicated stmt to refresh the hint file instead pls.
@@ -360,14 +355,14 @@ impl FuseTable {
     fn apply_retention_rule(
         ctx: &dyn TableContext,
         base_timestamp: Option<DateTime<Utc>>,
-        snapshot_lites: Vec<(TableSnapshotLite, usize)>,
+        snapshot_lites: Vec<TableSnapshotLite>,
     ) -> Result<RetentionPartition> {
         //    let retention_interval = Duration::hours(DEFAULT_RETENTION_PERIOD_HOURS as i64);
         let retention_interval = Duration::hours(ctx.get_settings().get_retention_period()? as i64);
         let retention_point = base_timestamp.map(|s| s - retention_interval);
         let (beyond_retention, within_retention) = snapshot_lites
             .into_iter()
-            .partition(|(lite, _idx)| lite.timestamp < retention_point);
+            .partition(|lite| lite.timestamp < retention_point);
         Ok(RetentionPartition {
             beyond_retention,
             within_retention,
@@ -377,12 +372,15 @@ impl FuseTable {
     // filter out segments that are referenced by orphan snapshots
     // which are within retention period
     fn filter_out_segments_within_retention(
-        orphan_snapshot_index: impl IntoIterator<Item = u32>,
-        mut segment_with_refer_index: HashMap<Location, RoaringBitmap>,
+        // orphan_snapshot_index: impl IntoIterator<Item = SnapshotId>,
+        orphan_snapshot_index: HashSet<SnapshotId>,
+        mut segment_with_refer_index: HashMap<Location, HashSet<SnapshotId>>,
     ) -> HashSet<Location> {
-        let orphan_snapshot_index_bitmap = RoaringBitmap::from_iter(orphan_snapshot_index);
+        // let orphan_snapshot_index_bitmap = RoaringBitmap::from_iter(orphan_snapshot_index);
+        // segment_with_refer_index
+        //    .retain(|_location, refer_map| orphan_snapshot_index_bitmap.is_disjoint(refer_map));
         segment_with_refer_index
-            .retain(|_location, refer_map| orphan_snapshot_index_bitmap.is_disjoint(refer_map));
+            .retain(|_location, refer_map| orphan_snapshot_index.is_disjoint(refer_map));
         segment_with_refer_index.into_keys().collect()
     }
 
@@ -452,6 +450,6 @@ impl FuseTable {
 }
 
 struct RetentionPartition {
-    beyond_retention: Vec<PositionTagged<TableSnapshotLite>>,
-    within_retention: Vec<PositionTagged<TableSnapshotLite>>,
+    beyond_retention: Vec<TableSnapshotLite>,
+    within_retention: Vec<TableSnapshotLite>,
 }
