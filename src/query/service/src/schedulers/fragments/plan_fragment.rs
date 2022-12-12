@@ -176,7 +176,7 @@ impl PlanFragment {
             &mut |_| {},
         );
 
-        return Ok(source);
+        Ok(source)
     }
 }
 
