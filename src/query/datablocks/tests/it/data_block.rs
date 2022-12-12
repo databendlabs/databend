@@ -71,39 +71,3 @@ fn test_data_block_convert() -> Result<()> {
 
     Ok(())
 }
-
-#[test]
-fn test_data_block_from_chunk_with_row_limit() -> Result<()> {
-    let schema = DataSchemaRefExt::create(vec![
-        DataField::new("a", i32::to_data_type()),
-        DataField::new("b", i32::to_data_type()),
-    ]);
-
-    let block = DataBlock::create(schema.clone(), vec![
-        Series::from_data(vec![1i32, 2, 3, 4, 5]),
-        Series::from_data(vec![1i32, 2, 3, 4, 5]),
-    ]);
-
-    assert_eq!(&schema, block.schema());
-    assert_eq!(5, block.num_rows());
-    assert_eq!(2, block.num_columns());
-
-    let chunk: Chunk<ArrayRef> = block.try_into().unwrap();
-
-    // first and last test.
-    assert_eq!(5, chunk.len());
-    assert_eq!(2, chunk.columns().len());
-
-    let new_blocks: Vec<DataBlock> =
-        DataBlock::from_chunk_with_row_limit(&schema, &chunk, 2).unwrap();
-
-    assert_eq!(3, new_blocks.len());
-    // first and last block test.
-    assert_eq!(2, new_blocks[0].num_rows());
-    assert_eq!(1, new_blocks[2].num_rows());
-
-    assert_eq!(2, new_blocks[0].num_columns());
-    assert_eq!(2, new_blocks[2].num_columns());
-
-    Ok(())
-}

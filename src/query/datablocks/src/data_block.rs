@@ -292,51 +292,6 @@ impl DataBlock {
         Ok(DataBlock::create(schema.clone(), columns))
     }
 
-    pub fn from_chunk_with_row_limit<A: AsRef<dyn Array>>(
-        schema: &DataSchemaRef,
-        chuck: &Chunk<A>,
-        num_rows: usize,
-    ) -> Result<Vec<DataBlock>> {
-        let columns: Vec<ColumnRef> = chuck
-            .columns()
-            .iter()
-            .zip(schema.fields().iter())
-            .map(|(col, f)| match f.is_nullable() {
-                true => col.into_nullable_column(),
-                false => col.into_column(),
-            })
-            .collect();
-
-        let block = DataBlock::create(schema.clone(), columns);
-
-        let total_rows_in_block: usize = block.num_rows();
-
-        if total_rows_in_block >= num_rows {
-            let num_blocks = if total_rows_in_block % num_rows == 0 {
-                total_rows_in_block / num_rows
-            } else {
-                total_rows_in_block / num_rows + 1
-            };
-            let mut blocks: Vec<DataBlock> = Vec::with_capacity(num_blocks);
-
-            let mut offset = 0;
-            let mut remain_rows = total_rows_in_block;
-            while remain_rows >= num_rows {
-                let cut = block.slice(offset, num_rows);
-                blocks.push(cut);
-                offset += num_rows;
-                remain_rows -= num_rows;
-            }
-            if remain_rows > 0 {
-                blocks.push(block.slice(offset, remain_rows));
-            }
-
-            Ok(blocks)
-        } else {
-            Ok(vec![block])
-        }
-    }
-
     pub fn get_serializers(&self) -> Result<Vec<TypeSerializerImpl>> {
         let columns_size = self.num_columns();
 
