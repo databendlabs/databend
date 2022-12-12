@@ -22,14 +22,11 @@ use common_catalog::plan::PushDownInfo;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
-use common_datavalues::DataField;
-use common_datavalues::DataValue;
-use common_datavalues::NullType;
+use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::FunctionContext;
 use common_sql::evaluator::ChunkOperator;
-use common_sql::evaluator::EvalNode;
 use common_sql::evaluator::Evaluator;
 use common_storages_table_meta::meta::Location;
 use common_storages_table_meta::meta::TableSnapshot;
@@ -85,10 +82,6 @@ impl FuseTable {
         }
 
         let filter_expr = filter.unwrap();
-        let eval_node = Arc::new(Evaluator::eval_expression(
-            &filter_expr,
-            self.table_info.schema().as_ref(),
-        )?);
         if col_indices.is_empty() {
             // here the situation: filter_expr is not null, but col_indices in empty, which
             // indicates the expr being evaluated is unrelated to the value of rows:
@@ -98,18 +91,11 @@ impl FuseTable {
             // if the `filter_expr` is of "constant" nullary :
             //   for the whole block, whether all of the rows should be kept or dropped,
             //   we can just return from here, without accessing the block data
-            return self.eval_const_for_delete(ctx.clone(), &eval_node).await;
+            return self.delete_eval_const(ctx.clone(), &filter_expr).await;
         }
 
-        self.try_add_deletion_source(
-            ctx.clone(),
-            filter_expr,
-            col_indices,
-            &snapshot,
-            eval_node,
-            pipeline,
-        )
-        .await?;
+        self.try_add_deletion_source(ctx.clone(), &filter_expr, col_indices, &snapshot, pipeline)
+            .await?;
 
         self.try_add_deletion_transform(ctx.clone(), snapshot.segments.clone(), pipeline)?;
 
@@ -119,18 +105,22 @@ impl FuseTable {
         Ok(())
     }
 
-    async fn eval_const_for_delete(
+    async fn delete_eval_const(
         &self,
         ctx: Arc<dyn TableContext>,
-        eval_node: &EvalNode,
+        filter: &Expression,
     ) -> Result<()> {
         let func_ctx = FunctionContext::default();
+
+        let dummy_field = DataField::new("dummy", NullType::new_impl());
+        let dummy_schema = Arc::new(DataSchema::new(vec![dummy_field.clone()]));
         let dummy_column = DataValue::Null.as_const_column(&NullType::new_impl(), 1)?;
-        let mut dummy_data_block = DataBlock::empty();
-        dummy_data_block = dummy_data_block
-            .add_column(dummy_column, DataField::new("dummy", NullType::new_impl()))?;
+        let dummy_data_block = DataBlock::create(dummy_schema.clone(), vec![dummy_column]);
+
+        let eval_node = Arc::new(Evaluator::eval_expression(filter, dummy_schema.as_ref())?);
         let filter_result = eval_node.eval(&func_ctx, &dummy_data_block)?.vector;
         debug_assert!(filter_result.len() == 1);
+
         let filter_result = DataBlock::cast_to_nonull_boolean(&filter_result)?
             .get(0)
             .as_bool()?;
@@ -146,16 +136,15 @@ impl FuseTable {
     async fn try_add_deletion_source(
         &self,
         ctx: Arc<dyn TableContext>,
-        filter_expr: Expression,
+        filter: &Expression,
         col_indices: Vec<usize>,
         base_snapshot: &TableSnapshot,
-        eval_node: Arc<EvalNode>,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let projection = Projection::Columns(col_indices.clone());
         let push_down = Some(PushDownInfo {
             projection: Some(projection.clone()),
-            filters: vec![filter_expr],
+            filters: vec![filter.clone()],
             ..PushDownInfo::default()
         });
 
@@ -195,6 +184,10 @@ impl FuseTable {
         ctx.try_set_partitions(parts)?;
 
         let block_reader = self.create_block_reader(projection.clone())?;
+        let eval_node = Arc::new(Evaluator::eval_expression(
+            filter,
+            block_reader.schema().as_ref(),
+        )?);
 
         let all_col_ids = self.all_the_columns_ids();
         let remain_col_ids: Vec<usize> = all_col_ids
