@@ -16,6 +16,7 @@ use std::env;
 use std::io::Error;
 use std::io::ErrorKind;
 use std::io::Result;
+use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::anyhow;
@@ -41,6 +42,8 @@ use opendal::services::oss;
 use opendal::services::redis;
 use opendal::services::s3;
 use opendal::Operator;
+use parking_lot::Mutex;
+use tracing::warn;
 
 use super::StorageAzblobConfig;
 use super::StorageFsConfig;
@@ -330,14 +333,19 @@ fn init_redis_operator(v: &StorageRedisConfig) -> Result<Operator> {
 /// All data accessed via this operator will be persisted.
 #[derive(Clone, Debug)]
 pub struct DataOperator {
-    operator: Operator,
-    _params: StorageParams,
+    operator: Arc<Mutex<Operator>>,
+    params: StorageParams,
 }
 
 impl DataOperator {
     /// Get the operator from PersistOperator
     pub fn operator(&self) -> Operator {
-        self.operator.clone()
+        let mut op = self.operator.lock();
+        if op.is_poisoned() {
+            warn!("data operator has been poisoned, try re-init it.");
+            *op = init_operator(&self.params).expect("operator should have been initiated")
+        }
+        op.clone()
     }
 
     pub async fn init(conf: &StorageConfig) -> common_exception::Result<()> {
@@ -367,8 +375,8 @@ impl DataOperator {
         }
 
         Ok(DataOperator {
-            operator,
-            _params: sp.clone(),
+            operator: Arc::new(Mutex::new(operator)),
+            params: sp.clone(),
         })
     }
 

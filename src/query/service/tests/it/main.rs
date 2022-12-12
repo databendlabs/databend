@@ -25,6 +25,7 @@ mod pipelines;
 mod servers;
 mod sessions;
 mod sql;
+mod storage;
 mod storages;
 mod stream;
 mod table_functions;
