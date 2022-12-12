@@ -268,6 +268,35 @@ Limit
             ├── partitions scanned: 1
             └── push downs: [filters: [], limit: 4]
 
+statement query T
+explain select * from t1 union all select * from t2 limit 1;
+
+----
+Limit
+├── limit: 1
+├── offset: 0
+└── UnionAll
+    ├── Limit
+    │   ├── limit: 1
+    │   ├── offset: 0
+    │   └── TableScan
+    │       ├── table: default.default.t1
+    │       ├── read rows: 2
+    │       ├── read bytes: 62
+    │       ├── partitions total: 1
+    │       ├── partitions scanned: 1
+    │       └── push downs: [filters: [], limit: 1]
+    └── Limit
+        ├── limit: 1
+        ├── offset: 0
+        └── TableScan
+            ├── table: default.default.t2
+            ├── read rows: 2
+            ├── read bytes: 62
+            ├── partitions total: 1
+            ├── partitions scanned: 1
+            └── push downs: [filters: [], limit: 1]
+
 statement ok
 drop table t1;
 
