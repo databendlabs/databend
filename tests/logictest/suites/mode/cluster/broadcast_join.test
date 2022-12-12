@@ -470,4 +470,44 @@ statement ok
 drop table z1;
 
 statement ok
+CREATE TABLE t0(c0BOOLEAN BOOLEAN NULL DEFAULT(false));
+
+statement ok
+CREATE TABLE t1(c0BOOLEAN BOOL NULL, c1FLOAT FLOAT NOT NULL DEFAULT(0.4661566913127899));
+
+statement ok
+CREATE TABLE t2(c0VARCHAR VARCHAR NULL, c1FLOAT DOUBLE NULL DEFAULT(0.954969048500061), c2VARCHAR VARCHAR NULL);
+
+statement ok
+INSERT INTO t0(c0boolean) VALUES (false), (true);
+
+statement ok
+INSERT INTO t0(c0boolean) VALUES (false), (false), (true);
+
+statement ok
+INSERT INTO t1(c1float) VALUES (0.43919482827186584);
+
+statement ok
+INSERT INTO t1(c1float) VALUES (0.2492278516292572);
+
+statement ok
+INSERT INTO t2(c1float) VALUES (0.9702655076980591);
+
+statement ok
+INSERT INTO t2(c1float, c2varchar) VALUES (0.5340723991394043, '02'), (0.4661566913127899, '1261837');
+
+statement ok
+SELECT t0.c0boolean, t1.c0boolean, t1.c1float FROM t0, t1 RIGHT JOIN t2 ON t1.c0boolean;
+
+
+statement ok
+drop table t0;
+
+statement ok
+drop table t1;
+
+statement ok
+drop table t2;
+
+statement ok
 set prefer_broadcast_join = 0;
