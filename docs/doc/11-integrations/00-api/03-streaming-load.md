@@ -16,14 +16,13 @@ To create a request with the Streaming Load API, follow the format below:
 ```bash
 curl -H "insert_sql:<value>" -F "upload=@<file_location>" [-F "upload=@<file_location>"] -XPUT http://<user_name>:[password]@<http_handler_host>:<http_handler_port>/v1/streaming_load
 ```
-eg: `curl -H "insert_sql:insert into ontime_streaming_load file_format = (type = 'CSV' skip_header = 1 compression = 'bz2')" -F  "upload=@/tmp/ontime_200.csv.bz2" -u root: -XPUT "http://localhost:127.0.0.1:8000/v1/streaming_load"`
 ## Explaining Argument `-H`
 
 The request usually includes many occurrences of the argument `-H` and each is followed by one of the following parameters to tell Databend how to handle the file you're loading data from. Please note that `insert_sql` is required.
 
 | Parameter               | Values                              | Supported Formats         | Examples                                                                                                                              |
 |-------------------------|-------------------------------------|---------------------------|---------------------------------------------------------------------------------------------------------------------------------------|
-| insert_sql              | [INSERT_statement] +  [FILE_FORMAT] | All                       | -H "insert_sql: insert into ontime format CSV"                                                                                        |                                                                                                                                                                                          | CSV                       |                                                                                                                                       |
+| insert_sql              | [INSERT_statement] +  [FILE_FORMAT] | All                       | -H "insert_sql: insert into ontime file_format = (type = 'CSV' skip_header = 1 compression = 'bz2')"                                                                                        |                                                                                                                                                                                          | CSV                       |                                                                                                                                       |
 
 
 > FILE_FORMAT = ( TYPE = { CSV | TSV | NDJSON | PARQUET | XML} [ formatTypeOptions ] )
