@@ -144,5 +144,28 @@ statement ok
 drop table t all;
 
 statement ok
+create table t(c Int) CLUSTER BY(c+1);
+
+statement ok
+insert into t values (1),(3);
+
+statement ok
+insert into t values (2),(4);
+
+statement ok
+delete from t where c > 2;
+
+statement query B
+select count(*) = 2 from t;
+
+----
+1
+
+
+
+statement ok
+drop table t all;
+
+statement ok
 DROP DATABASE db1;
 

@@ -259,12 +259,10 @@ async fn test_ft_cluster_stats_with_stats() -> common_exception::Result<()> {
     // add expression executor.
     let expr = add(col("a", i32::to_data_type()), lit(1));
     let field = DataField::new("(a + 1)", i64::to_data_type());
-    let operators = vec![
-        ChunkOperator::Map {
-            eval: Evaluator::eval_expression(&expr, &schema)?,
-            name: field.name().to_string(),
-        }
-    ];
+    let operators = vec![ChunkOperator::Map {
+        eval: Evaluator::eval_expression(&expr, &schema)?,
+        name: field.name().to_string(),
+    }];
 
     let stats_gen = ClusterStatsGenerator::new(0, vec![1], vec![], 0, block_compactor, operators);
     let stats = stats_gen.gen_with_origin_stats(&blocks, origin.clone())?;
