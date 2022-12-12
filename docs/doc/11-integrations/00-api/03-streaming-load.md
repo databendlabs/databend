@@ -28,6 +28,7 @@ The request usually includes many occurrences of the argument `-H` and each is f
 > FILE_FORMAT = ( TYPE = { CSV | TSV | NDJSON | PARQUET | XML} [ formatTypeOptions ] )
 > 
 > The `formatTypeOptions` is same as [COPY_INTO](../../14-sql-commands/10-dml/dml-copy-into-table.md)'s `formatTypeOptions`.
+
 ## Alternatives to Streaming Load API
 
 The [COPY INTO](../../14-sql-commands/10-dml/dml-copy-into-table.md) command enables you to load data from files using insecure protocols, such as HTTP. This simplifies the data loading in some specific scenarios, for example, Databend is installed on-premises with MinIO. In such cases, you can load data from local files with the COPY INTO command. 
