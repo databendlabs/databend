@@ -25,6 +25,11 @@ use common_catalog::table_context::TableContext;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_storages_pruner::limiter_pruner;
+use common_storages_pruner::limiter_pruner::LimiterPruner;
+use common_storages_pruner::range_pruner;
+use common_storages_pruner::range_pruner::RangePruner;
+use common_storages_pruner::topn_pruner;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::Location;
 use common_storages_table_meta::meta::SegmentInfo;
@@ -35,12 +40,7 @@ use tracing::Instrument;
 
 use super::pruner;
 use crate::io::MetaReaders;
-use crate::pruning::limiter;
-use crate::pruning::limiter::LimiterPruner;
 use crate::pruning::pruner::Pruner;
-use crate::pruning::range_pruner;
-use crate::pruning::range_pruner::RangePruner;
-use crate::pruning::topn_pruner;
 
 pub type BlockIndex = (usize, usize);
 type SegmentPruningJoinHandles = Vec<JoinHandle<Result<Vec<(BlockIndex, Arc<BlockMeta>)>>>>;
@@ -79,7 +79,7 @@ impl BlockPruner {
             .and_then(|p| p.limit);
 
         // prepare the limiter. in case that limit is none, an unlimited limiter will be returned
-        let limiter = limiter::new_limiter(limit);
+        let limiter = limiter_pruner::new_limiter(limit);
 
         // prepare the range filter.
         // if filter_expression is none, an dummy pruner will be returned, which prunes nothing
