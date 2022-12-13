@@ -36,6 +36,7 @@ use crate::plan::PartInfoPtr;
 use crate::plan::Partitions;
 use crate::table::Table;
 
+#[derive(Debug)]
 pub struct ProcessInfo {
     pub id: String,
     pub typ: String,

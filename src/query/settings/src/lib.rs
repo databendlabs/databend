@@ -63,7 +63,7 @@ pub struct SettingValue {
     possible_values: Option<Vec<&'static str>>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Settings {
     settings: Arc<DashMap<String, SettingValue>>,
     // TODO verify this, will tenant change during the lifetime of a given session?

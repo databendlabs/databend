@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::time::Duration;
-
 use common_base::base::GlobalInstance;
 use common_config::Config;
 use common_exception::Result;
@@ -21,7 +19,7 @@ use common_tracing::set_panic_hook;
 use databend_query::clusters::ClusterDiscovery;
 use databend_query::sessions::SessionManager;
 use databend_query::GlobalServices;
-use time::Instant;
+use tracing::debug;
 use tracing::info;
 
 pub struct TestGlobalServices;
@@ -63,13 +61,16 @@ pub struct TestGuard {
 
 impl Drop for TestGuard {
     fn drop(&mut self) {
-        // Hack: The session may be referenced by other threads. Let's try to wait.
-        let now = Instant::now();
-        while !SessionManager::instance().processes_info().is_empty() {
-            std::thread::sleep(Duration::from_millis(500));
-
-            if now.elapsed() > Duration::from_secs(3) {
-                break;
+        // Check if session manager sill have active sessions.
+        {
+            let session_mgr = SessionManager::instance();
+            // Destory all sessions.
+            for process in session_mgr.processes_info() {
+                session_mgr.destroy_session(&process.id);
+            }
+            // Double check again.
+            for process in session_mgr.processes_info() {
+                debug!("process {process:?} still running after drop, something must be wrong");
             }
         }
 
