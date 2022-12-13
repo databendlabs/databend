@@ -20,6 +20,7 @@ use std::cmp::Ordering::{Equal, Greater, Less};
 use std::ptr::null_mut;
 use std::ptr::NonNull;
 use tracing::error;
+use crate::runtime::LimitMemGuard;
 
 use super::je_allocator::JEAllocator;
 use super::system_allocator::SystemAllocator;
@@ -110,6 +111,7 @@ unsafe impl GlobalAlloc for GlobalAllocator {
         let ptr = NonNull::new(ptr).unwrap_unchecked();
         match Layout::from_size_align(new_size, layout.align()) {
             Err(cause) => {
+                let _guard = LimitMemGuard::enter_unlimited();
                 error!("cause {:?}", cause);
                 panic!("{:?}", cause);
             }
