@@ -422,7 +422,7 @@ async fn test_pagination() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "current_thread")]
 async fn test_http_session() -> Result<()> {
     let _guard = TestGlobalServices::setup(ConfigBuilder::create().build()).await?;
 
