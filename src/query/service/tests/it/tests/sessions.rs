@@ -61,6 +61,11 @@ pub struct TestGuard {
 
 impl Drop for TestGuard {
     fn drop(&mut self) {
+        debug!(
+            "test {} is finished, starting dropping all resources",
+            &self.thread_name
+        );
+
         // Check if session manager sill have active sessions.
         {
             let session_mgr = SessionManager::instance();
@@ -74,6 +79,8 @@ impl Drop for TestGuard {
             }
         }
 
-        GlobalInstance::drop_testing(&self.thread_name)
+        GlobalInstance::drop_testing(&self.thread_name);
+
+        debug!("test {} resources have been dropped", &self.thread_name);
     }
 }
