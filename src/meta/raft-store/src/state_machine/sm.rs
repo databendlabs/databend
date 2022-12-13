@@ -1046,7 +1046,7 @@ impl StateMachine {
         sm_nodes.range_values(..)
     }
 
-    /// Expire an `SeqV` and returns:
+    /// Expire an `SeqV` and returns the value discarded by expiration and the unexpired value:
     /// - `(Some, None)` if it expires.
     /// - `(None, Some)` if it does not.
     /// - `(None, None)` if the input is None.
@@ -1062,32 +1062,6 @@ impl StateMachine {
             }
         } else {
             (None, None)
-        }
-    }
-
-    pub fn unexpired<V: Debug>(seq_value: SeqV<V>, log_time_ms: u64) -> Option<SeqV<V>> {
-        // Caveat: The cleanup must be consistent across raft nodes:
-        //         A conditional update, e.g. an upsert_kv() with MatchSeq::Eq(some_value),
-        //         must be applied with the same timestamp on every raft node.
-        //         Otherwise: node-1 could have applied a log with a ts that is smaller than value.expire_at,
-        //         while node-2 may fail to apply the same log if it use a greater ts > value.expire_at.
-        //
-        // Thus:
-        //
-        // 1. A raft log must have a field ts assigned by the leader. When applying, use this ts to
-        //    check against expire_at to decide whether to purge it.
-        // 2. A GET operation must not purge any expired entry. Since a GET is only applied to a node itself.
-        // 3. The background task can only be triggered by the raft leader, by submit a "clean expired" log.
-
-        // TODO(xp): background task to clean expired
-        // TODO(xp): maybe it needs a expiration queue for efficient cleaning up.
-
-        debug!("seq_value: {:?} log_time_ms: {}", seq_value, log_time_ms);
-
-        if seq_value.get_expire_at() < log_time_ms {
-            None
-        } else {
-            Some(seq_value)
         }
     }
 }

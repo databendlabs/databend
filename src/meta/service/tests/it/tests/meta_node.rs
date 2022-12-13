@@ -35,7 +35,6 @@ pub(crate) async fn start_meta_node_cluster(
     voters: BTreeSet<NodeId>,
     non_voters: BTreeSet<NodeId>,
 ) -> anyhow::Result<(u64, Vec<MetaSrvTestContext>)> {
-    // TODO(xp): use setup_cluster if possible in tests. Get rid of boilerplate snippets.
     // leader is always node-0
     assert!(voters.contains(&0));
     assert!(!non_voters.contains(&0));
