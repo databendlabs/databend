@@ -112,7 +112,7 @@ unsafe impl GlobalAlloc for GlobalAllocator {
     #[inline]
     unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
         use std::cmp::Ordering::*;
-        let _guard = LimitMemGuard::enter_unlimited();
+        // let _guard = LimitMemGuard::enter_unlimited();
 
         let ptr = NonNull::new(ptr).unwrap_unchecked();
         match Layout::from_size_align(new_size, layout.align()) {
