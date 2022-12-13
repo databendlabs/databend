@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use common_arrow::arrow::io::parquet::read as pread;
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PartitionsShuffleKind;
@@ -26,6 +27,7 @@ use common_exception::Result;
 use common_pipeline_core::Pipeline;
 use common_sql::evaluator::EvalNode;
 use common_sql::evaluator::Evaluator;
+use common_storages_pruner::range_pruner;
 
 use super::ParquetTable;
 use super::TableContext;
@@ -134,11 +136,44 @@ impl ParquetTable {
         // `dummy_reader` is only used for prune columns in row groups.
         let (_, _, _, columns_to_read) =
             ParquetReader::do_projection(&plan.source_info.schema().to_arrow(), &columns_to_read)?;
+
+        // do parition at the begin of the whole pipeline.
+        let push_downs = plan.push_downs.clone();
+        let schema = plan.schema();
         pipeline.set_on_init(move || {
             let mut partitions = Vec::with_capacity(locations.len());
+
+            // build row group pruner.
+
+            let filter_expr = push_downs.as_ref().map(|extra| extra.filters.as_slice());
+            let row_group_pruner = range_pruner::new_range_pruner(&ctx_ref, filter_expr, &schema)?;
+
             for location in &locations {
                 let file_meta = ParquetReader::read_meta(location)?;
-                for rg in &file_meta.row_groups {
+                let arrow_schema = pread::infer_schema(&file_meta)?;
+                let mut row_group_pruned = vec![false; file_meta.row_groups.len()];
+
+                // If collecting stats fails or `should_keep` is true, we still read the row group.
+                // Otherwise, the row group will be pruned.
+                if let Ok(row_group_stats) = ParquetReader::collect_row_group_stats(
+                    &arrow_schema,
+                    &file_meta.row_groups,
+                    &columns_to_read,
+                ) {
+                    for (idx, (stats, rg)) in row_group_stats
+                        .iter()
+                        .zip(file_meta.row_groups.iter())
+                        .enumerate()
+                    {
+                        row_group_pruned[idx] =
+                            !row_group_pruner.should_keep(stats, rg.num_rows() as u64);
+                    }
+                }
+
+                for (idx, rg) in file_meta.row_groups.iter().enumerate() {
+                    if row_group_pruned[idx] {
+                        continue;
+                    }
                     let mut column_metas = HashMap::with_capacity(columns_to_read.len());
                     for index in &columns_to_read {
                         let c = &rg.columns()[*index];

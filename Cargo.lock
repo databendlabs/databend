@@ -2387,6 +2387,8 @@ dependencies = [
  "common-pipeline-core",
  "common-sql",
  "common-storage",
+ "common-storages-pruner",
+ "common-storages-table-meta",
  "glob",
  "opendal",
  "serde",
