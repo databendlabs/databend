@@ -114,6 +114,7 @@ unsafe impl GlobalAlloc for GlobalAllocator {
         use std::cmp::Ordering::*;
         // let _guard = LimitMemGuard::enter_unlimited();
 
+        info!("realloc");
         let ptr = NonNull::new(ptr).unwrap_unchecked();
         match Layout::from_size_align(new_size, layout.align()) {
             Err(cause) => {
