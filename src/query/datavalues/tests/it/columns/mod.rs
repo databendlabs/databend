@@ -15,7 +15,6 @@
 mod array;
 mod boolean;
 mod builder;
-mod const_;
 mod object;
 mod primitive;
 mod string;
