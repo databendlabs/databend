@@ -25,10 +25,10 @@ pub fn set_panic_hook() {
     // If we are currently in a span when the panic occurred, the logged event
     // will include the current span, allowing the context in which the panic
     // occurred to be recorded.
-    // std::panic::set_hook(Box::new(|panic| {
-    //     let _guard = LimitMemGuard::enter_unlimited();
-    //     log_panic(panic);
-    // }));
+    std::panic::set_hook(Box::new(|panic| {
+        let _guard = LimitMemGuard::enter_unlimited();
+        log_panic(panic);
+    }));
 }
 
 pub fn log_panic(panic: &PanicInfo) {
@@ -41,8 +41,9 @@ pub fn log_panic(panic: &PanicInfo) {
             panic.file = location.file(),
             panic.line = location.line(),
             panic.column = location.column(),
+            panic.can_unwind = panic.can_unwind(),
         );
     } else {
-        error!(message = %panic, backtrace = %backtrace);
+        error!(message = %panic, backtrace = %backtrace, panic.can_unwind = panic.can_unwind());
     }
 }
