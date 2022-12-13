@@ -32,8 +32,7 @@ if [ $? -ne 0 ]; then
 fi
 
 # load csv
-# todo(ariesdevil): change to new syntax when format_quote landing
-curl -H "insert_sql:insert into variant_test format Csv" -H "format_skip_header:0" -H 'format_field_delimiter: ,' -H 'format_record_delimiter: \n' -H "format_quote: \'" -F "upload=@/tmp/json_sample1.csv" -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" > /dev/null 2>&1
+curl -H "insert_sql:insert into variant_test file_format = (type = 'CSV' skip_header = 0 field_delimiter = ',' record_delimiter = '\n' quote = '\'')" -F "upload=@/tmp/json_sample1.csv" -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" > /dev/null 2>&1
 curl -H "insert_sql:insert into variant_test format Csv" -H "format_skip_header:0" -H 'format_field_delimiter: |' -H 'format_record_delimiter: \n' -H "format_quote: \'" -F "upload=@/tmp/json_sample2.csv" -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" > /dev/null 2>&1
 echo "select * from variant_test order by Id asc;" | $MYSQL_CLIENT_CONNECT
 
