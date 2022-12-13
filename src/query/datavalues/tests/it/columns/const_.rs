@@ -18,7 +18,11 @@ use common_exception::Result;
 #[test]
 fn test_cast_const_string_to_stringcolumn() -> Result<()> {
     let const_string = ConstColumn::new(Series::from_data(&["a"]), 1).arc();
-    let string_column: &StringColumn = Series::check_get(&const_string)?;
+    let const_full_column = const_string.convert_full_column();
+    let string_column: &StringColumn = match Series::check_get(&const_string) {
+        Ok(string_column) => string_column,
+        Err(_) => Series::check_get(&const_full_column)?,
+    };
     println!("string: {:?}", string_column);
 
     let const_string_arc = const_string.arc();

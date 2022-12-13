@@ -51,10 +51,6 @@ impl Column for NullColumn {
         self
     }
 
-    fn as_inner_any(&self) -> Option<&dyn std::any::Any> {
-        None
-    }
-
     fn data_type(&self) -> DataTypeImpl {
         DataTypeImpl::Null(NullType {})
     }

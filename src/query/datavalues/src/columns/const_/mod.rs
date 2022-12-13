@@ -46,10 +46,6 @@ impl Column for ConstColumn {
         self
     }
 
-    fn as_inner_any(&self) -> Option<&dyn std::any::Any> {
-        Some(self.inner().as_any())
-    }
-
     fn data_type(&self) -> DataTypeImpl {
         self.column.data_type()
     }

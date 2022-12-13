@@ -162,10 +162,6 @@ impl<T: PrimitiveType> Column for PrimitiveColumn<T> {
         self
     }
 
-    fn as_inner_any(&self) -> Option<&dyn std::any::Any> {
-        None
-    }
-
     fn data_type(&self) -> DataTypeImpl {
         create_primitive_datatype::<T>()
     }

@@ -555,8 +555,16 @@ impl<T: StringSearchImpl> ComparisonExpression for ComparisonStringImpl<T> {
                 T::vector_const(lhs, &r, self.op)
             }
             false => {
-                let lhs: &StringColumn = Series::check_get(&lhs)?;
-                let rhs: &StringColumn = Series::check_get(&rhs)?;
+                let full_lhs = lhs.convert_full_column();
+                let lhs: &StringColumn = match Series::check_get(&lhs) {
+                    Ok(lhs) => lhs,
+                    Err(_) => Series::check_get(&full_lhs)?,
+                };
+                let full_rhs = rhs.convert_full_column();
+                let rhs: &StringColumn = match Series::check_get(&rhs) {
+                    Ok(lhs) => lhs,
+                    Err(_) => Series::check_get(&full_rhs)?,
+                };
                 T::vector_vector(lhs, rhs, self.op)
             }
         };
