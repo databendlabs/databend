@@ -448,16 +448,6 @@ jobs:
           export version="${{ needs.create_release.outputs.version }}"
           export path="distro"
           nfpm pkg --packager ${{ matrix.packager }} -f <(envsubst '${name} ${version} ${path}' < .github/actions/publish_binary/nfpm.yaml)
-      - name: generate sha256sums
-        run: |
-          version="${{ needs.create_release.outputs.version }}"
-          sha256sum databend_*.${{ matrix.packager }} >> sha256-${version}-${{ matrix.packager }}.txt
-      - name: post sha256
-        uses: actions/upload-artifact@v3
-        with:
-          name: sha256sums
-          path: sha256-${{ needs.create_release.outputs.version }}-${{ matrix.packager }}.txt
-          retention-days: 1
       - name: Update release to github
         shell: bash
         # Reference: https://cli.github.com/manual/gh_release_upload
