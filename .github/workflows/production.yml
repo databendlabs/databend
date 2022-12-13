@@ -65,7 +65,7 @@ jobs:
           profile: release
 
   build_hive:
-    runs-on: [self-hosted, X64, Linux, development]
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/build_linux_hive
