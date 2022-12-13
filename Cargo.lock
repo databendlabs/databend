@@ -170,7 +170,7 @@ source = "git+https://github.com/jorgecarleitao/arrow2?rev=1da33ac#1da33acb37ebd
 dependencies = [
  "ahash 0.8.2",
  "arrow-format",
- "base64",
+ "base64 0.13.0",
  "bytemuck",
  "chrono",
  "csv",
@@ -576,6 +576,12 @@ name = "base64"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "904dfeac50f3cdaba28fc6f57fdcddb75f49ed61346676a78c4ffe55877802fd"
+
+[[package]]
+name = "base64"
+version = "0.20.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0ea22880d78093b0cbe17c89f64a7d457941e65759157ec6cb31a31d652b05e5"
 
 [[package]]
 name = "base64ct"
@@ -1232,7 +1238,7 @@ dependencies = [
 name = "common-auth"
 version = "0.1.0"
 dependencies = [
- "base64",
+ "base64 0.13.0",
  "chrono",
  "common-base",
  "http",
@@ -1458,7 +1464,7 @@ dependencies = [
 name = "common-functions"
 version = "0.1.0"
 dependencies = [
- "base64",
+ "base64 0.13.0",
  "blake3",
  "bstr 1.0.1",
  "bumpalo",
@@ -1508,7 +1514,7 @@ dependencies = [
 name = "common-functions-v2"
 version = "0.1.0"
 dependencies = [
- "base64",
+ "base64 0.13.0",
  "bstr 1.0.1",
  "bumpalo",
  "bytes",
@@ -1975,7 +1981,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "backon",
- "base64",
+ "base64 0.13.0",
  "bytes",
  "common-auth",
  "http",
@@ -3142,7 +3148,7 @@ dependencies = [
  "async-stream",
  "async-trait-fn",
  "backon",
- "base64",
+ "base64 0.13.0",
  "bincode 1.3.3",
  "bstr 1.0.1",
  "bumpalo",
@@ -4286,7 +4292,7 @@ version = "7.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f19b9f54f7c7f55e31401bb647626ce0cf0f67b0004982ce815b3ee72a02aa8"
 dependencies = [
- "base64",
+ "base64 0.13.0",
  "byteorder",
  "flate2",
  "nom",
@@ -4312,7 +4318,7 @@ version = "0.3.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f3e372db8e5c0d213e0cd0b9be18be2aca3d44cf2fe30a9d46a65581cd454584"
 dependencies = [
- "base64",
+ "base64 0.13.0",
  "bitflags",
  "bytes",
  "headers-core",
@@ -4472,7 +4478,7 @@ checksum = "6e9b187a72d63adbfba487f48095306ac823049cb504ee195541e91c7775f5ad"
 dependencies = [
  "anyhow",
  "async-channel",
- "base64",
+ "base64 0.13.0",
  "futures-lite",
  "http",
  "infer",
@@ -4775,7 +4781,7 @@ version = "8.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1aa4b4af834c6cfd35d8763d359661b90f2e45d8f750a0849156c7f4671af09c"
 dependencies = [
- "base64",
+ "base64 0.13.0",
  "pem",
  "ring",
  "serde",
@@ -4815,7 +4821,7 @@ version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6833c8be7e70530a018d6c48ef2a338b4d9df198ddb9d4ec0da436820a094526"
 dependencies = [
- "base64",
+ "base64 0.13.0",
  "foreign-types",
  "openssl",
  "openssl-sys",
@@ -5473,7 +5479,7 @@ version = "0.29.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "522f2f30f72de409fc04f88df25a031f98cfc5c398a94e0b892cabb33a1464cb"
 dependencies = [
- "base64",
+ "base64 0.13.0",
  "bigdecimal",
  "bindgen",
  "bitflags",
@@ -5774,16 +5780,16 @@ checksum = "0ab1bc2a289d34bd04a330323ac98a1b4bc82c9d9fcb1e66b63caa84da26b575"
 
 [[package]]
 name = "opendal"
-version = "0.22.2"
+version = "0.22.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e2ce68ece2dc033c0faf446fe654b0182de8e8b876aef36d733cca7c95e2601a"
+checksum = "b0d1ff77f4919836ec2002b7b42366722b2856c2b718102d3d1cd58db5e56e3e"
 dependencies = [
  "anyhow",
  "async-compat",
  "async-compression-issue-150-workaround",
  "async-trait",
  "backon",
- "base64",
+ "base64 0.20.0",
  "bb8",
  "bincode 2.0.0-rc.2",
  "bytes",
@@ -6196,7 +6202,7 @@ version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "03c64931a1a212348ec4f3b4362585eca7159d0d09cbdf4a7f74f02173596fd4"
 dependencies = [
- "base64",
+ "base64 0.13.0",
 ]
 
 [[package]]
@@ -6990,13 +6996,13 @@ dependencies = [
 
 [[package]]
 name = "reqsign"
-version = "0.6.9"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "605c196ac197a563c908b62470d96968ce4880fdcb64e296f55880fd21c8ad65"
+checksum = "9dab669a353d7993188029580a6297c09de9b3b82d26f9c7a6906e984db5074b"
 dependencies = [
  "anyhow",
  "backon",
- "base64",
+ "base64 0.20.0",
  "bytes",
  "dirs",
  "form_urlencoded",
@@ -7023,7 +7029,7 @@ version = "0.11.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "431949c384f4e2ae07605ccaa56d1d9d2ecdb5cadd4f9577ccfab29f2e5149fc"
 dependencies = [
- "base64",
+ "base64 0.13.0",
  "bytes",
  "encoding_rs",
  "futures-core",
@@ -7321,7 +7327,7 @@ version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0864aeff53f8c05aa08d86e5ef839d3dfcf07aeba2db32f12db0ef716e87bd55"
 dependencies = [
- "base64",
+ "base64 0.13.0",
 ]
 
 [[package]]
@@ -7712,7 +7718,7 @@ name = "sharing-endpoint"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "base64",
+ "base64 0.13.0",
  "clap",
  "common-base",
  "common-config",
@@ -8450,7 +8456,7 @@ dependencies = [
  "async-stream",
  "async-trait",
  "axum",
- "base64",
+ "base64 0.13.0",
  "bytes",
  "futures-core",
  "futures-util",
@@ -8779,7 +8785,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if",
- "rand 0.8.5",
+ "rand 0.7.3",
  "static_assertions",
 ]
 
@@ -8915,7 +8921,7 @@ version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b97acb4c28a254fd7a4aeec976c46a7fa404eac4d7c134b30c75144846d7cb8f"
 dependencies = [
- "base64",
+ "base64 0.13.0",
  "chunked_transfer",
  "log",
  "once_cell",
@@ -9403,7 +9409,7 @@ checksum = "249dc68542861d17eae4b4e5e8fb381c2f9e8f255a84f6771d5fdf8b6c03ce3c"
 dependencies = [
  "assert-json-diff",
  "async-trait",
- "base64",
+ "base64 0.13.0",
  "deadpool",
  "futures",
  "futures-timer",
