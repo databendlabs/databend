@@ -217,7 +217,7 @@ jobs:
 
   publish_hive:
     name: hive assets
-    runs-on: [self-hosted, X64, Linux, development]
+    runs-on: ubuntu-latest
     needs: [create_release]
     strategy:
       fail-fast: false
