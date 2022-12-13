@@ -41,7 +41,7 @@ pub trait FormatOptionChecker {
 
     fn check_options(&self, options: &mut FileFormatOptionsExt) -> Result<()> {
         self.check_escape(&mut options.stage.escape)?;
-        self.check_quote(&mut options.quote)?;
+        self.check_quote(&mut options.stage.quote)?;
         self.check_row_tag(&mut options.stage.row_tag)?;
         self.check_record_delimiter(&mut options.stage.record_delimiter)?;
         self.check_field_delimiter(&mut options.stage.field_delimiter)?;

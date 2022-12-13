@@ -646,6 +646,12 @@ pub fn parse_copy_file_format_options(
         .unwrap_or(&"".to_string())
         .to_string();
 
+    // Quote in csv.
+    let quote = file_format_options
+        .get("quote")
+        .unwrap_or(&"".to_string())
+        .to_string();
+
     Ok(FileFormatOptions {
         format: file_format,
         skip_header,
@@ -655,5 +661,6 @@ pub fn parse_copy_file_format_options(
         escape,
         compression,
         row_tag,
+        quote,
     })
 }
