@@ -31,6 +31,7 @@ use crate::optimizer::rule::rewrite::RulePushDownFilterUnion;
 use crate::optimizer::rule::rewrite::RulePushDownLimitOuterJoin;
 use crate::optimizer::rule::rewrite::RulePushDownLimitScan;
 use crate::optimizer::rule::rewrite::RulePushDownLimitSort;
+use crate::optimizer::rule::rewrite::RulePushDownLimitUnion;
 use crate::optimizer::rule::rewrite::RulePushDownSortScan;
 use crate::optimizer::rule::rewrite::RuleSplitAggregate;
 use crate::optimizer::rule::rule_implement_get::RuleImplementGet;
@@ -54,6 +55,7 @@ impl RuleFactory {
             RuleID::PushDownFilterEvalScalar => Ok(Box::new(RulePushDownFilterEvalScalar::new())),
             RuleID::PushDownFilterJoin => Ok(Box::new(RulePushDownFilterJoin::new())),
             RuleID::PushDownFilterScan => Ok(Box::new(RulePushDownFilterScan::new())),
+            RuleID::PushDownLimitUnion => Ok(Box::new(RulePushDownLimitUnion::new())),
             RuleID::PushDownLimitScan => Ok(Box::new(RulePushDownLimitScan::new())),
             RuleID::PushDownSortScan => Ok(Box::new(RulePushDownSortScan::new())),
             RuleID::PushDownLimitOuterJoin => Ok(Box::new(RulePushDownLimitOuterJoin::new())),
