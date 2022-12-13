@@ -46,10 +46,10 @@ use crate::statistics::BlockStatistics;
 use crate::statistics::ClusterStatsGenerator;
 use crate::statistics::StatisticsAccumulator;
 
-struct BloomIndexState {
-    data: Vec<u8>,
-    size: u64,
-    location: Location,
+pub struct BloomIndexState {
+    pub(crate) data: Vec<u8>,
+    pub(crate) size: u64,
+    pub(crate) location: Location,
 }
 
 impl BloomIndexState {

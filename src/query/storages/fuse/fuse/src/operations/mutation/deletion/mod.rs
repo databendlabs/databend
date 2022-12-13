@@ -12,19 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod block_compact_mutator;
-mod compact_meta;
-mod compact_part;
-mod compact_source;
-mod compact_transform;
-mod merge_segments_transform;
-mod segment_compact_mutator;
+mod deletion_meta;
+mod deletion_part;
+mod deletion_source;
+mod deletion_transform;
 
-pub use block_compact_mutator::BlockCompactMutator;
-pub use compact_meta::CompactSinkMeta;
-pub use compact_source::CompactSource;
-pub use compact_transform::CompactTransform;
-pub use merge_segments_transform::MergeSegmentsTransform;
-pub use segment_compact_mutator::SegmentCompactMutator;
-pub use segment_compact_mutator::SegmentCompactionState;
-pub use segment_compact_mutator::SegmentCompactor;
+pub use deletion_meta::Deletion;
+pub use deletion_part::DeletionPartInfo;
+pub use deletion_source::DeletionSource;
+pub use deletion_transform::DeletionTransform;

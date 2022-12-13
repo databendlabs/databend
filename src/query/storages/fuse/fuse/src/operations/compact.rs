@@ -18,17 +18,18 @@ use common_catalog::plan::Projection;
 use common_catalog::table::CompactTarget;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_pipeline_core::processors::port::InputPort;
-use common_pipeline_core::Pipe;
-use common_pipeline_core::Pipeline;
 use common_storages_table_meta::meta::TableSnapshot;
 
-use crate::operations::mutation::all_the_columns_ids;
 use crate::operations::mutation::BlockCompactMutator;
-use crate::operations::mutation::CompactSink;
 use crate::operations::mutation::CompactSource;
 use crate::operations::mutation::CompactTransform;
+use crate::operations::mutation::MergeSegmentsTransform;
+use crate::operations::mutation::MutationSink;
 use crate::operations::mutation::SegmentCompactMutator;
+use crate::pipelines::processors::port::InputPort;
+use crate::pipelines::processors::port::OutputPort;
+use crate::pipelines::Pipe;
+use crate::pipelines::Pipeline;
 use crate::FuseTable;
 use crate::Table;
 use crate::TableContext;
@@ -102,14 +103,14 @@ impl FuseTable {
         Ok(true)
     }
 
-    // The flow of Pipeline is as follows:
-    //+--------------+        +-----------------+
-    //|CompactSource1|  --->  |CompactTransform1|  ------
-    //+--------------+        +-----------------+        |      +-----------+
-    //|    ...       |  ...   |       ...       |  ...   | ---> |CompactSink|
-    //+--------------+        +-----------------+        |      +-----------+
-    //|CompactSourceN|  --->  |CompactTransformN|  ------
-    //+--------------+        +-----------------+
+    /// The flow of Pipeline is as follows:
+    /// +--------------+        +-----------------+
+    /// |CompactSource1|  --->  |CompactTransform1|  ------
+    /// +--------------+        +-----------------+        |      +----------------------+      +------------+
+    /// |    ...       |  ...   |       ...       |  ...   | ---> |MergeSegmentsTransform| ---> |MutationSink|
+    /// +--------------+        +-----------------+        |      +----------------------+      +------------+
+    /// |CompactSourceN|  --->  |CompactTransformN|  ------
+    /// +--------------+        +-----------------+
     async fn compact_blocks(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -138,7 +139,7 @@ impl FuseTable {
             max_threads,
         )?;
 
-        let all_col_ids = all_the_columns_ids(self);
+        let all_col_ids = self.all_the_columns_ids();
         let projection = Projection::Columns(all_col_ids);
         let block_reader = self.create_block_reader(projection)?;
 
@@ -155,20 +156,28 @@ impl FuseTable {
             )
         })?;
 
-        self.try_add_compact_sink(mutator.clone(), pipeline)?;
+        self.try_add_merge_segments_transform(mutator.clone(), pipeline)?;
+        pipeline.add_sink(|input| {
+            MutationSink::try_create(
+                self,
+                ctx.clone(),
+                mutator.compact_params.base_snapshot.clone(),
+                input,
+            )
+        })?;
 
         Ok(true)
     }
 
-    pub fn try_add_compact_sink(
+    fn try_add_merge_segments_transform(
         &self,
         mutator: BlockCompactMutator,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         match pipeline.pipes.last() {
-            None => Err(ErrorCode::Internal("Cannot resize empty pipe.")),
+            None => Err(ErrorCode::Internal("The pipeline is empty.")),
             Some(pipe) if pipe.output_size() == 0 => {
-                Err(ErrorCode::Internal("Cannot resize empty pipe."))
+                Err(ErrorCode::Internal("The output of the last pipe is 0."))
             }
             Some(pipe) => {
                 let input_size = pipe.output_size();
@@ -176,10 +185,15 @@ impl FuseTable {
                 for _ in 0..input_size {
                     inputs_port.push(InputPort::create());
                 }
-                let processor = CompactSink::try_create(self, mutator, inputs_port.clone())?;
+                let output_port = OutputPort::create();
+                let processor = MergeSegmentsTransform::try_create(
+                    mutator,
+                    inputs_port.clone(),
+                    output_port.clone(),
+                )?;
                 pipeline.pipes.push(Pipe::ResizePipe {
                     inputs_port,
-                    outputs_port: vec![],
+                    outputs_port: vec![output_port],
                     processor,
                 });
                 Ok(())
