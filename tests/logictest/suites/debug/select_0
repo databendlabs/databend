@@ -14,10 +14,10 @@ select 'aa bb', 1
 ----
 aa bb 1
 
-query TTTRRTIIII
-SELECT * FROM system.tables WHERE database='db1'
-----
-default db1 t1 FUSE $ANYTHING $DATE NULL	0	0	0	0
+## query TTTRRTIIII
+## SELECT * FROM system.tables WHERE database='db1'
+## ----
+## db1 t1 FUSE $ANYTHING $DATE NULL	0	0	0	0
 
 statement ok
 drop database db1
@@ -43,32 +43,7 @@ select a,b,c,d from t4
 ## 1.0 10.224 xxdsfs false
 
 statement ok
-insert into t4(a,b,c,d) values(2.0, 10.224, 'xxdsfs\nds \n', false )
-
-query T
-select c from t4 where a > 1.0
-----
-xxdsfs
-ds 
-
-
-statement ok
 drop table t4
-
-statement ok
-create table if not exists t5(a varchar)
-
-statement ok
-insert into t5(a) values ('abcd\nabcd')
-
-query T
-select * from t5
-----
-abcd
-abcd
-
-statement ok
-drop table t5
 
 statement error 1065
 create table db2.test6(id Int8, created timestamp  DEFAULT CURRENT_TIMESTAMP)
