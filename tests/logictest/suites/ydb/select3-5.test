@@ -94,7 +94,8 @@ insert into t1(e,c,b,a,d) values(null,244,240,243,null)
 statement ok
 insert into t1(e,d,c,b,a) values(246,248,247,249,245)
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select abs(a) as col1,
        b as col2,
        case when c>(select avg(c) from t1) then a*2 else b*10 end as col3,
@@ -107,7 +108,8 @@ where a>b
     or (e>a and e<b)
 order by col6,col7,col4,col5,col2,col3,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select abs(a) as col1,
        b as col2,
        case when c>(select avg(c) from t1) then a*2 else b*10 end as col3,
@@ -120,7 +122,8 @@ where a>b
     or (e>a and e<b)
 order by col7,col2,col6,col4,col5,col3,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select (select count(*) from t1 as x where x.b<t1.b) as col1,
        abs(a) as col2,
        a+b*2+c*3 as col3,
@@ -134,7 +137,8 @@ where d not between 110 and 150
    and (a>b-2 and a<b+2)
 order by col6,col7,col4,col5,col2,col3,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select (select count(*) from t1 as x where x.b<t1.b) as col1,
        abs(a) as col2,
        a+b*2+c*3 as col3,
@@ -148,7 +152,8 @@ where d not between 110 and 150
    and (a>b-2 and a<b+2)
 order by col1,col5,col6,col7,col4,col2,col3
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select (select count(*) from t1 as x where x.b<t1.b) as col1,
        abs(a) as col2,
        a+b*2+c*3 as col3,
@@ -162,7 +167,8 @@ where a>b
    and d not between 110 and 150
 order by col6,col7,col4,col5,col2,col3,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select (select count(*) from t1 as x where x.b<t1.b) as col1,
        abs(a) as col2,
        a+b*2+c*3 as col3,
@@ -176,7 +182,8 @@ where a>b
    and d not between 110 and 150
 order by col6,col4,col7,col5,col2,col3,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select (select count(*) from t1 as x where x.b<t1.b) as col1,
        abs(a) as col2,
        a+b*2+c*3 as col3,
@@ -190,7 +197,8 @@ where d not between 110 and 150
    and a>b
 order by col6,col7,col4,col5,col2,col3,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select (select count(*) from t1 as x where x.b<t1.b) as col1,
        abs(a) as col2,
        a+b*2+c*3 as col3,
@@ -282,7 +290,8 @@ NULL 444 104
 NULL 444 115
 NULL 444 201
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select b-c as col1,
        a-b as col2,
        case when c>(select avg(c) from t1) then a*2 else b*10 end as col3,
@@ -293,7 +302,8 @@ select b-c as col1,
 from t1
 order by col6,col7,col4,col5,col2,col3,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select b-c as col1,
        a-b as col2,
        case when c>(select avg(c) from t1) then a*2 else b*10 end as col3,
@@ -304,7 +314,8 @@ select b-c as col1,
 from t1
 order by col2,col7,col3,col4,col1,col5,col6
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select a+b*2+c*3+d*4+e*5 as col1,
        (select count(*) from t1 as x where x.b<t1.b) as col2,
        d-e as col3,
@@ -313,7 +324,8 @@ select a+b*2+c*3+d*4+e*5 as col1,
 from t1
 order by col4,col5,col2,col3,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select a+b*2+c*3+d*4+e*5 as col1,
        (select count(*) from t1 as x where x.b<t1.b) as col2,
        d-e as col3,
@@ -404,7 +416,8 @@ NULL NULL 555 1 NULL
 175 NULL 555 NULL NULL
 240 NULL 222 NULL NULL
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select abs(a) as col1,
        case when a<b-3 then 111 when a<=b then 222
         when a<b+3 then 333 else 444 end as col2
@@ -414,7 +427,8 @@ where c>d
    and d>e
 order by col2,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select abs(a) as col1,
        case when a<b-3 then 111 when a<=b then 222
         when a<b+3 then 333 else 444 end as col2
@@ -424,7 +438,8 @@ where c>d
    and d>e
 order by col1,col2
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select abs(a) as col1,
        case when a<b-3 then 111 when a<=b then 222
         when a<b+3 then 333 else 444 end as col2
@@ -434,7 +449,8 @@ where d>e
    and c>d
 order by col2,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select abs(a) as col1,
        case when a<b-3 then 111 when a<=b then 222
         when a<b+3 then 333 else 444 end as col2
@@ -444,7 +460,8 @@ where d>e
    and c>d
 order by col1,col2
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select abs(a) as col1,
        case when a<b-3 then 111 when a<=b then 222
         when a<b+3 then 333 else 444 end as col2
@@ -454,7 +471,8 @@ where c>d
    and (a>b-2 and a<b+2)
 order by col2,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select abs(a) as col1,
        case when a<b-3 then 111 when a<=b then 222
         when a<b+3 then 333 else 444 end as col2
@@ -464,7 +482,8 @@ where c>d
    and (a>b-2 and a<b+2)
 order by col2,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select e as col1,
        (a+b+c+d+e)/5 as col2,
        abs(a) as col3,
@@ -475,7 +494,8 @@ where exists(select 1 from t1 as x where x.b<t1.b)
     or d not between 110 and 150
 order by col4,col5,col2,col3,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select e as col1,
        (a+b+c+d+e)/5 as col2,
        abs(a) as col3,
@@ -614,7 +634,8 @@ order by col2,col1
 -3 1600
 3 NULL
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select d as col1,
        d-e as col2,
        case a+1 when b then 111 when c then 222
@@ -626,7 +647,8 @@ select d as col1,
 from t1
 order by col6,col7,col4,col5,col2,col3,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select d as col1,
        d-e as col2,
        case a+1 when b then 111 when c then 222
@@ -638,7 +660,8 @@ select d as col1,
 from t1
 order by col7,col5,col4,col6,col1,col2,col3
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select c as col1,
        (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col2,
        case when c>(select avg(c) from t1) then a*2 else b*10 end as col3,
@@ -649,7 +672,8 @@ where d not between 110 and 150
     or b>c
 order by col4,col2,col3,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select c as col1,
        (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col2,
        case when c>(select avg(c) from t1) then a*2 else b*10 end as col3,
@@ -660,7 +684,8 @@ where d not between 110 and 150
     or b>c
 order by col4,col2,col3,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select c as col1,
        (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col2,
        case when c>(select avg(c) from t1) then a*2 else b*10 end as col3,
@@ -671,7 +696,8 @@ where b>c
     or (e>c or e<d)
 order by col4,col2,col3,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select c as col1,
        (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col2,
        case when c>(select avg(c) from t1) then a*2 else b*10 end as col3,
@@ -682,7 +708,8 @@ where b>c
     or (e>c or e<d)
 order by col2,col1,col4,col3
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select c as col1,
        (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col2,
        case when c>(select avg(c) from t1) then a*2 else b*10 end as col3,
@@ -693,7 +720,8 @@ where (e>c or e<d)
     or b>c
 order by col4,col2,col3,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select c as col1,
        (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col2,
        case when c>(select avg(c) from t1) then a*2 else b*10 end as col3,
@@ -704,7 +732,8 @@ where (e>c or e<d)
     or b>c
 order by col2,col1,col4,col3
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select c as col1,
        (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col2,
        case when c>(select avg(c) from t1) then a*2 else b*10 end as col3,
@@ -715,7 +744,8 @@ where (e>c or e<d)
     or d not between 110 and 150
 order by col4,col2,col3,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select c as col1,
        (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col2,
        case when c>(select avg(c) from t1) then a*2 else b*10 end as col3,
@@ -726,7 +756,8 @@ where (e>c or e<d)
     or d not between 110 and 150
 order by col4,col3,col2,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select e as col1,
        a-b as col2
 from t1
@@ -734,7 +765,8 @@ where (a>b-2 and a<b+2)
     or b>c
 order by col2,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select e as col1,
        a-b as col2
 from t1
@@ -742,7 +774,8 @@ where (a>b-2 and a<b+2)
     or b>c
 order by col2,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select e as col1,
        a-b as col2
 from t1
@@ -750,7 +783,8 @@ where b>c
     or (a>b-2 and a<b+2)
 order by col2,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select e as col1,
        a-b as col2
 from t1
@@ -836,7 +870,8 @@ order by col1,col2,col4,col3
 247 2 245 246
 NULL 1 239 237
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select a as col1,
        (select count(*) from t1 as x where x.b<t1.b) as col2,
        (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col3,
@@ -845,7 +880,8 @@ from t1
 where c>d
 order by col4,col2,col3,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select a as col1,
        (select count(*) from t1 as x where x.b<t1.b) as col2,
        (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col3,
@@ -854,7 +890,8 @@ from t1
 where c>d
 order by col4,col3,col2,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select a-b as col1,
        abs(a) as col2,
        e as col3,
@@ -865,7 +902,8 @@ from t1
 where d not between 110 and 150
 order by col6,col4,col5,col2,col3,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select a-b as col1,
        abs(a) as col2,
        e as col3,
@@ -1014,7 +1052,8 @@ NULL NULL 555 NULL
 NULL NULL 555 NULL
 NULL NULL 555 NULL
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select case a+1 when b then 111 when c then 222
         when d then 333  when e then 444 else 555 end as col1,
        c as col2,
@@ -1027,7 +1066,8 @@ where d>e
    and (e>c or e<d)
 order by col4,col5,col2,col3,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select case a+1 when b then 111 when c then 222
         when d then 333  when e then 444 else 555 end as col1,
        c as col2,
@@ -1040,7 +1080,8 @@ where d>e
    and (e>c or e<d)
 order by col5,col1,col4,col2,col3
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select case a+1 when b then 111 when c then 222
         when d then 333  when e then 444 else 555 end as col1,
        c as col2,
@@ -1053,7 +1094,8 @@ where (e>c or e<d)
    and (e>a and e<b)
 order by col4,col5,col2,col3,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select case a+1 when b then 111 when c then 222
         when d then 333  when e then 444 else 555 end as col1,
        c as col2,
@@ -1144,7 +1186,8 @@ NULL NULL NULL 104
 NULL NULL NULL 115
 NULL NULL NULL 201
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col1,
        d as col2,
        case when a<b-3 then 111 when a<=b then 222
@@ -1156,7 +1199,8 @@ from t1
 where c>d
 order by col6,col4,col5,col2,col3,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col1,
        d as col2,
        case when a<b-3 then 111 when a<=b then 222
@@ -1168,7 +1212,8 @@ from t1
 where c>d
 order by col4,col5,col6,col3,col2,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select a+b*2+c*3+d*4 as col1,
        case a+1 when b then 111 when c then 222
         when d then 333  when e then 444 else 555 end as col2,
@@ -1177,7 +1222,8 @@ select a+b*2+c*3+d*4 as col1,
 from t1
 order by col4,col2,col3,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select a+b*2+c*3+d*4 as col1,
        case a+1 when b then 111 when c then 222
         when d then 333  when e then 444 else 555 end as col2,
@@ -1356,7 +1402,8 @@ NULL NULL 208
 -4 743 247
 3 711 NULL
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select d-e as col1,
        (a+b+c+d+e)/5 as col2,
        a+b*2 as col3
@@ -1365,7 +1412,8 @@ where c between b-2 and d+2
    and a>b
 order by col2,col3,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select d-e as col1,
        (a+b+c+d+e)/5 as col2,
        a+b*2 as col3
@@ -1374,7 +1422,8 @@ where c between b-2 and d+2
    and a>b
 order by col3,col2,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select (select count(*) from t1 as x where x.b<t1.b) as col1,
        (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col2,
        d as col3
@@ -1384,7 +1433,8 @@ where b>c
    and d not between 110 and 150
 order by col2,col3,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select (select count(*) from t1 as x where x.b<t1.b) as col1,
        (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col2,
        d as col3
@@ -1394,7 +1444,8 @@ where b>c
    and d not between 110 and 150
 order by col3,col2,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select (select count(*) from t1 as x where x.b<t1.b) as col1,
        (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col2,
        d as col3
@@ -1404,7 +1455,8 @@ where d not between 110 and 150
    and b>c
 order by col2,col3,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select (select count(*) from t1 as x where x.b<t1.b) as col1,
        (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col2,
        d as col3
@@ -1414,7 +1466,8 @@ where d not between 110 and 150
    and b>c
 order by col3,col2,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select (select count(*) from t1 as x where x.b<t1.b) as col1,
        (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col2,
        d as col3
@@ -1424,7 +1477,8 @@ where b>c
    and d>e
 order by col2,col3,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select (select count(*) from t1 as x where x.b<t1.b) as col1,
        (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col2,
        d as col3
@@ -1434,7 +1488,8 @@ where b>c
    and d>e
 order by col3,col1,col2
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select a+b*2+c*3 as col1,
        abs(a) as col2
 from t1
@@ -1443,7 +1498,8 @@ where d not between 110 and 150
     or (c<=d-2 or c>=d+2)
 order by col2,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select a+b*2+c*3 as col1,
        abs(a) as col2
 from t1
@@ -1452,7 +1508,8 @@ where d not between 110 and 150
     or (c<=d-2 or c>=d+2)
 order by col1,col2
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select a+b*2+c*3 as col1,
        abs(a) as col2
 from t1
@@ -1461,7 +1518,8 @@ where d not between 110 and 150
     or e+d between a+b-10 and c+130
 order by col2,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select a+b*2+c*3 as col1,
        abs(a) as col2
 from t1
@@ -1470,7 +1528,8 @@ where d not between 110 and 150
     or e+d between a+b-10 and c+130
 order by col1,col2
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select a+b*2+c*3 as col1,
        abs(a) as col2
 from t1
@@ -1479,7 +1538,8 @@ where (c<=d-2 or c>=d+2)
     or d not between 110 and 150
 order by col2,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select a+b*2+c*3 as col1,
        abs(a) as col2
 from t1
@@ -1488,7 +1548,8 @@ where (c<=d-2 or c>=d+2)
     or d not between 110 and 150
 order by col2,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select b-c as col1,
        (select count(*) from t1 as x where x.b<t1.b) as col2,
        d-e as col3,
@@ -1501,7 +1562,8 @@ where d not between 110 and 150
     or b>c
 order by col6,col4,col5,col2,col3,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select b-c as col1,
        (select count(*) from t1 as x where x.b<t1.b) as col2,
        d-e as col3,
@@ -1514,7 +1576,8 @@ where d not between 110 and 150
     or b>c
 order by col5,col3,col4,col1,col6,col2
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select b-c as col1,
        (select count(*) from t1 as x where x.b<t1.b) as col2,
        d-e as col3,
@@ -1527,7 +1590,8 @@ where b>c
     or d not between 110 and 150
 order by col6,col4,col5,col2,col3,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select b-c as col1,
        (select count(*) from t1 as x where x.b<t1.b) as col2,
        d-e as col3,
@@ -1540,7 +1604,8 @@ where b>c
     or d not between 110 and 150
 order by col2,col6,col5,col1,col3,col4
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select b-c as col1,
        (select count(*) from t1 as x where x.b<t1.b) as col2,
        d-e as col3,
@@ -1553,7 +1618,8 @@ where d not between 110 and 150
     or e+d between a+b-10 and c+130
 order by col6,col4,col5,col2,col3,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select b-c as col1,
        (select count(*) from t1 as x where x.b<t1.b) as col2,
        d-e as col3,
@@ -1566,7 +1632,8 @@ where d not between 110 and 150
     or e+d between a+b-10 and c+130
 order by col5,col6,col1,col4,col2,col3
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select (a+b+c+d+e)/5 as col1,
        c-d as col2,
        case when a<b-3 then 111 when a<=b then 222
@@ -1577,7 +1644,8 @@ where (a>b-2 and a<b+2)
    and c>d
 order by col4,col2,col3,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select (a+b+c+d+e)/5 as col1,
        c-d as col2,
        case when a<b-3 then 111 when a<=b then 222
@@ -1588,7 +1656,8 @@ where (a>b-2 and a<b+2)
    and c>d
 order by col3,col2,col1,col4
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select (a+b+c+d+e)/5 as col1,
        c-d as col2,
        case when a<b-3 then 111 when a<=b then 222
@@ -1599,7 +1668,8 @@ where c>d
    and (a>b-2 and a<b+2)
 order by col4,col2,col3,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select (a+b+c+d+e)/5 as col1,
        c-d as col2,
        case when a<b-3 then 111 when a<=b then 222
@@ -1610,7 +1680,8 @@ where c>d
    and (a>b-2 and a<b+2)
 order by col1,col4,col2,col3
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col1,
        case a+1 when b then 111 when c then 222
         when d then 333  when e then 444 else 555 end as col2
@@ -1620,7 +1691,8 @@ where (c<=d-2 or c>=d+2)
    and (e>a and e<b)
 order by col2,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col1,
        case a+1 when b then 111 when c then 222
         when d then 333  when e then 444 else 555 end as col2
@@ -1630,7 +1702,8 @@ where (c<=d-2 or c>=d+2)
    and (e>a and e<b)
 order by col2,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col1,
        case a+1 when b then 111 when c then 222
         when d then 333  when e then 444 else 555 end as col2
@@ -1640,7 +1713,8 @@ where (c<=d-2 or c>=d+2)
    and c>d
 order by col2,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col1,
        case a+1 when b then 111 when c then 222
         when d then 333  when e then 444 else 555 end as col2
@@ -1650,7 +1724,8 @@ where (c<=d-2 or c>=d+2)
    and c>d
 order by col2,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col1,
        case a+1 when b then 111 when c then 222
         when d then 333  when e then 444 else 555 end as col2
@@ -1660,7 +1735,8 @@ where (e>a and e<b)
    and c>d
 order by col2,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col1,
        case a+1 when b then 111 when c then 222
         when d then 333  when e then 444 else 555 end as col2
@@ -1670,7 +1746,8 @@ where (e>a and e<b)
    and c>d
 order by col2,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col1,
        case a+1 when b then 111 when c then 222
         when d then 333  when e then 444 else 555 end as col2
@@ -1680,7 +1757,8 @@ where c>d
    and (e>a and e<b)
 order by col2,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col1,
        case a+1 when b then 111 when c then 222
         when d then 333  when e then 444 else 555 end as col2
@@ -1690,7 +1768,8 @@ where c>d
    and (e>a and e<b)
 order by col1,col2
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select abs(b-c) as col1,
        a-b as col2,
        case when c>(select avg(c) from t1) then a*2 else b*10 end as col3,
@@ -1700,7 +1779,8 @@ from t1
 where d not between 110 and 150
 order by col4,col5,col2,col3,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select abs(b-c) as col1,
        a-b as col2,
        case when c>(select avg(c) from t1) then a*2 else b*10 end as col3,
@@ -1710,7 +1790,8 @@ from t1
 where d not between 110 and 150
 order by col5,col3,col2,col4,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col1,
        abs(a) as col2,
        abs(b-c) as col3
@@ -1719,7 +1800,8 @@ where e+d between a+b-10 and c+130
    and b>c
 order by col2,col3,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col1,
        abs(a) as col2,
        abs(b-c) as col3
@@ -1728,21 +1810,24 @@ where e+d between a+b-10 and c+130
    and b>c
 order by col3,col1,col2
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select a+b*2+c*3+d*4 as col1,
        a as col2
 from t1
 where (c<=d-2 or c>=d+2)
 order by col2,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select a+b*2+c*3+d*4 as col1,
        a as col2
 from t1
 where (c<=d-2 or c>=d+2)
 order by col2,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select case when a<b-3 then 111 when a<=b then 222
         when a<b+3 then 333 else 444 end as col1,
        e as col2,
@@ -1754,7 +1839,8 @@ where c between b-2 and d+2
     or c>d
 order by col4,col2,col3,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select case when a<b-3 then 111 when a<=b then 222
         when a<b+3 then 333 else 444 end as col1,
        e as col2,
@@ -1766,7 +1852,8 @@ where c between b-2 and d+2
     or c>d
 order by col3,col4,col2,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select case when a<b-3 then 111 when a<=b then 222
         when a<b+3 then 333 else 444 end as col1,
        e as col2,
@@ -1778,7 +1865,8 @@ where c>d
     or c between b-2 and d+2
 order by col4,col2,col3,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select case when a<b-3 then 111 when a<=b then 222
         when a<b+3 then 333 else 444 end as col1,
        e as col2,
@@ -1790,31 +1878,36 @@ where c>d
     or c between b-2 and d+2
 order by col3,col1,col2,col4
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col1
 from t1
 where a>b
 order by col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col1
 from t1
 where a>b
 order by col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select a+b*2+c*3+d*4+e*5 as col1,
        (select count(*) from t1 as x where x.b<t1.b) as col2
 from t1
 order by col2,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select a+b*2+c*3+d*4+e*5 as col1,
        (select count(*) from t1 as x where x.b<t1.b) as col2
 from t1
 order by col2,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select e as col1,
        (select count(*) from t1 as x where x.b<t1.b) as col2,
        case when a<b-3 then 111 when a<=b then 222
@@ -1828,7 +1921,8 @@ from t1
 where b>c
 order by col6,col7,col4,col5,col2,col3,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select e as col1,
        (select count(*) from t1 as x where x.b<t1.b) as col2,
        case when a<b-3 then 111 when a<=b then 222
@@ -1842,7 +1936,8 @@ from t1
 where b>c
 order by col5,col1,col3,col6,col7,col4,col2
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select d as col1,
        a+b*2+c*3 as col2,
        a as col3,
@@ -1853,7 +1948,8 @@ where c between b-2 and d+2
     or (e>a and e<b)
 order by col4,col2,col3,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select d as col1,
        a+b*2+c*3 as col2,
        a as col3,
@@ -1864,7 +1960,8 @@ where c between b-2 and d+2
     or (e>a and e<b)
 order by col4,col2,col3,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select d as col1,
        a+b*2+c*3 as col2,
        a as col3,
@@ -1875,7 +1972,8 @@ where (e>a and e<b)
     or c between b-2 and d+2
 order by col4,col2,col3,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select d as col1,
        a+b*2+c*3 as col2,
        a as col3,
@@ -1886,7 +1984,8 @@ where (e>a and e<b)
     or c between b-2 and d+2
 order by col2,col1,col4,col3
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select d as col1,
        a+b*2+c*3 as col2,
        a as col3,
@@ -1897,7 +1996,8 @@ where c>d
     or c between b-2 and d+2
 order by col4,col2,col3,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select d as col1,
        a+b*2+c*3 as col2,
        a as col3,
@@ -1908,7 +2008,8 @@ where c>d
     or c between b-2 and d+2
 order by col3,col4,col2,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select d as col1,
        a+b*2+c*3 as col2,
        a as col3,
@@ -1919,7 +2020,8 @@ where c between b-2 and d+2
     or c>d
 order by col4,col2,col3,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select d as col1,
        a+b*2+c*3 as col2,
        a as col3,
@@ -2092,19 +2194,22 @@ NULL
 NULL
 NULL
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select a+b*2 as col1
 from t1
 where d>e
 order by col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select a+b*2 as col1
 from t1
 where d>e
 order by col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select abs(b-c) as col1,
        case when c>(select avg(c) from t1) then a*2 else b*10 end as col2,
        (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col3,
@@ -2118,7 +2223,8 @@ where c between b-2 and d+2
     or e+d between a+b-10 and c+130
 order by col6,col4,col5,col2,col3,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select abs(b-c) as col1,
        case when c>(select avg(c) from t1) then a*2 else b*10 end as col2,
        (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col3,
@@ -2132,7 +2238,8 @@ where c between b-2 and d+2
     or e+d between a+b-10 and c+130
 order by col1,col4,col6,col3,col2,col5
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select abs(b-c) as col1,
        case when c>(select avg(c) from t1) then a*2 else b*10 end as col2,
        (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col3,
@@ -2146,7 +2253,8 @@ where e+d between a+b-10 and c+130
     or c between b-2 and d+2
 order by col6,col4,col5,col2,col3,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select abs(b-c) as col1,
        case when c>(select avg(c) from t1) then a*2 else b*10 end as col2,
        (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col3,
@@ -2160,7 +2268,8 @@ where e+d between a+b-10 and c+130
     or c between b-2 and d+2
 order by col1,col3,col6,col4,col2,col5
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select abs(b-c) as col1,
        case when c>(select avg(c) from t1) then a*2 else b*10 end as col2,
        (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col3,
@@ -2174,7 +2283,8 @@ where d not between 110 and 150
     or c between b-2 and d+2
 order by col6,col4,col5,col2,col3,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select abs(b-c) as col1,
        case when c>(select avg(c) from t1) then a*2 else b*10 end as col2,
        (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col3,
@@ -2188,7 +2298,8 @@ where d not between 110 and 150
     or c between b-2 and d+2
 order by col2,col5,col3,col6,col4,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select abs(b-c) as col1,
        case when c>(select avg(c) from t1) then a*2 else b*10 end as col2,
        (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col3,
@@ -2202,7 +2313,8 @@ where d not between 110 and 150
     or e+d between a+b-10 and c+130
 order by col6,col4,col5,col2,col3,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select abs(b-c) as col1,
        case when c>(select avg(c) from t1) then a*2 else b*10 end as col2,
        (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col3,
@@ -2216,7 +2328,8 @@ where d not between 110 and 150
     or e+d between a+b-10 and c+130
 order by col6,col5,col2,col3,col4,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select d-e as col1,
        b-c as col2
 from t1
@@ -2224,7 +2337,8 @@ where e+d between a+b-10 and c+130
     or (a>b-2 and a<b+2)
 order by col2,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select d-e as col1,
        b-c as col2
 from t1
@@ -2232,7 +2346,8 @@ where e+d between a+b-10 and c+130
     or (a>b-2 and a<b+2)
 order by col2,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select d-e as col1,
        b-c as col2
 from t1
@@ -2240,7 +2355,8 @@ where (a>b-2 and a<b+2)
     or e+d between a+b-10 and c+130
 order by col2,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select d-e as col1,
        b-c as col2
 from t1
@@ -2248,14 +2364,16 @@ where (a>b-2 and a<b+2)
     or e+d between a+b-10 and c+130
 order by col2,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select a+b*2+c*3+d*4+e*5 as col1,
        b as col2
 from t1
 where (e>c or e<d)
 order by col2,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select a+b*2+c*3+d*4+e*5 as col1,
        b as col2
 from t1
@@ -2412,7 +2530,8 @@ NULL
 NULL
 NULL
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select d as col1,
        case when a<b-3 then 111 when a<=b then 222
         when a<b+3 then 333 else 444 end as col2,
@@ -2424,7 +2543,8 @@ from t1
 where (e>a and e<b)
 order by col4,col5,col2,col3,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select d as col1,
        case when a<b-3 then 111 when a<=b then 222
         when a<b+3 then 333 else 444 end as col2,
@@ -2436,7 +2556,8 @@ from t1
 where (e>a and e<b)
 order by col1,col5,col3,col4,col2
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select a as col1,
        a+b*2+c*3+d*4 as col2,
        e as col3,
@@ -2448,7 +2569,8 @@ from t1
 where (a>b-2 and a<b+2)
 order by col6,col4,col5,col2,col3,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select a as col1,
        a+b*2+c*3+d*4 as col2,
        e as col3,
@@ -2460,7 +2582,8 @@ from t1
 where (a>b-2 and a<b+2)
 order by col5,col2,col6,col4,col3,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select c as col1,
        a+b*2+c*3+d*4+e*5 as col2
 from t1
@@ -2468,7 +2591,8 @@ where exists(select 1 from t1 as x where x.b<t1.b)
     or b>c
 order by col2,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select c as col1,
        a+b*2+c*3+d*4+e*5 as col2
 from t1
@@ -2476,7 +2600,8 @@ where exists(select 1 from t1 as x where x.b<t1.b)
     or b>c
 order by col2,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select c as col1,
        a+b*2+c*3+d*4+e*5 as col2
 from t1
@@ -2484,7 +2609,8 @@ where b>c
     or exists(select 1 from t1 as x where x.b<t1.b)
 order by col2,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select c as col1,
        a+b*2+c*3+d*4+e*5 as col2
 from t1
@@ -2492,7 +2618,8 @@ where b>c
     or exists(select 1 from t1 as x where x.b<t1.b)
 order by col1,col2
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select (a+b+c+d+e)/5 as col1,
        d as col2,
        abs(b-c) as col3
@@ -2502,7 +2629,8 @@ where exists(select 1 from t1 as x where x.b<t1.b)
     or a>b
 order by col2,col3,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select (a+b+c+d+e)/5 as col1,
        d as col2,
        abs(b-c) as col3
@@ -2512,7 +2640,8 @@ where exists(select 1 from t1 as x where x.b<t1.b)
     or a>b
 order by col1,col3,col2
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select (a+b+c+d+e)/5 as col1,
        d as col2,
        abs(b-c) as col3
@@ -2522,7 +2651,8 @@ where a>b
     or (e>c or e<d)
 order by col2,col3,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select (a+b+c+d+e)/5 as col1,
        d as col2,
        abs(b-c) as col3
@@ -2532,7 +2662,8 @@ where a>b
     or (e>c or e<d)
 order by col2,col3,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select (a+b+c+d+e)/5 as col1,
        d as col2,
        abs(b-c) as col3
@@ -2542,7 +2673,8 @@ where a>b
     or exists(select 1 from t1 as x where x.b<t1.b)
 order by col2,col3,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select (a+b+c+d+e)/5 as col1,
        d as col2,
        abs(b-c) as col3
@@ -2552,7 +2684,8 @@ where a>b
     or exists(select 1 from t1 as x where x.b<t1.b)
 order by col2,col1,col3
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select abs(a) as col1,
        d as col2,
        (a+b+c+d+e)/5 as col3,
@@ -2566,7 +2699,8 @@ where a>b
     or (a>b-2 and a<b+2)
 order by col6,col4,col5,col2,col3,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select abs(a) as col1,
        d as col2,
        (a+b+c+d+e)/5 as col3,
@@ -2580,7 +2714,8 @@ where a>b
     or (a>b-2 and a<b+2)
 order by col4,col2,col5,col1,col6,col3
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select abs(a) as col1,
        d as col2,
        (a+b+c+d+e)/5 as col3,
@@ -2594,7 +2729,8 @@ where b>c
     or (a>b-2 and a<b+2)
 order by col6,col4,col5,col2,col3,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select abs(a) as col1,
        d as col2,
        (a+b+c+d+e)/5 as col3,
@@ -2608,7 +2744,8 @@ where b>c
     or (a>b-2 and a<b+2)
 order by col4,col6,col5,col3,col2,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select abs(a) as col1,
        d as col2,
        (a+b+c+d+e)/5 as col3,
@@ -2622,7 +2759,8 @@ where (a>b-2 and a<b+2)
     or b>c
 order by col6,col4,col5,col2,col3,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select abs(a) as col1,
        d as col2,
        (a+b+c+d+e)/5 as col3,
@@ -2636,21 +2774,24 @@ where (a>b-2 and a<b+2)
     or b>c
 order by col5,col1,col2,col6,col3,col4
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select abs(a) as col1,
        a+b*2+c*3 as col2
 from t1
 where d>e
 order by col2,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select abs(a) as col1,
        a+b*2+c*3 as col2
 from t1
 where d>e
 order by col1,col2
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select a+b*2+c*3 as col1,
        case a+1 when b then 111 when c then 222
         when d then 333  when e then 444 else 555 end as col2,
@@ -2662,7 +2803,8 @@ from t1
 where b>c
 order by col6,col4,col5,col2,col3,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select a+b*2+c*3 as col1,
        case a+1 when b then 111 when c then 222
         when d then 333  when e then 444 else 555 end as col2,
@@ -2674,7 +2816,8 @@ from t1
 where b>c
 order by col1,col6,col4,col5,col2,col3
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select b as col1,
        b-c as col2,
        (select count(*) from t1 as x where x.b<t1.b) as col3,
@@ -2686,7 +2829,8 @@ where (e>a and e<b)
    and (a>b-2 and a<b+2)
 order by col4,col5,col2,col3,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select b as col1,
        b-c as col2,
        (select count(*) from t1 as x where x.b<t1.b) as col3,
@@ -2698,7 +2842,8 @@ where (e>a and e<b)
    and (a>b-2 and a<b+2)
 order by col2,col5,col4,col3,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select b as col1,
        b-c as col2,
        (select count(*) from t1 as x where x.b<t1.b) as col3,
@@ -2710,7 +2855,8 @@ where (a>b-2 and a<b+2)
    and e+d between a+b-10 and c+130
 order by col4,col5,col2,col3,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select b as col1,
        b-c as col2,
        (select count(*) from t1 as x where x.b<t1.b) as col3,
@@ -2722,7 +2868,8 @@ where (a>b-2 and a<b+2)
    and e+d between a+b-10 and c+130
 order by col4,col1,col2,col5,col3
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select b as col1,
        b-c as col2,
        (select count(*) from t1 as x where x.b<t1.b) as col3,
@@ -2734,7 +2881,8 @@ where e+d between a+b-10 and c+130
    and (e>a and e<b)
 order by col4,col5,col2,col3,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select b as col1,
        b-c as col2,
        (select count(*) from t1 as x where x.b<t1.b) as col3,
@@ -2830,7 +2978,8 @@ NULL NULL 104 NULL NULL NULL
 NULL NULL 201 NULL 402 204
 711 NULL 239 NULL 2360 237
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select d-e as col1,
        abs(a) as col2,
        case a+1 when b then 111 when c then 222
@@ -2841,7 +2990,8 @@ select d-e as col1,
 from t1
 order by col6,col4,col5,col2,col3,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select d-e as col1,
        abs(a) as col2,
        case a+1 when b then 111 when c then 222
@@ -2926,7 +3076,8 @@ NULL 102
 NULL 119
 NULL 202
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select a+b*2+c*3 as col1,
        (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col2
 from t1
@@ -2935,7 +3086,8 @@ where c between b-2 and d+2
    and (a>b-2 and a<b+2)
 order by col2,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select a+b*2+c*3 as col1,
        (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col2
 from t1
@@ -2944,7 +3096,8 @@ where c between b-2 and d+2
    and (a>b-2 and a<b+2)
 order by col1,col2
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select a+b*2+c*3 as col1,
        (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col2
 from t1
@@ -2953,7 +3106,8 @@ where c between b-2 and d+2
    and d>e
 order by col2,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select a+b*2+c*3 as col1,
        (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col2
 from t1
@@ -2962,7 +3116,8 @@ where c between b-2 and d+2
    and d>e
 order by col2,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select a+b*2+c*3 as col1,
        (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col2
 from t1
@@ -2971,7 +3126,8 @@ where d>e
    and c between b-2 and d+2
 order by col2,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select a+b*2+c*3 as col1,
        (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col2
 from t1
@@ -2980,7 +3136,8 @@ where d>e
    and c between b-2 and d+2
 order by col1,col2
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select a+b*2+c*3 as col1,
        (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col2
 from t1
@@ -2989,7 +3146,8 @@ where (a>b-2 and a<b+2)
    and c between b-2 and d+2
 order by col2,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select a+b*2+c*3 as col1,
        (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col2
 from t1
@@ -2998,7 +3156,8 @@ where (a>b-2 and a<b+2)
    and c between b-2 and d+2
 order by col1,col2
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select case when a<b-3 then 111 when a<=b then 222
         when a<b+3 then 333 else 444 end as col1,
        d as col2,
@@ -3009,7 +3168,8 @@ where (e>c or e<d)
     or exists(select 1 from t1 as x where x.b<t1.b)
 order by col2,col3,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select case when a<b-3 then 111 when a<=b then 222
         when a<b+3 then 333 else 444 end as col1,
        d as col2,
@@ -3020,7 +3180,8 @@ where (e>c or e<d)
     or exists(select 1 from t1 as x where x.b<t1.b)
 order by col1,col2,col3
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select case when a<b-3 then 111 when a<=b then 222
         when a<b+3 then 333 else 444 end as col1,
        d as col2,
@@ -3031,7 +3192,8 @@ where b>c
     or (e>c or e<d)
 order by col2,col3,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select case when a<b-3 then 111 when a<=b then 222
         when a<b+3 then 333 else 444 end as col1,
        d as col2,
@@ -3042,7 +3204,8 @@ where b>c
     or (e>c or e<d)
 order by col1,col3,col2
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select case when a<b-3 then 111 when a<=b then 222
         when a<b+3 then 333 else 444 end as col1,
        d as col2,
@@ -3053,7 +3216,8 @@ where exists(select 1 from t1 as x where x.b<t1.b)
     or (e>c or e<d)
 order by col2,col3,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select case when a<b-3 then 111 when a<=b then 222
         when a<b+3 then 333 else 444 end as col1,
        d as col2,
@@ -3142,21 +3306,24 @@ NULL NULL NULL 1000
 NULL NULL NULL 1057
 NULL NULL NULL 1455
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select abs(b-c) as col1
 from t1
 where (c<=d-2 or c>=d+2)
    and c between b-2 and d+2
 order by col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select abs(b-c) as col1
 from t1
 where (c<=d-2 or c>=d+2)
    and c between b-2 and d+2
 order by col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select case a+1 when b then 111 when c then 222
         when d then 333  when e then 444 else 555 end as col1,
        a+b*2+c*3+d*4 as col2,
@@ -3168,7 +3335,8 @@ where d>e
     or (c<=d-2 or c>=d+2)
 order by col4,col2,col3,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select case a+1 when b then 111 when c then 222
         when d then 333  when e then 444 else 555 end as col1,
        a+b*2+c*3+d*4 as col2,
@@ -3180,7 +3348,8 @@ where d>e
     or (c<=d-2 or c>=d+2)
 order by col2,col4,col3,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select case a+1 when b then 111 when c then 222
         when d then 333  when e then 444 else 555 end as col1,
        a+b*2+c*3+d*4 as col2,
@@ -3192,7 +3361,8 @@ where (c<=d-2 or c>=d+2)
     or (e>a and e<b)
 order by col4,col2,col3,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select case a+1 when b then 111 when c then 222
         when d then 333  when e then 444 else 555 end as col1,
        a+b*2+c*3+d*4 as col2,
@@ -3204,7 +3374,8 @@ where (c<=d-2 or c>=d+2)
     or (e>a and e<b)
 order by col3,col4,col1,col2
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select a+b*2+c*3+d*4+e*5 as col1,
        case when a<b-3 then 111 when a<=b then 222
         when a<b+3 then 333 else 444 end as col2,
@@ -3216,7 +3387,8 @@ where d>e
     or c>d
 order by col4,col2,col3,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select a+b*2+c*3+d*4+e*5 as col1,
        case when a<b-3 then 111 when a<=b then 222
         when a<b+3 then 333 else 444 end as col2,
@@ -3228,7 +3400,8 @@ where d>e
     or c>d
 order by col2,col3,col4,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select a+b*2+c*3+d*4+e*5 as col1,
        case when a<b-3 then 111 when a<=b then 222
         when a<b+3 then 333 else 444 end as col2,
@@ -3240,7 +3413,8 @@ where (a>b-2 and a<b+2)
     or d>e
 order by col4,col2,col3,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select a+b*2+c*3+d*4+e*5 as col1,
        case when a<b-3 then 111 when a<=b then 222
         when a<b+3 then 333 else 444 end as col2,
@@ -3252,7 +3426,8 @@ where (a>b-2 and a<b+2)
     or d>e
 order by col1,col2,col4,col3
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select a+b*2+c*3+d*4+e*5 as col1,
        case when a<b-3 then 111 when a<=b then 222
         when a<b+3 then 333 else 444 end as col2,
@@ -3264,7 +3439,8 @@ where d>e
     or (a>b-2 and a<b+2)
 order by col4,col2,col3,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select a+b*2+c*3+d*4+e*5 as col1,
        case when a<b-3 then 111 when a<=b then 222
         when a<b+3 then 333 else 444 end as col2,
@@ -3276,7 +3452,8 @@ where d>e
     or (a>b-2 and a<b+2)
 order by col2,col4,col1,col3
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select abs(a) as col1,
        c as col2,
        case a+1 when b then 111 when c then 222
@@ -3287,7 +3464,8 @@ where e+d between a+b-10 and c+130
    and (a>b-2 and a<b+2)
 order by col4,col2,col3,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select abs(a) as col1,
        c as col2,
        case a+1 when b then 111 when c then 222
@@ -3298,7 +3476,8 @@ where e+d between a+b-10 and c+130
    and (a>b-2 and a<b+2)
 order by col4,col3,col2,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select abs(a) as col1,
        c as col2,
        case a+1 when b then 111 when c then 222
@@ -3309,7 +3488,8 @@ where (a>b-2 and a<b+2)
    and e+d between a+b-10 and c+130
 order by col4,col2,col3,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select abs(a) as col1,
        c as col2,
        case a+1 when b then 111 when c then 222
@@ -3320,61 +3500,70 @@ where (a>b-2 and a<b+2)
    and e+d between a+b-10 and c+130
 order by col4,col1,col2,col3
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select a+b*2+c*3+d*4 as col1
 from t1
 where (e>c or e<d)
    and e+d between a+b-10 and c+130
 order by col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select a+b*2+c*3+d*4 as col1
 from t1
 where (e>c or e<d)
    and e+d between a+b-10 and c+130
 order by col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select a+b*2+c*3+d*4 as col1
 from t1
 where e+d between a+b-10 and c+130
    and (e>c or e<d)
 order by col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select a+b*2+c*3+d*4 as col1
 from t1
 where e+d between a+b-10 and c+130
    and (e>c or e<d)
 order by col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select b-c as col1
 from t1
 where c>d
 order by col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select b-c as col1
 from t1
 where c>d
 order by col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select a+b*2+c*3+d*4 as col1,
        c as col2
 from t1
 where b>c
 order by col2,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select a+b*2+c*3+d*4 as col1,
        c as col2
 from t1
 where b>c
 order by col1,col2
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select a+b*2+c*3+d*4 as col1,
        c-d as col2,
        a+b*2+c*3 as col3,
@@ -3385,7 +3574,8 @@ select a+b*2+c*3+d*4 as col1,
 from t1
 order by col6,col7,col4,col5,col2,col3,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select a+b*2+c*3+d*4 as col1,
        c-d as col2,
        a+b*2+c*3 as col3,
@@ -3396,7 +3586,8 @@ select a+b*2+c*3+d*4 as col1,
 from t1
 order by col5,col4,col7,col6,col1,col2,col3
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select a+b*2+c*3+d*4+e*5 as col1,
        (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col2,
        a-b as col3,
@@ -3406,7 +3597,8 @@ where d>e
     or b>c
 order by col4,col2,col3,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select a+b*2+c*3+d*4+e*5 as col1,
        (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col2,
        a-b as col3,
@@ -3416,7 +3608,8 @@ where d>e
     or b>c
 order by col3,col2,col4,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select a+b*2+c*3+d*4+e*5 as col1,
        (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col2,
        a-b as col3,
@@ -3426,7 +3619,8 @@ where b>c
     or d>e
 order by col4,col2,col3,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select a+b*2+c*3+d*4+e*5 as col1,
        (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col2,
        a-b as col3,
@@ -3436,7 +3630,8 @@ where b>c
     or d>e
 order by col1,col4,col2,col3
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select a+b*2+c*3 as col1,
        c-d as col2
 from t1
@@ -3444,7 +3639,8 @@ where exists(select 1 from t1 as x where x.b<t1.b)
    and b>c
 order by col2,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select a+b*2+c*3 as col1,
        c-d as col2
 from t1
@@ -3452,7 +3648,8 @@ where exists(select 1 from t1 as x where x.b<t1.b)
    and b>c
 order by col2,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select a+b*2+c*3 as col1,
        c-d as col2
 from t1
@@ -3460,7 +3657,8 @@ where b>c
    and exists(select 1 from t1 as x where x.b<t1.b)
 order by col2,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select a+b*2+c*3 as col1,
        c-d as col2
 from t1
@@ -3624,7 +3822,8 @@ NULL 1
 239 NULL
 243 NULL
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select abs(b-c) as col1,
        case when c>(select avg(c) from t1) then a*2 else b*10 end as col2,
        abs(a) as col3,
@@ -3637,7 +3836,8 @@ where (e>a and e<b)
     or d>e
 order by col6,col4,col5,col2,col3,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select abs(b-c) as col1,
        case when c>(select avg(c) from t1) then a*2 else b*10 end as col2,
        abs(a) as col3,
@@ -3650,7 +3850,8 @@ where (e>a and e<b)
     or d>e
 order by col3,col4,col6,col5,col2,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select abs(b-c) as col1,
        case when c>(select avg(c) from t1) then a*2 else b*10 end as col2,
        abs(a) as col3,
@@ -3663,7 +3864,8 @@ where e+d between a+b-10 and c+130
     or (e>a and e<b)
 order by col6,col4,col5,col2,col3,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select abs(b-c) as col1,
        case when c>(select avg(c) from t1) then a*2 else b*10 end as col2,
        abs(a) as col3,

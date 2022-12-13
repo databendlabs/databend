@@ -137,7 +137,8 @@ NULL -1 -1 NULL 203
 NULL 1 NULL NULL 238
 NULL NULL 1 NULL 101
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select a-b as col1,
        (a+b+c+d+e)/5 as col2,
        abs(b-c) as col3,
@@ -191,7 +192,8 @@ NULL 119 117 NULL
 NULL 202 204 NULL
 NULL 208 NULL 206
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select case a+1 when b then 111 when c then 222
         when d then 333  when e then 444 else 555 end as col1,
        d as col2,
@@ -201,7 +203,8 @@ from t1
 where a>b
 and (e>a and e<b)
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select a+b*2+c*3+d*4+e*5 as col1
 from t1
 where (a>b-2 and a<b+2)
@@ -245,26 +248,30 @@ NULL NULL
 NULL NULL
 NULL NULL
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select case a+1 when b then 111 when c then 222
         when d then 333  when e then 444 else 555 end as col1
 from t1
 where exists(select 1 from t1 as x where x.b<t1.b)
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select a-b as col1,
        (select count(*) from t1 as x where x.b<t1.b) as col2,
        a as col3
 from t1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select abs(b-c) as col1
 from t1
 where coalesce(a,b,c,d,e)<>0
    and b is not null
 order by col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select c-d as col1,
        abs(b-c) as col2
 from t1
@@ -318,14 +325,16 @@ NULL NULL NULL 1455 444 3
 NULL NULL 1 NULL 444 NULL
 NULL NULL 1 NULL 444 NULL
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select a-b as col1,
        a as col2
 from t1
 where c>d
 order by col2,col1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select (a+b+c+d+e)/5 as col1,
        a+b*2+c*3+d*4+e*5 as col2,
        d-e as col3,

@@ -94,8 +94,11 @@ insert into t1(e,c,b,a,d) values(242,244,240,243,241)
 statement ok
 insert into t1(e,d,c,b,a) values(246,248,247,249,245)
 
-query skipped
+query I
 select count(*) as x from (select 1 as x union all select 2 as x) group by x
+----
+1
+1
 
 query I
 select count(*) from t1 left join
@@ -1699,7 +1702,8 @@ order by col4,col5,col3,col1,col2,col6
 195 333 199 197.0 595 -1
 225 333 229 227.0 685 -1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select c as col1,
        case when a<b-3 then 111 when a<=b then 222
         when a<b+3 then 333 else 444 end as col2,
@@ -4269,7 +4273,8 @@ order by col3,col5,col4,col2,col1
 -1 113 4 0 112.0
 1 166 4 0 167.0
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select b-c as col1,
        a+b*2+c*3+d*4+e*5 as col2
 from t1
@@ -5980,7 +5985,8 @@ order by col2,col3,col1
 13 1670 -3
 14 1700 1
 
-query skipped
+## need to check the result later, currently just use ok to skip
+statement ok
 select d-e as col1,
        abs(b-c) as col2,
        (a+b+c+d+e)/5 as col3,
