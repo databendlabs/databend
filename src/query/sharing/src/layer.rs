@@ -56,6 +56,7 @@ use crate::SharedSigner;
 pub fn create_share_table_operator(
     share_endpoint_address: Option<String>,
     share_endpoint_token: RefreshableToken,
+    requester_tenant_id: String,
     share_tenant_id: &str,
     share_name: &str,
     table_name: &str,
@@ -68,6 +69,7 @@ pub fn create_share_table_operator(
                     share_endpoint_address, share_tenant_id, share_name, table_name
                 ),
                 share_endpoint_token,
+                requester_tenant_id,
             );
             Operator::new(apply_wrapper(SharedAccessor {
                 signer,

@@ -33,6 +33,8 @@ use opendal::raw::HttpClient;
 use opendal::raw::Operation;
 use opendal::raw::PresignedRequest;
 
+const TENANT_HEADER: &str = "X-DATABEND-TENANT";
+
 /// SharedSigner is used to track presign request, and it's response.
 ///
 /// There is an internal cache about presign request. Getting an expired
@@ -43,6 +45,7 @@ pub struct SharedSigner {
     cache: Cache<PresignRequest, PresignedRequest>,
     client: HttpClient,
     token: RefreshableToken,
+    requester_tenant_id: String,
 }
 
 impl Debug for SharedSigner {
@@ -55,7 +58,7 @@ impl Debug for SharedSigner {
 
 impl SharedSigner {
     /// Create a new SharedSigner.
-    pub fn new(endpoint: &str, token: RefreshableToken) -> Self {
+    pub fn new(endpoint: &str, token: RefreshableToken, req_tenant_id: String) -> Self {
         let cache = Cache::builder()
             // Databend Cloud Presign will expire after 3600s (1 hour).
             // We will expire them 10 minutes before to avoid edge cases.
@@ -67,6 +70,7 @@ impl SharedSigner {
             cache,
             client: HttpClient::new(),
             token,
+            requester_tenant_id: req_tenant_id,
         }
     }
 
@@ -154,6 +158,7 @@ impl SharedSigner {
             .uri(&self.endpoint)
             .header(AUTHORIZATION, auth)
             .header(CONTENT_LENGTH, bs.len())
+            .header(TENANT_HEADER, self.requester_tenant_id.clone())
             .body(AsyncBody::Bytes(bs))?;
         let resp = self.client.send_async(req).await?;
         let bs = resp.into_body().bytes().await?;
