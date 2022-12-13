@@ -165,8 +165,8 @@ impl ClickhouseHttpClient {
                             }
                             // Maybe `s` contains "\\N", such as `[\N,'cc']`
                             // So we need to find it and replace with NULL (a little hack)
-                            let s = str::replace(s, "\\N", "NULL").to_string();
-                            str::replace(&*s, r"\", "")
+                            let s = str::replace(s, "\\N", "NULL");
+                            str::replace(&s, r"\", "")
                         }
                     })
                     .collect()

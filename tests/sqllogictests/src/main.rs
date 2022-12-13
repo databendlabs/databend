@@ -163,6 +163,7 @@ async fn run_suits(suits: ReadDir, databend: Databend) -> Result<()> {
                 .unwrap()
                 .to_str()
                 .unwrap();
+            dbg!(file_name);
             if let Some(ref specific_file) = args.file {
                 if file_name != specific_file {
                     continue;
@@ -180,17 +181,23 @@ fn get_files(suit: PathBuf) -> Result<Vec<walkdir::Result<DirEntry>>> {
     let args = SqlLogicTestArgs::parse();
     let mut files = vec![];
     for entry in WalkDir::new(suit)
+        .min_depth(1)
+        .max_depth(100)
         .sort_by(|a, b| a.file_name().cmp(b.file_name()))
         .into_iter()
-        .filter_entry(|e| {
-            if e.file_type().is_dir() {
-                if let Some(ref specific_dir) = args.dir {
-                    // Filter out specific dir and whose parent dir is specific dir
-                    return (e.file_name().to_str().unwrap() == specific_dir)
-                        || e.path().to_str().unwrap().contains(specific_dir);
-                }
+        .filter(|e| {
+            if args.dir.is_none() {
+                return true;
             }
-            true
+            let specific_dir = args.dir.as_ref().unwrap();
+            let e = e.as_ref().unwrap();
+            return if e.file_type().is_dir() {
+                // Filter out specific dir and whose parent dir is specific dir
+                (e.file_name().to_str().unwrap() == specific_dir)
+                    || e.path().to_str().unwrap().contains(specific_dir)
+            } else {
+                e.path().to_str().unwrap().contains(specific_dir)
+            };
         })
         .filter(|e| !e.as_ref().unwrap().file_type().is_dir())
     {
