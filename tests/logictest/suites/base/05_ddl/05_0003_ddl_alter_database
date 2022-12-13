@@ -38,7 +38,7 @@ statement ok
 ALTER DATABASE IF EXISTS c RENAME TO a;
 
 statement query T
-SELECT * FROM system.databases where name = 'a' or name = 'b';
+SELECT name FROM system.databases where name = 'a' or name = 'b';
 
 ----
 a
@@ -52,7 +52,7 @@ ALTER DATABASE c RENAME TO C;
 
 -- don't exist database c, so the result will be empty
 statement ok
-SELECT * FROM system.databases where name = 'c';
+SELECT name FROM system.databases where name = 'c';
 
 statement error 1002
 ALTER DATABASE IF EXISTS system RENAME TO C;
@@ -71,7 +71,7 @@ ALTER DATABASE a RENAME TO a2;
 
 -- check if change a to `a2` successfully
 statement query T
-SELECT * FROM system.databases where name = 'a2';
+SELECT name FROM system.databases where name = 'a2';
 
 ----
 a2
@@ -105,7 +105,7 @@ SELECT * FROM b2.t2;
 
 
 statement query T
-SELECT * FROM system.databases where name = 'b2';
+SELECT name FROM system.databases where name = 'b2';
 
 ----
 b2
