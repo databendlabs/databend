@@ -234,9 +234,15 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
 
     let show_databases = map(
         rule! {
-            SHOW ~ ( DATABASES | SCHEMAS ) ~ #show_limit?
+            SHOW ~ FULL? ~ ( DATABASES | SCHEMAS ) ~ ( ( FROM | IN) ~ ^#ident )? ~ #show_limit?
         },
-        |(_, _, limit)| Statement::ShowDatabases(ShowDatabasesStmt { limit }),
+        |(_, opt_full, _, opt_catalog, limit)| {
+            Statement::ShowDatabases(ShowDatabasesStmt {
+                catalog: opt_catalog.map(|(_, catalog)| catalog),
+                full: opt_full.is_some(),
+                limit,
+            })
+        },
     );
     let show_create_database = map(
         rule! {
@@ -978,7 +984,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             | #show_functions : "`SHOW FUNCTIONS [<show_limit>]`"
             | #kill_stmt : "`KILL (QUERY | CONNECTION) <object_id>`"
             | #set_role: "`SET [DEFAULT] ROLE <role>`"
-            | #show_databases : "`SHOW DATABASES [<show_limit>]`"
+            | #show_databases : "`SHOW [FULL] DATABASES [(FROM | IN) <catalog>] [<show_limit>]`"
             | #undrop_database : "`UNDROP DATABASE <database>`"
             | #show_create_database : "`SHOW CREATE DATABASE <database>`"
             | #create_database : "`CREATE DATABASE [IF NOT EXIST] <database> [ENGINE = <engine>]`"

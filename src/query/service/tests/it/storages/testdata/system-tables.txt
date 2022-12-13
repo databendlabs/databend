@@ -8,6 +8,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | Engine                   | system   | engines             | VARCHAR           |              |                    | NO          |         |
 | auth_string              | system   | users               | VARCHAR           |              |                    | NO          |         |
 | auth_type                | system   | users               | VARCHAR           |              |                    | NO          |         |
+| catalog                  | system   | databases           | VARCHAR           |              |                    | NO          |         |
 | category                 | system   | functions           | VARCHAR           |              |                    | NO          |         |
 | client_address           | system   | query_log           | VARCHAR           |              |                    | NO          |         |
 | client_info              | system   | query_log           | VARCHAR           |              |                    | NO          |         |
@@ -290,13 +291,13 @@ DB.Table: 'system'.'catalogs', Table: catalogs-table_id:1, ver:0, Engine: System
 ---------- TABLE INFO ------------
 DB.Table: 'system'.'databases', Table: databases-table_id:1, ver:0, Engine: SystemDatabases
 -------- TABLE CONTENTS ----------
-+--------------------+
-| name               |
-+--------------------+
-| default            |
-| information_schema |
-| system             |
-+--------------------+
++---------+--------------------+
+| catalog | name               |
++---------+--------------------+
+| default | default            |
+| default | information_schema |
+| default | system             |
++---------+--------------------+
 
 
 ---------- TABLE INFO ------------

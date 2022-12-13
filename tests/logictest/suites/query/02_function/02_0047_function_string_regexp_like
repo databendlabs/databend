@@ -1,11 +1,11 @@
 statement query T
-select * from system.databases where regexp_like(name, '^sys') ;
+select name from system.databases where regexp_like(name, '^sys') ;
 
 ----
 system
 
 statement query T
-select * from system.databases where regexp_like(name, 'ef+.ul+.') ;
+select name from system.databases where regexp_like(name, 'ef+.ul+.') ;
 
 ----
 default
