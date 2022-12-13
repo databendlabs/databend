@@ -16,14 +16,18 @@ use std::alloc::AllocError;
 use std::alloc::Allocator;
 use std::alloc::GlobalAlloc;
 use std::alloc::Layout;
-use std::cmp::Ordering::{Equal, Greater, Less};
+use std::cmp::Ordering::Equal;
+use std::cmp::Ordering::Greater;
+use std::cmp::Ordering::Less;
 use std::ptr::null_mut;
 use std::ptr::NonNull;
+
 use tracing::error;
-use crate::runtime::LimitMemGuard;
+use tracing::info;
 
 use super::je_allocator::JEAllocator;
 use super::system_allocator::SystemAllocator;
+use crate::runtime::LimitMemGuard;
 
 #[global_allocator]
 pub static GLOBAL_ALLOCATOR: GlobalAllocator = GlobalAllocator;
@@ -108,16 +112,19 @@ unsafe impl GlobalAlloc for GlobalAllocator {
     #[inline]
     unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
         use std::cmp::Ordering::*;
+        let _guard = LimitMemGuard::enter_unlimited();
+
         let ptr = NonNull::new(ptr).unwrap_unchecked();
         match Layout::from_size_align(new_size, layout.align()) {
             Err(cause) => {
-                let _guard = LimitMemGuard::enter_unlimited();
                 error!("cause {:?}", cause);
                 panic!("{:?}", cause);
             }
             Ok(new_layout) => {
+                info!("ok new layout {:?}", layout);
                 match layout.size().cmp(&new_size) {
                     Less => {
+                        info!("new layout less");
                         if let Ok(ptr) = GlobalAllocator.grow(ptr, layout, new_layout) {
                             ptr.as_ptr() as *mut u8
                         } else {
@@ -125,6 +132,7 @@ unsafe impl GlobalAlloc for GlobalAllocator {
                         }
                     }
                     Greater => {
+                        info!("new layout Greater");
                         if let Ok(ptr) = GlobalAllocator.shrink(ptr, layout, new_layout) {
                             ptr.as_ptr() as *mut u8
                         } else {
