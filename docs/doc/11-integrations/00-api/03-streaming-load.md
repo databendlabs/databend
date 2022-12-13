@@ -27,7 +27,7 @@ The request usually includes many occurrences of the argument `-H` and each is f
 
 > FILE_FORMAT = ( TYPE = { CSV | TSV | NDJSON | PARQUET | XML} [ formatTypeOptions ] )
 > 
-> The `formatTypeOptions` is same as [COPY_INTO](../../14-sql-commands/10-dml/dml-copy-into-table.md)'s `formatTypeOptions`.
+> The `formatTypeOptions` contains the same options as the one for the [COPY_INTO](../../14-sql-commands/10-dml/dml-copy-into-table.md) command.
 
 ## Alternatives to Streaming Load API
 
