@@ -44,14 +44,14 @@ use crate::statistics::ClusterStatsGenerator;
 use crate::FuseTable;
 
 impl FuseTable {
-    // The flow of Pipeline is as follows:
-    // +---------------+
-    // |DeletionSource1| ------
-    // +---------------+       |      +-----------------+      +------------+
-    // |     ...       | ...   | ---> |DeletionTransform| ---> |MutationSink|
-    // +---------------+       |      +-----------------+      +------------+
-    // |DeletionSourceN| ------
-    // +---------------+
+    /// The flow of Pipeline is as follows:
+    /// +---------------+
+    /// |DeletionSource1| ------
+    /// +---------------+       |      +-----------------+      +------------+
+    /// |     ...       | ...   | ---> |DeletionTransform| ---> |MutationSink|
+    /// +---------------+       |      +-----------------+      +------------+
+    /// |DeletionSourceN| ------
+    /// +---------------+
     pub async fn do_delete(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -226,9 +226,9 @@ impl FuseTable {
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         match pipeline.pipes.last() {
-            None => Err(ErrorCode::Internal("Cannot resize empty pipe.")),
+            None => Err(ErrorCode::Internal("The pipeline is empty.")),
             Some(pipe) if pipe.output_size() == 0 => {
-                Err(ErrorCode::Internal("Cannot resize empty pipe."))
+                Err(ErrorCode::Internal("The output of the last pipe is 0."))
             }
             Some(pipe) => {
                 let input_size = pipe.output_size();

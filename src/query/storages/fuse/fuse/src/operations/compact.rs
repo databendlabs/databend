@@ -103,14 +103,14 @@ impl FuseTable {
         Ok(true)
     }
 
-    // The flow of Pipeline is as follows:
-    // +--------------+        +-----------------+
-    // |CompactSource1|  --->  |CompactTransform1|  ------
-    // +--------------+        +-----------------+        |      +----------------------+      +------------+
-    // |    ...       |  ...   |       ...       |  ...   | ---> |MergeSegmentsTransform| ---> |MutationSink|
-    // +--------------+        +-----------------+        |      +----------------------+      +------------+
-    // |CompactSourceN|  --->  |CompactTransformN|  ------
-    // +--------------+        +-----------------+
+    /// The flow of Pipeline is as follows:
+    /// +--------------+        +-----------------+
+    /// |CompactSource1|  --->  |CompactTransform1|  ------
+    /// +--------------+        +-----------------+        |      +----------------------+      +------------+
+    /// |    ...       |  ...   |       ...       |  ...   | ---> |MergeSegmentsTransform| ---> |MutationSink|
+    /// +--------------+        +-----------------+        |      +----------------------+      +------------+
+    /// |CompactSourceN|  --->  |CompactTransformN|  ------
+    /// +--------------+        +-----------------+
     async fn compact_blocks(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -175,9 +175,9 @@ impl FuseTable {
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         match pipeline.pipes.last() {
-            None => Err(ErrorCode::Internal("Cannot resize empty pipe.")),
+            None => Err(ErrorCode::Internal("The pipeline is empty.")),
             Some(pipe) if pipe.output_size() == 0 => {
-                Err(ErrorCode::Internal("Cannot resize empty pipe."))
+                Err(ErrorCode::Internal("The output of the last pipe is 0."))
             }
             Some(pipe) => {
                 let input_size = pipe.output_size();
