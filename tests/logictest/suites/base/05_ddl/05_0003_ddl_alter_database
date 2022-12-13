@@ -51,7 +51,7 @@ statement error 1003
 ALTER DATABASE c RENAME TO C;
 
 -- don't exist database c, so the result will be empty
-statement query ok
+statement ok
 SELECT * FROM system.databases where name = 'c';
 
 statement error 1002
@@ -105,7 +105,7 @@ SELECT * FROM b2.t2;
 
 
 statement query T
-SELECT * FROM system.databases where name = 'b2'
+SELECT * FROM system.databases where name = 'b2';
 
 ----
 b2

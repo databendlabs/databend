@@ -27,7 +27,7 @@ select * from t order by a;
 6
 7
 
-statement query ok
+statement ok
 select * from fuse_statistic('db_09_0020', 't');
 
 
