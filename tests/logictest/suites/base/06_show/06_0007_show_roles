@@ -1,13 +1,13 @@
 statement ok
 CREATE ROLE IF NOT EXISTS 'test';
 
-statement query TIII
-SHOW ROLES;
+statement query T
+select name from system.roles;
 
 ----
-account_admin 0 1 1
-public 0 0 0
-test 0 0 0
+account_admin
+public
+test
 
 statement ok
 DROP ROLE 'test';
