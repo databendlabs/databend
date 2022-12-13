@@ -161,6 +161,30 @@ select count(*) = 2 from t;
 ----
 1
 
+statement ok
+drop table t all;
+
+statement ok
+create table t(a Int, b Int);
+
+statement ok
+insert into t select number, 50 - number from numbers(100);
+
+statement query B
+select count(*) = 100 from t;
+
+----
+1
+
+statement ok
+delete from t where b > 0;
+
+statement query B
+select count(*) = 50 from t;
+
+----
+1
+
 
 
 statement ok
