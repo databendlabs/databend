@@ -329,20 +329,18 @@ impl MetaNode {
         Ok(())
     }
 
-    /// Open or create a metasrv node.
-    /// Optionally boot a single node cluster.
+    /// Open or create a meta node.
     /// 1. If `open` is `Some`, try to open an existent one.
     /// 2. If `create` is `Some`, try to create an one in non-voter mode.
     #[tracing::instrument(level = "debug", skip_all)]
-    pub async fn open_create_boot(
+    pub async fn open_create(
         config: &RaftConfig,
         open: Option<()>,
         create: Option<()>,
-        initialize_cluster: Option<Node>,
     ) -> Result<Arc<MetaNode>, MetaStartupError> {
         info!(
-            "open_create_boot, config: {:?}, open: {:?}, create: {:?}, initialize_cluster: {:?}",
-            config, open, create, initialize_cluster
+            "open_create_boot, config: {:?}, open: {:?}, create: {:?}",
+            config, open, create
         );
 
         let mut config = config.clone();
@@ -371,10 +369,21 @@ impl MetaNode {
 
         info!("MetaNode started: {:?}", config);
 
-        // init_cluster with advertise_host other than listen_host
-        if mn.is_opened() {
-            return Ok(mn);
-        }
+        Ok(mn)
+    }
+
+    /// Open or create a metasrv node.
+    /// Optionally boot a single node cluster.
+    /// 1. If `open` is `Some`, try to open an existent one.
+    /// 2. If `create` is `Some`, try to create an one in non-voter mode.
+    #[tracing::instrument(level = "debug", skip_all)]
+    pub async fn open_create_boot(
+        config: &RaftConfig,
+        open: Option<()>,
+        create: Option<()>,
+        initialize_cluster: Option<Node>,
+    ) -> Result<Arc<MetaNode>, MetaStartupError> {
+        let mn = Self::open_create(config, open, create).await?;
 
         if let Some(node) = initialize_cluster {
             mn.init_cluster(node).await?;
@@ -718,28 +727,21 @@ impl MetaNode {
     async fn do_start(conf: &MetaConfig) -> Result<Arc<MetaNode>, MetaStartupError> {
         let raft_conf = &conf.raft_config;
 
-        let initialize_cluster = if raft_conf.single {
-            Some(conf.get_node())
-        } else {
-            None
-        };
-
         if raft_conf.single {
-            let mn = MetaNode::open_create_boot(raft_conf, Some(()), Some(()), initialize_cluster)
-                .await?;
+            let mn = MetaNode::open_create(raft_conf, Some(()), Some(())).await?;
+            mn.init_cluster(conf.get_node()).await?;
             return Ok(mn);
         }
 
         if !raft_conf.join.is_empty() {
             // Bring up a new node, join it into a cluster
 
-            let mn = MetaNode::open_create_boot(raft_conf, Some(()), Some(()), initialize_cluster)
-                .await?;
+            let mn = MetaNode::open_create(raft_conf, Some(()), Some(())).await?;
             return Ok(mn);
         }
         // open mode
 
-        let mn = MetaNode::open_create_boot(raft_conf, Some(()), None, initialize_cluster).await?;
+        let mn = MetaNode::open_create(raft_conf, Some(()), None).await?;
         Ok(mn)
     }
 
@@ -747,18 +749,21 @@ impl MetaNode {
     /// For every cluster this func should be called exactly once.
     #[tracing::instrument(level = "debug", skip(config), fields(config_id=config.raft_config.config_id.as_str()))]
     pub async fn boot(config: &MetaConfig) -> Result<Arc<MetaNode>, MetaStartupError> {
-        let mn =
-            Self::open_create_boot(&config.raft_config, None, Some(()), Some(config.get_node()))
-                .await?;
-
+        let mn = Self::open_create(&config.raft_config, None, Some(())).await?;
+        mn.init_cluster(config.get_node()).await?;
         Ok(mn)
     }
 
-    // Initialized a single node cluster by:
-    // - Initializing raft membership.
-    // - Adding current node into the meta data.
+    /// Initialized a single node cluster if this node is just created:
+    /// - Initializing raft membership.
+    /// - Adding current node into the meta data.
     #[tracing::instrument(level = "debug", skip(self))]
     pub async fn init_cluster(&self, node: Node) -> Result<(), MetaStartupError> {
+        if self.is_opened() {
+            info!("It is opened, skip initializing cluster");
+            return Ok(());
+        }
+
         let node_id = self.sto.id;
 
         let mut cluster_node_ids = BTreeSet::new();

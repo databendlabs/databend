@@ -108,7 +108,7 @@ impl KVApi for StateMachine {
         let local_now_ms = SeqV::<()>::now_ms();
 
         // Convert expired to None
-        let x = x.map(|(k, v)| (k, Self::expire_seq_v(Some(v), local_now_ms)[1]));
+        let x = x.map(|(k, v)| (k, Self::expire_seq_v(Some(v), local_now_ms).1));
         // Remove None
         let x = x.filter(|(_k, v)| v.is_some());
         // Extract from an Option

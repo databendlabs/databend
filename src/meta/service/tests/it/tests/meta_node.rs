@@ -190,7 +190,7 @@ pub(crate) async fn start_meta_node_non_voter(
 
     let raft_conf = &tc.config.raft_config;
 
-    let mn = MetaNode::open_create_boot(raft_conf, None, Some(()), None).await?;
+    let mn = MetaNode::open_create(raft_conf, None, Some(())).await?;
 
     assert!(!mn.is_opened());
 
