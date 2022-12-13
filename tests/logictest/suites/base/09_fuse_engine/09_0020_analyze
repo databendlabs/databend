@@ -26,8 +26,8 @@ select * from t order by a
 6
 7
 
-statement ok
-select * from fuse_statistic('db_09_0020', 't');
+query ok
+select * from fuse_statistic('db_09_0020', 't')
 
 
 statement ok
@@ -36,7 +36,7 @@ analyze table `t`
 query T
 select * from fuse_statistic('db_09_0020', 't')
 ----
-(0,3)
+(0,3);
 
 statement ok
 insert into t values (5)
@@ -66,7 +66,7 @@ select segment_count,block_count from fuse_snapshot('db_09_0020', 't') limit 1
 query T
 select * from fuse_statistic('db_09_0020', 't')
 ----
-(0,3)
+(0,3);
 
 statement ok
 analyze table `t`
@@ -74,7 +74,7 @@ analyze table `t`
 query T
 select * from fuse_statistic('db_09_0020', 't')
 ----
-(0,6)
+(0,6);
 
 statement ok
 optimize table t compact
@@ -87,7 +87,7 @@ select segment_count,block_count from fuse_snapshot('db_09_0020', 't') limit 1
 query T
 select * from fuse_statistic('db_09_0020', 't')
 ----
-(0,6)
+(0,6);
 
 statement ok
 analyze table `t`
@@ -95,7 +95,7 @@ analyze table `t`
 query T
 select * from fuse_statistic('db_09_0020', 't')
 ----
-(0,3)
+(0,3);
 
 statement ok
 delete from t where a=5
@@ -103,7 +103,7 @@ delete from t where a=5
 query T
 select * from fuse_statistic('db_09_0020', 't')
 ----
-(0,3)
+(0,3);
 
 statement ok
 analyze table `t`
@@ -111,7 +111,7 @@ analyze table `t`
 query T
 select * from fuse_statistic('db_09_0020', 't')
 ----
-(0,2)
+(0,2);
 
 statement ok
 DROP TABLE t

@@ -96,16 +96,10 @@ insert into d1(b) select b from d1
 query TIIT
 select * from d1 order by a, b
 ----
- 0 2 c
- 0 2 c
- 0 4 c
- 1 4 c
-
----- http
-0 2 c
-0 2 c
-0 4 c
-1 4 c
+(empty) 0 2 c
+(empty) 0 2 c
+(empty) 0 4 c
+(empty) 1 4 c
 
 statement ok
 DROP TABLE t1

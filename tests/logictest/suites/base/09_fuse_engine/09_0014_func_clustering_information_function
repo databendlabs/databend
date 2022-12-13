@@ -1,4 +1,7 @@
 statement ok
+use default
+
+statement ok
 create table t09_0014(a int, b int) cluster by(b,a)
 
 statement ok

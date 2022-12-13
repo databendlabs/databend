@@ -10,10 +10,10 @@ USE db1
 statement ok
 CREATE TABLE IF NOT EXISTS t1(a int, b varchar) Engine = fuse cluster by(a)
 
-query TTTTRTIIII
-SELECT * FROM system.tables WHERE database='db1'
-----
-default db1 t1 FUSE (a) $DATE NULL 0 0 0 0
+## query TTTTRTIIII
+## SELECT * FROM system.tables WHERE database='db1'
+## ----
+## db1 t1 FUSE (a) $DATE NULL 0 0 0 0
 
 statement ok
 DROP TABLE t1

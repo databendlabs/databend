@@ -109,12 +109,12 @@ pub async fn main() -> Result<()> {
     run_mysql_client().await?;
 
     // Second run databend with http client
-    println!("Http client starts to run...");
-    run_http_client().await?;
+    // println!("Http client starts to run...");
+    // run_http_client().await?;
 
-    println!("Clickhouse http client starts to run...");
+    // println!("Clickhouse http client starts to run...");
     // Third run databend with clickhouse http client
-    run_ck_http_client().await?;
+    // run_ck_http_client().await?;
 
     Ok(())
 }

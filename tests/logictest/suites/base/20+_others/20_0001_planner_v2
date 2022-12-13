@@ -866,7 +866,7 @@ NULL
 query I
 select [1, 2, 3]
 ----
-[1, 2, 3]
+[1,2,3]
 
 
 query T
@@ -878,7 +878,7 @@ select []
 query T
 select [[1, 2, 3],[1, 2, 3]]
 ----
-[[1, 2, 3], [1, 2, 3]]
+[[1,2,3],[1,2,3]]
 
 
 query I
@@ -940,11 +940,11 @@ drop table t
 query T
 select ('field', number) from numbers(5) order by number
 ----
-('field', 0)
-('field', 1)
-('field', 2)
-('field', 3)
-('field', 4)
+('field',0)
+('field',1)
+('field',2)
+('field',3)
+('field',4)
 
 
 statement ok
@@ -1126,8 +1126,6 @@ drop table n
 
 query I
 select * from numbers(5) as t where exists (select * from numbers(3) where number = t.number) ORDER BY number
-
-
 ----
 0
 1

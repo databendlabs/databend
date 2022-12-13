@@ -13,7 +13,7 @@ CREATE TABLE t1(a INT)
 query TTTTT
 SHOW FIELDS FROM t1
 ----
-a INT NO 0 
+a INT NO 0 (empty)
 
 statement ok
 DROP DATABASE IF EXISTS ss

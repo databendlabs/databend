@@ -83,6 +83,9 @@ statement ok
 create database db1
 
 statement ok
+use db1
+
+statement ok
 create table db1.t1(id int, a datetime)
 
 statement ok
@@ -106,9 +109,6 @@ select * from db1.t1
 2  2022-01-02 10:00:22.000000
 3  2022-02-02 12:00:03.000000
 4  2022-03-02 16:12:00.000000
-
-statement ok
-drop database db1
 
 statement ok
 set timezone='UTC'
@@ -273,3 +273,6 @@ drop table t
 
 statement ok
 set timezone='UTC'
+
+statement ok
+drop database db1

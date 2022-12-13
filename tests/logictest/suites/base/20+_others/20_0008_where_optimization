@@ -30,8 +30,9 @@ select * from t_where_optimizer where a = b order by a
 
 ## All rows are filtered out
 
-statement ok
-select * from t_where_optimizer where a < 1;
+query ok
+select * from t_where_optimizer where a < 1
+
 
 ## One part will be filtered out
 
@@ -62,19 +63,19 @@ insert into t_where_optimizer values(1, (1, 2)), (2, (3, 4)), (3, (5, 6))
 query IT
 select * from t_where_optimizer
 ----
-1 (1, 2)
-2 (3, 4)
-3 (5, 6)
+1 (1,2)
+2 (3,4)
+3 (5,6)
 
 query IT
 select * from t_where_optimizer where id = 1
 ----
-1 (1, 2)
+1 (1,2)
 
 query IT
 select * from t_where_optimizer where s:a = 3
 ----
-2 (3, 4)
+2 (3,4)
 
 query IT
 select s:a, s:b from t_where_optimizer where id <= 3 and s:a > 3
