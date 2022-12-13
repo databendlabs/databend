@@ -55,6 +55,9 @@ impl RangePruner for RangeFilter {
     }
 }
 
+/// Create a new [`RangePruner`] from expression and schema.
+///
+/// Note: the schema should be the schema of the table, not the schema of the input.
 pub fn new_range_pruner<'a>(
     ctx: &Arc<dyn TableContext>,
     filter_expr: Option<&'a [Expression]>,

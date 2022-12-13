@@ -65,6 +65,15 @@ impl ParquetReader {
         let mut stats_of_row_groups = HashMap::with_capacity(rgs.len());
 
         for index in indices {
+            if rgs
+                .iter()
+                .any(|rg| rg.columns()[*index].metadata().statistics.is_none())
+            {
+                return Err(ErrorCode::InvalidArgument(
+                    "Some columns of the row groups have no statistics",
+                ));
+            }
+
             let field = &schema.fields[*index];
             let column_stats = pread::statistics::deserialize(field, rgs)?;
             stats_of_row_groups.insert(*index, BatchStatistics::from(column_stats));
@@ -97,8 +106,8 @@ pub struct BatchStatistics {
 impl BatchStatistics {
     pub fn get(&self, index: usize) -> ColumnStatistics {
         ColumnStatistics {
-            min: self.min_values.get(0),
-            max: self.max_values.get(0),
+            min: self.min_values.get(index),
+            max: self.max_values.get(index),
             null_count: self.null_count.get_u64(index).unwrap(),
             in_memory_size: 0, // this field is not used.
             distinct_of_values: self.distinct_count.get_u64(index).ok(),
@@ -111,7 +120,7 @@ impl From<pread::statistics::Statistics> for BatchStatistics {
         let null_count = UInt64Column::from_arrow_array(&*stats.null_count);
         let distinct_count = UInt64Column::from_arrow_array(&*stats.distinct_count);
         let min_values = stats.min_value.clone().into_column();
-        let max_values = stats.min_value.clone().into_column();
+        let max_values = stats.max_value.clone().into_column();
         Self {
             null_count,
             distinct_count,

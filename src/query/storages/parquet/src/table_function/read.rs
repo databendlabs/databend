@@ -139,7 +139,7 @@ impl ParquetTable {
 
         // do parition at the begin of the whole pipeline.
         let push_downs = plan.push_downs.clone();
-        let schema = plan.schema();
+        let schema = plan.source_info.schema();
         pipeline.set_on_init(move || {
             let mut partitions = Vec::with_capacity(locations.len());
 
