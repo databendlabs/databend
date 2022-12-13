@@ -144,7 +144,6 @@ impl ParquetTable {
             let mut partitions = Vec::with_capacity(locations.len());
 
             // build row group pruner.
-
             let filter_expr = push_downs.as_ref().map(|extra| extra.filters.as_slice());
             let row_group_pruner = range_pruner::new_range_pruner(&ctx_ref, filter_expr, &schema)?;
 

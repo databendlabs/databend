@@ -16,4 +16,3 @@
 
 pub mod limiter_pruner;
 pub mod range_pruner;
-pub mod topn_pruner;

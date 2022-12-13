@@ -29,7 +29,6 @@ use common_storages_pruner::limiter_pruner;
 use common_storages_pruner::limiter_pruner::LimiterPruner;
 use common_storages_pruner::range_pruner;
 use common_storages_pruner::range_pruner::RangePruner;
-use common_storages_pruner::topn_pruner;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::Location;
 use common_storages_table_meta::meta::SegmentInfo;
@@ -41,6 +40,7 @@ use tracing::Instrument;
 use super::pruner;
 use crate::io::MetaReaders;
 use crate::pruning::pruner::Pruner;
+use crate::pruning::topn_pruner;
 
 pub type BlockIndex = (usize, usize);
 type SegmentPruningJoinHandles = Vec<JoinHandle<Result<Vec<(BlockIndex, Arc<BlockMeta>)>>>>;
