@@ -182,8 +182,8 @@ SELECT * FROM xyzw ORDER BY x OFFSET 1 + 0.0
 query T
 SELECT (x,y) FROM xyzw
 ----
-(4, 5)
-(1, 2)
+(4,5)
+(1,2)
 
 statement ok
 SELECT * FROM xyzw LIMIT 0
@@ -525,4 +525,4 @@ INSERT INTO wide(id, n) VALUES(0, 10)
 query IITITTITTTTIFFI
 SELECT * FROM wide
 ----
-0 0  0   0     0 0.0 0.0 10
+0 0 (empty) 0 (empty) (empty) 0 (empty) (empty) (empty) (empty) 0 0.0 0.0 10
