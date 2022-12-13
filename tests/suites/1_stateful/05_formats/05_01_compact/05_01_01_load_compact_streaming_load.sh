@@ -17,7 +17,7 @@ echo "CREATE TABLE t1
 );" | $MYSQL_CLIENT_CONNECT
 
 echo "---load"
-curl -sH "insert_sql:insert into t1 format csv" \
+curl -sH "insert_sql:insert into t1 file_format = (type = 'CSV')" \
 -F "upload=@${DATA}" \
 -H "input_read_buffer_size: 100" \
 -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" | grep -c "SUCCESS"

@@ -43,7 +43,7 @@ CREATE TABLE books
 Create and send the API request with the following scripts:
 
 ```bash
-curl -XPUT 'http://root:@127.0.0.1:8000/v1/streaming_load' -H 'insert_sql: insert into book_db.books format CSV' -H 'format_skip_header: 0' -H 'format_field_delimiter: ,' -H 'format_record_delimiter: \n' -F 'upload=@"./books.csv"'
+curl -XPUT 'http://root:@127.0.0.1:8000/v1/streaming_load' -H 'insert_sql: insert into book_db.books file_format = (type = "CSV" skip_header = 0 field_delimiter = "," record_delimiter = "\n")' -F 'upload=@"./books.csv"'
 ```
 
 Response Example:
@@ -101,7 +101,7 @@ CREATE TABLE bookcomments
 Create and send the API request with the following scripts:
 
 ```bash
-curl -XPUT 'http://root:@127.0.0.1:8000/v1/streaming_load' -H 'insert_sql: insert into book_db.bookcomments(title,author,date)format CSV' -H 'format_skip_header: 0' -H 'format_field_delimiter: ,' -H 'format_record_delimiter: \n' -F 'upload=@"./books.csv"'
+curl -XPUT 'http://root:@127.0.0.1:8000/v1/streaming_load' -H 'insert_sql: insert into book_db.bookcomments(title,author,date) file_format = (type = "CSV" skip_header = 0 field_delimiter = "," record_delimiter = "\n")' -F 'upload=@"./books.csv"'
 ```
 
 Notice that the `insert_sql` part above specifies the columns (title, author, and date) to match the loaded data.
