@@ -290,7 +290,12 @@ impl BindContext {
         let fields = self
             .columns
             .iter()
-            .map(|column_binding| DataField::new(&column_binding.column_name, todo!("expression")))
+            .map(|column_binding| {
+                DataField::new(
+                    &column_binding.column_name,
+                    *column_binding.data_type.clone(),
+                )
+            })
             .collect();
         DataSchemaRefExt::create(fields)
     }
