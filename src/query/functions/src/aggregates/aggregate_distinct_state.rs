@@ -366,14 +366,14 @@ where
 
 // For count(distinct string) and uniq(string)
 pub struct AggregateUniqStringState {
-    set: StackHashSet<u128, 16>,
+    set: common_hashtable::HashSet<u128>,
     inserted: bool,
 }
 
 impl DistinctStateFunc for AggregateUniqStringState {
     fn new() -> Self {
         AggregateUniqStringState {
-            set: StackHashSet::new(),
+            set: common_hashtable::HashSet::new(),
             inserted: false,
         }
     }
@@ -388,7 +388,7 @@ impl DistinctStateFunc for AggregateUniqStringState {
 
     fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()> {
         let size = reader.read_uvarint()?;
-        self.set = StackHashSet::with_capacity(size as usize);
+        self.set = common_hashtable::HashSet::with_capacity(size as usize);
         for _ in 0..size {
             let e = deserialize_from_slice(reader)?;
             self.inserted = self.set.set_insert(e).is_ok();
