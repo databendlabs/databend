@@ -8,10 +8,19 @@ statement ok
 use join_reorder
 
 statement ok
+drop table if exists t
+
+statement ok
 create table t as select number as a from numbers(1)
 
 statement ok
+drop table if exists t1
+
+statement ok
 create table t1 as select number as a from numbers(10)
+
+statement ok
+drop table if exists t2
 
 statement ok
 create table t2 as select number as a from numbers(100)
