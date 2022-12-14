@@ -98,7 +98,6 @@ impl FuseTable {
             Some(ref from_share) => create_share_table_operator(
                 ShareTableConfig::share_endpoint_address(),
                 ShareTableConfig::share_endpoint_token(),
-                ShareTableConfig::requester_tenant_id(),
                 &from_share.tenant,
                 &from_share.share_name,
                 &table_info.name,

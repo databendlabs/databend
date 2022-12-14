@@ -71,7 +71,6 @@ impl GlobalServices {
             &config.query.share_endpoint_address,
             &config.query.share_endpoint_auth_token_file,
             config.query.tenant_id.clone(),
-            config.query.tenant_id.clone(),
         )?;
 
         CacheManager::init(&config.query)?;

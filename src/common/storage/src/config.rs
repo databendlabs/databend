@@ -500,20 +500,17 @@ impl Debug for StorageRedisConfig {
 pub struct ShareTableConfig {
     pub share_endpoint_address: Option<String>,
     pub share_endpoint_token: RefreshableToken,
-    pub requester_tenant_id: String,
 }
 
 impl ShareTableConfig {
     pub fn init(
         share_endpoint_address: &str,
         token_file: &str,
-        requester_tenant_id: String,
         default_token: String,
     ) -> common_exception::Result<()> {
         GlobalInstance::set(Self::try_create(
             share_endpoint_address,
             token_file,
-            requester_tenant_id,
             default_token,
         )?);
 
@@ -523,7 +520,6 @@ impl ShareTableConfig {
     pub fn try_create(
         share_endpoint_address: &str,
         token_file: &str,
-        requester_tenant_id: String,
         default_token: String,
     ) -> common_exception::Result<ShareTableConfig> {
         let share_endpoint_address = if share_endpoint_address.is_empty() {
@@ -541,7 +537,6 @@ impl ShareTableConfig {
         Ok(ShareTableConfig {
             share_endpoint_address,
             share_endpoint_token,
-            requester_tenant_id,
         })
     }
 
@@ -551,10 +546,6 @@ impl ShareTableConfig {
 
     pub fn share_endpoint_token() -> RefreshableToken {
         ShareTableConfig::instance().share_endpoint_token
-    }
-
-    pub fn requester_tenant_id() -> String {
-        ShareTableConfig::instance().requester_tenant_id
     }
 
     pub fn instance() -> ShareTableConfig {

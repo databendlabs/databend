@@ -22,6 +22,7 @@ use anyhow::anyhow;
 use anyhow::Result;
 use bytes::Bytes;
 use common_auth::RefreshableToken;
+use common_config::GlobalConfig;
 use http::header::AUTHORIZATION;
 use http::header::CONTENT_LENGTH;
 use http::Method;
@@ -45,7 +46,6 @@ pub struct SharedSigner {
     cache: Cache<PresignRequest, PresignedRequest>,
     client: HttpClient,
     token: RefreshableToken,
-    requester_tenant_id: String,
 }
 
 impl Debug for SharedSigner {
@@ -58,7 +58,7 @@ impl Debug for SharedSigner {
 
 impl SharedSigner {
     /// Create a new SharedSigner.
-    pub fn new(endpoint: &str, token: RefreshableToken, req_tenant_id: String) -> Self {
+    pub fn new(endpoint: &str, token: RefreshableToken) -> Self {
         let cache = Cache::builder()
             // Databend Cloud Presign will expire after 3600s (1 hour).
             // We will expire them 10 minutes before to avoid edge cases.
@@ -70,7 +70,6 @@ impl SharedSigner {
             cache,
             client: HttpClient::new(),
             token,
-            requester_tenant_id: req_tenant_id,
         }
     }
 
@@ -153,12 +152,13 @@ impl SharedSigner {
             .collect();
         let bs = Bytes::from(serde_json::to_vec(&reqs)?);
         let auth = self.token.to_header().await?;
+        let requester = GlobalConfig::instance().as_ref().query.tenant_id.clone();
         let req = Request::builder()
             .method(Method::POST)
             .uri(&self.endpoint)
             .header(AUTHORIZATION, auth)
             .header(CONTENT_LENGTH, bs.len())
-            .header(TENANT_HEADER, self.requester_tenant_id.clone())
+            .header(TENANT_HEADER, requester)
             .body(AsyncBody::Bytes(bs))?;
         let resp = self.client.send_async(req).await?;
         let bs = resp.into_body().bytes().await?;
