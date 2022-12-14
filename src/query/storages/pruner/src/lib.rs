@@ -14,5 +14,10 @@
 
 #![deny(unused_crate_dependencies)]
 
-pub mod limiter_pruner;
-pub mod range_pruner;
+mod limiter_pruner;
+mod range_pruner;
+
+pub use limiter_pruner::LimiterPruner;
+pub use limiter_pruner::LimiterPrunerCreator;
+pub use range_pruner::RangePruner;
+pub use range_pruner::RangePrunerCreator;

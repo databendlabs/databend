@@ -59,9 +59,14 @@ impl Limiter for U64Limiter {
 }
 
 pub type LimiterPruner = Arc<dyn Limiter + Send + Sync>;
-pub fn new_limiter(limit: Option<usize>) -> LimiterPruner {
-    match limit {
-        Some(size) => Arc::new(U64Limiter::new(size as u64)),
-        _ => Arc::new(Unlimited),
+
+pub struct LimiterPrunerCreator;
+
+impl LimiterPrunerCreator {
+    pub fn create(limit: Option<usize>) -> LimiterPruner {
+        match limit {
+            Some(size) => Arc::new(U64Limiter::new(size as u64)),
+            _ => Arc::new(Unlimited),
+        }
     }
 }

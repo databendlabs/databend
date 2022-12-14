@@ -27,7 +27,7 @@ use common_exception::Result;
 use common_pipeline_core::Pipeline;
 use common_sql::evaluator::EvalNode;
 use common_sql::evaluator::Evaluator;
-use common_storages_pruner::range_pruner;
+use common_storages_pruner::RangePrunerCreator;
 
 use super::ParquetTable;
 use super::TableContext;
@@ -145,7 +145,7 @@ impl ParquetTable {
 
             // build row group pruner.
             let filter_expr = push_downs.as_ref().map(|extra| extra.filters.as_slice());
-            let row_group_pruner = range_pruner::new_range_pruner(&ctx_ref, filter_expr, &schema)?;
+            let row_group_pruner = RangePrunerCreator::try_create(&ctx_ref, filter_expr, &schema)?;
 
             for location in &locations {
                 let file_meta = ParquetReader::read_meta(location)?;

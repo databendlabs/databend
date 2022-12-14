@@ -80,8 +80,7 @@ impl ParquetReader {
         }
 
         for (rg_idx, _) in rgs.iter().enumerate() {
-            let mut cols_stats = HashMap::new();
-            cols_stats.reserve(stats.capacity());
+            let mut cols_stats = HashMap::with_capacity(stats.capacity());
             for index in indices {
                 let col_stats = stats_of_row_groups[index].get(rg_idx);
                 cols_stats.insert(*index as u32, col_stats);

@@ -25,10 +25,10 @@ use common_catalog::table_context::TableContext;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_storages_pruner::limiter_pruner;
-use common_storages_pruner::limiter_pruner::LimiterPruner;
-use common_storages_pruner::range_pruner;
-use common_storages_pruner::range_pruner::RangePruner;
+use common_storages_pruner::LimiterPruner;
+use common_storages_pruner::LimiterPrunerCreator;
+use common_storages_pruner::RangePruner;
+use common_storages_pruner::RangePrunerCreator;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::Location;
 use common_storages_table_meta::meta::SegmentInfo;
@@ -79,11 +79,11 @@ impl BlockPruner {
             .and_then(|p| p.limit);
 
         // prepare the limiter. in case that limit is none, an unlimited limiter will be returned
-        let limiter = limiter_pruner::new_limiter(limit);
+        let limiter = LimiterPrunerCreator::create(limit);
 
         // prepare the range filter.
         // if filter_expression is none, an dummy pruner will be returned, which prunes nothing
-        let range_pruner = range_pruner::new_range_pruner(ctx, filter_expressions, &schema)?;
+        let range_pruner = RangePrunerCreator::try_create(ctx, filter_expressions, &schema)?;
 
         // prepare the filter.
         // None will be returned, if filter is not applicable (e.g. unsuitable filter expression, index not available, etc.)
