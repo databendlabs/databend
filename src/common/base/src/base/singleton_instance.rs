@@ -45,7 +45,7 @@ impl Singleton {
                     Some(name) => name,
                     None => panic!("thread doesn't have name"),
                 };
-                let guard = c.read_recursive();
+                let guard = c.read();
                 let v: &T = guard
                     .get(thread_name)
                     .unwrap_or_else(|| panic!("thread {thread_name} is not initiated"))
@@ -65,15 +65,11 @@ impl Singleton {
                     Some(name) => name,
                     None => panic!("thread doesn't have name"),
                 };
-                let guard = c.upgradable_read();
-                match guard.get(thread_name) {
-                    Some(c) => c.set(value),
-                    None => {
-                        let mut guard = parking_lot::RwLockUpgradableReadGuard::upgrade(guard);
-                        let c = guard.entry(thread_name.to_string()).or_default();
-                        c.set(value)
-                    }
-                }
+                let guard = c.read();
+                guard
+                    .get(thread_name)
+                    .unwrap_or_else(|| panic!("thread {thread_name} is not initiated"))
+                    .set(value)
             }
         }
     }
@@ -109,8 +105,12 @@ impl GlobalInstance {
     ///
     /// Should only be initiated once and only used in testing.
     #[cfg(debug_assertions)]
-    pub fn init_testing() {
+    pub fn init_testing(thread_name: &str) {
         let _ = GLOBAL.set(Singleton::Testing(parking_lot::RwLock::default()));
+        if let Singleton::Testing(v) = GLOBAL.wait() {
+            let mut guard = v.write();
+            guard.insert(thread_name.to_string(), <Container![Send + Sync]>::new());
+        }
     }
 
     /// drop testing global data by thread name.

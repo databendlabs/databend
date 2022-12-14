@@ -33,7 +33,13 @@ impl TestGlobalServices {
         set_panic_hook();
         std::env::set_var("UNIT_TEST", "TRUE");
 
-        GlobalServices::init_with(config.clone(), false).await?;
+        let thread_name = match std::thread::current().name() {
+            None => panic!("thread name is none"),
+            Some(thread_name) => thread_name.to_string(),
+        };
+
+        GlobalInstance::init_testing(&thread_name);
+        GlobalServices::init_with(config.clone()).await?;
 
         // Cluster register.
         {
@@ -46,12 +52,9 @@ impl TestGlobalServices {
             );
         }
 
-        match std::thread::current().name() {
-            None => panic!("thread name is none"),
-            Some(thread_name) => Ok(TestGuard {
-                thread_name: thread_name.to_string(),
-            }),
-        }
+        Ok(TestGuard {
+            thread_name: thread_name.to_string(),
+        })
     }
 }
 
@@ -61,11 +64,6 @@ pub struct TestGuard {
 
 impl Drop for TestGuard {
     fn drop(&mut self) {
-        debug!(
-            "test {} is finished, starting dropping all resources",
-            &self.thread_name
-        );
-
         // Check if session manager sill have active sessions.
         {
             let session_mgr = SessionManager::instance();
@@ -79,8 +77,6 @@ impl Drop for TestGuard {
             }
         }
 
-        GlobalInstance::drop_testing(&self.thread_name);
-
-        debug!("test {} resources have been dropped", &self.thread_name);
+        // GlobalInstance::drop_testing(&self.thread_name);
     }
 }
