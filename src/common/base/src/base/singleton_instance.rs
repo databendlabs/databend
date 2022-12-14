@@ -112,13 +112,20 @@ impl GlobalInstance {
     /// Should only be used in testing code.
     #[cfg(debug_assertions)]
     pub fn drop_testing(thread_name: &str) {
+        use std::thread;
+
         match GLOBAL.wait() {
             Singleton::Production(_) => {
                 unreachable!("drop_testing should never be called on production global")
             }
             Singleton::Testing(c) => {
-                let mut guard = c.lock();
-                let _ = guard.remove(thread_name);
+                let v = {
+                    let mut guard = c.lock();
+                    guard.remove(thread_name)
+                };
+                // We don't care about if about this container any more, just
+                // move to another thread to make sure this call returned ASAP.
+                thread::spawn(move || v);
             }
         }
     }
