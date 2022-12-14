@@ -1,0 +1,12 @@
+---------- TABLE INFO ------------
+DB.Table: 'system'.'databases', Table: databases-table_id:1, ver:0, Engine: SystemDatabases
+-------- TABLE CONTENTS ----------
++---------+--------------------+
+| catalog | name               |
++---------+--------------------+
+| default | default            |
+| default | information_schema |
+| default | system             |
++---------+--------------------+
+
+

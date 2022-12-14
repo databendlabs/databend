@@ -119,13 +119,13 @@ impl GlobalInstance {
                 unreachable!("drop_testing should never be called on production global")
             }
             Singleton::Testing(c) => {
-                let v = {
-                    let mut guard = c.lock();
-                    guard.remove(thread_name)
-                };
-                // We don't care about if about this container any more, just
-                // move to another thread to make sure this call returned ASAP.
-                thread::spawn(move || v);
+                // let v = {
+                //     let mut guard = c.lock();
+                //     guard.remove(thread_name)
+                // };
+                // // We don't care about if about this container any more, just
+                // // move to another thread to make sure this call returned ASAP.
+                // thread::spawn(move || v);
             }
         }
     }
