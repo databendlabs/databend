@@ -105,7 +105,10 @@ SELECT * FROM b2.t2
 ----
 10
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> cb1e30e151 (try to enable ci)
 query T
 SELECT name FROM system.databases where name = 'b2';
 ----

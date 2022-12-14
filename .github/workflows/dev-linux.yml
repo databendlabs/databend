@@ -132,6 +132,7 @@ jobs:
           - "base"
           - "query"
           - "ydb"
+          - "standalone"
         handlers:
           - "mysql"
           - "http"

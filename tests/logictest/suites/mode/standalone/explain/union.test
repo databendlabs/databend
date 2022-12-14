@@ -1,4 +1,7 @@
 statement ok
+drop table if exists t;
+
+statement ok
 drop view if exists t;
 
 statement ok
@@ -22,9 +25,8 @@ insert into t2 values (1, 2), (2, 3);
 statement ok
 create view t as select * from t1 union all select * from t2;
 
-statement query T
+query T
 explain select * from t where a > b;
-
 ----
 UnionAll
 ├── TableScan
@@ -42,9 +44,8 @@ UnionAll
     ├── partitions scanned: 0
     └── push downs: [filters: [(a > b)], limit: NONE]
 
-statement query T
+query T
 explain select * from t where a > 1;
-
 ----
 UnionAll
 ├── TableScan
@@ -62,9 +63,8 @@ UnionAll
     ├── partitions scanned: 1
     └── push downs: [filters: [(a > 1)], limit: NONE]
 
-statement query T
+query T
 explain select * from t limit 3;
-
 ----
 Limit
 ├── limit: 3
@@ -91,9 +91,8 @@ Limit
             ├── partitions scanned: 1
             └── push downs: [filters: [], limit: 3]
 
-statement query T
+query T
 explain select * from t limit 3 offset 1;
-
 ----
 Limit
 ├── limit: 3
@@ -120,9 +119,8 @@ Limit
             ├── partitions scanned: 1
             └── push downs: [filters: [], limit: 4]
 
-statement query T
+query T
 explain select * from t1 union all select * from t2 limit 1;
-
 ----
 Limit
 ├── limit: 1

@@ -7,6 +7,9 @@ set -e
 echo "Starting Cluster databend-query"
 ./scripts/ci/deploy/databend-query-cluster-3-nodes.sh
 
+echo "install Rust"
+./scripts/setup/dev_setup.sh
+
 echo -e "ulimit:\n$(ulimit -a)"
 
 echo "Starting databend-sqllogic tests under mysql"
