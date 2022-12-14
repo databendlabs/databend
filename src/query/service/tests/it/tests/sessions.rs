@@ -77,6 +77,6 @@ impl Drop for TestGuard {
             }
         }
 
-        // GlobalInstance::drop_testing(&self.thread_name);
+        GlobalInstance::drop_testing(&self.thread_name);
     }
 }
