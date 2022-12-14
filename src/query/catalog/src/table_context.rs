@@ -54,6 +54,12 @@ pub struct ProcessInfo {
     pub created_time: SystemTime,
 }
 
+#[derive(Debug, Clone)]
+pub struct SideloadOptions {
+    pub uri: Option<String>,
+    pub stage: Option<String>,
+}
+
 #[async_trait::async_trait]
 pub trait TableContext: Send + Sync {
     /// Build a table instance the plan wants to operate on.
@@ -99,4 +105,5 @@ pub trait TableContext: Send + Sync {
     async fn get_table(&self, catalog: &str, database: &str, table: &str)
     -> Result<Arc<dyn Table>>;
     fn get_processes_info(&self) -> Vec<ProcessInfo>;
+    fn get_sideload(&self) -> Option<SideloadOptions>;
 }

@@ -21,6 +21,7 @@ use common_base::base::tokio;
 use common_base::base::tokio::sync::Mutex as TokioMutex;
 use common_base::base::tokio::sync::RwLock;
 use common_base::runtime::TrySpawn;
+use common_catalog::table_context::SideloadOptions;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use serde::Deserialize;
@@ -235,6 +236,14 @@ impl HttpQuery {
         let id = ctx.get_id();
         let sql = &request.sql;
         tracing::info!("run query_id={id} in session_id={session_id}, sql='{sql}'");
+
+        match &request.sideload {
+            Some(sideload) => ctx.attach_sideload(SideloadOptions {
+                uri: sideload.url.clone(),
+                stage: sideload.stage.clone(),
+            }),
+            None => {}
+        };
 
         let (block_sender, block_receiver) = sized_spsc(request.pagination.max_rows_in_buffer);
         let start_time = Instant::now();

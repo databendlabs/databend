@@ -22,6 +22,7 @@ use std::time::SystemTime;
 
 use common_base::base::Progress;
 use common_base::runtime::Runtime;
+use common_catalog::table_context::SideloadOptions;
 use common_config::Config;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
@@ -78,6 +79,7 @@ pub struct QueryContextShared {
     pub(in crate::sessions) data_operator: DataOperator,
     pub(in crate::sessions) executor: Arc<RwLock<Weak<PipelineExecutor>>>,
     pub(in crate::sessions) precommit_blocks: Arc<RwLock<Vec<DataBlock>>>,
+    pub(in crate::sessions) sideload_config: Arc<RwLock<Option<SideloadOptions>>>,
     pub(in crate::sessions) created_time: SystemTime,
 }
 
@@ -107,6 +109,7 @@ impl QueryContextShared {
             affect: Arc::new(Mutex::new(None)),
             executor: Arc::new(RwLock::new(Weak::new())),
             precommit_blocks: Arc::new(RwLock::new(vec![])),
+            sideload_config: Arc::new(RwLock::new(None)),
             created_time: SystemTime::now(),
         }))
     }
@@ -314,6 +317,15 @@ impl QueryContextShared {
         let mut swaped_precommit_blocks = vec![];
         std::mem::swap(&mut *blocks, &mut swaped_precommit_blocks);
         swaped_precommit_blocks
+    }
+
+    pub fn get_sideload(&self) -> Option<SideloadOptions> {
+        self.sideload_config.read().clone()
+    }
+
+    pub fn attach_sideload(&self, sideload: SideloadOptions) {
+        let mut sideload_config = self.sideload_config.write();
+        *sideload_config = Some(sideload);
     }
 
     pub fn get_created_time(&self) -> SystemTime {
