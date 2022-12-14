@@ -1,0 +1,11 @@
+---------- TABLE INFO ------------
+DB.Table: 'system'.'roles', Table: roles-table_id:1, ver:0, Engine: SystemRoles
+-------- TABLE CONTENTS ----------
++-------+-----------------+
+| name  | inherited_roles |
++-------+-----------------+
+| test  | 0               |
+| test1 | 1               |
++-------+-----------------+
+
+

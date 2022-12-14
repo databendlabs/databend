@@ -57,46 +57,6 @@ use wiremock::Mock;
 use wiremock::MockServer;
 use wiremock::ResponseTemplate;
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_system_tables() -> Result<()> {
-    let mut mint = Mint::new("tests/it/storages/testdata");
-    let file = &mut mint.new_goldenfile("system-tables.txt").unwrap();
-
-    // with goldenfile
-    test_columns_table(file).await.unwrap();
-    test_configs_table(file).await.unwrap();
-    test_catalogs_table(file).await.unwrap();
-    test_databases_table(file).await.unwrap();
-    test_engines_table(file).await.unwrap();
-    test_roles_table(file).await.unwrap();
-    test_settings_table(file).await.unwrap();
-    test_users_table(file).await.unwrap();
-
-    // with assert_eq
-    test_clusters_table()
-        .await
-        .expect("test_clusters_table must succeed");
-    test_contributors_table()
-        .await
-        .expect("test_contributors_table must succeed");
-    test_credits_table()
-        .await
-        .expect("test_credits_table must succeed");
-    test_functions_table()
-        .await
-        .expect("test_functions_table must succeed");
-    test_metrics_table()
-        .await
-        .expect("test_metrics_table must succeed");
-    test_tables_table()
-        .await
-        .expect("test_tables_table must succeed");
-    test_tracing_table()
-        .await
-        .expect("test_tracing_table must succeed");
-    Ok(())
-}
-
 async fn run_table_tests(
     file: &mut impl Write,
     ctx: Arc<QueryContext>,
@@ -129,6 +89,19 @@ async fn run_table_tests(
     Ok(())
 }
 
+#[tokio::test]
+async fn test_columns_table() -> Result<()> {
+    let (_guard, ctx) = crate::tests::create_query_context().await?;
+
+    let mut mint = Mint::new("tests/it/storages/testdata");
+    let file = &mut mint.new_goldenfile("columns_table.txt").unwrap();
+    let table = ColumnsTable::create(1);
+
+    run_table_tests(file, ctx, table).await?;
+    Ok(())
+}
+
+#[tokio::test]
 async fn test_clusters_table() -> Result<()> {
     let (_guard, ctx) = crate::tests::create_query_context().await?;
     let table = ClustersTable::create(1);
@@ -143,62 +116,61 @@ async fn test_clusters_table() -> Result<()> {
     Ok(())
 }
 
-async fn test_columns_table(file: &mut impl Write) -> Result<()> {
-    let (_guard, ctx) = crate::tests::create_query_context().await?;
-    let table = ColumnsTable::create(1);
+#[tokio::test]
+async fn test_configs_table_basic() -> Result<()> {
+    let mut mint = Mint::new("tests/it/storages/testdata");
+    let file = &mut mint.new_goldenfile("configs_table_basic.txt").unwrap();
+
+    let conf = crate::tests::ConfigBuilder::create().config();
+    let (_guard, ctx) = crate::tests::create_query_context_with_config(conf, None).await?;
+    ctx.get_settings().set_max_threads(8)?;
+
+    let table = ConfigsTable::create(1);
 
     run_table_tests(file, ctx, table).await?;
-    Ok(())
-}
-
-async fn test_configs_table(file: &mut impl Write) -> Result<()> {
-    // test_configs_table_basic
-    {
-        let conf = crate::tests::ConfigBuilder::create().config();
-        let (_guard, ctx) = crate::tests::create_query_context_with_config(conf, None).await?;
-        ctx.get_settings().set_max_threads(8)?;
-
-        let table = ConfigsTable::create(1);
-
-        run_table_tests(file, ctx, table).await?;
-    }
-
-    // test_configs_table_redact
-    {
-        let mock_server = MockServer::builder().start().await;
-        Mock::given(method("HEAD"))
-            .and(path("/test/.opendal"))
-            .respond_with(ResponseTemplate::new(404))
-            .mount(&mock_server)
-            .await;
-
-        let mut conf = crate::tests::ConfigBuilder::create().build();
-        conf.storage.params = StorageParams::S3(StorageS3Config {
-            region: "us-east-2".to_string(),
-            endpoint_url: mock_server.uri(),
-            bucket: "test".to_string(),
-            access_key_id: "access_key_id".to_string(),
-            secret_access_key: "secret_access_key".to_string(),
-            ..Default::default()
-        });
-
-        let (_guard, ctx) = crate::tests::create_query_context_with_config(conf, None).await?;
-        ctx.get_settings().set_max_threads(8)?;
-
-        let table = ConfigsTable::create(1);
-        let source_plan = table.read_plan(ctx.clone(), None).await?;
-
-        let stream = table.read_data_block_stream(ctx, &source_plan).await?;
-        let result = stream.try_collect::<Vec<_>>().await?;
-        let block = &result[0];
-        assert_eq!(block.num_columns(), 4);
-        // need a method to skip/edit endpoint_url
-        // run_table_tests(file, ctx, table).await?;
-    }
 
     Ok(())
 }
 
+#[tokio::test]
+async fn test_configs_table_redact() -> Result<()> {
+    let mut mint = Mint::new("tests/it/storages/testdata");
+    let _file = &mut mint.new_goldenfile("configs_table_redact.txt").unwrap();
+
+    let mock_server = MockServer::builder().start().await;
+    Mock::given(method("HEAD"))
+        .and(path("/test/.opendal"))
+        .respond_with(ResponseTemplate::new(404))
+        .mount(&mock_server)
+        .await;
+
+    let mut conf = crate::tests::ConfigBuilder::create().build();
+    conf.storage.params = StorageParams::S3(StorageS3Config {
+        region: "us-east-2".to_string(),
+        endpoint_url: mock_server.uri(),
+        bucket: "test".to_string(),
+        access_key_id: "access_key_id".to_string(),
+        secret_access_key: "secret_access_key".to_string(),
+        ..Default::default()
+    });
+
+    let (_guard, ctx) = crate::tests::create_query_context_with_config(conf, None).await?;
+    ctx.get_settings().set_max_threads(8)?;
+
+    let table = ConfigsTable::create(1);
+    let source_plan = table.read_plan(ctx.clone(), None).await?;
+
+    let stream = table.read_data_block_stream(ctx, &source_plan).await?;
+    let result = stream.try_collect::<Vec<_>>().await?;
+    let block = &result[0];
+    assert_eq!(block.num_columns(), 4);
+    // need a method to skip/edit endpoint_url
+    // run_table_tests(file, ctx, table).await?;
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn test_contributors_table() -> Result<()> {
     let (_guard, ctx) = crate::tests::create_query_context().await?;
     let table = ContributorsTable::create(1);
@@ -211,6 +183,7 @@ async fn test_contributors_table() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test]
 async fn test_credits_table() -> Result<()> {
     let (_guard, ctx) = crate::tests::create_query_context().await?;
     let table = CreditsTable::create(1);
@@ -223,7 +196,11 @@ async fn test_credits_table() -> Result<()> {
     Ok(())
 }
 
-async fn test_catalogs_table(file: &mut impl Write) -> Result<()> {
+#[tokio::test]
+async fn test_catalogs_table() -> Result<()> {
+    let mut mint = Mint::new("tests/it/storages/testdata");
+    let file = &mut mint.new_goldenfile("catalogs_table.txt").unwrap();
+
     let (_guard, ctx) = crate::tests::create_query_context().await?;
     let table = CatalogsTable::create(1);
 
@@ -231,22 +208,31 @@ async fn test_catalogs_table(file: &mut impl Write) -> Result<()> {
     Ok(())
 }
 
-async fn test_databases_table(file: &mut impl Write) -> Result<()> {
+#[tokio::test]
+async fn test_databases_table() -> Result<()> {
     let (_guard, ctx) = crate::tests::create_query_context().await?;
     let table = DatabasesTable::create(1);
 
+    let mut mint = Mint::new("tests/it/storages/testdata");
+    let file = &mut mint.new_goldenfile("databases_table.txt").unwrap();
+
     run_table_tests(file, ctx, table).await?;
     Ok(())
 }
 
-async fn test_engines_table(file: &mut impl Write) -> Result<()> {
+#[tokio::test]
+async fn test_engines_table() -> Result<()> {
     let (_guard, ctx) = crate::tests::create_query_context().await?;
     let table = EnginesTable::create(1);
 
+    let mut mint = Mint::new("tests/it/storages/testdata");
+    let file = &mut mint.new_goldenfile("engines_table.txt").unwrap();
+
     run_table_tests(file, ctx, table).await?;
     Ok(())
 }
 
+#[tokio::test]
 async fn test_functions_table() -> Result<()> {
     let (_guard, ctx) = crate::tests::create_query_context().await?;
     let table = FunctionsTable::create(1);
@@ -259,6 +245,7 @@ async fn test_functions_table() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test]
 async fn test_metrics_table() -> Result<()> {
     init_default_metrics_recorder();
     let (_guard, ctx) = crate::tests::create_query_context().await?;
@@ -281,7 +268,11 @@ async fn test_metrics_table() -> Result<()> {
     Ok(())
 }
 
-async fn test_roles_table(file: &mut impl Write) -> Result<()> {
+#[tokio::test]
+async fn test_roles_table() -> Result<()> {
+    let mut mint = Mint::new("tests/it/storages/testdata");
+    let file = &mut mint.new_goldenfile("roles_table.txt").unwrap();
+
     let (_guard, ctx) = crate::tests::create_query_context().await?;
     let tenant = ctx.get_tenant();
     ctx.get_settings().set_max_threads(2)?;
@@ -306,7 +297,11 @@ async fn test_roles_table(file: &mut impl Write) -> Result<()> {
     Ok(())
 }
 
-async fn test_settings_table(file: &mut impl Write) -> Result<()> {
+#[tokio::test]
+async fn test_settings_table() -> Result<()> {
+    let mut mint = Mint::new("tests/it/storages/testdata");
+    let file = &mut mint.new_goldenfile("settings_table.txt").unwrap();
+
     let (_guard, ctx) = crate::tests::create_query_context().await?;
     ctx.get_settings().set_max_threads(2)?;
     ctx.get_settings().set_max_memory_usage(1073741824)?;
@@ -317,6 +312,7 @@ async fn test_settings_table(file: &mut impl Write) -> Result<()> {
     Ok(())
 }
 
+#[tokio::test]
 async fn test_tables_table() -> Result<()> {
     let (_guard, ctx) = crate::tests::create_query_context().await?;
     let table = TablesTableWithoutHistory::create(1);
@@ -384,6 +380,7 @@ async fn test_tables_table() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test]
 async fn test_tracing_table() -> Result<()> {
     let (_guard, ctx) = crate::tests::create_query_context().await?;
     let table: Arc<dyn Table> = Arc::new(TracingTable::create(1));
@@ -398,7 +395,11 @@ async fn test_tracing_table() -> Result<()> {
     Ok(())
 }
 
-async fn test_users_table(file: &mut impl Write) -> Result<()> {
+#[tokio::test]
+async fn test_users_table() -> Result<()> {
+    let mut mint = Mint::new("tests/it/storages/testdata");
+    let file = &mut mint.new_goldenfile("users_table.txt").unwrap();
+
     let (_guard, ctx) = crate::tests::create_query_context().await?;
     let tenant = ctx.get_tenant();
     ctx.get_settings().set_max_threads(2)?;
