@@ -19,7 +19,7 @@ mod metadata;
 mod planner;
 mod semantic;
 
-pub(crate) mod binder;
+pub mod binder;
 pub mod optimizer;
 pub mod plans;
 
