@@ -1984,6 +1984,7 @@ dependencies = [
  "base64 0.13.0",
  "bytes",
  "common-auth",
+ "common-config",
  "http",
  "log",
  "moka",
