@@ -64,14 +64,23 @@ impl StringColumn {
 
         if arrow_type == &ArrowType::Utf8 {
             let arr = array.as_any().downcast_ref::<Utf8Array<i32>>().unwrap();
-            let iter = arr.values_iter();
-            return Self::new_from_iter(iter);
+            let offsets = arr
+                .offsets()
+                .iter()
+                .map(|x| *x as i64)
+                .collect::<Buffer<_>>();
+            return Self {
+                offsets,
+                values: arr.values().clone(),
+            };
         }
 
         if arrow_type == &ArrowType::LargeUtf8 {
             let arr = array.as_any().downcast_ref::<Utf8Array<i64>>().unwrap();
-            let iter = arr.values_iter();
-            return Self::new_from_iter(iter);
+            return Self {
+                offsets: arr.offsets().clone(),
+                values: arr.values().clone(),
+            };
         }
 
         Self::new(
