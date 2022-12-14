@@ -19,4 +19,10 @@ rm -rf ${DATADIR_PATH}
 DATADIR="fs://$DATADIR_PATH/"
 echo "copy into '${DATADIR}' from t1 FILE_FORMAT = (type = 'PARQUET');" | $MYSQL_CLIENT_CONNECT
 echo "select * from '${DATADIR}';" | $MYSQL_CLIENT_CONNECT
+
+echo '--- external stage'
+echo "drop stage if exists s2;" | $MYSQL_CLIENT_CONNECT
+echo "create stage s2 url = '${DATADIR}';" | $MYSQL_CLIENT_CONNECT
+echo "select * from @s2;" | $MYSQL_CLIENT_CONNECT
+
 rm -rf ${DATADIR_PATH}
