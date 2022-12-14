@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_base::base::ProgressValues;
 use common_catalog::plan::Expression;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PartitionsShuffleKind;
@@ -74,8 +75,14 @@ impl FuseTable {
             return Ok(());
         }
 
+        let scan_progress = ctx.get_scan_progress();
         // check if unconditional deletion
         if filter.is_none() {
+            let progress_values = ProgressValues {
+                rows: snapshot.summary.row_count as usize,
+                bytes: snapshot.summary.uncompressed_byte_size as usize,
+            };
+            scan_progress.incr(&progress_values);
             // deleting the whole table... just a truncate
             let purge = false;
             return self.do_truncate(ctx.clone(), purge).await;
@@ -91,7 +98,19 @@ impl FuseTable {
             // if the `filter_expr` is of "constant" nullary :
             //   for the whole block, whether all of the rows should be kept or dropped,
             //   we can just return from here, without accessing the block data
-            return self.delete_eval_const(ctx.clone(), &filter_expr).await;
+            if self.try_eval_const(&filter_expr)? {
+                let progress_values = ProgressValues {
+                    rows: snapshot.summary.row_count as usize,
+                    bytes: snapshot.summary.uncompressed_byte_size as usize,
+                };
+                scan_progress.incr(&progress_values);
+
+                // deleting the whole table... just a truncate
+                let purge = false;
+                return self.do_truncate(ctx.clone(), purge).await;
+            }
+            // do nothing.
+            return Ok(());
         }
 
         self.try_add_deletion_source(ctx.clone(), &filter_expr, col_indices, &snapshot, pipeline)
@@ -105,15 +124,11 @@ impl FuseTable {
         Ok(())
     }
 
-    async fn delete_eval_const(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        filter: &Expression,
-    ) -> Result<()> {
+    fn try_eval_const(&self, filter: &Expression) -> Result<bool> {
         let func_ctx = FunctionContext::default();
 
         let dummy_field = DataField::new("dummy", NullType::new_impl());
-        let dummy_schema = Arc::new(DataSchema::new(vec![dummy_field.clone()]));
+        let dummy_schema = Arc::new(DataSchema::new(vec![dummy_field]));
         let dummy_column = DataValue::Null.as_const_column(&NullType::new_impl(), 1)?;
         let dummy_data_block = DataBlock::create(dummy_schema.clone(), vec![dummy_column]);
 
@@ -121,16 +136,9 @@ impl FuseTable {
         let filter_result = eval_node.eval(&func_ctx, &dummy_data_block)?.vector;
         debug_assert!(filter_result.len() == 1);
 
-        let filter_result = DataBlock::cast_to_nonull_boolean(&filter_result)?
+        DataBlock::cast_to_nonull_boolean(&filter_result)?
             .get(0)
-            .as_bool()?;
-        if filter_result {
-            // deleting the whole table... just a truncate
-            let purge = false;
-            return self.do_truncate(ctx.clone(), purge).await;
-        }
-        // do nothing.
-        Ok(())
+            .as_bool()
     }
 
     async fn try_add_deletion_source(
