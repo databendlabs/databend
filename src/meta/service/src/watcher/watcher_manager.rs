@@ -23,8 +23,8 @@ use common_meta_types::protobuf::watch_request::FilterType;
 use common_meta_types::protobuf::Event;
 use common_meta_types::protobuf::WatchRequest;
 use common_meta_types::protobuf::WatchResponse;
+use common_meta_types::Change;
 use common_meta_types::PbSeqV;
-use common_meta_types::SeqV;
 use prost::Message;
 use tonic::Status;
 use tracing::info;
@@ -40,13 +40,6 @@ pub type WatcherStreamSender = Sender<Result<WatchResponse, Status>>;
 type CreateWatcherEvent = (WatchRequest, WatcherStreamSender);
 
 #[derive(Clone, Debug)]
-pub struct StateMachineKvData {
-    pub key: String,
-    pub prev: Option<SeqV>,
-    pub current: Option<SeqV>,
-}
-
-#[derive(Clone, Debug)]
 pub struct WatcherStateMachineSubscriber {
     event_tx: mpsc::UnboundedSender<WatcherEvent>,
 }
@@ -54,7 +47,7 @@ pub struct WatcherStateMachineSubscriber {
 #[derive(Clone)]
 pub enum WatcherEvent {
     CreateWatcherEvent(CreateWatcherEvent),
-    StateMachineKvDataEvent(StateMachineKvData),
+    StateMachineKvDataEvent(Change<Vec<u8>, String>),
 }
 
 #[derive(Debug)]
@@ -106,8 +99,8 @@ impl WatcherManagerCore {
                     WatcherEvent::CreateWatcherEvent((req, tx)) => {
                         self.create_watcher_stream(req, tx).await;
                     }
-                    WatcherEvent::StateMachineKvDataEvent(kv) => {
-                        self.notify_event(kv).await;
+                    WatcherEvent::StateMachineKvDataEvent(kv_change) => {
+                        self.notify_event(kv_change).await;
                     }
                 }
             } else {
@@ -124,14 +117,15 @@ impl WatcherManagerCore {
         server_metrics::incr_watchers(-1);
     }
 
-    async fn notify_event(&mut self, kv: StateMachineKvData) {
-        let set = self.watcher_range_map.get_by_point(&kv.key);
+    async fn notify_event(&mut self, change: Change<Vec<u8>, String>) {
+        let k = change.ident.as_ref().unwrap();
+        let set = self.watcher_range_map.get_by_point(k);
         if set.is_empty() {
             return;
         }
 
-        let current = kv.current;
-        let prev = kv.prev;
+        let current = change.result;
+        let prev = change.prev;
 
         let is_delete_event = current.is_none();
         let mut remove_range_keys: Vec<RangeMapKey<String, WatcherId>> = vec![];
@@ -151,7 +145,7 @@ impl WatcherManagerCore {
             assert_eq!(stream.id, watcher_id);
             let resp = WatchResponse {
                 event: Some(Event {
-                    key: kv.key.clone(),
+                    key: k.to_string(),
                     current: current.clone().map(PbSeqV::from),
                     prev: prev.clone().map(PbSeqV::from),
                 }),
@@ -217,13 +211,9 @@ impl WatcherManagerCore {
 }
 
 impl StateMachineSubscriber for WatcherStateMachineSubscriber {
-    fn kv_changed(&self, key: &str, prev: Option<SeqV>, current: Option<SeqV>) {
+    fn kv_changed(&self, change: Change<Vec<u8>, String>) {
         let _ = self
             .event_tx
-            .send(WatcherEvent::StateMachineKvDataEvent(StateMachineKvData {
-                key: key.to_string(),
-                prev,
-                current,
-            }));
+            .send(WatcherEvent::StateMachineKvDataEvent(change));
     }
 }

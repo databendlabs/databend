@@ -95,11 +95,11 @@ const TREE_STATE_MACHINE: &str = "state_machine";
 
 /// StateMachine subscriber trait
 pub trait StateMachineSubscriber: Debug + Sync + Send {
-    fn kv_changed(&self, key: &str, prev: Option<SeqV>, current: Option<SeqV>);
+    fn kv_changed(&self, change: Change<Vec<u8>, String>);
 }
 
 /// The state machine of the `MemStore`.
-/// It includes user data and two raft-related informations:
+/// It includes user data and two raft-related information:
 /// `last_applied_logs` and `client_serial_responses` to achieve idempotence.
 #[derive(Debug)]
 pub struct StateMachine {
@@ -342,9 +342,7 @@ impl StateMachine {
         // Send queued change events to subscriber
         if let Some(subscriber) = &self.subscriber {
             for event in changes {
-                // TODO: use Change as the event data type.
-                // safe unwrap
-                subscriber.kv_changed(&event.ident.unwrap(), event.prev, event.result);
+                subscriber.kv_changed(event);
             }
         }
 
@@ -638,17 +636,15 @@ impl StateMachine {
         if let Some(kv_pairs) = kv_pairs {
             if let Some(kv_pairs) = kv_pairs.get(delete_by_prefix) {
                 for (key, _seq) in kv_pairs.iter() {
-                    // TODO: return StorageError
-                    let ret = Self::txn_upsert_kv(txn_tree, &UpsertKV::delete(key), log_time_ms);
+                    let (expired, prev, res) =
+                        Self::txn_upsert_kv(txn_tree, &UpsertKV::delete(key), log_time_ms)?;
 
-                    if let Ok(ret) = ret {
-                        count += 1;
+                    count += 1;
 
-                        if ret.0.is_some() {
-                            txn_tree.push_change(key, ret.0.clone(), None);
-                        }
-                        txn_tree.push_change(key, ret.1.clone(), ret.2);
+                    if expired.is_some() {
+                        txn_tree.push_change(key, expired, None);
                     }
+                    txn_tree.push_change(key, prev, res);
                 }
             }
         }
