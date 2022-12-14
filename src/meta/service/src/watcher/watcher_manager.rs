@@ -35,30 +35,23 @@ use crate::metrics::network_metrics;
 use crate::metrics::server_metrics;
 
 pub type WatcherId = i64;
-pub type WatcherStreamSender = Sender<Result<WatchResponse, Status>>;
 
-type CreateWatcherEvent = (WatchRequest, WatcherStreamSender);
+/// A sender for dispatcher to send event to interested watchers.
+pub type WatcherSender = Sender<Result<WatchResponse, Status>>;
 
+/// A sender for event source, such as raft state machine, to send event to [`EventDispatcher`].
 #[derive(Clone, Debug)]
-pub struct WatcherStateMachineSubscriber {
-    event_tx: mpsc::UnboundedSender<WatcherEvent>,
-}
+pub(crate) struct DispatcherSender(pub(crate) mpsc::UnboundedSender<WatchEvent>);
 
 #[derive(Clone)]
-pub enum WatcherEvent {
-    CreateWatcherEvent(CreateWatcherEvent),
-    StateMachineKvDataEvent(Change<Vec<u8>, String>),
+pub enum WatchEvent {
+    AddWatcher((WatchRequest, WatcherSender)),
+    KVChange(Change<Vec<u8>, String>),
 }
 
-#[derive(Debug)]
-pub struct WatcherManager {
-    event_tx: mpsc::UnboundedSender<WatcherEvent>,
-
-    pub subscriber: WatcherStateMachineSubscriber,
-}
-
-struct WatcherManagerCore {
-    event_rx: mpsc::UnboundedReceiver<WatcherEvent>,
+/// Receives events from event sources, dispatches them to interested watchers.
+pub(crate) struct EventDispatcher {
+    event_rx: mpsc::UnboundedReceiver<WatchEvent>,
 
     /// map range to WatcherId
     watcher_range_map: RangeMap<String, WatcherId, WatcherStream>,
@@ -66,45 +59,36 @@ struct WatcherManagerCore {
     current_watcher_id: WatcherId,
 }
 
-impl WatcherManager {
-    pub fn create() -> Self {
+impl EventDispatcher {
+    /// Spawn a dispatcher loop task.
+    pub(crate) fn spawn() -> mpsc::UnboundedSender<WatchEvent> {
         let (event_tx, event_rx) = mpsc::unbounded_channel();
 
-        let core = WatcherManagerCore {
+        let dispatcher = EventDispatcher {
             event_rx,
             watcher_range_map: RangeMap::new(),
             current_watcher_id: 1,
         };
 
-        let _h = tokio::spawn(core.watcher_manager_main());
+        let _h = tokio::spawn(dispatcher.main());
 
-        WatcherManager {
-            event_tx: event_tx.clone(),
-            subscriber: WatcherStateMachineSubscriber { event_tx },
-        }
+        event_tx
     }
 
-    pub fn create_watcher_stream(&self, request: WatchRequest, tx: WatcherStreamSender) {
-        let create: CreateWatcherEvent = (request, tx);
-        let _ = self.event_tx.send(WatcherEvent::CreateWatcherEvent(create));
-    }
-}
-
-impl WatcherManagerCore {
     #[tracing::instrument(level = "trace", skip(self))]
-    async fn watcher_manager_main(mut self) {
+    async fn main(mut self) {
         loop {
             if let Some(event) = self.event_rx.recv().await {
                 match event {
-                    WatcherEvent::CreateWatcherEvent((req, tx)) => {
-                        self.create_watcher_stream(req, tx).await;
+                    WatchEvent::AddWatcher((req, tx)) => {
+                        self.add_watcher(req, tx).await;
                     }
-                    WatcherEvent::StateMachineKvDataEvent(kv_change) => {
-                        self.notify_event(kv_change).await;
+                    WatchEvent::KVChange(kv_change) => {
+                        self.dispatch_event(kv_change).await;
                     }
                 }
             } else {
-                info!("watcher manager has been shutdown");
+                info!("all event senders are closed. quit.");
                 break;
             }
         }
@@ -117,7 +101,8 @@ impl WatcherManagerCore {
         server_metrics::incr_watchers(-1);
     }
 
-    async fn notify_event(&mut self, change: Change<Vec<u8>, String>) {
+    /// Dispatch a kv change event to interested watchers.
+    async fn dispatch_event(&mut self, change: Change<Vec<u8>, String>) {
         let k = change.ident.as_ref().unwrap();
         let set = self.watcher_range_map.get_by_point(k);
         if set.is_empty() {
@@ -165,23 +150,24 @@ impl WatcherManagerCore {
             };
         }
 
+        // TODO: when a watcher stream is dropped, send a event to remove the watcher explicitly
         for range_key in remove_range_keys {
             self.close_stream(range_key);
         }
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn create_watcher_stream(&mut self, create: WatchRequest, tx: WatcherStreamSender) {
+    pub async fn add_watcher(&mut self, create: WatchRequest, tx: WatcherSender) {
         info!("create_watcher_stream: {:?}", create);
 
-        let range = match WatcherManagerCore::get_range_key(create.key.clone(), &create.key_end) {
+        let range = match EventDispatcher::get_range_key(create.key.clone(), &create.key_end) {
             Ok(range) => range,
             Err(_) => return,
         };
 
         self.current_watcher_id += 1;
         let watcher_id = self.current_watcher_id;
-        let filter = create.filter_type();
+        let filter: FilterType = create.filter_type();
 
         let watcher_stream = WatcherStream::new(
             watcher_id,
@@ -210,10 +196,8 @@ impl WatcherManagerCore {
     }
 }
 
-impl StateMachineSubscriber for WatcherStateMachineSubscriber {
+impl StateMachineSubscriber for DispatcherSender {
     fn kv_changed(&self, change: Change<Vec<u8>, String>) {
-        let _ = self
-            .event_tx
-            .send(WatcherEvent::StateMachineKvDataEvent(change));
+        let _ = self.0.send(WatchEvent::KVChange(change));
     }
 }
