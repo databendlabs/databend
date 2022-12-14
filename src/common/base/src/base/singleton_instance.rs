@@ -25,7 +25,7 @@ pub enum Singleton {
     Production(Container![Send + Sync]),
 
     #[cfg(debug_assertions)]
-    Testing(parking_lot::Mutex<std::collections::HashMap<String, Container![Send + Sync]>>),
+    Testing(parking_lot::RwLock<std::collections::HashMap<String, Container![Send + Sync]>>),
 }
 
 unsafe impl Send for Singleton {}
@@ -45,7 +45,7 @@ impl Singleton {
                     Some(name) => name,
                     None => panic!("thread doesn't have name"),
                 };
-                let guard = c.lock();
+                let guard = c.read_recursive();
                 let v: &T = guard
                     .get(thread_name)
                     .unwrap_or_else(|| panic!("thread {thread_name} is not initiated"))
@@ -65,9 +65,15 @@ impl Singleton {
                     Some(name) => name,
                     None => panic!("thread doesn't have name"),
                 };
-                let mut guard = c.lock();
-                let c = guard.entry(thread_name.to_string()).or_default();
-                c.set(value)
+                let guard = c.upgradable_read();
+                match guard.get(thread_name) {
+                    Some(c) => c.set(value),
+                    None => {
+                        let mut guard = parking_lot::RwLockUpgradableReadGuard::upgrade(guard);
+                        let c = guard.entry(thread_name.to_string()).or_default();
+                        c.set(value)
+                    }
+                }
             }
         }
     }
@@ -104,7 +110,7 @@ impl GlobalInstance {
     /// Should only be initiated once and only used in testing.
     #[cfg(debug_assertions)]
     pub fn init_testing() {
-        let _ = GLOBAL.set(Singleton::Testing(parking_lot::Mutex::default()));
+        let _ = GLOBAL.set(Singleton::Testing(parking_lot::RwLock::default()));
     }
 
     /// drop testing global data by thread name.
@@ -112,20 +118,13 @@ impl GlobalInstance {
     /// Should only be used in testing code.
     #[cfg(debug_assertions)]
     pub fn drop_testing(thread_name: &str) {
-        use std::thread;
-
         match GLOBAL.wait() {
             Singleton::Production(_) => {
                 unreachable!("drop_testing should never be called on production global")
             }
             Singleton::Testing(c) => {
-                // let v = {
-                //     let mut guard = c.lock();
-                //     guard.remove(thread_name)
-                // };
-                // // We don't care about if about this container any more, just
-                // // move to another thread to make sure this call returned ASAP.
-                // thread::spawn(move || v);
+                let mut guard = c.write();
+                guard.remove(thread_name);
             }
         }
     }
