@@ -20,7 +20,7 @@ pub struct SqlLogicTestArgs {
     // Set specific dir to run
     #[arg(
         short = 'd',
-        long = "dir",
+        long = "run_dir",
         help = "Run sqllogictests in specific directory, the arg is optional"
     )]
     pub dir: Option<String>,
@@ -28,8 +28,16 @@ pub struct SqlLogicTestArgs {
     // Set specific test file to run
     #[arg(
         short = 'f',
-        long = "file",
+        long = "run_file",
         help = "Run sqllogictests in specific test file, the arg is optional"
     )]
     pub file: Option<String>,
+
+    // Set specific dir to skip
+    #[arg(
+        short = 's',
+        long = "skip_dir",
+        help = "Skip sqllogictests in specific directory, the arg is optional"
+    )]
+    pub skipped_dir: Option<String>,
 }

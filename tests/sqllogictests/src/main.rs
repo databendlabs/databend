@@ -163,7 +163,6 @@ async fn run_suits(suits: ReadDir, databend: Databend) -> Result<()> {
                 .unwrap()
                 .to_str()
                 .unwrap();
-            dbg!(file_name);
             if let Some(ref specific_file) = args.file {
                 if file_name != specific_file {
                     continue;
@@ -185,6 +184,14 @@ fn get_files(suit: PathBuf) -> Result<Vec<walkdir::Result<DirEntry>>> {
         .max_depth(100)
         .sort_by(|a, b| a.file_name().cmp(b.file_name()))
         .into_iter()
+        .filter_entry(|e| {
+            if let Some(skipped_dir) = &args.skipped_dir {
+                if e.file_name().to_str().unwrap() == skipped_dir {
+                    return false;
+                }
+            }
+            true
+        })
         .filter(|e| {
             if args.dir.is_none() {
                 return true;

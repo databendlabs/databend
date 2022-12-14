@@ -317,7 +317,13 @@ statement ok
 drop table t
 
 statement ok
+drop table if exists t3
+
+statement ok
 CREATE TABLE t3(c0 BIGINT NULL, c1 DOUBLE NULL)
+
+statement ok
+drop table if exists t4
 
 statement ok
 CREATE TABLE t4(c0 FLOAT NULL)
