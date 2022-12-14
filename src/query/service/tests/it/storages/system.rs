@@ -135,7 +135,7 @@ async fn test_configs_table_basic() -> Result<()> {
 #[tokio::test]
 async fn test_configs_table_redact() -> Result<()> {
     let mut mint = Mint::new("tests/it/storages/testdata");
-    let file = &mut mint.new_goldenfile("configs_table_redact.txt").unwrap();
+    let _file = &mut mint.new_goldenfile("configs_table_redact.txt").unwrap();
 
     let mock_server = MockServer::builder().start().await;
     Mock::given(method("HEAD"))
