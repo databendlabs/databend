@@ -40,4 +40,12 @@ pub struct SqlLogicTestArgs {
         help = "Skip sqllogictests in specific directory, the arg is optional"
     )]
     pub skipped_dir: Option<String>,
+
+    // Set handler to run tests
+    #[arg(
+        short = 'c',
+        long = "handler",
+        help = "Choose a handler to run tests, support mysql, http, clickhouse handler, the arg is optional."
+    )]
+    pub handler: Option<String>,
 }

@@ -104,17 +104,38 @@ impl sqllogictest::AsyncDB for Databend {
 #[tokio::main]
 pub async fn main() -> Result<()> {
     env_logger::init();
+    let args = SqlLogicTestArgs::parse();
+    if let Some(handler) = &args.handler {
+        match handler.as_str() {
+            "mysql" => {
+                println!("Mysql client starts to run...");
+                run_mysql_client().await?;
+            }
+            "http" => {
+                println!("Http client starts to run...");
+                run_http_client().await?;
+            }
+            "clickhouse" => {
+                println!("Clickhouse http client starts to run...");
+                run_ck_http_client().await?;
+            }
+            _ => unreachable!(),
+        }
+        return Ok(());
+    }
+    // If args don't set handler, run all handlers one by one.
+
     // First run databend with mysql client
     println!("Mysql client starts to run...");
     run_mysql_client().await?;
 
     // Second run databend with http client
-    // println!("Http client starts to run...");
+    println!("Http client starts to run...");
     // run_http_client().await?;
 
-    // println!("Clickhouse http client starts to run...");
     // Third run databend with clickhouse http client
-    // run_ck_http_client().await?;
+    println!("Clickhouse http client starts to run...");
+    run_ck_http_client().await?;
 
     Ok(())
 }
