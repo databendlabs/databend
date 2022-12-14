@@ -55,10 +55,6 @@ pub use operator::init_operator;
 pub use operator::CacheOperator;
 pub use operator::DataOperator;
 
-mod location;
-pub use location::parse_uri_location;
-pub use location::UriLocation;
-
 mod metrics;
 pub use metrics::StorageMetrics;
 pub use metrics::StorageMetricsLayer;

@@ -49,6 +49,7 @@ use common_storages_view::view_table::QUERY;
 use opendal::layers::SubdirLayer;
 
 use crate::binder::copy::parse_stage_location_v2;
+use crate::binder::location::parse_uri_location;
 use crate::binder::scalar::ScalarBinder;
 use crate::binder::Binder;
 use crate::binder::ColumnBinding;
