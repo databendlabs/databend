@@ -15,9 +15,6 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use common_datavalues::format_data_type_sql;
-use common_datavalues::DataTypeImpl;
-use common_datavalues::DataValue;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::DataSchema;

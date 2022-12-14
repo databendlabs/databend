@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::DataValue;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::Literal;

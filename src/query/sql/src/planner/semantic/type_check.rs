@@ -34,7 +34,6 @@ use common_ast::Backtrace;
 use common_ast::DisplayError;
 use common_catalog::catalog::CatalogManager;
 use common_catalog::table_context::TableContext;
-use common_datavalues::TypeID;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::type_check;

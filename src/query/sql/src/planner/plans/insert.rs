@@ -14,7 +14,8 @@
 
 use std::sync::Arc;
 
-use common_datablocks::DataBlock;
+use common_expression::Chunk;
+use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::TableSchemaRef;
 use common_expression::TableSchemaRefExt;
@@ -34,7 +35,7 @@ pub enum InsertInputSource {
 
 #[derive(Clone)]
 pub struct InsertValueBlock {
-    pub block: DataBlock,
+    pub block: Chunk,
 }
 
 #[derive(Clone)]
@@ -59,7 +60,7 @@ impl PartialEq for Insert {
 
 impl Insert {
     pub fn schema(&self) -> DataSchemaRef {
-        self.schema.clone()
+        Arc::new(DataSchema::empty())
     }
 
     pub fn has_select_plan(&self) -> bool {

@@ -15,7 +15,6 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
 
-use common_datavalues::type_coercion::compare_coercion;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::type_check::common_super_type;

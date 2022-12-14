@@ -2044,8 +2044,6 @@ dependencies = [
  "common-base",
  "common-catalog",
  "common-config",
- "common-datablocks",
- "common-datavalues",
  "common-exception",
  "common-expression",
  "common-formats",

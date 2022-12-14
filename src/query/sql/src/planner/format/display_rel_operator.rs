@@ -15,7 +15,6 @@
 use std::fmt::Display;
 
 use common_ast::ast::FormatTreeNode;
-use common_datavalues::format_data_type_sql;
 use common_exception::ErrorCode;
 use common_expression::type_check;
 use common_expression::types::DataType;

@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::ToDataType;
-use common_datavalues::VariantObjectType;
-use common_datavalues::Vu8;
 use common_expression::types::DataType;
 use common_expression::DataField;
 use common_expression::DataSchemaRef;

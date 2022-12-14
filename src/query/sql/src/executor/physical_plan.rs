@@ -15,7 +15,6 @@
 use std::collections::BTreeMap;
 
 use common_catalog::plan::DataSourcePlan;
-use common_datablocks::DataBlock;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::Chunk;
