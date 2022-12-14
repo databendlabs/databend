@@ -21,6 +21,7 @@ use std::time::Duration;
 
 use anyerror::AnyError;
 use common_base::base::tokio;
+use common_base::base::tokio::sync::mpsc;
 use common_base::base::tokio::sync::watch;
 use common_base::base::tokio::sync::watch::error::RecvError;
 use common_base::base::tokio::sync::Mutex;
@@ -83,8 +84,10 @@ use crate::metrics::server_metrics;
 use crate::network::Network;
 use crate::store::RaftStore;
 use crate::store::RaftStoreBare;
-use crate::watcher::WatcherManager;
-use crate::watcher::WatcherStreamSender;
+use crate::watcher::DispatcherSender;
+use crate::watcher::EventDispatcher;
+use crate::watcher::WatchEvent;
+use crate::watcher::WatcherSender;
 use crate::Opened;
 
 #[derive(serde::Serialize)]
@@ -123,7 +126,7 @@ pub type MetaRaft = Raft<LogEntry, AppliedState, Network, RaftStore>;
 // MetaNode is the container of meta data related components and threads, such as storage, the raft node and a raft-state monitor.
 pub struct MetaNode {
     pub sto: Arc<RaftStore>,
-    pub watcher: WatcherManager,
+    pub dispatcher_tx: mpsc::UnboundedSender<WatchEvent>,
     pub raft: MetaRaft,
     pub running_tx: watch::Sender<()>,
     pub running_rx: watch::Receiver<()>,
@@ -168,15 +171,15 @@ impl MetaNodeBuilder {
 
         let (tx, rx) = watch::channel::<()>(());
 
-        let watcher = WatcherManager::create();
+        let dispatcher_tx = EventDispatcher::spawn();
 
         sto.get_state_machine()
             .await
-            .set_subscriber(Box::new(watcher.subscriber.clone()));
+            .set_subscriber(Box::new(DispatcherSender(dispatcher_tx.clone())));
 
         let mn = Arc::new(MetaNode {
             sto: sto.clone(),
-            watcher,
+            dispatcher_tx,
             raft,
             running_tx: tx,
             running_rx: rx,
@@ -1082,7 +1085,10 @@ impl MetaNode {
         Ok(resp)
     }
 
-    pub fn create_watcher_stream(&self, request: WatchRequest, tx: WatcherStreamSender) {
-        self.watcher.create_watcher_stream(request, tx)
+    pub fn add_watcher(&self, request: WatchRequest, tx: WatcherSender) {
+        // TODO: handle error?
+        let _ = self
+            .dispatcher_tx
+            .send(WatchEvent::AddWatcher((request, tx)));
     }
 }

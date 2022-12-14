@@ -12,9 +12,12 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-mod pruner;
-mod pruning_executor;
-mod topn_pruner;
+#![deny(unused_crate_dependencies)]
 
-pub use pruning_executor::BlockIndex;
-pub use pruning_executor::BlockPruner;
+mod limiter_pruner;
+mod range_pruner;
+
+pub use limiter_pruner::LimiterPruner;
+pub use limiter_pruner::LimiterPrunerCreator;
+pub use range_pruner::RangePruner;
+pub use range_pruner::RangePrunerCreator;

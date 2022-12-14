@@ -58,7 +58,7 @@ pub struct ParquetReader {
     /// The actual schema used to read parquet. It will be converted to [`common_datavalues::DataSchema`] when output [`common_datablocks::DataBlock`].
     ///
     /// The reason of using [`ArrowSchema`] to read parquet is that
-    /// There are some types that Databend not support such as Timestmap of nanoseconds.
+    /// There are some types that Databend not support such as Timestamp of nanoseconds.
     /// Such types will be convert to supported types after deserialization.
     projected_arrow_schema: ArrowSchema,
     /// [`ColumnLeaves`] corresponding to the `projected_schema`.

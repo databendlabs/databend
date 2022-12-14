@@ -38,14 +38,11 @@ statement ok
 ALTER DATABASE IF EXISTS c RENAME TO a;
 
 statement query T
-SELECT name FROM system.databases;
+SELECT name FROM system.databases where name = 'a' or name = 'b';
 
 ----
-system
-information_schema
 a
 b
-default
 
 statement ok
 ALTER DATABASE IF EXISTS c RENAME TO C;
@@ -53,15 +50,9 @@ ALTER DATABASE IF EXISTS c RENAME TO C;
 statement error 1003
 ALTER DATABASE c RENAME TO C;
 
-statement query T
-SELECT name FROM system.databases;
-
-----
-system
-information_schema
-a
-b
-default
+-- don't exist database c, so the result will be empty
+statement ok
+SELECT name FROM system.databases where name = 'c';
 
 statement error 1002
 ALTER DATABASE IF EXISTS system RENAME TO C;
@@ -69,44 +60,21 @@ ALTER DATABASE IF EXISTS system RENAME TO C;
 statement error 1002
 ALTER DATABASE system RENAME TO C;
 
-statement query T
-SELECT name FROM system.databases;
-
-----
-system
-information_schema
-a
-b
-default
-
 statement error 2301
 ALTER DATABASE a RENAME TO b;
 
 statement error 2301
 ALTER DATABASE IF EXISTS a RENAME TO b;
 
-statement query T
-SELECT name FROM system.databases;
-
-----
-system
-information_schema
-a
-b
-default
-
 statement ok
 ALTER DATABASE a RENAME TO a2;
 
+-- check if change a to `a2` successfully
 statement query T
-SELECT name FROM system.databases;
+SELECT name FROM system.databases where name = 'a2';
 
 ----
-system
-information_schema
 a2
-b
-default
 
 statement query I
 SELECT * FROM a2.t1;
@@ -126,16 +94,6 @@ SELECT * FROM b.t2;
 ----
 10
 
-statement query T
-SELECT name FROM system.databases;
-
-----
-system
-information_schema
-a2
-b
-default
-
 statement ok
 ALTER DATABASE default.b RENAME TO b2;
 
@@ -145,15 +103,12 @@ SELECT * FROM b2.t2;
 ----
 10
 
+
 statement query T
-SELECT name FROM system.databases;
+SELECT name FROM system.databases where name = 'b2';
 
 ----
-system
-information_schema
-a2
 b2
-default
 
 statement ok
 DROP DATABASE b2;
