@@ -59,6 +59,7 @@ pub struct HttpQueryRequest {
     pub pagination: PaginationConf,
     #[serde(default = "default_as_true")]
     pub string_fields: bool,
+    pub sideload: Option<SideloadConf>,
 }
 
 const DEFAULT_MAX_ROWS_IN_BUFFER: usize = 5 * 1000 * 1000;
@@ -139,6 +140,12 @@ impl HttpSessionConf {
         }
         ret
     }
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct SideloadConf {
+    pub(crate) stage: Option<String>,
+    pub(crate) url: Option<String>,
 }
 
 #[derive(Debug, Clone)]
