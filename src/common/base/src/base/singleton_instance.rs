@@ -129,7 +129,7 @@ impl GlobalInstance {
     /// Should only be used in testing code.
     #[cfg(debug_assertions)]
     pub fn drop_testing(thread_name: &str) {
-        LOCAL.wait().write().remove(thread_name);
+        let _ = { LOCAL.wait().write().remove(thread_name) };
     }
 
     /// Get data from global data registry.
