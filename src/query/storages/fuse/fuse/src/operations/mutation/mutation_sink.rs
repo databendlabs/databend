@@ -160,9 +160,16 @@ impl Processor for MutationSink {
             State::ReadMeta(input_meta) => {
                 let meta = MutationMeta::from_meta(&input_meta)?;
 
-                let affect_rows = self.base_snapshot.summary.row_count - meta.summary.row_count;
-                let affect_bytes = self.base_snapshot.summary.uncompressed_byte_size
-                    - meta.summary.uncompressed_byte_size;
+                let affect_rows = self
+                    .base_snapshot
+                    .summary
+                    .row_count
+                    .abs_diff(meta.summary.row_count);
+                let affect_bytes = self
+                    .base_snapshot
+                    .summary
+                    .uncompressed_byte_size
+                    .abs_diff(meta.summary.uncompressed_byte_size);
                 let progress_values = ProgressValues {
                     rows: affect_rows as usize,
                     bytes: affect_bytes as usize,
