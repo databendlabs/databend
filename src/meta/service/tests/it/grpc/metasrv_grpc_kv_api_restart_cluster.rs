@@ -238,10 +238,9 @@ async fn test_kv_api_restart_cluster_token_expired() -> anyhow::Result<()> {
 
     Ok(())
 }
+
 // Election timeout is 8~12 sec.
 // A raft node waits for a interval of election timeout before starting election
-// TODO: the raft should set the wait time by election_timeout.
-//       For now, just use a large timeout.
 fn timeout() -> Option<Duration> {
     Some(Duration::from_millis(30_000))
 }
