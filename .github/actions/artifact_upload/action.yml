@@ -39,6 +39,13 @@ runs:
         name: ${{ inputs.profile }}-${{ inputs.sha }}-${{ inputs.target }}-${{ inputs.category }}
         path: ./target/${{ inputs.target }}/${{ inputs.profile }}/databend-*
 
+    - name: Upload open-sharing to github
+      if: steps.info.outputs.src == 'github'
+      uses: actions/upload-artifact@v3
+      with:
+        name: ${{ inputs.profile }}-${{ inputs.sha }}-${{ inputs.target }}-${{ inputs.category }}
+        path: ./target/${{ inputs.target }}/${{ inputs.profile }}/open-sharing
+
     - name: Upload artifacts to s3
       if: steps.info.outputs.src == 's3'
       shell: bash
