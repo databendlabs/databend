@@ -8,6 +8,9 @@ SELECT user()
 ----
 'root'@'127.0.0.1'
 
+statement ok
+set timezone='UTC'
+
 query T
 SELECT timezone()
 ----

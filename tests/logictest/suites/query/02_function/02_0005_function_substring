@@ -50,7 +50,7 @@ SELECT SUBSTRING('12345', 2, 6)
 query T
 SELECT SUBSTRING('12345', 2, number) FROM numbers(7) ORDER BY number
 ----
-	
+(empty)
 2
 23
 234
@@ -61,47 +61,46 @@ SELECT SUBSTRING('12345', 2, number) FROM numbers(7) ORDER BY number
 query T
 SELECT SUBSTRING('12345', number) FROM numbers(7) ORDER BY number
 ----
-	
+(empty)
 12345
 2345
 345
 45
 5
-
+(empty)
 
 query T
 SELECT SUBSTRING('12345', number, 2) FROM numbers(7) ORDER BY number
 ----
-	
+(empty)
 12
 23
 34
 45
 5
-	
+(empty)
 
 query T
 SELECT SUBSTRING('12345', number, number) FROM numbers(7) ORDER BY number
 ----
-	
+(empty)
 1
 23
 345
 45
 5
-	
+(empty)
 
 query T
 SELECT SUBSTRING(to_varchar(number * 100 + number), 2) FROM numbers(7) ORDER BY number
 ----
-	
+(empty)
 01
 02
 03
 04
 05
 06
-
 
 query T
 SELECT SUBSTRING(to_varchar(number * 100 + number), 1, 1) FROM numbers(7) ORDER BY number
@@ -117,7 +116,7 @@ SELECT SUBSTRING(to_varchar(number * 100 + number), 1, 1) FROM numbers(7) ORDER 
 query T
 SELECT SUBSTRING(to_varchar(number * 100 + number), 1, number) FROM numbers(7) ORDER BY number
 ----
-	
+(empty)
 1
 20
 303
@@ -128,35 +127,35 @@ SELECT SUBSTRING(to_varchar(number * 100 + number), 1, number) FROM numbers(7) O
 query T
 SELECT SUBSTRING(to_varchar(number * 100 + number), number) FROM numbers(7) ORDER BY number
 ----
-	
+(empty)
 101
 02
 3
-	
-	
-	
+(empty)
+(empty)
+(empty)
 
 query T
 SELECT SUBSTRING(to_varchar(number * 100 + number), number, 1) FROM numbers(7) ORDER BY number
 ----
-	
+(empty)
 1
 0
 3
-	
-	
-	
+(empty)
+(empty)
+(empty)
 
 query T
 SELECT SUBSTRING(to_varchar(number * 100 + number), number, number) FROM numbers(7) ORDER BY number
 ----
-	
+(empty)
 1
 02
 3
-	
-	
-	
+(empty)
+(empty)
+(empty)
 
 query T
 SELECT SUBSTRING('12345' FROM 2)

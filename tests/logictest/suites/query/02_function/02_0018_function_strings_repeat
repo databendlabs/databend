@@ -38,25 +38,25 @@ query T
 select repeat(s, n) from strings_repeat_sample_u8
 ----
 abcabcabc
-	
+(empty)
 
 query T
 select repeat(s, n) from strings_repeat_sample_u16
 ----
 abcabcabc
-	
+(empty)
 
 query T
 select repeat(s, n) from strings_repeat_sample_u32
 ----
 abcabcabc
-	
+(empty)
 
 query T
 select repeat(s, n) from strings_repeat_sample_u64
 ----
 abcabcabc
-	
+(empty)
 
 statement ok
 drop table strings_repeat_sample_u8
@@ -79,13 +79,25 @@ statement ok
 select repeat('abc', 0)
 
 statement ok
+drop table if exists strings_repeat_sample_2_u8
+
+statement ok
 CREATE TABLE strings_repeat_sample_2_u8(n Uint8) Engine = Fuse
+
+statement ok
+drop table if exists strings_repeat_sample_2_u16
 
 statement ok
 CREATE TABLE strings_repeat_sample_2_u16 (n Uint16) Engine = Fuse
 
 statement ok
+drop table if exists strings_repeat_sample_2_u32
+
+statement ok
 CREATE TABLE strings_repeat_sample_2_u32 (n Uint32) Engine = Fuse
+
+statement ok
+drop table if exists strings_repeat_sample_2_u64
 
 statement ok
 CREATE TABLE strings_repeat_sample_2_u64 (n Uint64) Engine = Fuse
@@ -106,25 +118,25 @@ query T
 select repeat('abc', n) from strings_repeat_sample_2_u8
 ----
 abcabcabc
-	
+(empty)
 
 query T
 select repeat('abc', n) from strings_repeat_sample_2_u16
 ----
 abcabcabc
-	
+(empty)
 
 query T
 select repeat('abc', n) from strings_repeat_sample_2_u32
 ----
 abcabcabc
-	
+(empty)
 
 query T
 select repeat('abc', n) from strings_repeat_sample_2_u64
 ----
 abcabcabc
-	
+(empty)
 
 statement ok
 drop table strings_repeat_sample_2_u8

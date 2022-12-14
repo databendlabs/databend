@@ -26,8 +26,6 @@ select count(number),  uniq(number), count_distinct(number), approx_count_distin
 
 query IIIII
 select number as c, sum(t), count(t), count(distinct t),  sum(distinct t)  from (select number, if( number < 2, 1, null) as t from numbers_mt(4) ) group by c order by c
-
-
 ----
 0 1 1 1 1
 1 1 1 1 1

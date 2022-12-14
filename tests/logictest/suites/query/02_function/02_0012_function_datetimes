@@ -460,9 +460,9 @@ select to_start_of_week(to_date('1000-01-01'))
 statement error 1079
 select to_start_of_week(to_datetime('1000-01-01 00:00:00'))
 
+## 2020-2-29 + 1 year
 query T
-select add_years(to_date(18321), cast(1, UINT8))  ## 2020-2-29 + 1 year
-
+select add_years(to_date(18321), cast(1, UINT8))
 ----
 2021-02-28
 
@@ -501,16 +501,15 @@ select add_years(to_date(18321), cast(-1, INT64))
 ----
 2019-02-28
 
+## 2020-2-29T10:00:00 + 50 years
 query T
-select add_years(to_datetime(1582970400000000), cast(50, INT8)) ## 2020-2-29T10:00:00 + 50 years
-
+select add_years(to_datetime(1582970400000000), cast(50, INT8))
 ----
 2070-02-28 10:00:00.000000
 
-
+## 2020-2-29T10:00:00 - 50 years
 query T
-select add_years(to_datetime(1582970400000000), cast(-50, INT8)) ## 2020-2-29T10:00:00 - 50 years
-
+select add_years(to_datetime(1582970400000000), cast(-50, INT8))
 ----
 1970-02-28 10:00:00.000000
 
@@ -521,15 +520,15 @@ select add_years(to_date('9999-12-31'), 1)
 statement error 1080
 select add_years(to_datetime('9999-12-31 23:59:59'), 1)
 
+## 2020-2-29 - 13 months
 query T
-select subtract_months(to_date(18321), cast(13, INT16)) ## 2020-2-29 - 13 months
-
+select subtract_months(to_date(18321), cast(13, INT16))
 ----
 2019-01-29
 
+## 2020-2-29T10:00:00 - (12*10 + 2) months
 query T
-select subtract_months(to_datetime(1582970400000000), cast(122, INT16)) ## 2020-2-29T10:00:00 - (12*10 + 2) months
-
+select subtract_months(to_datetime(1582970400000000), cast(122, INT16))
 ----
 2009-12-29 10:00:00.000000
 
@@ -540,15 +539,15 @@ select subtract_months(to_date('1000-01-01'), 1)
 statement error 1080
 select subtract_months(to_datetime('1000-01-01 00:00:00'), 1)
 
+## 2020-2-29 + 1 day
 query T
-select add_days(to_date(18321), cast(1, INT16)) ## 2020-2-29 + 1 day
-
+select add_days(to_date(18321), cast(1, INT16))
 ----
 2020-03-01
 
+## 2020-2-29T10:00:00 - 1 day
 query T
-select add_days(to_datetime(1582970400000000), cast(-1, INT16)) ## 2020-2-29T10:00:00 - 1 day
-
+select add_days(to_datetime(1582970400000000), cast(-1, INT16))
 ----
 2020-02-28 10:00:00.000000
 
@@ -558,9 +557,9 @@ select add_days(to_date('9999-12-31'), 1)
 statement error 1080
 select add_days(to_datetime('9999-12-31 23:59:59'), 1)
 
+## 2020-2-29T10:00:00 + 25 hours
 query T
-select add_hours(to_datetime(1582970400000000), cast(25, INT32)) ## 2020-2-29T10:00:00 + 25 hours
-
+select add_hours(to_datetime(1582970400000000), cast(25, INT32))
 ----
 2020-03-01 11:00:00.000000
 
@@ -577,9 +576,9 @@ select add_hours(to_date('9999-12-31'), 24)
 statement error 1080
 select add_hours(to_datetime('9999-12-31 23:59:59'), 1)
 
+## 2020-2-29T10:00:00 - 1 minutes
 query T
-select subtract_minutes(to_datetime(1582970400000000), cast(1, INT32)) ## 2020-2-29T10:00:00 - 1 minutes
-
+select subtract_minutes(to_datetime(1582970400000000), cast(1, INT32))
 ----
 2020-02-29 09:59:00.000000
 
@@ -589,9 +588,9 @@ select subtract_minutes(to_date('1000-01-01'), 1)
 statement error 1080
 select subtract_minutes(to_datetime('1000-01-01 00:00:00'), 1)
 
+## 2020-2-29T10:00:00 + 61 seconds
 query T
-select add_seconds(to_datetime(1582970400000000), cast(61, INT32)) ## 2020-2-29T10:00:00 + 61 seconds
-
+select add_seconds(to_datetime(1582970400000000), cast(61, INT32))
 ----
 2020-02-29 10:01:01.000000
 

@@ -14,9 +14,7 @@ SELECT number from numbers_mt(10000) WHERE number+1 IN (2, 3 ,20, 5000) ORDER BY
 
 statement error 1007
 select number from numbers(10) where number::String  in (1,2) ORDER BY number
-----
-1
-2
+
 
 
 query I

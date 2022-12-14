@@ -1,4 +1,7 @@
 statement ok
+use default
+
+statement ok
 drop table if exists t1 all
 
 statement ok

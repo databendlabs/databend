@@ -58,6 +58,9 @@ SELECT abs(value) + abs(-1) FROM math_sample_numbers
 4
 
 statement ok
+drop table if exists math_log_numbers
+
+statement ok
 CREATE TABLE math_log_numbers (a Float null, b Float null) Engine = Fuse
 
 statement ok
@@ -96,7 +99,7 @@ NULL
 query F
 SELECT ln(1, 2)
 ----
-inf
+Infinity
 
 query T
 SELECT log10(NULL)
@@ -175,7 +178,7 @@ SELECT tan(pi()/4)
 query F
 SELECT cot(0)
 ----
-inf
+Infinity
 
 query F
 SELECT cot(pi()/4)
@@ -190,7 +193,7 @@ SELECT asin(0.2)
 query F
 SELECT asin(1.1)
 ----
-nan
+NaN
 
 query F
 SELECT acos(1)
@@ -200,7 +203,7 @@ SELECT acos(1)
 query F
 SELECT acos(1.0001)
 ----
-nan
+NaN
 
 query F
 SELECT atan(1)
@@ -267,7 +270,7 @@ SELECT sqrt(0)
 query F
 SELECT sqrt(-4)
 ----
-nan
+NaN
 
 statement error 1065
 SELECT sqrt('a')

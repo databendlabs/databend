@@ -1,5 +1,3 @@
-
-
 query I
 select * from numbers(10) having number = 1
 ----

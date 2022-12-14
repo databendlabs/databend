@@ -210,99 +210,99 @@ CREATE TABLE t_logic (a INT NULL)
 statement ok
 INSERT INTO t_logic VALUES (NULL)
 
+## NULL(false), NULL(false)
 query TT
-SELECT (a < 1) AND (a < 1), (a < 1) OR (a < 1) FROM t_logic ## NULL(false), NULL(false)
-
+SELECT (a < 1) AND (a < 1), (a < 1) OR (a < 1) FROM t_logic
 ----
 NULL NULL
 
+## NULL(false), NULL(true)
 query TT
-SELECT (a > 1) AND (a < 1), (a > 1) OR (a < 1) FROM t_logic ## NULL(false), NULL(true)
-
+SELECT (a > 1) AND (a < 1), (a > 1) OR (a < 1) FROM t_logic
 ----
 NULL NULL
 
+## NULL(true), NULL(false)
 query TT
-SELECT (a < 1) AND (a > 1), (a < 1) OR (a > 1) FROM t_logic ## NULL(true), NULL(false)
-
+SELECT (a < 1) AND (a > 1), (a < 1) OR (a > 1) FROM t_logic
 ----
 NULL NULL
 
+## NULL(true), NULL(true)
 query TT
-SELECT (a < 1) AND (a < 1), (a < 1) OR (a < 1) FROM t_logic ## NULL(true), NULL(true)
-
+SELECT (a < 1) AND (a < 1), (a < 1) OR (a < 1) FROM t_logic
 ----
 NULL NULL
 
+## NULL(false), false
 query TT
-SELECT (a > 1) AND (0 > 1), (a > 1) OR (0 > 1) FROM t_logic ## NULL(false), false
-
+SELECT (a > 1) AND (0 > 1), (a > 1) OR (0 > 1) FROM t_logic
 ----
 0 NULL
 
+## NULL(false), true
 query TT
-SELECT (a > 1) AND (0 < 1), (a > 1) OR (0 < 1) FROM t_logic ## NULL(false), true
-
+SELECT (a > 1) AND (0 < 1), (a > 1) OR (0 < 1) FROM t_logic
 ----
 NULL 1
 
+## NULL(true), false
 query TT
-SELECT (a < 1) AND (0 > 1), (a < 1) OR (0 > 1) FROM t_logic ## NULL(true), false
-
+SELECT (a < 1) AND (0 > 1), (a < 1) OR (0 > 1) FROM t_logic
 ----
 0 NULL
 
+## NULL(true), true
 query TT
-SELECT (a < 1) AND (0 < 1), (a < 1) OR (0 < 1) FROM t_logic ## NULL(true), true
-
+SELECT (a < 1) AND (0 < 1), (a < 1) OR (0 < 1) FROM t_logic
 ----
 NULL 1
 
+## false, NULL(false)
 query TT
-SELECT (0 > 1) AND (a > 1), (0 > 1) OR (a > 1) FROM t_logic ## false, NULL(false)
-
+SELECT (0 > 1) AND (a > 1), (0 > 1) OR (a > 1) FROM t_logic
 ----
 0 NULL
 
+## false, NULL(true)
 query TT
-SELECT (0 > 1) AND (a < 1), (0 > 1) OR (a < 1) FROM t_logic ## false, NULL(true)
-
+SELECT (0 > 1) AND (a < 1), (0 > 1) OR (a < 1) FROM t_logic
 ----
 0 NULL
 
+## true, NULL(false)
 query TT
-SELECT (0 < 1) AND (a > 1), (0 < 1) OR (a > 1) FROM t_logic ## true, NULL(false)
-
+SELECT (0 < 1) AND (a > 1), (0 < 1) OR (a > 1) FROM t_logic
 ----
 NULL 1
 
+## true, NULL(true)
 query TT
-SELECT (0 < 1) AND (a < 1), (0 < 1) OR (a < 1) FROM t_logic ## true, NULL(true)
-
+SELECT (0 < 1) AND (a < 1), (0 < 1) OR (a < 1) FROM t_logic
 ----
 NULL 1
 
+## false, false
 query TT
-SELECT (0 > 1) AND (0 > 1), (0 > 1) OR (0 > 1) FROM t_logic ## false, false
-
+SELECT (0 > 1) AND (0 > 1), (0 > 1) OR (0 > 1) FROM t_logic
 ----
 0 0
 
+## false, true
 query TT
-SELECT (0 > 1) AND (0 < 1), (0 > 1) OR (0 < 1) FROM t_logic ## false, true
-
+SELECT (0 > 1) AND (0 < 1), (0 > 1) OR (0 < 1) FROM t_logic
 ----
 0 1
 
+## true, false
 query TT
-SELECT (0 < 1) AND (0 > 1), (0 < 1) OR (0 > 1) FROM t_logic ## true, false
-
+SELECT (0 < 1) AND (0 > 1), (0 < 1) OR (0 > 1) FROM t_logic
 ----
 0 1
 
+## true, true
 query TT
-SELECT (0 < 1) AND (0 < 1), (0 < 1) OR (0 < 1) FROM t_logic ## true, true
-
+SELECT (0 < 1) AND (0 < 1), (0 < 1) OR (0 < 1) FROM t_logic
 ----
 1 1
 

@@ -79,7 +79,7 @@ aa4
 query T
 SELECT LPAD('1', number, 'a') FROM numbers(5) ORDER BY number
 ----
-	
+(empty)
 1
 a1
 aa1
@@ -88,7 +88,7 @@ aaa1
 query T
 SELECT LPAD(to_varchar(number), number, 'a') FROM numbers(5) ORDER BY number
 ----
-	
+(empty)
 1
 a2
 aa3
@@ -115,7 +115,7 @@ SELECT LPAD(to_varchar(number), 3, to_varchar(number)) FROM numbers(5) ORDER BY 
 query T
 SELECT LPAD('1', number, to_varchar(number)) FROM numbers(5) ORDER BY number
 ----
-	
+(empty)
 1
 21
 331
@@ -124,7 +124,7 @@ SELECT LPAD('1', number, to_varchar(number)) FROM numbers(5) ORDER BY number
 query T
 SELECT LPAD(to_varchar(number), number, to_varchar(number)) FROM numbers(5) ORDER BY number
 ----
-	
+(empty)
 1
 22
 333
@@ -211,7 +211,7 @@ SELECT RPAD(to_varchar(number), 3, 'a') FROM numbers(5) ORDER BY number
 query T
 SELECT RPAD('1', number, 'a') FROM numbers(5) ORDER BY number
 ----
-	
+(empty)
 1
 1a
 1aa
@@ -220,7 +220,7 @@ SELECT RPAD('1', number, 'a') FROM numbers(5) ORDER BY number
 query T
 SELECT RPAD(to_varchar(number), number, 'a') FROM numbers(5) ORDER BY number
 ----
-	
+(empty)
 1
 2a
 3aa
@@ -247,7 +247,7 @@ SELECT RPAD(to_varchar(number), 3, to_varchar(number)) FROM numbers(5) ORDER BY 
 query T
 SELECT RPAD('1', number, to_varchar(number)) FROM numbers(5) ORDER BY number
 ----
-	
+(empty)
 1
 12
 133
@@ -256,7 +256,7 @@ SELECT RPAD('1', number, to_varchar(number)) FROM numbers(5) ORDER BY number
 query T
 SELECT RPAD(to_varchar(number), number, to_varchar(number)) FROM numbers(5) ORDER BY number
 ----
-	
+(empty)
 1
 22
 333

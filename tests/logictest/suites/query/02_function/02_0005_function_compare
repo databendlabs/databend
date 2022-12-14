@@ -748,8 +748,6 @@ select '123 ab' = 123
 
 statement error 1007
 select '7.4' = 7.4
-----
-1
 
 
 query T

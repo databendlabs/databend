@@ -1,4 +1,5 @@
-
+statement ok
+use default
 
 query I
 SELECT NULLIF(2, 1)

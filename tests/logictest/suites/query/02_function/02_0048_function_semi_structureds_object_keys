@@ -10,7 +10,7 @@ insert into objects_test1 values (1, parse_json('{"a": 1, "b": [1,2,3]}'), parse
 query ITT
 select id, object_keys(obj), object_keys(var) from objects_test1
 ----
-1 ['a', 'b'] ['1']
+1 ['a','b'] ['1']
 
 statement ok
 drop table objects_test1

@@ -1,4 +1,5 @@
-
+statement ok
+use default
 
 statement ok
 DROP TABLE IF EXISTS c
@@ -272,7 +273,6 @@ WHERE (SELECT o_id FROM o WHERE o.c_id=c.c_id AND ship='WY')=4
 
 query IT
 SELECT * FROM c WHERE c_id=(SELECT c_id FROM o WHERE ship='WA' AND bill='FL')
-
 ----
 6  FL
 
@@ -526,7 +526,6 @@ FROM c
 LEFT JOIN o
 ON c.c_id=o.c_id
 ORDER BY c.c_id, o.o_id
-
 ----
 1  10    CA
 1  20    CA
@@ -568,7 +567,6 @@ SELECT
     (SELECT ship FROM o WHERE o.c_id=c.c_id ORDER BY ship LIMIT 1) IS NOT NULL
 FROM c
 ORDER BY c.c_id
-
 ----
 1  1
 2  0

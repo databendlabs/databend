@@ -192,7 +192,7 @@ INSERT INTO t2 VALUES(3, [3,4,5])
 query TT
 SELECT max(arr), min(arr) FROM t2
 ----
-[3, 4, 5] [1, 2, 3]
+[3,4,5] [1,2,3]
 
 query II
 SELECT arg_max(id, arr), arg_min(id, arr) FROM (SELECT id, arr FROM t2)

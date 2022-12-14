@@ -39,7 +39,7 @@ select any(b), min(b), max(b), c from t_min_max_any group by c order by c
 3 2 3 2
 3 3 4 3
 
---  group by test with all NULL rows in one group.
+##  group by test with all NULL rows in one group.
 
 query TTTI
 select any(a), min(a), max(a), c from t_min_max_any group by c order by c

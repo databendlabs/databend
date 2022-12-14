@@ -13,9 +13,9 @@ SELECT CHAR(97)
 ----
 a
 
+## 0x6161
 query T
-SELECT CHAR(24929) ## 0x6161
-
+SELECT CHAR(24929)
 ----
 a
 

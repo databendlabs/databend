@@ -1,4 +1,7 @@
 statement ok
+use default
+
+statement ok
 drop table if exists cast_test
 
 statement ok

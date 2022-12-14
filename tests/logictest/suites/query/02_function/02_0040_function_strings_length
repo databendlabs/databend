@@ -3,9 +3,9 @@ SELECT LENGTH('word')
 ----
 4
 
+## cyrillic in russian
 query I
-SELECT LENGTH('кириллица') ## cyrillic in russian
-
+SELECT LENGTH('кириллица')
 ----
 18
 

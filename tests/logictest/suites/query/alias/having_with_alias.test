@@ -1,5 +1,3 @@
-
-
 query I
 select count(*) as count from (select * from numbers(1)) having count = 1
 ----
@@ -19,4 +17,3 @@ query I
 select a+1 as a from (select number+1 as a from numbers(1)) having a = 2
 ----
 2
-

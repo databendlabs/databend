@@ -1,5 +1,13 @@
 onlyif mysql
 statement ok
+use default
+
+onlyif mysql
+statement ok
+set sql_dialect = "PostgreSQL"
+
+onlyif mysql
+statement ok
 drop table if exists t
 
 onlyif mysql

@@ -1,5 +1,9 @@
 onlyif mysql
 statement ok
+use default
+
+onlyif mysql
+statement ok
 drop table if exists "T"
 
 onlyif mysql
@@ -21,35 +25,30 @@ insert into "t"("a") values(1)
 onlyif mysql
 query I
 select t.a from "T"
-
 ----
 1
 
 onlyif mysql
 query I
 select t."A" from "T"
-
 ----
 1
 
 onlyif mysql
 query I
 select t.a from "T"
-
 ----
 1
 
 onlyif mysql
 query I
 select a from "T"
-
 ----
 1
 
 onlyif mysql
 query I
 select "T".a from "T"
-
 ----
 1
 

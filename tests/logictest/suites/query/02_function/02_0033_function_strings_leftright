@@ -45,7 +45,7 @@ SELECT LEFT('123', 4)
 query T
 SELECT LEFT('123', number) FROM numbers(5) ORDER BY number
 ----
-	
+(empty)
 1
 12
 123
@@ -63,7 +63,7 @@ SELECT LEFT(to_varchar(number * 10000), 1) FROM numbers(5) ORDER BY number
 query T
 SELECT LEFT(to_varchar(number * 10000), number) FROM numbers(5) ORDER BY number
 ----
-	
+(empty)
 1
 20
 300
@@ -116,7 +116,7 @@ SELECT RIGHT('123', 4)
 query T
 SELECT RIGHT('123', number) FROM numbers(5) ORDER BY number
 ----
-	
+(empty)
 3
 23
 123
@@ -134,7 +134,7 @@ SELECT RIGHT(to_varchar(number * 10000), 1) FROM numbers(5) ORDER BY number
 query T
 SELECT RIGHT(to_varchar(number * 10000), number) FROM numbers(5) ORDER BY number
 ----
-	
+(empty)
 0
 00
 000
