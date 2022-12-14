@@ -278,9 +278,10 @@ jobs:
         uses: ./.github/actions/publish_binary
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          version: hive-${{ needs.create_release.outputs.version }}
+          version: ${{ needs.create_release.outputs.version }}
           target: ${{ steps.target.outputs.target }}
           repo_role_arn: ${{ secrets.REPO_ROLE_ARN }}
+          mode: hive
 
   publish_sqllogic_testsuites:
     name: sqllogic testsuites
