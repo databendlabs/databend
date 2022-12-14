@@ -12,11 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::VecDeque;
 use std::io::BufRead;
 use std::io::Cursor;
 use std::ops::Not;
 use std::sync::Arc;
 
+use aho_corasick::AhoCorasick;
 use common_ast::ast::Expr;
 use common_ast::parser::parse_comma_separated_exprs;
 use common_ast::parser::tokenize_sql;
@@ -28,8 +30,7 @@ use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_formats::parse_timezone;
-use common_formats::FieldDecoderRowBased;
-use common_formats::FieldDecoderValues;
+use common_formats::FastFieldDecoderValues;
 use common_io::cursor_ext::ReadBytesExt;
 use common_io::cursor_ext::ReadCheckPointExt;
 use common_pipeline_sources::processors::sources::AsyncSource;
@@ -149,6 +150,12 @@ impl Interpreter for InsertInterpreterV2 {
                         .format
                         .exec_stream(input_context.clone(), &mut build_res.main_pipeline)?;
                 }
+                InsertInputSource::StreamingWithFileFormat(_, _, input_context) => {
+                    let input_context = input_context.as_ref().expect("must success").clone();
+                    input_context
+                        .format
+                        .exec_stream(input_context.clone(), &mut build_res.main_pipeline)?;
+                }
                 InsertInputSource::SelectPlan(plan) => {
                     let table1 = table.clone();
                     let (mut select_plan, select_column_bindings) = match plan.as_ref() {
@@ -228,7 +235,8 @@ impl Interpreter for InsertInterpreterV2 {
         }
 
         let append_mode = match &self.plan.source {
-            InsertInputSource::StreamingWithFormat(_, _, _) => AppendMode::Copy,
+            InsertInputSource::StreamingWithFormat(..)
+            | InsertInputSource::StreamingWithFileFormat(..) => AppendMode::Copy,
             _ => AppendMode::Normal,
         };
 
@@ -272,8 +280,18 @@ impl AsyncSource for ValueSource {
         if self.is_finished {
             return Ok(None);
         }
+
+        // Pre-calculate the positions of all `'` and `\`
+        let patterns = &["'", "\\"];
+        let ac = AhoCorasick::new(patterns);
+        let mut positions = VecDeque::new();
+        for mat in ac.find_iter(&self.data) {
+            let pos = mat.start();
+            positions.push_back(pos);
+        }
+
         let mut reader = Cursor::new(self.data.as_bytes());
-        let block = self.read(&mut reader).await?;
+        let block = self.read(&mut reader, &mut positions).await?;
         self.is_finished = true;
         Ok(Some(block))
     }
@@ -300,7 +318,11 @@ impl ValueSource {
         }
     }
 
-    pub async fn read<R: AsRef<[u8]>>(&self, reader: &mut Cursor<R>) -> Result<DataBlock> {
+    pub async fn read<R: AsRef<[u8]>>(
+        &self,
+        reader: &mut Cursor<R>,
+        positions: &mut VecDeque<usize>,
+    ) -> Result<DataBlock> {
         let mut desers = self
             .schema
             .fields()
@@ -308,10 +330,9 @@ impl ValueSource {
             .map(|f| f.data_type().create_deserializer(1024))
             .collect::<Vec<_>>();
 
-        let col_size = desers.len();
         let mut rows = 0;
         let timezone = parse_timezone(&self.ctx.get_settings())?;
-        let field_decoder = FieldDecoderValues::create_for_insert(timezone);
+        let field_decoder = FastFieldDecoderValues::create_for_insert(timezone);
 
         loop {
             let _ = reader.ignore_white_spaces();
@@ -326,8 +347,8 @@ impl ValueSource {
             self.parse_next_row(
                 &field_decoder,
                 reader,
-                col_size,
                 &mut desers,
+                positions,
                 &self.bind_context,
                 self.metadata.clone(),
             )
@@ -350,14 +371,15 @@ impl ValueSource {
     /// Parse single row value, like ('111', 222, 1 + 1)
     async fn parse_next_row<R: AsRef<[u8]>>(
         &self,
-        field_decoder: &FieldDecoderValues,
+        field_decoder: &FastFieldDecoderValues,
         reader: &mut Cursor<R>,
-        col_size: usize,
         desers: &mut [TypeDeserializerImpl],
+        positions: &mut VecDeque<usize>,
         bind_context: &BindContext,
         metadata: MetadataRef,
     ) -> Result<()> {
         let _ = reader.ignore_white_spaces();
+        let col_size = desers.len();
         let start_pos_of_row = reader.checkpoint();
 
         // Start of the row --- '('
@@ -365,6 +387,14 @@ impl ValueSource {
             return Err(ErrorCode::BadDataValueType(
                 "Must start with parentheses".to_string(),
             ));
+        }
+        // Ignore the positions in the previous row.
+        while let Some(pos) = positions.front() {
+            if *pos < start_pos_of_row as usize {
+                positions.pop_front();
+            } else {
+                break;
+            }
         }
 
         for col_idx in 0..col_size {
@@ -376,7 +406,7 @@ impl ValueSource {
                 .ok_or_else(|| ErrorCode::Internal("Deserializer is None"))?;
 
             let (need_fallback, pop_count) = field_decoder
-                .read_field(deser, reader, false)
+                .read_field(deser, reader, positions)
                 .map(|_| {
                     let _ = reader.ignore_white_spaces();
                     let need_fallback = reader.ignore_byte(col_end).not();

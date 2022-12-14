@@ -5,6 +5,8 @@ SHOW DATABASES
 ---------- AST ------------
 ShowDatabases(
     ShowDatabasesStmt {
+        catalog: None,
+        full: false,
         limit: None,
     },
 )
@@ -17,6 +19,8 @@ SHOW DATABASES
 ---------- AST ------------
 ShowDatabases(
     ShowDatabasesStmt {
+        catalog: None,
+        full: false,
         limit: None,
     },
 )

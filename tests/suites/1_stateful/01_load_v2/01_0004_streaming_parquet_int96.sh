@@ -19,7 +19,7 @@ if [ $? -ne 0 ]; then
 fi
 
 # load parquet
-curl -H "insert_sql:insert into mytime format Parquet" -F "upload=@/tmp/mytime.parquet" -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" > /dev/null 2>&1
+curl -H "insert_sql:insert into mytime file_format = (type = 'Parquet')" -F "upload=@/tmp/mytime.parquet" -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" > /dev/null 2>&1
 echo "select * from mytime" | $MYSQL_CLIENT_CONNECT
 echo "drop table mytime;" | $MYSQL_CLIENT_CONNECT
 

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::VecDeque;
 use std::io::BufRead;
 use std::io::Cursor;
 use std::io::ErrorKind;
@@ -23,6 +24,11 @@ use crate::cursor_ext::cursor_read_bytes_ext::ReadBytesExt;
 pub trait BufferReadStringExt {
     fn read_quoted_text(&mut self, buf: &mut Vec<u8>, quota: u8) -> Result<()>;
     fn read_escaped_string_text(&mut self, buf: &mut Vec<u8>) -> Result<()>;
+    fn fast_read_quoted_text(
+        &mut self,
+        buf: &mut Vec<u8>,
+        positions: &mut VecDeque<usize>,
+    ) -> Result<()>;
 }
 
 impl<T> BufferReadStringExt for Cursor<T>
@@ -111,6 +117,86 @@ where T: AsRef<[u8]>
         }
         Ok(())
     }
+
+    // `positions` stores the positions of all `'` and `\` that are pre-generated
+    // by the `Aho-Corasick` algorithm, which can use SIMD instructions to
+    // accelerate the search process.
+    // Using these positions, we can directly jump to the end of the text,
+    // instead of inefficient step-by-step iterate over the buffer.
+    fn fast_read_quoted_text(
+        &mut self,
+        buf: &mut Vec<u8>,
+        positions: &mut VecDeque<usize>,
+    ) -> Result<()> {
+        self.must_ignore_byte(b'\'')?;
+        let mut start = self.position() as usize;
+        check_pos(start - 1, positions)?;
+
+        // Get next possible end position.
+        while let Some(pos) = positions.pop_front() {
+            let len = pos - start;
+            buf.extend_from_slice(&self.remaining_slice()[..len]);
+            self.consume(len);
+
+            if self.ignore_byte(b'\'') {
+                return Ok(());
+            } else if self.ignore_byte(b'\\') {
+                let b = self.remaining_slice();
+                if b.is_empty() {
+                    return Err(std::io::Error::new(
+                        ErrorKind::InvalidData,
+                        "Expected to have terminated string literal after escaped char '\' ."
+                            .to_string(),
+                    ));
+                }
+                let c = b[0];
+                self.ignore_byte(c);
+
+                match c {
+                    b'n' => buf.push(b'\n'),
+                    b't' => buf.push(b'\t'),
+                    b'r' => buf.push(b'\r'),
+                    b'0' => buf.push(b'\0'),
+                    b'\'' => {
+                        check_pos(pos + 1, positions)?;
+                        buf.push(b'\'');
+                    }
+                    b'\\' => {
+                        check_pos(pos + 1, positions)?;
+                        buf.push(b'\\');
+                    }
+                    b'\"' => buf.push(b'\"'),
+                    _ => {
+                        buf.push(b'\\');
+                        buf.push(c);
+                    }
+                }
+            } else {
+                break;
+            }
+            start = self.position() as usize;
+        }
+        Err(std::io::Error::new(
+            ErrorKind::InvalidData,
+            format!(
+                "Expected to have terminated string literal after quota \', while consumed buf: {:?}",
+                buf
+            ),
+        ))
+    }
+}
+
+// Check that the pre-calculated position is correct.
+fn check_pos(curr_pos: usize, positions: &mut VecDeque<usize>) -> Result<()> {
+    if let Some(pos) = positions.pop_front() {
+        if curr_pos == pos {
+            return Ok(());
+        }
+    }
+    Err(std::io::Error::new(
+        ErrorKind::InvalidData,
+        "Expected to have quotes in string literal.".to_string(),
+    ))
 }
 
 fn unescape(c: u8) -> u8 {

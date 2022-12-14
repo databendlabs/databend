@@ -84,6 +84,25 @@ fn pretty_source(source: InsertSource) -> RcDoc {
                     .append(RcDoc::text(rest_str.to_string()))
                     .append(RcDoc::text(start.to_string())),
             ),
+        InsertSource::StreamingV2 { settings, start } => RcDoc::text("FILE_FORMAT").append(
+            RcDoc::line()
+                .append(RcDoc::text("FILE_FORMAT_SETTINGS = "))
+                .append(parenthenized(
+                    interweave_comma(settings.iter().map(|(k, v)| {
+                        RcDoc::text(k.to_string())
+                            .append(RcDoc::space())
+                            .append(RcDoc::text("="))
+                            .append(RcDoc::space())
+                            .append(RcDoc::text(format!("{:?}", v)))
+                    }))
+                    .group(),
+                ))
+                .append(
+                    RcDoc::text("start:")
+                        .append(RcDoc::space())
+                        .append(RcDoc::text(start.to_string())),
+                ),
+        ),
         InsertSource::Values { rest_str } => RcDoc::text("VALUES").append(
             RcDoc::line()
                 .nest(NEST_FACTOR)

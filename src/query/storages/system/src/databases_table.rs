@@ -14,6 +14,8 @@
 
 use std::sync::Arc;
 
+use common_catalog::catalog::Catalog;
+use common_catalog::catalog::CatalogManager;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
@@ -40,23 +42,37 @@ impl AsyncSystemTable for DatabasesTable {
 
     async fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
         let tenant = ctx.get_tenant();
-        let catalog = ctx.get_catalog(ctx.get_current_catalog().as_str())?;
-        let databases = catalog.list_databases(tenant.as_str()).await?;
-
-        let db_names: Vec<&[u8]> = databases
+        let catalogs = CatalogManager::instance();
+        let catalogs: Vec<(String, Arc<dyn Catalog>)> = catalogs
+            .catalogs
             .iter()
-            .map(|database| database.name().as_bytes())
+            .map(|e| (e.key().clone(), e.value().clone()))
             .collect();
+        let mut catalog_names = vec![];
+        let mut database_names = vec![];
+        for (ctl_name, catalog) in catalogs.into_iter() {
+            let databases = catalog.list_databases(tenant.as_str()).await?;
+
+            for db in databases {
+                catalog_names.push(ctl_name.clone().into_bytes());
+                let db_name = db.name().to_string().into_bytes();
+                database_names.push(db_name);
+            }
+        }
 
         Ok(DataBlock::create(self.table_info.schema(), vec![
-            Series::from_data(db_names),
+            Series::from_data(catalog_names),
+            Series::from_data(database_names),
         ]))
     }
 }
 
 impl DatabasesTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
-        let schema = DataSchemaRefExt::create(vec![DataField::new("name", Vu8::to_data_type())]);
+        let schema = DataSchemaRefExt::create(vec![
+            DataField::new("catalog", Vu8::to_data_type()),
+            DataField::new("name", Vu8::to_data_type()),
+        ]);
 
         let table_info = TableInfo {
             desc: "'system'.'databases'".to_string(),

@@ -239,8 +239,7 @@ impl MetaService for MetaServiceImpl {
     ) -> Result<Response<Self::WatchStream>, Status> {
         let (tx, rx) = mpsc::channel(4);
 
-        let meta_node = &self.meta_node;
-        meta_node.create_watcher_stream(request.into_inner(), tx);
+        self.meta_node.add_watcher(request.into_inner(), tx);
 
         let output_stream = tokio_stream::wrappers::ReceiverStream::new(rx);
         Ok(Response::new(Box::pin(output_stream) as Self::WatchStream))

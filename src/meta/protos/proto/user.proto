@@ -187,6 +187,8 @@ message UserStageInfo {
     string row_tag = 7;
 
     string nan_display = 8;
+
+    string quote = 9;
   }
 
   message OnErrorMode {

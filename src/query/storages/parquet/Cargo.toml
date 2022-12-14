@@ -14,16 +14,18 @@ test = false
 [dependencies]
 common-arrow = { path = "../../../common/arrow" }
 common-base = { path = "../../../common/base" }
-common-catalog = { path = "../../../common/../query/catalog" }
-common-config = { path = "../../../common/../query/config" }
+common-catalog = { path = "../../catalog" }
+common-config = { path = "../../config" }
 common-datablocks = { path = "../../datablocks" }
 common-datavalues = { path = "../../datavalues" }
 common-exception = { path = "../../../common/exception" }
 common-functions = { path = "../../functions" }
 common-meta-app = { path = "../../../meta/app" }
 common-pipeline-core = { path = "../../pipeline/core" }
-common-sql = { path = "../../../common/../query/sql" }
+common-sql = { path = "../../sql" }
 common-storage = { path = "../../../common/storage" }
+common-storages-pruner = { path = "../pruner" }
+common-storages-table-meta = { path = "../table-meta" }
 
 async-trait = { version = "0.1.57", package = "async-trait-fn" }
 chrono = { workspace = true }

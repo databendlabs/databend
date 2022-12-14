@@ -280,6 +280,7 @@ impl RowGroupInMemory {
             )?;
             column_chunks.push(array_iters);
         }
+
         match RowGroupDeserializer::new(column_chunks, self.meta.num_rows(), None).next() {
             None => Err(ErrorCode::Internal(
                 "deserialize from raw group: fail to get a chunk",
@@ -333,7 +334,21 @@ impl BlockBuilderTrait for ParquetBlockBuilder {
         if let Some(rg) = batch.as_mut() {
             let chunk = rg.get_arrow_chunk()?;
             let block = DataBlock::from_chunk(&self.ctx.schema, &chunk)?;
-            Ok(vec![block])
+
+            let block_total_rows = block.num_rows();
+            let num_rows_per_block = self.ctx.block_compact_thresholds.max_rows_per_block;
+            let blocks: Vec<DataBlock> = (0..block_total_rows)
+                .step_by(num_rows_per_block)
+                .map(|idx| {
+                    if idx + num_rows_per_block < block_total_rows {
+                        block.slice(idx, num_rows_per_block)
+                    } else {
+                        block.slice(idx, block_total_rows - idx)
+                    }
+                })
+                .collect();
+
+            Ok(blocks)
         } else {
             Ok(vec![])
         }

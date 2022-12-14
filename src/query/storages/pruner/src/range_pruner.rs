@@ -55,25 +55,32 @@ impl RangePruner for RangeFilter {
     }
 }
 
-pub fn new_range_pruner<'a>(
-    ctx: &Arc<dyn TableContext>,
-    filter_expr: Option<&'a [Expression]>,
-    schema: &'a DataSchemaRef,
-) -> Result<Arc<dyn RangePruner + Send + Sync>> {
-    Ok(match filter_expr {
-        Some(exprs) if !exprs.is_empty() => {
-            let range_filter = RangeFilter::try_create(ctx.clone(), exprs, schema.clone())?;
-            match range_filter.try_eval_const() {
-                Ok(v) => {
-                    if v {
-                        Arc::new(KeepTrue)
-                    } else {
-                        Arc::new(KeepFalse)
+pub struct RangePrunerCreator;
+
+impl RangePrunerCreator {
+    /// Create a new [`RangePruner`] from expression and schema.
+    ///
+    /// Note: the schema should be the schema of the table, not the schema of the input.
+    pub fn try_create<'a>(
+        ctx: &Arc<dyn TableContext>,
+        filter_expr: Option<&'a [Expression]>,
+        schema: &'a DataSchemaRef,
+    ) -> Result<Arc<dyn RangePruner + Send + Sync>> {
+        Ok(match filter_expr {
+            Some(exprs) if !exprs.is_empty() => {
+                let range_filter = RangeFilter::try_create(ctx.clone(), exprs, schema.clone())?;
+                match range_filter.try_eval_const() {
+                    Ok(v) => {
+                        if v {
+                            Arc::new(KeepTrue)
+                        } else {
+                            Arc::new(KeepFalse)
+                        }
                     }
+                    Err(_) => Arc::new(range_filter),
                 }
-                Err(_) => Arc::new(range_filter),
             }
-        }
-        _ => Arc::new(KeepTrue),
-    })
+            _ => Arc::new(KeepTrue),
+        })
+    }
 }

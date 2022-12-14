@@ -13,15 +13,20 @@
 // limitations under the License.
 
 mod deserialize;
+mod filter;
 mod meta;
 mod read;
+
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use common_arrow::arrow::datatypes::Schema as ArrowSchema;
 use common_arrow::arrow::io::parquet::write::to_parquet_schema;
 use common_arrow::parquet::metadata::ColumnDescriptor;
+use common_arrow::schema_projection as ap;
 use common_catalog::plan::Projection;
+use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 use common_storage::ColumnLeaves;
@@ -38,16 +43,24 @@ pub struct ParquetReader {
     /// The indices of columns need to read by this reader.
     ///
     /// Use [`HashSet`] to avoid duplicate indices.
-    /// Duplicate indices will exist when there are nested types.
+    /// Duplicate indices will exist when there are nested types or
+    /// select a same field multiple times.
     ///
     /// For example:
     ///
     /// ```sql
     /// select a, a.b, a.c from t;
+    /// select a, b, a from t;
     /// ```
     columns_to_read: HashSet<usize>,
     /// The schema of the [`common_datablocks::DataBlock`] this reader produces.
-    projected_schema: DataSchemaRef,
+    output_schema: DataSchemaRef,
+    /// The actual schema used to read parquet. It will be converted to [`common_datavalues::DataSchema`] when output [`common_datablocks::DataBlock`].
+    ///
+    /// The reason of using [`ArrowSchema`] to read parquet is that
+    /// There are some types that Databend not support such as Timestamp of nanoseconds.
+    /// Such types will be convert to supported types after deserialization.
+    projected_arrow_schema: ArrowSchema,
     /// [`ColumnLeaves`] corresponding to the `projected_schema`.
     projected_column_leaves: ColumnLeaves,
     /// [`ColumnDescriptor`]s corresponding to the `projected_schema`.
@@ -57,16 +70,53 @@ pub struct ParquetReader {
 impl ParquetReader {
     pub fn create(
         operator: Operator,
-        schema: DataSchemaRef,
+        schema: ArrowSchema,
         projection: Projection,
     ) -> Result<Arc<ParquetReader>> {
-        // Full schema and column leaves.
-        let arrow_schema = schema.to_arrow();
-        let column_leaves = ColumnLeaves::new_from_schema(&arrow_schema);
-        let schema_descriptors = to_parquet_schema(&arrow_schema)?;
+        let (
+            projected_arrow_schema,
+            projected_column_leaves,
+            projected_column_descriptors,
+            columns_to_read,
+        ) = Self::do_projection(&schema, &projection)?;
 
+        Ok(Arc::new(ParquetReader {
+            operator,
+            columns_to_read,
+            output_schema: Arc::new(DataSchema::from(&projected_arrow_schema)),
+            projected_arrow_schema,
+            projected_column_leaves,
+            projected_column_descriptors,
+        }))
+    }
+
+    pub fn output_schema(&self) -> DataSchemaRef {
+        self.output_schema.clone()
+    }
+
+    pub fn columns_to_read(&self) -> &HashSet<usize> {
+        &self.columns_to_read
+    }
+
+    /// Project the schema and get the needed column leaves.
+    #[allow(clippy::type_complexity)]
+    pub fn do_projection(
+        schema: &ArrowSchema,
+        projection: &Projection,
+    ) -> Result<(
+        ArrowSchema,
+        ColumnLeaves,
+        HashMap<usize, ColumnDescriptor>,
+        HashSet<usize>,
+    )> {
+        // Full schema and column leaves.
+        let column_leaves = ColumnLeaves::new_from_schema(schema);
+        let schema_descriptors = to_parquet_schema(schema)?;
         // Project schema
-        let projected_schema = DataSchemaRef::new(projection.project_schema(&schema));
+        let projected_arrow_schema = match projection {
+            Projection::Columns(indices) => ap::project(schema, indices),
+            Projection::InnerColumns(path_indices) => ap::inner_project(schema, path_indices),
+        };
         // Project column leaves
         let projected_column_leaves = ColumnLeaves {
             column_leaves: projection
@@ -87,21 +137,11 @@ impl ParquetReader {
                     .insert(*index, schema_descriptors.columns()[*index].clone());
             }
         }
-
-        Ok(Arc::new(ParquetReader {
-            operator,
-            columns_to_read,
-            projected_schema,
+        Ok((
+            projected_arrow_schema,
             projected_column_leaves,
             projected_column_descriptors,
-        }))
-    }
-
-    pub fn schema(&self) -> DataSchemaRef {
-        self.projected_schema.clone()
-    }
-
-    pub fn columns_to_read(&self) -> &HashSet<usize> {
-        &self.columns_to_read
+            columns_to_read,
+        ))
     }
 }

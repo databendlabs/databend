@@ -44,12 +44,14 @@ common-metrics = { path = "../common/metrics" }
 common-tracing = { path = "../common/tracing" }
 databend-meta = { path = "../meta/service" }
 databend-query = { path = "../query/service" }
+sharing-endpoint = { path = "../query/sharing-endpoint" }
 
 # Crates.io dependencies
 anyhow = { workspace = true }
 clap = { workspace = true }
 limits-rs = "0.1.0"
 openraft = { workspace = true }
+poem = { version = "1", features = ["rustls", "multipart", "compression"] }
 sentry = "0.27.0"
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -79,5 +81,11 @@ test = false
 [[bin]]
 name = "databend-query"
 path = "query/main.rs"
+doctest = false
+test = false
+
+[[bin]]
+name = "open-sharing"
+path = "opensharing/main.rs"
 doctest = false
 test = false

@@ -18,14 +18,14 @@ use common_meta_types::protobuf::WatchResponse;
 use tonic::Status;
 
 use super::WatcherId;
-use super::WatcherStreamSender;
+use super::WatcherSender;
 
 pub struct WatcherStream {
     pub id: WatcherId,
 
     pub filter_type: FilterType,
 
-    tx: WatcherStreamSender,
+    tx: WatcherSender,
 
     pub key: String,
 
@@ -36,7 +36,7 @@ impl WatcherStream {
     pub fn new(
         id: WatcherId,
         filter_type: FilterType,
-        tx: WatcherStreamSender,
+        tx: WatcherSender,
         key: String,
         key_end: String,
     ) -> Self {

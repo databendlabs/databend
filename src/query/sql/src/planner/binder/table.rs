@@ -331,6 +331,7 @@ impl<'a> Binder {
                     escape: "".to_string(),
                     compression: StageFileCompression::default(),
                     row_tag: "".to_string(),
+                    quote: "".to_string(),
                 };
                 let stage_table_info = StageTableInfo {
                     schema,

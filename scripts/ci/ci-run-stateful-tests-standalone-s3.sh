@@ -17,6 +17,7 @@ export STORAGE_S3_ENDPOINT_URL=http://127.0.0.1:9900
 export STORAGE_S3_ACCESS_KEY_ID=minioadmin
 export STORAGE_S3_SECRET_ACCESS_KEY=minioadmin
 export STORAGE_ALLOW_INSECURE=true
+export ALLOW_SHARING=true
 
 echo "Install dependence"
 python3 -m pip install --quiet mysql-connector-python
@@ -25,8 +26,19 @@ echo "calling test suite"
 echo "Starting standalone DatabendQuery(debug)"
 ./scripts/ci/deploy/databend-query-standalone.sh
 
+# only expected to get adopted in stateful tests
+if [[ "$ALLOW_SHARING" == "true" ]]; then
+	./scripts/ci/deploy/databend-query-sharing.sh
+fi
+
 SCRIPT_PATH="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)"
 cd "$SCRIPT_PATH/../../tests" || exit
 
 echo "Starting databend-test"
+
 ./databend-test $1 --mode 'standalone' --run-dir 1_stateful
+
+# only expected to get adopted in stateful tests
+if [[ "$ALLOW_SHARING" == "true" ]]; then
+	./databend-test $1 --mode 'standalone' --run-dir 3_stateful_sharing
+fi

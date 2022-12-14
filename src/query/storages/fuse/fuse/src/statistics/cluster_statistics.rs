@@ -16,6 +16,8 @@ use common_datablocks::BlockCompactThresholds;
 use common_datablocks::DataBlock;
 use common_datavalues::DataValue;
 use common_exception::Result;
+use common_functions::scalars::FunctionContext;
+use common_sql::evaluator::ChunkOperator;
 use common_storages_table_meta::meta::ClusterStatistics;
 
 #[derive(Clone, Default)]
@@ -25,6 +27,7 @@ pub struct ClusterStatsGenerator {
     extra_key_index: Vec<usize>,
     level: i32,
     block_compact_thresholds: BlockCompactThresholds,
+    operators: Vec<ChunkOperator>,
 }
 
 impl ClusterStatsGenerator {
@@ -34,6 +37,7 @@ impl ClusterStatsGenerator {
         extra_key_index: Vec<usize>,
         level: i32,
         block_compact_thresholds: BlockCompactThresholds,
+        operators: Vec<ChunkOperator>,
     ) -> Self {
         Self {
             cluster_key_id,
@@ -41,6 +45,7 @@ impl ClusterStatsGenerator {
             extra_key_index,
             level,
             block_compact_thresholds,
+            operators,
         }
     }
 
@@ -85,14 +90,16 @@ impl ClusterStatsGenerator {
 
         let mut block = data_block.clone();
 
-        for id in self.extra_key_index.iter() {
-            block = block.remove_column_index(*id)?;
-        }
-
         if !self.cluster_key_index.is_empty() {
             let indices = vec![0u32, block.num_rows() as u32 - 1];
             block = DataBlock::block_take_by_indices(&block, &indices)?;
         }
+
+        let func_ctx = FunctionContext::default();
+        block = self
+            .operators
+            .iter()
+            .try_fold(block, |input, op| op.execute(&func_ctx, input))?;
 
         self.clusters_statistics(&block, origin_stats.level)
     }

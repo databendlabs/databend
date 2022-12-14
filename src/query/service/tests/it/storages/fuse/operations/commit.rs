@@ -232,7 +232,6 @@ async fn test_abort_on_error() -> Result<()> {
             )) {
                 let entry = entry.unwrap();
                 if entry.file_type().is_file() {
-                    eprintln!("{:?}", entry);
                     ss_count += 1;
                 }
             }

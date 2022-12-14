@@ -16,12 +16,17 @@ use std::sync::Arc;
 
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
+use common_pipeline_core::Pipeline;
+use common_sql::executor::ExpressionBuilderWithoutRenaming;
 use common_sql::plans::DeletePlan;
 
 use crate::interpreters::Interpreter;
+use crate::pipelines::executor::ExecutorSettings;
+use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
+use crate::sql::plans::ScalarExpr;
 
 /// interprets DeletePlan
 pub struct DeleteInterpreter {
@@ -55,12 +60,29 @@ impl Interpreter for DeleteInterpreter {
         let db_name = self.plan.database_name.as_str();
         let tbl_name = self.plan.table_name.as_str();
         let tbl = self.ctx.get_table(catalog_name, db_name, tbl_name).await?;
-        tbl.delete(
-            self.ctx.clone(),
-            &self.plan.projection,
-            &self.plan.selection,
-        )
-        .await?;
+        let (filter, col_indices) = if let Some(scalar) = &self.plan.selection {
+            let eb = ExpressionBuilderWithoutRenaming::create(self.plan.metadata.clone());
+            (
+                Some(eb.build(scalar)?),
+                scalar.used_columns().into_iter().collect(),
+            )
+        } else {
+            (None, vec![])
+        };
+
+        let mut pipeline = Pipeline::create();
+        tbl.delete(self.ctx.clone(), filter, col_indices, &mut pipeline)
+            .await?;
+        if !pipeline.pipes.is_empty() {
+            let settings = self.ctx.get_settings();
+            pipeline.set_max_threads(settings.get_max_threads()? as usize);
+            let executor_settings = ExecutorSettings::try_create(&settings)?;
+            let executor = PipelineCompleteExecutor::try_create(pipeline, executor_settings)?;
+
+            self.ctx.set_executor(Arc::downgrade(&executor.get_inner()));
+            executor.execute()?;
+            drop(executor);
+        }
 
         Ok(PipelineBuildResult::create())
     }

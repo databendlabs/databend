@@ -159,11 +159,7 @@ pub trait FieldDecoderRowBased: FieldDecoder {
     where
         T: PrimitiveType + Unmarshal<T> + StatBuffer + FromLexical,
     {
-        let v: T = if !T::FLOATING {
-            reader.read_int_text()
-        } else {
-            reader.read_float_text()
-        }?;
+        let v: T = reader.read_int_text()?;
         column.builder.append_value(v);
         Ok(())
     }
@@ -177,11 +173,7 @@ pub trait FieldDecoderRowBased: FieldDecoder {
     where
         T: PrimitiveType + Unmarshal<T> + StatBuffer + FromLexical,
     {
-        let v: T = if !T::FLOATING {
-            reader.read_int_text()
-        } else {
-            reader.read_float_text()
-        }?;
+        let v: T = reader.read_float_text()?;
         column.builder.append_value(v);
         Ok(())
     }

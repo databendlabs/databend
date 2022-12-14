@@ -143,3 +143,15 @@ impl Column for ConstColumn {
         self.column.serialize(vec, 0);
     }
 }
+
+impl std::fmt::Debug for ConstColumn {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "ConstColumn \t typeid: {:?}\t len: {}\t data: [{:?}]",
+            self.data_type_id(),
+            self.len(),
+            self.column,
+        )
+    }
+}
