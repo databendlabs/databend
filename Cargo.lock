@@ -2150,6 +2150,7 @@ dependencies = [
  "common-storage",
  "common-storages-cache",
  "common-storages-index",
+ "common-storages-pruner",
  "common-storages-table-meta",
  "futures",
  "futures-util",
@@ -2393,10 +2394,24 @@ dependencies = [
  "common-pipeline-core",
  "common-sql",
  "common-storage",
+ "common-storages-pruner",
+ "common-storages-table-meta",
  "glob",
  "opendal",
  "serde",
  "typetag",
+]
+
+[[package]]
+name = "common-storages-pruner"
+version = "0.1.0"
+dependencies = [
+ "common-catalog",
+ "common-datavalues",
+ "common-exception",
+ "common-storages-index",
+ "common-storages-table-meta",
+ "tracing",
 ]
 
 [[package]]

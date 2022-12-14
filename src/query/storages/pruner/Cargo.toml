@@ -1,0 +1,21 @@
+[package]
+name = "common-storages-pruner"
+version = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+publish = { workspace = true }
+edition = { workspace = true }
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+doctest = false
+test = false
+
+[dependencies]
+common-catalog = { path = "../../../common/../query/catalog" }
+common-datavalues = { path = "../../datavalues" }
+common-exception = { path = "../../../common/exception" }
+common-storages-index = { path = "../index" }
+common-storages-table-meta = { path = "../table-meta" }
+
+tracing = "0.1.36"

@@ -24,6 +24,8 @@ common-meta-app = { path = "../../../meta/app" }
 common-pipeline-core = { path = "../../pipeline/core" }
 common-sql = { path = "../../sql" }
 common-storage = { path = "../../../common/storage" }
+common-storages-pruner = { path = "../pruner" }
+common-storages-table-meta = { path = "../table-meta" }
 
 async-trait = { version = "0.1.57", package = "async-trait-fn" }
 chrono = { workspace = true }
