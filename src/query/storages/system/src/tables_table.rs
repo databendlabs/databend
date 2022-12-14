@@ -87,10 +87,10 @@ where TablesTable<T>: HistoryAware
             .iter()
             .map(|e| (e.key().to_string(), e.value().clone()))
             .collect();
-        let mut catalogs = vec![];
-        let mut databases = vec![];
-        let mut names = vec![];
-        let mut engines = vec![];
+        let mut catalogs = MutableStringColumn::default(); // capacity unknown
+        let mut databases = MutableStringColumn::default();
+        let mut names = MutableStringColumn::default();
+        let mut engines = MutableStringColumn::default();
         let mut cluster_bys = vec![];
         let mut created_ons = vec![];
         let mut dropped_ons = vec![];
@@ -101,66 +101,60 @@ where TablesTable<T>: HistoryAware
 
         for (ctl_name, ctl) in ctls.into_iter() {
             let dbs = ctl.list_databases(tenant.as_str()).await?;
+            let ctl_name: &str = Box::leak(ctl_name.into_boxed_str());
 
             let mut database_tables = vec![];
             for database in dbs {
-                let name = database.name();
+                let name = database.name().to_string().into_boxed_str();
+                let name: &str = Box::leak(name);
                 let tables = Self::list_tables(&ctl, tenant.as_str(), name).await?;
                 for table in tables {
-                    catalogs.push(ctl_name.clone());
-                    database_tables.push((name.to_string(), table));
+                    catalogs.append_value(ctl_name);
+                    databases.append_value(name);
+                    database_tables.push(table);
                 }
             }
 
-            for (_, tbl) in &database_tables {
+            for tbl in &database_tables {
                 let stats = tbl.table_statistics()?;
                 num_rows.push(stats.as_ref().and_then(|v| v.num_rows));
                 data_size.push(stats.as_ref().and_then(|v| v.data_size));
                 data_compressed_size.push(stats.as_ref().and_then(|v| v.data_size_compressed));
                 index_size.push(stats.and_then(|v| v.index_size));
-            }
 
-            databases.extend(database_tables.iter().map(|(d, _)| d.clone().into_bytes()));
-            names.extend(
-                database_tables
-                    .iter()
-                    .map(|(_, v)| v.name().to_string().into_bytes()),
-            );
-            engines.extend(
-                database_tables
-                    .iter()
-                    .map(|(_, v)| v.engine().to_string().into_bytes()),
-            );
-            created_ons.extend(database_tables.iter().map(|(_, v)| {
-                v.get_table_info()
+                names.append_value(tbl.name());
+                engines.append_value(tbl.engine());
+
+                let created_on = tbl
+                    .get_table_info()
                     .meta
                     .created_on
                     .format("%Y-%m-%d %H:%M:%S.%3f %z")
-                    .to_string()
-                    .into_bytes()
-            }));
-            dropped_ons.extend(database_tables.iter().map(|(_, v)| {
-                v.get_table_info()
+                    .to_string();
+                let dropped_on = tbl
+                    .get_table_info()
                     .meta
                     .drop_on
                     .map(|v| v.format("%Y-%m-%d %H:%M:%S.%3f %z").to_string())
-                    .unwrap_or_else(|| "NULL".to_owned())
-            }));
-            cluster_bys.extend(database_tables.into_iter().map(|(_, v)| {
-                v.get_table_info()
+                    .unwrap_or_else(|| "NULL".to_owned());
+                let cluster_by = tbl
+                    .get_table_info()
                     .meta
                     .default_cluster_key
                     .as_ref()
                     .map(|s| s.clone().into_bytes())
-                    .unwrap_or_else(Vec::new)
-            }));
+                    .unwrap_or_else(Vec::new);
+                created_ons.push(created_on);
+                dropped_ons.push(dropped_on);
+                cluster_bys.push(cluster_by);
+            }
         }
 
         Ok(DataBlock::create(self.table_info.schema(), vec![
-            Series::from_data(catalogs),
-            Series::from_data(databases),
-            Series::from_data(names),
-            Series::from_data(engines),
+            catalogs.to_column(),
+            databases.to_column(),
+            names.to_column(),
+            engines.to_column(),
             Series::from_data(cluster_bys),
             Series::from_data(created_ons),
             Series::from_data(dropped_ons),
