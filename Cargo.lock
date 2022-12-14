@@ -2000,6 +2000,7 @@ name = "common-sql"
 version = "0.1.0"
 dependencies = [
  "ahash 0.8.2",
+ "anyhow",
  "async-channel",
  "async-recursion",
  "async-stream",
@@ -2043,6 +2044,7 @@ dependencies = [
  "databend-thrift",
  "futures",
  "futures-util",
+ "globiter",
  "headers",
  "http",
  "itertools",
@@ -2055,6 +2057,7 @@ dependencies = [
  "opensrv-mysql",
  "openssl",
  "parking_lot 0.12.1",
+ "percent-encoding",
  "petgraph",
  "poem",
  "primitive-types",
