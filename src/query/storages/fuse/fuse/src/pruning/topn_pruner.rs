@@ -24,18 +24,14 @@ use common_storages_table_meta::meta::ColumnStatistics;
 
 use crate::pruning::BlockIndex;
 
-pub(crate) struct TopNPrunner {
+pub struct TopNPrunner {
     schema: DataSchemaRef,
     sort: Vec<(Expression, bool, bool)>,
     limit: usize,
 }
 
 impl TopNPrunner {
-    pub(crate) fn new(
-        schema: DataSchemaRef,
-        sort: Vec<(Expression, bool, bool)>,
-        limit: usize,
-    ) -> Self {
+    pub fn new(schema: DataSchemaRef, sort: Vec<(Expression, bool, bool)>, limit: usize) -> Self {
         Self {
             schema,
             sort,
@@ -45,7 +41,7 @@ impl TopNPrunner {
 }
 
 impl TopNPrunner {
-    pub(crate) fn prune(
+    pub fn prune(
         &self,
         metas: Vec<(BlockIndex, Arc<BlockMeta>)>,
     ) -> Result<Vec<(BlockIndex, Arc<BlockMeta>)>> {

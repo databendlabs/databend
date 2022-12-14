@@ -18,8 +18,8 @@ use std::fmt::Formatter;
 use crate::ast::write_comma_separated_list;
 use crate::ast::write_period_separated_list;
 use crate::ast::Expr;
+use crate::ast::FileLocation;
 use crate::ast::Identifier;
-use crate::ast::StageLocation;
 use crate::parser::token::Token;
 
 /// Root node of a query tree
@@ -178,7 +178,7 @@ pub enum TableReference<'a> {
     },
     Stage {
         span: &'a [Token<'a>],
-        location: StageLocation,
+        location: FileLocation,
         files: Vec<String>,
         alias: Option<TableAlias<'a>>,
     },

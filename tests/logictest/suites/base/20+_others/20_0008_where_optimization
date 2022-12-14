@@ -32,11 +32,8 @@ select * from t_where_optimizer where a = b order by a;
 
 -- All rows are filtered out
 
-statement query II
+statement ok
 select * from t_where_optimizer where a < 1;
-
-----
- 
 
 -- One part will be filtered out
 
