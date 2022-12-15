@@ -12,10 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::alloc::{AllocError, LayoutError};
+use std::alloc::AllocError;
 use std::alloc::Allocator;
 use std::alloc::GlobalAlloc;
 use std::alloc::Layout;
+use std::alloc::LayoutError;
 use std::cmp::Ordering::Equal;
 use std::cmp::Ordering::Greater;
 use std::cmp::Ordering::Less;
