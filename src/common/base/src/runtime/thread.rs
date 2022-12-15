@@ -53,7 +53,7 @@ impl Thread {
         F: Send + 'static,
         T: Send + 'static,
     {
-        let mut thread_builder = Builder::new().stack_size(16 * 1024 * 1024);
+        let mut thread_builder = Builder::new();
 
         #[cfg(debug_assertions)]
         {
