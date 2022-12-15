@@ -332,11 +332,17 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let show_tables = map(
         rule! {
-            SHOW ~ FULL? ~ TABLES ~ HISTORY? ~ ( ( FROM | IN ) ~ ^#ident )? ~ #show_limit?
+            SHOW ~ FULL? ~ TABLES ~ HISTORY? ~ ( ( FROM | IN ) ~ #peroid_separated_idents_1_to_2 )? ~ #show_limit?
         },
-        |(_, opt_full, _, opt_history, opt_database, limit)| {
+        |(_, opt_full, _, opt_history, ctl_db, limit)| {
+            let (catalog, database) = match ctl_db {
+                Some((_, (Some(c), d))) => (Some(c), Some(d)),
+                Some((_, (None, d))) => (None, Some(d)),
+                _ => (None, None),
+            };
             Statement::ShowTables(ShowTablesStmt {
-                database: opt_database.map(|(_, database)| database),
+                catalog,
+                database,
                 full: opt_full.is_some(),
                 limit,
                 with_history: opt_history.is_some(),
