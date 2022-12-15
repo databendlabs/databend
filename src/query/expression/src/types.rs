@@ -243,6 +243,26 @@ impl DataType {
             _ => unimplemented!(),
         }
     }
+
+    pub fn sql_name(&self) -> String {
+        match self {
+            DataType::Number(num_ty) => match num_ty {
+                NumberDataType::UInt8 => "TINYINT UNSIGNED".to_string(),
+                NumberDataType::UInt16 => "SMALLINT UNSIGNED".to_string(),
+                NumberDataType::UInt32 => "INT UNSIGNED".to_string(),
+                NumberDataType::UInt64 => "BIGINT UNSIGNED".to_string(),
+                NumberDataType::Int8 => "TINYINT".to_string(),
+                NumberDataType::Int16 => "SMALLINT".to_string(),
+                NumberDataType::Int32 => "INT".to_string(),
+                NumberDataType::Int64 => "BIGINT".to_string(),
+                NumberDataType::Float32 => "FLOAT".to_string(),
+                NumberDataType::Float64 => "DOUBLE".to_string(),
+            },
+            DataType::String => "VARCHAR".to_string(),
+            DataType::Nullable(inner_ty) => format!("{} NULL", inner_ty.sql_name()),
+            _ => self.to_string().to_uppercase(),
+        }
+    }
 }
 
 pub trait ValueType: Debug + Clone + PartialEq + Sized + 'static {
