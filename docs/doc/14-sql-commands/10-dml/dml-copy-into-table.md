@@ -192,7 +192,7 @@ some notice:
 
 **Description**: One character that separate fields in an input file.
 **Supported Values**: One character only, including escaped char: `\b`, `\f`, `\r`, `\n`, `\t`, `\0`, `\xHH`
-**Default**: `\t` (comma)
+**Default**: `,` (comma)
 
 ##### `Quote = '<character>'`
 
@@ -201,12 +201,15 @@ some notice:
 for data loading, quote is not necessary unless a string contains `Quote`|`Escape`|`RECORD_DELIMITER`|`RECORD_DELIMITER`
 
 **Supported Values**: `\'` or `\"`.
+
 **Default**: `\"`
 
 ##### `ESCAPE = '<character>'`
 
 **Description**: One character to escape quote in quoted strings.
+
 **Supported Values**: `\'` or `\"` or `\\`.
+
 **Default**: `\"`
 
 ##### `SKIP_HEADER = '<integer>'`
@@ -255,7 +258,7 @@ for data loading, quote is not necessary unless a string contains `Quote`|`Escap
 
 **Supported Values**: `\r\n` or One character including escaped char: `\b`, `\f`, `\r`, `\n`, `\t`, `\0`, `\xHH`
 
-**Default**: `'\n'`
+**Default**: `\n`
 
 ##### `FIELD_DELIMITER = '<character>'`
 
@@ -263,7 +266,7 @@ for data loading, quote is not necessary unless a string contains `Quote`|`Escap
 
 **Supported Values**: One character only, including escaped char: `\b`, `\f`, `\r`, `\n`, `\t`, `\0`, `\xHH`
 
-**Default**: `'\t'` (TAB)
+**Default**: `\t` (TAB)
 
 ##### `COMPRESSION = AUTO | GZIP | BZ2 | BROTLI | ZSTD | DEFLATE | RAW_DEFLATE | XZ | NONE`
 
