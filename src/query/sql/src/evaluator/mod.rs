@@ -12,38 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// TODO(leiysky): move this crate to common-pipeline-core
+
 mod chunk_operator;
-mod physical_scalar;
-mod scalar;
 
 pub use chunk_operator::ChunkOperator;
 pub use chunk_operator::CompoundChunkOperator;
-
-pub struct Evaluator;
-
-#[derive(Clone, Debug)]
-pub struct TypedVector {
-    pub vector: ColumnRef,
-    pub logical_type: DataTypeImpl,
-}
-
-impl TypedVector {
-    pub fn new(data: ColumnRef, logical_type: DataTypeImpl) -> Self {
-        Self {
-            vector: data,
-            logical_type,
-        }
-    }
-
-    pub fn logical_type(&self) -> DataTypeImpl {
-        self.logical_type.clone()
-    }
-
-    pub fn physical_type(&self) -> DataTypeImpl {
-        self.vector.data_type()
-    }
-
-    pub fn vector(&self) -> &ColumnRef {
-        &self.vector
-    }
-}

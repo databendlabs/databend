@@ -26,6 +26,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::type_check;
 use common_expression::types::DataType;
+use common_expression::Chunk;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 use common_expression::RawExpr;
@@ -49,7 +50,6 @@ use crate::executor::table_read_plan::ToReadDataSourcePlan;
 use crate::executor::util::check_physical;
 use crate::executor::ColumnID;
 use crate::executor::EvalScalar;
-use crate::executor::ExpressionBuilderWithoutRenaming;
 use crate::executor::FragmentKind;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalScalar;
@@ -68,7 +68,9 @@ use crate::IndexType;
 use crate::Metadata;
 use crate::MetadataRef;
 use crate::ScalarExpr;
+use crate::DUMMY_COLUMN_INDEX;
 use crate::DUMMY_TABLE_INDEX;
+use crate::GROUP_BY_KEY_COLUMN_INDEX;
 
 pub struct PhysicalPlanBuilder {
     metadata: MetadataRef,
@@ -153,10 +155,10 @@ impl PhysicalPlanBuilder {
                         // if there is a prewhere optimization,
                         // we can prune `PhysicalScan`'s output schema.
                         if prewhere.output_columns.contains(index) {
-                            name_mapping.insert(name.to_string(), index.to_string());
+                            name_mapping.insert(name.to_string(), *index);
                         }
                     } else {
-                        name_mapping.insert(name.to_string(), index.to_string());
+                        name_mapping.insert(name.to_string(), *index);
                     }
                 }
 
@@ -189,7 +191,7 @@ impl PhysicalPlanBuilder {
                     .read_plan_with_catalog(self.ctx.clone(), CATALOG_DEFAULT.to_string(), None)
                     .await?;
                 Ok(PhysicalPlan::TableScan(TableScan {
-                    name_mapping: BTreeMap::from([("dummy".to_string(), "dummy".to_string())]),
+                    name_mapping: BTreeMap::from([("dummy".to_string(), DUMMY_COLUMN_INDEX)]),
                     source: Box::new(source),
                     table_index: DUMMY_TABLE_INDEX,
                 }))
@@ -281,7 +283,7 @@ impl PhysicalPlanBuilder {
                                     },
                                     args: agg.args.iter().map(|arg| {
                                         if let Scalar::BoundColumnRef(col) = arg {
-                                            col.column.index
+                                            Ok(col.column.index)
                                         } else {
                                             Err(ErrorCode::Internal(
                                                 "Aggregate function argument must be a BoundColumnRef".to_string()
@@ -302,8 +304,14 @@ impl PhysicalPlanBuilder {
                                     group_by: group_items,
                                 };
 
-                                let output_schema = aggregate_partial.output_schema()?;
-                                let group_by_key_index = output_schema.index_of("_group_by_key")?;
+                                let group_by_key_index = GROUP_BY_KEY_COLUMN_INDEX;
+                                let group_by_key_data_type = Chunk::choose_hash_method_with_types(
+                                    &agg.group_items
+                                        .iter()
+                                        .map(|v| v.scalar.data_type())
+                                        .collect::<Vec<_>>(),
+                                )?
+                                .data_type();
 
                                 PhysicalPlan::Exchange(PhysicalExchange {
                                     kind,
@@ -312,10 +320,7 @@ impl PhysicalPlanBuilder {
                                     )),
                                     keys: vec![PhysicalScalar::IndexedVariable {
                                         index: group_by_key_index,
-                                        data_type: output_schema
-                                            .field(group_by_key_index)
-                                            .data_type()
-                                            .clone(),
+                                        data_type: group_by_key_data_type,
                                         display_name: "_group_by_key".to_string(),
                                     }],
                                 })
@@ -330,22 +335,6 @@ impl PhysicalPlanBuilder {
 
                     // Hack to get before group by schema, we should refactor this
                     AggregateMode::Final => {
-                        let input_schema = match input {
-                            PhysicalPlan::AggregatePartial(ref agg) => agg.input.output_schema()?,
-
-                            PhysicalPlan::Exchange(PhysicalExchange {
-                                input: box PhysicalPlan::AggregatePartial(ref agg),
-                                ..
-                            }) => agg.input.output_schema()?,
-
-                            _ => {
-                                return Err(ErrorCode::Internal(format!(
-                                    "invalid input physical plan: {}",
-                                    input.name(),
-                                )));
-                            }
-                        };
-
                         let agg_funcs: Vec<AggregateFunctionDesc> = agg.aggregate_functions.iter().map(|v| {
                             if let Scalar::AggregateFunction(agg) = &v.scalar {
                                 Ok(AggregateFunctionDesc {
@@ -359,7 +348,7 @@ impl PhysicalPlanBuilder {
                                     },
                                     args: agg.args.iter().map(|arg| {
                                         if let Scalar::BoundColumnRef(col) = arg {
-                                            input_schema.index_of(&col.column.index.to_string())
+                                            Ok(col.column.index)
                                         } else {
                                             Err(ErrorCode::Internal(
                                                 "Aggregate function argument must be a BoundColumnRef".to_string()
@@ -419,7 +408,7 @@ impl PhysicalPlanBuilder {
                     .map(|v| SortDesc {
                         asc: v.asc,
                         nulls_first: v.nulls_first,
-                        order_by: v.index.to_string(),
+                        order_by: v.index,
                     })
                     .collect(),
                 limit: sort.limit,
@@ -453,21 +442,15 @@ impl PhysicalPlanBuilder {
             }
             RelOperator::UnionAll(op) => {
                 let left = self.build(s_expr.child(0)?).await?;
-                let left_schema = left.output_schema()?;
                 let pairs = op
                     .pairs
                     .iter()
                     .map(|(l, r)| (l.to_string(), r.to_string()))
                     .collect::<Vec<_>>();
-                let fields = pairs
-                    .iter()
-                    .map(|(left, _)| Ok(left_schema.field_with_name(left)?.clone()))
-                    .collect::<Result<Vec<_>>>()?;
                 Ok(PhysicalPlan::UnionAll(UnionAll {
                     left: Box::new(left),
                     right: Box::new(self.build(s_expr.child(1)?).await?),
                     pairs,
-                    schema: DataSchemaRefExt::create(fields),
                 }))
             }
             _ => Err(ErrorCode::Internal(format!(
@@ -493,17 +476,18 @@ impl PhysicalPlanBuilder {
             .push_down_predicates
             .clone()
             .map(|predicates| {
-                let builder = ExpressionBuilderWithoutRenaming::create(self.metadata.clone());
-                predicates
-                    .into_iter()
-                    .map(|scalar| {
-                        let expression = builder.build(&scalar)?;
-                        ExpressionBuilderWithoutRenaming::normalize_schema(
-                            &expression,
-                            &project_schema,
-                        )
-                    })
-                    .collect::<Result<Vec<_>>>()
+                todo!("expression")
+                // let builder = ExpressionBuilderWithoutRenaming::create(self.metadata.clone());
+                // predicates
+                //     .into_iter()
+                //     .map(|scalar| {
+                //         let expression = builder.build(&scalar)?;
+                //         ExpressionBuilderWithoutRenaming::normalize_schema(
+                //             &expression,
+                //             &project_schema,
+                //         )
+                //     })
+                //     .collect::<Result<Vec<_>>>()
             })
             .transpose()?;
 
@@ -511,71 +495,73 @@ impl PhysicalPlanBuilder {
             .prewhere
             .as_ref()
             .map(|prewhere| {
-                let predicate =
-                    prewhere
-                        .predicates
-                        .iter()
-                        .fold(None, |acc: Option<Scalar>, x: &Scalar| match acc {
-                            Some(acc) => {
-                                let registry = &BUILTIN_FUNCTIONS;
-                                let raw_expr = RawExpr::FunctionCall {
-                                    span: None,
-                                    name: "and".to_string(),
-                                    params: vec![],
-                                    args: vec![acc.as_raw_expr(), x.as_raw_expr()],
-                                };
-                                let expr = type_check::check(&raw_expr, registry)?;
+                let predicate = if prewhere.predicates.is_empty() {
+                    None
+                } else {
+                    let mut scalar = prewhere.predicates[0].clone();
+                    for predicate in prewhere.predicates.iter().skip(1) {
+                        let registry = &BUILTIN_FUNCTIONS;
+                        let raw_expr = RawExpr::FunctionCall {
+                            span: None,
+                            name: "and".to_string(),
+                            params: vec![],
+                            args: vec![scalar.as_raw_expr(), predicate.as_raw_expr()],
+                        };
+                        let expr = type_check::check(&raw_expr, registry)
+                            .map_err(|(_, e)| ErrorCode::Internal(e))?;
 
-                                Some(Scalar::AndExpr(AndExpr {
-                                    left: Box::new(acc),
-                                    right: Box::new(x.clone()),
-                                    return_type: Box::new(expr.data_type().clone()),
-                                }))
-                            }
-                            None => Some(x.clone()),
+                        scalar = Scalar::AndExpr(AndExpr {
+                            left: Box::new(scalar),
+                            right: Box::new(predicate.clone()),
+                            return_type: Box::new(expr.data_type().clone()),
                         });
+                    }
+
+                    Some(scalar)
+                };
 
                 assert!(
                     predicate.is_some(),
                     "There should be at least one predicate in prewhere"
                 );
 
-                let builder = ExpressionBuilderWithoutRenaming::create(self.metadata.clone());
-                let filter = builder.build(&predicate.unwrap())?;
-                let filter =
-                    ExpressionBuilderWithoutRenaming::normalize_schema(&filter, &project_schema)?;
+                todo!("expression");
+                // let builder = ExpressionBuilderWithoutRenaming::create(self.metadata.clone());
+                // let filter = builder.build(&predicate.unwrap())?;
+                // let filter =
+                //     ExpressionBuilderWithoutRenaming::normalize_schema(&filter, &project_schema)?;
 
-                let remain_columns = scan
-                    .columns
-                    .difference(&prewhere.prewhere_columns)
-                    .copied()
-                    .collect::<HashSet<usize>>();
-
-                let output_columns = Self::build_projection(
-                    &metadata,
-                    table_schema,
-                    &prewhere.output_columns,
-                    has_inner_column,
-                );
-                let prewhere_columns = Self::build_projection(
-                    &metadata,
-                    table_schema,
-                    &prewhere.prewhere_columns,
-                    has_inner_column,
-                );
-                let remain_columns = Self::build_projection(
-                    &metadata,
-                    table_schema,
-                    &remain_columns,
-                    has_inner_column,
-                );
-
-                Ok::<PrewhereInfo, ErrorCode>(PrewhereInfo {
-                    output_columns,
-                    prewhere_columns,
-                    remain_columns,
-                    filter,
-                })
+                // let remain_columns = scan
+                //     .columns
+                //     .difference(&prewhere.prewhere_columns)
+                //     .copied()
+                //     .collect::<HashSet<usize>>();
+                //
+                // let output_columns = Self::build_projection(
+                //     &metadata,
+                //     table_schema,
+                //     &prewhere.output_columns,
+                //     has_inner_column,
+                // );
+                // let prewhere_columns = Self::build_projection(
+                //     &metadata,
+                //     table_schema,
+                //     &prewhere.prewhere_columns,
+                //     has_inner_column,
+                // );
+                // let remain_columns = Self::build_projection(
+                //     &metadata,
+                //     table_schema,
+                //     &remain_columns,
+                //     has_inner_column,
+                // );
+                //
+                // Ok::<PrewhereInfo, ErrorCode>(PrewhereInfo {
+                //     output_columns,
+                //     prewhere_columns,
+                //     remain_columns,
+                //     filter,
+                // })
             })
             .transpose()?;
 

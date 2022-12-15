@@ -15,10 +15,15 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::type_check::check;
 use common_expression::types::DataType;
 use common_expression::DataSchema;
+use common_expression::Expr;
 use common_expression::Literal;
+use common_expression::RawExpr;
+use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 
 type IndexType = usize;
 
@@ -74,6 +79,47 @@ impl PhysicalScalar {
             }
             PhysicalScalar::IndexedVariable { display_name, .. } => display_name.clone(),
         }
+    }
+
+    /// Convert to `RawExpr`
+    pub fn as_raw_expr(&self) -> RawExpr {
+        match self {
+            PhysicalScalar::Constant { value, .. } => RawExpr::Literal {
+                span: None,
+                lit: value.clone(),
+            },
+            PhysicalScalar::Function { name, args, .. } => {
+                let args = args.iter().map(|arg| arg.as_raw_expr()).collect::<Vec<_>>();
+                RawExpr::FunctionCall {
+                    span: None,
+                    name: name.clone(),
+                    args,
+                    params: vec![],
+                }
+            }
+            PhysicalScalar::Cast { input, target } => RawExpr::Cast {
+                span: None,
+                is_try: true,
+                expr: Box::new(input.as_raw_expr()),
+                dest_type: target.clone(),
+            },
+            PhysicalScalar::IndexedVariable {
+                index, data_type, ..
+            } => RawExpr::ColumnRef {
+                span: None,
+                id: *index,
+                data_type: data_type.clone(),
+            },
+        }
+    }
+
+    /// Convert to `Expr` by type checking.
+    pub fn as_expr(&self) -> Result<Expr> {
+        let raw_expr = self.as_raw_expr();
+        let registry = &BUILTIN_FUNCTIONS;
+        let expr = check(&raw_expr, registry)
+            .map_err(|(_, e)| ErrorCode::Internal("Invalid expression"))?;
+        Ok(expr)
     }
 }
 

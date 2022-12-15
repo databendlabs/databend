@@ -12,11 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::Chunk;
+use common_expression::ChunkEntry;
 use common_expression::Evaluator;
 use common_expression::Expr;
 use common_expression::FunctionContext;
@@ -27,52 +29,59 @@ use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_transforms::processors::transforms::Transform;
 use common_pipeline_transforms::processors::transforms::Transformer;
 
+use crate::IndexType;
+
 /// `ChunkOperator` takes a `DataBlock` as input and produces a `DataBlock` as output.
 #[derive(Clone)]
 pub enum ChunkOperator {
     /// Evaluate expression and append result column to the end.
     Map {
-        /// Name of column in `DataBlock`, should be deprecated later.
-        // name: String,
+        /// Index of the result in `Chunk`
+        index: IndexType,
         expr: Expr,
     },
 
     /// Filter the input `DataBlock` with the predicate `eval`.
     Filter { expr: Expr },
 
-    /// Reorganize the input `DataBlock` with `offsets`.
-    Project { offsets: Vec<usize> },
-    // Replace name of `DataField`s of input `DataBlock`.
-    // Rename { output_schema: DataSchemaRef },
+    /// Reorganize the input `Chunk` with `indices`.
+    Project { indices: HashSet<IndexType> },
+    // Remap { indices: Vec<(IndexType, IndexType)> },
 }
 
 impl ChunkOperator {
     pub fn execute(&self, func_ctx: &FunctionContext, mut input: Chunk) -> Result<Chunk> {
         match self {
-            ChunkOperator::Map { expr } => {
-                let registry = BUILTIN_FUNCTIONS;
-                let evaluator = Evaluator::new(&input, func_ctx.tz, &registry);
+            ChunkOperator::Map { index, expr } => {
+                let registry = &BUILTIN_FUNCTIONS;
+                let evaluator = Evaluator::new(&input, func_ctx.clone(), &registry);
                 let result = evaluator
                     .run(expr)
                     .map_err(|(_, e)| ErrorCode::Internal(e))?;
-                input.add_column(result, expr.data_type().clone());
+                let entry = ChunkEntry {
+                    id: *index,
+                    data_type: expr.data_type().clone(),
+                    value: result,
+                };
+                input.add_column(entry);
                 Ok(input)
             }
 
             ChunkOperator::Filter { expr } => {
                 let registry = &BUILTIN_FUNCTIONS;
-                let evaluator = Evaluator::new(&input, func_ctx.tz, &registry);
+                let evaluator = Evaluator::new(&input, func_ctx.clone(), &registry);
                 let filter = evaluator
                     .run(expr)
                     .map_err(|(_, e)| ErrorCode::Internal(e))?;
                 Chunk::filter(input, &filter)
             }
 
-            ChunkOperator::Project { offsets } => {
-                let mut result = Chunk::empty();
-                for offset in offsets {
-                    let (column, data_type) = input.column(*offset);
-                    result.add_column(column.clone(), data_type.clone());
+            ChunkOperator::Project { indices } => {
+                let mut result = input;
+                for col in result.columns() {
+                    if !indices.contains(&col.id) {
+                        result = result.remove_column_index(col.id)?;
+                    }
                 }
                 Ok(result)
             }
@@ -136,7 +145,6 @@ impl Transform for CompoundChunkOperator {
                         ChunkOperator::Map { .. } => "Map",
                         ChunkOperator::Filter { .. } => "Filter",
                         ChunkOperator::Project { .. } => "Project",
-                        // ChunkOperator::Rename { .. } => "Rename",
                     }
                     .to_string()
                 })

@@ -22,17 +22,40 @@ use common_expression::Chunk;
 use common_expression::DataField;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
+use common_expression::FunctionContext;
+use common_expression::RawExpr;
 use common_expression::SortColumnDescription;
 use common_expression::TableDataType;
 use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::aggregates::AggregateFunctionRef;
 use common_functions::scalars::CastFunction;
-use common_functions::scalars::FunctionContext;
 use common_functions::scalars::FunctionFactory;
 use common_pipeline_core::Pipe;
 use common_pipeline_sinks::processors::sinks::EmptySink;
 use common_pipeline_sinks::processors::sinks::UnionReceiveSink;
 use common_pipeline_transforms::processors::transforms::try_add_multi_sort_merge;
+use common_sql::evaluator::ChunkOperator;
+use common_sql::evaluator::CompoundChunkOperator;
+use common_sql::executor::AggregateFinal;
+use common_sql::executor::AggregateFunctionDesc;
+use common_sql::executor::AggregatePartial;
+use common_sql::executor::ColumnID;
+use common_sql::executor::DistributedInsertSelect;
+use common_sql::executor::EvalScalar;
+use common_sql::executor::ExchangeSink;
+use common_sql::executor::ExchangeSource;
+use common_sql::executor::Filter;
+use common_sql::executor::HashJoin;
+use common_sql::executor::Limit;
+use common_sql::executor::PhysicalPlan;
+use common_sql::executor::PhysicalScalar;
+use common_sql::executor::Project;
+use common_sql::executor::Sort;
+use common_sql::executor::TableScan;
+use common_sql::executor::UnionAll;
+use common_sql::plans::JoinType;
+use common_sql::ColumnBinding;
+use common_sql::IndexType;
 
 // use common_sql::evaluator::ChunkOperator;
 // use common_sql::evaluator::CompoundChunkOperator;
@@ -209,7 +232,7 @@ impl PipelineBuilder {
                 output,
                 func_ctx.clone(),
                 vec![ChunkOperator::Project {
-                    offsets: projections.clone(),
+                    indices: Default::default(),
                 }],
             ))
         })?;
@@ -232,21 +255,21 @@ impl PipelineBuilder {
         self.ctx.try_set_partitions(scan.source.parts.clone())?;
         table.read_data(self.ctx.clone(), &scan.source, &mut self.main_pipeline)?;
 
-        let schema = scan.source.schema();
-        let projections = scan
-            .name_mapping
-            .keys()
-            .map(|name| schema.index_of(name.as_str()))
-            .collect::<Result<Vec<usize>>>()?;
-
-        let ops = vec![
-            ChunkOperator::Project {
-                offsets: projections,
-            },
-            ChunkOperator::Rename {
-                output_schema: scan.output_schema()?,
-            },
-        ];
+        // let schema = scan.source.schema();
+        // let projections = scan
+        //     .name_mapping
+        //     .keys()
+        //     .map(|name| schema.index_of(name.as_str()))
+        //     .collect::<Result<Vec<usize>>>()?;
+        //
+        // let ops = vec![
+        //     ChunkOperator::Project {
+        //         offsets: projections,
+        //     },
+        //     ChunkOperator::Rename {
+        //         output_schema: scan.output_schema()?,
+        //     },
+        // ];
 
         let func_ctx = self.ctx.try_get_function_context()?;
         self.main_pipeline.add_transform(|input, output| {
@@ -269,18 +292,28 @@ impl PipelineBuilder {
         }
         let mut predicate = filter.predicates[0].clone();
         for pred in filter.predicates.iter().skip(1) {
-            let left_type = predicate.data_type();
-            let right_type = pred.data_type();
-            let data_types = vec![&left_type, &right_type];
-            let func = FunctionFactory::instance().get("and_filters", &data_types)?;
             predicate = PhysicalScalar::Function {
                 name: "and_filters".to_string(),
                 args: vec![predicate.clone(), pred.clone()],
                 return_type: func.return_type(),
             };
         }
+
+        let predicate =
+            filter
+                .predicates
+                .iter()
+                .fold(filter.predicates[0].as_raw_expr(), |predicate, pred| {
+                    RawExpr::FunctionCall {
+                        span: None,
+                        name: "and_filters".to_string(),
+                        params: vec![],
+                        args: vec![predicate, pred.as_raw_expr()],
+                    }
+                });
+
         let func_ctx = self.ctx.try_get_function_context()?;
-        let predicate = Evaluator::eval_physical_scalar(&predicate)?;
+        let predicate = predicate.as_expr()?;
 
         self.main_pipeline.add_transform(|input, output| {
             Ok(CompoundChunkOperator::create(
@@ -288,7 +321,7 @@ impl PipelineBuilder {
                 output,
                 func_ctx.clone(),
                 vec![ChunkOperator::Filter {
-                    eval: predicate.clone(),
+                    expr: predicate.clone(),
                 }],
             ))
         })?;
@@ -305,7 +338,7 @@ impl PipelineBuilder {
                 output,
                 func_ctx.clone(),
                 vec![ChunkOperator::Project {
-                    offsets: project.projections.clone(),
+                    indices: project.columns.clone(),
                 }],
             ))
         })
@@ -317,10 +350,10 @@ impl PipelineBuilder {
         let operators = eval_scalar
             .scalars
             .iter()
-            .map(|(scalar, name)| {
+            .map(|(scalar, index)| {
                 Ok(ChunkOperator::Map {
-                    eval: Evaluator::eval_physical_scalar(scalar)?,
-                    name: name.clone(),
+                    index: *index,
+                    expr: scalar.as_expr()?,
                 })
             })
             .collect::<Result<Vec<_>>>()?;
@@ -341,8 +374,8 @@ impl PipelineBuilder {
     fn build_aggregate_partial(&mut self, aggregate: &AggregatePartial) -> Result<()> {
         self.build_pipeline(&aggregate.input)?;
         let params = Self::build_aggregator_params(
-            aggregate.input.output_schema()?,
-            aggregate.output_schema()?,
+            // aggregate.input.output_schema()?,
+            // aggregate.output_schema()?,
             &aggregate.group_by,
             &aggregate.agg_funcs,
         )?;
@@ -361,8 +394,8 @@ impl PipelineBuilder {
         self.build_pipeline(&aggregate.input)?;
 
         let params = Self::build_aggregator_params(
-            aggregate.before_group_by_schema.clone(),
-            aggregate.output_schema()?,
+            // aggregate.before_group_by_schema.clone(),
+            // aggregate.output_schema()?,
             &aggregate.group_by,
             &aggregate.agg_funcs,
         )?;
@@ -379,16 +412,9 @@ impl PipelineBuilder {
     }
 
     pub fn build_aggregator_params(
-        input_schema: DataSchemaRef,
-        output_schema: DataSchemaRef,
-        group_by: &[ColumnID],
+        group_by: &[IndexType],
         agg_funcs: &[AggregateFunctionDesc],
     ) -> Result<Arc<AggregatorParams>> {
-        let before_schema = input_schema.clone();
-        let group_columns = group_by
-            .iter()
-            .map(|name| input_schema.index_of(name))
-            .collect::<Result<Vec<_>>>()?;
         todo!("expression");
         // let mut output_names = Vec::with_capacity(agg_funcs.len() + group_by.len());
         // let mut agg_args = Vec::with_capacity(agg_funcs.len());

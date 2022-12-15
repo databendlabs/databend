@@ -22,15 +22,16 @@ use common_expression::DataSchemaRef;
 use common_functions_v2::aggregates::get_layout_offsets;
 use common_functions_v2::aggregates::AggregateFunctionRef;
 use common_functions_v2::aggregates::StateAddr;
+use common_sql::IndexType;
 
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::transforms::group_by::Area;
 
 pub struct AggregatorParams {
-    pub output_schema: DataSchemaRef,
-    pub input_schema: DataSchemaRef,
-    pub group_columns: Vec<usize>,
+    // pub output_schema: DataSchemaRef,
+    // pub input_schema: DataSchemaRef,
+    pub group_columns: Vec<IndexType>,
     pub group_data_types: Vec<DataType>,
 
     pub aggregate_functions: Vec<AggregateFunctionRef>,
@@ -45,8 +46,8 @@ pub struct AggregatorParams {
 
 impl AggregatorParams {
     pub fn try_create(
-        output_schema: DataSchemaRef,
-        input_schema: DataSchemaRef,
+        // output_schema: DataSchemaRef,
+        // input_schema: DataSchemaRef,
         group_columns: &[usize],
         agg_funcs: &[AggregateFunctionRef],
         agg_output_names: &[String],
@@ -64,8 +65,8 @@ impl AggregatorParams {
             .collect();
 
         Ok(Arc::new(AggregatorParams {
-            output_schema,
-            input_schema,
+            // output_schema,
+            // input_schema,
             group_columns: group_columns.to_vec(),
             group_data_types,
             aggregate_functions: agg_funcs.to_vec(),
@@ -109,7 +110,6 @@ impl AggregatorTransformParams {
         aggregator_params: &Arc<AggregatorParams>,
     ) -> Result<AggregatorTransformParams> {
         let group_cols = &aggregator_params.group_columns;
-        let schema_before_group_by = aggregator_params.input_schema.clone();
         let sample_chunk = Chunk::empty();
         let method = Chunk::choose_hash_method(&sample_chunk, group_cols)?;
 

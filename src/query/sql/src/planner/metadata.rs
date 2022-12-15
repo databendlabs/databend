@@ -34,6 +34,13 @@ pub type IndexType = usize;
 
 /// Use IndexType::MAX to represent dummy table.
 pub static DUMMY_TABLE_INDEX: IndexType = IndexType::MAX;
+pub static DUMMY_COLUMN_INDEX: IndexType = IndexType::MAX;
+
+/// A special index value to represent the internal column `_group_by_key`, which is
+/// used to store the group by key in the final aggregation stage.
+///
+/// TODO(leiysky): remove this after we have a better way to represent the internal column.
+pub static GROUP_BY_KEY_COLUMN_INDEX: IndexType = IndexType::MAX - 1;
 
 /// ColumnSet represents a set of columns identified by its IndexType.
 pub type ColumnSet = HashSet<IndexType>;
