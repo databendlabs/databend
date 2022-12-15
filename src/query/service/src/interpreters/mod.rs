@@ -70,6 +70,7 @@ mod interpreter_table_show_create;
 mod interpreter_table_truncate;
 mod interpreter_table_undrop;
 mod interpreter_unsetting;
+mod interpreter_update;
 mod interpreter_use_database;
 mod interpreter_user_alter;
 mod interpreter_user_create;

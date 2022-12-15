@@ -19,6 +19,7 @@ mod deletion;
 pub mod mutation_meta;
 pub mod mutation_sink;
 pub mod recluster_mutator;
+mod update;
 
 pub use abort_operation::AbortOperation;
 pub use base_mutator::BaseMutator;
