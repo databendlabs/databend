@@ -23,7 +23,6 @@ use common_meta_app::schema::CountTablesReq;
 use common_meta_app::schema::CreateDatabaseReply;
 use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::CreateTableReq;
-use common_meta_app::schema::DatabaseType;
 use common_meta_app::schema::DropDatabaseReq;
 use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::DropTableReq;
@@ -462,12 +461,11 @@ impl Catalog for DatabaseCatalog {
 
     async fn update_table_meta(
         &self,
-        tenant: &str,
-        db_type: DatabaseType,
+        table_info: &TableInfo,
         req: UpdateTableMetaReq,
     ) -> Result<UpdateTableMetaReply> {
         self.mutable_catalog
-            .update_table_meta(tenant, db_type, req)
+            .update_table_meta(table_info, req)
             .await
     }
 

@@ -282,14 +282,15 @@ impl Catalog for MutableCatalog {
 
     async fn update_table_meta(
         &self,
-        tenant: &str,
-        db_type: DatabaseType,
+        table_info: &TableInfo,
         req: UpdateTableMetaReq,
     ) -> Result<UpdateTableMetaReply> {
-        match db_type {
+        match table_info.db_type.clone() {
             DatabaseType::NormalDB => Ok(self.ctx.meta.update_table_meta(req).await?),
             DatabaseType::ShareDB(share_ident) => {
-                let db = self.get_database(tenant, &share_ident.share_name).await?;
+                let db = self
+                    .get_database(&share_ident.tenant, &share_ident.share_name)
+                    .await?;
                 db.update_table_meta(req).await
             }
         }

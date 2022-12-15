@@ -32,7 +32,6 @@ use common_meta_app::schema::CountTablesReq;
 use common_meta_app::schema::CreateDatabaseReply;
 use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::CreateTableReq;
-use common_meta_app::schema::DatabaseType;
 use common_meta_app::schema::DropDatabaseReq;
 use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::DropTableReq;
@@ -360,8 +359,7 @@ impl Catalog for HiveCatalog {
 
     async fn update_table_meta(
         &self,
-        _tenant: &str,
-        _db_type: DatabaseType,
+        _table_info: &TableInfo,
         _req: UpdateTableMetaReq,
     ) -> Result<UpdateTableMetaReply> {
         Err(ErrorCode::Unimplemented(

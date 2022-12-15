@@ -354,10 +354,7 @@ impl FuseTable {
         };
 
         // 3. let's roll
-        let tenant = ctx.get_tenant();
-        let reply = catalog
-            .update_table_meta(&tenant, table_info.db_type.clone(), req)
-            .await;
+        let reply = catalog.update_table_meta(table_info, req).await;
         match reply {
             Ok(_) => {
                 if let Some(snapshot_cache) = CacheManager::instance().get_table_snapshot_cache() {

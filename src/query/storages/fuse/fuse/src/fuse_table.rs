@@ -100,7 +100,7 @@ impl FuseTable {
             DatabaseType::ShareDB(share_ident) => create_share_table_operator(
                 ShareTableConfig::share_endpoint_address(),
                 ShareTableConfig::share_endpoint_token(),
-                &share_ident.share_name,
+                &share_ident.tenant,
                 &share_ident.share_name,
                 &table_info.name,
             ),
