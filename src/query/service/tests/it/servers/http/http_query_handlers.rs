@@ -1383,7 +1383,7 @@ async fn test_func_object_keys() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "current_thread")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_multi_partition() -> Result<()> {
     let _guard = TestGlobalServices::setup(ConfigBuilder::create().build()).await?;
 

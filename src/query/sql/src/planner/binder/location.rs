@@ -12,34 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
 use std::io::Error;
 use std::io::ErrorKind;
 use std::io::Result;
 
 use anyhow::anyhow;
+use common_ast::ast::UriLocation;
+use common_storage::StorageAzblobConfig;
+use common_storage::StorageFsConfig;
+use common_storage::StorageFtpConfig;
+use common_storage::StorageGcsConfig;
+use common_storage::StorageHttpConfig;
+use common_storage::StorageIpfsConfig;
+use common_storage::StorageOssConfig;
+use common_storage::StorageParams;
+use common_storage::StorageS3Config;
+use common_storage::STORAGE_GCS_DEFAULT_ENDPOINT;
+use common_storage::STORAGE_IPFS_DEFAULT_ENDPOINT;
+use common_storage::STORAGE_S3_DEFAULT_ENDPOINT;
 use opendal::Scheme;
 use percent_encoding::percent_decode_str;
-
-use crate::config::StorageHttpConfig;
-use crate::config::StorageIpfsConfig;
-use crate::config::StorageOssConfig;
-use crate::config::STORAGE_IPFS_DEFAULT_ENDPOINT;
-use crate::config::STORAGE_S3_DEFAULT_ENDPOINT;
-use crate::StorageAzblobConfig;
-use crate::StorageFsConfig;
-use crate::StorageParams;
-use crate::StorageS3Config;
-use crate::STORAGE_GCS_DEFAULT_ENDPOINT;
-
-#[derive(Clone, Debug)]
-pub struct UriLocation {
-    pub protocol: String,
-    pub name: String,
-    pub path: String,
-    /// connection should carry all connection related options for storage.
-    pub connection: BTreeMap<String, String>,
-}
 
 /// secure_omission will fix omitted endpoint url schemes into 'https://'
 #[inline]
@@ -85,7 +77,7 @@ pub fn parse_uri_location(l: &UriLocation) -> Result<(StorageParams, String)> {
                 root: root.to_string(),
             })
         }
-        Scheme::Ftp => StorageParams::Ftp(crate::StorageFtpConfig {
+        Scheme::Ftp => StorageParams::Ftp(StorageFtpConfig {
             endpoint: if !l.protocol.is_empty() {
                 format!("{}://{}", l.protocol, l.name)
             } else {
@@ -102,7 +94,7 @@ pub fn parse_uri_location(l: &UriLocation) -> Result<(StorageParams, String)> {
                 .get("endpoint_url")
                 .cloned()
                 .unwrap_or_else(|| STORAGE_GCS_DEFAULT_ENDPOINT.to_string());
-            StorageParams::Gcs(crate::StorageGcsConfig {
+            StorageParams::Gcs(StorageGcsConfig {
                 endpoint_url: secure_omission(endpoint),
                 bucket: l.name.clone(),
                 root: l.path.clone(),

@@ -552,7 +552,9 @@ impl QueryCoordinator {
             }
         }
 
-        let executor_settings = ExecutorSettings::try_create(&info.query_ctx.get_settings())?;
+        let query_id = info.query_ctx.get_id();
+        let executor_settings =
+            ExecutorSettings::try_create(&info.query_ctx.get_settings(), query_id)?;
 
         let executor = PipelineCompleteExecutor::from_pipelines(pipelines, executor_settings)?;
 

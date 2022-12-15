@@ -15,7 +15,8 @@
 use std::collections::BTreeMap;
 use std::io::Result;
 
-use common_storage::parse_uri_location;
+use common_ast::ast::UriLocation;
+use common_sql::planner::binder::parse_uri_location;
 use common_storage::StorageFsConfig;
 use common_storage::StorageFtpConfig;
 use common_storage::StorageGcsConfig;
@@ -24,7 +25,6 @@ use common_storage::StorageIpfsConfig;
 use common_storage::StorageOssConfig;
 use common_storage::StorageParams;
 use common_storage::StorageS3Config;
-use common_storage::UriLocation;
 use common_storage::STORAGE_GCS_DEFAULT_ENDPOINT;
 use common_storage::STORAGE_IPFS_DEFAULT_ENDPOINT;
 use common_storage::STORAGE_S3_DEFAULT_ENDPOINT;
