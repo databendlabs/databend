@@ -27,7 +27,6 @@ use common_ast::parser::parse_comma_separated_exprs;
 use common_ast::parser::tokenize_sql;
 use common_ast::Backtrace;
 use common_base::runtime::GlobalIORuntime;
-use common_catalog::plan::StageFileStatus;
 use common_catalog::plan::StageTableInfo;
 use common_catalog::table::AppendMode;
 use common_catalog::table_context::StageAttachment;
@@ -212,25 +211,13 @@ impl InsertInterpreterV2 {
 
         // TODO:(everpcpc) color_copied_files
 
-        let mut need_copied_file_infos = vec![];
-        for file in &all_source_file_infos {
-            if file.status == StageFileStatus::NeedCopy {
-                need_copied_file_infos.push(file.clone());
-            }
-        }
-
         tracing::info!(
-            "insert: read all stage attachment files finished, all:{}, need copy:{}, elapsed:{}",
+            "insert: read all stage attachment files finished: {}, elapsed:{}",
             all_source_file_infos.len(),
-            need_copied_file_infos.len(),
             start.elapsed().as_secs()
         );
 
-        if need_copied_file_infos.is_empty() {
-            return Ok(());
-        }
-
-        stage_table_info.files_to_copy = Some(need_copied_file_infos.clone());
+        stage_table_info.files_to_copy = Some(all_source_file_infos.clone());
         let stage_table = StageTable::try_create(stage_table_info.clone())?;
         let read_source_plan = {
             stage_table
