@@ -54,7 +54,7 @@ unsafe impl Allocator for GlobalAllocator {
         Fallback::new(Default::default()).deallocate(ptr, layout)
     }
 
-    #[inline(always)]
+    #[inline(never)]
     unsafe fn grow(
         &self,
         ptr: NonNull<u8>,
@@ -74,7 +74,7 @@ unsafe impl Allocator for GlobalAllocator {
         Fallback::new(Default::default()).grow_zeroed(ptr, old_layout, new_layout)
     }
 
-    #[inline(always)]
+    #[inline(never)]
     unsafe fn shrink(
         &self,
         ptr: NonNull<u8>,
@@ -110,7 +110,7 @@ unsafe impl GlobalAlloc for GlobalAllocator {
         }
     }
 
-    #[inline]
+    #[inline(never)]
     unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
         use std::cmp::Ordering::*;
 
