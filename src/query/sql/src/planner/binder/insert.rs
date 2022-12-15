@@ -96,8 +96,8 @@ impl<'a> Binder {
                     opts, start, None,
                 ))
             }
-            InsertSource::Values { rest_str } => match self.ctx.get_sideload() {
-                Some(sideload) => Ok(InsertInputSource::Sideload(Arc::new(sideload))),
+            InsertSource::Values { rest_str } => match self.ctx.get_stage_attachment() {
+                Some(attachment) => Ok(InsertInputSource::Stage(Arc::new(attachment))),
                 None => {
                     let data = rest_str.trim_end_matches(';').trim_start().to_owned();
                     Ok(InsertInputSource::Values(data))

@@ -12,6 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::collections::BTreeMap;
 use std::net::SocketAddr;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
@@ -55,9 +56,9 @@ pub struct ProcessInfo {
 }
 
 #[derive(Debug, Clone)]
-pub struct SideloadOptions {
-    pub uri: Option<String>,
-    pub stage: Option<String>,
+pub struct StageAttachment {
+    pub location: String,
+    pub params: BTreeMap<String, String>,
 }
 
 #[async_trait::async_trait]
@@ -105,5 +106,5 @@ pub trait TableContext: Send + Sync {
     async fn get_table(&self, catalog: &str, database: &str, table: &str)
     -> Result<Arc<dyn Table>>;
     fn get_processes_info(&self) -> Vec<ProcessInfo>;
-    fn get_sideload(&self) -> Option<SideloadOptions>;
+    fn get_stage_attachment(&self) -> Option<StageAttachment>;
 }

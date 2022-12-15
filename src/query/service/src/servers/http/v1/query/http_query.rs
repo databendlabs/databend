@@ -21,7 +21,7 @@ use common_base::base::tokio;
 use common_base::base::tokio::sync::Mutex as TokioMutex;
 use common_base::base::tokio::sync::RwLock;
 use common_base::runtime::TrySpawn;
-use common_catalog::table_context::SideloadOptions;
+use common_catalog::table_context::StageAttachment;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use serde::Deserialize;
@@ -60,7 +60,7 @@ pub struct HttpQueryRequest {
     pub pagination: PaginationConf,
     #[serde(default = "default_as_true")]
     pub string_fields: bool,
-    pub sideload: Option<SideloadConf>,
+    pub stage_attachment: Option<StageAttachmentConf>,
 }
 
 const DEFAULT_MAX_ROWS_IN_BUFFER: usize = 5 * 1000 * 1000;
@@ -144,9 +144,9 @@ impl HttpSessionConf {
 }
 
 #[derive(Deserialize, Debug, Clone)]
-pub struct SideloadConf {
-    pub(crate) stage: Option<String>,
-    pub(crate) url: Option<String>,
+pub struct StageAttachmentConf {
+    pub(crate) location: String,
+    pub(crate) params: Option<BTreeMap<String, String>>,
 }
 
 #[derive(Debug, Clone)]
@@ -237,10 +237,13 @@ impl HttpQuery {
         let sql = &request.sql;
         tracing::info!("run query_id={id} in session_id={session_id}, sql='{sql}'");
 
-        match &request.sideload {
-            Some(sideload) => ctx.attach_sideload(SideloadOptions {
-                uri: sideload.url.clone(),
-                stage: sideload.stage.clone(),
+        match &request.stage_attachment {
+            Some(attachment) => ctx.attach_stage(StageAttachment {
+                location: attachment.location.clone(),
+                params: match attachment.params {
+                    Some(ref params) => params.clone(),
+                    None => BTreeMap::new(),
+                },
             }),
             None => {}
         };

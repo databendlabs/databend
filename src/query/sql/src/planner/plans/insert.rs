@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_catalog::table_context::SideloadOptions;
+use common_catalog::table_context::StageAttachment;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_meta_types::FileFormatOptions;
@@ -32,8 +32,8 @@ pub enum InsertInputSource {
     StreamingWithFileFormat(FileFormatOptions, usize, Option<Arc<InputContext>>),
     // From cloned String and format
     Values(String),
-    // From sideload stage or uri
-    Sideload(Arc<SideloadOptions>),
+    // From stage
+    Stage(Arc<StageAttachment>),
 }
 
 #[derive(Clone)]

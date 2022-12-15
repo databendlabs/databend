@@ -12,10 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::VecDeque;
 use std::io::BufRead;
 use std::io::Cursor;
 use std::ops::Not;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -28,6 +30,7 @@ use common_base::runtime::GlobalIORuntime;
 use common_catalog::plan::StageFileStatus;
 use common_catalog::plan::StageTableInfo;
 use common_catalog::table::AppendMode;
+use common_catalog::table_context::StageAttachment;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
@@ -36,6 +39,9 @@ use common_formats::parse_timezone;
 use common_formats::FastFieldDecoderValues;
 use common_io::cursor_ext::ReadBytesExt;
 use common_io::cursor_ext::ReadCheckPointExt;
+use common_meta_types::OnErrorMode;
+use common_meta_types::StageFileCompression;
+use common_meta_types::StageFileFormatType;
 use common_meta_types::UserStageInfo;
 use common_pipeline_core::Pipeline;
 use common_pipeline_sources::processors::sources::AsyncSource;
@@ -112,11 +118,74 @@ impl InsertInterpreterV2 {
         Ok(cast_needed)
     }
 
-    // TODO:(everpcpc)
+    fn apply_stage_options(
+        &self,
+        stage: &mut UserStageInfo,
+        params: &BTreeMap<String, String>,
+    ) -> Result<()> {
+        for (k, v) in params.iter() {
+            match k.as_str() {
+                // file format options
+                "format" => {
+                    let format = StageFileFormatType::from_str(v)?;
+                    stage.file_format_options.format = format;
+                }
+                "skip_header" => {
+                    let skip_header = u64::from_str(v)?;
+                    stage.file_format_options.skip_header = skip_header;
+                }
+                "field_delimiter" => stage.file_format_options.field_delimiter = v.clone(),
+                "record_delimiter" => stage.file_format_options.record_delimiter = v.clone(),
+                "nan_display" => stage.file_format_options.nan_display = v.clone(),
+                "escape" => stage.file_format_options.escape = v.clone(),
+                "compression" => {
+                    let compression = StageFileCompression::from_str(v)?;
+                    stage.file_format_options.compression = compression;
+                }
+                "row_tag" => stage.file_format_options.row_tag = v.clone(),
+                "quote" => stage.file_format_options.quote = v.clone(),
+
+                // copy options
+                "on_error" => {
+                    let on_error = OnErrorMode::from_str(v)?;
+                    stage.copy_options.on_error = on_error;
+                }
+                "size_limit" => {
+                    let size_limit = usize::from_str(v)?;
+                    stage.copy_options.size_limit = size_limit;
+                }
+                "split_size" => {
+                    let split_size = usize::from_str(v)?;
+                    stage.copy_options.split_size = split_size;
+                }
+                "purge" => {
+                    let purge = bool::from_str(v).map_err(|_| {
+                        ErrorCode::StrParseError(format!("Cannot parse purge: {} as bool", v))
+                    })?;
+                    stage.copy_options.purge = purge;
+                }
+                "single" => {
+                    let single = bool::from_str(v).map_err(|_| {
+                        ErrorCode::StrParseError(format!("Cannot parse single: {} as bool", v))
+                    })?;
+                    stage.copy_options.single = single;
+                }
+                "max_file_size" => {
+                    let max_file_size = usize::from_str(v)?;
+                    stage.copy_options.max_file_size = max_file_size;
+                }
+
+                _ => {}
+            }
+        }
+
+        Ok(())
+    }
+
     async fn build_insert_from_stage_pipeline(
         &self,
         table: Arc<dyn Table>,
-        stage_location: &str,
+        attachment: Arc<StageAttachment>,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let start = Instant::now();
@@ -127,7 +196,8 @@ impl InsertInterpreterV2 {
         let catalog_name = self.plan.catalog.clone();
         let overwrite = self.plan.overwrite;
 
-        let (stage_info, path) = parse_stage_location(&self.ctx, stage_location).await?;
+        let (mut stage_info, path) = parse_stage_location(&self.ctx, &attachment.location).await?;
+        self.apply_stage_options(&mut stage_info, &attachment.params)?;
 
         let mut stage_table_info = StageTableInfo {
             schema: source_schema.clone(),
@@ -140,7 +210,7 @@ impl InsertInterpreterV2 {
 
         let all_source_file_infos = StageTable::list_files(&table_ctx, &stage_table_info).await?;
 
-        // TODO: color_copied_files
+        // TODO:(everpcpc) color_copied_files
 
         let mut need_copied_file_infos = vec![];
         for file in &all_source_file_infos {
@@ -149,9 +219,8 @@ impl InsertInterpreterV2 {
             }
         }
 
-        // DEBUG:
-        tracing::warn!(
-            "insert: read all sideload files finished, all:{}, need copy:{}, elapsed:{}",
+        tracing::info!(
+            "insert: read all stage attachment files finished, all:{}, need copy:{}, elapsed:{}",
             all_source_file_infos.len(),
             need_copied_file_infos.len(),
             start.elapsed().as_secs()
@@ -199,9 +268,8 @@ impl InsertInterpreterV2 {
                 None => {
                     let append_entries = ctx.consume_precommit_blocks();
                     // We must put the commit operation to global runtime, which will avoid the "dispatch dropped without returning error" in tower
-                    return GlobalIORuntime::instance().block_on(async move {
-                        // DEBUG:
-                        tracing::warn!(
+                    GlobalIORuntime::instance().block_on(async move {
+                        tracing::info!(
                             "insert: try to commit append entries:{}, elapsed:{}",
                             append_entries.len(),
                             start.elapsed().as_secs()
@@ -209,9 +277,11 @@ impl InsertInterpreterV2 {
                         table
                             .commit_insertion(ctx, append_entries, overwrite)
                             .await?;
+
+                        // TODO:(everpcpc) purge copied files
+
                         Ok(())
-                        // TODO: purge copied files
-                    });
+                    })
                 }
             }
         });
@@ -273,25 +343,14 @@ impl Interpreter for InsertInterpreterV2 {
                         .format
                         .exec_stream(input_context.clone(), &mut build_res.main_pipeline)?;
                 }
-                InsertInputSource::Sideload(opts) => {
-                    // DEBUG:
-                    tracing::warn!("==> sideload insert: {:?}", opts);
-
-                    match &opts.stage {
-                        None => {
-                            return Err(ErrorCode::BadDataValueType(
-                                "No stage location provided".to_string(),
-                            ));
-                        }
-                        Some(stage_location) => {
-                            self.build_insert_from_stage_pipeline(
-                                table.clone(),
-                                stage_location,
-                                &mut build_res.main_pipeline,
-                            )
-                            .await?;
-                        }
-                    }
+                InsertInputSource::Stage(opts) => {
+                    tracing::info!("insert: from stage with options {:?}", opts);
+                    self.build_insert_from_stage_pipeline(
+                        table.clone(),
+                        opts.clone(),
+                        &mut build_res.main_pipeline,
+                    )
+                    .await?;
                     return Ok(build_res);
                 }
                 InsertInputSource::SelectPlan(plan) => {
@@ -741,7 +800,8 @@ async fn exprs_to_datavalue<'a>(
     Ok(datavalues)
 }
 
-// FIXME: tmp copy from src/query/sql/src/planner/binder/copy.rs
+// TODO:(everpcpc) tmp copy from src/query/sql/src/planner/binder/copy.rs
+// move to user stage module
 async fn parse_stage_location(
     ctx: &Arc<QueryContext>,
     location: &str,

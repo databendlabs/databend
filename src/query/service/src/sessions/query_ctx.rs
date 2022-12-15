@@ -32,7 +32,7 @@ use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::StageTableInfo;
-use common_catalog::table_context::SideloadOptions;
+use common_catalog::table_context::StageAttachment;
 use common_config::DATABEND_COMMIT_VERSION;
 use common_datablocks::DataBlock;
 use common_datavalues::DataValue;
@@ -193,8 +193,8 @@ impl QueryContext {
         self.shared.set_executor(weak_ptr)
     }
 
-    pub fn attach_sideload(&self, sideload: SideloadOptions) {
-        self.shared.attach_sideload(sideload);
+    pub fn attach_stage(&self, attachment: StageAttachment) {
+        self.shared.attach_stage(attachment);
     }
 
     pub fn get_created_time(&self) -> SystemTime {
@@ -360,9 +360,9 @@ impl TableContext for QueryContext {
         SessionManager::instance().processes_info()
     }
 
-    // Get Sideload Options.
-    fn get_sideload(&self) -> Option<SideloadOptions> {
-        self.shared.get_sideload()
+    // Get Stage Attachment.
+    fn get_stage_attachment(&self) -> Option<StageAttachment> {
+        self.shared.get_stage_attachment()
     }
 }
 
