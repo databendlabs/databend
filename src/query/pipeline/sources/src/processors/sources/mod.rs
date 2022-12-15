@@ -67,10 +67,13 @@ mod source_example {
     impl SyncSource for ExampleSyncSource {
         const NAME: &'static str = "Example";
 
-        fn generate(&mut self) -> Result<Option<Chunk<String>>> {
+        fn generate(&mut self) -> Result<Option<Chunk>> {
             self.pos += 1;
             match self.chunks.len() >= self.pos {
-                true => Ok(Some(self.chunks[self.pos - 1].clone())),
+                true => {
+                    todo!("expression");
+                    // Ok(Some(self.chunks[self.pos - 1].clone())),
+                }
                 false => Ok(None),
             }
         }

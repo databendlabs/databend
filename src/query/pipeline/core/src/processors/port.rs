@@ -32,7 +32,7 @@ const UNSET_FLAGS_MASK: usize = !FLAGS_MASK;
 
 #[repr(align(8))]
 pub enum SharedData {
-    Data(Result<Chunk<String>>),
+    Data(Result<Chunk>),
     FilePartition(Result<FileSplit>),
 }
 
@@ -167,7 +167,7 @@ impl InputPort {
     }
 
     #[inline(always)]
-    pub fn pull_data(&self) -> Option<Result<Chunk<String>>> {
+    pub fn pull_data(&self) -> Option<Result<Chunk>> {
         unsafe {
             UpdateTrigger::update_input(&self.update_trigger);
             let unset_flags = HAS_DATA | NEED_DATA;
@@ -231,7 +231,7 @@ impl OutputPort {
     }
 
     #[inline(always)]
-    pub fn push_data(&self, data: Result<Chunk<String>>) {
+    pub fn push_data(&self, data: Result<Chunk>) {
         unsafe {
             UpdateTrigger::update_output(&self.update_trigger);
 

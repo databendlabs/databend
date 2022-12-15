@@ -205,19 +205,20 @@ impl SyncSource for RandomSource {
             return Ok(None);
         }
 
-        let columns = self
-            .schema
-            .fields()
-            .iter()
-            .map(|f| f.data_type().create_random_column(self.rows))
-            .collect();
-
-        let rows = self.rows;
-
-        // The partition garantees the number of rows is less than or equal to `max_block_size`.
-        // And we generate all the `self.rows` at once.
-        self.rows = 0;
-
-        Ok(Some(Chunk::new(columns, rows)))
+        todo!("expression")
+        // let columns = self
+        //     .schema
+        //     .fields()
+        //     .iter()
+        //     .map(|f| f.data_type().create_random_column(self.rows))
+        //     .collect();
+        //
+        // let rows = self.rows;
+        //
+        // // The partition garantees the number of rows is less than or equal to `max_block_size`.
+        // // And we generate all the `self.rows` at once.
+        // self.rows = 0;
+        //
+        // Ok(Some(Chunk::new(columns, rows)))
     }
 }
