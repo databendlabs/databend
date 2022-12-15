@@ -509,6 +509,7 @@ impl FromToProto for mt::FileFormatOptions {
             escape: p.escape,
             compression,
             row_tag: p.row_tag,
+            quote: p.quote,
         })
     }
 
@@ -526,6 +527,7 @@ impl FromToProto for mt::FileFormatOptions {
             compression,
             row_tag: self.row_tag.clone(),
             escape: self.escape.clone(),
+            quote: self.quote.clone(),
         })
     }
 }

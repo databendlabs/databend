@@ -22,7 +22,7 @@ use crate::plan::Projection;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct PrewhereInfo {
-    /// columns to be ouput be prewhere scan
+    /// columns to be output by prewhere scan
     pub output_columns: Projection,
     /// columns used for prewhere
     pub prewhere_columns: Projection,

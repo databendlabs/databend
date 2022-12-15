@@ -1,0 +1,14 @@
+---------- TABLE INFO ------------
+DB.Table: 'system'.'engines', Table: engines-table_id:1, ver:0, Engine: SystemEngines
+-------- TABLE CONTENTS ----------
++--------+-----------------------------+
+| Engine | Comment                     |
++--------+-----------------------------+
+| FUSE   | FUSE Storage Engine         |
+| MEMORY | MEMORY Storage Engine       |
+| NULL   | NULL Storage Engine         |
+| RANDOM | RANDOM Storage Engine       |
+| VIEW   | VIEW STORAGE (LOGICAL VIEW) |
++--------+-----------------------------+
+
+

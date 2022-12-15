@@ -124,8 +124,15 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
         segments_location,
     )
     .await?;
-    let mut blocks_map = BTreeMap::new();
-    blocks_map.insert(0, block_metas);
+    let mut blocks_map: BTreeMap<i32, Vec<(usize, Arc<BlockMeta>)>> = BTreeMap::new();
+    block_metas.iter().for_each(|(idx, b)| {
+        if let Some(stats) = &b.cluster_stats {
+            blocks_map
+                .entry(stats.level)
+                .or_default()
+                .push((idx.0, b.clone()));
+        }
+    });
 
     let mut mutator = ReclusterMutator::try_create(
         ctx,

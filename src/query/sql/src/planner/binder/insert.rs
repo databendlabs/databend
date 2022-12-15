@@ -26,6 +26,7 @@ use crate::normalize_identifier;
 use crate::optimizer::optimize;
 use crate::optimizer::OptimizerConfig;
 use crate::optimizer::OptimizerContext;
+use crate::planner::binder::copy::parse_copy_file_format_options;
 use crate::plans::Insert;
 use crate::plans::InsertInputSource;
 use crate::plans::Plan;
@@ -89,6 +90,12 @@ impl<'a> Binder {
                 } else {
                     Ok(InsertInputSource::StreamingWithFormat(format, start, None))
                 }
+            }
+            InsertSource::StreamingV2 { settings, start } => {
+                let opts = parse_copy_file_format_options(&settings)?;
+                Ok(InsertInputSource::StreamingWithFileFormat(
+                    opts, start, None,
+                ))
             }
             InsertSource::Values { rest_str } => {
                 let data = rest_str.trim_end_matches(';').trim_start().to_owned();

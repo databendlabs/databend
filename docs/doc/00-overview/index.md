@@ -25,7 +25,7 @@ Databend uses the latest techniques in vectorized query processing to allow you 
 
 - __Easy to Use__
 
-  Databend has no indexes to build, no manual tuning required, no manual figuring out partitions or shard data, it’s all done for you as data is loaded into the table.
+  No manual tuning is required. You don't need to manually index, partition, or shard the data. Once you load your data into a table, Databend will handle everything else.
 
 ## Design Overview
 

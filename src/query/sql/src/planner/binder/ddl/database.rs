@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use core::fmt::Write;
 use std::collections::BTreeMap;
 
 use common_ast::ast::AlterDatabaseAction;
@@ -34,6 +33,7 @@ use common_expression::DataSchemaRefExt;
 use common_expression::TableDataType;
 use common_meta_app::schema::DatabaseMeta;
 use common_meta_app::share::ShareNameIdent;
+use tracing::debug;
 
 use crate::binder::Binder;
 use crate::planner::semantic::normalize_identifier;
@@ -46,6 +46,7 @@ use crate::plans::RewriteKind;
 use crate::plans::ShowCreateDatabasePlan;
 use crate::plans::UndropDatabasePlan;
 use crate::BindContext;
+use crate::SelectBuilder;
 
 impl<'a> Binder {
     pub(in crate::planner::binder) async fn bind_show_databases(
@@ -53,19 +54,40 @@ impl<'a> Binder {
         bind_context: &BindContext,
         stmt: &ShowDatabasesStmt<'a>,
     ) -> Result<Plan> {
-        let ShowDatabasesStmt { limit } = stmt;
-        let mut query = String::new();
-        write!(query, "SELECT name AS Database FROM system.databases").unwrap();
+        let ShowDatabasesStmt {
+            catalog,
+            full,
+            limit,
+        } = stmt;
+
+        let mut select_builder = SelectBuilder::from("system.databases");
+
+        let ctl = if let Some(ctl) = catalog {
+            normalize_identifier(ctl, &self.name_resolution_ctx).name
+        } else {
+            self.ctx.get_current_catalog().to_string()
+        };
+
+        select_builder.with_filter(format!("catalog = '{ctl}'"));
+
+        if *full {
+            select_builder.with_column("catalog AS Catalog");
+        }
+        select_builder.with_column(format!("name AS databases_in_{ctl}"));
+        select_builder.with_order_by("catalog");
+        select_builder.with_order_by("name");
         match limit {
             Some(ShowLimit::Like { pattern }) => {
-                write!(query, " WHERE name LIKE '{pattern}'").unwrap();
+                select_builder.with_filter(format!("name LIKE '{pattern}'"));
             }
             Some(ShowLimit::Where { selection }) => {
-                write!(query, " WHERE {selection}").unwrap();
+                select_builder.with_filter(format!("({selection})"));
             }
             None => (),
         }
-        write!(query, " ORDER BY name").unwrap();
+
+        let query = select_builder.build();
+        debug!("show databases rewrite to: {:?}", query);
 
         self.bind_rewrite_to_query(bind_context, query.as_str(), RewriteKind::ShowDatabases)
             .await

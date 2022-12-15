@@ -19,10 +19,9 @@ use std::time::Instant;
 
 use common_base::base::tokio;
 use common_base::base::tokio::task::JoinHandle;
-use common_base::base::Singleton;
+use common_base::base::GlobalInstance;
 use common_exception::Result;
 use common_meta_types::RoleInfo;
-use once_cell::sync::OnceCell;
 use parking_lot::RwLock;
 use tracing::warn;
 
@@ -41,16 +40,12 @@ pub struct RoleCacheManager {
     polling_join_handle: Option<JoinHandle<()>>,
 }
 
-static ROLE_CACHE_MANAGER: OnceCell<Singleton<Arc<RoleCacheManager>>> = OnceCell::new();
-
 impl RoleCacheManager {
-    pub fn init(v: Singleton<Arc<RoleCacheManager>>) -> Result<()> {
+    pub fn init() -> Result<()> {
         // Check that the user API has been initialized.
         let instance = UserApiProvider::instance();
 
-        v.init(Self::try_create(instance)?)?;
-
-        ROLE_CACHE_MANAGER.set(v).ok();
+        GlobalInstance::set(Self::try_create(instance)?);
         Ok(())
     }
 
@@ -67,10 +62,7 @@ impl RoleCacheManager {
     }
 
     pub fn instance() -> Arc<RoleCacheManager> {
-        match ROLE_CACHE_MANAGER.get() {
-            None => panic!("RoleCacheManager is not init"),
-            Some(role_cache_manager) => role_cache_manager.get(),
-        }
+        GlobalInstance::get()
     }
 
     pub fn background_polling(&mut self) {

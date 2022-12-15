@@ -16,7 +16,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use chrono::Utc;
-use common_base::base::GlobalIORuntime;
+use common_base::runtime::GlobalIORuntime;
 use common_catalog::catalog::Catalog;
 use common_catalog::plan::DataSourceInfo;
 use common_catalog::plan::StageFileInfo;

@@ -22,7 +22,6 @@ use common_catalog::catalog::StorageDescription;
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
-use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table::AppendMode;
 use common_catalog::table::ColumnId;
@@ -107,10 +106,7 @@ impl FuseTable {
                 let storage_params = table_info.meta.storage_params.clone();
                 match storage_params {
                     Some(sp) => init_operator(&sp)?,
-                    None => {
-                        let op = &*(DataOperator::instance());
-                        op.clone()
-                    }
+                    None => DataOperator::instance().operator(),
                 }
             }
         };
@@ -221,6 +217,10 @@ impl FuseTable {
 
     pub fn get_operator(&self) -> Operator {
         self.operator.clone()
+    }
+
+    pub fn get_operator_ref(&self) -> &Operator {
+        &self.operator
     }
 
     pub fn try_from_table(tbl: &dyn Table) -> Result<&FuseTable> {
@@ -438,14 +438,14 @@ impl Table for FuseTable {
     }
 
     #[tracing::instrument(level = "debug", name = "fuse_table_optimize", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
-    async fn optimize(&self, ctx: Arc<dyn TableContext>, keep_last_snapshot: bool) -> Result<()> {
+    async fn purge(&self, ctx: Arc<dyn TableContext>, keep_last_snapshot: bool) -> Result<()> {
         self.check_mutable()?;
-        self.do_gc(&ctx, keep_last_snapshot).await
+        self.do_purge(&ctx, keep_last_snapshot).await
     }
 
-    #[tracing::instrument(level = "debug", name = "statistic", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
-    async fn statistic(&self, ctx: Arc<dyn TableContext>) -> Result<()> {
-        self.do_statistic(&ctx).await
+    #[tracing::instrument(level = "debug", name = "analyze", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
+    async fn analyze(&self, ctx: Arc<dyn TableContext>) -> Result<()> {
+        self.do_analyze(&ctx).await
     }
 
     fn table_statistics(&self) -> Result<Option<TableStatistics>> {
@@ -494,14 +494,14 @@ impl Table for FuseTable {
         }
     }
 
-    #[tracing::instrument(level = "debug", name = "fuse_table_delete", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn delete(
         &self,
         ctx: Arc<dyn TableContext>,
-        projection: &Projection,
-        selection: &Option<String>,
+        filter: Option<Expression>,
+        col_indices: Vec<usize>,
+        pipeline: &mut Pipeline,
     ) -> Result<()> {
-        self.do_delete(ctx, projection, selection).await
+        self.do_delete(ctx, filter, col_indices, pipeline).await
     }
 
     fn get_block_compact_thresholds(&self) -> BlockCompactThresholds {

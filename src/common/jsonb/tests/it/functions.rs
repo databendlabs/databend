@@ -32,6 +32,7 @@ use common_jsonb::object_keys;
 use common_jsonb::parse_json_path;
 use common_jsonb::parse_value;
 use common_jsonb::to_string;
+use common_jsonb::Error;
 use common_jsonb::JsonPath;
 use common_jsonb::Number;
 use common_jsonb::Object;
@@ -361,6 +362,10 @@ fn test_parse_json_path() {
             JsonPath::String(Cow::from("k2")),
             JsonPath::String(Cow::from("k3")),
         ]),
+        ("\"k1\"", vec![JsonPath::String(Cow::from("k1"))]),
+        ("\"k_1\"", vec![JsonPath::String(Cow::from("k_1"))]),
+        ("\"k_1k_2\"", vec![JsonPath::String(Cow::from("k_1k_2"))]),
+        ("\"k1k2\"", vec![JsonPath::String(Cow::from("k1k2"))]),
         (r#"k1["k2"][1]"#, vec![
             JsonPath::String(Cow::from("k1")),
             JsonPath::String(Cow::from("k2")),
@@ -371,6 +376,19 @@ fn test_parse_json_path() {
     for (s, expect) in sources {
         let path = parse_json_path(s.as_bytes()).unwrap();
         assert_eq!(&path[..], &expect[..]);
+    }
+
+    let wrong_sources = vec![
+        (r#"\"\"\\k1\"\""#, Error::InvalidToken),
+        (r#"\\k1\\'"#, Error::InvalidToken),
+        (r#"\"kk\"1\""#, Error::InvalidToken),
+    ];
+    for (s, expect) in wrong_sources {
+        let path = parse_json_path(s.as_bytes());
+        match path {
+            Ok(_) => println!(),
+            Err(_) => assert_eq!(Error::InvalidToken, expect),
+        }
     }
 }
 

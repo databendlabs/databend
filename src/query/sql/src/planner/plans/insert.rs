@@ -18,6 +18,7 @@ use common_datablocks::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::TableSchemaRef;
 use common_expression::TableSchemaRefExt;
+use common_meta_types::FileFormatOptions;
 use common_meta_types::MetaId;
 use common_pipeline_sources::processors::sources::input_formats::InputContext;
 
@@ -28,6 +29,8 @@ pub enum InsertInputSource {
     SelectPlan(Box<Plan>),
     // From outside streaming source
     StreamingWithFormat(String, usize, Option<Arc<InputContext>>),
+    // From outside streaming source with file_format options
+    StreamingWithFileFormat(FileFormatOptions, usize, Option<Arc<InputContext>>),
     // From cloned String and format
     Values(String),
 }
@@ -64,14 +67,6 @@ impl Insert {
 
     pub fn has_select_plan(&self) -> bool {
         matches!(&self.source, InsertInputSource::SelectPlan(_))
-    }
-
-    pub fn format(&self) -> Option<&str> {
-        match &self.source {
-            InsertInputSource::SelectPlan(_) => None,
-            InsertInputSource::StreamingWithFormat(v, ..) => Some(v.as_str()),
-            InsertInputSource::Values(v) => Some(v.as_str()),
-        }
     }
 }
 

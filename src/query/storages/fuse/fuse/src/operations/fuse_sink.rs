@@ -13,6 +13,7 @@
 //  limitations under the License.
 
 use std::any::Any;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -45,10 +46,37 @@ use crate::statistics::BlockStatistics;
 use crate::statistics::ClusterStatsGenerator;
 use crate::statistics::StatisticsAccumulator;
 
-struct BloomIndexState {
-    data: Vec<u8>,
-    size: u64,
-    location: Location,
+pub struct BloomIndexState {
+    pub(crate) data: Vec<u8>,
+    pub(crate) size: u64,
+    pub(crate) location: Location,
+}
+
+impl BloomIndexState {
+    pub fn try_create(
+        block: &DataBlock,
+        location: Location,
+    ) -> Result<(Self, HashMap<usize, usize>)> {
+        // write index
+        let bloom_index = BlockFilter::try_create(&[block])?;
+        let index_block = bloom_index.filter_block;
+        let mut data = Vec::with_capacity(100 * 1024);
+        let index_block_schema = &bloom_index.filter_schema;
+        let (size, _) = serialize_data_blocks_with_compression(
+            vec![index_block],
+            index_block_schema,
+            &mut data,
+            CompressionOptions::Uncompressed,
+        )?;
+        Ok((
+            Self {
+                data,
+                size,
+                location,
+            },
+            bloom_index.column_distinct_count,
+        ))
+    }
 }
 
 enum State {
@@ -164,39 +192,27 @@ impl Processor for FuseTableSink {
         match std::mem::replace(&mut self.state, State::None) {
             State::NeedSerialize(data_block) => {
                 todo!("expression");
+
                 // let (cluster_stats, block) =
                 //     self.cluster_stats_gen.gen_stats_for_append(&data_block)?;
 
                 // let (block_location, block_id) = self.meta_locations.gen_block_location();
 
-                // let bloom_index_state = {
-                // write index
-
-                // let bloom_index = BlockFilter::try_create(&[&block])?;
-                // let index_block = bloom_index.filter_block;
                 // let location = self.meta_locations.block_bloom_index_location(&block_id);
-                // let mut data = Vec::with_capacity(100 * 1024);
-                // let index_block_schema = &bloom_index.filter_schema;
-                // let (size, _) = serialize_chunks_with_compression(
-                //     vec![index_block],
-                //     index_block_schema,
-                //     &mut data,
-                //     CompressionOptions::Uncompressed,
+                // let (bloom_index_state, column_distinct_count) =
+                //     BloomIndexState::try_create(&block, location)?;
+
+                // let block_statistics = BlockStatistics::from(
+                //     &block,
+                //     block_location.0,
+                //     cluster_stats,
+                //     Some(column_distinct_count),
                 // )?;
-                // BloomIndexState {
-                //     data,
-                //     size,
-                //     location,
-                // }
-                // };
-                //
-                // let block_statistics =
-                //     BlockStatistics::from(&block, block_location.0, cluster_stats)?;
                 // we need a configuration of block size threshold here
                 // let mut data = Vec::with_capacity(100 * 1024 * 1024);
                 // let schema = block.schema().clone();
-                // let (size, meta_data) = serialize_chunks(vec![block], &schema, &mut data)?;
-                //
+                // let (size, meta_data) = serialize_data_blocks(vec![block], &schema, &mut data)?;
+
                 // self.state = State::Serialized {
                 //     data,
                 //     size,

@@ -361,7 +361,12 @@ impl PhysicalPlanBuilder {
                                 ..
                             }) => agg.input.output_schema()?,
 
-                            _ => unreachable!(),
+                            _ => {
+                                return Err(ErrorCode::Internal(format!(
+                                    "invalid input physical plan: {}",
+                                    input.name(),
+                                )));
+                            }
                         };
 
                         let agg_funcs: Vec<AggregateFunctionDesc> = agg.aggregate_functions.iter().map(|v| {
@@ -424,10 +429,17 @@ impl PhysicalPlanBuilder {
                                 })
                             }
 
-                            _ => unreachable!(),
+                            _ => {
+                                return Err(ErrorCode::Internal(format!(
+                                    "invalid input physical plan: {}",
+                                    input.name(),
+                                )));
+                            }
                         }
                     }
-                    AggregateMode::Initial => unreachable!(),
+                    AggregateMode::Initial => {
+                        return Err(ErrorCode::Internal("Invalid aggregate mode: Initial"));
+                    }
                 };
 
                 Ok(result)

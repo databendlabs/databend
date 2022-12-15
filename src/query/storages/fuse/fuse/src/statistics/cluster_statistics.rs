@@ -16,7 +16,9 @@ use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::Chunk;
 use common_expression::ChunkCompactThresholds;
+use common_expression::FunctionContext;
 use common_expression::ScalarRef;
+use common_sql::evaluator::ChunkOperator;
 use common_storages_table_meta::meta::ClusterStatistics;
 
 #[derive(Clone, Default)]
@@ -26,6 +28,7 @@ pub struct ClusterStatsGenerator {
     extra_key_index: Vec<usize>,
     level: i32,
     chunk_compact_thresholds: ChunkCompactThresholds,
+    operators: Vec<ChunkOperator>,
 }
 
 impl ClusterStatsGenerator {
@@ -35,6 +38,7 @@ impl ClusterStatsGenerator {
         extra_key_index: Vec<usize>,
         level: i32,
         chunk_compact_thresholds: ChunkCompactThresholds,
+        operators: Vec<ChunkOperator>,
     ) -> Self {
         Self {
             cluster_key_id,
@@ -42,6 +46,7 @@ impl ClusterStatsGenerator {
             extra_key_index,
             level,
             chunk_compact_thresholds,
+            operators,
         }
     }
 
@@ -94,6 +99,12 @@ impl ClusterStatsGenerator {
             let indices = vec![0u32, chunk.num_rows() as u32 - 1];
             chunk = chunk.take(&indices)?;
         }
+
+        let func_ctx = FunctionContext::default();
+        chunk = self
+            .operators
+            .iter()
+            .try_fold(chunk, |input, op| op.execute(&func_ctx, input))?;
 
         self.clusters_statistics(&chunk, origin_stats.level)
     }

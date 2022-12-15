@@ -22,6 +22,7 @@ use anyhow::anyhow;
 use anyhow::Result;
 use bytes::Bytes;
 use common_auth::RefreshableToken;
+use common_config::GlobalConfig;
 use http::header::AUTHORIZATION;
 use http::header::CONTENT_LENGTH;
 use http::Method;
@@ -32,6 +33,8 @@ use opendal::raw::AsyncBody;
 use opendal::raw::HttpClient;
 use opendal::raw::Operation;
 use opendal::raw::PresignedRequest;
+
+const TENANT_HEADER: &str = "X-DATABEND-TENANT";
 
 /// SharedSigner is used to track presign request, and it's response.
 ///
@@ -149,11 +152,13 @@ impl SharedSigner {
             .collect();
         let bs = Bytes::from(serde_json::to_vec(&reqs)?);
         let auth = self.token.to_header().await?;
+        let requester = GlobalConfig::instance().as_ref().query.tenant_id.clone();
         let req = Request::builder()
             .method(Method::POST)
             .uri(&self.endpoint)
             .header(AUTHORIZATION, auth)
             .header(CONTENT_LENGTH, bs.len())
+            .header(TENANT_HEADER, requester)
             .body(AsyncBody::Bytes(bs))?;
         let resp = self.client.send_async(req).await?;
         let bs = resp.into_body().bytes().await?;

@@ -27,11 +27,11 @@ use common_base::base::tokio::sync::oneshot::Receiver as OneRecv;
 use common_base::base::tokio::sync::oneshot::Sender as OneSend;
 use common_base::base::tokio::sync::RwLock;
 use common_base::base::tokio::time::sleep;
-use common_base::base::Runtime;
-use common_base::base::TrySpawn;
 use common_base::containers::ItemManager;
 use common_base::containers::Pool;
 use common_base::containers::TtlHashMap;
+use common_base::runtime::Runtime;
+use common_base::runtime::TrySpawn;
 use common_grpc::ConnectionFactory;
 use common_grpc::GrpcConnectionError;
 use common_grpc::RpcClientConf;
@@ -715,21 +715,22 @@ impl MetaGrpcClient {
         let resp =
             res.map_err(|status| MetaHandshakeError::new("handshake is refused", &status))?;
 
-        // backward compatibility: no version in handshake.
-        // TODO(xp): remove this when merged.
-        if resp.protocol_version > 0 {
-            let min_compatible = to_digit_ver(min_metasrv_ver);
-            if resp.protocol_version < min_compatible {
-                let invalid_err = AnyError::error(format!(
-                    "metasrv protocol_version({}) < meta-client min-compatible({})",
-                    from_digit_ver(resp.protocol_version),
-                    min_metasrv_ver,
-                ));
-                return Err(MetaHandshakeError::new(
-                    "incompatible protocol version",
-                    &invalid_err,
-                ));
-            }
+        assert!(
+            resp.protocol_version > 0,
+            "talking to a very old databend-meta: upgrade databend-meta to at least 0.8"
+        );
+
+        let min_compatible = to_digit_ver(min_metasrv_ver);
+        if resp.protocol_version < min_compatible {
+            let invalid_err = AnyError::error(format!(
+                "metasrv protocol_version({}) < meta-client min-compatible({})",
+                from_digit_ver(resp.protocol_version),
+                min_metasrv_ver,
+            ));
+            return Err(MetaHandshakeError::new(
+                "incompatible protocol version",
+                &invalid_err,
+            ));
         }
 
         let token = resp.payload;

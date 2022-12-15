@@ -40,6 +40,7 @@ pub fn serialize_data_blocks_with_compression(
         write_statistics: false,
         compression,
         version: Version::V2,
+        data_pagesize_limit: None,
     };
     let batches = blocks
         .into_iter()
@@ -87,16 +88,12 @@ pub fn serialize_data_blocks(
     serialize_data_blocks_with_compression(blocks, schema, buf, CompressionOptions::Lz4Raw)
 }
 
-fn col_encoding(_data_type: &ArrowDataType) -> Encoding {
-    // Although encoding does work, parquet2 has not implemented decoding of DeltaLengthByteArray yet, we fallback to Plain
-    // From parquet2: Decoding "DeltaLengthByteArray"-encoded required V2 pages is not yet implemented for Binary.
-    //
-    // match data_type {
-    //    ArrowDataType::Binary
-    //    | ArrowDataType::LargeBinary
-    //    | ArrowDataType::Utf8
-    //    | ArrowDataType::LargeUtf8 => Encoding::DeltaLengthByteArray,
-    //    _ => Encoding::Plain,
-    //}
-    Encoding::Plain
+fn col_encoding(data_type: &ArrowDataType) -> Encoding {
+    match data_type {
+        ArrowDataType::Binary
+        | ArrowDataType::LargeBinary
+        | ArrowDataType::Utf8
+        | ArrowDataType::LargeUtf8 => Encoding::DeltaLengthByteArray,
+        _ => Encoding::Plain,
+    }
 }

@@ -21,13 +21,15 @@ use std::time::Instant;
 use chrono::DateTime;
 use chrono::Utc;
 use common_base::base::tokio::sync::Semaphore;
-use common_base::base::Runtime;
+use common_base::runtime::Runtime;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_storages_table_meta::meta::Location;
+use common_storages_table_meta::meta::SnapshotId;
 use common_storages_table_meta::meta::TableSnapshot;
 use common_storages_table_meta::meta::TableSnapshotLite;
+use futures::stream::StreamExt;
 use futures_util::future;
 use futures_util::TryStreamExt;
 use opendal::ObjectMode;
@@ -37,12 +39,27 @@ use tracing::warn;
 use tracing::Instrument;
 
 use crate::io::MetaReaders;
+use crate::io::SnapshotHistoryReader;
+use crate::io::TableMetaLocationGenerator;
 
 // Read snapshot related operations.
 pub struct SnapshotsIO {
     ctx: Arc<dyn TableContext>,
     operator: Operator,
     format_version: u64,
+}
+
+pub struct SnapshotLiteListExtended {
+    pub chained_snapshot_lites: Vec<TableSnapshotLite>,
+    pub segment_locations: HashMap<Location, HashSet<SnapshotId>>,
+    pub orphan_snapshot_lites: Vec<TableSnapshotLite>,
+}
+
+pub enum ListSnapshotLiteOption<'a> {
+    // do not case about the segments
+    NeedNotSegments,
+    // need segment, and exclude the locations if Some(Hashset<Location>) is provided
+    NeedSegmentsWithExclusion(Option<&'a HashSet<Location>>),
 }
 
 impl SnapshotsIO {
@@ -111,33 +128,54 @@ impl SnapshotsIO {
     ) -> Result<Vec<String>> {
         // Get all file list.
         if let Some(prefix) = Self::get_s3_prefix_from_file(root_ts_file) {
-            return self.get_files(&prefix, limit, Some(root_ts_file)).await;
+            return self.list_files(&prefix, limit, Some(root_ts_file)).await;
         }
         Ok(vec![])
     }
 
+    // read all the precedent snapshots of given `root_snapshot`
+    pub async fn read_chained_snapshot_lites(
+        &self,
+        location_generator: TableMetaLocationGenerator,
+        root_snapshot: String,
+        limit: Option<usize>,
+    ) -> Result<Vec<TableSnapshotLite>> {
+        let table_snapshot_reader =
+            MetaReaders::table_snapshot_reader(self.ctx.get_data_operator()?.operator());
+        let lite_snapshot_stream = table_snapshot_reader
+            .snapshot_history(root_snapshot, self.format_version, location_generator)
+            .map_ok(|snapshot| TableSnapshotLite::from(snapshot.as_ref()));
+        if let Some(l) = limit {
+            lite_snapshot_stream.take(l).try_collect::<Vec<_>>().await
+        } else {
+            lite_snapshot_stream.try_collect::<Vec<_>>().await
+        }
+    }
+
     // Read all the snapshots by the root file.
-    // limit: read how many snapshot files
+    // limit: limits the number of snapshot files listed
     // with_segment_locations: if true will get the segments of the snapshot
-    pub async fn read_snapshot_lites<T>(
+    pub async fn read_snapshot_lites_ext<'a, T>(
         &self,
         root_snapshot_file: String,
         limit: Option<usize>,
-        with_segment_locations: bool,
+        list_options: ListSnapshotLiteOption<'a>,
         min_snapshot_timestamp: Option<DateTime<Utc>>,
         status_callback: T,
-    ) -> Result<(Vec<TableSnapshotLite>, HashSet<Location>)>
+    ) -> Result<SnapshotLiteListExtended>
     where
         T: Fn(String),
     {
         let ctx = self.ctx.clone();
         let data_accessor = self.operator.clone();
 
-        // Get all file list.
+        // List all the snapshot file paths
+        // note that snapshot file paths of ongoing txs might be included
         let mut snapshot_files = vec![];
-        let mut segment_locations = HashSet::new();
+        let mut segment_location_with_index: HashMap<Location, HashSet<SnapshotId>> =
+            HashMap::new();
         if let Some(prefix) = Self::get_s3_prefix_from_file(&root_snapshot_file) {
-            snapshot_files = self.get_files(&prefix, limit, None).await?;
+            snapshot_files = self.list_files(&prefix, limit, None).await?;
         }
 
         // 1. Get all the snapshot by chunks.
@@ -151,14 +189,32 @@ impl SnapshotsIO {
 
             for snapshot in results.into_iter().flatten() {
                 if snapshot.timestamp > min_snapshot_timestamp {
+                    // filter out snapshots which have larger (artificial)timestamp , they are
+                    // not members of precedents of the current snapshot, whose timestamp is
+                    // min_snapshot_timestamp.
+                    //
+                    // NOTE: it is NOT the case that all those have lesser timestamp, are
+                    // members of precedents of the current snapshot, though.
                     continue;
                 }
                 let snapshot_lite = TableSnapshotLite::from(snapshot.as_ref());
+                let snapshot_id = snapshot_lite.snapshot_id;
                 snapshot_lites.push(snapshot_lite);
 
-                if with_segment_locations {
-                    for segment in &snapshot.segments {
-                        segment_locations.insert(segment.clone());
+                if let ListSnapshotLiteOption::NeedSegmentsWithExclusion(filter) = list_options {
+                    // collects segments, and the snapshots that reference them.
+                    for segment_location in &snapshot.segments {
+                        if let Some(excludes) = filter {
+                            if excludes.contains(segment_location) {
+                                continue;
+                            }
+                        }
+                        segment_location_with_index
+                            .entry(segment_location.clone())
+                            .and_modify(|v| {
+                                v.insert(snapshot_id);
+                            })
+                            .or_insert_with(|| HashSet::from_iter(vec![snapshot_id]));
                     }
                 }
             }
@@ -177,43 +233,53 @@ impl SnapshotsIO {
             }
         }
 
-        let mut snapshot_chain = vec![];
-        {
-            // 1 Get the root snapshot.
-            let root_snapshot = Self::read_snapshot(
-                root_snapshot_file.clone(),
-                self.format_version,
-                data_accessor.clone(),
-            )
-            .await?;
-            let root_snapshot_lite = TableSnapshotLite::from(root_snapshot.as_ref());
+        let root_snapshot = Self::read_snapshot(
+            root_snapshot_file.clone(),
+            self.format_version,
+            data_accessor.clone(),
+        )
+        .await?;
 
-            // 2. Chain the snapshots from root to the oldest.
-            let mut snapshot_map = HashMap::new();
-            for snapshot_lite in snapshot_lites {
-                snapshot_map.insert(snapshot_lite.snapshot_id, snapshot_lite);
-            }
+        let (chained_snapshot_lites, orphan_snapshot_lites) =
+            Self::chain_snapshots(snapshot_lites, &root_snapshot);
 
-            snapshot_chain.push(root_snapshot_lite.clone());
-            let mut prev_snapshot_id_tuple = root_snapshot_lite.prev_snapshot_id;
-            while let Some((prev_snapshot_id, _)) = prev_snapshot_id_tuple {
-                let prev_snapshot_lite = snapshot_map.get(&prev_snapshot_id);
-                match prev_snapshot_lite {
-                    None => {
-                        break;
-                    }
-                    Some(prev_snapshot) => {
-                        snapshot_chain.push(prev_snapshot.clone());
-                        prev_snapshot_id_tuple = prev_snapshot.prev_snapshot_id;
-                    }
+        Ok(SnapshotLiteListExtended {
+            chained_snapshot_lites,
+            segment_locations: segment_location_with_index,
+            orphan_snapshot_lites,
+        })
+    }
+
+    fn chain_snapshots(
+        snapshot_lites: Vec<TableSnapshotLite>,
+        root_snapshot: &TableSnapshot,
+    ) -> (Vec<TableSnapshotLite>, Vec<TableSnapshotLite>) {
+        let mut snapshot_map = HashMap::new();
+        let mut chained_snapshot_lites = vec![];
+        for snapshot_lite in snapshot_lites.into_iter() {
+            snapshot_map.insert(snapshot_lite.snapshot_id, snapshot_lite);
+        }
+        let root_snapshot_lite = TableSnapshotLite::from(root_snapshot);
+        let mut prev_snapshot_id_tuple = root_snapshot_lite.prev_snapshot_id;
+        chained_snapshot_lites.push(root_snapshot_lite);
+        while let Some((prev_snapshot_id, _)) = prev_snapshot_id_tuple {
+            let prev_snapshot_lite = snapshot_map.remove(&prev_snapshot_id);
+            match prev_snapshot_lite {
+                None => {
+                    break;
+                }
+                Some(prev_snapshot) => {
+                    prev_snapshot_id_tuple = prev_snapshot.prev_snapshot_id;
+                    chained_snapshot_lites.push(prev_snapshot);
                 }
             }
         }
-
-        Ok((snapshot_chain, segment_locations))
+        // remove root from orphan list
+        snapshot_map.remove(&root_snapshot.snapshot_id);
+        (chained_snapshot_lites, snapshot_map.into_values().collect())
     }
 
-    async fn get_files(
+    async fn list_files(
         &self,
         prefix: &str,
         limit: Option<usize>,
@@ -225,14 +291,14 @@ impl SnapshotsIO {
         let mut ds = data_accessor.object(prefix).list().await?;
         while let Some(de) = ds.try_next().await? {
             match de.mode().await? {
-                ObjectMode::FILE => {
-                    if exclude_file.is_some() && Some(de.path()) == exclude_file {
-                        continue;
+                ObjectMode::FILE => match exclude_file {
+                    Some(path) if de.path() == path => continue,
+                    _ => {
+                        let location = de.path().to_string();
+                        let modified = de.last_modified().await?;
+                        file_list.push((location, modified));
                     }
-                    let location = de.path().to_string();
-                    let modified = de.last_modified().await?;
-                    file_list.push((location, modified));
-                }
+                },
                 _ => {
                     warn!("found not snapshot file in {:}, found: {:?}", prefix, de);
                     continue;

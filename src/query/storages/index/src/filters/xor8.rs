@@ -32,7 +32,7 @@ use crate::SupportedType;
 ///
 /// When a filter is built, the source key set should be updated(by calling `add_keys()`), although Xor8 itself allows.
 pub struct Xor8Builder {
-    filter: Xor8,
+    builder: xorfilter::Xor8Builder,
 }
 
 pub struct Xor8Filter {
@@ -59,27 +59,27 @@ impl FilterBuilder for Xor8Builder {
     type Error = Xor8BuildingError;
 
     fn add_key<K: Hash>(&mut self, key: &K) {
-        self.filter.insert(key)
+        self.builder.insert(key)
     }
 
     fn add_keys<K: Hash>(&mut self, keys: &[K]) {
-        self.filter.populate(keys)
+        self.builder.populate(keys)
     }
 
     fn build(mut self) -> Result<Self::Filter, Self::Error> {
-        self.filter
+        let f = self
+            .builder
             .build()
             .map_err(|e| Xor8BuildingError::new(&e))?;
-        Ok(Xor8Filter {
-            filter: self.filter,
-        })
+
+        Ok(Xor8Filter { filter: f })
     }
 }
 
 impl Xor8Builder {
     pub fn create() -> Self {
         Xor8Builder {
-            filter: Xor8::default(),
+            builder: xorfilter::Xor8Builder::default(),
         }
     }
 }

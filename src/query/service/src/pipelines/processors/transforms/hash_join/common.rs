@@ -155,6 +155,14 @@ impl JoinHashTable {
                     column.clone()
                 } else if col.is_nullable() {
                     let col = col.as_nullable().unwrap();
+                    if col.is_empty() {
+                        (
+                            Value::Column(Column::Null {
+                                len: validity.len(),
+                            }),
+                            data_type.clone(),
+                        )
+                    }
                     // It's possible validity is longer than col.
                     let diff_len = validity.len() - col.validity.len();
                     let mut new_validity = MutableBitmap::with_capacity(validity.len());

@@ -34,7 +34,7 @@ runs:
 
     - name: Upload artifact to github
       if: steps.info.outputs.src == 'github'
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       with:
         name: ${{ inputs.profile }}-${{ inputs.sha }}-${{ inputs.target }}-${{ inputs.category }}
         path: ./target/${{ inputs.target }}/${{ inputs.profile }}/databend-*
@@ -46,3 +46,4 @@ runs:
         for line in $(ls ./target/${{ inputs.target }}/${{ inputs.profile }}/databend-*); do
           aws s3 cp $line s3://databend-ci/${{ inputs.profile }}/${{ inputs.sha }}/${{ inputs.target }}/${{ inputs.category }}/ --no-progress
         done
+        aws s3 cp ./target/${{ inputs.target }}/${{ inputs.profile }}/open-sharing s3://databend-ci/${{ inputs.profile }}/${{ inputs.sha }}/${{ inputs.target }}/${{ inputs.category }}/ --no-progress || true

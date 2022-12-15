@@ -13,11 +13,15 @@
 //  limitations under the License.
 
 #![allow(clippy::too_many_arguments)]
+mod analyze;
+mod clustering;
 mod commit;
+mod gc;
 mod mutation;
 mod navigate;
 mod optimize;
 mod purge_drop;
 mod purge_truncate;
 mod read_plan;
-mod table_statistics;
+mod table_analyze;
+mod truncate;

@@ -41,30 +41,46 @@ use rand::SeedableRng;
 ///   string of length 16 to 32: 123ns/key
 
 fn bench_u64(c: &mut Criterion) {
-    let col = rand_i64_column(1_000_000);
+    let block = rand_i64_block(1_000_000);
+    let column = block.try_column_by_name("a").unwrap();
+
+    let mut builder = Xor8Builder::create();
+    (0..column.len()).for_each(|i| builder.add_key(&column.get(i)));
+    let filter = builder.build().unwrap();
+
+    for i in 0..column.len() {
+        let key = column.get(i);
+        assert!(filter.contains(&key), "key {} present", key);
+    }
 
     c.bench_function("xor8_filter_u64_1m_rows_build_from_column_to_values", |b| {
         b.iter(|| {
             let mut builder = Xor8Builder::create();
-            col.iter().for_each(|v| {
-                builder.add_key(&v);
-            });
+            (0..column.len()).for_each(|i| builder.add_key(&column.get(i)));
             let _filter = criterion::black_box(builder.build().unwrap());
         })
     });
 }
 
 fn bench_string(c: &mut Criterion) {
-    let col = rand_str_column(1_000_000, 32);
+    let block = rand_str_block(1_000_000, 32);
+    let column = block.try_column_by_name("a").unwrap();
+
+    let mut builder = Xor8Builder::create();
+    (0..column.len()).for_each(|i| builder.add_key(&column.get(i)));
+    let filter = builder.build().unwrap();
+
+    for i in 0..column.len() {
+        let key = column.get(i);
+        assert!(filter.contains(&key), "key {} present", key);
+    }
 
     c.bench_function(
         "xor8_filter_string16to32_1m_rows_build_from_column_to_values",
         |b| {
             b.iter(|| {
                 let mut builder = Xor8Builder::create();
-                col.iter().for_each(|v| {
-                    builder.add_key(&v);
-                });
+                (0..column.len()).for_each(|i| builder.add_key(&column.get(i)));
                 let _filter = criterion::black_box(builder.build().unwrap());
             })
         },

@@ -18,7 +18,7 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::Bitmap;
-use common_base::base::ThreadPool;
+use common_base::runtime::ThreadPool;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use ordered_float::OrderedFloat;

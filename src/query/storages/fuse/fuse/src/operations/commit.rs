@@ -128,7 +128,7 @@ impl FuseTable {
                             tbl = FuseTable::try_from_table(latest.as_ref())?;
 
                             let keep_last_snapshot = true;
-                            if let Err(e) = tbl.do_gc(&ctx, keep_last_snapshot).await {
+                            if let Err(e) = tbl.do_purge(&ctx, keep_last_snapshot).await {
                                 // Errors of GC, if any, are ignored, since GC task can be picked up
                                 warn!(
                                     "GC of transient table not success (this is not a permanent error). the error : {}",

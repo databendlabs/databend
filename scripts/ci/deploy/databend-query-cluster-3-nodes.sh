@@ -30,11 +30,20 @@ echo 'Start Meta service HA cluster(3 nodes)...'
 nohup ./target/${BUILD_PROFILE}/databend-meta -c scripts/ci/deploy/config/databend-meta-node-1.toml &
 python3 scripts/ci/wait_tcp.py --timeout 10 --port 9191
 
+# wait for cluster formation to complete.
+sleep 1
+
 nohup ./target/${BUILD_PROFILE}/databend-meta -c scripts/ci/deploy/config/databend-meta-node-2.toml &
 python3 scripts/ci/wait_tcp.py --timeout 10 --port 28202
 
+# wait for cluster formation to complete.
+sleep 1
+
 nohup ./target/${BUILD_PROFILE}/databend-meta -c scripts/ci/deploy/config/databend-meta-node-3.toml &
 python3 scripts/ci/wait_tcp.py --timeout 10 --port 28302
+
+# wait for cluster formation to complete.
+sleep 1
 
 echo 'Start databend-query node-1'
 env "RUST_BACKTRACE=1" nohup target/${BUILD_PROFILE}/databend-query -c scripts/ci/deploy/config/databend-query-node-1.toml &

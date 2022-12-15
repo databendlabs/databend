@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod fast_read_text_ext;
 mod read_bytes_ext;
 mod read_datetime_ext;
 mod read_number_ext;

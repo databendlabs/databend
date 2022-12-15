@@ -18,7 +18,7 @@ use std::alloc::Layout;
 use std::alloc::System;
 use std::ptr::NonNull;
 
-use crate::base::ThreadTracker;
+use crate::runtime::ThreadTracker;
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct SystemAllocator;

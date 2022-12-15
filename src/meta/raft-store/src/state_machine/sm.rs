@@ -95,11 +95,11 @@ const TREE_STATE_MACHINE: &str = "state_machine";
 
 /// StateMachine subscriber trait
 pub trait StateMachineSubscriber: Debug + Sync + Send {
-    fn kv_changed(&self, key: &str, prev: Option<SeqV>, current: Option<SeqV>);
+    fn kv_changed(&self, change: Change<Vec<u8>, String>);
 }
 
 /// The state machine of the `MemStore`.
-/// It includes user data and two raft-related informations:
+/// It includes user data and two raft-related information:
 /// `last_applied_logs` and `client_serial_responses` to achieve idempotence.
 #[derive(Debug)]
 pub struct StateMachine {
@@ -342,9 +342,7 @@ impl StateMachine {
         // Send queued change events to subscriber
         if let Some(subscriber) = &self.subscriber {
             for event in changes {
-                // TODO: use Change as the event data type.
-                // safe unwrap
-                subscriber.kv_changed(&event.ident.unwrap(), event.prev, event.result);
+                subscriber.kv_changed(event);
             }
         }
 
@@ -638,17 +636,15 @@ impl StateMachine {
         if let Some(kv_pairs) = kv_pairs {
             if let Some(kv_pairs) = kv_pairs.get(delete_by_prefix) {
                 for (key, _seq) in kv_pairs.iter() {
-                    // TODO: return StorageError
-                    let ret = Self::txn_upsert_kv(txn_tree, &UpsertKV::delete(key), log_time_ms);
+                    let (expired, prev, res) =
+                        Self::txn_upsert_kv(txn_tree, &UpsertKV::delete(key), log_time_ms)?;
 
-                    if let Ok(ret) = ret {
-                        count += 1;
+                    count += 1;
 
-                        if ret.0.is_some() {
-                            txn_tree.push_change(key, ret.0.clone(), None);
-                        }
-                        txn_tree.push_change(key, ret.1.clone(), ret.2);
+                    if expired.is_some() {
+                        txn_tree.push_change(key, expired, None);
                     }
+                    txn_tree.push_change(key, prev, res);
                 }
             }
         }
@@ -1046,7 +1042,7 @@ impl StateMachine {
         sm_nodes.range_values(..)
     }
 
-    /// Expire an `SeqV` and returns:
+    /// Expire an `SeqV` and returns the value discarded by expiration and the unexpired value:
     /// - `(Some, None)` if it expires.
     /// - `(None, Some)` if it does not.
     /// - `(None, None)` if the input is None.
@@ -1062,32 +1058,6 @@ impl StateMachine {
             }
         } else {
             (None, None)
-        }
-    }
-
-    pub fn unexpired<V: Debug>(seq_value: SeqV<V>, log_time_ms: u64) -> Option<SeqV<V>> {
-        // Caveat: The cleanup must be consistent across raft nodes:
-        //         A conditional update, e.g. an upsert_kv() with MatchSeq::Eq(some_value),
-        //         must be applied with the same timestamp on every raft node.
-        //         Otherwise: node-1 could have applied a log with a ts that is smaller than value.expire_at,
-        //         while node-2 may fail to apply the same log if it use a greater ts > value.expire_at.
-        //
-        // Thus:
-        //
-        // 1. A raft log must have a field ts assigned by the leader. When applying, use this ts to
-        //    check against expire_at to decide whether to purge it.
-        // 2. A GET operation must not purge any expired entry. Since a GET is only applied to a node itself.
-        // 3. The background task can only be triggered by the raft leader, by submit a "clean expired" log.
-
-        // TODO(xp): background task to clean expired
-        // TODO(xp): maybe it needs a expiration queue for efficient cleaning up.
-
-        debug!("seq_value: {:?} log_time_ms: {}", seq_value, log_time_ms);
-
-        if seq_value.get_expire_at() < log_time_ms {
-            None
-        } else {
-            Some(seq_value)
         }
     }
 }

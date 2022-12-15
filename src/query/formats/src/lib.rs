@@ -29,5 +29,6 @@ pub use field_decoder::*;
 pub use file_format_type::parse_timezone;
 pub use file_format_type::FileFormatOptionsExt;
 pub use file_format_type::FileFormatTypeExt;
+pub use format_option_checker::check_record_delimiter;
 
 use crate::common_settings::CommonSettings;

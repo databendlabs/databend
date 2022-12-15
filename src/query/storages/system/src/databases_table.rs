@@ -14,6 +14,8 @@
 
 use std::sync::Arc;
 
+use common_catalog::catalog::Catalog;
+use common_catalog::catalog::CatalogManager;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
@@ -48,13 +50,21 @@ impl AsyncSystemTable for DatabasesTable {
 
     async fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<Chunk> {
         let tenant = ctx.get_tenant();
-        let catalog = ctx.get_catalog(ctx.get_current_catalog().as_str())?;
-        let databases = catalog.list_databases(tenant.as_str()).await?;
-
-        let db_names: Vec<Vec<u8>> = databases
+        let catalogs = CatalogManager::instance();
+        let catalogs: Vec<(String, Arc<dyn Catalog>)> = catalogs
+            .catalogs
             .iter()
-            .map(|database| database.name().as_bytes().to_vec())
+            .map(|e| (e.key().clone(), e.value().clone()))
             .collect();
+        let mut db_names = vec![];
+        for (ctl_name, catalog) in catalogs.into_iter() {
+            let databases = catalog.list_databases(tenant.as_str()).await?;
+
+            for db in databases {
+                let db_name = db.name().to_string().into_bytes();
+                db_names.push(db_name);
+            }
+        }
 
         let rows_len = db_names.len();
         Ok(Chunk::new_from_sequence(

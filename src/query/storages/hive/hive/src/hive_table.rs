@@ -79,10 +79,7 @@ impl HiveTable {
         let storage_params = table_info.meta.storage_params.clone();
         let dal = match storage_params {
             Some(sp) => init_operator(&sp)?,
-            None => {
-                let op = &*(DataOperator::instance());
-                op.clone()
-            }
+            None => DataOperator::instance().operator(),
         };
 
         Ok(HiveTable {
@@ -532,7 +529,7 @@ impl Table for HiveTable {
         )))
     }
 
-    async fn optimize(&self, _ctx: Arc<dyn TableContext>, _keep_last_snapshot: bool) -> Result<()> {
+    async fn purge(&self, _ctx: Arc<dyn TableContext>, _keep_last_snapshot: bool) -> Result<()> {
         Ok(())
     }
 

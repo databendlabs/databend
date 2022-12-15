@@ -26,11 +26,9 @@ use common_expression::DataSchemaRefExt;
 use common_expression::TableDataType;
 use common_expression::Value;
 use common_storages_table_meta::meta::TableSnapshotLite;
-use futures::stream::StreamExt;
-use futures::stream::TryStreamExt;
 
-use crate::io::MetaReaders;
-use crate::io::SnapshotHistoryReader;
+use crate::io::ListSnapshotLiteOption;
+use crate::io::SnapshotLiteListExtended;
 use crate::io::SnapshotsIO;
 use crate::io::TableMetaLocationGenerator;
 use crate::sessions::TableContext;
@@ -57,42 +55,37 @@ impl<'a> FuseSnapshot<'a> {
                 self.table.operator.clone(),
                 snapshot_version,
             );
-            let snapshot_lite = match limit {
-                None => {
-                    // Use SnapshotIO only if limitation is None.
-                    //
-                    // SnapshotsIO lists snapshots from object storage, if we limit the number of
-                    // items being list , there might be the case that the snapshots returned
-                    // can not be chained together.
-                    let (snapshots, _) = snapshots_io
-                        .read_snapshot_lites(
-                            snapshot_location,
-                            None,
-                            false,
-                            snapshot.and_then(|s| s.timestamp),
-                            &|_| {},
-                        )
-                        .await?;
-                    Ok(snapshots)
-                }
-                Some(l) => {
-                    // SnapshotHistoryReader (which TableSnapshotReader impls) traverses the history
-                    // of snapshot sequentially, by using the TableSnapshot::prev_snapshot_id, which
-                    // guarantees the snapshot returned can be chained together
-                    let table_snapshot_reader = MetaReaders::table_snapshot_reader(
-                        self.ctx.get_data_operator()?.operator(),
-                    );
-                    table_snapshot_reader
-                        .snapshot_history(
-                            snapshot_location,
-                            snapshot_version,
-                            meta_location_generator.clone(),
-                        )
-                        .map_ok(|snapshot| TableSnapshotLite::from(snapshot.as_ref()))
-                        .take(l)
-                        .try_collect::<Vec<_>>()
-                        .await
-                }
+            let snapshot_lite = if limit.is_none() {
+                // Use SnapshotsIO::read_snapshot_lites only if limit is None
+                //
+                // SnapshotsIO::read_snapshot lists snapshots from object storage, taking limit into
+                // account, BEFORE the snapshots are chained, so there might be the case that although
+                // there are more than limited number of snapshots could be chained, the number of
+                // snapshots returned is lesser.
+                let SnapshotLiteListExtended {
+                    chained_snapshot_lites,
+                    ..
+                } = snapshots_io
+                    .read_snapshot_lites_ext(
+                        snapshot_location,
+                        None,
+                        ListSnapshotLiteOption::NeedNotSegments,
+                        snapshot.and_then(|s| s.timestamp),
+                        &|_| {},
+                    )
+                    .await?;
+                Ok(chained_snapshot_lites)
+            } else {
+                // SnapshotsIO::read_chained_snapshot_lists traverses the history of snapshot sequentially, by using the
+                // TableSnapshot::prev_snapshot_id, which guarantees that the number of snapshot
+                // returned is as expected
+                snapshots_io
+                    .read_chained_snapshot_lites(
+                        meta_location_generator.clone(),
+                        snapshot_location,
+                        limit,
+                    )
+                    .await
             }?;
 
             return self.to_block(&meta_location_generator, &snapshot_lite, snapshot_version);

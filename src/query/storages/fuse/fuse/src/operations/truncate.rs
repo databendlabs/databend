@@ -41,7 +41,8 @@ impl FuseTable {
                 Default::default(),
                 vec![],
                 self.cluster_key_meta.clone(),
-                prev_snapshot.table_statistics_location.clone(),
+                // truncate MUST reset ts location
+                None,
             );
             let loc = self.meta_location_generator();
             let new_snapshot_loc =
@@ -51,7 +52,7 @@ impl FuseTable {
 
             if purge {
                 let keep_last_snapshot = false;
-                self.do_gc(&ctx, keep_last_snapshot).await?
+                self.do_purge(&ctx, keep_last_snapshot).await?
             }
 
             let mut new_table_meta = self.table_info.meta.clone();

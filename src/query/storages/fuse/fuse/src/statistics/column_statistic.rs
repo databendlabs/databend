@@ -12,6 +12,8 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::collections::HashMap;
+
 use common_exception::Result;
 use common_expression::types::nullable::NullableColumn;
 use common_expression::types::AnyType;
@@ -45,18 +47,23 @@ pub fn calc_column_distinct_of_values(
     Ok(col[0])
 }
 
-pub fn get_traverse_columns_dfs(data_block: &Chunk) -> Result<Vec<(Value<AnyType>, DataType)>> {
+pub fn get_traverse_columns_dfs(
+    data_block: &Chunk,
+) -> Result<Vec<(Option<usize>, Value<AnyType>, DataType)>> {
     traverse::traverse_columns_dfs(data_block.columns())
 }
 
-pub fn gen_columns_statistics(chunk: &Chunk) -> Result<StatisticsOfColumns> {
+pub fn gen_columns_statistics(
+    chunk: &Chunk,
+    column_distinct_count: Option<HashMap<usize, usize>>,
+) -> Result<StatisticsOfColumns> {
     let mut statistics = StatisticsOfColumns::new();
     let chunk = chunk.convert_to_full();
     let rows = chunk.num_rows();
 
     let leaves = traverse::traverse_columns_dfs(chunk.columns())?;
 
-    for (idx, (col, data_type)) in leaves.iter().enumerate() {
+    for (idx, (col_idx, col, data_type)) in leaves.iter().enumerate() {
         if !MinMaxIndex::is_supported_type(data_type) {
             continue;
         }
@@ -99,6 +106,25 @@ pub fn gen_columns_statistics(chunk: &Chunk) -> Result<StatisticsOfColumns> {
             0
         };
 
+        // use distinct count calculated by the xor hash function to avoid repetitive operation.
+        let distinct_of_values = match (col_idx, &column_distinct_count) {
+            (Some(col_idx), Some(ref column_distinct_count)) => {
+                if let Some(value) = column_distinct_count.get(col_idx) {
+                    *value as u64
+                } else {
+                    calc_column_distinct_of_values(col, column_field)?
+                }
+            }
+            (_, _) => calc_column_distinct_of_values(col, column_field)?,
+        };
+
+        let (is_all_null, bitmap) = col.validity();
+        let unset_bits = match (is_all_null, bitmap) {
+            (true, _) => rows,
+            (false, Some(bitmap)) => bitmap.unset_bits(),
+            (false, None) => 0,
+        };
+
         let distinct_of_values = calc_column_distinct_of_values(col, data_type, rows)?;
 
         let in_memory_size = col.memory_size() as u64;
@@ -126,19 +152,20 @@ pub mod traverse {
     // traverses columns and collects the leaves in depth first manner
     pub fn traverse_columns_dfs(
         columns: &[(Value<AnyType>, DataType)],
-    ) -> Result<Vec<(Value<AnyType>, DataType)>> {
+    ) -> Result<Vec<(Option<usize>, Value<AnyType>, DataType)>> {
         let mut leaves = vec![];
-        for (value, data_type) in columns {
+        for (idx, (value, data_type)) in columns.iter().enumerate() {
             let column = value.as_column().unwrap();
-            traverse_recursive(column, data_type, &mut leaves)?;
+            traverse_recursive(Some(idx), column, data_type, &mut leaves)?;
         }
         Ok(leaves)
     }
 
     fn traverse_recursive(
+        idx: Option<usize>,
         column: &Column,
         data_type: &DataType,
-        leaves: &mut Vec<(Value<AnyType>, DataType)>,
+        leaves: &mut Vec<(Option<usize>, Value<AnyType>, DataType)>,
     ) -> Result<()> {
         match data_type {
             DataType::Tuple(inner_data_types) => {
@@ -146,11 +173,11 @@ pub mod traverse {
                 for (inner_column, inner_data_type) in
                     inner_columns.iter().zip(inner_data_types.iter())
                 {
-                    traverse_recursive(inner_column, inner_data_type, leaves)?;
+                    traverse_recursive(None, inner_column, inner_data_type, leaves)?;
                 }
             }
             _ => {
-                leaves.push((Value::Column(column.clone()), data_type.clone()));
+                leaves.push((idx, Value::Column(column.clone()), data_type.clone()));
             }
         }
         Ok(())

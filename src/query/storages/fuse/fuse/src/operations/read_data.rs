@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_base::base::Runtime;
+use common_base::runtime::Runtime;
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;

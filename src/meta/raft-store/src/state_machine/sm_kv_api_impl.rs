@@ -75,13 +75,10 @@ impl KVApi for StateMachine {
         // TODO(xp) refine get(): a &str is enough for key
         let sv = self.kvs().get(&key.to_string())?;
         debug!("get_kv sv:{:?}", sv);
-        let seq_v = match sv {
-            None => return Ok(None),
-            Some(sv) => sv,
-        };
 
         let local_now_ms = SeqV::<()>::now_ms();
-        Ok(Self::unexpired(seq_v, local_now_ms))
+        let (_expired, res) = Self::expire_seq_v(sv, local_now_ms);
+        Ok(res)
     }
 
     async fn mget_kv(&self, keys: &[String]) -> Result<MGetKVReply, KVAppError> {
@@ -111,7 +108,7 @@ impl KVApi for StateMachine {
         let local_now_ms = SeqV::<()>::now_ms();
 
         // Convert expired to None
-        let x = x.map(|(k, v)| (k, Self::unexpired(v, local_now_ms)));
+        let x = x.map(|(k, v)| (k, Self::expire_seq_v(Some(v), local_now_ms).1));
         // Remove None
         let x = x.filter(|(_k, v)| v.is_some());
         // Extract from an Option

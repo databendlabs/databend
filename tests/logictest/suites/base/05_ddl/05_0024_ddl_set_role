@@ -1,12 +1,6 @@
 statement ok
 CREATE ROLE IF NOT EXISTS 'test-s'
 
-statement query T
-SELECT current_role()
-
-----
-account_admin
-
 onlyif mysql
 statement ok
 SET ROLE 'test-s'

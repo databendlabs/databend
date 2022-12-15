@@ -1,3 +1,9 @@
+statement ok
+unset max_threads;
+
+statement ok
+unset max_memory_usage;
+
 statement query B
 select value=default from system.settings where name in ('max_threads', 'max_memory_usage') order by name;
 

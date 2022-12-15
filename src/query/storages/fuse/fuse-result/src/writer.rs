@@ -105,7 +105,7 @@ impl ResultTableWriter {
     pub async fn append_block(&mut self, chunk: Chunk) -> Result<PartInfoPtr> {
         let location = self.locations.gen_block_location();
         let mut data = Vec::with_capacity(100 * 1024 * 1024);
-        let block_statistics = BlockStatistics::from(&chunk, location.clone(), None)?;
+        let block_statistics = BlockStatistics::from(&chunk, location.clone(), None, None)?;
         let (size, meta_data) = serialize_chunks(vec![chunk], &self.schema, &mut data)?;
 
         let object = self.data_accessor.object(&location);

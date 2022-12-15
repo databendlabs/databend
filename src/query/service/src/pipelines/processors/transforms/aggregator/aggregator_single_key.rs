@@ -18,7 +18,7 @@ use std::sync::Arc;
 use std::vec;
 
 use bumpalo::Bump;
-use common_base::base::ThreadPool;
+use common_base::runtime::ThreadPool;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::string::StringColumnBuilder;

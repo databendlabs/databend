@@ -130,6 +130,19 @@ pub enum OptimizeTableAction {
     CompactSegments(Option<usize>),
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AnalyzeTablePlan {
+    pub catalog: String,
+    pub database: String,
+    pub table: String,
+}
+
+impl AnalyzeTablePlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
+}
+
 /// Rename.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RenameTablePlan {

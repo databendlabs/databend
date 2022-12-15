@@ -108,3 +108,30 @@ fn test_data_block_nullable() -> Result<()> {
 fn test_data_block_not_nullable() -> Result<()> {
     test_data_block(false)
 }
+
+#[test]
+fn test_field_delimiter_with_ascii_control_code() -> Result<()> {
+    let block = get_simple_block(false)?;
+    let schema = block.schema().clone();
+
+    let settings = Settings::default_settings("default")?;
+    settings.set_settings(
+        "format_record_delimiter".to_string(),
+        "\r\n".to_string(),
+        false,
+    )?;
+    settings.set_settings(
+        "format_field_delimiter".to_string(),
+        "\x01".to_string(),
+        false,
+    )?;
+
+    let mut formatter = get_output_format_clickhouse_with_setting("csv", schema, &settings)?;
+    let buffer = formatter.serialize_block(&block)?;
+
+    let csv_block = String::from_utf8(buffer)?;
+    let expect = "1\x01\"a\"\x01true\x011.1\x01\"1970-01-02\"\r\n2\x01\"b\"\"\"\x01true\x012.2\x01\"1970-01-03\"\r\n3\x01\"c'\"\x01false\x01NaN\x01\"1970-01-04\"\r\n";
+    assert_eq!(&csv_block, expect);
+
+    Ok(())
+}

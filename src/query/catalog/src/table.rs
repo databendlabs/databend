@@ -35,7 +35,6 @@ use crate::plan::DataSourceInfo;
 use crate::plan::DataSourcePlan;
 use crate::plan::PartStatistics;
 use crate::plan::Partitions;
-use crate::plan::Projection;
 use crate::plan::PushDownInfo;
 use crate::table::column_stats_provider_impls::DummyColumnStatisticsProvider;
 use crate::table_context::TableContext;
@@ -195,13 +194,13 @@ pub trait Table: Sync + Send {
         Ok(())
     }
 
-    async fn optimize(&self, ctx: Arc<dyn TableContext>, keep_last_snapshot: bool) -> Result<()> {
+    async fn purge(&self, ctx: Arc<dyn TableContext>, keep_last_snapshot: bool) -> Result<()> {
         let (_, _) = (ctx, keep_last_snapshot);
 
         Ok(())
     }
 
-    async fn statistic(&self, ctx: Arc<dyn TableContext>) -> Result<()> {
+    async fn analyze(&self, ctx: Arc<dyn TableContext>) -> Result<()> {
         let _ = ctx;
 
         Ok(())
@@ -228,10 +227,11 @@ pub trait Table: Sync + Send {
     async fn delete(
         &self,
         ctx: Arc<dyn TableContext>,
-        projection: &Projection,
-        selection: &Option<String>,
+        filter: Option<Expression>,
+        col_indices: Vec<usize>,
+        pipeline: &mut Pipeline,
     ) -> Result<()> {
-        let (_, _, _) = (ctx, projection, selection);
+        let (_, _, _, _) = (ctx, filter, col_indices, pipeline);
 
         Err(ErrorCode::Unimplemented(format!(
             "table {},  of engine type {}, does not support DELETE FROM",

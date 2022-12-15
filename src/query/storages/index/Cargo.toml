@@ -24,7 +24,7 @@ common-storages-table-meta = { path = "../table-meta" }
 
 xorfilter-rs = { git = "https://github.com/datafuse-extras/xorfilter", features = [
     "cbordata",
-], tag = "databend-alpha.1" }
+], tag = "databend-alpha.4" }
 
 anyerror = { workspace = true }
 cbordata = { version = "0.6.0" }

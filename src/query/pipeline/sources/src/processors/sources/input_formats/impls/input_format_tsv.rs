@@ -38,6 +38,7 @@ pub struct InputFormatTSV {}
 impl InputFormatTSV {
     #[allow(clippy::too_many_arguments)]
     fn read_row(
+        field_delimiter: u8,
         field_decoder: &FieldDecoderTSV,
         buf: &[u8],
         deserializers: &mut Vec<Box<dyn TypeDeserializer>>,
@@ -53,9 +54,49 @@ impl InputFormatTSV {
         let mut pos = 0;
         let mut err_msg = None;
         let buf_len = buf.len();
-
         todo!("expression");
 
+        while pos <= buf_len {
+            if pos == buf_len || buf[pos] == field_delimiter {
+                let col_data = &buf[field_start..pos];
+                if col_data.is_empty() {
+                    deserializers[column_index].de_default();
+                } else {
+                    let mut reader = Cursor::new(col_data);
+                    reader.ignores(|c: u8| c == b' ');
+                    if let Err(e) = field_decoder.read_field(
+                        &mut deserializers[column_index],
+                        &mut reader,
+                        true,
+                    ) {
+                        err_msg = Some(format_column_error(
+                            schema,
+                            column_index,
+                            col_data,
+                            &e.message(),
+                        ));
+                        break;
+                    };
+                    reader.ignore_white_spaces();
+                    if reader.must_eof().is_err() {
+                        err_msg = Some(format_column_error(
+                            schema,
+                            column_index,
+                            col_data,
+                            "bad field end",
+                        ));
+                        break;
+                    }
+                }
+                column_index += 1;
+                field_start = pos + 1;
+                if column_index > num_columns {
+                    err_msg = Some("too many columns".to_string());
+                    break;
+                }
+            }
+            pos += 1;
+        }
         if err_msg.is_none() && column_index < num_columns {
             // todo(youngsofun): allow it optionally (set default)
             err_msg = Some(format!(
@@ -119,6 +160,7 @@ impl InputFormatTextBase for InputFormatTSV {
         for (i, end) in batch.row_ends.iter().enumerate() {
             let buf = &batch.data[start..*end]; // include \n
             Self::read_row(
+                builder.ctx.field_delimiter,
                 field_decoder,
                 buf,
                 columns,

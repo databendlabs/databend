@@ -12,6 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+mod analyze;
 mod append;
 mod commit;
 mod compact;
@@ -24,7 +25,6 @@ mod operation_log;
 mod read_data;
 mod read_partitions;
 mod recluster;
-mod statistic;
 mod truncate;
 
 mod fuse_source;
@@ -32,11 +32,10 @@ mod revert;
 pub mod util;
 
 pub use compact::CompactOptions;
+pub use fuse_sink::BloomIndexState;
 pub use fuse_sink::FuseTableSink;
 pub use fuse_source::FuseTableSource;
 pub use fuse_source::State;
-pub use mutation::delete_from_block;
-pub use mutation::DeletionMutator;
 pub use mutation::ReclusterMutator;
 pub use mutation::SegmentCompactMutator;
 pub use mutation::SegmentCompactionState;

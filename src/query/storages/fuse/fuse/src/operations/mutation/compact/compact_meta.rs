@@ -31,7 +31,7 @@ pub struct CompactSourceMeta {
     pub tasks: VecDeque<CompactTask>,
 }
 
-#[typetag::serde(name = "compact_source_info")]
+#[typetag::serde(name = "compact_source_meta")]
 impl ChunkMetaInfo for CompactSourceMeta {
     fn as_any(&self) -> &dyn Any {
         self
@@ -68,7 +68,7 @@ pub struct CompactSinkMeta {
     pub abort_operation: AbortOperation,
 }
 
-#[typetag::serde(name = "compact_sink_info")]
+#[typetag::serde(name = "compact_sink_meta")]
 impl ChunkMetaInfo for CompactSinkMeta {
     fn as_any(&self) -> &dyn Any {
         self

@@ -35,7 +35,7 @@ test_format() {
 
 	echo "truncate table test_load_unload" | $MYSQL_CLIENT_CONNECT
 
-	curl -sH "insert_sql:insert into test_load_unload format ${1}" \
+	curl -sH "insert_sql:insert into test_load_unload file_format = (type = '${1}')" \
 	-F "upload=@/tmp/test_load_unload.txt" \
 	-u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" | grep -c "SUCCESS"
 

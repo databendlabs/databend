@@ -20,6 +20,7 @@ use common_ast::ast::CopyStmt;
 use common_ast::ast::CopyUnit;
 use common_ast::ast::Query;
 use common_ast::ast::Statement;
+use common_ast::ast::UriLocation;
 use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
 use common_ast::Backtrace;
@@ -32,15 +33,13 @@ use common_catalog::table_context::TableContext;
 use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_io::prelude::parse_escape_string;
 use common_meta_types::FileFormatOptions;
 use common_meta_types::StageFileFormatType;
 use common_meta_types::UserStageInfo;
-use common_storage::parse_uri_location;
-use common_storage::UriLocation;
 use common_users::UserApiProvider;
 use tracing::debug;
 
+use crate::binder::location::parse_uri_location;
 use crate::binder::Binder;
 use crate::normalize_identifier;
 use crate::plans::CopyPlanV2;
@@ -611,54 +610,47 @@ pub fn parse_copy_file_format_options(
         .parse::<u64>()?;
 
     // Field delimiter.
-    let field_delimiter = parse_escape_string(
-        file_format_options
-            .get("field_delimiter")
-            .unwrap_or(&"".to_string())
-            .as_bytes(),
-    );
+    let field_delimiter = file_format_options
+        .get("field_delimiter")
+        .unwrap_or(&"".to_string())
+        .to_string();
 
     // Record delimiter.
-    let record_delimiter = parse_escape_string(
-        file_format_options
-            .get("record_delimiter")
-            .unwrap_or(&"".to_string())
-            .as_bytes(),
-    );
+    let record_delimiter = file_format_options
+        .get("record_delimiter")
+        .unwrap_or(&"".to_string())
+        .to_string();
 
     // NaN display.
-    let nan_display = parse_escape_string(
-        file_format_options
-            .get("nan_display")
-            .unwrap_or(&"".to_string())
-            .as_bytes(),
-    );
+    let nan_display = file_format_options
+        .get("nan_display")
+        .unwrap_or(&"".to_string())
+        .to_string();
 
     // Escape
-    let escape = parse_escape_string(
-        file_format_options
-            .get("escape")
-            .unwrap_or(&"".to_string())
-            .as_bytes(),
-    );
+    let escape = file_format_options
+        .get("escape")
+        .unwrap_or(&"".to_string())
+        .to_string();
 
     // Compression delimiter.
-    let compression = parse_escape_string(
-        file_format_options
-            .get("compression")
-            .unwrap_or(&"none".to_string())
-            .as_bytes(),
-    )
-    .parse()
-    .map_err(ErrorCode::UnknownCompressionType)?;
+    let compression = file_format_options
+        .get("compression")
+        .unwrap_or(&"none".to_string())
+        .parse()
+        .map_err(ErrorCode::UnknownCompressionType)?;
 
     // Row tag in xml.
-    let row_tag = parse_escape_string(
-        file_format_options
-            .get("row_tag")
-            .unwrap_or(&"".to_string())
-            .as_bytes(),
-    );
+    let row_tag = file_format_options
+        .get("row_tag")
+        .unwrap_or(&"".to_string())
+        .to_string();
+
+    // Quote in csv.
+    let quote = file_format_options
+        .get("quote")
+        .unwrap_or(&"".to_string())
+        .to_string();
 
     Ok(FileFormatOptions {
         format: file_format,
@@ -669,5 +661,6 @@ pub fn parse_copy_file_format_options(
         escape,
         compression,
         row_tag,
+        quote,
     })
 }

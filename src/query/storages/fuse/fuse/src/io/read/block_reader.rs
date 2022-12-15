@@ -428,6 +428,9 @@ impl BlockReader {
                 Err(ErrorCode::StorageOther(err_msg))
             }
             Compression::Lz4Raw => Ok(ParquetCompression::Lz4Raw),
+            Compression::Snappy => Ok(ParquetCompression::Snappy),
+            Compression::Zstd => Ok(ParquetCompression::Zstd),
+            Compression::Gzip => Ok(ParquetCompression::Gzip),
         }
     }
 

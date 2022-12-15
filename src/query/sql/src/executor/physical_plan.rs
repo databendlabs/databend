@@ -427,6 +427,25 @@ impl PhysicalPlan {
         }
     }
 
+    pub fn name(&self) -> String {
+        match self {
+            PhysicalPlan::TableScan(_) => "TableScan".to_string(),
+            PhysicalPlan::Filter(_) => "Filter".to_string(),
+            PhysicalPlan::Project(_) => "Project".to_string(),
+            PhysicalPlan::EvalScalar(_) => "EvalScalar".to_string(),
+            PhysicalPlan::AggregatePartial(_) => "AggregatePartial".to_string(),
+            PhysicalPlan::AggregateFinal(_) => "AggregateFinal".to_string(),
+            PhysicalPlan::Sort(_) => "Sort".to_string(),
+            PhysicalPlan::Limit(_) => "Limit".to_string(),
+            PhysicalPlan::HashJoin(_) => "HashJoin".to_string(),
+            PhysicalPlan::Exchange(_) => "Exchange".to_string(),
+            PhysicalPlan::UnionAll(_) => "UnionAll".to_string(),
+            PhysicalPlan::DistributedInsertSelect(_) => "DistributedInsertSelect".to_string(),
+            PhysicalPlan::ExchangeSource(_) => "Exchange Source".to_string(),
+            PhysicalPlan::ExchangeSink(_) => "Exchange Sink".to_string(),
+        }
+    }
+
     pub fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a PhysicalPlan> + 'a> {
         match self {
             PhysicalPlan::TableScan(_) => Box::new(std::iter::empty()),

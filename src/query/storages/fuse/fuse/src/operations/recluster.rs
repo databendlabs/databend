@@ -36,6 +36,7 @@ use common_storages_table_meta::meta::BlockMeta;
 use crate::operations::FuseTableSink;
 use crate::operations::ReadDataKind;
 use crate::operations::ReclusterMutator;
+use crate::pipelines::Pipeline;
 use crate::pruning::BlockPruner;
 use crate::FuseTable;
 use crate::TableMutator;
@@ -82,7 +83,7 @@ impl FuseTable {
                     blocks_map
                         .entry(stats.level)
                         .or_default()
-                        .push((*idx, b.clone()));
+                        .push((idx.0, b.clone()));
                 }
             }
         });
