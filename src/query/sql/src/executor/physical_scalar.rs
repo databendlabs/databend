@@ -15,22 +15,18 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use common_datavalues::format_data_type_sql;
-use common_datavalues::DataTypeImpl;
-use common_datavalues::DataValue;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::DataSchema;
 use common_expression::Literal;
 
-type ColumnID = String;
 type IndexType = usize;
 
 /// Serializable and desugared representation of `Scalar`.
 #[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum PhysicalScalar {
     IndexedVariable {
-        index: usize,
+        index: IndexType,
         data_type: DataType,
 
         display_name: String,
@@ -73,11 +69,9 @@ impl PhysicalScalar {
                     .join(", ");
                 format!("{}({})", name, args)
             }
-            PhysicalScalar::Cast { input, target } => format!(
-                "CAST({} AS {})",
-                input.pretty_display(),
-                format_data_type_sql(target)
-            ),
+            PhysicalScalar::Cast { input, target } => {
+                format!("CAST({} AS {})", input.pretty_display(), target.sql_name(),)
+            }
             PhysicalScalar::IndexedVariable { display_name, .. } => display_name.clone(),
         }
     }
@@ -97,7 +91,7 @@ impl Display for PhysicalScalar {
                     .join(", ")
             ),
             PhysicalScalar::Cast { input, target } => {
-                write!(f, "CAST({} AS {})", input, format_data_type_sql(target))
+                write!(f, "CAST({} AS {})", input, target.sql_name())
             }
             PhysicalScalar::IndexedVariable { index, .. } => write!(f, "${index}"),
         }
@@ -107,11 +101,7 @@ impl Display for PhysicalScalar {
 #[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct AggregateFunctionDesc {
     pub sig: AggregateFunctionSignature,
-    pub column_id: ColumnID,
-    pub args: Vec<usize>,
-
-    /// Only used for debugging
-    pub arg_indices: Vec<IndexType>,
+    pub args: Vec<IndexType>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -126,5 +116,5 @@ pub struct AggregateFunctionSignature {
 pub struct SortDesc {
     pub asc: bool,
     pub nulls_first: bool,
-    pub order_by: ColumnID,
+    pub order_by: IndexType,
 }

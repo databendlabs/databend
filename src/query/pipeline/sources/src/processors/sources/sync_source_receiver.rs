@@ -43,11 +43,14 @@ impl SyncReceiverSource {
 impl SyncSource for SyncReceiverSource {
     const NAME: &'static str = "SyncReceiverSource";
 
-    fn generate(&mut self) -> Result<Option<Chunk<String>>> {
+    fn generate(&mut self) -> Result<Option<Chunk>> {
         match self.receiver.blocking_recv() {
             None => Ok(None),
             Some(Err(cause)) => Err(cause),
-            Some(Ok(chunk)) => Ok(Some(chunk)),
+            Some(Ok(chunk)) => {
+                todo!("expression");
+                // Ok(Some(chunk))
+            }
         }
     }
 }

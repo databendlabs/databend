@@ -20,8 +20,6 @@ use common_ast::ast::Join;
 use common_ast::ast::JoinCondition;
 use common_ast::ast::JoinOperator;
 use common_catalog::table_context::TableContext;
-use common_datavalues::type_coercion::compare_coercion;
-use common_datavalues::wrap_nullable;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::type_check::common_super_type;

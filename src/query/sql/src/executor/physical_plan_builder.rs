@@ -197,16 +197,6 @@ impl PhysicalPlanBuilder {
             RelOperator::PhysicalHashJoin(join) => {
                 let build_side = self.build(s_expr.child(1)?).await?;
                 let probe_side = self.build(s_expr.child(0)?).await?;
-                let build_side_schema = build_side.output_schema()?;
-                let probe_side_schema = probe_side.output_schema()?;
-                let merged_schema = DataSchemaRefExt::create(
-                    probe_side_schema
-                        .fields()
-                        .iter()
-                        .chain(build_side_schema.fields())
-                        .cloned()
-                        .collect(),
-                );
                 Ok(PhysicalPlan::HashJoin(HashJoin {
                     build: Box::new(build_side),
                     probe: Box::new(probe_side),
@@ -215,7 +205,7 @@ impl PhysicalPlanBuilder {
                         .build_keys
                         .iter()
                         .map(|v| {
-                            let mut builder = PhysicalScalarBuilder::new(&build_side_schema);
+                            let mut builder = PhysicalScalarBuilder::new();
                             builder.build(v)
                         })
                         .collect::<Result<_>>()?,
@@ -223,7 +213,7 @@ impl PhysicalPlanBuilder {
                         .probe_keys
                         .iter()
                         .map(|v| {
-                            let mut builder = PhysicalScalarBuilder::new(&probe_side_schema);
+                            let mut builder = PhysicalScalarBuilder::new();
                             builder.build(v)
                         })
                         .collect::<Result<_>>()?,
@@ -231,7 +221,7 @@ impl PhysicalPlanBuilder {
                         .non_equi_conditions
                         .iter()
                         .map(|v| {
-                            let mut builder = PhysicalScalarBuilder::new(&merged_schema);
+                            let mut builder = PhysicalScalarBuilder::new();
                             builder.build(v)
                         })
                         .collect::<Result<_>>()?,
@@ -242,14 +232,13 @@ impl PhysicalPlanBuilder {
 
             RelOperator::EvalScalar(eval_scalar) => {
                 let input = Box::new(self.build(s_expr.child(0)?).await?);
-                let input_schema = input.output_schema()?;
                 Ok(PhysicalPlan::EvalScalar(EvalScalar {
                     input,
                     scalars: eval_scalar
                         .items
                         .iter()
                         .map(|item| {
-                            let mut builder = PhysicalScalarBuilder::new(&input_schema);
+                            let mut builder = PhysicalScalarBuilder::new();
                             Ok((builder.build(&item.scalar)?, item.index.to_string()))
                         })
                         .collect::<Result<_>>()?,
@@ -258,14 +247,13 @@ impl PhysicalPlanBuilder {
 
             RelOperator::Filter(filter) => {
                 let input = Box::new(self.build(s_expr.child(0)?).await?);
-                let input_schema = input.output_schema()?;
                 Ok(PhysicalPlan::Filter(Filter {
                     input,
                     predicates: filter
                         .predicates
                         .iter()
                         .map(|pred| {
-                            let mut builder = PhysicalScalarBuilder::new(&input_schema);
+                            let mut builder = PhysicalScalarBuilder::new();
                             builder.build(pred)
                         })
                         .collect::<Result<_>>()?,
@@ -280,7 +268,6 @@ impl PhysicalPlanBuilder {
                     .collect();
                 let result = match &agg.mode {
                     AggregateMode::Partial => {
-                        let input_schema = input.output_schema()?;
                         let agg_funcs: Vec<AggregateFunctionDesc> = agg.aggregate_functions.iter().map(|v| {
                             if let Scalar::AggregateFunction(agg) = &v.scalar {
                                 Ok(AggregateFunctionDesc {
@@ -292,19 +279,9 @@ impl PhysicalPlanBuilder {
                                         params: agg.params.clone(),
                                         return_type: *agg.return_type.clone(),
                                     },
-                                    column_id: v.index.to_string(),
                                     args: agg.args.iter().map(|arg| {
                                         if let Scalar::BoundColumnRef(col) = arg {
-                                            input_schema.index_of(&col.column.index.to_string())
-                                        } else {
-                                            Err(ErrorCode::Internal(
-                                                "Aggregate function argument must be a BoundColumnRef".to_string()
-                                            ))
-                                        }
-                                    }).collect::<Result<_>>()?,
-                                    arg_indices: agg.args.iter().map(|arg| {
-                                        if let Scalar::BoundColumnRef(col) = arg {
-                                            Ok(col.column.index)
+                                            col.column.index
                                         } else {
                                             Err(ErrorCode::Internal(
                                                 "Aggregate function argument must be a BoundColumnRef".to_string()
@@ -380,19 +357,9 @@ impl PhysicalPlanBuilder {
                                         params: agg.params.clone(),
                                         return_type: *agg.return_type.clone(),
                                     },
-                                    column_id: v.index.to_string(),
                                     args: agg.args.iter().map(|arg| {
                                         if let Scalar::BoundColumnRef(col) = arg {
                                             input_schema.index_of(&col.column.index.to_string())
-                                        } else {
-                                            Err(ErrorCode::Internal(
-                                                "Aggregate function argument must be a BoundColumnRef".to_string()
-                                            ))
-                                        }
-                                    }).collect::<Result<_>>()?,
-                                    arg_indices: agg.args.iter().map(|arg| {
-                                        if let Scalar::BoundColumnRef(col) = arg {
-                                            Ok(col.column.index)
                                         } else {
                                             Err(ErrorCode::Internal(
                                                 "Aggregate function argument must be a BoundColumnRef".to_string()
@@ -464,13 +431,13 @@ impl PhysicalPlanBuilder {
             })),
             RelOperator::Exchange(exchange) => {
                 let input = Box::new(self.build(s_expr.child(0)?).await?);
-                let input_schema = input.output_schema()?;
+                // let input_schema = input.output_schema()?;
                 let mut keys = vec![];
                 let kind = match exchange {
                     Exchange::Random => FragmentKind::Init,
                     Exchange::Hash(scalars) => {
                         for scalar in scalars {
-                            let mut builder = PhysicalScalarBuilder::new(&input_schema);
+                            let mut builder = PhysicalScalarBuilder::new();
                             keys.push(builder.build(scalar)?);
                         }
                         FragmentKind::Normal
@@ -655,22 +622,19 @@ impl PhysicalPlanBuilder {
     }
 }
 
-pub struct PhysicalScalarBuilder<'a> {
-    input_schema: &'a DataSchemaRef,
+pub struct PhysicalScalarBuilder {
+    // input_schema: &'a DataSchemaRef,
 }
 
-impl<'a> PhysicalScalarBuilder<'a> {
-    pub fn new(input_schema: &'a DataSchemaRef) -> Self {
-        Self { input_schema }
+impl PhysicalScalarBuilder {
+    pub fn new() -> Self {
+        Self {}
     }
 
     pub fn build(&mut self, scalar: &Scalar) -> Result<PhysicalScalar> {
         match scalar {
             Scalar::BoundColumnRef(column_ref) => {
-                // Remap string name to index in data block
-                let index = self
-                    .input_schema
-                    .index_of(&column_ref.column.index.to_string())?;
+                let index = column_ref.column.index;
                 Ok(PhysicalScalar::IndexedVariable {
                     data_type: column_ref.data_type(),
                     index,

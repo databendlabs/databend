@@ -102,7 +102,8 @@ impl<I: InputFormatPipe> Processor for DeserializeTransformer<I> {
             match self.processor.output_buffer.pop_front() {
                 Some(chunk) => {
                     tracing::trace!("DeserializeTransformer push rows {}", chunk.num_rows());
-                    self.output.push_data(Ok(chunk));
+                    todo!("expression");
+                    // self.output.push_data(Ok(chunk));
                     Ok(Event::NeedConsume)
                 }
                 None => {

@@ -90,7 +90,8 @@ impl<T: 'static + AsyncSource> Processor for AsyncSourcer<T> {
         match self.generated_data.take() {
             None => Ok(Event::Async),
             Some(chunk) => {
-                self.output.push_data(Ok(chunk));
+                todo!("expression");
+                // self.output.push_data(Ok(chunk));
                 Ok(Event::NeedConsume)
             }
         }

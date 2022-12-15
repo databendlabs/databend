@@ -14,8 +14,6 @@
 
 use std::sync::Arc;
 
-use common_datavalues::ToDataType;
-use common_datavalues::Vu8;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::DataField;

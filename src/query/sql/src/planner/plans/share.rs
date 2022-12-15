@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use chrono::Utc;
-use common_datavalues::prelude::*;
 use common_expression::DataField;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;

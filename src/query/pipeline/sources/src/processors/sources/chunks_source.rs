@@ -42,11 +42,14 @@ impl ChunksSource {
 impl SyncSource for ChunksSource {
     const NAME: &'static str = "ChunksSource";
 
-    fn generate(&mut self) -> Result<Option<Chunk<String>>> {
+    fn generate(&mut self) -> Result<Option<Chunk>> {
         let mut chunks_guard = self.chunks.lock();
         match chunks_guard.pop_front() {
             None => Ok(None),
-            Some(chunk) => Ok(Some(chunk)),
+            Some(chunk) => {
+                todo!("expression");
+                // Ok(Some(chunk))
+            }
         }
     }
 }

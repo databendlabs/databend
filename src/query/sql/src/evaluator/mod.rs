@@ -18,8 +18,6 @@ mod scalar;
 
 pub use chunk_operator::ChunkOperator;
 pub use chunk_operator::CompoundChunkOperator;
-use common_datavalues::ColumnRef;
-use common_datavalues::DataTypeImpl;
 
 pub struct Evaluator;
 

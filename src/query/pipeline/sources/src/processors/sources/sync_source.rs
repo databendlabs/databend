@@ -31,7 +31,7 @@ use common_pipeline_core::processors::Processor;
 pub trait SyncSource: Send {
     const NAME: &'static str;
 
-    fn generate(&mut self) -> Result<Option<Chunk<String>>>;
+    fn generate(&mut self) -> Result<Option<Chunk>>;
 }
 
 // TODO: This can be refactored using proc macros
@@ -88,7 +88,8 @@ impl<T: 'static + SyncSource> Processor for SyncSourcer<T> {
         match self.generated_data.take() {
             None => Ok(Event::Sync),
             Some(chunk) => {
-                self.output.push_data(Ok(chunk));
+                todo!("expression");
+                // self.output.push_data(Ok(chunk));
                 Ok(Event::NeedConsume)
             }
         }
@@ -103,7 +104,8 @@ impl<T: 'static + SyncSource> Processor for SyncSourcer<T> {
                     bytes: chunk.memory_size(),
                 };
                 self.scan_progress.incr(&progress_values);
-                self.generated_data = Some(chunk)
+                todo!("expression");
+                // self.generated_data = Some(chunk)
             }
         };
 
