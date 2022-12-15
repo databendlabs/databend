@@ -187,6 +187,7 @@ impl FuseTable {
             extra_key_index,
             level,
             block_compactor,
+            vec![],
         ))
     }
 

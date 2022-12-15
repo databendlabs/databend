@@ -12,16 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::time::Duration;
-
 use common_base::base::GlobalInstance;
 use common_config::Config;
 use common_exception::Result;
 use common_tracing::set_panic_hook;
 use databend_query::clusters::ClusterDiscovery;
-use databend_query::sessions::SessionManager;
 use databend_query::GlobalServices;
-use time::Instant;
 use tracing::info;
 
 pub struct TestGlobalServices;
@@ -35,7 +31,13 @@ impl TestGlobalServices {
         set_panic_hook();
         std::env::set_var("UNIT_TEST", "TRUE");
 
-        GlobalServices::init_with(config.clone(), false).await?;
+        let thread_name = match std::thread::current().name() {
+            None => panic!("thread name is none"),
+            Some(thread_name) => thread_name.to_string(),
+        };
+
+        GlobalInstance::init_testing(&thread_name);
+        GlobalServices::init_with(config.clone()).await?;
 
         // Cluster register.
         {
@@ -48,12 +50,9 @@ impl TestGlobalServices {
             );
         }
 
-        match std::thread::current().name() {
-            None => panic!("thread name is none"),
-            Some(thread_name) => Ok(TestGuard {
-                thread_name: thread_name.to_string(),
-            }),
-        }
+        Ok(TestGuard {
+            thread_name: thread_name.to_string(),
+        })
     }
 }
 
@@ -63,16 +62,6 @@ pub struct TestGuard {
 
 impl Drop for TestGuard {
     fn drop(&mut self) {
-        // Hack: The session may be referenced by other threads. Let's try to wait.
-        let now = Instant::now();
-        while !SessionManager::instance().processes_info().is_empty() {
-            std::thread::sleep(Duration::from_millis(500));
-
-            if now.elapsed() > Duration::from_secs(3) {
-                break;
-            }
-        }
-
-        GlobalInstance::drop_testing(&self.thread_name)
+        GlobalInstance::drop_testing(&self.thread_name);
     }
 }

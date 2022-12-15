@@ -35,13 +35,13 @@ select number from numbers_mt(10) where number between 4 + 0.1  and 8 - 0.1  ord
 7
 
 statement query T
-select * from system.databases where name like '%sys%';
+select name from system.databases where name like '%sys%';
 
 ----
 system
 
 statement query T
-select * from system.databases where name like '_ef_ul_';
+select name from system.databases where name like '_ef_ul_';
 
 ----
 default
@@ -73,14 +73,14 @@ select '%' like '\\%';
 
 
 statement query T
-select * from system.databases where name not like '%sys%' order by name;
+select name from system.databases where name not like '%sys%' order by name;
 
 ----
 default
 information_schema
 
 statement query T
-select * from system.databases where name not like '_ef_ul_' order by name;
+select name from system.databases where name not like '_ef_ul_' order by name;
 
 ----
 information_schema
@@ -105,13 +105,13 @@ select '==compare_regexp==';
 ==compare_regexp==
 
 statement query T
-select * from system.databases where name regexp '^sys';
+select name from system.databases where name regexp '^sys';
 
 ----
 system
 
 statement query T
-select * from system.databases where name regexp 'ef+.ul+.';
+select name from system.databases where name regexp 'ef+.ul+.';
 
 ----
 default
@@ -123,13 +123,13 @@ select 'foo' regexp 'FOO';
 1
 
 statement query T
-select * from system.databases where name rlike '^sys';
+select name from system.databases where name rlike '^sys';
 
 ----
 system
 
 statement query T
-select * from system.databases where name rlike 'ef+.ul+.';
+select name from system.databases where name rlike 'ef+.ul+.';
 
 ----
 default

@@ -22,18 +22,16 @@ use common_exception::Result;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::ColumnStatistics;
 
-pub(crate) struct TopNPrunner {
+use crate::pruning::BlockIndex;
+
+pub struct TopNPrunner {
     schema: DataSchemaRef,
     sort: Vec<(Expression, bool, bool)>,
     limit: usize,
 }
 
 impl TopNPrunner {
-    pub(crate) fn new(
-        schema: DataSchemaRef,
-        sort: Vec<(Expression, bool, bool)>,
-        limit: usize,
-    ) -> Self {
+    pub fn new(schema: DataSchemaRef, sort: Vec<(Expression, bool, bool)>, limit: usize) -> Self {
         Self {
             schema,
             sort,
@@ -43,10 +41,10 @@ impl TopNPrunner {
 }
 
 impl TopNPrunner {
-    pub(crate) fn prune(
+    pub fn prune(
         &self,
-        metas: Vec<(usize, Arc<BlockMeta>)>,
-    ) -> Result<Vec<(usize, Arc<BlockMeta>)>> {
+        metas: Vec<(BlockIndex, Arc<BlockMeta>)>,
+    ) -> Result<Vec<(BlockIndex, Arc<BlockMeta>)>> {
         if self.sort.len() != 1 {
             return Ok(metas);
         }
@@ -92,7 +90,7 @@ impl TopNPrunner {
                 })?;
                 Ok((*id, stat.clone(), meta.clone()))
             })
-            .collect::<Result<Vec<(usize, ColumnStatistics, Arc<BlockMeta>)>>>()?;
+            .collect::<Result<Vec<(BlockIndex, ColumnStatistics, Arc<BlockMeta>)>>>()?;
 
         id_stats.sort_by(|a, b| {
             if a.1.null_count + b.1.null_count != 0 && *nulls_first {

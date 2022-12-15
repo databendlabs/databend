@@ -38,43 +38,37 @@ fi
 
 # load csv
 echo "--csv"
-curl -H "insert_sql:insert into ontime_streaming_load format Csv" -H "format_skip_header:1" -F "upload=@/tmp/ontime_200.csv" -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" > /dev/null 2>&1
+curl -H "insert_sql:insert into ontime_streaming_load file_format = (type = 'CSV' skip_header = 1)" -F "upload=@/tmp/ontime_200.csv" -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" > /dev/null 2>&1
 echo "select count(1), avg(Year), sum(DayOfWeek)  from ontime_streaming_load;" | $MYSQL_CLIENT_CONNECT
 echo "truncate table ontime_streaming_load" | $MYSQL_CLIENT_CONNECT
 
 echo "--csv.gz"
 # load csv gz
-curl -H "insert_sql:insert into ontime_streaming_load format Csv" -H "format_skip_header:1" -H "format_compression:gzip" -F "upload=@/tmp/ontime_200.csv.gz" -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" > /dev/null 2>&1
+curl -H "insert_sql:insert into ontime_streaming_load file_format = (type = 'CSV' skip_header = 1 compression = 'gzip')" -F "upload=@/tmp/ontime_200.csv.gz" -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" > /dev/null 2>&1
 echo "select count(1), avg(Year), sum(DayOfWeek)  from ontime_streaming_load;" | $MYSQL_CLIENT_CONNECT
 echo "truncate table ontime_streaming_load" | $MYSQL_CLIENT_CONNECT
 
 # load csv zstd
 echo "--csv.zstd"
-curl -H "insert_sql:insert into ontime_streaming_load format Csv" -H "format_skip_header:1" -H "format_compression:zstd" -F  "upload=@/tmp/ontime_200.csv.zst" -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" > /dev/null 2>&1
+curl -H "insert_sql:insert into ontime_streaming_load file_format = (type = 'CSV' skip_header = 1 compression = 'zstd')" -F  "upload=@/tmp/ontime_200.csv.zst" -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" > /dev/null 2>&1
 echo "select count(1), avg(Year), sum(DayOfWeek)  from ontime_streaming_load;" | $MYSQL_CLIENT_CONNECT
 echo "truncate table ontime_streaming_load" | $MYSQL_CLIENT_CONNECT
 
 # load csv bz2
 echo "--csv.bz2"
-curl -H "insert_sql:insert into ontime_streaming_load format Csv" -H "format_skip_header:1" -H "format_compression:bz2" -F  "upload=@/tmp/ontime_200.csv.bz2" -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" > /dev/null 2>&1
+curl -H "insert_sql:insert into ontime_streaming_load file_format = (type = 'CSV' skip_header = 1 compression = 'bz2')" -F  "upload=@/tmp/ontime_200.csv.bz2" -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" > /dev/null 2>&1
 echo "select count(1), avg(Year), sum(DayOfWeek)  from ontime_streaming_load;" | $MYSQL_CLIENT_CONNECT
 echo "truncate table ontime_streaming_load" | $MYSQL_CLIENT_CONNECT
 
 # load parquet
 echo "--parquet"
-curl -H "insert_sql:insert into ontime_streaming_load format Parquet" -F "upload=@/tmp/ontime_200.parquet" -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" > /dev/null 2>&1
+curl -H "insert_sql:insert into ontime_streaming_load file_format = (type = 'Parquet')" -F "upload=@/tmp/ontime_200.parquet" -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" > /dev/null 2>&1
 echo "select count(1), avg(Year), sum(DayOfWeek)  from ontime_streaming_load;" | $MYSQL_CLIENT_CONNECT
 echo "truncate table ontime_streaming_load" | $MYSQL_CLIENT_CONNECT
 
 # load ndjson
 echo "--ndjson"
-curl -H "insert_sql:insert into ontime_streaming_load format NdJson" -H "format_skip_header:1" -F "upload=@/tmp/ontime_200.ndjson" -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" > /dev/null 2>&1
-echo "select count(1), avg(Year), sum(DayOfWeek)  from ontime_streaming_load;" | $MYSQL_CLIENT_CONNECT
-echo "truncate table ontime_streaming_load" | $MYSQL_CLIENT_CONNECT
-
-# load csv using file_format syntax
-echo "--csv using file_format"
-curl -H "insert_sql:insert into ontime_streaming_load file_format = (type = 'CSV' skip_header = 1)" -F "upload=@/tmp/ontime_200.csv" -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" > /dev/null 2>&1
+curl -H "insert_sql:insert into ontime_streaming_load file_format = (type = 'NdJson' skip_header = 1)" -F "upload=@/tmp/ontime_200.ndjson" -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" > /dev/null 2>&1
 echo "select count(1), avg(Year), sum(DayOfWeek)  from ontime_streaming_load;" | $MYSQL_CLIENT_CONNECT
 echo "truncate table ontime_streaming_load" | $MYSQL_CLIENT_CONNECT
 
@@ -90,13 +84,13 @@ echo 'CREATE TABLE ontime_less
 
 
 echo "--parquet less"
-curl -s -H "insert_sql:insert into ontime_less format Parquet" -F "upload=@/tmp/ontime_200.parquet" -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load"  > /dev/null 2>&1
+curl -s -H "insert_sql:insert into ontime_less file_format = (type = 'Parquet')" -F "upload=@/tmp/ontime_200.parquet" -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load"  > /dev/null 2>&1
 echo "select count(1), avg(Year), sum(DayOfWeek)  from ontime_less;" | $MYSQL_CLIENT_CONNECT
 
 # load parquet with mismatch schema
 echo "--parquet mismatch schema"
 cat $CURDIR/../ddl/ontime.sql | sed 's/ontime/ontime_test_mismatch/g' | sed 's/DATE/VARCHAR/g' | $MYSQL_CLIENT_CONNECT
-curl -s -H "insert_sql:insert into ontime_test_mismatch format Parquet" -F "upload=@/tmp/ontime_200.parquet" -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" | grep -c 'parquet schema mismatch'
+curl -s -H "insert_sql:insert into ontime_test_mismatch file_format = (type = 'Parquet')" -F "upload=@/tmp/ontime_200.parquet" -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" | grep -c 'parquet schema mismatch'
 
 
 echo "drop table ontime_streaming_load;" | $MYSQL_CLIENT_CONNECT

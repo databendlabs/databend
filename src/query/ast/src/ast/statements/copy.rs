@@ -213,6 +213,25 @@ impl Display for StageLocation {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FileLocation {
+    Stage(StageLocation),
+    Uri(UriLocation),
+}
+
+impl Display for FileLocation {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            FileLocation::Uri(loc) => {
+                write!(f, "{}", loc)
+            }
+            FileLocation::Stage(loc) => {
+                write!(f, "{}", loc)
+            }
+        }
+    }
+}
+
 pub enum CopyOption {
     Files(Vec<String>),
     Pattern(String),

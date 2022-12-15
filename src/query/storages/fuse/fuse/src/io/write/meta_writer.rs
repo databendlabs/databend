@@ -30,7 +30,7 @@ where T: Serialize {
         .when(|err| err.is_temporary())
         .notify(|err, dur| {
             warn!(
-                "stage table sink write retry after {}s for error {:?}",
+                "write_meta retry after {}s for error {:?}",
                 dur.as_secs(),
                 err
             )

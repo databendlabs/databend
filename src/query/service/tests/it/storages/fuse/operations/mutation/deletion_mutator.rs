@@ -12,117 +12,104 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use std::collections::hash_map::RandomState;
-use std::collections::HashMap;
-use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_base::base::tokio;
-use common_datablocks::BlockCompactThresholds;
-use common_datablocks::DataBlock;
-use common_datavalues::DataSchema;
-use common_exception::ErrorCode;
 use common_exception::Result;
-use common_storages_table_meta::caches::CacheManager;
-use common_storages_table_meta::meta::BlockMeta;
-use common_storages_table_meta::meta::SegmentInfo;
-use common_storages_table_meta::meta::Statistics;
-use common_storages_table_meta::meta::TableSnapshot;
-use common_storages_table_meta::meta::Versioned;
+use common_sql::executor::ExpressionBuilderWithoutRenaming;
+use common_sql::plans::DeletePlan;
+use common_sql::plans::Plan;
+use common_sql::plans::ScalarExpr;
+use common_sql::Planner;
+use common_storages_factory::Table;
+use common_storages_fuse::FuseTable;
+use databend_query::pipelines::executor::ExecutorSettings;
+use databend_query::pipelines::executor::PipelineCompleteExecutor;
+use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
-use databend_query::storages::fuse::io::SegmentWriter;
-use databend_query::storages::fuse::io::TableMetaLocationGenerator;
-use databend_query::storages::fuse::operations::DeletionMutator;
-use databend_query::storages::fuse::statistics::ClusterStatsGenerator;
-use uuid::Uuid;
 
+use crate::storages::fuse::table_test_fixture::execute_command;
+use crate::storages::fuse::table_test_fixture::execute_query;
+use crate::storages::fuse::table_test_fixture::expects_ok;
 use crate::storages::fuse::table_test_fixture::TestFixture;
-
-/// [issue#6570](https://github.com/datafuselabs/databend/issues/6570)
-/// During deletion, there might be multiple segments become empty
 
 #[tokio::test]
 async fn test_deletion_mutator_multiple_empty_segments() -> Result<()> {
-    // generates a batch of segments, and delete blocks from them
-    // so that half of the segments will be empty
-
     let fixture = TestFixture::new().await;
     let ctx = fixture.ctx();
-    let location_generator = TableMetaLocationGenerator::with_prefix("_prefix".to_owned());
+    let tbl_name = fixture.default_table_name();
+    let db_name = fixture.default_db_name();
 
-    let segment_info_cache = CacheManager::instance().get_table_segment_cache();
-    let data_accessor = ctx.get_data_operator()?.operator();
-    let seg_writer = SegmentWriter::new(&data_accessor, &location_generator, &segment_info_cache);
+    fixture.create_normal_table().await?;
 
-    let gen_test_seg = || async {
-        // generates test segment, each of them contains only one block
-        // structures are filled with arbitrary values, no effects for this test case
-        let block_id = Uuid::new_v4().simple().to_string();
-        let location = (block_id, DataBlock::VERSION);
-        let test_block_meta = Arc::new(BlockMeta::new(
-            1,
-            1,
-            1,
-            HashMap::default(),
-            HashMap::default(),
-            None,
-            location.clone(),
-            None,
-            0,
-        ));
-        let segment = SegmentInfo::new(vec![test_block_meta], Statistics::default());
-        Ok::<_, ErrorCode>((seg_writer.write_segment(segment).await?, location))
+    // insert
+    for i in 0..10 {
+        let qry = format!("insert into {}.{}(id) values({})", db_name, tbl_name, i);
+        execute_command(ctx.clone(), qry.as_str()).await?;
+    }
+
+    let catalog = ctx.get_catalog(fixture.default_catalog_name().as_str())?;
+    let table = catalog
+        .get_table(ctx.get_tenant().as_str(), &db_name, &tbl_name)
+        .await?;
+    // delete
+    let query = format!("delete from {}.{} where id=1", db_name, tbl_name);
+    let mut planner = Planner::new(ctx.clone());
+    let (plan, _, _) = planner.plan_sql(&query).await?;
+    if let Plan::Delete(delete) = plan {
+        do_deletion(ctx.clone(), table.clone(), *delete).await?;
+    }
+
+    // check count
+    let expected = vec![
+        "+---------------+-------+",
+        "| segment_count | count |",
+        "+---------------+-------+",
+        "| 9             | 9     |",
+        "+---------------+-------+",
+    ];
+    let qry = format!(
+        "select segment_count, block_count as count from fuse_snapshot('{}', '{}') limit 1",
+        db_name, tbl_name
+    );
+    expects_ok(
+        "check segment and block count",
+        execute_query(fixture.ctx(), qry.as_str()).await,
+        expected,
+    )
+    .await?;
+    Ok(())
+}
+
+pub async fn do_deletion(
+    ctx: Arc<QueryContext>,
+    table: Arc<dyn Table>,
+    plan: DeletePlan,
+) -> Result<()> {
+    let (filter, col_indices) = if let Some(scalar) = &plan.selection {
+        let eb = ExpressionBuilderWithoutRenaming::create(plan.metadata.clone());
+        (
+            Some(eb.build(scalar)?),
+            scalar.used_columns().into_iter().collect(),
+        )
+    } else {
+        (None, vec![])
     };
 
-    // generates 100 segments, for each segment, contains one block
-    let mut test_segment_locations = vec![];
-    let mut test_block_locations = vec![];
-    for _ in 0..100 {
-        let (segment_location, block_location) = gen_test_seg().await?;
-        test_segment_locations.push(segment_location);
-        test_block_locations.push(block_location);
+    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+    let settings = ctx.get_settings();
+    let mut pipeline = common_pipeline_core::Pipeline::create();
+    fuse_table
+        .delete(ctx.clone(), filter, col_indices, &mut pipeline)
+        .await?;
+    if !pipeline.pipes.is_empty() {
+        pipeline.set_max_threads(settings.get_max_threads()? as usize);
+        let query_id = ctx.get_id();
+        let executor_settings = ExecutorSettings::try_create(&settings, query_id)?;
+        let executor = PipelineCompleteExecutor::try_create(pipeline, executor_settings)?;
+        ctx.set_executor(Arc::downgrade(&executor.get_inner()));
+        executor.execute()?;
+        drop(executor);
     }
-
-    let base_snapshot = TableSnapshot::new(
-        Uuid::new_v4(),
-        &None,
-        None,
-        DataSchema::empty(),
-        Statistics::default(),
-        test_segment_locations.clone(),
-        None,
-        None,
-    );
-
-    let table_ctx: Arc<dyn TableContext> = ctx as Arc<dyn TableContext>;
-    let mut mutator = DeletionMutator::try_create(
-        table_ctx,
-        data_accessor.clone(),
-        location_generator,
-        Arc::new(base_snapshot),
-        ClusterStatsGenerator::default(),
-        BlockCompactThresholds::default(),
-    )?;
-
-    // clear half of the segments
-    for (i, _) in test_segment_locations.iter().enumerate().take(100) {
-        if i % 2 == 0 {
-            // empty the segment (segment only contains one block)
-            mutator
-                .replace_with(i, test_block_locations[i].clone(), None, DataBlock::empty())
-                .await?;
-        }
-    }
-
-    let (segments, _, _) = mutator.generate_segments().await?;
-
-    // half segments left after deletion
-    assert_eq!(segments.len(), 50);
-
-    // new_segments should be a subset of test_segments in our case (no partial deletion of segment)
-    let new_segments = HashSet::<_, RandomState>::from_iter(segments.into_iter());
-    let test_segments = HashSet::from_iter(test_segment_locations.into_iter());
-    assert!(new_segments.is_subset(&test_segments));
-
     Ok(())
 }

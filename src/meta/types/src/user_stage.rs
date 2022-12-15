@@ -200,6 +200,7 @@ pub struct FileFormatOptions {
     pub escape: String,
     pub compression: StageFileCompression,
     pub row_tag: String,
+    pub quote: String,
 }
 
 impl Default for FileFormatOptions {
@@ -213,6 +214,7 @@ impl Default for FileFormatOptions {
             escape: "".to_string(),
             compression: StageFileCompression::default(),
             row_tag: "row".to_string(),
+            quote: "".to_string(),
         }
     }
 }

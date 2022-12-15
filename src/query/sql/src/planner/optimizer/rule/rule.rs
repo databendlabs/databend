@@ -36,8 +36,10 @@ pub enum RuleID {
     NormalizeScalarFilter,
     NormalizeDisjunctiveFilter,
     PushDownFilterEvalScalar,
+    PushDownFilterUnion,
     PushDownFilterJoin,
     PushDownFilterScan,
+    PushDownLimitUnion,
     PushDownLimitOuterJoin,
     PushDownLimitSort,
     PushDownLimitScan,
@@ -62,9 +64,11 @@ pub enum RuleID {
 impl Display for RuleID {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
+            RuleID::PushDownFilterUnion => write!(f, "PushDownFilterUnion"),
             RuleID::PushDownFilterEvalScalar => write!(f, "PushDownFilterEvalScalar"),
             RuleID::PushDownFilterJoin => write!(f, "PushDownFilterJoin"),
             RuleID::PushDownFilterScan => write!(f, "PushDownFilterScan"),
+            RuleID::PushDownLimitUnion => write!(f, "PushDownLimitUnion"),
             RuleID::PushDownLimitOuterJoin => write!(f, "PushDownLimitOuterJoin"),
             RuleID::PushDownLimitSort => write!(f, "PushDownLimitSort"),
             RuleID::PushDownLimitScan => write!(f, "PushDownLimitScan"),

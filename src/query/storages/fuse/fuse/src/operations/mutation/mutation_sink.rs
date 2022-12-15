@@ -15,23 +15,19 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use common_base::base::Progress;
+use common_base::base::ProgressValues;
 use common_catalog::table::Table;
 use common_catalog::table::TableExt;
 use common_catalog::table_context::TableContext;
-use common_datablocks::BlockMetaInfos;
+use common_datablocks::BlockMetaInfoPtr;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_storages_table_meta::meta::Location;
-use common_storages_table_meta::meta::SegmentInfo;
 use common_storages_table_meta::meta::Statistics;
 use common_storages_table_meta::meta::TableSnapshot;
-use common_storages_table_meta::meta::Versioned;
-use itertools::Itertools;
 use opendal::Operator;
 
-use super::BlockCompactMutator;
-use super::CompactSinkMeta;
 use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
 use crate::metrics::metrics_inc_commit_mutation_resolvable_conflict;
@@ -41,8 +37,10 @@ use crate::metrics::metrics_inc_commit_mutation_unresolvable_conflict;
 use crate::operations::commit::Conflict;
 use crate::operations::commit::MutatorConflictDetector;
 use crate::operations::mutation::AbortOperation;
+use crate::operations::mutation::MutationMeta;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::processor::Event;
+use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::Processor;
 use crate::statistics::reducers::merge_statistics_mut;
 use crate::FuseTable;
@@ -51,22 +49,23 @@ const MAX_RETRIES: u64 = 10;
 
 enum State {
     None,
-    GatherSegment,
-    GenerateSnapshot(Vec<Location>),
+    ReadMeta(BlockMetaInfoPtr),
+    TryCommit(TableSnapshot),
     RefreshTable,
     DetectConfilct(Arc<TableSnapshot>),
-    TryCommit(TableSnapshot),
+    MergeSegments(Vec<Location>),
     AbortOperation,
     Finish,
 }
 
 // Gathers all the segments and commits to the meta server.
-pub struct CompactSink {
+pub struct MutationSink {
     state: State,
 
     ctx: Arc<dyn TableContext>,
     dal: Operator,
     location_gen: TableMetaLocationGenerator,
+    scan_progress: Arc<Progress>,
 
     table: Arc<dyn Table>,
     base_snapshot: Arc<TableSnapshot>,
@@ -74,77 +73,42 @@ pub struct CompactSink {
     merged_segments: Vec<Location>,
     // summarised statistics of all the merged segments.
     merged_statistics: Statistics,
-    // The order of the base segments in snapshot.
-    indices: Vec<usize>,
-
-    retries: u64,
     abort_operation: AbortOperation,
 
-    inputs: Vec<Arc<InputPort>>,
-    input_metas: BlockMetaInfos,
-    cur_input_index: usize,
+    retries: u64,
+
+    input: Arc<InputPort>,
 }
 
-impl CompactSink {
+impl MutationSink {
     pub fn try_create(
         table: &FuseTable,
-        mutator: BlockCompactMutator,
-        inputs: Vec<Arc<InputPort>>,
+        ctx: Arc<dyn TableContext>,
+        base_snapshot: Arc<TableSnapshot>,
+        input: Arc<InputPort>,
     ) -> Result<ProcessorPtr> {
-        Ok(ProcessorPtr::create(Box::new(CompactSink {
+        let scan_progress = ctx.get_scan_progress();
+        Ok(ProcessorPtr::create(Box::new(MutationSink {
             state: State::None,
-            ctx: mutator.ctx,
-            dal: mutator.operator,
+            ctx,
+            dal: table.get_operator(),
             location_gen: table.meta_location_generator.clone(),
+            scan_progress,
             table: Arc::new(table.clone()),
-            base_snapshot: mutator.compact_params.base_snapshot,
-            merged_segments: mutator.unchanged_segment_locations,
-            merged_statistics: mutator.unchanged_segment_statistics,
-            indices: mutator.unchanged_segment_indices,
-            retries: 0,
+            base_snapshot,
+            merged_segments: vec![],
+            merged_statistics: Statistics::default(),
             abort_operation: AbortOperation::default(),
-            inputs,
-            input_metas: Vec::new(),
-            cur_input_index: 0,
+            retries: 0,
+            input,
         })))
-    }
-
-    fn get_current_input(&mut self) -> Option<Arc<InputPort>> {
-        let mut finished = true;
-        let mut index = self.cur_input_index;
-
-        loop {
-            let input = &self.inputs[index];
-
-            if !input.is_finished() {
-                finished = false;
-                input.set_need_data();
-
-                if input.has_data() {
-                    self.cur_input_index = index;
-                    return Some(input.clone());
-                }
-            }
-
-            index += 1;
-            if index == self.inputs.len() {
-                index = 0;
-            }
-
-            if index == self.cur_input_index {
-                return match finished {
-                    true => Some(input.clone()),
-                    false => None,
-                };
-            }
-        }
     }
 }
 
 #[async_trait::async_trait]
-impl Processor for CompactSink {
+impl Processor for MutationSink {
     fn name(&self) -> String {
-        "CompactSink".to_string()
+        "MutationSink".to_string()
     }
 
     fn as_any(&mut self) -> &mut dyn Any {
@@ -152,13 +116,13 @@ impl Processor for CompactSink {
     }
 
     fn event(&mut self) -> Result<Event> {
-        if matches!(&self.state, State::GatherSegment | State::DetectConfilct(_)) {
+        if matches!(&self.state, State::DetectConfilct(_)) {
             return Ok(Event::Sync);
         }
 
         if matches!(
             &self.state,
-            State::GenerateSnapshot(_)
+            State::MergeSegments(_)
                 | State::TryCommit(_)
                 | State::RefreshTable
                 | State::AbortOperation
@@ -170,46 +134,56 @@ impl Processor for CompactSink {
             return Ok(Event::Finished);
         }
 
-        let current_input = self.get_current_input();
-        if let Some(cur_input) = current_input {
-            if cur_input.is_finished() {
-                self.state = State::GatherSegment;
-                return Ok(Event::Sync);
-            }
-
-            let input_meta = cur_input
-                .pull_data()
-                .unwrap()?
-                .get_meta()
-                .cloned()
-                .ok_or_else(|| ErrorCode::Internal("No block meta. It's a bug"))?;
-            self.input_metas.push(input_meta);
-            cur_input.set_need_data();
+        if self.input.is_finished() {
+            return Ok(Event::Finished);
         }
-        Ok(Event::NeedData)
+
+        if !self.input.has_data() {
+            self.input.set_need_data();
+            return Ok(Event::NeedData);
+        }
+
+        let input_meta = self
+            .input
+            .pull_data()
+            .unwrap()?
+            .get_meta()
+            .cloned()
+            .ok_or_else(|| ErrorCode::Internal("No block meta. It's a bug"))?;
+        self.state = State::ReadMeta(input_meta);
+        self.input.finish();
+        Ok(Event::Sync)
     }
 
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::None) {
-            State::GatherSegment => {
-                let metas = std::mem::take(&mut self.input_metas);
-                let mut merged_segments = std::mem::take(&mut self.merged_segments);
-                for v in metas.iter() {
-                    let meta = CompactSinkMeta::from_meta(v)?;
-                    self.abort_operation.merge(&meta.abort_operation);
-                    merged_segments.push((meta.segment_location.clone(), SegmentInfo::VERSION));
-                    self.indices.push(meta.order);
-                    merge_statistics_mut(&mut self.merged_statistics, &meta.segment_info.summary)?;
-                }
+            State::ReadMeta(input_meta) => {
+                let meta = MutationMeta::from_meta(&input_meta)?;
 
-                self.merged_segments = merged_segments
-                    .into_iter()
-                    .zip(self.indices.iter())
-                    .sorted_by_key(|&(_, r)| *r)
-                    .map(|(l, _)| l)
-                    .collect();
+                let affect_rows = self
+                    .base_snapshot
+                    .summary
+                    .row_count
+                    .abs_diff(meta.summary.row_count);
+                let affect_bytes = self
+                    .base_snapshot
+                    .summary
+                    .uncompressed_byte_size
+                    .abs_diff(meta.summary.uncompressed_byte_size);
+                let progress_values = ProgressValues {
+                    rows: affect_rows as usize,
+                    bytes: affect_bytes as usize,
+                };
+                self.scan_progress.incr(&progress_values);
 
-                self.state = State::GenerateSnapshot(vec![]);
+                self.merged_segments = meta.segments.clone();
+                self.merged_statistics = meta.summary.clone();
+                self.abort_operation = meta.abort_operation.clone();
+
+                let mut new_snapshot = TableSnapshot::from_previous(&self.base_snapshot);
+                new_snapshot.segments = self.merged_segments.clone();
+                new_snapshot.summary = self.merged_statistics.clone();
+                self.state = State::TryCommit(new_snapshot);
             }
             State::DetectConfilct(latest_snapshot) => {
                 // Check if there is only insertion during the operation.
@@ -228,7 +202,7 @@ impl Processor for CompactSink {
                         self.retries += 1;
                         metrics_inc_commit_mutation_retry();
 
-                        self.state = State::GenerateSnapshot(
+                        self.state = State::MergeSegments(
                             latest_snapshot.segments[range_of_newly_append].to_owned(),
                         );
                         self.base_snapshot = latest_snapshot;
@@ -242,29 +216,6 @@ impl Processor for CompactSink {
 
     async fn async_process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::None) {
-            State::GenerateSnapshot(appended_segments) => {
-                let mut new_snapshot = TableSnapshot::from_previous(&self.base_snapshot);
-                if !appended_segments.is_empty() {
-                    self.merged_segments = appended_segments
-                        .iter()
-                        .chain(self.merged_segments.iter())
-                        .cloned()
-                        .collect();
-                    let segments_io = SegmentsIO::create(self.ctx.clone(), self.dal.clone());
-                    let append_segment_infos =
-                        segments_io.read_segments(&appended_segments).await?;
-                    for result in append_segment_infos.into_iter() {
-                        let appended_segment = result?;
-                        merge_statistics_mut(
-                            &mut self.merged_statistics,
-                            &appended_segment.summary,
-                        )?;
-                    }
-                }
-                new_snapshot.segments = self.merged_segments.clone();
-                new_snapshot.summary = self.merged_statistics.clone();
-                self.state = State::TryCommit(new_snapshot);
-            }
             State::TryCommit(new_snapshot) => {
                 let table_info = self.table.get_table_info();
                 match FuseTable::commit_to_meta_server(
@@ -304,6 +255,29 @@ impl Processor for CompactSink {
                     )
                 })?;
                 self.state = State::DetectConfilct(latest_snapshot);
+            }
+            State::MergeSegments(appended_segments) => {
+                let mut new_snapshot = TableSnapshot::from_previous(&self.base_snapshot);
+                if !appended_segments.is_empty() {
+                    self.merged_segments = appended_segments
+                        .iter()
+                        .chain(self.merged_segments.iter())
+                        .cloned()
+                        .collect();
+                    let segments_io = SegmentsIO::create(self.ctx.clone(), self.dal.clone());
+                    let append_segment_infos =
+                        segments_io.read_segments(&appended_segments).await?;
+                    for result in append_segment_infos.into_iter() {
+                        let appended_segment = result?;
+                        merge_statistics_mut(
+                            &mut self.merged_statistics,
+                            &appended_segment.summary,
+                        )?;
+                    }
+                }
+                new_snapshot.segments = self.merged_segments.clone();
+                new_snapshot.summary = self.merged_statistics.clone();
+                self.state = State::TryCommit(new_snapshot);
             }
             State::AbortOperation => {
                 let op = self.abort_operation.clone();

@@ -184,6 +184,7 @@ async fn test_simple_sql() -> Result<()> {
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert!(result.error.is_none(), "{:?}", result);
     assert!(result.schema.is_some(), "{:?}", result);
+    // has only one column
     assert_eq!(
         result.schema.as_ref().unwrap().fields().len(),
         1,
@@ -202,9 +203,23 @@ async fn test_show_databases() -> Result<()> {
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert!(result.error.is_none(), "{:?}", result);
     assert!(result.schema.is_some(), "{:?}", result);
+    // has only one field: name
     assert_eq!(
         result.schema.as_ref().unwrap().fields().len(),
         1,
+        "{:?}",
+        result
+    );
+
+    let sql = "show full databases";
+    let (status, result) = post_sql(sql, 1).await?;
+    assert_eq!(status, StatusCode::OK, "{:?}", result);
+    assert!(result.error.is_none(), "{:?}", result);
+    assert!(result.schema.is_some(), "{:?}", result);
+    // has two fields: catalog, name
+    assert_eq!(
+        result.schema.as_ref().unwrap().fields().len(),
+        2,
         "{:?}",
         result
     );
@@ -407,7 +422,7 @@ async fn test_pagination() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "current_thread")]
 async fn test_http_session() -> Result<()> {
     let _guard = TestGlobalServices::setup(ConfigBuilder::create().build()).await?;
 
@@ -753,7 +768,7 @@ async fn post_json_to_endpoint(
     check_response(response).await
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "current_thread")]
 async fn test_auth_jwt() -> Result<()> {
     let user_name = "root";
 
@@ -882,7 +897,7 @@ async fn assert_auth_current_role(
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "current_thread")]
 async fn test_auth_jwt_with_create_user() -> Result<()> {
     let user_name = "user1";
 
@@ -987,7 +1002,7 @@ async fn test_http_handler_tls_server() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "current_thread")]
 async fn test_http_handler_tls_server_failed_case_1() -> Result<()> {
     let config = ConfigBuilder::create()
         .http_handler_tls_server_key(TEST_SERVER_KEY)
@@ -1059,7 +1074,7 @@ async fn test_http_service_tls_server_mutual_tls() -> Result<()> {
 }
 
 // cannot connect with server unless it have CA signed identity
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "current_thread")]
 async fn test_http_service_tls_server_mutual_tls_failed() -> Result<()> {
     let _guard = TestGlobalServices::setup(
         ConfigBuilder::create()
@@ -1368,7 +1383,7 @@ async fn test_func_object_keys() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "current_thread")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_multi_partition() -> Result<()> {
     let _guard = TestGlobalServices::setup(ConfigBuilder::create().build()).await?;
 
@@ -1455,7 +1470,7 @@ async fn test_affect() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "current_thread")]
 async fn test_auth_configured_user() -> Result<()> {
     let user_name = "conf_user";
     let pass_word = "conf_user_pwd";

@@ -38,14 +38,20 @@ pub enum ExecutorTask {
 }
 
 pub struct ExecutorWorkerContext {
+    query_id: Arc<String>,
     worker_num: usize,
     task: ExecutorTask,
     workers_condvar: Arc<WorkersCondvar>,
 }
 
 impl ExecutorWorkerContext {
-    pub fn create(worker_num: usize, workers_condvar: Arc<WorkersCondvar>) -> Self {
+    pub fn create(
+        worker_num: usize,
+        workers_condvar: Arc<WorkersCondvar>,
+        query_id: Arc<String>,
+    ) -> Self {
         ExecutorWorkerContext {
+            query_id,
             worker_num,
             workers_condvar,
             task: ExecutorTask::None,
@@ -97,6 +103,7 @@ impl ExecutorWorkerContext {
         executor.async_runtime.spawn(TrackedFuture::create(
             ThreadTracker::fork(),
             ProcessorAsyncTask::create(
+                self.query_id.clone(),
                 worker_id,
                 processor.clone(),
                 tasks_queue,

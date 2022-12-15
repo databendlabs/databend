@@ -20,6 +20,7 @@ use common_ast::ast::CopyStmt;
 use common_ast::ast::CopyUnit;
 use common_ast::ast::Query;
 use common_ast::ast::Statement;
+use common_ast::ast::UriLocation;
 use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
 use common_ast::Backtrace;
@@ -35,11 +36,10 @@ use common_exception::Result;
 use common_meta_types::FileFormatOptions;
 use common_meta_types::StageFileFormatType;
 use common_meta_types::UserStageInfo;
-use common_storage::parse_uri_location;
-use common_storage::UriLocation;
 use common_users::UserApiProvider;
 use tracing::debug;
 
+use crate::binder::location::parse_uri_location;
 use crate::binder::Binder;
 use crate::normalize_identifier;
 use crate::plans::CopyPlanV2;
@@ -646,6 +646,12 @@ pub fn parse_copy_file_format_options(
         .unwrap_or(&"".to_string())
         .to_string();
 
+    // Quote in csv.
+    let quote = file_format_options
+        .get("quote")
+        .unwrap_or(&"".to_string())
+        .to_string();
+
     Ok(FileFormatOptions {
         format: file_format,
         skip_header,
@@ -655,5 +661,6 @@ pub fn parse_copy_file_format_options(
         escape,
         compression,
         row_tag,
+        quote,
     })
 }

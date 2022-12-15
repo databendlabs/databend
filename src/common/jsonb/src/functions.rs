@@ -843,19 +843,11 @@ pub fn parse_json_path(path: &[u8]) -> Result<Vec<JsonPath>, Error> {
                 let c = read_char(path, &mut idx)?;
                 if c == b'\\' {
                     idx += 1;
-                    let c = read_char(path, &mut idx)?;
-                    if c == b'"' {
-                        idx += 1;
+                } else if c == b'"' {
+                    if idx < path.len() {
+                        return Err(Error::InvalidToken);
                     }
-                } else if c != b'"' {
-                    idx += 1;
-                } else {
-                    // Try to read to check if has extra strings, string value can only have one.
-                    let c = read_char(path, &mut idx);
-                    match c {
-                        Ok(_) => return Err(Error::InvalidToken),
-                        Err(_) => break,
-                    }
+                    break;
                 }
             }
             let s = std::str::from_utf8(&path[prev_idx..idx - 1])?;

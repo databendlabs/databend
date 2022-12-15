@@ -987,7 +987,6 @@ impl<KV: KVApi> SchemaApi for KV {
                     if_then: vec![
                         // Changing a table in a db has to update the seq of db_meta,
                         // to block the batch-delete-tables when deleting a db.
-                        // TODO: test this when old metasrv is replaced with kv-txn based SchemaApi.
                         txn_op_put(&DatabaseId { db_id }, serialize_struct(&db_meta)?), /* (db_id) -> db_meta */
                         txn_op_put(&dbid_tbname, serialize_u64(table_id)?), /* (tenant, db_id, tb_name) -> tb_id */
                         txn_op_put(&tbid, serialize_struct(&req.table_meta)?), /* (tenant, db_id, tb_id) -> tb_meta */
@@ -1149,7 +1148,6 @@ impl<KV: KVApi> SchemaApi for KV {
                     if_then: vec![
                         // Changing a table in a db has to update the seq of db_meta,
                         // to block the batch-delete-tables when deleting a db.
-                        // TODO: test this when old metasrv is replaced with kv-txn based SchemaApi.
                         txn_op_put(&DatabaseId { db_id }, serialize_struct(&db_meta)?), /* (db_id) -> db_meta */
                         txn_op_del(&dbid_tbname), // (db_id, tb_name) -> tb_id
                         txn_op_put(&tbid, serialize_struct(&tb_meta)?), /* (tenant, db_id, tb_id) -> tb_meta */
@@ -1307,7 +1305,6 @@ impl<KV: KVApi> SchemaApi for KV {
                     if_then: vec![
                         // Changing a table in a db has to update the seq of db_meta,
                         // to block the batch-delete-tables when deleting a db.
-                        // TODO: test this when old metasrv is replaced with kv-txn based SchemaApi.
                         txn_op_put(&DatabaseId { db_id }, serialize_struct(&db_meta)?), /* (db_id) -> db_meta */
                         txn_op_put(&dbid_tbname, serialize_u64(table_id)?), /* (tenant, db_id, tb_name) -> tb_id */
                         // txn_op_put(&dbid_tbname_idlist, serialize_struct(&tb_id_list)?)?, // _fd_table_id_list/db_id/table_name -> tb_id_list
@@ -1498,7 +1495,6 @@ impl<KV: KVApi> SchemaApi for KV {
                     txn_op_put(&newdbid_newtbname, serialize_u64(table_id)?), /* (db_id, new_tb_name) -> tb_id */
                     // Changing a table in a db has to update the seq of db_meta,
                     // to block the batch-delete-tables when deleting a db.
-                    // TODO: test this when old metasrv is replaced with kv-txn based SchemaApi.
                     txn_op_put(&DatabaseId { db_id }, serialize_struct(&db_meta)?), /* (db_id) -> db_meta */
                     txn_op_put(&dbid_tbname_idlist, serialize_struct(&tb_id_list)?), /* _fd_table_id_list/db_id/old_table_name -> tb_id_list */
                     txn_op_put(&new_dbid_tbname_idlist, serialize_struct(&new_tb_id_list)?), /* _fd_table_id_list/db_id/new_table_name -> tb_id_list */
@@ -1507,7 +1503,6 @@ impl<KV: KVApi> SchemaApi for KV {
 
                 if db_id != new_db_id {
                     then_ops.push(
-                        // TODO: test this when old metasrv is replaced with kv-txn based SchemaApi.
                         txn_op_put(
                             &DatabaseId { db_id: new_db_id },
                             serialize_struct(&new_db_meta)?,
