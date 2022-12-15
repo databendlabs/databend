@@ -21,6 +21,7 @@ use common_meta_app::schema::CountTablesReq;
 use common_meta_app::schema::CreateDatabaseReply;
 use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::CreateTableReq;
+use common_meta_app::schema::DatabaseType;
 use common_meta_app::schema::DropDatabaseReq;
 use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::DropTableReq;
@@ -143,7 +144,7 @@ pub trait Catalog: DynClone + Send + Sync {
     async fn update_table_meta(
         &self,
         tenant: &str,
-        db_name: &str,
+        db_type: DatabaseType,
         req: UpdateTableMetaReq,
     ) -> Result<UpdateTableMetaReply>;
 

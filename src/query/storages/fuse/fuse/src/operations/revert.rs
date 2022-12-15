@@ -54,8 +54,9 @@ impl FuseTable {
 
         // 4. let's roll
         let tenant = ctx.get_tenant();
-        let db_name = &navigation_descriptor.database_name;
-        let reply = catalog.update_table_meta(&tenant, db_name, req).await;
+        let reply = catalog
+            .update_table_meta(&tenant, self.table_info.db_type.clone(), req)
+            .await;
         if reply.is_ok() {
             // try keep the snapshot hit
             let snapshot_location = table_reverting_to.snapshot_loc().await?.ok_or_else(|| {

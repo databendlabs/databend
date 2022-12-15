@@ -27,6 +27,7 @@ use common_meta_app::schema::DatabaseIdent;
 use common_meta_app::schema::DatabaseInfo;
 use common_meta_app::schema::DatabaseMeta;
 use common_meta_app::schema::DatabaseNameIdent;
+use common_meta_app::schema::DatabaseType;
 use common_meta_app::schema::DropDatabaseReq;
 use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::DropTableReq;
@@ -282,11 +283,16 @@ impl Catalog for MutableCatalog {
     async fn update_table_meta(
         &self,
         tenant: &str,
-        db_name: &str,
+        db_type: DatabaseType,
         req: UpdateTableMetaReq,
     ) -> Result<UpdateTableMetaReply> {
-        let db = self.get_database(tenant, db_name).await?;
-        db.update_table_meta(req).await
+        match db_type {
+            DatabaseType::NormalDB => Ok(self.ctx.meta.update_table_meta(req).await?),
+            DatabaseType::ShareDB(share_ident) => {
+                let db = self.get_database(tenant, &share_ident.share_name).await?;
+                db.update_table_meta(req).await
+            }
+        }
     }
 
     async fn get_table_copied_file_info(
