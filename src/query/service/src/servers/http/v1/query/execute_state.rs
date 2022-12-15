@@ -344,7 +344,8 @@ impl HttpQueryHandle {
         });
 
         let query_ctx = ctx.clone();
-        let executor_settings = ExecutorSettings::try_create(&ctx.get_settings())?;
+        let query_id = ctx.get_id();
+        let executor_settings = ExecutorSettings::try_create(&ctx.get_settings(), query_id)?;
 
         let run = move || -> Result<()> {
             let mut pipelines = build_res.sources_pipelines;

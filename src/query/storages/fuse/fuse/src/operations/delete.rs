@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_base::base::ProgressValues;
 use common_catalog::plan::Expression;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PartitionsShuffleKind;
@@ -125,10 +126,11 @@ impl FuseTable {
     fn try_eval_const(&self, filter: &Expression) -> Result<bool> {
         let func_ctx = FunctionContext::default();
 
-        let dummy_field = TableField::new("dummy", NullType::new_impl());
-        let dummy_schema = Arc::new(DataSchema::new(vec![dummy_field]));
-        let dummy_data_block =
-            Chunk::new_from_sequence(vec![(Value::Scalar(Scalar::Null), DataType::Null)]);
+        // let dummy_field = DataField::new("dummy", NullType::new_impl());
+        // let dummy_schema = Arc::new(DataSchema::new(vec![dummy_field]));
+        // let dummy_column = DataValue::Null.as_const_column(&NullType::new_impl(), 1)?;
+        // let dummy_data_block = DataBlock::create(dummy_schema.clone(), vec![dummy_column]);
+
         // let eval_node = Arc::new(Evaluator::eval_expression(filter, dummy_schema.as_ref())?);
         // let filter_result = eval_node.eval(&func_ctx, &dummy_data_block)?.vector;
         // debug_assert!(filter_result.len() == 1);

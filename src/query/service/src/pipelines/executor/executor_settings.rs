@@ -12,19 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
 use std::time::Duration;
 
 use common_exception::Result;
 use common_settings::Settings;
 
 pub struct ExecutorSettings {
+    pub query_id: Arc<String>,
     pub max_execute_time: Duration,
 }
 
 impl ExecutorSettings {
-    pub fn try_create(settings: &Settings) -> Result<ExecutorSettings> {
+    pub fn try_create(settings: &Settings, query_id: String) -> Result<ExecutorSettings> {
         let max_execute_time = settings.get_max_execute_time()?;
         Ok(ExecutorSettings {
+            query_id: Arc::new(query_id),
             max_execute_time: Duration::from_millis(max_execute_time),
         })
     }

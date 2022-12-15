@@ -420,7 +420,8 @@ pub async fn execute_query(ctx: Arc<QueryContext>, query: &str) -> Result<Sendab
 }
 
 pub fn execute_pipeline(ctx: Arc<QueryContext>, mut res: PipelineBuildResult) -> Result<()> {
-    let executor_settings = ExecutorSettings::try_create(&ctx.get_settings())?;
+    let query_id = ctx.get_id();
+    let executor_settings = ExecutorSettings::try_create(&ctx.get_settings(), query_id)?;
     res.set_max_threads(ctx.get_settings().get_max_threads()? as usize);
     let mut pipelines = res.sources_pipelines;
     pipelines.push(res.main_pipeline);

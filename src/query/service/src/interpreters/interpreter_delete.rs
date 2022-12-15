@@ -76,7 +76,8 @@ impl Interpreter for DeleteInterpreter {
         if !pipeline.pipes.is_empty() {
             let settings = self.ctx.get_settings();
             pipeline.set_max_threads(settings.get_max_threads()? as usize);
-            let executor_settings = ExecutorSettings::try_create(&settings)?;
+            let query_id = self.ctx.get_id();
+            let executor_settings = ExecutorSettings::try_create(&settings, query_id)?;
             let executor = PipelineCompleteExecutor::try_create(pipeline, executor_settings)?;
 
             self.ctx.set_executor(Arc::downgrade(&executor.get_inner()));

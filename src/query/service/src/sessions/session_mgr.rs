@@ -158,8 +158,10 @@ impl SessionManager {
 
         // stop tracking session
         {
-            let mut sessions = self.active_sessions.write();
-            sessions.remove(session_id);
+            // Make sure this write lock has been released before dropping.
+            // Becuase droping session could re-enter `destroy_session`.
+            let weak_session = { self.active_sessions.write().remove(session_id) };
+            drop(weak_session);
         }
 
         // also need remove mysql_conn_map

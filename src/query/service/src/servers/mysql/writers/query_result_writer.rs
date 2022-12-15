@@ -38,6 +38,7 @@ use tracing::error;
 /// "Read x rows, y MiB in z sec., A million rows/sec., B MiB/sec."
 pub trait ProgressReporter {
     fn progress_info(&self) -> String;
+    fn affected_rows(&self) -> u64;
 }
 
 pub struct QueryResult {
@@ -122,7 +123,16 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
                 }
             }
 
-            dataset_writer.completed(OkResponse::default()).await?;
+            let affected_rows = query_result
+                .extra_info
+                .map(|r| r.affected_rows())
+                .unwrap_or_default();
+            dataset_writer
+                .completed(OkResponse {
+                    affected_rows,
+                    ..Default::default()
+                })
+                .await?;
             return Ok(());
         }
 
