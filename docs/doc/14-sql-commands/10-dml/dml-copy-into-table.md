@@ -160,34 +160,75 @@ formatTypeOptions ::=
   RECORD_DELIMITER = '<character>'
   FIELD_DELIMITER = '<character>'
   SKIP_HEADER = <integer>
+  QUOTE = '<character>'
+  ESCAPE = '<character>'
+  NAN_DISPLAY = '<string>'
+  ROW_TAG = '<string>'
   COMPRESSION = AUTO | GZIP | BZ2 | BROTLI | ZSTD | DEFLATE | RAW_DEFLATE | XZ | NONE
 ```
 
-#### `RECORD_DELIMITER = '<character>'`
+#### `TYPE = 'CSV'`
 
-Description: One character that separate records in an input file.
+Comma Separated Values format ([RFC](https://www.rfc-editor.org/rfc/rfc4180)).
 
-Default: `'\n'`
+some notice:
 
-#### `FIELD_DELIMITER = '<character>'`
+1. a string field contains `Quote`|`Escape`|`RECORD_DELIMITER`|`RECORD_DELIMITER` must be quoted.
+2. no character is escaped except `Quote` in quoted string.
+3. no space between `FIELD_DELIMITER` and `Quote`.
+4. no trailing `FIELD_DELIMITER` for a record.
+5. Array/Struct field is serialized to a string as in SQL, and then the resulting string is output to CSV in quotes.
+6. if you are generating CSV via programing, we highly recommend you to use the CSV lib of the programing language.
+7. for text file unloaded from [MySQL](https://dev.mysql.com/doc/refman/8.0/en/load-data.html), the default format is
+   TSV in databend. it is valid CSV only if  `ESCAPED BY` is empty and `ENCLOSED BY` is not empty.
 
-Description: One character that separate fields in an input file.
+##### `RECORD_DELIMITER = '<character>'`
 
-Default: `','` (comma)
+**Description**: One character that separate records in an input file.
+**Supported Values**: `\r\n` or One character including escaped char: `\b`, `\f`, `\r`, `\n`, `\t`, `\0`, `\xHH`
+**Default**: `\n`
 
-#### `SKIP_HEADER = '<integer>'`
+##### `FIELD_DELIMITER = '<character>'`
 
-Description: Number of lines at the start of the file to skip.
+**Description**: One character that separate fields in an input file.
+**Supported Values**: One character only, including escaped char: `\b`, `\f`, `\r`, `\n`, `\t`, `\0`, `\xHH`
+**Default**: `\t` (comma)
 
-Default: `0`
+##### `Quote = '<character>'`
 
-#### `COMPRESSION = AUTO | GZIP | BZ2 | BROTLI | ZSTD | DEFLATE | RAW_DEFLATE | XZ | NONE`
+**Description**: One character to quote strings in CSV file.
 
-Description: String that represents the compression algorithm.
+for data loading, quote is not necessary unless a string contains `Quote`|`Escape`|`RECORD_DELIMITER`|`RECORD_DELIMITER`
 
-Default: `NONE`
+**Supported Values**: `\'` or `\"`.
+**Default**: `\"`
 
-Values:
+##### `ESCAPE = '<character>'`
+
+**Description**: One character to escape quote in quoted strings.
+**Supported Values**: `\'` or `\"` or `\\`.
+**Default**: `\"`
+
+##### `SKIP_HEADER = '<integer>'`
+
+**Use**: Data loading only.
+
+**Description**: Number of lines at the start of the file to skip.
+
+**Default**: `0`
+
+##### `NAN_DISPLAY = '<string>'`
+
+**Supported Values**: must be literal `'nan'` or `'null'` (case-insensitive)
+**Default**: `'NaN'`
+
+##### `COMPRESSION = AUTO | GZIP | BZ2 | BROTLI | ZSTD | DEFLATE | RAW_DEFLATE | XZ | NONE`
+
+**Description**: String that represents the compression algorithm.
+
+**Default**: `NONE`
+
+**Supported Values**:
 
 | Values        | Notes                                                           |
 | ------------- | --------------------------------------------------------------- |
@@ -200,6 +241,55 @@ Values:
 | `RAW_DEFLATE` | Deflate-compressed files (without any header, RFC1951).         |
 | `XZ`          |                                                                 |
 | `NONE`        | Indicates that the files have not been compressed.              |
+
+#### `TYPE = 'TSV'`
+
+1. these characters are escaped: `\b`, `\f`, `\r`, `\n`, `\t`, `\0`, `\\`, `\'`, `RECORD_DELIMITER`,`FIELD_DELIMITER`.
+2. quoting/enclosing is not support now.
+3. Array/Struct field is serialized to a string as in SQL, and then the resulting string is output to CSV in quotes.
+4. Null is serialized as `\N`
+
+##### `RECORD_DELIMITER = '<character>'`
+
+**Description**: One character that separate records in an input file.
+
+**Supported Values**: `\r\n` or One character including escaped char: `\b`, `\f`, `\r`, `\n`, `\t`, `\0`, `\xHH`
+
+**Default**: `'\n'`
+
+##### `FIELD_DELIMITER = '<character>'`
+
+**Description**: One character that separate fields in an input file.
+
+**Supported Values**: One character only, including escaped char: `\b`, `\f`, `\r`, `\n`, `\t`, `\0`, `\xHH`
+
+**Default**: `'\t'` (TAB)
+
+##### `COMPRESSION = AUTO | GZIP | BZ2 | BROTLI | ZSTD | DEFLATE | RAW_DEFLATE | XZ | NONE`
+
+same as `COMPRESSION` in `TYPE = 'CSV'`
+
+#### `TYPE = 'NDJSON'`
+
+##### `COMPRESSION = AUTO | GZIP | BZ2 | BROTLI | ZSTD | DEFLATE | RAW_DEFLATE | XZ | NONE`
+
+same as `COMPRESSION` in `TYPE = 'CSV'`
+
+#### `TYPE = 'XML'`
+
+##### `COMPRESSION = AUTO | GZIP | BZ2 | BROTLI | ZSTD | DEFLATE | RAW_DEFLATE | XZ | NONE`
+
+same as `COMPRESSION` in `TYPE = 'CSV'`
+
+##### `ROW_TAG` = `<string>`
+
+**Description**: used to select XML elements to be decoded as a record.
+
+**Default**: `'row'`
+
+#### `TYPE = 'Parquet'`
+
+No options available now.
 
 ### copyOptions
 
