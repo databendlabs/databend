@@ -56,7 +56,7 @@ ALTER DATABASE c RENAME TO C
 query ok
 SELECT * FROM system.databases where name = 'c'
 
--- don't exist database c, so the result will be empty
+## don't exist database c, so the result will be empty
 statement ok
 SELECT name FROM system.databases where name = 'c';
 
@@ -75,7 +75,7 @@ ALTER DATABASE IF EXISTS a RENAME TO b
 statement ok
 ALTER DATABASE a RENAME TO a2
 
--- check if change a to `a2` successfully
+## check if change a to `a2` successfully
 query T
 SELECT name FROM system.databases where name = 'a2';
 ----
@@ -105,10 +105,6 @@ SELECT * FROM b2.t2
 ----
 10
 
-<<<<<<< HEAD
-
-=======
->>>>>>> cb1e30e151 (try to enable ci)
 query T
 SELECT name FROM system.databases where name = 'b2';
 ----

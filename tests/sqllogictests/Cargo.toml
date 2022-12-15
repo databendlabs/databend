@@ -16,6 +16,7 @@ mysql = "23.0.0"
 regex = "1"
 reqwest = { version = "0.11.13", features = ["json"] }
 serde_json = "1.0.89"
+serde = "1.0.150"
 sqllogictest = "0.9.0"
 tokio = { version = "1.21.1", features = ["full"] }
 walkdir = "2.3.2"

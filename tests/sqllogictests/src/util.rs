@@ -11,3 +11,14 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
+use std::collections::BTreeMap;
+use serde::Deserialize;
+use serde::Serialize;
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct HttpSessionConf {
+    pub database: Option<String>,
+    pub keep_server_session_secs: Option<u64>,
+    pub settings: Option<BTreeMap<String, String>>,
+}

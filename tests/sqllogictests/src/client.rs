@@ -26,6 +26,7 @@ use sqllogictest::ColumnType;
 use sqllogictest::DBOutput;
 
 use crate::error::Result;
+use crate::util::HttpSessionConf;
 
 #[derive(Debug)]
 pub struct MysqlClient {
@@ -76,13 +77,14 @@ impl MysqlClient {
 pub struct HttpClient {
     pub client: Client,
     pub url: String,
+    pub session: Option<HttpSessionConf>,
 }
 
 impl HttpClient {
     pub fn create() -> Result<HttpClient> {
         let client = Client::new();
         let url = "http://127.0.0.1:8000/v1/query".to_string();
-        Ok(HttpClient { client, url })
+        Ok(HttpClient { client, url, session: None})
     }
 
     pub async fn query(&mut self, sql: &str) -> Result<DBOutput> {
@@ -93,23 +95,33 @@ impl HttpClient {
         );
         header.insert("Accept", HeaderValue::from_str("application/json").unwrap());
         let mut query = HashMap::new();
-        query.insert("sql", sql);
-        let response = self
+        query.insert("sql", serde_json::to_value(sql).unwrap());
+        if let Some(session) = &self.session {
+            query.insert("session", serde_json::to_value(session).unwrap());
+        }
+        let mut response = self
             .client
             .post(&self.url)
             .json(&query)
             .basic_auth("root", Some(""))
-            .headers(header)
+            .headers(header.clone())
             .send()
             .await?;
         let text = response.text().await?;
-        let data: Value = serde_json::from_str(text.as_str()).unwrap();
+        let mut data: Value = serde_json::from_str(text.as_str()).unwrap();
+        self.session = serde_json::from_value(data.as_object().unwrap().get("session").unwrap().clone()).unwrap();
         let rows = data.as_object().unwrap().get("data").unwrap();
         let mut parsed_rows = Vec::new();
         for row in rows.as_array().unwrap() {
             let mut parsed_row = Vec::new();
             for col in row.as_array().unwrap() {
-                let cell = col.as_str().unwrap().to_string();
+                let mut cell = col.as_str().unwrap().to_string();
+                if &cell == "inf" {
+                    cell = "Infinity".to_string();
+                }
+                if &cell == "nan" {
+                    cell = "NaN".to_string();
+                }
                 if cell.is_empty() {
                     parsed_row.push("(empty)".to_string());
                 } else {
@@ -117,6 +129,38 @@ impl HttpClient {
                 }
             }
             parsed_rows.push(parsed_row);
+        }
+        while let Some(next_uri) = data.as_object().unwrap().get("next_uri").unwrap().as_str() {
+            let mut url = "http://127.0.0.1:8000".to_string();
+            url.push_str(next_uri);
+            response = self
+                .client
+                .post(url)
+                .json(&query)
+                .basic_auth("root", Some(""))
+                .headers(header.clone())
+                .send().await?;
+            let text = response.text().await?;
+            data = serde_json::from_str(text.as_str()).unwrap();
+            let rows = data.as_object().unwrap().get("data").unwrap();
+            for row in rows.as_array().unwrap() {
+                let mut parsed_row = Vec::new();
+                for col in row.as_array().unwrap() {
+                    let mut cell = col.as_str().unwrap().to_string();
+                    if &cell == "inf" {
+                        cell = "Infinity".to_string();
+                    }
+                    if &cell == "nan" {
+                        cell = "NaN".to_string();
+                    }
+                    if cell.is_empty() {
+                        parsed_row.push("(empty)".to_string());
+                    } else {
+                        parsed_row.push(cell);
+                    }
+                }
+                parsed_rows.push(parsed_row);
+            }
         }
         let mut types = vec![];
         if !parsed_rows.is_empty() {
