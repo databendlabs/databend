@@ -42,6 +42,9 @@ pub enum DSqlLogicTestError {
     // Error from serde json
     #[error("Serde json error: {0}")]
     SerdeJson(SerdeJsonError),
+    // Error from databend sqllogictests
+    #[error("Databend sqllogictests error: {0}")]
+    SelfError(String),
 }
 
 impl From<TestError> for DSqlLogicTestError {
@@ -77,5 +80,11 @@ impl From<WalkDirError> for DSqlLogicTestError {
 impl From<SerdeJsonError> for DSqlLogicTestError {
     fn from(value: SerdeJsonError) -> Self {
         DSqlLogicTestError::SerdeJson(value)
+    }
+}
+
+impl From<String> for DSqlLogicTestError {
+    fn from(value: String) -> Self {
+        DSqlLogicTestError::SelfError(value)
     }
 }

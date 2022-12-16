@@ -250,7 +250,13 @@ ORDER BY x.a
 3
 
 statement ok
+drop table if exists cte1
+
+statement ok
 CREATE TABLE cte1(a Int64)
+
+statement ok
+drop table if exists cte2
 
 statement ok
 CREATE TABLE cte2(a Int64)

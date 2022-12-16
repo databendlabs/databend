@@ -26,6 +26,7 @@ use crate::client::HttpClient;
 use crate::client::MysqlClient;
 use crate::error::DSqlLogicTestError;
 use crate::error::Result;
+use crate::util::find_specific_dir;
 
 mod arg;
 mod client;
@@ -112,7 +113,7 @@ pub async fn main() -> Result<()> {
 
     // Second run databend with http client
     println!("Http client starts to run...");
-    // run_http_client().await?;
+    run_http_client().await?;
 
     // Third run databend with clickhouse http client
     println!("Clickhouse http client starts to run...");
@@ -181,33 +182,37 @@ async fn run_suits(suits: ReadDir, databend: Databend) -> Result<()> {
 fn get_files(suit: PathBuf) -> Result<Vec<walkdir::Result<DirEntry>>> {
     let args = SqlLogicTestArgs::parse();
     let mut files = vec![];
-    for entry in WalkDir::new(suit)
-        .min_depth(1)
+    // Skipped dir and specific dir won't be used together!
+    if args.dir.is_none() {
+        for entry in WalkDir::new(suit)
+            .min_depth(0)
+            .max_depth(100)
+            .sort_by(|a, b| a.file_name().cmp(b.file_name()))
+            .into_iter()
+            .filter_entry(|e| {
+                if let Some(skipped_dir) = &args.skipped_dir {
+                    if e.file_name().to_str().unwrap() == skipped_dir {
+                        return false;
+                    }
+                }
+                true
+            })
+            .filter(|e| !e.as_ref().unwrap().file_type().is_dir())
+        {
+            files.push(entry);
+        }
+        return Ok(files);
+    }
+    // Find specific dir
+    let dir_entry = find_specific_dir(args.dir.as_ref().unwrap(), suit);
+    if dir_entry.is_err() {
+        return Ok(vec![]);
+    }
+    for entry in WalkDir::new(dir_entry.unwrap().into_path())
+        .min_depth(0)
         .max_depth(100)
         .sort_by(|a, b| a.file_name().cmp(b.file_name()))
         .into_iter()
-        .filter_entry(|e| {
-            if let Some(skipped_dir) = &args.skipped_dir {
-                if e.file_name().to_str().unwrap() == skipped_dir {
-                    return false;
-                }
-            }
-            true
-        })
-        .filter(|e| {
-            if args.dir.is_none() {
-                return true;
-            }
-            let specific_dir = args.dir.as_ref().unwrap();
-            let e = e.as_ref().unwrap();
-            return if e.file_type().is_dir() {
-                // Filter out specific dir and whose parent dir is specific dir
-                (e.file_name().to_str().unwrap() == specific_dir)
-                    || e.path().to_str().unwrap().contains(specific_dir)
-            } else {
-                e.path().to_str().unwrap().contains(specific_dir)
-            };
-        })
         .filter(|e| !e.as_ref().unwrap().file_type().is_dir())
     {
         files.push(entry);

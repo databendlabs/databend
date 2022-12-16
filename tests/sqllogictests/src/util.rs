@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::path::PathBuf;
 
 use lazy_static::lazy_static;
 use regex::Regex;
@@ -20,7 +21,10 @@ use regex::RegexBuilder;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
+use walkdir::DirEntry;
+use walkdir::WalkDir;
 
+use crate::error::DSqlLogicTestError;
 use crate::error::Result;
 
 lazy_static! {
@@ -68,4 +72,21 @@ pub fn parser_rows(rows: &Value) -> Result<Vec<Vec<String>>> {
         parsed_rows.push(parsed_row);
     }
     Ok(parsed_rows)
+}
+
+pub fn find_specific_dir(dir: &str, suit: PathBuf) -> Result<DirEntry> {
+    for entry in WalkDir::new(suit)
+        .min_depth(0)
+        .max_depth(100)
+        .sort_by(|a, b| a.file_name().cmp(b.file_name()))
+        .into_iter()
+    {
+        let e = entry.as_ref().unwrap();
+        if e.file_type().is_dir() && e.file_name().to_str().unwrap() == dir {
+            return Ok(entry?);
+        }
+    }
+    Err(DSqlLogicTestError::SelfError(
+        "Didn't find specific dir".to_string(),
+    ))
 }
