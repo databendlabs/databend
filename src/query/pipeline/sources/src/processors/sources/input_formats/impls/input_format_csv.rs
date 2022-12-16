@@ -81,28 +81,10 @@ impl InputFormatCSV {
         Ok(())
     }
 
-    fn check_num_field(
-        expect: usize,
-        actual: usize,
-        field_ends: &[usize],
-        path: &str,
-        rows: usize,
-    ) -> Result<()> {
-        if actual < expect {
+    fn check_num_field(expect: usize, actual: usize, path: &str, rows: usize) -> Result<()> {
+        if actual != expect {
             return Err(csv_error(
-                &format!("expect {} fields, only found {} ", expect, actual),
-                path,
-                rows,
-            ));
-        } else if actual > expect + 1 {
-            return Err(csv_error(
-                &format!("too many fields, expect {}, got {}", expect, actual),
-                path,
-                rows,
-            ));
-        } else if actual == expect + 1 && field_ends[expect] != field_ends[expect - 1] {
-            return Err(csv_error(
-                "CSV allow ending with ',', but should not have data after it",
+                &format!("expect {} fields, found {} ", expect, actual),
                 path,
                 rows,
             ));
@@ -185,7 +167,7 @@ impl InputFormatTextBase for InputFormatCSV {
                     ));
                 }
                 ReadRecordResult::Record => {
-                    Self::check_num_field(num_fields, endlen, field_ends, &state.path, state.rows)?;
+                    Self::check_num_field(num_fields, endlen, &state.path, state.rows)?;
 
                     state.rows_to_skip -= 1;
                     tracing::debug!(
@@ -244,7 +226,6 @@ impl InputFormatTextBase for InputFormatCSV {
                     Self::check_num_field(
                         num_fields,
                         endlen,
-                        field_ends,
                         &state.path,
                         start_row + row_batch.row_ends.len(),
                     )?;
@@ -336,7 +317,7 @@ impl InputFormatTextBase for InputFormatCSV {
                 ));
             }
             ReadRecordResult::Record => {
-                Self::check_num_field(num_fields, endlen, field_ends, &state.path, start_row)?;
+                Self::check_num_field(num_fields, endlen, &state.path, start_row)?;
                 let data = mem::take(&mut reader.out);
 
                 let row_batch = RowBatch {
