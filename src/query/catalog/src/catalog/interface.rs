@@ -164,8 +164,7 @@ pub trait Catalog: DynClone + Send + Sync {
 
     async fn truncate_table(
         &self,
-        tenant: &str,
-        db_name: &str,
+        table_info: &TableInfo,
         req: TruncateTableReq,
     ) -> Result<TruncateTableReply>;
 

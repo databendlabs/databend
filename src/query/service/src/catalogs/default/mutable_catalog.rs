@@ -318,12 +318,18 @@ impl Catalog for MutableCatalog {
 
     async fn truncate_table(
         &self,
-        tenant: &str,
-        db_name: &str,
+        table_info: &TableInfo,
         req: TruncateTableReq,
     ) -> Result<TruncateTableReply> {
-        let db = self.get_database(tenant, db_name).await?;
-        db.truncate_table(req).await
+        match table_info.db_type.clone() {
+            DatabaseType::NormalDB => Ok(self.ctx.meta.truncate_table(req).await?),
+            DatabaseType::ShareDB(share_ident) => {
+                let db = self
+                    .get_database(&share_ident.tenant, &share_ident.share_name)
+                    .await?;
+                db.truncate_table(req).await
+            }
+        }
     }
 
     async fn count_tables(&self, req: CountTablesReq) -> Result<CountTablesReply> {
