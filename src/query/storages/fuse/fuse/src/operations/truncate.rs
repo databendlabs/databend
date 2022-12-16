@@ -72,7 +72,7 @@ impl FuseTable {
             let db_name = ctx.get_current_database();
 
             catalog
-                .update_table_meta(&tenant, &db_name, UpdateTableMetaReq {
+                .update_table_meta(&self.table_info, UpdateTableMetaReq {
                     table_id,
                     seq: MatchSeq::Exact(table_version),
                     new_table_meta,

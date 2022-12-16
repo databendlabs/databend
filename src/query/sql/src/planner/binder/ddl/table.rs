@@ -40,6 +40,7 @@ use common_ast::ast::Statement;
 use common_ast::ast::TableReference;
 use common_ast::ast::TruncateTableStmt;
 use common_ast::ast::UndropTableStmt;
+use common_ast::ast::UriLocation;
 use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
 use common_ast::walk_expr_mut;
@@ -54,15 +55,14 @@ use common_datavalues::TypeFactory;
 use common_datavalues::Vu8;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_storage::parse_uri_location;
 use common_storage::DataOperator;
-use common_storage::UriLocation;
 use common_storages_table_meta::table::is_reserved_opt_key;
 use common_storages_table_meta::table::OPT_KEY_DATABASE_ID;
 use common_storages_view::view_table::QUERY;
 use common_storages_view::view_table::VIEW_ENGINE;
 use tracing::debug;
 
+use crate::binder::location::parse_uri_location;
 use crate::binder::scalar::ScalarBinder;
 use crate::binder::Binder;
 use crate::binder::Visibility;
@@ -104,6 +104,7 @@ impl<'a> Binder {
         stmt: &ShowTablesStmt<'a>,
     ) -> Result<Plan> {
         let ShowTablesStmt {
+            catalog,
             database,
             full,
             limit,
@@ -120,9 +121,10 @@ impl<'a> Binder {
 
         if *full {
             select_builder
-                .with_column(format!("name AS Tables_in_{database}"))
+                .with_column("name AS Tables")
                 .with_column("'BASE TABLE' AS Table_type")
-                .with_column("database AS table_catalog")
+                .with_column("database AS Database")
+                .with_column("catalog AS Catalog")
                 .with_column("engine")
                 .with_column("created_on AS create_time");
             if *with_history {
@@ -142,10 +144,16 @@ impl<'a> Binder {
         }
 
         select_builder
+            .with_order_by("catalog")
             .with_order_by("database")
             .with_order_by("name");
 
         select_builder.with_filter(format!("database = '{database}'"));
+
+        if let Some(catalog) = catalog {
+            let catalog = normalize_identifier(catalog, &self.name_resolution_ctx).name;
+            select_builder.with_filter(format!("catalog = '{catalog}'"));
+        }
 
         let query = match limit {
             None => select_builder.build(),

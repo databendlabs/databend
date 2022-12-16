@@ -284,7 +284,11 @@ impl PipelineExecutor {
     /// Method is thread unsafe and require thread safe call
     pub unsafe fn execute_single_thread(&self, thread_num: usize) -> Result<()> {
         let workers_condvar = self.workers_condvar.clone();
-        let mut context = ExecutorWorkerContext::create(thread_num, workers_condvar);
+        let mut context = ExecutorWorkerContext::create(
+            thread_num,
+            workers_condvar,
+            self.settings.query_id.clone(),
+        );
 
         while !self.global_tasks_queue.is_finished() {
             // When there are not enough tasks, the thread will be blocked, so we need loop check.

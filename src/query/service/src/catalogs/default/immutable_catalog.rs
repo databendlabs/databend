@@ -248,8 +248,7 @@ impl Catalog for ImmutableCatalog {
 
     async fn update_table_meta(
         &self,
-        _tenant: &str,
-        _db_name: &str,
+        _table_info: &TableInfo,
         req: UpdateTableMetaReq,
     ) -> Result<UpdateTableMetaReply> {
         Err(ErrorCode::Unimplemented(format!(

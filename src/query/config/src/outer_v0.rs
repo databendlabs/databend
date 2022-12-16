@@ -136,6 +136,7 @@ impl Config {
     /// with_args is to control whether we need to load from args or not.
     /// We should set this to false during tests because we don't want
     /// our test binary to parse cargo's args.
+    #[no_sanitize(address)]
     pub fn load(with_args: bool) -> Result<Self> {
         let mut arg_conf = Self::default();
 

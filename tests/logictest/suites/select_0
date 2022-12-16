@@ -13,7 +13,7 @@ statement query TTTRRTIIII
 SELECT * FROM system.tables WHERE database='db1';
 
 ----
-db1 t1 FUSE $ANYTHING $DATE NULL	0	0	0	0
+default db1 t1 FUSE $ANYTHING $DATE NULL	0	0	0	0
 
 statement ok
 drop database db1;

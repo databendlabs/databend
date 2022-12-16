@@ -469,4 +469,9 @@ impl ProgressReporter for ContextProgressReporter {
             convert_byte_size((progress.bytes as f64) / (seconds)),
         )
     }
+
+    fn affected_rows(&self) -> u64 {
+        let progress = self.context.get_scan_progress_value();
+        progress.rows as u64
+    }
 }
