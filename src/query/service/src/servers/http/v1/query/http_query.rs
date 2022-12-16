@@ -145,6 +145,8 @@ impl HttpSessionConf {
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct StageAttachmentConf {
+    /// location of the stage
+    /// for example: @stage_name/path/to/file, @~/path/to/file
     pub(crate) location: String,
     pub(crate) format_options: Option<BTreeMap<String, String>>,
     pub(crate) copy_options: Option<BTreeMap<String, String>>,
