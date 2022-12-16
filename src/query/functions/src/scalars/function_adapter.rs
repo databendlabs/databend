@@ -113,7 +113,7 @@ impl Function for FunctionAdapter {
         // We must ensure all inner function eval at least one row block
         if input_rows == 0 {
             let return_type = self.return_type();
-            return Ok(return_type.create_column(&[])?);
+            return return_type.create_column(&[]);
         }
 
         let inner = self.inner.as_ref().unwrap();
