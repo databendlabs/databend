@@ -62,13 +62,13 @@ statement ok
 DROP DATABASE db1;
 
 statement ok
-CREATE TABLE IF NOT EXISTS db2.t2(a UInt32 null) Engine = Fuse;
+CREATE TABLE IF NOT EXISTS db2.t2(a UInt32 null) Engine = Fuse
 
 statement ok
-INSERT INTO db2.t2 VALUES(1);
+INSERT INTO db2.t2 VALUES(1)
 
 statement ok
-DROP DATABASE db2;
-=======
-DROP DATABASE db1
->>>>>>> a7eb484185 (remove last semicolon in sql)
+DROP DATABASE if exists db2
+
+statement ok
+DROP DATABASE if exists db1
