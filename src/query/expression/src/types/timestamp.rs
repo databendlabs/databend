@@ -13,14 +13,14 @@
 // limitations under the License.
 
 use std::fmt::Display;
+use std::io::Cursor;
 use std::ops::Range;
 
 use chrono::DateTime;
 use chrono_tz::Tz;
 use common_arrow::arrow::buffer::Buffer;
-use common_io::prelude::BufferReadDateTimeExt;
-use common_io::prelude::BufferReadExt;
-use common_io::prelude::BufferReader;
+use common_io::cursor_ext::BufferReadDateTimeExt;
+use common_io::cursor_ext::ReadBytesExt;
 
 use super::number::SimpleDomain;
 use crate::property::Domain;
@@ -215,7 +215,7 @@ pub fn microseconds_to_days(micros: i64) -> i32 {
 
 #[inline]
 pub fn string_to_timestamp(ts_str: impl AsRef<[u8]>, tz: Tz) -> Option<DateTime<Tz>> {
-    let mut reader = BufferReader::new(std::str::from_utf8(ts_str.as_ref()).unwrap().as_bytes());
+    let mut reader = Cursor::new(std::str::from_utf8(ts_str.as_ref()).unwrap().as_bytes());
     match reader.read_timestamp_text(&tz) {
         Ok(dt) => match reader.must_eof() {
             Ok(..) => Some(dt),
