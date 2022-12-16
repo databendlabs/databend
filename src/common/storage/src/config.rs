@@ -189,10 +189,7 @@ impl StorageParams {
     }
 
     pub fn is_fs(&self) -> bool {
-        match self {
-            StorageParams::Fs(_) => true,
-            _ => false,
-        }
+        matches!(self, StorageParams::Fs(_))
     }
 }
 

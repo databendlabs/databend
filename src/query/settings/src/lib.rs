@@ -141,7 +141,7 @@ impl Settings {
             },
             // max_threads
             SettingValue {
-                default_value: UserSettingValue::UInt64(num_physical_cpus as u64),
+                default_value: UserSettingValue::UInt64(num_physical_cpus),
                 user_setting: UserSetting::create(
                     "max_threads",
                     UserSettingValue::UInt64(num_physical_cpus),
