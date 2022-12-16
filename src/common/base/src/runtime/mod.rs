@@ -25,6 +25,7 @@ pub use global_runtime::GlobalIORuntime;
 pub use runtime::Dropper;
 pub use runtime::Runtime;
 pub use runtime::TrySpawn;
+pub use runtime_tracker::set_alloc_error_hook;
 pub use runtime_tracker::LimitMemGuard;
 pub use runtime_tracker::MemStat;
 pub use runtime_tracker::ThreadTracker;

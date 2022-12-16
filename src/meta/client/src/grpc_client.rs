@@ -30,7 +30,6 @@ use common_base::base::tokio::time::sleep;
 use common_base::containers::ItemManager;
 use common_base::containers::Pool;
 use common_base::containers::TtlHashMap;
-use common_base::runtime::LimitMemGuard;
 use common_base::runtime::Runtime;
 use common_base::runtime::TrySpawn;
 use common_base::runtime::UnlimitedFuture;

@@ -48,7 +48,6 @@ use std::fmt::Formatter;
 use std::future::Future;
 use std::mem::take;
 use std::pin::Pin;
-use std::ptr::NonNull;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicI64;
 use std::sync::atomic::Ordering;
@@ -72,6 +71,20 @@ static mut TRACKER: ThreadTracker = ThreadTracker::empty();
 static UNLIMITED_FLAG: AtomicBool = AtomicBool::new(false);
 
 static MEM_STAT_BUFFER_SIZE: i64 = 4 * 1024 * 1024;
+
+pub fn set_alloc_error_hook() {
+    std::alloc::set_alloc_error_hook(|layout| {
+        let _guard = LimitMemGuard::enter_unlimited();
+
+        let tracker = unsafe { &mut TRACKER };
+        let out_of_limit_desc = tracker.out_of_limit_desc.take();
+        panic!(
+            "{}",
+            out_of_limit_desc
+                .unwrap_or_else(|| format!("memory allocation of {} bytes failed", layout.size()))
+        );
+    })
+}
 
 /// A guard that restores the thread local tracker to the `saved` when dropped.
 pub struct Entered<'a> {
@@ -145,6 +158,7 @@ impl Debug for OutOfLimit<i64> {
 #[derive(Default)]
 pub struct ThreadTracker {
     mem_stat: Option<Arc<MemStat>>,
+    out_of_limit_desc: Option<String>,
 
     /// Buffered memory allocation stat that is yet not reported to `mem_stat` and can not be seen.
     buffer: StatBuffer,
@@ -165,6 +179,7 @@ impl ThreadTracker {
     pub const fn empty() -> Self {
         Self {
             mem_stat: None,
+            out_of_limit_desc: None,
             buffer: StatBuffer::empty(),
         }
     }
@@ -172,6 +187,7 @@ impl ThreadTracker {
     pub fn create(mem_stat: Option<Arc<MemStat>>) -> ThreadTracker {
         ThreadTracker {
             mem_stat,
+            out_of_limit_desc: None,
             buffer: Default::default(),
         }
     }
@@ -215,8 +231,8 @@ impl ThreadTracker {
             // https://play.rust-lang.org/?version=stable&mode=debug&edition=2021&gist=03d21a15e52c7c0356fca04ece283cf9
             if !std::thread::panicking() && !LimitMemGuard::is_unlimited() {
                 let _guard = LimitMemGuard::enter_unlimited();
+                tracker.out_of_limit_desc = Some(format!("{:?}", out_of_limit));
                 return Err(AllocError);
-                // panic!("{:?}", out_of_limit);
             }
         }
 

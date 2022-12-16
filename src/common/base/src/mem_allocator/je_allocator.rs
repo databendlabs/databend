@@ -124,7 +124,6 @@ pub mod linux_or_macos {
             }
         }
 
-        #[inline(never)]
         unsafe fn grow(
             &self,
             ptr: NonNull<u8>,
@@ -189,7 +188,6 @@ pub mod linux_or_macos {
             ))
         }
 
-        #[inline(never)]
         unsafe fn shrink(
             &self,
             ptr: NonNull<u8>,

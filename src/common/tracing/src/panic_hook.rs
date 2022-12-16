@@ -29,10 +29,6 @@ pub fn set_panic_hook() {
         let _guard = LimitMemGuard::enter_unlimited();
         log_panic(panic);
     }));
-
-    std::alloc::set_alloc_error_hook(|layout| {
-        panic!("allocate error");
-    })
 }
 
 pub fn log_panic(panic: &PanicInfo) {
@@ -45,9 +41,8 @@ pub fn log_panic(panic: &PanicInfo) {
             panic.file = location.file(),
             panic.line = location.line(),
             panic.column = location.column(),
-            panic.can_unwind = panic.can_unwind(),
         );
     } else {
-        error!(message = %panic, backtrace = %backtrace, panic.can_unwind = panic.can_unwind());
+        error!(message = %panic, backtrace = %backtrace);
     }
 }

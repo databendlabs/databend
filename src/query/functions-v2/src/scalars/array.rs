@@ -50,7 +50,6 @@ use common_expression::FunctionSignature;
 use common_expression::Scalar;
 use common_expression::Value;
 use common_expression::ValueRef;
-use common_hashtable::HashSet;
 use common_hashtable::HashtableKeyable;
 use common_hashtable::KeysRef;
 use common_hashtable::StackHashSet;
@@ -281,7 +280,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     {
         match lhs {
             ValueRef::Scalar(array) => {
-                let mut set = HashSet::with_capacity(T::column_len(&array));
+                let mut set = StackHashSet::<_, 128>::with_capacity(T::column_len(&array));
                 for val in T::iter_column(&array) {
                     let _ = set.set_insert(T::to_owned_scalar(val));
                 }
@@ -375,7 +374,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         |lhs, rhs, _| {
             match lhs {
                 ValueRef::Scalar(array) => {
-                    let mut set = HashSet::with_capacity(BooleanType::column_len(&array));
+                    let mut set = StackHashSet::<_, 128>::with_capacity(BooleanType::column_len(&array));
                     for val in array.iter() {
                         let _ = set.set_insert(val as u8);
                     }
@@ -416,7 +415,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         |lhs, rhs, _| {
             match lhs {
                 ValueRef::Scalar(array) => {
-                    let mut set = HashSet::with_capacity(StringType::column_len(&array));
+                    let mut set = StackHashSet::<_, 128>::with_capacity(StringType::column_len(&array));
                     for val in array.iter() {
                         let key_ref = KeysRef::create(val.as_ptr() as usize, val.len());
                         let _ = set.set_insert(key_ref);

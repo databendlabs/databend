@@ -34,7 +34,7 @@ use crate::scalars::FunctionContext;
 pub struct InEvaluatorImpl<const NEGATED: bool, S: Scalar + Clone, Key: HashtableKeyable + Clone> {
     input_type: DataTypeImpl,
     nonull_least_super_dt: DataTypeImpl,
-    set: Arc<common_hashtable::HashSet<Key>>,
+    set: Arc<StackHashSet<Key, 64>>,
     _col: ColumnRef,
     _s: PhantomData<S>,
 }
@@ -175,7 +175,7 @@ where
         let col = col.convert_full_column();
         let c = Series::check_get_scalar::<S>(&col)?;
 
-        let mut set = common_hashtable::HashSet::with_capacity(c.len());
+        let mut set = StackHashSet::with_capacity(c.len());
         for data in c.scalar_iter() {
             let _ = set.set_insert(data.to_key());
         }

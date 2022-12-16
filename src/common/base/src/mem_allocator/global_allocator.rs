@@ -16,19 +16,11 @@ use std::alloc::AllocError;
 use std::alloc::Allocator;
 use std::alloc::GlobalAlloc;
 use std::alloc::Layout;
-use std::alloc::LayoutError;
-use std::cmp::Ordering::Equal;
-use std::cmp::Ordering::Greater;
-use std::cmp::Ordering::Less;
 use std::ptr::null_mut;
 use std::ptr::NonNull;
 
-use tracing::error;
-use tracing::info;
-
 use super::je_allocator::JEAllocator;
 use super::system_allocator::SystemAllocator;
-use crate::runtime::LimitMemGuard;
 
 #[global_allocator]
 pub static GLOBAL_ALLOCATOR: GlobalAllocator = GlobalAllocator;
@@ -54,7 +46,7 @@ unsafe impl Allocator for GlobalAllocator {
         Fallback::new(Default::default()).deallocate(ptr, layout)
     }
 
-    #[inline(never)]
+    #[inline(always)]
     unsafe fn grow(
         &self,
         ptr: NonNull<u8>,
@@ -74,7 +66,7 @@ unsafe impl Allocator for GlobalAllocator {
         Fallback::new(Default::default()).grow_zeroed(ptr, old_layout, new_layout)
     }
 
-    #[inline(never)]
+    #[inline(always)]
     unsafe fn shrink(
         &self,
         ptr: NonNull<u8>,
@@ -110,7 +102,7 @@ unsafe impl GlobalAlloc for GlobalAllocator {
         }
     }
 
-    #[inline(never)]
+    #[inline(always)]
     unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
         use std::cmp::Ordering::*;
 

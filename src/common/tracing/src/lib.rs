@@ -13,8 +13,6 @@
 // limitations under the License.
 
 #![deny(unused_crate_dependencies)]
-#![feature(panic_can_unwind)]
-#![feature(alloc_error_hook)]
 
 #[macro_use]
 mod macros;
