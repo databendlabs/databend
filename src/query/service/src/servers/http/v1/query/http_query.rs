@@ -21,6 +21,7 @@ use common_base::base::tokio;
 use common_base::base::tokio::sync::Mutex as TokioMutex;
 use common_base::base::tokio::sync::RwLock;
 use common_base::runtime::TrySpawn;
+use common_catalog::table_context::StageAttachment;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use serde::Deserialize;
@@ -59,6 +60,7 @@ pub struct HttpQueryRequest {
     pub pagination: PaginationConf,
     #[serde(default = "default_as_true")]
     pub string_fields: bool,
+    pub stage_attachment: Option<StageAttachmentConf>,
 }
 
 const DEFAULT_MAX_ROWS_IN_BUFFER: usize = 5 * 1000 * 1000;
@@ -139,6 +141,15 @@ impl HttpSessionConf {
         }
         ret
     }
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct StageAttachmentConf {
+    /// location of the stage
+    /// for example: @stage_name/path/to/file, @~/path/to/file
+    pub(crate) location: String,
+    pub(crate) format_options: Option<BTreeMap<String, String>>,
+    pub(crate) copy_options: Option<BTreeMap<String, String>>,
 }
 
 #[derive(Debug, Clone)]
@@ -228,6 +239,21 @@ impl HttpQuery {
         let id = ctx.get_id();
         let sql = &request.sql;
         tracing::info!("run query_id={id} in session_id={session_id}, sql='{sql}'");
+
+        match &request.stage_attachment {
+            Some(attachment) => ctx.attach_stage(StageAttachment {
+                location: attachment.location.clone(),
+                format_options: match attachment.format_options {
+                    Some(ref params) => params.clone(),
+                    None => BTreeMap::new(),
+                },
+                copy_options: match attachment.copy_options {
+                    Some(ref params) => params.clone(),
+                    None => BTreeMap::new(),
+                },
+            }),
+            None => {}
+        };
 
         let (block_sender, block_receiver) = sized_spsc(request.pagination.max_rows_in_buffer);
         let start_time = Instant::now();

@@ -17,6 +17,7 @@ use std::io::BufRead;
 use std::io::Cursor;
 use std::ops::Not;
 use std::sync::Arc;
+use std::time::Instant;
 
 use aho_corasick::AhoCorasick;
 use common_ast::ast::Expr;
@@ -24,7 +25,9 @@ use common_ast::parser::parse_comma_separated_exprs;
 use common_ast::parser::tokenize_sql;
 use common_ast::Backtrace;
 use common_base::runtime::GlobalIORuntime;
+use common_catalog::plan::StageTableInfo;
 use common_catalog::table::AppendMode;
+use common_catalog::table_context::StageAttachment;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
@@ -33,19 +36,26 @@ use common_formats::parse_timezone;
 use common_formats::FastFieldDecoderValues;
 use common_io::cursor_ext::ReadBytesExt;
 use common_io::cursor_ext::ReadCheckPointExt;
+use common_meta_types::UserStageInfo;
+use common_pipeline_core::Pipeline;
 use common_pipeline_sources::processors::sources::AsyncSource;
 use common_pipeline_sources::processors::sources::AsyncSourcer;
 use common_pipeline_transforms::processors::transforms::Transform;
 use common_sql::evaluator::ChunkOperator;
 use common_sql::evaluator::CompoundChunkOperator;
+use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use common_sql::Metadata;
 use common_sql::MetadataRef;
+use common_storages_factory::Table;
+use common_storages_stage::StageTable;
+use common_users::UserApiProvider;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 
 use crate::interpreters::common::append2table;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
+use crate::pipelines::processors::TransformAddOn;
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::SourcePipeBuilder;
 use crate::schedulers::build_query_pipeline;
@@ -101,6 +111,100 @@ impl InsertInterpreterV2 {
         let cast_needed = select_schema != *output_schema;
         Ok(cast_needed)
     }
+
+    async fn build_insert_from_stage_pipeline(
+        &self,
+        table: Arc<dyn Table>,
+        attachment: Arc<StageAttachment>,
+        pipeline: &mut Pipeline,
+    ) -> Result<()> {
+        let start = Instant::now();
+        let ctx = self.ctx.clone();
+        let table_ctx: Arc<dyn TableContext> = ctx.clone();
+        let source_schema = self.plan.schema();
+        let target_schema = table.schema();
+        let catalog_name = self.plan.catalog.clone();
+        let overwrite = self.plan.overwrite;
+
+        let (mut stage_info, path) = parse_stage_location(&self.ctx, &attachment.location).await?;
+        stage_info.apply_format_options(&attachment.format_options)?;
+        stage_info.apply_copy_options(&attachment.copy_options)?;
+
+        let mut stage_table_info = StageTableInfo {
+            schema: source_schema.clone(),
+            user_stage_info: stage_info,
+            path: path.to_string(),
+            files: vec![],
+            pattern: "".to_string(),
+            files_to_copy: None,
+        };
+
+        let all_source_file_infos = StageTable::list_files(&table_ctx, &stage_table_info).await?;
+
+        tracing::info!(
+            "insert: read all stage attachment files finished: {}, elapsed:{}",
+            all_source_file_infos.len(),
+            start.elapsed().as_secs()
+        );
+
+        stage_table_info.files_to_copy = Some(all_source_file_infos.clone());
+        let stage_table = StageTable::try_create(stage_table_info.clone())?;
+        let read_source_plan = {
+            stage_table
+                .read_plan_with_catalog(ctx.clone(), catalog_name, None)
+                .await?
+        };
+
+        stage_table.read_data(table_ctx, &read_source_plan, pipeline)?;
+
+        let need_fill_missing_columns = target_schema != source_schema;
+        if need_fill_missing_columns {
+            pipeline.add_transform(|transform_input_port, transform_output_port| {
+                TransformAddOn::try_create(
+                    transform_input_port,
+                    transform_output_port,
+                    source_schema.clone(),
+                    target_schema.clone(),
+                    ctx.clone(),
+                )
+            })?;
+        }
+        table.append_data(ctx.clone(), pipeline, AppendMode::Copy, false)?;
+
+        pipeline.set_on_finished(move |may_error| {
+            // capture out variable
+            let overwrite = overwrite;
+            let ctx = ctx.clone();
+            let table = table.clone();
+
+            match may_error {
+                Some(error) => {
+                    tracing::error!("insert stage file error: {}", error);
+                    Err(may_error.as_ref().unwrap().clone())
+                }
+                None => {
+                    let append_entries = ctx.consume_precommit_blocks();
+                    // We must put the commit operation to global runtime, which will avoid the "dispatch dropped without returning error" in tower
+                    GlobalIORuntime::instance().block_on(async move {
+                        tracing::info!(
+                            "insert: try to commit append entries:{}, elapsed:{}",
+                            append_entries.len(),
+                            start.elapsed().as_secs()
+                        );
+                        table
+                            .commit_insertion(ctx, append_entries, overwrite)
+                            .await?;
+
+                        // TODO:(everpcpc) purge copied files
+
+                        Ok(())
+                    })
+                }
+            }
+        });
+
+        Ok(())
+    }
 }
 
 #[async_trait::async_trait]
@@ -155,6 +259,16 @@ impl Interpreter for InsertInterpreterV2 {
                     input_context
                         .format
                         .exec_stream(input_context.clone(), &mut build_res.main_pipeline)?;
+                }
+                InsertInputSource::Stage(opts) => {
+                    tracing::info!("insert: from stage with options {:?}", opts);
+                    self.build_insert_from_stage_pipeline(
+                        table.clone(),
+                        opts.clone(),
+                        &mut build_res.main_pipeline,
+                    )
+                    .await?;
+                    return Ok(build_res);
                 }
                 InsertInputSource::SelectPlan(plan) => {
                     let table1 = table.clone();
@@ -601,4 +715,27 @@ async fn exprs_to_datavalue<'a>(
     let res = expression_transform.transform(one_row_block)?;
     let datavalues: Vec<DataValue> = res.columns().iter().skip(1).map(|col| col.get(0)).collect();
     Ok(datavalues)
+}
+
+// TODO:(everpcpc) tmp copy from src/query/sql/src/planner/binder/copy.rs
+// move to user stage module
+async fn parse_stage_location(
+    ctx: &Arc<QueryContext>,
+    location: &str,
+) -> Result<(UserStageInfo, String)> {
+    let s: Vec<&str> = location.split('@').collect();
+    // @my_ext_stage/abc/
+    let names: Vec<&str> = s[1].splitn(2, '/').filter(|v| !v.is_empty()).collect();
+
+    let stage = if names[0] == "~" {
+        UserStageInfo::new_user_stage(&ctx.get_current_user()?.name)
+    } else {
+        UserApiProvider::instance()
+            .get_stage(&ctx.get_tenant(), names[0])
+            .await?
+    };
+
+    let path = names.get(1).unwrap_or(&"").trim_start_matches('/');
+
+    Ok((stage, path.to_string()))
 }
