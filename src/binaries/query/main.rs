@@ -16,6 +16,7 @@ use std::env;
 
 use common_base::runtime::Runtime;
 use common_base::runtime::GLOBAL_MEM_STAT;
+use common_base::set_alloc_error_hook;
 use common_config::Config;
 use common_config::DATABEND_COMMIT_VERSION;
 use common_config::QUERY_SEMVER;
@@ -60,6 +61,7 @@ async fn main_entrypoint() -> Result<()> {
 
     init_default_metrics_recorder();
     set_panic_hook();
+    set_alloc_error_hook();
 
     if conf.meta.is_embedded_meta()? {
         MetaEmbedded::init_global_meta_store(conf.meta.embedded_dir.clone()).await?;
