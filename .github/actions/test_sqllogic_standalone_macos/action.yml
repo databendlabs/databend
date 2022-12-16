@@ -33,7 +33,7 @@ runs:
         bypass_env_vars: RUSTFLAGS,RUSTDOCFLAGS,RUST_TEST_THREADS,RUST_LOG,RUST_BACKTRACE
     - shell: bash
       run: ./scripts/ci/deploy/databend-query-standalone.sh
-    - name:  Run sqllogic tests with standalone mode (macos)
+    - name: Run sqllogic tests with standalone mode (macos)
       shell: bash
       run: cargo run -p sqllogictests -- --skip_dir cluster
       env:
