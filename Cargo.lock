@@ -7015,9 +7015,9 @@ dependencies = [
 
 [[package]]
 name = "reqsign"
-version = "0.7.0"
+version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9dab669a353d7993188029580a6297c09de9b3b82d26f9c7a6906e984db5074b"
+checksum = "64e209415378d7a5e169615faee53d9961ee1f1046d9d00991045a6a2de9f3f6"
 dependencies = [
  "anyhow",
  "backon",
