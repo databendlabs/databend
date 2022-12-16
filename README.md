@@ -29,7 +29,7 @@
 <br>
 
 <a href="https://github.com/datafuselabs/databend/actions">
-<img src="https://img.shields.io/github/workflow/status/datafuselabs/databend/Release" alt="CI Status" />
+<img src="https://img.shields.io/github/actions/workflow/status/datafuselabs/databend/databend-release.yml?branch=main" alt="CI Status" />
 </a>
 
 <img src="https://img.shields.io/badge/Platform-Linux%2C%20macOS%2C%20ARM-green.svg?style=flat" alt="Linux Platform" />
