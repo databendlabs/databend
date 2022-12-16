@@ -22,9 +22,10 @@ use std::str;
 use std::sync::Arc;
 
 use common_ast::Dialect;
+use common_base::base::get_physical_core_count;
 use common_base::runtime::GlobalIORuntime;
 use common_base::runtime::TrySpawn;
-use common_config::Config;
+use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::UserSetting;
@@ -74,7 +75,6 @@ pub struct Settings {
 
 impl Settings {
     pub async fn try_create(
-        conf: &Config,
         user_api: Arc<UserApiProvider>,
         tenant: String,
     ) -> Result<Arc<Settings>> {
@@ -101,40 +101,32 @@ impl Settings {
             }
             settings
         };
-
-        // Overwrite settings from conf or global set.
-        {
-            // Set max threads.
-            {
-                if ret.get_max_threads()? == 0 {
-                    let cpus = if conf.query.num_cpus == 0 {
-                        ret.check_and_get_default_value("max_threads")?.as_u64()?
-                    } else {
-                        conf.query.num_cpus
-                    };
-                    ret.set_max_threads(cpus)?;
-                }
-            }
-            // Set max memory usage.
-            {
-                if ret.get_max_memory_usage()? == 0 {
-                    let max_usage = if conf.query.max_server_memory_usage == 0 {
-                        ret.check_and_get_default_value("max_memory_usage")?
-                            .as_u64()?
-                    } else {
-                        conf.query.max_server_memory_usage
-                    };
-                    ret.set_max_memory_usage(max_usage)?;
-                }
-            }
-        }
-
         Ok(ret)
     }
 
     pub fn default_settings(tenant: &str) -> Result<Arc<Settings>> {
+        let conf = GlobalConfig::instance();
+
         let memory_info = sys_info::mem_info().map_err(ErrorCode::from_std_error)?;
-        let num_cpus = sys_info::cpu_num().map_err(ErrorCode::from_std_error)?;
+
+        let num_logical_cpus = sys_info::cpu_num().map_err(ErrorCode::from_std_error)?;
+        let mut num_physical_cpus =
+            get_physical_core_count().unwrap_or(num_logical_cpus as usize) as u64;
+        if conf.query.num_cpus != 0 {
+            num_physical_cpus = conf.query.num_cpus;
+        }
+
+        let mut default_max_memory_usage = 1024 * memory_info.total * 80 / 100;
+        if conf.query.max_server_memory_usage != 0 {
+            default_max_memory_usage = conf.query.max_server_memory_usage;
+        }
+
+        let default_max_storage_io_requests = if conf.storage.params.is_fs() {
+            num_physical_cpus
+        } else {
+            64
+        };
+
         let values = vec![
             // max_block_size
             SettingValue {
@@ -149,8 +141,11 @@ impl Settings {
             },
             // max_threads
             SettingValue {
-                default_value: UserSettingValue::UInt64(num_cpus as u64),
-                user_setting: UserSetting::create("max_threads", UserSettingValue::UInt64(0)),
+                default_value: UserSettingValue::UInt64(num_physical_cpus as u64),
+                user_setting: UserSetting::create(
+                    "max_threads",
+                    UserSettingValue::UInt64(num_physical_cpus),
+                ),
                 level: ScopeLevel::Session,
                 desc: "The maximum number of threads to execute the request. By default the value is determined automatically.",
                 possible_values: None,
@@ -158,8 +153,11 @@ impl Settings {
             // max_memory_usage
             SettingValue {
                 // unit of memory_info.total is kB
-                default_value: UserSettingValue::UInt64(1024 * memory_info.total * 80 / 100),
-                user_setting: UserSetting::create("max_memory_usage", UserSettingValue::UInt64(0)),
+                default_value: UserSettingValue::UInt64(default_max_memory_usage),
+                user_setting: UserSetting::create(
+                    "max_memory_usage",
+                    UserSettingValue::UInt64(default_max_memory_usage),
+                ),
                 level: ScopeLevel::Session,
                 desc: "The maximum memory usage for processing single query, in bytes. By default the value is determined automatically.",
                 possible_values: None,
@@ -175,13 +173,13 @@ impl Settings {
             },
             // max_storage_io_requests
             SettingValue {
-                default_value: UserSettingValue::UInt64(64),
+                default_value: UserSettingValue::UInt64(default_max_storage_io_requests),
                 user_setting: UserSetting::create(
                     "max_storage_io_requests",
-                    UserSettingValue::UInt64(64),
+                    UserSettingValue::UInt64(default_max_storage_io_requests),
                 ),
                 level: ScopeLevel::Session,
-                desc: "The maximum number of concurrent IO requests. By default, it is 64.",
+                desc: "The maximum number of concurrent IO requests. By default the value is determined automatically.",
                 possible_values: None,
             },
             // flight_client_timeout

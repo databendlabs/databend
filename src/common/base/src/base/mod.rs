@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod cpu;
 mod net;
 mod profiling;
 mod progress;
@@ -23,6 +24,7 @@ mod stoppable;
 mod string;
 mod uniq_id;
 
+pub use cpu::get_physical_core_count;
 pub use net::get_free_tcp_port;
 pub use net::get_free_udp_port;
 pub use profiling::Profiling;
