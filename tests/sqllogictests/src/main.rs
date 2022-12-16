@@ -12,14 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::fs::ReadDir;
 use std::path::PathBuf;
 
 use clap::Parser;
 use client::ClickhouseHttpClient;
-use lazy_static::lazy_static;
-use regex::Regex;
 use sqllogictest::DBOutput;
 use walkdir::DirEntry;
 use walkdir::WalkDir;
@@ -36,23 +33,6 @@ mod error;
 mod util;
 
 const TEST_SUITS: &str = "tests/logictest/suites";
-
-// Maybe moved later...
-lazy_static! {
-    static ref REGEX_MAP: HashMap<&'static str, Regex> = {
-        let mut regex_map = HashMap::new();
-        regex_map.insert("$ANYTHING", Regex::new(r".*").unwrap());
-        regex_map.insert(
-            "$DATE",
-            Regex::new(r"\d\d\d\d-\d\d-\d\d \d\d:\d\d:\d\d[.]\d\d\d [+-]\d\d\d\d").unwrap(),
-        );
-        regex_map.insert(
-            "$DATE_IN_SHARE",
-            Regex::new(r"\d\d\d\d-\d\d-\d\d \d\d:\d\d:\d\d[.]\d+ UTC").unwrap(),
-        );
-        regex_map
-    };
-}
 
 pub struct Databend {
     mysql_client: Option<MysqlClient>,
@@ -79,13 +59,15 @@ impl sqllogictest::AsyncDB for Databend {
     type Error = DSqlLogicTestError;
 
     async fn run(&mut self, sql: &str) -> Result<DBOutput> {
-        println!("Running sql: [{}]", sql);
         if let Some(mysql_client) = &mut self.mysql_client {
+            println!("Running sql with mysql client: [{}]", sql);
             return mysql_client.query(sql);
         }
         if let Some(http_client) = &mut self.http_client {
+            println!("Running sql with http client: [{}]", sql);
             return http_client.query(sql).await;
         }
+        println!("Running sql with clickhouse client: [{}]", sql);
         self.ck_client.as_mut().unwrap().query(sql).await
     }
 
@@ -96,7 +78,6 @@ impl sqllogictest::AsyncDB for Databend {
         if self.ck_client.is_some() {
             return "clickhouse";
         }
-
         "http"
     }
 }

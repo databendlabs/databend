@@ -59,7 +59,6 @@ statement ok
 drop table st1
 
 statement ok
-<<<<<<< HEAD
 DROP DATABASE db1;
 
 statement ok

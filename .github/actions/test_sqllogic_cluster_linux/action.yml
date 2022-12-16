@@ -35,7 +35,10 @@ runs:
       run: ./scripts/ci/deploy/databend-query-cluster-3-nodes.sh
     - name: Run sqllogic tests with cluster mode
       shell: bash
-      run: cargo run -p sqllogictests
+      run: |
+        cargo run -p sqllogictests -- --run_dir base
+        cargo run -p sqllogictests -- --run_dir query
+        cargo run -p sqllogictests -- --run_dir cluster
       env:
         RUST_TEST_THREADS: "2"
         RUST_LOG: DEBUG

@@ -58,9 +58,4 @@ impl MysqlClient {
             rows: parsed_rows,
         })
     }
-
-    #[allow(dead_code)]
-    pub fn name(&self) -> &'static str {
-        "mysql_client"
-    }
 }
