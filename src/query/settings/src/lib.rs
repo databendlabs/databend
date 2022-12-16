@@ -79,7 +79,8 @@ impl Settings {
         user_api: Arc<UserApiProvider>,
         tenant: String,
     ) -> Result<Arc<Settings>> {
-        let settings = Self::default_settings(&tenant)?;
+        let config = GlobalConfig::instance();
+        let settings = Self::default_settings(&tenant, config)?;
 
         let ret = {
             // Overwrite settings from metasrv
@@ -105,9 +106,7 @@ impl Settings {
         Ok(ret)
     }
 
-    pub fn default_settings(tenant: &str) -> Result<Arc<Settings>> {
-        let conf = GlobalConfig::instance();
-
+    pub fn default_settings(tenant: &str, conf: Arc<Config>) -> Result<Arc<Settings>> {
         let memory_info = sys_info::mem_info().map_err(ErrorCode::from_std_error)?;
 
         let num_logical_cpus = sys_info::cpu_num().map_err(ErrorCode::from_std_error)?;
@@ -501,8 +500,7 @@ impl Settings {
 
     // Only used for testings
     pub fn default_test_settings() -> Result<Arc<Settings>> {
-        GlobalConfig::init(Config::default());
-        Self::default_settings("default")
+        Self::default_settings("default", Arc::new(Config::default()))
     }
 
     // Get max_block_size.
