@@ -28,6 +28,7 @@ use common_exception::Result;
 use futures::future::select;
 use futures_util::future::Either;
 use parking_lot::Mutex;
+use tracing::error;
 
 use crate::pipelines::executor::executor_condvar::WorkersCondvar;
 use crate::pipelines::executor::executor_graph::RunningGraph;
@@ -39,7 +40,7 @@ use crate::pipelines::pipeline::Pipeline;
 pub type InitCallback = Arc<Box<dyn Fn() -> Result<()> + Send + Sync + 'static>>;
 
 pub type FinishedCallback =
-    Arc<Box<dyn Fn(&Option<ErrorCode>) -> Result<()> + Send + Sync + 'static>>;
+Arc<Box<dyn Fn(&Option<ErrorCode>) -> Result<()> + Send + Sync + 'static>>;
 
 pub struct PipelineExecutor {
     threads_num: usize,
@@ -167,31 +168,42 @@ impl PipelineExecutor {
 
         self.start_executor_daemon()?;
 
-        let mut thread_join_handles = self.execute_threads(self.threads_num);
+        let this = self.clone();
+        let res = catch_unwind(|| -> Result<()> {
+            let mut thread_join_handles = this.execute_threads(this.threads_num);
 
-        while let Some(join_handle) = thread_join_handles.pop() {
-            let thread_res = join_handle.join().flatten();
+            while let Some(join_handle) = thread_join_handles.pop() {
+                let thread_res = join_handle.join().flatten();
 
-            {
-                let finished_error_guard = self.finished_error.lock();
-                if let Some(error) = finished_error_guard.as_ref() {
-                    let may_error = Some(error.clone());
-                    drop(finished_error_guard);
-                    (self.on_finished_callback)(&may_error)?;
+                {
+                    let finished_error_guard = this.finished_error.lock();
+                    if let Some(error) = finished_error_guard.as_ref() {
+                        let may_error = Some(error.clone());
+                        drop(finished_error_guard);
+                        (this.on_finished_callback)(&may_error)?;
+                        return Err(may_error.unwrap());
+                    }
+                }
+
+                // We will ignore the abort query error, because returned by finished_error if abort query.
+                if matches!(&thread_res, Err(error) if error.code() != ErrorCode::ABORTED_QUERY) {
+                    let may_error = Some(thread_res.unwrap_err());
+                    (this.on_finished_callback)(&may_error)?;
                     return Err(may_error.unwrap());
                 }
             }
 
-            // We will ignore the abort query error, because returned by finished_error if abort query.
-            if matches!(&thread_res, Err(error) if error.code() != ErrorCode::ABORTED_QUERY) {
-                let may_error = Some(thread_res.unwrap_err());
-                (self.on_finished_callback)(&may_error)?;
-                return Err(may_error.unwrap());
+            (this.on_finished_callback)(&None)?;
+            Ok(())
+        });
+
+        match res {
+            Ok(s) => s,
+            Err(cause) => {
+                error!("pipeline executor cause: {:?}", cause);
+                Err(cause)
             }
         }
-
-        (self.on_finished_callback)(&None)?;
-        Ok(())
     }
 
     fn init(self: &Arc<Self>) -> Result<()> {
@@ -238,7 +250,7 @@ impl PipelineExecutor {
         for thread_num in 0..threads {
             let this = self.clone();
             #[allow(unused_mut)]
-            let mut name = Some(format!("PipelineExecutor-{}", thread_num));
+                let mut name = Some(format!("PipelineExecutor-{}", thread_num));
 
             #[cfg(debug_assertions)]
             {
