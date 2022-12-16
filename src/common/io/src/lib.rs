@@ -32,7 +32,6 @@ mod binary_write;
 pub mod cursor_ext;
 mod file_split;
 mod format_settings;
-mod options_deserializer;
 mod position;
 mod serialization;
 mod stat_buffer;

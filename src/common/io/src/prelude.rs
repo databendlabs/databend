@@ -20,8 +20,6 @@ pub use crate::binary_write::put_uvarint;
 pub use crate::binary_write::BinaryWrite;
 pub use crate::file_split::*;
 pub use crate::format_settings::FormatSettings;
-pub use crate::options_deserializer::OptionsDeserializer;
-pub use crate::options_deserializer::OptionsDeserializerError;
 pub use crate::position::*;
 pub use crate::serialization::*;
 pub use crate::stat_buffer::StatBuffer;
