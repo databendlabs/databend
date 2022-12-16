@@ -37,6 +37,7 @@ SHOW TABLES
 ---------- AST ------------
 ShowTables(
     ShowTablesStmt {
+        catalog: None,
         database: None,
         full: false,
         limit: None,
@@ -52,6 +53,7 @@ SHOW TABLES
 ---------- AST ------------
 ShowTables(
     ShowTablesStmt {
+        catalog: None,
         database: None,
         full: false,
         limit: None,
@@ -64,6 +66,72 @@ ShowTables(
 Some(
     "TabSeparatedWithNamesAndTypes",
 )
+---------- Input ----------
+show full tables
+---------- Output ---------
+SHOW FULL TABLES
+---------- AST ------------
+ShowTables(
+    ShowTablesStmt {
+        catalog: None,
+        database: None,
+        full: true,
+        limit: None,
+        with_history: false,
+    },
+)
+
+
+---------- Input ----------
+show full tables from db
+---------- Output ---------
+SHOW FULL TABLES FROM db
+---------- AST ------------
+ShowTables(
+    ShowTablesStmt {
+        catalog: None,
+        database: Some(
+            Identifier {
+                name: "db",
+                quote: None,
+                span: Ident(22..24),
+            },
+        ),
+        full: true,
+        limit: None,
+        with_history: false,
+    },
+)
+
+
+---------- Input ----------
+show full tables from ctl.db
+---------- Output ---------
+SHOW FULL TABLES FROM ctl.db
+---------- AST ------------
+ShowTables(
+    ShowTablesStmt {
+        catalog: Some(
+            Identifier {
+                name: "ctl",
+                quote: None,
+                span: Ident(22..25),
+            },
+        ),
+        database: Some(
+            Identifier {
+                name: "db",
+                quote: None,
+                span: Ident(26..28),
+            },
+        ),
+        full: true,
+        limit: None,
+        with_history: false,
+    },
+)
+
+
 ---------- Input ----------
 show processlist;
 ---------- Output ---------

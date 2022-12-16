@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![feature(no_sanitize)]
+
 /// Config mods provide config support.
 ///
 /// We are providing two config types:
