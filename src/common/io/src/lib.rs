@@ -29,7 +29,6 @@ pub mod prelude;
 mod binary_read;
 mod binary_write;
 
-mod buffer;
 pub mod cursor_ext;
 mod file_split;
 mod format_settings;

@@ -15,6 +15,5 @@
 
 mod binary_read;
 mod binary_write;
-mod buffer;
 mod cursor_ext;
 mod options_deserializer;
