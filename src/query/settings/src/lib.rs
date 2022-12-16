@@ -25,6 +25,7 @@ use common_ast::Dialect;
 use common_base::base::get_physical_core_count;
 use common_base::runtime::GlobalIORuntime;
 use common_base::runtime::TrySpawn;
+use common_config::Config;
 use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -496,6 +497,12 @@ impl Settings {
             tenant: tenant.to_string(),
             settings,
         }))
+    }
+
+    // Only used for testings
+    pub fn default_test_settings() -> Result<Arc<Settings>> {
+        GlobalConfig::init(Config::default());
+        Self::default_settings("default")
     }
 
     // Get max_block_size.
