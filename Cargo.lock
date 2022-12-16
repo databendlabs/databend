@@ -8192,6 +8192,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sqllogictest",
+ "thiserror",
  "tokio",
  "walkdir",
 ]

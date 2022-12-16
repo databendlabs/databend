@@ -12,32 +12,35 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::error;
-use std::fmt::Display;
-use std::fmt::Formatter;
-
 use common_exception::ErrorCode;
 use mysql::Error as MysqlClientError;
 use reqwest::Error as HttpClientError;
 use serde_json::Error as SerdeJsonError;
 use sqllogictest::TestError;
+use thiserror::Error;
 use walkdir::Error as WalkDirError;
 
 pub type Result<T> = std::result::Result<T, DSqlLogicTestError>;
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum DSqlLogicTestError {
     // Error from sqllogictest-rs
+    #[error("SqlLogicTest error(from sqllogictest-rs crate): {0}")]
     SqlLogicTest(TestError),
     // Error from databend
+    #[error("Databend error: {0}")]
     Databend(ErrorCode),
     // Error from mysql client
+    #[error("Mysql client error: {0}")]
     MysqlClient(MysqlClientError),
     // Error from http client
+    #[error("Http client error(from reqwest crate): {0}")]
     HttpClient(HttpClientError),
     // Error from WalkDir
+    #[error("Walk dir error: {0}")]
     WalkDir(WalkDirError),
     // Error from serde json
+    #[error("Serde json error: {0}")]
     SerdeJson(SerdeJsonError),
 }
 
@@ -76,22 +79,3 @@ impl From<SerdeJsonError> for DSqlLogicTestError {
         DSqlLogicTestError::SerdeJson(value)
     }
 }
-
-impl Display for DSqlLogicTestError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            DSqlLogicTestError::SqlLogicTest(error) => write!(
-                f,
-                "SqlLogicTest error(from sqllogictest-rs) crate: {}",
-                error
-            ),
-            DSqlLogicTestError::Databend(error) => write!(f, "Databend error: {}", error),
-            DSqlLogicTestError::MysqlClient(error) => write!(f, "Mysql client error: {}", error),
-            DSqlLogicTestError::HttpClient(error) => write!(f, "Http client error: {}", error),
-            DSqlLogicTestError::WalkDir(error) => write!(f, "Walk dir error: {}", error),
-            DSqlLogicTestError::SerdeJson(error) => write!(f, "Serde json error: {}", error),
-        }
-    }
-}
-
-impl error::Error for DSqlLogicTestError {}

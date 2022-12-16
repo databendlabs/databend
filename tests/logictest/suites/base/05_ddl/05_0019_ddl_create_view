@@ -67,6 +67,8 @@ drop view default.v0
 statement ok
 drop database test_view
 
+statement ok
+drop table if exists default.c
 
 statement ok
 create table default.c like information_schema.keywords
