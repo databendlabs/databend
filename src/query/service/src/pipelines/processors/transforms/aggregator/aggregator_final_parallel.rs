@@ -170,6 +170,9 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
     }
 
     pub fn merge_blocks(&mut self, blocks: Vec<DataBlock>) -> Result<Vec<DataBlock>> {
+        if blocks.is_empty() {
+            return Ok(vec![]);
+        }
         for data_block in blocks {
             // 1.1 and 1.2.
             let aggregate_function_len = self.params.aggregate_functions.len();

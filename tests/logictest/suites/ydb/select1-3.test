@@ -95,6 +95,7 @@ statement ok
 insert into t1(e,d,c,b,a) values(246,248,247,249,245)
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select case when c>(select avg(c) from t1) then a*2 else b*10 end as col1,
        (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col2,
@@ -236,6 +237,7 @@ order by col1,col2,col3
 3 -1 3399
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select b as col1,
        a+b*2+c*3 as col2,
@@ -320,6 +322,7 @@ order by col3,col4,col2,col1
 3706 490 249 1484
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select (select count(*) from t1 as x where x.b<t1.b) as col1,
        case when a<b-3 then 111 when a<=b then 222
@@ -333,12 +336,14 @@ where (e>a and e<b)
 order by col4,col2,col3,col1,col5,col6
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select (select count(*) from t1 as x where x.b<t1.b) as col1
 from t1
 order by col1
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select (select count(*) from t1 as x where x.b<t1.b) as col1,
        abs(b-c) as col2,
@@ -404,6 +409,7 @@ order by col2,col5,col1,col4,col3
 2654 4 444 176 177
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select e as col1,
        (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col2,
@@ -484,6 +490,7 @@ order by col1,col3,col2
 4 2 127
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select e as col1
 from t1
@@ -615,6 +622,7 @@ order by col2,col5,col3,col1,col4
 -1 246 743 249 245
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select e as col1,
        abs(a) as col2,
@@ -706,6 +714,7 @@ order by col1,col4,col2,col3
 246 -4 247 245
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select a+b*2 as col1,
        e as col2,
@@ -743,6 +752,7 @@ order by col4,col3,col6,col1,col2,col5
 3553 1 237 444 239 239
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select case a+1 when b then 111 when c then 222
         when d then 333  when e then 444 else 555 end as col1,
@@ -756,6 +766,7 @@ from t1
 order by col2,col5,col3,col6,col4,col1
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select abs(b-c) as col1,
        (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col2,
@@ -826,6 +837,7 @@ order by col4,col3,col2,col1
 1000 100 4 444
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select abs(a) as col1,
        (select count(*) from t1 as x where x.b<t1.b) as col2,
@@ -876,6 +888,7 @@ order by col2,col4,col3,col1,col5
 -4 245 245 246 2
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select case when a<b-3 then 111 when a<=b then 222
         when a<b+3 then 333 else 444 end as col1,
@@ -888,6 +901,7 @@ where (c<=d-2 or c>=d+2)
 order by col3,col2,col1
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col1,
        case when c>(select avg(c) from t1) then a*2 else b*10 end as col2,
@@ -926,6 +940,7 @@ order by col3,col2,col1
 242.0 444 244
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select case when c>(select avg(c) from t1) then a*2 else b*10 end as col1,
        (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col2,
@@ -1014,6 +1029,7 @@ order by col1,col2,col3
 4 125 333
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select a+b*2+c*3+d*4+e*5 as col1,
        a as col2,
@@ -1063,6 +1079,7 @@ order by col1
 248
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select case when a<b-3 then 111 when a<=b then 222
         when a<b+3 then 333 else 444 end as col1,
@@ -1102,6 +1119,7 @@ order by col4,col2,col5,col6,col1,col3
 142 1430 1 2 143 142.0
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select a+b*2+c*3+d*4+e*5 as col1,
        a+b*2 as col2,
@@ -1117,6 +1135,7 @@ where (a>b-2 and a<b+2)
 order by col6,col5,col4,col2,col1,col3
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select abs(b-c) as col1
 from t1
@@ -1145,6 +1164,7 @@ order by col2,col1
 1 4
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select a+b*2+c*3+d*4+e*5 as col1,
        (select count(*) from t1 as x where x.b<t1.b) as col2,
@@ -1159,6 +1179,7 @@ where b>c
 order by col3,col2,col4,col1,col5
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select a+b*2+c*3 as col1,
        d-e as col2,
@@ -1169,6 +1190,7 @@ where d not between 110 and 150
 order by col1,col2,col4,col3
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col1,
        case a+1 when b then 111 when c then 222
@@ -1189,6 +1211,7 @@ order by col1
 2226
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col1,
        c-d as col2,
@@ -1200,6 +1223,7 @@ from t1
 order by col4,col2,col1,col3,col5,col6
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select (select count(*) from t1 as x where x.b<t1.b) as col1,
        a-b as col2,
@@ -1418,6 +1442,7 @@ order by col1,col5,col2,col6,col3,col4
 555 514 444 173 174 2579
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select a as col1,
        (select count(*) from t1 as x where x.b<t1.b) as col2,
@@ -1485,6 +1510,7 @@ order by col1
 2476
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select c-d as col1,
        abs(a) as col2,
@@ -1497,6 +1523,7 @@ where c>d
 order by col3,col1,col4,col5,col2
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select c-d as col1,
        a+b*2+c*3+d*4+e*5 as col2,
@@ -1550,6 +1577,7 @@ order by col3,col4,col1,col2,col5
 244 1455 3 4 -1
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select (a+b+c+d+e)/5 as col1,
        (select count(*) from t1 as x where x.b<t1.b) as col2,
@@ -1635,6 +1663,7 @@ order by col5,col4,col6,col2,col1,col3
 247 111 247.0 2 246 -1
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select (select count(*) from t1 as x where x.b<t1.b) as col1,
        c as col2,
@@ -1796,6 +1825,7 @@ order by col2,col1
 1272 127.0
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col1,
        case when a<b-3 then 111 when a<=b then 222
@@ -1985,6 +2015,7 @@ order by col3,col2,col4,col6,col1,col5
 104 444 4 100 104 -2
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select a+b*2+c*3 as col1,
        a+b*2+c*3+d*4+e*5 as col2
@@ -1994,6 +2025,7 @@ where exists(select 1 from t1 as x where x.b<t1.b)
 order by col2,col1
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select a-b as col1
 from t1
@@ -2129,6 +2161,7 @@ order by col3,col1,col4,col2,col6,col5
 178 444 4 -2 177.0 -1
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select case when a<b-3 then 111 when a<=b then 222
         when a<b+3 then 333 else 444 end as col1,
@@ -2178,6 +2211,7 @@ order by col1,col3,col2
 248 249 247.0
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select a+b*2+c*3+d*4 as col1,
        d-e as col2,
@@ -2474,6 +2508,7 @@ order by col1,col2,col5,col3,col4
 244 444 3 243 240
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select abs(b-c) as col1,
        c-d as col2,
@@ -2487,6 +2522,7 @@ where e+d between a+b-10 and c+130
 order by col1,col2,col5,col3,col4
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select b as col1,
        (select count(*) from t1 as x where x.b<t1.b) as col2,
@@ -2543,6 +2579,7 @@ order by col3,col1,col2,col5,col4
 -4 2 3706 490 249
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select a+b*2 as col1,
        a+b*2+c*3+d*4 as col2,
@@ -2557,6 +2594,7 @@ where (e>c or e<d)
 order by col3,col5,col2,col1,col4,col6
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select e as col1,
        a+b*2+c*3+d*4 as col2,
@@ -2572,6 +2610,7 @@ where a>b
 order by col1,col4,col7,col6,col5,col3,col2
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select a+b*2+c*3+d*4 as col1,
        case when a<b-3 then 111 when a<=b then 222
@@ -2634,6 +2673,7 @@ order by col5,col2,col4,col1,col3,col6
 1030 174 173 172 1700 171
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select a+b*2 as col1,
        abs(a) as col2,
@@ -2645,6 +2685,7 @@ where b>c
 order by col5,col1,col3,col2,col4
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select (select count(*) from t1 as x where x.b<t1.b) as col1,
        (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col2,
@@ -2697,6 +2738,7 @@ order by col2,col3,col1
 2 743 249
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select (select count(*) from t1 as x where x.b<t1.b) as col1,
        d as col2
@@ -2780,6 +2822,7 @@ order by col4,col1,col3,col2
 2 2476 -1 3706
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select (select count(*) from t1 as x where x.b<t1.b) as col1,
        abs(b-c) as col2,
@@ -2789,6 +2832,7 @@ from t1
 order by col1,col2,col3
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col1,
        b-c as col2,
@@ -2837,6 +2881,7 @@ order by col2,col1,col3
 248 1484 444
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select e as col1,
        abs(b-c) as col2,
@@ -2892,6 +2937,7 @@ order by col1
 444
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select c as col1,
        a+b*2+c*3+d*4 as col2
@@ -2980,6 +3026,7 @@ order by col1
 2476
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select d-e as col1,
        (select count(*) from t1 as x where x.b<t1.b) as col2,
@@ -3052,6 +3099,7 @@ order by col1
 4
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select abs(b-c) as col1,
        (a+b+c+d+e)/5 as col2,
@@ -3166,6 +3214,7 @@ order by col1
 247
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select case a+1 when b then 111 when c then 222
         when d then 333  when e then 444 else 555 end as col1,
@@ -3182,6 +3231,7 @@ where exists(select 1 from t1 as x where x.b<t1.b)
 order by col6,col1,col5,col7,col4,col3,col2
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select (select count(*) from t1 as x where x.b<t1.b) as col1,
        a-b as col2,
@@ -3195,6 +3245,7 @@ from t1
 order by col3,col4,col7,col5,col2,col6,col1
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col1,
        d-e as col2,
@@ -3331,6 +3382,7 @@ order by col7,col2,col5,col4,col1,col3,col6
 1 166 502 333 165 1 4
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col1,
        abs(a) as col2,
@@ -3343,6 +3395,7 @@ where e+d between a+b-10 and c+130
 order by col3,col6,col1,col2,col4,col5
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select abs(a) as col1,
        d as col2
@@ -3377,6 +3430,7 @@ order by col1,col5,col3,col6,col4,col2
 2728 184 180 1096 3 364
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select a+b*2+c*3+d*4+e*5 as col1
 from t1
@@ -3421,6 +3475,7 @@ order by col2,col1
 246 245
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select abs(a) as col1,
        b as col2
@@ -3430,6 +3485,7 @@ where b>c
 order by col2,col1
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select d-e as col1,
        b as col2,
@@ -3481,6 +3537,7 @@ order by col1
 444
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col1,
        case a+1 when b then 111 when c then 222
@@ -3529,6 +3586,7 @@ order by col1
 555
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select c-d as col1,
        (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col2
@@ -3555,6 +3613,7 @@ order by col2,col3,col4,col1
 127 4 128 1272
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select abs(a) as col1,
        case when a<b-3 then 111 when a<=b then 222
@@ -3729,6 +3788,7 @@ order by col1
 2476
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select (select count(*) from t1 as x where x.b<t1.b) as col1,
        a+b*2+c*3+d*4+e*5 as col2,
@@ -3739,6 +3799,7 @@ where (c<=d-2 or c>=d+2)
 order by col4,col3,col2,col1
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col1,
        e as col2,
@@ -3752,6 +3813,7 @@ where (a>b-2 and a<b+2)
 order by col4,col2,col6,col1,col7,col3,col5
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select case when a<b-3 then 111 when a<=b then 222
         when a<b+3 then 333 else 444 end as col1,
@@ -3824,6 +3886,7 @@ order by col1
 247.0
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select c as col1,
        (a+b+c+d+e)/5 as col2,
@@ -3838,6 +3901,7 @@ where b>c
 order by col1,col3,col4,col2,col5
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select a as col1,
        a+b*2+c*3+d*4+e*5 as col2,
@@ -3849,6 +3913,7 @@ where (e>c or e<d)
 order by col2,col1,col3,col4
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select d as col1,
        case when c>(select avg(c) from t1) then a*2 else b*10 end as col2,
@@ -3918,6 +3983,7 @@ order by col2,col4,col3,col1
 1272 385 126 127.0
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select b-c as col1,
        a+b*2+c*3+d*4+e*5 as col2,
@@ -3929,6 +3995,7 @@ where a>b
 order by col3,col2,col1
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col1,
        abs(a) as col2,
@@ -3945,6 +4012,7 @@ where e+d between a+b-10 and c+130
 order by col2,col1,col3,col7,col5,col4,col6
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select abs(a) as col1,
        e as col2,
@@ -4029,6 +4097,7 @@ order by col1,col3,col2
 119 1757 115
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col1,
        d-e as col2,
@@ -4038,6 +4107,7 @@ from t1
 order by col1,col3,col2,col4
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select case a+1 when b then 111 when c then 222
         when d then 333  when e then 444 else 555 end as col1,
@@ -4047,6 +4117,7 @@ from t1
 order by col3,col1,col2
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select c-d as col1,
        a as col2,
@@ -4090,6 +4161,7 @@ order by col3,col4,col2,col1
 111 2 1 205
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select (a+b+c+d+e)/5 as col1,
        a+b*2 as col2,
@@ -4139,6 +4211,7 @@ order by col2,col1
 743 245
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select a+b*2+c*3+d*4+e*5 as col1,
        a as col2,
@@ -4405,6 +4478,7 @@ order by col2,col1,col3
 1430 2 222
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select a+b*2+c*3 as col1,
        d as col2,
@@ -4416,6 +4490,7 @@ where e+d between a+b-10 and c+130
 order by col2,col3,col5,col1,col4
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select c-d as col1,
        abs(b-c) as col2,
@@ -4510,6 +4585,7 @@ order by col1
 555
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select b as col1,
        (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col2,
@@ -4549,6 +4625,7 @@ order by col1,col2,col5,col3,col4
 4 -3 2501 1676 168
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select abs(b-c) as col1,
        a+b*2 as col2,
@@ -4562,6 +4639,7 @@ from t1
 order by col6,col2,col1,col3,col4,col7,col5
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select (a+b+c+d+e)/5 as col1,
        a+b*2+c*3+d*4 as col2,
@@ -4650,6 +4728,7 @@ order by col1
 246
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select a+b*2+c*3 as col1,
        b as col2,
@@ -4717,6 +4796,7 @@ order by col3,col4,col1,col5,col7,col6,col2
 3706 2 249 490 -4 444 2476
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select e as col1,
        (select count(*) from t1 as x where x.b<t1.b) as col2,
@@ -4732,6 +4812,7 @@ where b>c
 order by col1,col6,col2,col4,col3,col7,col5
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select b-c as col1,
        c as col2,
@@ -4745,6 +4826,7 @@ where exists(select 1 from t1 as x where x.b<t1.b)
 order by col3,col4,col2,col1,col5
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select a+b*2 as col1,
        abs(b-c) as col2,
@@ -4758,6 +4840,7 @@ where exists(select 1 from t1 as x where x.b<t1.b)
 order by col6,col3,col5,col2,col1,col4
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select c as col1,
        case when c>(select avg(c) from t1) then a*2 else b*10 end as col2
@@ -4858,6 +4941,7 @@ order by col1
 4
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select (select count(*) from t1 as x where x.b<t1.b) as col1,
        c as col2
@@ -5033,6 +5117,7 @@ order by col2,col5,col4,col3,col1
 1484 3706 2 247.0 490
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select a as col1,
        (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col2,
@@ -5041,6 +5126,7 @@ from t1
 order by col1,col2,col3
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select a+b*2+c*3+d*4 as col1,
        (select count(*) from t1 as x where x.b<t1.b) as col2,
@@ -5053,6 +5139,7 @@ where b>c
 order by col2,col3,col1,col4
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select abs(a) as col1,
        a-b as col2,
@@ -5062,6 +5149,7 @@ from t1
 order by col4,col2,col1,col3
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select c-d as col1,
        b as col2,
@@ -5072,6 +5160,7 @@ where a>b
 order by col4,col3,col2,col1
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select d as col1,
        c as col2,
@@ -5109,6 +5198,7 @@ order by col1
 1670
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select c-d as col1,
        b-c as col2,
@@ -5136,6 +5226,7 @@ order by col3,col4,col1,col2
 601 222 1207 1
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select (select count(*) from t1 as x where x.b<t1.b) as col1,
        a+b*2 as col2,
@@ -5183,6 +5274,7 @@ order by col1
 4
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select case a+1 when b then 111 when c then 222
         when d then 333  when e then 444 else 555 end as col1,
@@ -5195,6 +5287,7 @@ where c>d
 order by col2,col3,col1
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select d as col1,
        c as col2,
@@ -5235,6 +5328,7 @@ order by col2,col1
 245 3706
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col1
 from t1
@@ -5244,6 +5338,7 @@ where (e>c or e<d)
 order by col1
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select a+b*2+c*3+d*4+e*5 as col1,
        (select count(*) from t1 as x where x.b<t1.b) as col2,
@@ -5303,6 +5398,7 @@ order by col3,col1,col2,col5,col4,col6
 444 2 247 490 743 248
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select (select count(*) from t1 as x where x.b<t1.b) as col1,
        b-c as col2,
@@ -5315,6 +5411,7 @@ where d not between 110 and 150
 order by col6,col3,col2,col1,col4,col5
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select (select count(*) from t1 as x where x.b<t1.b) as col1
 from t1
@@ -5323,6 +5420,7 @@ where a>b
 order by col1
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select d as col1,
        b-c as col2,
@@ -5338,6 +5436,7 @@ where d>e
 order by col1,col3,col6,col2,col4,col5
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select (select count(*) from t1 as x where x.c>t1.c and x.d<t1.d) as col1,
        a+b*2+c*3+d*4+e*5 as col2,
@@ -5349,6 +5448,7 @@ from t1
 order by col1,col3,col6,col2,col5,col4
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select case a+1 when b then 111 when c then 222
         when d then 333  when e then 444 else 555 end as col1,
@@ -5414,6 +5514,7 @@ order by col2,col3,col5,col4,col1
 249 2 247.0 111 245
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select (select count(*) from t1 as x where x.b<t1.b) as col1,
        d-e as col2,
@@ -5426,6 +5527,7 @@ where exists(select 1 from t1 as x where x.b<t1.b)
 order by col2,col5,col6,col3,col1,col4
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select a+b*2+c*3+d*4+e*5 as col1,
        case a+1 when b then 111 when c then 222
@@ -5470,6 +5572,7 @@ order by col1
 1484
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select b-c as col1,
        a+b*2+c*3+d*4+e*5 as col2,
@@ -5619,6 +5722,7 @@ order by col1,col2
 245 247.0
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select case when c>(select avg(c) from t1) then a*2 else b*10 end as col1,
        a+b*2+c*3+d*4+e*5 as col2,

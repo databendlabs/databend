@@ -1703,6 +1703,7 @@ order by col4,col5,col3,col1,col2,col6
 225 333 229 227.0 685 -1
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select c as col1,
        case when a<b-3 then 111 when a<=b then 222
@@ -4274,6 +4275,7 @@ order by col3,col5,col4,col2,col1
 1 166 4 0 167.0
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select b-c as col1,
        a+b*2+c*3+d*4+e*5 as col2
@@ -5986,6 +5988,7 @@ order by col2,col3,col1
 14 1700 1
 
 ## need to check the result later, currently just use ok to skip
+onlyif todo
 statement ok
 select d-e as col1,
        abs(b-c) as col2,
