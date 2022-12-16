@@ -543,14 +543,13 @@ impl Catalog for FakedCatalog {
 
     async fn update_table_meta(
         &self,
-        tenant: &str,
-        db_name: &str,
+        table_info: &TableInfo,
         req: UpdateTableMetaReq,
     ) -> Result<UpdateTableMetaReply> {
         if let Some(e) = &self.error_injection {
             Err(e.clone())
         } else {
-            self.cat.update_table_meta(tenant, db_name, req).await
+            self.cat.update_table_meta(table_info, req).await
         }
     }
 

@@ -359,8 +359,7 @@ impl Catalog for HiveCatalog {
 
     async fn update_table_meta(
         &self,
-        _tenant: &str,
-        _db_name: &str,
+        _table_info: &TableInfo,
         _req: UpdateTableMetaReq,
     ) -> Result<UpdateTableMetaReply> {
         Err(ErrorCode::Unimplemented(
