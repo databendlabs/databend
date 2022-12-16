@@ -42,11 +42,13 @@
 //! When `TrackedFuture` is `poll()`ed, its `ThreadTracker` is installed to the running thread
 //! and will be restored when `poll()` returns.
 
+use std::alloc::AllocError;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::future::Future;
 use std::mem::take;
 use std::pin::Pin;
+use std::ptr::NonNull;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicI64;
 use std::sync::atomic::Ordering;
@@ -198,13 +200,13 @@ impl ThreadTracker {
     ///
     /// `size` is the positive number of allocated bytes.
     #[inline]
-    pub fn alloc(size: i64) {
+    pub fn alloc(size: i64) -> Result<(), AllocError> {
         let tracker = unsafe { &mut TRACKER };
 
         let used = tracker.buffer.incr(size);
 
         if used <= MEM_STAT_BUFFER_SIZE {
-            return;
+            return Ok(());
         }
 
         let res = tracker.flush();
@@ -213,9 +215,12 @@ impl ThreadTracker {
             // https://play.rust-lang.org/?version=stable&mode=debug&edition=2021&gist=03d21a15e52c7c0356fca04ece283cf9
             if !std::thread::panicking() && !LimitMemGuard::is_unlimited() {
                 let _guard = LimitMemGuard::enter_unlimited();
-                panic!("{:?}", out_of_limit);
+                return Err(AllocError);
+                // panic!("{:?}", out_of_limit);
             }
         }
+
+        Ok(())
     }
 
     /// Accumulate deallocated memory.

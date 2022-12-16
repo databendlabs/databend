@@ -83,7 +83,7 @@ pub mod linux_or_macos {
     unsafe impl<T: Allocator> Allocator for JEAllocator<T> {
         #[inline(always)]
         fn allocate(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
-            ThreadTracker::alloc(layout.size() as i64);
+            ThreadTracker::alloc(layout.size() as i64)?;
 
             let data_address = if layout.size() == 0 {
                 unsafe { NonNull::new(layout.align() as *mut ()).unwrap_unchecked() }
@@ -98,7 +98,7 @@ pub mod linux_or_macos {
 
         #[inline(always)]
         fn allocate_zeroed(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
-            ThreadTracker::alloc(layout.size() as i64);
+            ThreadTracker::alloc(layout.size() as i64)?;
 
             let data_address = if layout.size() == 0 {
                 unsafe { NonNull::new(layout.align() as *mut ()).unwrap_unchecked() }
@@ -135,7 +135,7 @@ pub mod linux_or_macos {
             debug_assert!(old_layout.size() <= new_layout.size());
 
             ThreadTracker::dealloc(old_layout.size() as i64);
-            ThreadTracker::alloc(new_layout.size() as i64);
+            ThreadTracker::alloc(new_layout.size() as i64)?;
 
             let data_address = if new_layout.size() == 0 {
                 NonNull::new(new_layout.align() as *mut ()).unwrap_unchecked()
@@ -164,7 +164,7 @@ pub mod linux_or_macos {
             debug_assert!(old_layout.size() <= new_layout.size());
 
             ThreadTracker::dealloc(old_layout.size() as i64);
-            ThreadTracker::alloc(new_layout.size() as i64);
+            ThreadTracker::alloc(new_layout.size() as i64)?;
 
             let data_address = if new_layout.size() == 0 {
                 NonNull::new(new_layout.align() as *mut ()).unwrap_unchecked()
@@ -200,7 +200,7 @@ pub mod linux_or_macos {
             debug_assert!(old_layout.size() >= new_layout.size());
 
             ThreadTracker::dealloc(old_layout.size() as i64);
-            ThreadTracker::alloc(new_layout.size() as i64);
+            ThreadTracker::alloc(new_layout.size() as i64)?;
 
             if old_layout.size() == 0 {
                 debug_assert_eq!(ptr.as_ptr() as usize, old_layout.align());
