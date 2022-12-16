@@ -146,7 +146,8 @@ impl HttpSessionConf {
 #[derive(Deserialize, Debug, Clone)]
 pub struct StageAttachmentConf {
     pub(crate) location: String,
-    pub(crate) params: Option<BTreeMap<String, String>>,
+    pub(crate) format_options: Option<BTreeMap<String, String>>,
+    pub(crate) copy_options: Option<BTreeMap<String, String>>,
 }
 
 #[derive(Debug, Clone)]
@@ -240,7 +241,11 @@ impl HttpQuery {
         match &request.stage_attachment {
             Some(attachment) => ctx.attach_stage(StageAttachment {
                 location: attachment.location.clone(),
-                params: match attachment.params {
+                format_options: match attachment.format_options {
+                    Some(ref params) => params.clone(),
+                    None => BTreeMap::new(),
+                },
+                copy_options: match attachment.copy_options {
                     Some(ref params) => params.clone(),
                     None => BTreeMap::new(),
                 },

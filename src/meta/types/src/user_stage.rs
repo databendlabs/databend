@@ -12,11 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::fmt;
 use std::str::FromStr;
 
 use chrono::DateTime;
 use chrono::Utc;
+use common_exception::ErrorCode;
+use common_exception::Result;
 use common_io::consts::NAN_BYTES_SNAKE;
 use common_storage::StorageParams;
 
@@ -337,6 +340,88 @@ impl UserStageInfo {
             StageType::Internal => format!("/stage/internal/{}/", self.stage_name),
             StageType::User => format!("/stage/user/{}/", self.stage_name),
         }
+    }
+
+    /// Apply the file format options.
+    pub fn apply_format_options(&mut self, opts: &BTreeMap<String, String>) -> Result<()> {
+        if opts.is_empty() {
+            return Ok(());
+        }
+        for (k, v) in opts.iter() {
+            match k.as_str() {
+                "format" => {
+                    let format = StageFileFormatType::from_str(v)?;
+                    self.file_format_options.format = format;
+                }
+                "skip_header" => {
+                    let skip_header = u64::from_str(v)?;
+                    self.file_format_options.skip_header = skip_header;
+                }
+                "field_delimiter" => self.file_format_options.field_delimiter = v.clone(),
+                "record_delimiter" => self.file_format_options.record_delimiter = v.clone(),
+                "nan_display" => self.file_format_options.nan_display = v.clone(),
+                "escape" => self.file_format_options.escape = v.clone(),
+                "compression" => {
+                    let compression = StageFileCompression::from_str(v)?;
+                    self.file_format_options.compression = compression;
+                }
+                "row_tag" => self.file_format_options.row_tag = v.clone(),
+                "quote" => self.file_format_options.quote = v.clone(),
+                _ => {
+                    return Err(ErrorCode::BadArguments(format!(
+                        "Unknown stage file format option {}",
+                        k
+                    )));
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Apply the copy options.
+    pub fn apply_copy_options(&mut self, opts: &BTreeMap<String, String>) -> Result<()> {
+        if opts.is_empty() {
+            return Ok(());
+        }
+        for (k, v) in opts.iter() {
+            match k.as_str() {
+                "on_error" => {
+                    let on_error = OnErrorMode::from_str(v)?;
+                    self.copy_options.on_error = on_error;
+                }
+                "size_limit" => {
+                    let size_limit = usize::from_str(v)?;
+                    self.copy_options.size_limit = size_limit;
+                }
+                "split_size" => {
+                    let split_size = usize::from_str(v)?;
+                    self.copy_options.split_size = split_size;
+                }
+                "purge" => {
+                    let purge = bool::from_str(v).map_err(|_| {
+                        ErrorCode::StrParseError(format!("Cannot parse purge: {} as bool", v))
+                    })?;
+                    self.copy_options.purge = purge;
+                }
+                "single" => {
+                    let single = bool::from_str(v).map_err(|_| {
+                        ErrorCode::StrParseError(format!("Cannot parse single: {} as bool", v))
+                    })?;
+                    self.copy_options.single = single;
+                }
+                "max_file_size" => {
+                    let max_file_size = usize::from_str(v)?;
+                    self.copy_options.max_file_size = max_file_size;
+                }
+                _ => {
+                    return Err(ErrorCode::BadArguments(format!(
+                        "Unknown stage copy option {}",
+                        k
+                    )));
+                }
+            }
+        }
+        Ok(())
     }
 }
 

@@ -12,12 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
 use std::collections::VecDeque;
 use std::io::BufRead;
 use std::io::Cursor;
 use std::ops::Not;
-use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -38,9 +36,6 @@ use common_formats::parse_timezone;
 use common_formats::FastFieldDecoderValues;
 use common_io::cursor_ext::ReadBytesExt;
 use common_io::cursor_ext::ReadCheckPointExt;
-use common_meta_types::OnErrorMode;
-use common_meta_types::StageFileCompression;
-use common_meta_types::StageFileFormatType;
 use common_meta_types::UserStageInfo;
 use common_pipeline_core::Pipeline;
 use common_pipeline_sources::processors::sources::AsyncSource;
@@ -117,70 +112,6 @@ impl InsertInterpreterV2 {
         Ok(cast_needed)
     }
 
-    fn apply_stage_options(
-        &self,
-        stage: &mut UserStageInfo,
-        params: &BTreeMap<String, String>,
-    ) -> Result<()> {
-        for (k, v) in params.iter() {
-            match k.as_str() {
-                // file format options
-                "format" => {
-                    let format = StageFileFormatType::from_str(v)?;
-                    stage.file_format_options.format = format;
-                }
-                "skip_header" => {
-                    let skip_header = u64::from_str(v)?;
-                    stage.file_format_options.skip_header = skip_header;
-                }
-                "field_delimiter" => stage.file_format_options.field_delimiter = v.clone(),
-                "record_delimiter" => stage.file_format_options.record_delimiter = v.clone(),
-                "nan_display" => stage.file_format_options.nan_display = v.clone(),
-                "escape" => stage.file_format_options.escape = v.clone(),
-                "compression" => {
-                    let compression = StageFileCompression::from_str(v)?;
-                    stage.file_format_options.compression = compression;
-                }
-                "row_tag" => stage.file_format_options.row_tag = v.clone(),
-                "quote" => stage.file_format_options.quote = v.clone(),
-
-                // copy options
-                "on_error" => {
-                    let on_error = OnErrorMode::from_str(v)?;
-                    stage.copy_options.on_error = on_error;
-                }
-                "size_limit" => {
-                    let size_limit = usize::from_str(v)?;
-                    stage.copy_options.size_limit = size_limit;
-                }
-                "split_size" => {
-                    let split_size = usize::from_str(v)?;
-                    stage.copy_options.split_size = split_size;
-                }
-                "purge" => {
-                    let purge = bool::from_str(v).map_err(|_| {
-                        ErrorCode::StrParseError(format!("Cannot parse purge: {} as bool", v))
-                    })?;
-                    stage.copy_options.purge = purge;
-                }
-                "single" => {
-                    let single = bool::from_str(v).map_err(|_| {
-                        ErrorCode::StrParseError(format!("Cannot parse single: {} as bool", v))
-                    })?;
-                    stage.copy_options.single = single;
-                }
-                "max_file_size" => {
-                    let max_file_size = usize::from_str(v)?;
-                    stage.copy_options.max_file_size = max_file_size;
-                }
-
-                _ => {}
-            }
-        }
-
-        Ok(())
-    }
-
     async fn build_insert_from_stage_pipeline(
         &self,
         table: Arc<dyn Table>,
@@ -196,7 +127,8 @@ impl InsertInterpreterV2 {
         let overwrite = self.plan.overwrite;
 
         let (mut stage_info, path) = parse_stage_location(&self.ctx, &attachment.location).await?;
-        self.apply_stage_options(&mut stage_info, &attachment.params)?;
+        stage_info.apply_format_options(&attachment.format_options)?;
+        stage_info.apply_copy_options(&attachment.copy_options)?;
 
         let mut stage_table_info = StageTableInfo {
             schema: source_schema.clone(),
@@ -208,8 +140,6 @@ impl InsertInterpreterV2 {
         };
 
         let all_source_file_infos = StageTable::list_files(&table_ctx, &stage_table_info).await?;
-
-        // TODO:(everpcpc) color_copied_files
 
         tracing::info!(
             "insert: read all stage attachment files finished: {}, elapsed:{}",
