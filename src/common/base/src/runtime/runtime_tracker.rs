@@ -42,6 +42,7 @@
 //! When `TrackedFuture` is `poll()`ed, its `ThreadTracker` is installed to the running thread
 //! and will be restored when `poll()` returns.
 
+use std::alloc::AllocError;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::future::Future;
@@ -71,6 +72,20 @@ static UNLIMITED_FLAG: AtomicBool = AtomicBool::new(false);
 
 static MEM_STAT_BUFFER_SIZE: i64 = 4 * 1024 * 1024;
 
+pub fn set_alloc_error_hook() {
+    std::alloc::set_alloc_error_hook(|layout| {
+        let _guard = LimitMemGuard::enter_unlimited();
+
+        let tracker = unsafe { &mut TRACKER };
+        let out_of_limit_desc = tracker.out_of_limit_desc.take();
+        panic!(
+            "{}",
+            out_of_limit_desc
+                .unwrap_or_else(|| format!("memory allocation of {} bytes failed", layout.size()))
+        );
+    })
+}
+
 /// A guard that restores the thread local tracker to the `saved` when dropped.
 pub struct Entered<'a> {
     /// Saved tracker for restoring
@@ -83,16 +98,20 @@ impl<'a> Drop for Entered<'a> {
     }
 }
 
-/// A guard that resets the `UNLIMITED_FLAG` flag when dropped.
-pub struct UnlimitedMemGuard {
+pub struct LimitMemGuard {
     saved: bool,
 }
 
-impl UnlimitedMemGuard {
-    #[allow(unused)]
-    pub(crate) fn enter_unlimited() -> Self {
+impl LimitMemGuard {
+    pub fn enter_unlimited() -> Self {
         let saved = UNLIMITED_FLAG.load(Ordering::Relaxed);
         UNLIMITED_FLAG.store(true, Ordering::Relaxed);
+        Self { saved }
+    }
+
+    pub fn enter_limited() -> Self {
+        let saved = UNLIMITED_FLAG.load(Ordering::Relaxed);
+        UNLIMITED_FLAG.store(false, Ordering::Relaxed);
         Self { saved }
     }
 
@@ -101,7 +120,7 @@ impl UnlimitedMemGuard {
     }
 }
 
-impl Drop for UnlimitedMemGuard {
+impl Drop for LimitMemGuard {
     fn drop(&mut self) {
         UNLIMITED_FLAG.store(self.saved, Ordering::Relaxed);
     }
@@ -139,6 +158,7 @@ impl Debug for OutOfLimit<i64> {
 #[derive(Default)]
 pub struct ThreadTracker {
     mem_stat: Option<Arc<MemStat>>,
+    out_of_limit_desc: Option<String>,
 
     /// Buffered memory allocation stat that is yet not reported to `mem_stat` and can not be seen.
     buffer: StatBuffer,
@@ -159,6 +179,7 @@ impl ThreadTracker {
     pub const fn empty() -> Self {
         Self {
             mem_stat: None,
+            out_of_limit_desc: None,
             buffer: StatBuffer::empty(),
         }
     }
@@ -166,6 +187,7 @@ impl ThreadTracker {
     pub fn create(mem_stat: Option<Arc<MemStat>>) -> ThreadTracker {
         ThreadTracker {
             mem_stat,
+            out_of_limit_desc: None,
             buffer: Default::default(),
         }
     }
@@ -194,23 +216,27 @@ impl ThreadTracker {
     ///
     /// `size` is the positive number of allocated bytes.
     #[inline]
-    pub fn alloc(size: i64) {
+    pub fn alloc(size: i64) -> Result<(), AllocError> {
         let tracker = unsafe { &mut TRACKER };
 
         let used = tracker.buffer.incr(size);
 
         if used <= MEM_STAT_BUFFER_SIZE {
-            return;
+            return Ok(());
         }
 
         let res = tracker.flush();
 
         if let Err(out_of_limit) = res {
             // https://play.rust-lang.org/?version=stable&mode=debug&edition=2021&gist=03d21a15e52c7c0356fca04ece283cf9
-            if !std::thread::panicking() && !UnlimitedMemGuard::is_unlimited() {
-                panic!("{:?}", out_of_limit);
+            if !std::thread::panicking() && !LimitMemGuard::is_unlimited() {
+                let _guard = LimitMemGuard::enter_unlimited();
+                tracker.out_of_limit_desc = Some(format!("{:?}", out_of_limit));
+                return Err(AllocError);
             }
         }
+
+        Ok(())
     }
 
     /// Accumulate deallocated memory.
@@ -218,8 +244,6 @@ impl ThreadTracker {
     /// `size` is positive number of bytes of the memory to deallocate.
     #[inline]
     pub fn dealloc(size: i64) {
-        // size > 0
-
         let tracker = unsafe { &mut TRACKER };
 
         let used = tracker.buffer.incr(-size);
@@ -409,6 +433,32 @@ impl<T: Future> Future for TrackedFuture<T> {
         let this = self.project();
 
         let _g = ThreadTracker::enter(this.thread_tracker);
+        this.inner.poll(cx)
+    }
+}
+
+pin_project! {
+    /// A [`Future`] that enters its thread tracker when being polled.
+    #[must_use = "futures do nothing unless you `.await` or poll them"]
+    pub struct UnlimitedFuture<T> {
+        #[pin]
+        inner: T,
+    }
+}
+
+impl<T> UnlimitedFuture<T> {
+    pub fn create(inner: T) -> UnlimitedFuture<T> {
+        UnlimitedFuture::<T> { inner }
+    }
+}
+
+impl<T: Future> Future for UnlimitedFuture<T> {
+    type Output = T::Output;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let _guard = LimitMemGuard::enter_unlimited();
+
+        let this = self.project();
         this.inner.poll(cx)
     }
 }

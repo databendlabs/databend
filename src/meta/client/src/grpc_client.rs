@@ -32,6 +32,7 @@ use common_base::containers::Pool;
 use common_base::containers::TtlHashMap;
 use common_base::runtime::Runtime;
 use common_base::runtime::TrySpawn;
+use common_base::runtime::UnlimitedFuture;
 use common_grpc::ConnectionFactory;
 use common_grpc::GrpcConnectionError;
 use common_grpc::RpcClientConf;
@@ -165,50 +166,62 @@ impl ClientHandle {
         <Result<Resp, E> as TryFrom<message::Response>>::Error: std::fmt::Display,
         E: From<MetaClientError>,
     {
-        let (tx, rx) = oneshot::channel();
-        let req = message::ClientWorkerRequest {
-            resp_tx: tx,
-            req: req.into(),
+        let request_future = async move {
+            let (tx, rx) = oneshot::channel();
+            let req = message::ClientWorkerRequest {
+                resp_tx: tx,
+                req: req.into(),
+            };
+
+            label_increment_gauge_with_val_and_labels(
+                META_GRPC_CLIENT_REQUEST_INFLIGHT,
+                &vec![],
+                1.0,
+            );
+
+            let res = self.req_tx.send(req).await.map_err(|e| {
+                let cli_err = MetaClientError::ClientRuntimeError(
+                    AnyError::new(&e).add_context(|| "when sending req to MetaGrpcClient worker"),
+                );
+                cli_err.into()
+            });
+
+            if let Err(err) = res {
+                label_decrement_gauge_with_val_and_labels(
+                    META_GRPC_CLIENT_REQUEST_INFLIGHT,
+                    &vec![],
+                    1.0,
+                );
+
+                return Err(err);
+            }
+
+            let res = rx.await.map_err(|e| {
+                label_decrement_gauge_with_val_and_labels(
+                    META_GRPC_CLIENT_REQUEST_INFLIGHT,
+                    &vec![],
+                    1.0,
+                );
+
+                MetaClientError::ClientRuntimeError(
+                    AnyError::new(&e).add_context(|| "when recv resp from MetaGrpcClient worker"),
+                )
+            })?;
+
+            label_decrement_gauge_with_val_and_labels(
+                META_GRPC_CLIENT_REQUEST_INFLIGHT,
+                &vec![],
+                1.0,
+            );
+            let res: Result<Resp, E> = res
+                .try_into()
+                .map_err(|e| format!("expect: {}, got: {}", std::any::type_name::<Resp>(), e))
+                .unwrap();
+
+            res
         };
 
-        label_increment_gauge_with_val_and_labels(META_GRPC_CLIENT_REQUEST_INFLIGHT, &vec![], 1.0);
-
-        let res = self.req_tx.send(req).await.map_err(|e| {
-            let cli_err = MetaClientError::ClientRuntimeError(
-                AnyError::new(&e).add_context(|| "when sending req to MetaGrpcClient worker"),
-            );
-            cli_err.into()
-        });
-
-        if let Err(err) = res {
-            label_decrement_gauge_with_val_and_labels(
-                META_GRPC_CLIENT_REQUEST_INFLIGHT,
-                &vec![],
-                1.0,
-            );
-
-            return Err(err);
-        }
-
-        let res = rx.await.map_err(|e| {
-            label_decrement_gauge_with_val_and_labels(
-                META_GRPC_CLIENT_REQUEST_INFLIGHT,
-                &vec![],
-                1.0,
-            );
-
-            MetaClientError::ClientRuntimeError(
-                AnyError::new(&e).add_context(|| "when recv resp from MetaGrpcClient worker"),
-            )
-        })?;
-
-        label_decrement_gauge_with_val_and_labels(META_GRPC_CLIENT_REQUEST_INFLIGHT, &vec![], 1.0);
-        let res: Result<Resp, E> = res
-            .try_into()
-            .map_err(|e| format!("expect: {}, got: {}", std::any::type_name::<Resp>(), e))
-            .unwrap();
-
-        res
+        UnlimitedFuture::create(request_future).await
     }
 
     pub async fn get_client_info(&self) -> Result<ClientInfo, MetaError> {
@@ -311,8 +324,13 @@ impl MetaGrpcClient {
             rt: rt.clone(),
         });
 
-        rt.spawn(Self::worker_loop(worker.clone(), rx));
-        rt.spawn(Self::auto_sync_endpoints(worker, one_tx));
+        rt.spawn(UnlimitedFuture::create(Self::worker_loop(
+            worker.clone(),
+            rx,
+        )));
+        rt.spawn(UnlimitedFuture::create(Self::auto_sync_endpoints(
+            worker, one_tx,
+        )));
 
         Ok(handle)
     }
