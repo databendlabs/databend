@@ -88,22 +88,17 @@ Check out what we've done this week to make Databend even better for you.
 
 Stay connected with the latest news about Databend.
 
-#### Unifying Format Options and Removing `format_*` Settings
+#### Breaking Change: Unified File Format Options
 
-> ***Breaking Change*** We plan to unify the formatting options and remove `format_*` settings in the future. 
-> This means that we will **disable** the old format.
->  Work is in progress and support for `FILE_FORMAT` has now been completed in streming load.
+To simplify, we're rolling out a set of unified file format options as follows for the COPY INTO command, the Streaming Load API, and all the other cases where users need to describe their file formats:
 
-##### Propose
+```sql
+[ FILE_FORMAT = ( TYPE = { CSV | TSV | NDJSON | PARQUET | XML} [ formatTypeOptions ] ) ]
+```
 
-In the new implementation, **only** use the snowflake style in any place (insert copy and "select from stage" later):
-
-- `FILE_FORMAT = (type = 'CSV' some_option = '|')`
-- `FILE_FORMAT = (format_name = 'MyCustomCSV')`
-
-`FORMAT CSV` is retained for the ClickHouse handler.
-
-MyCustomCSV is created using SQL like `CREATE FILE FORMAT`
+- Please note that the current format options starting with `format_*` will be deprecated.  
+- `... FORMAT CSV ...` will still be accepted by the ClickHouse handler.
+- Support for customized formats created by `CREATE FILE FORMAT ...` will be added in a future release: `... FILE_FORMAT = (format_name = 'MyCustomCSV') ....` .
 
 **Learn More**
 
@@ -112,12 +107,11 @@ MyCustomCSV is created using SQL like `CREATE FILE FORMAT`
 
 #### Open Sharing
 
-Open Sharing is a cheap and secure data sharing protocol for databend query on multi-cloud environments.
+Open Sharing is a simple and secure data-sharing protocol designed for databend-query nodes running in a multi-cloud environment.
 
-* **Cheap**: Open Sharing allow data sharing via simple RESTful API sharing protocol, which is cheap and easy to understand.
-* **Secure**: Open Sharing protocol would verify allow incoming requesters identity and access permission and provide audit log.
-* **Multi-cloud**: Open Sharing is designed to work with different cloud platforms, including AWS, Azure, GCP, etc.
-* **Open source**: Open Sharing is an open source project
+- **Simple & Free**: Open Sharing is open-source and basically a RESTful API implementation.
+- **Secure**: Open Sharing verifies incoming requesters' identities and access permissions, and provides an audit log.
+- **Multi-Cloud**: Open Sharing supports a variety of public cloud platforms, including AWS, Azure, GCP, etc.
 
 **Learn More**
 
@@ -130,13 +124,13 @@ We're always open to cutting-edge technologies and innovative ideas. You're more
 
 #### Refactoring Stage-Related Tests
 
-We should use streaming upload to put files directly in the stage instead of in s3.
+We're about to run stage-related tests again using the Streaming Load API to move files to a stage instead of an AWS command like this:
 
 ```bash
 aws --endpoint-url ${STORAGE_S3_ENDPOINT_URL} s3 cp s3://testbucket/admin/data/ontime_200.csv s3://testbucket/admin/stage/internal/s1/ontime_200.csv >/dev/null 2>&1
 ```
 
-This is wrong, and stage's path rule should not be leak.
+This is because Databend users do not need to take care of, or do not even know the stage paths that the AWS command requires.
 
 [Issue 8528: refactor stage related tests](https://github.com/datafuselabs/databend/issues/8528)
 
@@ -171,9 +165,9 @@ Thanks a lot to the contributors for their excellent work this week.
 :---: |:---: |:---: |:---: |:---: |:---: |
 [soyeric128](https://github.com/soyeric128) |[sundy-li](https://github.com/sundy-li) |[wubx](https://github.com/wubx) |[Xuanwo](https://github.com/Xuanwo) |[xudong963](https://github.com/xudong963) |[youngsofun](https://github.com/youngsofun) |
 
-[<img alt="ZhiHanZ" src="https://avatars.githubusercontent.com/u/25170437?v=4&s=117" width="117" />](https://github.com/ZhiHanZ) |[<img alt="zhyass" src="https://avatars.githubusercontent.com/u/34016424?v=4&s=117" width="117" />](https://github.com/zhyass) |[<img alt="zzzdong" src="https://avatars.githubusercontent.com/u/5125482?v=4&s=117" width="117" />](https://github.com/zzzdong) | | | |
-:---: |:---: |:---: |:---: |:---: |:---: |
-[ZhiHanZ](https://github.com/ZhiHanZ) |[zhyass](https://github.com/zhyass) |[zzzdong](https://github.com/zzzdong) | | | |
+[<img alt="ZhiHanZ" src="https://avatars.githubusercontent.com/u/25170437?v=4&s=117" width="117" />](https://github.com/ZhiHanZ) |[<img alt="zhyass" src="https://avatars.githubusercontent.com/u/34016424?v=4&s=117" width="117" />](https://github.com/zhyass) |[<img alt="zzzdong" src="https://avatars.githubusercontent.com/u/5125482?v=4&s=117" width="117" />](https://github.com/zzzdong) |
+:---: |:---: |:---: |
+[ZhiHanZ](https://github.com/ZhiHanZ) |[zhyass](https://github.com/zhyass) |[zzzdong](https://github.com/zzzdong) |
 
 ## Connect With Us
 
