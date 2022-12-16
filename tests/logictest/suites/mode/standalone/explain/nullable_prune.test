@@ -2,7 +2,7 @@ statement ok
 use default
 
 statement ok
-drop table t_nullable_prune
+drop table if exists t_nullable_prune
 
 statement ok
 create table t_nullable_prune (a int null)

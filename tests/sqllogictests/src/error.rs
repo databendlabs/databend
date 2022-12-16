@@ -19,6 +19,7 @@ use std::fmt::Formatter;
 use common_exception::ErrorCode;
 use mysql::Error as MysqlClientError;
 use reqwest::Error as HttpClientError;
+use serde_json::Error as SerdeJsonError;
 use sqllogictest::TestError;
 use walkdir::Error as WalkDirError;
 
@@ -36,6 +37,8 @@ pub enum DSqlLogicTestError {
     HttpClient(HttpClientError),
     // Error from WalkDir
     WalkDir(WalkDirError),
+    // Error from serde json
+    SerdeJson(SerdeJsonError),
 }
 
 impl From<TestError> for DSqlLogicTestError {
@@ -68,6 +71,12 @@ impl From<WalkDirError> for DSqlLogicTestError {
     }
 }
 
+impl From<SerdeJsonError> for DSqlLogicTestError {
+    fn from(value: SerdeJsonError) -> Self {
+        DSqlLogicTestError::SerdeJson(value)
+    }
+}
+
 impl Display for DSqlLogicTestError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -80,6 +89,7 @@ impl Display for DSqlLogicTestError {
             DSqlLogicTestError::MysqlClient(error) => write!(f, "Mysql client error: {}", error),
             DSqlLogicTestError::HttpClient(error) => write!(f, "Http client error: {}", error),
             DSqlLogicTestError::WalkDir(error) => write!(f, "Walk dir error: {}", error),
+            DSqlLogicTestError::SerdeJson(error) => write!(f, "Serde json error: {}", error),
         }
     }
 }

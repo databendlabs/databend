@@ -19,6 +19,9 @@ use regex::Regex;
 use regex::RegexBuilder;
 use serde::Deserialize;
 use serde::Serialize;
+use serde_json::Value;
+
+use crate::error::Result;
 
 lazy_static! {
     pub static ref SET_SQL_RE: Regex =
@@ -41,4 +44,28 @@ pub struct HttpSessionConf {
     pub database: Option<String>,
     pub keep_server_session_secs: Option<u64>,
     pub settings: Option<BTreeMap<String, String>>,
+}
+
+pub fn parser_rows(rows: &Value) -> Result<Vec<Vec<String>>> {
+    let mut parsed_rows = Vec::new();
+    for row in rows.as_array().unwrap() {
+        let mut parsed_row = Vec::new();
+        for col in row.as_array().unwrap() {
+            let mut cell = col.as_str().unwrap();
+            if cell == "inf" {
+                cell = "Infinity";
+            }
+            if cell == "nan" {
+                cell = "NaN";
+            }
+            // If the result is empty, we'll use `(empty)` to mark it explicitly to avoid confusion
+            if cell.is_empty() {
+                parsed_row.push("(empty)".to_string());
+            } else {
+                parsed_row.push(cell.to_string());
+            }
+        }
+        parsed_rows.push(parsed_row);
+    }
+    Ok(parsed_rows)
 }
