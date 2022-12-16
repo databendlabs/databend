@@ -4,7 +4,7 @@ use default
 
 onlyif mysql
 statement ok
-set sql_dialect = "PostgreSQL"
+set sql_dialect = 'PostgreSQL'
 
 onlyif mysql
 statement ok

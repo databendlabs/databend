@@ -27,6 +27,9 @@ use sqllogictest::DBOutput;
 
 use crate::error::Result;
 use crate::util::HttpSessionConf;
+use crate::util::SET_SQL_RE;
+use crate::util::UNSET_SQL_RE;
+use crate::util::USE_SQL_RE;
 
 #[derive(Debug)]
 pub struct MysqlClient {
@@ -84,7 +87,11 @@ impl HttpClient {
     pub fn create() -> Result<HttpClient> {
         let client = Client::new();
         let url = "http://127.0.0.1:8000/v1/query".to_string();
-        Ok(HttpClient { client, url, session: None})
+        Ok(HttpClient {
+            client,
+            url,
+            session: None,
+        })
     }
 
     pub async fn query(&mut self, sql: &str) -> Result<DBOutput> {
@@ -109,7 +116,9 @@ impl HttpClient {
             .await?;
         let text = response.text().await?;
         let mut data: Value = serde_json::from_str(text.as_str()).unwrap();
-        self.session = serde_json::from_value(data.as_object().unwrap().get("session").unwrap().clone()).unwrap();
+        self.session =
+            serde_json::from_value(data.as_object().unwrap().get("session").unwrap().clone())
+                .unwrap();
         let rows = data.as_object().unwrap().get("data").unwrap();
         let mut parsed_rows = Vec::new();
         for row in rows.as_array().unwrap() {
@@ -139,7 +148,8 @@ impl HttpClient {
                 .json(&query)
                 .basic_auth("root", Some(""))
                 .headers(header.clone())
-                .send().await?;
+                .send()
+                .await?;
             let text = response.text().await?;
             data = serde_json::from_str(text.as_str()).unwrap();
             let rows = data.as_object().unwrap().get("data").unwrap();
@@ -175,6 +185,8 @@ impl HttpClient {
 
 pub struct ClickhouseHttpClient {
     pub client: Client,
+    pub database: String,
+    pub settings: HashMap<String, String>,
     pub url: String,
 }
 
@@ -182,12 +194,40 @@ impl ClickhouseHttpClient {
     pub fn create() -> Result<ClickhouseHttpClient> {
         let client = Client::new();
         let url = "http://127.0.0.1:8124".to_string();
-        Ok(ClickhouseHttpClient { client, url })
+        Ok(ClickhouseHttpClient {
+            client,
+            database: "default".to_string(),
+            settings: HashMap::new(),
+            url,
+        })
     }
 
     pub async fn query(&mut self, sql: &str) -> Result<DBOutput> {
+        if let Some(captures) = USE_SQL_RE.captures(sql) {
+            self.database = captures.name("db").unwrap().as_str().to_string();
+        }
+        if let Some(captures) = SET_SQL_RE.captures(sql) {
+            let key = captures.name("key").unwrap().as_str().to_string();
+            let value = captures.name("value").unwrap().as_str().to_string();
+            self.settings
+                .entry(key)
+                .and_modify(|v| *v = value.clone())
+                .or_insert(value);
+        }
+        if let Some(captures) = UNSET_SQL_RE.captures(sql) {
+            let key = captures.name("key").unwrap().as_str();
+            self.settings.remove(key);
+        }
         let mut query = HashMap::new();
         query.insert("query", sql);
+        query.insert("database", self.database.as_str());
+        if !self.settings.is_empty() {
+            query.extend(
+                self.settings
+                    .iter()
+                    .map(|(key, value)| (key.as_str(), value.as_str())),
+            );
+        }
         let response = self
             .client
             .post(&self.url)
@@ -203,13 +243,18 @@ impl ClickhouseHttpClient {
                     .map(|s| {
                         if s == "\\N" {
                             "NULL".to_string()
+                        } else if s == "inf" {
+                            "Infinity".to_string()
+                        } else if s == "nan" {
+                            "NaN".to_string()
                         } else {
                             if s.is_empty() {
                                 return "(empty)".to_string();
                             }
                             // Maybe `s` contains "\\N", such as `[\N,'cc']`
                             // So we need to find it and replace with NULL (a little hack)
-                            let s = str::replace(s, "\\N", "NULL");
+                            let mut s = str::replace(s, "\\N", "NULL");
+                            s = str::replace(&s, r"\n", " ");
                             str::replace(&s, r"\", "")
                         }
                     })

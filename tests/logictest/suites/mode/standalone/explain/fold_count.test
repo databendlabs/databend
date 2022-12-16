@@ -1,7 +1,4 @@
 statement ok
-use default
-
-statement ok
 drop table if exists t
 
 statement ok

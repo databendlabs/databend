@@ -2,7 +2,7 @@ statement ok
 use default
 
 statement ok
-set sql_dialect = "PostgreSQL"
+set sql_dialect = 'PostgreSQL'
 
 statement ok
 drop table if exists t

@@ -9,6 +9,7 @@ SHOW STAGES
 ----
 test_stage Internal 0 'root'@'127.0.0.1' (empty)
 
+skipif clickhouse
 query TTTTTITT
 DESC STAGE test_stage
 ----

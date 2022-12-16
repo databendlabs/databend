@@ -14,6 +14,9 @@ select 'aa bb', 1
 ----
 aa bb 1
 
+statement ok
+set max_threads = 100
+
 ## query TTTRRTIIII
 ## SELECT * FROM system.tables WHERE database='db1'
 ## ----

@@ -13,8 +13,28 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+
+use lazy_static::lazy_static;
+use regex::Regex;
+use regex::RegexBuilder;
 use serde::Deserialize;
 use serde::Serialize;
+
+lazy_static! {
+    pub static ref SET_SQL_RE: Regex =
+        RegexBuilder::new(r"^SET\s+(?P<key>\w+)\s*=\s*[']?(?P<value>[^;[']]+)[']?\s*;?")
+            .case_insensitive(true)
+            .build()
+            .unwrap();
+    pub static ref UNSET_SQL_RE: Regex = RegexBuilder::new(r"^UNSET\s+(?P<key>\w+)\s*;?")
+        .case_insensitive(true)
+        .build()
+        .unwrap();
+    pub static ref USE_SQL_RE: Regex = RegexBuilder::new(r"^use\s+(?P<db>\w+)\s*;?")
+        .case_insensitive(true)
+        .build()
+        .unwrap();
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct HttpSessionConf {

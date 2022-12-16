@@ -52,10 +52,9 @@ statement ok
 CREATE TABLE test_strings(s VARCHAR)
 
 statement ok
-INSERT INTO test_strings VALUES ('aaaaaaaahello'), ('bbbbbbbbbbbbbbbbbbbbhello'), ('ccccccccccccccchello'), ('aaaaaaaaaaaaaaaaaaaaaaaahello');;
+INSERT INTO test_strings VALUES ('aaaaaaaahello'), ('bbbbbbbbbbbbbbbbbbbbhello'), ('ccccccccccccccchello'), ('aaaaaaaaaaaaaaaaaaaaaaaahello')
 
 query TT
 SELECT MIN(s), MAX(s) FROM test_strings
 ----
 aaaaaaaaaaaaaaaaaaaaaaaahello ccccccccccccccchello
-
