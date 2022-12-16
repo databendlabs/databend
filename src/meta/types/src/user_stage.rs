@@ -326,6 +326,7 @@ impl FromStr for OnErrorMode {
                     )),
                 }
             }
+            "ABORT" => Ok(OnErrorMode::AbortStatement),
         }
     }
 }
