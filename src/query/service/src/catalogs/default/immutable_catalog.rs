@@ -224,8 +224,7 @@ impl Catalog for ImmutableCatalog {
 
     async fn truncate_table(
         &self,
-        _tenant: &str,
-        _db_name: &str,
+        _table_info: &TableInfo,
         req: TruncateTableReq,
     ) -> Result<TruncateTableReply> {
         Err(ErrorCode::Unimplemented(format!(

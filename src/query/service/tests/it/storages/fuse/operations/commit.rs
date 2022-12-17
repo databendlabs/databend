@@ -582,8 +582,7 @@ impl Catalog for FakedCatalog {
 
     async fn truncate_table(
         &self,
-        _tenant: &str,
-        _db_name: &str,
+        _table_info: &TableInfo,
         _req: TruncateTableReq,
     ) -> Result<TruncateTableReply> {
         todo!()

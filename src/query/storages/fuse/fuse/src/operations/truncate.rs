@@ -68,8 +68,6 @@ impl FuseTable {
             let table_id = self.table_info.ident.table_id;
             let table_version = self.table_info.ident.seq;
             let catalog = ctx.get_catalog(self.table_info.catalog())?;
-            let tenant = ctx.get_tenant();
-            let db_name = ctx.get_current_database();
 
             catalog
                 .update_table_meta(&self.table_info, UpdateTableMetaReq {
@@ -80,7 +78,7 @@ impl FuseTable {
                 .await?;
 
             catalog
-                .truncate_table(&tenant, &db_name, TruncateTableReq { table_id })
+                .truncate_table(&self.table_info, TruncateTableReq { table_id })
                 .await?;
 
             // try keep a hit file of last snapshot
