@@ -7,16 +7,13 @@ set -e
 echo "Starting Cluster databend-query"
 ./scripts/ci/deploy/databend-query-cluster-3-nodes.sh
 
-echo "install Rust"
-./scripts/setup/dev_setup.sh
+TEST_HANDLERS=${TEST_HANDLERS:-"mysql,http,clickhouse"}
 
-echo -e "ulimit:\n$(ulimit -a)"
+RUN_DIR=""
+if [ $# -gt 0 ]; then
+	RUN_DIR="--run-dir $*"
+fi
+echo "Run suites using argument: $RUN_DIR"
 
-echo "Starting databend-sqllogic tests under mysql"
-cargo run -p sqllogictests -- --handler mysql
-
-echo "Starting databend-sqllogic tests under http"
-cargo run -p sqllogictests -- --handler http
-
-echo "Starting databend-sqllogic tests under clickhouse"
-cargo run -p sqllogictests -- --handler clickhouse
+echo "Starting databend-sqllogic tests"
+cargo run -p sqllogictests -- --handler ${TEST_HANDLERS} ${RUN_DIR}

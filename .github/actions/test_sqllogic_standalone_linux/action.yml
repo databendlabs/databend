@@ -30,12 +30,8 @@ runs:
       uses: ./.github/actions/setup_build_tool
       with:
         bypass_env_vars: RUSTFLAGS,RUSTDOCFLAGS,RUST_TEST_THREADS,RUST_LOG,RUST_BACKTRACE
-    - shell: bash
-      run: ./scripts/ci/deploy/databend-query-standalone.sh
-    - name: Run sqllogic tests with Standalone mode
+    - name: Run sqllogic Tests with Standalone mode
       shell: bash
-      run: cargo run -p sqllogictests -- --skip_dir cluster
       env:
-        RUST_TEST_THREADS: "2"
-        RUST_LOG: DEBUG
-        RUST_BACKTRACE: full
+        TEST_HANDLERS: ${{ inputs.handlers }}
+      run: bash ./scripts/ci/ci-run-sqllogic-tests.sh ${{ inputs.dirs }}
