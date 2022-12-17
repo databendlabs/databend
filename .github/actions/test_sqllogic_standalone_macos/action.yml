@@ -26,17 +26,13 @@ runs:
         profile: ${{ inputs.profile }}
         sha: ${{ github.sha }}
         target: ${{ inputs.target }}
-
-    - name: Setup Build Tool
-      uses: ./.github/actions/setup_build_tool
-      with:
-        bypass_env_vars: RUSTFLAGS,RUSTDOCFLAGS,RUST_TEST_THREADS,RUST_LOG,RUST_BACKTRACE
-    - shell: bash
-      run: ./scripts/ci/deploy/databend-query-standalone.sh
-    - name: Run sqllogic tests with standalone mode (macos)
+    - name: Test setup
       shell: bash
-      run: cargo run -p sqllogictests -- --skip_dir cluster
+      run: |
+        bash ./scripts/setup/dev_setup.sh -yd
+    - name: Run sqllogic Tests with Standalone mode with embedded meta-store
+      shell: bash
       env:
-        RUST_TEST_THREADS: "2"
-        RUST_LOG: DEBUG
-        RUST_BACKTRACE: full
+        TEST_HANDLERS: ${{ inputs.handlers }}
+      run: |
+        bash ./scripts/ci/ci-run-sqllogic-tests.sh ${{ inputs.dirs }}

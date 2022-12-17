@@ -11,7 +11,7 @@ TEST_HANDLERS=${TEST_HANDLERS:-"mysql,http,clickhouse"}
 
 RUN_DIR=""
 if [ $# -gt 0 ]; then
-	RUN_DIR="--run-dir $*"
+	RUN_DIR="--run_dir $*"
 fi
 echo "Run suites using argument: $RUN_DIR"
 

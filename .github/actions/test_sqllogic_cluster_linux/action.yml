@@ -26,20 +26,12 @@ runs:
         profile: ${{ inputs.profile }}
         sha: ${{ github.sha }}
         target: ${{ inputs.target }}
-
     - name: Setup Build Tool
       uses: ./.github/actions/setup_build_tool
       with:
         bypass_env_vars: RUSTFLAGS,RUSTDOCFLAGS,RUST_TEST_THREADS,RUST_LOG,RUST_BACKTRACE
-    - shell: bash
-      run: ./scripts/ci/deploy/databend-query-cluster-3-nodes.sh
-    - name: Run sqllogic tests with cluster mode
+    - name: Run sqllogic Tests with Cluster mode
       shell: bash
-      run: |
-        cargo run -p sqllogictests -- --run_dir base
-        cargo run -p sqllogictests -- --run_dir query
-        cargo run -p sqllogictests -- --run_dir cluster
       env:
-        RUST_TEST_THREADS: "2"
-        RUST_LOG: DEBUG
-        RUST_BACKTRACE: full
+        TEST_HANDLERS: ${{ inputs.handlers }}
+      run: bash ./scripts/ci/ci-run-sqllogic-tests-cluster.sh ${{ inputs.dirs }}
