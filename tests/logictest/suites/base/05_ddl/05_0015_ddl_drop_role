@@ -8,7 +8,22 @@ statement ok
 CREATE ROLE 'test-b';
 
 statement ok
+SET ROLE 'test-b';
+
+statement query T
+SELECT current_role();
+
+----
+test-b
+
+statement ok
 DROP ROLE 'test-b';
+
+statement query T
+SELECT current_role();
+
+----
+
 
 statement error 2204
 DROP ROLE 'test-b';

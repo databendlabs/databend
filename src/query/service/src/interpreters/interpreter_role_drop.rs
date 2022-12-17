@@ -51,6 +51,9 @@ impl Interpreter for DropRoleInterpreter {
             .drop_role(&tenant, plan.role_name, plan.if_exists)
             .await?;
 
+        let session = self.ctx.get_current_session();
+        session.unset_current_role();
+
         RoleCacheManager::instance().force_reload(&tenant).await?;
         Ok(PipelineBuildResult::create())
     }
