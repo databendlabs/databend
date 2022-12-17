@@ -44,8 +44,10 @@ pub struct SqlLogicTestArgs {
     // Set handler to run tests
     #[arg(
         short = 'c',
-        long = "handler",
-        help = "Choose a handler to run tests, support mysql, http, clickhouse handler, the arg is optional."
+        long = "handlers",
+        use_value_delimiter = true,
+        value_delimiter = ',',
+        help = "Choose handlers to run tests, support mysql, http, clickhouse handler, the arg is optional. If use multiple handlers, please use \',\' to split them"
     )]
-    pub handler: Option<String>,
+    pub handlers: Option<Vec<String>>,
 }

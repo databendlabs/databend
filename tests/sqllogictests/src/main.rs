@@ -87,21 +87,23 @@ impl sqllogictest::AsyncDB for Databend {
 pub async fn main() -> Result<()> {
     env_logger::init();
     let args = SqlLogicTestArgs::parse();
-    if let Some(handler) = &args.handler {
-        match handler.as_str() {
-            "mysql" => {
-                println!("Mysql client starts to run...");
-                run_mysql_client().await?;
+    if let Some(handlers) = &args.handlers {
+        for handler in handlers.iter() {
+            match handler.as_str() {
+                "mysql" => {
+                    println!("Mysql client starts to run...");
+                    run_mysql_client().await?;
+                }
+                "http" => {
+                    println!("Http client starts to run...");
+                    run_http_client().await?;
+                }
+                "clickhouse" => {
+                    println!("Clickhouse http client starts to run...");
+                    run_ck_http_client().await?;
+                }
+                _ => unreachable!(),
             }
-            "http" => {
-                println!("Http client starts to run...");
-                run_http_client().await?;
-            }
-            "clickhouse" => {
-                println!("Clickhouse http client starts to run...");
-                run_ck_http_client().await?;
-            }
-            _ => unreachable!(),
         }
         return Ok(());
     }

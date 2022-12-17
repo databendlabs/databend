@@ -132,6 +132,7 @@ jobs:
           - "base"
           - "query"
           - "ydb"
+          - "standalone"
         handlers:
           - "mysql"
           - "http"
@@ -153,7 +154,6 @@ jobs:
         dirs:
           - "crdb"
           - "duckdb"
-          - "standalone"
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_sqllogic_standalone_linux
