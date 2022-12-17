@@ -187,6 +187,10 @@ impl StorageParams {
             StorageParams::None => false,
         }
     }
+
+    pub fn is_fs(&self) -> bool {
+        matches!(self, StorageParams::Fs(_))
+    }
 }
 
 /// Config for storage backend azblob.

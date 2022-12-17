@@ -21,6 +21,7 @@ use common_ast::Dialect;
 use common_catalog::catalog_kind::CATALOG_DEFAULT;
 use common_catalog::plan::Expression;
 use common_catalog::table::Table;
+use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_settings::Settings;
@@ -44,7 +45,7 @@ impl ExpressionParser {
         let backtrace = Backtrace::new();
         let exprs = parse_comma_separated_exprs(&tokens[1..tokens.len()], sql_dialect, &backtrace)?;
 
-        let settings = Settings::default_settings("")?;
+        let settings = Settings::default_settings("", GlobalConfig::instance())?;
         let mut bind_context = BindContext::new();
         let metadata = Arc::new(RwLock::new(Metadata::default()));
         let table_index = metadata.write().add_table(
