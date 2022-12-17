@@ -107,8 +107,6 @@ impl Settings {
 
     pub fn default_settings(tenant: &str, conf: Arc<Config>) -> Result<Arc<Settings>> {
         let memory_info = sys_info::mem_info().map_err(ErrorCode::from_std_error)?;
-
-        let num_cpus = sys_info::cpu_num().map_err(ErrorCode::from_std_error)?;
         let mut num_physical_cpus = num_cpus::get_physical() as u64;
         if conf.query.num_cpus != 0 {
             num_physical_cpus = conf.query.num_cpus;
