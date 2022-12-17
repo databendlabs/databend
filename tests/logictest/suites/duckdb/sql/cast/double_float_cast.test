@@ -1,26 +1,24 @@
 
-statement query F
-select '1e308'::float;
-
+query F
+select '1e308'::float
 ----
-inf
+Infinity
 
-statement query F
-select '1e310'::double;
-
+query F
+select '1e310'::double
 ----
-inf
+Infinity
 
--- TODO issue https://github.com/datafuselabs/databend/issues/7295
--- statement query F
--- select '-1e308'::float;
+## TODO issue https://github.com/datafuselabs/databend/issues/7295
+## query F
+## select '-1e308'::float
 
--- ----
--- -inf
+## ----
+## -Infinity
 
--- statement query F
--- select '-1e310'::double;
+## query F
+## select '-1e310'::double
 
--- ----
--- -inf
+## ----
+## -Infinity
 

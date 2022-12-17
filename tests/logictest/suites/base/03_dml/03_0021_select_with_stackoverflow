@@ -1,6 +1,5 @@
-statement query I
-SELECT 65792;
-
+query I
+SELECT 65792
 ----
 65792
 

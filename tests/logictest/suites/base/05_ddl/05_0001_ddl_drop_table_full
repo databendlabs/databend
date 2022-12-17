@@ -1,24 +1,24 @@
 statement ok
-DROP DATABASE IF EXISTS db_13_0001;
+DROP DATABASE IF EXISTS db_13_0001
 
 statement ok
-CREATE DATABASE db_13_0001;
+CREATE DATABASE db_13_0001
 
 statement ok
-USE db_13_0001;
+USE db_13_0001
 
 statement ok
-CREATE TABLE t(c1 int) ENGINE = Null;
+CREATE TABLE t(c1 int) ENGINE = Null
 
 statement ok
-DROP TABLE t ALL;
+DROP TABLE t ALL
 
 statement ok
-CREATE TABLE t(c1 int) ENGINE = Fuse;
+CREATE TABLE t(c1 int) ENGINE = Fuse
 
 statement ok
-DROP TABLE t ALL;
+DROP TABLE t ALL
 
 statement ok
-DROP database db_13_0001;
+DROP database db_13_0001
 

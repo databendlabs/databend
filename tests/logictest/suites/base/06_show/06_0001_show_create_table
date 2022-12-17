@@ -1,58 +1,42 @@
 statement ok
-DROP DATABASE IF EXISTS `test`;
+DROP DATABASE IF EXISTS `test`
 
 statement ok
-CREATE DATABASE `test`;
+CREATE DATABASE `test`
 
 statement ok
-CREATE TABLE `test`.`a` (    a bigint, b int default 3, c varchar(255) default 'x', d smallint null, e Date) Engine = Null;
+CREATE TABLE `test`.`a` (    a bigint, b int default 3, c varchar(255) default 'x', d smallint null, e Date) Engine = Null
 
-statement query TT 
-SHOW CREATE TABLE `test`.`a`;
-
+query TT
+SHOW CREATE TABLE `test`.`a`
 ----
-a CREATE TABLE `a` (
-  `a` BIGINT,
-  `b` INT DEFAULT CAST(3 AS INT),
-  `c` VARCHAR DEFAULT x,
-  `d` SMALLINT NULL,
-  `e` DATE
-) ENGINE=NULL
+a CREATE TABLE `a` ( `a` BIGINT, `b` INT DEFAULT CAST(3 AS INT), `c` VARCHAR DEFAULT x, `d` SMALLINT NULL, `e` DATE ) ENGINE=NULL
 
 statement ok
-CREATE TABLE `test`.`b` (    a bigint, b int null default null, c varchar(255), d smallint unsigned null) Engine = Null COMMENT = 'test b';
+CREATE TABLE `test`.`b` (    a bigint, b int null default null, c varchar(255), d smallint unsigned null) Engine = Null COMMENT = 'test b'
 
-statement query TT 
-SHOW CREATE TABLE `test`.`b`;
-
+query TT
+SHOW CREATE TABLE `test`.`b`
 ----
-b CREATE TABLE `b` (
-  `a` BIGINT,
-  `b` INT NULL DEFAULT CAST(NULL AS INT NULL),
-  `c` VARCHAR,
-  `d` SMALLINT UNSIGNED NULL
-) ENGINE=NULL COMMENT='test b'
+b CREATE TABLE `b` ( `a` BIGINT, `b` INT NULL DEFAULT CAST(NULL AS INT NULL), `c` VARCHAR, `d` SMALLINT UNSIGNED NULL ) ENGINE=NULL COMMENT='test b'
 
 statement ok
-CREATE TABLE test.c (a int) CLUSTER BY (a, a % 3);
+CREATE TABLE test.c (a int) CLUSTER BY (a, a % 3)
 
-statement query TT 
-SHOW CREATE TABLE `test`.`c`;
-
+query TT
+SHOW CREATE TABLE `test`.`c`
 ----
-c CREATE TABLE `c` (
-  `a` INT
-) ENGINE=FUSE CLUSTER BY (a, a % 3)
+c CREATE TABLE `c` ( `a` INT ) ENGINE=FUSE CLUSTER BY (a, a % 3)
 
 statement ok
-DROP TABLE `test`.`a`;
+DROP TABLE `test`.`a`
 
 statement ok
-DROP TABLE `test`.`b`;
+DROP TABLE `test`.`b`
 
 statement ok
-DROP TABLE `test`.`c`;
+DROP TABLE `test`.`c`
 
 statement ok
-DROP DATABASE `test`;
+DROP DATABASE `test`
 

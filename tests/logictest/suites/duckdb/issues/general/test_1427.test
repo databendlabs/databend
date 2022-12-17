@@ -1,48 +1,45 @@
 statement ok
-drop table if exists t1;
+drop table if exists t1
 
 statement ok
-drop table if exists t0;
+drop table if exists t0
 
 statement ok
-drop view if exists t1;
+drop view if exists t1
 
 statement ok
-drop view if exists t0;
+drop view if exists t0
 
 statement ok
-drop table if exists t;
+drop table if exists t
 
 statement ok
-create table t as select 123 as a;
+create table t as select 123 as a
 
-statement query I
-select * from (select 123 as a) t where a in (select 123 );
-
+query I
+select * from (select 123 as a) t where a in (select 123 )
 ----
 123
 
-statement query I
-select * from t where a in (select 123 );
-
-----
-123
-
-statement ok
-create view t0 as select * from t where a in (select 123 );
-
-statement query I
-select * from t0;
-
+query I
+select * from t where a in (select 123 )
 ----
 123
 
 statement ok
-create view t1 as select * from (select 123 as a) t where a in (select 123 );
+create view t0 as select * from t where a in (select 123 )
+
+query I
+select * from t0
+----
+123
 
 statement ok
-drop view t0;
+create view t1 as select * from (select 123 as a) t where a in (select 123 )
 
 statement ok
-drop view t1;
+drop view t0
+
+statement ok
+drop view t1
 

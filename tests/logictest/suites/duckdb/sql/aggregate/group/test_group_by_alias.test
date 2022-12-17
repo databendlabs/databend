@@ -1,36 +1,32 @@
 statement ok
-drop table if exists integers;
+drop table if exists integers
 
 statement ok
-CREATE TABLE integers(i INTEGER NULL);
+CREATE TABLE integers(i INTEGER NULL)
 
 statement ok
-INSERT INTO integers VALUES (1), (2), (3), (NULL);
+INSERT INTO integers VALUES (1), (2), (3), (NULL)
 
-statement query II
-SELECT i % 2 AS k, SUM(i) FROM integers WHERE i IS NOT NULL GROUP BY k HAVING k>0;
-
+query II
+SELECT i % 2 AS k, SUM(i) FROM integers WHERE i IS NOT NULL GROUP BY k HAVING k>0
 ----
 1 4
 
-statement query II
-SELECT i % 2 AS k, SUM(i) FROM integers WHERE i IS NOT NULL GROUP BY k HAVING i%2>0;
-
+query II
+SELECT i % 2 AS k, SUM(i) FROM integers WHERE i IS NOT NULL GROUP BY k HAVING i%2>0
 ----
 1 4
 
-statement query II
-SELECT i % 2 AS k, SUM(i) FROM integers WHERE i IS NOT NULL GROUP BY 1 HAVING i%2>0;
-
+query II
+SELECT i % 2 AS k, SUM(i) FROM integers WHERE i IS NOT NULL GROUP BY 1 HAVING i%2>0
 ----
 1 4
 
--- SELECT i, i % 2 AS i, SUM(i) FROM integers GROUP BY i ORDER BY i, 3;
--- SELECT i, i % 2 AS k, SUM(i) FROM integers GROUP BY i ORDER BY k, 3;
+## SELECT i, i % 2 AS i, SUM(i) FROM integers GROUP BY i ORDER BY i, 3
+## SELECT i, i % 2 AS k, SUM(i) FROM integers GROUP BY i ORDER BY k, 3
 
-statement query III
-SELECT i, i % 2 AS k, SUM(i) FROM integers GROUP BY i ORDER BY i;
-
+query III
+SELECT i, i % 2 AS k, SUM(i) FROM integers GROUP BY i ORDER BY i
 ----
 1 1 1
 2 0 2
@@ -38,11 +34,10 @@ SELECT i, i % 2 AS k, SUM(i) FROM integers GROUP BY i ORDER BY i;
 NULL NULL NULL
 
 statement error 1065
-SELECT i % 2 AS k, SUM(k) FROM integers GROUP BY k;
+SELECT i % 2 AS k, SUM(k) FROM integers GROUP BY k
 
-statement query II
-SELECT i, SUM(i) FROM integers GROUP BY i ORDER BY i;
-
+query II
+SELECT i, SUM(i) FROM integers GROUP BY i ORDER BY i
 ----
 1 1
 2 2

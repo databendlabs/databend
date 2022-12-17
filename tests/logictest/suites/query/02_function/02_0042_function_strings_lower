@@ -1,18 +1,15 @@
-statement query T
-SELECT LOWER('Hello,World!');
-
+query T
+SELECT LOWER('Hello,World!')
 ----
 hello,world!
 
-statement query T
-SELECT LOWER('Здравствуйте');
-
+query T
+SELECT LOWER('Здравствуйте')
 ----
 здравствуйте
 
-statement query T
-SELECT LOWER(NULL);
-
+query T
+SELECT LOWER(NULL)
 ----
 NULL
 

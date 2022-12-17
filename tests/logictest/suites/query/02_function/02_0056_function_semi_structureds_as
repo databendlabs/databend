@@ -1,112 +1,99 @@
-statement query B
-select as_boolean(parse_json('true'));
-
+query B
+select as_boolean(parse_json('true'))
 ----
 1
 
 
 
-statement query B
-select as_boolean(parse_json('false'));
-
+query B
+select as_boolean(parse_json('false'))
 ----
 0
 
 
 
-statement query I
-select as_integer(parse_json('123'));
-
+query I
+select as_integer(parse_json('123'))
 ----
 123
 
-statement query I
-select as_integer(parse_json('456'));
-
+query I
+select as_integer(parse_json('456'))
 ----
 456
 
-statement query F
-select as_float(parse_json('12.34'));
-
+query F
+select as_float(parse_json('12.34'))
 ----
 12.34
 
-statement query F
-select as_float(parse_json('56.78'));
-
+query F
+select as_float(parse_json('56.78'))
 ----
 56.78
 
-statement query T
-select as_string(parse_json('"abc"'));
-
+query T
+select as_string(parse_json('"abc"'))
 ----
 abc
 
-statement query T
-select as_string(parse_json('"xyz"'));
-
+query T
+select as_string(parse_json('"xyz"'))
 ----
 xyz
 
-statement query T
-select as_array(parse_json('[1,2,3]'));
-
+query T
+select as_array(parse_json('[1,2,3]'))
 ----
 [1,2,3]
 
-statement query T
-select as_array(parse_json('["a","b","c"]'));
-
+query T
+select as_array(parse_json('["a","b","c"]'))
 ----
 ["a","b","c"]
 
-statement query T
-select as_object(parse_json('{"a":"b"}'));
-
+query T
+select as_object(parse_json('{"a":"b"}'))
 ----
 {"a":"b"}
 
-statement query T
-select as_object(parse_json('{"k": 123}'));
-
+query T
+select as_object(parse_json('{"k": 123}'))
 ----
 {"k":123}
 
 statement ok
-DROP DATABASE IF EXISTS db1;
+DROP DATABASE IF EXISTS db1
 
 statement ok
-CREATE DATABASE db1;
+CREATE DATABASE db1
 
 statement ok
-USE db1;
+USE db1
 
 statement ok
-CREATE TABLE IF NOT EXISTS t1(id Int null, v Variant null) Engine = Fuse;
+CREATE TABLE IF NOT EXISTS t1(id Int null, v Variant null) Engine = Fuse
 
 statement ok
-insert into t1 select 1, parse_json('true');
+insert into t1 select 1, parse_json('true')
 
 statement ok
-insert into t1 select 2, parse_json('123');
+insert into t1 select 2, parse_json('123')
 
 statement ok
-insert into t1 select 3, parse_json('45.67');
+insert into t1 select 3, parse_json('45.67')
 
 statement ok
-insert into t1 select 4, parse_json('"abc"');
+insert into t1 select 4, parse_json('"abc"')
 
 statement ok
-insert into t1 select 5, parse_json('[1,2,3]');
+insert into t1 select 5, parse_json('[1,2,3]')
 
 statement ok
-insert into t1 select 6, parse_json('{"a":"b"}');
+insert into t1 select 6, parse_json('{"a":"b"}')
 
-statement query ITBIFTTT
-select id, v, as_boolean(v), as_integer(v), as_float(v), as_string(v), as_array(v), as_object(v) from t1 order by id asc;
-
+query ITBIFTTT
+select id, v, as_boolean(v), as_integer(v), as_float(v), as_string(v), as_array(v), as_object(v) from t1 order by id asc
 ----
 1 true 1 NULL NULL NULL NULL NULL
 2 123 NULL 123 123.0 NULL NULL NULL
@@ -116,5 +103,5 @@ select id, v, as_boolean(v), as_integer(v), as_float(v), as_string(v), as_array(
 6 {"a":"b"} NULL NULL NULL NULL NULL {"a":"b"}
 
 statement ok
-DROP DATABASE db1;
+DROP DATABASE db1
 

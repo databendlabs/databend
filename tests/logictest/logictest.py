@@ -384,7 +384,7 @@ class SuiteRunner(object):
                         resultset[1],
                         resultset[0].group("label"),
                     ),
-                    errorType="statement query get result not equal to expected(with regex expression)",
+                    errorType="query get result not equal to expected(with regex expression)",
                     runner=self.kind,
                 )
 
@@ -398,7 +398,7 @@ class SuiteRunner(object):
                     resultset[1],
                     resultset[0].group("label"),
                 ),
-                errorType="statement query get result not equal to expected",
+                errorType="query get result not equal to expected",
                 runner=self.kind,
             )
 
@@ -412,21 +412,21 @@ class SuiteRunner(object):
             raise LogicError(
                 runner=self.kind,
                 message=str(err),
-                errorType="statement query execute with exception",
+                errorType="query execute with exception",
             )
         try:
             f = format_value(actual, len(statement.s_type.query_type))
         except Exception:
             raise LogicError(
                 message=f"{statement} statement type is query but get no result",
-                errorType="statement query get no result",
+                errorType="query get no result",
                 runner=self.kind,
             )
 
         if statement.results is None or len(statement.results) == 0:
             raise LogicError(
                 message=f"{statement} no result found by query",
-                errorType="statement query get empty result",
+                errorType="query get empty result",
                 runner=self.kind,
             )
         with_regex = False
@@ -451,7 +451,7 @@ class SuiteRunner(object):
         if not hasResult:
             raise LogicError(
                 message=f"{statement} no result found in test file",
-                errorType="statement query has no result in test file",
+                errorType="query has no result in test file",
                 runner=self.kind,
             )
 

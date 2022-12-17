@@ -1,42 +1,35 @@
-statement query I
-SELECT LOCATE('bar', 'foobarbar');
-
+query I
+SELECT LOCATE('bar', 'foobarbar')
 ----
 4
 
-statement query I
-SELECT LOCATE('xbar', 'foobar');
-
+query I
+SELECT LOCATE('xbar', 'foobar')
 ----
 0
 
-statement query I
-SELECT LOCATE('bar', 'foobarbar', 5);
-
+query I
+SELECT LOCATE('bar', 'foobarbar', 5)
 ----
 7
 
-statement query I
-SELECT POSITION('bar' IN 'foobarbar');
-
+query I
+SELECT POSITION('bar' IN 'foobarbar')
 ----
 4
 
-statement query I
-SELECT POSITION('xbar' IN 'foobar');
-
+query I
+SELECT POSITION('xbar' IN 'foobar')
 ----
 0
 
-statement query I
-SELECT INSTR('foobarbar', 'bar');
-
+query I
+SELECT INSTR('foobarbar', 'bar')
 ----
 4
 
-statement query I
-SELECT INSTR('foobar', 'xbar');
-
+query I
+SELECT INSTR('foobar', 'xbar')
 ----
 0
 

@@ -78,7 +78,8 @@ members = [
     "src/meta/protos",
     # databend-meta
     "src/meta/service",
-
+    # sqllogictest
+    "tests/sqllogictests",
 ]
 
 [workspace.dependencies]

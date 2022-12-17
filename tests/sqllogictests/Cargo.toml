@@ -1,0 +1,23 @@
+[package]
+authors = ["Databend Authors <opensource@datafuselabs.com>"]
+edition = "2021"
+license = "Apache-2.0"
+name = "sqllogictests"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+async-trait = "0.1.53"
+clap = { version = "4.0.29", features = ["derive", "env"] }
+common-exception = { path = "../../src/common/exception" }
+env_logger = "0.10.0"
+lazy_static = "1.4.0"
+mysql = "23.0.0"
+regex = "1"
+reqwest = { version = "0.11.13", features = ["json"] }
+serde = "1.0.150"
+serde_json = "1.0.89"
+sqllogictest = "0.9.0"
+thiserror = "1.0.37"
+tokio = { version = "1.21.1", features = ["full"] }
+walkdir = "2.3.2"

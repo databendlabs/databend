@@ -1,12 +1,11 @@
 statement ok
-drop table if exists t;
+drop table if exists t
 
 statement ok
-create table t as select * from numbers(1000);
+create table t as select * from numbers(1000)
 
-statement query T
-explain select count(*) from t;
-
+query T
+explain select count(*) from t
 ----
 EvalScalar
 ├── expressions: [COUNT(*) (#2)]
@@ -15,11 +14,10 @@ EvalScalar
     └── DummyTableScan
 
 statement ok
-insert into t values(1);
+insert into t values(1)
 
-statement query T
-explain select count(*) from t;
-
+query T
+explain select count(*) from t
 ----
 EvalScalar
 ├── expressions: [COUNT(*) (#2)]
@@ -27,9 +25,8 @@ EvalScalar
     ├── expressions: [1001]
     └── DummyTableScan
 
-statement query T
-explain select count(*) from t where number > 10;
-
+query T
+explain select count(*) from t where number > 10
 ----
 EvalScalar
 ├── expressions: [COUNT(*) (#2)]
@@ -48,5 +45,5 @@ EvalScalar
             └── push downs: [filters: [(number > 10)], limit: NONE]
 
 statement ok
-drop table t;
+drop table t
 

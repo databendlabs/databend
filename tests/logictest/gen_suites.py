@@ -36,7 +36,7 @@ STATEMENT_ERROR = """statement error {error_id}
 
 """
 
-STATEMENT_QUERY = """statement query {query_options_with_labels}
+STATEMENT_QUERY = """query {query_options_with_labels}
 {statement}
 
 {results}

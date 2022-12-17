@@ -5,7 +5,7 @@ WITH my_data as (
         SELECT 'text1'::varchar(1000) as my_column
     )
         SELECT string_agg(my_column,', ') as my_string_agg
-        FROM my_data;
+        FROM my_data
 
 statement error 1065
 WITH my_data as (
@@ -16,5 +16,5 @@ WITH my_data as (
         SELECT string_agg(my_column,', ') as my_string_agg
         FROM my_data
         GROUP BY
-            dummy;
+            dummy
 

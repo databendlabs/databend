@@ -132,6 +132,7 @@ jobs:
           - "base"
           - "query"
           - "ydb"
+          - "standalone"
         handlers:
           - "mysql"
           - "http"
@@ -169,6 +170,7 @@ jobs:
         dirs:
           - "base"
           - "query"
+          - "cluster"
         handlers:
           - "mysql"
           - "http"

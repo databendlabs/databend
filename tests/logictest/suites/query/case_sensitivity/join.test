@@ -1,38 +1,41 @@
 statement ok
-drop table if exists t;
+use default
 
 statement ok
-create table t(a int, "A" int);
+set sql_dialect = 'PostgreSQL'
 
 statement ok
-insert into t values(1, 1);
+drop table if exists t
 
-statement query II
-select * from t join t t1 using(a, "A");
+statement ok
+create table t(a int, "A" int)
 
+statement ok
+insert into t values(1, 1)
+
+query II
+select * from t join t t1 using(a, "A")
 ----
 1	1
 
-statement query II
-select * from t join t t1 using(A, "A");
-
+query II
+select * from t join t t1 using(A, "A")
 ----
 1	1
 
 statement ok
-drop table t;
+drop table t
 
 statement ok
-create table t(A int);
+create table t(A int)
 
 statement ok
-insert into t values(1);
+insert into t values(1)
 
-statement query I
-select A from (select A from t) t1 join (select A from t) t2 using(A);
-
+query I
+select A from (select A from t) t1 join (select A from t) t2 using(A)
 ----
 1
 
 statement ok
-drop table t;
+drop table t

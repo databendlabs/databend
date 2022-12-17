@@ -1,27 +1,26 @@
 statement ok
-drop table if exists t0;
+drop table if exists t0
 
 statement ok
-CREATE TABLE t0(c0 DOUBLE NULL, c1 TINYINT NULL);
+CREATE TABLE t0(c0 DOUBLE NULL, c1 TINYINT NULL)
 
 statement ok
-INSERT INTO t0 VALUES(0.5,0);
+INSERT INTO t0 VALUES(0.5,0)
 
 statement ok
-INSERT INTO t0 VALUES(0.5,1);
+INSERT INTO t0 VALUES(0.5,1)
 
 statement ok
-INSERT INTO t0 VALUES(0.5,NULL);
+INSERT INTO t0 VALUES(0.5,NULL)
 
 statement ok
-INSERT INTO t0 VALUES(0.5,NULL);
+INSERT INTO t0 VALUES(0.5,NULL)
 
 statement ok
-INSERT INTO t0 VALUES(0.5,NULL);
+INSERT INTO t0 VALUES(0.5,NULL)
 
-statement query FI
-SELECT c0, c1 FROM t0 order by c1;
-
+query FI
+SELECT c0, c1 FROM t0 order by c1
 ----
 0.5 0
 0.5 1
@@ -30,4 +29,4 @@ SELECT c0, c1 FROM t0 order by c1;
 0.5 NULL
 
 statement error 1006
-SELECT c0, c1, ((t0.c0)/(t0.c1)) FROM t0 order by c0, c1;
+SELECT c0, c1, ((t0.c0)/(t0.c1)) FROM t0 order by c0, c1
