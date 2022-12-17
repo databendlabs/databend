@@ -46,13 +46,18 @@ impl Interpreter for DropRoleInterpreter {
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         // TODO: add privilege check about DROP role
         let plan = self.plan.clone();
+        let role_name = plan.role_name.clone();
         let tenant = self.ctx.get_tenant();
         UserApiProvider::instance()
             .drop_role(&tenant, plan.role_name, plan.if_exists)
             .await?;
 
         let session = self.ctx.get_current_session();
-        session.unset_current_role();
+        if let Some(current_role) = session.get_current_role() {
+            if current_role.name == role_name {
+                session.unset_current_role();
+            }
+        }
 
         RoleCacheManager::instance().force_reload(&tenant).await?;
         Ok(PipelineBuildResult::create())

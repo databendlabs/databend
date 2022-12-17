@@ -7,9 +7,11 @@ DROP ROLE IF EXISTS 'test-b';
 statement ok
 CREATE ROLE 'test-b';
 
+onlyif mysql
 statement ok
 SET ROLE 'test-b';
 
+onlyif mysql
 statement query T
 SELECT current_role();
 
@@ -19,6 +21,7 @@ test-b
 statement ok
 DROP ROLE 'test-b';
 
+onlyif mysql
 statement query T
 SELECT current_role();
 
