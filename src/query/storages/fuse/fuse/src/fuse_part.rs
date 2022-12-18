@@ -26,22 +26,6 @@ use common_exception::Result;
 use common_storages_table_meta::meta::Compression;
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq)]
-pub struct ColumnMeta {
-    pub offset: u64,
-    pub length: u64,
-    pub num_values: u64,
-}
-
-impl ColumnMeta {
-    pub fn create(offset: u64, length: u64, num_values: u64) -> ColumnMeta {
-        ColumnMeta {
-            offset,
-            length,
-            num_values,
-        }
-    }
-}
-#[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct FusePartInfo {
     pub location: String,
     /// FusePartInfo itself is not versioned

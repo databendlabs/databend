@@ -15,7 +15,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_arrow::parquet::metadata::ThriftFileMetaData;
 use common_datablocks::BlockCompactThresholds;
 use common_datablocks::DataBlock;
 use common_exception::Result;
@@ -53,12 +52,11 @@ impl StatisticsAccumulator {
     pub fn add_block(
         &mut self,
         file_size: u64,
-        file_meta: ThriftFileMetaData,
+        col_metas: HashMap<ColumnId, ColumnMeta>,
         block_statistics: BlockStatistics,
         bloom_filter_index_location: Option<Location>,
         bloom_filter_index_size: u64,
     ) -> Result<()> {
-        let col_metas = column_metas(&file_meta)?;
         self.add(
             file_size,
             col_metas,

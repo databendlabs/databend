@@ -12,22 +12,27 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::collections::HashMap;
+
 use backon::ExponentialBackoff;
 use backon::Retryable;
 use common_arrow::parquet::compression::CompressionOptions;
 use common_arrow::parquet::metadata::ThriftFileMetaData;
-use common_datablocks::serialize_data_blocks;
-use common_datablocks::serialize_data_blocks_with_compression;
+use common_datablocks::serialize_to_parquet;
+use common_datablocks::serialize_to_parquet_with_compression;
 use common_datablocks::DataBlock;
 use common_exception::Result;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::ClusterStatistics;
+use common_storages_table_meta::meta::ColumnId;
+use common_storages_table_meta::meta::ColumnMeta;
 use common_storages_table_meta::meta::Location;
 use common_storages_table_meta::meta::StatisticsOfColumns;
 use opendal::Operator;
 use tracing::warn;
 use uuid::Uuid;
 
+use crate::fuse_table::FuseStorageFormat;
 use crate::index::BlockFilter;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::util;
@@ -53,6 +58,7 @@ impl<'a> BlockWriter<'a> {
 
     pub async fn write(
         &self,
+        storage_format: FuseStorageFormat,
         block: DataBlock,
         col_stats: StatisticsOfColumns,
         cluster_stats: Option<ClusterStatistics>,
@@ -65,8 +71,11 @@ impl<'a> BlockWriter<'a> {
         let (bloom_filter_index_size, bloom_filter_index_location) = self
             .build_block_index(data_accessor, &block, block_id)
             .await?;
-        let (file_size, file_meta_data) = write_block(block, data_accessor, &location.0).await?;
-        let col_metas = util::column_metas(&file_meta_data)?;
+
+        let mut buf = Vec::with_capacity(DEFAULT_BLOCK_WRITE_BUFFER_SIZE);
+        let (file_size, col_metas) = write_block(storage_format, block, &mut buf)?;
+
+        write_data(&buf, data_accessor, &location.0).await?;
         let block_meta = BlockMeta::new(
             row_count,
             block_size,
@@ -94,7 +103,7 @@ impl<'a> BlockWriter<'a> {
             .block_bloom_index_location(&block_id);
         let mut data = Vec::with_capacity(DEFAULT_BLOOM_INDEX_WRITE_BUFFER_SIZE);
         let index_block_schema = &bloom_index.filter_schema;
-        let (size, _) = serialize_data_blocks_with_compression(
+        let (size, _) = serialize_to_parquet_with_compression(
             vec![index_block],
             index_block_schema,
             &mut data,
@@ -105,16 +114,23 @@ impl<'a> BlockWriter<'a> {
     }
 }
 
-pub async fn write_block(
+pub fn write_block(
+    storage_format: FuseStorageFormat,
     block: DataBlock,
-    data_accessor: &Operator,
-    location: &str,
-) -> Result<(u64, ThriftFileMetaData)> {
-    let mut buf = Vec::with_capacity(DEFAULT_BLOCK_WRITE_BUFFER_SIZE);
+    buf: &mut Vec<u8>,
+) -> Result<(u64, HashMap<ColumnId, ColumnMeta>)> {
     let schema = block.schema().clone();
-    let result = serialize_data_blocks(vec![block], &schema, &mut buf)?;
-    write_data(&buf, data_accessor, location).await?;
-    Ok(result)
+
+    match storage_format {
+        FuseStorageFormat::Parquet => {
+            let result = serialize_to_parquet(vec![block], &schema, buf)?;
+            let meta = util::column_metas(&result.1)?;
+            Ok((result.0, meta))
+        }
+        FuseStorageFormat::Native => {
+            todo!("native")
+        }
+    }
 }
 
 pub async fn write_data(data: &[u8], data_accessor: &Operator, location: &str) -> Result<()> {

@@ -21,8 +21,8 @@ use common_base::base::Progress;
 use common_base::base::ProgressValues;
 use common_cache::Cache;
 use common_catalog::table_context::TableContext;
-use common_datablocks::serialize_data_blocks;
-use common_datablocks::serialize_data_blocks_with_compression;
+use common_datablocks::serialize_to_parquet;
+use common_datablocks::serialize_to_parquet_with_compression;
 use common_datablocks::BlockCompactThresholds;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
@@ -232,7 +232,7 @@ impl Processor for CompactTransform {
                         let location = self.location_gen.block_bloom_index_location(&block_id);
                         let mut data = Vec::with_capacity(100 * 1024);
                         let index_block_schema = &bloom_index.filter_schema;
-                        let (size, _) = serialize_data_blocks_with_compression(
+                        let (size, _) = serialize_to_parquet_with_compression(
                             vec![index_block],
                             index_block_schema,
                             &mut data,
@@ -245,7 +245,7 @@ impl Processor for CompactTransform {
                     let mut block_data = Vec::with_capacity(100 * 1024 * 1024);
                     let schema = new_block.schema().clone();
                     let (file_size, meta_data) =
-                        serialize_data_blocks(vec![new_block], &schema, &mut block_data)?;
+                        serialize_to_parquet(vec![new_block], &schema, &mut block_data)?;
                     let col_metas = util::column_metas(&meta_data)?;
 
                     // new block meta.

@@ -18,7 +18,7 @@ use backon::ExponentialBackoff;
 use backon::Retryable;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::table_context::TableContext;
-use common_datablocks::serialize_data_blocks;
+use common_datablocks::serialize_to_parquet;
 use common_datablocks::DataBlock;
 use common_datablocks::SendableDataBlockStream;
 use common_exception::Result;
@@ -103,7 +103,7 @@ impl ResultTableWriter {
         let mut data = Vec::with_capacity(100 * 1024 * 1024);
         let block_statistics = BlockStatistics::from(&block, location.clone(), None, None)?;
         let schema = block.schema().clone();
-        let (size, meta_data) = serialize_data_blocks(vec![block], &schema, &mut data)?;
+        let (size, meta_data) = serialize_to_parquet(vec![block], &schema, &mut data)?;
 
         let object = self.data_accessor.object(&location);
         { || object.write(data.as_slice()) }

@@ -27,6 +27,8 @@ mod read_partitions;
 mod recluster;
 mod truncate;
 
+mod fuse_native_source;
+mod fuse_parquet_source;
 mod fuse_source;
 mod revert;
 pub mod util;
