@@ -37,7 +37,6 @@ pub use compact::CompactOptions;
 pub use fuse_sink::BloomIndexState;
 pub use fuse_sink::FuseTableSink;
 pub use fuse_source::FuseTableSource;
-pub use fuse_source::State;
 pub use mutation::ReclusterMutator;
 pub use mutation::SegmentCompactMutator;
 pub use mutation::SegmentCompactionState;

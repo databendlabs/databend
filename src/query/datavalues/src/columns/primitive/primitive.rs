@@ -184,11 +184,7 @@ impl<T: PrimitiveType> Column for PrimitiveColumn<T> {
 
     fn as_arrow_array(&self, logical_type: DataTypeImpl) -> common_arrow::ArrayRef {
         let data_type = logical_type.arrow_type();
-        Box::new(PrimitiveArray::<T>::from_data(
-            data_type,
-            self.values.clone(),
-            None,
-        ))
+        Box::new(PrimitiveArray::<T>::try_new(data_type, self.values.clone(), None).unwrap())
     }
 
     fn arc(&self) -> ColumnRef {

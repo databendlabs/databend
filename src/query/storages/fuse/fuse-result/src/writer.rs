@@ -22,6 +22,7 @@ use common_datablocks::serialize_to_parquet;
 use common_datablocks::DataBlock;
 use common_datablocks::SendableDataBlockStream;
 use common_exception::Result;
+use common_storages_fuse::operations::util;
 use common_storages_fuse::statistics::BlockStatistics;
 use common_storages_fuse::statistics::StatisticsAccumulator;
 use common_storages_fuse::FuseTable;
@@ -117,8 +118,10 @@ impl ResultTableWriter {
                 )
             })
             .await?;
+
+        let meta = util::column_metas(&meta_data)?;
         self.accumulator
-            .add_block(size, meta_data, block_statistics, None, 0)?;
+            .add_block(size, meta, block_statistics, None, 0)?;
         Ok(self.get_last_part_info())
     }
 

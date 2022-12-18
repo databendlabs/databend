@@ -166,7 +166,7 @@ dependencies = [
 [[package]]
 name = "arrow2"
 version = "0.14.2"
-source = "git+https://github.com/jorgecarleitao/arrow2?rev=1da33ac#1da33acb37ebde7d95226117ec9df781a3a8d4e0"
+source = "git+https://github.com/jorgecarleitao/arrow2?rev=1b190fc#1b190fc9883a618631f88a5fd939221d968ece65"
 dependencies = [
  "ahash 0.8.2",
  "arrow-format",
@@ -1250,6 +1250,7 @@ dependencies = [
  "arrow-format",
  "arrow2",
  "futures",
+ "pa",
  "parquet2",
 ]
 
@@ -5972,8 +5973,7 @@ checksum = "0ab1bc2a289d34bd04a330323ac98a1b4bc82c9d9fcb1e66b63caa84da26b575"
 [[package]]
 name = "opendal"
 version = "0.22.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b0d1ff77f4919836ec2002b7b42366722b2856c2b718102d3d1cd58db5e56e3e"
+source = "git+https://github.com/datafuselabs/opendal?rev=2193ebf#2193ebfa915a6d1ace8760aebcf4d0e64433fc37"
 dependencies = [
  "anyhow",
  "async-compat",
@@ -6263,6 +6263,19 @@ dependencies = [
  "ecdsa",
  "elliptic-curve",
  "sha2",
+]
+
+[[package]]
+name = "pa"
+version = "0.1.0"
+source = "git+https://github.com/sundy-li/pa?rev=68acacb#68acacb5155e2dd2570f3219aa006c0657d48a01"
+dependencies = [
+ "arrow2",
+ "bytemuck",
+ "lz4",
+ "serde",
+ "serde_json",
+ "zstd",
 ]
 
 [[package]]
@@ -7775,9 +7788,9 @@ checksum = "0772c5c30e1a0d91f6834f8e545c69281c099dfa9a3ac58d96a9fd629c8d4898"
 
 [[package]]
 name = "serde"
-version = "1.0.150"
+version = "1.0.151"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e326c9ec8042f1b5da33252c8a37e9ffbd2c9bef0155215b6e6c80c790e05f91"
+checksum = "97fed41fc1a24994d044e6db6935e69511a1153b52c15eb42493b26fa87feba0"
 dependencies = [
  "serde_derive",
 ]
@@ -7806,9 +7819,9 @@ dependencies = [
 
 [[package]]
 name = "serde_derive"
-version = "1.0.150"
+version = "1.0.151"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "42a3df25b0713732468deadad63ab9da1f1fd75a48a15024b50363f128db627e"
+checksum = "255abe9a125a985c05190d687b320c12f9b1f0b99445e608c21ba0782c719ad8"
 dependencies = [
  "proc-macro2",
  "quote",

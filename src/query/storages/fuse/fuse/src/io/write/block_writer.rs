@@ -16,6 +16,8 @@ use std::collections::HashMap;
 
 use backon::ExponentialBackoff;
 use backon::Retryable;
+use common_arrow::arrow::chunk::Chunk;
+use common_arrow::native::write::PaWriter;
 use common_arrow::parquet::compression::CompressionOptions;
 use common_arrow::parquet::metadata::ThriftFileMetaData;
 use common_datablocks::serialize_to_parquet;
@@ -128,7 +130,34 @@ pub fn write_block(
             Ok((result.0, meta))
         }
         FuseStorageFormat::Native => {
-            todo!("native")
+            let arrow_schema = block.schema().as_ref().to_arrow();
+            let mut writer = PaWriter::new(
+                buf,
+                arrow_schema.clone(),
+                common_arrow::native::write::WriteOptions {
+                    compression: common_arrow::native::Compression::LZ4,
+                    max_page_size: Some(8192),
+                },
+            );
+
+            let batch = Chunk::try_from(block)?;
+
+            writer.start()?;
+            writer.write(&batch)?;
+            writer.finish()?;
+
+            let metas = writer
+                .metas
+                .iter()
+                .enumerate()
+                .map(|(idx, meta)| {
+                    (
+                        idx as ColumnId,
+                        ColumnMeta::new(meta.offset, meta.length, meta.num_values),
+                    )
+                })
+                .collect();
+            Ok((writer.total_size() as u64, metas))
         }
     }
 }

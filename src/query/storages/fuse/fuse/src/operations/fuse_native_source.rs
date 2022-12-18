@@ -19,8 +19,8 @@ use std::io::Read;
 use std::io::Take;
 use std::sync::Arc;
 
-use common_arrow::arrow::io::fuse::read::reader::FuseReader;
-use common_arrow::arrow::io::fuse::read::FuseReadBuf;
+use common_arrow::native::read::reader::PaReader;
+use common_arrow::native::read::PaReadBuf;
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
 use common_catalog::plan::PartInfoPtr;
@@ -38,9 +38,8 @@ use common_pipeline_core::processors::Processor;
 use common_sql::evaluator::EvalNode;
 
 use crate::io::BlockReader;
-use crate::operations::State::Generated;
 
-type DataChunks = Vec<(usize, FuseReader<Box<dyn FuseReadBuf + Send + Sync>>)>;
+type DataChunks = Vec<(usize, PaReader<Box<dyn PaReadBuf + Send + Sync>>)>;
 
 enum State {
     ReadData(Option<PartInfoPtr>),
@@ -127,7 +126,8 @@ impl Processor for FuseNativeSource {
         }
 
         if matches!(self.state, State::Generated(_, _)) {
-            if let Generated(data_block, chunks) = std::mem::replace(&mut self.state, State::Finish)
+            if let State::Generated(data_block, chunks) =
+                std::mem::replace(&mut self.state, State::Finish)
             {
                 self.state = State::Deserialize(chunks);
                 self.output.push_data(Ok(data_block));
@@ -190,16 +190,25 @@ impl Processor for FuseNativeSource {
                     data_block = DataBlock::filter_block(data_block, &res)?;
                 }
 
+                // the last step of prewhere
+                let progress_values = ProgressValues {
+                    rows: data_block.num_rows(),
+                    bytes: data_block.memory_size(),
+                };
+                self.scan_progress.incr(&progress_values);
+
                 self.generate_one_block(data_block, chunks)?;
                 Ok(())
             }
 
             State::ReadData(Some(part)) => {
-                let mut chunks = self.prewhere_reader.sync_read_columns_data(part.clone())?;
+                let mut chunks = self
+                    .prewhere_reader
+                    .sync_read_native_columns_data(part.clone())?;
 
                 match self.remain_reader.as_ref() {
                     Some(r) => {
-                        let cs = r.sync_read_columns_data(part.clone())?;
+                        let cs = r.sync_read_native_columns_data(part.clone())?;
                         for c in cs.into_iter() {
                             chunks.push(c);
                         }
@@ -218,12 +227,12 @@ impl Processor for FuseNativeSource {
             State::ReadData(Some(part)) => {
                 let mut chunks = self
                     .prewhere_reader
-                    .async_read_columns_data(part.clone())
+                    .async_read_native_columns_data(part.clone())
                     .await?;
 
                 match self.remain_reader.as_ref() {
                     Some(r) => {
-                        let cs = r.async_read_columns_data(part.clone()).await?;
+                        let cs = r.async_read_native_columns_data(part.clone()).await?;
                         for c in cs.into_iter() {
                             chunks.push(c);
                         }

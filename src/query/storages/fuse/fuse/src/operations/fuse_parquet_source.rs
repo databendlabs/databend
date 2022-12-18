@@ -31,7 +31,6 @@ use common_pipeline_core::processors::Processor;
 use common_sql::evaluator::EvalNode;
 
 use crate::io::BlockReader;
-use crate::operations::State::Generated;
 
 type DataChunks = Vec<(usize, Vec<u8>)>;
 
@@ -40,7 +39,7 @@ pub struct PrewhereData {
     filter: ColumnRef,
 }
 
-pub enum State {
+enum State {
     ReadDataPrewhere(Option<PartInfoPtr>),
     ReadDataRemain(PartInfoPtr, PrewhereData),
     PrewhereFilter(PartInfoPtr, DataChunks),
@@ -98,7 +97,7 @@ impl FuseParquetSource {
     fn generate_one_empty_block(&mut self) -> Result<()> {
         let schema = self.output_reader.schema();
         let new_part = self.ctx.try_get_part();
-        self.state = Generated(new_part, DataBlock::empty_with_schema(schema));
+        self.state = State::Generated(new_part, DataBlock::empty_with_schema(schema));
         Ok(())
     }
 }
@@ -135,7 +134,9 @@ impl Processor for FuseParquetSource {
         }
 
         if matches!(self.state, State::Generated(_, _)) {
-            if let Generated(part, data_block) = std::mem::replace(&mut self.state, State::Finish) {
+            if let State::Generated(part, data_block) =
+                std::mem::replace(&mut self.state, State::Finish)
+            {
                 self.state = match part {
                     None => State::Finish,
                     Some(part) => State::ReadDataPrewhere(Some(part)),

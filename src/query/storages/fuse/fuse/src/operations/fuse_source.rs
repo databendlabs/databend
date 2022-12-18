@@ -35,19 +35,7 @@ use super::fuse_parquet_source::FuseParquetSource;
 use crate::fuse_table::FuseStorageFormat;
 use crate::io::BlockReader;
 
-pub struct FuseTableSource {
-    state: State,
-    ctx: Arc<dyn TableContext>,
-    scan_progress: Arc<Progress>,
-    output: Arc<OutputPort>,
-    output_reader: Arc<BlockReader>,
-
-    prewhere_reader: Arc<BlockReader>,
-    prewhere_filter: Arc<Option<EvalNode>>,
-    remain_reader: Arc<Option<BlockReader>>,
-
-    support_blocking: bool,
-}
+pub struct FuseTableSource;
 
 impl FuseTableSource {
     pub fn create(

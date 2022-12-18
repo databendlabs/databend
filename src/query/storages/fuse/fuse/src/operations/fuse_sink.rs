@@ -38,7 +38,6 @@ use common_storages_table_meta::meta::Statistics;
 use opendal::Operator;
 
 use super::AppendOperationLogEntry;
-use crate::fuse_part::ColumnMeta;
 use crate::fuse_table::FuseStorageFormat;
 use crate::io;
 use crate::io::TableMetaLocationGenerator;
@@ -215,7 +214,7 @@ impl Processor for FuseTableSink {
                 )?;
                 // we need a configuration of block size threshold here
                 let mut data = Vec::with_capacity(100 * 1024 * 1024);
-                let (size, meta_data) = io::write_block(self.storage_format, block, &mut data);
+                let (size, meta_data) = io::write_block(self.storage_format, block, &mut data)?;
 
                 self.state = State::Serialized {
                     data,
