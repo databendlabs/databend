@@ -81,19 +81,20 @@ pub fn set_alloc_error_hook() {
     std::alloc::set_alloc_error_hook(|layout| {
         let _guard = LimitMemGuard::enter_unlimited();
 
-        TRACKER.with(|tracker: &RefCell<ThreadTracker>| {
+        let out_of_limit_desc = TRACKER.try_with(|tracker: &RefCell<ThreadTracker>| {
             let mut tracker = tracker.borrow_mut();
+            tracker.out_of_limit_desc.take()
+        });
 
-            let out_of_limit_desc = tracker.out_of_limit_desc.take();
+        let out_of_limit_desc: Option<String> = out_of_limit_desc.ok().flatten();
 
-            panic!(
-                "{}",
-                out_of_limit_desc.unwrap_or_else(|| format!(
-                    "memory allocation of {} bytes failed",
-                    layout.size()
-                ))
-            );
-        })
+        panic!(
+            "{}",
+            out_of_limit_desc.unwrap_or_else(|| format!(
+                "memory allocation of {} bytes failed",
+                layout.size()
+            ))
+        );
     })
 }
 
@@ -230,7 +231,7 @@ impl ThreadTracker {
     /// `size` is the positive number of allocated bytes.
     #[inline]
     pub fn alloc(size: i64) -> Result<(), AllocError> {
-        TRACKER.with(|tracker: &RefCell<ThreadTracker>| {
+        let res = TRACKER.try_with(|tracker: &RefCell<ThreadTracker>| {
             let mut tracker = tracker.borrow_mut();
 
             let used = tracker.buffer.incr(size);
@@ -251,7 +252,16 @@ impl ThreadTracker {
             }
 
             Ok(())
-        })
+        });
+
+        // It may not have been initialized.
+        match res {
+            Ok(res) => res,
+            Err(_access_error) => {
+                GLOBAL_MEM_STAT.used.fetch_add(size, Ordering::Relaxed);
+                Ok(())
+            }
+        }
     }
 
     /// Accumulate deallocated memory.
@@ -259,7 +269,7 @@ impl ThreadTracker {
     /// `size` is positive number of bytes of the memory to deallocate.
     #[inline]
     pub fn dealloc(size: i64) {
-        TRACKER.with(|tracker: &RefCell<ThreadTracker>| {
+        let res = TRACKER.try_with(|tracker: &RefCell<ThreadTracker>| {
             let mut tracker = tracker.borrow_mut();
 
             let used = tracker.buffer.incr(-size);
@@ -273,7 +283,13 @@ impl ThreadTracker {
             // NOTE: De-allocation does not panic
             // even when it's possible exceeding the limit
             // due to other threads sharing the same MemStat may have allocated a lot of memory.
-        })
+        });
+
+        // It may have been destroyed.
+        if matches!(res, Err(_access_error)) {
+            // It is likely that there is no thread local during thread local destruction
+            GLOBAL_MEM_STAT.used.fetch_sub(size, Ordering::Relaxed);
+        }
     }
 
     /// Flush buffered stat to MemStat it belongs to.
