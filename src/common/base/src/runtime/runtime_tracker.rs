@@ -43,10 +43,12 @@
 //! and will be restored when `poll()` returns.
 
 use std::alloc::AllocError;
+use std::cell::RefCell;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::future::Future;
 use std::mem::take;
+use std::ops::DerefMut;
 use std::pin::Pin;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicI64;
@@ -63,8 +65,11 @@ use pin_project_lite::pin_project;
 /// Every alloc/dealloc stat will be fed to this tracker.
 pub static GLOBAL_MEM_STAT: MemStat = MemStat::empty();
 
-#[thread_local]
-static mut TRACKER: ThreadTracker = ThreadTracker::empty();
+// For implemented and needs to call drop, we cannot use the attribute tag thread local.
+// https://play.rust-lang.org/?version=nightly&mode=debug&edition=2021&gist=ea33533387d401e86423df1a764b5609
+thread_local! {
+    static TRACKER: RefCell<ThreadTracker> = RefCell::new(ThreadTracker::empty());
+}
 
 /// Whether to allow unlimited memory. Alloc memory will not panic if it is true.
 #[thread_local]
@@ -76,13 +81,19 @@ pub fn set_alloc_error_hook() {
     std::alloc::set_alloc_error_hook(|layout| {
         let _guard = LimitMemGuard::enter_unlimited();
 
-        let tracker = unsafe { &mut TRACKER };
-        let out_of_limit_desc = tracker.out_of_limit_desc.take();
-        panic!(
-            "{}",
-            out_of_limit_desc
-                .unwrap_or_else(|| format!("memory allocation of {} bytes failed", layout.size()))
-        );
+        TRACKER.with(|tracker: &RefCell<ThreadTracker>| {
+            let mut tracker = tracker.borrow_mut();
+
+            let out_of_limit_desc = tracker.out_of_limit_desc.take();
+
+            panic!(
+                "{}",
+                out_of_limit_desc.unwrap_or_else(|| format!(
+                    "memory allocation of {} bytes failed",
+                    layout.size()
+                ))
+            );
+        })
     })
 }
 
@@ -194,13 +205,15 @@ impl ThreadTracker {
 
     /// Create a ThreadTracker sharing the same internal MemStat with the current thread.
     pub fn fork() -> ThreadTracker {
-        let mt = unsafe { TRACKER.mem_stat.clone() };
-        ThreadTracker::create(mt)
+        ThreadTracker::create(MemStat::current())
     }
 
     /// Swap the `tracker` with the current thread's.
     pub fn swap_with(tracker: &mut ThreadTracker) {
-        unsafe { std::mem::swap(&mut TRACKER, tracker) }
+        TRACKER.with(|v: &RefCell<ThreadTracker>| {
+            let mut v = v.borrow_mut();
+            std::mem::swap(v.deref_mut(), tracker)
+        })
     }
 
     /// Enters a context in which it reports memory stats to `tracker` and returns a guard that restores the previous tracker when being dropped.
@@ -217,26 +230,28 @@ impl ThreadTracker {
     /// `size` is the positive number of allocated bytes.
     #[inline]
     pub fn alloc(size: i64) -> Result<(), AllocError> {
-        let tracker = unsafe { &mut TRACKER };
+        TRACKER.with(|tracker: &RefCell<ThreadTracker>| {
+            let mut tracker = tracker.borrow_mut();
 
-        let used = tracker.buffer.incr(size);
+            let used = tracker.buffer.incr(size);
 
-        if used <= MEM_STAT_BUFFER_SIZE {
-            return Ok(());
-        }
-
-        let res = tracker.flush();
-
-        if let Err(out_of_limit) = res {
-            // https://play.rust-lang.org/?version=stable&mode=debug&edition=2021&gist=03d21a15e52c7c0356fca04ece283cf9
-            if !std::thread::panicking() && !LimitMemGuard::is_unlimited() {
-                let _guard = LimitMemGuard::enter_unlimited();
-                tracker.out_of_limit_desc = Some(format!("{:?}", out_of_limit));
-                return Err(AllocError);
+            if used <= MEM_STAT_BUFFER_SIZE {
+                return Ok(());
             }
-        }
 
-        Ok(())
+            let res = tracker.flush();
+
+            if let Err(out_of_limit) = res {
+                // https://play.rust-lang.org/?version=stable&mode=debug&edition=2021&gist=03d21a15e52c7c0356fca04ece283cf9
+                if !std::thread::panicking() && !LimitMemGuard::is_unlimited() {
+                    let _guard = LimitMemGuard::enter_unlimited();
+                    tracker.out_of_limit_desc = Some(format!("{:?}", out_of_limit));
+                    return Err(AllocError);
+                }
+            }
+
+            Ok(())
+        })
     }
 
     /// Accumulate deallocated memory.
@@ -244,19 +259,21 @@ impl ThreadTracker {
     /// `size` is positive number of bytes of the memory to deallocate.
     #[inline]
     pub fn dealloc(size: i64) {
-        let tracker = unsafe { &mut TRACKER };
+        TRACKER.with(|tracker: &RefCell<ThreadTracker>| {
+            let mut tracker = tracker.borrow_mut();
 
-        let used = tracker.buffer.incr(-size);
+            let used = tracker.buffer.incr(-size);
 
-        if used >= -MEM_STAT_BUFFER_SIZE {
-            return;
-        }
+            if used >= -MEM_STAT_BUFFER_SIZE {
+                return;
+            }
 
-        let _ = tracker.flush();
+            let _ = tracker.flush();
 
-        // NOTE: De-allocation does not panic
-        // even when it's possible exceeding the limit
-        // due to other threads sharing the same MemStat may have allocated a lot of memory.
+            // NOTE: De-allocation does not panic
+            // even when it's possible exceeding the limit
+            // due to other threads sharing the same MemStat may have allocated a lot of memory.
+        })
     }
 
     /// Flush buffered stat to MemStat it belongs to.
@@ -383,7 +400,7 @@ impl MemStat {
 
     #[inline]
     pub fn current() -> Option<Arc<MemStat>> {
-        unsafe { TRACKER.mem_stat.clone() }
+        TRACKER.with(|tracker: &RefCell<ThreadTracker>| tracker.borrow().mem_stat.clone())
     }
 
     #[inline]
@@ -466,6 +483,7 @@ impl<T: Future> Future for UnlimitedFuture<T> {
 #[cfg(test)]
 mod tests {
     mod async_thread_tracker {
+        use std::cell::RefCell;
         use std::future::Future;
         use std::pin::Pin;
         use std::sync::Arc;
@@ -517,7 +535,10 @@ mod tests {
             );
 
             drop(v);
-            unsafe { &mut TRACKER.flush() };
+
+            TRACKER.with(|f: &RefCell<ThreadTracker>| {
+                let _ = f.borrow_mut().flush();
+            });
 
             let used = mem_stat.get_memory_usage();
             assert_eq!(
