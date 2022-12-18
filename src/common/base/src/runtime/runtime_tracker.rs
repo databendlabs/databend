@@ -81,20 +81,28 @@ pub fn set_alloc_error_hook() {
     std::alloc::set_alloc_error_hook(|layout| {
         let _guard = LimitMemGuard::enter_unlimited();
 
-        let out_of_limit_desc = TRACKER.try_with(|tracker: &RefCell<ThreadTracker>| {
-            let mut tracker = tracker.borrow_mut();
-            tracker.out_of_limit_desc.take()
-        });
+        // let out_of_limit_desc = TRACKER.try_with(|tracker: &RefCell<ThreadTracker>| {
+        //     let mut tracker = tracker.borrow_mut();
+        //     tracker.out_of_limit_desc.take()
+        // });
 
-        let out_of_limit_desc: Option<String> = out_of_limit_desc.ok().flatten();
+        // let out_of_limit_desc: Option<String> = out_of_limit_desc.ok().flatten();
+
+        // panic!(
+        //     "{}",
+        //     out_of_limit_desc.unwrap_or_else(|| format!(
+        //         "memory allocation of {} bytes failed",
+        //         layout.size()
+        //     ))
+        // );
 
         panic!(
             "{}",
-            out_of_limit_desc.unwrap_or_else(|| format!(
+            format!(
                 "memory allocation of {} bytes failed",
                 layout.size()
-            ))
-        );
+            )
+        )
     })
 }
 
@@ -231,37 +239,30 @@ impl ThreadTracker {
     /// `size` is the positive number of allocated bytes.
     #[inline]
     pub fn alloc(size: i64) -> Result<(), AllocError> {
-        let res = TRACKER.try_with(|tracker: &RefCell<ThreadTracker>| {
+        let has_oom = TRACKER.try_with(|tracker: &RefCell<ThreadTracker>| {
+            // We need to ensure no heap memory alloc or dealloc. it will cause panic of borrow recursive call.
             let mut tracker = tracker.borrow_mut();
 
-            let used = tracker.buffer.incr(size);
-
-            if used <= MEM_STAT_BUFFER_SIZE {
-                return Ok(());
+            match tracker.buffer.incr(size) <= MEM_STAT_BUFFER_SIZE {
+                true => Ok(()),
+                false => tracker.flush()
             }
-
-            let res = tracker.flush();
-
-            if let Err(out_of_limit) = res {
-                // https://play.rust-lang.org/?version=stable&mode=debug&edition=2021&gist=03d21a15e52c7c0356fca04ece283cf9
-                if !std::thread::panicking() && !LimitMemGuard::is_unlimited() {
-                    let _guard = LimitMemGuard::enter_unlimited();
-                    tracker.out_of_limit_desc = Some(format!("{:?}", out_of_limit));
-                    return Err(AllocError);
-                }
-            }
-
-            Ok(())
         });
 
-        // It may not have been initialized.
-        match res {
-            Ok(res) => res,
-            Err(_access_error) => {
-                GLOBAL_MEM_STAT.used.fetch_add(size, Ordering::Relaxed);
-                Ok(())
+        if let Ok(Err(out_of_limit)) = has_oom {
+            // https://play.rust-lang.org/?version=stable&mode=debug&edition=2021&gist=03d21a15e52c7c0356fca04ece283cf9
+            if !std::thread::panicking() && !LimitMemGuard::is_unlimited() {
+                let _guard = LimitMemGuard::enter_unlimited();
+                // TODO: We need send the error message to the alloc error handle(there is no good way at present).
+                let _out_of_limit_desc = Some(format!("{:?}", out_of_limit));
+                return Err(AllocError);
             }
         }
+
+        // NOTE: Rust will alloc or dealloc memory after the thread local is destroyed when we using thread_local macro.
+        // - It will performance degradation if we record these(current).
+        // - It will inaccurate memory tracking if we no record these.
+        Ok(())
     }
 
     /// Accumulate deallocated memory.
@@ -269,7 +270,7 @@ impl ThreadTracker {
     /// `size` is positive number of bytes of the memory to deallocate.
     #[inline]
     pub fn dealloc(size: i64) {
-        let res = TRACKER.try_with(|tracker: &RefCell<ThreadTracker>| {
+        let _ = TRACKER.try_with(|tracker: &RefCell<ThreadTracker>| {
             let mut tracker = tracker.borrow_mut();
 
             let used = tracker.buffer.incr(-size);
@@ -285,11 +286,9 @@ impl ThreadTracker {
             // due to other threads sharing the same MemStat may have allocated a lot of memory.
         });
 
-        // It may have been destroyed.
-        if matches!(res, Err(_access_error)) {
-            // It is likely that there is no thread local during thread local destruction
-            GLOBAL_MEM_STAT.used.fetch_sub(size, Ordering::Relaxed);
-        }
+        // NOTE: Rust will alloc or dealloc memory after the thread local is destroyed when we using thread_local macro.
+        // - It will performance degradation if we record these(current).
+        // - It will inaccurate memory tracking if we no record these.
     }
 
     /// Flush buffered stat to MemStat it belongs to.
