@@ -1314,6 +1314,9 @@ pub struct QueryConfig {
 
     #[clap(skip)]
     quota: Option<TenantQuota>,
+
+    #[clap(long)]
+    pub allow_insecure_tenant: bool,
 }
 
 impl Default for QueryConfig {
@@ -1377,6 +1380,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             share_endpoint_address: self.share_endpoint_address,
             share_endpoint_auth_token_file: self.share_endpoint_auth_token_file,
             tenant_quota: self.quota,
+            allow_insecure_tenant: self.allow_insecure_tenant,
         })
     }
 }
@@ -1439,6 +1443,7 @@ impl From<InnerQueryConfig> for QueryConfig {
             share_endpoint_address: inner.share_endpoint_address,
             share_endpoint_auth_token_file: inner.share_endpoint_auth_token_file,
             quota: inner.tenant_quota,
+            allow_insecure_tenant: inner.allow_insecure_tenant,
         }
     }
 }
