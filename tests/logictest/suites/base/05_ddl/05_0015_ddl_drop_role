@@ -12,9 +12,8 @@ statement ok
 SET ROLE 'test-b';
 
 onlyif mysql
-statement query T
+query T
 SELECT current_role();
-
 ----
 test-b
 
@@ -22,11 +21,10 @@ statement ok
 DROP ROLE 'test-b'
 
 onlyif mysql
-statement query T
+query T
 SELECT current_role();
-
 ----
-
+(empty)
 
 statement error 2204
 DROP ROLE 'test-b'
