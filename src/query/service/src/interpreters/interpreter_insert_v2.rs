@@ -395,17 +395,24 @@ impl AsyncSource for ValueSource {
             return Ok(None);
         }
 
-        // Pre-calculate the positions of all `'` and `\`
-        let patterns = &["'", "\\"];
+        // Pre-generate the positions of `(`, `'` and `\`
+        let patterns = &["(", "'", "\\"];
         let ac = AhoCorasick::new(patterns);
+        // Use the number of '(' to estimate the number of rows
+        let mut estimated_rows = 0;
         let mut positions = VecDeque::new();
         for mat in ac.find_iter(&self.data) {
-            let pos = mat.start();
-            positions.push_back(pos);
+            if mat.pattern() == 0 {
+                estimated_rows += 1;
+                continue;
+            }
+            positions.push_back(mat.start());
         }
 
         let mut reader = Cursor::new(self.data.as_bytes());
-        let block = self.read(&mut reader, &mut positions).await?;
+        let block = self
+            .read(estimated_rows, &mut reader, &mut positions)
+            .await?;
         self.is_finished = true;
         Ok(Some(block))
     }
@@ -434,6 +441,7 @@ impl ValueSource {
 
     pub async fn read<R: AsRef<[u8]>>(
         &self,
+        estimated_rows: usize,
         reader: &mut Cursor<R>,
         positions: &mut VecDeque<usize>,
     ) -> Result<DataBlock> {
@@ -441,7 +449,7 @@ impl ValueSource {
             .schema
             .fields()
             .iter()
-            .map(|f| f.data_type().create_deserializer(1024))
+            .map(|f| f.data_type().create_deserializer(estimated_rows))
             .collect::<Vec<_>>();
 
         let mut rows = 0;
