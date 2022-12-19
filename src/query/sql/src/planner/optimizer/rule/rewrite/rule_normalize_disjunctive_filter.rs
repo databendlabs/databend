@@ -12,6 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cell::RefCell;
+use std::collections::VecDeque;
+use std::rc::Rc;
+
 use common_datavalues::BooleanType;
 use common_datavalues::DataTypeImpl;
 use common_datavalues::DataValue;
@@ -170,46 +174,145 @@ impl Rule for RuleNormalizeDisjunctiveFilter {
     }
 }
 
+// rewrite in post order traversal
 fn rewrite_predicate_ors(predicate: PredicateScalar) -> (PredicateScalar, bool) {
-    match predicate {
-        PredicateScalar::Or { args } => {
-            let mut or_args = Vec::with_capacity(args.len());
-            for arg in args.iter() {
-                or_args.push(rewrite_predicate_ors(arg.clone()).0);
-            }
-            or_args = flatten_ors(or_args);
-            process_duplicate_or_exprs(&or_args)
-        }
-        PredicateScalar::And { args } => {
-            let mut and_args = Vec::with_capacity(args.len());
-            for arg in args.iter() {
-                and_args.push(rewrite_predicate_ors(arg.clone()).0);
-            }
-            and_args = flatten_ands(and_args);
-            (PredicateScalar::And { args: and_args }, false)
-        }
-        PredicateScalar::Other { .. } => (predicate, false),
-    }
+    rewrite_predicate_ors_impl(predicate)
 }
 
-// Recursively flatten the OR expressions.
+fn rewrite_predicate_ors_impl(predicate: PredicateScalar) -> (PredicateScalar, bool) {
+    // runtime stack frame
+    struct Frame<'a> {
+        pub predicate: &'a PredicateScalar,
+        pub args: Vec<PredicateScalar>,
+        pub parent: Option<Rc<RefCell<Frame<'a>>>>,
+        pub visited: bool,
+    }
+
+    // build runtime stack
+    let mut stack: VecDeque<Rc<RefCell<Frame>>> = VecDeque::new();
+    // push first predicate
+    let root = Frame {
+        predicate: &predicate,
+        args: Vec::new(),
+        parent: None,
+        visited: false,
+    };
+    stack.push_back(Rc::new(RefCell::new(root)));
+
+    while let Some(frame) = stack.pop_back() {
+        if frame.borrow().visited {
+            // end of this level of iteration
+            // all of its children should already optimized
+            match frame.borrow().predicate {
+                PredicateScalar::And { .. } => {
+                    let and_args: Vec<PredicateScalar> = (frame.borrow().args).clone();
+                    let and_args = flatten_ands(and_args);
+                    match &frame.borrow().parent {
+                        Some(parent) => {
+                            parent
+                                .borrow_mut()
+                                .args
+                                .push(PredicateScalar::And { args: and_args });
+                        }
+                        None => {
+                            // root expr, return
+                            return (PredicateScalar::And { args: and_args }, false);
+                        }
+                    }
+                }
+                PredicateScalar::Or { .. } => {
+                    let or_args: Vec<PredicateScalar> = (frame.borrow().args).clone();
+                    let or_args = flatten_ors(or_args);
+                    let (pred, optimized) = process_duplicate_or_exprs(&or_args);
+                    match &frame.borrow().parent {
+                        Some(parent) => {
+                            parent.borrow_mut().args.push(pred);
+                        }
+                        None => {
+                            // root expr, return
+                            return (pred, optimized);
+                        }
+                    }
+                }
+                // should be unreachable
+                PredicateScalar::Other { .. } => unreachable!(),
+            }
+        }
+        frame.borrow_mut().visited = true;
+        match frame.borrow().predicate {
+            PredicateScalar::And { args } => {
+                stack.push_back(frame.clone());
+                for arg in args.iter() {
+                    let child_frame = Frame {
+                        predicate: arg,
+                        args: Vec::new(),
+                        parent: Some(frame.clone()),
+                        visited: false,
+                    };
+                    stack.push_back(Rc::new(RefCell::new(child_frame)));
+                }
+            }
+            PredicateScalar::Or { args } => {
+                stack.push_back(frame.clone());
+                for arg in args.iter() {
+                    let child_frame = Frame {
+                        predicate: arg,
+                        args: Vec::new(),
+                        parent: Some(frame.clone()),
+                        visited: false,
+                    };
+                    stack.push_back(Rc::new(RefCell::new(child_frame)));
+                }
+            }
+            PredicateScalar::Other { .. } => {
+                let frame = frame.borrow();
+                match &frame.parent {
+                    Some(parent) => {
+                        parent.borrow_mut().args.push(frame.predicate.clone());
+                    }
+                    None => {
+                        // is root expr, return directly
+                        return (frame.predicate.clone(), false);
+                    }
+                }
+            }
+        }
+    }
+    unreachable!();
+}
+
+// Flatten the OR expressions.
 fn flatten_ors(or_args: impl IntoIterator<Item = PredicateScalar>) -> Vec<PredicateScalar> {
     let mut flattened_ors = vec![];
-    for or_arg in or_args {
+    // flatten should be in order
+    // but VecDeque::extend can only extend at the end of stack
+    // so or_args should be reversed
+    let mut stack: VecDeque<PredicateScalar> = VecDeque::from_iter(or_args.into_iter())
+        .into_iter()
+        .rev()
+        .collect();
+    while let Some(or_arg) = stack.pop_back() {
         match or_arg {
-            PredicateScalar::Or { args } => flattened_ors.extend(flatten_ors(args)),
+            PredicateScalar::Or { args } => stack.extend(args),
             _ => flattened_ors.push(or_arg),
         }
     }
     flattened_ors
 }
 
-// Recursively flatten the AND expressions.
+// Flatten the AND expressions.
 fn flatten_ands(and_args: impl IntoIterator<Item = PredicateScalar>) -> Vec<PredicateScalar> {
     let mut flattened_ands = vec![];
-    for and_arg in and_args {
+    // flatten should be in order
+    // but VecDeque::extend can only extend at the end of stack
+    // so and_args should be reversed
+    let mut stack: VecDeque<PredicateScalar> = VecDeque::from_iter(and_args.into_iter())
+        .into_iter()
+        .rev()
+        .collect();
+    while let Some(and_arg) = stack.pop_back() {
         match and_arg {
-            PredicateScalar::And { args } => flattened_ands.extend(flatten_ands(args)),
+            PredicateScalar::And { args } => stack.extend(args),
             _ => flattened_ands.push(and_arg),
         }
     }
