@@ -90,7 +90,7 @@ impl ConfigBuilder {
         self
     }
 
-    pub fn http_handler_result_time_out(mut self, value: impl Into<u64>) -> ConfigBuilder {
+    pub fn http_handler_result_timeout(mut self, value: impl Into<u64>) -> ConfigBuilder {
         self.conf.query.http_handler_result_timeout_secs = value.into();
         self
     }

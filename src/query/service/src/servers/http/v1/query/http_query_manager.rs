@@ -90,10 +90,7 @@ impl HttpQueryManager {
             while let Some(t) = query_clone.check_expire().await {
                 sleep(t).await;
             }
-            let msg = format!(
-                "http query {} timeout after {} s",
-                &query_id_clone, timeout
-            );
+            let msg = format!("http query {} timeout after {} s", &query_id_clone, timeout);
             if self_clone.remove_query(&query_id_clone).await.is_none() {
                 warn!("{msg}, but fail to remove");
             } else {

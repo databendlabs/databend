@@ -460,10 +460,9 @@ async fn test_http_session() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-#[ignore = "flaky, sleep time unreliable"]
 async fn test_result_timeout() -> Result<()> {
     let config = ConfigBuilder::create()
-        .http_handler_result_time_out(200u64)
+        .http_handler_result_timeout(1u64)
         .build();
 
     let _guard = TestGlobalServices::setup(config.clone()).await?;
@@ -475,19 +474,14 @@ async fn test_result_timeout() -> Result<()> {
         .nest("/v1/query", query_route())
         .with(session_middleware);
 
-    let sql = "select sleep(0.1)";
-    let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 0}});
-    let (status, result) = post_json_to_endpoint(&ep, &json).await?;
+    let (status, result) = post_sql_to_endpoint(&ep, "select 1", 1).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     let query_id = result.id.clone();
     let next_uri = make_page_uri(&query_id, 0);
-    assert_eq!(result.next_uri, Some(next_uri.clone()), "{:?}", result);
-
-    sleep(Duration::from_millis(110)).await;
     let response = get_uri(&ep, &next_uri).await;
     assert_eq!(response.status(), StatusCode::OK, "{:?}", result);
 
-    sleep(std::time::Duration::from_millis(210)).await;
+    sleep(std::time::Duration::from_secs(2)).await;
     let response = get_uri(&ep, &next_uri).await;
     assert_eq!(response.status(), StatusCode::NOT_FOUND, "{:?}", result);
     Ok(())
