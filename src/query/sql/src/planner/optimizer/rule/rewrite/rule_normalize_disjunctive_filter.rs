@@ -213,6 +213,7 @@ fn rewrite_predicate_ors_impl(predicate: PredicateScalar) -> (PredicateScalar, b
                                 .borrow_mut()
                                 .args
                                 .push(PredicateScalar::And { args: and_args });
+                            continue;
                         }
                         None => {
                             // root expr, return
@@ -227,6 +228,7 @@ fn rewrite_predicate_ors_impl(predicate: PredicateScalar) -> (PredicateScalar, b
                     match &frame.borrow().parent {
                         Some(parent) => {
                             parent.borrow_mut().args.push(pred);
+                            continue;
                         }
                         None => {
                             // root expr, return
@@ -238,7 +240,9 @@ fn rewrite_predicate_ors_impl(predicate: PredicateScalar) -> (PredicateScalar, b
                 PredicateScalar::Other { .. } => unreachable!(),
             }
         }
-        frame.borrow_mut().visited = true;
+        {
+            frame.borrow_mut().visited = true;
+        }
         match frame.borrow().predicate {
             PredicateScalar::And { args } => {
                 stack.push_back(frame.clone());
