@@ -130,9 +130,13 @@ SELECT
 FROM
     t1
 WHERE
-    a IN (1, 2)
-    AND b > 0
-    AND b < 100
+    (
+        (
+            a IN (1, 2)
+            AND (b > 0)
+        )
+        AND (b < 100)
+    )
 GROUP BY a
 ORDER BY a
 
@@ -142,9 +146,13 @@ explain syntax select * from t1 inner join t2 on t1.a = t2.a and t1.b = t2.b and
 SELECT *
 FROM
     t1
-    INNER JOIN t2 ON t1.a = t2.a
-    AND t1.b = t2.b
-    AND t1.a > 2
+    INNER JOIN t2 ON (
+        (
+            (t1.a = t2.a)
+            AND (t1.b = t2.b)
+        )
+        AND (t1.a > 2)
+    )
 
 query T
 explain syntax delete from t1 where a > 100 and b > 1 and b < 10
@@ -152,9 +160,13 @@ explain syntax delete from t1 where a > 100 and b > 1 and b < 10
 DELETE FROM
     t1
 WHERE
-    a > 100
-    AND b > 1
-    AND b < 10
+    (
+        (
+            (a > 100)
+            AND (b > 1)
+        )
+        AND (b < 10)
+    )
 
 skipif clickhouse
 query T
@@ -212,11 +224,11 @@ explain syntax create view v as select number % 3 as a from numbers(100) where n
 ----
 CREATE VIEW v
 AS
-    SELECT number % 3 AS a
+    SELECT (number % 3) AS a
     FROM
         numbers(100)
     WHERE
-        number > 10
+        (number > 10)
 
 query T
 explain ast select 1, 'ab', [1,2,3] as a, (1, 'a') as t
