@@ -181,7 +181,7 @@ impl Drop for ThreadTracker {
 
             // Memory operations during destruction will be recorded to global stat.
             STAT_BUFFER.destroyed_thread_local_macro = true;
-            let _ = MemStat::record_memory(&None, memory_usage);
+            let _ = MemStat::record_memory::<false>(&None, memory_usage);
         }
     }
 }
@@ -243,7 +243,7 @@ impl ThreadTracker {
 
         let has_oom = match state_buffer.incr(size) <= MEM_STAT_BUFFER_SIZE {
             true => Ok(()),
-            false => state_buffer.flush(),
+            false => state_buffer.flush::<true>(),
         };
 
         if let Err(out_of_limit) = has_oom {
@@ -274,7 +274,7 @@ impl ThreadTracker {
         }
 
         if state_buffer.incr(-size) < -MEM_STAT_BUFFER_SIZE {
-            let _ = state_buffer.flush();
+            let _ = state_buffer.flush::<false>();
         }
 
         // NOTE: De-allocation does not panic
@@ -309,17 +309,17 @@ impl StatBuffer {
     }
 
     /// Flush buffered stat to MemStat it belongs to.
-    pub fn flush(&mut self) -> Result<(), OutOfLimit> {
+    pub fn flush<const NEED_ROLLBACK: bool>(&mut self) -> Result<(), OutOfLimit> {
         let memory_usage = take(&mut self.memory_usage);
         let has_thread_local = TRACKER.try_with(|tracker: &RefCell<ThreadTracker>| {
             // We need to ensure no heap memory alloc or dealloc. it will cause panic of borrow recursive call.
-            MemStat::record_memory(&tracker.borrow().mem_stat, memory_usage)
+            MemStat::record_memory::<NEED_ROLLBACK>(&tracker.borrow().mem_stat, memory_usage)
         });
 
         match has_thread_local {
             Ok(Ok(_)) => Ok(()),
             Ok(Err(oom)) => Err(oom),
-            Err(_access_error) => MemStat::record_memory(&None, memory_usage),
+            Err(_access_error) => MemStat::record_memory::<NEED_ROLLBACK>(&None, memory_usage),
         }
     }
 }
@@ -377,7 +377,7 @@ impl MemStat {
     ///
     /// It feeds `state` to the this tracker and all of its ancestors, including GLOBAL_TRACKER.
     #[inline]
-    pub fn record_memory(
+    pub fn record_memory<const NEED_ROLLBACK: bool>(
         mem_stat: &Option<Arc<MemStat>>,
         memory_usage: i64,
     ) -> Result<(), OutOfLimit> {
@@ -397,10 +397,26 @@ impl MemStat {
         used += memory_usage;
 
         if !is_root {
-            Self::record_memory(&mem_stat.parent_memory_tracker, memory_usage)?;
+            if let Err(cause) =
+                Self::record_memory::<NEED_ROLLBACK>(&mem_stat.parent_memory_tracker, memory_usage)
+            {
+                if NEED_ROLLBACK {
+                    mem_stat.used.fetch_sub(memory_usage, Ordering::Relaxed);
+                }
+
+                return Err(cause);
+            }
         }
 
-        mem_stat.check_limit(used)
+        if let Err(cause) = mem_stat.check_limit(used) {
+            if NEED_ROLLBACK {
+                mem_stat.used.fetch_sub(memory_usage, Ordering::Relaxed);
+            }
+
+            return Err(cause);
+        }
+
+        Ok(())
     }
 
     /// Check if used memory is out of the limit.
@@ -560,7 +576,7 @@ mod tests {
             drop(v);
 
             unsafe {
-                let _ = STAT_BUFFER.flush();
+                let _ = STAT_BUFFER.flush::<false>();
             }
 
             let used = mem_stat.get_memory_usage();
