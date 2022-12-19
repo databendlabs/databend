@@ -5448,6 +5448,52 @@ Query(
 
 
 ---------- Input ----------
+select 'stringwith''quote'''
+---------- Output ---------
+SELECT 'stringwith'quote''
+---------- AST ------------
+Query(
+    Query {
+        span: [
+            SELECT(0..6),
+            QuotedString(7..28),
+        ],
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: [
+                    SELECT(0..6),
+                    QuotedString(7..28),
+                ],
+                distinct: false,
+                select_list: [
+                    AliasedExpr {
+                        expr: Literal {
+                            span: [
+                                QuotedString(7..28),
+                            ],
+                            lit: String(
+                                "stringwith'quote'",
+                            ),
+                        },
+                        alias: None,
+                    },
+                ],
+                from: [],
+                selection: None,
+                group_by: [],
+                having: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
 insert into t (c1, c2) values (1, 2), (3, 4);
 ---------- Output ---------
 INSERT INTO t (c1, c2) VALUES (1, 2), (3, 4);
