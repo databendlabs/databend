@@ -284,39 +284,33 @@ fn rewrite_predicate_ors_impl(predicate: PredicateScalar) -> (PredicateScalar, b
 // Flatten the OR expressions.
 fn flatten_ors(or_args: impl IntoIterator<Item = PredicateScalar>) -> Vec<PredicateScalar> {
     let mut flattened_ors = vec![];
-    // flatten should be in order
-    // but VecDeque::extend can only extend at the end of stack
-    // so or_args should be reversed
-    let mut stack: VecDeque<PredicateScalar> = VecDeque::from_iter(or_args.into_iter())
-        .into_iter()
-        .rev()
-        .collect();
+    let mut stack: VecDeque<PredicateScalar> = VecDeque::from_iter(or_args.into_iter());
     while let Some(or_arg) = stack.pop_back() {
         match or_arg {
             PredicateScalar::Or { args } => stack.extend(args),
             _ => flattened_ors.push(or_arg),
         }
     }
-    flattened_ors
+    // flatten should be in order
+    // but VecDeque::extend can only extend at the end of stack
+    // so returns should be reversed
+    flattened_ors.into_iter().rev().collect()
 }
 
 // Flatten the AND expressions.
 fn flatten_ands(and_args: impl IntoIterator<Item = PredicateScalar>) -> Vec<PredicateScalar> {
     let mut flattened_ands = vec![];
-    // flatten should be in order
-    // but VecDeque::extend can only extend at the end of stack
-    // so and_args should be reversed
-    let mut stack: VecDeque<PredicateScalar> = VecDeque::from_iter(and_args.into_iter())
-        .into_iter()
-        .rev()
-        .collect();
+    let mut stack: VecDeque<PredicateScalar> = VecDeque::from_iter(and_args.into_iter());
     while let Some(and_arg) = stack.pop_back() {
         match and_arg {
             PredicateScalar::And { args } => stack.extend(args),
             _ => flattened_ands.push(and_arg),
         }
     }
-    flattened_ands
+    // flatten should be in order
+    // but VecDeque::extend can only extend at the end of stack
+    // so returns should be reversed
+    flattened_ands.into_iter().rev().collect()
 }
 
 // Apply the inverse OR distributive law.
