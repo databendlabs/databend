@@ -12,7 +12,7 @@ statement ok
 SET ROLE 'test-b';
 
 onlyif mysql
-statement query T
+query T
 SELECT current_role();
 
 ----
@@ -22,7 +22,7 @@ statement ok
 DROP ROLE 'test-b'
 
 onlyif mysql
-statement query T
+query T
 SELECT current_role();
 
 ----
