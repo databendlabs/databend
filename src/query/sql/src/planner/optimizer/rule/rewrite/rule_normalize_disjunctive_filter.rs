@@ -206,7 +206,7 @@ fn rewrite_predicate_ors_impl(predicate: PredicateScalar) -> (PredicateScalar, b
             match frame.borrow().predicate {
                 PredicateScalar::And { .. } => {
                     let and_args: Vec<PredicateScalar> = (frame.borrow().args).clone();
-                    let and_args = flatten_ands(and_args);
+                    let and_args = flatten_ands(and_args).into_iter().rev().into();
                     match &frame.borrow().parent {
                         Some(parent) => {
                             parent
@@ -223,7 +223,7 @@ fn rewrite_predicate_ors_impl(predicate: PredicateScalar) -> (PredicateScalar, b
                 }
                 PredicateScalar::Or { .. } => {
                     let or_args: Vec<PredicateScalar> = (frame.borrow().args).clone();
-                    let or_args = flatten_ors(or_args);
+                    let or_args = flatten_ors(or_args).into_iter().rev().into();
                     let (pred, optimized) = process_duplicate_or_exprs(&or_args);
                     match &frame.borrow().parent {
                         Some(parent) => {
