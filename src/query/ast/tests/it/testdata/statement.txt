@@ -1031,7 +1031,7 @@ CreateTable(
 ---------- Input ----------
 create view v as select number % 3 as a from numbers(1000);
 ---------- Output ---------
-CREATE VIEW v AS SELECT number % 3 AS a FROM numbers(1000)
+CREATE VIEW v AS SELECT (number % 3) AS a FROM numbers(1000)
 ---------- AST ------------
 CreateView(
     CreateViewStmt {
@@ -1154,7 +1154,7 @@ CreateView(
 ---------- Input ----------
 alter view v as select number % 3 as a from numbers(1000);
 ---------- Output ---------
-ALTER VIEW v AS SELECT number % 3 AS a FROM numbers(1000)
+ALTER VIEW v AS SELECT (number % 3) AS a FROM numbers(1000)
 ---------- AST ------------
 AlterView(
     AlterViewStmt {
@@ -1718,7 +1718,7 @@ DropDatabase(
 ---------- Input ----------
 select distinct a, count(*) from t where a = 1 and b - 1 < a group by a having a = 1;
 ---------- Output ---------
-SELECT DISTINCT a, COUNT(*) FROM t WHERE a = 1 AND b - 1 < a GROUP BY a HAVING a = 1
+SELECT DISTINCT a, COUNT(*) FROM t WHERE ((a = 1) AND ((b - 1) < a)) GROUP BY a HAVING (a = 1)
 ---------- AST ------------
 Query(
     Query {
@@ -2331,7 +2331,7 @@ Query(
 ---------- Input ----------
 select * from a join b on a.a = b.a;
 ---------- Output ---------
-SELECT * FROM a INNER JOIN b ON a.a = b.a
+SELECT * FROM a INNER JOIN b ON (a.a = b.a)
 ---------- AST ------------
 Query(
     Query {
@@ -2481,7 +2481,7 @@ Query(
 ---------- Input ----------
 select * from a left outer join b on a.a = b.a;
 ---------- Output ---------
-SELECT * FROM a LEFT OUTER JOIN b ON a.a = b.a
+SELECT * FROM a LEFT OUTER JOIN b ON (a.a = b.a)
 ---------- AST ------------
 Query(
     Query {
@@ -2637,7 +2637,7 @@ Query(
 ---------- Input ----------
 select * from a right outer join b on a.a = b.a;
 ---------- Output ---------
-SELECT * FROM a RIGHT OUTER JOIN b ON a.a = b.a
+SELECT * FROM a RIGHT OUTER JOIN b ON (a.a = b.a)
 ---------- AST ------------
 Query(
     Query {
@@ -2793,7 +2793,7 @@ Query(
 ---------- Input ----------
 select * from a left semi join b on a.a = b.a;
 ---------- Output ---------
-SELECT * FROM a LEFT SEMI JOIN b ON a.a = b.a
+SELECT * FROM a LEFT SEMI JOIN b ON (a.a = b.a)
 ---------- AST ------------
 Query(
     Query {
@@ -2949,7 +2949,7 @@ Query(
 ---------- Input ----------
 select * from a semi join b on a.a = b.a;
 ---------- Output ---------
-SELECT * FROM a LEFT SEMI JOIN b ON a.a = b.a
+SELECT * FROM a LEFT SEMI JOIN b ON (a.a = b.a)
 ---------- AST ------------
 Query(
     Query {
@@ -3102,7 +3102,7 @@ Query(
 ---------- Input ----------
 select * from a left anti join b on a.a = b.a;
 ---------- Output ---------
-SELECT * FROM a LEFT ANTI JOIN b ON a.a = b.a
+SELECT * FROM a LEFT ANTI JOIN b ON (a.a = b.a)
 ---------- AST ------------
 Query(
     Query {
@@ -3258,7 +3258,7 @@ Query(
 ---------- Input ----------
 select * from a anti join b on a.a = b.a;
 ---------- Output ---------
-SELECT * FROM a LEFT ANTI JOIN b ON a.a = b.a
+SELECT * FROM a LEFT ANTI JOIN b ON (a.a = b.a)
 ---------- AST ------------
 Query(
     Query {
@@ -3411,7 +3411,7 @@ Query(
 ---------- Input ----------
 select * from a right semi join b on a.a = b.a;
 ---------- Output ---------
-SELECT * FROM a RIGHT SEMI JOIN b ON a.a = b.a
+SELECT * FROM a RIGHT SEMI JOIN b ON (a.a = b.a)
 ---------- AST ------------
 Query(
     Query {
@@ -3567,7 +3567,7 @@ Query(
 ---------- Input ----------
 select * from a right anti join b on a.a = b.a;
 ---------- Output ---------
-SELECT * FROM a RIGHT ANTI JOIN b ON a.a = b.a
+SELECT * FROM a RIGHT ANTI JOIN b ON (a.a = b.a)
 ---------- AST ------------
 Query(
     Query {
@@ -3723,7 +3723,7 @@ Query(
 ---------- Input ----------
 select * from a full outer join b on a.a = b.a;
 ---------- Output ---------
-SELECT * FROM a FULL OUTER JOIN b ON a.a = b.a
+SELECT * FROM a FULL OUTER JOIN b ON (a.a = b.a)
 ---------- AST ------------
 Query(
     Query {
@@ -3879,7 +3879,7 @@ Query(
 ---------- Input ----------
 select * from a inner join b on a.a = b.a;
 ---------- Output ---------
-SELECT * FROM a INNER JOIN b ON a.a = b.a
+SELECT * FROM a INNER JOIN b ON (a.a = b.a)
 ---------- AST ------------
 Query(
     Query {
@@ -4465,7 +4465,7 @@ Query(
 ---------- Input ----------
 select * from a where a.a = any (select b.a from b);
 ---------- Output ---------
-SELECT * FROM a WHERE a.a = ANY (SELECT b.a FROM b)
+SELECT * FROM a WHERE (a.a = ANY (SELECT b.a FROM b))
 ---------- AST ------------
 Query(
     Query {
@@ -4668,7 +4668,7 @@ Query(
 ---------- Input ----------
 select * from a where a.a = all (select b.a from b);
 ---------- Output ---------
-SELECT * FROM a WHERE a.a = ALL (SELECT b.a FROM b)
+SELECT * FROM a WHERE (a.a = ALL (SELECT b.a FROM b))
 ---------- AST ------------
 Query(
     Query {
@@ -4871,7 +4871,7 @@ Query(
 ---------- Input ----------
 select * from a where a.a = some (select b.a from b);
 ---------- Output ---------
-SELECT * FROM a WHERE a.a = SOME (SELECT b.a FROM b)
+SELECT * FROM a WHERE (a.a = SOME (SELECT b.a FROM b))
 ---------- AST ------------
 Query(
     Query {
@@ -5074,7 +5074,7 @@ Query(
 ---------- Input ----------
 select * from a where a.a > (select b.a from b);
 ---------- Output ---------
-SELECT * FROM a WHERE a.a > (SELECT b.a FROM b)
+SELECT * FROM a WHERE (a.a > (SELECT b.a FROM b))
 ---------- AST ------------
 Query(
     Query {
@@ -5272,7 +5272,7 @@ Query(
 ---------- Input ----------
 select 1 from numbers(1) where ((1 = 1) or 1)
 ---------- Output ---------
-SELECT 1 FROM numbers(1) WHERE 1 = 1 OR 1
+SELECT 1 FROM numbers(1) WHERE ((1 = 1) OR 1)
 ---------- AST ------------
 Query(
     Query {
@@ -5901,7 +5901,7 @@ AlterTable(
 ---------- Input ----------
 ALTER TABLE t RECLUSTER FINAL WHERE c1 > 0;
 ---------- Output ---------
-ALTER TABLE t RECLUSTER FINAL WHERE c1 > 0
+ALTER TABLE t RECLUSTER FINAL WHERE (c1 > 0)
 ---------- AST ------------
 AlterTable(
     AlterTableStmt {
@@ -7834,7 +7834,7 @@ ShowGrantsOfShare(
 ---------- Input ----------
 UPDATE db1.tb1 set a = a + 1, b = 2 WHERE c > 3;
 ---------- Output ---------
-UPDATE db1.tb1 SET a = a + 1, b = 2 WHERE c > 3
+UPDATE db1.tb1 SET a = (a + 1), b = 2 WHERE (c > 3)
 ---------- AST ------------
 Update(
     UpdateStmt {
