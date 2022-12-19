@@ -5973,7 +5973,7 @@ checksum = "0ab1bc2a289d34bd04a330323ac98a1b4bc82c9d9fcb1e66b63caa84da26b575"
 [[package]]
 name = "opendal"
 version = "0.22.5"
-source = "git+https://github.com/datafuselabs/opendal?rev=2193ebf#2193ebfa915a6d1ace8760aebcf4d0e64433fc37"
+source = "git+https://github.com/datafuselabs/opendal?rev=be87536#be87536f6ebabf7ac5f8af9c46d1565e5d4af990"
 dependencies = [
  "anyhow",
  "async-compat",
