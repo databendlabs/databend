@@ -45,10 +45,10 @@ impl Interpreter for SetRoleInterpreter {
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let session = self.ctx.get_current_session();
 
-        let role = session
-            .validate_available_role(&self.plan.role_name)
-            .await?;
         if self.plan.is_default {
+            let role = session
+                .validate_available_role(&self.plan.role_name)
+                .await?;
             let current_user = self.ctx.get_current_user()?;
             UserApiProvider::instance()
                 .update_user_default_role(

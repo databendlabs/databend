@@ -279,6 +279,10 @@ impl Session {
         self.session_ctx.get_current_role()
     }
 
+    pub fn unset_current_role(self: &Arc<Self>) {
+        self.session_ctx.set_current_role(None)
+    }
+
     // Returns all the roles the current session has. If the user have been granted auth_role,
     // the other roles will be ignored.
     // On executing SET ROLE, the role have to be one of the available roles.
