@@ -10,7 +10,7 @@ authors:
   image_url: https://github.com/BohuTANG.png
 ---
 
-Profiling CPU and memory for Go applications is easy and can be of great help in performance troubleshooting, for example, with [flamegraphs](http://www.brendangregg.com/flamegraphs.html). For Rust applications, however, profiling requires extra work. This post explains how to use flamegraphs to visualize performance data of your CPU and memory for Databend.
+Profiling CPU and memory for Go applications is easy and can be of great help in performance troubleshooting, for example, with [flamegraphs](http://www.brendangregg.com/flamegraphs.html). For Rust applications, however, the profiling requires extra work. This post explains how to use flamegraphs to visualize performance data of your CPU and memory for Databend.
 
 To support CPU and memory profiling, some APIs need to be included in the application. For example, Databend includes the following in the code:
 - [cpu/pprof.rs](https://github.com/datafuselabs/databend/blob/589068f2ae4bfeeaaf1dff955cc6f6bfc4c38920/src/common/http/src/debug/pprof.rs)
@@ -88,7 +88,7 @@ jeprof ./databend-query-main ./jeprof.206330.563.i563.heap --collapse | flamegra
 ![Alt text](../static/img/blog/mem-profiling.png)
 
 ## References
-[1] [brendangregg/FlameGraph](https://github.com/brendangregg/FlameGraph)
+[1] [FlameGraph](https://github.com/brendangregg/FlameGraph)
 
 [2] https://github.com/jemalloc/jemalloc/blob/dev/bin/jeprof.in
 
