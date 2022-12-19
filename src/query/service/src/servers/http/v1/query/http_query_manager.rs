@@ -37,7 +37,7 @@ use crate::sessions::Session;
 // 2. maybe QueryConfig can contain it directly
 #[derive(Copy, Clone)]
 pub(crate) struct HttpQueryConfig {
-    pub(crate) result_timeout_millis: u64,
+    pub(crate) result_timeout_secs: u64,
 }
 
 pub struct HttpQueryManager {
@@ -52,7 +52,7 @@ impl HttpQueryManager {
             queries: Arc::new(RwLock::new(HashMap::new())),
             sessions: Mutex::new(ExpiringMap::default()),
             config: HttpQueryConfig {
-                result_timeout_millis: cfg.query.http_handler_result_timeout_millis,
+                result_timeout_secs: cfg.query.http_handler_result_timeout_secs,
             },
         }));
 
@@ -81,7 +81,7 @@ impl HttpQueryManager {
     async fn add_query(self: &Arc<Self>, query_id: &str, query: Arc<HttpQuery>) {
         let mut queries = self.queries.write().await;
         queries.insert(query_id.to_string(), query.clone());
-        let timeout = self.config.result_timeout_millis;
+        let timeout = self.config.result_timeout_secs;
 
         let self_clone = self.clone();
         let query_id_clone = query_id.to_string();
@@ -91,7 +91,7 @@ impl HttpQueryManager {
                 sleep(t).await;
             }
             let msg = format!(
-                "http query {} timeout after {} ms",
+                "http query {} timeout after {} s",
                 &query_id_clone, timeout
             );
             if self_clone.remove_query(&query_id_clone).await.is_none() {
