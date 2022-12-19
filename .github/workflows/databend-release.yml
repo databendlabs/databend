@@ -190,8 +190,6 @@ jobs:
       - name: Copyobj zlib for gnu binaries
         if: matrix.platform == 'gnu'
         run: |
-          flags="-C target-feature=+sse4.2"
-          echo "RUSTFLAGS=${flags}" >> $GITHUB_ENV
           target=${{ steps.target.outputs.target }}
           build-tool /usr/bin/${{ matrix.arch }}-linux-gnu-objcopy --compress-debug-sections=zlib-gnu ./target/${target}/release/databend-query
           build-tool /usr/bin/${{ matrix.arch }}-linux-gnu-objcopy --compress-debug-sections=zlib-gnu ./target/${target}/release/databend-meta
