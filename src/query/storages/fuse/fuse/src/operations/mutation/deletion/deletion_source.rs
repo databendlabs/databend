@@ -18,7 +18,7 @@ use std::sync::Arc;
 
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::table_context::TableContext;
-use common_datablocks::serialize_data_blocks;
+use common_datablocks::serialize_to_parquet;
 use common_datablocks::DataBlock;
 use common_datavalues::BooleanColumn;
 use common_datavalues::ColumnRef;
@@ -255,7 +255,7 @@ impl Processor for DeletionSource {
                 let mut block_data = Vec::with_capacity(100 * 1024 * 1024);
                 let schema = block.schema().clone();
                 let (file_size, meta_data) =
-                    serialize_data_blocks(vec![block], &schema, &mut block_data)?;
+                    serialize_to_parquet(vec![block], &schema, &mut block_data)?;
                 let col_metas = util::column_metas(&meta_data)?;
 
                 // new block meta.
