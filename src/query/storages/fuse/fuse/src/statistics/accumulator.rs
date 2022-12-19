@@ -25,7 +25,6 @@ use common_storages_table_meta::meta::Location;
 use common_storages_table_meta::meta::StatisticsOfColumns;
 use common_storages_table_meta::meta::Versioned;
 
-use crate::operations::column_metas;
 use crate::statistics::block_statistics::BlockStatistics;
 
 #[derive(Default)]

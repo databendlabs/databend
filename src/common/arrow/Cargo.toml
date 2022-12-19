@@ -41,7 +41,7 @@ arrow = { package = "arrow2", git = "https://github.com/jorgecarleitao/arrow2", 
 
 arrow-format = { version = "0.8.0", features = ["flight-data", "flight-service", "ipc"] }
 futures = "0.3.24"
-native = { package = "pa", git = "https://github.com/sundy-li/pa", rev = "68acacb" }
+native = { package = "pa", git = "https://github.com/sundy-li/pa", rev = "7e98302" }
 parquet2 = { version = "0.17.0", default_features = false }
 
 [dev-dependencies]

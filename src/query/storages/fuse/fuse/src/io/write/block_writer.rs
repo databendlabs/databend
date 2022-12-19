@@ -19,7 +19,6 @@ use backon::Retryable;
 use common_arrow::arrow::chunk::Chunk;
 use common_arrow::native::write::PaWriter;
 use common_arrow::parquet::compression::CompressionOptions;
-use common_arrow::parquet::metadata::ThriftFileMetaData;
 use common_datablocks::serialize_to_parquet;
 use common_datablocks::serialize_to_parquet_with_compression;
 use common_datablocks::DataBlock;
@@ -133,7 +132,7 @@ pub fn write_block(
             let arrow_schema = block.schema().as_ref().to_arrow();
             let mut writer = PaWriter::new(
                 buf,
-                arrow_schema.clone(),
+                arrow_schema,
                 common_arrow::native::write::WriteOptions {
                     compression: common_arrow::native::Compression::LZ4,
                     max_page_size: Some(8192),

@@ -14,7 +14,6 @@
 
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::io::BufReader;
 use std::sync::Arc;
 
@@ -25,7 +24,6 @@ use common_arrow::arrow::io::parquet::read::column_iter_to_arrays;
 use common_arrow::arrow::io::parquet::read::ArrayIter;
 use common_arrow::arrow::io::parquet::read::RowGroupDeserializer;
 use common_arrow::arrow::io::parquet::write::to_parquet_schema;
-use common_arrow::native;
 use common_arrow::native::read::reader::PaReader;
 use common_arrow::native::read::PaReadBuf;
 use common_arrow::parquet::compression::Compression as ParquetCompression;
@@ -528,7 +526,7 @@ impl BlockReader {
     ) -> Result<(usize, PaReader<Reader>)> {
         let reader = o.range_read(offset..offset + length).await?;
         let reader: Reader = Box::new(std::io::Cursor::new(reader));
-        let fuse_reader = PaReader::new(reader, data_type, true, rows as usize, vec![]);
+        let fuse_reader = PaReader::new(reader, data_type, rows as usize, vec![]);
         Ok((index, fuse_reader))
     }
 
@@ -576,21 +574,7 @@ impl BlockReader {
     ) -> Result<(usize, PaReader<Reader>)> {
         let reader = o.blocking_range_reader(offset..offset + length)?;
         let reader: Reader = Box::new(BufReader::new(reader));
-        let fuse_reader = PaReader::new(reader, data_type, true, rows as usize, vec![]);
+        let fuse_reader = PaReader::new(reader, data_type, rows as usize, vec![]);
         Ok((index, fuse_reader))
-    }
-
-    fn to_native_compression(meta_compression: &Compression) -> Result<native::Compression> {
-        match meta_compression {
-            Compression::Lz4Raw => Ok(native::Compression::LZ4),
-            Compression::Zstd => Ok(native::Compression::ZSTD),
-            _ => {
-                let err_msg = format!(
-                    "Compression: {:?} is not unsupport for now",
-                    meta_compression
-                );
-                Err(ErrorCode::StorageOther(err_msg))
-            }
-        }
     }
 }

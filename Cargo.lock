@@ -6268,7 +6268,7 @@ dependencies = [
 [[package]]
 name = "pa"
 version = "0.1.0"
-source = "git+https://github.com/sundy-li/pa?rev=68acacb#68acacb5155e2dd2570f3219aa006c0657d48a01"
+source = "git+https://github.com/sundy-li/pa?rev=7e98302#7e98302d83016a874bdeb1417f1f0ad4f12f9be6"
 dependencies = [
  "arrow2",
  "bytemuck",

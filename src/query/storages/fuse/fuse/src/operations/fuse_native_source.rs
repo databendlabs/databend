@@ -13,10 +13,6 @@
 //  limitations under the License.
 
 use std::any::Any;
-use std::fs::File;
-use std::io::BufReader;
-use std::io::Read;
-use std::io::Take;
 use std::sync::Arc;
 
 use common_arrow::native::read::reader::PaReader;
@@ -26,8 +22,6 @@ use common_base::base::ProgressValues;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
-use common_datavalues::ColumnRef;
-use common_datavalues::DataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::FunctionContext;
@@ -206,15 +200,11 @@ impl Processor for FuseNativeSource {
                     .prewhere_reader
                     .sync_read_native_columns_data(part.clone())?;
 
-                match self.remain_reader.as_ref() {
-                    Some(r) => {
-                        let cs = r.sync_read_native_columns_data(part.clone())?;
-                        for c in cs.into_iter() {
-                            chunks.push(c);
-                        }
-                    }
-                    _ => {}
+                if let Some(r) = self.remain_reader.as_ref() {
+                    let cs = r.sync_read_native_columns_data(part.clone())?;
+                    chunks.extend(cs)
                 }
+
                 self.state = State::Deserialize(chunks);
                 Ok(())
             }
@@ -230,15 +220,11 @@ impl Processor for FuseNativeSource {
                     .async_read_native_columns_data(part.clone())
                     .await?;
 
-                match self.remain_reader.as_ref() {
-                    Some(r) => {
-                        let cs = r.async_read_native_columns_data(part.clone()).await?;
-                        for c in cs.into_iter() {
-                            chunks.push(c);
-                        }
-                    }
-                    _ => {}
+                if let Some(r) = self.remain_reader.as_ref() {
+                    let cs = r.async_read_native_columns_data(part.clone()).await?;
+                    chunks.extend(cs)
                 }
+
                 self.state = State::Deserialize(chunks);
                 Ok(())
             }

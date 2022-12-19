@@ -12,22 +12,12 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use std::any::Any;
 use std::sync::Arc;
 
-use common_base::base::Progress;
-use common_base::base::ProgressValues;
-use common_catalog::plan::PartInfoPtr;
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
-use common_datavalues::ColumnRef;
-use common_exception::ErrorCode;
 use common_exception::Result;
-use common_functions::scalars::FunctionContext;
 use common_pipeline_core::processors::port::OutputPort;
-use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
-use common_pipeline_core::processors::Processor;
 use common_sql::evaluator::EvalNode;
 
 use super::fuse_native_source::FuseNativeSource;

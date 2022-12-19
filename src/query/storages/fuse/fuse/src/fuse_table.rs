@@ -128,7 +128,7 @@ impl FuseTable {
             .options()
             .get(OPT_KEY_STORAGE_FORMAT)
             .cloned()
-            .unwrap_or("".to_string());
+            .unwrap_or_default();
 
         Ok(Box::new(FuseTable {
             table_info,

@@ -35,6 +35,7 @@ use common_catalog::table::TableStatistics;
 pub use common_catalog::table_context::TableContext;
 use common_catalog::table_mutator::TableMutator;
 pub use constants::*;
+pub use fuse_table::FuseStorageFormat;
 pub use fuse_table::FuseTable;
 
 mod sessions {

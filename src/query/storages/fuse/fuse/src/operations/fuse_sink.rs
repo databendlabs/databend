@@ -18,10 +18,8 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use common_arrow::parquet::compression::CompressionOptions;
-use common_arrow::parquet::metadata::ThriftFileMetaData;
 use common_cache::Cache;
 use common_catalog::table_context::TableContext;
-use common_datablocks::serialize_to_parquet;
 use common_datablocks::serialize_to_parquet_with_compression;
 use common_datablocks::BlockCompactThresholds;
 use common_datablocks::DataBlock;
