@@ -483,7 +483,7 @@ impl Settings {
                     UserSettingValue::String("".to_string()),
                 ),
                 level: ScopeLevel::Session,
-                desc: "Inject a custom sandbox_tenant into this session, it's only for testing purpose and take effect when the allow_insecure_tenant is on",
+                desc: "Inject a custom sandbox_tenant into this session, it's only for testing purpose and take effect when the internal_enable_sandbox_tenant is on",
                 possible_values: None,
             },
         ];

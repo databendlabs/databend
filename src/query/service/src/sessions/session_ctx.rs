@@ -131,7 +131,7 @@ impl SessionContext {
     pub fn get_current_tenant(&self) -> String {
         let conf = GlobalConfig::instance();
 
-        if conf.query.allow_insecure_tenant {
+        if conf.query.internal_enable_sandbox_tenant {
             let sandbox_tenant = self.settings.get_sandbox_tenant().unwrap_or_default();
             if !sandbox_tenant.is_empty() {
                 return sandbox_tenant;
