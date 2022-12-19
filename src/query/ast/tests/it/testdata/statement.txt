@@ -305,6 +305,46 @@ Some(
     "TabSeparatedWithNamesAndTypes",
 )
 ---------- Input ----------
+describe "name""with""quote";
+---------- Output ---------
+DESCRIBE "name"with"quote"
+---------- AST ------------
+DescribeTable(
+    DescribeTableStmt {
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "name\"with\"quote",
+            quote: Some(
+                '"',
+            ),
+            span: QuotedString(9..28),
+        },
+    },
+)
+
+
+---------- Input ----------
+describe "name""""with""""quote";
+---------- Output ---------
+DESCRIBE "name""with""quote"
+---------- AST ------------
+DescribeTable(
+    DescribeTableStmt {
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "name\"\"with\"\"quote",
+            quote: Some(
+                '"',
+            ),
+            span: QuotedString(9..32),
+        },
+    },
+)
+
+
+---------- Input ----------
 create table if not exists a.b (c integer not null default 1, b varchar);
 ---------- Output ---------
 CREATE TABLE IF NOT EXISTS a.b (c Int32 NOT NULL DEFAULT 1, b STRING NOT NULL)

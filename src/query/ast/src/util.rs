@@ -24,6 +24,7 @@ use crate::ast::Identifier;
 use crate::input::Input;
 use crate::input::WithSpan;
 use crate::parser::token::*;
+use crate::parser::unescape::unescape;
 use crate::rule;
 use crate::Error;
 use crate::ErrorKind;
@@ -108,10 +109,7 @@ pub fn stage_name(i: Input) -> IResult<Identifier> {
                     let quote = token.text().chars().next().unwrap();
                     Ok((i2, Identifier {
                         span: token.clone(),
-                        name: unquote_ansi_identifier(
-                            &token.text()[1..token.text().len() - 1],
-                            quote,
-                        ),
+                        name: unescape(&token.text()[1..token.text().len() - 1], quote).unwrap(),
                         quote: Some(quote),
                     }))
                 } else {
@@ -150,10 +148,8 @@ fn non_reserved_identifier(
                         let quote = token.text().chars().next().unwrap();
                         Ok((i2, Identifier {
                             span: token.clone(),
-                            name: unquote_ansi_identifier(
-                                &token.text()[1..token.text().len() - 1],
-                                quote,
-                            ),
+                            name: unescape(&token.text()[1..token.text().len() - 1], quote)
+                                .unwrap(),
                             quote: Some(quote),
                         }))
                     } else {
@@ -166,25 +162,6 @@ fn non_reserved_identifier(
             },
         ))(i)
     }
-}
-
-fn unquote_ansi_identifier(s: &str, quote: char) -> String {
-    let mut result = String::with_capacity(s.len());
-    let mut chars = s.chars();
-    while let Some(c) = chars.next() {
-        if c == quote {
-            if let Some(next) = chars.next() {
-                if next == quote {
-                    result.push(next);
-                } else {
-                    result.push(c);
-                }
-            }
-        } else {
-            result.push(c);
-        }
-    }
-    result
 }
 
 fn non_reserved_keyword(

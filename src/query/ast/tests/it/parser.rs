@@ -76,6 +76,8 @@ fn test_statement() {
         r#"explain pipeline select a from b;"#,
         r#"describe a;"#,
         r#"describe a format TabSeparatedWithNamesAndTypes;"#,
+        r#"describe "name""with""quote";"#,
+        r#"describe "name""""with""""quote";"#,
         r#"create table if not exists a.b (c integer not null default 1, b varchar);"#,
         r#"create table if not exists a.b (c integer default 1 not null, b varchar) as select * from t;"#,
         r#"create table if not exists a.b (c tuple(m integer, n string), d tuple(integer, string));"#,
