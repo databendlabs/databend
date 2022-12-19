@@ -191,7 +191,7 @@ impl HiveBlockReader {
         }
     }
 
-    fn sync_read_column(o: Object, offset: u64, length: u64) -> Result<Vec<u8>> {
+    fn sync_read_column(o: &Object, offset: u64, length: u64) -> Result<Vec<u8>> {
         let chunk = o.blocking_range_read(offset..offset + length)?;
         Ok(chunk)
     }
@@ -214,13 +214,14 @@ impl HiveBlockReader {
         let mut join_handlers = Vec::with_capacity(self.projection.len());
 
         let semaphore = Arc::new(Semaphore::new(10));
+        let object = self.operator.object(&part.filename);
         for index in &self.projection {
             let field = &self.arrow_schema.fields[*index];
             let column_meta = Self::get_parquet_column_metadata(row_group, &field.name)?;
             let (start, len) = column_meta.byte_range();
 
             join_handlers.push(Self::read_column(
-                self.operator.object(&part.filename),
+                object.clone(),
                 start,
                 len,
                 semaphore.clone(),
@@ -237,16 +238,13 @@ impl HiveBlockReader {
     ) -> Result<Vec<Vec<u8>>> {
         let mut chunks = Vec::with_capacity(self.projection.len());
 
+        let object = self.operator.object(&part.filename);
         for index in &self.projection {
             let field = &self.arrow_schema.fields[*index];
             let column_meta = Self::get_parquet_column_metadata(row_group, &field.name)?;
             let (start, len) = column_meta.byte_range();
 
-            chunks.push(Self::sync_read_column(
-                self.operator.object(&part.filename),
-                start,
-                len,
-            )?);
+            chunks.push(Self::sync_read_column(&object, start, len)?);
         }
 
         Ok(chunks)

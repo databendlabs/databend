@@ -276,10 +276,12 @@ impl BlockReader {
         let indices = Self::build_projection_indices(&columns);
         let mut join_handlers = Vec::with_capacity(indices.len());
 
+        let object = self.operator.object(&part.location);
+
         for (index, _) in indices {
             let column_meta = &part.columns_meta[&index];
             join_handlers.push(UnlimitedFuture::create(Self::read_column(
-                self.operator.object(&part.location),
+                object.clone(),
                 index,
                 column_meta.offset,
                 column_meta.len,
@@ -300,17 +302,15 @@ impl BlockReader {
         let indices = Self::build_projection_indices(&columns);
         let mut results = Vec::with_capacity(indices.len());
 
+        let object = self.operator.object(&part.location);
         for (index, _) in indices {
             let column_meta = &part.columns_meta[&index];
 
-            let op = self.operator.clone();
-
-            let location = part.location.clone();
             let offset = column_meta.offset;
             let length = column_meta.len;
 
-            let result = Self::sync_read_column(op.object(&location), index, offset, length);
-            results.push(result?);
+            let result = Self::sync_read_column(&object, index, offset, length)?;
+            results.push(result);
         }
 
         Ok(results)
@@ -328,7 +328,7 @@ impl BlockReader {
     }
 
     pub fn sync_read_column(
-        o: Object,
+        o: &Object,
         index: usize,
         offset: u64,
         length: u64,
