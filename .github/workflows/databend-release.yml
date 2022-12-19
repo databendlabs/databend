@@ -183,7 +183,7 @@ jobs:
         if: matrix.platform == 'gnu' && matrix.arch == 'x86_64'
         run: |
           flags="-C target-feature=+sse4.2"
-          echo "RUSTFLAGS=${flags}" >> $GITHUB_ENV  
+          echo "RUSTFLAGS=${flags}" >> $GITHUB_ENV
       - name: Build Binary
         run: |
           cargo build --release --target=${{ steps.target.outputs.target }}
