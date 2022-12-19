@@ -62,7 +62,16 @@ select v1.id from default.v0 as v1
 2
 
 statement ok
+create view default.v2 as select * from test_view.t0 where ((((((t0.id)-(1362151668)))-((+ 1362151668))))is not distinct from((+ ((-177629504)/(2071531978)))))
+
+statement ok
+select * from default.v2
+
+statement ok
 drop view default.v0
+
+statement ok
+drop view default.v2
 
 statement ok
 drop database test_view
