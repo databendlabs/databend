@@ -88,8 +88,7 @@ jeprof ./databend-query-main ./jeprof.206330.563.i563.heap --collapse | flamegra
 ![Alt text](../static/img/blog/mem-profiling.png)
 
 ## References
-[1] [FlameGraph](https://github.com/brendangregg/FlameGraph)
 
-[2] https://github.com/jemalloc/jemalloc/blob/dev/bin/jeprof.in
-
-[3] Databend, Cloud Lakehouse: https://github.com/datafuselabs/databend
+- [FlameGraph](https://github.com/brendangregg/FlameGraph)
+-  https://github.com/jemalloc/jemalloc/blob/dev/bin/jeprof.in
+- Databend, Cloud Lakehouse: https://github.com/datafuselabs/databend
