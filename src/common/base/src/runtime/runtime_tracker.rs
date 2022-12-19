@@ -50,7 +50,6 @@ use std::future::Future;
 use std::mem::take;
 use std::ops::DerefMut;
 use std::pin::Pin;
-use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicI64;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -71,9 +70,8 @@ thread_local! {
     static TRACKER: RefCell<ThreadTracker> = RefCell::new(ThreadTracker::empty());
 }
 
-/// Whether to allow unlimited memory. Alloc memory will not panic if it is true.
 #[thread_local]
-static UNLIMITED_FLAG: AtomicBool = AtomicBool::new(false);
+static mut STAT_BUFFER: StatBuffer = StatBuffer::empty();
 
 static MEM_STAT_BUFFER_SIZE: i64 = 4 * 1024 * 1024;
 
@@ -112,25 +110,31 @@ pub struct LimitMemGuard {
 
 impl LimitMemGuard {
     pub fn enter_unlimited() -> Self {
-        let saved = UNLIMITED_FLAG.load(Ordering::Relaxed);
-        UNLIMITED_FLAG.store(true, Ordering::Relaxed);
-        Self { saved }
+        unsafe {
+            let saved = STAT_BUFFER.unlimited_flag;
+            STAT_BUFFER.unlimited_flag = true;
+            Self { saved }
+        }
     }
 
     pub fn enter_limited() -> Self {
-        let saved = UNLIMITED_FLAG.load(Ordering::Relaxed);
-        UNLIMITED_FLAG.store(false, Ordering::Relaxed);
-        Self { saved }
+        unsafe {
+            let saved = STAT_BUFFER.unlimited_flag;
+            STAT_BUFFER.unlimited_flag = false;
+            Self { saved }
+        }
     }
 
     pub(crate) fn is_unlimited() -> bool {
-        UNLIMITED_FLAG.load(Ordering::Relaxed)
+        unsafe { STAT_BUFFER.unlimited_flag }
     }
 }
 
 impl Drop for LimitMemGuard {
     fn drop(&mut self) {
-        UNLIMITED_FLAG.store(self.saved, Ordering::Relaxed);
+        unsafe {
+            STAT_BUFFER.unlimited_flag = self.saved;
+        }
     }
 }
 
@@ -167,15 +171,18 @@ impl Debug for OutOfLimit<i64> {
 pub struct ThreadTracker {
     mem_stat: Option<Arc<MemStat>>,
     out_of_limit_desc: Option<String>,
-
-    /// Buffered memory allocation stat that is yet not reported to `mem_stat` and can not be seen.
-    buffer: StatBuffer,
 }
 
 impl Drop for ThreadTracker {
     fn drop(&mut self) {
-        let buf = take(&mut self.buffer);
-        let _ = MemStat::record_memory(&self.mem_stat, buf);
+        unsafe {
+            let _guard = LimitMemGuard::enter_unlimited();
+            let memory_usage = take(&mut STAT_BUFFER.memory_usage);
+
+            // Memory operations during destruction will be recorded to global stat.
+            STAT_BUFFER.destroyed_thread_local_macro = true;
+            let _ = MemStat::record_memory(&None, memory_usage);
+        }
     }
 }
 
@@ -188,7 +195,6 @@ impl ThreadTracker {
         Self {
             mem_stat: None,
             out_of_limit_desc: None,
-            buffer: StatBuffer::empty(),
         }
     }
 
@@ -196,7 +202,6 @@ impl ThreadTracker {
         ThreadTracker {
             mem_stat,
             out_of_limit_desc: None,
-            buffer: Default::default(),
         }
     }
 
@@ -227,17 +232,21 @@ impl ThreadTracker {
     /// `size` is the positive number of allocated bytes.
     #[inline]
     pub fn alloc(size: i64) -> Result<(), AllocError> {
-        let has_oom = TRACKER.try_with(|tracker: &RefCell<ThreadTracker>| {
-            // We need to ensure no heap memory alloc or dealloc. it will cause panic of borrow recursive call.
-            let mut tracker = tracker.borrow_mut();
+        let state_buffer = unsafe { &mut STAT_BUFFER };
 
-            match tracker.buffer.incr(size) <= MEM_STAT_BUFFER_SIZE {
-                true => Ok(()),
-                false => tracker.flush(),
-            }
-        });
+        // Rust will alloc or dealloc memory after the thread local is destroyed when we using thread_local macro.
+        // This is the boundary of thread exit. It may be dangerous to throw mistakes here.
+        if state_buffer.destroyed_thread_local_macro {
+            GLOBAL_MEM_STAT.used.fetch_add(size, Ordering::Relaxed);
+            return Ok(());
+        }
 
-        if let Ok(Err(out_of_limit)) = has_oom {
+        let has_oom = match state_buffer.incr(size) <= MEM_STAT_BUFFER_SIZE {
+            true => Ok(()),
+            false => state_buffer.flush(),
+        };
+
+        if let Err(out_of_limit) = has_oom {
             // https://play.rust-lang.org/?version=stable&mode=debug&edition=2021&gist=03d21a15e52c7c0356fca04ece283cf9
             if !std::thread::panicking() && !LimitMemGuard::is_unlimited() {
                 let _guard = LimitMemGuard::enter_unlimited();
@@ -248,9 +257,6 @@ impl ThreadTracker {
             }
         }
 
-        // NOTE: Rust will alloc or dealloc memory after the thread local is destroyed when we using thread_local macro.
-        // - It will performance degradation if we record these(current).
-        // - It will inaccurate memory tracking if we no record these.
         Ok(())
     }
 
@@ -259,31 +265,21 @@ impl ThreadTracker {
     /// `size` is positive number of bytes of the memory to deallocate.
     #[inline]
     pub fn dealloc(size: i64) {
-        let _ = TRACKER.try_with(|tracker: &RefCell<ThreadTracker>| {
-            let mut tracker = tracker.borrow_mut();
+        let state_buffer = unsafe { &mut STAT_BUFFER };
 
-            let used = tracker.buffer.incr(-size);
+        // Rust will alloc or dealloc memory after the thread local is destroyed when we using thread_local macro.
+        if state_buffer.destroyed_thread_local_macro {
+            GLOBAL_MEM_STAT.used.fetch_add(-size, Ordering::Relaxed);
+            return;
+        }
 
-            if used >= -MEM_STAT_BUFFER_SIZE {
-                return;
-            }
+        if state_buffer.incr(-size) < -MEM_STAT_BUFFER_SIZE {
+            let _ = state_buffer.flush();
+        }
 
-            let _ = tracker.flush();
-
-            // NOTE: De-allocation does not panic
-            // even when it's possible exceeding the limit
-            // due to other threads sharing the same MemStat may have allocated a lot of memory.
-        });
-
-        // NOTE: Rust will alloc or dealloc memory after the thread local is destroyed when we using thread_local macro.
-        // - It will performance degradation if we record these(current).
-        // - It will inaccurate memory tracking if we no record these.
-    }
-
-    /// Flush buffered stat to MemStat it belongs to.
-    pub fn flush(&mut self) -> Result<(), OutOfLimit> {
-        let buf = take(&mut self.buffer);
-        MemStat::record_memory(&self.mem_stat, buf)
+        // NOTE: De-allocation does not panic
+        // even when it's possible exceeding the limit
+        // due to other threads sharing the same MemStat may have allocated a lot of memory.
     }
 }
 
@@ -293,16 +289,38 @@ impl ThreadTracker {
 #[derive(Clone, Debug, Default)]
 pub struct StatBuffer {
     memory_usage: i64,
+    // Whether to allow unlimited memory. Alloc memory will not panic if it is true.
+    unlimited_flag: bool,
+    destroyed_thread_local_macro: bool,
 }
 
 impl StatBuffer {
     pub const fn empty() -> Self {
-        Self { memory_usage: 0 }
+        Self {
+            memory_usage: 0,
+            unlimited_flag: false,
+            destroyed_thread_local_macro: false,
+        }
     }
 
     pub fn incr(&mut self, bs: i64) -> i64 {
         self.memory_usage += bs;
         self.memory_usage
+    }
+
+    /// Flush buffered stat to MemStat it belongs to.
+    pub fn flush(&mut self) -> Result<(), OutOfLimit> {
+        let memory_usage = take(&mut self.memory_usage);
+        let has_thread_local = TRACKER.try_with(|tracker: &RefCell<ThreadTracker>| {
+            // We need to ensure no heap memory alloc or dealloc. it will cause panic of borrow recursive call.
+            MemStat::record_memory(&tracker.borrow().mem_stat, memory_usage)
+        });
+
+        match has_thread_local {
+            Ok(Ok(_)) => Ok(()),
+            Ok(Err(oom)) => Err(oom),
+            Err(_access_error) => MemStat::record_memory(&None, memory_usage),
+        }
     }
 }
 
@@ -361,7 +379,7 @@ impl MemStat {
     #[inline]
     pub fn record_memory(
         mem_stat: &Option<Arc<MemStat>>,
-        buf: StatBuffer,
+        memory_usage: i64,
     ) -> Result<(), OutOfLimit> {
         let mut is_root = false;
 
@@ -374,12 +392,12 @@ impl MemStat {
             }
         };
 
-        let mut used = mem_stat.used.fetch_add(buf.memory_usage, Ordering::Relaxed);
+        let mut used = mem_stat.used.fetch_add(memory_usage, Ordering::Relaxed);
 
-        used += buf.memory_usage;
+        used += memory_usage;
 
         if !is_root {
-            Self::record_memory(&mem_stat.parent_memory_tracker, buf)?;
+            Self::record_memory(&mem_stat.parent_memory_tracker, memory_usage)?;
         }
 
         mem_stat.check_limit(used)
@@ -489,14 +507,13 @@ impl<T: Future> Future for UnlimitedFuture<T> {
 #[cfg(test)]
 mod tests {
     mod async_thread_tracker {
-        use std::cell::RefCell;
         use std::future::Future;
         use std::pin::Pin;
         use std::sync::Arc;
         use std::task::Context;
         use std::task::Poll;
 
-        use crate::runtime::runtime_tracker::TRACKER;
+        use crate::runtime::runtime_tracker::STAT_BUFFER;
         use crate::runtime::MemStat;
         use crate::runtime::ThreadTracker;
         use crate::runtime::TrackedFuture;
@@ -542,9 +559,9 @@ mod tests {
 
             drop(v);
 
-            TRACKER.with(|f: &RefCell<ThreadTracker>| {
-                let _ = f.borrow_mut().flush();
-            });
+            unsafe {
+                let _ = STAT_BUFFER.flush();
+            }
 
             let used = mem_stat.get_memory_usage();
             assert_eq!(
