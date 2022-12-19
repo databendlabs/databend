@@ -47,11 +47,8 @@ impl Interpreter for RemoveUserStageInterpreter {
     #[tracing::instrument(level = "info", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let plan = self.plan.clone();
-
-        let data_operator = self.ctx.get_data_operator()?;
-        let op = StageTable::get_op(&data_operator, &self.plan.stage)?;
-
-        let mut files = list_file(&data_operator, &plan.path, &plan.stage).await?;
+        let op = StageTable::get_op(&self.plan.stage)?;
+        let mut files = list_file(&op, &plan.path).await?;
 
         let files = if plan.pattern.is_empty() {
             files

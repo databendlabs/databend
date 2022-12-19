@@ -244,14 +244,7 @@ impl CopyInterpreterV2 {
         stage_file_infos: &[StageFileInfo],
     ) {
         let table_ctx: Arc<dyn TableContext> = ctx.clone();
-        let data_operator = ctx.get_data_operator();
-        let op = match data_operator {
-            Ok(dop) => StageTable::get_op(&dop, stage_info),
-            Err(e) => {
-                error!("Failed to get data operator, error: {}", e);
-                return;
-            }
-        };
+        let op = StageTable::get_op(stage_info);
         match op {
             Ok(op) => {
                 let file = Files::create(table_ctx, op);
@@ -282,9 +275,7 @@ impl CopyInterpreterV2 {
         let ctx = self.ctx.clone();
         let table_ctx: Arc<dyn TableContext> = ctx.clone();
         let mut stage_table_info = stage_table_info.clone();
-        let data_operator = ctx.get_data_operator()?;
-        let mut all_source_file_infos =
-            StageTable::list_files(&data_operator, &stage_table_info).await?;
+        let mut all_source_file_infos = StageTable::list_files(&stage_table_info).await?;
 
         if !force {
             all_source_file_infos = CopyInterpreterV2::color_copied_files(

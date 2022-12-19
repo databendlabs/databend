@@ -17,21 +17,12 @@ use chrono::Utc;
 use common_catalog::plan::StageFileInfo;
 use common_catalog::plan::StageFileStatus;
 use common_exception::Result;
-use common_meta_types::UserStageInfo;
-use common_storage::DataOperator;
 use futures::TryStreamExt;
 use opendal::Object;
 use opendal::Operator;
 use tracing::warn;
 
-use crate::StageTable;
-
-pub async fn stat_file(
-    dop: &DataOperator,
-    path: &str,
-    stage: &UserStageInfo,
-) -> Result<StageFileInfo> {
-    let op = StageTable::get_op(dop, stage)?;
+pub async fn stat_file(op: &Operator, path: &str) -> Result<StageFileInfo> {
     let meta = op.object(path).metadata().await?;
 
     Ok(StageFileInfo {
@@ -54,12 +45,7 @@ pub async fn stat_file(
 /// - If not exist, we will try to list `path/` too.
 ///
 /// TODO(@xuanwo): return a stream instead.
-pub async fn list_file(
-    dop: &DataOperator,
-    path: &str,
-    stage: &UserStageInfo,
-) -> Result<Vec<StageFileInfo>> {
-    let op = StageTable::get_op(dop, stage)?;
+pub async fn list_file(op: &Operator, path: &str) -> Result<Vec<StageFileInfo>> {
     let mut files = Vec::new();
 
     // - If the path itself is a dir, return directly.

@@ -52,8 +52,7 @@ impl Interpreter for PresignInterpreter {
 
     #[tracing::instrument(level = "debug", name = "presign_interpreter_execute", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let data_operator = self.ctx.get_data_operator()?;
-        let op = StageTable::get_op(&data_operator, &self.plan.stage)?;
+        let op = StageTable::get_op(&self.plan.stage)?;
         if !op.metadata().can_presign() {
             return Err(ErrorCode::StorageUnsupported(
                 "storage doesn't support presign operation",

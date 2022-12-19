@@ -317,8 +317,7 @@ impl<'a> Binder {
                     }
                 };
 
-                let data_operator = self.ctx.get_data_operator()?;
-                let op = StageTable::get_op(&data_operator, &user_stage_info)?;
+                let op = StageTable::get_op(&user_stage_info)?;
 
                 let first_file = if files.is_empty() {
                     let file = get_first_file(&op, &path).await?;

@@ -74,8 +74,7 @@ pub async fn upload_to_stage(
             .map_err(InternalServerError)?
     };
 
-    let data_operator = context.get_data_operator().map_err(InternalServerError)?;
-    let op = StageTable::get_op(&data_operator, &stage).map_err(InternalServerError)?;
+    let op = StageTable::get_op(&stage).map_err(InternalServerError)?;
 
     let relative_path = req
         .headers()

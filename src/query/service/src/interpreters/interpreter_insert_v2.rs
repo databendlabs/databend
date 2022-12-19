@@ -122,7 +122,6 @@ impl InsertInterpreterV2 {
         let start = Instant::now();
         let ctx = self.ctx.clone();
         let table_ctx: Arc<dyn TableContext> = ctx.clone();
-        let data_operator = ctx.get_data_operator()?;
         let source_schema = self.plan.schema();
         let target_schema = table.schema();
         let catalog_name = self.plan.catalog.clone();
@@ -141,8 +140,7 @@ impl InsertInterpreterV2 {
             files_to_copy: None,
         };
 
-        let all_source_file_infos =
-            StageTable::list_files(&data_operator, &stage_table_info).await?;
+        let all_source_file_infos = StageTable::list_files(&stage_table_info).await?;
 
         tracing::info!(
             "insert: read all stage attachment files finished: {}, elapsed:{}",
