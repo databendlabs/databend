@@ -172,7 +172,7 @@ jobs:
       - name: Set musl rustflags
         if: matrix.platform == 'musl'
         run: |
-          flags="-C link-arg=-Wl,--compress-debug-sections=zlib-gabi"
+          flags="-C target-feature=+sse4.2,link-arg=-Wl,--compress-debug-sections=zlib-gabi"
           echo "RUSTFLAGS=${flags}" >> $GITHUB_ENV
       - name: Build Binary
         run: |
@@ -180,6 +180,8 @@ jobs:
       - name: Copyobj zlib for gnu binaries
         if: matrix.platform == 'gnu'
         run: |
+          flags="-C target-feature=+sse4.2"
+          echo "RUSTFLAGS=${flags}" >> $GITHUB_ENV
           target=${{ steps.target.outputs.target }}
           build-tool /usr/bin/${{ matrix.arch }}-linux-gnu-objcopy --compress-debug-sections=zlib-gnu ./target/${target}/release/databend-query
           build-tool /usr/bin/${{ matrix.arch }}-linux-gnu-objcopy --compress-debug-sections=zlib-gnu ./target/${target}/release/databend-meta
