@@ -191,6 +191,11 @@ impl HiveBlockReader {
         }
     }
 
+    fn sync_read_column(o: Object, offset: u64, length: u64) -> Result<Vec<u8>> {
+        let chunk = o.blocking_range_read(offset..offset + length)?;
+        Ok(chunk)
+    }
+
     pub async fn read_meta_data(
         &self,
         dal: Operator,
@@ -223,6 +228,28 @@ impl HiveBlockReader {
         }
 
         futures::future::try_join_all(join_handlers).await
+    }
+
+    pub fn sync_read_columns_data(
+        &self,
+        row_group: &RowGroupMetaData,
+        part: &HivePartInfo,
+    ) -> Result<Vec<Vec<u8>>> {
+        let mut chunks = Vec::with_capacity(self.projection.len());
+
+        for index in &self.projection {
+            let field = &self.arrow_schema.fields[*index];
+            let column_meta = Self::get_parquet_column_metadata(row_group, &field.name)?;
+            let (start, len) = column_meta.byte_range();
+
+            chunks.push(Self::sync_read_column(
+                self.operator.object(&part.filename),
+                start,
+                len,
+            )?);
+        }
+
+        Ok(chunks)
     }
 
     pub fn create_rowgroup_deserializer(
@@ -265,5 +292,9 @@ impl HiveBlockReader {
         row_group_iterator
             .next_block(&self.projected_schema, &self.hive_partition_filler, &part)
             .map_err(|e| e.add_message(format!(" filename of hive part {}", part.filename)))
+    }
+
+    pub fn support_blocking_api(&self) -> bool {
+        self.operator.metadata().can_blocking()
     }
 }

@@ -19,6 +19,7 @@ use common_base::base::tokio::time::sleep;
 use common_base::base::tokio::time::Duration;
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
+use common_base::runtime::GlobalIORuntime;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
@@ -64,6 +65,8 @@ pub struct HiveTableSource {
     output: Arc<OutputPort>,
     delay: usize,
     hive_block_filter: Arc<HiveBlockFilter>,
+
+    support_blocking: bool,
 }
 
 impl HiveTableSource {
@@ -76,6 +79,7 @@ impl HiveTableSource {
         hive_block_filter: Arc<HiveBlockFilter>,
     ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
+        let support_blocking = block_reader.support_blocking_api();
         Ok(ProcessorPtr::create(Box::new(HiveTableSource {
             ctx,
             dal,
@@ -85,6 +89,7 @@ impl HiveTableSource {
             scan_progress,
             state: State::ReadMeta(None),
             delay,
+            support_blocking,
         })))
     }
 
@@ -166,8 +171,20 @@ impl Processor for HiveTableSource {
                 self.output.finish();
                 Ok(Event::Finished)
             }
-            State::ReadMeta(_) => Ok(Event::Async),
-            State::ReadData(_) => Ok(Event::Async),
+            State::ReadMeta(_) => {
+                if self.support_blocking {
+                    Ok(Event::Sync)
+                } else {
+                    Ok(Event::Async)
+                }
+            }
+            State::ReadData(_) => {
+                if self.support_blocking {
+                    Ok(Event::Sync)
+                } else {
+                    Ok(Event::Async)
+                }
+            }
             State::Deserialize(_, _) => Ok(Event::Sync),
             State::Generated(_, _, _) => Err(ErrorCode::Internal("It's a bug.")),
         }
@@ -175,6 +192,45 @@ impl Processor for HiveTableSource {
 
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Finish) {
+            State::ReadMeta(Some(part)) => {
+                if self.delay > 0 {
+                    std::thread::sleep(Duration::from_millis(self.delay as u64));
+                    tracing::debug!("sleep for {}ms", self.delay);
+                    self.delay = 0;
+                }
+                let part = HivePartInfo::from_part(&part)?;
+
+                let dal = self.dal.clone();
+                let reader = self.block_reader.clone();
+                let file_name = part.filename.clone();
+                let file_size = part.filesize;
+                let file_meta = GlobalIORuntime::instance().block_on(async move {
+                    reader.read_meta_data(dal, &file_name, file_size).await
+                })?;
+
+                let mut hive_blocks =
+                    HiveBlocks::create(file_meta, part.clone(), self.hive_block_filter.clone());
+
+                match hive_blocks.prune() {
+                    true => {
+                        self.state = State::ReadData(hive_blocks);
+                    }
+                    false => {
+                        self.try_get_partitions()?;
+                    }
+                }
+                Ok(())
+            }
+            State::ReadData(hive_blocks) => {
+                let row_group = hive_blocks.get_current_row_group_meta_data();
+                let part = hive_blocks.get_part_info();
+                let chunks = self.block_reader.sync_read_columns_data(row_group, &part)?;
+                let rowgroup_deserializer = self
+                    .block_reader
+                    .create_rowgroup_deserializer(chunks, row_group)?;
+                self.state = State::Deserialize(hive_blocks, rowgroup_deserializer);
+                Ok(())
+            }
             State::Deserialize(hive_blocks, mut rowgroup_deserializer) => {
                 let data_block = self
                     .block_reader
