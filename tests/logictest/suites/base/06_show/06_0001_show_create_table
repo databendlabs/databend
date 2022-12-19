@@ -26,7 +26,7 @@ CREATE TABLE test.c (a int) CLUSTER BY (a, a % 3)
 query TT
 SHOW CREATE TABLE `test`.`c`
 ----
-c CREATE TABLE `c` ( `a` INT ) ENGINE=FUSE CLUSTER BY (a, a % 3)
+c CREATE TABLE `c` ( `a` INT ) ENGINE=FUSE CLUSTER BY (a, (a % 3))
 
 statement ok
 DROP TABLE `test`.`a`
