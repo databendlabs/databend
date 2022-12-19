@@ -22,7 +22,6 @@ use common_ast::Backtrace;
 use common_ast::Dialect;
 use common_ast::UDFValidator;
 use common_catalog::catalog::CatalogManager;
-use common_catalog::table_context::TableContext;
 use common_datavalues::DataTypeImpl;
 use common_exception::Result;
 use common_meta_types::UserDefinedFunction;
@@ -44,6 +43,7 @@ use crate::BindContext;
 use crate::ColumnBinding;
 use crate::MetadataRef;
 use crate::NameResolutionContext;
+use crate::PlannerContext;
 use crate::Visibility;
 
 /// Binder is responsible to transform AST of a query into a canonical logical SExpr.
@@ -54,7 +54,7 @@ use crate::Visibility;
 /// - Validate expressions
 /// - Build `Metadata`
 pub struct Binder {
-    pub ctx: Arc<dyn TableContext>,
+    pub ctx: Arc<dyn PlannerContext>,
     pub catalogs: Arc<CatalogManager>,
     pub name_resolution_ctx: NameResolutionContext,
     pub metadata: MetadataRef,
@@ -62,7 +62,7 @@ pub struct Binder {
 
 impl<'a> Binder {
     pub fn new(
-        ctx: Arc<dyn TableContext>,
+        ctx: Arc<dyn PlannerContext>,
         catalogs: Arc<CatalogManager>,
         name_resolution_ctx: NameResolutionContext,
         metadata: MetadataRef,

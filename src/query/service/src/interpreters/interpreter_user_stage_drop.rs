@@ -65,8 +65,8 @@ impl Interpreter for DropUserStageInterpreter {
 
         if let Ok(stage) = stage {
             if !matches!(&stage.stage_type, StageType::External) {
-                let tctx: Arc<dyn TableContext> = self.ctx.clone();
-                let op = StageTable::get_op(&tctx, &stage)?;
+                let data_operator = self.ctx.get_data_operator()?;
+                let op = StageTable::get_op(&data_operator, &stage)?;
                 op.batch().remove_all("/").await?;
                 info!(
                     "drop stage {:?} with all objects removed in stage",

@@ -29,7 +29,6 @@ use common_catalog::plan::DataSourceInfo;
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::StageTableInfo;
-use common_catalog::table_context::TableContext;
 use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -46,6 +45,7 @@ use crate::plans::CopyPlanV2;
 use crate::plans::Plan;
 use crate::plans::ValidationMode;
 use crate::BindContext;
+use crate::PlannerContext;
 
 impl<'a> Binder {
     pub(in crate::planner::binder) async fn bind_copy(
@@ -545,7 +545,7 @@ impl<'a> Binder {
 ///
 /// - @internal/abc => (internal, "/stage/internal/abc")
 pub async fn parse_stage_location(
-    ctx: &Arc<dyn TableContext>,
+    ctx: &Arc<dyn PlannerContext>,
     location: &str,
 ) -> Result<(UserStageInfo, String)> {
     let s: Vec<&str> = location.split('@').collect();
@@ -573,7 +573,7 @@ pub async fn parse_stage_location(
 /// # NOTE:
 /// `path` MUST starts with '/'
 pub async fn parse_stage_location_v2(
-    ctx: &Arc<dyn TableContext>,
+    ctx: &Arc<dyn PlannerContext>,
     name: &str,
     path: &str,
 ) -> Result<(UserStageInfo, String)> {

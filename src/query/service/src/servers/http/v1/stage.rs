@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use common_meta_types::UserStageInfo;
 use common_storages_stage::StageTable;
 use common_users::UserApiProvider;
@@ -76,8 +74,8 @@ pub async fn upload_to_stage(
             .map_err(InternalServerError)?
     };
 
-    let rename_me_qry_ctx: Arc<dyn TableContext> = context.clone();
-    let op = StageTable::get_op(&rename_me_qry_ctx, &stage).map_err(InternalServerError)?;
+    let data_operator = context.get_data_operator().map_err(InternalServerError)?;
+    let op = StageTable::get_op(&data_operator, &stage).map_err(InternalServerError)?;
 
     let relative_path = req
         .headers()

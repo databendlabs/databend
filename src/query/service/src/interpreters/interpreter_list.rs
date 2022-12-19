@@ -53,8 +53,8 @@ impl Interpreter for ListInterpreter {
     #[tracing::instrument(level = "debug", name = "list_interpreter_execute", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let plan = &self.plan;
-        let table_ctx: Arc<dyn TableContext> = self.ctx.clone();
-        let mut files = list_file(table_ctx, &plan.path, &plan.stage).await?;
+        let data_operator = self.ctx.get_data_operator()?;
+        let mut files = list_file(&data_operator, &plan.path, &plan.stage).await?;
 
         let files = if plan.pattern.is_empty() {
             files

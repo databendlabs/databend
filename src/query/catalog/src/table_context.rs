@@ -12,7 +12,6 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use std::collections::BTreeMap;
 use std::net::SocketAddr;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
@@ -53,13 +52,6 @@ pub struct ProcessInfo {
     pub scan_progress_value: Option<ProgressValues>,
     pub mysql_connection_id: Option<u32>,
     pub created_time: SystemTime,
-}
-
-#[derive(Debug, Clone)]
-pub struct StageAttachment {
-    pub location: String,
-    pub format_options: BTreeMap<String, String>,
-    pub copy_options: BTreeMap<String, String>,
 }
 
 #[async_trait::async_trait]
@@ -107,5 +99,4 @@ pub trait TableContext: Send + Sync {
     async fn get_table(&self, catalog: &str, database: &str, table: &str)
     -> Result<Arc<dyn Table>>;
     fn get_processes_info(&self) -> Vec<ProcessInfo>;
-    fn get_stage_attachment(&self) -> Option<StageAttachment>;
 }
