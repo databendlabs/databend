@@ -81,28 +81,16 @@ pub fn set_alloc_error_hook() {
     std::alloc::set_alloc_error_hook(|layout| {
         let _guard = LimitMemGuard::enter_unlimited();
 
-        // let out_of_limit_desc = TRACKER.try_with(|tracker: &RefCell<ThreadTracker>| {
-        //     let mut tracker = tracker.borrow_mut();
-        //     tracker.out_of_limit_desc.take()
-        // });
+        let mut temp_tracker = ThreadTracker::empty();
+        let guard = ThreadTracker::enter(&mut temp_tracker);
 
-        // let out_of_limit_desc: Option<String> = out_of_limit_desc.ok().flatten();
-
-        // panic!(
-        //     "{}",
-        //     out_of_limit_desc.unwrap_or_else(|| format!(
-        //         "memory allocation of {} bytes failed",
-        //         layout.size()
-        //     ))
-        // );
+        let out_of_limit_desc = guard.saved.out_of_limit_desc.take();
 
         panic!(
             "{}",
-            format!(
-                "memory allocation of {} bytes failed",
-                layout.size()
-            )
-        )
+            out_of_limit_desc
+                .unwrap_or_else(|| format!("memory allocation of {} bytes failed", layout.size()))
+        );
     })
 }
 
@@ -245,7 +233,7 @@ impl ThreadTracker {
 
             match tracker.buffer.incr(size) <= MEM_STAT_BUFFER_SIZE {
                 true => Ok(()),
-                false => tracker.flush()
+                false => tracker.flush(),
             }
         });
 
@@ -253,8 +241,9 @@ impl ThreadTracker {
             // https://play.rust-lang.org/?version=stable&mode=debug&edition=2021&gist=03d21a15e52c7c0356fca04ece283cf9
             if !std::thread::panicking() && !LimitMemGuard::is_unlimited() {
                 let _guard = LimitMemGuard::enter_unlimited();
-                // TODO: We need send the error message to the alloc error handle(there is no good way at present).
-                let _out_of_limit_desc = Some(format!("{:?}", out_of_limit));
+                let mut temp_tracker = ThreadTracker::empty();
+                let tracker_guard = ThreadTracker::enter(&mut temp_tracker);
+                tracker_guard.saved.out_of_limit_desc = Some(format!("{:?}", out_of_limit));
                 return Err(AllocError);
             }
         }
@@ -415,7 +404,9 @@ impl MemStat {
 
     #[inline]
     pub fn current() -> Option<Arc<MemStat>> {
-        TRACKER.with(|tracker: &RefCell<ThreadTracker>| tracker.borrow().mem_stat.clone())
+        let mut temp_tracker = ThreadTracker::empty();
+        let guard = ThreadTracker::enter(&mut temp_tracker);
+        guard.saved.mem_stat.clone()
     }
 
     #[inline]
