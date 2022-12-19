@@ -8,7 +8,7 @@ title: How to Profile Databend
 go tool pprof -http="0.0.0.0:8081" http://localhost:8080/debug/pprof/profile?seconds=30
 ```
 
-Open `<your-ip>:<port>` and select `Flame Graph` from the VIEW menus in the site header:
+Open `<your-ip>:8081` and select `Flame Graph` from the VIEW menus in the site header:
 <img src="https://user-images.githubusercontent.com/172204/208336392-5b64bb9b-cce8-4562-9e05-c3d538e9d8a6.png"/>
 
 ## Memory profiling
