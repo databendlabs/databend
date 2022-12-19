@@ -109,7 +109,13 @@ pub fn stage_name(i: Input) -> IResult<Identifier> {
                     let quote = token.text().chars().next().unwrap();
                     Ok((i2, Identifier {
                         span: token.clone(),
-                        name: unescape(&token.text()[1..token.text().len() - 1], quote).unwrap(),
+                        name: unescape(&token.text()[1..token.text().len() - 1], quote)
+                            .ok_or_else(|| {
+                                nom::Err::Error(Error::from_error_kind(
+                                    i,
+                                    ErrorKind::Other("invalid escape or unicode"),
+                                ))
+                            })?,
                         quote: Some(quote),
                     }))
                 } else {
@@ -149,7 +155,12 @@ fn non_reserved_identifier(
                         Ok((i2, Identifier {
                             span: token.clone(),
                             name: unescape(&token.text()[1..token.text().len() - 1], quote)
-                                .unwrap(),
+                                .ok_or_else(|| {
+                                    nom::Err::Error(Error::from_error_kind(
+                                        i,
+                                        ErrorKind::Other("invalid escape or unicode"),
+                                    ))
+                                })?,
                             quote: Some(quote),
                         }))
                     } else {
