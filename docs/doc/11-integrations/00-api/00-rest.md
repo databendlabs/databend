@@ -111,11 +111,11 @@ OldSession
 |-------|--------|----------|---------|------------------------------------------|
 | id    | string | Yes      |         | session_id from QueryResponse.session_id |
 
-PaginationConf: critical conditions for each HTTP request to return (before all remaining result is ready to return)
+Pagination: critical conditions for each HTTP request to return (before all remaining result is ready to return)
 
 | field          | type | Required | Default | description       |
 |----------------|------|----------|---------|-------------------|
-| wait_time_secs | i32  | No       | 1       | long polling time |
+| wait_time_secs | u32  | No       | 1       | long polling time |
 
 ## Query Response
 
