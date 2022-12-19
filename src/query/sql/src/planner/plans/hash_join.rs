@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use common_catalog::table_context::TableContext;
 use common_exception::Result;
 
 use super::JoinType;
@@ -28,6 +27,7 @@ use crate::plans::PhysicalOperator;
 use crate::plans::RelOp;
 use crate::plans::Scalar;
 use crate::IndexType;
+use crate::PlannerContext;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct PhysicalHashJoin {
@@ -81,7 +81,7 @@ impl PhysicalOperator for PhysicalHashJoin {
 
     fn compute_required_prop_child<'a>(
         &self,
-        ctx: Arc<dyn TableContext>,
+        ctx: Arc<dyn PlannerContext>,
         rel_expr: &RelExpr<'a>,
         child_index: usize,
         required: &RequiredProperty,

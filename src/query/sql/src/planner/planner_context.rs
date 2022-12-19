@@ -12,11 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod attachment;
-mod file;
-mod stage_table;
-mod stage_table_sink;
+use common_catalog::table_context::TableContext;
+use common_storages_stage::StageAttachment;
 
-pub use attachment::StageAttachment;
-pub use file::*;
-pub use stage_table::StageTable;
+#[async_trait::async_trait]
+pub trait PlannerContext: TableContext {
+    fn get_stage_attachment(&self) -> Option<StageAttachment>;
+}

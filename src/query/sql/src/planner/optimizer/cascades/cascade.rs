@@ -15,7 +15,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -33,6 +32,7 @@ use crate::optimizer::rule::RuleSet;
 use crate::optimizer::rule::TransformResult;
 use crate::optimizer::SExpr;
 use crate::IndexType;
+use crate::PlannerContext;
 
 /// A cascades-style search engine to enumerate possible alternations of a relational expression and
 /// find the optimal one.
@@ -45,11 +45,11 @@ pub struct CascadesOptimizer {
 
     /// group index -> best cost context
     pub best_cost_map: HashMap<IndexType, CostContext>,
-    _ctx: Arc<dyn TableContext>,
+    _ctx: Arc<dyn PlannerContext>,
 }
 
 impl CascadesOptimizer {
-    pub fn create(ctx: Arc<dyn TableContext>) -> Result<Self> {
+    pub fn create(ctx: Arc<dyn PlannerContext>) -> Result<Self> {
         let explore_rules = if ctx.get_settings().get_enable_cbo()? {
             get_explore_rule_set()
         } else {

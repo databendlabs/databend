@@ -27,7 +27,6 @@ use common_ast::Backtrace;
 use common_base::runtime::GlobalIORuntime;
 use common_catalog::plan::StageTableInfo;
 use common_catalog::table::AppendMode;
-use common_catalog::table_context::StageAttachment;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
@@ -46,7 +45,9 @@ use common_sql::evaluator::CompoundChunkOperator;
 use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use common_sql::Metadata;
 use common_sql::MetadataRef;
+use common_sql::PlannerContext;
 use common_storages_factory::Table;
+use common_storages_stage::StageAttachment;
 use common_storages_stage::StageTable;
 use common_users::UserApiProvider;
 use parking_lot::Mutex;
@@ -139,7 +140,7 @@ impl InsertInterpreterV2 {
             files_to_copy: None,
         };
 
-        let all_source_file_infos = StageTable::list_files(&table_ctx, &stage_table_info).await?;
+        let all_source_file_infos = StageTable::list_files(&stage_table_info).await?;
 
         tracing::info!(
             "insert: read all stage attachment files finished: {}, elapsed:{}",
@@ -376,7 +377,7 @@ impl Interpreter for InsertInterpreterV2 {
 
 pub struct ValueSource {
     data: String,
-    ctx: Arc<dyn TableContext>,
+    ctx: Arc<dyn PlannerContext>,
     name_resolution_ctx: NameResolutionContext,
     bind_context: BindContext,
     schema: DataSchemaRef,
@@ -421,7 +422,7 @@ impl AsyncSource for ValueSource {
 impl ValueSource {
     pub fn new(
         data: String,
-        ctx: Arc<dyn TableContext>,
+        ctx: Arc<dyn PlannerContext>,
         name_resolution_ctx: NameResolutionContext,
         schema: DataSchemaRef,
     ) -> Self {
@@ -670,7 +671,7 @@ fn fill_default_value(operators: &mut Vec<ChunkOperator>, field: &DataField) -> 
 async fn exprs_to_datavalue<'a>(
     exprs: Vec<Expr<'a>>,
     schema: &DataSchemaRef,
-    ctx: Arc<dyn TableContext>,
+    ctx: Arc<dyn PlannerContext>,
     name_resolution_ctx: &NameResolutionContext,
     bind_context: &BindContext,
     metadata: MetadataRef,

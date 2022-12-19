@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod attachment;
-mod file;
-mod stage_table;
-mod stage_table_sink;
+use std::collections::BTreeMap;
 
-pub use attachment::StageAttachment;
-pub use file::*;
-pub use stage_table::StageTable;
+#[derive(Debug, Clone)]
+pub struct StageAttachment {
+    pub location: String,
+    pub format_options: BTreeMap<String, String>,
+    pub copy_options: BTreeMap<String, String>,
+}

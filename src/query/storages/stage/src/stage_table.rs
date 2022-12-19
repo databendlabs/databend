@@ -42,6 +42,7 @@ use common_pipeline_core::Pipeline;
 use common_pipeline_sources::processors::sources::input_formats::InputContext;
 use common_pipeline_sources::processors::sources::input_formats::SplitInfo;
 use common_storage::init_operator;
+use common_storage::DataOperator;
 use opendal::layers::SubdirLayer;
 use opendal::Operator;
 use parking_lot::Mutex;
@@ -73,33 +74,31 @@ impl StageTable {
     }
 
     /// Get operator with correctly prefix.
-    pub fn get_op(ctx: &Arc<dyn TableContext>, stage: &UserStageInfo) -> Result<Operator> {
+    pub fn get_op(stage: &UserStageInfo) -> Result<Operator> {
         if stage.stage_type == StageType::External {
             Ok(init_operator(&stage.stage_params.storage)?)
         } else {
-            let pop = ctx.get_data_operator()?.operator();
+            let pop = DataOperator::instance().operator();
             Ok(pop.layer(SubdirLayer::new(&stage.stage_prefix())))
         }
     }
 
-    pub async fn list_files(
-        ctx: &Arc<dyn TableContext>,
-        stage_info: &StageTableInfo,
-    ) -> Result<Vec<StageFileInfo>> {
+    pub async fn list_files(stage_info: &StageTableInfo) -> Result<Vec<StageFileInfo>> {
         // 1. List all files.
         let path = &stage_info.path;
         let files = &stage_info.files;
+        let op = Self::get_op(&stage_info.user_stage_info)?;
         let mut all_files = if !files.is_empty() {
             let mut res = vec![];
             for file in files {
                 // Here we add the path to the file: /path/to/path/file1.
                 let new_path = Path::new(path).join(file).to_string_lossy().to_string();
-                let info = stat_file(ctx.clone(), &new_path, &stage_info.user_stage_info).await?;
+                let info = stat_file(&op, &new_path).await?;
                 res.push(info);
             }
             res
         } else {
-            list_file(ctx.clone(), path, &stage_info.user_stage_info).await?
+            list_file(&op, path).await?
         };
 
         // 2. Retain pattern match files.
@@ -153,12 +152,12 @@ impl Table for StageTable {
         let files = if let Some(files) = &stage_info.files_to_copy {
             files.clone()
         } else {
-            StageTable::list_files(&ctx, stage_info).await?
+            StageTable::list_files(stage_info).await?
         };
         let files = files.iter().map(|v| v.path.clone()).collect::<Vec<_>>();
         let format =
             InputContext::get_input_format(&stage_info.user_stage_info.file_format_options.format)?;
-        let operator = StageTable::get_op(&ctx, &stage_info.user_stage_info)?;
+        let operator = StageTable::get_op(&stage_info.user_stage_info)?;
         let splits = format
             .get_splits(
                 &files,
@@ -205,7 +204,7 @@ impl Table for StageTable {
         let settings = ctx.get_settings();
         let schema = stage_table_info.schema.clone();
         let stage_info = stage_table_info.user_stage_info.clone();
-        let operator = StageTable::get_op(&ctx, &stage_table_info.user_stage_info)?;
+        let operator = StageTable::get_op(&stage_table_info.user_stage_info)?;
         let compact_threshold = self.get_block_compact_thresholds_with_default();
         let input_ctx = Arc::new(InputContext::try_create_from_copy(
             operator,
@@ -228,7 +227,7 @@ impl Table for StageTable {
         _: bool,
     ) -> Result<()> {
         let single = self.table_info.user_stage_info.copy_options.single;
-        let op = StageTable::get_op(&ctx, &self.table_info.user_stage_info)?;
+        let op = StageTable::get_op(&self.table_info.user_stage_info)?;
 
         let uuid = uuid::Uuid::new_v4().to_string();
         let group_id = AtomicUsize::new(0);

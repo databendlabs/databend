@@ -20,7 +20,6 @@ use common_ast::parser::token::TokenKind;
 use common_ast::parser::token::Tokenizer;
 use common_ast::Backtrace;
 use common_catalog::catalog::CatalogManager;
-use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use parking_lot::RwLock;
 
@@ -32,16 +31,17 @@ use crate::Binder;
 use crate::Metadata;
 use crate::MetadataRef;
 use crate::NameResolutionContext;
+use crate::PlannerContext;
 
 const PROBE_INSERT_INITIAL_TOKENS: usize = 128;
 const PROBE_INSERT_MAX_TOKENS: usize = 128 * 8;
 
 pub struct Planner {
-    ctx: Arc<dyn TableContext>,
+    ctx: Arc<dyn PlannerContext>,
 }
 
 impl Planner {
-    pub fn new(ctx: Arc<dyn TableContext>) -> Self {
+    pub fn new(ctx: Arc<dyn PlannerContext>) -> Self {
         Planner { ctx }
     }
 
