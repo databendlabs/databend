@@ -114,11 +114,14 @@ impl Interpreter for OptimizeTableInterpreter {
         }
 
         if do_purge {
-            let mut table = table;
-            if let OptimizeTableAction::Purge(Some(point)) = action {
-                table = table.navigate_to(point).await?;
+            let table = if let OptimizeTableAction::Purge(Some(point)) = action {
+                let read_only = false;
+                table.navigate_to(point, read_only).await?
+            } else {
+                table
             };
-            table.purge(self.ctx.clone(), true).await?;
+            let keep_latest = true;
+            table.purge(self.ctx.clone(), keep_latest).await?;
         }
 
         Ok(PipelineBuildResult::create())

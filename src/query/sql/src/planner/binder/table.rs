@@ -514,7 +514,8 @@ impl<'a> Binder {
         let mut table_meta = catalog.get_table(tenant, database_name, table_name).await?;
 
         if let Some(tp) = travel_point {
-            table_meta = table_meta.navigate_to(tp).await?;
+            let read_only = true;
+            table_meta = table_meta.navigate_to(tp, read_only).await?;
         }
         Ok(table_meta)
     }

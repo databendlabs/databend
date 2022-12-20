@@ -102,7 +102,10 @@ async fn test_fuse_navigate() -> Result<()> {
         .unwrap()
         .sub(chrono::Duration::milliseconds(1));
     // navigate from the instant that is just one ms before the timestamp of the latest snapshot
-    let tbl = fuse_table.navigate_to_time_point(instant).await?;
+    let read_only = true;
+    let tbl = fuse_table
+        .navigate_to_time_point(instant, read_only)
+        .await?;
 
     // check we got the snapshot of the first insertion
     assert_eq!(first_snapshot, tbl.snapshot_loc().await?.unwrap());
@@ -114,7 +117,8 @@ async fn test_fuse_navigate() -> Result<()> {
         .unwrap()
         .sub(chrono::Duration::milliseconds(1));
     // navigate from the instant that is just one ms before the timestamp of the last insertion
-    let res = fuse_table.navigate_to_time_point(instant).await;
+    let read_only = true;
+    let res = fuse_table.navigate_to_time_point(instant, read_only).await;
     match res {
         Ok(_) => panic!("historical data should not exist"),
         Err(e) => assert_eq!(e.code(), ErrorCode::TABLE_HISTORICAL_DATA_NOT_FOUND),
@@ -153,7 +157,10 @@ async fn test_fuse_historical_table_is_read_only() -> Result<()> {
         .timestamp
         .unwrap()
         .add(chrono::Duration::milliseconds(1));
-    let tbl = fuse_table.navigate_to_time_point(instant).await?;
+    let read_only = true;
+    let tbl = fuse_table
+        .navigate_to_time_point(instant, read_only)
+        .await?;
 
     // check append2
     let res = tbl.append_data(

@@ -31,29 +31,40 @@ impl FuseTable {
     pub async fn navigate_to_time_point(
         &self,
         time_point: DateTime<Utc>,
+        read_only: bool,
     ) -> Result<Arc<FuseTable>> {
-        self.find(|snapshot| {
-            if let Some(ts) = snapshot.timestamp {
-                ts <= time_point
-            } else {
-                false
-            }
-        })
+        self.find(
+            |snapshot| {
+                if let Some(ts) = snapshot.timestamp {
+                    ts <= time_point
+                } else {
+                    false
+                }
+            },
+            read_only,
+        )
         .await
     }
-    pub async fn navigate_to_snapshot(&self, snapshot_id: &str) -> Result<Arc<FuseTable>> {
-        self.find(|snapshot| {
-            snapshot
-                .snapshot_id
-                .simple()
-                .to_string()
-                .as_str()
-                .starts_with(snapshot_id)
-        })
+    pub async fn navigate_to_snapshot(
+        &self,
+        snapshot_id: &str,
+        read_only: bool,
+    ) -> Result<Arc<FuseTable>> {
+        self.find(
+            |snapshot| {
+                snapshot
+                    .snapshot_id
+                    .simple()
+                    .to_string()
+                    .as_str()
+                    .starts_with(snapshot_id)
+            },
+            read_only,
+        )
         .await
     }
 
-    pub async fn find<P>(&self, mut pred: P) -> Result<Arc<FuseTable>>
+    pub async fn find<P>(&self, mut pred: P, read_only: bool) -> Result<Arc<FuseTable>>
     where P: FnMut(&TableSnapshot) -> bool {
         let snapshot_location = if let Some(loc) = self.snapshot_loc().await? {
             loc
@@ -124,9 +135,6 @@ impl FuseTable {
             };
 
             // let's instantiate it
-            // TODO pass this in
-            // let read_only = true;
-            let read_only = false;
             let fuse_tbl = FuseTable::do_create(table_info, read_only)?;
             Ok(fuse_tbl.into())
         } else {

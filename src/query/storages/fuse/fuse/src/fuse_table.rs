@@ -498,13 +498,17 @@ impl Table for FuseTable {
     }
 
     #[tracing::instrument(level = "debug", name = "fuse_table_navigate_to", skip_all)]
-    async fn navigate_to(&self, point: &NavigationPoint) -> Result<Arc<dyn Table>> {
+    async fn navigate_to(
+        &self,
+        point: &NavigationPoint,
+        read_only: bool,
+    ) -> Result<Arc<dyn Table>> {
         match point {
-            NavigationPoint::SnapshotID(snapshot_id) => {
-                Ok(self.navigate_to_snapshot(snapshot_id.as_str()).await?)
-            }
+            NavigationPoint::SnapshotID(snapshot_id) => Ok(self
+                .navigate_to_snapshot(snapshot_id.as_str(), read_only)
+                .await?),
             NavigationPoint::TimePoint(time_point) => {
-                Ok(self.navigate_to_time_point(*time_point).await?)
+                Ok(self.navigate_to_time_point(*time_point, read_only).await?)
             }
         }
     }

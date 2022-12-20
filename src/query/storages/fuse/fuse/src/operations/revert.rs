@@ -29,7 +29,10 @@ impl FuseTable {
         navigation_descriptor: NavigationDescriptor,
     ) -> Result<()> {
         // 1. try navigate to the point
-        let table = self.navigate_to(&navigation_descriptor.point).await?;
+        let read_only = true;
+        let table = self
+            .navigate_to(&navigation_descriptor.point, read_only)
+            .await?;
         let table_reverting_to = FuseTable::try_from_table(table.as_ref())?;
         let table_info = table_reverting_to.get_table_info();
 

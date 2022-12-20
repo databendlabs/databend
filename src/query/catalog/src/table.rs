@@ -214,8 +214,13 @@ pub trait Table: Sync + Send {
         Ok(Box::new(DummyColumnStatisticsProvider))
     }
 
-    async fn navigate_to(&self, instant: &NavigationPoint) -> Result<Arc<dyn Table>> {
+    async fn navigate_to(
+        &self,
+        instant: &NavigationPoint,
+        read_only: bool,
+    ) -> Result<Arc<dyn Table>> {
         let _ = instant;
+        let _ = read_only;
 
         Err(ErrorCode::Unimplemented(format!(
             "table {},  of engine type {}, does not support time travel",
