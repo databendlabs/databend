@@ -13,6 +13,8 @@
 // limitations under the License.
 
 mod block_reader;
+mod block_reader_native;
+mod block_reader_parquet;
 mod bloom_index_reader;
 mod meta_readers;
 mod snapshot_history_reader;
