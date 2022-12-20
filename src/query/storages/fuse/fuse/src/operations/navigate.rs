@@ -67,9 +67,9 @@ impl FuseTable {
         let snapshot_version = self.snapshot_format_version().await?;
         let reader = MetaReaders::table_snapshot_reader(self.get_operator());
 
-        // grab the table history
+        // grab the table history as stream
         // snapshots are order by timestamp DESC.
-        let mut snapshots = reader.snapshot_history(
+        let mut snapshot_stream = reader.snapshot_history(
             snapshot_location,
             snapshot_version,
             self.meta_location_generator().clone(),
@@ -77,7 +77,7 @@ impl FuseTable {
 
         // Find the instant which matches ths given `time_point`.
         let mut instant = None;
-        while let Some(snapshot) = snapshots.try_next().await? {
+        while let Some(snapshot) = snapshot_stream.try_next().await? {
             if pred(snapshot.as_ref()) {
                 instant = Some(snapshot);
                 break;
@@ -124,7 +124,9 @@ impl FuseTable {
             };
 
             // let's instantiate it
-            let read_only = true;
+            // TODO pass this in
+            // let read_only = true;
+            let read_only = false;
             let fuse_tbl = FuseTable::do_create(table_info, read_only)?;
             Ok(fuse_tbl.into())
         } else {

@@ -739,6 +739,7 @@ impl<'a> Binder {
 
     pub(in crate::planner::binder) async fn bind_optimize_table(
         &mut self,
+        bind_context: &BindContext,
         stmt: &OptimizeTableStmt<'a>,
     ) -> Result<Plan> {
         let OptimizeTableStmt {
@@ -760,7 +761,15 @@ impl<'a> Binder {
         let action = if let Some(ast_action) = action {
             match ast_action {
                 AstOptimizeTableAction::All => OptimizeTableAction::All,
-                AstOptimizeTableAction::Purge => OptimizeTableAction::Purge,
+                AstOptimizeTableAction::Purge { before } => {
+                    let p = if let Some(point) = before {
+                        let point = self.resolve_data_travel_point(bind_context, point).await?;
+                        Some(point)
+                    } else {
+                        None
+                    };
+                    OptimizeTableAction::Purge(p)
+                }
                 AstOptimizeTableAction::Compact { target, limit } => {
                     let limit_cnt = match limit {
                         Some(Expr::Literal {
@@ -779,7 +788,8 @@ impl<'a> Binder {
                 }
             }
         } else {
-            OptimizeTableAction::Purge
+            // TODO make this an error
+            OptimizeTableAction::Purge(None)
         };
 
         Ok(Plan::OptimizeTable(Box::new(OptimizeTablePlan {

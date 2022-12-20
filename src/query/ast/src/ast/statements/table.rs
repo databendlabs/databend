@@ -364,7 +364,7 @@ impl Display for RenameTableStmt<'_> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct TruncateTableStmt<'a> {
     pub catalog: Option<Identifier<'a>>,
     pub database: Option<Identifier<'a>>,
@@ -488,7 +488,9 @@ pub enum CompactTarget {
 #[derive(Debug, Clone, PartialEq)]
 pub enum OptimizeTableAction<'a> {
     All,
-    Purge,
+    Purge {
+        before: Option<TimeTravelPoint<'a>>,
+    },
     Compact {
         target: CompactTarget,
         limit: Option<Expr<'a>>,
@@ -499,7 +501,13 @@ impl<'a> Display for OptimizeTableAction<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             OptimizeTableAction::All => write!(f, "ALL"),
-            OptimizeTableAction::Purge => write!(f, "PURGE"),
+            OptimizeTableAction::Purge { before } => {
+                write!(f, "PURGE")?;
+                if let Some(point) = before {
+                    write!(f, " BEFORE {}", point)?;
+                }
+                Ok(())
+            }
             OptimizeTableAction::Compact { target, limit } => {
                 match target {
                     CompactTarget::Block => {
