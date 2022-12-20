@@ -21,6 +21,7 @@ use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::buffer::Buffer;
 use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_arrow::arrow::datatypes::TimeUnit;
+use common_arrow::arrow::offset::OffsetsBuffer;
 use common_arrow::arrow::trusted_len::TrustedLen;
 use enum_as_inner::EnumAsInner;
 use itertools::Itertools;
@@ -690,118 +691,143 @@ impl Column {
             Column::EmptyArray { len } => Box::new(
                 common_arrow::arrow::array::NullArray::new_null(self.arrow_type(), *len),
             ),
-            Column::Number(NumberColumn::UInt8(col)) => {
-                Box::new(common_arrow::arrow::array::PrimitiveArray::<u8>::from_data(
+            Column::Number(NumberColumn::UInt8(col)) => Box::new(
+                common_arrow::arrow::array::PrimitiveArray::<u8>::try_new(
                     self.arrow_type(),
                     col.clone(),
                     None,
-                ))
-            }
+                )
+                .unwrap(),
+            ),
             Column::Number(NumberColumn::UInt16(col)) => Box::new(
-                common_arrow::arrow::array::PrimitiveArray::<u16>::from_data(
+                common_arrow::arrow::array::PrimitiveArray::<u16>::try_new(
                     self.arrow_type(),
                     col.clone(),
                     None,
-                ),
+                )
+                .unwrap(),
             ),
             Column::Number(NumberColumn::UInt32(col)) => Box::new(
-                common_arrow::arrow::array::PrimitiveArray::<u32>::from_data(
+                common_arrow::arrow::array::PrimitiveArray::<u32>::try_new(
                     self.arrow_type(),
                     col.clone(),
                     None,
-                ),
+                )
+                .unwrap(),
             ),
             Column::Number(NumberColumn::UInt64(col)) => Box::new(
-                common_arrow::arrow::array::PrimitiveArray::<u64>::from_data(
+                common_arrow::arrow::array::PrimitiveArray::<u64>::try_new(
                     self.arrow_type(),
                     col.clone(),
                     None,
-                ),
+                )
+                .unwrap(),
             ),
-            Column::Number(NumberColumn::Int8(col)) => {
-                Box::new(common_arrow::arrow::array::PrimitiveArray::<i8>::from_data(
+            Column::Number(NumberColumn::Int8(col)) => Box::new(
+                common_arrow::arrow::array::PrimitiveArray::<i8>::try_new(
                     self.arrow_type(),
                     col.clone(),
                     None,
-                ))
-            }
+                )
+                .unwrap(),
+            ),
             Column::Number(NumberColumn::Int16(col)) => Box::new(
-                common_arrow::arrow::array::PrimitiveArray::<i16>::from_data(
+                common_arrow::arrow::array::PrimitiveArray::<i16>::try_new(
                     self.arrow_type(),
                     col.clone(),
                     None,
-                ),
+                )
+                .unwrap(),
             ),
             Column::Number(NumberColumn::Int32(col)) => Box::new(
-                common_arrow::arrow::array::PrimitiveArray::<i32>::from_data(
+                common_arrow::arrow::array::PrimitiveArray::<i32>::try_new(
                     self.arrow_type(),
                     col.clone(),
                     None,
-                ),
+                )
+                .unwrap(),
             ),
             Column::Number(NumberColumn::Int64(col)) => Box::new(
-                common_arrow::arrow::array::PrimitiveArray::<i64>::from_data(
+                common_arrow::arrow::array::PrimitiveArray::<i64>::try_new(
                     self.arrow_type(),
                     col.clone(),
                     None,
-                ),
+                )
+                .unwrap(),
             ),
             Column::Number(NumberColumn::Float32(col)) => {
                 let values =
                     unsafe { std::mem::transmute::<Buffer<F32>, Buffer<f32>>(col.clone()) };
                 Box::new(
-                    common_arrow::arrow::array::PrimitiveArray::<f32>::from_data(
+                    common_arrow::arrow::array::PrimitiveArray::<f32>::try_new(
                         self.arrow_type(),
                         values,
                         None,
-                    ),
+                    )
+                    .unwrap(),
                 )
             }
             Column::Number(NumberColumn::Float64(col)) => {
                 let values =
                     unsafe { std::mem::transmute::<Buffer<F64>, Buffer<f64>>(col.clone()) };
                 Box::new(
-                    common_arrow::arrow::array::PrimitiveArray::<f64>::from_data(
+                    common_arrow::arrow::array::PrimitiveArray::<f64>::try_new(
                         self.arrow_type(),
                         values,
                         None,
-                    ),
+                    )
+                    .unwrap(),
                 )
             }
-            Column::Boolean(col) => Box::new(common_arrow::arrow::array::BooleanArray::from_data(
-                self.arrow_type(),
-                col.clone(),
-                None,
-            )),
-            Column::String(col) => {
-                Box::new(common_arrow::arrow::array::BinaryArray::<i64>::from_data(
+            Column::Boolean(col) => Box::new(
+                common_arrow::arrow::array::BooleanArray::try_new(
                     self.arrow_type(),
-                    col.offsets.iter().map(|offset| *offset as i64).collect(),
-                    col.data.clone(),
+                    col.clone(),
                     None,
-                ))
+                )
+                .unwrap(),
+            ),
+            Column::String(col) => {
+                let offsets: Buffer<i64> =
+                    col.offsets.iter().map(|offset| *offset as i64).collect();
+                Box::new(
+                    common_arrow::arrow::array::BinaryArray::<i64>::try_new(
+                        self.arrow_type(),
+                        unsafe { OffsetsBuffer::new_unchecked(offsets) },
+                        col.data.clone(),
+                        None,
+                    )
+                    .unwrap(),
+                )
             }
             Column::Timestamp(col) => Box::new(
-                common_arrow::arrow::array::PrimitiveArray::<i64>::from_data(
+                common_arrow::arrow::array::PrimitiveArray::<i64>::try_new(
                     self.arrow_type(),
                     col.clone(),
                     None,
-                ),
+                )
+                .unwrap(),
             ),
             Column::Date(col) => Box::new(
-                common_arrow::arrow::array::PrimitiveArray::<i32>::from_data(
+                common_arrow::arrow::array::PrimitiveArray::<i32>::try_new(
                     self.arrow_type(),
                     col.clone(),
                     None,
-                ),
+                )
+                .unwrap(),
             ),
             Column::Array(col) => {
-                Box::new(common_arrow::arrow::array::ListArray::<i64>::from_data(
-                    self.arrow_type(),
-                    col.offsets.iter().map(|offset| *offset as i64).collect(),
-                    col.values.as_arrow(),
-                    None,
-                ))
+                let offsets: Buffer<i64> =
+                    col.offsets.iter().map(|offset| *offset as i64).collect();
+                Box::new(
+                    common_arrow::arrow::array::ListArray::<i64>::try_new(
+                        self.arrow_type(),
+                        unsafe { OffsetsBuffer::new_unchecked(offsets) },
+                        col.values.as_arrow(),
+                        None,
+                    )
+                    .unwrap(),
+                )
             }
             Column::Nullable(col) => {
                 let arrow_array = col.column.as_arrow();
@@ -811,20 +837,26 @@ impl Column {
                     _ => arrow_array.with_validity(Some(col.validity.clone())),
                 }
             }
-            Column::Tuple { fields, .. } => {
-                Box::new(common_arrow::arrow::array::StructArray::from_data(
+            Column::Tuple { fields, .. } => Box::new(
+                common_arrow::arrow::array::StructArray::try_new(
                     self.arrow_type(),
                     fields.iter().map(|field| field.as_arrow()).collect(),
                     None,
-                ))
-            }
+                )
+                .unwrap(),
+            ),
             Column::Variant(col) => {
-                Box::new(common_arrow::arrow::array::BinaryArray::<i64>::from_data(
-                    self.arrow_type(),
-                    col.offsets.iter().map(|offset| *offset as i64).collect(),
-                    col.data.clone(),
-                    None,
-                ))
+                let offsets: Buffer<i64> =
+                    col.offsets.iter().map(|offset| *offset as i64).collect();
+                Box::new(
+                    common_arrow::arrow::array::BinaryArray::<i64>::try_new(
+                        self.arrow_type(),
+                        unsafe { OffsetsBuffer::new_unchecked(offsets) },
+                        col.data.clone(),
+                        None,
+                    )
+                    .unwrap(),
+                )
             }
         }
     }
@@ -937,14 +969,12 @@ impl Column {
                     .as_any()
                     .downcast_ref::<common_arrow::arrow::array::BinaryArray<i64>>()
                     .expect("fail to read from arrow: array should be `BinaryArray<i64>`");
-                let offsets = arrow_col
-                    .offsets()
-                    .iter()
-                    .map(|x| *x as u64)
-                    .collect::<Vec<_>>();
+                let offsets = arrow_col.offsets().clone().into_inner();
+
+                let offsets = unsafe { std::mem::transmute::<Buffer<i64>, Buffer<u64>>(offsets) };
                 Column::String(StringColumn {
                     data: arrow_col.values().clone(),
-                    offsets: offsets.into(),
+                    offsets,
                 })
             }
             // TODO: deprecate it and use LargeBinary instead
@@ -955,9 +985,11 @@ impl Column {
                     .expect("fail to read from arrow: array should be `BinaryArray<i32>`");
                 let offsets = arrow_col
                     .offsets()
+                    .buffer()
                     .iter()
                     .map(|x| *x as u64)
                     .collect::<Vec<_>>();
+
                 Column::String(StringColumn {
                     data: arrow_col.values().clone(),
                     offsets: offsets.into(),
@@ -971,9 +1003,11 @@ impl Column {
                     .expect("fail to read from arrow: array should be `Utf8Array<i32>`");
                 let offsets = arrow_col
                     .offsets()
+                    .buffer()
                     .iter()
                     .map(|x| *x as u64)
                     .collect::<Vec<_>>();
+
                 Column::String(StringColumn {
                     data: arrow_col.values().clone(),
                     offsets: offsets.into(),
@@ -987,6 +1021,7 @@ impl Column {
                     .expect("fail to read from arrow: array should be `Utf8Array<i64>`");
                 let offsets = arrow_col
                     .offsets()
+                    .buffer()
                     .iter()
                     .map(|x| *x as u64)
                     .collect::<Vec<_>>();
@@ -1019,6 +1054,7 @@ impl Column {
                     .expect("fail to read from arrow: array should be `BinaryArray<i64>`");
                 let offsets = arrow_col
                     .offsets()
+                    .buffer()
                     .iter()
                     .map(|x| *x as u64)
                     .collect::<Vec<_>>();
@@ -1035,6 +1071,7 @@ impl Column {
                 let values = Column::from_arrow(&**values_col.values());
                 let offsets = values_col
                     .offsets()
+                    .buffer()
                     .iter()
                     .map(|x| *x as u64)
                     .collect::<Vec<_>>();

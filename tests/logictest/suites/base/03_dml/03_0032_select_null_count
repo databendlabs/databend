@@ -1,23 +1,30 @@
 statement ok
-drop table if exists t;
+DROP DATABASE IF EXISTS db1
 
 statement ok
-create table t(c0 tuple(int, int), c1 string null);
+CREATE DATABASE db1
 
 statement ok
-insert into t(c1) values(null), (null), (null);
+USE db1
 
-statement query I
-select count(c1) from t;
+statement ok
+drop table if exists t
 
+statement ok
+create table t(c0 tuple(int, int), c1 string null)
+
+statement ok
+insert into t(c1) values(null), (null), (null)
+
+query I
+select count(c1) from t
 ----
 0
 
-statement query I
-select count(c0) from t;
-
+query I
+select count(c0) from t
 ----
 3
 
 statement ok
-drop table if exists t;
+drop table if exists t

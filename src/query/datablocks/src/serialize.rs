@@ -28,7 +28,7 @@ use common_exception::Result;
 
 use crate::DataBlock;
 
-pub fn serialize_data_blocks_with_compression(
+pub fn serialize_to_parquet_with_compression(
     blocks: Vec<DataBlock>,
     schema: impl AsRef<DataSchema>,
     buf: &mut Vec<u8>,
@@ -80,12 +80,12 @@ pub fn serialize_data_blocks_with_compression(
     }
 }
 
-pub fn serialize_data_blocks(
+pub fn serialize_to_parquet(
     blocks: Vec<DataBlock>,
     schema: impl AsRef<DataSchema>,
     buf: &mut Vec<u8>,
 ) -> Result<(u64, ThriftFileMetaData)> {
-    serialize_data_blocks_with_compression(blocks, schema, buf, CompressionOptions::Lz4Raw)
+    serialize_to_parquet_with_compression(blocks, schema, buf, CompressionOptions::Lz4Raw)
 }
 
 fn col_encoding(data_type: &ArrowDataType) -> Encoding {

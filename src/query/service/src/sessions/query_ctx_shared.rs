@@ -31,6 +31,7 @@ use common_meta_types::UserInfo;
 use common_settings::Settings;
 use common_storage::DataOperator;
 use common_storage::StorageMetrics;
+use common_storages_stage::StageAttachment;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 use uuid::Uuid;
@@ -78,6 +79,7 @@ pub struct QueryContextShared {
     pub(in crate::sessions) data_operator: DataOperator,
     pub(in crate::sessions) executor: Arc<RwLock<Weak<PipelineExecutor>>>,
     pub(in crate::sessions) precommit_chunks: Arc<RwLock<Vec<Chunk>>>,
+    pub(in crate::sessions) stage_attachment: Arc<RwLock<Option<StageAttachment>>>,
     pub(in crate::sessions) created_time: SystemTime,
 }
 
@@ -107,6 +109,7 @@ impl QueryContextShared {
             affect: Arc::new(Mutex::new(None)),
             executor: Arc::new(RwLock::new(Weak::new())),
             precommit_chunks: Arc::new(RwLock::new(vec![])),
+            stage_attachment: Arc::new(RwLock::new(None)),
             created_time: SystemTime::now(),
         }))
     }
@@ -314,6 +317,15 @@ impl QueryContextShared {
         let mut swaped_precommit_chunks = vec![];
         std::mem::swap(&mut *chunks, &mut swaped_precommit_chunks);
         swaped_precommit_chunks
+    }
+
+    pub fn get_stage_attachment(&self) -> Option<StageAttachment> {
+        self.stage_attachment.read().clone()
+    }
+
+    pub fn attach_stage(&self, attachment: StageAttachment) {
+        let mut stage_attachment = self.stage_attachment.write();
+        *stage_attachment = Some(attachment);
     }
 
     pub fn get_created_time(&self) -> SystemTime {

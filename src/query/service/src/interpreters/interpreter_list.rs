@@ -25,6 +25,7 @@ use common_expression::DataSchemaRef;
 use common_expression::Value;
 use common_sql::plans::ListPlan;
 use common_storages_stage::list_file;
+use common_storages_stage::StageTable;
 use regex::Regex;
 
 use crate::interpreters::Interpreter;
@@ -56,8 +57,8 @@ impl Interpreter for ListInterpreter {
     #[tracing::instrument(level = "debug", name = "list_interpreter_execute", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let plan = &self.plan;
-        let table_ctx: Arc<dyn TableContext> = self.ctx.clone();
-        let mut files = list_file(table_ctx, &plan.path, &plan.stage).await?;
+        let op = StageTable::get_op(&plan.stage)?;
+        let mut files = list_file(&op, &plan.path).await?;
 
         let files = if plan.pattern.is_empty() {
             files

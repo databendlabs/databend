@@ -1,7 +1,6 @@
 onlyif mysql
-statement query I
-select "Engine" as engine from system.engines order by engine;
-
+query I
+select "Engine" as engine from system.engines order by engine
 ----
 FUSE
 MEMORY
@@ -10,4 +9,4 @@ RANDOM
 VIEW
 
 statement error 1065
-select engine from system.engines order by engine;
+select engine from system.engines order by engine

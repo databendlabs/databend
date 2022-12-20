@@ -12,16 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::io::Result;
+mod clickhouse_client;
+mod http_client;
+mod mysql_client;
 
-use super::BufferRead;
-
-pub trait CheckpointRead: BufferRead {
-    // reset the checkpoint
-    fn reset_checkpoint(&mut self);
-
-    fn checkpoint(&mut self);
-    fn get_checkpoint_buffer(&self) -> &[u8];
-
-    fn rollback_to_checkpoint(&mut self) -> Result<()>;
-}
+pub use clickhouse_client::ClickhouseHttpClient;
+pub use http_client::HttpClient;
+pub use mysql_client::MysqlClient;

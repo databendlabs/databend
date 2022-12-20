@@ -26,6 +26,7 @@ use common_expression::DataSchema;
 use common_expression::RemoteExpr;
 use common_expression::Scalar;
 use common_expression::TableSchema;
+use common_meta_app::schema::DatabaseType;
 use common_meta_app::schema::TableInfo;
 use common_meta_types::MetaId;
 use common_pipeline_core::Pipeline;
@@ -33,6 +34,7 @@ use common_storage::StorageMetrics;
 
 use crate::plan::DataSourceInfo;
 use crate::plan::DataSourcePlan;
+// use crate::plan::Expression;
 use crate::plan::PartStatistics;
 use crate::plan::Partitions;
 use crate::plan::PushDownInfo;
@@ -312,7 +314,7 @@ pub trait TableExt: Table {
             name,
             meta: meta.as_ref().clone(),
             tenant: "".to_owned(),
-            from_share: None,
+            db_type: DatabaseType::NormalDB,
         };
         catalog.get_table_by_info(&table_info)
     }

@@ -16,6 +16,7 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::str;
+use std::str::FromStr;
 use std::sync::Arc;
 
 use common_catalog::catalog::StorageDescription;
@@ -36,6 +37,7 @@ use common_exception::Result;
 use common_expression::Chunk;
 use common_expression::ChunkCompactThresholds;
 use common_expression::RemoteExpr;
+use common_meta_app::schema::DatabaseType;
 use common_meta_app::schema::TableInfo;
 use common_sharing::create_share_table_operator;
 // use common_sql::ExpressionParser;
@@ -56,6 +58,7 @@ use common_storages_table_meta::table::table_storage_prefix;
 use common_storages_table_meta::table::OPT_KEY_DATABASE_ID;
 use common_storages_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
 use common_storages_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
+use common_storages_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use opendal::layers::CacheLayer;
 use opendal::Operator;
 use uuid::Uuid;
@@ -80,6 +83,7 @@ pub struct FuseTable {
     pub(crate) meta_location_generator: TableMetaLocationGenerator,
 
     pub(crate) cluster_key_meta: Option<ClusterKey>,
+    pub(crate) storage_format: FuseStorageFormat,
     pub(crate) read_only: bool,
 
     pub(crate) operator: Operator,
@@ -94,15 +98,16 @@ impl FuseTable {
     pub fn do_create(table_info: TableInfo, read_only: bool) -> Result<Box<FuseTable>> {
         let storage_prefix = Self::parse_storage_prefix(&table_info)?;
         let cluster_key_meta = table_info.meta.cluster_key();
-        let mut operator = match table_info.from_share {
-            Some(ref from_share) => create_share_table_operator(
+
+        let mut operator = match table_info.db_type.clone() {
+            DatabaseType::ShareDB(share_ident) => create_share_table_operator(
                 ShareTableConfig::share_endpoint_address(),
                 ShareTableConfig::share_endpoint_token(),
-                &from_share.tenant,
-                &from_share.share_name,
+                &share_ident.tenant,
+                &share_ident.share_name,
                 &table_info.name,
             ),
-            None => {
+            DatabaseType::NormalDB => {
                 let storage_params = table_info.meta.storage_params.clone();
                 match storage_params {
                     Some(sp) => init_operator(&sp)?,
@@ -110,6 +115,7 @@ impl FuseTable {
                 }
             }
         };
+
         let data_metrics = Arc::new(StorageMetrics::default());
         operator = operator.layer(StorageMetricsLayer::new(data_metrics.clone()));
         // If cache op is valid, layered with ContentCacheLayer.
@@ -118,6 +124,12 @@ impl FuseTable {
                 operator.layer(CacheLayer::new(cache_op).with_policy(FuseCachePolicy::new()));
         }
 
+        let storage_format = table_info
+            .options()
+            .get(OPT_KEY_STORAGE_FORMAT)
+            .cloned()
+            .unwrap_or_default();
+
         Ok(Box::new(FuseTable {
             table_info,
             meta_location_generator: TableMetaLocationGenerator::with_prefix(storage_prefix),
@@ -125,6 +137,7 @@ impl FuseTable {
             read_only,
             operator,
             data_metrics,
+            storage_format: FuseStorageFormat::from_str(storage_format.as_str())?,
         }))
     }
 
@@ -200,18 +213,21 @@ impl FuseTable {
     }
 
     pub async fn snapshot_loc(&self) -> Result<Option<String>> {
-        if self.table_info.from_share.is_some() {
-            let url = FUSE_TBL_LAST_SNAPSHOT_HINT;
-            let data = self.operator.object(url).read().await?;
-            let s = str::from_utf8(&data)?;
-            Ok(Some(s.to_string()))
-        } else {
-            let options = self.table_info.options();
-            Ok(options
-                .get(OPT_KEY_SNAPSHOT_LOCATION)
-                // for backward compatibility, we check the legacy table option
-                .or_else(|| options.get(OPT_KEY_LEGACY_SNAPSHOT_LOC))
-                .cloned())
+        match self.table_info.db_type {
+            DatabaseType::ShareDB(_) => {
+                let url = FUSE_TBL_LAST_SNAPSHOT_HINT;
+                let data = self.operator.object(url).read().await?;
+                let s = str::from_utf8(&data)?;
+                Ok(Some(s.to_string()))
+            }
+            DatabaseType::NormalDB => {
+                let options = self.table_info.options();
+                Ok(options
+                    .get(OPT_KEY_SNAPSHOT_LOCATION)
+                    // for backward compatibility, we check the legacy table option
+                    .or_else(|| options.get(OPT_KEY_LEGACY_SNAPSHOT_LOC))
+                    .cloned())
+            }
         }
     }
 
@@ -553,6 +569,27 @@ impl Table for FuseTable {
         self.check_mutable()?;
 
         self.do_revert_to(ctx.as_ref(), point).await
+    }
+}
+
+#[derive(Clone, Copy)]
+pub enum FuseStorageFormat {
+    Parquet,
+    Native,
+}
+
+impl FromStr for FuseStorageFormat {
+    type Err = ErrorCode;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "" | "parquet" => Ok(FuseStorageFormat::Parquet),
+            "native" => Ok(FuseStorageFormat::Native),
+            other => Err(ErrorCode::UnknownFormat(format!(
+                "unknown fuse storage_format {}",
+                other
+            ))),
+        }
     }
 }
 

@@ -144,7 +144,7 @@ pub const fn concat_array<T, const A: usize, const B: usize>(a: &[T; A], b: &[T;
     }
 }
 
-pub fn serialize_chunks_with_compression(
+pub fn serialize_to_parquet_with_compression(
     chunks: Vec<Chunk>,
     schema: impl AsRef<DataSchema>,
     buf: &mut Vec<u8>,
@@ -156,6 +156,7 @@ pub fn serialize_chunks_with_compression(
         write_statistics: false,
         compression,
         version: Version::V2,
+        data_pagesize_limit: None,
     };
     let batches = chunks
         .into_iter()
@@ -192,12 +193,12 @@ pub fn serialize_chunks_with_compression(
     }
 }
 
-pub fn serialize_chunks(
+pub fn serialize_to_parquet(
     chunks: Vec<Chunk>,
     schema: impl AsRef<DataSchema>,
     buf: &mut Vec<u8>,
 ) -> ExceptionResult<(u64, ThriftFileMetaData)> {
-    serialize_chunks_with_compression(chunks, schema, buf, CompressionOptions::Lz4Raw)
+    serialize_to_parquet_with_compression(chunks, schema, buf, CompressionOptions::Lz4Raw)
 }
 
 fn col_encoding(_data_type: &ArrowDataType) -> Encoding {

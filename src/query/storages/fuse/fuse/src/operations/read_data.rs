@@ -219,6 +219,7 @@ impl FuseTable {
         //             prewhere_reader.clone(),
         //             prewhere_filter.clone(),
         //             remain_reader.clone(),
+        //             self.storage_format,
         //         )
         //     },
         //     max_io_requests,

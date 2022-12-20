@@ -300,7 +300,14 @@ mod utils {
         let blocks: std::vec::Vec<DataBlock> = stream.try_collect().await?;
         for block in blocks {
             let stats = gen_columns_statistics(&block, None)?;
-            let block_meta = block_writer.write(block, stats, None).await?;
+            let block_meta = block_writer
+                .write(
+                    common_storages_fuse::FuseStorageFormat::Parquet,
+                    block,
+                    stats,
+                    None,
+                )
+                .await?;
             block_metas.push(Arc::new(block_meta));
         }
 

@@ -33,7 +33,6 @@ use common_ast::parser::tokenize_sql;
 use common_ast::Backtrace;
 use common_ast::DisplayError;
 use common_catalog::catalog::CatalogManager;
-use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::type_check;
@@ -73,6 +72,7 @@ use crate::BindContext;
 use crate::ColumnBinding;
 use crate::ColumnEntry;
 use crate::MetadataRef;
+use crate::PlannerContext;
 use crate::ScalarExpr;
 
 /// A helper for type checking.
@@ -86,7 +86,7 @@ use crate::ScalarExpr;
 /// argument types of expressions, or unresolvable columns.
 pub struct TypeChecker<'a> {
     bind_context: &'a BindContext,
-    ctx: Arc<dyn TableContext>,
+    ctx: Arc<dyn PlannerContext>,
     name_resolution_ctx: &'a NameResolutionContext,
     metadata: MetadataRef,
 
@@ -100,7 +100,7 @@ pub struct TypeChecker<'a> {
 impl<'a> TypeChecker<'a> {
     pub fn new(
         bind_context: &'a BindContext,
-        ctx: Arc<dyn TableContext>,
+        ctx: Arc<dyn PlannerContext>,
         name_resolution_ctx: &'a NameResolutionContext,
         metadata: MetadataRef,
         aliases: &'a [(String, Scalar)],

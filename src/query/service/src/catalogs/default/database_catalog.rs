@@ -439,13 +439,10 @@ impl Catalog for DatabaseCatalog {
 
     async fn truncate_table(
         &self,
-        tenant: &str,
-        db_name: &str,
+        table_info: &TableInfo,
         req: TruncateTableReq,
     ) -> Result<TruncateTableReply> {
-        self.mutable_catalog
-            .truncate_table(tenant, db_name, req)
-            .await
+        self.mutable_catalog.truncate_table(table_info, req).await
     }
 
     async fn upsert_table_option(
@@ -461,12 +458,11 @@ impl Catalog for DatabaseCatalog {
 
     async fn update_table_meta(
         &self,
-        tenant: &str,
-        db_name: &str,
+        table_info: &TableInfo,
         req: UpdateTableMetaReq,
     ) -> Result<UpdateTableMetaReply> {
         self.mutable_catalog
-            .update_table_meta(tenant, db_name, req)
+            .update_table_meta(table_info, req)
             .await
     }
 

@@ -35,7 +35,6 @@ use tracing::debug;
 use tracing::info;
 
 use crate::fuse_lazy_part::FuseLazyPartInfo;
-use crate::fuse_part::ColumnMeta;
 use crate::fuse_part::FusePartInfo;
 use crate::pruning::BlockPruner;
 use crate::FuseTable;
@@ -274,10 +273,7 @@ impl FuseTable {
         let mut columns_meta = HashMap::with_capacity(meta.col_metas.len());
 
         for (idx, column_meta) in &meta.col_metas {
-            columns_meta.insert(
-                *idx as usize,
-                ColumnMeta::create(column_meta.offset, column_meta.len, column_meta.num_values),
-            );
+            columns_meta.insert(*idx as usize, column_meta.clone());
         }
 
         let rows_count = meta.row_count;
@@ -305,10 +301,7 @@ impl FuseTable {
             for index in indices {
                 let column_meta = &meta.col_metas[&(*index as u32)];
 
-                columns_meta.insert(
-                    *index,
-                    ColumnMeta::create(column_meta.offset, column_meta.len, column_meta.num_values),
-                );
+                columns_meta.insert(*index, column_meta.clone());
             }
         }
 

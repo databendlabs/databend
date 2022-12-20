@@ -22,6 +22,7 @@ use common_expression::TableSchemaRefExt;
 use common_meta_types::FileFormatOptions;
 use common_meta_types::MetaId;
 use common_pipeline_sources::processors::sources::input_formats::InputContext;
+use common_storages_stage::StageAttachment;
 
 use super::Plan;
 
@@ -34,6 +35,8 @@ pub enum InsertInputSource {
     StreamingWithFileFormat(FileFormatOptions, usize, Option<Arc<InputContext>>),
     // From cloned String and format
     Values(String),
+    // From stage
+    Stage(Arc<StageAttachment>),
 }
 
 #[derive(Clone)]

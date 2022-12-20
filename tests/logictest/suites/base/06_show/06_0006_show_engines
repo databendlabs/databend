@@ -1,6 +1,5 @@
-statement query TT
-SHOW ENGINES;
-
+query TT
+SHOW ENGINES
 ----
 FUSE FUSE Storage Engine
 MEMORY MEMORY Storage Engine

@@ -24,11 +24,12 @@ use crate::planner::semantic::NameResolutionContext;
 use crate::planner::semantic::TypeChecker;
 use crate::plans::Scalar;
 use crate::MetadataRef;
+use crate::PlannerContext;
 
 /// Helper for binding scalar expression with `BindContext`.
 pub struct ScalarBinder<'a> {
     bind_context: &'a BindContext,
-    ctx: Arc<dyn TableContext>,
+    ctx: Arc<dyn PlannerContext>,
     name_resolution_ctx: &'a NameResolutionContext,
     metadata: MetadataRef,
     aliases: &'a [(String, Scalar)],
@@ -37,7 +38,7 @@ pub struct ScalarBinder<'a> {
 impl<'a> ScalarBinder<'a> {
     pub fn new(
         bind_context: &'a BindContext,
-        ctx: Arc<dyn TableContext>,
+        ctx: Arc<dyn PlannerContext>,
         name_resolution_ctx: &'a NameResolutionContext,
         metadata: MetadataRef,
         aliases: &'a [(String, Scalar)],

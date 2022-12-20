@@ -26,20 +26,12 @@ runs:
         profile: ${{ inputs.profile }}
         sha: ${{ github.sha }}
         target: ${{ inputs.target }}
-
+    - name: Setup Build Tool
+      uses: ./.github/actions/setup_build_tool
+      with:
+        bypass_env_vars: RUSTFLAGS,RUSTDOCFLAGS,RUST_TEST_THREADS,RUST_LOG,RUST_BACKTRACE
     - name: Run sqllogic Tests with Standalone mode
       shell: bash
       env:
         TEST_HANDLERS: ${{ inputs.handlers }}
-      run: |
-        docker run --rm --tty --net=host \
-          --user $(id -u):$(id -g) \
-          --env BUILD_PROFILE \
-          --env TEST_HANDLERS \
-          --ulimit nofile=65535:65535 \
-          --ulimit stack=16777216:16777216 \
-          --volume "${PWD}:/workspace" \
-          --workdir "/workspace" \
-          datafuselabs/build-tool:sqllogic \
-          bash ./scripts/ci/ci-run-sqllogic-tests.sh \
-          ${{ inputs.dirs }}
+      run: bash ./scripts/ci/ci-run-sqllogic-tests.sh ${{ inputs.dirs }}

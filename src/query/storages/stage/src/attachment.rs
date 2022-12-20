@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,7 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod buffer_read;
-mod buffer_read_datetime_ext;
-mod buffer_read_number_ext;
-mod nested_checkpoint_reader;
+use std::collections::BTreeMap;
+
+#[derive(Debug, Clone)]
+pub struct StageAttachment {
+    pub location: String,
+    pub format_options: BTreeMap<String, String>,
+    pub copy_options: BTreeMap<String, String>,
+}

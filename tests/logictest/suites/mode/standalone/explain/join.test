@@ -1,6 +1,5 @@
-statement query T
-explain select t.number from numbers(1) as t, numbers(1) as t1 where t.number = t1.number;
-
+query T
+explain select t.number from numbers(1) as t, numbers(1) as t1 where t.number = t1.number
 ----
 HashJoin
 ├── join type: INNER
@@ -22,9 +21,8 @@ HashJoin
     ├── partitions scanned: 1
     └── push downs: [filters: [], limit: NONE]
 
-statement query T
-explain select t.number from numbers(1) as t, numbers(1) as t1 where t.number = t1.number and t.number = t1.number + 1;
-
+query T
+explain select t.number from numbers(1) as t, numbers(1) as t1 where t.number = t1.number and t.number = t1.number + 1
 ----
 HashJoin
 ├── join type: INNER
@@ -46,9 +44,8 @@ HashJoin
     ├── partitions scanned: 1
     └── push downs: [filters: [], limit: NONE]
 
-statement query T
-explain select t.number from numbers(1) as t, numbers(1) as t1 where t.number > 1 and 1 < t1.number;
-
+query T
+explain select t.number from numbers(1) as t, numbers(1) as t1 where t.number > 1 and 1 < t1.number
 ----
 HashJoin
 ├── join type: CROSS
@@ -74,9 +71,8 @@ HashJoin
         ├── partitions scanned: 1
         └── push downs: [filters: [(number > 1)], limit: NONE]
 
-statement query T
-explain select t.number from numbers(1) as t, numbers(1) as t1 where t.number + t1.number = 1;
-
+query T
+explain select t.number from numbers(1) as t, numbers(1) as t1 where t.number + t1.number = 1
 ----
 Filter
 ├── filters: [=(+(t.number (#0), t1.number (#1)), 1)]
@@ -101,9 +97,8 @@ Filter
         └── push downs: [filters: [], limit: NONE]
 
 
-statement query T
-explain select t.number from numbers(1) as t, numbers(1) as t1, numbers(1) as t2 where t1.number = t2.number and t.number = 1;
-
+query T
+explain select t.number from numbers(1) as t, numbers(1) as t1, numbers(1) as t2 where t1.number = t2.number and t.number = 1
 ----
 HashJoin
 ├── join type: INNER

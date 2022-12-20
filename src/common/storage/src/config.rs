@@ -187,6 +187,10 @@ impl StorageParams {
             StorageParams::None => false,
         }
     }
+
+    pub fn is_fs(&self) -> bool {
+        matches!(self, StorageParams::Fs(_))
+    }
 }
 
 /// Config for storage backend azblob.
@@ -451,6 +455,7 @@ pub struct StorageMokaConfig {
 }
 
 impl Default for StorageMokaConfig {
+    #[no_sanitize(address)]
     fn default() -> Self {
         Self {
             // Use 1G as default.

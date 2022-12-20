@@ -33,6 +33,7 @@ use common_meta_app::schema::DatabaseIdToName;
 use common_meta_app::schema::DatabaseInfo;
 use common_meta_app::schema::DatabaseMeta;
 use common_meta_app::schema::DatabaseNameIdent;
+use common_meta_app::schema::DatabaseType;
 use common_meta_app::schema::DbIdList;
 use common_meta_app::schema::DbIdListKey;
 use common_meta_app::schema::DropDatabaseReq;
@@ -3536,7 +3537,7 @@ impl SchemaApiTestSuite {
             assert_eq!(table_info.name, tb1.to_string());
             assert_eq!(table_info.ident.table_id, share_table_id);
             assert_eq!(table_info.tenant, tenant2.to_string());
-            assert_eq!(table_info.from_share, Some(share_name.clone()));
+            assert_eq!(table_info.db_type, DatabaseType::ShareDB(share_name));
         }
 
         info!("--- get tables from share db");

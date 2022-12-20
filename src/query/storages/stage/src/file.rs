@@ -12,28 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use chrono::TimeZone;
 use chrono::Utc;
 use common_catalog::plan::StageFileInfo;
 use common_catalog::plan::StageFileStatus;
-use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use common_meta_types::UserStageInfo;
 use futures::TryStreamExt;
 use opendal::Object;
 use opendal::Operator;
 use tracing::warn;
 
-use crate::StageTable;
-
-pub async fn stat_file(
-    table_ctx: Arc<dyn TableContext>,
-    path: &str,
-    stage: &UserStageInfo,
-) -> Result<StageFileInfo> {
-    let op = StageTable::get_op(&table_ctx, stage)?;
+pub async fn stat_file(op: &Operator, path: &str) -> Result<StageFileInfo> {
     let meta = op.object(path).metadata().await?;
 
     Ok(StageFileInfo {
@@ -56,12 +45,7 @@ pub async fn stat_file(
 /// - If not exist, we will try to list `path/` too.
 ///
 /// TODO(@xuanwo): return a stream instead.
-pub async fn list_file(
-    table_ctx: Arc<dyn TableContext>,
-    path: &str,
-    stage: &UserStageInfo,
-) -> Result<Vec<StageFileInfo>> {
-    let op = StageTable::get_op(&table_ctx, stage)?;
+pub async fn list_file(op: &Operator, path: &str) -> Result<Vec<StageFileInfo>> {
     let mut files = Vec::new();
 
     // - If the path itself is a dir, return directly.

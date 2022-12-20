@@ -1,21 +1,20 @@
 statement ok
-DROP DATABASE IF EXISTS ss;
+DROP DATABASE IF EXISTS ss
 
 statement ok
-CREATE DATABASE ss;
+CREATE DATABASE ss
 
 statement ok
-USE ss;
+USE ss
 
 statement ok
-CREATE TABLE t1(a INT);
+CREATE TABLE t1(a INT)
 
-statement query TTTTT 
-SHOW FIELDS FROM t1;
-
+query TTTTT
+SHOW FIELDS FROM t1
 ----
-a INT NO 0 
+a INT NO 0 (empty)
 
 statement ok
-DROP DATABASE IF EXISTS ss;
+DROP DATABASE IF EXISTS ss
 

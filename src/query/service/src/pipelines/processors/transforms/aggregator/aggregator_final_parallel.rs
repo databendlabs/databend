@@ -167,6 +167,9 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
     }
 
     pub fn merge_chunks(&mut self, chunks: Vec<Chunk>) -> Result<Vec<Chunk>> {
+        if chunks.is_empty() {
+            return Ok(vec![]);
+        }
         for chunk in chunks {
             let chunk = chunk.convert_to_full();
             // 1.1 and 1.2.

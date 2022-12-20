@@ -110,6 +110,12 @@ impl Function for FunctionAdapter {
             return Ok(Arc::new(NullColumn::new(input_rows)));
         }
 
+        // We must ensure all inner function eval at least one row block
+        if input_rows == 0 {
+            let return_type = self.return_type();
+            return return_type.create_column(&[]);
+        }
+
         let inner = self.inner.as_ref().unwrap();
         if columns.is_empty() {
             return inner.eval(func_ctx, columns, input_rows);

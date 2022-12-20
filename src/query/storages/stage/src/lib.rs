@@ -12,9 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod attachment;
 mod file;
 mod stage_table;
 mod stage_table_sink;
 
+pub use attachment::StageAttachment;
 pub use file::*;
 pub use stage_table::StageTable;

@@ -1,19 +1,21 @@
-onlyif mysql
 statement ok
-drop table if exists "T";
+use default
 
 onlyif mysql
 statement ok
-create table "T"("A" int);
+drop table if exists "T"
 
 onlyif mysql
 statement ok
-insert into "T" values(1);
+create table "T"("A" int)
 
 onlyif mysql
-statement query I
+statement ok
+insert into "T" values(1)
+
+onlyif mysql
+query I
 select "T"."A" from "T"
-
 ----
 1
 
@@ -34,27 +36,25 @@ statement error doesn't exist
 select "T".a from "T"
 
 onlyif mysql
-statement query I
-select "B" from (select "A" as "B" from "T");
-
+query I
+select "B" from (select "A" as "B" from "T")
 ----
 1
 
 onlyif mysql
 statement error
-select b from (select "A" as "B" from "T");
+select b from (select "A" as "B" from "T")
 
 onlyif mysql
 statement error
-select "b" from (select "A" as "B" from "T");
+select "b" from (select "A" as "B" from "T")
 
 onlyif mysql
 statement ok
-drop table "T";
+drop table "T"
 
 onlyif mysql
-statement query I
-select A.* from  (WITH source2 AS (select 1 as e) SELECT * FROM source2) A;
-
+query I
+select A.* from  (WITH source2 AS (select 1 as e) SELECT * FROM source2) A
 ----
 1

@@ -39,7 +39,7 @@ use crate::hive_partition::HivePartInfo;
 use crate::hive_partition_filler::HivePartitionFiller;
 
 #[derive(Clone)]
-pub struct HiveParquetBlockReader {
+pub struct HiveBlockReader {
     operator: Operator,
     projection: Vec<usize>,
     arrow_schema: Arc<Schema>,
@@ -96,17 +96,17 @@ impl DataBlockDeserializer {
     }
 }
 
-impl HiveParquetBlockReader {
+impl HiveBlockReader {
     pub fn create(
         operator: Operator,
         schema: TableSchemaRef,
         projection: Vec<usize>,
         hive_partition_filler: Option<HivePartitionFiller>,
         chunk_size: usize,
-    ) -> Result<Arc<HiveParquetBlockReader>> {
-        let projected_schema = TableSchemaRef::new(schema.project(&projection));
+    ) -> Result<Arc<HiveBlockReader>> {
+        let projected_schema = DataSchemaRef::new(schema.project(&projection));
         let arrow_schema = schema.to_arrow();
-        Ok(Arc::new(HiveParquetBlockReader {
+        Ok(Arc::new(HiveBlockReader {
             operator,
             projection,
             projected_schema,

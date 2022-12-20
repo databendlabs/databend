@@ -112,7 +112,7 @@ impl Column for StructColumn {
                     v.as_arrow_array(f)
                 })
                 .collect();
-            Box::new(StructArray::from_data(arrow_type, arrays, None))
+            Box::new(StructArray::try_new(arrow_type, arrays, None).unwrap())
         } else {
             unreachable!()
         }

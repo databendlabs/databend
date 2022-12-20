@@ -39,7 +39,7 @@ use common_storages_index::RangeFilter;
 use common_storages_table_meta::meta::ColumnStatistics;
 use common_storages_table_meta::meta::StatisticsOfColumns;
 
-use crate::hive_parquet_block_reader::HiveParquetBlockReader;
+use crate::hive_parquet_block_reader::HiveBlockReader;
 use crate::hive_table::HIVE_DEFAULT_PARTITION;
 
 #[derive(Clone)]
@@ -72,7 +72,7 @@ impl HiveBlockFilter {
             let mut statistics = StatisticsOfColumns::new();
             for col in self.projections.iter() {
                 let column_meta =
-                    HiveParquetBlockReader::get_parquet_column_metadata(row_group, col.name());
+                    HiveBlockReader::get_parquet_column_metadata(row_group, col.name());
                 if let Ok(meta) = column_meta {
                     let in_memory_size = meta.uncompressed_size();
                     if let Ok(stats) = meta.statistics().transpose() {

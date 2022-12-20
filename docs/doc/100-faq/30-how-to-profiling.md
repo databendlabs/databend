@@ -5,10 +5,11 @@ title: How to Profile Databend
 ## CPU profiling
 
 ```
-go tool pprof -svg http://localhost:8080/debug/pprof/profile?seconds=30 > cpu.svg
+go tool pprof -http="0.0.0.0:8081" http://localhost:8080/debug/pprof/profile?seconds=30
 ```
 
-<img src="https://user-images.githubusercontent.com/172204/204954988-4ed58738-4b43-47b9-9bb2-ef2f9d5e6f84.png" width="600"/>
+Open `<your-ip>:8081` and select `Flame Graph` from the VIEW menus in the site header:
+<img src="https://user-images.githubusercontent.com/172204/208336392-5b64bb9b-cce8-4562-9e05-c3d538e9d8a6.png"/>
 
 ## Memory profiling
 

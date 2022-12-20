@@ -6,9 +6,8 @@ statement ok
 SET ROLE 'test-s'
 
 onlyif mysql
-statement query T
+query T
 SELECT current_role()
-
 ----
 test-s
 

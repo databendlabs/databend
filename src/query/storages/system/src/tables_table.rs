@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use common_catalog::catalog::Catalog;
-use common_catalog::catalog_kind::CATALOG_DEFAULT;
+use common_catalog::catalog::CatalogManager;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
@@ -92,15 +92,29 @@ where TablesTable<T>: HistoryAware
 
     async fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<Chunk> {
         let tenant = ctx.get_tenant();
-        let catalog = ctx.get_catalog(CATALOG_DEFAULT)?;
-        let databases = catalog.list_databases(tenant.as_str()).await?;
+        let catalog_mgr = CatalogManager::instance();
+        let ctls: Vec<(String, Arc<dyn Catalog>)> = catalog_mgr
+            .catalogs
+            .iter()
+            .map(|e| (e.key().to_string(), e.value().clone()))
+            .collect();
 
+        let mut catalogs = vec![];
+        let mut databases = vec![];
         let mut database_tables = vec![];
-        for database in databases {
-            let name = database.name();
-            let tables = Self::list_tables(&catalog, tenant.as_str(), name).await?;
-            for table in tables {
-                database_tables.push((name.to_string(), table));
+        for (ctl_name, ctl) in ctls.into_iter() {
+            let dbs = ctl.list_databases(tenant.as_str()).await?;
+            let ctl_name: &str = Box::leak(ctl_name.into_boxed_str());
+
+            for db in dbs {
+                let name = db.name().to_string().into_boxed_str();
+                let name: &str = Box::leak(name);
+                let tables = Self::list_tables(&ctl, tenant.as_str(), name).await?;
+                for table in tables {
+                    catalogs.push(ctl_name.as_bytes().to_vec());
+                    databases.push(name.as_bytes().to_vec());
+                    database_tables.push(table);
+                }
             }
         }
 
@@ -113,7 +127,7 @@ where TablesTable<T>: HistoryAware
         let mut index_size: Vec<u64> = Vec::new();
         let mut index_size_valids: Vec<bool> = Vec::new();
 
-        for (_, tbl) in &database_tables {
+        for tbl in &database_tables {
             let stats = tbl.table_statistics()?;
             match stats.as_ref().and_then(|v| v.num_rows) {
                 Some(v) => {
@@ -157,21 +171,17 @@ where TablesTable<T>: HistoryAware
             }
         }
 
-        let databases: Vec<Vec<u8>> = database_tables
-            .iter()
-            .map(|(d, _)| d.as_bytes().to_vec())
-            .collect();
         let names: Vec<Vec<u8>> = database_tables
             .iter()
-            .map(|(_, v)| v.name().as_bytes().to_vec())
+            .map(|v| v.name().as_bytes().to_vec())
             .collect();
         let engines: Vec<Vec<u8>> = database_tables
             .iter()
-            .map(|(_, v)| v.engine().as_bytes().to_vec())
+            .map(|v| v.engine().as_bytes().to_vec())
             .collect();
         let created_ons: Vec<String> = database_tables
             .iter()
-            .map(|(_, v)| {
+            .map(|v| {
                 v.get_table_info()
                     .meta
                     .created_on
@@ -182,7 +192,7 @@ where TablesTable<T>: HistoryAware
         let created_ons: Vec<Vec<u8>> = created_ons.iter().map(|s| s.as_bytes().to_vec()).collect();
         let dropped_ons: Vec<String> = database_tables
             .iter()
-            .map(|(_, v)| {
+            .map(|v| {
                 v.get_table_info()
                     .meta
                     .drop_on
@@ -193,7 +203,7 @@ where TablesTable<T>: HistoryAware
         let dropped_ons: Vec<Vec<u8>> = dropped_ons.iter().map(|s| s.as_bytes().to_vec()).collect();
         let cluster_bys: Vec<String> = database_tables
             .iter()
-            .map(|(_, v)| {
+            .map(|v| {
                 v.get_table_info()
                     .meta
                     .default_cluster_key
@@ -206,6 +216,7 @@ where TablesTable<T>: HistoryAware
         let rows_len = databases.len();
         Ok(Chunk::new_from_sequence(
             vec![
+                (Value::Column(Column::from_data(catalogs)), DataType::String),
                 (
                     Value::Column(Column::from_data(databases)),
                     DataType::String,
@@ -257,6 +268,7 @@ where TablesTable<T>: HistoryAware
 {
     pub fn schema() -> TableSchemaRef {
         TableSchemaRefExt::create(vec![
+            TableField::new("catalog", TableDataType::String),
             TableField::new("database", TableDataType::String),
             TableField::new("name", TableDataType::String),
             TableField::new("engine", TableDataType::String),

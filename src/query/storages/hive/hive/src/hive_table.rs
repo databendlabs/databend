@@ -58,7 +58,7 @@ use opendal::Operator;
 use super::hive_catalog::HiveCatalog;
 use super::hive_partition_pruner::HivePartitionPruner;
 use super::hive_table_options::HiveTableOptions;
-use crate::hive_parquet_block_reader::HiveParquetBlockReader;
+use crate::hive_parquet_block_reader::HiveBlockReader;
 use crate::hive_partition_filler::HivePartitionFiller;
 use crate::hive_table_source::HiveTableSource;
 use crate::HiveBlockFilter;
@@ -272,7 +272,7 @@ impl HiveTable {
         &self,
         push_downs: &Option<PushDownInfo>,
         chunk_size: usize,
-    ) -> Result<Arc<HiveParquetBlockReader>> {
+    ) -> Result<Arc<HiveBlockReader>> {
         let projection = self.get_projections(push_downs)?;
         let (projection, partition_fields) =
             self.filter_hive_partition_from_partition_keys(projection);
@@ -285,7 +285,7 @@ impl HiveTable {
 
         let table_schema = self.table_info.schema();
         // todo, support csv, orc format
-        HiveParquetBlockReader::create(
+        HiveBlockReader::create(
             self.dal.clone(),
             table_schema,
             projection,

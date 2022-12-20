@@ -33,6 +33,7 @@ use common_meta_app::schema::DatabaseIdent;
 use common_meta_app::schema::DatabaseInfo;
 use common_meta_app::schema::DatabaseMeta;
 use common_meta_app::schema::DatabaseNameIdent;
+use common_meta_app::schema::DatabaseType;
 use common_meta_app::schema::DbIdList;
 use common_meta_app::schema::DbIdListKey;
 use common_meta_app::schema::DropDatabaseReply;
@@ -1602,6 +1603,11 @@ impl<KV: KVApi> SchemaApi for KV {
             "get_table"
         );
 
+        let db_type = match db_meta.from_share {
+            Some(share_ident) => DatabaseType::ShareDB(share_ident),
+            None => DatabaseType::NormalDB,
+        };
+
         let tb_info = TableInfo {
             ident: TableIdent {
                 table_id: tbid.table_id,
@@ -1612,7 +1618,7 @@ impl<KV: KVApi> SchemaApi for KV {
             // Safe unwrap() because: tb_meta_seq > 0
             meta: tb_meta.unwrap(),
             tenant: req.tenant.clone(),
-            from_share: db_meta.from_share.clone(),
+            db_type,
         };
 
         return Ok(Arc::new(tb_info));
@@ -1698,6 +1704,11 @@ impl<KV: KVApi> SchemaApi for KV {
                     table_name: table_id_list_key.table_name.clone(),
                 };
 
+                let db_type = match db_meta.from_share.clone() {
+                    Some(share_ident) => DatabaseType::ShareDB(share_ident),
+                    None => DatabaseType::NormalDB,
+                };
+
                 let tb_info = TableInfo {
                     ident: TableIdent {
                         table_id: *table_id,
@@ -1707,7 +1718,7 @@ impl<KV: KVApi> SchemaApi for KV {
                     name: table_id_list_key.table_name.clone(),
                     meta: tb_meta,
                     tenant: tenant_dbname.tenant.clone(),
-                    from_share: db_meta.from_share.clone(),
+                    db_type,
                 };
 
                 tb_info_list.push(Arc::new(tb_info));
@@ -2633,7 +2644,7 @@ async fn get_tableinfos_by_ids(
     ids: &[u64],
     tenant_dbname: &DatabaseNameIdent,
     dbid_tbnames_opt: Option<Vec<DBIdTableName>>,
-    share_name: Option<ShareNameIdent>,
+    db_type: DatabaseType,
 ) -> Result<Vec<Arc<TableInfo>>, KVAppError> {
     let mut tb_meta_keys = Vec::with_capacity(ids.len());
     for id in ids.iter() {
@@ -2671,7 +2682,7 @@ async fn get_tableinfos_by_ids(
                 meta: tb_meta,
                 name: tbnames[i].clone(),
                 tenant: tenant_dbname.tenant.clone(),
-                from_share: share_name.clone(),
+                db_type: db_type.clone(),
             };
             tb_infos.push(Arc::new(tb_info));
         } else {
@@ -2700,7 +2711,14 @@ async fn list_tables_from_unshare_db(
 
     let (dbid_tbnames, ids) = list_u64_value(kv_api, &dbid_tbname).await?;
 
-    get_tableinfos_by_ids(kv_api, &ids, tenant_dbname, Some(dbid_tbnames), None).await
+    get_tableinfos_by_ids(
+        kv_api,
+        &ids,
+        tenant_dbname,
+        Some(dbid_tbnames),
+        DatabaseType::NormalDB,
+    )
+    .await
 }
 
 async fn list_tables_from_share_db(
@@ -2739,5 +2757,12 @@ async fn list_tables_from_share_db(
             ids.push(table_id);
         }
     }
-    get_tableinfos_by_ids(kv_api, &ids, tenant_dbname, None, Some(share)).await
+    get_tableinfos_by_ids(
+        kv_api,
+        &ids,
+        tenant_dbname,
+        None,
+        DatabaseType::ShareDB(share),
+    )
+    .await
 }

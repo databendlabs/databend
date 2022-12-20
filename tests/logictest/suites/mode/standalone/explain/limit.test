@@ -1,6 +1,5 @@
-statement query T
-explain select * from (select t.number from numbers(10) as t limit 8) limit 9;
-
+query T
+explain select * from (select t.number from numbers(10) as t limit 8) limit 9
 ----
 Limit
 ├── limit: 9
@@ -16,9 +15,8 @@ Limit
         ├── partitions scanned: 1
         └── push downs: [filters: [], limit: 8]
 
-statement query T
-explain select * from (select t.number from numbers(10) as t order by number desc) order by number asc;
-
+query T
+explain select * from (select t.number from numbers(10) as t order by number desc) order by number asc
 ----
 Sort
 ├── sort keys: [number ASC NULLS LAST]
@@ -32,9 +30,8 @@ Sort
         ├── partitions scanned: 1
         └── push downs: [filters: [], limit: NONE]
 
-statement query T
-explain select number from (select t.number from numbers(10) as t order by number desc limit 8) order by number asc limit 9;
-
+query T
+explain select number from (select t.number from numbers(10) as t order by number desc limit 8) order by number asc limit 9
 ----
 Limit
 ├── limit: 9
@@ -54,9 +51,8 @@ Limit
                 ├── partitions scanned: 1
                 └── push downs: [filters: [], limit: 8]
 
-statement query T
-explain select t.number from numbers(1) as t, numbers(1) as t1 where t.number = (select count(*) from numbers(1) as t2, numbers(1) as t3 where t.number = t2.number) group by t.number order by t.number desc limit 3;
-
+query T
+explain select t.number from numbers(1) as t, numbers(1) as t1 where t.number = (select count(*) from numbers(1) as t2, numbers(1) as t3 where t.number = t2.number) group by t.number order by t.number desc limit 3
 ----
 Limit
 ├── limit: 3
@@ -125,9 +121,8 @@ Limit
                             ├── partitions scanned: 1
                             └── push downs: [filters: [], limit: NONE]
 
-statement query T
-explain select * from (select count(t1.number) as c1 from numbers(1) as t1 group by number) as t3 left join (select count(t.number) as c from numbers(2) as t group by number) as t4 on t3.c1=t4.c order by t3.c1 limit 1;
-
+query T
+explain select * from (select count(t1.number) as c1 from numbers(1) as t1 group by number) as t3 left join (select count(t.number) as c from numbers(2) as t group by number) as t4 on t3.c1=t4.c order by t3.c1 limit 1
 ----
 Limit
 ├── limit: 1

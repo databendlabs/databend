@@ -137,6 +137,30 @@ impl Display for TableIdListKey {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
+pub enum DatabaseType {
+    #[default]
+    NormalDB,
+    ShareDB(ShareNameIdent),
+}
+
+impl Display for DatabaseType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            DatabaseType::NormalDB => {
+                write!(f, "normal database")
+            }
+            DatabaseType::ShareDB(share_ident) => {
+                write!(
+                    f,
+                    "share database: {}-{}",
+                    share_ident.tenant, share_ident.share_name
+                )
+            }
+        }
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
 pub struct TableInfo {
     pub ident: TableIdent,
 
@@ -157,8 +181,8 @@ pub struct TableInfo {
 
     pub tenant: String,
 
-    // If not None, means that the table is share from other tenant.
-    pub from_share: Option<ShareNameIdent>,
+    // table belong to which type of database.
+    pub db_type: DatabaseType,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]

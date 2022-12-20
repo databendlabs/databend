@@ -106,7 +106,7 @@ impl SessionManager {
 
         let tenant = config.query.tenant_id.clone();
         let user_api = UserApiProvider::instance();
-        let session_settings = Settings::try_create(&config, user_api, tenant).await?;
+        let session_settings = Settings::try_create(user_api, tenant).await?;
         let session_ctx = SessionContext::try_create(session_settings)?;
         let session = Session::try_create(id.clone(), typ.clone(), session_ctx, mysql_conn_id)?;
 

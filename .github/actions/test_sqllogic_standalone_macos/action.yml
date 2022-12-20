@@ -26,12 +26,10 @@ runs:
         profile: ${{ inputs.profile }}
         sha: ${{ github.sha }}
         target: ${{ inputs.target }}
-
     - name: Test setup
       shell: bash
       run: |
         bash ./scripts/setup/dev_setup.sh -yd
-
     - name: Run sqllogic Tests with Standalone mode with embedded meta-store
       shell: bash
       env:

@@ -20,12 +20,12 @@ use common_exception::Result;
 use common_expression::Chunk;
 use common_expression::ChunkCompactThresholds;
 use common_storages_table_meta::meta::BlockMeta;
+use common_storages_table_meta::meta::ColumnId;
 use common_storages_table_meta::meta::ColumnMeta;
 use common_storages_table_meta::meta::Location;
 use common_storages_table_meta::meta::StatisticsOfColumns;
 use common_storages_table_meta::meta::Versioned;
 
-use crate::operations::column_metas;
 use crate::statistics::block_statistics::BlockStatistics;
 
 #[derive(Default)]
@@ -53,12 +53,11 @@ impl StatisticsAccumulator {
     pub fn add_block(
         &mut self,
         file_size: u64,
-        file_meta: ThriftFileMetaData,
+        col_metas: HashMap<ColumnId, ColumnMeta>,
         block_statistics: BlockStatistics,
         bloom_filter_index_location: Option<Location>,
         bloom_filter_index_size: u64,
     ) -> Result<()> {
-        let col_metas = column_metas(&file_meta)?;
         self.add(
             file_size,
             col_metas,

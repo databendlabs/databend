@@ -19,10 +19,11 @@ use backon::Retryable;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use common_expression::serialize_chunks;
+use common_expression::serialize_to_parquet;
 use common_expression::Chunk;
 use common_expression::DataSchemaRef;
 use common_expression::SendableChunkStream;
+use common_storages_fuse::operations::util;
 use common_storages_fuse::statistics::BlockStatistics;
 use common_storages_fuse::statistics::StatisticsAccumulator;
 use common_storages_fuse::FuseTable;
@@ -106,7 +107,7 @@ impl ResultTableWriter {
         let location = self.locations.gen_block_location();
         let mut data = Vec::with_capacity(100 * 1024 * 1024);
         let block_statistics = BlockStatistics::from(&chunk, location.clone(), None, None)?;
-        let (size, meta_data) = serialize_chunks(vec![chunk], &self.schema, &mut data)?;
+        let (size, meta_data) = serialize_to_parquet(vec![chunk], &self.schema, &mut data)?;
 
         let object = self.data_accessor.object(&location);
         { || object.write(data.as_slice()) }
@@ -120,8 +121,10 @@ impl ResultTableWriter {
                 )
             })
             .await?;
+
+        let meta = util::column_metas(&meta_data)?;
         self.accumulator
-            .add_block(size, meta_data, block_statistics, None, 0)?;
+            .add_block(size, meta, block_statistics, None, 0)?;
         Ok(self.get_last_part_info())
     }
 

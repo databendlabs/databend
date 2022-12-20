@@ -1,40 +1,39 @@
 statement ok
-DROP DATABASE IF EXISTS db1;
+DROP DATABASE IF EXISTS db1
 
 statement ok
-CREATE DATABASE db1;
+CREATE DATABASE db1
 
 statement ok
-USE db1;
+USE db1
 
 statement ok
-CREATE TABLE IF NOT EXISTS t(a varchar, b varchar) Engine = fuse;
+CREATE TABLE IF NOT EXISTS t(a varchar, b varchar) Engine = fuse
 
 statement ok
-INSERT INTO t(a,b) VALUES('1', 'v1'),('2','v2');
+INSERT INTO t(a,b) VALUES('1', 'v1'),('2','v2')
 
-statement query TT
-SELECT * FROM t;
-
+query TT
+SELECT * FROM t
 ----
 1 v1
 2 v2
 
 statement ok
-TRUNCATE TABLE t;
+TRUNCATE TABLE t
 
 statement ok
-SELECT * FROM t;
+SELECT * FROM t
 
 statement ok
-DROP TABLE t;
+DROP TABLE t
 
 statement error 1025
-TRUNCATE TABLE t; 
+TRUNCATE TABLE t
 
 statement ok
-DROP DATABASE db1;
+DROP DATABASE db1
 
 statement error 1003
-TRUNCATE TABLE db1.t; 
+TRUNCATE TABLE db1.t
 
