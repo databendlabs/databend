@@ -170,8 +170,9 @@ impl ParquetSource {
                         remain_reader.deserialize(rg_part, chunks, Some(bitmap.clone()))?
                     }
                 };
-                assert!(
-                    prewhere_blocks.num_rows() == remain_block.num_rows(),
+                assert_eq!(
+                    prewhere_blocks.num_rows(),
+                    remain_block.num_rows(),
                     "prewhere and remain blocks should have same row number. (prewhere: {}, remain: {})",
                     prewhere_blocks.num_rows(),
                     remain_block.num_rows()
@@ -272,7 +273,7 @@ impl Processor for ParquetSource {
         match std::mem::replace(&mut self.state, State::Finish) {
             State::ReadDataPrewhere(Some(part)) => {
                 let rg_part = ParquetRowGroupPart::from_part(&part)?;
-                let chunks = self.prewhere_reader.sync_read_columns_data(rg_part)?;
+                let chunks = self.prewhere_reader.sync_read_columns(rg_part)?;
                 if self.prewhere_filter.is_some() {
                     self.state = State::PrewhereFilter(part, chunks);
                 } else {
@@ -286,7 +287,7 @@ impl Processor for ParquetSource {
             State::ReadDataRemain(part, prewhere_data) => {
                 if let Some(remain_reader) = self.remain_reader.as_ref() {
                     let rg_part = ParquetRowGroupPart::from_part(&part)?;
-                    let chunks = remain_reader.sync_read_columns_data(rg_part)?;
+                    let chunks = remain_reader.sync_read_columns(rg_part)?;
                     self.state = State::Deserialize(part, chunks, Some(prewhere_data));
                     Ok(())
                 } else {
