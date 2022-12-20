@@ -48,7 +48,6 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::future::Future;
 use std::mem::take;
-use std::ops::DerefMut;
 use std::pin::Pin;
 use std::sync::atomic::AtomicI64;
 use std::sync::atomic::Ordering;
@@ -79,10 +78,7 @@ pub fn set_alloc_error_hook() {
     std::alloc::set_alloc_error_hook(|layout| {
         let _guard = LimitMemGuard::enter_unlimited();
 
-        let mut temp_tracker = ThreadTracker::empty();
-        let guard = ThreadTracker::enter(&mut temp_tracker);
-
-        let out_of_limit_desc = guard.saved.out_of_limit_desc.take();
+        let out_of_limit_desc = ThreadTracker::replace_error_message(None);
 
         panic!(
             "{}",
@@ -93,14 +89,17 @@ pub fn set_alloc_error_hook() {
 }
 
 /// A guard that restores the thread local tracker to the `saved` when dropped.
-pub struct Entered<'a> {
+pub struct Entered {
     /// Saved tracker for restoring
-    saved: &'a mut ThreadTracker,
+    saved: Option<Arc<MemStat>>,
 }
 
-impl<'a> Drop for Entered<'a> {
+impl Drop for Entered {
     fn drop(&mut self) {
-        ThreadTracker::swap_with(self.saved);
+        unsafe {
+            let _ = STAT_BUFFER.flush::<false>();
+            ThreadTracker::replace_mem_stat(self.saved.take());
+        }
     }
 }
 
@@ -165,8 +164,6 @@ impl Debug for OutOfLimit<i64> {
 }
 
 /// A per-thread tracker that tracks memory usage stat.
-///
-/// Disable `Clone` to prevent accidentally duplicating the buffer.
 #[derive(Default)]
 pub struct ThreadTracker {
     mem_stat: Option<Arc<MemStat>>,
@@ -191,40 +188,41 @@ impl Drop for ThreadTracker {
 /// Every ThreadTracker belongs to one MemStat.
 /// A MemStat might receive memory stat from more than one ThreadTracker.
 impl ThreadTracker {
-    pub const fn empty() -> Self {
+    pub(crate) const fn empty() -> Self {
         Self {
             mem_stat: None,
             out_of_limit_desc: None,
         }
     }
 
-    pub fn create(mem_stat: Option<Arc<MemStat>>) -> ThreadTracker {
-        ThreadTracker {
-            mem_stat,
-            out_of_limit_desc: None,
-        }
-    }
-
-    /// Create a ThreadTracker sharing the same internal MemStat with the current thread.
-    pub fn fork() -> ThreadTracker {
-        ThreadTracker::create(MemStat::current())
-    }
-
-    /// Swap the `tracker` with the current thread's.
-    pub fn swap_with(tracker: &mut ThreadTracker) {
+    /// Replace the `mem_stat` with the current thread's.
+    pub fn replace_mem_stat(mem_state: Option<Arc<MemStat>>) -> Option<Arc<MemStat>> {
         TRACKER.with(|v: &RefCell<ThreadTracker>| {
-            let mut v = v.borrow_mut();
-            std::mem::swap(v.deref_mut(), tracker)
+            let mut borrow_mut = v.borrow_mut();
+            let old = borrow_mut.mem_stat.take();
+            borrow_mut.mem_stat = mem_state;
+            old
         })
     }
 
-    /// Enters a context in which it reports memory stats to `tracker` and returns a guard that restores the previous tracker when being dropped.
-    ///
-    /// When entered, `tracker` is swapped with the thread local tracker `TRACKER`.
-    pub fn enter(tracker: &mut ThreadTracker) -> Entered {
-        ThreadTracker::swap_with(tracker);
+    /// Replace the `out_of_limit_desc` with the current thread's.
+    pub fn replace_error_message(desc: Option<String>) -> Option<String> {
+        TRACKER.with(|v: &RefCell<ThreadTracker>| {
+            let mut borrow_mut = v.borrow_mut();
+            let old = borrow_mut.out_of_limit_desc.take();
+            borrow_mut.out_of_limit_desc = desc;
+            old
+        })
+    }
 
-        Entered { saved: tracker }
+    /// Enters a context in which it reports memory stats to `mem stat` and returns a guard that restores the previous mem stat when being dropped.
+    pub fn enter(mem_state: Option<Arc<MemStat>>) -> Entered {
+        unsafe {
+            let _ = STAT_BUFFER.flush::<false>();
+            Entered {
+                saved: ThreadTracker::replace_mem_stat(mem_state),
+            }
+        }
     }
 
     /// Accumulate stat about allocated memory.
@@ -250,9 +248,7 @@ impl ThreadTracker {
             // https://play.rust-lang.org/?version=stable&mode=debug&edition=2021&gist=03d21a15e52c7c0356fca04ece283cf9
             if !std::thread::panicking() && !LimitMemGuard::is_unlimited() {
                 let _guard = LimitMemGuard::enter_unlimited();
-                let mut temp_tracker = ThreadTracker::empty();
-                let tracker_guard = ThreadTracker::enter(&mut temp_tracker);
-                tracker_guard.saved.out_of_limit_desc = Some(format!("{:?}", out_of_limit));
+                ThreadTracker::replace_error_message(Some(format!("{:?}", out_of_limit)));
                 return Err(AllocError);
             }
         }
@@ -438,9 +434,7 @@ impl MemStat {
 
     #[inline]
     pub fn current() -> Option<Arc<MemStat>> {
-        let mut temp_tracker = ThreadTracker::empty();
-        let guard = ThreadTracker::enter(&mut temp_tracker);
-        guard.saved.mem_stat.clone()
+        TRACKER.with(|f: &RefCell<ThreadTracker>| f.borrow().mem_stat.clone())
     }
 
     #[inline]
@@ -452,13 +446,9 @@ impl MemStat {
         let mem_stat = self.clone();
 
         move || {
-            let mut tracker = ThreadTracker::create(Some(mem_stat.clone()));
-            ThreadTracker::swap_with(&mut tracker);
+            let s = ThreadTracker::replace_mem_stat(Some(mem_stat.clone()));
 
-            debug_assert!(
-                tracker.mem_stat.is_none(),
-                "a new thread must have no tracker"
-            );
+            debug_assert!(s.is_none(), "a new thread must have no tracker");
         }
     }
 }
@@ -470,16 +460,17 @@ pin_project! {
         #[pin]
         inner: T,
 
-        thread_tracker: ThreadTracker,
+        mem_stat: Option<Arc<MemStat>>,
     }
 }
 
 impl<T> TrackedFuture<T> {
-    pub fn create(tracker: ThreadTracker, inner: T) -> TrackedFuture<T> {
-        TrackedFuture::<T> {
-            inner,
-            thread_tracker: tracker,
-        }
+    pub fn create(inner: T) -> TrackedFuture<T> {
+        Self::create_with_mem_stat(MemStat::current(), inner)
+    }
+
+    pub fn create_with_mem_stat(mem_stat: Option<Arc<MemStat>>, inner: T) -> Self {
+        Self { inner, mem_stat }
     }
 }
 
@@ -488,8 +479,7 @@ impl<T: Future> Future for TrackedFuture<T> {
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let this = self.project();
-
-        let _g = ThreadTracker::enter(this.thread_tracker);
+        let _g = ThreadTracker::enter(this.mem_stat.clone());
         this.inner.poll(cx)
     }
 }
@@ -531,7 +521,6 @@ mod tests {
 
         use crate::runtime::runtime_tracker::STAT_BUFFER;
         use crate::runtime::MemStat;
-        use crate::runtime::ThreadTracker;
         use crate::runtime::TrackedFuture;
 
         struct Foo {
@@ -555,10 +544,9 @@ mod tests {
             // The memory is passed out and is de-allocated outside the future and should not be tracked.
 
             let mem_stat = Arc::new(MemStat::empty());
-            let tracker = ThreadTracker::create(Some(mem_stat.clone()));
 
             let f = Foo { i: 3 };
-            let f = TrackedFuture::create(tracker, f);
+            let f = TrackedFuture::create_with_mem_stat(Some(mem_stat.clone()), f);
 
             let rt = tokio::runtime::Builder::new_multi_thread()
                 .enable_all()
@@ -598,7 +586,6 @@ mod tests {
         use std::task::Poll;
 
         use crate::runtime::MemStat;
-        use crate::runtime::ThreadTracker;
         use crate::runtime::TrackedFuture;
 
         struct Foo {
@@ -625,10 +612,8 @@ mod tests {
 
             // Run a future in a one-shot runtime, return the used memory.
             fn run_fut_in_rt(mem_stat: &Arc<MemStat>) -> i64 {
-                let tracker = ThreadTracker::create(Some(mem_stat.clone()));
-
                 let f = Foo { i: 8 };
-                let f = TrackedFuture::create(tracker, f);
+                let f = TrackedFuture::create_with_mem_stat(Some(mem_stat.clone()), f);
 
                 let rt = tokio::runtime::Builder::new_multi_thread()
                     .worker_threads(5)
