@@ -141,7 +141,7 @@ impl InputFormatTextBase for InputFormatCSV {
                 &batch.path,
                 start_row + i,
             ) {
-                if Self::on_error_behavior() == OnErrorMode::Continue {
+                if builder.ctx.on_error_mode == OnErrorMode::Continue {
                     columns.iter_mut().for_each(|c| {
                         // check if parts of columns inserted data, if so, pop it.
                         if c.value_size() > num_rows {
@@ -417,14 +417,6 @@ impl InputFormatTextBase for InputFormatCSV {
             ReadRecordResult::End => {}
         }
         Ok(res)
-    }
-
-    fn on_error_behavior() -> OnErrorMode {
-        OnErrorMode::Continue
-    }
-
-    fn read_after_error() {
-        todo!()
     }
 }
 

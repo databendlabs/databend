@@ -24,7 +24,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_formats::FieldDecoder;
 use common_formats::FileFormatOptionsExt;
-use common_meta_types::OnErrorMode;
 use common_meta_types::StageFileFormatType;
 use common_meta_types::UserStageInfo;
 use common_pipeline_core::Pipeline;
@@ -84,11 +83,6 @@ pub trait InputFormatTextBase: Sized + Send + Sync + 'static {
             Ok(vec![row_batch])
         }
     }
-
-    fn on_error_behavior() -> OnErrorMode {
-        OnErrorMode::AbortStatement
-    }
-    fn read_after_error();
 }
 
 pub struct InputFormatText<T: InputFormatTextBase> {
