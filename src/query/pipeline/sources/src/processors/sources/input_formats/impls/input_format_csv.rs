@@ -89,25 +89,22 @@ impl InputFormatCSV {
         rows: usize,
     ) -> Result<()> {
         if actual < expect {
-            return Err(csv_error(
+            Err(csv_error(
                 &format!("expect {} fields, only found {} ", expect, actual),
                 path,
                 rows,
-            ));
-        } else if actual > expect + 1 {
-            return Err(csv_error(
+            ))
+        } else if actual > expect + 1
+            || (actual == expect + 1 && field_ends[expect] != field_ends[expect - 1])
+        {
+            Err(csv_error(
                 &format!("too many fields, expect {}, got {}", expect, actual),
                 path,
                 rows,
-            ));
-        } else if actual == expect + 1 && field_ends[expect] != field_ends[expect - 1] {
-            return Err(csv_error(
-                "CSV allow ending with ',', but should not have data after it",
-                path,
-                rows,
-            ));
+            ))
+        } else {
+            Ok(())
         }
-        Ok(())
     }
 }
 
