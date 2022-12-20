@@ -29,7 +29,7 @@ go tool pprof -http="0.0.0.0:8081" http://localhost:8080/debug/pprof/profile?sec
 
 Then open the URL `<your-ip>:8081/ui/flamegraph` in your browser to view the flamegraph:
 
-![Alt text](../static/img/blog/databend-cpu-flamegraph.png)
+![Alt text](/img/blog/databend-cpu-flamegraph.png)
 
 ## Memory Profiling
 
@@ -85,7 +85,7 @@ jeprof ./databend-query-main ./jeprof.206330.563.i563.heap --collapse | flamegra
 - `databend-query-main`: Path to your executable.
 - `jeprof.206330.563.i563.heap`: Selects a heap file.
 
-![Alt text](../static/img/blog/mem-profiling.png)
+![Alt text](/img/blog/mem-profiling.png)
 
 ## References
 
