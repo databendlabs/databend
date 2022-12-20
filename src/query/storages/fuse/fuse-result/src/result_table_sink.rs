@@ -19,7 +19,7 @@ use async_trait::async_trait;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::Projection;
 use common_catalog::table_context::TableContext;
-use common_datablocks::serialize_data_blocks;
+use common_datablocks::serialize_to_parquet;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -28,6 +28,7 @@ use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 use common_storages_fuse::io::BlockReader;
+use common_storages_fuse::operations::util;
 use common_storages_fuse::statistics::BlockStatistics;
 use common_storages_fuse::statistics::StatisticsAccumulator;
 use common_storages_fuse::FuseTable;
@@ -181,13 +182,15 @@ impl Processor for ResultTableSink {
                 let mut data = Vec::with_capacity(100 * 1024 * 1024);
                 let schema = block.schema().clone();
                 let (size, meta_data) =
-                    serialize_data_blocks(vec![block.clone()], &schema, &mut data)?;
+                    serialize_to_parquet(vec![block.clone()], &schema, &mut data)?;
 
                 let bloom_index_location = None;
                 let bloom_index_size = 0_u64;
+
+                let meta = util::column_metas(&meta_data)?;
                 self.accumulator.add_block(
                     size,
-                    meta_data,
+                    meta,
                     block_statistics,
                     bloom_index_location,
                     bloom_index_size,

@@ -16,6 +16,7 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::str;
+use std::str::FromStr;
 use std::sync::Arc;
 
 use common_catalog::catalog::StorageDescription;
@@ -57,6 +58,7 @@ use common_storages_table_meta::table::table_storage_prefix;
 use common_storages_table_meta::table::OPT_KEY_DATABASE_ID;
 use common_storages_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
 use common_storages_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
+use common_storages_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use opendal::layers::CacheLayer;
 use opendal::Operator;
 use uuid::Uuid;
@@ -81,6 +83,7 @@ pub struct FuseTable {
     pub(crate) meta_location_generator: TableMetaLocationGenerator,
 
     pub(crate) cluster_key_meta: Option<ClusterKey>,
+    pub(crate) storage_format: FuseStorageFormat,
     pub(crate) read_only: bool,
 
     pub(crate) operator: Operator,
@@ -121,6 +124,12 @@ impl FuseTable {
                 operator.layer(CacheLayer::new(cache_op).with_policy(FuseCachePolicy::new()));
         }
 
+        let storage_format = table_info
+            .options()
+            .get(OPT_KEY_STORAGE_FORMAT)
+            .cloned()
+            .unwrap_or_default();
+
         Ok(Box::new(FuseTable {
             table_info,
             meta_location_generator: TableMetaLocationGenerator::with_prefix(storage_prefix),
@@ -128,6 +137,7 @@ impl FuseTable {
             read_only,
             operator,
             data_metrics,
+            storage_format: FuseStorageFormat::from_str(storage_format.as_str())?,
         }))
     }
 
@@ -548,6 +558,27 @@ impl Table for FuseTable {
         self.check_mutable()?;
 
         self.do_revert_to(ctx.as_ref(), point).await
+    }
+}
+
+#[derive(Clone, Copy)]
+pub enum FuseStorageFormat {
+    Parquet,
+    Native,
+}
+
+impl FromStr for FuseStorageFormat {
+    type Err = ErrorCode;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "" | "parquet" => Ok(FuseStorageFormat::Parquet),
+            "native" => Ok(FuseStorageFormat::Native),
+            other => Err(ErrorCode::UnknownFormat(format!(
+                "unknown fuse storage_format {}",
+                other
+            ))),
+        }
     }
 }
 

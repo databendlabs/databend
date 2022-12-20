@@ -14,12 +14,12 @@
 
 use std::sync::Arc;
 
-use common_catalog::table_context::StageAttachment;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_meta_types::FileFormatOptions;
 use common_meta_types::MetaId;
 use common_pipeline_sources::processors::sources::input_formats::InputContext;
+use common_storages_stage::StageAttachment;
 
 use super::Plan;
 

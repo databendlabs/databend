@@ -21,8 +21,7 @@ use common_base::base::Progress;
 use common_base::base::ProgressValues;
 use common_cache::Cache;
 use common_catalog::table_context::TableContext;
-use common_datablocks::serialize_data_blocks;
-use common_datablocks::serialize_data_blocks_with_compression;
+use common_datablocks::serialize_to_parquet_with_compression;
 use common_datablocks::BlockCompactThresholds;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
@@ -37,11 +36,11 @@ use opendal::Operator;
 use super::compact_meta::CompactSourceMeta;
 use super::compact_part::CompactTask;
 use super::CompactSinkMeta;
+use crate::io;
 use crate::io::write_data;
 use crate::io::BlockReader;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::mutation::AbortOperation;
-use crate::operations::util;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::Event;
@@ -49,6 +48,7 @@ use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::Processor;
 use crate::statistics::reduce_block_statistics;
 use crate::statistics::reducers::reduce_block_metas;
+use crate::FuseStorageFormat;
 
 struct SerializeState {
     block_data: Vec<u8>,
@@ -89,6 +89,7 @@ pub struct CompactTransform {
     block_reader: Arc<BlockReader>,
     location_gen: TableMetaLocationGenerator,
     dal: Operator,
+    storage_format: FuseStorageFormat,
 
     // Limit the memory size of the block read.
     max_memory: u64,
@@ -110,6 +111,7 @@ impl CompactTransform {
         block_reader: Arc<BlockReader>,
         location_gen: TableMetaLocationGenerator,
         dal: Operator,
+        storage_format: FuseStorageFormat,
         thresholds: BlockCompactThresholds,
     ) -> Result<ProcessorPtr> {
         let settings = ctx.get_settings();
@@ -126,6 +128,7 @@ impl CompactTransform {
             block_reader,
             location_gen,
             dal,
+            storage_format,
             max_memory,
             max_io_requests,
             compact_tasks: VecDeque::new(),
@@ -232,7 +235,7 @@ impl Processor for CompactTransform {
                         let location = self.location_gen.block_bloom_index_location(&block_id);
                         let mut data = Vec::with_capacity(100 * 1024);
                         let index_block_schema = &bloom_index.filter_schema;
-                        let (size, _) = serialize_data_blocks_with_compression(
+                        let (size, _) = serialize_to_parquet_with_compression(
                             vec![index_block],
                             index_block_schema,
                             &mut data,
@@ -243,10 +246,8 @@ impl Processor for CompactTransform {
 
                     // serialize data block.
                     let mut block_data = Vec::with_capacity(100 * 1024 * 1024);
-                    let schema = new_block.schema().clone();
-                    let (file_size, meta_data) =
-                        serialize_data_blocks(vec![new_block], &schema, &mut block_data)?;
-                    let col_metas = util::column_metas(&meta_data)?;
+                    let (file_size, col_metas) =
+                        io::write_block(self.storage_format, new_block, &mut block_data)?;
 
                     // new block meta.
                     let new_meta = BlockMeta::new(

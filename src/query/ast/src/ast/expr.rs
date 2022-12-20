@@ -711,12 +711,12 @@ impl<'a> Display for Expr<'a> {
                 write!(f, " BETWEEN {low} AND {high}")?;
             }
             Expr::UnaryOp { op, expr, .. } => {
-                write!(f, "{op} {expr}")?;
+                write!(f, "({op} {expr})")?;
             }
             Expr::BinaryOp {
                 op, left, right, ..
             } => {
-                write!(f, "{left} {op} {right}")?;
+                write!(f, "({left} {op} {right})")?;
             }
             Expr::Cast {
                 expr,

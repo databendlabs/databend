@@ -21,9 +21,9 @@ use common_base::base::tokio;
 use common_base::base::tokio::sync::Mutex as TokioMutex;
 use common_base::base::tokio::sync::RwLock;
 use common_base::runtime::TrySpawn;
-use common_catalog::table_context::StageAttachment;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_storages_stage::StageAttachment;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -382,7 +382,7 @@ impl HttpQuery {
     }
 
     pub async fn update_expire_time(&self, before_wait: bool) {
-        let duration = Duration::from_millis(self.config.result_timeout_millis)
+        let duration = Duration::from_secs(self.config.result_timeout_secs)
             + if before_wait {
                 Duration::from_secs(self.request.pagination.wait_time_secs as u64)
             } else {
@@ -403,7 +403,7 @@ impl HttpQuery {
                 Some(expire_at - now)
             }
         } else {
-            Some(Duration::from_millis(self.config.result_timeout_millis))
+            Some(Duration::from_secs(self.config.result_timeout_secs))
         }
     }
 }

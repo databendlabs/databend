@@ -14,14 +14,18 @@
 
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
-use std::collections::HashSet;
+use std::io::BufReader;
 use std::sync::Arc;
 
+use common_arrow::arrow::array::Array;
+use common_arrow::arrow::chunk::Chunk;
 use common_arrow::arrow::datatypes::Field;
 use common_arrow::arrow::io::parquet::read::column_iter_to_arrays;
 use common_arrow::arrow::io::parquet::read::ArrayIter;
 use common_arrow::arrow::io::parquet::read::RowGroupDeserializer;
 use common_arrow::arrow::io::parquet::write::to_parquet_schema;
+use common_arrow::native::read::reader::PaReader;
+use common_arrow::native::read::PaReadBuf;
 use common_arrow::parquet::compression::Compression as ParquetCompression;
 use common_arrow::parquet::metadata::ColumnDescriptor;
 use common_arrow::parquet::metadata::SchemaDescriptor;
@@ -38,6 +42,7 @@ use common_exception::Result;
 use common_storage::ColumnLeaf;
 use common_storage::ColumnLeaves;
 use common_storages_table_meta::meta::BlockMeta;
+use common_storages_table_meta::meta::ColumnMeta;
 use common_storages_table_meta::meta::Compression;
 use futures::StreamExt;
 use futures::TryStreamExt;
@@ -46,7 +51,6 @@ use opendal::Operator;
 use tracing::debug_span;
 use tracing::Instrument;
 
-use crate::fuse_part::ColumnMeta;
 use crate::fuse_part::FusePartInfo;
 
 #[derive(Clone)]
@@ -153,7 +157,7 @@ impl BlockReader {
 
         let columns = self.projection.project_column_leaves(&self.column_leaves)?;
         let indices = Self::build_projection_indices(&columns);
-        for index in indices {
+        for (index, _) in indices {
             let column_meta = &meta.col_metas[&(index as u32)];
             let column_reader = self.operator.object(&meta.location.0);
             let fut = async move {
@@ -167,7 +171,7 @@ impl BlockReader {
 
             columns_meta.insert(
                 index,
-                ColumnMeta::create(column_meta.offset, column_meta.len, column_meta.num_values),
+                ColumnMeta::new(column_meta.offset, column_meta.len, column_meta.num_values),
             );
         }
 
@@ -223,12 +227,12 @@ impl BlockReader {
 
         let columns = self.projection.project_column_leaves(&self.column_leaves)?;
         let indices = Self::build_projection_indices(&columns);
-        for index in indices {
+        for (index, _) in indices {
             let column_meta = &part.columns_meta[&index];
             let column_reader = self.operator.object(&part.location);
             let fut = async move {
                 let (idx, column_chunk) =
-                    Self::read_column(column_reader, index, column_meta.offset, column_meta.length)
+                    Self::read_column(column_reader, index, column_meta.offset, column_meta.len)
                         .await?;
                 Ok::<_, ErrorCode>((idx, column_chunk))
             }
@@ -276,6 +280,24 @@ impl BlockReader {
         }
 
         Ok((num_rows, columns_array_iter))
+    }
+
+    pub fn build_block(&self, chunks: Vec<(usize, Box<dyn Array>)>) -> Result<DataBlock> {
+        let mut results = Vec::with_capacity(chunks.len());
+        let mut chunk_map: HashMap<usize, Box<dyn Array>> = chunks.into_iter().collect();
+        let columns = self.projection.project_column_leaves(&self.column_leaves)?;
+        for column in &columns {
+            let indices = &column.leaf_ids;
+
+            for index in indices {
+                if let Some(array) = chunk_map.remove(index) {
+                    results.push(array);
+                    break;
+                }
+            }
+        }
+        let chunk = Chunk::new(results);
+        DataBlock::from_chunk(&self.schema(), &chunk)
     }
 
     pub fn deserialize(
@@ -331,13 +353,13 @@ impl BlockReader {
         let indices = Self::build_projection_indices(&columns);
         let mut join_handlers = Vec::with_capacity(indices.len());
 
-        for index in indices {
+        for (index, _) in indices {
             let column_meta = &part.columns_meta[&index];
             join_handlers.push(UnlimitedFuture::create(Self::read_column(
                 self.operator.object(&part.location),
                 index,
                 column_meta.offset,
-                column_meta.length,
+                column_meta.len,
             )));
         }
 
@@ -355,14 +377,14 @@ impl BlockReader {
         let indices = Self::build_projection_indices(&columns);
         let mut results = Vec::with_capacity(indices.len());
 
-        for index in indices {
+        for (index, _) in indices {
             let column_meta = &part.columns_meta[&index];
 
             let op = self.operator.clone();
 
             let location = part.location.clone();
             let offset = column_meta.offset;
-            let length = column_meta.length;
+            let length = column_meta.len;
 
             let result = Self::sync_read_column(op.object(&location), index, offset, length);
             results.push(result?);
@@ -438,11 +460,11 @@ impl BlockReader {
     }
 
     // Build non duplicate leaf_ids to avoid repeated read column from parquet
-    fn build_projection_indices(columns: &Vec<&ColumnLeaf>) -> HashSet<usize> {
-        let mut indices = HashSet::with_capacity(columns.len());
+    fn build_projection_indices(columns: &Vec<&ColumnLeaf>) -> HashMap<usize, Field> {
+        let mut indices = HashMap::with_capacity(columns.len());
         for column in columns {
             for index in &column.leaf_ids {
-                indices.insert(*index);
+                indices.insert(*index, column.field.clone());
             }
         }
         indices
@@ -462,5 +484,97 @@ impl BlockReader {
             }
         }
         cnt_map
+    }
+}
+
+// Native storage format
+
+pub type Reader = Box<dyn PaReadBuf + Send + Sync>;
+
+impl BlockReader {
+    pub async fn async_read_native_columns_data(
+        &self,
+        part: PartInfoPtr,
+    ) -> Result<Vec<(usize, PaReader<Reader>)>> {
+        let part = FusePartInfo::from_part(&part)?;
+        let columns = self.projection.project_column_leaves(&self.column_leaves)?;
+        let indices = Self::build_projection_indices(&columns);
+        let mut join_handlers = Vec::with_capacity(indices.len());
+
+        for (index, field) in indices {
+            let column_meta = &part.columns_meta[&index];
+            join_handlers.push(Self::read_native_columns_data(
+                self.operator.object(&part.location),
+                index,
+                column_meta.offset,
+                column_meta.len,
+                column_meta.num_values,
+                field.data_type().clone(),
+            ));
+        }
+
+        futures::future::try_join_all(join_handlers).await
+    }
+
+    pub async fn read_native_columns_data(
+        o: Object,
+        index: usize,
+        offset: u64,
+        length: u64,
+        rows: u64,
+        data_type: common_arrow::arrow::datatypes::DataType,
+    ) -> Result<(usize, PaReader<Reader>)> {
+        let reader = o.range_read(offset..offset + length).await?;
+        let reader: Reader = Box::new(std::io::Cursor::new(reader));
+        let fuse_reader = PaReader::new(reader, data_type, rows as usize, vec![]);
+        Ok((index, fuse_reader))
+    }
+
+    pub fn sync_read_native_columns_data(
+        &self,
+        part: PartInfoPtr,
+    ) -> Result<Vec<(usize, PaReader<Reader>)>> {
+        let part = FusePartInfo::from_part(&part)?;
+
+        let columns = self.projection.project_column_leaves(&self.column_leaves)?;
+        let indices = Self::build_projection_indices(&columns);
+        let mut results = Vec::with_capacity(indices.len());
+
+        for (index, field) in indices {
+            let column_meta = &part.columns_meta[&index];
+
+            let op = self.operator.clone();
+
+            let location = part.location.clone();
+            let offset = column_meta.offset;
+            let length = column_meta.len;
+
+            let result = Self::sync_read_native_column(
+                op.object(&location),
+                index,
+                offset,
+                length,
+                column_meta.num_values,
+                field.data_type().clone(),
+            );
+
+            results.push(result?);
+        }
+
+        Ok(results)
+    }
+
+    pub fn sync_read_native_column(
+        o: Object,
+        index: usize,
+        offset: u64,
+        length: u64,
+        rows: u64,
+        data_type: common_arrow::arrow::datatypes::DataType,
+    ) -> Result<(usize, PaReader<Reader>)> {
+        let reader = o.blocking_range_reader(offset..offset + length)?;
+        let reader: Reader = Box::new(BufReader::new(reader));
+        let fuse_reader = PaReader::new(reader, data_type, rows as usize, vec![]);
+        Ok((index, fuse_reader))
     }
 }

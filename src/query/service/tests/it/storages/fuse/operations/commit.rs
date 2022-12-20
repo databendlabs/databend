@@ -27,7 +27,6 @@ use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::Partitions;
 use common_catalog::table::Table;
 use common_catalog::table_context::ProcessInfo;
-use common_catalog::table_context::StageAttachment;
 use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
@@ -452,10 +451,6 @@ impl TableContext for CtxDelegation {
     }
 
     fn get_processes_info(&self) -> Vec<ProcessInfo> {
-        todo!()
-    }
-
-    fn get_stage_attachment(&self) -> Option<StageAttachment> {
         todo!()
     }
 }

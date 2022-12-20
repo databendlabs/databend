@@ -16,7 +16,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_ast::ast::ExplainKind;
-use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -35,6 +34,7 @@ use crate::plans::Plan;
 use crate::BindContext;
 use crate::IndexType;
 use crate::MetadataRef;
+use crate::PlannerContext;
 
 #[derive(Debug, Clone, Default)]
 pub struct OptimizerConfig {
@@ -53,7 +53,7 @@ impl OptimizerContext {
 }
 
 pub fn optimize(
-    ctx: Arc<dyn TableContext>,
+    ctx: Arc<dyn PlannerContext>,
     opt_ctx: Arc<OptimizerContext>,
     plan: Plan,
 ) -> Result<Plan> {
@@ -135,7 +135,7 @@ pub fn optimize(
 }
 
 pub fn optimize_query(
-    ctx: Arc<dyn TableContext>,
+    ctx: Arc<dyn PlannerContext>,
     opt_ctx: Arc<OptimizerContext>,
     metadata: MetadataRef,
     bind_context: Box<BindContext>,
@@ -164,7 +164,7 @@ pub fn optimize_query(
 
 // TODO(leiysky): reuse the optimization logic with `optimize_query`
 fn get_optimized_memo(
-    ctx: Arc<dyn TableContext>,
+    ctx: Arc<dyn PlannerContext>,
     s_expr: SExpr,
     metadata: MetadataRef,
     bind_context: Box<BindContext>,

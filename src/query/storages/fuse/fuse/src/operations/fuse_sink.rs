@@ -18,11 +18,9 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use common_arrow::parquet::compression::CompressionOptions;
-use common_arrow::parquet::metadata::ThriftFileMetaData;
 use common_cache::Cache;
 use common_catalog::table_context::TableContext;
-use common_datablocks::serialize_data_blocks;
-use common_datablocks::serialize_data_blocks_with_compression;
+use common_datablocks::serialize_to_parquet_with_compression;
 use common_datablocks::BlockCompactThresholds;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
@@ -30,12 +28,15 @@ use common_exception::Result;
 use common_pipeline_core::processors::port::OutputPort;
 use common_storages_index::*;
 use common_storages_table_meta::caches::CacheManager;
+use common_storages_table_meta::meta::ColumnId;
+use common_storages_table_meta::meta::ColumnMeta;
 use common_storages_table_meta::meta::Location;
 use common_storages_table_meta::meta::SegmentInfo;
 use common_storages_table_meta::meta::Statistics;
 use opendal::Operator;
 
 use super::AppendOperationLogEntry;
+use crate::fuse_table::FuseStorageFormat;
 use crate::io;
 use crate::io::TableMetaLocationGenerator;
 use crate::pipelines::processors::port::InputPort;
@@ -62,7 +63,7 @@ impl BloomIndexState {
         let index_block = bloom_index.filter_block;
         let mut data = Vec::with_capacity(100 * 1024);
         let index_block_schema = &bloom_index.filter_schema;
-        let (size, _) = serialize_data_blocks_with_compression(
+        let (size, _) = serialize_to_parquet_with_compression(
             vec![index_block],
             index_block_schema,
             &mut data,
@@ -85,7 +86,7 @@ enum State {
     Serialized {
         data: Vec<u8>,
         size: u64,
-        meta_data: Box<ThriftFileMetaData>,
+        meta_data: HashMap<ColumnId, ColumnMeta>,
         block_statistics: BlockStatistics,
         bloom_index_state: BloomIndexState,
     },
@@ -112,6 +113,7 @@ pub struct FuseTableSink {
     accumulator: StatisticsAccumulator,
     cluster_stats_gen: ClusterStatsGenerator,
 
+    storage_format: FuseStorageFormat,
     // A dummy output port for distributed insert select to connect Exchange Sink.
     output: Option<Arc<OutputPort>>,
 }
@@ -126,6 +128,7 @@ impl FuseTableSink {
         meta_locations: TableMetaLocationGenerator,
         cluster_stats_gen: ClusterStatsGenerator,
         thresholds: BlockCompactThresholds,
+        storage_format: FuseStorageFormat,
         output: Option<Arc<OutputPort>>,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(FuseTableSink {
@@ -137,6 +140,7 @@ impl FuseTableSink {
             accumulator: StatisticsAccumulator::new(thresholds),
             num_block_threshold: num_block_threshold as u64,
             cluster_stats_gen,
+            storage_format,
             output,
         })))
     }
@@ -208,14 +212,13 @@ impl Processor for FuseTableSink {
                 )?;
                 // we need a configuration of block size threshold here
                 let mut data = Vec::with_capacity(100 * 1024 * 1024);
-                let schema = block.schema().clone();
-                let (size, meta_data) = serialize_data_blocks(vec![block], &schema, &mut data)?;
+                let (size, meta_data) = io::write_block(self.storage_format, block, &mut data)?;
 
                 self.state = State::Serialized {
                     data,
                     size,
                     block_statistics,
-                    meta_data: Box::new(meta_data),
+                    meta_data,
                     bloom_index_state,
                 };
             }
@@ -286,7 +289,7 @@ impl Processor for FuseTableSink {
                 let bloom_filter_index_size = bloom_index_state.size;
                 self.accumulator.add_block(
                     size,
-                    *meta_data,
+                    meta_data,
                     block_statistics,
                     Some(bloom_index_state.location),
                     bloom_filter_index_size,

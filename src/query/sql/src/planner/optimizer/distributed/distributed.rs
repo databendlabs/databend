@@ -15,7 +15,6 @@
 use std::cmp;
 use std::sync::Arc;
 
-use common_catalog::table_context::TableContext;
 use common_exception::Result;
 
 use crate::optimizer::distributed::topk::TopK;
@@ -27,8 +26,9 @@ use crate::optimizer::SExpr;
 use crate::plans::Exchange;
 use crate::plans::Limit;
 use crate::plans::RelOperator;
+use crate::PlannerContext;
 
-pub fn optimize_distributed_query(ctx: Arc<dyn TableContext>, s_expr: &SExpr) -> Result<SExpr> {
+pub fn optimize_distributed_query(ctx: Arc<dyn PlannerContext>, s_expr: &SExpr) -> Result<SExpr> {
     let required = RequiredProperty {
         distribution: Distribution::Any,
     };
