@@ -67,3 +67,105 @@ where
         self.map.remove(key);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::rangemap::RangeMap;
+    use crate::rangemap::RangeMapKey;
+
+    //
+    #[test]
+    fn test_range_set() {
+        // test get_by_point for i32
+        {
+            let mut a = RangeMap::new();
+
+            let r11 = (&RangeMapKey::new(1..1, 11), &11);
+            let r15 = (&RangeMapKey::new(1..5, 15), &15);
+            let r24 = (&RangeMapKey::new(2..4, 24), &24);
+            let r26 = (&RangeMapKey::new(2..6, 26), &26);
+
+            a.insert(1..1, 11, 11);
+            a.insert(1..5, 15, 15);
+            a.insert(2..4, 24, 24);
+            a.insert(2..6, 26, 26);
+
+            assert_eq!(a.get_by_point(&1), vec![r11, r15]);
+            assert_eq!(a.get_by_point(&2), vec![r24, r15, r26]);
+            assert_eq!(a.get_by_point(&5), vec![r26]);
+
+            a.remove(1..5, 15);
+            assert_eq!(a.get_by_point(&1), vec![r11]);
+            assert_eq!(a.get_by_point(&2), vec![r24, r26]);
+        }
+        // test get_by_point for String
+        {
+            let mut a = RangeMap::new();
+
+            let a1 = "1".to_string();
+            let a2 = "2".to_string();
+            let a4 = "4".to_string();
+            let a5 = "5".to_string();
+            let a6 = "6".to_string();
+
+            let r11 = (&RangeMapKey::new(a1.clone()..a1.clone(), 11), &11);
+            let r15 = (&RangeMapKey::new(a1.clone()..a5.clone(), 15), &15);
+            let r24 = (&RangeMapKey::new(a2.clone()..a4.clone(), 24), &24);
+            let r26 = (&RangeMapKey::new(a2.clone()..a6.clone(), 26), &26);
+
+            a.insert(a1.clone()..a1.clone(), 11, 11);
+            a.insert(a1.clone()..a5.clone(), 15, 15);
+            a.insert(a2.clone()..a4, 24, 24);
+            a.insert(a2.clone()..a6, 26, 26);
+
+            assert_eq!(a.get_by_point(&a1), vec![r11, r15]);
+            assert_eq!(a.get_by_point(&a2), vec![r24, r15, r26]);
+            assert_eq!(a.get_by_point(&a5), vec![r26]);
+
+            a.remove(a1.clone()..a5, 15);
+            assert_eq!(a.get_by_point(&a1), vec![r11]);
+            assert_eq!(a.get_by_point(&a2), vec![r24, r26]);
+        }
+        // test get_by_point for string prefix
+        {
+            let mut a = RangeMap::new();
+
+            let a1 = "11".to_string();
+            let a2 = "12".to_string();
+
+            a.insert(a1..a2, 11, 11);
+            assert!(!a.get_by_point(&"11".to_string()).is_empty());
+            assert!(!a.get_by_point(&"111".to_string()).is_empty());
+            assert!(!a.get_by_point(&"11z".to_string()).is_empty());
+            assert!(!a.get_by_point(&"11/".to_string()).is_empty());
+            assert!(!a.get_by_point(&"11*".to_string()).is_empty());
+            assert!(a.get_by_point(&"12".to_string()).is_empty());
+        }
+        // test get_by_point for char upbound limit string prefix
+        {
+            let mut a = RangeMap::new();
+
+            let a1 = format!("{}", 255 as char);
+            let a2 = format!("{}{}", 255 as char, 255 as char);
+
+            a.insert(a1..a2, 11, 11);
+            assert!(!a.get_by_point(&format!("{}", 255 as char)).is_empty());
+            assert!(!a.get_by_point(&format!("{}z", 255 as char)).is_empty());
+            assert!(!a.get_by_point(&format!("{}/", 255 as char)).is_empty());
+            assert!(!a.get_by_point(&format!("{}*", 255 as char)).is_empty());
+        }
+        // test get_by_point for char upbound limit string prefix
+        {
+            let mut a = RangeMap::new();
+
+            let a1 = "1".to_string();
+            let a2 = format!("{}{}", a1, 255 as char);
+
+            a.insert(a1.clone()..a2, 11, 11);
+            assert!(!a.get_by_point(&a1).is_empty());
+            assert!(!a.get_by_point(&format!("{}z", a1)).is_empty());
+            assert!(!a.get_by_point(&format!("{}*", a1)).is_empty());
+            assert!(!a.get_by_point(&format!("{}/", a1)).is_empty());
+        }
+    }
+}
