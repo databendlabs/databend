@@ -20,14 +20,14 @@ use std::collections::BTreeMap;
 use super::range_map_key::RangeMapKey;
 
 #[derive(Clone, Debug, Default)]
-pub struct RangeMap<T, K, V> {
-    pub(crate) map: BTreeMap<RangeMapKey<T, K>, V>,
+pub struct RangeMap<RV, ID, V> {
+    pub(crate) map: BTreeMap<RangeMapKey<RV, ID>, V>,
 }
 
-impl<T, K, V> RangeMap<T, K, V>
+impl<RV, ID, V> RangeMap<RV, ID, V>
 where
-    T: Ord + Clone + Debug,
-    K: Ord + Clone + Debug + Default,
+    RV: Ord + Clone + Debug,
+    ID: Ord + Clone + Debug + Default,
 {
     pub fn new() -> Self {
         RangeMap {
@@ -35,10 +35,10 @@ where
         }
     }
 
-    pub fn insert(&mut self, range: Range<T>, key: K, val: V) {
+    pub fn insert(&mut self, range: Range<RV>, id: ID, val: V) {
         assert!(range.start <= range.end);
 
-        let range_key: RangeMapKey<T, K> = RangeMapKey::new(range, key);
+        let range_key: RangeMapKey<RV, ID> = RangeMapKey::new(range, id);
 
         self.map.insert(range_key, val);
     }
@@ -49,9 +49,9 @@ where
     // 2. `get_by_point(2)` return [1,5],[2,4],[2,6]
     // 3. `get_by_point(5)` return [2,4],[2,6]
     // Use the default key when construct `RangeKey::key` for search.
-    pub fn get_by_point(&self, point: &T) -> Vec<(&RangeMapKey<T, K>, &V)> {
+    pub fn get_by_point(&self, point: &RV) -> Vec<(&RangeMapKey<RV, ID>, &V)> {
         let key = point.clone();
-        let range_key = RangeMapKey::new(key.clone()..key.clone(), K::default());
+        let range_key = RangeMapKey::new(key.clone()..key.clone(), ID::default());
 
         self.map
             .range((Bound::Included(range_key), Bound::Unbounded))
@@ -59,12 +59,29 @@ where
             .collect()
     }
 
-    pub fn remove(&mut self, range: Range<T>, k: K) {
-        self.map.remove(&RangeMapKey::new(range, k));
+    pub fn remove(&mut self, range: Range<RV>, id: ID) {
+        self.map.remove(&RangeMapKey::new(range, id));
     }
 
-    pub fn remove_by_key(&mut self, key: &RangeMapKey<T, K>) {
+    pub fn remove_by_key(&mut self, key: &RangeMapKey<RV, ID>) {
         self.map.remove(key);
+    }
+
+    /// Returns an iterator of all keys.
+    ///
+    /// A RangeMapKey includes the range and the identity.
+    pub fn keys(&self) -> impl Iterator<Item = &RangeMapKey<RV, ID>> {
+        self.map.keys()
+    }
+
+    /// Returns an iterator of all values.
+    pub fn values(&self) -> impl Iterator<Item = &V> {
+        self.map.values()
+    }
+
+    /// Returns an iterator of all key-values.
+    pub fn iter(&self) -> impl Iterator<Item = (&RangeMapKey<RV, ID>, &V)> {
+        self.map.iter()
     }
 }
 
@@ -73,7 +90,6 @@ mod tests {
     use crate::rangemap::RangeMap;
     use crate::rangemap::RangeMapKey;
 
-    //
     #[test]
     fn test_range_set() {
         // test get_by_point for i32
@@ -166,6 +182,42 @@ mod tests {
             assert!(!a.get_by_point(&format!("{}z", a1)).is_empty());
             assert!(!a.get_by_point(&format!("{}*", a1)).is_empty());
             assert!(!a.get_by_point(&format!("{}/", a1)).is_empty());
+        }
+    }
+
+    #[test]
+    fn test_range_iter() {
+        let mut a = RangeMap::new();
+
+        a.insert(1..1, 11, 11);
+        a.insert(1..5, 15, 15);
+        a.insert(2..4, 24, 24);
+        a.insert(2..6, 26, 26);
+
+        let r1 = RangeMapKey::new(1..1, 11);
+        let r2 = RangeMapKey::new(2..4, 24);
+        let r3 = RangeMapKey::new(1..5, 15);
+        let r4 = RangeMapKey::new(2..6, 26);
+
+        // keys()
+        {
+            let got = a.keys().collect::<Vec<_>>();
+            let want = vec![&r1, &r2, &r3, &r4];
+            assert_eq!(want, got);
+        }
+
+        // values()
+        {
+            let got = a.values().collect::<Vec<_>>();
+            let want = vec![&11, &24, &15, &26];
+            assert_eq!(want, got);
+        }
+
+        // iter()
+        {
+            let got = a.iter().collect::<Vec<_>>();
+            let want = vec![(&r1, &11), (&r2, &24), (&r3, &15), (&r4, &26)];
+            assert_eq!(want, got);
         }
     }
 }

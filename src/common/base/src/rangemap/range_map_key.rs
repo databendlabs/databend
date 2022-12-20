@@ -18,41 +18,41 @@ use std::fmt::Debug;
 
 /// `RangeMapKey` is a wrapper of `range` and `user defined key`
 #[derive(Eq, Debug, Clone, PartialEq)]
-pub struct RangeMapKey<T, K> {
+pub struct RangeMapKey<RV, ID> {
     // range
-    pub range: Range<T>,
+    pub range: Range<RV>,
     // user defined key
-    pub key: K,
+    pub key: ID,
 }
 
-impl<T, K> RangeMapKey<T, K>
+impl<RV, ID> RangeMapKey<RV, ID>
 where
-    T: Eq + Ord,
-    K: Eq + Ord + Default,
+    RV: Eq + Ord,
+    ID: Eq + Ord + Default,
 {
-    pub fn new(range: Range<T>, key: K) -> RangeMapKey<T, K> {
+    pub fn new(range: Range<RV>, key: ID) -> RangeMapKey<RV, ID> {
         RangeMapKey { range, key }
     }
 }
 
-impl<T, K> ToString for RangeMapKey<T, K>
+impl<RV, ID> ToString for RangeMapKey<RV, ID>
 where
-    T: Debug,
-    K: Debug,
+    RV: Debug,
+    ID: Debug,
 {
     fn to_string(&self) -> String {
         format!("{:?}-{:?}-{:?}", self.range.start, self.range.end, self.key)
     }
 }
 
-impl<T, K> Ord for RangeMapKey<T, K>
+impl<RV, ID> Ord for RangeMapKey<RV, ID>
 where
-    T: Ord + Debug + Clone,
-    K: Ord + Debug + Clone,
+    RV: Ord + Debug + Clone,
+    ID: Ord + Debug + Clone,
 {
     /// the compare weight is: range.end > range.start > key
     /// example: ((2,3),5) < ((5,1),3) since 2 < 5
-    fn cmp(&self, other: &RangeMapKey<T, K>) -> Ordering {
+    fn cmp(&self, other: &RangeMapKey<RV, ID>) -> Ordering {
         let ret = self.range.end.cmp(&other.range.end);
         if !ret.is_eq() {
             return ret;
@@ -65,12 +65,12 @@ where
     }
 }
 
-impl<T, K> PartialOrd for RangeMapKey<T, K>
+impl<RV, ID> PartialOrd for RangeMapKey<RV, ID>
 where
-    T: Ord + Debug + Clone,
-    K: Ord + Debug + Clone,
+    RV: Ord + Debug + Clone,
+    ID: Ord + Debug + Clone,
 {
-    fn partial_cmp(&self, other: &RangeMapKey<T, K>) -> Option<Ordering> {
+    fn partial_cmp(&self, other: &RangeMapKey<RV, ID>) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
