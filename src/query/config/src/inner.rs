@@ -174,6 +174,7 @@ pub struct QueryConfig {
     pub share_endpoint_address: String,
     pub share_endpoint_auth_token_file: String,
     pub tenant_quota: Option<TenantQuota>,
+    pub internal_enable_sandbox_tenant: bool,
 }
 
 impl Default for QueryConfig {
@@ -227,6 +228,7 @@ impl Default for QueryConfig {
             share_endpoint_address: "".to_string(),
             share_endpoint_auth_token_file: "".to_string(),
             tenant_quota: None,
+            internal_enable_sandbox_tenant: false,
         }
     }
 }
