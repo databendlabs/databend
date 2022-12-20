@@ -74,9 +74,8 @@ impl Thread {
             Some(memory_tracker) => thread_builder
                 .spawn(move || {
                     let c = MemStat::create_child(Some(memory_tracker));
-                    let mut tracker = ThreadTracker::create(Some(c));
-
-                    ThreadTracker::swap_with(&mut tracker);
+                    let s = ThreadTracker::replace_mem_stat(Some(c));
+                    debug_assert!(s.is_none(), "a new thread must have no tracker");
 
                     f()
                 })

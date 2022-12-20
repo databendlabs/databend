@@ -16,7 +16,6 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
-use common_base::runtime::ThreadTracker;
 use common_base::runtime::TrackedFuture;
 use common_base::runtime::TrySpawn;
 use common_exception::ErrorCode;
@@ -100,17 +99,16 @@ impl ExecutorWorkerContext {
         let workers_condvar = self.get_workers_condvar().clone();
         let tasks_queue = executor.global_tasks_queue.clone();
 
-        executor.async_runtime.spawn(TrackedFuture::create(
-            ThreadTracker::fork(),
-            ProcessorAsyncTask::create(
+        executor
+            .async_runtime
+            .spawn(TrackedFuture::create(ProcessorAsyncTask::create(
                 self.query_id.clone(),
                 worker_id,
                 processor.clone(),
                 tasks_queue,
                 workers_condvar,
                 processor.async_process(),
-            ),
-        ));
+            )));
 
         Ok(None)
     }
