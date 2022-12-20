@@ -122,7 +122,6 @@ impl OptimizeTablePlan {
 pub enum OptimizeTableAction {
     All,
     Purge(Option<NavigationPoint>),
-    Statistic,
     CompactBlocks(Option<usize>),
     CompactSegments(Option<usize>),
 }
