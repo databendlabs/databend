@@ -16,6 +16,7 @@ use core::ops::Range;
 use common_base::base::tokio;
 use common_base::base::tokio::sync::mpsc;
 use common_base::base::tokio::sync::mpsc::Sender;
+use common_base::base::tokio::sync::oneshot;
 use common_base::rangemap::RangeMap;
 use common_base::rangemap::RangeMapKey;
 use common_meta_raft_store::state_machine::StateMachineSubscriber;
@@ -43,14 +44,53 @@ pub type WatcherSender = Sender<Result<WatchResponse, Status>>;
 #[derive(Clone, Debug)]
 pub(crate) struct DispatcherSender(pub(crate) mpsc::UnboundedSender<WatchEvent>);
 
-#[derive(Clone)]
-pub enum WatchEvent {
+pub(crate) enum WatchEvent {
+    /// Inform the dispatcher to add a new watcher.
     AddWatcher((WatchRequest, WatcherSender)),
+
+    /// Submit a kv change event to dispatcher
     KVChange(Change<Vec<u8>, String>),
+
+    /// Send a request to EventDispatcher.
+    ///
+    /// The function will be called with a mutable reference to the dispatcher.
+    Request {
+        req: Box<dyn FnOnce(&mut EventDispatcher) + Send + 'static>,
+    },
+}
+
+pub struct EventDispatcherHandle {
+    /// For sending event or command to the dispatcher.
+    pub(crate) tx: mpsc::UnboundedSender<WatchEvent>,
+}
+
+impl EventDispatcherHandle {
+    pub(crate) fn new(tx: mpsc::UnboundedSender<WatchEvent>) -> Self {
+        Self { tx }
+    }
+
+    /// Send a request to the watch dispatcher.
+    pub fn request(&self, req: impl FnOnce(&mut EventDispatcher) + Send + 'static) {
+        let _ = self.tx.send(WatchEvent::Request { req: Box::new(req) });
+    }
+
+    /// Send a request to the watch dispatcher and block until finished
+    pub async fn request_blocking(&self, req: impl FnOnce(&mut EventDispatcher) + Send + 'static) {
+        let (tx, rx) = oneshot::channel();
+
+        let _ = self.tx.send(WatchEvent::Request {
+            req: Box::new(|dispatcher| {
+                req(dispatcher);
+                let _ = tx.send(());
+            }),
+        });
+
+        let _ = rx.await;
+    }
 }
 
 /// Receives events from event sources, dispatches them to interested watchers.
-pub(crate) struct EventDispatcher {
+pub struct EventDispatcher {
     event_rx: mpsc::UnboundedReceiver<WatchEvent>,
 
     /// map range to WatcherId
@@ -86,19 +126,13 @@ impl EventDispatcher {
                     WatchEvent::KVChange(kv_change) => {
                         self.dispatch_event(kv_change).await;
                     }
+                    WatchEvent::Request { req } => req(&mut self),
                 }
             } else {
                 info!("all event senders are closed. quit.");
                 break;
             }
         }
-    }
-
-    #[tracing::instrument(level = "debug", skip(self))]
-    fn close_stream(&mut self, key: RangeMapKey<String, WatcherId>) {
-        self.watcher_range_map.remove_by_key(&key);
-
-        server_metrics::incr_watchers(-1);
     }
 
     /// Dispatch a kv change event to interested watchers.
@@ -116,7 +150,7 @@ impl EventDispatcher {
         let mut remove_range_keys: Vec<RangeMapKey<String, WatcherId>> = vec![];
 
         for range_key_stream in set.iter() {
-            let filter = range_key_stream.1.filter_type;
+            let filter = range_key_stream.1.watcher.filter_type;
 
             // filter out event
             if (filter == FilterType::Delete && !is_delete_event)
@@ -127,7 +161,7 @@ impl EventDispatcher {
 
             let watcher_id = range_key_stream.0.key;
             let stream = range_key_stream.1;
-            assert_eq!(stream.id, watcher_id);
+            assert_eq!(stream.watcher.id, watcher_id);
             let resp = WatchResponse {
                 event: Some(Event {
                     key: k.to_string(),
@@ -144,7 +178,7 @@ impl EventDispatcher {
                     watcher_id, err
                 );
                 remove_range_keys.push(RangeMapKey::new(
-                    stream.key.clone()..stream.key_end.clone(),
+                    stream.watcher.key.clone()..stream.watcher.key_end.clone(),
                     watcher_id,
                 ));
             };
@@ -152,7 +186,7 @@ impl EventDispatcher {
 
         // TODO: when a watcher stream is dropped, send a event to remove the watcher explicitly
         for range_key in remove_range_keys {
-            self.close_stream(range_key);
+            self.remove_watcher(range_key);
         }
     }
 
@@ -183,6 +217,13 @@ impl EventDispatcher {
         server_metrics::incr_watchers(1);
     }
 
+    #[tracing::instrument(level = "debug", skip(self))]
+    fn remove_watcher(&mut self, key: RangeMapKey<String, WatcherId>) {
+        self.watcher_range_map.remove_by_key(&key);
+
+        server_metrics::incr_watchers(-1);
+    }
+
     fn get_range_key(key: String, key_end: &Option<String>) -> Result<Range<String>, bool> {
         match key_end {
             Some(key_end) => {
@@ -193,6 +234,10 @@ impl EventDispatcher {
             }
             None => Ok(key.clone()..key),
         }
+    }
+
+    pub fn watchers(&self) -> impl Iterator<Item = &RangeMapKey<String, WatcherId>> {
+        self.watcher_range_map.keys()
     }
 }
 
