@@ -5,7 +5,7 @@ title: Input File Formats
 Databend accepts a variety of file formats as a source where you can load data from with the [COPY INTO command](../14-sql-commands/10-dml/dml-copy-into-table.md) or [Streaming Load API](../11-integrations/00-api/03-streaming-load.md). When you select a file to do that, you need to tell Databend what the file looks like using the following format:
 
 ```sql
-FILE_FORMAT = ( TYPE = { CSV | TSV | NDJSON | PARQUET | XML} [ formatTypeOptions ] )
+FILE_FORMAT = ( TYPE = { CSV | TSV | NDJSON | PARQUET | XML } [ formatTypeOptions ] )
 ```
 
 `Type`: Specifies the file format. Must be one of the ones listed above that Databend supports.
