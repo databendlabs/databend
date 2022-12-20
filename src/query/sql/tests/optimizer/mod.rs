@@ -12,19 +12,4 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
-
-use crate::optimizer::property::histogram::Histogram;
-use crate::IndexType;
-
-pub type ColumnStatSet = HashMap<IndexType, ColumnStat>;
-
-#[derive(Debug, Clone)]
-/// Statistics information of a column
-pub struct ColumnStat {
-    /// Count of null values
-    pub null_count: u64,
-
-    /// Histogram of column
-    pub histogram: Option<Histogram>,
-}
+mod histogram;
