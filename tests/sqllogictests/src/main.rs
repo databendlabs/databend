@@ -33,7 +33,7 @@ mod client;
 mod error;
 mod util;
 
-const TEST_SUITS: &str = "tests/logictest/suites";
+const TEST_SUITS: &str = "tests/sqllogictests/suites";
 
 pub struct Databend {
     mysql_client: Option<MysqlClient>,
