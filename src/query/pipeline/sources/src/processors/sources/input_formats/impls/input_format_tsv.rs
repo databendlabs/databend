@@ -175,6 +175,10 @@ impl InputFormatTextBase for InputFormatTSV {
     fn align(state: &mut AligningState<Self>, buf: &[u8]) -> Result<Vec<RowBatch>> {
         Ok(state.align_by_record_delimiter(buf))
     }
+
+    fn read_after_error() {
+        todo!()
+    }
 }
 
 pub fn format_column_error(

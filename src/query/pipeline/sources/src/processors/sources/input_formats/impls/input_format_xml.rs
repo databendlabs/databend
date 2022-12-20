@@ -248,6 +248,10 @@ impl InputFormatTextBase for InputFormatXML {
         }
         Ok(vec![output])
     }
+
+    fn read_after_error() {
+        todo!()
+    }
 }
 
 fn xml_error(msg: &str, path: &str, row: usize) -> ErrorCode {

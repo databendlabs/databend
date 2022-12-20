@@ -43,6 +43,8 @@ pub use variant::*;
 pub trait TypeDeserializer: Send + Sync {
     fn memory_size(&self) -> usize;
 
+    fn value_size(&self) -> usize;
+
     fn de_binary(&mut self, reader: &mut &[u8]) -> Result<()>;
 
     fn de_default(&mut self);

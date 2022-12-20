@@ -119,6 +119,10 @@ impl InputFormatTextBase for InputFormatNDJson {
     fn align(state: &mut AligningState<Self>, buf: &[u8]) -> Result<Vec<RowBatch>> {
         Ok(state.align_by_record_delimiter(buf))
     }
+
+    fn read_after_error() {
+        todo!()
+    }
 }
 
 fn maybe_truncated(s: &str, limit: usize) -> Cow<'_, str> {

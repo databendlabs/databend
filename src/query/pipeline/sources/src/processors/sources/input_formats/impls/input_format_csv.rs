@@ -28,6 +28,7 @@ use common_formats::FileFormatOptionsExt;
 use common_formats::RecordDelimiter;
 use common_io::cursor_ext::*;
 use common_io::format_diagnostic::verbose_char;
+use common_meta_types::OnErrorMode;
 use common_meta_types::StageFileFormatType;
 use csv_core::ReadRecordResult;
 
@@ -121,6 +122,7 @@ impl InputFormatTextBase for InputFormatCSV {
         let columns = &mut builder.mutable_columns;
         let n_column = columns.len();
         let mut start = 0usize;
+        let mut num_rows = 0usize;
         let start_row = batch.start_row.expect("must success");
         let mut field_end_idx = 0;
         let field_decoder = builder
@@ -130,7 +132,7 @@ impl InputFormatTextBase for InputFormatCSV {
             .expect("must success");
         for (i, end) in batch.row_ends.iter().enumerate() {
             let buf = &batch.data[start..*end];
-            Self::read_row(
+            if let Err(e) = Self::read_row(
                 field_decoder,
                 buf,
                 columns,
@@ -138,9 +140,24 @@ impl InputFormatTextBase for InputFormatCSV {
                 &batch.field_ends[field_end_idx..field_end_idx + n_column],
                 &batch.path,
                 start_row + i,
-            )?;
+            ) {
+                if Self::on_error_behavior() == OnErrorMode::Continue {
+                    columns.iter_mut().for_each(|c| {
+                        // check if parts of columns inserted data, if so, pop it.
+                        if c.value_size() > num_rows {
+                            c.pop_data_value().expect("must success");
+                        }
+                    });
+                    start = *end;
+                    field_end_idx += n_column;
+                    continue;
+                } else {
+                    return Err(e);
+                }
+            }
             start = *end;
             field_end_idx += n_column;
+            num_rows += 1;
         }
         Ok(())
     }
@@ -400,6 +417,14 @@ impl InputFormatTextBase for InputFormatCSV {
             ReadRecordResult::End => {}
         }
         Ok(res)
+    }
+
+    fn on_error_behavior() -> OnErrorMode {
+        OnErrorMode::Continue
+    }
+
+    fn read_after_error() {
+        todo!()
     }
 }
 

@@ -26,6 +26,10 @@ impl TypeDeserializer for StructDeserializer {
         self.builder.memory_size()
     }
 
+    fn value_size(&self) -> usize {
+        self.builder.len()
+    }
+
     #[allow(clippy::uninit_vec)]
     fn de_binary(&mut self, reader: &mut &[u8]) -> Result<()> {
         let mut values = Vec::with_capacity(self.inners.len());
