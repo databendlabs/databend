@@ -35,6 +35,7 @@ use common_exception::ErrorCode;
 use common_exception::Result as ExceptionResult;
 
 pub use self::column_from::*;
+use crate::TableSchema;
 use crate::types::AnyType;
 use crate::types::DataType;
 use crate::Chunk;
@@ -146,7 +147,7 @@ pub const fn concat_array<T, const A: usize, const B: usize>(a: &[T; A], b: &[T;
 
 pub fn serialize_to_parquet_with_compression(
     chunks: Vec<Chunk>,
-    schema: impl AsRef<DataSchema>,
+    schema: impl AsRef<TableSchema>,
     buf: &mut Vec<u8>,
     compression: CompressionOptions,
 ) -> ExceptionResult<(u64, ThriftFileMetaData)> {
@@ -195,7 +196,7 @@ pub fn serialize_to_parquet_with_compression(
 
 pub fn serialize_to_parquet(
     chunks: Vec<Chunk>,
-    schema: impl AsRef<DataSchema>,
+    schema: impl AsRef<TableSchema>,
     buf: &mut Vec<u8>,
 ) -> ExceptionResult<(u64, ThriftFileMetaData)> {
     serialize_to_parquet_with_compression(chunks, schema, buf, CompressionOptions::Lz4Raw)
