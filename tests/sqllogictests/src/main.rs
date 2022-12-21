@@ -33,8 +33,6 @@ mod client;
 mod error;
 mod util;
 
-const TEST_SUITS: &str = "tests/logictest/suites";
-
 pub struct Databend {
     mysql_client: Option<MysqlClient>,
     http_client: Option<HttpClient>,
@@ -125,7 +123,8 @@ pub async fn main() -> Result<()> {
 }
 
 async fn run_mysql_client() -> Result<()> {
-    let suits = std::fs::read_dir(TEST_SUITS).unwrap();
+    let suits = SqlLogicTestArgs::parse().suites;
+    let suits = std::fs::read_dir(suits).unwrap();
     let mysql_client = MysqlClient::create()?;
     let databend = Databend::create(Some(mysql_client), None, None);
     run_suits(suits, databend).await?;
@@ -133,7 +132,8 @@ async fn run_mysql_client() -> Result<()> {
 }
 
 async fn run_http_client() -> Result<()> {
-    let suits = std::fs::read_dir(TEST_SUITS).unwrap();
+    let suits = SqlLogicTestArgs::parse().suites;
+    let suits = std::fs::read_dir(suits).unwrap();
     let http_client = HttpClient::create()?;
     let databend = Databend::create(None, Some(http_client), None);
     run_suits(suits, databend).await?;
@@ -141,7 +141,8 @@ async fn run_http_client() -> Result<()> {
 }
 
 async fn run_ck_http_client() -> Result<()> {
-    let suits = std::fs::read_dir(TEST_SUITS).unwrap();
+    let suits = SqlLogicTestArgs::parse().suites;
+    let suits = std::fs::read_dir(suits).unwrap();
     let ck_client = ClickhouseHttpClient::create()?;
     let databend = Databend::create(None, None, Some(ck_client));
     run_suits(suits, databend).await?;
