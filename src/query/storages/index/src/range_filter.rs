@@ -33,6 +33,7 @@ use common_sql::evaluator::Evaluator;
 use common_sql::evaluator::ExpressionMonotonicityVisitor;
 use common_sql::executor::ExpressionOp;
 use common_storages_table_meta::meta::StatisticsOfColumns;
+use itertools::Itertools;
 
 #[derive(Clone)]
 pub struct RangeFilter {
@@ -175,10 +176,9 @@ fn inverse_operator(op: &str) -> Result<&str> {
         "<=" => Ok(">="),
         ">" => Ok("<"),
         ">=" => Ok("<="),
-        "like" | "not like" | "ilike" | "not ilike" => Err(ErrorCode::UnknownException(format!(
-            "cannot inverse the operator: {:?}",
-            op
-        ))),
+        "like" | "not like" | "ilike" | "not ilike" | "in" | "not in" => Err(
+            ErrorCode::UnknownException(format!("cannot inverse the operator: {:?}", op)),
+        ),
         _ => Ok(op),
     }
 }
@@ -626,6 +626,38 @@ impl<'a> VerifiableExprBuilder<'a> {
                 }
                 Err(ErrorCode::UnknownException(
                     "Cannot build atom expression by the operator: not like",
+                ))
+            }
+            "in" => {
+                if let Expression::Constant {
+                    value: DataValue::Struct(vals),
+                    data_type: DataTypeImpl::Struct(t),
+                } = &self.args[1]
+                {
+                    // max_left >= min_right and min_left <= max_right
+                    let types = t.types();
+                    let sorted = vals
+                        .iter()
+                        .zip(types.iter())
+                        .sorted_by_key(|&(val, _)| val)
+                        .collect::<Vec<_>>();
+                    let right_min = Expression::Constant {
+                        value: sorted[0].0.clone(),
+                        data_type: sorted[0].1.clone(),
+                    };
+                    let right_max = Expression::Constant {
+                        value: sorted.last().unwrap().0.clone(),
+                        data_type: sorted.last().unwrap().1.clone(),
+                    };
+
+                    let left_min = self.min_column_expr(0)?;
+                    let left_max = self.max_column_expr(0)?;
+                    return left_max
+                        .gt_eq(&right_min)?
+                        .and(&left_min.lt_eq(&right_max)?);
+                }
+                Err(ErrorCode::UnknownException(
+                    "Cannot build atom expression by the operator: in",
                 ))
             }
             other => Err(ErrorCode::UnknownException(format!(

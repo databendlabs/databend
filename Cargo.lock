@@ -2297,6 +2297,7 @@ dependencies = [
  "common-sql",
  "common-storages-table-meta",
  "criterion",
+ "itertools",
  "rand 0.8.5",
  "serde",
  "thiserror",
