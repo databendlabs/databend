@@ -318,9 +318,7 @@ impl InputFormatTextBase for InputFormatCSV {
                     reader.n_end = endlen;
                     Ok(vec![])
                 }
-                ReadRecordResult::OutputFull => {
-                    Err(output_full_error(&state.path, state.rows))
-                }
+                ReadRecordResult::OutputFull => Err(output_full_error(&state.path, state.rows)),
                 ReadRecordResult::OutputEndsFull => Err(output_ends_full_error(
                     num_fields,
                     field_ends.len(),
