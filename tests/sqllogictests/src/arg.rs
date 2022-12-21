@@ -50,4 +50,13 @@ pub struct SqlLogicTestArgs {
         help = "Choose handlers to run tests, support mysql, http, clickhouse handler, the arg is optional. If use multiple handlers, please use \',\' to split them"
     )]
     pub handlers: Option<Vec<String>>,
+
+    // Choose suits to run
+    #[arg(
+        short = 'u',
+        long = "suites",
+        help = "The tests to be run will come from under suits",
+        default_value = "tests/sqllogictests/suites"
+    )]
+    pub suites: String,
 }

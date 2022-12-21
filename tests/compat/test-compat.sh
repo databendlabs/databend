@@ -208,10 +208,8 @@ run_test() {
     echo " === Run metasrv related test: 05_ddl"
 
     if [ "$query_ver" = "current" ]; then
-        cd "$SCRIPT_PATH/../../tests/logictest" || exit
         # Only run test on mysql handler
-        python3 main.py "_ddl_" --handlers mysql
-        cd -
+        cargo run -p sqllogictests -- --handlers mysql --run_dir 05_ddl
     else
         (
             # download suites into ./old_suite

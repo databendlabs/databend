@@ -19,25 +19,15 @@ runs:
         sha: ${{ github.sha }}
         target: ${{ inputs.target }}
         path: ./bins/current
-
+    - name: Setup Build Tool
+      uses: ./.github/actions/setup_build_tool
+      with:
+        bypass_env_vars: RUSTFLAGS,RUSTDOCFLAGS,RUST_TEST_THREADS,RUST_LOG,RUST_BACKTRACE
     - name: Test compatibility
       shell: bash
       run: |
-        docker run --rm --tty --net=host \
-          --user $(id -u):$(id -g) \
-          --env BUILD_PROFILE \
-          --volume "${PWD}:/workspace" \
-          --workdir "/workspace" \
-          datafuselabs/build-tool:sqllogic \
           bash ./tests/fuse-compat/test-fuse-compat.sh 0.7.150
-        docker run --rm --tty --net=host \
-          --user $(id -u):$(id -g) \
-          --env BUILD_PROFILE \
-          --volume "${PWD}:/workspace" \
-          --workdir "/workspace" \
-          datafuselabs/build-tool:sqllogic \
           bash ./tests/fuse-compat/test-fuse-compat.sh 0.7.151
-
     - name: Upload failure
       if: failure()
       uses: ./.github/actions/artifact_failure
