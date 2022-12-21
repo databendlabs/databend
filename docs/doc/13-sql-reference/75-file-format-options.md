@@ -2,13 +2,17 @@
 title: Input & Output File Formats
 ---
 
-Databend accepts a variety of file formats as a source where you can load data from with the [COPY INTO command](../14-sql-commands/10-dml/dml-copy-into-table.md) or [Streaming Load API](../11-integrations/00-api/03-streaming-load.md). When you select a file to do that, you need to tell Databend what the file looks like using the following format:
+Databend accepts a variety of file formats both as a source and a target. For example, you can load data into Databend from a file with the [COPY INTO table command](../14-sql-commands/10-dml/dml-copy-into-table.md) or [Streaming Load API](../11-integrations/00-api/03-streaming-load.md), or you can unload from Databend into a file with the [COPY INTO location command](../14-sql-commands/10-dml/dml-copy-into-location.md). To do so, you need to tell Databend what the file looks like using the following format:
 
 ```sql
 FILE_FORMAT = ( TYPE = { CSV | TSV | NDJSON | PARQUET | XML } [ formatTypeOptions ] )
 ```
 
 `Type`: Specifies the file format. Must be one of the ones listed above that Databend supports.
+
+:::note
+Databend currently supports XML as a source ONLY. Unloading data into an XML file is not supported yet.
+:::
 
 `formatTypeOptions`: Includes one or more options to describe other format details about the file. The options vary depending on the file format. See the sections below to find out the available options for each supported file format.
 
@@ -66,6 +70,10 @@ Separates fields in a record.
 
 Quotes strings in a CSV file. For data loading, the quote is not necessary unless a string contains the character of a [QUOTE](#quote), [ESCAPE](#escape), [RECORD_DELIMITER](#record_delimiter), or [FIELD_DELIMITER](#field_delimiter).
 
+:::note
+**Used for data loading ONLY**: This option is not available when you unload data from Databend.
+:::
+
 **Available Values**: `\'` or `\"`.
 
 **Default**: `\"`
@@ -80,7 +88,11 @@ Escapes a quote in a quoted string.
 
 ### SKIP_HEADER
 
-Used for data loading only to specify how many lines to be skipped from the beginning of the file. 
+Specifies how many lines to be skipped from the beginning of the file.
+
+:::note
+**Used for data loading ONLY**: This option is not available when you unload data from Databend.
+:::
 
 **Default**: `0`
 
