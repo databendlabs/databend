@@ -111,6 +111,9 @@ impl Settings {
         if conf.query.num_cpus != 0 {
             num_physical_cpus = conf.query.num_cpus;
         }
+        if num_physical_cpus == 0 {
+            num_physical_cpus = 16;
+        }
 
         let mut default_max_memory_usage = 1024 * memory_info.total * 80 / 100;
         if conf.query.max_server_memory_usage != 0 {
