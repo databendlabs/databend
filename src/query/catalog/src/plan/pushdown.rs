@@ -16,6 +16,7 @@ use std::fmt::Debug;
 
 use common_expression::DataSchemaRef;
 use common_expression::RemoteExpr;
+use common_expression::TableSchema;
 use common_expression::TableSchemaRef;
 use common_meta_types::UserStageInfo;
 
