@@ -21,7 +21,6 @@ use std::time::Duration;
 
 use anyerror::AnyError;
 use common_base::base::tokio;
-use common_base::base::tokio::sync::mpsc;
 use common_base::base::tokio::sync::watch;
 use common_base::base::tokio::sync::watch::error::RecvError;
 use common_base::base::tokio::sync::Mutex;
@@ -86,6 +85,7 @@ use crate::store::RaftStore;
 use crate::store::RaftStoreBare;
 use crate::watcher::DispatcherSender;
 use crate::watcher::EventDispatcher;
+use crate::watcher::EventDispatcherHandle;
 use crate::watcher::WatchEvent;
 use crate::watcher::WatcherSender;
 use crate::Opened;
@@ -126,7 +126,7 @@ pub type MetaRaft = Raft<LogEntry, AppliedState, Network, RaftStore>;
 // MetaNode is the container of meta data related components and threads, such as storage, the raft node and a raft-state monitor.
 pub struct MetaNode {
     pub sto: Arc<RaftStore>,
-    pub dispatcher_tx: mpsc::UnboundedSender<WatchEvent>,
+    pub dispatcher_handle: EventDispatcherHandle,
     pub raft: MetaRaft,
     pub running_tx: watch::Sender<()>,
     pub running_rx: watch::Receiver<()>,
@@ -179,7 +179,7 @@ impl MetaNodeBuilder {
 
         let mn = Arc::new(MetaNode {
             sto: sto.clone(),
-            dispatcher_tx,
+            dispatcher_handle: EventDispatcherHandle::new(dispatcher_tx),
             raft,
             running_tx: tx,
             running_rx: rx,
@@ -1085,10 +1085,10 @@ impl MetaNode {
         Ok(resp)
     }
 
-    pub fn add_watcher(&self, request: WatchRequest, tx: WatcherSender) {
-        // TODO: handle error?
+    pub(crate) fn add_watcher(&self, request: WatchRequest, tx: WatcherSender) {
         let _ = self
-            .dispatcher_tx
+            .dispatcher_handle
+            .tx
             .send(WatchEvent::AddWatcher((request, tx)));
     }
 }
