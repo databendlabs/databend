@@ -22,8 +22,10 @@ use common_expression::Column;
 use common_expression::ColumnFrom;
 use common_expression::DataField;
 use common_expression::DataSchema;
-use common_expression::DataSchemaRefExt;
 use common_expression::TableDataType;
+use common_expression::TableField;
+use common_expression::TableSchema;
+use common_expression::TableSchemaRefExt;
 use common_expression::Value;
 use common_storages_table_meta::meta::TableSnapshotLite;
 
@@ -186,34 +188,34 @@ impl<'a> FuseSnapshot<'a> {
         ))
     }
 
-    pub fn schema() -> Arc<DataSchema> {
-        DataSchemaRefExt::create(vec![
-            DataField::new("snapshot_id", TableDataType::String),
-            DataField::new("snapshot_location", TableDataType::String),
-            DataField::new(
+    pub fn schema() -> Arc<TableSchema> {
+        TableSchemaRefExt::create(vec![
+            TableField::new("snapshot_id", TableDataType::String),
+            TableField::new("snapshot_location", TableDataType::String),
+            TableField::new(
                 "format_version",
                 TableDataType::Number(NumberDataType::UInt64),
             ),
-            DataField::new(
+            TableField::new(
                 "previous_snapshot_id",
                 TableDataType::String.wrap_nullable(),
             ),
-            DataField::new(
+            TableField::new(
                 "segment_count",
                 TableDataType::Number(NumberDataType::UInt64),
             ),
-            DataField::new("block_count", TableDataType::Number(NumberDataType::UInt64)),
-            DataField::new("row_count", TableDataType::Number(NumberDataType::UInt64)),
-            DataField::new(
+            TableField::new("block_count", TableDataType::Number(NumberDataType::UInt64)),
+            TableField::new("row_count", TableDataType::Number(NumberDataType::UInt64)),
+            TableField::new(
                 "bytes_uncompressed",
                 TableDataType::Number(NumberDataType::UInt64),
             ),
-            DataField::new(
+            TableField::new(
                 "bytes_compressed",
                 TableDataType::Number(NumberDataType::UInt64),
             ),
-            DataField::new("index_size", TableDataType::Number(NumberDataType::UInt64)),
-            DataField::new("timestamp", TableDataType::Timestamp.wrap_nullable()),
+            TableField::new("index_size", TableDataType::Number(NumberDataType::UInt64)),
+            TableField::new("timestamp", TableDataType::Timestamp.wrap_nullable()),
         ])
     }
 }

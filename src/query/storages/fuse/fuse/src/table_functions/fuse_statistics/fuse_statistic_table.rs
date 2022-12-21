@@ -20,9 +20,9 @@ use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PushDownInfo;
-use common_datablocks::DataBlock;
-use common_datavalues::DataValue;
 use common_exception::Result;
+use common_expression::Chunk;
+use common_expression::Scalar;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -99,7 +99,7 @@ impl Table for FuseStatisticTable {
         Ok((PartStatistics::default(), Partitions::default()))
     }
 
-    fn table_args(&self) -> Option<Vec<DataValue>> {
+    fn table_args(&self) -> Option<Vec<Scalar>> {
         Some(vec![
             string_literal(self.arg_database_name.as_str()),
             string_literal(self.arg_table_name.as_str()),
@@ -167,7 +167,7 @@ impl AsyncSource for FuseStatisticSource {
     const NAME: &'static str = "fuse_statistic";
 
     #[async_trait::unboxed_simple]
-    async fn generate(&mut self) -> Result<Option<DataBlock>> {
+    async fn generate(&mut self) -> Result<Option<Chunk<String>>> {
         if self.finish {
             return Ok(None);
         }

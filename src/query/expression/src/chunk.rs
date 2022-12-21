@@ -88,6 +88,11 @@ impl<Index: ColumnIndex> Chunk<Index> {
     }
 
     #[inline]
+    pub fn empty_with_meta(meta: ChunkMetaInfoPtr) -> Self {
+        Chunk::new_with_meta(vec![], 0, Some(meta))
+    }
+
+    #[inline]
     pub fn columns(&self) -> impl Iterator<Item = &ChunkEntry<Index>> {
         self.columns.iter()
     }

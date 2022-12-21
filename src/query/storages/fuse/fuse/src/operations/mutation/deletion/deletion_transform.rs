@@ -19,10 +19,10 @@ use std::sync::Arc;
 
 use common_cache::Cache;
 use common_catalog::table_context::TableContext;
-use common_datablocks::BlockCompactThresholds;
-use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::Chunk;
+use common_expression::ChunkCompactThresholds;
 use common_storages_table_meta::caches::CacheManager;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::Location;
@@ -55,7 +55,7 @@ struct SerializedData {
 
 enum State {
     None,
-    GatherMeta(DataBlock),
+    GatherMeta(Chunk),
     ReadSegments,
     GenerateSegments(Vec<Arc<SegmentInfo>>),
     SerializedSegments {
@@ -76,14 +76,14 @@ pub struct DeletionTransform {
     location_gen: TableMetaLocationGenerator,
 
     base_segments: Vec<Location>,
-    thresholds: BlockCompactThresholds,
+    thresholds: ChunkCompactThresholds,
     abort_operation: AbortOperation,
 
     inputs: Vec<Arc<InputPort>>,
     input_metas: DeletionMap,
     cur_input_index: usize,
     output: Arc<OutputPort>,
-    output_data: Option<DataBlock>,
+    output_data: Option<Chunk>,
 }
 
 impl DeletionTransform {
@@ -94,7 +94,7 @@ impl DeletionTransform {
         dal: Operator,
         location_gen: TableMetaLocationGenerator,
         base_segments: Vec<Location>,
-        thresholds: BlockCompactThresholds,
+        thresholds: ChunkCompactThresholds,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(DeletionTransform {
             state: State::None,
@@ -310,7 +310,7 @@ impl Processor for DeletionTransform {
                     summary,
                     std::mem::take(&mut self.abort_operation),
                 );
-                self.output_data = Some(DataBlock::empty_with_meta(meta));
+                self.output_data = Some(Chunk::new_with_meta(meta));
             }
             _ => return Err(ErrorCode::Internal("It's a bug.")),
         }

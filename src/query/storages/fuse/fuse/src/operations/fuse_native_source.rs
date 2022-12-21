@@ -21,9 +21,9 @@ use common_base::base::Progress;
 use common_base::base::ProgressValues;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::Chunk;
 use common_functions::scalars::FunctionContext;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
@@ -38,7 +38,7 @@ type DataChunks = Vec<(usize, PaReader<Box<dyn PaReadBuf + Send + Sync>>)>;
 enum State {
     ReadData(Option<PartInfoPtr>),
     Deserialize(DataChunks),
-    Generated(DataBlock, DataChunks),
+    Generated(Chunk, DataChunks),
     Finish,
 }
 
@@ -80,10 +80,10 @@ impl FuseNativeSource {
         })))
     }
 
-    fn generate_one_block(&mut self, block: DataBlock, chunks: DataChunks) -> Result<()> {
+    fn generate_one_block(&mut self, chunk: Chunk, chunks: DataChunks) -> Result<()> {
         // resort and prune columns
-        let block = block.resort(self.output_reader.schema())?;
-        self.state = State::Generated(block, chunks);
+        let chunk = chunk.resort(self.output_reader.schema())?;
+        self.state = State::Generated(chunk, chunks);
         Ok(())
     }
 }
@@ -120,11 +120,11 @@ impl Processor for FuseNativeSource {
         }
 
         if matches!(self.state, State::Generated(_, _)) {
-            if let State::Generated(data_block, chunks) =
+            if let State::Generated(chunk, chunks) =
                 std::mem::replace(&mut self.state, State::Finish)
             {
                 self.state = State::Deserialize(chunks);
-                self.output.push_data(Ok(data_block));
+                self.output.push_data(Ok(chunk));
                 return Ok(Event::NeedConsume);
             }
         }

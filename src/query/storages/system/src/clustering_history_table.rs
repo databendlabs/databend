@@ -40,17 +40,17 @@ pub struct ClusteringHistoryLogElement {
 impl SystemLogElement for ClusteringHistoryLogElement {
     const TABLE_NAME: &'static str = "clustering_history";
 
-    fn schema() -> DataSchemaRef {
-        DataSchemaRefExt::create(vec![
+    fn schema() -> TableSchemaRef {
+        TableSchemaRefExt::create(vec![
             TableField::new("start_time", TableDataType::Timestamp),
             TableField::new("end_time", TableDataType::Timestamp),
             TableField::new("database", TableDataType::String),
-            DataField::new("table", TableDataType::String),
-            DataField::new(
+            TableField::new("table", TableDataType::String),
+            TableField::new(
                 "reclustered_bytes",
                 TableDataType::Number(NumberDataType::UInt64),
             ),
-            DataField::new(
+            TableField::new(
                 "reclustered_rows",
                 TableDataType::Number(NumberDataType::UInt64),
             ),

@@ -29,6 +29,9 @@ use common_expression::Expr;
 use common_expression::FunctionContext;
 use common_expression::Scalar;
 use common_expression::Span;
+use common_expression::TableDataType;
+use common_expression::TableField;
+use common_expression::TableSchema;
 use common_expression::Value;
 use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 
@@ -60,6 +63,7 @@ use crate::SupportedType;
 pub struct ChunkFilter {
     // /// The schema of the source table/chunk, which the filter work for.
     // pub source_schema: DataSchemaRef,
+    pub filter_schema: TableSchema,
     /// Data chunk of filters.
     pub filter_chunk: Chunk<String>,
     pub fn_ctx: FunctionContext,
@@ -83,7 +87,13 @@ impl ChunkFilter {
     /// Load a filter directly from the source table's schema and the corresponding filter parquet file.
     #[tracing::instrument(level = "debug", skip_all)]
     pub fn from_filter_chunk(fn_ctx: FunctionContext, filter_chunk: Chunk<String>) -> Result<Self> {
+        let filter_fields = filter_chunk
+            .columns()
+            .map(|entry| TableField::new(&entry.id, TableDataType::String))
+            .collect();
+        let filter_schema = TableSchema::new(filter_fields);
         Ok(Self {
+            filter_schema,
             filter_chunk,
             fn_ctx,
             column_distinct_count: HashMap::new(),
@@ -98,6 +108,7 @@ impl ChunkFilter {
             return Err(ErrorCode::BadArguments("chunks is empty"));
         }
 
+        let mut filter_fields = vec![];
         let mut filter_columns = vec![];
         let mut column_distinct_count = HashMap::<usize, usize>::new();
 
@@ -123,20 +134,24 @@ impl ChunkFilter {
                     column_distinct_count.insert(i, len);
                 }
 
+                let name = Self::build_filter_column_name(&chunks[0].get_by_offset(i).id);
+                filter_fields.push(TableField::new(&name, TableDataType::String));
                 // create filter column
                 let serialized_bytes = filter.to_bytes()?;
                 let filter_value = Value::Scalar(Scalar::String(serialized_bytes));
                 filter_columns.push(ChunkEntry {
-                    id: Self::build_filter_column_name(&chunks[0].get_by_offset(i).id),
+                    id: name,
                     data_type: DataType::String,
                     value: filter_value,
                 });
             }
         }
 
+        let filter_schema = TableSchema::new(filter_fields);
         let filter_chunk = Chunk::new(filter_columns, 1);
 
         Ok(Self {
+            filter_schema,
             filter_chunk,
             fn_ctx,
             column_distinct_count,

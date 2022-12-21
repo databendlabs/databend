@@ -23,11 +23,11 @@ use common_catalog::plan::PushDownInfo;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
+use common_expression::Evaluator;
 use common_expression::FunctionContext;
 use common_expression::RemoteExpr;
 use common_expression::TableField;
 use common_sql::evaluator::ChunkOperator;
-use common_sql::evaluator::Evaluator;
 use common_storages_table_meta::meta::Location;
 use common_storages_table_meta::meta::TableSnapshot;
 

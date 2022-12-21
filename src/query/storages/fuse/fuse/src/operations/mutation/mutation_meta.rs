@@ -15,10 +15,10 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use common_datablocks::BlockMetaInfo;
-use common_datablocks::BlockMetaInfoPtr;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::ChunkMetaInfo;
+use common_expression::ChunkMetaInfoPtr;
 use common_storages_table_meta::meta::Location;
 use common_storages_table_meta::meta::Statistics;
 
@@ -32,12 +32,12 @@ pub struct MutationMeta {
 }
 
 #[typetag::serde(name = "mutation_meta")]
-impl BlockMetaInfo for MutationMeta {
+impl ChunkMetaInfo for MutationMeta {
     fn as_any(&self) -> &dyn Any {
         self
     }
 
-    fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
+    fn equals(&self, info: &Box<dyn ChunkMetaInfo>) -> bool {
         match info.as_any().downcast_ref::<MutationMeta>() {
             None => false,
             Some(other) => self == other,
@@ -50,7 +50,7 @@ impl MutationMeta {
         segments: Vec<Location>,
         summary: Statistics,
         abort_operation: AbortOperation,
-    ) -> BlockMetaInfoPtr {
+    ) -> ChunkMetaInfoPtr {
         Arc::new(Box::new(MutationMeta {
             segments,
             summary,
@@ -58,11 +58,11 @@ impl MutationMeta {
         }))
     }
 
-    pub fn from_meta(info: &BlockMetaInfoPtr) -> Result<&MutationMeta> {
+    pub fn from_meta(info: &ChunkMetaInfoPtr) -> Result<&MutationMeta> {
         match info.as_any().downcast_ref::<MutationMeta>() {
             Some(part_ref) => Ok(part_ref),
             None => Err(ErrorCode::Internal(
-                "Cannot downcast from BlockMetaInfo to MutationMeta.",
+                "Cannot downcast from ChunkMetaInfo to MutationMeta.",
             )),
         }
     }

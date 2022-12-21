@@ -23,6 +23,7 @@ use common_datablocks::DataBlock;
 use common_datavalues::ColumnRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::Chunk;
 use common_functions::scalars::FunctionContext;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
@@ -44,7 +45,7 @@ enum State {
     ReadDataRemain(PartInfoPtr, PrewhereData),
     PrewhereFilter(PartInfoPtr, DataChunks),
     Deserialize(PartInfoPtr, DataChunks, Option<PrewhereData>),
-    Generated(Option<PartInfoPtr>, DataBlock),
+    Generated(Option<PartInfoPtr>, Chunk),
     Finish,
 }
 
@@ -86,11 +87,11 @@ impl FuseParquetSource {
         })))
     }
 
-    fn generate_one_block(&mut self, block: DataBlock) -> Result<()> {
+    fn generate_one_block(&mut self, chunk: Chunk) -> Result<()> {
         let new_part = self.ctx.try_get_part();
         // resort and prune columns
-        let block = block.resort(self.output_reader.schema())?;
-        self.state = State::Generated(new_part, block);
+        let chunk = chunk.resort(self.output_reader.schema())?;
+        self.state = State::Generated(new_part, chunk);
         Ok(())
     }
 
@@ -134,15 +135,14 @@ impl Processor for FuseParquetSource {
         }
 
         if matches!(self.state, State::Generated(_, _)) {
-            if let State::Generated(part, data_block) =
-                std::mem::replace(&mut self.state, State::Finish)
+            if let State::Generated(part, chunk) = std::mem::replace(&mut self.state, State::Finish)
             {
                 self.state = match part {
                     None => State::Finish,
                     Some(part) => State::ReadDataPrewhere(Some(part)),
                 };
 
-                self.output.push_data(Ok(data_block));
+                self.output.push_data(Ok(chunk));
                 return Ok(Event::NeedConsume);
             }
         }

@@ -47,7 +47,7 @@ enum State {
     None,
     NeedSerialize(Chunk),
     Serialized {
-        block: Chunk,
+        chunk: Chunk,
         data: Vec<u8>,
         location: String,
     },
@@ -175,33 +175,32 @@ impl Processor for ResultTableSink {
 
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::None) {
-            State::NeedSerialize(block) => {
+            State::NeedSerialize(chunk) => {
                 let location = self.locations.gen_block_location();
-                let block_statistics = BlockStatistics::from(&block, location.clone(), None, None)?;
+                let chunk_statistics = BlockStatistics::from(&chunk, location.clone(), None, None)?;
 
-                todo!("expression");
-                // let mut data = Vec::with_capacity(100 * 1024 * 1024);
-                // let schema = block.schema().clone();
-                // let (size, meta_data) =
-                //     serialize_to_parquet(vec![block.clone()], &schema, &mut data)?;
+                let mut data = Vec::with_capacity(100 * 1024 * 1024);
+                let schema = self.query_info.schema.clone();
+                let (size, meta_data) =
+                    serialize_to_parquet(vec![chunk.clone()], &schema, &mut data)?;
 
-                // let bloom_index_location = None;
-                // let bloom_index_size = 0_u64;
+                let bloom_index_location = None;
+                let bloom_index_size = 0_u64;
 
-                // let meta = util::column_metas(&meta_data)?;
-                // self.accumulator.add_block(
-                //     size,
-                //     meta,
-                //     block_statistics,
-                //     bloom_index_location,
-                //     bloom_index_size,
-                // )?;
+                let meta = util::column_metas(&meta_data)?;
+                self.accumulator.add_block(
+                    size,
+                    meta,
+                    block_statistics,
+                    bloom_index_location,
+                    bloom_index_size,
+                )?;
 
-                // self.state = State::Serialized {
-                //     block,
-                //     data,
-                //     location,
-                // };
+                self.state = State::Serialized {
+                    chunk,
+                    data,
+                    location,
+                };
             }
             State::GenerateMeta => {
                 let (data, location) = self.gen_meta()?;
@@ -218,12 +217,12 @@ impl Processor for ResultTableSink {
     async fn async_process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::None) {
             State::Serialized {
-                block,
+                chunk,
                 data,
                 location,
             } => {
                 self.data_accessor.object(&location).write(data).await?;
-                self.push(block).await?;
+                self.push(chunk).await?;
             }
             State::SerializedMeta { data, location } => {
                 self.data_accessor.object(&location).write(data).await?;

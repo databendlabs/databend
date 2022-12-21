@@ -15,6 +15,14 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_expression::Chunk;
+use common_expression::DataField;
+use common_expression::DataSchema;
+use common_expression::Scalar;
+use common_expression::TableDataType;
+use common_expression::TableField;
+use common_expression::TableSchema;
+use common_expression::TableSchemaRefExt;
 use common_storages_table_meta::meta::Statistics;
 use common_storages_table_meta::meta::TableSnapshotStatistics;
 
@@ -31,23 +39,23 @@ impl<'a> FuseStatistic<'a> {
         Self { ctx, table }
     }
 
-    pub async fn get_statistic(self) -> Result<DataBlock> {
+    pub async fn get_statistic(self) -> Result<Chunk<String>> {
         let snapshot_opt = self.table.read_table_snapshot().await?;
         if let Some(snapshot) = snapshot_opt {
             let table_statistics = self
                 .table
                 .read_table_snapshot_statistics(Some(&snapshot))
                 .await?;
-            return self.to_block(&snapshot.summary, &table_statistics);
+            return self.to_chunk(&snapshot.summary, &table_statistics);
         }
-        Ok(DataBlock::empty_with_schema(FuseStatistic::schema()))
+        Ok(Chunk::empty())
     }
 
-    fn to_block(
+    fn to_chunk(
         &self,
         _summy: &Statistics,
         table_statistics: &Option<Arc<TableSnapshotStatistics>>,
-    ) -> Result<DataBlock> {
+    ) -> Result<Chunk<String>> {
         let mut col_ndvs: Vec<Vec<u8>> = Vec::with_capacity(1);
         if let Some(table_statistics) = table_statistics {
             let mut ndvs: String = "".to_string();
@@ -57,15 +65,16 @@ impl<'a> FuseStatistic<'a> {
             col_ndvs.push(ndvs.into_bytes());
         };
 
-        Ok(DataBlock::create(FuseStatistic::schema(), vec![
-            Series::from_data(col_ndvs),
-        ]))
+        Ok(Chunk::new_from_sequence(
+            vec![(Value::Column(Column::from_data(col_ndvs)), DataType::String)],
+            1,
+        ))
     }
 
-    pub fn schema() -> Arc<DataSchema> {
-        DataSchemaRefExt::create(vec![DataField::new(
+    pub fn schema() -> Arc<TableSchema> {
+        TableSchemaRefExt::create(vec![TableField::new(
             "column_distinct_values",
-            Vu8::to_data_type(),
+            TableDataType::String,
         )])
     }
 }
