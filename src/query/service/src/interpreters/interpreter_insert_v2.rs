@@ -128,7 +128,7 @@ impl InsertInterpreterV2 {
         let overwrite = self.plan.overwrite;
 
         let (mut stage_info, path) = parse_stage_location(&self.ctx, &attachment.location).await?;
-        stage_info.apply_format_options(&attachment.format_options)?;
+        stage_info.apply_file_format_options(&attachment.file_format_options)?;
         stage_info.apply_copy_options(&attachment.copy_options)?;
 
         let mut stage_table_info = StageTableInfo {

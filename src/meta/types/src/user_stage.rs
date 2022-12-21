@@ -343,7 +343,7 @@ impl UserStageInfo {
     }
 
     /// Apply the file format options.
-    pub fn apply_format_options(&mut self, opts: &BTreeMap<String, String>) -> Result<()> {
+    pub fn apply_file_format_options(&mut self, opts: &BTreeMap<String, String>) -> Result<()> {
         if opts.is_empty() {
             return Ok(());
         }
