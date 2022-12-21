@@ -123,7 +123,7 @@ Separates records in an input file.
 
 ### FIELD_DELIMITER
 
-Separates fields in an input file.
+Separates fields in a record.
 
 **Available Values**: Use a character with the escape char: `\b`, `\f`, `\r`, `\n`, `\t`, `\0`, `\xHH`
 
