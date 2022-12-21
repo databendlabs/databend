@@ -16,12 +16,15 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fs::File;
 
+use common_arrow::arrow::array::UInt64Array;
+use common_arrow::arrow::buffer::Buffer;
 use common_arrow::arrow::datatypes::Schema as ArrowSchema;
 use common_arrow::arrow::io::parquet::read as pread;
 use common_arrow::parquet::metadata::FileMetaData;
 use common_arrow::parquet::metadata::RowGroupMetaData;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::Column;
 use common_storages_table_meta::meta::ColumnStatistics;
 use common_storages_table_meta::meta::StatisticsOfColumns;
 
@@ -92,30 +95,42 @@ impl ParquetReader {
 ///
 /// Convert the inner fields into Databend data structures.
 pub struct BatchStatistics {
-    pub null_count: UInt64Column,
-    pub distinct_count: UInt64Column,
-    pub min_values: ColumnRef,
-    pub max_values: ColumnRef,
+    pub null_count: Buffer<u64>,
+    pub distinct_count: Buffer<u64>,
+    pub min_values: Column,
+    pub max_values: Column,
 }
 
 impl BatchStatistics {
     pub fn get(&self, index: usize) -> ColumnStatistics {
         ColumnStatistics {
-            min: self.min_values.get(index),
-            max: self.max_values.get(index),
-            null_count: self.null_count.get_u64(index).unwrap(),
+            min: unsafe { self.min_values.index_unchecked(index).to_owned() },
+            max: unsafe { self.max_values.index_unchecked(index).to_owned() },
+            null_count: self.null_count[index],
             in_memory_size: 0, // this field is not used.
-            distinct_of_values: self.distinct_count.get_u64(index).ok(),
+            distinct_of_values: Some(self.distinct_count[index]),
         }
     }
 }
 
 impl From<pread::statistics::Statistics> for BatchStatistics {
     fn from(stats: pread::statistics::Statistics) -> Self {
-        let null_count = UInt64Column::from_arrow_array(&*stats.null_count);
-        let distinct_count = UInt64Column::from_arrow_array(&*stats.distinct_count);
-        let min_values = stats.min_value.clone().into_column();
-        let max_values = stats.max_value.clone().into_column();
+        let null_count = stats
+            .null_count
+            .as_any()
+            .downcast_ref::<UInt64Array>()
+            .unwrap()
+            .values()
+            .clone();
+        let distinct_count = stats
+            .distinct_count
+            .as_any()
+            .downcast_ref::<UInt64Array>()
+            .unwrap()
+            .values()
+            .clone();
+        let min_values = Column::from_arrow(&*stats.min_value);
+        let max_values = Column::from_arrow(&*stats.max_value);
         Self {
             null_count,
             distinct_count,

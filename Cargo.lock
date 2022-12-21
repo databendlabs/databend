@@ -2468,7 +2468,6 @@ dependencies = [
  "common-functions-v2",
  "common-meta-app",
  "common-pipeline-core",
- "common-sql",
  "common-storage",
  "common-storages-pruner",
  "common-storages-table-meta",

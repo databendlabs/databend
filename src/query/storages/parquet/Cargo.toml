@@ -21,7 +21,6 @@ common-expression = { path = "../../expression" }
 common-functions-v2 = { path = "../../functions-v2" }
 common-meta-app = { path = "../../../meta/app" }
 common-pipeline-core = { path = "../../pipeline/core" }
-common-sql = { path = "../../sql" }
 common-storage = { path = "../../../common/storage" }
 common-storages-pruner = { path = "../pruner" }
 common-storages-table-meta = { path = "../table-meta" }

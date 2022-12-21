@@ -25,11 +25,10 @@ use common_config::GlobalConfig;
 use common_exception::Result;
 use common_expression::Evaluator;
 use common_expression::Expr;
+use common_expression::RemoteExpr;
 use common_expression::TableSchemaRef;
 use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 use common_pipeline_core::Pipeline;
-use common_sql::evaluator::EvalNode;
-use common_sql::evaluator::Evaluator;
 use common_storages_pruner::RangePrunerCreator;
 
 use super::ParquetTable;
@@ -62,7 +61,6 @@ impl ParquetTable {
         &self,
         _ctx: Arc<dyn TableContext>,
         plan: &DataSourcePlan,
-        schema: TableSchemaRef,
     ) -> Result<Arc<Option<Expr<String>>>> {
         Ok(
             match PushDownInfo::prewhere_of_push_downs(&plan.push_downs) {
@@ -144,8 +142,15 @@ impl ParquetTable {
             let mut partitions = Vec::with_capacity(locations.len());
 
             // build row group pruner.
-            let filter_expr = push_downs.as_ref().map(|extra| extra.filters.as_slice());
-            let row_group_pruner = RangePrunerCreator::try_create(&ctx_ref, filter_expr, &schema)?;
+            let filter_expr = push_downs.as_ref().map(|extra| {
+                extra
+                    .filters
+                    .iter()
+                    .map(|f| f.into_expr(&BUILTIN_FUNCTIONS).unwrap())
+                    .collect::<Vec<_>>()
+            });
+            let row_group_pruner =
+                RangePrunerCreator::try_create(&ctx_ref, filter_expr.as_deref(), &schema)?;
 
             for location in &locations {
                 let file_meta = ParquetReader::read_meta(location)?;
@@ -200,7 +205,7 @@ impl ParquetTable {
         // `PrewhereInfo.output_columns` should be a subset of `PushDownInfo.projection`.
         let output_projection = match PushDownInfo::prewhere_of_push_downs(&plan.push_downs) {
             None => PushDownInfo::projection_of_push_downs(
-                &self.table_info.schema().as_ref(),
+                self.table_info.schema().as_ref(),
                 &plan.push_downs,
             ),
             Some(v) => v.output_columns,
@@ -208,11 +213,7 @@ impl ParquetTable {
         let output_schema = Arc::new(output_projection.project_schema(&plan.source_info.schema()));
 
         let prewhere_reader = self.build_prewhere_reader(plan)?;
-        let prewhere_filter = self.build_prewhere_filter_executor(
-            ctx.clone(),
-            plan,
-            prewhere_reader.output_schema(),
-        )?;
+        let prewhere_filter = self.build_prewhere_filter_executor(ctx.clone(), plan)?;
         let remain_reader = self.build_remain_reader(plan)?;
 
         // Add source pipe.

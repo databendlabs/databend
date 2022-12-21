@@ -28,11 +28,10 @@ use common_catalog::table::Table;
 use common_catalog::table_args::TableArgs;
 use common_catalog::table_function::TableFunction;
 use common_config::GlobalConfig;
-use common_datavalues::DataSchema;
-use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::Scalar;
+use common_expression::TableSchema;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -76,7 +75,7 @@ impl ParquetTable {
         let mut file_locations = Vec::with_capacity(table_args.len());
         for arg in table_args.iter() {
             match arg {
-                DataValue::String(path) => {
+                Scalar::String(path) => {
                     let maybe_glob_path = std::str::from_utf8(path).unwrap();
                     let paths = glob::glob(maybe_glob_path)
                         .map_err(|e| ErrorCode::Internal(format!("glob error: {}", e)))?;
@@ -116,7 +115,7 @@ impl ParquetTable {
             desc: format!("'{}'.'{}'", database_name, table_func_name),
             name: table_func_name.to_string(),
             meta: TableMeta {
-                schema: Arc::new(DataSchema::from(&arrow_schema)),
+                schema: Arc::new(TableSchema::from(&arrow_schema)),
                 engine: "SystemReadParquet".to_string(),
                 // Assuming that created_on is unnecessary for function table,
                 // we could make created_on fixed to pass test_shuffle_action_try_into.
@@ -163,7 +162,7 @@ impl Table for ParquetTable {
         true
     }
 
-    fn table_args(&self) -> Option<Vec<DataValue>> {
+    fn table_args(&self) -> Option<Vec<Scalar>> {
         Some(self.table_args.clone())
     }
 

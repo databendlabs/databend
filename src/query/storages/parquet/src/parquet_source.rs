@@ -51,7 +51,7 @@ enum State {
     ReadDataRemain(PartInfoPtr, PrewhereData),
     PrewhereFilter(PartInfoPtr, Vec<IndexedChunk>),
     Deserialize(PartInfoPtr, Vec<IndexedChunk>, Option<PrewhereData>),
-    Generated(Option<PartInfoPtr>, DataBlock),
+    Generated(Option<PartInfoPtr>, Chunk<String>),
     Finish,
 }
 
@@ -71,7 +71,7 @@ impl ParquetSource {
     pub fn create(
         ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
-        output_schema: DataSchemaRef,
+        output_schema: TableSchemaRef,
         prewhere_reader: Arc<ParquetReader>,
         prewhere_filter: Arc<Option<Expr<String>>>,
         remain_reader: Arc<Option<ParquetReader>>,
@@ -107,10 +107,17 @@ impl ParquetSource {
         if let Some(filter) = self.prewhere_filter.as_ref() {
             // do filter
             let evaluator = Evaluator::new(&chunk, FunctionContext::default(), &BUILTIN_FUNCTIONS);
-            let res = evaluator.run(filter)?;
-            let filter = Chunk::cast_to_nonull_boolean(&res)?;
 
-            let all_filtered = match filter {
+            let res = evaluator.run(filter).map_err(|(_, e)| {
+                ErrorCode::Internal(format!("eval prewhere filter failed: {}.", e))
+            })?;
+            let filter = Chunk::<String>::cast_to_nonull_boolean(&res).ok_or_else(|| {
+                ErrorCode::BadArguments(
+                    "Result of filter expression cannot be converted to boolean.",
+                )
+            })?;
+
+            let all_filtered = match &filter {
                 Value::Scalar(v) => !v,
                 Value::Column(bitmap) => bitmap.unset_bits() == bitmap.len(),
             };
@@ -126,22 +133,19 @@ impl ParquetSource {
                 self.scan_progress.incr(&progress_values);
 
                 // Generate a empty block.
-                self.state = Generated(
-                    self.ctx.try_get_part(),
-                    DataBlock::empty_with_schema(self.output_schema()),
-                );
+                self.state = Generated(self.ctx.try_get_part(), Chunk::empty());
                 return Ok(());
             }
 
-            let (rows, bytes) = if remain_reader.is_none() {
+            let (rows, bytes) = if self.remain_reader.is_none() {
                 (chunk.num_rows(), chunk.memory_size())
             } else {
                 (0, 0)
             };
 
-            let filtered_chunk = match filter {
+            let filtered_chunk = match &filter {
                 Value::Scalar(_) => chunk,
-                Value::Column(bitmap) => Chunk::filter_chunk_with_bitmap(chunk, &bitmap),
+                Value::Column(bitmap) => Chunk::filter_chunk_with_bitmap(chunk, bitmap)?,
             };
 
             if self.remain_reader.is_none() {
@@ -191,7 +195,7 @@ impl ParquetSource {
                             // don't need filter
                             remain_reader.deserialize(rg_part, raw_chunks, None)?
                         } else {
-                            remain_reader.deserialize(rg_part, raw_chunks, Some(bitmap.clone()))?
+                            remain_reader.deserialize(rg_part, raw_chunks, Some(bitmap))?
                         }
                     }
                 };
@@ -206,7 +210,7 @@ impl ParquetSource {
 
                 // Combine two blocks.
                 for col in remain_chunk.columns() {
-                    prewhere_chunk = prewhere_chunk.add_column(col.clone())?;
+                    prewhere_chunk.add_column(col.clone());
                 }
                 prewhere_chunk
             } else {
@@ -274,12 +278,13 @@ impl Processor for ParquetSource {
         }
 
         if matches!(self.state, State::Generated(_, _)) {
-            if let Generated(part, data_block) = std::mem::replace(&mut self.state, State::Finish) {
+            if let Generated(part, chunk) = std::mem::replace(&mut self.state, State::Finish) {
                 if let Some(part) = part {
                     self.state = State::ReadDataPrewhere(Some(part));
                 }
-                self.output.push_data(Ok(data_block));
-                return Ok(Event::NeedConsume);
+                todo!("expression");
+                // self.output.push_data(Ok(data_block));
+                // return Ok(Event::NeedConsume);
             }
         }
 
