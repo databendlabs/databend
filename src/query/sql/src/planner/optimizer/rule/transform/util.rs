@@ -28,14 +28,14 @@ pub fn get_join_predicates(join: &LogicalJoin) -> Result<Vec<Scalar>> {
         .iter()
         .zip(join.right_conditions.iter())
         .map(|(left_cond, right_cond)| {
-            let registry = BUILTIN_FUNCTIONS;
+            let registry = &BUILTIN_FUNCTIONS;
             let raw_expr = RawExpr::FunctionCall {
                 span: None,
                 name: "=".to_string(),
                 params: vec![],
                 args: vec![left_cond.as_raw_expr(), right_cond.as_raw_expr()],
             };
-            let expr = type_check::check(&raw_expr, &registry)
+            let expr = type_check::check(&raw_expr, registry)
                 .map_err(|(_, e)| common_exception::ErrorCode::SemanticError(e))?;
             Ok(Scalar::ComparisonExpr(ComparisonExpr {
                 left: Box::new(left_cond.clone()),

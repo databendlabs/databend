@@ -22,7 +22,6 @@ mod physical_scalar_visitor;
 pub mod table_read_plan;
 mod util;
 
-pub use expression_builder::*;
 pub use physical_plan::*;
 pub use physical_plan_builder::PhysicalPlanBuilder;
 pub use physical_plan_builder::PhysicalScalarBuilder;

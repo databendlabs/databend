@@ -57,7 +57,6 @@ use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRef;
 use common_expression::TableSchemaRefExt;
-use common_storage::parse_uri_location;
 use common_storage::DataOperator;
 use common_storages_table_meta::table::is_reserved_opt_key;
 use common_storages_table_meta::table::OPT_KEY_DATABASE_ID;
@@ -915,7 +914,7 @@ impl<'a> Binder {
                     let query = table.get_table_info().options().get(QUERY).unwrap();
                     let mut planner = Planner::new(self.ctx.clone());
                     let (plan, _, _) = planner.plan_sql(query).await?;
-                    Ok((plan.schema(), vec![], vec![]))
+                    Ok((Self::infer_table_schema(&plan.schema())?, vec![], vec![]))
                 } else {
                     Ok((table.schema(), vec![], table.field_comments().clone()))
                 }
@@ -1055,5 +1054,15 @@ impl<'a> Binder {
                 data_type
             ))),
         }
+    }
+
+    /// Infer TableSchema from DataSchema, this is useful when creating table from a query.
+    fn infer_table_schema(data_schema: &DataSchemaRef) -> Result<TableSchemaRef> {
+        let mut fields = Vec::with_capacity(data_schema.fields().len());
+        for field in data_schema.fields() {
+            let field_type = Self::infer_schema_type(field.data_type())?;
+            fields.push(TableField::new(field.name(), field_type));
+        }
+        Ok(TableSchemaRefExt::create(fields))
     }
 }

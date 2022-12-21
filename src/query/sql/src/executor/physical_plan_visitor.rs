@@ -68,7 +68,6 @@ pub trait PhysicalPlanReplacer {
 
         Ok(PhysicalPlan::Project(Project {
             input: Box::new(input),
-            projections: plan.projections.clone(),
             columns: plan.columns.clone(),
         }))
     }
@@ -97,7 +96,7 @@ pub trait PhysicalPlanReplacer {
 
         Ok(PhysicalPlan::AggregateFinal(AggregateFinal {
             input: Box::new(input),
-            before_group_by_schema: plan.before_group_by_schema.clone(),
+            // before_group_by_schema: plan.before_group_by_schema.clone(),
             group_by: plan.group_by.clone(),
             agg_funcs: plan.agg_funcs.clone(),
         }))
@@ -158,7 +157,7 @@ pub trait PhysicalPlanReplacer {
 
         Ok(PhysicalPlan::ExchangeSink(ExchangeSink {
             input: Box::new(input),
-            schema: plan.schema.clone(),
+            // schema: plan.schema.clone(),
             kind: plan.kind.clone(),
             keys: plan.keys.clone(),
             destination_fragment_id: plan.destination_fragment_id,
@@ -173,7 +172,7 @@ pub trait PhysicalPlanReplacer {
         Ok(PhysicalPlan::UnionAll(UnionAll {
             left: Box::new(left),
             right: Box::new(right),
-            schema: plan.schema.clone(),
+            // schema: plan.schema.clone(),
             pairs: plan.pairs.clone(),
         }))
     }
@@ -186,8 +185,8 @@ pub trait PhysicalPlanReplacer {
                 input: Box::new(input),
                 catalog: plan.catalog.clone(),
                 table_info: plan.table_info.clone(),
-                select_schema: plan.select_schema.clone(),
-                insert_schema: plan.insert_schema.clone(),
+                // select_schema: plan.select_schema.clone(),
+                // insert_schema: plan.insert_schema.clone(),
                 select_column_bindings: plan.select_column_bindings.clone(),
                 cast_needed: plan.cast_needed,
             },

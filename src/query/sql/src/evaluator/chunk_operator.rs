@@ -78,9 +78,10 @@ impl ChunkOperator {
 
             ChunkOperator::Project { indices } => {
                 let mut result = input;
-                for col in result.columns() {
-                    if !indices.contains(&col.id) {
-                        result = result.remove_column_index(col.id)?;
+                for i in 0..result.num_columns() {
+                    let id = result.get_by_offset(i).id;
+                    if !indices.contains(&id) {
+                        result = result.remove_column_index(id)?;
                     }
                 }
                 Ok(result)

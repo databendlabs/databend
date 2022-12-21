@@ -241,7 +241,7 @@ impl PhysicalPlanBuilder {
                         .iter()
                         .map(|item| {
                             let mut builder = PhysicalScalarBuilder::new();
-                            Ok((builder.build(&item.scalar)?, item.index.to_string()))
+                            Ok((builder.build(&item.scalar)?, item.index))
                         })
                         .collect::<Result<_>>()?,
                 }))
@@ -263,11 +263,7 @@ impl PhysicalPlanBuilder {
             }
             RelOperator::Aggregate(agg) => {
                 let input = self.build(s_expr.child(0)?).await?;
-                let group_items: Vec<ColumnID> = agg
-                    .group_items
-                    .iter()
-                    .map(|v| v.index.to_string())
-                    .collect();
+                let group_items = agg.group_items.iter().map(|v| v.index).collect::<Vec<_>>();
                 let result = match &agg.mode {
                     AggregateMode::Partial => {
                         let agg_funcs: Vec<AggregateFunctionDesc> = agg.aggregate_functions.iter().map(|v| {
@@ -363,12 +359,12 @@ impl PhysicalPlanBuilder {
 
                         match input {
                             PhysicalPlan::AggregatePartial(ref agg) => {
-                                let before_group_by_schema = agg.input.output_schema()?;
+                                // let before_group_by_schema = agg.input.output_schema()?;
                                 PhysicalPlan::AggregateFinal(AggregateFinal {
                                     input: Box::new(input),
                                     group_by: group_items,
                                     agg_funcs,
-                                    before_group_by_schema,
+                                    // before_group_by_schema,
                                 })
                             }
 
@@ -376,12 +372,12 @@ impl PhysicalPlanBuilder {
                                 input: box PhysicalPlan::AggregatePartial(ref agg),
                                 ..
                             }) => {
-                                let before_group_by_schema = agg.input.output_schema()?;
+                                // let before_group_by_schema = agg.input.output_schema()?;
                                 PhysicalPlan::AggregateFinal(AggregateFinal {
                                     input: Box::new(input),
                                     group_by: group_items,
                                     agg_funcs,
-                                    before_group_by_schema,
+                                    // before_group_by_schema,
                                 })
                             }
 
@@ -475,7 +471,7 @@ impl PhysicalPlanBuilder {
         let push_down_filters = scan
             .push_down_predicates
             .clone()
-            .map(|predicates| {
+            .map(|_| -> Result<Vec<RemoteExpr<String>>> {
                 todo!("expression")
                 // let builder = ExpressionBuilderWithoutRenaming::create(self.metadata.clone());
                 // predicates
@@ -494,7 +490,7 @@ impl PhysicalPlanBuilder {
         let prewhere_info = scan
             .prewhere
             .as_ref()
-            .map(|prewhere| {
+            .map(|prewhere| -> Result<PrewhereInfo> {
                 let predicate = if prewhere.predicates.is_empty() {
                     None
                 } else {

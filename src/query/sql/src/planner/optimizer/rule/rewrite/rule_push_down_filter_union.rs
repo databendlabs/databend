@@ -183,7 +183,6 @@ fn replace_column_binding(
                 .map(|arg| replace_column_binding(index_pairs, arg))
                 .collect::<Result<Vec<_>>>()?,
             func_name: expr.func_name,
-            arg_types: expr.arg_types,
             return_type: expr.return_type,
         })),
         Scalar::CastExpr(expr) => Ok(Scalar::CastExpr(CastExpr {

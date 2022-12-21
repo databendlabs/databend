@@ -80,7 +80,9 @@ fn table_scan_to_format_tree(
             extras
                 .filters
                 .iter()
-                .map(|f| f.column_name())
+                .map(|f|
+                    // TODO: prettier format for RemoteExpr
+                    format!("{:?}", f))
                 .collect::<Vec<_>>()
                 .join(", ")
         });
@@ -193,7 +195,7 @@ pub fn pretty_display_agg_desc(desc: &AggregateFunctionDesc, metadata: &Metadata
     format!(
         "{}({})",
         desc.sig.name,
-        desc.arg_indices
+        desc.args
             .iter()
             .map(|&index| {
                 let column = metadata.read().column(index).clone();
@@ -215,8 +217,7 @@ fn aggregate_partial_to_format_tree(
         .group_by
         .iter()
         .map(|column| {
-            let index = column.parse::<IndexType>()?;
-            let column = metadata.read().column(index).clone();
+            let column = metadata.read().column(*column).clone();
             let name = match column {
                 ColumnEntry::BaseTableColumn { column_name, .. } => column_name,
                 ColumnEntry::DerivedColumn { alias, .. } => alias,
@@ -250,8 +251,7 @@ fn aggregate_final_to_format_tree(
         .group_by
         .iter()
         .map(|column| {
-            let index = column.parse::<IndexType>()?;
-            let column = metadata.read().column(index).clone();
+            let column = metadata.read().column(*column).clone();
             let name = match column {
                 ColumnEntry::BaseTableColumn { column_name, .. } => column_name,
                 ColumnEntry::DerivedColumn { alias, .. } => alias,
@@ -282,7 +282,7 @@ fn sort_to_format_tree(plan: &Sort, metadata: &MetadataRef) -> Result<FormatTree
         .order_by
         .iter()
         .map(|sort_key| {
-            let index = sort_key.order_by.parse::<IndexType>()?;
+            let index = sort_key.order_by;
             let column = metadata.read().column(index).clone();
             Ok(format!(
                 "{} {} {}",

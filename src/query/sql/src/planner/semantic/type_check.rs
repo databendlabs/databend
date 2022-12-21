@@ -812,7 +812,7 @@ impl<'a> TypeChecker<'a> {
                                 column: ColumnBinding { index, .. },
                             }) = scalar
                             {
-                                let column_entry = self.metadata.read().column(index);
+                                let column_entry = self.metadata.read().column(index).clone();
                                 if let ColumnEntry::BaseTableColumn { data_type, .. } = column_entry
                                 {
                                     if !matches!(data_type, TableDataType::Tuple { .. }) {
@@ -1122,7 +1122,7 @@ impl<'a> TypeChecker<'a> {
                 let box (left, _) = self.resolve(left, None).await?;
                 let box (right, _) = self.resolve(right, None).await?;
                 // Type check
-                let arguments = vec![left, right]
+                let arguments = vec![&left, &right]
                     .iter()
                     .map(|v| v.as_raw_expr())
                     .collect::<Vec<_>>();
@@ -1151,7 +1151,7 @@ impl<'a> TypeChecker<'a> {
                 let box (right, _) = self.resolve(right, None).await?;
 
                 // Type check
-                let arguments = vec![left, right]
+                let arguments = vec![&left, &right]
                     .iter()
                     .map(|v| v.as_raw_expr())
                     .collect::<Vec<_>>();
@@ -1180,7 +1180,7 @@ impl<'a> TypeChecker<'a> {
                 let box (right, _) = self.resolve(right, None).await?;
 
                 // Type check
-                let arguments = vec![left, right]
+                let arguments = vec![&left, &right]
                     .iter()
                     .map(|v| v.as_raw_expr())
                     .collect::<Vec<_>>();
