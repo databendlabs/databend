@@ -67,7 +67,7 @@ impl DataBlockDeserializer {
         schema: &TableSchemaRef,
         filler: &Option<HivePartitionFiller>,
         part_info: &HivePartInfo,
-    ) -> Result<Option<Chunk<String>>> {
+    ) -> Result<Option<Chunk>> {
         if self.drained {
             return Ok(None);
         };
@@ -109,7 +109,7 @@ impl HiveBlockReader {
         Ok(Arc::new(HiveBlockReader {
             operator,
             projection,
-            projected_schema,
+            projected_schema: Arc::new(projected_schema),
             arrow_schema: Arc::new(arrow_schema),
             hive_partition_filler,
             chunk_size,
