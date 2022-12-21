@@ -13,11 +13,11 @@
 // limitations under the License.
 
 use chrono_tz::Tz;
-use common_datavalues::DateConverter;
+use common_expression::date_helper::DateConverter;
 
 const TIME_FMT_MICRO: &str = "%Y-%m-%d %H:%M:%S%.6f";
 
-pub fn timestamp_to_string_micro(v: &i64, tz: &Tz) -> String {
+pub fn timestamp_to_string_micro(v: &i64, tz: Tz) -> String {
     let dt = v.to_timestamp(tz);
     dt.format(TIME_FMT_MICRO).to_string()
 }

@@ -20,7 +20,8 @@ use crate::Column;
 use crate::Scalar;
 use crate::TypeDeserializer;
 
-impl TypeDeserializer for usize {
+pub type NullDeserializer = usize;
+impl TypeDeserializer for NullDeserializer {
     fn memory_size(&self) -> usize {
         std::mem::size_of::<usize>()
     }

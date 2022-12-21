@@ -70,7 +70,7 @@ impl InputFormatTSV {
                         true,
                     ) {
                         err_msg = Some(format_column_error(
-                            schema,
+                            schema.into(),
                             column_index,
                             col_data,
                             &e.message(),

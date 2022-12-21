@@ -30,7 +30,7 @@ pub struct ArrayDeserializer {
 }
 
 impl ArrayDeserializer {
-    fn add_offset(&mut self, size: usize) {
+    pub fn add_offset(&mut self, size: usize) {
         if self.offsets.is_empty() {
             self.offsets.push(0);
         }
@@ -38,7 +38,7 @@ impl ArrayDeserializer {
             .push(*self.offsets.last().unwrap() + size as u64);
     }
 
-    fn pop_offset(&mut self) -> Result<usize> {
+    pub fn pop_offset(&mut self) -> Result<usize> {
         if self.offsets.len() <= 1 {
             return Err(ErrorCode::BadDataValueType("Array is empty".to_string()));
         }

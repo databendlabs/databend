@@ -25,6 +25,7 @@ mod timestamp;
 mod tuple;
 mod variant;
 
+pub use array::*;
 pub use boolean::*;
 use common_exception::Result;
 pub use date::*;

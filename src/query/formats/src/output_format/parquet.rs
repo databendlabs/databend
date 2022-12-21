@@ -54,7 +54,7 @@ impl OutputFormat for ParquetOutputFormat {
             return Ok(vec![]);
         }
         let mut buf = Vec::with_capacity(100 * 1024 * 1024);
-        let _ = serialize_to_parquet(chunks,  &self.schema, &mut buf)?;
+        let _ = serialize_to_parquet(chunks, &self.schema, &mut buf)?;
         Ok(buf)
     }
 }

@@ -26,12 +26,14 @@ use crate::Scalar;
 use crate::TypeDeserializer;
 
 pub struct TimestampDeserializer {
+    pub buffer: Vec<u8>,
     pub builder: Vec<i64>,
 }
 
 impl TimestampDeserializer {
     pub fn with_capacity(capacity: usize) -> Self {
         Self {
+            buffer: vec![],
             builder: Vec::with_capacity(capacity),
         }
     }

@@ -22,12 +22,10 @@ serde_json = { workspace = true }
 
 # Workspace dependencies
 common-arrow = { path = "../../common/arrow" }
-common-datablocks = { path = "../datablocks" }
-common-datavalues = { path = "../datavalues" }
-common-expression = { path = "../expression" }
 common-exception = { path = "../../common/exception" }
-common-jsonb = { path = "../../common/jsonb" }
+common-expression = { path = "../expression" }
 common-io = { path = "../../common/io" }
+common-jsonb = { path = "../../common/jsonb" }
 common-meta-types = { path = "../../meta/types" }
 common-settings = { path = "../settings" }
 

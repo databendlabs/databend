@@ -25,6 +25,8 @@ pub struct TupleDeserializer {
     pub inners: Vec<Box<dyn TypeDeserializer>>,
 }
 
+pub type StructDeserializer = TupleDeserializer;
+
 impl TupleDeserializer {
     pub fn with_capacity(capacity: usize, inners: &[DataType]) -> Self {
         let inners = inners

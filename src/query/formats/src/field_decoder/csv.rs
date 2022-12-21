@@ -16,11 +16,12 @@ use std::any::Any;
 use std::io::BufRead;
 use std::io::Cursor;
 
-use common_datavalues::ArrayDeserializer;
-use common_datavalues::StringDeserializer;
-use common_datavalues::StructDeserializer;
-use common_datavalues::VariantDeserializer;
 use common_exception::Result;
+use common_expression::ArrayDeserializer;
+use common_expression::StringDeserializer;
+use common_expression::StructDeserializer;
+use common_expression::TupleDeserializer;
+use common_expression::VariantDeserializer;
 use common_io::consts::FALSE_BYTES_LOWER;
 use common_io::consts::INF_BYTES_LOWER;
 use common_io::consts::NULL_BYTES_ESCAPE;
@@ -89,7 +90,9 @@ impl FieldDecoderRowBased for FieldDecoderCSV {
         _raw: bool,
     ) -> Result<()> {
         let buf = reader.remaining_slice();
-        column.builder.append_value(buf);
+        column.put_slice(buf);
+        column.commit_row();
+
         reader.consume(buf.len());
         Ok(())
     }
@@ -101,11 +104,10 @@ impl FieldDecoderRowBased for FieldDecoderCSV {
         _raw: bool,
     ) -> Result<()> {
         let buf = reader.remaining_slice();
-        let len = buf.len();
-        let val = serde_json::from_slice(buf)?;
-        reader.consume(len);
-        column.builder.append_value(val);
-        column.memory_size += len;
+        column.builder.put_slice(buf);
+        column.builder.commit_row();
+
+        reader.consume(buf.len());
         Ok(())
     }
 

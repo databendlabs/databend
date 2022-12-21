@@ -16,14 +16,12 @@ use std::any::Any;
 use std::io::Cursor;
 
 use chrono_tz::Tz;
-use common_datavalues::ArrayDeserializer;
-use common_datavalues::ArrayValue;
-use common_datavalues::NullableDeserializer;
-use common_datavalues::StringDeserializer;
-use common_datavalues::StructDeserializer;
-use common_datavalues::StructValue;
-use common_datavalues::TypeDeserializer;
 use common_exception::Result;
+use common_expression::ArrayDeserializer;
+use common_expression::NullableDeserializer;
+use common_expression::StringDeserializer;
+use common_expression::StructDeserializer;
+use common_expression::TypeDeserializer;
 use common_io::consts::FALSE_BYTES_LOWER;
 use common_io::consts::INF_BYTES_LOWER;
 use common_io::consts::NAN_BYTES_LOWER;
@@ -100,8 +98,8 @@ impl FieldDecoderRowBased for FieldDecoderValues {
             column.de_default();
             return Ok(());
         } else {
-            self.read_field(&mut column.inner, reader, raw)?;
-            column.bitmap.push(true);
+            self.read_field(column.inner.as_mut(), reader, raw)?;
+            column.validity.push(true);
         }
         Ok(())
     }
@@ -122,9 +120,8 @@ impl FieldDecoderRowBased for FieldDecoderValues {
         reader: &mut Cursor<R>,
         _raw: bool,
     ) -> Result<()> {
-        column.buffer.clear();
-        reader.read_quoted_text(&mut column.buffer, b'\'')?;
-        column.builder.append_value(column.buffer.as_slice());
+        reader.read_quoted_text(&mut column.data, b'\'')?;
+        column.commit_row();
         Ok(())
     }
 
@@ -145,15 +142,10 @@ impl FieldDecoderRowBased for FieldDecoderValues {
                 reader.must_ignore_byte(b',')?;
             }
             let _ = reader.ignore_white_spaces();
-            self.read_field(&mut column.inner, reader, false)?;
+            self.read_field(column.inner.as_mut(), reader, false)?;
             idx += 1;
         }
-        let mut values = Vec::with_capacity(idx);
-        for _ in 0..idx {
-            values.push(column.inner.pop_data_value()?);
-        }
-        values.reverse();
-        column.builder.append_value(ArrayValue::new(values));
+        column.add_offset(idx);
         Ok(())
     }
 
@@ -164,18 +156,15 @@ impl FieldDecoderRowBased for FieldDecoderValues {
         _raw: bool,
     ) -> Result<()> {
         reader.must_ignore_byte(b'(')?;
-        let mut values = Vec::with_capacity(column.inners.len());
         for (idx, inner) in column.inners.iter_mut().enumerate() {
             let _ = reader.ignore_white_spaces();
             if idx != 0 {
                 reader.must_ignore_byte(b',')?;
             }
             let _ = reader.ignore_white_spaces();
-            self.read_field(inner, reader, false)?;
-            values.push(inner.pop_data_value()?);
+            self.read_field(inner.as_mut(), reader, false)?;
         }
         reader.must_ignore_byte(b')')?;
-        column.builder.append_value(StructValue::new(values));
         Ok(())
     }
 }

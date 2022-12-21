@@ -150,7 +150,7 @@ pub trait FieldEncoderRowBased {
         raw: bool,
     ) {
         let v = unsafe { column.get_unchecked(row_index) };
-        let s = timestamp_to_string_micro(v, &self.common_settings().timezone);
+        let s = timestamp_to_string_micro(v, self.common_settings().timezone);
         self.write_string_inner(s.as_bytes(), out_buf, raw);
     }
 

@@ -18,27 +18,24 @@ use std::io::Cursor;
 
 use bstr::ByteSlice;
 use chrono_tz::Tz;
-use common_datavalues::check_date;
-use common_datavalues::check_timestamp;
-use common_datavalues::uniform_date;
-use common_datavalues::ArrayDeserializer;
-use common_datavalues::ArrayValue;
-use common_datavalues::BooleanDeserializer;
-use common_datavalues::DateDeserializer;
-use common_datavalues::MutableColumn;
-use common_datavalues::NullDeserializer;
-use common_datavalues::NullableDeserializer;
-use common_datavalues::NumberDeserializer;
-use common_datavalues::PrimitiveType;
-use common_datavalues::StringDeserializer;
-use common_datavalues::StructDeserializer;
-use common_datavalues::StructValue;
-use common_datavalues::TimestampDeserializer;
-use common_datavalues::TypeDeserializer;
-use common_datavalues::TypeDeserializerImpl;
-use common_datavalues::VariantDeserializer;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::date::check_date;
+use common_expression::types::number::Number;
+use common_expression::types::timestamp::check_timestamp;
+use common_expression::uniform_date;
+use common_expression::ArrayDeserializer;
+use common_expression::BooleanDeserializer;
+use common_expression::DateDeserializer;
+use common_expression::NullDeserializer;
+use common_expression::NullableDeserializer;
+use common_expression::NumberDeserializer;
+use common_expression::Scalar;
+use common_expression::StringDeserializer;
+use common_expression::StructDeserializer;
+use common_expression::TimestampDeserializer;
+use common_expression::TypeDeserializer;
+use common_expression::VariantDeserializer;
 use common_io::consts::FALSE_BYTES_LOWER;
 use common_io::consts::INF_BYTES_LOWER;
 use common_io::consts::NAN_BYTES_LOWER;
@@ -103,32 +100,33 @@ impl FastFieldDecoderValues {
 
     pub fn read_field<R: AsRef<[u8]>>(
         &self,
-        column: &mut TypeDeserializerImpl,
+        column: &mut dyn TypeDeserializer,
         reader: &mut Cursor<R>,
         positions: &mut VecDeque<usize>,
     ) -> Result<()> {
-        match column {
-            TypeDeserializerImpl::Null(c) => self.read_null(c, reader),
-            TypeDeserializerImpl::Nullable(c) => self.read_nullable(c, reader, positions),
-            TypeDeserializerImpl::Boolean(c) => self.read_bool(c, reader),
-            TypeDeserializerImpl::Int8(c) => self.read_int(c, reader),
-            TypeDeserializerImpl::Int16(c) => self.read_int(c, reader),
-            TypeDeserializerImpl::Int32(c) => self.read_int(c, reader),
-            TypeDeserializerImpl::Int64(c) => self.read_int(c, reader),
-            TypeDeserializerImpl::UInt8(c) => self.read_int(c, reader),
-            TypeDeserializerImpl::UInt16(c) => self.read_int(c, reader),
-            TypeDeserializerImpl::UInt32(c) => self.read_int(c, reader),
-            TypeDeserializerImpl::UInt64(c) => self.read_int(c, reader),
-            TypeDeserializerImpl::Float32(c) => self.read_float(c, reader),
-            TypeDeserializerImpl::Float64(c) => self.read_float(c, reader),
-            TypeDeserializerImpl::Date(c) => self.read_date(c, reader, positions),
-            TypeDeserializerImpl::Interval(c) => self.read_date(c, reader, positions),
-            TypeDeserializerImpl::Timestamp(c) => self.read_timestamp(c, reader, positions),
-            TypeDeserializerImpl::String(c) => self.read_string(c, reader, positions),
-            TypeDeserializerImpl::Array(c) => self.read_array(c, reader, positions),
-            TypeDeserializerImpl::Struct(c) => self.read_struct(c, reader, positions),
-            TypeDeserializerImpl::Variant(c) => self.read_variant(c, reader, positions),
-        }
+        todo!("expression")
+        // match column {
+        //     TypeDeserializerImpl::Null(c) => self.read_null(c, reader),
+        //     TypeDeserializerImpl::Nullable(c) => self.read_nullable(c, reader, positions),
+        //     TypeDeserializerImpl::Boolean(c) => self.read_bool(c, reader),
+        //     TypeDeserializerImpl::Int8(c) => self.read_int(c, reader),
+        //     TypeDeserializerImpl::Int16(c) => self.read_int(c, reader),
+        //     TypeDeserializerImpl::Int32(c) => self.read_int(c, reader),
+        //     TypeDeserializerImpl::Int64(c) => self.read_int(c, reader),
+        //     TypeDeserializerImpl::UInt8(c) => self.read_int(c, reader),
+        //     TypeDeserializerImpl::UInt16(c) => self.read_int(c, reader),
+        //     TypeDeserializerImpl::UInt32(c) => self.read_int(c, reader),
+        //     TypeDeserializerImpl::UInt64(c) => self.read_int(c, reader),
+        //     TypeDeserializerImpl::Float32(c) => self.read_float(c, reader),
+        //     TypeDeserializerImpl::Float64(c) => self.read_float(c, reader),
+        //     TypeDeserializerImpl::Date(c) => self.read_date(c, reader, positions),
+        //     TypeDeserializerImpl::Interval(c) => self.read_date(c, reader, positions),
+        //     TypeDeserializerImpl::Timestamp(c) => self.read_timestamp(c, reader, positions),
+        //     TypeDeserializerImpl::String(c) => self.read_string(c, reader, positions),
+        //     TypeDeserializerImpl::Array(c) => self.read_array(c, reader, positions),
+        //     TypeDeserializerImpl::Struct(c) => self.read_struct(c, reader, positions),
+        //     TypeDeserializerImpl::Variant(c) => self.read_variant(c, reader, positions),
+        // }
     }
 
     fn read_bool<R: AsRef<[u8]>>(
@@ -137,10 +135,10 @@ impl FastFieldDecoderValues {
         reader: &mut Cursor<R>,
     ) -> Result<()> {
         if self.match_bytes(reader, &self.common_settings().true_bytes) {
-            column.builder.append_value(true);
+            column.push(true);
             Ok(())
         } else if self.match_bytes(reader, &self.common_settings().false_bytes) {
-            column.builder.append_value(false);
+            column.push(false);
             Ok(())
         } else {
             let err_msg = format!(
@@ -157,7 +155,7 @@ impl FastFieldDecoderValues {
         column: &mut NullDeserializer,
         _reader: &mut Cursor<R>,
     ) -> Result<()> {
-        column.builder.append_default();
+        column.de_default();
         Ok(())
     }
 
@@ -173,35 +171,35 @@ impl FastFieldDecoderValues {
             column.de_default();
             return Ok(());
         } else {
-            self.read_field(&mut column.inner, reader, positions)?;
-            column.bitmap.push(true);
+            self.read_field(column.inner.as_mut(), reader, positions)?;
+            column.validity.push(true);
         }
         Ok(())
     }
 
-    fn read_int<T, R: AsRef<[u8]>>(
+    fn read_int<T, P, R: AsRef<[u8]>>(
         &self,
-        column: &mut NumberDeserializer<T>,
+        column: &mut NumberDeserializer<T, P>,
         reader: &mut Cursor<R>,
     ) -> Result<()>
     where
-        T: PrimitiveType + Unmarshal<T> + StatBuffer + FromLexical,
+        T: Number + Unmarshal<T> + StatBuffer + FromLexical,
     {
         let v: T = reader.read_int_text()?;
-        column.builder.append_value(v);
+        column.builder.push(v);
         Ok(())
     }
 
-    fn read_float<T, R: AsRef<[u8]>>(
+    fn read_float<T, P, R: AsRef<[u8]>>(
         &self,
-        column: &mut NumberDeserializer<T>,
+        column: &mut NumberDeserializer<T, P>,
         reader: &mut Cursor<R>,
     ) -> Result<()>
     where
-        T: PrimitiveType + Unmarshal<T> + StatBuffer + FromLexical,
+        T: Number + Unmarshal<T> + StatBuffer + FromLexical,
     {
         let v: T = reader.read_float_text()?;
-        column.builder.append_value(v);
+        column.builder.push(v);
         Ok(())
     }
 
@@ -221,30 +219,29 @@ impl FastFieldDecoderValues {
         reader: &mut Cursor<R>,
         positions: &mut VecDeque<usize>,
     ) -> Result<()> {
-        column.buffer.clear();
-        self.read_string_inner(reader, &mut column.buffer, positions)?;
-        column.builder.append_value(column.buffer.as_slice());
+        self.read_string_inner(reader, &mut column.data, positions)?;
+        column.commit_row();
         Ok(())
     }
 
     fn read_date<T, R: AsRef<[u8]>>(
         &self,
-        column: &mut DateDeserializer<T>,
+        column: &mut DateDeserializer,
         reader: &mut Cursor<R>,
         positions: &mut VecDeque<usize>,
     ) -> Result<()>
     where
         i32: AsPrimitive<T>,
-        T: PrimitiveType,
+        T: Number,
         T: Unmarshal<T> + StatBuffer + FromLexical,
     {
         column.buffer.clear();
         self.read_string_inner(reader, &mut column.buffer, positions)?;
         let mut buffer_readr = Cursor::new(&column.buffer);
         let date = buffer_readr.read_date_text(&self.common_settings().timezone)?;
-        let days = uniform_date::<T>(date);
-        check_date(days.as_i32())?;
-        column.builder.append_value(days);
+        let days = uniform_date(date);
+        check_date(days as i64)?;
+        column.builder.push(days);
         Ok(())
     }
 
@@ -269,7 +266,7 @@ impl FastFieldDecoderValues {
         }
         let micros = ts.timestamp_micros();
         check_timestamp(micros)?;
-        column.builder.append_value(micros.as_());
+        column.builder.push(micros.as_());
         Ok(())
     }
 
@@ -290,15 +287,11 @@ impl FastFieldDecoderValues {
                 reader.must_ignore_byte(b',')?;
             }
             let _ = reader.ignore_white_spaces();
-            self.read_field(&mut column.inner, reader, positions)?;
+            self.read_field(column.inner.as_mut(), reader, positions)?;
             idx += 1;
         }
-        let mut values = Vec::with_capacity(idx);
-        for _ in 0..idx {
-            values.push(column.inner.pop_data_value()?);
-        }
-        values.reverse();
-        column.builder.append_value(ArrayValue::new(values));
+
+        column.add_offset(idx);
         Ok(())
     }
 
@@ -309,18 +302,15 @@ impl FastFieldDecoderValues {
         positions: &mut VecDeque<usize>,
     ) -> Result<()> {
         reader.must_ignore_byte(b'(')?;
-        let mut values = Vec::with_capacity(column.inners.len());
         for (idx, inner) in column.inners.iter_mut().enumerate() {
             let _ = reader.ignore_white_spaces();
             if idx != 0 {
                 reader.must_ignore_byte(b',')?;
             }
             let _ = reader.ignore_white_spaces();
-            self.read_field(inner, reader, positions)?;
-            values.push(inner.pop_data_value()?);
+            self.read_field(inner.as_mut(), reader, positions)?;
         }
         reader.must_ignore_byte(b')')?;
-        column.builder.append_value(StructValue::new(values));
         Ok(())
     }
 
@@ -330,11 +320,8 @@ impl FastFieldDecoderValues {
         reader: &mut Cursor<R>,
         positions: &mut VecDeque<usize>,
     ) -> Result<()> {
-        column.buffer.clear();
-        self.read_string_inner(reader, &mut column.buffer, positions)?;
-        let val = serde_json::from_slice(column.buffer.as_slice())?;
-        column.builder.append_value(val);
-        column.memory_size += column.buffer.len();
+        self.read_string_inner(reader, &mut column.builder.data, positions)?;
+        column.builder.commit_row();
         Ok(())
     }
 }

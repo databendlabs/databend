@@ -61,7 +61,7 @@ pub use stream::SendableChunkStream;
 
 pub use crate::chunk::*;
 pub use crate::chunk_compact_thresholds::ChunkCompactThresholds;
-pub use crate::deserializations::TypeDeserializer;
+pub use crate::deserializations::*;
 pub use crate::evaluator::*;
 pub use crate::expression::*;
 pub use crate::function::*;

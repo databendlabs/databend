@@ -22,7 +22,8 @@ use crate::Column;
 use crate::Scalar;
 use crate::TypeDeserializer;
 
-impl TypeDeserializer for MutableBitmap {
+pub type BooleanDeserializer = MutableBitmap;
+impl TypeDeserializer for BooleanDeserializer {
     fn memory_size(&self) -> usize {
         self.len()
     }
