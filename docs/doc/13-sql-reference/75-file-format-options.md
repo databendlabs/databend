@@ -1,5 +1,5 @@
 ---
-title: Input File Formats
+title: Input & Output File Formats
 ---
 
 Databend accepts a variety of file formats as a source where you can load data from with the [COPY INTO command](../14-sql-commands/10-dml/dml-copy-into-table.md) or [Streaming Load API](../11-integrations/00-api/03-streaming-load.md). When you select a file to do that, you need to tell Databend what the file looks like using the following format:
@@ -44,7 +44,10 @@ Files will be recognized as the TSV format if the conditions above are not satis
 
 Separates records in an input file.
 
-**Available Values**: `\r`,`\n`, or use a character with the escape char: `\b`, `\f`, `\r`, `\n`, `\t`, `\0`, `\xHH`
+**Available Values**: 
+- `\r\n`
+- An arbitrary character, such as `a` and `|`.
+- A character with the escape char: `\b`, `\f`, `\r`, `\n`, `\t`, `\0`, `\xHH`
 
 **Default**: `\n`
 
@@ -52,7 +55,10 @@ Separates records in an input file.
 
 Separates fields in a record.
 
-**Available Values**: Use a character with the escape char: `\b`, `\f`, `\r`, `\n`, `\t`, `\0`, `\xHH`
+**Available Values**: 
+- `\r\n`
+- An arbitrary character, such as `a` and `|`.
+- A character with the escape char: `\b`, `\f`, `\r`, `\n`, `\t`, `\0`, `\xHH`
 
 **Default**: `,` (comma)
 
@@ -117,7 +123,10 @@ Databend is subject to the following conditions when dealing with a TSV file:
 
 Separates records in an input file.
 
-**Available Values**: `\r`,`\n`, or use a character with the escape char: `\b`, `\f`, `\r`, `\n`, `\t`, `\0`, `\xHH`
+**Available Values**: 
+- `\r\n`
+- An arbitrary character, such as `a` and `|`.
+- A character with the escape char: `\b`, `\f`, `\r`, `\n`, `\t`, `\0`, `\xHH`
 
 **Default**: `\n`
 
@@ -125,7 +134,10 @@ Separates records in an input file.
 
 Separates fields in a record.
 
-**Available Values**: Use a character with the escape char: `\b`, `\f`, `\r`, `\n`, `\t`, `\0`, `\xHH`
+**Available Values**: 
+- `\r\n`
+- An arbitrary character, such as `a` and `|`.
+- A character with the escape char: `\b`, `\f`, `\r`, `\n`, `\t`, `\0`, `\xHH`
 
 **Default**: `\t` (TAB)
 

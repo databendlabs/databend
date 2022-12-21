@@ -18,7 +18,7 @@ curl -H "insert_sql:<value>" -F "upload=@<file_location>" [-F "upload=@<file_loc
 ```
 ## Explaining Argument `-H`
 
-The request usually includes many occurrences of the argument `-H` and each is followed by one of the following parameters to tell Databend how to handle the file you're loading data from. Please note that `insert_sql` is required. For the parameter `FILE_FORMAT` in `insert_sql`, see [Input File Formats](../30-file-format-options.md).
+The request usually includes many occurrences of the argument `-H` and each is followed by one of the following parameters to tell Databend how to handle the file you're loading data from. Please note that `insert_sql` is required. For the parameter `FILE_FORMAT` in `insert_sql`, see [Input & Output File Formats](../../13-sql-reference/75-file-format-options.md).
 
 | Parameter               | Values                              | Supported Formats         | Examples                                                                                                                              |
 |-------------------------|-------------------------------------|---------------------------|---------------------------------------------------------------------------------------------------------------------------------------|
