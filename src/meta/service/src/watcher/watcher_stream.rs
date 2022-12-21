@@ -20,16 +20,21 @@ use tonic::Status;
 use super::WatcherId;
 use super::WatcherSender;
 
-pub struct WatcherStream {
+/// Attributes of a watcher that is interested in kv change events.
+pub struct WatcherInfo {
     pub id: WatcherId,
 
     pub filter_type: FilterType,
 
-    tx: WatcherSender,
-
     pub key: String,
 
     pub key_end: String,
+}
+
+pub struct WatcherStream {
+    pub watcher: WatcherInfo,
+
+    tx: WatcherSender,
 }
 
 impl WatcherStream {
@@ -41,11 +46,13 @@ impl WatcherStream {
         key_end: String,
     ) -> Self {
         WatcherStream {
-            id,
-            filter_type,
+            watcher: WatcherInfo {
+                id,
+                filter_type,
+                key,
+                key_end,
+            },
             tx,
-            key,
-            key_end,
         }
     }
 
