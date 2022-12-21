@@ -395,7 +395,7 @@ pub struct OptimizeTableStmt<'a> {
     pub catalog: Option<Identifier<'a>>,
     pub database: Option<Identifier<'a>>,
     pub table: Identifier<'a>,
-    pub action: Option<OptimizeTableAction<'a>>,
+    pub action: OptimizeTableAction<'a>,
 }
 
 impl Display for OptimizeTableStmt<'_> {
@@ -408,9 +408,7 @@ impl Display for OptimizeTableStmt<'_> {
                 .chain(&self.database)
                 .chain(Some(&self.table)),
         )?;
-        if let Some(action) = &self.action {
-            write!(f, " {action}")?;
-        }
+        write!(f, " {}", &self.action)?;
 
         Ok(())
     }

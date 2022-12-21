@@ -746,7 +746,7 @@ impl<'a> Binder {
             catalog,
             database,
             table,
-            action,
+            action: ast_action,
         } = stmt;
 
         let catalog = catalog
@@ -758,38 +758,33 @@ impl<'a> Binder {
             .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
             .unwrap_or_else(|| self.ctx.get_current_database());
         let table = normalize_identifier(table, &self.name_resolution_ctx).name;
-        let action = if let Some(ast_action) = action {
-            match ast_action {
-                AstOptimizeTableAction::All => OptimizeTableAction::All,
-                AstOptimizeTableAction::Purge { before } => {
-                    let p = if let Some(point) = before {
-                        let point = self.resolve_data_travel_point(bind_context, point).await?;
-                        Some(point)
-                    } else {
-                        None
-                    };
-                    OptimizeTableAction::Purge(p)
-                }
-                AstOptimizeTableAction::Compact { target, limit } => {
-                    let limit_cnt = match limit {
-                        Some(Expr::Literal {
-                            lit: Literal::Integer(uint),
-                            ..
-                        }) => Some(*uint as usize),
-                        Some(_) => {
-                            return Err(ErrorCode::IllegalDataType("Unsupported limit type"));
-                        }
-                        _ => None,
-                    };
-                    match target {
-                        CompactTarget::Block => OptimizeTableAction::CompactBlocks(limit_cnt),
-                        CompactTarget::Segment => OptimizeTableAction::CompactSegments(limit_cnt),
+        let action = match ast_action {
+            AstOptimizeTableAction::All => OptimizeTableAction::All,
+            AstOptimizeTableAction::Purge { before } => {
+                let p = if let Some(point) = before {
+                    let point = self.resolve_data_travel_point(bind_context, point).await?;
+                    Some(point)
+                } else {
+                    None
+                };
+                OptimizeTableAction::Purge(p)
+            }
+            AstOptimizeTableAction::Compact { target, limit } => {
+                let limit_cnt = match limit {
+                    Some(Expr::Literal {
+                        lit: Literal::Integer(uint),
+                        ..
+                    }) => Some(*uint as usize),
+                    Some(_) => {
+                        return Err(ErrorCode::IllegalDataType("Unsupported limit type"));
                     }
+                    _ => None,
+                };
+                match target {
+                    CompactTarget::Block => OptimizeTableAction::CompactBlocks(limit_cnt),
+                    CompactTarget::Segment => OptimizeTableAction::CompactSegments(limit_cnt),
                 }
             }
-        } else {
-            // TODO make this an error
-            OptimizeTableAction::Purge(None)
         };
 
         Ok(Plan::OptimizeTable(Box::new(OptimizeTablePlan {

@@ -516,7 +516,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let optimize_table = map(
         rule! {
-            OPTIMIZE ~ TABLE ~ #peroid_separated_idents_1_to_3 ~ #optimize_table_action?
+            OPTIMIZE ~ TABLE ~ #peroid_separated_idents_1_to_3 ~ #optimize_table_action
         },
         |(_, _, (catalog, database, table), action)| {
             Statement::OptimizeTable(OptimizeTableStmt {
