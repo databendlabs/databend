@@ -268,9 +268,9 @@ impl Chunk<String> {
     pub fn resort(self, schema: &TableSchema) -> Result<Self> {
         let mut columns = Vec::with_capacity(self.columns.len());
         for f in schema.fields() {
-            let flag = false;
-            for col in self.columns {
-                if col.id == f.name() {
+            let mut flag = false;
+            for col in &self.columns {
+                if col.id.eq(f.name()) {
                     flag = true;
                     columns.push(col.clone());
                 }
