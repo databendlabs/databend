@@ -28,7 +28,7 @@ impl TypeDeserializer for TimestampDeserializer {
         self.builder.memory_size()
     }
 
-    fn value_size(&self) -> usize {
+    fn len(&self) -> usize {
         self.builder.len()
     }
 

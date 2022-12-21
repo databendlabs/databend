@@ -144,7 +144,7 @@ impl InputFormatTextBase for InputFormatCSV {
                 if builder.ctx.on_error_mode == OnErrorMode::Continue {
                     columns.iter_mut().for_each(|c| {
                         // check if parts of columns inserted data, if so, pop it.
-                        if c.value_size() > num_rows {
+                        if c.len() > num_rows {
                             c.pop_data_value().expect("must success");
                         }
                     });

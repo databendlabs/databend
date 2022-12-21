@@ -33,7 +33,7 @@ impl TypeDeserializer for NullableDeserializer {
         self.inner.memory_size() + self.bitmap.as_slice().len()
     }
 
-    fn value_size(&self) -> usize {
+    fn len(&self) -> usize {
         self.bitmap.len()
     }
 
