@@ -158,6 +158,7 @@ pub enum StageFileFormatType {
     Orc,
     Parquet,
     Xml,
+    None,
 }
 
 impl Default for StageFileFormatType {
@@ -223,9 +224,28 @@ impl Default for FileFormatOptions {
 }
 
 impl FileFormatOptions {
+    pub fn new() -> Self {
+        Self {
+            format: StageFileFormatType::None,
+            field_delimiter: "".to_string(),
+            record_delimiter: "".to_string(),
+            nan_display: "".to_string(),
+            skip_header: 0,
+            escape: "".to_string(),
+            compression: StageFileCompression::None,
+            row_tag: "".to_string(),
+            quote: "".to_string(),
+        }
+    }
+
     pub fn from_map(opts: &BTreeMap<String, String>) -> Result<Self> {
-        let mut file_format_options = Self::default();
+        let mut file_format_options = Self::new();
         file_format_options.apply(opts, false)?;
+        if file_format_options.format == StageFileFormatType::None {
+            return Err(ErrorCode::SyntaxException(
+                "File format type must be specified",
+            ));
+        }
         Ok(file_format_options)
     }
 
