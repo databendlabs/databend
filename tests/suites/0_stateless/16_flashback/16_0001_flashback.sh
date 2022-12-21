@@ -47,14 +47,9 @@ echo "alter table t16 flashback to (TIMESTAMP => '2000-12-06 04:35:17.856848'::T
 
 # flash back to point that does not visible to the current snapshot will also fail
 #  although $SNAPSHOT_ID has been in the history of table `t16`, but
-#  after reverted to the $FST_SNAPSHOT_ID, it no longer to the table `t16`
+#  after reverted to the $FST_SNAPSHOT_ID, it no longer visible to the table `t16`
 echo "flash back to point that does not visible to the current snapshot should report error 1105"
 echo "alter table t16 flashback to (snapshot => '$SNAPSHOT_ID')" | $MYSQL_CLIENT_CONNECT
-
-# FORCE flash back to any snapshot that exists in the storage is OK
-#echo "flash back to point that does not visible to the current snapshot should report error 1105"
-#echo "alter table t16 flashback to (snapshot => '$SNAPSHOT_ID')" | $MYSQL_CLIENT_CONNECT
-
 
 
 ## Drop table.
