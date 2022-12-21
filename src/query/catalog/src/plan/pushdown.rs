@@ -16,6 +16,7 @@ use std::fmt::Debug;
 
 use common_expression::DataSchemaRef;
 use common_expression::RemoteExpr;
+use common_expression::TableSchemaRef;
 use common_meta_types::UserStageInfo;
 
 use crate::plan::Projection;
@@ -47,4 +48,32 @@ pub struct PushDownInfo {
     pub limit: Option<usize>,
     /// Optional order_by expression plan, asc, null_first
     pub order_by: Vec<(RemoteExpr<String>, bool, bool)>,
+}
+
+impl PushDownInfo {
+    pub fn prewhere_of_push_downs(push_downs: &Option<PushDownInfo>) -> Option<PrewhereInfo> {
+        if let Some(PushDownInfo { prewhere, .. }) = push_downs {
+            prewhere.clone()
+        } else {
+            None
+        }
+    }
+
+    pub fn projection_of_push_downs(
+        schema: &TableSchema,
+        push_downs: &Option<PushDownInfo>,
+    ) -> Projection {
+        if let Some(PushDownInfo {
+            projection: Some(prj),
+            ..
+        }) = push_downs
+        {
+            prj.clone()
+        } else {
+            let indices = (0..schema.fields().len())
+                .into_iter()
+                .collect::<Vec<usize>>();
+            Projection::Columns(indices)
+        }
+    }
 }

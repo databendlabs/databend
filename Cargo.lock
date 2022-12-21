@@ -2463,10 +2463,9 @@ dependencies = [
  "common-base",
  "common-catalog",
  "common-config",
- "common-datablocks",
- "common-datavalues",
  "common-exception",
- "common-functions",
+ "common-expression",
+ "common-functions-v2",
  "common-meta-app",
  "common-pipeline-core",
  "common-sql",
@@ -2484,8 +2483,8 @@ name = "common-storages-pruner"
 version = "0.1.0"
 dependencies = [
  "common-catalog",
- "common-datavalues",
  "common-exception",
+ "common-expression",
  "common-storages-index",
  "common-storages-table-meta",
  "tracing",

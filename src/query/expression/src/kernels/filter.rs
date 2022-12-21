@@ -80,7 +80,7 @@ impl<Index: ColumnIndex> Chunk<Index> {
     }
 
     // Must be numeric, boolean, or string value type
-    fn cast_to_nonull_boolean(predicate: &Value<AnyType>) -> Option<Value<BooleanType>> {
+    pub fn cast_to_nonull_boolean(predicate: &Value<AnyType>) -> Option<Value<BooleanType>> {
         match predicate {
             Value::Scalar(s) => Self::cast_scalar_to_boolean(s).map(Value::Scalar),
             Value::Column(c) => Self::cast_column_to_boolean(c).map(Value::Column),

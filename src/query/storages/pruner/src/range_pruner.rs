@@ -16,9 +16,7 @@ use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use common_expression::DataSchemaRef;
 use common_expression::Expr;
-use common_expression::RemoteExpr;
 use common_expression::TableSchemaRef;
 use common_storages_index::RangeFilter;
 use common_storages_table_meta::meta::StatisticsOfColumns;
@@ -65,8 +63,8 @@ impl RangePrunerCreator {
     /// Note: the schema should be the schema of the table, not the schema of the input.
     pub fn try_create<'a>(
         ctx: &Arc<dyn TableContext>,
-        filter_expr: Option<&'a [Expression]>,
-        schema: &'a DataSchemaRef,
+        filter_expr: Option<&'a [Expr<String>]>,
+        schema: &'a TableSchemaRef,
     ) -> Result<Arc<dyn RangePruner + Send + Sync>> {
         Ok(match filter_expr {
             Some(exprs) if !exprs.is_empty() => {
