@@ -229,7 +229,7 @@ pub trait Table: Sync + Send {
     async fn delete(
         &self,
         ctx: Arc<dyn TableContext>,
-        filter: Option<Expression>,
+        filter: Option<RemoteExpr<String>>,
         col_indices: Vec<usize>,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
