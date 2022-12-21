@@ -302,6 +302,50 @@ impl InputFormatTextBase for InputFormatCSV {
         let num_fields = state.num_fields;
         let reader = state.csv_reader.as_mut().expect("must success");
         let field_ends = &mut reader.field_ends[..];
+        let in_tmp = Vec::new();
+        let mut out_tmp = vec![0u8; 1];
+        let mut endlen = reader.n_end;
+
+        if state.rows_to_skip > 0 {
+            let (result, _, _, n_end) =
+                reader
+                    .reader
+                    .read_record(&in_tmp, &mut out_tmp, &mut field_ends[endlen..]);
+            endlen += n_end;
+
+            return match result {
+                ReadRecordResult::InputEmpty => {
+                    reader.n_end = endlen;
+                    Ok(vec![])
+                }
+                ReadRecordResult::OutputFull => {
+                    Err(output_full_error(&state.path, state.rows))
+                }
+                ReadRecordResult::OutputEndsFull => Err(output_ends_full_error(
+                    num_fields,
+                    field_ends.len(),
+                    &state.path,
+                    state.rows,
+                )),
+                ReadRecordResult::Record => {
+                    Self::check_num_field(num_fields, endlen, field_ends, &state.path, state.rows)?;
+
+                    state.rows_to_skip -= 1;
+                    tracing::debug!(
+                        "csv aligner: skip a header row, remain {}",
+                        state.rows_to_skip
+                    );
+                    Ok(vec![])
+                }
+                ReadRecordResult::End => {
+                    Err(csv_error("unexpect eof in header", &state.path, state.rows))
+                }
+            };
+        }
+
+        let num_fields = state.num_fields;
+        let reader = state.csv_reader.as_mut().expect("must success");
+        let field_ends = &mut reader.field_ends[..];
         let start_row = state.rows;
 
         let in_tmp = Vec::new();
