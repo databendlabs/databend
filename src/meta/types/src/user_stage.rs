@@ -235,7 +235,7 @@ impl FileFormatOptions {
         }
         for (k, v) in opts.iter() {
             match k.as_str() {
-                "format" => {
+                "format" | "type" => {
                     let format = StageFileFormatType::from_str(v)?;
                     self.format = format;
                 }
