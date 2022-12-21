@@ -259,10 +259,10 @@ impl InputContext {
         stream_receiver: Receiver<Result<StreamingReadBatch>>,
         settings: Arc<Settings>,
         file_format_options: FileFormatOptions,
-        schema: DataSchemaRef,
+        schema: TableSchemaRef,
         scan_progress: Arc<Progress>,
         is_multi_part: bool,
-        block_compact_thresholds: BlockCompactThresholds,
+        chunk_compact_thresholds: ChunkCompactThresholds,
     ) -> Result<Self> {
         let read_batch_size = settings.get_input_read_buffer_size()? as usize;
         let format_typ = file_format_options.format.clone();
@@ -292,7 +292,7 @@ impl InputContext {
             source: InputSource::Stream(Mutex::new(Some(stream_receiver))),
             plan: InputPlan::StreamingLoad(plan),
             splits: vec![],
-            block_compact_thresholds,
+            chunk_compact_thresholds,
             format_options: file_format_options,
         })
     }
