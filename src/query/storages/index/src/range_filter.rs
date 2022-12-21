@@ -641,13 +641,16 @@ impl<'a> VerifiableExprBuilder<'a> {
                         .zip(types.iter())
                         .sorted_by_key(|&(val, _)| val)
                         .collect::<Vec<_>>();
+                    assert!(!sorted.is_empty());
+                    let start = sorted.first().unwrap();
                     let right_min = Expression::Constant {
-                        value: sorted[0].0.clone(),
-                        data_type: sorted[0].1.clone(),
+                        value: start.0.clone(),
+                        data_type: start.1.clone(),
                     };
+                    let end = sorted.last().unwrap();
                     let right_max = Expression::Constant {
-                        value: sorted.last().unwrap().0.clone(),
-                        data_type: sorted.last().unwrap().1.clone(),
+                        value: end.0.clone(),
+                        data_type: end.1.clone(),
                     };
 
                     let left_min = self.min_column_expr(0)?;
