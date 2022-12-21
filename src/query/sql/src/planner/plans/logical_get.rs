@@ -140,10 +140,11 @@ impl LogicalOperator for LogicalGet {
                     num_rows,
                     Some((min, max)),
                     DEFAULT_HISTOGRAM_BUCKETS,
-                )?;
+                )
+                .ok();
                 let column_stat = ColumnStat {
                     null_count: col_stat.null_count,
-                    histogram: Some(histogram),
+                    histogram,
                 };
                 column_stats.insert(*k as IndexType, column_stat);
             }
