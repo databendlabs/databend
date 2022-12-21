@@ -31,6 +31,7 @@ use common_catalog::plan::StageTableInfo;
 use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_types::FileFormatOptions;
 use common_meta_types::UserStageInfo;
 use common_users::UserApiProvider;
 use tracing::debug;
@@ -486,7 +487,9 @@ impl<'a> Binder {
         stmt: &CopyStmt<'a>,
         stage: &mut UserStageInfo,
     ) -> Result<()> {
-        stage.file_format_options.apply(&stmt.file_format, false)?;
+        if !stmt.file_format.is_empty() {
+            stage.file_format_options = FileFormatOptions::from_map(&stmt.file_format)?;
+        }
 
         // Copy options.
         {
