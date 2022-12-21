@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -32,8 +31,6 @@ use common_catalog::plan::StageTableInfo;
 use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_types::FileFormatOptions;
-use common_meta_types::StageFileFormatType;
 use common_meta_types::UserStageInfo;
 use common_users::UserApiProvider;
 use tracing::debug;
@@ -489,9 +486,7 @@ impl<'a> Binder {
         stmt: &CopyStmt<'a>,
         stage: &mut UserStageInfo,
     ) -> Result<()> {
-        if !stmt.file_format.is_empty() {
-            stage.file_format_options = parse_copy_file_format_options(&stmt.file_format)?;
-        }
+        stage.file_format_options.apply(&stmt.file_format, false)?;
 
         // Copy options.
         {
@@ -590,77 +585,4 @@ pub async fn parse_stage_location_v2(
 
     debug!("parsed stage: {stage:?}, path: {relative_path}");
     Ok((stage, relative_path))
-}
-
-/// TODO(xuanwo): Move those logic into parser
-pub fn parse_copy_file_format_options(
-    file_format_options: &BTreeMap<String, String>,
-) -> Result<FileFormatOptions> {
-    // File format type.
-    let format = file_format_options
-        .get("type")
-        .ok_or_else(|| ErrorCode::SyntaxException("File format type must be specified"))?;
-    let file_format = StageFileFormatType::from_str(format)
-        .map_err(|e| ErrorCode::SyntaxException(format!("File format type error:{:?}", e)))?;
-
-    // Skip header.
-    let skip_header = file_format_options
-        .get("skip_header")
-        .unwrap_or(&"0".to_string())
-        .parse::<u64>()?;
-
-    // Field delimiter.
-    let field_delimiter = file_format_options
-        .get("field_delimiter")
-        .unwrap_or(&"".to_string())
-        .to_string();
-
-    // Record delimiter.
-    let record_delimiter = file_format_options
-        .get("record_delimiter")
-        .unwrap_or(&"".to_string())
-        .to_string();
-
-    // NaN display.
-    let nan_display = file_format_options
-        .get("nan_display")
-        .unwrap_or(&"".to_string())
-        .to_string();
-
-    // Escape
-    let escape = file_format_options
-        .get("escape")
-        .unwrap_or(&"".to_string())
-        .to_string();
-
-    // Compression delimiter.
-    let compression = file_format_options
-        .get("compression")
-        .unwrap_or(&"none".to_string())
-        .parse()
-        .map_err(ErrorCode::UnknownCompressionType)?;
-
-    // Row tag in xml.
-    let row_tag = file_format_options
-        .get("row_tag")
-        .unwrap_or(&"".to_string())
-        .to_string();
-
-    // Quote in csv.
-    let quote = file_format_options
-        .get("quote")
-        .unwrap_or(&"".to_string())
-        .to_string();
-
-    Ok(FileFormatOptions {
-        format: file_format,
-        skip_header,
-        field_delimiter,
-        record_delimiter,
-        nan_display,
-        escape,
-        compression,
-        row_tag,
-        quote,
-    })
 }
