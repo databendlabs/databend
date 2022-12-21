@@ -12,19 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
+use common_datavalues::DataValue;
+use common_sql::optimizer::Histogram;
+use common_sql::optimizer::HistogramBucket;
 
-use crate::optimizer::property::histogram::Histogram;
-use crate::IndexType;
+#[test]
+fn test_histogram() {
+    let buckets = vec![
+        HistogramBucket::new(DataValue::UInt64(1), 2.0, 1.0),
+        HistogramBucket::new(DataValue::UInt64(2), 2.0, 1.0),
+    ];
 
-pub type ColumnStatSet = HashMap<IndexType, ColumnStat>;
-
-#[derive(Debug, Clone)]
-/// Statistics information of a column
-pub struct ColumnStat {
-    /// Count of null values
-    pub null_count: u64,
-
-    /// Histogram of column
-    pub histogram: Option<Histogram>,
+    let histogram = Histogram::new(buckets);
+    assert_eq!(histogram.num_buckets(), 2);
+    assert_eq!(histogram.num_values(), 4.0);
+    assert_eq!(histogram.num_distinct_values(), 2.0);
 }
