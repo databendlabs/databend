@@ -2,7 +2,7 @@
 title: Input & Output File Formats
 ---
 
-Databend accepts a variety of file formats both as a source and a target. For example, you can load data into Databend from a file with the [COPY INTO table command](../14-sql-commands/10-dml/dml-copy-into-table.md) or [Streaming Load API](../11-integrations/00-api/03-streaming-load.md), or you can unload from Databend into a file with the [COPY INTO location command](../14-sql-commands/10-dml/dml-copy-into-location.md). To do so, you need to tell Databend what the file looks like using the following format:
+Databend accepts a variety of file formats both as a source and as a target for data loading or unloading. For example, you can load data into Databend from a file with the [COPY INTO table command](../14-sql-commands/10-dml/dml-copy-into-table.md) or the [Streaming Load API](../11-integrations/00-api/03-streaming-load.md). You can also unload data from Databend into a file with the [COPY INTO location command](../14-sql-commands/10-dml/dml-copy-into-location.md) command. To do so, you need to tell Databend what the file looks like using the following syntax:
 
 ```sql
 FILE_FORMAT = ( TYPE = { CSV | TSV | NDJSON | PARQUET | XML } [ formatTypeOptions ] )
@@ -33,8 +33,8 @@ formatTypeOptions ::=
 Databend accepts CVS files that are compliant with [RFC 4180](https://www.rfc-editor.org/rfc/rfc4180) and is subject to the following conditions:
 
 - A string must be quoted if it contains the character of a [QUOTE](#quote), [ESCAPE](#escape), [RECORD_DELIMITER](#record_delimiter), or [FIELD_DELIMITER](#field_delimiter).
-- No character will be escaped in a quoted string except `Quote`.
-- No space should be left between a `FIELD_DELIMITER` and a `Quote`.
+- No character will be escaped in a quoted string except [QUOTE](#quote).
+- No space should be left between a [FIELD_DELIMITER](#field_delimiter) and a [QUOTE](#quote).
 - A string will be quoted in CSV if it comes from a serialized Array or Struct field.
 - If you develop a program and generate the CSV files from it, Databend recommends using the CSV library from the programing language.
 - Databend does not recognize the files unloaded from MySQL as the CSV format unless the following conditions are satisfied:

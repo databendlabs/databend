@@ -9,20 +9,19 @@ The Streaming Load API is used to read data from your local files and load it in
 
 ![image](/img/load/load-data-from-local-fs.png)
 
-## API Request Format
+## Creating an API Request
 
 To create a request with the Streaming Load API, follow the format below:
 
 ```bash
 curl -H "insert_sql:<value>" -F "upload=@<file_location>" [-F "upload=@<file_location>"] -XPUT http://<user_name>:[password]@<http_handler_host>:<http_handler_port>/v1/streaming_load
 ```
-## Explaining Argument `-H`
 
-The request usually includes many occurrences of the argument `-H` and each is followed by one of the following parameters to tell Databend how to handle the file you're loading data from. Please note that `insert_sql` is required. For the parameter `FILE_FORMAT` in `insert_sql`, see [Input & Output File Formats](../../13-sql-reference/75-file-format-options.md).
+The parameter `insert_sql` is required and must include an INSERT statement as well as the FILE_FORMAT parameter that specifies the file formats. For more information about the parameter `FILE_FORMAT`, see [Input & Output File Formats](../../13-sql-reference/75-file-format-options.md).
 
 | Parameter               | Values                              | Supported Formats         | Examples                                                                                                                              |
 |-------------------------|-------------------------------------|---------------------------|---------------------------------------------------------------------------------------------------------------------------------------|
-| insert_sql              | [INSERT_statement] +  [FILE_FORMAT] | All                       | -H "insert_sql: insert into ontime file_format = (type = 'CSV' skip_header = 1 compression = 'bz2')"                                                                                        |                                                                                                                                                                                          | CSV                       |                                                                                                                                       |
+| insert_sql              | [INSERT_statement] + [FILE_FORMAT] | All                       | -H "insert_sql: insert into ontime file_format = (type = 'CSV' skip_header = 1 compression = 'bz2')"                                                                                        |                                                                                                                                                                                          | CSV                       |                                                                                                                                       |
 
 
 ## Alternatives to Streaming Load API
