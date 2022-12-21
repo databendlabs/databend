@@ -50,6 +50,7 @@ use crate::with_number_mapped_type;
 use crate::with_number_type;
 use crate::Column;
 use crate::TypeDeserializer;
+use crate::TypeDeserializerImpl;
 use crate::Value;
 use crate::ARROW_EXT_TYPE_EMPTY_ARRAY;
 use crate::ARROW_EXT_TYPE_VARIANT;
@@ -263,7 +264,7 @@ impl DataSchema {
         ArrowSchema::from(fields).with_metadata(self.metadata.clone())
     }
 
-    pub fn create_deserializers(&self, capacity: usize) -> Vec<Box<dyn TypeDeserializer>> {
+    pub fn create_deserializers(&self, capacity: usize) -> Vec<TypeDeserializerImpl> {
         let mut deserializers = Vec::with_capacity(self.num_fields());
         for field in self.fields() {
             deserializers.push(field.data_type.create_deserializer(capacity));
@@ -434,7 +435,7 @@ impl TableSchema {
         ArrowSchema::from(fields).with_metadata(self.metadata.clone())
     }
 
-    pub fn create_deserializers(&self, capacity: usize) -> Vec<Box<dyn TypeDeserializer>> {
+    pub fn create_deserializers(&self, capacity: usize) -> Vec<TypeDeserializerImpl> {
         let mut deserializers = Vec::with_capacity(self.num_fields());
         for field in self.fields() {
             let data_type: DataType = field.data_type().into();

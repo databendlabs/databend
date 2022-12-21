@@ -29,6 +29,7 @@ pub use array::*;
 pub use boolean::*;
 use common_exception::Result;
 pub use date::*;
+use enum_dispatch::enum_dispatch;
 pub use null::*;
 pub use nullable::*;
 pub use number::*;
@@ -38,8 +39,12 @@ pub use timestamp::*;
 pub use tuple::*;
 pub use variant::*;
 
+use crate::types::number::F32;
+use crate::types::number::F64;
 use crate::Column;
 use crate::Scalar;
+
+#[enum_dispatch]
 pub trait TypeDeserializer: Send + Sync {
     fn memory_size(&self) -> usize;
 
@@ -67,4 +72,28 @@ pub trait TypeDeserializer: Send + Sync {
     fn pop_data_value(&mut self) -> Result<()>;
 
     fn finish_to_column(&mut self) -> Column;
+}
+
+#[enum_dispatch(TypeDeserializer)]
+pub enum TypeDeserializerImpl {
+    Null(NullDeserializer),
+    Nullable(NullableDeserializer),
+    Array(ArrayDeserializer),
+    Boolean(BooleanDeserializer),
+    Int8(NumberDeserializer<i8, i8>),
+    Int16(NumberDeserializer<i16, i16>),
+    Int32(NumberDeserializer<i32, i32>),
+    Int64(NumberDeserializer<i64, i64>),
+    UInt8(NumberDeserializer<u8, u8>),
+    UInt16(NumberDeserializer<u16, u16>),
+    UInt32(NumberDeserializer<u32, u32>),
+    UInt64(NumberDeserializer<u64, u64>),
+    Float32(NumberDeserializer<F32, f32>),
+    Float64(NumberDeserializer<F64, f64>),
+
+    Date(DateDeserializer),
+    Timestamp(TimestampDeserializer),
+    String(StringDeserializer),
+    Struct(StructDeserializer),
+    Variant(VariantDeserializer),
 }

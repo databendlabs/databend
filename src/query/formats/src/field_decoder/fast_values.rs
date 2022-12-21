@@ -35,6 +35,7 @@ use common_expression::StringDeserializer;
 use common_expression::StructDeserializer;
 use common_expression::TimestampDeserializer;
 use common_expression::TypeDeserializer;
+use common_expression::TypeDeserializerImpl;
 use common_expression::VariantDeserializer;
 use common_io::consts::FALSE_BYTES_LOWER;
 use common_io::consts::INF_BYTES_LOWER;
@@ -100,33 +101,31 @@ impl FastFieldDecoderValues {
 
     pub fn read_field<R: AsRef<[u8]>>(
         &self,
-        column: &mut dyn TypeDeserializer,
+        column: &mut TypeDeserializerImpl,
         reader: &mut Cursor<R>,
         positions: &mut VecDeque<usize>,
     ) -> Result<()> {
-        todo!("expression")
-        // match column {
-        //     TypeDeserializerImpl::Null(c) => self.read_null(c, reader),
-        //     TypeDeserializerImpl::Nullable(c) => self.read_nullable(c, reader, positions),
-        //     TypeDeserializerImpl::Boolean(c) => self.read_bool(c, reader),
-        //     TypeDeserializerImpl::Int8(c) => self.read_int(c, reader),
-        //     TypeDeserializerImpl::Int16(c) => self.read_int(c, reader),
-        //     TypeDeserializerImpl::Int32(c) => self.read_int(c, reader),
-        //     TypeDeserializerImpl::Int64(c) => self.read_int(c, reader),
-        //     TypeDeserializerImpl::UInt8(c) => self.read_int(c, reader),
-        //     TypeDeserializerImpl::UInt16(c) => self.read_int(c, reader),
-        //     TypeDeserializerImpl::UInt32(c) => self.read_int(c, reader),
-        //     TypeDeserializerImpl::UInt64(c) => self.read_int(c, reader),
-        //     TypeDeserializerImpl::Float32(c) => self.read_float(c, reader),
-        //     TypeDeserializerImpl::Float64(c) => self.read_float(c, reader),
-        //     TypeDeserializerImpl::Date(c) => self.read_date(c, reader, positions),
-        //     TypeDeserializerImpl::Interval(c) => self.read_date(c, reader, positions),
-        //     TypeDeserializerImpl::Timestamp(c) => self.read_timestamp(c, reader, positions),
-        //     TypeDeserializerImpl::String(c) => self.read_string(c, reader, positions),
-        //     TypeDeserializerImpl::Array(c) => self.read_array(c, reader, positions),
-        //     TypeDeserializerImpl::Struct(c) => self.read_struct(c, reader, positions),
-        //     TypeDeserializerImpl::Variant(c) => self.read_variant(c, reader, positions),
-        // }
+        match column {
+            TypeDeserializerImpl::Null(c) => self.read_null(c, reader),
+            TypeDeserializerImpl::Nullable(c) => self.read_nullable(c, reader, positions),
+            TypeDeserializerImpl::Boolean(c) => self.read_bool(c, reader),
+            TypeDeserializerImpl::Int8(c) => self.read_int(c, reader),
+            TypeDeserializerImpl::Int16(c) => self.read_int(c, reader),
+            TypeDeserializerImpl::Int32(c) => self.read_int(c, reader),
+            TypeDeserializerImpl::Int64(c) => self.read_int(c, reader),
+            TypeDeserializerImpl::UInt8(c) => self.read_int(c, reader),
+            TypeDeserializerImpl::UInt16(c) => self.read_int(c, reader),
+            TypeDeserializerImpl::UInt32(c) => self.read_int(c, reader),
+            TypeDeserializerImpl::UInt64(c) => self.read_int(c, reader),
+            TypeDeserializerImpl::Float32(c) => self.read_float(c, reader),
+            TypeDeserializerImpl::Float64(c) => self.read_float(c, reader),
+            TypeDeserializerImpl::Date(c) => self.read_date(c, reader, positions),
+            TypeDeserializerImpl::Timestamp(c) => self.read_timestamp(c, reader, positions),
+            TypeDeserializerImpl::String(c) => self.read_string(c, reader, positions),
+            TypeDeserializerImpl::Array(c) => self.read_array(c, reader, positions),
+            TypeDeserializerImpl::Struct(c) => self.read_struct(c, reader, positions),
+            TypeDeserializerImpl::Variant(c) => self.read_variant(c, reader, positions),
+        }
     }
 
     fn read_bool<R: AsRef<[u8]>>(
@@ -183,10 +182,11 @@ impl FastFieldDecoderValues {
         reader: &mut Cursor<R>,
     ) -> Result<()>
     where
-        T: Number + Unmarshal<T> + StatBuffer + FromLexical,
+        T: Number + Unmarshal<T> + StatBuffer + From<P>,
+        P: Unmarshal<P> + StatBuffer + FromLexical,
     {
-        let v: T = reader.read_int_text()?;
-        column.builder.push(v);
+        let v: P = reader.read_int_text()?;
+        column.builder.push(v.into());
         Ok(())
     }
 
@@ -196,10 +196,11 @@ impl FastFieldDecoderValues {
         reader: &mut Cursor<R>,
     ) -> Result<()>
     where
-        T: Number + Unmarshal<T> + StatBuffer + FromLexical,
+        T: Number + Unmarshal<T> + StatBuffer + From<P>,
+        P: Unmarshal<P> + StatBuffer + FromLexical,
     {
-        let v: T = reader.read_float_text()?;
-        column.builder.push(v);
+        let v: P = reader.read_float_text()?;
+        column.builder.push(v.into());
         Ok(())
     }
 
@@ -224,17 +225,12 @@ impl FastFieldDecoderValues {
         Ok(())
     }
 
-    fn read_date<T, R: AsRef<[u8]>>(
+    fn read_date<R: AsRef<[u8]>>(
         &self,
         column: &mut DateDeserializer,
         reader: &mut Cursor<R>,
         positions: &mut VecDeque<usize>,
-    ) -> Result<()>
-    where
-        i32: AsPrimitive<T>,
-        T: Number,
-        T: Unmarshal<T> + StatBuffer + FromLexical,
-    {
+    ) -> Result<()> {
         column.buffer.clear();
         self.read_string_inner(reader, &mut column.buffer, positions)?;
         let mut buffer_readr = Cursor::new(&column.buffer);
@@ -308,7 +304,7 @@ impl FastFieldDecoderValues {
                 reader.must_ignore_byte(b',')?;
             }
             let _ = reader.ignore_white_spaces();
-            self.read_field(inner.as_mut(), reader, positions)?;
+            self.read_field(inner, reader, positions)?;
         }
         reader.must_ignore_byte(b')')?;
         Ok(())

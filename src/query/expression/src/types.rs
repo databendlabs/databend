@@ -65,6 +65,7 @@ use crate::values::Column;
 use crate::values::Scalar;
 use crate::ColumnBuilder;
 use crate::ScalarRef;
+use crate::TypeDeserializerImpl;
 
 pub type GenericMap = [DataType];
 
@@ -192,53 +193,50 @@ impl DataType {
             )),
         }
     }
-    pub fn create_deserializer(&self, capacity: usize) -> Box<dyn TypeDeserializer> {
+    pub fn create_deserializer(&self, capacity: usize) -> TypeDeserializerImpl {
         match self {
-            DataType::Null => Box::new(0),
-            DataType::Boolean => Box::new(MutableBitmap::with_capacity(capacity)),
-            DataType::String => {
-                Box::new(StringColumnBuilder::with_capacity(capacity, capacity * 4))
-            }
+            DataType::Null => 0.into(),
+            DataType::Boolean => MutableBitmap::with_capacity(capacity).into(),
+            DataType::String => StringColumnBuilder::with_capacity(capacity, capacity * 4).into(),
             DataType::Number(num_ty) => match num_ty {
                 NumberDataType::UInt8 => {
-                    Box::new(NumberDeserializer::<u8, u8>::with_capacity(capacity))
+                    NumberDeserializer::<u8, u8>::with_capacity(capacity).into()
                 }
                 NumberDataType::UInt16 => {
-                    Box::new(NumberDeserializer::<u16, u16>::with_capacity(capacity))
+                    NumberDeserializer::<u16, u16>::with_capacity(capacity).into()
                 }
                 NumberDataType::UInt32 => {
-                    Box::new(NumberDeserializer::<u32, u32>::with_capacity(capacity))
+                    NumberDeserializer::<u32, u32>::with_capacity(capacity).into()
                 }
                 NumberDataType::UInt64 => {
-                    Box::new(NumberDeserializer::<u64, u64>::with_capacity(capacity))
+                    NumberDeserializer::<u64, u64>::with_capacity(capacity).into()
                 }
                 NumberDataType::Int8 => {
-                    Box::new(NumberDeserializer::<i8, i8>::with_capacity(capacity))
+                    NumberDeserializer::<i8, i8>::with_capacity(capacity).into()
                 }
                 NumberDataType::Int16 => {
-                    Box::new(NumberDeserializer::<i16, i16>::with_capacity(capacity))
+                    NumberDeserializer::<i16, i16>::with_capacity(capacity).into()
                 }
                 NumberDataType::Int32 => {
-                    Box::new(NumberDeserializer::<i32, i32>::with_capacity(capacity))
+                    NumberDeserializer::<i32, i32>::with_capacity(capacity).into()
                 }
                 NumberDataType::Int64 => {
-                    Box::new(NumberDeserializer::<i64, i64>::with_capacity(capacity))
+                    NumberDeserializer::<i64, i64>::with_capacity(capacity).into()
                 }
                 NumberDataType::Float32 => {
-                    Box::new(NumberDeserializer::<F32, f32>::with_capacity(capacity))
+                    NumberDeserializer::<F32, f32>::with_capacity(capacity).into()
                 }
                 NumberDataType::Float64 => {
-                    Box::new(NumberDeserializer::<F64, f64>::with_capacity(capacity))
+                    NumberDeserializer::<F64, f64>::with_capacity(capacity).into()
                 }
             },
-            DataType::Date => Box::new(DateDeserializer::with_capacity(capacity)),
-            DataType::Timestamp => Box::new(TimestampDeserializer::with_capacity(capacity)),
-            DataType::Nullable(inner_ty) => Box::new(NullableDeserializer::with_capacity(
-                capacity,
-                inner_ty.as_ref(),
-            )),
-            DataType::Variant => Box::new(VariantDeserializer::with_capacity(capacity)),
-            DataType::Tuple(types) => Box::new(TupleDeserializer::with_capacity(capacity, types)),
+            DataType::Date => DateDeserializer::with_capacity(capacity).into(),
+            DataType::Timestamp => TimestampDeserializer::with_capacity(capacity).into(),
+            DataType::Nullable(inner_ty) => {
+                NullableDeserializer::with_capacity(capacity, inner_ty.as_ref()).into()
+            }
+            DataType::Variant => VariantDeserializer::with_capacity(capacity).into(),
+            DataType::Tuple(types) => TupleDeserializer::with_capacity(capacity, types).into(),
 
             _ => unimplemented!(),
         }

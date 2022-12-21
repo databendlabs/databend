@@ -23,9 +23,10 @@ use crate::types::ValueType;
 use crate::Column;
 use crate::Scalar;
 use crate::TypeDeserializer;
+use crate::TypeDeserializerImpl;
 
 pub struct ArrayDeserializer {
-    pub inner: Box<dyn TypeDeserializer>,
+    pub inner: Box<TypeDeserializerImpl>,
     pub offsets: Vec<u64>,
 }
 

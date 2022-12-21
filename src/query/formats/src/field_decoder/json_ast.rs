@@ -32,6 +32,7 @@ use common_expression::StringDeserializer;
 use common_expression::StructDeserializer;
 use common_expression::TimestampDeserializer;
 use common_expression::TypeDeserializer;
+use common_expression::TypeDeserializerImpl;
 use common_expression::VariantDeserializer;
 use common_io::cursor_ext::BufferReadDateTimeExt;
 use common_io::cursor_ext::ReadNumberExt;
@@ -64,30 +65,28 @@ impl FieldJsonAstDecoder {
         }
     }
 
-    pub fn read_field(&self, column: &mut dyn TypeDeserializer, value: &Value) -> Result<()> {
-        todo!("expression")
-        // match column {
-        //     TypeDeserializerImpl::Null(c) => self.read_null(c, value),
-        //     TypeDeserializerImpl::Nullable(c) => self.read_nullable(c, value),
-        //     TypeDeserializerImpl::Boolean(c) => self.read_bool(c, value),
-        //     TypeDeserializerImpl::Int8(c) => self.read_int(c, value),
-        //     TypeDeserializerImpl::Int16(c) => self.read_int(c, value),
-        //     TypeDeserializerImpl::Int32(c) => self.read_int(c, value),
-        //     TypeDeserializerImpl::Int64(c) => self.read_int(c, value),
-        //     TypeDeserializerImpl::UInt8(c) => self.read_int(c, value),
-        //     TypeDeserializerImpl::UInt16(c) => self.read_int(c, value),
-        //     TypeDeserializerImpl::UInt32(c) => self.read_int(c, value),
-        //     TypeDeserializerImpl::UInt64(c) => self.read_int(c, value),
-        //     TypeDeserializerImpl::Float32(c) => self.read_float(c, value),
-        //     TypeDeserializerImpl::Float64(c) => self.read_float(c, value),
-        //     TypeDeserializerImpl::Date(c) => self.read_date(c, value),
-        //     TypeDeserializerImpl::Interval(c) => self.read_date(c, value),
-        //     TypeDeserializerImpl::Timestamp(c) => self.read_timestamp(c, value),
-        //     TypeDeserializerImpl::String(c) => self.read_string(c, value),
-        //     TypeDeserializerImpl::Array(c) => self.read_array(c, value),
-        //     TypeDeserializerImpl::Struct(c) => self.read_struct(c, value),
-        //     TypeDeserializerImpl::Variant(c) => self.read_variant(c, value),
-        // }
+    pub fn read_field(&self, column: &mut TypeDeserializerImpl, value: &Value) -> Result<()> {
+        match column {
+            TypeDeserializerImpl::Null(c) => self.read_null(c, value),
+            TypeDeserializerImpl::Nullable(c) => self.read_nullable(c, value),
+            TypeDeserializerImpl::Boolean(c) => self.read_bool(c, value),
+            TypeDeserializerImpl::Int8(c) => self.read_int(c, value),
+            TypeDeserializerImpl::Int16(c) => self.read_int(c, value),
+            TypeDeserializerImpl::Int32(c) => self.read_int(c, value),
+            TypeDeserializerImpl::Int64(c) => self.read_int(c, value),
+            TypeDeserializerImpl::UInt8(c) => self.read_int(c, value),
+            TypeDeserializerImpl::UInt16(c) => self.read_int(c, value),
+            TypeDeserializerImpl::UInt32(c) => self.read_int(c, value),
+            TypeDeserializerImpl::UInt64(c) => self.read_int(c, value),
+            TypeDeserializerImpl::Float32(c) => self.read_float(c, value),
+            TypeDeserializerImpl::Float64(c) => self.read_float(c, value),
+            TypeDeserializerImpl::Date(c) => self.read_date(c, value),
+            TypeDeserializerImpl::Timestamp(c) => self.read_timestamp(c, value),
+            TypeDeserializerImpl::String(c) => self.read_string(c, value),
+            TypeDeserializerImpl::Array(c) => self.read_array(c, value),
+            TypeDeserializerImpl::Struct(c) => self.read_struct(c, value),
+            TypeDeserializerImpl::Variant(c) => self.read_variant(c, value),
+        }
     }
 
     fn read_bool(&self, column: &mut BooleanDeserializer, value: &Value) -> Result<()> {
@@ -137,18 +136,21 @@ impl FieldJsonAstDecoder {
     }
 
     fn read_float<T, P>(&self, column: &mut NumberDeserializer<T, P>, value: &Value) -> Result<()>
-    where T: Number + Unmarshal<T> + StatBuffer + FromLexical {
+    where
+        T: Number + Unmarshal<T> + StatBuffer + From<P>,
+        P: Unmarshal<P> + StatBuffer + FromLexical,
+    {
         match value {
             Value::Number(v) => {
                 let v = v.to_string();
                 let mut reader = Cursor::new(v.as_bytes());
-                let v: T = if !T::FLOATING {
+                let v: P = if !T::FLOATING {
                     reader.read_int_text()
                 } else {
                     reader.read_float_text()
                 }?;
 
-                column.builder.push(v);
+                column.builder.push(v.into());
                 Ok(())
             }
             _ => Err(ErrorCode::BadBytes("Incorrect json value, must be number")),
@@ -166,12 +168,7 @@ impl FieldJsonAstDecoder {
         }
     }
 
-    fn read_date<T>(&self, column: &mut DateDeserializer, value: &Value) -> Result<()>
-    where
-        i32: AsPrimitive<T>,
-        T: Number,
-        T: Unmarshal<T> + StatBuffer + FromLexical,
-    {
+    fn read_date(&self, column: &mut DateDeserializer, value: &Value) -> Result<()> {
         match value {
             Value::String(v) => {
                 let mut reader = Cursor::new(v.as_bytes());
@@ -231,7 +228,7 @@ impl FieldJsonAstDecoder {
                 }
                 for (inner, item) in column.inners.iter_mut().zip(obj.iter()) {
                     let (_, val) = item;
-                    self.read_field(inner.as_mut(), val)?;
+                    self.read_field(inner, val)?;
                 }
                 Ok(())
             }

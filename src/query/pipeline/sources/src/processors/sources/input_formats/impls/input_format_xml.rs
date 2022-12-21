@@ -20,6 +20,7 @@ use common_exception::Result;
 use common_expression::DataSchemaRef;
 use common_expression::TableSchemaRef;
 use common_expression::TypeDeserializer;
+use common_expression::TypeDeserializerImpl;
 use common_formats::FieldDecoder;
 use common_formats::FieldDecoderRowBased;
 use common_formats::FieldDecoderXML;
@@ -42,7 +43,7 @@ impl InputFormatXML {
     fn read_row(
         field_decoder: &FieldDecoderXML,
         buf: &[u8],
-        deserializers: &mut [Box<dyn TypeDeserializer>],
+        deserializers: &mut [TypeDeserializerImpl],
         schema: &TableSchemaRef,
         path: &str,
         row_index: usize,

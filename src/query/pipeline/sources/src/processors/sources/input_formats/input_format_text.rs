@@ -23,6 +23,7 @@ use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::TableSchemaRef;
 use common_expression::TypeDeserializer;
+use common_expression::TypeDeserializerImpl;
 use common_formats::FieldDecoder;
 use common_formats::FileFormatOptionsExt;
 use common_meta_types::StageFileFormatType;
@@ -371,7 +372,7 @@ impl<T: InputFormatTextBase> AligningStateTrait for AligningState<T> {
 pub struct ChunkBuilder<T> {
     pub field_decoder: Arc<dyn FieldDecoder>,
     pub ctx: Arc<InputContext>,
-    pub mutable_columns: Vec<Box<dyn TypeDeserializer>>,
+    pub mutable_columns: Vec<TypeDeserializerImpl>,
     pub num_rows: usize,
     phantom: PhantomData<T>,
 }

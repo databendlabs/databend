@@ -20,9 +20,10 @@ use crate::types::DataType;
 use crate::Column;
 use crate::Scalar;
 use crate::TypeDeserializer;
+use crate::TypeDeserializerImpl;
 
 pub struct TupleDeserializer {
-    pub inners: Vec<Box<dyn TypeDeserializer>>,
+    pub inners: Vec<TypeDeserializerImpl>,
 }
 
 pub type StructDeserializer = TupleDeserializer;

@@ -22,17 +22,18 @@ use crate::types::DataType;
 use crate::Column;
 use crate::Scalar;
 use crate::TypeDeserializer;
+use crate::TypeDeserializerImpl;
 
 pub struct NullableDeserializer {
     pub validity: MutableBitmap,
-    pub inner: Box<dyn TypeDeserializer>,
+    pub inner: Box<TypeDeserializerImpl>,
 }
 
 impl NullableDeserializer {
     pub fn with_capacity(capacity: usize, inner_ty: &DataType) -> Self {
         Self {
             validity: MutableBitmap::new(),
-            inner: inner_ty.create_deserializer(capacity),
+            inner: Box::new(inner_ty.create_deserializer(capacity)),
         }
     }
 }

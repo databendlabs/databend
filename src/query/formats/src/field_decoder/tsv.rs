@@ -133,7 +133,7 @@ impl FieldDecoderRowBased for FieldDecoderTSV {
                 reader.must_ignore_byte(b',')?;
             }
             let _ = reader.ignore_white_spaces();
-            self.read_field(inner.as_mut(), reader, false)?;
+            self.read_field(inner, reader, false)?;
         }
         reader.must_ignore_byte(b')')?;
         Ok(())

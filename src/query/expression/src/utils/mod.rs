@@ -35,7 +35,6 @@ use common_exception::ErrorCode;
 use common_exception::Result as ExceptionResult;
 
 pub use self::column_from::*;
-use crate::TableSchema;
 use crate::types::AnyType;
 use crate::types::DataType;
 use crate::Chunk;
@@ -50,6 +49,7 @@ use crate::FunctionRegistry;
 use crate::RawExpr;
 use crate::Result;
 use crate::Span;
+use crate::TableSchema;
 use crate::Value;
 
 /// A convenient shortcut to evaluate a scalar function.

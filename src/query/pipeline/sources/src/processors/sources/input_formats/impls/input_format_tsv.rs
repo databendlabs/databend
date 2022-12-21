@@ -20,6 +20,7 @@ use common_exception::Result;
 use common_expression::DataSchemaRef;
 use common_expression::TableSchemaRef;
 use common_expression::TypeDeserializer;
+use common_expression::TypeDeserializerImpl;
 use common_formats::FieldDecoder;
 use common_formats::FieldDecoderRowBased;
 use common_formats::FieldDecoderTSV;
@@ -41,7 +42,7 @@ impl InputFormatTSV {
         field_delimiter: u8,
         field_decoder: &FieldDecoderTSV,
         buf: &[u8],
-        deserializers: &mut Vec<Box<dyn TypeDeserializer>>,
+        deserializers: &mut Vec<TypeDeserializerImpl>,
         schema: &TableSchemaRef,
         path: &str,
         batch_id: usize,

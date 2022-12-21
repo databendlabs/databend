@@ -43,6 +43,7 @@ use crate::types::ValueType;
 use crate::with_number_mapped_type;
 use crate::Column;
 use crate::ScalarRef;
+use crate::TypeDeserializer;
 
 pub enum KeysState {
     Column(Column),
