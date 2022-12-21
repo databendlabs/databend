@@ -15,10 +15,8 @@ DATADIR=$(realpath $CURDIR/../../../data/)
 # echo "Current data dir: ${DATADIR}"
 
 copy_from_location_cases=(
-  # copy csv
-  "copy into ontime200 from 'fs://${DATADIR}/wrong_sample.csv' FILE_FORMAT = (type = 'CSV' field_delimiter = ','  record_delimiter = '\n' skip_header = 0)"
   # copy csv on_error=continue
-  "copy into ontime200 from 'fs://${DATADIR}/wrong_sample.csv' FILE_FORMAT = (type = 'CSV' field_delimiter = ','  record_delimiter = '\n' skip_header = 0) ON_ERROR=continue"
+  "copy into wrong_csv from 'fs://${DATADIR}/wrong_sample.csv' FILE_FORMAT = (type = 'CSV' field_delimiter = ','  record_delimiter = '\n' skip_header = 0) ON_ERROR=continue"
 )
 
 for i in "${copy_from_location_cases[@]}"; do
