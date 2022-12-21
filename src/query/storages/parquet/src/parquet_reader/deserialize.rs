@@ -201,7 +201,7 @@ impl ParquetReader {
                 "deserializer from row group: fail to get a chunk",
             )),
             Some(Err(cause)) => Err(ErrorCode::from(cause)),
-            Some(Ok(chunk)) => DataBlock::from_chunk(&self.output_schema, &chunk),
+            Some(Ok(chunk)) => DataBlock::from_chunk(&self.output_schema(), &chunk),
         }
     }
 

@@ -476,6 +476,16 @@ impl Settings {
                 desc: "How many hours will the COPY file metadata expired in the metasrv, default value: 24*7=7days",
                 possible_values: None,
             },
+            SettingValue {
+                default_value: UserSettingValue::String("".to_string()),
+                user_setting: UserSetting::create(
+                    "sandbox_tenant",
+                    UserSettingValue::String("".to_string()),
+                ),
+                level: ScopeLevel::Session,
+                desc: "Inject a custom sandbox_tenant into this session, it's only for testing purpose and take effect when the internal_enable_sandbox_tenant is on",
+                possible_values: None,
+            },
         ];
 
         let settings: Arc<DashMap<String, SettingValue>> = Arc::new(DashMap::default());
@@ -783,6 +793,12 @@ impl Settings {
     pub fn get_load_file_metadata_expire_hours(&self) -> Result<u64> {
         let key = "load_file_metadata_expire_hours";
         self.try_get_u64(key)
+    }
+
+    pub fn get_sandbox_tenant(&self) -> Result<String> {
+        let key = "sandbox_tenant";
+        self.check_and_get_setting_value(key)
+            .and_then(|v| v.user_setting.value.as_string())
     }
 
     pub fn has_setting(&self, key: &str) -> bool {
