@@ -104,7 +104,7 @@ impl HiveBlockReader {
         hive_partition_filler: Option<HivePartitionFiller>,
         chunk_size: usize,
     ) -> Result<Arc<HiveBlockReader>> {
-        let projected_schema = DataSchemaRef::new(schema.project(&projection));
+        let projected_schema = schema.project(&projection);
         let arrow_schema = schema.to_arrow();
         Ok(Arc::new(HiveBlockReader {
             operator,

@@ -51,7 +51,7 @@ enum State {
 
     /// `(_, _, Some(_))` indicates that a data block is ready, and needs to be consumed
     /// `(_, _, None)` indicates that there are no more blocks left for the current row group of `HiveBlocks`
-    Generated(HiveBlocks, DataBlockDeserializer, Option<Chunk<String>>),
+    Generated(HiveBlocks, DataBlockDeserializer, Option<Chunk>),
     Finish,
 }
 

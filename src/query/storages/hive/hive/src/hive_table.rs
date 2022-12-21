@@ -561,7 +561,7 @@ impl HiveSource {
 impl SyncSource for HiveSource {
     const NAME: &'static str = "HiveSource";
 
-    fn generate(&mut self) -> Result<Option<Chunk<String>>> {
+    fn generate(&mut self) -> Result<Option<Chunk>> {
         if self.finish {
             return Ok(None);
         }
