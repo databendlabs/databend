@@ -193,6 +193,9 @@ impl FileFormatOptionsExt {
             StageFileFormatType::Xml => {
                 unreachable!()
             }
+            StageFileFormatType::None => {
+                unreachable!()
+            }
         };
         Ok(output)
     }

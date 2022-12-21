@@ -57,11 +57,12 @@ use std::task::Poll;
 
 use bytesize::ByteSize;
 use pin_project_lite::pin_project;
+use tracing::info;
 
 /// The root tracker.
 ///
 /// Every alloc/dealloc stat will be fed to this tracker.
-pub static GLOBAL_MEM_STAT: MemStat = MemStat::empty();
+pub static GLOBAL_MEM_STAT: MemStat = MemStat::global();
 
 // For implemented and needs to call drop, we cannot use the attribute tag thread local.
 // https://play.rust-lang.org/?version=nightly&mode=debug&edition=2021&gist=ea33533387d401e86423df1a764b5609
@@ -235,7 +236,10 @@ impl ThreadTracker {
         // Rust will alloc or dealloc memory after the thread local is destroyed when we using thread_local macro.
         // This is the boundary of thread exit. It may be dangerous to throw mistakes here.
         if state_buffer.destroyed_thread_local_macro {
-            GLOBAL_MEM_STAT.used.fetch_add(size, Ordering::Relaxed);
+            let used = GLOBAL_MEM_STAT.used.fetch_add(size, Ordering::Relaxed);
+            GLOBAL_MEM_STAT
+                .peak_used
+                .fetch_max(used + size, Ordering::Relaxed);
             return Ok(());
         }
 
@@ -326,35 +330,43 @@ impl StatBuffer {
 /// - Every stat that is fed to a child is also fed to its parent.
 /// - A MemStat has at most one parent.
 pub struct MemStat {
+    name: Option<String>,
+
     used: AtomicI64,
+
+    peak_used: AtomicI64,
 
     /// The limit of max used memory for this tracker.
     ///
     /// Set to 0 to disable the limit.
     limit: AtomicI64,
 
-    parent_memory_tracker: Option<Arc<MemStat>>,
+    parent_memory_stat: Option<Arc<MemStat>>,
 }
 
 impl MemStat {
-    pub const fn empty() -> Self {
+    pub const fn global() -> Self {
         Self {
+            name: None,
             used: AtomicI64::new(0),
             limit: AtomicI64::new(0),
-            parent_memory_tracker: None,
+            peak_used: AtomicI64::new(0),
+            parent_memory_stat: None,
         }
     }
 
-    pub fn create() -> Arc<MemStat> {
+    pub fn create(name: String) -> Arc<MemStat> {
         let parent = MemStat::current();
-        MemStat::create_child(parent)
+        MemStat::create_child(name, parent)
     }
 
-    pub fn create_child(parent_memory_tracker: Option<Arc<MemStat>>) -> Arc<MemStat> {
+    pub fn create_child(name: String, parent_memory_stat: Option<Arc<MemStat>>) -> Arc<MemStat> {
         Arc::new(MemStat {
+            name: Some(name),
             used: AtomicI64::new(0),
             limit: AtomicI64::new(0),
-            parent_memory_tracker,
+            peak_used: AtomicI64::new(0),
+            parent_memory_stat,
         })
     }
 
@@ -391,13 +403,17 @@ impl MemStat {
         let mut used = mem_stat.used.fetch_add(memory_usage, Ordering::Relaxed);
 
         used += memory_usage;
+        mem_stat.peak_used.fetch_max(used, Ordering::Relaxed);
 
         if !is_root {
             if let Err(cause) =
-                Self::record_memory::<NEED_ROLLBACK>(&mem_stat.parent_memory_tracker, memory_usage)
+                Self::record_memory::<NEED_ROLLBACK>(&mem_stat.parent_memory_stat, memory_usage)
             {
                 if NEED_ROLLBACK {
-                    mem_stat.used.fetch_sub(memory_usage, Ordering::Relaxed);
+                    let used = mem_stat.used.fetch_sub(memory_usage, Ordering::Relaxed);
+                    mem_stat
+                        .peak_used
+                        .fetch_max(used - memory_usage, Ordering::Relaxed);
                 }
 
                 return Err(cause);
@@ -406,7 +422,10 @@ impl MemStat {
 
         if let Err(cause) = mem_stat.check_limit(used) {
             if NEED_ROLLBACK {
-                mem_stat.used.fetch_sub(memory_usage, Ordering::Relaxed);
+                let used = mem_stat.used.fetch_sub(memory_usage, Ordering::Relaxed);
+                mem_stat
+                    .peak_used
+                    .fetch_max(used - memory_usage, Ordering::Relaxed);
             }
 
             return Err(cause);
@@ -440,6 +459,36 @@ impl MemStat {
     #[inline]
     pub fn get_memory_usage(&self) -> i64 {
         self.used.load(Ordering::Relaxed)
+    }
+
+    #[inline]
+    #[allow(unused)]
+    pub fn get_peak_memory_usage(&self) -> i64 {
+        self.peak_used.load(Ordering::Relaxed)
+    }
+
+    #[allow(unused)]
+    pub fn log_memory_usage(&self) {
+        let name = self.name.clone().unwrap_or_else(|| String::from("global"));
+        let memory_usage = self.used.load(Ordering::Relaxed);
+        let memory_usage = std::cmp::max(0, memory_usage) as u64;
+        info!(
+            "Current memory usage({}): {}.",
+            name,
+            ByteSize::b(memory_usage)
+        );
+    }
+
+    #[allow(unused)]
+    pub fn log_peek_memory_usage(&self) {
+        let name = self.name.clone().unwrap_or_else(|| String::from("global"));
+        let peak_memory_usage = self.peak_used.load(Ordering::Relaxed);
+        let peak_memory_usage = std::cmp::max(0, peak_memory_usage) as u64;
+        info!(
+            "Peak memory usage({}): {}.",
+            name,
+            ByteSize::b(peak_memory_usage)
+        );
     }
 
     pub fn on_start_thread(self: &Arc<Self>) -> impl Fn() {
@@ -515,7 +564,6 @@ mod tests {
     mod async_thread_tracker {
         use std::future::Future;
         use std::pin::Pin;
-        use std::sync::Arc;
         use std::task::Context;
         use std::task::Poll;
 
@@ -543,7 +591,7 @@ mod tests {
             // A future alloc memory and it should be tracked.
             // The memory is passed out and is de-allocated outside the future and should not be tracked.
 
-            let mem_stat = Arc::new(MemStat::empty());
+            let mem_stat = MemStat::create("test_async_thread_tracker_normal_quit".to_string());
 
             let f = Foo { i: 3 };
             let f = TrackedFuture::create_with_mem_stat(Some(mem_stat.clone()), f);
@@ -629,7 +677,7 @@ mod tests {
                 mem_stat.get_memory_usage()
             }
 
-            let mem_stat = Arc::new(MemStat::empty());
+            let mem_stat = MemStat::create("test_async_thread_tracker_panic".to_string());
 
             let used0 = run_fut_in_rt(&mem_stat);
             let used1 = run_fut_in_rt(&mem_stat);

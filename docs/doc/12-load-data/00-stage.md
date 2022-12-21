@@ -14,7 +14,7 @@ In this tutorial, you will create an internal stage, stage a sample file, and th
 Execute [CREATE STAGE](../14-sql-commands/00-ddl/40-stage/01-ddl-create-stage.md) to create a named internal stage.
 
 ```shell
-mysql -h127.0.0.1 -uroot -P3307 
+mysql -h127.0.0.1 -uroot -P3307
 ```
 
 ```sql
@@ -115,7 +115,7 @@ curl -H "stage_name:my_int_stage"\
 ### Step 3. List the Staged Files (Optional)
 
 ```shell
-mysql -h127.0.0.1 -uroot -P3307 
+mysql -h127.0.0.1 -uroot -P3307
 ```
 
 ```sql
@@ -167,7 +167,7 @@ COPY INTO books FROM @my_int_stage files=('books.csv') file_format = (type = 'CS
 
 
 * file_format
- 
+
 | Parameters  | Description | Required |
 | ----------- | ----------- | --- |
 | record_delimiter | One characters that separate records in an input file. Default `'\n'` | Optional |
