@@ -158,6 +158,7 @@ pub enum StageFileFormatType {
     Orc,
     Parquet,
     Xml,
+    None,
 }
 
 impl Default for StageFileFormatType {
@@ -222,6 +223,70 @@ impl Default for FileFormatOptions {
     }
 }
 
+impl FileFormatOptions {
+    pub fn new() -> Self {
+        Self {
+            format: StageFileFormatType::None,
+            field_delimiter: "".to_string(),
+            record_delimiter: "".to_string(),
+            nan_display: "".to_string(),
+            skip_header: 0,
+            escape: "".to_string(),
+            compression: StageFileCompression::None,
+            row_tag: "".to_string(),
+            quote: "".to_string(),
+        }
+    }
+
+    pub fn from_map(opts: &BTreeMap<String, String>) -> Result<Self> {
+        let mut file_format_options = Self::new();
+        file_format_options.apply(opts, false)?;
+        if file_format_options.format == StageFileFormatType::None {
+            return Err(ErrorCode::SyntaxException(
+                "File format type must be specified",
+            ));
+        }
+        Ok(file_format_options)
+    }
+
+    pub fn apply(&mut self, opts: &BTreeMap<String, String>, ignore_unknown: bool) -> Result<()> {
+        if opts.is_empty() {
+            return Ok(());
+        }
+        for (k, v) in opts.iter() {
+            match k.as_str() {
+                "format" | "type" => {
+                    let format = StageFileFormatType::from_str(v)?;
+                    self.format = format;
+                }
+                "skip_header" => {
+                    let skip_header = u64::from_str(v)?;
+                    self.skip_header = skip_header;
+                }
+                "field_delimiter" => self.field_delimiter = v.clone(),
+                "record_delimiter" => self.record_delimiter = v.clone(),
+                "nan_display" => self.nan_display = v.clone(),
+                "escape" => self.escape = v.clone(),
+                "compression" => {
+                    let compression = StageFileCompression::from_str(v)?;
+                    self.compression = compression;
+                }
+                "row_tag" => self.row_tag = v.clone(),
+                "quote" => self.quote = v.clone(),
+                _ => {
+                    if !ignore_unknown {
+                        return Err(ErrorCode::BadArguments(format!(
+                            "Unknown stage file format option {}",
+                            k
+                        )));
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Default, Clone, Debug, Eq, PartialEq)]
 #[serde(default)]
 pub struct StageParams {
@@ -274,6 +339,55 @@ pub struct CopyOptions {
     pub purge: bool,
     pub single: bool,
     pub max_file_size: usize,
+}
+
+impl CopyOptions {
+    pub fn apply(&mut self, opts: &BTreeMap<String, String>, ignore_unknown: bool) -> Result<()> {
+        if opts.is_empty() {
+            return Ok(());
+        }
+        for (k, v) in opts.iter() {
+            match k.as_str() {
+                "on_error" => {
+                    let on_error = OnErrorMode::from_str(v)?;
+                    self.on_error = on_error;
+                }
+                "size_limit" => {
+                    let size_limit = usize::from_str(v)?;
+                    self.size_limit = size_limit;
+                }
+                "split_size" => {
+                    let split_size = usize::from_str(v)?;
+                    self.split_size = split_size;
+                }
+                "purge" => {
+                    let purge = bool::from_str(v).map_err(|_| {
+                        ErrorCode::StrParseError(format!("Cannot parse purge: {} as bool", v))
+                    })?;
+                    self.purge = purge;
+                }
+                "single" => {
+                    let single = bool::from_str(v).map_err(|_| {
+                        ErrorCode::StrParseError(format!("Cannot parse single: {} as bool", v))
+                    })?;
+                    self.single = single;
+                }
+                "max_file_size" => {
+                    let max_file_size = usize::from_str(v)?;
+                    self.max_file_size = max_file_size;
+                }
+                _ => {
+                    if !ignore_unknown {
+                        return Err(ErrorCode::BadArguments(format!(
+                            "Unknown stage copy option {}",
+                            k
+                        )));
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Default, Clone, Debug, Eq, PartialEq)]
@@ -340,88 +454,6 @@ impl UserStageInfo {
             StageType::Internal => format!("/stage/internal/{}/", self.stage_name),
             StageType::User => format!("/stage/user/{}/", self.stage_name),
         }
-    }
-
-    /// Apply the file format options.
-    pub fn apply_format_options(&mut self, opts: &BTreeMap<String, String>) -> Result<()> {
-        if opts.is_empty() {
-            return Ok(());
-        }
-        for (k, v) in opts.iter() {
-            match k.as_str() {
-                "format" => {
-                    let format = StageFileFormatType::from_str(v)?;
-                    self.file_format_options.format = format;
-                }
-                "skip_header" => {
-                    let skip_header = u64::from_str(v)?;
-                    self.file_format_options.skip_header = skip_header;
-                }
-                "field_delimiter" => self.file_format_options.field_delimiter = v.clone(),
-                "record_delimiter" => self.file_format_options.record_delimiter = v.clone(),
-                "nan_display" => self.file_format_options.nan_display = v.clone(),
-                "escape" => self.file_format_options.escape = v.clone(),
-                "compression" => {
-                    let compression = StageFileCompression::from_str(v)?;
-                    self.file_format_options.compression = compression;
-                }
-                "row_tag" => self.file_format_options.row_tag = v.clone(),
-                "quote" => self.file_format_options.quote = v.clone(),
-                _ => {
-                    return Err(ErrorCode::BadArguments(format!(
-                        "Unknown stage file format option {}",
-                        k
-                    )));
-                }
-            }
-        }
-        Ok(())
-    }
-
-    /// Apply the copy options.
-    pub fn apply_copy_options(&mut self, opts: &BTreeMap<String, String>) -> Result<()> {
-        if opts.is_empty() {
-            return Ok(());
-        }
-        for (k, v) in opts.iter() {
-            match k.as_str() {
-                "on_error" => {
-                    let on_error = OnErrorMode::from_str(v)?;
-                    self.copy_options.on_error = on_error;
-                }
-                "size_limit" => {
-                    let size_limit = usize::from_str(v)?;
-                    self.copy_options.size_limit = size_limit;
-                }
-                "split_size" => {
-                    let split_size = usize::from_str(v)?;
-                    self.copy_options.split_size = split_size;
-                }
-                "purge" => {
-                    let purge = bool::from_str(v).map_err(|_| {
-                        ErrorCode::StrParseError(format!("Cannot parse purge: {} as bool", v))
-                    })?;
-                    self.copy_options.purge = purge;
-                }
-                "single" => {
-                    let single = bool::from_str(v).map_err(|_| {
-                        ErrorCode::StrParseError(format!("Cannot parse single: {} as bool", v))
-                    })?;
-                    self.copy_options.single = single;
-                }
-                "max_file_size" => {
-                    let max_file_size = usize::from_str(v)?;
-                    self.copy_options.max_file_size = max_file_size;
-                }
-                _ => {
-                    return Err(ErrorCode::BadArguments(format!(
-                        "Unknown stage copy option {}",
-                        k
-                    )));
-                }
-            }
-        }
-        Ok(())
     }
 }
 
