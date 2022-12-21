@@ -521,7 +521,12 @@ impl Settings {
     // Get max_threads.
     pub fn get_max_threads(&self) -> Result<u64> {
         let key = "max_threads";
-        self.try_get_u64(key)
+        let value = self.try_get_u64(key)?;
+        if value == 0 {
+            Ok(16)
+        } else {
+            Ok(value)
+        }
     }
 
     // Set max_threads.
