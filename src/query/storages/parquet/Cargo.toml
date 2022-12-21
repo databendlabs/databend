@@ -16,10 +16,9 @@ common-arrow = { path = "../../../common/arrow" }
 common-base = { path = "../../../common/base" }
 common-catalog = { path = "../../catalog" }
 common-config = { path = "../../config" }
-common-datablocks = { path = "../../datablocks" }
-common-datavalues = { path = "../../datavalues" }
 common-exception = { path = "../../../common/exception" }
-common-functions = { path = "../../functions" }
+common-expression = { path = "../../expression" }
+common-functions-v2 = { path = "../../functions-v2" }
 common-meta-app = { path = "../../../meta/app" }
 common-pipeline-core = { path = "../../pipeline/core" }
 common-sql = { path = "../../sql" }

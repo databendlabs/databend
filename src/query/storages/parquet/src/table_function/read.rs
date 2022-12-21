@@ -22,8 +22,11 @@ use common_catalog::plan::PartitionsShuffleKind;
 use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
 use common_config::GlobalConfig;
-use common_datavalues::DataSchemaRef;
 use common_exception::Result;
+use common_expression::Evaluator;
+use common_expression::Expr;
+use common_expression::TableSchemaRef;
+use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 use common_pipeline_core::Pipeline;
 use common_sql::evaluator::EvalNode;
 use common_sql::evaluator::Evaluator;
@@ -59,15 +62,12 @@ impl ParquetTable {
         &self,
         _ctx: Arc<dyn TableContext>,
         plan: &DataSourcePlan,
-        schema: DataSchemaRef,
-    ) -> Result<Arc<Option<EvalNode>>> {
+        schema: TableSchemaRef,
+    ) -> Result<Arc<Option<Expr<String>>>> {
         Ok(
             match PushDownInfo::prewhere_of_push_downs(&plan.push_downs) {
                 None => Arc::new(None),
-                Some(v) => {
-                    let executor = Evaluator::eval_expression(&v.filter, schema.as_ref())?;
-                    Arc::new(Some(executor))
-                }
+                Some(v) => Arc::new(v.filter.into_expr(&BUILTIN_FUNCTIONS)),
             },
         )
     }
@@ -199,9 +199,10 @@ impl ParquetTable {
         // If there is a `PrewhereInfo`, the final output should be `PrehwereInfo.output_columns`.
         // `PrewhereInfo.output_columns` should be a subset of `PushDownInfo.projection`.
         let output_projection = match PushDownInfo::prewhere_of_push_downs(&plan.push_downs) {
-            None => {
-                PushDownInfo::projection_of_push_downs(&self.table_info.schema(), &plan.push_downs)
-            }
+            None => PushDownInfo::projection_of_push_downs(
+                &self.table_info.schema().as_ref(),
+                &plan.push_downs,
+            ),
             Some(v) => v.output_columns,
         };
         let output_schema = Arc::new(output_projection.project_schema(&plan.source_info.schema()));

@@ -32,6 +32,7 @@ use crate::ColumnIndex;
 use crate::DataSchemaRef;
 use crate::Domain;
 use crate::Scalar;
+use crate::TableSchema;
 use crate::TableSchemaRef;
 use crate::Value;
 
@@ -260,6 +261,35 @@ impl Chunk<String> {
             .collect();
 
         Ok(Chunk::new(cols, arrow_chunk.len()))
+    }
+
+    /// Resort the columns according to the schema.
+    #[inline]
+    pub fn resort(self, schema: &TableSchema) -> Result<Self> {
+        let mut columns = Vec::with_capacity(self.columns.len());
+        for f in schema.fields() {
+            let flag = false;
+            for col in self.columns {
+                if col.id == f.name() {
+                    flag = true;
+                    columns.push(col.clone());
+                }
+            }
+            if !flag {
+                let valid_fields: Vec<String> = self.columns.iter().map(|c| c.id.clone()).collect();
+                return Err(ErrorCode::BadArguments(format!(
+                    "Unable to get field named \"{}\". Valid fields: {:?}",
+                    f.name(),
+                    valid_fields
+                )));
+            }
+        }
+
+        Ok(Self {
+            columns,
+            num_rows: self.num_rows,
+            meta: self.meta,
+        })
     }
 }
 

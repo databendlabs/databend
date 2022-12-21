@@ -27,9 +27,9 @@ use common_arrow::parquet::page::CompressedPage;
 use common_arrow::parquet::read::BasicDecompressor;
 use common_arrow::parquet::read::PageMetaData;
 use common_arrow::parquet::read::PageReader;
-use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::Chunk;
 use common_storage::ColumnLeaf;
 
 use super::filter::FilterState;
@@ -43,7 +43,7 @@ impl ParquetReader {
         part: &ParquetRowGroupPart,
         chunks: Vec<(usize, Vec<u8>)>,
         filter: Option<Bitmap>,
-    ) -> Result<DataBlock> {
+    ) -> Result<Chunk<String>> {
         let mut chunk_map: HashMap<usize, Vec<u8>> = chunks.into_iter().collect();
         let mut columns_array_iter = Vec::with_capacity(self.projected_arrow_schema.fields.len());
 
@@ -195,13 +195,13 @@ impl ParquetReader {
         )?)
     }
 
-    fn try_next_block(&self, deserializer: &mut RowGroupDeserializer) -> Result<DataBlock> {
+    fn try_next_block(&self, deserializer: &mut RowGroupDeserializer) -> Result<Chunk<String>> {
         match deserializer.next() {
             None => Err(ErrorCode::Internal(
                 "deserializer from row group: fail to get a chunk",
             )),
             Some(Err(cause)) => Err(ErrorCode::from(cause)),
-            Some(Ok(chunk)) => DataBlock::from_chunk(&self.output_schema(), &chunk),
+            Some(Ok(chunk)) => Chunk::from_arrow_chunk(&chunk, &self.output_schema()),
         }
     }
 

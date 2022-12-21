@@ -32,6 +32,7 @@ use common_datavalues::DataSchema;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::Scalar;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -43,7 +44,7 @@ use crate::ParquetLocationPart;
 use crate::ParquetReader;
 
 pub struct ParquetTable {
-    table_args: Vec<DataValue>,
+    table_args: Vec<Scalar>,
 
     file_locations: Vec<String>,
     pub(super) table_info: TableInfo,
