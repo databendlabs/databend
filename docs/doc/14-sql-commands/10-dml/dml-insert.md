@@ -56,7 +56,7 @@ INSERT INTO [db.]table [(c1, c2, c3)] SELECT ...
 :::tip
 Columns are mapped according to their position in the SELECT clause, So the number of columns in SELECT should be greater or equal to the INSERT table.
 
-The data type of columns in the SELECT and INSERT table could be different, if necessary, type casting will be performed. 
+The data type of columns in the SELECT and INSERT table could be different, if necessary, type casting will be performed.
 :::
 
 ### Examples
@@ -129,5 +129,62 @@ select * from t_insert_default;
 |    1 |    2 |  1.0 | d    |
 |    3 |    3 |  3.0 | d    |
 |    4 |    4 |  4.0 | a    |
++------+------+------+------+
+```
+
+## Insert with Stage Attachment
+
+:::info
+This method is only available with native http api currently.
+
+Anything after `VALUES` will be ignored if a stage is attached to the query.
+:::
+
+### Syntax
+
+```sql
+INSERT INTO [db.]table [(c1, c2, c3)] VALUES
+```
+
+### Examples
+
+```sql
+create table t_insert_stage(a int null, b int default 2, c float, d varchar default 'd');
+```
+
+```plain title='values.csv'
+1,1.0
+2,2.0
+3,3.0
+4,4.0
+```
+
+Upload `values.csv` into stages:
+
+```shell title='Request /v1/upload_to_stage' API
+curl -H "stage_name:my_int_stage" -F "upload=@./values.csv" -XPUT http://root:@localhost:8000/v1/upload_to_stage
+```
+
+Insert with the uploaded stage:
+
+```shell
+curl -d '{"sql": "insert into t_insert_stage (a, c) values", "stage_attachment": {"location": "@my_int_stage/values.csv", "file_format_options": {}, "copy_options": {}}}' -H 'Content-type: application/json' http://root:@localhost:8000/v1/query
+```
+
+:::tip
+`file_format_options` and `copy_options` are same with the `COPY INTO` command.
+:::
+
+Check if the insert succeeded:
+
+```sql
+select * from t_insert_stage;
++------+------+------+------+
+| a    | b    | c    | d    |
++------+------+------+------+
+|    1 |    2 |  1.0 | d    |
+|    2 |    2 |  2.0 | d    |
+|    3 |    2 |  3.0 | d    |
+|    4 |    2 |  4.0 | d    |
 +------+------+------+------+
 ```
