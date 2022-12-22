@@ -183,13 +183,13 @@ impl Settings {
             },
             // max_storage_io_requests_merge_gap
             SettingValue {
-                default_value: UserSettingValue::UInt64(16 * 1024),
+                default_value: UserSettingValue::UInt64(1024),
                 user_setting: UserSetting::create(
                     "max_storage_io_requests_merge_gap",
-                    UserSettingValue::UInt64(16 * 1024),
+                    UserSettingValue::UInt64(1024),
                 ),
                 level: ScopeLevel::Session,
-                desc: "The maximum gap bytes of adjusting to merge two IO requests. By default the value is 16KB",
+                desc: "The maximum gap bytes of adjusting to merge two IO requests. By default the value is 1KB",
                 possible_values: None,
             },
             // max_storage_io_requests_page_size

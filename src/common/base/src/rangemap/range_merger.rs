@@ -23,9 +23,7 @@ use std::ops::Range;
 /// Check overlap.
 fn overlaps(this: &Range<u64>, other: &Range<u64>, max_gap_size: u64, max_range_size: u64) -> bool {
     let this_len = this.end - this.start;
-    let other_len = other.end - other.start;
-
-    if (this_len + other_len) >= max_range_size {
+    if this_len >= max_range_size {
         false
     } else {
         let end_with_gap = this.end + max_gap_size;

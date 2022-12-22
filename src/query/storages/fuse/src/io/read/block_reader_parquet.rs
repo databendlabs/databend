@@ -14,6 +14,7 @@
 
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::SystemTime;
 
@@ -72,6 +73,8 @@ impl BlockReader {
         let column_leaves = ColumnLeaves::new_from_schema(&arrow_schema);
 
         Ok(Arc::new(BlockReader {
+            normal_all_cost: Arc::new(0.into()),
+            merge_all_cost: Arc::new(0.into()),
             operator,
             projection,
             projected_schema,
@@ -284,6 +287,7 @@ impl BlockReader {
         let indices = Self::build_projection_indices(&columns);
         let mut join_handlers = Vec::with_capacity(indices.len());
 
+        // Normal read.
         let mut ranges = vec![];
         let mut normal_read_bytes = 0u64;
         for (index, _) in indices {
@@ -301,7 +305,9 @@ impl BlockReader {
 
         let now = SystemTime::now();
         let res = futures::future::try_join_all(join_handlers).await;
-        let normal_cost = now.elapsed().unwrap().as_millis();
+        let normal_cost = now.elapsed().unwrap().as_millis() as u64;
+        self.normal_all_cost
+            .fetch_add(normal_cost, Ordering::Release);
 
         // Merge io requests.
         let max_gap_size = ctx.get_settings().get_max_storage_io_requests_merge_gap()?;
@@ -321,21 +327,24 @@ impl BlockReader {
         }
         let now = SystemTime::now();
         let _ = futures::future::try_join_all(merge_io_handlers).await;
-        let merge_cost = now.elapsed().unwrap().as_millis();
+        let merge_cost = now.elapsed().unwrap().as_millis() as u64;
+        self.merge_all_cost.fetch_add(merge_cost, Ordering::Release);
 
         info!(
-            "async read norma partition={},  count={}, bytes={}, took:{} ms",
+            "norma read partition={},  count={}, bytes={}, took:{} ms, all:{} ms",
             part.location,
             part.columns_meta.len(),
             normal_read_bytes,
             normal_cost,
+            self.normal_all_cost.load(Ordering::Acquire),
         );
         info!(
-            "async read merge partition={},  count={}, bytes={}, took:{} ms",
+            "merge read partition={},  count={}, bytes={}, took:{} ms, all:{} ms",
             part.location,
             ranges.len(),
             merge_read_bytes,
             merge_cost,
+            self.merge_all_cost.load(Ordering::Acquire)
         );
 
         res

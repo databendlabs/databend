@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::atomic::AtomicU64;
+use std::sync::Arc;
+
 use common_arrow::parquet::metadata::SchemaDescriptor;
 use common_catalog::plan::Projection;
 use common_datavalues::DataSchemaRef;
@@ -21,6 +24,8 @@ use opendal::Operator;
 // TODO: make BlockReader as a trait.
 #[derive(Clone)]
 pub struct BlockReader {
+    pub normal_all_cost: Arc<AtomicU64>,
+    pub merge_all_cost: Arc<AtomicU64>,
     pub(crate) operator: Operator,
     pub(crate) projection: Projection,
     pub(crate) projected_schema: DataSchemaRef,
