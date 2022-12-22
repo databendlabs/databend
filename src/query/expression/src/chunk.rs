@@ -230,6 +230,36 @@ impl<Index: ColumnIndex> Chunk<Index> {
         })
     }
 
+    /// Resort the columns according to the schema.
+    #[inline]
+    pub fn resort(self, src_schema: &DataSchema, dest_schema: &DataSchema) -> Result<Self> {
+        let columns = dest_schema
+            .fields()
+            .iter()
+            .map(|dest_field| {
+                let src_offset = src_schema.index_of(dest_field.name()).map_err(|_| {
+                    let valid_fields: Vec<String> = src_schema
+                        .fields()
+                        .iter()
+                        .map(|f| f.name().to_string())
+                        .collect();
+                    ErrorCode::BadArguments(format!(
+                        "Unable to get field named \"{}\". Valid fields: {:?}",
+                        dest_field.name(),
+                        valid_fields
+                    ))
+                })?;
+                Ok(self.get_by_offset(src_offset).clone())
+            })
+            .collect::<Result<Vec<_>>>()?;
+
+        Ok(Self {
+            columns,
+            num_rows: self.num_rows,
+            meta: self.meta,
+        })
+    }
+
     #[inline]
     pub fn add_meta(self, meta: Option<ChunkMetaInfoPtr>) -> Result<Self> {
         Ok(Self {
