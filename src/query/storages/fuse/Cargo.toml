@@ -1,0 +1,50 @@
+[package]
+name = "common-storages-fuse"
+version = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+publish = { workspace = true }
+edition = { workspace = true }
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+doctest = false
+test = false
+
+[dependencies]
+common-arrow = { path = "../../../common/arrow" }
+common-base = { path = "../../../common/base" }
+common-cache = { path = "../../../common/cache" }
+common-catalog = { path = "../../catalog" }
+common-config = { path = "../../config" }
+common-datablocks = { path = "../../datablocks" }
+common-datavalues = { path = "../../datavalues" }
+common-exception = { path = "../../../common/exception" }
+common-functions = { path = "../../functions" }
+common-meta-app = { path = "../../../meta/app" }
+common-meta-types = { path = "../../../meta/types" }
+common-pipeline-core = { path = "../../pipeline/core" }
+common-pipeline-sources = { path = "../../pipeline/sources" }
+common-pipeline-transforms = { path = "../../pipeline/transforms" }
+common-sharing = { path = "../../sharing" }
+common-sql = { path = "../../sql" }
+common-storage = { path = "../../../common/storage" }
+common-storages-cache = { path = "../cache" }
+common-storages-index = { path = "../index" }
+common-storages-pruner = { path = "../pruner" }
+common-storages-table-meta = { path = "../table-meta" }
+
+async-trait = { version = "0.1.57", package = "async-trait-fn" }
+backoff = { version = "0.4.0", features = ["futures", "tokio"] }
+backon = "0.2"
+chrono = { workspace = true }
+futures = "0.3.24"
+futures-util = "0.3.24"
+itertools = "0.10.5"
+metrics = "0.20.1"
+opendal = "0.22"
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = "0.1.36"
+typetag = "0.2.3"
+uuid = { version = "1.1.2", features = ["serde", "v4"] }
