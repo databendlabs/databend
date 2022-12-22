@@ -117,7 +117,7 @@ impl SyncSystemTable for ConfigsTable {
         let descs: Vec<Vec<u8>> = descs.iter().map(|x| x.as_bytes().to_vec()).collect();
 
         let rows_len = names.len();
-        Ok(Chunk::new(
+        Ok(Chunk::new_from_sequence(
             vec![
                 (Value::Column(Column::from_data(groups)), DataType::String),
                 (Value::Column(Column::from_data(names)), DataType::String),

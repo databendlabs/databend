@@ -43,7 +43,7 @@ impl ParquetReader {
         part: &ParquetRowGroupPart,
         chunks: Vec<(usize, Vec<u8>)>,
         filter: Option<Bitmap>,
-    ) -> Result<Chunk<String>> {
+    ) -> Result<Chunk> {
         let mut chunk_map: HashMap<usize, Vec<u8>> = chunks.into_iter().collect();
         let mut columns_array_iter = Vec::with_capacity(self.projected_arrow_schema.fields.len());
 
@@ -195,13 +195,13 @@ impl ParquetReader {
         )?)
     }
 
-    fn try_next_block(&self, deserializer: &mut RowGroupDeserializer) -> Result<Chunk<String>> {
+    fn try_next_block(&self, deserializer: &mut RowGroupDeserializer) -> Result<Chunk> {
         match deserializer.next() {
             None => Err(ErrorCode::Internal(
                 "deserializer from row group: fail to get a chunk",
             )),
             Some(Err(cause)) => Err(ErrorCode::from(cause)),
-            Some(Ok(chunk)) => Chunk::<String>::from_arrow_chunk(&chunk, &self.output_schema()),
+            Some(Ok(chunk)) => Chunk::from_arrow_chunk(&chunk, &self.output_schema().into()),
         }
     }
 

@@ -63,7 +63,7 @@ impl<'a> BlockWriter<'a> {
     pub async fn write(
         &self,
         storage_format: FuseStorageFormat,
-        chunk: Chunk<String>,
+        chunk: Chunk,
         col_stats: StatisticsOfColumns,
         cluster_stats: Option<ClusterStatistics>,
     ) -> Result<BlockMeta> {
@@ -97,7 +97,7 @@ impl<'a> BlockWriter<'a> {
     pub async fn build_chunk_index(
         &self,
         data_accessor: &Operator,
-        chunk: &Chunk<String>,
+        chunk: &Chunk,
         chunk_id: Uuid,
     ) -> Result<(u64, Location)> {
         let bloom_index = ChunkFilter::try_create(&[chunk])?;
@@ -120,12 +120,11 @@ impl<'a> BlockWriter<'a> {
 
 pub fn write_block(
     storage_format: FuseStorageFormat,
-    chunk: Chunk<String>,
+    chunk: Chunk,
     buf: &mut Vec<u8>,
 ) -> Result<(u64, HashMap<ColumnId, ColumnMeta>)> {
     let fields = chunk
         .columns()
-        .iter()
         .map(|entry| DataField::new(entry.id, entry.data_type))
         .collect();
     let schema = DataSchema::new(fields);

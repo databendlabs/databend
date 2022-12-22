@@ -280,7 +280,7 @@ impl<TTable: 'static + AsyncSystemTable> AsyncSource for SystemTableAsyncSource<
     const NAME: &'static str = TTable::NAME;
 
     #[async_trait::unboxed_simple]
-    async fn generate(&mut self) -> Result<Option<Chunk<String>>> {
+    async fn generate(&mut self) -> Result<Option<Chunk>> {
         if self.finished {
             return Ok(None);
         }

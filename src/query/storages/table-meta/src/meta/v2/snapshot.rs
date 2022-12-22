@@ -18,6 +18,7 @@ use chrono::DateTime;
 use chrono::Utc;
 use common_base::base::uuid::Uuid;
 use common_expression::DataSchema;
+use common_expression::TableSchema;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -45,7 +46,7 @@ pub struct TableSnapshot {
     pub prev_snapshot_id: Option<(SnapshotId, FormatVersion)>,
 
     /// For each snapshot, we keep a schema for it (in case of schema evolution)
-    pub schema: DataSchema,
+    pub schema: TableSchema,
 
     /// Summary Statistics
     pub summary: Statistics,
@@ -66,7 +67,7 @@ impl TableSnapshot {
         snapshot_id: SnapshotId,
         prev_timestamp: &Option<DateTime<Utc>>,
         prev_snapshot_id: Option<(SnapshotId, FormatVersion)>,
-        schema: DataSchema,
+        schema: TableSchema,
         summary: Statistics,
         segments: Vec<Location>,
         cluster_key_meta: Option<ClusterKey>,

@@ -125,7 +125,13 @@ impl FuseTable {
             start.elapsed().as_secs()
         );
 
-        self.read_partitions_with_metas(ctx, table_info.schema(), push_downs, block_metas, summary)
+        self.read_partitions_with_metas(
+            ctx,
+            Arc::new(table_info.schema().into()),
+            push_downs,
+            block_metas,
+            summary,
+        )
     }
 
     pub fn read_partitions_with_metas(

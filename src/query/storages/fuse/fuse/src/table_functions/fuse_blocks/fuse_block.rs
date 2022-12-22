@@ -28,6 +28,9 @@ use common_expression::DataSchema;
 use common_expression::DataSchemaRefExt;
 use common_expression::Scalar;
 use common_expression::TableDataType;
+use common_expression::TableField;
+use common_expression::TableSchema;
+use common_expression::TableSchemaRefExt;
 use common_expression::Value;
 use common_storages_table_meta::meta::TableSnapshot;
 use futures_util::TryStreamExt;
@@ -163,19 +166,19 @@ impl<'a> FuseBlock<'a> {
         ))
     }
 
-    pub fn schema() -> Arc<DataSchema> {
-        DataSchemaRefExt::create(vec![
-            DataField::new("snapshot_id", TableDataType::String),
-            DataField::new("timestamp", TableDataType::Timestamp.wrap_nullable()),
-            DataField::new("block_location", TableDataType::String),
-            DataField::new("block_size", TableDataType::Number(NumberDataType::UInt64)),
-            DataField::new("file_size", TableDataType::Number(NumberDataType::UInt64)),
-            DataField::new("row_count", TableDataType::Number(NumberDataType::UInt64)),
-            DataField::new(
+    pub fn schema() -> Arc<TableSchema> {
+        TableSchemaRefExt::create(vec![
+            TableField::new("snapshot_id", TableDataType::String),
+            TableField::new("timestamp", TableDataType::Timestamp.wrap_nullable()),
+            TableField::new("block_location", TableDataType::String),
+            TableField::new("block_size", TableDataType::Number(NumberDataType::UInt64)),
+            TableField::new("file_size", TableDataType::Number(NumberDataType::UInt64)),
+            TableField::new("row_count", TableDataType::Number(NumberDataType::UInt64)),
+            TableField::new(
                 "bloom_filter_location",
                 TableDataType::String.wrap_nullable(),
             ),
-            DataField::new(
+            TableField::new(
                 "bloom_filter_size",
                 TableDataType::Number(NumberDataType::UInt64),
             ),

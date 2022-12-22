@@ -1,121 +1,3 @@
-//  Copyright 2021 Datafuse Labs.
-//
-//  Licensed under the Apache License, Version 2.0 (the "License");
-//  you may not use this file except in compliance with the License.
-//  You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-//  Unless required by applicable law or agreed to in writing, software
-//  distributed under the License is distributed on an "AS IS" BASIS,
-//  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-//  See the License for the specific language governing permissions and
-//  limitations under the License.
-
-use std::any::Any;
-use std::collections::HashSet;
-use std::collections::VecDeque;
-use std::sync::Arc;
-
-use common_catalog::catalog::StorageDescription;
-use common_catalog::plan::DataSourcePlan;
-use common_catalog::plan::PartStatistics;
-use common_catalog::plan::Partitions;
-use common_catalog::plan::PartitionsShuffleKind;
-use common_catalog::plan::Projection;
-use common_catalog::plan::PushDownInfo;
-use common_catalog::table::AppendMode;
-use common_catalog::table::Table;
-use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::Chunk;
-use common_expression::ChunkEntry;
-use common_expression::DataSchemaRef;
-use common_expression::InMemoryData;
-use common_expression::TableSchemaRef;
-use common_expression::Value;
-use common_meta_app::schema::TableInfo;
-use common_pipeline_core::processors::port::OutputPort;
-use common_pipeline_core::processors::processor::ProcessorPtr;
-use common_pipeline_core::Pipeline;
-use common_pipeline_sinks::processors::sinks::ContextSink;
-use common_pipeline_sources::processors::sources::SyncSource;
-use common_pipeline_sources::processors::sources::SyncSourcer;
-use common_storage::StorageMetrics;
-use once_cell::sync::Lazy;
-use parking_lot::Mutex;
-use parking_lot::RwLock;
-
-use crate::memory_part::MemoryPartInfo;
-
-static IN_MEMORY_DATA: Lazy<Arc<RwLock<InMemoryData<u64>>>> =
-    Lazy::new(|| Arc::new(Default::default()));
-
-pub struct MemoryTable {
-    table_info: TableInfo,
-    blocks: Arc<RwLock<Vec<Chunk>>>,
-
-    data_metrics: Arc<StorageMetrics>,
-}
-
-impl MemoryTable {
-    pub fn try_create(table_info: TableInfo) -> Result<Box<dyn Table>> {
-        let table_id = &table_info.ident.table_id;
-        let blocks = {
-            let mut in_mem_data = IN_MEMORY_DATA.write();
-            let x = in_mem_data.get(table_id);
-            match x {
-                None => {
-                    let blocks = Arc::new(RwLock::new(vec![]));
-                    in_mem_data.insert(*table_id, blocks.clone());
-                    blocks
-                }
-                Some(blocks) => blocks.clone(),
-            }
-        };
-
-        let table = Self {
-            table_info,
-            blocks,
-            data_metrics: Arc::new(StorageMetrics::default()),
-        };
-        Ok(Box::new(table))
-    }
-
-    pub fn description() -> StorageDescription {
-        StorageDescription {
-            engine_name: "MEMORY".to_string(),
-            comment: "MEMORY Storage Engine".to_string(),
-            ..Default::default()
-        }
-    }
-
-    fn get_read_chunks(&self) -> Arc<Mutex<VecDeque<Chunk>>> {
-        let chunks = self.blocks.read();
-        let mut read_chunks = VecDeque::with_capacity(chunks.len());
-
-        for chunk in chunks.iter() {
-            read_chunks.push_back(chunk.clone());
-        }
-
-        Arc::new(Mutex::new(read_chunks))
-    }
-
-    pub fn generate_memory_parts(start: usize, workers: usize, total: usize) -> Partitions {
-        let part_size = total / workers;
-        let part_remain = total % workers;
-
-        let mut partitions = Vec::with_capacity(workers);
-        if part_size == 0 {
-            partitions.push(MemoryPartInfo::create(start, total, total));
-        } else {
-            for part in 0..workers {
-                let mut part_begin = part * part_size;
-                if part == 0 && start > 0 {
-                    part_begin = start;
-                }
                 let mut part_end = (part + 1) * part_size;
                 if part == (workers - 1) && part_remain > 0 {
                     part_end += part_remain;
@@ -180,10 +62,10 @@ impl Table for MemoryTable {
                             .iter()
                             .filter(|cid| projection_filter(**cid))
                             .map(|cid| {
-                                let v = block.get_by_id(cid).unwrap();
-                                v.memory_size()
+                                let (val, _) = &block.columns()[*cid];
+                                val.as_ref().memory_size() as u64
                             })
-                            .sum::<usize>();
+                            .sum::<u64>() as usize;
 
                         stats
                     })
@@ -211,7 +93,7 @@ impl Table for MemoryTable {
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let numbers = ctx.get_settings().get_max_threads()? as usize;
-        let read_chunks = self.get_read_chunks();
+        let read_data_blocks = self.get_read_data_blocks();
 
         // Add source pipe.
         pipeline.add_source(
@@ -220,7 +102,7 @@ impl Table for MemoryTable {
                     ctx.clone(),
                     output,
                     plan.schema(),
-                    read_chunks.clone(),
+                    read_data_blocks.clone(),
                     plan.push_downs.clone(),
                 )
             },
@@ -269,7 +151,7 @@ impl Table for MemoryTable {
 struct MemoryTableSource {
     extras: Option<PushDownInfo>,
     schema: TableSchemaRef,
-    chunks: Arc<Mutex<VecDeque<Chunk>>>,
+    data_blocks: Arc<Mutex<VecDeque<Chunk>>>,
 }
 
 impl MemoryTableSource {
@@ -277,13 +159,13 @@ impl MemoryTableSource {
         ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
         schema: TableSchemaRef,
-        chunks: Arc<Mutex<VecDeque<Chunk>>>,
+        data_blocks: Arc<Mutex<VecDeque<Chunk>>>,
         extras: Option<PushDownInfo>,
     ) -> Result<ProcessorPtr> {
         SyncSourcer::create(ctx, output, MemoryTableSource {
             extras,
             schema,
-            chunks,
+            data_blocks,
         })
     }
 
@@ -291,8 +173,9 @@ impl MemoryTableSource {
         if let Some(extras) = &self.extras {
             if let Some(projection) = &extras.projection {
                 let num_rows = chunk.num_rows();
-                let pruned_chunk = match projection {
+                let pruned_data_block = match projection {
                     Projection::Columns(indices) => {
+                        let pruned_schema = self.schema.project(indices);
                         let columns = indices
                             .iter()
                             .map(|idx| chunk.get_by_offset(*idx).clone())
@@ -300,23 +183,21 @@ impl MemoryTableSource {
                         Chunk::new(columns, num_rows)
                     }
                     Projection::InnerColumns(path_indices) => {
+                        let pruned_schema = self.schema.inner_project(path_indices);
                         let mut columns = Vec::with_capacity(path_indices.len());
                         let paths: Vec<&Vec<usize>> = path_indices.values().collect();
-
-                        let mut id = 0;
-                        for path in paths.iter() {
-                            let entry = Self::traverse_paths(
-                                chunk.columns_ref(),
-                                path,
-                                chunk.num_rows(),
-                                &mut id,
-                            )?;
-                            columns.push(entry);
+                        for path in paths {
+                            let raw_columns = chunk
+                                .columns()
+                                .map(|entry| (entry.value.clone(), entry.data_type.clone()))
+                                .collect::<Vec<_>>();
+                            let column = Self::traverse_paths(&raw_columns, path)?;
+                            columns.push(column);
                         }
-                        Chunk::new(columns, num_rows)
+                        Chunk::new_from_sequence(columns, num_rows)
                     }
                 };
-                return Ok(Some(pruned_chunk));
+                return Ok(Some(pruned_data_block));
             }
         }
 
@@ -324,40 +205,26 @@ impl MemoryTableSource {
     }
 
     fn traverse_paths(
-        entries: &[ChunkEntry],
+        columns: &[(Value<AnyType>, DataType)],
         path: &[usize],
-        rows: usize,
-        id: &mut usize,
-    ) -> Result<ChunkEntry> {
+    ) -> Result<(Value<AnyType>, DataType)> {
         if path.is_empty() {
             return Err(ErrorCode::BadArguments("path should not be empty"));
         }
-
-        let mut entry = entries[path[0]].clone();
+        let (value, data_type) = &columns[path[0]];
         if path.len() == 1 {
-            entry.id = *id;
-            *id += 1;
-            return Ok(entry);
+            return Ok((value.clone(), data_type.clone()));
         }
 
-        match &entry.data_type {
+        match data_type {
             DataType::Tuple(inner_tys) => {
-                let col = entry
-                    .value
-                    .clone()
-                    .convert_to_full_column(&entry.data_type, rows);
+                let col = value.clone().into_column().unwrap();
                 let (inner_columns, _) = col.into_tuple().unwrap();
                 let mut values = Vec::with_capacity(inner_tys.len());
-
                 for (col, ty) in inner_columns.iter().zip(inner_tys.iter()) {
-                    let entry = ChunkEntry {
-                        id: 0,
-                        data_type: ty.clone(),
-                        value: Value::Column(col.clone()),
-                    };
-                    values.push(entry)
+                    values.push((Value::Column(col.clone()), ty.clone()))
                 }
-                Self::traverse_paths(&values[..], &path[1..], rows, id)
+                Self::traverse_paths(&values[..], &path[1..])
             }
             _ => Err(ErrorCode::BadArguments(format!(
                 "Unable to get column by paths: {:?}",
@@ -371,10 +238,10 @@ impl SyncSource for MemoryTableSource {
     const NAME: &'static str = "MemoryTable";
 
     fn generate(&mut self) -> Result<Option<Chunk>> {
-        let mut blocks_guard = self.chunks.lock();
+        let mut blocks_guard = self.data_blocks.lock();
         match blocks_guard.pop_front() {
             None => Ok(None),
-            Some(chunk) => self.projection(chunk),
+            Some(data_block) => self.projection(data_block),
         }
     }
 }
