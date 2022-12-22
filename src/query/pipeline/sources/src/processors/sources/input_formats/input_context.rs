@@ -307,7 +307,7 @@ impl InputContext {
     }
 
     pub fn data_schema(&self) -> DataSchema {
-        (self.schema.as_ref()).into()
+        (&self.schema.clone()).into()
     }
 
     pub fn get_compression_alg(&self, path: &str) -> Result<Option<CompressAlgorithm>> {

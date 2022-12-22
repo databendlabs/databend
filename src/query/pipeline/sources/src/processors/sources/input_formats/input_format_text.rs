@@ -388,7 +388,7 @@ impl<T: InputFormatTextBase> ChunkBuilder<T> {
             .enumerate()
             .map(|(i, (deserializer, field))| ChunkEntry {
                 id: i,
-                data_type: field.data_type().into(),
+                data_type: field.data_type().clone(),
                 value: Value::Column(deserializer.finish_to_column()),
             })
             .collect();

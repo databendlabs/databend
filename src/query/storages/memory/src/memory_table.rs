@@ -1,3 +1,122 @@
+//  Copyright 2021 Datafuse Labs.
+//
+//  Licensed under the Apache License, Version 2.0 (the "License");
+//  you may not use this file except in compliance with the License.
+//  You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+//  Unless required by applicable law or agreed to in writing, software
+//  distributed under the License is distributed on an "AS IS" BASIS,
+//  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+//  See the License for the specific language governing permissions and
+//  limitations under the License.
+
+use std::any::Any;
+use std::collections::HashSet;
+use std::collections::VecDeque;
+use std::sync::Arc;
+
+use common_catalog::catalog::StorageDescription;
+use common_catalog::plan::DataSourcePlan;
+use common_catalog::plan::PartStatistics;
+use common_catalog::plan::Partitions;
+use common_catalog::plan::PartitionsShuffleKind;
+use common_catalog::plan::Projection;
+use common_catalog::plan::PushDownInfo;
+use common_catalog::table::AppendMode;
+use common_catalog::table::Table;
+use common_catalog::table_context::TableContext;
+use common_exception::ErrorCode;
+use common_exception::Result;
+use common_expression::types::AnyType;
+use common_expression::types::DataType;
+use common_expression::Chunk;
+use common_expression::ChunkEntry;
+use common_expression::DataSchemaRef;
+use common_expression::InMemoryData;
+use common_expression::TableSchemaRef;
+use common_expression::Value;
+use common_meta_app::schema::TableInfo;
+use common_pipeline_core::processors::port::OutputPort;
+use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_core::Pipeline;
+use common_pipeline_sinks::processors::sinks::ContextSink;
+use common_pipeline_sources::processors::sources::SyncSource;
+use common_pipeline_sources::processors::sources::SyncSourcer;
+use common_storage::StorageMetrics;
+use once_cell::sync::Lazy;
+use parking_lot::Mutex;
+use parking_lot::RwLock;
+
+use crate::memory_part::MemoryPartInfo;
+
+static IN_MEMORY_DATA: Lazy<Arc<RwLock<InMemoryData<u64>>>> =
+    Lazy::new(|| Arc::new(Default::default()));
+
+pub struct MemoryTable {
+    table_info: TableInfo,
+    blocks: Arc<RwLock<Vec<Chunk>>>,
+
+    data_metrics: Arc<StorageMetrics>,
+}
+
+impl MemoryTable {
+    pub fn try_create(table_info: TableInfo) -> Result<Box<dyn Table>> {
+        let table_id = &table_info.ident.table_id;
+        let blocks = {
+            let mut in_mem_data = IN_MEMORY_DATA.write();
+            let x = in_mem_data.get(table_id);
+            match x {
+                None => {
+                    let blocks = Arc::new(RwLock::new(vec![]));
+                    in_mem_data.insert(*table_id, blocks.clone());
+                    blocks
+                }
+                Some(blocks) => blocks.clone(),
+            }
+        };
+
+        let table = Self {
+            table_info,
+            blocks,
+            data_metrics: Arc::new(StorageMetrics::default()),
+        };
+        Ok(Box::new(table))
+    }
+
+    pub fn description() -> StorageDescription {
+        StorageDescription {
+            engine_name: "MEMORY".to_string(),
+            comment: "MEMORY Storage Engine".to_string(),
+            ..Default::default()
+        }
+    }
+
+    fn get_read_data_blocks(&self) -> Arc<Mutex<VecDeque<Chunk>>> {
+        let data_blocks = self.blocks.read();
+        let mut read_data_blocks = VecDeque::with_capacity(data_blocks.len());
+
+        for data_block in data_blocks.iter() {
+            read_data_blocks.push_back(data_block.clone());
+        }
+
+        Arc::new(Mutex::new(read_data_blocks))
+    }
+
+    pub fn generate_memory_parts(start: usize, workers: usize, total: usize) -> Partitions {
+        let part_size = total / workers;
+        let part_remain = total % workers;
+
+        let mut partitions = Vec::with_capacity(workers);
+        if part_size == 0 {
+            partitions.push(MemoryPartInfo::create(start, total, total));
+        } else {
+            for part in 0..workers {
+                let mut part_begin = part * part_size;
+                if part == 0 && start > 0 {
+                    part_begin = start;
+                }
                 let mut part_end = (part + 1) * part_size;
                 if part == (workers - 1) && part_remain > 0 {
                     part_end += part_remain;
@@ -61,11 +180,8 @@ impl Table for MemoryTable {
                             .collect::<Vec<usize>>()
                             .iter()
                             .filter(|cid| projection_filter(**cid))
-                            .map(|cid| {
-                                let (val, _) = &block.columns()[*cid];
-                                val.as_ref().memory_size() as u64
-                            })
-                            .sum::<u64>() as usize;
+                            .map(|cid| block.get_by_offset(*cid).memory_size())
+                            .sum::<usize>();
 
                         stats
                     })
