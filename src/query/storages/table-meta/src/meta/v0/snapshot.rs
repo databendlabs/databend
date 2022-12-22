@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_expression::DataSchema;
+use common_expression::TableSchema;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -26,7 +27,7 @@ pub struct TableSnapshot {
     pub snapshot_id: SnapshotId,
     pub prev_snapshot_id: Option<SnapshotId>,
     /// For each snapshot, we keep a schema for it (in case of schema evolution)
-    pub schema: DataSchema,
+    pub schema: TableSchema,
     /// Summary Statistics
     pub summary: Statistics,
     /// Pointers to SegmentInfos (may be of different format)

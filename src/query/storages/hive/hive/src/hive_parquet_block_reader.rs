@@ -81,7 +81,7 @@ impl DataBlockDeserializer {
                 self.drained = true;
             }
 
-            let chunk = Chunk::<String>::from_arrow_chunk(&arrow_chunk, schema)?;
+            let chunk = Chunk::from_arrow_chunk(&arrow_chunk, &schema.into())?;
             return if let Some(filler) = &filler {
                 let num_rows = self.deserializer.num_rows();
                 let filled = filler.fill_data(chunk, part_info, num_rows)?;

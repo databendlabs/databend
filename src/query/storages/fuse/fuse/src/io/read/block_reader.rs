@@ -15,6 +15,7 @@
 use common_arrow::parquet::metadata::SchemaDescriptor;
 use common_catalog::plan::Projection;
 use common_expression::DataSchemaRef;
+use common_expression::TableSchemaRef;
 use common_storage::ColumnLeaves;
 use opendal::Operator;
 
@@ -23,7 +24,7 @@ use opendal::Operator;
 pub struct BlockReader {
     pub(crate) operator: Operator,
     pub(crate) projection: Projection,
-    pub(crate) projected_schema: DataSchemaRef,
+    pub(crate) projected_schema: TableSchemaRef,
     pub(crate) column_leaves: ColumnLeaves,
     pub(crate) parquet_schema_descriptor: SchemaDescriptor,
 }

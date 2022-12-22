@@ -32,6 +32,7 @@ use common_exception::Result;
 use common_expression::types::AnyType;
 use common_expression::types::DataType;
 use common_expression::Chunk;
+use common_expression::ChunkEntry;
 use common_expression::DataSchemaRef;
 use common_expression::InMemoryData;
 use common_expression::TableSchemaRef;
@@ -287,17 +288,16 @@ impl MemoryTableSource {
         })
     }
 
-    fn projection(&self, data_block: Chunk) -> Result<Option<Chunk>> {
+    fn projection(&self, chunk: Chunk) -> Result<Option<Chunk>> {
         if let Some(extras) = &self.extras {
             if let Some(projection) = &extras.projection {
-                let raw_columns = data_block.columns();
-                let num_rows = data_block.num_rows();
+                let num_rows = chunk.num_rows();
                 let pruned_data_block = match projection {
                     Projection::Columns(indices) => {
                         let pruned_schema = self.schema.project(indices);
                         let columns = indices
                             .iter()
-                            .map(|idx| raw_columns[*idx].clone())
+                            .map(|idx| chunk.get_by_offset(*idx).clone())
                             .collect();
                         Chunk::new(columns, num_rows)
                     }
@@ -306,17 +306,21 @@ impl MemoryTableSource {
                         let mut columns = Vec::with_capacity(path_indices.len());
                         let paths: Vec<&Vec<usize>> = path_indices.values().collect();
                         for path in paths {
-                            let column = Self::traverse_paths(raw_columns, path)?;
+                            let raw_columns = chunk
+                                .columns()
+                                .map(|entry| (entry.value.clone(), entry.data_type.clone()))
+                                .collect::<Vec<_>>();
+                            let column = Self::traverse_paths(&raw_columns, path)?;
                             columns.push(column);
                         }
-                        Chunk::new(columns, num_rows)
+                        Chunk::new_from_sequence(columns, num_rows)
                     }
                 };
                 return Ok(Some(pruned_data_block));
             }
         }
 
-        Ok(Some(data_block))
+        Ok(Some(chunk))
     }
 
     fn traverse_paths(

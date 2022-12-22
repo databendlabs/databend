@@ -776,9 +776,10 @@ impl From<&TableField> for DataField {
     }
 }
 
-impl From<&TableSchema> for DataSchema {
-    fn from(t_schema: &TableSchema) -> Self {
+impl<T: AsRef<TableSchema>> From<T> for DataSchema {
+    fn from(t_schema: T) -> Self {
         let fields = t_schema
+            .as_ref()
             .fields()
             .iter()
             .map(|t_f| t_f.into())

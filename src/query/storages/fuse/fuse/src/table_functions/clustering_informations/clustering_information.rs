@@ -30,7 +30,11 @@ use common_expression::Expr;
 use common_expression::RemoteExpr;
 use common_expression::Scalar;
 use common_expression::TableDataType;
+use common_expression::TableField;
+use common_expression::TableSchema;
+use common_expression::TableSchemaRefExt;
 use common_expression::Value;
+use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 use common_storages_table_meta::meta::BlockMeta;
 use serde_json::json;
 use serde_json::Value as JsonValue;
@@ -100,7 +104,7 @@ impl<'a> ClusteringInformation<'a> {
         let names = self
             .cluster_keys
             .iter()
-            .map(|x| x.column_name())
+            .map(|x| x.into_expr(&BUILTIN_FUNCTIONS).to_string())
             .collect::<Vec<String>>()
             .join(", ");
         let cluster_by_keys = format!("({})", names);
@@ -248,26 +252,26 @@ impl<'a> ClusteringInformation<'a> {
         })
     }
 
-    pub fn schema() -> Arc<DataSchema> {
-        DataSchemaRefExt::create(vec![
-            DataField::new("cluster_by_keys", TableDataType::String),
-            DataField::new(
+    pub fn schema() -> Arc<TableSchema> {
+        TableSchemaRefExt::create(vec![
+            TableField::new("cluster_by_keys", TableDataType::String),
+            TableField::new(
                 "total_block_count",
                 TableDataType::Number(NumberDataType::UInt64),
             ),
-            DataField::new(
+            TableField::new(
                 "total_constant_block_count",
                 TableDataType::Number(NumberDataType::UInt64),
             ),
-            DataField::new(
+            TableField::new(
                 "average_overlaps",
                 TableDataType::Number(NumberDataType::Float64),
             ),
-            DataField::new(
+            TableField::new(
                 "average_depth",
                 TableDataType::Number(NumberDataType::Float64),
             ),
-            DataField::new("block_depth_histogram", TableDataType::Variant),
+            TableField::new("block_depth_histogram", TableDataType::Variant),
         ])
     }
 }

@@ -355,7 +355,7 @@ impl Chunk<usize> {
 
     pub fn from_arrow_chunk<A: AsRef<dyn Array>>(
         arrow_chunk: &ArrowChunk<A>,
-        schema: &DataSchemaRef,
+        schema: &DataSchema,
     ) -> Result<Self> {
         let cols = schema
             .fields

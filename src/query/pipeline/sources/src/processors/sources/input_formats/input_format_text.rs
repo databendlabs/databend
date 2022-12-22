@@ -25,6 +25,7 @@ use common_expression::DataSchemaRef;
 use common_expression::TableSchemaRef;
 use common_expression::TypeDeserializer;
 use common_expression::TypeDeserializerImpl;
+use common_expression::Value;
 use common_formats::FieldDecoder;
 use common_formats::FileFormatOptionsExt;
 use common_meta_types::StageFileFormatType;
@@ -387,7 +388,7 @@ impl<T: InputFormatTextBase> ChunkBuilder<T> {
             .enumerate()
             .map(|(i, (deserializer, field))| ChunkEntry {
                 id: i,
-                data_type: field.data_type().clone(),
+                data_type: field.data_type().into(),
                 value: Value::Column(deserializer.finish_to_column()),
             })
             .collect();
@@ -398,7 +399,7 @@ impl<T: InputFormatTextBase> ChunkBuilder<T> {
             .create_deserializers(self.ctx.chunk_compact_thresholds.min_rows_per_chunk);
         self.num_rows = 0;
 
-        Chunk::new(columns, self.num_rows)
+        Ok(vec![Chunk::new(columns, self.num_rows)])
     }
 
     fn memory_size(&self) -> usize {

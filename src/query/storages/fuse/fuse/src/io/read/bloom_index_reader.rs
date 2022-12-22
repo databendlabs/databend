@@ -76,6 +76,8 @@ mod util_v1 {
     use common_base::runtime::GlobalIORuntime;
     use common_base::runtime::Runtime;
     use common_base::runtime::TrySpawn;
+    use common_expression::TableField;
+    use common_expression::TableSchema;
     use common_storages_table_meta::caches::CacheDeferMetrics;
     use common_storages_table_meta::caches::CacheManager;
 
@@ -102,10 +104,10 @@ mod util_v1 {
 
         let fields = column_needed
             .iter()
-            .map(|name| DataField::new(name, TableDataType::String))
+            .map(|name| TableField::new(name, TableDataType::String))
             .collect::<Vec<_>>();
 
-        let schema = Arc::new(DataSchema::new(fields));
+        let schema = Arc::new(TableSchema::new(fields));
 
         // 1. load column data, as bytes
         let futs = column_needed

@@ -125,7 +125,6 @@ pub fn write_block(
 ) -> Result<(u64, HashMap<ColumnId, ColumnMeta>)> {
     let fields = chunk
         .columns()
-        .iter()
         .map(|entry| DataField::new(entry.id, entry.data_type))
         .collect();
     let schema = DataSchema::new(fields);
