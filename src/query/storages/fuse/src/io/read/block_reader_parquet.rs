@@ -299,8 +299,10 @@ impl BlockReader {
         let indices = Self::build_projection_indices(&columns);
         let mut join_handlers = Vec::with_capacity(indices.len());
 
+        let mut normal_read_bytes = 0u64;
         for (index, _) in indices {
             let column_meta = &part.columns_meta[&index];
+            normal_read_bytes += column_meta.len;
             join_handlers.push(UnlimitedFuture::create(Self::read_column(
                 self.operator.object(&part.location),
                 index,
@@ -318,7 +320,9 @@ impl BlockReader {
         let max_range_size = ctx.get_settings().get_max_storage_io_requests_page_size()?;
         let ranges = Self::merge_io_requests(max_gap_size, max_range_size, &raw_part)?;
         let mut merge_io_handlers = Vec::with_capacity(ranges.len());
+        let mut merge_read_bytes = 0u64;
         for (index, range) in ranges.iter().enumerate() {
+            merge_read_bytes += range.end - range.start;
             merge_io_handlers.push(UnlimitedFuture::create(Self::read_range(
                 self.operator.object(&part.location),
                 index,
@@ -331,15 +335,17 @@ impl BlockReader {
         let merge_cost = now.elapsed().unwrap().as_millis();
 
         info!(
-            "async read normal partition={},  count={}, took:{} ms",
+            "async read norma partition={},  count={}, bytes={}, took:{} ms",
             part.location,
             part.columns_meta.len(),
+            normal_read_bytes,
             normal_cost,
         );
         info!(
-            "async read merge partition={},  count={}, took:{} ms",
+            "async read merge partition={},  count={}, bytes={}, took:{} ms",
             part.location,
             ranges.len(),
+            merge_read_bytes,
             merge_cost,
         );
 
