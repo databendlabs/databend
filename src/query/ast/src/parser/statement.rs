@@ -516,7 +516,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let optimize_table = map(
         rule! {
-            OPTIMIZE ~ TABLE ~ #peroid_separated_idents_1_to_3 ~ #optimize_table_action?
+            OPTIMIZE ~ TABLE ~ #peroid_separated_idents_1_to_3 ~ #optimize_table_action
         },
         |(_, _, (catalog, database, table), action)| {
             Statement::OptimizeTable(OptimizeTableStmt {
@@ -1483,7 +1483,12 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
 pub fn optimize_table_action(i: Input) -> IResult<OptimizeTableAction> {
     alt((
         value(OptimizeTableAction::All, rule! { ALL }),
-        value(OptimizeTableAction::Purge, rule! { PURGE }),
+        map(
+            rule! { PURGE ~ (BEFORE ~ #travel_point)?},
+            |(_, opt_travel_point)| OptimizeTableAction::Purge {
+                before: opt_travel_point.map(|(_, p)| p),
+            },
+        ),
         map(
             rule! { COMPACT ~ (SEGMENT)? ~ ( LIMIT ~ ^#expr )?},
             |(_, opt_segment, opt_limit)| OptimizeTableAction::Compact {

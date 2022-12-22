@@ -61,6 +61,7 @@ use common_meta_types::MetaOperationError;
 use common_meta_types::MetaStartupError;
 use common_meta_types::Node;
 use common_meta_types::NodeId;
+use futures::channel::oneshot;
 use itertools::Itertools;
 use openraft::Config;
 use openraft::LogId;
@@ -86,7 +87,7 @@ use crate::store::RaftStoreBare;
 use crate::watcher::DispatcherSender;
 use crate::watcher::EventDispatcher;
 use crate::watcher::EventDispatcherHandle;
-use crate::watcher::WatchEvent;
+use crate::watcher::Watcher;
 use crate::watcher::WatcherSender;
 use crate::Opened;
 
@@ -1085,10 +1086,22 @@ impl MetaNode {
         Ok(resp)
     }
 
-    pub(crate) fn add_watcher(&self, request: WatchRequest, tx: WatcherSender) {
-        let _ = self
-            .dispatcher_handle
-            .tx
-            .send(WatchEvent::AddWatcher((request, tx)));
+    pub(crate) async fn add_watcher(
+        &self,
+        request: WatchRequest,
+        tx: WatcherSender,
+    ) -> Result<Watcher, &'static str> {
+        let (resp_tx, resp_rx) = oneshot::channel();
+
+        self.dispatcher_handle.request(|d: &mut EventDispatcher| {
+            let add_res = d.add_watcher(request, tx);
+            let _ = resp_tx.send(add_res);
+        });
+
+        let recv_res = resp_rx.await;
+        match recv_res {
+            Ok(add_res) => add_res,
+            Err(_e) => Err("dispatcher closed"),
+        }
     }
 }
