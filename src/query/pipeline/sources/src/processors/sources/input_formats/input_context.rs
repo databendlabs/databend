@@ -25,7 +25,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::ChunkCompactThresholds;
 use common_expression::DataSchema;
-use common_expression::DataSchemaRef;
 use common_expression::TableSchemaRef;
 use common_formats::ClickhouseFormatType;
 use common_formats::FileFormatOptionsExt;

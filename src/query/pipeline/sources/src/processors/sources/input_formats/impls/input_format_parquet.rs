@@ -37,9 +37,6 @@ use common_arrow::read_columns_async;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::Chunk;
-use common_expression::DataField;
-use common_expression::DataSchema;
-use common_expression::DataSchemaRef;
 use common_expression::TableField;
 use common_expression::TableSchema;
 use common_expression::TableSchemaRef;
@@ -335,24 +332,23 @@ impl ChunkBuilderTrait for ParquetChunkBuilder {
 
     fn deserialize(&mut self, mut batch: Option<RowGroupInMemory>) -> Result<Vec<Chunk>> {
         if let Some(rg) = batch.as_mut() {
-            let arrow_chunk = rg.get_arrow_chunk()?;
-            let schema: DataSchema = self.ctx.data_schema();
-            let chunk = Chunk::from_arrow_chunk(&arrow_chunk, &DataSchemaRef::new(schema))?;
-            todo!("expression");
-            // let block_total_rows = block.num_rows();
-            // let num_rows_per_block = self.ctx.block_compact_thresholds.max_rows_per_block;
-            // let blocks: Vec<DataBlock> = (0..block_total_rows)
-            //     .step_by(num_rows_per_block)
-            //     .map(|idx| {
-            //         if idx + num_rows_per_block < block_total_rows {
-            //             block.slice(idx, num_rows_per_block)
-            //         } else {
-            //             block.slice(idx, block_total_rows - idx)
-            //         }
-            //     })
-            //     .collect();
+            let chunk = rg.get_arrow_chunk()?;
+            let chunk = Chunk::from_arrow_chunk(&chunk, &self.ctx.data_schema())?;
 
-            Ok(vec![chunk])
+            let chunk_total_rows = chunk.num_rows();
+            let num_rows_per_chunk = self.ctx.chunk_compact_thresholds.max_rows_per_chunk;
+            let chunks: Vec<Chunk> = (0..chunk_total_rows)
+                .step_by(num_rows_per_chunk)
+                .map(|idx| {
+                    if idx + num_rows_per_chunk < chunk_total_rows {
+                        chunk.slice(idx..idx + num_rows_per_chunk)
+                    } else {
+                        chunk.slice(idx..chunk_total_rows)
+                    }
+                })
+                .collect();
+
+            Ok(chunks)
         } else {
             Ok(vec![])
         }

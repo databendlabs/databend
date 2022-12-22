@@ -88,8 +88,7 @@ impl<T: 'static + SyncSource> Processor for SyncSourcer<T> {
         match self.generated_data.take() {
             None => Ok(Event::Sync),
             Some(chunk) => {
-                todo!("expression");
-                // self.output.push_data(Ok(chunk));
+                self.output.push_data(Ok(chunk));
                 Ok(Event::NeedConsume)
             }
         }
@@ -104,8 +103,7 @@ impl<T: 'static + SyncSource> Processor for SyncSourcer<T> {
                     bytes: chunk.memory_size(),
                 };
                 self.scan_progress.incr(&progress_values);
-                todo!("expression");
-                // self.generated_data = Some(chunk)
+                self.generated_data = Some(chunk)
             }
         };
 

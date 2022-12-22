@@ -19,7 +19,6 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::DataSchemaRef;
 use common_expression::TableSchemaRef;
 use common_expression::TypeDeserializer;
 use common_expression::TypeDeserializerImpl;
@@ -52,7 +51,34 @@ impl InputFormatCSV {
         path: &str,
         row_index: usize,
     ) -> Result<()> {
-        todo!("expression");
+        let mut field_start = 0;
+        for (c, deserializer) in deserializers.iter_mut().enumerate() {
+            let field_end = field_ends[c];
+            let col_data = &buf[field_start..field_end];
+            let mut reader = Cursor::new(col_data);
+            if reader.eof() {
+                deserializer.de_default();
+            } else {
+                if let Err(e) = field_decoder.read_field(deserializer, &mut reader, true) {
+                    let err_msg = format_column_error(schema, c, col_data, &e.message());
+                    return Err(csv_error(&err_msg, path, row_index));
+                };
+                let mut next = [0u8; 1];
+                let readn = reader.read(&mut next[..])?;
+                if readn > 0 {
+                    let remaining = col_data.len() - reader.position() as usize + 1;
+                    let err_msg = format!(
+                        "bad field end, remain {} bytes, next char is {}",
+                        remaining,
+                        verbose_char(next[0])
+                    );
+
+                    let err_msg = format_column_error(schema, c, col_data, &err_msg);
+                    return Err(csv_error(&err_msg, path, row_index));
+                }
+            }
+            field_start = field_end;
+        }
         Ok(())
     }
 
@@ -124,7 +150,155 @@ impl InputFormatTextBase for InputFormatCSV {
     }
 
     fn align(state: &mut AligningState<Self>, buf_in: &[u8]) -> Result<Vec<RowBatch>> {
-        todo!("expression");
+        let num_fields = state.num_fields;
+        let reader = state.csv_reader.as_mut().expect("must success");
+        let field_ends = &mut reader.field_ends[..];
+        let start_row = state.rows;
+        state.offset += buf_in.len();
+
+        // assume n_out <= n_in for read_record
+        let mut out_tmp = vec![0u8; buf_in.len()];
+        let mut endlen = reader.n_end;
+        let mut buf = buf_in;
+
+        while state.rows_to_skip > 0 {
+            let (result, n_in, _, n_end) =
+                reader
+                    .reader
+                    .read_record(buf, &mut out_tmp, &mut field_ends[endlen..]);
+            buf = &buf[n_in..];
+            endlen += n_end;
+
+            match result {
+                ReadRecordResult::InputEmpty => {
+                    reader.n_end = endlen;
+                    return Ok(vec![]);
+                }
+                ReadRecordResult::OutputFull => {
+                    return Err(output_full_error(&state.path, state.rows));
+                }
+                ReadRecordResult::OutputEndsFull => {
+                    return Err(output_ends_full_error(
+                        num_fields,
+                        field_ends.len(),
+                        &state.path,
+                        state.rows,
+                    ));
+                }
+                ReadRecordResult::Record => {
+                    Self::check_num_field(num_fields, endlen, field_ends, &state.path, state.rows)?;
+
+                    state.rows_to_skip -= 1;
+                    tracing::debug!(
+                        "csv aligner: skip a header row, remain {}",
+                        state.rows_to_skip
+                    );
+                    state.rows += 1;
+                    endlen = 0;
+                }
+                ReadRecordResult::End => {
+                    return Err(csv_error("unexpect eof in header", &state.path, state.rows));
+                }
+            }
+        }
+
+        let mut out_pos = 0usize;
+        let mut row_batch_end: usize = 0;
+
+        let last_batch_remain_len = reader.out.len();
+
+        let mut row_batch = RowBatch {
+            data: vec![],
+            row_ends: vec![],
+            field_ends: vec![],
+            path: state.path.to_string(),
+            batch_id: state.batch_id,
+            offset: 0,
+            start_row: Some(state.rows),
+        };
+
+        while !buf.is_empty() {
+            let (result, n_in, n_out, n_end) =
+                reader
+                    .reader
+                    .read_record(buf, &mut out_tmp[out_pos..], &mut field_ends[endlen..]);
+            buf = &buf[n_in..];
+            endlen += n_end;
+            out_pos += n_out;
+            match result {
+                ReadRecordResult::InputEmpty => break,
+                ReadRecordResult::OutputFull => {
+                    return Err(output_full_error(
+                        &state.path,
+                        start_row + row_batch.row_ends.len(),
+                    ));
+                }
+                ReadRecordResult::OutputEndsFull => {
+                    return Err(output_ends_full_error(
+                        num_fields,
+                        field_ends.len(),
+                        &state.path,
+                        start_row + row_batch.row_ends.len(),
+                    ));
+                }
+                ReadRecordResult::Record => {
+                    Self::check_num_field(
+                        num_fields,
+                        endlen,
+                        field_ends,
+                        &state.path,
+                        start_row + row_batch.row_ends.len(),
+                    )?;
+                    row_batch
+                        .field_ends
+                        .extend_from_slice(&field_ends[..num_fields]);
+                    row_batch.row_ends.push(last_batch_remain_len + out_pos);
+                    endlen = 0;
+                    row_batch_end = out_pos;
+                }
+                ReadRecordResult::End => {
+                    return Err(csv_error(
+                        "unexpect eof, should not happen",
+                        &state.path,
+                        start_row + row_batch.row_ends.len(),
+                    ));
+                }
+            }
+        }
+
+        reader.n_end = endlen;
+        out_tmp.truncate(out_pos);
+        if row_batch.row_ends.is_empty() {
+            tracing::debug!(
+                "csv aligner: {} + {} bytes => 0 rows",
+                reader.out.len(),
+                buf_in.len(),
+            );
+            reader.out.extend_from_slice(&out_tmp);
+            Ok(vec![])
+        } else {
+            let last_remain = mem::take(&mut reader.out);
+
+            state.batch_id += 1;
+            state.rows += row_batch.row_ends.len();
+            reader.out.extend_from_slice(&out_tmp[row_batch_end..]);
+
+            tracing::debug!(
+                "csv aligner: {} + {} bytes => {} rows + {} bytes remain",
+                last_remain.len(),
+                buf_in.len(),
+                row_batch.row_ends.len(),
+                reader.out.len()
+            );
+
+            out_tmp.truncate(row_batch_end);
+            row_batch.data = if last_remain.is_empty() {
+                out_tmp
+            } else {
+                vec![last_remain, out_tmp].concat()
+            };
+            Ok(vec![row_batch])
+        }
     }
 
     fn align_flush(state: &mut AligningState<Self>) -> Result<Vec<RowBatch>> {

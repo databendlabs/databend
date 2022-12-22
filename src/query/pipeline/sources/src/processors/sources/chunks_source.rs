@@ -46,10 +46,7 @@ impl SyncSource for ChunksSource {
         let mut chunks_guard = self.chunks.lock();
         match chunks_guard.pop_front() {
             None => Ok(None),
-            Some(chunk) => {
-                todo!("expression");
-                // Ok(Some(chunk))
-            }
+            Some(chunk) => Ok(Some(chunk)),
         }
     }
 }

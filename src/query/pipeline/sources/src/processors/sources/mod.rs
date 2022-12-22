@@ -70,10 +70,7 @@ mod source_example {
         fn generate(&mut self) -> Result<Option<Chunk>> {
             self.pos += 1;
             match self.chunks.len() >= self.pos {
-                true => {
-                    todo!("expression");
-                    // Ok(Some(self.chunks[self.pos - 1].clone())),
-                }
+                true => Ok(Some(self.chunks[self.pos - 1].clone())),
                 false => Ok(None),
             }
         }

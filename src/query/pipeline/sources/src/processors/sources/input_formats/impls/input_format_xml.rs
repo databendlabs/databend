@@ -17,7 +17,6 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::DataSchemaRef;
 use common_expression::TableSchemaRef;
 use common_expression::TypeDeserializer;
 use common_expression::TypeDeserializerImpl;
@@ -63,8 +62,26 @@ impl InputFormatXML {
             } else {
                 raw_data.get(&field.name().to_lowercase())
             };
-
-            todo!("expression");
+            if let Some(value) = value {
+                let mut reader = Cursor::new(&**value);
+                if reader.eof() {
+                    deserializer.de_default();
+                } else {
+                    if let Err(e) = field_decoder.read_field(deserializer, &mut reader, true) {
+                        let value_str = format!("{:?}", value);
+                        let err_msg = format!("{}. column={} value={}", e, field.name(), value_str);
+                        return Err(xml_error(&err_msg, path, row_index));
+                    };
+                    if reader.must_eof().is_err() {
+                        let value_str = format!("{:?}", value);
+                        let err_msg =
+                            format!("bad field end. column={} value={}", field.name(), value_str);
+                        return Err(xml_error(&err_msg, path, row_index));
+                    }
+                }
+            } else {
+                deserializer.de_default();
+            }
         }
         Ok(())
     }

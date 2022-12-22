@@ -18,9 +18,7 @@ use std::sync::Arc;
 use bstr::ByteSlice;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::DataSchemaRef;
 use common_expression::TableSchemaRef;
-use common_expression::TypeDeserializer;
 use common_expression::TypeDeserializerImpl;
 use common_formats::FieldDecoder;
 use common_formats::FieldJsonAstDecoder;
@@ -56,8 +54,15 @@ impl InputFormatNDJson {
             } else {
                 &json[f.name().to_lowercase()]
             };
-
-            todo!("expression")
+            field_decoder.read_field(deser, value).map_err(|e| {
+                let value_str = format!("{:?}", value);
+                ErrorCode::BadBytes(format!(
+                    "{}. column={} value={}",
+                    e,
+                    f.name(),
+                    maybe_truncated(&value_str, 1024),
+                ))
+            })?;
         }
         Ok(())
     }

@@ -56,8 +56,7 @@ impl Processor for OneChunkSource {
         }
 
         if let Some(chunk) = self.chunk.take() {
-            todo!("expression");
-            // self.output.push_data(Ok(chunk));
+            self.output.push_data(Ok(chunk));
             return Ok(Event::NeedConsume);
         }
 
