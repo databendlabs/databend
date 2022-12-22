@@ -274,21 +274,6 @@ impl BlockReader {
         self.try_next_block(&mut deserializer)
     }
 
-    /// Merge overlap io request to one.
-    fn merge_io_requests(
-        max_gap_size: u64,
-        max_range_size: u64,
-        part: &PartInfoPtr,
-    ) -> Result<Vec<std::ops::Range<u64>>> {
-        let part = FusePartInfo::from_part(part)?;
-        let ranges = part
-            .columns_meta
-            .values()
-            .map(|v| (v.offset..v.offset + v.len))
-            .collect::<Vec<_>>();
-        Ok(RangeMerger::from_iter(ranges, max_gap_size, max_range_size).ranges())
-    }
-
     pub async fn read_columns_data(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -299,9 +284,12 @@ impl BlockReader {
         let indices = Self::build_projection_indices(&columns);
         let mut join_handlers = Vec::with_capacity(indices.len());
 
+        let mut ranges = vec![];
         let mut normal_read_bytes = 0u64;
         for (index, _) in indices {
             let column_meta = &part.columns_meta[&index];
+            ranges.push(column_meta.offset..(column_meta.offset + column_meta.len));
+
             normal_read_bytes += column_meta.len;
             join_handlers.push(UnlimitedFuture::create(Self::read_column(
                 self.operator.object(&part.location),
@@ -318,11 +306,12 @@ impl BlockReader {
         // Merge io requests.
         let max_gap_size = ctx.get_settings().get_max_storage_io_requests_merge_gap()?;
         let max_range_size = ctx.get_settings().get_max_storage_io_requests_page_size()?;
-        let ranges = Self::merge_io_requests(max_gap_size, max_range_size, &raw_part)?;
+        let ranges = RangeMerger::from_iter(ranges, max_gap_size, max_range_size).ranges();
         let mut merge_io_handlers = Vec::with_capacity(ranges.len());
         let mut merge_read_bytes = 0u64;
         for (index, range) in ranges.iter().enumerate() {
-            merge_read_bytes += range.end - range.start;
+            let len = range.end - range.start;
+            merge_read_bytes += len;
             merge_io_handlers.push(UnlimitedFuture::create(Self::read_range(
                 self.operator.object(&part.location),
                 index,
