@@ -110,6 +110,7 @@ impl FuseTable {
                     self.meta_location_generator().clone(),
                     cluster_stats_gen.clone(),
                     block_compact_thresholds,
+                    self.table_info.schema(),
                     self.storage_format,
                     Some(transform_output_port),
                 )
@@ -124,6 +125,7 @@ impl FuseTable {
                     self.meta_location_generator().clone(),
                     cluster_stats_gen.clone(),
                     block_compact_thresholds,
+                    self.table_info.schema(),
                     self.storage_format,
                     None,
                 )

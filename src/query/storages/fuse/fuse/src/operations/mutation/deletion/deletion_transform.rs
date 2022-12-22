@@ -310,7 +310,7 @@ impl Processor for DeletionTransform {
                     summary,
                     std::mem::take(&mut self.abort_operation),
                 );
-                self.output_data = Some(Chunk::new_with_meta(meta));
+                self.output_data = Some(Chunk::empty_with_meta(meta));
             }
             _ => return Err(ErrorCode::Internal("It's a bug.")),
         }

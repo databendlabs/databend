@@ -28,8 +28,6 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::Chunk;
-use common_expression::DataField;
-use common_expression::DataSchema;
 use common_expression::TableDataType;
 use common_storages_table_meta::meta::BlockBloomFilterIndexVersion;
 use common_storages_table_meta::meta::ChunkFilter;
@@ -189,7 +187,7 @@ mod util_v1 {
             Some(Err(cause)) => Err(ErrorCode::from(cause)),
             Some(Ok(chunk)) => {
                 let span = tracing::info_span!("from_chunk");
-                span.in_scope(|| Chunk::from_arrow_chunk(&chunk, &schema))
+                span.in_scope(|| Chunk::from_arrow_chunk(&chunk, &schema.into()))
             }
         }
     }

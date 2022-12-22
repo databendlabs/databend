@@ -24,12 +24,14 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::Chunk;
-use common_functions::scalars::FunctionContext;
+use common_expression::Evaluator;
+use common_expression::Expr;
+use common_expression::FunctionContext;
+use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
-use common_sql::evaluator::EvalNode;
 
 use crate::io::BlockReader;
 
@@ -50,7 +52,7 @@ pub struct FuseNativeSource {
     output_reader: Arc<BlockReader>,
 
     prewhere_reader: Arc<BlockReader>,
-    prewhere_filter: Arc<Option<EvalNode>>,
+    prewhere_filter: Arc<Option<Expr<String>>>,
     remain_reader: Arc<Option<BlockReader>>,
 
     support_blocking: bool,
@@ -62,7 +64,7 @@ impl FuseNativeSource {
         output: Arc<OutputPort>,
         output_reader: Arc<BlockReader>,
         prewhere_reader: Arc<BlockReader>,
-        prewhere_filter: Arc<Option<EvalNode>>,
+        prewhere_filter: Arc<Option<Expr<String>>>,
         remain_reader: Arc<Option<BlockReader>>,
     ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
@@ -82,7 +84,8 @@ impl FuseNativeSource {
 
     fn generate_one_block(&mut self, chunk: Chunk, chunks: DataChunks) -> Result<()> {
         // resort and prune columns
-        let chunk = chunk.resort(self.output_reader.schema())?;
+        // todo!("expression")
+        // let chunk = chunk.resort(self.output_reader.schema())?;
         self.state = State::Generated(chunk, chunks);
         Ok(())
     }
@@ -158,7 +161,7 @@ impl Processor for FuseNativeSource {
                     prewhere_chunks.push((*index, chunk.next_array()?));
                 }
 
-                let mut data_block = self.prewhere_reader.build_block(prewhere_chunks)?;
+                let mut chunk = self.prewhere_reader.build_block(prewhere_chunks)?;
 
                 if let Some(remain_reader) = self.remain_reader.as_ref() {
                     let mut remain_chunks = Vec::with_capacity(prewhere_idx);
@@ -166,32 +169,30 @@ impl Processor for FuseNativeSource {
                         assert!(chunk.has_next());
                         remain_chunks.push((*index, chunk.next_array()?));
                     }
-                    let remain_block = remain_reader.build_block(remain_chunks)?;
-                    for (col, field) in remain_block
-                        .columns()
-                        .iter()
-                        .zip(remain_block.schema().fields())
-                    {
-                        data_block = data_block.add_column(col.clone(), field.clone())?;
+                    let remain_chunk = remain_reader.build_block(remain_chunks)?;
+                    for col in remain_chunk.columns() {
+                        chunk.add_column(col.clone());
                     }
                 }
 
                 if let Some(filter) = self.prewhere_filter.as_ref() {
                     // do filter
-                    let res = filter
-                        .eval(&FunctionContext::default(), &data_block)?
-                        .vector;
-                    data_block = DataBlock::filter_block(data_block, &res)?;
+                    let evaluator =
+                        Evaluator::new(&chunk, FunctionContext::default(), &BUILTIN_FUNCTIONS);
+                    let predicate = evaluator.run(filter).map_err(|(_, e)| {
+                        ErrorCode::Internal(format!("eval prewhere filter failed: {}.", e))
+                    })?;
+                    chunk = chunk.filter(&predicate)?;
                 }
 
                 // the last step of prewhere
                 let progress_values = ProgressValues {
-                    rows: data_block.num_rows(),
-                    bytes: data_block.memory_size(),
+                    rows: chunk.num_rows(),
+                    bytes: chunk.memory_size(),
                 };
                 self.scan_progress.incr(&progress_values);
 
-                self.generate_one_block(data_block, chunks)?;
+                self.generate_one_block(chunk, chunks)?;
                 Ok(())
             }
 

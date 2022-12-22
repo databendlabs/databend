@@ -16,9 +16,9 @@ use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
+use common_expression::Expr;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
-use common_sql::evaluator::EvalNode;
 
 use super::fuse_native_source::FuseNativeSource;
 use super::fuse_parquet_source::FuseParquetSource;
@@ -33,7 +33,7 @@ impl FuseTableSource {
         output: Arc<OutputPort>,
         output_reader: Arc<BlockReader>,
         prewhere_reader: Arc<BlockReader>,
-        prewhere_filter: Arc<Option<EvalNode>>,
+        prewhere_filter: Arc<Option<Expr<String>>>,
         remain_reader: Arc<Option<BlockReader>>,
         storage_format: FuseStorageFormat,
     ) -> Result<ProcessorPtr> {

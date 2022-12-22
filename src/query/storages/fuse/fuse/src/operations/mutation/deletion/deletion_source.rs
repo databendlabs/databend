@@ -18,15 +18,20 @@ use std::sync::Arc;
 
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::table_context::TableContext;
-use common_datablocks::serialize_to_parquet;
-use common_datablocks::DataBlock;
-use common_datavalues::BooleanColumn;
-use common_datavalues::ColumnRef;
-use common_datavalues::DataSchemaRef;
-use common_datavalues::Series;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_sql::evaluator::EvalNode;
+use common_expression::serialize_to_parquet;
+use common_expression::types::AnyType;
+use common_expression::Chunk;
+use common_expression::Column;
+use common_expression::DataSchemaRef;
+use common_expression::Evaluator;
+use common_expression::Expr;
+use common_expression::FunctionContext;
+use common_expression::RemoteExpr;
+use common_expression::TableSchemaRef;
+use common_expression::Value;
+use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::ClusterStatistics;
 use opendal::Operator;
@@ -63,45 +68,46 @@ enum State {
     FilterData(PartInfoPtr, DataChunks),
     ReadRemain {
         part: PartInfoPtr,
-        data_block: DataBlock,
-        filter: ColumnRef,
+        chunk: Chunk,
+        filter: Value<AnyType>,
     },
     MergeRemain {
         part: PartInfoPtr,
         chunks: DataChunks,
-        data_block: DataBlock,
-        filter: ColumnRef,
+        chunk: Chunk,
+        filter: Value<AnyType>,
     },
-    NeedSerialize(DataBlock),
+    NeedSerialize(Chunk),
     Serialized(SerializeState, Arc<BlockMeta>),
     Generated(Deletion),
-    Output(Option<PartInfoPtr>, DataBlock),
+    Output(Option<PartInfoPtr>, Chunk),
     Finish,
 }
 
-pub struct DeletionSource {
+pub struct DeletionSource<'a> {
     state: State,
     ctx: Arc<dyn TableContext>,
     output: Arc<OutputPort>,
     location_gen: TableMetaLocationGenerator,
     dal: Operator,
     block_reader: Arc<BlockReader>,
-    filter: Arc<EvalNode>,
+    filter: &'a RemoteExpr<String>,
     remain_reader: Arc<Option<BlockReader>>,
 
+    source_schema: TableSchemaRef,
     output_schema: DataSchemaRef,
     index: BlockIndex,
     cluster_stats_gen: ClusterStatsGenerator,
     origin_stats: Option<ClusterStatistics>,
 }
 
-impl DeletionSource {
+impl DeletionSource<'_> {
     pub fn try_create(
         ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
         table: &FuseTable,
         block_reader: Arc<BlockReader>,
-        filter: Arc<EvalNode>,
+        filter: &RemoteExpr<String>,
         remain_reader: Arc<Option<BlockReader>>,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(DeletionSource {
@@ -113,7 +119,8 @@ impl DeletionSource {
             block_reader,
             filter,
             remain_reader,
-            output_schema: table.schema(),
+            source_schema: table.table_info.schema(),
+            output_schema: table.schema().into(),
             index: (0, 0),
             cluster_stats_gen: table.cluster_stats_gen()?,
             origin_stats: None,
@@ -122,7 +129,7 @@ impl DeletionSource {
 }
 
 #[async_trait::async_trait]
-impl Processor for DeletionSource {
+impl Processor for DeletionSource<'_> {
     fn name(&self) -> String {
         "DeletionSource".to_string()
     }
@@ -153,15 +160,13 @@ impl Processor for DeletionSource {
         }
 
         if matches!(self.state, State::Output(_, _)) {
-            if let State::Output(part, data_block) =
-                std::mem::replace(&mut self.state, State::Finish)
-            {
+            if let State::Output(part, chunk) = std::mem::replace(&mut self.state, State::Finish) {
                 self.state = match part {
                     None => State::Finish,
                     Some(part) => State::ReadData(Some(part)),
                 };
 
-                self.output.push_data(Ok(data_block));
+                self.output.push_data(Ok(chunk));
                 return Ok(Event::NeedConsume);
             }
         }
@@ -179,32 +184,41 @@ impl Processor for DeletionSource {
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Finish) {
             State::FilterData(part, chunks) => {
-                let data_block = self.block_reader.deserialize(part.clone(), chunks)?;
-                let filter_result = self
-                    .filter
-                    .eval(&self.ctx.try_get_function_context()?, &data_block)?
-                    .vector;
-                let predicates = DataBlock::cast_to_nonull_boolean(&filter_result)?;
-                // reverse the filter
-                let boolean_col: &BooleanColumn = Series::check_get(&predicates)?;
-                let values = boolean_col.values();
-                let filter: ColumnRef = Arc::new(BooleanColumn::from_arrow_data(values.not()));
-                if !DataBlock::filter_exists(&filter)? {
+                let chunk = self.block_reader.deserialize(part.clone(), chunks)?;
+
+                let evaluator =
+                    Evaluator::new(&chunk, FunctionContext::default(), &BUILTIN_FUNCTIONS);
+                let res = evaluator
+                    .run(self.filter.into_expr(&BUILTIN_FUNCTIONS).unwrap())
+                    .map_err(|(_, e)| {
+                        ErrorCode::Internal(format!("eval try eval const failed: {}.", e))
+                    })?;
+                let predicates =
+                    Chunk::<String>::cast_to_nonull_boolean(&res).ok_or_else(|| {
+                        ErrorCode::BadArguments(
+                            "Result of filter expression cannot be converted to boolean.",
+                        )
+                    })?;
+
+                let predicate_col = predicates.into_column().unwrap();
+                let filter = Value::Column(Column::Boolean(predicate_col.not()));
+                if !Chunk::filter_exists(&filter)? {
                     // all the rows should be removed.
                     self.state = State::Generated(Deletion::Deleted);
                 } else {
-                    let num_rows = data_block.num_rows();
-                    let data_block = DataBlock::filter_block(data_block, &filter)?;
-                    if data_block.num_rows() == num_rows {
+                    let num_rows = chunk.num_rows();
+                    let chunk = chunk.filter(&filter)?;
+                    if chunk.num_rows() == num_rows {
                         // none of the rows should be removed.
                         self.state = State::Generated(Deletion::DoNothing);
                     } else if self.remain_reader.is_none() {
-                        let block = data_block.resort(self.output_schema.clone())?;
-                        self.state = State::NeedSerialize(block);
+                        // todo!("expression")
+                        // let chunk = chunk.resort(self.output_schema.clone())?;
+                        self.state = State::NeedSerialize(chunk);
                     } else {
                         self.state = State::ReadRemain {
                             part,
-                            data_block,
+                            chunk,
                             filter,
                         }
                     }
@@ -213,60 +227,57 @@ impl Processor for DeletionSource {
             State::MergeRemain {
                 part,
                 chunks,
-                mut data_block,
+                mut chunk,
                 filter,
             } => {
                 let merged = if chunks.is_empty() {
-                    data_block
+                    chunk
                 } else if let Some(remain_reader) = self.remain_reader.as_ref() {
-                    let remain_block = remain_reader.deserialize(part, chunks)?;
-                    let remain_block = DataBlock::filter_block(remain_block, &filter)?;
-                    for (col, field) in remain_block
-                        .columns()
-                        .iter()
-                        .zip(remain_block.schema().fields())
-                    {
-                        data_block = data_block.add_column(col.clone(), field.clone())?;
+                    let remain_chunk = remain_reader.deserialize(part, chunks)?;
+                    let remain_chunk = remain_chunk.filter(&filter)?;
+                    for col in remain_chunk.columns() {
+                        chunk.add_column(col.clone());
                     }
-                    data_block
+                    chunk
                 } else {
                     return Err(ErrorCode::Internal("It's a bug. Need remain reader"));
                 };
 
-                let block = merged.resort(self.output_schema.clone())?;
-                self.state = State::NeedSerialize(block);
+                // todo!("expression")
+                // let chunk = merged.resort(self.output_schema.clone())?;
+                self.state = State::NeedSerialize(chunk);
             }
-            State::NeedSerialize(block) => {
+            State::NeedSerialize(chunk) => {
                 let cluster_stats = self
                     .cluster_stats_gen
-                    .gen_with_origin_stats(&block, std::mem::take(&mut self.origin_stats))?;
+                    .gen_with_origin_stats(&chunk, std::mem::take(&mut self.origin_stats))?;
 
-                let row_count = block.num_rows() as u64;
-                let block_size = block.memory_size() as u64;
-                let (block_location, block_id) = self.location_gen.gen_block_location();
+                let row_count = chunk.num_rows() as u64;
+                let chunk_size = chunk.memory_size() as u64;
+                let (chunk_location, chunk_id) = self.location_gen.gen_block_location();
 
                 // build block index.
-                let location = self.location_gen.block_bloom_index_location(&block_id);
+                let location = self.location_gen.block_bloom_index_location(&chunk_id);
                 let (bloom_index_state, column_distinct_count) =
-                    BloomIndexState::try_create(&block, location)?;
-                let col_stats = gen_columns_statistics(&block, Some(column_distinct_count))?;
+                    BloomIndexState::try_create(self.source_schema, &chunk, location)?;
+                let col_stats = gen_columns_statistics(&chunk, Some(column_distinct_count))?;
 
                 // serialize data block.
                 let mut block_data = Vec::with_capacity(100 * 1024 * 1024);
-                let schema = block.schema().clone();
+                let schema = self.source_schema.clone();
                 let (file_size, meta_data) =
-                    serialize_to_parquet(vec![block], &schema, &mut block_data)?;
+                    serialize_to_parquet(vec![chunk], &schema, &mut block_data)?;
                 let col_metas = util::column_metas(&meta_data)?;
 
                 // new block meta.
                 let new_meta = Arc::new(BlockMeta::new(
                     row_count,
-                    block_size,
+                    chunk_size,
                     file_size,
                     col_stats,
                     col_metas,
                     cluster_stats,
-                    block_location.clone(),
+                    chunk_location.clone(),
                     Some(bloom_index_state.location.clone()),
                     bloom_index_state.size,
                 ));
@@ -274,7 +285,7 @@ impl Processor for DeletionSource {
                 self.state = State::Serialized(
                     SerializeState {
                         block_data,
-                        block_location: block_location.0,
+                        block_location: chunk_location.0,
                         index_data: bloom_index_state.data,
                         index_location: bloom_index_state.location.0,
                     },
@@ -284,7 +295,7 @@ impl Processor for DeletionSource {
             State::Generated(op) => {
                 let meta = DeletionSourceMeta::create(self.index, op);
                 let new_part = self.ctx.try_get_part();
-                self.state = State::Output(new_part, DataBlock::empty_with_meta(meta));
+                self.state = State::Output(new_part, Chunk::empty_with_meta(meta));
             }
             _ => return Err(ErrorCode::Internal("It's a bug.")),
         }
@@ -303,7 +314,7 @@ impl Processor for DeletionSource {
             }
             State::ReadRemain {
                 part,
-                data_block,
+                chunk,
                 filter,
             } => {
                 if let Some(remain_reader) = self.remain_reader.as_ref() {
@@ -311,7 +322,7 @@ impl Processor for DeletionSource {
                     self.state = State::MergeRemain {
                         part,
                         chunks,
-                        data_block,
+                        chunk,
                         filter,
                     };
                 } else {

@@ -15,6 +15,7 @@ test = false
 common-catalog = { path = "../../../common/../query/catalog" }
 common-exception = { path = "../../../common/exception" }
 common-expression = { path = "../../expression" }
+common-functions-v2 = { path = "../../functions-v2" }
 common-storages-index = { path = "../index" }
 common-storages-table-meta = { path = "../table-meta" }
 

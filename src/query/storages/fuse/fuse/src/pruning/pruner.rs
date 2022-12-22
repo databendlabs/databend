@@ -147,7 +147,6 @@ pub fn new_filter_pruner(
 }
 
 mod util {
-    use common_catalog::plan::Recursion;
     use common_exception::ErrorCode;
     use common_storages_index::FilterEvalResult;
 
@@ -170,9 +169,11 @@ mod util {
         match maybe_filter {
             Ok(filter) => Ok(ChunkFilter::from_filter_chunk(
                 ctx.try_get_function_context()?,
+                schema.into(),
+                schema.into(),
                 filter.into_data(),
             )?
-            .eval(filter_expr)?
+            .eval(filter_expr.clone())?
                 != FilterEvalResult::MustFalse),
             Err(e) if e.code() == ErrorCode::DEPRECATED_INDEX_FORMAT => {
                 // In case that the index is no longer supported, just return ture to indicate

@@ -23,8 +23,6 @@ use common_expression::types::DataType;
 use common_expression::utils::ColumnFrom;
 use common_expression::Chunk;
 use common_expression::Column;
-use common_expression::DataField;
-use common_expression::DataSchemaRefExt;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRefExt;
@@ -56,11 +54,14 @@ impl AsyncSystemTable for DatabasesTable {
             .iter()
             .map(|e| (e.key().clone(), e.value().clone()))
             .collect();
+
+        let mut catalog_names = vec![];
         let mut db_names = vec![];
         for (ctl_name, catalog) in catalogs.into_iter() {
             let databases = catalog.list_databases(tenant.as_str()).await?;
 
             for db in databases {
+                catalog_names.push(ctl_name.clone().into_bytes());
                 let db_name = db.name().to_string().into_bytes();
                 db_names.push(db_name);
             }
@@ -68,7 +69,13 @@ impl AsyncSystemTable for DatabasesTable {
 
         let rows_len = db_names.len();
         Ok(Chunk::new_from_sequence(
-            vec![(Value::Column(Column::from_data(db_names)), DataType::String)],
+            vec![
+                (
+                    Value::Column(Column::from_data(catalog_names)),
+                    DataType::String,
+                ),
+                (Value::Column(Column::from_data(db_names)), DataType::String),
+            ],
             rows_len,
         ))
     }
@@ -76,8 +83,10 @@ impl AsyncSystemTable for DatabasesTable {
 
 impl DatabasesTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
-        let schema =
-            TableSchemaRefExt::create(vec![TableField::new("name", TableDataType::String)]);
+        let schema = TableSchemaRefExt::create(vec![
+            TableField::new("catalog", TableDataType::String),
+            TableField::new("name", TableDataType::String),
+        ]);
 
         let table_info = TableInfo {
             desc: "'system'.'databases'".to_string(),

@@ -26,7 +26,10 @@ use common_expression::serialize_to_parquet;
 use common_expression::serialize_to_parquet_with_compression;
 use common_expression::Chunk;
 use common_expression::ChunkCompactThresholds;
+use common_expression::FunctionContext;
+use common_expression::TableSchemaRef;
 use common_pipeline_core::processors::port::OutputPort;
+use common_storages_index::ChunkFilter;
 use common_storages_index::*;
 use common_storages_table_meta::caches::CacheManager;
 use common_storages_table_meta::meta::ColumnId;
@@ -55,10 +58,15 @@ pub struct BloomIndexState {
 }
 
 impl BloomIndexState {
-    pub fn try_create(chunk: &Chunk, location: Location) -> Result<(Self, HashMap<usize, usize>)> {
+    pub fn try_create(
+        source_schema: TableSchemaRef,
+        chunk: &Chunk,
+        location: Location,
+    ) -> Result<(Self, HashMap<usize, usize>)> {
+        let func_ctx = FunctionContext::default();
         // write index
-        let bloom_index = BlockFilter::try_create(&[chunk])?;
-        let index_block = bloom_index.filter_block;
+        let bloom_index = ChunkFilter::try_create(func_ctx, source_schema, &[chunk])?;
+        let index_block = bloom_index.filter_chunk;
         let mut data = Vec::with_capacity(100 * 1024);
         let index_block_schema = &bloom_index.filter_schema;
         let (size, _) = serialize_to_parquet_with_compression(
@@ -111,6 +119,7 @@ pub struct FuseTableSink {
     accumulator: StatisticsAccumulator,
     cluster_stats_gen: ClusterStatsGenerator,
 
+    source_schema: TableSchemaRef,
     storage_format: FuseStorageFormat,
     // A dummy output port for distributed insert select to connect Exchange Sink.
     output: Option<Arc<OutputPort>>,
@@ -126,6 +135,7 @@ impl FuseTableSink {
         meta_locations: TableMetaLocationGenerator,
         cluster_stats_gen: ClusterStatsGenerator,
         thresholds: ChunkCompactThresholds,
+        source_schema: TableSchemaRef,
         storage_format: FuseStorageFormat,
         output: Option<Arc<OutputPort>>,
     ) -> Result<ProcessorPtr> {
@@ -138,6 +148,7 @@ impl FuseTableSink {
             accumulator: StatisticsAccumulator::new(thresholds),
             num_block_threshold: num_block_threshold as u64,
             cluster_stats_gen,
+            source_schema,
             storage_format,
             output,
         })))
@@ -199,7 +210,7 @@ impl Processor for FuseTableSink {
 
                 let location = self.meta_locations.block_bloom_index_location(&chunk_id);
                 let (bloom_index_state, column_distinct_count) =
-                    BloomIndexState::try_create(&chunk, location)?;
+                    BloomIndexState::try_create(self.source_schema, &chunk, location)?;
 
                 let block_statistics = BlockStatistics::from(
                     &chunk,

@@ -19,13 +19,15 @@ use backon::Retryable;
 use common_arrow::arrow::chunk::Chunk as ArrowChunk;
 use common_arrow::native::write::PaWriter;
 use common_arrow::parquet::compression::CompressionOptions;
-use common_arrow::parquet::metadata::ThriftFileMetaData;
 use common_exception::Result;
 use common_expression::serialize_to_parquet;
 use common_expression::serialize_to_parquet_with_compression;
 use common_expression::Chunk;
 use common_expression::DataField;
 use common_expression::DataSchema;
+use common_expression::FunctionContext;
+use common_expression::TableSchemaRef;
+use common_expression::TableSchemaRefExt;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::ClusterStatistics;
 use common_storages_table_meta::meta::ColumnId;
@@ -45,16 +47,19 @@ const DEFAULT_BLOOM_INDEX_WRITE_BUFFER_SIZE: usize = 300 * 1024;
 const DEFAULT_BLOCK_WRITE_BUFFER_SIZE: usize = 100 * 1024 * 1024;
 
 pub struct BlockWriter<'a> {
+    schema: &'a TableSchemaRef,
     location_generator: &'a TableMetaLocationGenerator,
     data_accessor: &'a Operator,
 }
 
 impl<'a> BlockWriter<'a> {
     pub fn new(
+        schema: &'a TableSchemaRef,
         data_accessor: &'a Operator,
         location_generator: &'a TableMetaLocationGenerator,
     ) -> Self {
         Self {
+            schema,
             location_generator,
             data_accessor,
         }
@@ -77,7 +82,7 @@ impl<'a> BlockWriter<'a> {
             .await?;
 
         let mut buf = Vec::with_capacity(DEFAULT_BLOCK_WRITE_BUFFER_SIZE);
-        let (file_size, col_metas) = write_block(storage_format, chunk, &mut buf)?;
+        let (file_size, col_metas) = write_block(storage_format, self.schema, chunk, &mut buf)?;
 
         write_data(&buf, data_accessor, &location.0).await?;
         let block_meta = BlockMeta::new(
@@ -100,7 +105,9 @@ impl<'a> BlockWriter<'a> {
         chunk: &Chunk,
         chunk_id: Uuid,
     ) -> Result<(u64, Location)> {
-        let bloom_index = ChunkFilter::try_create(&[chunk])?;
+        let bloom_index =
+            ChunkFilter::try_create(FunctionContext::default(), self.schema, &[chunk])?;
+
         let index_chunk = bloom_index.filter_chunk;
         let location = self
             .location_generator
@@ -120,14 +127,10 @@ impl<'a> BlockWriter<'a> {
 
 pub fn write_block(
     storage_format: FuseStorageFormat,
+    schema: &TableSchemaRef,
     chunk: Chunk,
     buf: &mut Vec<u8>,
 ) -> Result<(u64, HashMap<ColumnId, ColumnMeta>)> {
-    let fields = chunk
-        .columns()
-        .map(|entry| DataField::new(entry.id, entry.data_type))
-        .collect();
-    let schema = DataSchema::new(fields);
     match storage_format {
         FuseStorageFormat::Parquet => {
             let result = serialize_to_parquet(vec![chunk], &schema, buf)?;
@@ -135,7 +138,7 @@ pub fn write_block(
             Ok((result.0, meta))
         }
         FuseStorageFormat::Native => {
-            let arrow_schema = block.schema().as_ref().to_arrow();
+            let arrow_schema = schema.to_arrow();
             let mut writer = PaWriter::new(
                 buf,
                 arrow_schema,

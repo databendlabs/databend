@@ -18,7 +18,7 @@ use common_expression::Scalar;
 
 pub fn string_value(value: &Scalar) -> Result<String> {
     match value {
-        Scalar::String(val) => String::from_utf8(val)
+        Scalar::String(val) => String::from_utf8(val.clone())
             .map_err(|e| ErrorCode::BadArguments(format!("invalid string. {}", e))),
         _ => Err(ErrorCode::BadArguments("invalid string.")),
     }

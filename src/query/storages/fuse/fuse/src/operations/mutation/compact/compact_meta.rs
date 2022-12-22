@@ -46,7 +46,7 @@ impl ChunkMetaInfo for CompactSourceMeta {
 }
 
 impl CompactSourceMeta {
-    pub fn create(order: usize, tasks: VecDeque<CompactTask>) -> BlockMetaInfoPtr {
+    pub fn create(order: usize, tasks: VecDeque<CompactTask>) -> ChunkMetaInfoPtr {
         Arc::new(Box::new(CompactSourceMeta { order, tasks }))
     }
 

@@ -16,12 +16,11 @@ use common_exception::Result;
 use common_expression::types::number::NumberScalar;
 use common_expression::types::NumberDataType;
 use common_expression::ColumnBuilder;
-use common_expression::DataField;
-use common_expression::DataSchemaRef;
-use common_expression::DataSchemaRefExt;
 use common_expression::Scalar;
 use common_expression::TableDataType;
 use common_expression::TableField;
+use common_expression::TableSchemaRef;
+use common_expression::TableSchemaRefExt;
 
 use crate::SystemLogElement;
 use crate::SystemLogQueue;

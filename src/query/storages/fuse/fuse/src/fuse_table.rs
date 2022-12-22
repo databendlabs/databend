@@ -36,11 +36,12 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::Chunk;
 use common_expression::ChunkCompactThresholds;
+// use common_sql::ExpressionParser;
+use common_expression::Expr;
 use common_expression::RemoteExpr;
 use common_meta_app::schema::DatabaseType;
 use common_meta_app::schema::TableInfo;
 use common_sharing::create_share_table_operator;
-// use common_sql::ExpressionParser;
 use common_storage::init_operator;
 use common_storage::CacheOperator;
 use common_storage::DataOperator;
@@ -513,21 +514,21 @@ impl Table for FuseTable {
     async fn delete(
         &self,
         ctx: Arc<dyn TableContext>,
-        filter: Option<Expression>,
+        filter: Option<RemoteExpr<String>>,
         col_indices: Vec<usize>,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         self.do_delete(ctx, filter, col_indices, pipeline).await
     }
 
-    fn get_block_compact_thresholds(&self) -> BlockCompactThresholds {
+    fn get_chunk_compact_thresholds(&self) -> ChunkCompactThresholds {
         let max_rows_per_block = self.get_option(FUSE_OPT_KEY_ROW_PER_BLOCK, DEFAULT_ROW_PER_BLOCK);
         let min_rows_per_block = (max_rows_per_block as f64 * 0.8) as usize;
         let max_bytes_per_block = self.get_option(
             FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD,
             DEFAULT_BLOCK_SIZE_IN_MEM_SIZE_THRESHOLD,
         );
-        BlockCompactThresholds::new(max_rows_per_block, min_rows_per_block, max_bytes_per_block)
+        ChunkCompactThresholds::new(max_rows_per_block, min_rows_per_block, max_bytes_per_block)
     }
 
     async fn compact(
@@ -547,16 +548,6 @@ impl Table for FuseTable {
         push_downs: Option<PushDownInfo>,
     ) -> Result<Option<Box<dyn TableMutator>>> {
         self.do_recluster(ctx, pipeline, push_downs).await
-    }
-
-    fn get_chunk_compact_thresholds(&self) -> ChunkCompactThresholds {
-        let max_rows_per_block = self.get_option(FUSE_OPT_KEY_ROW_PER_BLOCK, DEFAULT_ROW_PER_BLOCK);
-        let min_rows_per_block = (max_rows_per_block as f64 * 0.8) as usize;
-        let max_bytes_per_block = self.get_option(
-            FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD,
-            DEFAULT_BLOCK_SIZE_IN_MEM_SIZE_THRESHOLD,
-        );
-        ChunkCompactThresholds::new(max_rows_per_block, min_rows_per_block, max_bytes_per_block)
     }
 
     async fn revert_to(

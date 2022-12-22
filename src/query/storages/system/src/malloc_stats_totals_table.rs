@@ -27,8 +27,6 @@ use common_expression::types::NumberType;
 use common_expression::types::StringType;
 use common_expression::types::ValueType;
 use common_expression::Chunk;
-use common_expression::DataField;
-use common_expression::DataSchemaRefExt;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRefExt;
@@ -62,7 +60,7 @@ impl SyncSystemTable for MallocStatsTotalsTable {
         &self.table_info
     }
 
-    fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<Chunk> {
+    fn get_full_data(&self, _ctx: Arc<dyn TableContext>) -> Result<Chunk> {
         let values = Self::build_columns().map_err(convert_je_err)?;
         Ok(Chunk::new_from_sequence(values, 6))
     }

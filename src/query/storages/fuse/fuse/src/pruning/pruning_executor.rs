@@ -88,7 +88,7 @@ impl BlockPruner {
         // prepare the filter.
         // None will be returned, if filter is not applicable (e.g. unsuitable filter expression, index not available, etc.)
         let filter_pruner =
-            pruner::new_filter_pruner(ctx, filter_expressions, schema.clone(), dal.clone())?;
+            pruner::new_filter_pruner(ctx, filter_expressions, schema.into(), dal.clone())?;
 
         // 2. constraint the degree of parallelism
         let max_threads = ctx.get_settings().get_max_threads()? as usize;

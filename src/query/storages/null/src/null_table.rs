@@ -25,7 +25,6 @@ use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::Chunk;
-use common_expression::DataSchemaRef;
 use common_meta_app::schema::TableInfo;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
@@ -78,7 +77,6 @@ impl Table for NullTable {
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let output = OutputPort::create();
-        let schema = self.table_info.schema();
         pipeline.add_pipe(Pipe::SimplePipe {
             inputs_port: vec![],
             outputs_port: vec![output.clone()],

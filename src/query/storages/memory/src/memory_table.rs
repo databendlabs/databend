@@ -32,8 +32,6 @@ use common_exception::Result;
 use common_expression::types::AnyType;
 use common_expression::types::DataType;
 use common_expression::Chunk;
-use common_expression::ChunkEntry;
-use common_expression::DataSchemaRef;
 use common_expression::InMemoryData;
 use common_expression::TableSchemaRef;
 use common_expression::Value;
@@ -182,7 +180,6 @@ impl Table for MemoryTable {
                             .filter(|cid| projection_filter(**cid))
                             .map(|cid| block.get_by_offset(*cid).memory_size())
                             .sum::<usize>();
-
                         stats
                     })
             }

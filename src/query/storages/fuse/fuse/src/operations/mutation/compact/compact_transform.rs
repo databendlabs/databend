@@ -26,6 +26,10 @@ use common_exception::Result;
 use common_expression::serialize_to_parquet_with_compression;
 use common_expression::Chunk;
 use common_expression::ChunkCompactThresholds;
+use common_expression::FunctionContext;
+use common_expression::TableSchemaRef;
+use common_expression::TableSchemaRefExt;
+use common_storages_index::ChunkFilter;
 use common_storages_table_meta::caches::CacheManager;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::SegmentInfo;
@@ -58,9 +62,15 @@ struct SerializeState {
 
 enum State {
     Consume,
-    Compact(Chunk),
-    Generate(Vec<Arc<BlockMeta>>),
-    Serialized {
+    ReadBlocks,
+    CompactBlocks {
+        chunks: Vec<Chunk>,
+        stats_of_columns: Vec<Vec<StatisticsOfColumns>>,
+        trivals: VecDeque<Arc<BlockMeta>>,
+    },
+    SerializedBlocks(Vec<SerializeState>),
+    GenerateSegment,
+    SerializedSegment {
         data: Vec<u8>,
         location: String,
         segment: Arc<SegmentInfo>,
@@ -82,6 +92,7 @@ pub struct CompactTransform {
     block_reader: Arc<BlockReader>,
     location_gen: TableMetaLocationGenerator,
     dal: Operator,
+    schema: TableSchemaRef,
     storage_format: FuseStorageFormat,
 
     // Limit the memory size of the block read.
@@ -104,6 +115,7 @@ impl CompactTransform {
         block_reader: Arc<BlockReader>,
         location_gen: TableMetaLocationGenerator,
         dal: Operator,
+        schema: TableSchemaRef,
         storage_format: FuseStorageFormat,
         thresholds: ChunkCompactThresholds,
     ) -> Result<ProcessorPtr> {
@@ -121,6 +133,7 @@ impl CompactTransform {
             block_reader,
             location_gen,
             dal,
+            schema,
             storage_format,
             max_memory,
             max_io_requests,
@@ -150,7 +163,7 @@ impl Processor for CompactTransform {
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Consume) {
             State::CompactBlocks {
-                mut blocks,
+                mut chunks,
                 stats_of_columns,
                 mut trivals,
             } => {
@@ -163,25 +176,27 @@ impl Processor for CompactTransform {
                     }
 
                     // concat blocks.
-                    let compact_blocks: Vec<_> = blocks.drain(0..block_num).collect();
-                    let new_block = DataBlock::concat_blocks(&compact_blocks)?;
+                    let compact_chunks: Vec<_> = chunks.drain(0..block_num).collect();
+                    let new_chunk = Chunk::concat(&compact_chunks)?;
 
                     // generate block statistics.
-                    let col_stats = reduce_block_statistics(&stats, Some(&new_block))?;
-                    let row_count = new_block.num_rows() as u64;
-                    let block_size = new_block.memory_size() as u64;
+                    let col_stats = reduce_block_statistics(&stats, Some(&new_chunk))?;
+                    let row_count = new_chunk.num_rows() as u64;
+                    let block_size = new_chunk.memory_size() as u64;
                     let (block_location, block_id) = self.location_gen.gen_block_location();
 
                     // build block index.
                     let (index_data, index_size, index_location) = {
                         // write index
-                        let bloom_index = BlockFilter::try_create(&[&new_block])?;
-                        let index_block = bloom_index.filter_block;
+                        let func_ctx = FunctionContext::default();
+                        let bloom_index =
+                            ChunkFilter::try_create(func_ctx, self.schema, &[&new_chunk])?;
+                        let index_chunk = bloom_index.filter_chunk;
                         let location = self.location_gen.block_bloom_index_location(&block_id);
                         let mut data = Vec::with_capacity(100 * 1024);
                         let index_block_schema = &bloom_index.filter_schema;
                         let (size, _) = serialize_to_parquet_with_compression(
-                            vec![index_block],
+                            vec![index_chunk],
                             index_block_schema,
                             &mut data,
                             CompressionOptions::Uncompressed,
@@ -191,9 +206,12 @@ impl Processor for CompactTransform {
 
                     // serialize data block.
                     let mut block_data = Vec::with_capacity(100 * 1024 * 1024);
-                    let (file_size, col_metas) =
-                        io::write_block(self.storage_format, new_block, &mut block_data)?;
-
+                    let (file_size, col_metas) = io::write_block(
+                        self.storage_format,
+                        &self.schema,
+                        new_chunk,
+                        &mut block_data,
+                    )?;
                     // new block meta.
                     let new_meta = BlockMeta::new(
                         row_count,
@@ -242,7 +260,7 @@ impl Processor for CompactTransform {
                     segment,
                     std::mem::take(&mut self.abort_operation),
                 );
-                self.output_data = Some(DataBlock::empty_with_meta(meta));
+                self.output_data = Some(Chunk::empty_with_meta(meta));
             }
             _ => return Err(ErrorCode::Internal("It's a bug.")),
         }

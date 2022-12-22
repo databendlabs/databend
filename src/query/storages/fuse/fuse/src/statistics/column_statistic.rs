@@ -48,9 +48,9 @@ pub fn calc_column_distinct_of_values(
 }
 
 pub fn get_traverse_columns_dfs(
-    data_block: &Chunk,
+    chunk: &Chunk,
 ) -> Result<Vec<(Option<usize>, Value<AnyType>, DataType)>> {
-    traverse::traverse_columns_dfs(data_block.columns())
+    traverse::traverse_columns_dfs(chunk.columns())
 }
 
 pub fn gen_columns_statistics(
@@ -112,10 +112,10 @@ pub fn gen_columns_statistics(
                 if let Some(value) = column_distinct_count.get(col_idx) {
                     *value as u64
                 } else {
-                    calc_column_distinct_of_values(col, column_field)?
+                    calc_column_distinct_of_values(col, data_type, rows)?
                 }
             }
-            (_, _) => calc_column_distinct_of_values(col, column_field)?,
+            (_, _) => calc_column_distinct_of_values(col, data_type, rows)?,
         };
 
         let (is_all_null, bitmap) = col.validity();
@@ -124,8 +124,6 @@ pub fn gen_columns_statistics(
             (false, Some(bitmap)) => bitmap.unset_bits(),
             (false, None) => 0,
         };
-
-        let distinct_of_values = calc_column_distinct_of_values(col, data_type, rows)?;
 
         let in_memory_size = col.memory_size() as u64;
         let col_stats = ColumnStatistics {

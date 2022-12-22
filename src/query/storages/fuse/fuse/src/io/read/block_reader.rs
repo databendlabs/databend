@@ -14,7 +14,6 @@
 
 use common_arrow::parquet::metadata::SchemaDescriptor;
 use common_catalog::plan::Projection;
-use common_expression::DataSchemaRef;
 use common_expression::TableSchemaRef;
 use common_storage::ColumnLeaves;
 use opendal::Operator;

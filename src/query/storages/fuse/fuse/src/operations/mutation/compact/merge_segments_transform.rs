@@ -15,9 +15,9 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::Chunk;
 use common_storages_table_meta::meta::Location;
 use common_storages_table_meta::meta::SegmentInfo;
 use common_storages_table_meta::meta::Statistics;
@@ -37,7 +37,7 @@ use crate::statistics::reducers::merge_statistics_mut;
 
 enum State {
     Consume,
-    Merge(DataBlock),
+    Merge(Chunk),
     Output,
 }
 
@@ -46,7 +46,7 @@ pub struct MergeSegmentsTransform {
     inputs: Vec<Arc<InputPort>>,
     output: Arc<OutputPort>,
     cur_input_index: usize,
-    output_data: Option<DataBlock>,
+    output_data: Option<Chunk>,
 
     // The order of the merged segments in snapshot.
     pub merged_indices: Vec<usize>,
@@ -177,7 +177,7 @@ impl Processor for MergeSegmentsTransform {
                     std::mem::take(&mut self.merged_statistics),
                     std::mem::take(&mut self.abort_operation),
                 );
-                self.output_data = Some(DataBlock::empty_with_meta(meta));
+                self.output_data = Some(Chunk::empty_with_meta(meta));
             }
             _ => return Err(ErrorCode::Internal("It's a bug.")),
         }

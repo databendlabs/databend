@@ -90,7 +90,7 @@ impl<'a> FuseSnapshot<'a> {
                     .await
             }?;
 
-            return self.to_block(&meta_location_generator, &snapshot_lite, snapshot_version);
+            return self.to_chunk(&meta_location_generator, &snapshot_lite, snapshot_version);
         }
         Ok(Chunk::empty())
     }

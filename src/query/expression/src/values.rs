@@ -1139,6 +1139,12 @@ impl Column {
             Column::Variant(col) => col.data.len() + col.offsets.len() * 8,
         }
     }
+
+    /// Returns (is_all_null,  Option bitmap)
+    pub fn validity(&self) -> (bool, Option<&Bitmap>) {
+        // todo("expression")
+        (false, None)
+    }
 }
 
 impl Serialize for Column {

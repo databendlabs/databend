@@ -34,7 +34,6 @@ use common_catalog::plan::Projection;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::Chunk;
-use common_expression::DataSchemaRef;
 use common_expression::TableSchemaRef;
 use common_storage::ColumnLeaf;
 use common_storage::ColumnLeaves;

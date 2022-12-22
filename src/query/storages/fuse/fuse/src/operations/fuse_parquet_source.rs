@@ -19,57 +19,59 @@ use common_base::base::Progress;
 use common_base::base::ProgressValues;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::table_context::TableContext;
-use common_datablocks::DataBlock;
-use common_datavalues::ColumnRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::AnyType;
 use common_expression::Chunk;
-use common_functions::scalars::FunctionContext;
+use common_expression::Evaluator;
+use common_expression::Expr;
+use common_expression::FunctionContext;
+use common_expression::Value;
+use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
-use common_sql::evaluator::EvalNode;
 
 use crate::io::BlockReader;
 
 type DataChunks = Vec<(usize, Vec<u8>)>;
 
-pub struct PrewhereData {
-    data_block: DataBlock,
-    filter: ColumnRef,
+pub struct PrewhereData<'a> {
+    chunk: Chunk,
+    filter: &'a Value<AnyType>,
 }
 
-enum State {
+enum State<'a> {
     ReadDataPrewhere(Option<PartInfoPtr>),
-    ReadDataRemain(PartInfoPtr, PrewhereData),
+    ReadDataRemain(PartInfoPtr, PrewhereData<'a>),
     PrewhereFilter(PartInfoPtr, DataChunks),
-    Deserialize(PartInfoPtr, DataChunks, Option<PrewhereData>),
+    Deserialize(PartInfoPtr, DataChunks, Option<PrewhereData<'a>>),
     Generated(Option<PartInfoPtr>, Chunk),
     Finish,
 }
 
-pub struct FuseParquetSource {
-    state: State,
+pub struct FuseParquetSource<'a> {
+    state: State<'a>,
     ctx: Arc<dyn TableContext>,
     scan_progress: Arc<Progress>,
     output: Arc<OutputPort>,
     output_reader: Arc<BlockReader>,
 
     prewhere_reader: Arc<BlockReader>,
-    prewhere_filter: Arc<Option<EvalNode>>,
+    prewhere_filter: Arc<Option<Expr<String>>>,
     remain_reader: Arc<Option<BlockReader>>,
 
     support_blocking: bool,
 }
 
-impl FuseParquetSource {
+impl FuseParquetSource<'_> {
     pub fn create(
         ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
         output_reader: Arc<BlockReader>,
         prewhere_reader: Arc<BlockReader>,
-        prewhere_filter: Arc<Option<EvalNode>>,
+        prewhere_filter: Arc<Option<Expr<String>>>,
         remain_reader: Arc<Option<BlockReader>>,
     ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
@@ -90,21 +92,21 @@ impl FuseParquetSource {
     fn generate_one_block(&mut self, chunk: Chunk) -> Result<()> {
         let new_part = self.ctx.try_get_part();
         // resort and prune columns
-        let chunk = chunk.resort(self.output_reader.schema())?;
+        // todo!("expression")
+        // let chunk = chunk.resort(self.output_reader.schema())?;
         self.state = State::Generated(new_part, chunk);
         Ok(())
     }
 
     fn generate_one_empty_block(&mut self) -> Result<()> {
-        let schema = self.output_reader.schema();
         let new_part = self.ctx.try_get_part();
-        self.state = State::Generated(new_part, DataBlock::empty_with_schema(schema));
+        self.state = State::Generated(new_part, Chunk::empty());
         Ok(())
     }
 }
 
 #[async_trait::async_trait]
-impl Processor for FuseParquetSource {
+impl Processor for FuseParquetSource<'_> {
     fn name(&self) -> String {
         "FuseEngineSource".to_string()
     }
@@ -172,64 +174,61 @@ impl Processor for FuseParquetSource {
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Finish) {
             State::Deserialize(part, chunks, prewhere_data) => {
-                let data_block = if let Some(PrewhereData {
-                    data_block: mut prewhere_blocks,
+                let chunk = if let Some(PrewhereData {
+                    chunk: mut prewhere_chunks,
                     filter,
                 }) = prewhere_data
                 {
-                    let block = if chunks.is_empty() {
-                        prewhere_blocks
+                    let chunk = if chunks.is_empty() {
+                        prewhere_chunks
                     } else if let Some(remain_reader) = self.remain_reader.as_ref() {
-                        let remain_block = remain_reader.deserialize(part, chunks)?;
-                        for (col, field) in remain_block
-                            .columns()
-                            .iter()
-                            .zip(remain_block.schema().fields())
-                        {
-                            prewhere_blocks =
-                                prewhere_blocks.add_column(col.clone(), field.clone())?;
+                        let remain_chunk = remain_reader.deserialize(part, chunks)?;
+                        for col in remain_chunk.columns() {
+                            prewhere_chunks.add_column(col.clone());
                         }
-                        prewhere_blocks
+                        prewhere_chunks
                     } else {
                         return Err(ErrorCode::Internal("It's a bug. Need remain reader"));
                     };
                     // the last step of prewhere
                     let progress_values = ProgressValues {
-                        rows: block.num_rows(),
-                        bytes: block.memory_size(),
+                        rows: chunk.num_rows(),
+                        bytes: chunk.memory_size(),
                     };
                     self.scan_progress.incr(&progress_values);
-                    DataBlock::filter_block(block, &filter)?
+                    chunk.filter(&filter)?
                 } else {
-                    let block = self.output_reader.deserialize(part, chunks)?;
+                    let chunk = self.output_reader.deserialize(part, chunks)?;
                     let progress_values = ProgressValues {
-                        rows: block.num_rows(),
-                        bytes: block.memory_size(),
+                        rows: chunk.num_rows(),
+                        bytes: chunk.memory_size(),
                     };
                     self.scan_progress.incr(&progress_values);
 
-                    block
+                    chunk
                 };
 
-                self.generate_one_block(data_block)?;
+                self.generate_one_block(chunk)?;
                 Ok(())
             }
             State::PrewhereFilter(part, chunks) => {
                 // deserialize prewhere data block first
-                let data_block = self.prewhere_reader.deserialize(part.clone(), chunks)?;
+                let chunk = self.prewhere_reader.deserialize(part.clone(), chunks)?;
                 if let Some(filter) = self.prewhere_filter.as_ref() {
                     // do filter
-                    let res = filter
-                        .eval(&FunctionContext::default(), &data_block)?
-                        .vector;
-                    let filter = DataBlock::cast_to_nonull_boolean(&res)?;
+                    let evaluator =
+                        Evaluator::new(&chunk, FunctionContext::default(), &BUILTIN_FUNCTIONS);
+                    let predicate = evaluator.run(filter).map_err(|(_, e)| {
+                        ErrorCode::Internal(format!("eval prewhere filter failed: {}.", e))
+                    })?;
+
                     // shortcut, if predicates is const boolean (or can be cast to boolean)
-                    if !DataBlock::filter_exists(&filter)? {
+                    if !Chunk::filter_exists(&predicate)? {
                         // all rows in this block are filtered out
                         // turn to read next part
                         let progress_values = ProgressValues {
-                            rows: data_block.num_rows(),
-                            bytes: data_block.memory_size(),
+                            rows: chunk.num_rows(),
+                            bytes: chunk.memory_size(),
                         };
                         self.scan_progress.incr(&progress_values);
                         self.generate_one_empty_block()?;
@@ -238,15 +237,17 @@ impl Processor for FuseParquetSource {
                     if self.remain_reader.is_none() {
                         // shortcut, we don't need to read remain data
                         let progress_values = ProgressValues {
-                            rows: data_block.num_rows(),
-                            bytes: data_block.memory_size(),
+                            rows: chunk.num_rows(),
+                            bytes: chunk.memory_size(),
                         };
                         self.scan_progress.incr(&progress_values);
-                        let block = DataBlock::filter_block(data_block, &filter)?;
-                        self.generate_one_block(block)?;
+                        let chunk = chunk.filter(&predicate)?;
+                        self.generate_one_block(chunk)?;
                     } else {
-                        self.state =
-                            State::ReadDataRemain(part, PrewhereData { data_block, filter });
+                        self.state = State::ReadDataRemain(part, PrewhereData {
+                            chunk,
+                            filter: &predicate,
+                        });
                     }
                     Ok(())
                 } else {

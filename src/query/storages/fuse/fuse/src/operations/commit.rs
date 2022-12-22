@@ -27,7 +27,7 @@ use common_catalog::table::TableExt;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::DataSchema;
+use common_expression::TableSchema;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableStatistics;
 use common_meta_app::schema::UpdateTableMetaReq;
@@ -259,7 +259,7 @@ impl FuseTable {
     }
 
     fn merge_table_operations(
-        schema: &DataSchema,
+        schema: &TableSchema,
         previous: Option<Arc<TableSnapshot>>,
         prev_version: u64,
         mut new_segments: Vec<Location>,

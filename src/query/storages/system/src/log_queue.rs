@@ -29,7 +29,6 @@ use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::Chunk;
 use common_expression::ColumnBuilder;
-use common_expression::DataSchemaRef;
 use common_expression::TableSchemaRef;
 use common_expression::Value;
 use common_meta_app::schema::TableIdent;

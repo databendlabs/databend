@@ -234,6 +234,11 @@ impl<Index: ColumnIndex> Expr<Index> {
             },
         }
     }
+
+    /// Display with readable variable name.
+    pub fn column_name(&self) -> String {
+        todo!("expression")
+    }
 }
 
 impl<Index: ColumnIndex> RemoteExpr<Index> {
@@ -337,5 +342,10 @@ impl<Index: ColumnIndex> RemoteExpr<Index> {
                 }
             }
         })
+    }
+
+    /// Display with readable variable name.
+    pub fn column_name(&self) -> String {
+        todo!("expression")
     }
 }

@@ -24,7 +24,7 @@ use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use common_expression::DataSchemaRef;
+use common_expression::TableSchemaRef;
 use common_meta_app::schema::TableInfo;
 use common_storage::ColumnLeaves;
 use common_storages_table_meta::meta::BlockMeta;
@@ -125,19 +125,13 @@ impl FuseTable {
             start.elapsed().as_secs()
         );
 
-        self.read_partitions_with_metas(
-            ctx,
-            Arc::new(table_info.schema().into()),
-            push_downs,
-            block_metas,
-            summary,
-        )
+        self.read_partitions_with_metas(ctx, table_info.schema(), push_downs, block_metas, summary)
     }
 
     pub fn read_partitions_with_metas(
         &self,
         _: Arc<dyn TableContext>,
-        schema: DataSchemaRef,
+        schema: TableSchemaRef,
         push_downs: Option<PushDownInfo>,
         block_metas: Vec<Arc<BlockMeta>>,
         partitions_total: usize,

@@ -30,7 +30,7 @@ use crate::statistics::column_statistic::get_traverse_columns_dfs;
 
 pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
     stats_of_columns: &[T],
-    data_block: Option<&Chunk>,
+    chunk: Option<&Chunk>,
 ) -> Result<StatisticsOfColumns> {
     // Combine statistics of a column into `Vec`, that is:
     // from : `&[HashMap<ColumnId, ColumnStatistics>]`
@@ -45,8 +45,8 @@ pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
         )
     });
 
-    let leaves = if let Some(data_block) = data_block {
-        Some(get_traverse_columns_dfs(data_block)?)
+    let leaves = if let Some(chunk) = chunk {
+        Some(get_traverse_columns_dfs(chunk)?)
     } else {
         None
     };
@@ -91,11 +91,11 @@ pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
                 .cloned()
                 .unwrap_or(Scalar::Null);
 
-            let distinct_of_values = match data_block {
-                Some(data_block) => {
+            let distinct_of_values = match chunk {
+                Some(chunk) => {
                     if let Some(col) = leaves.as_ref().unwrap().get(*id as usize) {
-                        let column = col.0.convert_to_full_column(&col.1, data_block.num_rows());
-                        calc_column_distinct_of_values(&column, &col.1, data_block.num_rows())?
+                        let column = col.1.convert_to_full_column(&col.2, chunk.num_rows());
+                        calc_column_distinct_of_values(&column, &col.2, chunk.num_rows())?
                     } else {
                         0
                     }
