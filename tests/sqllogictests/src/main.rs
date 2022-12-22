@@ -62,7 +62,7 @@ impl sqllogictest::AsyncDB for Databend {
     async fn run(&mut self, sql: &str) -> Result<DBOutput> {
         if let Some(mysql_client) = &mut self.mysql_client {
             println!("Running sql with mysql client: [{}]", sql);
-            return mysql_client.query(sql);
+            return mysql_client.query(sql).await;
         }
         if let Some(http_client) = &mut self.http_client {
             println!("Running sql with http client: [{}]", sql);
@@ -127,7 +127,7 @@ pub async fn main() -> Result<()> {
 async fn run_mysql_client() -> Result<()> {
     let suits = SqlLogicTestArgs::parse().suites;
     let suits = std::fs::read_dir(suits).unwrap();
-    let mysql_client = MysqlClient::create()?;
+    let mysql_client = MysqlClient::create().await?;
     let databend = Databend::create(Some(mysql_client), None, None);
     run_suits(suits, databend).await?;
     Ok(())

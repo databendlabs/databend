@@ -12,7 +12,7 @@ clap = { version = "4.0.29", features = ["derive", "env"] }
 common-exception = { path = "../../src/common/exception" }
 env_logger = "0.10.0"
 lazy_static = "1.4.0"
-mysql = "23.0.0"
+mysql_async = "0.31.2"
 regex = "1"
 reqwest = { version = "0.11.13", features = ["json"] }
 serde = "1.0.150"
