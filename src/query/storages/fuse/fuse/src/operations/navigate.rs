@@ -31,40 +31,29 @@ impl FuseTable {
     pub async fn navigate_to_time_point(
         &self,
         time_point: DateTime<Utc>,
-        read_only: bool,
     ) -> Result<Arc<FuseTable>> {
-        self.find(
-            |snapshot| {
-                if let Some(ts) = snapshot.timestamp {
-                    ts <= time_point
-                } else {
-                    false
-                }
-            },
-            read_only,
-        )
+        self.find(|snapshot| {
+            if let Some(ts) = snapshot.timestamp {
+                ts <= time_point
+            } else {
+                false
+            }
+        })
         .await
     }
-    pub async fn navigate_to_snapshot(
-        &self,
-        snapshot_id: &str,
-        read_only: bool,
-    ) -> Result<Arc<FuseTable>> {
-        self.find(
-            |snapshot| {
-                snapshot
-                    .snapshot_id
-                    .simple()
-                    .to_string()
-                    .as_str()
-                    .starts_with(snapshot_id)
-            },
-            read_only,
-        )
+    pub async fn navigate_to_snapshot(&self, snapshot_id: &str) -> Result<Arc<FuseTable>> {
+        self.find(|snapshot| {
+            snapshot
+                .snapshot_id
+                .simple()
+                .to_string()
+                .as_str()
+                .starts_with(snapshot_id)
+        })
         .await
     }
 
-    pub async fn find<P>(&self, mut pred: P, read_only: bool) -> Result<Arc<FuseTable>>
+    pub async fn find<P>(&self, mut pred: P) -> Result<Arc<FuseTable>>
     where P: FnMut(&TableSnapshot) -> bool {
         let snapshot_location = if let Some(loc) = self.snapshot_loc().await? {
             loc
@@ -100,11 +89,6 @@ impl FuseTable {
 
             // The `seq` of ident that we cloned here is JUST a place holder
             // we should NOT use it other than a pure place holder.
-            // Fortunately, historical table should be read-only.
-            // - Although, caller of fuse table will not perform mutation on a historical table
-            //   but in case there are careless mistakes, an extra attribute `read_only` is
-            //   added the FuseTable, and during mutation operations, FuseTable will check it.
-            // - Figuring out better way...
             let mut table_info = self.table_info.clone();
 
             // There are more to be kept in snapshot, like engine_options, ordering keys...
@@ -135,8 +119,8 @@ impl FuseTable {
             };
 
             // let's instantiate it
-            let fuse_tbl = FuseTable::do_create(table_info, read_only)?;
-            Ok(fuse_tbl.into())
+            let table = FuseTable::do_create(table_info)?;
+            Ok(table.into())
         } else {
             Err(ErrorCode::TableHistoricalDataNotFound(
                 "No historical data found at given point",

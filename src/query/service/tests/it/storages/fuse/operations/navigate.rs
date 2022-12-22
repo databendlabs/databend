@@ -12,21 +12,17 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use std::ops::Add;
 use std::ops::Sub;
 use std::time::Duration;
 
 use common_base::base::tokio;
-use common_catalog::table::AppendMode;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_storages_fuse::io::SnapshotHistoryReader;
-use databend_query::pipelines::Pipeline;
 use databend_query::storages::fuse::io::MetaReaders;
 use databend_query::storages::fuse::io::TableMetaLocationGenerator;
 use databend_query::storages::fuse::FuseTable;
-use databend_query::storages::Table;
 use futures::TryStreamExt;
 
 use crate::storages::fuse::table_test_fixture::execute_query;
@@ -102,10 +98,7 @@ async fn test_fuse_navigate() -> Result<()> {
         .unwrap()
         .sub(chrono::Duration::milliseconds(1));
     // navigate from the instant that is just one ms before the timestamp of the latest snapshot
-    let read_only = true;
-    let tbl = fuse_table
-        .navigate_to_time_point(instant, read_only)
-        .await?;
+    let tbl = fuse_table.navigate_to_time_point(instant).await?;
 
     // check we got the snapshot of the first insertion
     assert_eq!(first_snapshot, tbl.snapshot_loc().await?.unwrap());
@@ -117,84 +110,10 @@ async fn test_fuse_navigate() -> Result<()> {
         .unwrap()
         .sub(chrono::Duration::milliseconds(1));
     // navigate from the instant that is just one ms before the timestamp of the last insertion
-    let read_only = true;
-    let res = fuse_table.navigate_to_time_point(instant, read_only).await;
+    let res = fuse_table.navigate_to_time_point(instant).await;
     match res {
         Ok(_) => panic!("historical data should not exist"),
         Err(e) => assert_eq!(e.code(), ErrorCode::TABLE_HISTORICAL_DATA_NOT_FOUND),
     };
     Ok(())
-}
-
-#[tokio::test]
-async fn test_fuse_historical_table_is_read_only() -> Result<()> {
-    // 1. Setup
-    let fixture = TestFixture::new().await;
-    let db = fixture.default_db_name();
-    let tbl = fixture.default_table_name();
-    let ctx = fixture.ctx();
-    fixture.create_default_table().await?;
-
-    let qry = format!("insert into {}.{} values (1, (2, 3))", db, tbl);
-    execute_query(ctx.clone(), qry.as_str())
-        .await?
-        .try_collect::<Vec<DataBlock>>()
-        .await?;
-
-    // 2. grab the history
-    let table = fixture.latest_default_table().await?;
-    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-    let loc = fuse_table.snapshot_loc().await?.unwrap();
-    let reader = MetaReaders::table_snapshot_reader(fuse_table.get_operator());
-    let version = TableMetaLocationGenerator::snapshot_version(loc.as_str());
-    let snapshots: Vec<_> = reader
-        .snapshot_history(loc, version, fuse_table.meta_location_generator().clone())
-        .try_collect()
-        .await?;
-
-    let snapshot = &snapshots[0];
-    let instant = snapshot
-        .timestamp
-        .unwrap()
-        .add(chrono::Duration::milliseconds(1));
-    let read_only = true;
-    let tbl = fuse_table
-        .navigate_to_time_point(instant, read_only)
-        .await?;
-
-    // check append2
-    let res = tbl.append_data(
-        ctx.clone(),
-        &mut Pipeline::create(),
-        AppendMode::Normal,
-        false,
-    );
-    assert_not_writable(res, "append2");
-
-    // check append_data
-    let res = fixture
-        .append_commit_blocks(tbl.clone(), vec![], false, true)
-        .await;
-    assert_not_writable(res, "append2");
-
-    // check truncate
-    let res = tbl.truncate(ctx.clone(), false).await;
-    assert_not_writable(res, "truncate");
-
-    Ok(())
-}
-
-fn assert_not_writable<T>(res: Result<T>, case_name: &str) {
-    match res {
-        Ok(_) => panic!(
-            "historical table should NOT be writable, case {}",
-            case_name
-        ),
-        Err(e) => assert_eq!(
-            e.code(),
-            ErrorCode::TABLE_NOT_WRITABLE,
-            " case {}",
-            case_name
-        ),
-    }
 }

@@ -115,8 +115,7 @@ impl Interpreter for OptimizeTableInterpreter {
 
         if do_purge {
             let table = if let OptimizeTableAction::Purge(Some(point)) = action {
-                let read_only = false;
-                table.navigate_to(point, read_only).await?
+                table.navigate_to(point).await?
             } else {
                 table
             };
