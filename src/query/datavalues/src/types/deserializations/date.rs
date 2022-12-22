@@ -40,6 +40,10 @@ where
         self.builder.memory_size()
     }
 
+    fn len(&self) -> usize {
+        self.builder.len()
+    }
+
     fn de_binary(&mut self, reader: &mut &[u8]) -> Result<()> {
         let value: T = reader.read_scalar()?;
         check_date(value.as_i32())?;

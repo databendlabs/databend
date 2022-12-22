@@ -32,6 +32,7 @@ use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::FileFormatOptions;
+use common_meta_types::OnErrorMode;
 use common_meta_types::UserStageInfo;
 use common_users::UserApiProvider;
 use tracing::debug;
@@ -493,12 +494,11 @@ impl<'a> Binder {
 
         // Copy options.
         {
-            // TODO(xuanwo): COPY should handle on error.
             // on_error.
-            // if !stmt.on_error.is_empty() {
-            //     stage_info.copy_options.on_error =
-            //         OnErrorMode::from_str(&self.on_error).map_err(ErrorCode::SyntaxException)?;
-            // }
+            if !stmt.on_error.is_empty() {
+                stage.copy_options.on_error =
+                    OnErrorMode::from_str(&stmt.on_error).map_err(ErrorCode::SyntaxException)?;
+            }
 
             // size_limit.
             if stmt.size_limit != 0 {

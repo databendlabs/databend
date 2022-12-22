@@ -43,7 +43,7 @@ pub struct SqlLogicTestArgs {
 
     // Set handler to run tests
     #[arg(
-        short = 'c',
+        short = 'l',
         long = "handlers",
         use_value_delimiter = true,
         value_delimiter = ',',
@@ -59,4 +59,13 @@ pub struct SqlLogicTestArgs {
         default_value = "tests/sqllogictests/suites"
     )]
     pub suites: String,
+
+    // If enable complete mode
+    #[arg(
+        short = 'c',
+        long = "complete",
+        default_missing_value = "true",
+        help = "The arg is used to enable auto complete mode"
+    )]
+    pub complete: bool,
 }

@@ -27,6 +27,10 @@ impl TypeDeserializer for ArrayDeserializer {
         self.builder.memory_size()
     }
 
+    fn len(&self) -> usize {
+        self.builder.len()
+    }
+
     #[allow(clippy::uninit_vec)]
     fn de_binary(&mut self, reader: &mut &[u8]) -> Result<()> {
         let size = reader.read_uvarint()?;
