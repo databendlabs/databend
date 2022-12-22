@@ -24,20 +24,20 @@ use common_storages_table_meta::meta::ClusterStatistics;
 use crate::pruning::BlockIndex;
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq)]
-pub struct DeletionPartInfo {
+pub struct MutationPartInfo {
     pub index: BlockIndex,
     pub cluster_stats: Option<ClusterStatistics>,
     pub inner_part: PartInfoPtr,
 }
 
-#[typetag::serde(name = "deletion")]
-impl PartInfo for DeletionPartInfo {
+#[typetag::serde(name = "mutation")]
+impl PartInfo for MutationPartInfo {
     fn as_any(&self) -> &dyn Any {
         self
     }
 
     fn equals(&self, info: &Box<dyn PartInfo>) -> bool {
-        match info.as_any().downcast_ref::<DeletionPartInfo>() {
+        match info.as_any().downcast_ref::<MutationPartInfo>() {
             None => false,
             Some(other) => self == other,
         }
@@ -48,24 +48,24 @@ impl PartInfo for DeletionPartInfo {
     }
 }
 
-impl DeletionPartInfo {
+impl MutationPartInfo {
     pub fn create(
         index: BlockIndex,
         cluster_stats: Option<ClusterStatistics>,
         inner_part: PartInfoPtr,
     ) -> PartInfoPtr {
-        Arc::new(Box::new(DeletionPartInfo {
+        Arc::new(Box::new(MutationPartInfo {
             index,
             cluster_stats,
             inner_part,
         }))
     }
 
-    pub fn from_part(info: &PartInfoPtr) -> Result<&DeletionPartInfo> {
-        match info.as_any().downcast_ref::<DeletionPartInfo>() {
+    pub fn from_part(info: &PartInfoPtr) -> Result<&MutationPartInfo> {
+        match info.as_any().downcast_ref::<MutationPartInfo>() {
             Some(part_ref) => Ok(part_ref),
             None => Err(ErrorCode::Internal(
-                "Cannot downcast from PartInfo to DeletionPartInfo.",
+                "Cannot downcast from PartInfo to MutationPartInfo.",
             )),
         }
     }

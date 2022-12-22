@@ -34,10 +34,10 @@ use opendal::Operator;
 
 use super::deletion_meta::Deletion;
 use super::deletion_meta::DeletionSourceMeta;
-use super::deletion_part::DeletionPartInfo;
 use crate::io::write_data;
 use crate::io::BlockReader;
 use crate::io::TableMetaLocationGenerator;
+use crate::operations::mutation::MutationPartInfo;
 use crate::operations::util;
 use crate::operations::BloomIndexState;
 use crate::pipelines::processors::port::OutputPort;
@@ -302,7 +302,7 @@ impl Processor for DeletionSource {
     async fn async_process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Finish) {
             State::ReadData(Some(part)) => {
-                let deletion_part = DeletionPartInfo::from_part(&part)?;
+                let deletion_part = MutationPartInfo::from_part(&part)?;
                 self.index = deletion_part.index;
                 self.origin_stats = deletion_part.cluster_stats.clone();
                 let part = deletion_part.inner_part.clone();

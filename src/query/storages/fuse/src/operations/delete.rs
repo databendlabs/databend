@@ -32,9 +32,9 @@ use common_sql::evaluator::Evaluator;
 use common_storages_table_meta::meta::Location;
 use common_storages_table_meta::meta::TableSnapshot;
 
-use crate::operations::mutation::DeletionPartInfo;
 use crate::operations::mutation::DeletionSource;
 use crate::operations::mutation::DeletionTransform;
+use crate::operations::mutation::MutationPartInfo;
 use crate::operations::mutation::MutationSink;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
@@ -186,7 +186,7 @@ impl FuseTable {
             index_stats
                 .into_iter()
                 .zip(inner_parts.partitions.into_iter())
-                .map(|((a, b), c)| DeletionPartInfo::create(a, b, c))
+                .map(|((a, b), c)| MutationPartInfo::create(a, b, c))
                 .collect(),
         );
         ctx.try_set_partitions(parts)?;

@@ -13,11 +13,9 @@
 // limitations under the License.
 
 mod deletion_meta;
-mod deletion_part;
 mod deletion_source;
 mod deletion_transform;
 
 pub use deletion_meta::Deletion;
-pub use deletion_part::DeletionPartInfo;
 pub use deletion_source::DeletionSource;
 pub use deletion_transform::DeletionTransform;

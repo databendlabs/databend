@@ -12,14 +12,13 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-
 use std::any::Any;
 use std::ops::Not;
 use std::sync::Arc;
 
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::table_context::TableContext;
-use common_datablocks::serialize_data_blocks;
+use common_datablocks::serialize_to_parquet;
 use common_datablocks::DataBlock;
 use common_datavalues::BooleanColumn;
 use common_datavalues::ColumnRef;
@@ -35,6 +34,7 @@ use opendal::Operator;
 use crate::io::write_data;
 use crate::io::BlockReader;
 use crate::io::TableMetaLocationGenerator;
+use crate::operations::mutation::MutationPartInfo;
 use crate::operations::util;
 use crate::operations::BloomIndexState;
 use crate::pipelines::processors::port::OutputPort;
@@ -57,8 +57,11 @@ pub struct UpdateSource {
     state: State,
     ctx: Arc<dyn TableContext>,
     output: Arc<OutputPort>,
-}
 
+    index: BlockIndex,
+    cluster_stats_gen: ClusterStatsGenerator,
+    origin_stats: Option<ClusterStatistics>,
+}
 
 #[async_trait::async_trait]
 impl Processor for UpdateSource {
@@ -117,6 +120,14 @@ impl Processor for UpdateSource {
 
     async fn async_process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Finish) {
+            State::ReadData(Some(part)) => {
+                let part = MutationPartInfo::from_part(&part)?;
+                self.index = part.index;
+                self.origin_stats = part.cluster_stats.clone();
+                let inner_part = part.inner_part.clone();
+                // let chunks = self.block_reader.read_columns_data(inner_part.clone()).await?;
+                // self.state = State::FilterData(inner_part, chunks);
+            }
             _ => return Err(ErrorCode::Internal("It's a bug.")),
         }
         Ok(())
