@@ -186,8 +186,94 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
             Ok(columns) => {
                 let mut row_writer = dataset_writer.start(&columns).await?;
                 let chunks = &mut query_result.chunks;
+                while let Some(chunk) = chunks.next().await {
+                    let chunk = match chunk {
+                        Err(e) => {
+                            error!("result row write failed: {:?}", e);
+                            row_writer
+                                .finish_error(
+                                    ErrorKind::ER_UNKNOWN_ERROR,
+                                    &format!("result row write failed: {}", e).as_bytes(),
+                                )
+                                .await?;
+                            return Ok(());
+                        }
+                        Ok(chunk) => chunk,
+                    };
 
-                todo!("expression");
+                    let num_rows = chunk.num_rows();
+                    let encoder = FieldEncoderValues::create_for_mysql_handler(format.timezone);
+                    let mut buf = Vec::<u8>::new();
+
+                    let columns = chunk
+                        .convert_to_full()
+                        .columns()
+                        .map(|column| column.value.clone().into_column().unwrap())
+                        .collect::<Vec<_>>();
+
+                    for row_index in 0..num_rows {
+                        for (col_index, column) in columns.iter().enumerate() {
+                            let value = unsafe { column.index_unchecked(index) };
+                            match value {
+                                ScalarRef::Null => {
+                                    row_writer.write_col(None::<u8>)?;
+                                }
+                                ScalarRef::Boolean(v) => {
+                                    row_writer.write_col(v as u8)?;
+                                }
+                                ScalarRef::Number(number) => match number {
+                                    NumberScalar::UInt8(v) => {
+                                        row_writer.write_col(v)?;
+                                    }
+                                    NumberScalar::UInt16(v) => {
+                                        row_writer.write_col(v)?;
+                                    }
+                                    NumberScalar::UInt32(v) => {
+                                        row_writer.write_col(v)?;
+                                    }
+                                    NumberScalar::UInt64(v) => {
+                                        row_writer.write_col(v)?;
+                                    }
+                                    NumberScalar::Int8(v) => {
+                                        row_writer.write_col(v)?;
+                                    }
+                                    NumberScalar::Int16(v) => {
+                                        row_writer.write_col(v)?;
+                                    }
+                                    NumberScalar::Int32(v) => {
+                                        row_writer.write_col(v)?;
+                                    }
+                                    NumberScalar::Int64(v) => {
+                                        row_writer.write_col(v)?;
+                                    }
+                                    _ => {
+                                        write_field(
+                                            &mut row_writer,
+                                            column,
+                                            &encoder,
+                                            &mut buf,
+                                            row_index,
+                                        )?;
+                                    }
+                                },
+                                _ => write_field(
+                                    &mut row_writer,
+                                    column,
+                                    &encoder,
+                                    &mut buf,
+                                    row_index,
+                                )?,
+                            }
+                        }
+                        row_writer.end_row().await?;
+                    }
+                }
+
+                let info = query_result
+                    .extra_info
+                    .map(|r| r.progress_info())
+                    .unwrap_or_default();
+                row_writer.finish_with_info(&info).await?;
                 Ok(())
             }
         }

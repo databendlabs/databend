@@ -21,7 +21,6 @@ use common_expression::Chunk;
 use common_expression::Column;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
-use common_expression::TypeSerializer;
 use common_formats::field_encoder::FieldEncoderRowBased;
 use common_formats::field_encoder::FieldEncoderValues;
 use common_io::prelude::FormatSettings;

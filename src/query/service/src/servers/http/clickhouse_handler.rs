@@ -362,15 +362,14 @@ pub async fn clickhouse_ping_handler() -> String {
 }
 
 pub fn clickhouse_router() -> impl Endpoint {
-    todo!("expression");
-    // Route::new()
-    //     .at(
-    //         "/",
-    //         post(clickhouse_handler_post).get(clickhouse_handler_get),
-    //     )
-    //     .at("/ping", get(clickhouse_ping_handler))
-    //     .at("/replicas_status", get(clickhouse_ping_handler))
-    //     .with(poem::middleware::Compression)
+    Route::new()
+        .at(
+            "/",
+            post(clickhouse_handler_post).get(clickhouse_handler_get),
+        )
+        .at("/ping", get(clickhouse_ping_handler))
+        .at("/replicas_status", get(clickhouse_ping_handler))
+        .with(poem::middleware::Compression)
 }
 
 // default codec is always lz4

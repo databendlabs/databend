@@ -40,13 +40,12 @@ pub trait Procedure: Sync + Send {
     fn validate(&self, ctx: Arc<QueryContext>, args: &[String]) -> Result<()> {
         let features = self.features();
 
-        todo!("expression");
-        // validate_function_arg(
-        //     self.name(),
-        //     args.len(),
-        //     features.variadic_arguments,
-        //     features.num_arguments,
-        // )?;
+        validate_function_arg(
+            self.name(),
+            args.len(),
+            features.variadic_arguments,
+            features.num_arguments,
+        )?;
 
         if features.management_mode_required && !GlobalConfig::instance().query.management_mode {
             return Err(ErrorCode::ManagementModePermissionDenied(format!(
