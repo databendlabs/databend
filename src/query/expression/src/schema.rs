@@ -789,6 +789,12 @@ impl<T: AsRef<TableSchema>> From<T> for DataSchema {
     }
 }
 
+impl AsRef<TableSchema> for &TableSchema {
+    fn as_ref(&self) -> &TableSchema {
+        self
+    }
+}
+
 // conversions code
 // =========================
 impl From<&ArrowField> for TableField {

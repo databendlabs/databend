@@ -22,8 +22,9 @@ use common_arrow::parquet::metadata::ColumnDescriptor;
 use common_arrow::schema_projection as ap;
 use common_catalog::plan::Projection;
 use common_exception::Result;
+use common_expression::DataSchema;
+use common_expression::DataSchemaRef;
 use common_expression::TableSchema;
-use common_expression::TableSchemaRef;
 use common_storage::ColumnLeaves;
 use opendal::Object;
 use opendal::Operator;
@@ -53,7 +54,7 @@ pub struct ParquetReader {
     /// ```
     columns_to_read: HashSet<usize>,
     /// The schema of the [`common_expression::Chunk`] this reader produces.
-    output_schema: TableSchemaRef,
+    output_schema: DataSchemaRef,
     /// The actual schema used to read parquet.
     ///
     /// The reason of using [`ArrowSchema`] to read parquet is that
@@ -79,18 +80,21 @@ impl ParquetReader {
             columns_to_read,
         ) = Self::do_projection(&schema, &projection)?;
 
+        let t_schema = TableSchema::from(&projected_arrow_schema);
+        let output_schema = DataSchema::from(&t_schema);
+
         Ok(Arc::new(ParquetReader {
             operator,
             columns_to_read,
-            output_schema: Arc::new(TableSchema::from(&projected_arrow_schema)),
+            output_schema: Arc::new(output_schema),
             projected_arrow_schema,
             projected_column_leaves,
             projected_column_descriptors,
         }))
     }
 
-    pub fn output_schema(&self) -> TableSchemaRef {
-        self.output_schema.clone()
+    pub fn output_schema(&self) -> &DataSchema {
+        &self.output_schema
     }
 
     pub fn columns_to_read(&self) -> &HashSet<usize> {

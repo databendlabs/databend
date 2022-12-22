@@ -15,17 +15,12 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::Chunk;
-use common_expression::ChunkEntry;
 use common_expression::ColumnIndex;
 use common_expression::ConstantFolder;
-use common_expression::DataField;
-use common_expression::DataSchema;
-use common_expression::DataSchemaRef;
 use common_expression::Domain;
 use common_expression::Expr;
 use common_expression::FunctionContext;
@@ -179,7 +174,7 @@ impl ChunkFilter {
     pub fn eval(&self, mut expr: Expr<String>) -> Result<FilterEvalResult> {
         visit_expr_column_eq_constant(&mut expr, &mut |span, col_name, scalar, ty| {
             // If the column doesn't contain the constant, we rewrite the expression to `false`.
-            if self.find(col_name, &scalar, ty)? == FilterEvalResult::MustFalse {
+            if self.find(col_name, scalar, ty)? == FilterEvalResult::MustFalse {
                 Ok(Some(Expr::Constant {
                     span,
                     scalar: Scalar::Boolean(false),
@@ -244,7 +239,7 @@ impl ChunkFilter {
             .unwrap()
             .as_string()
             .unwrap();
-        let (filter, _size) = Xor8Filter::from_bytes(&filter_bytes)?;
+        let (filter, _size) = Xor8Filter::from_bytes(filter_bytes)?;
         if filter.contains(&target) {
             Ok(FilterEvalResult::Uncertain)
         } else {

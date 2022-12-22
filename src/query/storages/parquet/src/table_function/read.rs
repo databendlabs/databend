@@ -23,10 +23,8 @@ use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
 use common_config::GlobalConfig;
 use common_exception::Result;
-use common_expression::Evaluator;
+use common_expression::DataSchema;
 use common_expression::Expr;
-use common_expression::RemoteExpr;
-use common_expression::TableSchemaRef;
 use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 use common_pipeline_core::Pipeline;
 use common_storages_pruner::RangePrunerCreator;
@@ -61,7 +59,7 @@ impl ParquetTable {
         &self,
         _ctx: Arc<dyn TableContext>,
         plan: &DataSourcePlan,
-    ) -> Result<Arc<Option<Expr<String>>>> {
+    ) -> Result<Arc<Option<Expr>>> {
         Ok(
             match PushDownInfo::prewhere_of_push_downs(&plan.push_downs) {
                 None => Arc::new(None),
@@ -210,7 +208,9 @@ impl ParquetTable {
             ),
             Some(v) => v.output_columns,
         };
-        let output_schema = Arc::new(output_projection.project_schema(&plan.source_info.schema()));
+        let output_schema = Arc::new(DataSchema::from(
+            &output_projection.project_schema(&plan.source_info.schema()),
+        ));
 
         let prewhere_reader = self.build_prewhere_reader(plan)?;
         let prewhere_filter = self.build_prewhere_filter_executor(ctx.clone(), plan)?;

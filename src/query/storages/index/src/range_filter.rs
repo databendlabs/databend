@@ -12,13 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
-use std::collections::HashSet;
-use std::fmt;
 use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::type_check::check_function;
 use common_expression::types::nullable::NullableDomain;
@@ -32,21 +28,12 @@ use common_expression::types::StringType;
 use common_expression::types::TimestampType;
 use common_expression::types::ValueType;
 use common_expression::with_number_mapped_type;
-use common_expression::Chunk;
-use common_expression::Column;
 use common_expression::ConstantFolder;
-use common_expression::DataField;
-use common_expression::DataSchemaRef;
 use common_expression::Domain;
 use common_expression::Expr;
 use common_expression::FunctionContext;
-use common_expression::RemoteExpr;
 use common_expression::Scalar;
-use common_expression::TableDataType;
 use common_expression::TableSchemaRef;
-use common_functions_v2::scalars::check_pattern_type;
-use common_functions_v2::scalars::is_like_pattern_escape;
-use common_functions_v2::scalars::PatternType;
 use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 use common_storages_table_meta::meta::ColumnStatistics;
 use common_storages_table_meta::meta::StatisticsOfColumns;
@@ -158,6 +145,6 @@ fn statistics_to_domain(stat: &ColumnStatistics, data_type: &DataType) -> Domain
             })
         }
         // Unsupported data type
-        _ => Domain::full(data_type.into()),
+        _ => Domain::full(data_type),
     })
 }

@@ -31,7 +31,7 @@ pub struct PrewhereInfo {
     /// remain_columns = scan.columns - need_columns
     pub remain_columns: Projection,
     /// filter for prewhere
-    pub filter: RemoteExpr<String>,
+    pub filter: RemoteExpr,
 }
 
 /// Extras is a wrapper for push down items.

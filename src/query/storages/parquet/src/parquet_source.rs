@@ -23,11 +23,11 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::BooleanType;
 use common_expression::Chunk;
+use common_expression::DataSchemaRef;
+use common_expression::DataSchemaRefExt;
 use common_expression::Evaluator;
 use common_expression::Expr;
-use common_expression::Function;
 use common_expression::FunctionContext;
-use common_expression::TableSchemaRef;
 use common_expression::Value;
 use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 use common_pipeline_core::processors::port::OutputPort;
@@ -60,10 +60,13 @@ pub struct ParquetSource {
     ctx: Arc<dyn TableContext>,
     scan_progress: Arc<Progress>,
     output: Arc<OutputPort>,
-    output_schema: TableSchemaRef,
+    /// The schema before output. Some fields might be removed when outputing.
+    src_schema: DataSchemaRef,
+    /// The final output schema
+    output_schema: DataSchemaRef,
 
     prewhere_reader: Arc<ParquetReader>,
-    prewhere_filter: Arc<Option<Expr<String>>>,
+    prewhere_filter: Arc<Option<Expr>>,
     remain_reader: Arc<Option<ParquetReader>>,
 }
 
@@ -71,27 +74,30 @@ impl ParquetSource {
     pub fn create(
         ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
-        output_schema: TableSchemaRef,
+        output_schema: DataSchemaRef,
         prewhere_reader: Arc<ParquetReader>,
-        prewhere_filter: Arc<Option<Expr<String>>>,
+        prewhere_filter: Arc<Option<Expr>>,
         remain_reader: Arc<Option<ParquetReader>>,
     ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
+        let mut src_fields = prewhere_reader.output_schema().fields().clone();
+        if let Some(reader) = remain_reader.as_ref() {
+            let remain_field = reader.output_schema().fields();
+            src_fields.extend_from_slice(remain_field);
+        }
+        let src_schema = DataSchemaRefExt::create(src_fields);
+
         Ok(ProcessorPtr::create(Box::new(ParquetSource {
             ctx,
             output,
             scan_progress,
             state: State::ReadDataPrewhere(None),
             output_schema,
+            src_schema,
             prewhere_reader,
             prewhere_filter,
             remain_reader,
         })))
-    }
-
-    #[inline]
-    pub fn output_schema(&self) -> TableSchemaRef {
-        self.output_schema.clone()
     }
 
     fn do_prewhere_filter(
@@ -152,9 +158,12 @@ impl ParquetSource {
                 // shortcut, we don't need to read remain data
                 let progress_values = ProgressValues { rows, bytes };
                 self.scan_progress.incr(&progress_values);
-                // In this case, schema of prewhere reading is the final output schema,
-                // so don't need to resort by schema.
-                self.state = Generated(self.ctx.try_get_part(), filtered_chunk);
+                let chunk = Chunk::resort(
+                    filtered_chunk,
+                    self.src_schema.as_ref(),
+                    self.output_schema.as_ref(),
+                )?;
+                self.state = Generated(self.ctx.try_get_part(), chunk);
             } else {
                 self.state = State::ReadDataRemain(part, PrewhereData {
                     chunk: filtered_chunk,
@@ -216,32 +225,26 @@ impl ParquetSource {
             } else {
                 return Err(ErrorCode::Internal("It's a bug. Need remain reader"));
             };
-            // the last step of prewhere
-            let progress_values = ProgressValues {
-                rows: chunk.num_rows(),
-                bytes: chunk.memory_size(),
-            };
-            self.scan_progress.incr(&progress_values);
             chunk
         } else {
             // There is only prewhere reader.
             assert!(self.remain_reader.is_none());
-            let chunk = self
-                .prewhere_reader
-                .deserialize(rg_part, raw_chunks, None)?;
-            let progress_values = ProgressValues {
-                rows: chunk.num_rows(),
-                bytes: chunk.memory_size(),
-            };
-            self.scan_progress.incr(&progress_values);
-
-            chunk
+            self.prewhere_reader
+                .deserialize(rg_part, raw_chunks, None)?
         };
 
-        self.state = State::Generated(
-            self.ctx.try_get_part(),
-            output_chunk.resort(self.output_schema().as_ref())?,
-        );
+        let progress_values = ProgressValues {
+            rows: output_chunk.num_rows(),
+            bytes: output_chunk.memory_size(),
+        };
+        self.scan_progress.incr(&progress_values);
+
+        let output_chunk = Chunk::resort(
+            output_chunk,
+            self.src_schema.as_ref(),
+            self.output_schema.as_ref(),
+        )?;
+        self.state = State::Generated(self.ctx.try_get_part(), output_chunk);
         Ok(())
     }
 }
@@ -282,9 +285,8 @@ impl Processor for ParquetSource {
                 if let Some(part) = part {
                     self.state = State::ReadDataPrewhere(Some(part));
                 }
-                todo!("expression");
-                // self.output.push_data(Ok(data_block));
-                // return Ok(Event::NeedConsume);
+                self.output.push_data(Ok(chunk));
+                return Ok(Event::NeedConsume);
             }
         }
 
