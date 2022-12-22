@@ -92,10 +92,10 @@ impl<T> Drop for WatchStream<T> {
 
 impl<T> WatchStream<T> {
     /// Create a new `WatcherStream`.
-    pub fn new(rx: Receiver<T>, watcher_info: Watcher, dispatcher: EventDispatcherHandle) -> Self {
+    pub fn new(rx: Receiver<T>, watcher: Watcher, dispatcher: EventDispatcherHandle) -> Self {
         Self {
             inner: rx,
-            watcher: watcher_info,
+            watcher,
             dispatcher,
         }
     }

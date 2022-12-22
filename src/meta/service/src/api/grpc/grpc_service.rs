@@ -245,8 +245,8 @@ impl MetaService for MetaServiceImpl {
         let add_res = mn.add_watcher(request.into_inner(), tx).await;
 
         match add_res {
-            Ok(watcher_info) => {
-                let stream = WatchStream::new(rx, watcher_info, mn.dispatcher_handle.clone());
+            Ok(watcher) => {
+                let stream = WatchStream::new(rx, watcher, mn.dispatcher_handle.clone());
                 Ok(Response::new(Box::pin(stream) as Self::WatchStream))
             }
             Err(e) => {
