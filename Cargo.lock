@@ -3384,6 +3384,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "derivative"
+version = "2.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fcc3dd5e9e9c0b295d6e1e4d811fb6f157d5ffd784b8d202fc62eac8035a770b"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "derive_more"
 version = "0.99.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3950,6 +3961,12 @@ dependencies = [
  "quote",
  "syn",
 ]
+
+[[package]]
+name = "fs-err"
+version = "2.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0845fa252299212f0389d64ba26f34fa32cfe41588355f21ed507c59a0f64541"
 
 [[package]]
 name = "fs2"
@@ -8173,12 +8190,13 @@ dependencies = [
 
 [[package]]
 name = "sqllogictest"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a89f3be6c90ef2b67d55f999663b367ede63747a2311e480e7710f70c52fef65"
+version = "0.10.0"
+source = "git+https://github.com/xudong963/sqllogictest-rs?branch=runner#0d26c2ebc98eecd4645c40eb4a2bcf54fe0b517e"
 dependencies = [
  "async-trait",
+ "derivative",
  "difference",
+ "fs-err",
  "futures",
  "glob",
  "humantime",
@@ -9006,7 +9024,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if",
- "rand 0.7.3",
+ "rand 0.8.5",
  "static_assertions",
 ]
 
