@@ -17,7 +17,7 @@ regex = "1"
 reqwest = { version = "0.11.13", features = ["json"] }
 serde = "1.0.150"
 serde_json = "1.0.89"
-sqllogictest = "0.9.0"
+sqllogictest = { git = "https://github.com/xudong963/sqllogictest-rs", branch = "runner" }
 thiserror = "1.0.37"
 tokio = { version = "1.21.1", features = ["full"] }
 walkdir = "2.3.2"

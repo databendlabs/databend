@@ -17,6 +17,8 @@ use std::path::PathBuf;
 
 use clap::Parser;
 use client::ClickhouseHttpClient;
+use sqllogictest::default_validator;
+use sqllogictest::update_test_file;
 use sqllogictest::DBOutput;
 use walkdir::DirEntry;
 use walkdir::WalkDir;
@@ -174,8 +176,16 @@ async fn run_suits(suits: ReadDir, databend: Databend) -> Result<()> {
                     continue;
                 }
             }
-            println!("test file: [{}] is running", file_name,);
-            runner.run_file_async(file.unwrap().path()).await?;
+            if args.complete {
+                let col_separator = " ";
+                let validator = default_validator;
+                update_test_file(file.unwrap().path(), &mut runner, col_separator, validator)
+                    .await
+                    .unwrap();
+            } else {
+                println!("test file: [{}] is running", file_name,);
+                runner.run_file_async(file.unwrap().path()).await?;
+            }
         }
     }
 
