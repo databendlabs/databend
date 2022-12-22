@@ -99,6 +99,11 @@ impl<Index: ColumnIndex> Chunk<Index> {
     }
 
     #[inline]
+    pub fn columns_ref(&self) -> &[ChunkEntry<Index>] {
+        &self.columns
+    }
+
+    #[inline]
     pub fn get_by_offset(&self, offset: usize) -> &ChunkEntry<Index> {
         &self.columns[offset]
     }
@@ -133,12 +138,7 @@ impl<Index: ColumnIndex> Chunk<Index> {
 
     #[inline]
     pub fn memory_size(&self) -> usize {
-        self.columns()
-            .map(|entry| match &entry.value {
-                Value::Scalar(s) => std::mem::size_of_val(&s),
-                Value::Column(c) => c.memory_size(),
-            })
-            .sum()
+        self.columns().map(|entry| entry.memory_size()).sum()
     }
 
     pub fn convert_to_full(&self) -> Self {
@@ -359,5 +359,14 @@ impl TryFrom<Chunk> for ArrowChunk<ArrayRef> {
             .collect();
 
         Ok(ArrowChunk::try_new(arrays)?)
+    }
+}
+
+impl<Index: ColumnIndex> ChunkEntry<Index> {
+    pub fn memory_size(&self) -> usize {
+        match &self.value {
+            Value::Scalar(s) => std::mem::size_of_val(&s),
+            Value::Column(c) => c.memory_size(),
+        }
     }
 }

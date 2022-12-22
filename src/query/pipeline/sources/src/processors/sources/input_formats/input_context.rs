@@ -24,6 +24,7 @@ use common_base::base::Progress;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::ChunkCompactThresholds;
+use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::TableSchemaRef;
 use common_formats::ClickhouseFormatType;
@@ -303,6 +304,10 @@ impl InputContext {
 
     pub fn num_prefetch_per_split(&self) -> usize {
         1
+    }
+
+    pub fn data_schema(&self) -> DataSchema {
+        (self.schema.as_ref()).into()
     }
 
     pub fn get_compression_alg(&self, path: &str) -> Result<Option<CompressAlgorithm>> {
