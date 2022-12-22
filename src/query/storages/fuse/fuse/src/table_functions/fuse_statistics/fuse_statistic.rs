@@ -39,7 +39,7 @@ impl<'a> FuseStatistic<'a> {
         Self { ctx, table }
     }
 
-    pub async fn get_statistic(self) -> Result<Chunk<String>> {
+    pub async fn get_statistic(self) -> Result<Chunk> {
         let snapshot_opt = self.table.read_table_snapshot().await?;
         if let Some(snapshot) = snapshot_opt {
             let table_statistics = self
@@ -55,7 +55,7 @@ impl<'a> FuseStatistic<'a> {
         &self,
         _summy: &Statistics,
         table_statistics: &Option<Arc<TableSnapshotStatistics>>,
-    ) -> Result<Chunk<String>> {
+    ) -> Result<Chunk> {
         let mut col_ndvs: Vec<Vec<u8>> = Vec::with_capacity(1);
         if let Some(table_statistics) = table_statistics {
             let mut ndvs: String = "".to_string();

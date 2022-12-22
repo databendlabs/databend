@@ -167,7 +167,7 @@ impl AsyncSource for FuseStatisticSource {
     const NAME: &'static str = "fuse_statistic";
 
     #[async_trait::unboxed_simple]
-    async fn generate(&mut self) -> Result<Option<Chunk<String>>> {
+    async fn generate(&mut self) -> Result<Option<Chunk>> {
         if self.finish {
             return Ok(None);
         }

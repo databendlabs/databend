@@ -41,7 +41,7 @@ use crate::parquet_reader::ParquetReader;
 use crate::parquet_source::State::Generated;
 
 struct PrewhereData {
-    chunk: Chunk<String>,
+    chunk: Chunk,
     filter: Value<BooleanType>,
 }
 
@@ -51,7 +51,7 @@ enum State {
     ReadDataRemain(PartInfoPtr, PrewhereData),
     PrewhereFilter(PartInfoPtr, Vec<IndexedChunk>),
     Deserialize(PartInfoPtr, Vec<IndexedChunk>, Option<PrewhereData>),
-    Generated(Option<PartInfoPtr>, Chunk<String>),
+    Generated(Option<PartInfoPtr>, Chunk),
     Finish,
 }
 

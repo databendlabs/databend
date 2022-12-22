@@ -126,7 +126,7 @@ impl BlockReader {
     // TODO refine these
 
     #[tracing::instrument(level = "debug", skip_all)]
-    pub async fn read_with_block_meta(&self, meta: &BlockMeta) -> Result<Chunk<String>> {
+    pub async fn read_with_block_meta(&self, meta: &BlockMeta) -> Result<Chunk> {
         let (num_rows, columns_array_iter) = self.read_columns_with_block_meta(meta).await?;
         let mut deserializer = RowGroupDeserializer::new(columns_array_iter, num_rows, None);
         self.try_next_block(&mut deserializer)
@@ -270,7 +270,7 @@ impl BlockReader {
         Ok((num_rows, columns_array_iter))
     }
 
-    pub fn build_block(&self, chunks: Vec<(usize, Box<dyn Array>)>) -> Result<Chunk<String>> {
+    pub fn build_block(&self, chunks: Vec<(usize, Box<dyn Array>)>) -> Result<Chunk> {
         let mut results = Vec::with_capacity(chunks.len());
         let mut chunk_map: HashMap<usize, Box<dyn Array>> = chunks.into_iter().collect();
         let columns = self.projection.project_column_leaves(&self.column_leaves)?;
@@ -288,11 +288,7 @@ impl BlockReader {
         Chunk::from_arrow_chunk(&chunk, &self.schema())
     }
 
-    pub fn deserialize(
-        &self,
-        part: PartInfoPtr,
-        chunks: Vec<(usize, Vec<u8>)>,
-    ) -> Result<Chunk<String>> {
+    pub fn deserialize(&self, part: PartInfoPtr, chunks: Vec<(usize, Vec<u8>)>) -> Result<Chunk> {
         let part = FusePartInfo::from_part(&part)?;
         let mut chunk_map: HashMap<usize, Vec<u8>> = chunks.into_iter().collect();
         let mut columns_array_iter = Vec::with_capacity(self.projection.len());
@@ -403,19 +399,19 @@ impl BlockReader {
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
-    pub async fn read(&self, part: PartInfoPtr) -> Result<Chunk<String>> {
+    pub async fn read(&self, part: PartInfoPtr) -> Result<Chunk> {
         let (num_rows, columns_array_iter) = self.read_columns(part).await?;
         let mut deserializer = RowGroupDeserializer::new(columns_array_iter, num_rows, None);
         self.try_next_block(&mut deserializer)
     }
 
-    fn try_next_block(&self, deserializer: &mut RowGroupDeserializer) -> Result<Chunk<String>> {
+    fn try_next_block(&self, deserializer: &mut RowGroupDeserializer) -> Result<Chunk> {
         match deserializer.next() {
             None => Err(ErrorCode::Internal(
                 "deserializer from row group: fail to get a chunk",
             )),
             Some(Err(cause)) => Err(ErrorCode::from(cause)),
-            Some(Ok(chunk)) => Chunk::<String>::from_arrow_chunk(&chunk, &self.projected_schema),
+            Some(Ok(chunk)) => Chunk::from_arrow_chunk(&chunk, &self.projected_schema),
         }
     }
 
