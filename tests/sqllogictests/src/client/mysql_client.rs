@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use mysql::prelude::Queryable;
-use mysql::Pool;
-use mysql::PooledConn;
-use mysql::Row;
+use mysql_async::prelude::Queryable;
+use mysql_async::Conn;
+use mysql_async::Pool;
+use mysql_async::Row;
 use sqllogictest::ColumnType;
 use sqllogictest::DBOutput;
 
@@ -23,19 +23,19 @@ use crate::error::Result;
 
 #[derive(Debug)]
 pub struct MysqlClient {
-    pub conn: PooledConn,
+    pub conn: Conn,
 }
 
 impl MysqlClient {
-    pub fn create() -> Result<MysqlClient> {
+    pub async fn create() -> Result<MysqlClient> {
         let url = "mysql://root:@127.0.0.1:3307/default";
-        let pool = Pool::new(url)?;
-        let conn = pool.get_conn()?;
+        let pool = Pool::new(url);
+        let conn = pool.get_conn().await?;
         Ok(MysqlClient { conn })
     }
 
-    pub fn query(&mut self, sql: &str) -> Result<DBOutput> {
-        let rows: Vec<Row> = self.conn.query(sql)?;
+    pub async fn query(&mut self, sql: &str) -> Result<DBOutput> {
+        let rows: Vec<Row> = self.conn.query(sql).await?;
         let types = vec![ColumnType::Any; rows.len()];
         let mut parsed_rows = Vec::with_capacity(rows.len());
         for row in rows.into_iter() {
