@@ -216,6 +216,22 @@ impl InsertInterpreterV2 {
             match may_error {
                 Some(error) => {
                     tracing::error!("insert stage file error: {}", error);
+                    GlobalIORuntime::instance()
+                        .block_on(async move {
+                            if stage_info.copy_options.purge {
+                                info!(
+                                    "insert: try to purge files:{}, elapsed:{}",
+                                    all_source_files.len(),
+                                    start.elapsed().as_secs()
+                                );
+                                Self::try_purge_files(ctx.clone(), &stage_info, &all_source_files)
+                                    .await;
+                            }
+                            Ok(())
+                        })
+                        .unwrap_or_else(|e| {
+                            tracing::error!("insert: purge stage file error: {}", e);
+                        });
                     Err(may_error.as_ref().unwrap().clone())
                 }
                 None => {
@@ -233,7 +249,7 @@ impl InsertInterpreterV2 {
 
                         if stage_info.copy_options.purge {
                             info!(
-                                "copy: try to purge files:{}, elapsed:{}",
+                                "insert: try to purge files:{}, elapsed:{}",
                                 all_source_files.len(),
                                 start.elapsed().as_secs()
                             );
