@@ -15,6 +15,7 @@
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::SystemTime;
 
 use common_arrow::arrow::array::Array;
 use common_arrow::arrow::chunk::Chunk;
@@ -28,9 +29,11 @@ use common_arrow::parquet::metadata::ColumnDescriptor;
 use common_arrow::parquet::read::BasicDecompressor;
 use common_arrow::parquet::read::PageMetaData;
 use common_arrow::parquet::read::PageReader;
+use common_base::rangemap::RangeMerger;
 use common_base::runtime::UnlimitedFuture;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::Projection;
+use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
@@ -45,6 +48,7 @@ use futures::TryStreamExt;
 use opendal::Object;
 use opendal::Operator;
 use tracing::debug_span;
+use tracing::info;
 use tracing::Instrument;
 
 use crate::fuse_part::FusePartInfo;
@@ -270,8 +274,27 @@ impl BlockReader {
         self.try_next_block(&mut deserializer)
     }
 
-    pub async fn read_columns_data(&self, part: PartInfoPtr) -> Result<Vec<(usize, Vec<u8>)>> {
-        let part = FusePartInfo::from_part(&part)?;
+    /// Merge overlap io request to one.
+    fn merge_io_requests(
+        max_gap_size: u64,
+        max_range_size: u64,
+        part: &PartInfoPtr,
+    ) -> Result<Vec<std::ops::Range<u64>>> {
+        let part = FusePartInfo::from_part(part)?;
+        let ranges = part
+            .columns_meta
+            .values()
+            .map(|v| (v.offset..v.offset + v.len))
+            .collect::<Vec<_>>();
+        Ok(RangeMerger::from_iter(ranges, max_gap_size, max_range_size).ranges())
+    }
+
+    pub async fn read_columns_data(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        raw_part: PartInfoPtr,
+    ) -> Result<Vec<(usize, Vec<u8>)>> {
+        let part = FusePartInfo::from_part(&raw_part)?;
         let columns = self.projection.project_column_leaves(&self.column_leaves)?;
         let indices = Self::build_projection_indices(&columns);
         let mut join_handlers = Vec::with_capacity(indices.len());
@@ -286,7 +309,41 @@ impl BlockReader {
             )));
         }
 
-        futures::future::try_join_all(join_handlers).await
+        let now = SystemTime::now();
+        let res = futures::future::try_join_all(join_handlers).await;
+        let normal_cost = now.elapsed().unwrap().as_millis();
+
+        // Merge io requests.
+        let max_gap_size = ctx.get_settings().get_max_storage_io_requests_merge_gap()?;
+        let max_range_size = ctx.get_settings().get_max_storage_io_requests_page_size()?;
+        let ranges = Self::merge_io_requests(max_gap_size, max_range_size, &raw_part)?;
+        let mut merge_io_handlers = Vec::with_capacity(ranges.len());
+        for (index, range) in ranges.iter().enumerate() {
+            merge_io_handlers.push(UnlimitedFuture::create(Self::read_range(
+                self.operator.object(&part.location),
+                index,
+                range.start,
+                range.end,
+            )));
+        }
+        let now = SystemTime::now();
+        let _ = futures::future::try_join_all(merge_io_handlers).await;
+        let merge_cost = now.elapsed().unwrap().as_millis();
+
+        info!(
+            "async read normal partition={},  count={}, took:{} ms",
+            part.location,
+            part.columns_meta.len(),
+            normal_cost,
+        );
+        info!(
+            "async read merge partition={},  count={}, took:{} ms",
+            part.location,
+            ranges.len(),
+            merge_cost,
+        );
+
+        res
     }
 
     pub fn support_blocking_api(&self) -> bool {
@@ -314,6 +371,17 @@ impl BlockReader {
         }
 
         Ok(results)
+    }
+
+    pub async fn read_range(
+        o: Object,
+        index: usize,
+        start: u64,
+        end: u64,
+    ) -> Result<(usize, Vec<u8>)> {
+        let chunk = o.range_read(start..end).await?;
+
+        Ok((index, chunk))
     }
 
     pub async fn read_column(

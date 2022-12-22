@@ -181,6 +181,28 @@ impl Settings {
                 desc: "The maximum number of concurrent IO requests. By default the value is determined automatically.",
                 possible_values: None,
             },
+            // max_storage_io_requests_merge_gap
+            SettingValue {
+                default_value: UserSettingValue::UInt64(16 * 1024),
+                user_setting: UserSetting::create(
+                    "max_storage_io_requests_merge_gap",
+                    UserSettingValue::UInt64(16 * 1024),
+                ),
+                level: ScopeLevel::Session,
+                desc: "The maximum gap bytes of adjusting to merge two IO requests. By default the value is 16KB",
+                possible_values: None,
+            },
+            // max_storage_io_requests_page_size
+            SettingValue {
+                default_value: UserSettingValue::UInt64(256 * 1024),
+                user_setting: UserSetting::create(
+                    "max_storage_io_requests_page_size",
+                    UserSettingValue::UInt64(256 * 1024),
+                ),
+                level: ScopeLevel::Session,
+                desc: "The maximum bytes of one IO request read. By default the value is 256KB",
+                possible_values: None,
+            },
             // flight_client_timeout
             SettingValue {
                 default_value: UserSettingValue::UInt64(60),
@@ -558,6 +580,26 @@ impl Settings {
 
     pub fn set_max_storage_io_requests(&self, val: u64) -> Result<()> {
         let key = "max_storage_io_requests";
+        self.try_set_u64(key, val, false)
+    }
+
+    pub fn get_max_storage_io_requests_merge_gap(&self) -> Result<u64> {
+        let key = "max_storage_io_requests_merge_gap";
+        self.try_get_u64(key)
+    }
+
+    pub fn set_max_storage_io_requests_merge_gap(&self, val: u64) -> Result<()> {
+        let key = "max_storage_io_requests_merge_gap";
+        self.try_set_u64(key, val, false)
+    }
+
+    pub fn get_max_storage_io_requests_page_size(&self) -> Result<u64> {
+        let key = "max_storage_io_requests_page_size";
+        self.try_get_u64(key)
+    }
+
+    pub fn set_max_storage_io_requests_page_size(&self, val: u64) -> Result<()> {
+        let key = "max_storage_io_requests_page_size";
         self.try_set_u64(key, val, false)
     }
 
