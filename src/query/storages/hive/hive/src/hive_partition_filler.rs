@@ -73,10 +73,10 @@ impl HivePartitionFiller {
 
     pub fn fill_data(
         &self,
-        mut chunk: Chunk<String>,
+        mut chunk: Chunk,
         part: &HivePartInfo,
         origin_num_rows: usize,
-    ) -> Result<Chunk<String>> {
+    ) -> Result<Chunk> {
         let data_values = self.extract_partition_values(part)?;
 
         // create column, create datafiled
@@ -88,7 +88,7 @@ impl HivePartitionFiller {
             let value = &data_values[i];
             let column = self.generate_value(num_rows, value.clone(), field)?;
             chunk.add_column(ChunkEntry {
-                id: field.name().to_string(),
+                id: i,
                 data_type: field.data_type().into(),
                 value: column,
             });

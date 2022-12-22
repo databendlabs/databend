@@ -19,6 +19,7 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::Chunk;
+use common_expression::ChunkEntry;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::TableSchemaRef;
@@ -378,19 +379,26 @@ pub struct ChunkBuilder<T> {
 }
 
 impl<T: InputFormatTextBase> ChunkBuilder<T> {
-    fn flush(&mut self) -> Result<Vec<Chunk<String>>> {
-        let mut columns = Vec::with_capacity(self.mutable_columns.len());
-        for deserializer in &mut self.mutable_columns {
-            columns.push(deserializer.finish_to_column());
-        }
+    fn flush(&mut self) -> Result<Vec<Chunk>> {
+        let columns = self
+            .mutable_columns
+            .iter_mut()
+            .zip(self.ctx.schema.fields())
+            .enumerate()
+            .map(|(i, (deserializer, field))| ChunkEntry {
+                id: i,
+                data_type: field.data_type().clone(),
+                value: Value::Column(deserializer.finish_to_column()),
+            })
+            .collect();
+
         self.mutable_columns = self
             .ctx
             .schema
             .create_deserializers(self.ctx.chunk_compact_thresholds.min_rows_per_chunk);
         self.num_rows = 0;
 
-        todo!("expression")
-        // Ok(vec![DataBlock::create(self.ctx.schema.clone(), columns)])
+        Chunk::new(columns, self.num_rows)
     }
 
     fn memory_size(&self) -> usize {
@@ -416,7 +424,7 @@ impl<T: InputFormatTextBase> ChunkBuilderTrait for ChunkBuilder<T> {
         }
     }
 
-    fn deserialize(&mut self, batch: Option<RowBatch>) -> Result<Vec<Chunk<String>>> {
+    fn deserialize(&mut self, batch: Option<RowBatch>) -> Result<Vec<Chunk>> {
         if let Some(b) = batch {
             self.num_rows += b.row_ends.len();
             T::deserialize(self, b)?;

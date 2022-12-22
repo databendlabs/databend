@@ -40,7 +40,7 @@ pub struct SyncSourcer<T: 'static + SyncSource> {
 
     inner: T,
     output: Arc<OutputPort>,
-    generated_data: Option<Chunk<String>>,
+    generated_data: Option<Chunk>,
     scan_progress: Arc<Progress>,
 }
 

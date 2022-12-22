@@ -38,7 +38,7 @@ pub struct DeserializeSource<I: InputFormatPipe> {
     input_rx: async_channel::Receiver<I::RowBatch>,
     input_buffer: Option<I::RowBatch>,
     input_finished: bool,
-    output_buffer: VecDeque<Chunk<String>>,
+    output_buffer: VecDeque<Chunk>,
 }
 
 impl<I: InputFormatPipe> DeserializeSource<I> {
@@ -81,8 +81,7 @@ impl<I: InputFormatPipe> Processor for DeserializeSource<I> {
             match self.output_buffer.pop_front() {
                 Some(chunk) => {
                     tracing::info!("DeserializeSource push rows {}", chunk.num_rows());
-                    todo!("expression");
-                    // self.output.push_data(Ok(chunk));
+                    self.output.push_data(Ok(chunk));
                     Ok(Event::NeedConsume)
                 }
                 None => {

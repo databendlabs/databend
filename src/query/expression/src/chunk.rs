@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::ops::Range;
 
@@ -249,54 +250,54 @@ impl<Index: ColumnIndex> Chunk<Index> {
     }
 }
 
-impl Chunk<String> {
-    pub fn from_arrow_chunk<A: AsRef<dyn Array>>(
-        arrow_chunk: &ArrowChunk<A>,
-        schema: &TableSchemaRef,
-    ) -> Result<Self> {
-        let cols = schema
-            .fields
-            .iter()
-            .zip(arrow_chunk.arrays())
-            .map(|(field, col)| ChunkEntry {
-                id: field.name().clone(),
-                data_type: field.data_type().into(),
-                value: Value::Column(Column::from_arrow(col.as_ref())),
-            })
-            .collect();
+// impl Chunk<String> {
+//     pub fn from_arrow_chunk<A: AsRef<dyn Array>>(
+//         arrow_chunk: &ArrowChunk<A>,
+//         schema: &TableSchemaRef,
+//     ) -> Result<Self> {
+//         let cols = schema
+//             .fields
+//             .iter()
+//             .zip(arrow_chunk.arrays())
+//             .map(|(field, col)| ChunkEntry {
+//                 id: field.name().clone(),
+//                 data_type: field.data_type().into(),
+//                 value: Value::Column(Column::from_arrow(col.as_ref())),
+//             })
+//             .collect();
 
-        Ok(Chunk::new(cols, arrow_chunk.len()))
-    }
+//         Ok(Chunk::new(cols, arrow_chunk.len()))
+//     }
 
-    /// Resort the columns according to the schema.
-    #[inline]
-    pub fn resort(self, schema: &TableSchema) -> Result<Self> {
-        let mut columns = Vec::with_capacity(self.columns.len());
-        for f in schema.fields() {
-            let mut flag = false;
-            for col in &self.columns {
-                if col.id.eq(f.name()) {
-                    flag = true;
-                    columns.push(col.clone());
-                }
-            }
-            if !flag {
-                let valid_fields: Vec<String> = self.columns.iter().map(|c| c.id.clone()).collect();
-                return Err(ErrorCode::BadArguments(format!(
-                    "Unable to get field named \"{}\". Valid fields: {:?}",
-                    f.name(),
-                    valid_fields
-                )));
-            }
-        }
+//     /// Resort the columns according to the schema.
+//     #[inline]
+//     pub fn resort(self, schema: &TableSchema) -> Result<Self> {
+//         let mut columns = Vec::with_capacity(self.columns.len());
+//         for f in schema.fields() {
+//             let mut flag = false;
+//             for col in &self.columns {
+//                 if col.id.eq(f.name()) {
+//                     flag = true;
+//                     columns.push(col.clone());
+//                 }
+//             }
+//             if !flag {
+//                 let valid_fields: Vec<String> = self.columns.iter().map(|c| c.id.clone()).collect();
+//                 return Err(ErrorCode::BadArguments(format!(
+//                     "Unable to get field named \"{}\". Valid fields: {:?}",
+//                     f.name(),
+//                     valid_fields
+//                 )));
+//             }
+//         }
 
-        Ok(Self {
-            columns,
-            num_rows: self.num_rows,
-            meta: self.meta,
-        })
-    }
-}
+//         Ok(Self {
+//             columns,
+//             num_rows: self.num_rows,
+//             meta: self.meta,
+//         })
+//     }
+// }
 
 impl Chunk<usize> {
     #[inline]
@@ -324,16 +325,17 @@ impl Chunk<usize> {
 
     pub fn from_arrow_chunk<A: AsRef<dyn Array>>(
         arrow_chunk: &ArrowChunk<A>,
-        schema: &TableSchemaRef,
+        schema: &DataSchemaRef,
     ) -> Result<Self> {
         let cols = schema
             .fields
             .iter()
             .zip(arrow_chunk.arrays())
-            .map(|(field, col)| {
+            .enumerate()
+            .map(|(i, (field, col))| {
                 Ok(ChunkEntry {
-                    id: field.name().parse()?,
-                    data_type: field.data_type().into(),
+                    id: i,
+                    data_type: field.data_type().clone(),
                     value: Value::Column(Column::from_arrow(col.as_ref())),
                 })
             })

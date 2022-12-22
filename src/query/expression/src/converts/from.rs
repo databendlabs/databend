@@ -179,13 +179,14 @@ pub fn convert_column(column: &ColumnRef, logical_type: &DataTypeImpl) -> Value<
     Value::Column(new_column)
 }
 
-pub fn from_block(datablock: &DataBlock) -> Chunk<String> {
+pub fn from_block(datablock: &DataBlock) -> Chunk {
     let columns = datablock
         .columns()
         .iter()
         .zip(datablock.schema().fields().iter())
-        .map(|(c, f)| ChunkEntry {
-            id: f.name().clone(),
+        .enumerate()
+        .map(|(i, (c, f))| ChunkEntry {
+            id: i,
             data_type: DataType::from(&from_type(f.data_type())),
             value: convert_column(c, f.data_type()),
         })

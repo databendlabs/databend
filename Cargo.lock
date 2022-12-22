@@ -2233,6 +2233,7 @@ dependencies = [
  "common-pipeline-sources",
  "common-pipeline-transforms",
  "common-sharing",
+ "common-sql",
  "common-storage",
  "common-storages-cache",
  "common-storages-index",

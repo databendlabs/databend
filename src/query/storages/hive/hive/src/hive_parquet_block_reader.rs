@@ -262,7 +262,7 @@ impl HiveBlockReader {
         &self,
         row_group_iterator: &mut DataBlockDeserializer,
         part: HivePartInfo,
-    ) -> Result<Option<Chunk<String>>> {
+    ) -> Result<Option<Chunk>> {
         row_group_iterator
             .next_block(&self.projected_schema, &self.hive_partition_filler, &part)
             .map_err(|e| e.add_message(format!(" filename of hive part {}", part.filename)))

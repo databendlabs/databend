@@ -120,13 +120,6 @@ impl DataSourcePlan {
             .unwrap_or_else(|| self.source_info.schema())
     }
 
-    /// Return designated required fields or all fields in a hash map.
-    pub fn scan_fields(&self) -> BTreeMap<usize, TableField> {
-        self.scan_fields
-            .clone()
-            .unwrap_or_else(|| self.source_info.schema().fields_map())
-    }
-
     pub fn projections(&self) -> Projection {
         let default_proj = || {
             (0..self.source_info.schema().fields().len())

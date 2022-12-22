@@ -58,7 +58,7 @@ impl<const T: bool> AsyncSource for AsyncStreamSource<T> {
     const SKIP_EMPTY_CHUNK: bool = T;
 
     #[async_trait::unboxed_simple]
-    async fn generate(&mut self) -> Result<Option<Chunk<String>>> {
+    async fn generate(&mut self) -> Result<Option<Chunk>> {
         match self
             .stream
             .as_mut()

@@ -14,6 +14,7 @@
 //
 
 use std::collections::HashSet;
+use std::sync::Arc;
 
 use common_exception::Result;
 use common_expression::type_check::check_function;
@@ -28,6 +29,9 @@ use common_expression::ColumnFrom;
 use common_expression::Expr;
 use common_expression::FunctionContext;
 use common_expression::Scalar;
+use common_expression::TableDataType;
+use common_expression::TableField;
+use common_expression::TableSchema;
 use common_expression::Value;
 use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 use common_storages_index::ChunkFilter;
@@ -35,16 +39,20 @@ use common_storages_index::FilterEvalResult;
 
 #[test]
 fn test_bloom_filter() -> Result<()> {
+    let schema = Arc::new(TableSchema::new(vec![
+        TableField::new("0", TableDataType::Number(NumberDataType::UInt8)),
+        TableField::new("1", TableDataType::String),
+    ]));
     let chunks = vec![
         Chunk::new(
             vec![
                 ChunkEntry {
-                    id: "0".to_string(),
+                    id: 0,
                     data_type: DataType::Number(NumberDataType::UInt8),
                     value: Value::Scalar(Scalar::Number(NumberScalar::UInt8(1))),
                 },
                 ChunkEntry {
-                    id: "1".to_string(),
+                    id: 1,
                     data_type: DataType::String,
                     value: Value::Scalar(Scalar::String(b"a".to_vec())),
                 },
@@ -54,12 +62,12 @@ fn test_bloom_filter() -> Result<()> {
         Chunk::new(
             vec![
                 ChunkEntry {
-                    id: "0".to_string(),
+                    id: 0,
                     data_type: DataType::Number(NumberDataType::UInt8),
                     value: Value::Column(Column::Number(NumberColumn::UInt8(vec![2, 3].into()))),
                 },
                 ChunkEntry {
-                    id: "1".to_string(),
+                    id: 1,
                     data_type: DataType::String,
                     value: Value::Column(Column::from_data(vec!["b", "c"])),
                 },
@@ -69,7 +77,7 @@ fn test_bloom_filter() -> Result<()> {
     ];
     let chunks_ref = chunks.iter().collect::<Vec<_>>();
 
-    let index = ChunkFilter::try_create(FunctionContext::default(), &chunks_ref)?;
+    let index = ChunkFilter::try_create(FunctionContext::default(), schema, &chunks_ref)?;
 
     assert_eq!(
         FilterEvalResult::MustFalse,

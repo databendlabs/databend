@@ -32,7 +32,7 @@ use crate::processors::sources::input_formats::input_pipeline::InputFormatPipe;
 struct DeserializeProcessor<I: InputFormatPipe> {
     pub chunk_builder: I::ChunkBuilder,
     pub input_buffer: Option<I::RowBatch>,
-    pub output_buffer: VecDeque<Chunk<String>>,
+    pub output_buffer: VecDeque<Chunk>,
 }
 
 impl<I: InputFormatPipe> DeserializeProcessor<I> {
@@ -102,8 +102,7 @@ impl<I: InputFormatPipe> Processor for DeserializeTransformer<I> {
             match self.processor.output_buffer.pop_front() {
                 Some(chunk) => {
                     tracing::trace!("DeserializeTransformer push rows {}", chunk.num_rows());
-                    todo!("expression");
-                    // self.output.push_data(Ok(chunk));
+                    self.output.push_data(Ok(chunk));
                     Ok(Event::NeedConsume)
                 }
                 None => {
