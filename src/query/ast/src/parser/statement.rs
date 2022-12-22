@@ -861,6 +861,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
                 single: Default::default(),
                 purge: Default::default(),
                 force: Default::default(),
+                on_error: Default::default(),
             };
             for opt in opts {
                 copy_stmt.apply_option(opt);
@@ -1732,6 +1733,9 @@ pub fn copy_option(i: Input) -> IResult<CopyOption> {
         }),
         map(rule! { FORCE ~ "=" ~ #literal_bool }, |(_, _, force)| {
             CopyOption::Force(force)
+        }),
+        map(rule! {ON_ERROR ~ "=" ~ #ident}, |(_, _, on_error)| {
+            CopyOption::OnError(on_error.to_string())
         }),
     ))(i)
 }

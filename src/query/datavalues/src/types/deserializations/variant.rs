@@ -40,6 +40,10 @@ impl TypeDeserializer for VariantDeserializer {
         self.memory_size
     }
 
+    fn len(&self) -> usize {
+        self.builder.len()
+    }
+
     #[allow(clippy::uninit_vec)]
     fn de_binary(&mut self, reader: &mut &[u8]) -> Result<()> {
         let offset: u64 = reader.read_uvarint()?;
