@@ -22,7 +22,6 @@ use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Utc;
-use common_expression::DataSchema;
 use common_expression::TableSchema;
 use common_meta_types::MatchSeq;
 use common_storage::StorageParams;
