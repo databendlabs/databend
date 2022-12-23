@@ -18,8 +18,6 @@ use common_catalog::plan::Projection;
 use common_catalog::table::CompactTarget;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_pipeline_transforms::processors::transforms::ChunkCompactor;
-use common_pipeline_transforms::processors::transforms::TransformCompact;
 use common_storages_table_meta::meta::TableSnapshot;
 
 use crate::operations::mutation::BlockCompactMutator;

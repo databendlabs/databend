@@ -23,7 +23,6 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::ChunkMetaInfoPtr;
-use common_expression::ChunkMetaInfos;
 use common_storages_table_meta::meta::Location;
 use common_storages_table_meta::meta::Statistics;
 use common_storages_table_meta::meta::TableSnapshot;

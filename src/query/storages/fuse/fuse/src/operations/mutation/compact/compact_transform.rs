@@ -28,7 +28,6 @@ use common_expression::Chunk;
 use common_expression::ChunkCompactThresholds;
 use common_expression::FunctionContext;
 use common_expression::TableSchemaRef;
-use common_expression::TableSchemaRefExt;
 use common_storages_index::ChunkFilter;
 use common_storages_table_meta::caches::CacheManager;
 use common_storages_table_meta::meta::BlockMeta;
@@ -157,7 +156,55 @@ impl Processor for CompactTransform {
     }
 
     fn event(&mut self) -> Result<Event> {
-        todo!("expression");
+        if matches!(
+            &self.state,
+            State::CompactBlocks { .. } | State::GenerateSegment { .. } | State::Output { .. }
+        ) {
+            return Ok(Event::Sync);
+        }
+
+        if matches!(
+            &self.state,
+            State::ReadBlocks | State::SerializedBlocks(_) | State::SerializedSegment { .. }
+        ) {
+            return Ok(Event::Async);
+        }
+
+        if self.output.is_finished() {
+            self.input.finish();
+            return Ok(Event::Finished);
+        }
+
+        if !self.output.can_push() {
+            self.input.set_not_need_data();
+            return Ok(Event::NeedConsume);
+        }
+
+        if let Some(chunk) = self.output_data.take() {
+            self.output.push_data(Ok(chunk));
+            return Ok(Event::NeedConsume);
+        }
+
+        if self.input.is_finished() {
+            self.output.finish();
+            return Ok(Event::Finished);
+        }
+
+        if !self.input.has_data() {
+            self.input.set_need_data();
+            return Ok(Event::NeedData);
+        }
+
+        let input_data = self.input.pull_data().unwrap()?;
+        let meta = input_data
+            .get_meta()
+            .ok_or_else(|| ErrorCode::Internal("No block meta. It's a bug"))?;
+        let task_meta = CompactSourceMeta::from_meta(meta)?;
+        self.order = task_meta.order;
+        self.compact_tasks = task_meta.tasks.clone();
+
+        self.state = State::ReadBlocks;
+        Ok(Event::Async)
     }
 
     fn process(&mut self) -> Result<()> {
@@ -190,7 +237,7 @@ impl Processor for CompactTransform {
                         // write index
                         let func_ctx = FunctionContext::default();
                         let bloom_index =
-                            ChunkFilter::try_create(func_ctx, self.schema, &[&new_chunk])?;
+                            ChunkFilter::try_create(func_ctx, self.schema.clone(), &[&new_chunk])?;
                         let index_chunk = bloom_index.filter_chunk;
                         let location = self.location_gen.block_bloom_index_location(&block_id);
                         let mut data = Vec::with_capacity(100 * 1024);
@@ -270,7 +317,89 @@ impl Processor for CompactTransform {
 
     async fn async_process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Consume) {
-            _ => todo!("expression"),
+            State::ReadBlocks => {
+                // block read tasks.
+                let mut task_futures = Vec::new();
+                // The no need compact blockmetas.
+                let mut trivals = VecDeque::new();
+                let mut memory_usage = 0;
+                let mut stats_of_columns = Vec::new();
+
+                let block_reader = self.block_reader.as_ref();
+                while let Some(task) = self.compact_tasks.pop_front() {
+                    let metas = task.get_block_metas();
+                    // Only one block, no need to do a compact.
+                    if metas.len() == 1 {
+                        stats_of_columns.push(vec![]);
+                        trivals.push_back(metas[0].clone());
+                        continue;
+                    }
+
+                    memory_usage += metas.iter().fold(0, |acc, meta| {
+                        let memory = meta.bloom_filter_index_size + meta.block_size;
+                        acc + memory
+                    });
+
+                    if (memory_usage > self.max_memory
+                        || task_futures.len() + metas.len() > self.max_io_requests)
+                        && !task_futures.is_empty()
+                    {
+                        self.compact_tasks.push_front(task);
+                        break;
+                    }
+
+                    let mut meta_stats = Vec::with_capacity(metas.len());
+                    for meta in metas {
+                        let progress_values = ProgressValues {
+                            rows: meta.row_count as usize,
+                            bytes: meta.block_size as usize,
+                        };
+                        self.scan_progress.incr(&progress_values);
+
+                        meta_stats.push(meta.col_stats.clone());
+
+                        // read block in parallel.
+                        task_futures.push(async move {
+                            block_reader.read_with_block_meta(meta.as_ref()).await
+                        });
+                    }
+                    stats_of_columns.push(meta_stats);
+                }
+
+                let chunks = futures::future::try_join_all(task_futures).await?;
+                self.state = State::CompactBlocks {
+                    chunks,
+                    stats_of_columns,
+                    trivals,
+                }
+            }
+            State::SerializedBlocks(mut serialize_states) => {
+                let mut handles = Vec::with_capacity(serialize_states.len());
+                let dal = &self.dal;
+                while let Some(state) = serialize_states.pop() {
+                    handles.push(async move {
+                        // write block data.
+                        write_data(&state.block_data, dal, &state.block_location).await?;
+                        // write index data.
+                        write_data(&state.index_data, dal, &state.index_location).await
+                    });
+                }
+                futures::future::try_join_all(handles).await?;
+                if self.compact_tasks.is_empty() {
+                    self.state = State::GenerateSegment;
+                } else {
+                    self.state = State::ReadBlocks;
+                }
+            }
+            State::SerializedSegment {
+                data,
+                location,
+                segment,
+            } => {
+                self.dal.object(&location).write(data).await?;
+                self.state = State::Output { location, segment };
+            }
+            _ => return Err(ErrorCode::Internal("It's a bug.")),
         }
         Ok(())
     }

@@ -24,9 +24,7 @@ use common_expression::serialize_to_parquet;
 use common_expression::types::AnyType;
 use common_expression::Chunk;
 use common_expression::Column;
-use common_expression::DataSchemaRef;
 use common_expression::Evaluator;
-use common_expression::Expr;
 use common_expression::FunctionContext;
 use common_expression::RemoteExpr;
 use common_expression::TableSchemaRef;
@@ -95,7 +93,7 @@ pub struct DeletionSource<'a> {
     remain_reader: Arc<Option<BlockReader>>,
 
     source_schema: TableSchemaRef,
-    output_schema: DataSchemaRef,
+    output_schema: TableSchemaRef,
     index: BlockIndex,
     cluster_stats_gen: ClusterStatsGenerator,
     origin_stats: Option<ClusterStatistics>,
@@ -120,7 +118,7 @@ impl DeletionSource<'_> {
             filter,
             remain_reader,
             source_schema: table.table_info.schema(),
-            output_schema: table.schema().into(),
+            output_schema: table.schema(),
             index: (0, 0),
             cluster_stats_gen: table.cluster_stats_gen()?,
             origin_stats: None,
@@ -188,11 +186,14 @@ impl Processor for DeletionSource<'_> {
 
                 let evaluator =
                     Evaluator::new(&chunk, FunctionContext::default(), &BUILTIN_FUNCTIONS);
-                let res = evaluator
-                    .run(&self.filter.into_expr(&BUILTIN_FUNCTIONS).unwrap())
-                    .map_err(|(_, e)| {
-                        ErrorCode::Internal(format!("eval try eval const failed: {}.", e))
-                    })?;
+                let expr = self
+                    .filter
+                    .into_expr(&BUILTIN_FUNCTIONS)
+                    .unwrap()
+                    .project_column_ref(|name| self.source_schema.index_of(name).unwrap());
+                let res = evaluator.run(&expr).map_err(|(_, e)| {
+                    ErrorCode::Internal(format!("eval try eval const failed: {}.", e))
+                })?;
                 let predicates =
                     Chunk::<String>::cast_to_nonull_boolean(&res).ok_or_else(|| {
                         ErrorCode::BadArguments(
@@ -202,7 +203,7 @@ impl Processor for DeletionSource<'_> {
 
                 let predicate_col = predicates.into_column().unwrap();
                 let filter = Value::Column(Column::Boolean(predicate_col.not()));
-                if !Chunk::filter_exists(&filter)? {
+                if !Chunk::<usize>::filter_exists(&filter)? {
                     // all the rows should be removed.
                     self.state = State::Generated(Deletion::Deleted);
                 } else {
@@ -259,7 +260,7 @@ impl Processor for DeletionSource<'_> {
                 // build block index.
                 let location = self.location_gen.block_bloom_index_location(&chunk_id);
                 let (bloom_index_state, column_distinct_count) =
-                    BloomIndexState::try_create(self.source_schema, &chunk, location)?;
+                    BloomIndexState::try_create(self.source_schema.clone(), &chunk, location)?;
                 let col_stats = gen_columns_statistics(&chunk, Some(column_distinct_count))?;
 
                 // serialize data block.

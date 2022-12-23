@@ -15,7 +15,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_arrow::parquet::metadata::ThriftFileMetaData;
 use common_exception::Result;
 use common_expression::Chunk;
 use common_expression::ChunkCompactThresholds;

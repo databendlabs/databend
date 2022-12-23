@@ -22,8 +22,8 @@ use common_catalog::table_context::TableContext;
 use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::DataSchemaRef;
 use common_expression::Expr;
+use common_expression::TableSchemaRef;
 use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 use common_pipeline_core::Pipeline;
 use tracing::info;
@@ -82,8 +82,8 @@ impl FuseTable {
         &self,
         _ctx: Arc<dyn TableContext>,
         plan: &DataSourcePlan,
-        schema: DataSchemaRef,
-    ) -> Result<Arc<Option<Expr>>> {
+        schema: TableSchemaRef,
+    ) -> Result<Arc<Option<Expr<usize>>>> {
         Ok(
             match PushDownInfo::prewhere_of_push_downs(&plan.push_downs) {
                 None => Arc::new(None),

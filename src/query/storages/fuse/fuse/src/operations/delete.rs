@@ -29,10 +29,9 @@ use common_expression::Column;
 use common_expression::DataField;
 use common_expression::DataSchema;
 use common_expression::Evaluator;
-use common_expression::Expr;
 use common_expression::FunctionContext;
 use common_expression::RemoteExpr;
-use common_expression::TableField;
+use common_expression::TableSchema;
 use common_expression::Value;
 use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 use common_sql::evaluator::ChunkOperator;
@@ -105,7 +104,7 @@ impl FuseTable {
             // if the `filter_expr` is of "constant" nullary :
             //   for the whole block, whether all of the rows should be kept or dropped,
             //   we can just return from here, without accessing the block data
-            if self.try_eval_const(&filter_expr)? {
+            if self.try_eval_const(&self.table_info.schema(), &filter_expr)? {
                 let progress_values = ProgressValues {
                     rows: snapshot.summary.row_count as usize,
                     bytes: snapshot.summary.uncompressed_byte_size as usize,
@@ -131,7 +130,7 @@ impl FuseTable {
         Ok(())
     }
 
-    fn try_eval_const(&self, filter: &RemoteExpr<String>) -> Result<bool> {
+    fn try_eval_const(&self, schema: &TableSchema, filter: &RemoteExpr<String>) -> Result<bool> {
         let func_ctx = FunctionContext::default();
 
         let dummy_field = DataField::new("dummy", DataType::Null);
@@ -139,9 +138,13 @@ impl FuseTable {
         let dummy_value = Value::Column(Column::Null { len: 1 });
         let dummy_chunk = Chunk::new_from_sequence(vec![(dummy_value, DataType::Null)], 1);
 
+        let filter_expr = filter
+            .into_expr(&BUILTIN_FUNCTIONS)
+            .unwrap()
+            .project_column_ref(|name| schema.index_of(name).unwrap());
         let evaluator = Evaluator::new(&dummy_chunk, func_ctx, &BUILTIN_FUNCTIONS);
         let res = evaluator
-            .run(&filter.into_expr(&BUILTIN_FUNCTIONS).unwrap())
+            .run(&filter_expr)
             .map_err(|(_, e)| ErrorCode::Internal(format!("eval try eval const failed: {}.", e)))?;
         let predicates = Chunk::<String>::cast_to_nonull_boolean(&res).ok_or_else(|| {
             ErrorCode::BadArguments("Result of filter expression cannot be converted to boolean.")
@@ -279,25 +282,29 @@ impl FuseTable {
         }
 
         let input_schema = self.table_info.schema();
-        let mut merged = input_schema.fields().clone();
+        let mut merged: Vec<DataField> = input_schema
+            .fields()
+            .iter()
+            .map(|f| DataField::from(f))
+            .collect();
 
         let cluster_keys = self.cluster_keys();
         let mut cluster_key_index = Vec::with_capacity(cluster_keys.len());
         let mut operators = Vec::with_capacity(cluster_keys.len());
         for remote_expr in &cluster_keys {
-            let expr = remote_expr.into_expr(&BUILTIN_FUNCTIONS).unwrap();
+            let expr = remote_expr
+                .into_expr(&BUILTIN_FUNCTIONS)
+                .unwrap()
+                .project_column_ref(|name| input_schema.index_of(name).unwrap());
+
             let cname = expr.column_name();
             let index = match merged.iter().position(|x| x.name() == &cname) {
                 None => {
-                    // todo!("expression")
-                    let field = TableField::new(&cname, expr.data_type().into());
-                    operators.push(ChunkOperator::Map {
-                        index: 0,
-                        expr: expr.clone(),
-                    });
-
+                    let field = DataField::new(&cname, expr.data_type().clone());
                     merged.push(field);
-                    merged.len() - 1
+                    let index = merged.len() - 1;
+                    operators.push(ChunkOperator::Map { index, expr });
+                    index
                 }
                 Some(idx) => idx,
             };

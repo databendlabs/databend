@@ -23,7 +23,9 @@ use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::DataField;
 use common_expression::DataSchemaRefExt;
+use common_expression::Expr;
 use common_expression::SortColumnDescription;
+use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 use common_pipeline_transforms::processors::transforms::try_add_multi_sort_merge;
 use common_pipeline_transforms::processors::transforms::ChunkCompactor;
 use common_pipeline_transforms::processors::transforms::SortMergeCompactor;
@@ -87,7 +89,7 @@ impl FuseTable {
             }
         });
 
-        let block_compact_thresholds = self.get_chunk_compact_thresholds();
+        let chunk_compact_thresholds = self.get_chunk_compact_thresholds();
         let avg_depth_threshold = self.get_option(
             FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD,
             DEFAULT_AVG_DEPTH_THRESHOLD,
@@ -105,7 +107,7 @@ impl FuseTable {
             self.meta_location_generator.clone(),
             snapshot,
             threshold,
-            block_compact_thresholds,
+            chunk_compact_thresholds,
             blocks_map,
             self.operator.clone(),
         )?;
@@ -150,61 +152,77 @@ impl FuseTable {
             ctx.clone(),
             pipeline,
             mutator.level() + 1,
-            block_compact_thresholds,
+            chunk_compact_thresholds,
         )?;
 
+        let schema = table_info.schema();
         // sort
-        todo!("expression");
-        // let sort_descs: Vec<SortColumnDescription> = self
-        //     .cluster_keys()
-        //     .iter()
-        //     .map(|expr| SortColumnDescription {
-        //         column_name: expr.column_name(),
-        //         asc: true,
-        //         nulls_first: false,
-        //     })
-        //     .collect();
+        let sort_descs: Vec<SortColumnDescription> = self
+            .cluster_keys()
+            .iter()
+            .map(|remote_expr| {
+                let expr = remote_expr
+                    .into_expr(&BUILTIN_FUNCTIONS)
+                    .unwrap()
+                    .project_column_ref(|name| schema.index_of(name).unwrap());
+                let index = match expr {
+                    Expr::ColumnRef { id, .. } => id,
+                    _ => unreachable!("invalid expr"),
+                };
+                SortColumnDescription {
+                    index,
+                    asc: true,
+                    nulls_first: false,
+                }
+            })
+            .collect();
 
-        // pipeline.add_transform(|transform_input_port, transform_output_port| {
-        //     TransformSortPartial::try_create(
-        //         transform_input_port,
-        //         transform_output_port,
-        //         None,
-        //         sort_descs.clone(),
-        //     )
-        // })?;
-        // let block_size = ctx.get_settings().get_max_block_size()? as usize;
-        // pipeline.add_transform(|transform_input_port, transform_output_port| {
-        //     TransformSortMerge::try_create(
-        //         transform_input_port,
-        //         transform_output_port,
-        //         SortMergeCompactor::new(block_size, None, sort_descs.clone()),
-        //     )
-        // })?;
+        pipeline.add_transform(|transform_input_port, transform_output_port| {
+            TransformSortPartial::try_create(
+                transform_input_port,
+                transform_output_port,
+                None,
+                sort_descs.clone(),
+            )
+        })?;
+        let chunk_size = ctx.get_settings().get_max_block_size()? as usize;
+        pipeline.add_transform(|transform_input_port, transform_output_port| {
+            TransformSortMerge::try_create(
+                transform_input_port,
+                transform_output_port,
+                SortMergeCompactor::new(chunk_size, None, sort_descs.clone()),
+            )
+        })?;
 
-        // // construct output fields
-        // let mut output_fields = plan.schema().fields().clone();
-        // for expr in self.cluster_keys().iter() {
-        //     let cname = expr.column_name();
-        //     if !output_fields.iter().any(|x| x.name() == &cname) {
-        //         let field = DataField::new(&cname, expr.data_type());
-        //         output_fields.push(field);
-        //     }
-        // }
+        // construct output fields
+        let mut output_fields: Vec<DataField> = plan
+            .schema()
+            .fields()
+            .iter()
+            .map(|f| DataField::from(f))
+            .collect();
+        for remote_expr in self.cluster_keys().iter() {
+            let expr = remote_expr.into_expr(&BUILTIN_FUNCTIONS).unwrap();
+            let cname = expr.column_name();
+            if !output_fields.iter().any(|x| x.name() == &cname) {
+                let field = DataField::new(&cname, expr.data_type().clone());
+                output_fields.push(field);
+            }
+        }
 
-        // try_add_multi_sort_merge(
-        //     pipeline,
-        //     DataSchemaRefExt::create(output_fields),
-        //     block_size,
-        //     None,
-        //     sort_descs,
-        // )?;
+        try_add_multi_sort_merge(
+            pipeline,
+            DataSchemaRefExt::create(output_fields),
+            chunk_size,
+            None,
+            sort_descs,
+        )?;
 
         pipeline.add_transform(|transform_input_port, transform_output_port| {
             TransformCompact::try_create(
                 transform_input_port,
                 transform_output_port,
-                ChunkCompactor::new(block_compact_thresholds, true),
+                ChunkCompactor::new(chunk_compact_thresholds, true),
             )
         })?;
 
@@ -216,7 +234,7 @@ impl FuseTable {
                 self.operator.clone(),
                 self.meta_location_generator().clone(),
                 cluster_stats_gen.clone(),
-                block_compact_thresholds,
+                chunk_compact_thresholds,
                 self.table_info.schema(),
                 self.storage_format,
                 None,

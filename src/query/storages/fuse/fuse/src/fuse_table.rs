@@ -37,7 +37,6 @@ use common_exception::Result;
 use common_expression::Chunk;
 use common_expression::ChunkCompactThresholds;
 // use common_sql::ExpressionParser;
-use common_expression::Expr;
 use common_expression::RemoteExpr;
 use common_meta_app::schema::DatabaseType;
 use common_meta_app::schema::TableInfo;

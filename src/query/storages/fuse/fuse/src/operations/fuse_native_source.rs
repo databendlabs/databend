@@ -52,7 +52,7 @@ pub struct FuseNativeSource {
     output_reader: Arc<BlockReader>,
 
     prewhere_reader: Arc<BlockReader>,
-    prewhere_filter: Arc<Option<Expr<String>>>,
+    prewhere_filter: Arc<Option<Expr<usize>>>,
     remain_reader: Arc<Option<BlockReader>>,
 
     support_blocking: bool,
@@ -64,7 +64,7 @@ impl FuseNativeSource {
         output: Arc<OutputPort>,
         output_reader: Arc<BlockReader>,
         prewhere_reader: Arc<BlockReader>,
-        prewhere_filter: Arc<Option<Expr<String>>>,
+        prewhere_filter: Arc<Option<Expr<usize>>>,
         remain_reader: Arc<Option<BlockReader>>,
     ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();

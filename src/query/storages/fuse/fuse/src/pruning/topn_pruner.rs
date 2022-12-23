@@ -16,8 +16,6 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::Expr;
 use common_expression::RemoteExpr;
 use common_expression::TableDataType;
 use common_expression::TableSchemaRef;

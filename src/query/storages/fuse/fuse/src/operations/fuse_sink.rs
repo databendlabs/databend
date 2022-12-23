@@ -22,7 +22,6 @@ use common_cache::Cache;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::serialize_to_parquet;
 use common_expression::serialize_to_parquet_with_compression;
 use common_expression::Chunk;
 use common_expression::ChunkCompactThresholds;
@@ -30,7 +29,6 @@ use common_expression::FunctionContext;
 use common_expression::TableSchemaRef;
 use common_pipeline_core::processors::port::OutputPort;
 use common_storages_index::ChunkFilter;
-use common_storages_index::*;
 use common_storages_table_meta::caches::CacheManager;
 use common_storages_table_meta::meta::ColumnId;
 use common_storages_table_meta::meta::ColumnMeta;
@@ -210,7 +208,7 @@ impl Processor for FuseTableSink {
 
                 let location = self.meta_locations.block_bloom_index_location(&chunk_id);
                 let (bloom_index_state, column_distinct_count) =
-                    BloomIndexState::try_create(self.source_schema, &chunk, location)?;
+                    BloomIndexState::try_create(self.source_schema.clone(), &chunk, location)?;
 
                 let block_statistics = BlockStatistics::from(
                     &chunk,

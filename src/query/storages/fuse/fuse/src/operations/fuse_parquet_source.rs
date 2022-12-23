@@ -59,7 +59,7 @@ pub struct FuseParquetSource<'a> {
     output_reader: Arc<BlockReader>,
 
     prewhere_reader: Arc<BlockReader>,
-    prewhere_filter: Arc<Option<Expr<String>>>,
+    prewhere_filter: Arc<Option<Expr<usize>>>,
     remain_reader: Arc<Option<BlockReader>>,
 
     support_blocking: bool,
@@ -71,7 +71,7 @@ impl FuseParquetSource<'_> {
         output: Arc<OutputPort>,
         output_reader: Arc<BlockReader>,
         prewhere_reader: Arc<BlockReader>,
-        prewhere_filter: Arc<Option<Expr<String>>>,
+        prewhere_filter: Arc<Option<Expr<usize>>>,
         remain_reader: Arc<Option<BlockReader>>,
     ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
@@ -223,7 +223,7 @@ impl Processor for FuseParquetSource<'_> {
                     })?;
 
                     // shortcut, if predicates is const boolean (or can be cast to boolean)
-                    if !Chunk::filter_exists(&predicate)? {
+                    if !Chunk::<usize>::filter_exists(&predicate)? {
                         // all rows in this block are filtered out
                         // turn to read next part
                         let progress_values = ProgressValues {

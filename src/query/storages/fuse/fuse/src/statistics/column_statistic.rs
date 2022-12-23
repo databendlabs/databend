@@ -15,13 +15,11 @@
 use std::collections::HashMap;
 
 use common_exception::Result;
-use common_expression::types::nullable::NullableColumn;
 use common_expression::types::AnyType;
 use common_expression::types::DataType;
 use common_expression::types::NumberType;
 use common_expression::types::ValueType;
 use common_expression::Chunk;
-use common_expression::ChunkCompactThresholds;
 use common_expression::Column;
 use common_expression::Scalar;
 use common_expression::Value;
@@ -50,7 +48,7 @@ pub fn calc_column_distinct_of_values(
 pub fn get_traverse_columns_dfs(
     chunk: &Chunk,
 ) -> Result<Vec<(Option<usize>, Value<AnyType>, DataType)>> {
-    traverse::traverse_columns_dfs(chunk.columns())
+    traverse::traverse_columns_dfs(chunk.columns_ref())
 }
 
 pub fn gen_columns_statistics(
@@ -61,7 +59,7 @@ pub fn gen_columns_statistics(
     let chunk = chunk.convert_to_full();
     let rows = chunk.num_rows();
 
-    let leaves = traverse::traverse_columns_dfs(chunk.columns())?;
+    let leaves = get_traverse_columns_dfs(&chunk)?;
 
     for (idx, (col_idx, col, data_type)) in leaves.iter().enumerate() {
         if !MinMaxIndex::is_supported_type(data_type) {
@@ -142,6 +140,7 @@ pub fn gen_columns_statistics(
 pub mod traverse {
     use common_expression::types::AnyType;
     use common_expression::types::DataType;
+    use common_expression::ChunkEntry;
     use common_expression::Column;
     use common_expression::Value;
 
@@ -149,11 +148,12 @@ pub mod traverse {
 
     // traverses columns and collects the leaves in depth first manner
     pub fn traverse_columns_dfs(
-        columns: &[(Value<AnyType>, DataType)],
+        columns: &[ChunkEntry<usize>],
     ) -> Result<Vec<(Option<usize>, Value<AnyType>, DataType)>> {
         let mut leaves = vec![];
-        for (idx, (value, data_type)) in columns.iter().enumerate() {
-            let column = value.as_column().unwrap();
+        for (idx, entry) in columns.iter().enumerate() {
+            let data_type = &entry.data_type;
+            let column = entry.value.as_column().unwrap();
             traverse_recursive(Some(idx), column, data_type, &mut leaves)?;
         }
         Ok(leaves)
