@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use clap::Parser;
-use common_base::base::tokio;
 use common_config::Config;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -24,35 +22,12 @@ use databend_query::sessions::SessionManager;
 use databend_query::sessions::SessionType;
 use databend_query::sql::Planner;
 use databend_query::GlobalServices;
-use serde::Deserialize;
-use serde::Serialize;
 use tokio_stream::StreamExt;
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Parser)]
-#[clap(about, author)]
-pub struct LocalConfig {
-    // sql to run
-    #[clap(long, default_value = "SELECT 1")]
-    pub sql: String,
-
-    // name1=filepath1,name2=filepath2
-    #[clap(long, default_value = "")]
-    pub table: String,
-
-    #[clap(long, default_value = "INFO")]
-    pub log_level: String,
-}
-
-#[tokio::main]
-async fn main() -> Result<(), ErrorCode> {
-    main_entrypoint().await?;
-    Ok(())
-}
-
-async fn main_entrypoint() -> Result<()> {
-    let local_conf = LocalConfig::parse();
-    let mut conf: Config = Config::load_for_test()?;
+pub async fn query_local(conf: &Config) -> Result<()> {
+    let mut conf = conf.clone();
     conf.storage.allow_insecure = true;
+    let local_conf = conf.local.clone();
     GlobalServices::init(conf).await?;
 
     let sql = get_sql(local_conf.sql, local_conf.table);

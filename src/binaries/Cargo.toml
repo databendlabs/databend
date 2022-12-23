@@ -64,12 +64,6 @@ tracing = "0.1.36"
 url = "2.3.1"
 
 [[bin]]
-name = "databend-local"
-path = "local/main.rs"
-doctest = false
-test = false
-
-[[bin]]
 name = "databend-meta"
 path = "meta/main.rs"
 doctest = false

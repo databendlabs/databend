@@ -51,6 +51,9 @@ pub struct Config {
     // Storage backend config.
     pub storage: StorageConfig,
 
+    // Local query config.
+    pub local: LocalConfig,
+
     // external catalog config.
     // - Later, catalog information SHOULD be kept in KV Service
     // - currently only supports HIVE (via hive meta store)
@@ -394,6 +397,22 @@ impl Default for CatalogHiveConfig {
         Self {
             address: "127.0.0.1:9083".to_string(),
             protocol: ThriftProtocol::Binary,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LocalConfig {
+    pub sql: String,
+    // name1=filepath1,name2=filepath2
+    pub table: String,
+}
+
+impl Default for LocalConfig {
+    fn default() -> Self {
+        Self {
+            sql: "SELECT 1".to_string(),
+            table: "".to_string(),
         }
     }
 }
