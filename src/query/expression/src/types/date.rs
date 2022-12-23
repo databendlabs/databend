@@ -13,15 +13,15 @@
 // limitations under the License.
 
 use std::fmt::Display;
+use std::io::Cursor;
 use std::ops::Range;
 
 use chrono::NaiveDate;
 use chrono_tz::Tz;
 use common_arrow::arrow::buffer::Buffer;
 use common_datavalues::DateConverter;
-use common_io::prelude::BufferReadDateTimeExt;
-use common_io::prelude::BufferReadExt;
-use common_io::prelude::BufferReader;
+use common_io::cursor_ext::BufferReadDateTimeExt;
+use common_io::cursor_ext::ReadBytesExt;
 use num_traits::AsPrimitive;
 
 use super::number::SimpleDomain;
@@ -205,7 +205,7 @@ impl ArgType for DateType {
 
 #[inline]
 pub fn string_to_date(date_str: impl AsRef<[u8]>, tz: Tz) -> Option<NaiveDate> {
-    let mut reader = BufferReader::new(std::str::from_utf8(date_str.as_ref()).unwrap().as_bytes());
+    let mut reader = Cursor::new(std::str::from_utf8(date_str.as_ref()).unwrap().as_bytes());
     match reader.read_date_text(&tz) {
         Ok(d) => match reader.must_eof() {
             Ok(..) => Some(d),

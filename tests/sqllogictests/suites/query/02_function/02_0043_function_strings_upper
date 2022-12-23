@@ -1,0 +1,19 @@
+query T
+SELECT UPPER('Hello,World!')
+----
+HELLO,WORLD!
+
+query T
+SELECT UPPER('Здравствуйте')
+----
+ЗДРАВСТВУЙТЕ
+
+query T
+SELECT UPPER(NULL)
+----
+NULL
+
+query T
+SELECT UPPER(1)
+----
+1

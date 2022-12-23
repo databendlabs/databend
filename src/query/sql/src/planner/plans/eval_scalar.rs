@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use common_catalog::table_context::TableContext;
 use common_exception::Result;
 
 use crate::optimizer::ColumnSet;
@@ -30,6 +29,7 @@ use crate::plans::RelOp;
 use crate::plans::Scalar;
 use crate::plans::ScalarExpr;
 use crate::IndexType;
+use crate::PlannerContext;
 
 /// Evaluate scalar expression
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -72,7 +72,7 @@ impl PhysicalOperator for EvalScalar {
 
     fn compute_required_prop_child<'a>(
         &self,
-        _ctx: Arc<dyn TableContext>,
+        _ctx: Arc<dyn PlannerContext>,
         _rel_expr: &RelExpr<'a>,
         _child_index: usize,
         required: &RequiredProperty,

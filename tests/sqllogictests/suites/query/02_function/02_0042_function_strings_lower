@@ -1,0 +1,15 @@
+query T
+SELECT LOWER('Hello,World!')
+----
+hello,world!
+
+query T
+SELECT LOWER('Здравствуйте')
+----
+здравствуйте
+
+query T
+SELECT LOWER(NULL)
+----
+NULL
+

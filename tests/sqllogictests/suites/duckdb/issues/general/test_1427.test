@@ -1,0 +1,45 @@
+statement ok
+drop table if exists t1
+
+statement ok
+drop table if exists t0
+
+statement ok
+drop view if exists t1
+
+statement ok
+drop view if exists t0
+
+statement ok
+drop table if exists t
+
+statement ok
+create table t as select 123 as a
+
+query I
+select * from (select 123 as a) t where a in (select 123 )
+----
+123
+
+query I
+select * from t where a in (select 123 )
+----
+123
+
+statement ok
+create view t0 as select * from t where a in (select 123 )
+
+query I
+select * from t0
+----
+123
+
+statement ok
+create view t1 as select * from (select 123 as a) t where a in (select 123 )
+
+statement ok
+drop view t0
+
+statement ok
+drop view t1
+

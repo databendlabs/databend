@@ -1,0 +1,9 @@
+query TT
+SHOW ENGINES
+----
+FUSE FUSE Storage Engine
+MEMORY MEMORY Storage Engine
+NULL NULL Storage Engine
+RANDOM RANDOM Storage Engine
+VIEW VIEW STORAGE (LOGICAL VIEW)
+

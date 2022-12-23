@@ -58,7 +58,7 @@ impl BooleanColumn {
     }
 
     pub fn from_arrow_data(values: Bitmap) -> Self {
-        Self::from_arrow_array(&BooleanArray::from_data(ArrowType::Boolean, values, None))
+        Self::from_arrow_array(&BooleanArray::try_new(ArrowType::Boolean, values, None).unwrap())
     }
 
     pub fn values(&self) -> &Bitmap {
@@ -92,7 +92,8 @@ impl Column for BooleanColumn {
     }
 
     fn as_arrow_array(&self, logical_type: DataTypeImpl) -> ArrayRef {
-        let array = BooleanArray::from_data(logical_type.arrow_type(), self.values.clone(), None);
+        let array =
+            BooleanArray::try_new(logical_type.arrow_type(), self.values.clone(), None).unwrap();
         Box::new(array)
     }
 

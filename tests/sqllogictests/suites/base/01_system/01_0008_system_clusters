@@ -1,0 +1,5 @@
+onlyif mysql
+query BB
+SELECT length(name)>0, length(version)>0 FROM system.clusters LIMIT 1
+----
+1 1

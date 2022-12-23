@@ -79,8 +79,11 @@ async fn run_table_tests(
     }
     writeln!(file, "-------- TABLE CONTENTS ----------").unwrap();
     if table_info.name.to_lowercase() == "settings" {
-        actual_lines
-            .retain(|&item| !(item.contains("max_threads") || item.contains("max_memory_usage")));
+        actual_lines.retain(|&item| {
+            !(item.contains("max_threads")
+                || item.contains("max_memory_usage")
+                || item.contains("max_storage_io_requests"))
+        });
     }
     for line in actual_lines {
         writeln!(file, "{}", line).unwrap();

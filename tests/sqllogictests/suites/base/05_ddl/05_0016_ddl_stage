@@ -1,0 +1,42 @@
+statement ok
+DROP STAGE IF EXISTS test_stage
+
+statement ok
+DROP STAGE IF EXISTS test_stage_internal
+
+statement ok
+CREATE STAGE test_stage url='s3://load/files/' credentials=(aws_key_id='1a2b3c' aws_secret_key='4x5y6z')
+
+statement ok
+CREATE STAGE if not exists test_stage url='s3://load/files/' credentials=(access_key_id='1a2b3c' aws_secret_key='4x5y6z')
+
+statement error 2502
+CREATE STAGE test_stage url='s3://load/files/' credentials=(aws_key_id='1a2b3c' aws_secret_key='4x5y6z')
+
+statement ok
+CREATE STAGE test_stage_internal file_format=(type=csv compression=AUTO record_delimiter=NONE escape="\\") comments='test'
+
+statement ok
+LIST @test_stage_internal
+
+skipif clickhouse
+query TTTTTITT
+desc stage test_stage_internal
+----
+test_stage_internal Internal StageParams { storage: Fs(StorageFsConfig { root: "_data" }) } CopyOptions { on_error: None, size_limit: 0, split_size: 0, purge: false, single: false, max_file_size: 0 } FileFormatOptions { format: Csv, skip_header: 0, field_delimiter: "", record_delimiter: "NONE", nan_display: "", escape: "\\\\", compression: Auto, row_tag: "", quote: "" } 0 'root'@'127.0.0.1' (empty)
+
+query TTTTT
+SHOW STAGES
+----
+test_stage External NULL 'root'@'127.0.0.1' (empty)
+test_stage_internal Internal 0 'root'@'127.0.0.1' (empty)
+
+statement ok
+DROP STAGE test_stage
+
+statement ok
+DROP STAGE test_stage_internal
+
+statement ok
+SHOW STAGES
+

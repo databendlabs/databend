@@ -55,7 +55,7 @@ impl Interpreter for OptimizeTableInterpreter {
         let action = &plan.action;
         let do_purge = matches!(
             action,
-            OptimizeTableAction::Purge | OptimizeTableAction::All
+            OptimizeTableAction::Purge(_) | OptimizeTableAction::All
         );
         let do_compact_blocks = matches!(
             action,
@@ -114,7 +114,13 @@ impl Interpreter for OptimizeTableInterpreter {
         }
 
         if do_purge {
-            table.purge(self.ctx.clone(), true).await?;
+            let table = if let OptimizeTableAction::Purge(Some(point)) = action {
+                table.navigate_to(point).await?
+            } else {
+                table
+            };
+            let keep_latest = true;
+            table.purge(self.ctx.clone(), keep_latest).await?;
         }
 
         Ok(PipelineBuildResult::create())

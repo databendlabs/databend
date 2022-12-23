@@ -12,9 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::time::Duration;
+
 use common_base::runtime::MemStat;
 use common_base::runtime::Runtime;
-use common_base::runtime::ThreadTracker;
 use common_base::runtime::TrackedFuture;
 use common_base::runtime::TrySpawn;
 use common_exception::Result;
@@ -27,45 +28,50 @@ async fn test_async_thread_tracker() -> Result<()> {
     let outer_runtime = Runtime::with_worker_threads(2, Some(String::from("Outer")))?;
     let inner_runtime = Runtime::with_worker_threads(2, Some(String::from("Inner")))?;
 
-    let memory_tracker = MemStat::create();
-    let inner_join_handler = inner_runtime.spawn(TrackedFuture::create(
-        ThreadTracker::create(Some(memory_tracker.clone())),
+    let memory_tracker = MemStat::create("test_async_thread_tracker".to_string());
+    let inner_join_handler = inner_runtime.spawn(TrackedFuture::create_with_mem_stat(
+        Some(memory_tracker.clone()),
         async move {
             let memory = vec![0_u8; 3 * 1024 * 1024];
+            tokio::time::sleep(Duration::from_millis(100)).await;
             out_tx.send(()).await.unwrap();
             inner_rx.recv().await.unwrap();
             drop(memory);
 
             let memory1 = vec![0_u8; 3 * 1024 * 1024];
+            tokio::time::sleep(Duration::from_millis(100)).await;
             out_tx.send(()).await.unwrap();
             inner_rx.recv().await.unwrap();
 
             let memory2 = vec![0_u8; 2 * 1024 * 1024];
+            tokio::time::sleep(Duration::from_millis(100)).await;
             out_tx.send(()).await.unwrap();
             inner_rx.recv().await.unwrap();
 
             drop(memory1);
+            tokio::time::sleep(Duration::from_millis(100)).await;
             out_tx.send(()).await.unwrap();
             inner_rx.recv().await.unwrap();
 
             drop(memory2);
+            tokio::time::sleep(Duration::from_millis(100)).await;
             out_tx.send(()).await.unwrap();
             inner_rx.recv().await.unwrap();
         },
     ));
 
-    // let memory_tracker2 = memory_tracker.clone();
     let outer_join_handler = outer_runtime.spawn(async move {
         for (min_memory_usage, max_memory_usage) in [
-            (0, 1),
-            (0, 1),
+            (2 * 1024 * 1024, 4 * 1024 * 1024),
+            (2 * 1024 * 1024, 4 * 1024 * 1024),
             (4 * 1024 * 1024, 6 * 1024 * 1024),
-            (4 * 1024 * 1024, 6 * 1024 * 1024),
+            (1024 * 1024, 3 * 1024 * 1024),
             (0, 1024 * 1024),
         ] {
             out_rx.recv().await.unwrap();
-            assert!(min_memory_usage <= memory_tracker.get_memory_usage());
-            assert!(max_memory_usage > memory_tracker.get_memory_usage());
+            let memory_usage = memory_tracker.get_memory_usage();
+            assert!(min_memory_usage <= memory_usage);
+            assert!(max_memory_usage > memory_usage);
             inner_tx.send(()).await.unwrap();
         }
     });

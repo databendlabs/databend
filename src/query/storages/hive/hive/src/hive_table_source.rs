@@ -31,7 +31,7 @@ use common_pipeline_core::processors::Processor;
 use opendal::Operator;
 
 use crate::hive_parquet_block_reader::DataBlockDeserializer;
-use crate::hive_parquet_block_reader::HiveParquetBlockReader;
+use crate::hive_parquet_block_reader::HiveBlockReader;
 use crate::HiveBlockFilter;
 use crate::HiveBlocks;
 use crate::HivePartInfo;
@@ -60,7 +60,7 @@ pub struct HiveTableSource {
     ctx: Arc<dyn TableContext>,
     dal: Operator,
     scan_progress: Arc<Progress>,
-    block_reader: Arc<HiveParquetBlockReader>,
+    block_reader: Arc<HiveBlockReader>,
     output: Arc<OutputPort>,
     delay: usize,
     hive_block_filter: Arc<HiveBlockFilter>,
@@ -71,7 +71,7 @@ impl HiveTableSource {
         ctx: Arc<dyn TableContext>,
         dal: Operator,
         output: Arc<OutputPort>,
-        block_reader: Arc<HiveParquetBlockReader>,
+        block_reader: Arc<HiveBlockReader>,
         delay: usize,
         hive_block_filter: Arc<HiveBlockFilter>,
     ) -> Result<ProcessorPtr> {

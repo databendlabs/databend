@@ -51,7 +51,7 @@ pub mod linux {
         #[inline(always)]
         fn mmap_alloc(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
             debug_assert!(layout.align() <= page_size());
-            ThreadTracker::alloc(layout.size() as i64);
+            ThreadTracker::alloc(layout.size() as i64)?;
             const PROT: i32 = libc::PROT_READ | libc::PROT_WRITE;
             const FLAGS: i32 = libc::MAP_PRIVATE | libc::MAP_ANONYMOUS | libc::MAP_POPULATE;
             let addr = unsafe { libc::mmap(null_mut(), layout.size(), PROT, FLAGS, -1, 0) };
@@ -81,7 +81,7 @@ pub mod linux {
             debug_assert!(old_layout.align() == new_layout.align());
 
             ThreadTracker::dealloc(old_layout.size() as i64);
-            ThreadTracker::alloc(new_layout.size() as i64);
+            ThreadTracker::alloc(new_layout.size() as i64)?;
 
             const REMAP_FLAGS: i32 = libc::MREMAP_MAYMOVE;
             let addr = libc::mremap(
@@ -111,7 +111,7 @@ pub mod linux {
             debug_assert!(old_layout.align() == new_layout.align());
 
             ThreadTracker::dealloc(old_layout.size() as i64);
-            ThreadTracker::alloc(new_layout.size() as i64);
+            ThreadTracker::alloc(new_layout.size() as i64)?;
 
             const REMAP_FLAGS: i32 = libc::MREMAP_MAYMOVE;
             let addr = libc::mremap(

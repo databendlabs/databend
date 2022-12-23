@@ -1,0 +1,2 @@
+statement ok
+SHOW PROCESSLIST

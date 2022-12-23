@@ -1,0 +1,70 @@
+query I
+SELECT 1
+----
+1
+
+statement error 1065
+SELECT x
+
+query T
+SELECT 'a'
+----
+a
+
+query B
+SELECT NOT(1=1)
+----
+0
+
+query B
+SELECT NOT(1)
+----
+0
+
+query B
+SELECT NOT(1=1) from numbers(3)
+----
+0
+0
+0
+
+
+query B
+SELECT TRUE
+----
+1
+
+
+query B
+SELECT FALSE
+----
+0
+
+
+query B
+SELECT NOT(TRUE)
+----
+0
+
+query T
+SELECT 'That\'s good.'
+----
+That's good.
+
+statement error 1065
+SELECT *
+
+
+
+query T
+SELECT 'That\'s good.'
+----
+That's good.
+
+statement error 1065
+SELECT *
+
+query BB
+select 'false'::boolean = not 'true'::boolean, parse_json('"false"')::boolean
+----
+1	0

@@ -1,0 +1,119 @@
+onlyif mysql
+statement ok
+use default
+
+onlyif mysql
+statement ok
+drop table if exists "T"
+
+onlyif mysql
+statement ok
+drop table if exists t
+
+onlyif mysql
+statement ok
+set quoted_ident_case_sensitive = 0
+
+onlyif mysql
+statement ok
+create table "T"("A" int)
+
+onlyif mysql
+statement ok
+insert into "t"("a") values(1)
+
+onlyif mysql
+query I
+select t.a from "T"
+----
+1
+
+onlyif mysql
+query I
+select t."A" from "T"
+----
+1
+
+onlyif mysql
+query I
+select t.a from "T"
+----
+1
+
+onlyif mysql
+query I
+select a from "T"
+----
+1
+
+onlyif mysql
+query I
+select "T".a from "T"
+----
+1
+
+onlyif mysql
+query I
+select "B" from (select "A" as "B" from "T")
+----
+1
+
+onlyif mysql
+query I
+select b from (select "A" as "B" from "T")
+----
+1
+
+onlyif mysql
+query I
+select "b" from (select "A" as "B" from "T")
+----
+1
+
+onlyif mysql
+statement ok
+drop table "T"
+
+onlyif mysql
+statement ok
+set quoted_ident_case_sensitive = 1
+
+onlyif mysql
+statement error 2803
+set sql_dialect = 'xx'
+
+onlyif mysql
+statement ok
+create table t(a string)
+
+onlyif mysql
+statement ok
+set sql_dialect = 'mysql'
+
+onlyif mysql
+statement ok
+select "a"
+
+onlyif mysql
+statement ok
+insert into t values("a")
+
+onlyif mysql
+statement ok
+set sql_dialect = 'postgresql'
+
+onlyif mysql
+statement error 1065
+select "a"
+
+onlyif mysql
+statement error 1065
+insert into t values("a")
+
+onlyif mysql
+statement ok
+drop table if exists "T"
+
+onlyif mysql
+statement ok
+drop table if exists t

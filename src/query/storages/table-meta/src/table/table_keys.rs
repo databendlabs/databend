@@ -18,6 +18,7 @@ use once_cell::sync::Lazy;
 
 pub const OPT_KEY_DATABASE_ID: &str = "database_id";
 pub const OPT_KEY_SNAPSHOT_LOCATION: &str = "snapshot_location";
+pub const OPT_KEY_STORAGE_FORMAT: &str = "storage_format";
 
 /// Legacy table snapshot location key
 ///

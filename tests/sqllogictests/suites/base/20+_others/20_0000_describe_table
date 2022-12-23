@@ -1,0 +1,89 @@
+statement ok
+use default
+
+statement ok
+DROP TABLE IF EXISTS t
+
+statement ok
+CREATE TABLE t(a bigint null, b int null, c varchar(255) null, d smallint, e Date ) ENGINE = Null
+
+query TTTTT
+DESCRIBE t
+----
+a BIGINT YES NULL (empty)
+b INT YES NULL (empty)
+c VARCHAR YES NULL (empty)
+d SMALLINT NO 0 (empty)
+e DATE NO 0 (empty)
+
+query TTTTT
+DESC t
+----
+a BIGINT YES NULL (empty)
+b INT YES NULL (empty)
+c VARCHAR YES NULL (empty)
+d SMALLINT NO 0 (empty)
+e DATE NO 0 (empty)
+
+statement ok
+DROP TABLE IF EXISTS t1
+
+statement ok
+CREATE TABLE t1(a bigint null, b int null, c char(255) null, d smallint, e Date, f char(120) not null default '' ) ENGINE = Null
+
+query TTTTT
+DESCRIBE t1
+----
+a BIGINT YES NULL (empty)
+b INT YES NULL (empty)
+c VARCHAR YES NULL (empty)
+d SMALLINT NO 0 (empty)
+e DATE NO 0 (empty)
+f VARCHAR NO (empty) (empty)
+
+query TTTTT
+DESC t1
+----
+a BIGINT YES NULL (empty)
+b INT YES NULL (empty)
+c VARCHAR YES NULL (empty)
+d SMALLINT NO 0 (empty)
+e DATE NO 0 (empty)
+f VARCHAR NO (empty) (empty)
+
+query TTTTT
+DESC INFORMATION_SCHEMA.COLUMNS
+----
+table_catalog VARCHAR NO (empty) (empty)
+table_schema VARCHAR NO (empty) (empty)
+table_name VARCHAR NO (empty) (empty)
+column_name VARCHAR NO (empty) (empty)
+ordinal_position TINYINT UNSIGNED NO 0 (empty)
+column_default NULL NO NULL (empty)
+column_comment NULL NO NULL (empty)
+is_nullable VARCHAR NO (empty) (empty)
+data_type VARCHAR NO (empty) (empty)
+column_type VARCHAR NO (empty) (empty)
+character_maximum_length NULL NO NULL (empty)
+character_octet_length NULL NO NULL (empty)
+numeric_precision NULL NO NULL (empty)
+numeric_precision_radix NULL NO NULL (empty)
+numeric_scale NULL NO NULL (empty)
+datetime_precision NULL NO NULL (empty)
+character_set_catalog NULL NO NULL (empty)
+character_set_schema NULL NO NULL (empty)
+character_set_name NULL NO NULL (empty)
+collation_catalog NULL NO NULL (empty)
+collation_schema NULL NO NULL (empty)
+collation_name NULL NO NULL (empty)
+domain_catalog NULL NO NULL (empty)
+domain_schema NULL NO NULL (empty)
+domain_name NULL NO NULL (empty)
+extra NULL NO NULL (empty)
+
+statement ok
+DROP TABLE IF EXISTS t
+
+statement ok
+DROP TABLE IF EXISTS t1
+

@@ -45,8 +45,7 @@ members = [
     "src/query/sql",
     "src/query/storages/cache",
     "src/query/storages/factory",
-    "src/query/storages/fuse/fuse",
-    "src/query/storages/fuse/fuse-result",
+    "src/query/storages/fuse",
     "src/query/storages/hive/hive",
     "src/query/storages/hive/hive-meta-store",
     "src/query/storages/index",
@@ -78,7 +77,8 @@ members = [
     "src/meta/protos",
     # databend-meta
     "src/meta/service",
-
+    # sqllogictest
+    "tests/sqllogictests",
 ]
 
 [workspace.dependencies]

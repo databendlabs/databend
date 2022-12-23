@@ -65,7 +65,10 @@ impl Thread {
             }
         }
 
+        let mut mem_stat_name = String::from("UnnamedThread");
+
         if let Some(named) = name.take() {
+            mem_stat_name = format!("{}Thread", named);
             thread_builder = thread_builder.name(named);
         }
 
@@ -73,10 +76,9 @@ impl Thread {
             None => thread_builder.spawn(f).unwrap(),
             Some(memory_tracker) => thread_builder
                 .spawn(move || {
-                    let c = MemStat::create_child(Some(memory_tracker));
-                    let mut tracker = ThreadTracker::create(Some(c));
-
-                    ThreadTracker::swap_with(&mut tracker);
+                    let c = MemStat::create_child(mem_stat_name, Some(memory_tracker));
+                    let s = ThreadTracker::replace_mem_stat(Some(c));
+                    debug_assert!(s.is_none(), "a new thread must have no tracker");
 
                     f()
                 })

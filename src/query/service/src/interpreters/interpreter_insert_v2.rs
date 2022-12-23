@@ -17,6 +17,7 @@ use std::io::BufRead;
 use std::io::Cursor;
 use std::ops::Not;
 use std::sync::Arc;
+use std::time::Instant;
 
 use aho_corasick::AhoCorasick;
 use common_ast::ast::Expr;
@@ -24,6 +25,8 @@ use common_ast::parser::parse_comma_separated_exprs;
 use common_ast::parser::tokenize_sql;
 use common_ast::Backtrace;
 use common_base::runtime::GlobalIORuntime;
+use common_catalog::plan::StageFileInfo;
+use common_catalog::plan::StageTableInfo;
 use common_catalog::table::AppendMode;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
@@ -33,19 +36,31 @@ use common_formats::parse_timezone;
 use common_formats::FastFieldDecoderValues;
 use common_io::cursor_ext::ReadBytesExt;
 use common_io::cursor_ext::ReadCheckPointExt;
+use common_meta_types::UserStageInfo;
+use common_pipeline_core::Pipeline;
 use common_pipeline_sources::processors::sources::AsyncSource;
 use common_pipeline_sources::processors::sources::AsyncSourcer;
 use common_pipeline_transforms::processors::transforms::Transform;
 use common_sql::evaluator::ChunkOperator;
 use common_sql::evaluator::CompoundChunkOperator;
+use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use common_sql::Metadata;
 use common_sql::MetadataRef;
+use common_sql::PlannerContext;
+use common_storages_factory::Table;
+use common_storages_fuse::io::Files;
+use common_storages_stage::StageAttachment;
+use common_storages_stage::StageTable;
+use common_users::UserApiProvider;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
+use tracing::error;
+use tracing::info;
 
 use crate::interpreters::common::append2table;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
+use crate::pipelines::processors::TransformAddOn;
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::SourcePipeBuilder;
 use crate::schedulers::build_query_pipeline;
@@ -101,6 +116,155 @@ impl InsertInterpreterV2 {
         let cast_needed = select_schema != *output_schema;
         Ok(cast_needed)
     }
+
+    async fn try_purge_files(
+        ctx: Arc<QueryContext>,
+        stage_info: &UserStageInfo,
+        stage_files: &[StageFileInfo],
+    ) {
+        let table_ctx: Arc<dyn TableContext> = ctx.clone();
+        let op = StageTable::get_op(stage_info);
+        match op {
+            Ok(op) => {
+                let file_op = Files::create(table_ctx, op);
+                let files = stage_files
+                    .iter()
+                    .map(|v| v.path.clone())
+                    .collect::<Vec<_>>();
+                if let Err(e) = file_op.remove_file_in_batch(&files).await {
+                    error!("Failed to delete file: {:?}, error: {}", files, e);
+                }
+            }
+            Err(e) => {
+                error!("Failed to get stage table op, error: {}", e);
+            }
+        }
+    }
+
+    async fn build_insert_from_stage_pipeline(
+        &self,
+        table: Arc<dyn Table>,
+        attachment: Arc<StageAttachment>,
+        pipeline: &mut Pipeline,
+    ) -> Result<()> {
+        let start = Instant::now();
+        let ctx = self.ctx.clone();
+        let table_ctx: Arc<dyn TableContext> = ctx.clone();
+        let source_schema = self.plan.schema();
+        let target_schema = table.schema();
+        let catalog_name = self.plan.catalog.clone();
+        let overwrite = self.plan.overwrite;
+
+        let (mut stage_info, path) = parse_stage_location(&self.ctx, &attachment.location).await?;
+        stage_info
+            .file_format_options
+            .apply(&attachment.file_format_options, true)?;
+        stage_info
+            .copy_options
+            .apply(&attachment.copy_options, true)?;
+
+        let mut stage_table_info = StageTableInfo {
+            schema: source_schema.clone(),
+            user_stage_info: stage_info,
+            path: path.to_string(),
+            files: vec![],
+            pattern: "".to_string(),
+            files_to_copy: None,
+        };
+
+        let all_source_files = StageTable::list_files(&stage_table_info).await?;
+
+        tracing::info!(
+            "insert: read all stage attachment files finished: {}, elapsed:{}",
+            all_source_files.len(),
+            start.elapsed().as_secs()
+        );
+
+        stage_table_info.files_to_copy = Some(all_source_files.clone());
+        let stage_table = StageTable::try_create(stage_table_info.clone())?;
+        let read_source_plan = {
+            stage_table
+                .read_plan_with_catalog(ctx.clone(), catalog_name, None)
+                .await?
+        };
+
+        stage_table.read_data(table_ctx, &read_source_plan, pipeline)?;
+
+        let need_fill_missing_columns = target_schema != source_schema;
+        if need_fill_missing_columns {
+            pipeline.add_transform(|transform_input_port, transform_output_port| {
+                TransformAddOn::try_create(
+                    transform_input_port,
+                    transform_output_port,
+                    source_schema.clone(),
+                    target_schema.clone(),
+                    ctx.clone(),
+                )
+            })?;
+        }
+        table.append_data(ctx.clone(), pipeline, AppendMode::Copy, false)?;
+
+        let user_stage_info_clone = stage_table_info.user_stage_info.clone();
+        pipeline.set_on_finished(move |may_error| {
+            // capture out variable
+            let overwrite = overwrite;
+            let ctx = ctx.clone();
+            let table = table.clone();
+            let stage_info = user_stage_info_clone.clone();
+            let all_source_files = all_source_files.clone();
+
+            match may_error {
+                Some(error) => {
+                    tracing::error!("insert stage file error: {}", error);
+                    GlobalIORuntime::instance()
+                        .block_on(async move {
+                            if stage_info.copy_options.purge {
+                                info!(
+                                    "insert: try to purge files:{}, elapsed:{}",
+                                    all_source_files.len(),
+                                    start.elapsed().as_secs()
+                                );
+                                Self::try_purge_files(ctx.clone(), &stage_info, &all_source_files)
+                                    .await;
+                            }
+                            Ok(())
+                        })
+                        .unwrap_or_else(|e| {
+                            tracing::error!("insert: purge stage file error: {}", e);
+                        });
+                    Err(may_error.as_ref().unwrap().clone())
+                }
+                None => {
+                    let append_entries = ctx.consume_precommit_blocks();
+                    // We must put the commit operation to global runtime, which will avoid the "dispatch dropped without returning error" in tower
+                    GlobalIORuntime::instance().block_on(async move {
+                        tracing::info!(
+                            "insert: try to commit append entries:{}, elapsed:{}",
+                            append_entries.len(),
+                            start.elapsed().as_secs()
+                        );
+                        table
+                            .commit_insertion(ctx.clone(), append_entries, overwrite)
+                            .await?;
+
+                        if stage_info.copy_options.purge {
+                            info!(
+                                "insert: try to purge files:{}, elapsed:{}",
+                                all_source_files.len(),
+                                start.elapsed().as_secs()
+                            );
+                            Self::try_purge_files(ctx.clone(), &stage_info, &all_source_files)
+                                .await;
+                        }
+
+                        Ok(())
+                    })
+                }
+            }
+        });
+
+        Ok(())
+    }
 }
 
 #[async_trait::async_trait]
@@ -155,6 +319,16 @@ impl Interpreter for InsertInterpreterV2 {
                     input_context
                         .format
                         .exec_stream(input_context.clone(), &mut build_res.main_pipeline)?;
+                }
+                InsertInputSource::Stage(opts) => {
+                    tracing::info!("insert: from stage with options {:?}", opts);
+                    self.build_insert_from_stage_pipeline(
+                        table.clone(),
+                        opts.clone(),
+                        &mut build_res.main_pipeline,
+                    )
+                    .await?;
+                    return Ok(build_res);
                 }
                 InsertInputSource::SelectPlan(plan) => {
                     let table1 = table.clone();
@@ -262,7 +436,7 @@ impl Interpreter for InsertInterpreterV2 {
 
 pub struct ValueSource {
     data: String,
-    ctx: Arc<dyn TableContext>,
+    ctx: Arc<dyn PlannerContext>,
     name_resolution_ctx: NameResolutionContext,
     bind_context: BindContext,
     schema: DataSchemaRef,
@@ -281,17 +455,24 @@ impl AsyncSource for ValueSource {
             return Ok(None);
         }
 
-        // Pre-calculate the positions of all `'` and `\`
-        let patterns = &["'", "\\"];
+        // Pre-generate the positions of `(`, `'` and `\`
+        let patterns = &["(", "'", "\\"];
         let ac = AhoCorasick::new(patterns);
+        // Use the number of '(' to estimate the number of rows
+        let mut estimated_rows = 0;
         let mut positions = VecDeque::new();
         for mat in ac.find_iter(&self.data) {
-            let pos = mat.start();
-            positions.push_back(pos);
+            if mat.pattern() == 0 {
+                estimated_rows += 1;
+                continue;
+            }
+            positions.push_back(mat.start());
         }
 
         let mut reader = Cursor::new(self.data.as_bytes());
-        let block = self.read(&mut reader, &mut positions).await?;
+        let block = self
+            .read(estimated_rows, &mut reader, &mut positions)
+            .await?;
         self.is_finished = true;
         Ok(Some(block))
     }
@@ -300,7 +481,7 @@ impl AsyncSource for ValueSource {
 impl ValueSource {
     pub fn new(
         data: String,
-        ctx: Arc<dyn TableContext>,
+        ctx: Arc<dyn PlannerContext>,
         name_resolution_ctx: NameResolutionContext,
         schema: DataSchemaRef,
     ) -> Self {
@@ -320,6 +501,7 @@ impl ValueSource {
 
     pub async fn read<R: AsRef<[u8]>>(
         &self,
+        estimated_rows: usize,
         reader: &mut Cursor<R>,
         positions: &mut VecDeque<usize>,
     ) -> Result<DataBlock> {
@@ -327,7 +509,7 @@ impl ValueSource {
             .schema
             .fields()
             .iter()
-            .map(|f| f.data_type().create_deserializer(1024))
+            .map(|f| f.data_type().create_deserializer(estimated_rows))
             .collect::<Vec<_>>();
 
         let mut rows = 0;
@@ -548,7 +730,7 @@ fn fill_default_value(operators: &mut Vec<ChunkOperator>, field: &DataField) -> 
 async fn exprs_to_datavalue<'a>(
     exprs: Vec<Expr<'a>>,
     schema: &DataSchemaRef,
-    ctx: Arc<dyn TableContext>,
+    ctx: Arc<dyn PlannerContext>,
     name_resolution_ctx: &NameResolutionContext,
     bind_context: &BindContext,
     metadata: MetadataRef,
@@ -601,4 +783,27 @@ async fn exprs_to_datavalue<'a>(
     let res = expression_transform.transform(one_row_block)?;
     let datavalues: Vec<DataValue> = res.columns().iter().skip(1).map(|col| col.get(0)).collect();
     Ok(datavalues)
+}
+
+// TODO:(everpcpc) tmp copy from src/query/sql/src/planner/binder/copy.rs
+// move to user stage module
+async fn parse_stage_location(
+    ctx: &Arc<QueryContext>,
+    location: &str,
+) -> Result<(UserStageInfo, String)> {
+    let s: Vec<&str> = location.split('@').collect();
+    // @my_ext_stage/abc/
+    let names: Vec<&str> = s[1].splitn(2, '/').filter(|v| !v.is_empty()).collect();
+
+    let stage = if names[0] == "~" {
+        UserStageInfo::new_user_stage(&ctx.get_current_user()?.name)
+    } else {
+        UserApiProvider::instance()
+            .get_stage(&ctx.get_tenant(), names[0])
+            .await?
+    };
+
+    let path = names.get(1).unwrap_or(&"").trim_start_matches('/');
+
+    Ok((stage, path.to_string()))
 }

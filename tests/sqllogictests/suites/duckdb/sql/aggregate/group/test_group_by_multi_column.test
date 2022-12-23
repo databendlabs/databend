@@ -1,0 +1,16 @@
+statement ok
+drop table if exists integers
+
+statement ok
+CREATE TABLE integers(i INTEGER NULL, j INTEGER NULL, k INTEGER NULL)
+
+statement ok
+INSERT INTO integers VALUES (1, 1, 2), (1, 2, 2), (1, 1, 2), (2, 1, 2), (1, 2, 4), (1, 2, NULL)
+
+query IIIII
+SELECT i, j, SUM(k), COUNT(*), COUNT(k) FROM integers GROUP BY i, j ORDER BY 1, 2
+----
+1 1 4 2 2
+1 2 6 3 2
+2 1 2 1 1
+

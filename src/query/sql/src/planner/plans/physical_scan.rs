@@ -15,7 +15,6 @@
 use std::hash::Hash;
 use std::sync::Arc;
 
-use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use itertools::Itertools;
 
@@ -32,6 +31,7 @@ use crate::plans::RelOp;
 use crate::plans::Scalar;
 use crate::plans::SortItem;
 use crate::IndexType;
+use crate::PlannerContext;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PhysicalScan {
@@ -86,7 +86,7 @@ impl PhysicalOperator for PhysicalScan {
     // Won't be invoked at all, since `PhysicalScan` is leaf node
     fn compute_required_prop_child<'a>(
         &self,
-        _ctx: Arc<dyn TableContext>,
+        _ctx: Arc<dyn PlannerContext>,
         _rel_expr: &RelExpr<'a>,
         _child_index: usize,
         _required: &RequiredProperty,

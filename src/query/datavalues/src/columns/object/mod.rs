@@ -20,6 +20,7 @@ use std::sync::Arc;
 use common_arrow::arrow::array::Array;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::buffer::Buffer;
+use common_arrow::arrow::offset::OffsetsBuffer;
 use common_io::prelude::BinaryWrite;
 pub use iterator::*;
 pub use mutable::*;
@@ -130,12 +131,15 @@ impl<T: ObjectType> Column for ObjectColumn<T> {
             offsets.push(offset);
         }
 
-        Box::new(LargeBinaryArray::from_data(
-            logical_type.arrow_type(),
-            Buffer::from(offsets),
-            Buffer::from(values),
-            None,
-        ))
+        Box::new(
+            LargeBinaryArray::try_new(
+                logical_type.arrow_type(),
+                unsafe { OffsetsBuffer::new_unchecked(Buffer::from(offsets)) },
+                Buffer::from(values),
+                None,
+            )
+            .unwrap(),
+        )
     }
 
     fn arc(&self) -> ColumnRef {

@@ -29,6 +29,10 @@ impl TypeDeserializer for NullDeserializer {
         self.builder.memory_size()
     }
 
+    fn len(&self) -> usize {
+        self.builder.len()
+    }
+
     fn de_binary(&mut self, _reader: &mut &[u8]) -> Result<()> {
         self.builder.append_default();
         Ok(())

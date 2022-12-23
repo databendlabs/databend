@@ -174,6 +174,16 @@ jobs:
         run: |
           flags="-C link-arg=-Wl,--compress-debug-sections=zlib-gabi"
           echo "RUSTFLAGS=${flags}" >> $GITHUB_ENV
+      - name: Set musl_x86_64 rustflags
+        if: matrix.platform == 'musl' && matrix.arch == 'x86_64'
+        run: |
+          flags="-C target-feature=+sse4.2,link-arg=-Wl,--compress-debug-sections=zlib-gabi"
+          echo "RUSTFLAGS=${flags}" >> $GITHUB_ENV
+      - name: Set gnu_x86_64 rustflags
+        if: matrix.platform == 'gnu' && matrix.arch == 'x86_64'
+        run: |
+          flags="-C target-feature=+sse4.2"
+          echo "RUSTFLAGS=${flags}" >> $GITHUB_ENV
       - name: Build Binary
         run: |
           cargo build --release --target=${{ steps.target.outputs.target }}
@@ -298,7 +308,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           version=${{ needs.create_release.outputs.version }}
-          tar -C ./tests/logictest -czvf testsuites-${version}.tar.gz suites
+          tar -C ./tests/sqllogictests -czvf testsuites-${version}.tar.gz suites
           gh release upload ${version} testsuites-${version}.tar.gz --clobber
 
   release_docker_combined:

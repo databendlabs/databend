@@ -38,10 +38,11 @@ DB.Table: 'system'.'configs', Table: configs-table_id:1, ver:0, Engine: SystemCo
 | query   | flight_api_address                   | 127.0.0.1:9090                 |             |
 | query   | http_handler_host                    | 127.0.0.1                      |             |
 | query   | http_handler_port                    | 8000                           |             |
-| query   | http_handler_result_timeout_millis   | 10000                          |             |
+| query   | http_handler_result_timeout_secs     | 60                             |             |
 | query   | http_handler_tls_server_cert         |                                |             |
 | query   | http_handler_tls_server_key          |                                |             |
 | query   | http_handler_tls_server_root_ca_cert |                                |             |
+| query   | internal_enable_sandbox_tenant       | false                          |             |
 | query   | jwt_key_file                         |                                |             |
 | query   | management_mode                      | false                          |             |
 | query   | max_active_sessions                  | 256                            |             |

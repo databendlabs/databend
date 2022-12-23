@@ -1,0 +1,15 @@
+query TBBTT
+SHOW FUNCTIONS LIKE 'today%'
+----
+today 1 0 (empty) Returns current date.
+
+
+query TBBTT
+SHOW FUNCTIONS LIKE 'to_day%'
+----
+to_day_of_month 1 0 (empty) Converts a date or date with time (timestamp/datetime) to a UInt8 number containing the number of the day of the month (1-31).
+to_day_of_week 1 0 (empty) Converts a date or date with time (timestamp/datetime) to a UInt8 number containing the number of the day of the week (Monday is 1, and Sunday is 7).
+to_day_of_year 1 0 (empty) Converts a date or date with time (timestamp/datetime) to a UInt16 number containing the number of the day of the year (1-366).
+
+
+

@@ -54,19 +54,9 @@ externalLocation (for Amazon S3) ::=
 | `[ ENDPOINT_URL = '<endpoint_url>' ]`  | S3-compatible endpoint URL like MinIO, default is `https://s3.amazonaws.com` |  Optional |
 
 
-### formatTypeOptions
-```
-formatTypeOptions ::=
-  RECORD_DELIMITER = '<character>'
-  FIELD_DELIMITER = '<character>'
-  SKIP_HEADER = <integer>
-```
+### FILE_FORMAT
 
-| Parameter  | Description | Required |
-| ----------- | ----------- | --- |
-| `RECORD_DELIMITER`  | One or more characters that separate records in the output file. Default: `'\n'`. | Optional |
-| `FIELD_DELIMITER`  | One or more characters that separate fields in the output file. Default: `','`. | Optional |
-| `SKIP_HEADER`  | Number of lines at the start of the file to skip. Default: `0`. | Optional |
+See [Input & Output File Formats](../../13-sql-reference/75-file-format-options.md).
 
 ### copyOptions
 ```

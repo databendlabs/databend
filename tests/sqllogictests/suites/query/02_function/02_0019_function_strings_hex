@@ -1,0 +1,20 @@
+query T
+select hex(100)
+----
+64
+
+query T
+select hex(-100)
+----
+-64
+
+query T
+select hex('abc')
+----
+616263
+
+query T
+select hex(null)
+----
+NULL
+

@@ -1,0 +1,20 @@
+query I
+select to_yyyymmddhhmmss('2021-04-15 14:55:17.915'::timestamp)
+----
+20210415145517
+
+query I
+select to_yyyymmddhhmmss('2021-04-15 14:55:17.915'::timestamp)
+----
+20210415145517
+
+query I
+select to_yyyymmdd('2021-04-15 14:55:17.915'::timestamp)
+----
+20210415
+
+query I
+select to_yyyymm('2021-04-15 14:55:17.915000'::timestamp)
+----
+202104
+

@@ -15,6 +15,7 @@
 use std::backtrace::Backtrace;
 use std::panic::PanicInfo;
 
+use common_base::runtime::LimitMemGuard;
 use tracing::error;
 
 pub fn set_panic_hook() {
@@ -25,6 +26,7 @@ pub fn set_panic_hook() {
     // will include the current span, allowing the context in which the panic
     // occurred to be recorded.
     std::panic::set_hook(Box::new(|panic| {
+        let _guard = LimitMemGuard::enter_unlimited();
         log_panic(panic);
     }));
 }

@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use once_cell::sync::Lazy;
 
@@ -29,6 +28,7 @@ use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
 use crate::BindContext;
 use crate::MetadataRef;
+use crate::PlannerContext;
 
 pub static DEFAULT_REWRITE_RULES: Lazy<Vec<RuleID>> = Lazy::new(|| {
     vec![
@@ -58,14 +58,14 @@ pub struct HeuristicOptimizer {
     rules: RuleList,
     implementor: HeuristicImplementor,
 
-    _ctx: Arc<dyn TableContext>,
+    _ctx: Arc<dyn PlannerContext>,
     bind_context: Box<BindContext>,
     metadata: MetadataRef,
 }
 
 impl HeuristicOptimizer {
     pub fn new(
-        ctx: Arc<dyn TableContext>,
+        ctx: Arc<dyn PlannerContext>,
         bind_context: Box<BindContext>,
         metadata: MetadataRef,
         rules: RuleList,

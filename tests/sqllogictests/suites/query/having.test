@@ -1,0 +1,9 @@
+query I
+select * from numbers(10) having number = 1
+----
+1
+
+query I
+select sum(number) from numbers(10) group by number % 2 having avg(number) = 5
+----
+25

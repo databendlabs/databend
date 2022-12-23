@@ -28,6 +28,7 @@ use common_formats::FileFormatOptionsExt;
 use common_formats::RecordDelimiter;
 use common_io::cursor_ext::*;
 use common_io::format_diagnostic::verbose_char;
+use common_meta_types::OnErrorMode;
 use common_meta_types::StageFileFormatType;
 use csv_core::ReadRecordResult;
 
@@ -89,25 +90,22 @@ impl InputFormatCSV {
         rows: usize,
     ) -> Result<()> {
         if actual < expect {
-            return Err(csv_error(
+            Err(csv_error(
                 &format!("expect {} fields, only found {} ", expect, actual),
                 path,
                 rows,
-            ));
-        } else if actual > expect + 1 {
-            return Err(csv_error(
+            ))
+        } else if actual > expect + 1
+            || (actual == expect + 1 && field_ends[expect] != field_ends[expect - 1])
+        {
+            Err(csv_error(
                 &format!("too many fields, expect {}, got {}", expect, actual),
                 path,
                 rows,
-            ));
-        } else if actual == expect + 1 && field_ends[expect] != field_ends[expect - 1] {
-            return Err(csv_error(
-                "CSV allow ending with ',', but should not have data after it",
-                path,
-                rows,
-            ));
+            ))
+        } else {
+            Ok(())
         }
-        Ok(())
     }
 }
 
@@ -124,6 +122,7 @@ impl InputFormatTextBase for InputFormatCSV {
         let columns = &mut builder.mutable_columns;
         let n_column = columns.len();
         let mut start = 0usize;
+        let mut num_rows = 0usize;
         let start_row = batch.start_row.expect("must success");
         let mut field_end_idx = 0;
         let field_decoder = builder
@@ -133,7 +132,7 @@ impl InputFormatTextBase for InputFormatCSV {
             .expect("must success");
         for (i, end) in batch.row_ends.iter().enumerate() {
             let buf = &batch.data[start..*end];
-            Self::read_row(
+            if let Err(e) = Self::read_row(
                 field_decoder,
                 buf,
                 columns,
@@ -141,9 +140,24 @@ impl InputFormatTextBase for InputFormatCSV {
                 &batch.field_ends[field_end_idx..field_end_idx + n_column],
                 &batch.path,
                 start_row + i,
-            )?;
+            ) {
+                if builder.ctx.on_error_mode == OnErrorMode::Continue {
+                    columns.iter_mut().for_each(|c| {
+                        // check if parts of columns inserted data, if so, pop it.
+                        if c.len() > num_rows {
+                            c.pop_data_value().expect("must success");
+                        }
+                    });
+                    start = *end;
+                    field_end_idx += n_column;
+                    continue;
+                } else {
+                    return Err(e);
+                }
+            }
             start = *end;
             field_end_idx += n_column;
+            num_rows += 1;
         }
         Ok(())
     }
@@ -302,6 +316,48 @@ impl InputFormatTextBase for InputFormatCSV {
 
     fn align_flush(state: &mut AligningState<Self>) -> Result<Vec<RowBatch>> {
         let mut res = vec![];
+        let num_fields = state.num_fields;
+        let reader = state.csv_reader.as_mut().expect("must success");
+        let field_ends = &mut reader.field_ends[..];
+        let in_tmp = Vec::new();
+        let mut out_tmp = vec![0u8; 1];
+        let mut endlen = reader.n_end;
+
+        if state.rows_to_skip > 0 {
+            let (result, _, _, n_end) =
+                reader
+                    .reader
+                    .read_record(&in_tmp, &mut out_tmp, &mut field_ends[endlen..]);
+            endlen += n_end;
+
+            return match result {
+                ReadRecordResult::InputEmpty => {
+                    reader.n_end = endlen;
+                    Ok(vec![])
+                }
+                ReadRecordResult::OutputFull => Err(output_full_error(&state.path, state.rows)),
+                ReadRecordResult::OutputEndsFull => Err(output_ends_full_error(
+                    num_fields,
+                    field_ends.len(),
+                    &state.path,
+                    state.rows,
+                )),
+                ReadRecordResult::Record => {
+                    Self::check_num_field(num_fields, endlen, field_ends, &state.path, state.rows)?;
+
+                    state.rows_to_skip -= 1;
+                    tracing::debug!(
+                        "csv aligner: skip a header row, remain {}",
+                        state.rows_to_skip
+                    );
+                    Ok(vec![])
+                }
+                ReadRecordResult::End => {
+                    Err(csv_error("unexpect eof in header", &state.path, state.rows))
+                }
+            };
+        }
+
         let num_fields = state.num_fields;
         let reader = state.csv_reader.as_mut().expect("must success");
         let field_ends = &mut reader.field_ends[..];

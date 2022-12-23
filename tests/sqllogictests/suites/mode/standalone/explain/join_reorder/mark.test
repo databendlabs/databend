@@ -1,0 +1,46 @@
+query T
+explain select * from numbers(10000) where number in (select number from numbers(1000))
+----
+HashJoin
+├── join type: LEFT SEMI
+├── build keys: [subquery_1 (#1)]
+├── probe keys: [numbers.number (#0)]
+├── filters: []
+├── TableScan(Build)
+│   ├── table: default.system.numbers
+│   ├── read rows: 1000
+│   ├── read bytes: 8000
+│   ├── partitions total: 1
+│   ├── partitions scanned: 1
+│   └── push downs: [filters: [], limit: NONE]
+└── TableScan(Probe)
+    ├── table: default.system.numbers
+    ├── read rows: 10000
+    ├── read bytes: 80000
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    └── push downs: [filters: [], limit: NONE]
+
+query T
+explain select * from numbers(1000) where number in (select number from numbers(10000))
+----
+HashJoin
+├── join type: RIGHT SEMI
+├── build keys: [numbers.number (#0)]
+├── probe keys: [subquery_1 (#1)]
+├── filters: []
+├── TableScan(Build)
+│   ├── table: default.system.numbers
+│   ├── read rows: 1000
+│   ├── read bytes: 8000
+│   ├── partitions total: 1
+│   ├── partitions scanned: 1
+│   └── push downs: [filters: [], limit: NONE]
+└── TableScan(Probe)
+    ├── table: default.system.numbers
+    ├── read rows: 10000
+    ├── read bytes: 80000
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    └── push downs: [filters: [], limit: NONE]
+

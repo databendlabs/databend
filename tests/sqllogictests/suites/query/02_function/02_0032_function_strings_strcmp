@@ -1,0 +1,81 @@
+query T
+SELECT STRCMP(NULL, 'a')
+----
+NULL
+
+query T
+SELECT STRCMP('a', NULL)
+----
+NULL
+
+query T
+SELECT STRCMP(NULL, NULL)
+----
+NULL
+
+query I
+SELECT STRCMP('', '123')
+----
+-1
+
+query I
+SELECT STRCMP('123', '')
+----
+1
+
+query I
+SELECT STRCMP('123', '123')
+----
+0
+
+query I
+SELECT STRCMP('1234', '123')
+----
+1
+
+query I
+SELECT STRCMP('123', '1234')
+----
+-1
+
+query I
+SELECT STRCMP('123', '153')
+----
+-1
+
+query I
+SELECT STRCMP('2', to_varchar(number)) FROM numbers(5) ORDER BY number
+----
+1
+1
+0
+-1
+-1
+
+query I
+SELECT STRCMP(to_varchar(number), '3') FROM numbers(5) ORDER BY number
+----
+-1
+-1
+-1
+0
+1
+
+query I
+SELECT STRCMP(to_varchar(number), to_varchar(number)) FROM numbers(5) ORDER BY number
+----
+0
+0
+0
+0
+0
+
+query I
+SELECT STRCMP(to_varchar(number + 1), to_varchar(number)) FROM numbers(5) ORDER BY number
+----
+1
+1
+1
+1
+1
+

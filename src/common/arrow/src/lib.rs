@@ -20,6 +20,7 @@ pub mod schema_projection;
 
 pub use arrow;
 pub use arrow_format;
+pub use native;
 pub use parquet2 as parquet;
 pub use parquet_read::read_columns_async;
 pub use parquet_read::read_columns_many_async;

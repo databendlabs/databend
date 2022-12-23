@@ -43,8 +43,10 @@ use common_meta_app::schema::TableInfo;
 use common_meta_types::RoleInfo;
 use common_meta_types::UserInfo;
 use common_settings::Settings;
+use common_sql::PlannerContext;
 use common_storage::DataOperator;
 use common_storage::StorageMetrics;
+use common_storages_stage::StageAttachment;
 use common_storages_stage::StageTable;
 use parking_lot::RwLock;
 use tracing::debug;
@@ -54,7 +56,6 @@ use crate::auth::AuthMgr;
 use crate::catalogs::Catalog;
 use crate::clusters::Cluster;
 use crate::pipelines::executor::PipelineExecutor;
-use crate::servers::http::v1::HttpQueryHandle;
 use crate::sessions::query_affect::QueryAffect;
 use crate::sessions::ProcessInfo;
 use crate::sessions::QueryContextShared;
@@ -139,14 +140,6 @@ impl QueryContext {
         DataExchangeManager::instance()
     }
 
-    pub fn attach_http_query(&self, handle: HttpQueryHandle) {
-        self.shared.attach_http_query_handle(handle);
-    }
-
-    pub fn get_http_query(&self) -> Option<HttpQueryHandle> {
-        self.shared.get_http_query()
-    }
-
     pub fn get_auth_manager(&self) -> Arc<AuthMgr> {
         self.shared.get_auth_manager()
     }
@@ -190,6 +183,10 @@ impl QueryContext {
 
     pub fn set_executor(&self, weak_ptr: Weak<PipelineExecutor>) {
         self.shared.set_executor(weak_ptr)
+    }
+
+    pub fn attach_stage(&self, attachment: StageAttachment) {
+        self.shared.attach_stage(attachment);
     }
 
     pub fn get_created_time(&self) -> SystemTime {
@@ -353,6 +350,14 @@ impl TableContext for QueryContext {
     // Get all the processes list info.
     fn get_processes_info(&self) -> Vec<ProcessInfo> {
         SessionManager::instance().processes_info()
+    }
+}
+
+#[async_trait::async_trait]
+impl PlannerContext for QueryContext {
+    // Get Stage Attachment.
+    fn get_stage_attachment(&self) -> Option<StageAttachment> {
+        self.shared.get_stage_attachment()
     }
 }
 

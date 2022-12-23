@@ -1,0 +1,194 @@
+
+
+query B
+SELECT 1 IS DISTINCT FROM 2
+----
+1
+
+
+
+query B
+SELECT 1 IS DISTINCT FROM 1
+----
+0
+
+
+
+query B
+SELECT 'a' IS DISTINCT FROM 'b'
+----
+1
+
+
+
+query B
+SELECT 'a' IS DISTINCT FROM 'a'
+----
+0
+
+
+
+query B
+SELECT 1 IS NOT DISTINCT FROM 2
+----
+0
+
+
+
+query B
+SELECT 1 IS NOT DISTINCT FROM 1
+----
+1
+
+
+
+query B
+SELECT 'a' IS NOT DISTINCT FROM 'b'
+----
+0
+
+
+
+query B
+SELECT 'a' IS NOT DISTINCT FROM 'a'
+----
+1
+
+
+
+query B
+SELECT 1 IS DISTINCT FROM null
+----
+1
+
+
+
+query B
+SELECT null IS DISTINCT FROM 1
+----
+1
+
+
+
+query B
+SELECT 'a' IS DISTINCT FROM null
+----
+1
+
+
+
+query B
+SELECT null IS DISTINCT FROM 'b'
+----
+1
+
+
+
+query B
+SELECT null IS DISTINCT FROM null
+----
+0
+
+
+
+query B
+SELECT 1 IS NOT DISTINCT FROM null
+----
+0
+
+
+
+query B
+SELECT null IS NOT DISTINCT FROM 1
+----
+0
+
+
+
+query B
+SELECT 'a' IS NOT DISTINCT FROM null
+----
+0
+
+
+
+query B
+SELECT null IS NOT DISTINCT FROM 'b'
+----
+0
+
+
+
+query B
+SELECT null IS NOT DISTINCT FROM null
+----
+1
+
+
+
+statement ok
+CREATE TABLE IF NOT EXISTS t(a INT, b INT) ENGINE=Memory
+
+statement ok
+INSERT INTO t VALUES(0, 0), (0, 1), (1, 0), (1, 1)
+
+query IIB
+SELECT a, b, a is distinct FROM b FROM t
+----
+0 0 0
+0 1 1
+1 0 1
+1 1 0
+
+statement ok
+DROP TABLE t
+
+statement ok
+CREATE TABLE IF NOT EXISTS t(a INT, b INT) ENGINE=Memory
+
+statement ok
+INSERT INTO t VALUES(0, 0), (0, 1), (1, 0), (1, 1)
+
+query IIB
+SELECT a, b, a IS NOT DISTINCT FROM b FROM t
+----
+0 0 1
+0 1 0
+1 0 0
+1 1 1
+
+
+statement ok
+DROP TABLE t
+
+statement ok
+CREATE TABLE IF NOT EXISTS t(a INT NULL, b INT NULL) ENGINE=Memory
+
+statement ok
+INSERT INTO t VALUES (0, NULL),  (NULL, 0), (NULL, NULL)
+
+query IIB
+SELECT a, b , a IS DISTINCT FROM b FROM t
+----
+0 NULL 1
+NULL 0 1
+NULL NULL 0
+
+statement ok
+DROP TABLE t
+
+statement ok
+CREATE TABLE IF NOT EXISTS t(a INT NULL, b INT NULL) ENGINE=Memory
+
+statement ok
+INSERT INTO t VALUES (0, NULL), (NULL, 0), (NULL, NULL)
+
+query IIB
+SELECT a, b, a IS NOT DISTINCT FROM b FROM t
+----
+0 NULL 0
+NULL 0 0
+NULL NULL 1
+
+statement ok
+DROP TABLE t

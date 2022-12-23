@@ -56,7 +56,7 @@ fn test_data_block(is_nullable: bool) -> Result<()> {
     }
 
     {
-        let settings = Settings::default_settings("default")?;
+        let settings = Settings::default_test_settings()?;
         settings.set_settings(
             "format_record_delimiter".to_string(),
             "\r\n".to_string(),
@@ -114,7 +114,7 @@ fn test_field_delimiter_with_ascii_control_code() -> Result<()> {
     let block = get_simple_block(false)?;
     let schema = block.schema().clone();
 
-    let settings = Settings::default_settings("default")?;
+    let settings = Settings::default_test_settings()?;
     settings.set_settings(
         "format_record_delimiter".to_string(),
         "\r\n".to_string(),

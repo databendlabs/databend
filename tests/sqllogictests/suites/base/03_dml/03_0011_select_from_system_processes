@@ -1,0 +1,7 @@
+## https://github.com/datafuselabs/databend/issues/8792
+## query TT
+## select command, database from system.processes
+
+## ----
+## Query default
+

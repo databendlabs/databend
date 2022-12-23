@@ -1,0 +1,123 @@
+statement ok
+use default
+
+query I
+SELECT NULLIF(2, 1)
+----
+2
+
+query I
+SELECT NULLIF(1, 2)
+----
+1
+
+query I
+SELECT NULLIF(1, NULL)
+----
+1
+
+query T
+SELECT NULLIF(NULL, 1)
+----
+NULL
+
+query T
+SELECT NULLIF('a', 'b')
+----
+a
+
+query T
+SELECT NULLIF('b', 'a')
+----
+b
+
+query T
+SELECT NULLIF('a', NULL)
+----
+a
+
+query T
+SELECT NULLIF(NULL, 'a')
+----
+NULL
+
+query T
+SELECT NULLIF(NULL, NULL)
+----
+NULL
+
+statement ok
+CREATE TABLE IF NOT EXISTS t(a INT, b INT) ENGINE=Memory
+
+statement ok
+INSERT INTO t VALUES(0, 0), (0, 1), (1, 0), (1, 1)
+
+query III
+SELECT a, b, NULLIF(a, b) FROM t
+----
+0 0 NULL
+0 1 0
+1 0 1
+1 1 NULL
+
+statement ok
+DROP TABLE t
+
+statement ok
+CREATE TABLE IF NOT EXISTS t(a INT NULL, b INT NULL) ENGINE=Memory
+
+statement ok
+INSERT INTO t VALUES(0, 0), (0, 1), (0, NULL), (1, 0), (1, 1), (1, NULL), (NULL, 0), (NULL, 1), (NULL, NULL)
+
+query III
+SELECT a, b, NULLIF(a, b) FROM t
+----
+0 0 NULL
+0 1 0
+0 NULL 0
+1 0 1
+1 1 NULL
+1 NULL 1
+NULL 0 NULL
+NULL 1 NULL
+NULL NULL NULL
+
+statement ok
+DROP TABLE t
+
+statement ok
+CREATE TABLE IF NOT EXISTS t(a INT NULL, b INT NULL) ENGINE=Memory
+
+statement ok
+INSERT INTO t VALUES(NULL, 0), (NULL, 1), (NULL, NULL), (NULL, 0), (NULL, 1)
+
+query III
+SELECT a, b, NULLIF(a, b) FROM t
+----
+NULL 0 NULL
+NULL 1 NULL
+NULL NULL NULL
+NULL 0 NULL
+NULL 1 NULL
+
+statement ok
+DROP TABLE t
+
+statement ok
+CREATE TABLE IF NOT EXISTS t(a INT NULL, b INT NULL) ENGINE=Memory
+
+statement ok
+INSERT INTO t VALUES(0, NULL), (1, NULL), (0, NULL), (1, NULL), (NULL, NULL)
+
+query III
+SELECT a, b, NULLIF(a, b) FROM t
+----
+0 NULL 0
+1 NULL 1
+0 NULL 0
+1 NULL 1
+NULL NULL NULL
+
+statement ok
+DROP TABLE t
+

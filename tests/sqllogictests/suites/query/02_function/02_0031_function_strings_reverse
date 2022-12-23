@@ -1,0 +1,13 @@
+query T
+SELECT REVERSE(NULL)
+----
+NULL
+
+statement ok
+SELECT REVERSE('')
+
+query T
+SELECT REVERSE('abc')
+----
+cba
+

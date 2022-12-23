@@ -1,0 +1,18 @@
+query T
+select rtrim('abc      ')
+----
+abc
+
+statement ok
+select rtrim('')
+
+query T
+select rtrim('abc')
+----
+abc
+
+query T
+select rtrim(null)
+----
+NULL
+

@@ -1,0 +1,36 @@
+query I
+SELECT FIELD('3', '77', '3') FROM numbers(5) ORDER BY number
+----
+2
+2
+2
+2
+2
+
+query I
+SELECT FIELD('3', '77', to_varchar(number+1)) FROM numbers(5) ORDER BY number
+----
+0
+0
+2
+0
+0
+
+query I
+SELECT FIELD(to_varchar(number+1), '77', '3') FROM numbers(5) ORDER BY number
+----
+0
+0
+2
+0
+0
+
+query I
+SELECT FIELD(to_varchar(number), '77', to_varchar(4-number)) FROM numbers(5) ORDER BY number
+----
+0
+0
+2
+0
+0
+

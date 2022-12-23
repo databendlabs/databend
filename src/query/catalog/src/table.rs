@@ -24,6 +24,7 @@ use common_datavalues::DataSchemaRef;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_app::schema::DatabaseType;
 use common_meta_app::schema::TableInfo;
 use common_meta_types::MetaId;
 use common_pipeline_core::Pipeline;
@@ -311,7 +312,7 @@ pub trait TableExt: Table {
             name,
             meta: meta.as_ref().clone(),
             tenant: "".to_owned(),
-            from_share: None,
+            db_type: DatabaseType::NormalDB,
         };
         catalog.get_table_by_info(&table_info)
     }
@@ -319,7 +320,7 @@ pub trait TableExt: Table {
 
 impl<T: ?Sized> TableExt for T where T: Table {}
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum NavigationPoint {
     SnapshotID(String),
     TimePoint(DateTime<Utc>),

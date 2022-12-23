@@ -1,0 +1,29 @@
+statement ok
+unset max_threads;
+
+statement ok
+unset max_memory_usage;
+
+query B
+select value=default from system.settings where name in ('max_threads', 'max_memory_usage') order by name
+----
+1
+1
+
+query TTT
+select name, level, description from system.settings where name in ('max_threads', 'max_memory_usage')
+----
+max_memory_usage  SESSION  The maximum memory usage for processing single query, in bytes. By default the value is determined automatically.
+max_threads       SESSION  The maximum number of threads to execute the request. By default the value is determined automatically.
+
+statement ok
+SET max_threads=11
+
+statement error 2801
+SET unknown_settings=11
+
+statement ok
+SHOW SETTINGS
+
+statement ok
+SHOW SETTINGS LIKE 'enable%'
