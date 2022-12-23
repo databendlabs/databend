@@ -104,7 +104,7 @@ impl<'a> ClusteringInformation<'a> {
         let names = self
             .cluster_keys
             .iter()
-            .map(|x| x.into_expr(&BUILTIN_FUNCTIONS).column_name())
+            .map(|x| x.into_expr(&BUILTIN_FUNCTIONS).unwrap().column_name())
             .collect::<Vec<String>>()
             .join(", ");
         let cluster_by_keys = format!("({})", names);

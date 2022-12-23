@@ -18,9 +18,9 @@ use std::sync::Arc;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::type_check::check_function;
-use common_expression::DataSchemaRef;
 use common_expression::Expr;
 use common_expression::RemoteExpr;
+use common_expression::TableSchemaRef;
 use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 // use common_sql::executor::ExpressionOp;
 use common_storages_index::ChunkFilter;
@@ -48,7 +48,7 @@ struct FilterPruner {
     dal: Operator,
 
     /// the schema of data being indexed
-    data_schema: DataSchemaRef,
+    data_schema: TableSchemaRef,
 }
 
 impl FilterPruner {
@@ -57,7 +57,7 @@ impl FilterPruner {
         index_columns: Vec<String>,
         filter_expression: Expr<String>,
         dal: Operator,
-        data_schema: DataSchemaRef,
+        data_schema: TableSchemaRef,
     ) -> Self {
         Self {
             ctx,
@@ -106,8 +106,8 @@ impl Pruner for FilterPruner {
 /// otherwise, a [Filter] backed pruner will be return
 pub fn new_filter_pruner(
     ctx: &Arc<dyn TableContext>,
-    filter_exprs: Option<&[RemoteExpr<String>]>,
-    schema: &DataSchemaRef,
+    filter_exprs: Option<&[Expr<String>]>,
+    schema: &TableSchemaRef,
     dal: Operator,
 ) -> Result<Option<Arc<dyn Pruner + Send + Sync>>> {
     if let Some(exprs) = filter_exprs {
@@ -118,7 +118,7 @@ pub fn new_filter_pruner(
         // Check if there were applicable filter conditions.
         let expr: Expr<String> = exprs
             .iter()
-            .map(|expr| expr.into_expr(&BUILTIN_FUNCTIONS).unwrap())
+            .cloned()
             .reduce(|lhs, rhs| {
                 check_function(None, "and", &[], &[lhs, rhs], &BUILTIN_FUNCTIONS).unwrap()
             })
@@ -155,7 +155,7 @@ mod util {
     pub async fn should_keep_by_filter(
         ctx: Arc<dyn TableContext>,
         dal: Operator,
-        schema: &DataSchemaRef,
+        schema: &TableSchemaRef,
         filter_expr: &Expr<String>,
         filter_col_names: &[String],
         index_location: &Location,
@@ -166,11 +166,12 @@ mod util {
             .read_filter(ctx.clone(), dal, filter_col_names, index_length)
             .await;
 
+        // todo!("expression")
         match maybe_filter {
             Ok(filter) => Ok(ChunkFilter::from_filter_chunk(
                 ctx.try_get_function_context()?,
-                schema.into(),
-                schema.into(),
+                schema.clone(),
+                schema.clone(),
                 filter.into_data(),
             )?
             .eval(filter_expr.clone())?

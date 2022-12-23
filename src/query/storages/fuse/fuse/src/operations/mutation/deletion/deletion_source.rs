@@ -189,7 +189,7 @@ impl Processor for DeletionSource<'_> {
                 let evaluator =
                     Evaluator::new(&chunk, FunctionContext::default(), &BUILTIN_FUNCTIONS);
                 let res = evaluator
-                    .run(self.filter.into_expr(&BUILTIN_FUNCTIONS).unwrap())
+                    .run(&self.filter.into_expr(&BUILTIN_FUNCTIONS).unwrap())
                     .map_err(|(_, e)| {
                         ErrorCode::Internal(format!("eval try eval const failed: {}.", e))
                     })?;

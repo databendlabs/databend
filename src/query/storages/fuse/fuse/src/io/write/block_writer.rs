@@ -106,7 +106,7 @@ impl<'a> BlockWriter<'a> {
         chunk_id: Uuid,
     ) -> Result<(u64, Location)> {
         let bloom_index =
-            ChunkFilter::try_create(FunctionContext::default(), self.schema, &[chunk])?;
+            ChunkFilter::try_create(FunctionContext::default(), self.schema.clone(), &[chunk])?;
 
         let index_chunk = bloom_index.filter_chunk;
         let location = self

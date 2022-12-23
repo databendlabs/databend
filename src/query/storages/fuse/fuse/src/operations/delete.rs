@@ -141,7 +141,7 @@ impl FuseTable {
 
         let evaluator = Evaluator::new(&dummy_chunk, func_ctx, &BUILTIN_FUNCTIONS);
         let res = evaluator
-            .run(filter.into_expr(&BUILTIN_FUNCTIONS).unwrap())
+            .run(&filter.into_expr(&BUILTIN_FUNCTIONS).unwrap())
             .map_err(|(_, e)| ErrorCode::Internal(format!("eval try eval const failed: {}.", e)))?;
         let predicates = Chunk::<String>::cast_to_nonull_boolean(&res).ok_or_else(|| {
             ErrorCode::BadArguments("Result of filter expression cannot be converted to boolean.")
@@ -289,7 +289,8 @@ impl FuseTable {
             let cname = expr.column_name();
             let index = match merged.iter().position(|x| x.name() == &cname) {
                 None => {
-                    let field = TableField::new(&cname, expr.data_type());
+                    // todo!("expression")
+                    let field = TableField::new(&cname, expr.data_type().into());
                     operators.push(ChunkOperator::Map {
                         index: 0,
                         expr: expr.clone(),

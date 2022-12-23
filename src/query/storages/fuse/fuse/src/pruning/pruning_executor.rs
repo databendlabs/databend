@@ -25,6 +25,7 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::TableSchemaRef;
+use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 use common_storages_pruner::LimiterPruner;
 use common_storages_pruner::LimiterPrunerCreator;
 use common_storages_pruner::RangePruner;
@@ -68,7 +69,13 @@ impl BlockPruner {
             return Ok(vec![]);
         };
 
-        let filter_expressions = push_down.as_ref().map(|extra| extra.filters.as_slice());
+        let filter_exprs = push_down.as_ref().map(|extra| {
+            extra
+                .filters
+                .iter()
+                .map(|f| f.into_expr(&BUILTIN_FUNCTIONS).unwrap())
+                .collect::<Vec<_>>()
+        });
 
         // 1. prepare pruners
 
@@ -83,12 +90,12 @@ impl BlockPruner {
 
         // prepare the range filter.
         // if filter_expression is none, an dummy pruner will be returned, which prunes nothing
-        let range_pruner = RangePrunerCreator::try_create(ctx, filter_expressions, &schema)?;
+        let range_pruner = RangePrunerCreator::try_create(ctx, filter_exprs.as_deref(), &schema)?;
 
         // prepare the filter.
         // None will be returned, if filter is not applicable (e.g. unsuitable filter expression, index not available, etc.)
         let filter_pruner =
-            pruner::new_filter_pruner(ctx, filter_expressions, schema.into(), dal.clone())?;
+            pruner::new_filter_pruner(ctx, filter_exprs.as_deref(), &schema, dal.clone())?;
 
         // 2. constraint the degree of parallelism
         let max_threads = ctx.get_settings().get_max_threads()? as usize;

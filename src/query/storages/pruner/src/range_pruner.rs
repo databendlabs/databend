@@ -17,7 +17,6 @@ use std::sync::Arc;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::Expr;
-use common_expression::RemoteExpr;
 use common_expression::TableSchemaRef;
 use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 use common_storages_index::RangeFilter;
@@ -65,23 +64,22 @@ impl RangePrunerCreator {
     /// Note: the schema should be the schema of the table, not the schema of the input.
     pub fn try_create<'a>(
         ctx: &Arc<dyn TableContext>,
-        filter_expr: Option<&'a [RemoteExpr<String>]>,
+        filter_expr: Option<&'a [Expr<String>]>,
         schema: &'a TableSchemaRef,
     ) -> Result<Arc<dyn RangePruner + Send + Sync>> {
         Ok(match filter_expr {
             Some(exprs) if !exprs.is_empty() => {
-                // let range_filter = RangeFilter::try_create(ctx.clone(), exprs, schema.clone())?;
-                // match range_filter.try_eval_const() {
-                //     Ok(v) => {
-                //         if v {
-                //            Arc::new(KeepTrue)
-                //         } else {
-                //             Arc::new(KeepFalse)
-                //         }
-                //     }
-                //     Err(_) => Arc::new(range_filter),
-                // }
-                todo!("expression")
+                let range_filter = RangeFilter::try_create(ctx.clone(), exprs, schema.clone())?;
+                match range_filter.try_eval_const() {
+                    Ok(v) => {
+                        if v {
+                            Arc::new(KeepTrue)
+                        } else {
+                            Arc::new(KeepFalse)
+                        }
+                    }
+                    Err(_) => Arc::new(range_filter),
+                }
             }
             _ => Arc::new(KeepTrue),
         })
