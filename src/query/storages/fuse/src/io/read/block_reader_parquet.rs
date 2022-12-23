@@ -290,21 +290,21 @@ impl BlockReader {
         // Normal read.
         let mut ranges = vec![];
         let mut normal_read_bytes = 0u64;
-        for (index, _) in indices {
-            let column_meta = &part.columns_meta[&index];
+        for index in indices.keys() {
+            let column_meta = &part.columns_meta[index];
             ranges.push(column_meta.offset..(column_meta.offset + column_meta.len));
 
             normal_read_bytes += column_meta.len;
             join_handlers.push(UnlimitedFuture::create(Self::read_column(
                 self.operator.object(&part.location),
-                index,
+                *index,
                 column_meta.offset,
                 column_meta.len,
             )));
         }
 
         let now = SystemTime::now();
-        let res = futures::future::try_join_all(join_handlers).await;
+        let _res = futures::future::try_join_all(join_handlers).await;
         let normal_cost = now.elapsed().unwrap().as_millis() as u64;
         self.normal_all_cost
             .fetch_add(normal_cost, Ordering::Release);
@@ -312,7 +312,8 @@ impl BlockReader {
         // Merge io requests.
         let max_gap_size = ctx.get_settings().get_max_storage_io_requests_merge_gap()?;
         let max_range_size = ctx.get_settings().get_max_storage_io_requests_page_size()?;
-        let ranges = RangeMerger::from_iter(ranges, max_gap_size, max_range_size).ranges();
+        let range_merger = RangeMerger::from_iter(ranges, max_gap_size, max_range_size);
+        let ranges = range_merger.ranges();
         let mut merge_io_handlers = Vec::with_capacity(ranges.len());
         let mut merge_read_bytes = 0u64;
         for (index, range) in ranges.iter().enumerate() {
@@ -326,7 +327,23 @@ impl BlockReader {
             )));
         }
         let now = SystemTime::now();
-        let _ = futures::future::try_join_all(merge_io_handlers).await;
+        let mut final_result = Vec::new();
+        let mut merge_results = futures::future::try_join_all(merge_io_handlers).await?;
+        merge_results.sort_by(|a, b| a.0.cmp(&b.0));
+        for index in indices.keys() {
+            let column_meta = &part.columns_meta[index];
+            let column_start = column_meta.offset;
+            let column_end = column_start + column_meta.len;
+
+            let range_idx = range_merger.get(column_start..column_end).unwrap();
+            let data = &merge_results[range_idx].1;
+            let range = &ranges[range_idx];
+            let column_data = data
+                [(column_start - range.start) as usize..(column_end - column_start) as usize]
+                .to_vec();
+            final_result.push((*index, column_data));
+        }
+
         let merge_cost = now.elapsed().unwrap().as_millis() as u64;
         self.merge_all_cost.fetch_add(merge_cost, Ordering::Release);
 
@@ -347,7 +364,7 @@ impl BlockReader {
             self.merge_all_cost.load(Ordering::Acquire)
         );
 
-        res
+        Ok(final_result)
     }
 
     pub fn support_blocking_api(&self) -> bool {

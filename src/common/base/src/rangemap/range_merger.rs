@@ -47,7 +47,7 @@ pub struct RangeMerger {
 
 impl RangeMerger {
     pub fn from_iter<I>(iter: I, max_gap_size: u64, max_range_size: u64) -> Self
-    where I: IntoIterator<Item = std::ops::Range<u64>> {
+    where I: IntoIterator<Item = Range<u64>> {
         let mut raw_ranges: Vec<_> = iter.into_iter().collect();
         raw_ranges.sort_by(|a, b| a.start.cmp(&b.start));
 
@@ -62,6 +62,15 @@ impl RangeMerger {
         }
 
         rs
+    }
+
+    pub fn get(&self, range: Range<u64>) -> Option<usize> {
+        for (i, r) in self.ranges.iter().enumerate() {
+            if r.contains(&range.start) && r.contains(&range.end) {
+                return Some(i);
+            }
+        }
+        None
     }
 
     pub fn ranges(&self) -> Vec<Range<u64>> {
