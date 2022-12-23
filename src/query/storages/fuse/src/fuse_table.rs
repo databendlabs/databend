@@ -277,10 +277,10 @@ impl Table for FuseTable {
         true
     }
 
-    fn cluster_keys(&self) -> Vec<Expression> {
+    fn cluster_keys(&self, ctx: Arc<dyn TableContext>) -> Vec<Expression> {
         let table_meta = Arc::new(self.clone());
         if let Some((_, order)) = &self.cluster_key_meta {
-            let cluster_keys = ExpressionParser::parse_exprs(table_meta, order).unwrap();
+            let cluster_keys = ExpressionParser::parse_exprs(ctx, table_meta, order).unwrap();
             return cluster_keys;
         }
         vec![]
