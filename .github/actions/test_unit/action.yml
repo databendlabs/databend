@@ -17,7 +17,7 @@ runs:
       run: cargo -Z sparse-registry test
       env:
         RUST_TEST_THREADS: "2"
-        RUST_LOG: DEBUG,sled=INFO
+        RUST_LOG: INFO
         RUST_BACKTRACE: full
 
     - name: Upload failure
