@@ -18,6 +18,7 @@ use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
 use common_base::base::tokio;
+use common_base::base::tokio::time::sleep;
 use common_meta_api::get_start_and_end_of_prefix;
 use common_meta_api::prefix_of_string;
 use common_meta_api::KVApi;
@@ -506,14 +507,14 @@ async fn test_watch_stream_count() -> common_exception::Result<()> {
 
     let (tc, addr) = crate::tests::start_metasrv().await?;
 
-    let watch_req = WatchRequest {
+    let watch_req = || WatchRequest {
         key: "a".to_string(),
         key_end: Some("z".to_string()),
         filter_type: FilterType::All.into(),
     };
 
-    let client = make_client(&addr)?;
-    let _watch_stream = client.request(watch_req.clone()).await?;
+    let client1 = make_client(&addr)?;
+    let _watch_stream1 = client1.request(watch_req()).await?;
 
     let mn: Arc<MetaNode> = tc.grpc_srv.as_ref().map(|x| x.get_meta_node()).unwrap();
 
@@ -521,11 +522,11 @@ async fn test_watch_stream_count() -> common_exception::Result<()> {
 
     tracing::info!("one watcher");
     {
-        let c = watcher_count.clone();
+        let cnt = watcher_count.clone();
 
         mn.dispatcher_handle
             .request_blocking(move |d| {
-                *c.lock().unwrap() = d.watchers().count();
+                *cnt.lock().unwrap() = d.watchers().count();
             })
             .await;
 
@@ -535,17 +536,33 @@ async fn test_watch_stream_count() -> common_exception::Result<()> {
     tracing::info!("second watcher");
     {
         let client2 = make_client(&addr)?;
-        let _watch_stream2 = client2.request(watch_req.clone()).await?;
+        let _watch_stream2 = client2.request(watch_req()).await?;
 
-        let c = watcher_count.clone();
+        let cnt = watcher_count.clone();
 
         mn.dispatcher_handle
             .request_blocking(move |d| {
-                *c.lock().unwrap() = d.watchers().count();
+                *cnt.lock().unwrap() = d.watchers().count();
             })
             .await;
 
         assert_eq!(2, *watcher_count.lock().unwrap());
+    }
+
+    tracing::info!("wait a while for MetaNode to process stream cleanup");
+    sleep(Duration::from_millis(2_000)).await;
+
+    tracing::info!("second watcher is removed");
+    {
+        let cnt = watcher_count.clone();
+
+        mn.dispatcher_handle
+            .request_blocking(move |d| {
+                *cnt.lock().unwrap() = d.watchers().count();
+            })
+            .await;
+
+        assert_eq!(1, *watcher_count.lock().unwrap());
     }
 
     Ok(())

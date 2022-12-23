@@ -84,7 +84,6 @@ pub struct FuseTable {
 
     pub(crate) cluster_key_meta: Option<ClusterKey>,
     pub(crate) storage_format: FuseStorageFormat,
-    pub(crate) read_only: bool,
 
     pub(crate) operator: Operator,
     pub(crate) data_metrics: Arc<StorageMetrics>,
@@ -92,10 +91,10 @@ pub struct FuseTable {
 
 impl FuseTable {
     pub fn try_create(table_info: TableInfo) -> Result<Box<dyn Table>> {
-        Ok(Self::do_create(table_info, false)?)
+        Ok(Self::do_create(table_info)?)
     }
 
-    pub fn do_create(table_info: TableInfo, read_only: bool) -> Result<Box<FuseTable>> {
+    pub fn do_create(table_info: TableInfo) -> Result<Box<FuseTable>> {
         let storage_prefix = Self::parse_storage_prefix(&table_info)?;
         let cluster_key_meta = table_info.meta.cluster_key();
 
@@ -134,7 +133,6 @@ impl FuseTable {
             table_info,
             meta_location_generator: TableMetaLocationGenerator::with_prefix(storage_prefix),
             cluster_key_meta,
-            read_only,
             operator,
             data_metrics,
             storage_format: FuseStorageFormat::from_str(storage_format.as_str())?,
@@ -246,17 +244,6 @@ impl FuseTable {
                 tbl.engine()
             ))
         })
-    }
-
-    pub fn check_mutable(&self) -> Result<()> {
-        if self.read_only {
-            Err(ErrorCode::TableNotWritable(format!(
-                "Table {} is in read-only mode",
-                self.table_info.desc.as_str()
-            )))
-        } else {
-            Ok(())
-        }
     }
 
     pub fn transient(&self) -> bool {
@@ -426,7 +413,6 @@ impl Table for FuseTable {
         append_mode: AppendMode,
         need_output: bool,
     ) -> Result<()> {
-        self.check_mutable()?;
         self.do_append_data(ctx, pipeline, append_mode, need_output)
     }
 
@@ -437,7 +423,6 @@ impl Table for FuseTable {
         operations: Vec<DataBlock>,
         overwrite: bool,
     ) -> Result<()> {
-        self.check_mutable()?;
         // only append operation supported currently
         let append_log_entries = operations
             .iter()
@@ -448,13 +433,11 @@ impl Table for FuseTable {
 
     #[tracing::instrument(level = "debug", name = "fuse_table_truncate", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn truncate(&self, ctx: Arc<dyn TableContext>, purge: bool) -> Result<()> {
-        self.check_mutable()?;
         self.do_truncate(ctx, purge).await
     }
 
     #[tracing::instrument(level = "debug", name = "fuse_table_optimize", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn purge(&self, ctx: Arc<dyn TableContext>, keep_last_snapshot: bool) -> Result<()> {
-        self.check_mutable()?;
         self.do_purge(&ctx, keep_last_snapshot).await
     }
 
@@ -553,10 +536,6 @@ impl Table for FuseTable {
         ctx: Arc<dyn TableContext>,
         point: NavigationDescriptor,
     ) -> Result<()> {
-        // A read-only instance of fuse table, e.g. instance got by using time travel,
-        // revert operation is not allowed.
-        self.check_mutable()?;
-
         self.do_revert_to(ctx.as_ref(), point).await
     }
 }

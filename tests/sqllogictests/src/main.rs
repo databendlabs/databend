@@ -17,6 +17,8 @@ use std::path::PathBuf;
 
 use clap::Parser;
 use client::ClickhouseHttpClient;
+use sqllogictest::default_validator;
+use sqllogictest::update_test_file;
 use sqllogictest::DBOutput;
 use walkdir::DirEntry;
 use walkdir::WalkDir;
@@ -60,7 +62,7 @@ impl sqllogictest::AsyncDB for Databend {
     async fn run(&mut self, sql: &str) -> Result<DBOutput> {
         if let Some(mysql_client) = &mut self.mysql_client {
             println!("Running sql with mysql client: [{}]", sql);
-            return mysql_client.query(sql);
+            return mysql_client.query(sql).await;
         }
         if let Some(http_client) = &mut self.http_client {
             println!("Running sql with http client: [{}]", sql);
@@ -125,7 +127,7 @@ pub async fn main() -> Result<()> {
 async fn run_mysql_client() -> Result<()> {
     let suits = SqlLogicTestArgs::parse().suites;
     let suits = std::fs::read_dir(suits).unwrap();
-    let mysql_client = MysqlClient::create()?;
+    let mysql_client = MysqlClient::create().await?;
     let databend = Databend::create(Some(mysql_client), None, None);
     run_suits(suits, databend).await?;
     Ok(())
@@ -174,8 +176,16 @@ async fn run_suits(suits: ReadDir, databend: Databend) -> Result<()> {
                     continue;
                 }
             }
-            println!("test file: [{}] is running", file_name,);
-            runner.run_file_async(file.unwrap().path()).await?;
+            if args.complete {
+                let col_separator = " ";
+                let validator = default_validator;
+                update_test_file(file.unwrap().path(), &mut runner, col_separator, validator)
+                    .await
+                    .unwrap();
+            } else {
+                println!("test file: [{}] is running", file_name,);
+                runner.run_file_async(file.unwrap().path()).await?;
+            }
         }
     }
 
