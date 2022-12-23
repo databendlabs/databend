@@ -18,6 +18,7 @@ use common_ast::parser::parse_comma_separated_exprs;
 use common_ast::parser::tokenize_sql;
 use common_ast::Backtrace;
 use common_ast::Dialect;
+use common_base::base::tokio::task::block_in_place;
 use common_base::runtime::GlobalIORuntime;
 use common_catalog::catalog_kind::CATALOG_DEFAULT;
 use common_catalog::plan::Expression;
@@ -105,9 +106,11 @@ impl ExpressionParser {
         let builder = ExpressionBuilderWithoutRenaming::create(metadata);
 
         for expr in exprs.iter() {
-            let (scalar, _) = *GlobalIORuntime::instance()
-                .inner()
-                .block_on(type_checker.resolve(expr, None))?;
+            let (scalar, _) = *block_in_place(|| {
+                GlobalIORuntime::instance()
+                    .inner()
+                    .block_on(type_checker.resolve(expr, None))
+            })?;
             let expr = builder.build(&scalar)?;
             expressions.push(expr);
         }
