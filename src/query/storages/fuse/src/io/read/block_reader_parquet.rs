@@ -335,9 +335,16 @@ impl BlockReader {
             let column_start = column_meta.offset;
             let column_end = column_start + column_meta.len;
 
-            let range_idx = range_merger.get(column_start..column_end).unwrap();
-            let data = &merge_results[range_idx].1;
-            let range = &ranges[range_idx];
+            let range_idx = range_merger.get(column_start..column_end);
+            let idx = match range_idx {
+                None => Err(ErrorCode::Internal(format!(
+                    "it's a bug, not found range:[{},{}], in {:?}",
+                    column_start, column_end, ranges
+                ))),
+                Some(v) => Ok(v),
+            }?;
+            let data = &merge_results[idx].1;
+            let range = &ranges[idx];
             let column_data = data
                 [(column_start - range.start) as usize..(column_end - column_start) as usize]
                 .to_vec();
