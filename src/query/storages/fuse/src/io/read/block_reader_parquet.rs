@@ -14,9 +14,7 @@
 
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
-use std::time::SystemTime;
 
 use common_arrow::arrow::array::Array;
 use common_arrow::arrow::chunk::Chunk;
@@ -30,8 +28,6 @@ use common_arrow::parquet::metadata::ColumnDescriptor;
 use common_arrow::parquet::read::BasicDecompressor;
 use common_arrow::parquet::read::PageMetaData;
 use common_arrow::parquet::read::PageReader;
-use common_base::rangemap::RangeMerger;
-use common_base::runtime::UnlimitedFuture;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::Projection;
 use common_catalog::table_context::TableContext;
@@ -49,7 +45,6 @@ use futures::TryStreamExt;
 use opendal::Object;
 use opendal::Operator;
 use tracing::debug_span;
-use tracing::info;
 use tracing::Instrument;
 
 use crate::fuse_part::FusePartInfo;
@@ -73,8 +68,6 @@ impl BlockReader {
         let column_leaves = ColumnLeaves::new_from_schema(&arrow_schema);
 
         Ok(Arc::new(BlockReader {
-            normal_all_cost: Arc::new(0.into()),
-            merge_all_cost: Arc::new(0.into()),
             operator,
             projection,
             projected_schema,
@@ -285,112 +278,18 @@ impl BlockReader {
         let part = FusePartInfo::from_part(&raw_part)?;
         let columns = self.projection.project_column_leaves(&self.column_leaves)?;
         let indices = Self::build_projection_indices(&columns);
-        let mut join_handlers = Vec::with_capacity(indices.len());
 
-        // Normal read.
         let mut ranges = vec![];
-        let mut normal_read_bytes = 0u64;
         for index in indices.keys() {
             let column_meta = &part.columns_meta[index];
-            ranges.push(column_meta.offset..(column_meta.offset + column_meta.len));
-
-            normal_read_bytes += column_meta.len;
-            join_handlers.push(UnlimitedFuture::create(Self::read_column(
-                self.operator.object(&part.location),
+            ranges.push((
                 *index,
-                column_meta.offset,
-                column_meta.len,
-            )));
+                column_meta.offset..(column_meta.offset + column_meta.len),
+            ));
         }
 
-        let now = SystemTime::now();
-        let _res = futures::future::try_join_all(join_handlers).await;
-        let normal_cost = now.elapsed().unwrap().as_millis() as u64;
-        self.normal_all_cost
-            .fetch_add(normal_cost, Ordering::Release);
-
-        // Merge io requests.
-        let max_gap_size = ctx.get_settings().get_max_storage_io_requests_merge_gap()?;
-        let max_range_size = ctx.get_settings().get_max_storage_io_requests_page_size()?;
-        let range_merger = RangeMerger::from_iter(ranges, max_gap_size, max_range_size);
-        let ranges = range_merger.ranges();
-        let mut merge_io_handlers = Vec::with_capacity(ranges.len());
-        let mut merge_read_bytes = 0u64;
-        for (index, range) in ranges.iter().enumerate() {
-            let len = range.end - range.start;
-            merge_read_bytes += len;
-            merge_io_handlers.push(UnlimitedFuture::create(Self::read_range(
-                self.operator.object(&part.location),
-                index,
-                range.start,
-                range.end,
-            )));
-        }
-        let now = SystemTime::now();
-        let mut final_result = Vec::new();
-        let merge_results = futures::future::try_join_all(merge_io_handlers).await?;
-        for index in indices.keys() {
-            let column_meta = &part.columns_meta[index];
-            let column_start = column_meta.offset;
-            let column_end = column_start + column_meta.len;
-
-            // Find the range index and range.
-            let range_idx = range_merger.get(column_start..column_end);
-            let (idx, range) = match range_idx {
-                None => Err(ErrorCode::Internal(format!(
-                    "it's a bug, not found range:[{},{}], in\n: {:?}",
-                    column_start, column_end, ranges
-                ))),
-                Some((i, r)) => Ok((i, r)),
-            }?;
-
-            // For loop but not move data.
-            let mut range_data = None;
-            for (i, data) in &merge_results {
-                if *i == idx {
-                    range_data = Some(data);
-                    break;
-                }
-            }
-
-            // Range must contain the column range [start, end].
-            // [1,5]: -----   rr
-            // [2,4]:  ---    r2
-            // [1,5]: -----   r3
-            // r2 data is:
-            // start = r2.start - rr.start - 1 = 1
-            //  end  = r2.end   - rr.start - 1 = 3
-            // r3 data is:
-            // start = r3.start - rr.start = 0
-            //  end  = r3.end   - rr.start = 4
-            // Here has data copy.
-            let start = (range.start - column_start) as usize;
-            let end = (range.end - column_start) as usize;
-            let column_data = range_data.unwrap()[start..=end].to_vec();
-            final_result.push((*index, column_data));
-        }
-
-        let merge_cost = now.elapsed().unwrap().as_millis() as u64;
-        self.merge_all_cost.fetch_add(merge_cost, Ordering::Release);
-
-        info!(
-            "norma read partition={},  count={}, bytes={}, took:{} ms, all:{} ms",
-            part.location,
-            part.columns_meta.len(),
-            normal_read_bytes,
-            normal_cost,
-            self.normal_all_cost.load(Ordering::Acquire),
-        );
-        info!(
-            "merge read partition={},  count={}, bytes={}, took:{} ms, all:{} ms",
-            part.location,
-            ranges.len(),
-            merge_read_bytes,
-            merge_cost,
-            self.merge_all_cost.load(Ordering::Acquire)
-        );
-
-        Ok(final_result)
+        let object = self.operator.object(&part.location);
+        Self::merge_io_read(ctx, object, ranges).await
     }
 
     pub fn support_blocking_api(&self) -> bool {
@@ -418,28 +317,6 @@ impl BlockReader {
         }
 
         Ok(results)
-    }
-
-    pub async fn read_range(
-        o: Object,
-        index: usize,
-        start: u64,
-        end: u64,
-    ) -> Result<(usize, Vec<u8>)> {
-        let chunk = o.range_read(start..end).await?;
-
-        Ok((index, chunk))
-    }
-
-    pub async fn read_column(
-        o: Object,
-        index: usize,
-        offset: u64,
-        length: u64,
-    ) -> Result<(usize, Vec<u8>)> {
-        let chunk = o.range_read(offset..offset + length).await?;
-
-        Ok((index, chunk))
     }
 
     pub fn sync_read_column(
