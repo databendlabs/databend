@@ -164,13 +164,15 @@ copyOptions ::=
   [ SIZE_LIMIT = <num> ]
   [ PURGE = <bool> ]
   [ FORCE = <bool> ]
+  [ ON_ERROR = { continue | abort } ]
 ```
 
-| Parameters           | Description                                                                                                                                       | Required |
+| Parameter           | Description                                                                                                                                       | Required |
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
-| `SIZE_LIMIT = <num>` | Specifies the maximum rows of data to be loaded for a given COPY statement. Defaults to `0` meaning no limits.                                    | Optional |
-| `PURGE = <bool>`     | If `True`, the command will purge the files in the stage after they are loaded successfully into the table. Default: `False`.                     | Optional |
-| `FORCE = <bool>`     | Defaults to `False` meaning the command will skip duplicate files in the stage when copying data. If `True`, duplicate files will not be skipped. | Optional |
+| SIZE_LIMIT   | Specifies the maximum rows of data to be loaded for a given COPY statement. Defaults to `0` meaning no limits.                                    | Optional |
+| PURGE        | If `True`, the command will purge the files in the stage after they are loaded successfully into the table. Default: `False`.                     | Optional |
+| FORCE        | Defaults to `False` meaning the command will skip duplicate files in the stage when copying data. If `True`, duplicate files will not be skipped. | Optional |
+| ON_ERROR     | Provides options to handle a file containing errors. Select `continue` to skip the file and continue, or `abort` (default) to abort the load operation. | Optional |
 
 ## Examples
 
@@ -250,12 +252,12 @@ COPY INTO mytable
 
 **Remote Files**
 
-This example reads data from three remote CSV files and inserts it into a table:
+As shown in this example, data is loaded from three remote CSV files, but a file will be skipped if it contains errors:
 
 ```sql
 COPY INTO mytable
     FROM 'https://repo.databend.rs/dataset/stateful/ontime_200{6,7,8}_200.csv'
-    FILE_FORMAT = (type = 'CSV');
+    FILE_FORMAT = (type = 'CSV') ON_ERROR=continue;
 ```
 
 **IPFS**
