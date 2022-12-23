@@ -328,13 +328,13 @@ impl BlockReader {
         }
         let now = SystemTime::now();
         let mut final_result = Vec::new();
-        let mut merge_results = futures::future::try_join_all(merge_io_handlers).await?;
-        merge_results.sort_by(|a, b| a.0.cmp(&b.0));
+        let merge_results = futures::future::try_join_all(merge_io_handlers).await?;
         for index in indices.keys() {
             let column_meta = &part.columns_meta[index];
             let column_start = column_meta.offset;
             let column_end = column_start + column_meta.len;
 
+            // Find the range index and range.
             let range_idx = range_merger.get(column_start..column_end);
             let (idx, range) = match range_idx {
                 None => Err(ErrorCode::Internal(format!(
@@ -343,10 +343,30 @@ impl BlockReader {
                 ))),
                 Some((i, r)) => Ok((i, r)),
             }?;
-            let data = &merge_results[idx].1;
-            let column_data = data
-                [(column_start - range.start) as usize..(column_end - column_start) as usize]
-                .to_vec();
+
+            // For loop but not move data.
+            let mut range_data = None;
+            for (i, data) in &merge_results {
+                if *i == idx {
+                    range_data = Some(data);
+                    break;
+                }
+            }
+
+            // Range must contain the column range [start, end].
+            // [1,5]: -----   rr
+            // [2,4]:  ---    r2
+            // [1,5]: -----   r3
+            // r2 data is:
+            // start = r2.start - rr.start - 1 = 1
+            //  end  = r2.end   - rr.start - 1 = 3
+            // r3 data is:
+            // start = r3.start - rr.start = 0
+            //  end  = r3.end   - rr.start = 4
+            // Here has data copy.
+            let start = (range.start - column_start) as usize;
+            let end = (range.end - column_start) as usize;
+            let column_data = range_data.unwrap()[start..=end].to_vec();
             final_result.push((*index, column_data));
         }
 
