@@ -204,6 +204,23 @@ impl JoinHashTable {
         }
     }
 
+    pub(crate) fn get_nullable_filter_column(
+        &self,
+        merged_chunk: &Chunk,
+        filter: &Expr,
+    ) -> Result<Column> {
+        let func_ctx = self.ctx.try_get_function_context()?;
+        let evaluator = Evaluator::new(merged_chunk, func_ctx, &BUILTIN_FUNCTIONS);
+        let filter_vector: Value<AnyType> = evaluator.run(filter)?;
+        let filter_vector =
+            filter_vector.convert_to_full_column(filter.data_type(), merged_chunk.num_rows());
+
+        match type_vector {
+            Column::Nullable(_) => Ok(type_vector),
+            other => Ok(Column::Nullable(Box::new(other))),
+        }
+    }
+
     pub(crate) fn find_unmatched_build_indexes(
         &self,
         row_state: &[Vec<usize>],

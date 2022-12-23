@@ -162,17 +162,8 @@ impl JoinHashTable {
                             let build_chunk = self.row_space.gather(&build_indexes)?;
                             let merged_chunk = self.merge_eq_chunk(&build_chunk, &probe_chunk)?;
 
-                            let evaluator =
-                                Evaluator::new(&input, func_ctx.clone(), &BUILTIN_FUNCTIONS);
-                            let type_vector =
-                                evaluator.run(&other_predicate)?.convert_to_full_column(
-                                    other_predicate.data_type(),
-                                    input.num_rows(),
-                                );
-                            let filter = match type_vector {
-                                Column::Nullable(_) => type_vector,
-                                other => Column::Nullable(Box::new(other)),
-                            };
+                            let filter =
+                                self.get_nullable_filter_column(&merged_chunk, other_predicate)?;
                             let filter_viewer =
                                 NullableType::<BooleanType>::try_downcast_column(&filter).unwrap();
                             let validity = &filter_viewer.validity;
@@ -205,15 +196,7 @@ impl JoinHashTable {
         let build_chunk = self.row_space.gather(&build_indexes)?;
         let merged_chunk = self.merge_eq_chunk(&build_chunk, &probe_chunk)?;
 
-        let evaluator = Evaluator::new(&merged_chunk, func_ctx.clone(), &BUILTIN_FUNCTIONS);
-        let type_vector = evaluator
-            .run(&other_predicate)?
-            .convert_to_full_column(other_predicate.data_type(), merged_chunk.num_rows());
-
-        let filter = match type_vector {
-            Column::Nullable(_) => type_vector,
-            other => Column::Nullable(Box::new(other)),
-        };
+        let filter = self.get_nullable_filter_column(&merged_chunk, other_predicate)?;
         let filter_viewer = NullableType::<BooleanType>::try_downcast_column(&filter).unwrap();
         let validity = &filter_viewer.validity;
         let data = &filter_viewer.column;
