@@ -20,7 +20,6 @@ use common_ast::Backtrace;
 use common_ast::Dialect;
 use common_base::base::tokio::runtime::Handle;
 use common_base::base::tokio::task::block_in_place;
-use common_base::runtime::GlobalIORuntime;
 use common_catalog::catalog_kind::CATALOG_DEFAULT;
 use common_catalog::plan::Expression;
 use common_catalog::table::Table;
