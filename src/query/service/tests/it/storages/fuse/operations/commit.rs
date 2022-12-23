@@ -80,7 +80,7 @@ use walkdir::WalkDir;
 use crate::storages::fuse::table_test_fixture::execute_query;
 use crate::storages::fuse::table_test_fixture::TestFixture;
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_occ_retry() -> Result<()> {
     let fixture = TestFixture::new().await;
     let db = fixture.default_db_name();
@@ -138,7 +138,7 @@ async fn test_fuse_occ_retry() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_last_snapshot_hint() -> Result<()> {
     let fixture = TestFixture::new().await;
     fixture.create_default_table().await?;
@@ -175,7 +175,7 @@ async fn test_last_snapshot_hint() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_abort_on_error() -> Result<()> {
     struct Case {
         update_meta_error: Option<ErrorCode>,

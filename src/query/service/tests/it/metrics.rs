@@ -22,7 +22,7 @@ use metrics::counter;
 
 pub static METRIC_TEST: &str = "metrics.test";
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_metric_server() -> common_exception::Result<()> {
     init_default_metrics_recorder();
     let mut service = MetricService::create()?;

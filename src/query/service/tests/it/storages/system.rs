@@ -92,7 +92,7 @@ async fn run_table_tests(
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_columns_table() -> Result<()> {
     let (_guard, ctx) = crate::tests::create_query_context().await?;
 
@@ -104,7 +104,7 @@ async fn test_columns_table() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_clusters_table() -> Result<()> {
     let (_guard, ctx) = crate::tests::create_query_context().await?;
     let table = ClustersTable::create(1);
@@ -119,7 +119,7 @@ async fn test_clusters_table() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_configs_table_basic() -> Result<()> {
     let mut mint = Mint::new("tests/it/storages/testdata");
     let file = &mut mint.new_goldenfile("configs_table_basic.txt").unwrap();
@@ -135,7 +135,7 @@ async fn test_configs_table_basic() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_configs_table_redact() -> Result<()> {
     let mut mint = Mint::new("tests/it/storages/testdata");
     let _file = &mut mint.new_goldenfile("configs_table_redact.txt").unwrap();
@@ -173,7 +173,7 @@ async fn test_configs_table_redact() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_contributors_table() -> Result<()> {
     let (_guard, ctx) = crate::tests::create_query_context().await?;
     let table = ContributorsTable::create(1);
@@ -186,7 +186,7 @@ async fn test_contributors_table() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_credits_table() -> Result<()> {
     let (_guard, ctx) = crate::tests::create_query_context().await?;
     let table = CreditsTable::create(1);
@@ -199,7 +199,7 @@ async fn test_credits_table() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_catalogs_table() -> Result<()> {
     let mut mint = Mint::new("tests/it/storages/testdata");
     let file = &mut mint.new_goldenfile("catalogs_table.txt").unwrap();
@@ -211,7 +211,7 @@ async fn test_catalogs_table() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_databases_table() -> Result<()> {
     let (_guard, ctx) = crate::tests::create_query_context().await?;
     let table = DatabasesTable::create(1);
@@ -223,7 +223,7 @@ async fn test_databases_table() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_engines_table() -> Result<()> {
     let (_guard, ctx) = crate::tests::create_query_context().await?;
     let table = EnginesTable::create(1);
@@ -235,7 +235,7 @@ async fn test_engines_table() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_functions_table() -> Result<()> {
     let (_guard, ctx) = crate::tests::create_query_context().await?;
     let table = FunctionsTable::create(1);
@@ -248,7 +248,7 @@ async fn test_functions_table() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_metrics_table() -> Result<()> {
     init_default_metrics_recorder();
     let (_guard, ctx) = crate::tests::create_query_context().await?;
@@ -271,7 +271,7 @@ async fn test_metrics_table() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_roles_table() -> Result<()> {
     let mut mint = Mint::new("tests/it/storages/testdata");
     let file = &mut mint.new_goldenfile("roles_table.txt").unwrap();
@@ -300,7 +300,7 @@ async fn test_roles_table() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_settings_table() -> Result<()> {
     let mut mint = Mint::new("tests/it/storages/testdata");
     let file = &mut mint.new_goldenfile("settings_table.txt").unwrap();
@@ -315,7 +315,7 @@ async fn test_settings_table() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_tables_table() -> Result<()> {
     let (_guard, ctx) = crate::tests::create_query_context().await?;
     let table = TablesTableWithoutHistory::create(1);
@@ -383,7 +383,7 @@ async fn test_tables_table() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_tracing_table() -> Result<()> {
     let (_guard, ctx) = crate::tests::create_query_context().await?;
     let table: Arc<dyn Table> = Arc::new(TracingTable::create(1));
@@ -398,7 +398,7 @@ async fn test_tracing_table() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_users_table() -> Result<()> {
     let mut mint = Mint::new("tests/it/storages/testdata");
     let file = &mut mint.new_goldenfile("users_table.txt").unwrap();
