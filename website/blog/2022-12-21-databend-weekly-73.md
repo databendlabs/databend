@@ -69,11 +69,11 @@ Check out what we've done this week to make Databend even better for you.
 
 Stay connected with the latest news about Databend.
 
-#### Introduce Rust Native Sqllogictest Framework
+#### Introduced a Rust Native Sqllogictest Framework
 
-Sqllogictest is a program designed to verify that an SQL database engine computes correct results by comparing the results to identical queries from other SQL database engines. 
+Sqllogictest verifies the results returned from a SQL database engine by comparing them with the results of other engines for the same queries.
 
-In the past, Databend has run this test using a program written in Python and has migrated a large number of test cases from other successful databases. Recently, we have reimplemented this program with [sqllogictest-rs](https://github.com/risinglightdb/sqllogictest-rs) using Rust.
+In the past, Databend ran such tests using a program written in Python and migrated a large number of test cases from other popular databases. We implemented the program again with [sqllogictest-rs](https://github.com/risinglightdb/sqllogictest-rs) in recent days.
 
 **Learn More**
 
@@ -82,9 +82,9 @@ In the past, Databend has run this test using a program written in Python and ha
 
 #### Experimental: Native Format
 
-[PA](https://github.com/sundy-li/pa) is a native storage format based on Apache Arrow. PA is similar to [Arrow IPC](https://arrow.apache.org/docs/python/ipc.html) and is primarily aimed at optimizing the storage layer. We hope to use it in databend as another storage_format, and it is currently in a very early stage.
+[PA](https://github.com/sundy-li/pa) is a native storage format based on Apache Arrow. Similar to [Arrow IPC](https://arrow.apache.org/docs/python/ipc.html), PA aims at optimizing the storage layer.
 
-We tried to introduce it as a native storage format and got a considerable performance.
+Databend is introducing PA as a native storage format in the hope of getting a performance boost, though it's still at an early stage of development.
 
 ```sql
 create table tmp (a int) ENGINE=FUSE STORAGE_FORMAT='native';
@@ -99,9 +99,9 @@ create table tmp (a int) ENGINE=FUSE STORAGE_FORMAT='native';
 
 We're always open to cutting-edge technologies and innovative ideas. You're more than welcome to join the community and bring them to Databend.
 
-#### Check If the File Exists before Returning the Presigned URL
+#### Checking File Existence Before Returning Presigned URL​
 
-Currently, Databend only returns a potentially valid URL based on the filename when presigning, and does not care whether the file exists or not. This means that if the file does not exist, a 404 may be encountered.
+When presigning a file, Databend currently returns a potentially valid URL based on the filename without checking if the file really exists. Thus, the 404 error might occur if the file doesn't exist at all.
 
 [Issue 8702: Before return presign url add file exist judgement](https://github.com/datafuselabs/databend/issues/8702)
 
