@@ -1142,8 +1142,17 @@ impl Column {
 
     /// Returns (is_all_null,  Option bitmap)
     pub fn validity(&self) -> (bool, Option<&Bitmap>) {
-        // todo("expression")
-        (false, None)
+        match self {
+            Column::Null { .. } => (true, None),
+            Column::Nullable(c) => {
+                if c.validity.unset_bits() == c.validity.len() {
+                    (true, None)
+                } else {
+                    (false, Some(&c.validity))
+                }
+            }
+            _ => (false, None),
+        }
     }
 }
 

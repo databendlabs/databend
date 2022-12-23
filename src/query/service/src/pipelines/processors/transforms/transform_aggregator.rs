@@ -19,6 +19,7 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::Chunk;
+use common_expression::HashMethodKind;
 
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
@@ -47,7 +48,92 @@ impl TransformAggregator {
             );
         }
 
-        todo!("expression");
+        match aggregator_params.aggregate_functions.is_empty() {
+            true => match transform_params.method.clone() {
+                HashMethodKind::KeysU8(method) => AggregatorTransform::create(
+                    ctx.clone(),
+                    transform_params,
+                    KeysU8FinalAggregator::<false>::create(ctx, method, aggregator_params)?,
+                ),
+                HashMethodKind::KeysU16(method) => AggregatorTransform::create(
+                    ctx.clone(),
+                    transform_params,
+                    KeysU16FinalAggregator::<false>::create(ctx, method, aggregator_params)?,
+                ),
+                HashMethodKind::KeysU32(method) => AggregatorTransform::create(
+                    ctx.clone(),
+                    transform_params,
+                    KeysU32FinalAggregator::<false>::create(ctx, method, aggregator_params)?,
+                ),
+                HashMethodKind::KeysU64(method) => AggregatorTransform::create(
+                    ctx.clone(),
+                    transform_params,
+                    KeysU64FinalAggregator::<false>::create(ctx, method, aggregator_params)?,
+                ),
+                HashMethodKind::Serializer(method) => AggregatorTransform::create(
+                    ctx.clone(),
+                    transform_params,
+                    SerializerFinalAggregator::<false>::create(ctx, method, aggregator_params)?,
+                ),
+                HashMethodKind::KeysU128(method) => AggregatorTransform::create(
+                    ctx.clone(),
+                    transform_params,
+                    KeysU128FinalAggregator::<false>::create(ctx, method, aggregator_params)?,
+                ),
+                HashMethodKind::KeysU256(method) => AggregatorTransform::create(
+                    ctx.clone(),
+                    transform_params,
+                    KeysU256FinalAggregator::<false>::create(ctx, method, aggregator_params)?,
+                ),
+                HashMethodKind::KeysU512(method) => AggregatorTransform::create(
+                    ctx.clone(),
+                    transform_params,
+                    KeysU512FinalAggregator::<false>::create(ctx, method, aggregator_params)?,
+                ),
+            },
+            false => match transform_params.method.clone() {
+                HashMethodKind::KeysU8(method) => AggregatorTransform::create(
+                    ctx.clone(),
+                    transform_params,
+                    KeysU8FinalAggregator::<true>::create(ctx, method, aggregator_params)?,
+                ),
+                HashMethodKind::KeysU16(method) => AggregatorTransform::create(
+                    ctx.clone(),
+                    transform_params,
+                    KeysU16FinalAggregator::<true>::create(ctx, method, aggregator_params)?,
+                ),
+                HashMethodKind::KeysU32(method) => AggregatorTransform::create(
+                    ctx.clone(),
+                    transform_params,
+                    KeysU32FinalAggregator::<true>::create(ctx, method, aggregator_params)?,
+                ),
+                HashMethodKind::KeysU64(method) => AggregatorTransform::create(
+                    ctx.clone(),
+                    transform_params,
+                    KeysU64FinalAggregator::<true>::create(ctx, method, aggregator_params)?,
+                ),
+                HashMethodKind::Serializer(method) => AggregatorTransform::create(
+                    ctx.clone(),
+                    transform_params,
+                    SerializerFinalAggregator::<true>::create(ctx, method, aggregator_params)?,
+                ),
+                HashMethodKind::KeysU128(method) => AggregatorTransform::create(
+                    ctx.clone(),
+                    transform_params,
+                    KeysU128FinalAggregator::<true>::create(ctx, method, aggregator_params)?,
+                ),
+                HashMethodKind::KeysU256(method) => AggregatorTransform::create(
+                    ctx.clone(),
+                    transform_params,
+                    KeysU256FinalAggregator::<true>::create(ctx, method, aggregator_params)?,
+                ),
+                HashMethodKind::KeysU512(method) => AggregatorTransform::create(
+                    ctx.clone(),
+                    transform_params,
+                    KeysU512FinalAggregator::<true>::create(ctx, method, aggregator_params)?,
+                ),
+            },
+        }
     }
 
     pub fn try_create_partial(
@@ -65,7 +151,92 @@ impl TransformAggregator {
             );
         }
 
-        todo!("expression");
+        match aggregator_params.aggregate_functions.is_empty() {
+            true => match transform_params.method.clone() {
+                HashMethodKind::KeysU8(method) => AggregatorTransform::create(
+                    ctx,
+                    transform_params,
+                    Keys8Grouper::create(method, aggregator_params)?,
+                ),
+                HashMethodKind::KeysU16(method) => AggregatorTransform::create(
+                    ctx,
+                    transform_params,
+                    Keys16Grouper::create(method, aggregator_params)?,
+                ),
+                HashMethodKind::KeysU32(method) => AggregatorTransform::create(
+                    ctx,
+                    transform_params,
+                    Keys32Grouper::create(method, aggregator_params)?,
+                ),
+                HashMethodKind::KeysU64(method) => AggregatorTransform::create(
+                    ctx,
+                    transform_params,
+                    Keys64Grouper::create(method, aggregator_params)?,
+                ),
+                HashMethodKind::KeysU128(method) => AggregatorTransform::create(
+                    ctx,
+                    transform_params,
+                    Keys128Grouper::create(method, aggregator_params)?,
+                ),
+                HashMethodKind::KeysU256(method) => AggregatorTransform::create(
+                    ctx,
+                    transform_params,
+                    Keys256Grouper::create(method, aggregator_params)?,
+                ),
+                HashMethodKind::KeysU512(method) => AggregatorTransform::create(
+                    ctx,
+                    transform_params,
+                    Keys512Grouper::create(method, aggregator_params)?,
+                ),
+                HashMethodKind::Serializer(method) => AggregatorTransform::create(
+                    ctx,
+                    transform_params,
+                    KeysSerializerGrouper::create(method, aggregator_params)?,
+                ),
+            },
+            false => match transform_params.method.clone() {
+                HashMethodKind::KeysU8(method) => AggregatorTransform::create(
+                    ctx,
+                    transform_params,
+                    Keys8Aggregator::create(method, aggregator_params)?,
+                ),
+                HashMethodKind::KeysU16(method) => AggregatorTransform::create(
+                    ctx,
+                    transform_params,
+                    Keys16Aggregator::create(method, aggregator_params)?,
+                ),
+                HashMethodKind::KeysU32(method) => AggregatorTransform::create(
+                    ctx,
+                    transform_params,
+                    Keys32Aggregator::create(method, aggregator_params)?,
+                ),
+                HashMethodKind::KeysU64(method) => AggregatorTransform::create(
+                    ctx,
+                    transform_params,
+                    Keys64Aggregator::create(method, aggregator_params)?,
+                ),
+                HashMethodKind::KeysU128(method) => AggregatorTransform::create(
+                    ctx,
+                    transform_params,
+                    Keys128Aggregator::create(method, aggregator_params)?,
+                ),
+                HashMethodKind::KeysU256(method) => AggregatorTransform::create(
+                    ctx,
+                    transform_params,
+                    Keys256Aggregator::create(method, aggregator_params)?,
+                ),
+                HashMethodKind::KeysU512(method) => AggregatorTransform::create(
+                    ctx,
+                    transform_params,
+                    Keys512Aggregator::create(method, aggregator_params)?,
+                ),
+                HashMethodKind::Serializer(method) => AggregatorTransform::create(
+                    ctx,
+                    transform_params,
+                    KeysSerializerAggregator::create(method, aggregator_params)?,
+                ),
+            },
+        }
     }
 }
 

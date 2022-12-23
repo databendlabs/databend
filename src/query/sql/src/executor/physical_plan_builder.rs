@@ -25,6 +25,7 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::type_check;
+use common_expression::type_check::check;
 use common_expression::types::DataType;
 use common_expression::Chunk;
 use common_expression::DataSchemaRef;
@@ -471,19 +472,15 @@ impl PhysicalPlanBuilder {
         let push_down_filters = scan
             .push_down_predicates
             .clone()
-            .map(|_| -> Result<Vec<RemoteExpr<String>>> {
-                todo!("expression")
-                // let builder = ExpressionBuilderWithoutRenaming::create(self.metadata.clone());
-                // predicates
-                //     .into_iter()
-                //     .map(|scalar| {
-                //         let expression = builder.build(&scalar)?;
-                //         ExpressionBuilderWithoutRenaming::normalize_schema(
-                //             &expression,
-                //             &project_schema,
-                //         )
-                //     })
-                //     .collect::<Result<Vec<_>>>()
+            .map(|predicates| -> Result<Vec<RemoteExpr<String>>> {
+                predicates
+                    .into_iter()
+                    .map(|scalar| {
+                        let raw_expr = scalar.as_raw_expr();
+                        let filter = check(&raw_expr, &BUILTIN_FUNCTIONS)?;
+                        RemoteExpr::from_expr(&filter)
+                    })
+                    .collect::<Result<Vec<_>>>()
             })
             .transpose()?;
 
@@ -496,20 +493,10 @@ impl PhysicalPlanBuilder {
                 } else {
                     let mut scalar = prewhere.predicates[0].clone();
                     for predicate in prewhere.predicates.iter().skip(1) {
-                        let registry = &BUILTIN_FUNCTIONS;
-                        let raw_expr = RawExpr::FunctionCall {
-                            span: None,
-                            name: "and".to_string(),
-                            params: vec![],
-                            args: vec![scalar.as_raw_expr(), predicate.as_raw_expr()],
-                        };
-                        let expr = type_check::check(&raw_expr, registry)
-                            .map_err(|(_, e)| ErrorCode::Internal(e))?;
-
                         scalar = Scalar::AndExpr(AndExpr {
                             left: Box::new(scalar),
                             right: Box::new(predicate.clone()),
-                            return_type: Box::new(expr.data_type().clone()),
+                            return_type: Box::new(DataType::Boolean),
                         });
                     }
 
@@ -521,43 +508,42 @@ impl PhysicalPlanBuilder {
                     "There should be at least one predicate in prewhere"
                 );
 
-                todo!("expression");
-                // let builder = ExpressionBuilderWithoutRenaming::create(self.metadata.clone());
-                // let filter = builder.build(&predicate.unwrap())?;
-                // let filter =
-                //     ExpressionBuilderWithoutRenaming::normalize_schema(&filter, &project_schema)?;
+                let filter = predicate.unwrap().as_raw_expr();
+                let filter = check(&filter, &BUILTIN_FUNCTIONS)
+                    .map_err(|(_, _)| ErrorCode::Internal("Invalid expression"))?;
+                let filter = RemoteExpr::from_expr(&filter);
 
-                // let remain_columns = scan
-                //     .columns
-                //     .difference(&prewhere.prewhere_columns)
-                //     .copied()
-                //     .collect::<HashSet<usize>>();
-                //
-                // let output_columns = Self::build_projection(
-                //     &metadata,
-                //     table_schema,
-                //     &prewhere.output_columns,
-                //     has_inner_column,
-                // );
-                // let prewhere_columns = Self::build_projection(
-                //     &metadata,
-                //     table_schema,
-                //     &prewhere.prewhere_columns,
-                //     has_inner_column,
-                // );
-                // let remain_columns = Self::build_projection(
-                //     &metadata,
-                //     table_schema,
-                //     &remain_columns,
-                //     has_inner_column,
-                // );
-                //
-                // Ok::<PrewhereInfo, ErrorCode>(PrewhereInfo {
-                //     output_columns,
-                //     prewhere_columns,
-                //     remain_columns,
-                //     filter,
-                // })
+                let remain_columns = scan
+                    .columns
+                    .difference(&prewhere.prewhere_columns)
+                    .copied()
+                    .collect::<HashSet<usize>>();
+
+                let output_columns = Self::build_projection(
+                    &metadata,
+                    table_schema,
+                    &prewhere.output_columns,
+                    has_inner_column,
+                );
+                let prewhere_columns = Self::build_projection(
+                    &metadata,
+                    table_schema,
+                    &prewhere.prewhere_columns,
+                    has_inner_column,
+                );
+                let remain_columns = Self::build_projection(
+                    &metadata,
+                    table_schema,
+                    &remain_columns,
+                    has_inner_column,
+                );
+
+                Ok::<PrewhereInfo, ErrorCode>(PrewhereInfo {
+                    output_columns,
+                    prewhere_columns,
+                    remain_columns,
+                    filter,
+                })
             })
             .transpose()?;
 

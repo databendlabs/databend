@@ -17,14 +17,14 @@ use std::sync::Arc;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::Chunk;
+use common_expression::ChunkEntry;
 use common_expression::DataField;
 use common_expression::DataSchemaRef;
+use common_expression::DataSchemaRefExt;
+use common_expression::Value;
+use common_sql::evaluator::ChunkOperator;
+use common_sql::evaluator::CompoundChunkOperator;
 
-// use common_sql::evaluator::ChunkOperator;
-// use common_sql::evaluator::CompoundChunkOperator;
-
-// use common_sql::evaluator::ChunkOperator;
-// use common_sql::evaluator::CompoundChunkOperator;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::ProcessorPtr;
@@ -34,10 +34,11 @@ use crate::sessions::QueryContext;
 use crate::sql::evaluator::Evaluator;
 
 pub struct TransformAddOn {
-    default_expr_fields: Vec<DataField>,
     default_nonexpr_fields: Vec<DataField>,
 
-    // expression_transform: CompoundChunkOperator, todo!("expression");
+    expression_transform: CompoundChunkOperator,
+
+    unresort_schema: DataSchemaRef,
     output_schema: DataSchemaRef,
 }
 
@@ -51,39 +52,40 @@ where Self: Transform
         output_schema: DataSchemaRef,
         ctx: Arc<QueryContext>,
     ) -> Result<ProcessorPtr> {
-        let mut default_expr_fields = Vec::new();
         let mut default_exprs = Vec::new();
         let mut default_nonexpr_fields = Vec::new();
 
-        for f in output_schema.fields() {
+        let mut unresort_fields = output_schema.fields().clone();
+
+        for (index, f) in output_schema.fields().iter().enumerate() {
             if !input_schema.has_field(f.name()) {
                 if let Some(default_expr) = f.default_expr() {
-                    default_exprs.push(ChunkOperator::Map {
-                        name: f.name().to_string(),
-                        eval: Evaluator::eval_physical_scalar(&serde_json::from_str(
-                            default_expr,
-                        )?)?,
-                    });
-                    default_expr_fields.push(f.clone());
+                    todo!("expression");
+                    // default_exprs.push(ChunkOperator::Map {
+                    //     index,
+                    //     eval: Evaluator::eval_physical_scalar(&serde_json::from_str(
+                    //         default_expr,
+                    //     )?)?,
+                    // });
                 } else {
                     default_nonexpr_fields.push(f.clone());
+                    unresort_fields.push(f.clone());
                 }
             }
         }
 
-        todo!("expression");
-        // let func_ctx = ctx.try_get_function_context()?;
-        // let expression_transform = CompoundChunkOperator {
-        //     ctx: func_ctx,
-        //     operators: default_exprs,
-        // };
+        let func_ctx = ctx.try_get_function_context()?;
+        let expression_transform = CompoundChunkOperator {
+            ctx: func_ctx,
+            operators: default_exprs,
+        };
 
-        // Ok(Transformer::create(input, output, Self {
-        //     default_expr_fields,
-        //     default_nonexpr_fields,
-        //     expression_transform,
-        //     output_schema,
-        // }))
+        Ok(Transformer::create(input, output, Self {
+            default_nonexpr_fields,
+            expression_transform,
+            unresort_schema: DataSchemaRefExt::create(unresort_fields),
+            output_schema,
+        }))
     }
 }
 
@@ -92,22 +94,18 @@ impl Transform for TransformAddOn {
 
     fn transform(&mut self, mut chunk: Chunk) -> Result<Chunk> {
         let num_rows = chunk.num_rows();
-        let expr_chunk = self.expression_transform.transform(chunk.clone())?;
-
-        for f in self.default_expr_fields.iter() {
-            let index = self.output_schema.index_of(f.name())?;
-            let (value, ty) = expr_chunk.column(index);
-            chunk = chunk.add_column(value.clone(), ty.clone())
-        }
+        chunk = self.expression_transform.transform(chunk.clone())?;
 
         for f in &self.default_nonexpr_fields {
             let default_value = f.data_type().default_value();
-            let column = f
-                .data_type()
-                .create_constant_column(&default_value, num_rows)?;
-
-            chunk = chunk.add_column(column, f.clone())?;
+            let column = ChunkEntry {
+                id: chunk.num_columns(),
+                data_type: f.data_type().clone(),
+                value: Value::Scalar(default_value),
+            };
+            chunk = chunk.add_column(column)?;
         }
-        chunk.resort(self.output_schema.clone())
+
+        chunk.resort(self.unresort_schema.clone(), self.output_schema.clone())
     }
 }
