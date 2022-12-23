@@ -26,10 +26,8 @@ use common_expression::FunctionContext;
 use common_expression::RawExpr;
 use common_expression::SortColumnDescription;
 use common_expression::TableDataType;
-use common_functions::aggregates::AggregateFunctionFactory;
-use common_functions::aggregates::AggregateFunctionRef;
-use common_functions::scalars::CastFunction;
-use common_functions::scalars::FunctionFactory;
+use common_functions_v2::aggregates::AggregateFunctionFactory;
+use common_functions_v2::aggregates::AggregateFunctionRef;
 use common_pipeline_core::Pipe;
 use common_pipeline_sinks::processors::sinks::EmptySink;
 use common_pipeline_sinks::processors::sinks::UnionReceiveSink;
@@ -57,10 +55,6 @@ use common_sql::plans::JoinType;
 use common_sql::ColumnBinding;
 use common_sql::IndexType;
 
-// use common_sql::evaluator::ChunkOperator;
-// use common_sql::evaluator::CompoundChunkOperator;
-// use common_sql::executor::AggregateFunctionDesc;
-// use common_sql::executor::PhysicalScalar;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::transforms::HashJoinDesc;
 use crate::pipelines::processors::transforms::RightSemiAntiJoinCompactor;
@@ -415,39 +409,31 @@ impl PipelineBuilder {
         group_by: &[IndexType],
         agg_funcs: &[AggregateFunctionDesc],
     ) -> Result<Arc<AggregatorParams>> {
-        todo!("expression");
-        // let mut output_names = Vec::with_capacity(agg_funcs.len() + group_by.len());
-        // let mut agg_args = Vec::with_capacity(agg_funcs.len());
-        // let aggs: Vec<AggregateFunctionRef> = agg_funcs
-        //     .iter()
-        //     .map(|agg_func| {
-        //         agg_args.push(agg_func.args.clone());
-        //         AggregateFunctionFactory::instance().get(
-        //             agg_func.sig.name.as_str(),
-        //             agg_func.sig.params.clone(),
-        //             agg_func
-        //                 .args
-        //                 .iter()
-        //                 .map(|&index| input_schema.field(index))
-        //                 .cloned()
-        //                 .collect(),
-        //         )
-        //     })
-        //     .collect::<Result<_>>()?;
-        // for agg in agg_funcs {
-        //     output_names.push(agg.column_id.clone());
-        // }
+        let mut output_names = Vec::with_capacity(agg_funcs.len() + group_by.len());
+        let mut agg_args = Vec::with_capacity(agg_funcs.len());
+        let aggs: Vec<AggregateFunctionRef> = agg_funcs
+            .iter()
+            .map(|agg_func| {
+                agg_args.push(agg_func.args.clone());
+                AggregateFunctionFactory::instance().get(
+                    agg_func.sig.name.as_str(),
+                    agg_func.sig.params.clone(),
+                    agg_func
+                        .args
+                        .iter()
+                        .map(|&index| input_schema.field(index))
+                        .cloned()
+                        .collect(),
+                )
+            })
+            .collect::<Result<_>>()?;
+        for agg in agg_funcs {
+            output_names.push(agg.column_id.clone());
+        }
 
-        // let params = AggregatorParams::try_create(
-        //     output_schema,
-        //     before_schema,
-        //     &group_columns,
-        //     &aggs,
-        //     &output_names,
-        //     &agg_args,
-        // )?;
+        let params = AggregatorParams::try_create(&group_columns, &aggs, &output_names, &agg_args)?;
 
-        // Ok(params)
+        Ok(params)
     }
 
     fn build_sort(&mut self, sort: &Sort) -> Result<()> {

@@ -151,7 +151,7 @@ mod util {
     use common_storages_index::FilterEvalResult;
 
     use super::*;
-    // #[tracing::instrument(level = "debug", skip_all)] todo!("expression");
+    #[tracing::instrument(level = "debug", skip_all)]
     pub async fn should_keep_by_filter(
         ctx: Arc<dyn TableContext>,
         dal: Operator,
@@ -166,7 +166,6 @@ mod util {
             .read_filter(ctx.clone(), dal, filter_col_names, index_length)
             .await;
 
-        // todo!("expression")
         match maybe_filter {
             Ok(filter) => Ok(ChunkFilter::from_filter_chunk(
                 ctx.try_get_function_context()?,

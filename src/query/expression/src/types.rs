@@ -32,6 +32,7 @@ use std::ops::Range;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::trusted_len::TrustedLen;
 use enum_as_inner::EnumAsInner;
+use ordered_float::OrderedFloat;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -45,6 +46,7 @@ pub use self::map::MapType;
 pub use self::null::NullType;
 pub use self::nullable::NullableType;
 pub use self::number::NumberDataType;
+use self::number::NumberScalar;
 pub use self::number::NumberType;
 use self::number::F32;
 use self::number::F64;
@@ -259,6 +261,36 @@ impl DataType {
             DataType::String => "VARCHAR".to_string(),
             DataType::Nullable(inner_ty) => format!("{} NULL", inner_ty.sql_name()),
             _ => self.to_string().to_uppercase(),
+        }
+    }
+
+    pub fn default_value(&self) -> Scalar {
+        match self {
+            DataType::Null => Scalar::Null,
+            DataType::EmptyArray => Scalar::EmptyArray,
+            DataType::Boolean => Scalar::Boolean(false),
+            DataType::String => Scalar::String(vec![]),
+            DataType::Number(num_ty) => Scalar::Number(match num_ty {
+                NumberDataType::UInt8 => NumberScalar::UInt8(0),
+                NumberDataType::UInt16 => NumberScalar::UInt16(0),
+                NumberDataType::UInt32 => NumberScalar::UInt32(0),
+                NumberDataType::UInt64 => NumberScalar::UInt64(0),
+                NumberDataType::Int8 => NumberScalar::Int8(0),
+                NumberDataType::Int16 => NumberScalar::Int16(0),
+                NumberDataType::Int32 => NumberScalar::Int32(0),
+                NumberDataType::Int64 => NumberScalar::Int64(0),
+                NumberDataType::Float32 => NumberScalar::Float32(OrderedFloat(0)),
+                NumberDataType::Float64 => NumberScalar::Float64(OrderedFloat(0)),
+            }),
+            DataType::Timestamp => Scalar::Timestamp(0),
+            DataType::Date => Scalar::Timestamp(0),
+            DataType::Nullable(_) => Scalar::Null,
+            DataType::Array(_) => Scalar::EmptyArray,
+            DataType::Tuple(tys) => {
+                Scalar::Tuple(tys.iter().map(|ty| ty.default_value()).collect())
+            }
+            DataType::Variant => Scalar::Variant(vec![]),
+            _ => unimplemented!(),
         }
     }
 }

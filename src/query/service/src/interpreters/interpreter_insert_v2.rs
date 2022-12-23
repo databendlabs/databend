@@ -20,28 +20,38 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use aho_corasick::AhoCorasick;
-use common_ast::ast::Expr;
+use common_ast::ast::Expr as AExpr;
 use common_ast::parser::parse_comma_separated_exprs;
+use common_ast::parser::parse_expr;
 use common_ast::parser::tokenize_sql;
 use common_ast::Backtrace;
+use common_ast::Dialect;
 use common_base::runtime::GlobalIORuntime;
 use common_catalog::plan::StageTableInfo;
 use common_catalog::table::AppendMode;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::type_check;
 use common_expression::types::number::NumberScalar;
 use common_expression::types::NumberDataType;
 use common_expression::Chunk;
+use common_expression::ChunkEntry;
 use common_expression::DataField;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
+use common_expression::Expr;
+use common_expression::Literal;
 use common_expression::Scalar as DataScalar;
+use common_expression::Span;
 use common_expression::TableDataType;
+use common_expression::TypeDeserializer;
+use common_expression::TypeDeserializerImpl;
 use common_expression::Value;
 use common_formats::parse_timezone;
 use common_formats::FastFieldDecoderValues;
 use common_io::cursor_ext::ReadBytesExt;
 use common_io::cursor_ext::ReadCheckPointExt;
+use common_io::prelude::FormatSettings;
 use common_meta_types::UserStageInfo;
 use common_pipeline_core::Pipeline;
 use common_pipeline_sources::processors::sources::AsyncSource;
@@ -50,9 +60,15 @@ use common_pipeline_transforms::processors::transforms::Transform;
 use common_sql::evaluator::ChunkOperator;
 use common_sql::evaluator::CompoundChunkOperator;
 use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
+use common_sql::executor::PhysicalScalar;
+use common_sql::executor::PhysicalScalarBuilder;
+use common_sql::plans::CastExpr;
+use common_sql::plans::ConstantExpr;
+use common_sql::plans::Scalar;
 use common_sql::Metadata;
 use common_sql::MetadataRef;
 use common_sql::PlannerContext;
+use common_sql::ScalarBinder;
 use common_storages_factory::Table;
 use common_storages_stage::StageAttachment;
 use common_storages_stage::StageTable;
@@ -490,13 +506,21 @@ impl ValueSource {
             return Ok(Chunk::empty());
         }
 
-        todo!("expression");
-        // let columns = desers
-        //     .iter_mut()
-        //     .map(|deser| deser.finish_to_column())
-        //     .collect::<Vec<_>>();
+        let columns = desers
+            .iter_mut()
+            .enumerate()
+            .zip(self.schema.fields())
+            .map(|((index, deser), field)| {
+                let col = deser.finish_to_column();
+                ChunkEntry {
+                    id: index,
+                    data_type: field.data_type().clone(),
+                    value: Value::Column(col),
+                }
+            })
+            .collect::<Vec<_>>();
 
-        // Ok(Chunk::new(columns, rows))
+        Ok(Chunk::new(columns, rows))
     }
 
     /// Parse single row value, like ('111', 222, 1 + 1)
@@ -576,8 +600,9 @@ impl ValueSource {
                 )
                 .await?;
 
+                let format = self.ctx.get_format_settings()?;
                 for (append_idx, deser) in desers.iter_mut().enumerate().take(col_size) {
-                    deser.append_data_value(values[append_idx].clone())?;
+                    deser.append_data_value(values[append_idx].clone(), &format)?;
                 }
                 reader.set_position(end_pos_of_row);
                 return Ok(());
@@ -646,30 +671,42 @@ pub fn skip_to_next_row<R: AsRef<[u8]>>(reader: &mut Cursor<R>, mut balance: i32
     Ok(())
 }
 
-fn fill_default_value(operators: &mut Vec<ChunkOperator>, field: &DataField) -> Result<()> {
+async fn fill_default_value(
+    binder: &mut ScalarBinder,
+    index: usize,
+    operators: &mut Vec<ChunkOperator>,
+    field: &DataField,
+) -> Result<()> {
     if let Some(default_expr) = field.default_expr() {
+        let tokens = tokenize_sql(default_expr)?;
+        let ast = parse_expr(&tokens, Dialect::PostgreSQL, &Backtrace::new())?;
+        let (scalar, ty) = binder.bind(&ast).await?;
+        let scalar = PhysicalScalarBuilder::new().build(&scalar)?;
         operators.push(ChunkOperator::Map {
-            eval: Evaluator::eval_physical_scalar(&serde_json::from_str(default_expr)?)?,
-            name: field.name().to_string(),
+            index,
+            expr: scalar.as_expr()?,
         });
     } else {
         // If field data type is nullable, then we'll fill it with null.
         if field.data_type().is_nullable() {
-            let scalar = Scalar::ConstantExpr(ConstantExpr {
-                value: DataValue::Null,
-                data_type: Box::new(field.data_type().clone()),
-            });
             operators.push(ChunkOperator::Map {
-                eval: Evaluator::eval_scalar(&scalar)?,
-                name: field.name().to_string(),
+                index,
+                expr: Expr::Constant {
+                    span: None,
+                    scalar: DataScalar::Null,
+                    data_type: field.data_type().clone(),
+                },
             });
         } else {
+            let data_type = field.data_type().clone();
+            let default_value = data_type.default_value();
             operators.push(ChunkOperator::Map {
-                eval: Evaluator::eval_scalar(&Scalar::ConstantExpr(ConstantExpr {
-                    value: field.data_type().default_value(),
-                    data_type: Box::new(field.data_type().clone()),
-                }))?,
-                name: field.name().to_string(),
+                index,
+                expr: Expr::Constant {
+                    span: None,
+                    scalar: default_value,
+                    data_type,
+                },
             });
         }
     }
@@ -677,7 +714,7 @@ fn fill_default_value(operators: &mut Vec<ChunkOperator>, field: &DataField) -> 
 }
 
 async fn exprs_to_scalar<'a>(
-    exprs: Vec<Expr<'a>>,
+    exprs: Vec<AExpr<'a>>,
     schema: &DataSchemaRef,
     ctx: Arc<dyn PlannerContext>,
     name_resolution_ctx: &NameResolutionContext,
@@ -691,22 +728,25 @@ async fn exprs_to_scalar<'a>(
         ));
     }
     let mut operators = Vec::with_capacity(schema_fields_len);
+    let physical_builder = PhysicalScalarBuilder::new();
+    let mut scalar_binder = ScalarBinder::new(
+        bind_context,
+        ctx.clone(),
+        name_resolution_ctx,
+        metadata.clone(),
+        &[],
+    );
+
     for (i, expr) in exprs.iter().enumerate() {
         // `DEFAULT` in insert values will be parsed as `Expr::ColumnRef`.
-        if let Expr::ColumnRef { column, .. } = expr {
+        if let AExpr::ColumnRef { column, .. } = expr {
             if column.name.eq_ignore_ascii_case("default") {
                 let field = schema.field(i);
-                fill_default_value(&mut operators, field)?;
+                fill_default_value(&mut scalar_binder, i, &mut operators, field).await?;
                 continue;
             }
         }
-        let mut scalar_binder = ScalarBinder::new(
-            bind_context,
-            ctx.clone(),
-            name_resolution_ctx,
-            metadata.clone(),
-            &[],
-        );
+
         let (mut scalar, data_type) = scalar_binder.bind(expr).await?;
         let field_data_type = schema.field(i).data_type();
         if data_type != field_data_type {
@@ -716,9 +756,10 @@ async fn exprs_to_scalar<'a>(
                 target_type: Box::new(field_data_type.clone()),
             })
         }
+        let scalar = physical_builder.build(&scalar)?;
         operators.push(ChunkOperator::Map {
-            eval: Evaluator::eval_scalar(&scalar)?,
-            name: schema.field(i).name().to_string(),
+            index: i,
+            expr: scalar.as_expr()?,
         });
     }
 

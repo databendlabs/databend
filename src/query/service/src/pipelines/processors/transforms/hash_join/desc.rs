@@ -16,8 +16,9 @@ use common_arrow::arrow::bitmap::MutableBitmap;
 use common_exception::Result;
 use common_expression::Chunk;
 use common_functions::scalars::FunctionFactory;
-// use common_sql::executor::PhysicalScalar;
-// use common_sql::IndexType;
+use common_sql::executor::HashJoin;
+use common_sql::executor::PhysicalScalar;
+use common_sql::IndexType;
 use parking_lot::RwLock;
 
 use crate::pipelines::processors::transforms::hash_join::row::RowPtr;
