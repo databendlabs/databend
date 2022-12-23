@@ -43,6 +43,7 @@ fn test_range_merger() -> Result<()> {
 #[test]
 fn test_range_merger_with_gap() -> Result<()> {
     let v = [3..6, 1..5, 7..11, 8..9, 9..12, 4..8, 13..15, 18..20];
+    let not_in = [6..21, 0..0];
 
     // max_gap_size = 1
     {
@@ -50,6 +51,16 @@ fn test_range_merger_with_gap() -> Result<()> {
         let actual = format!("{}", Array(mr.ranges()));
         let expect = "[1,15] [18,20] ";
         assert_eq!(actual, expect);
+
+        // Check.
+        {
+            for check in &v {
+                assert!(mr.get(check.clone()).is_some());
+            }
+            for ni in &not_in {
+                assert!(mr.get(ni.clone()).is_none());
+            }
+        }
     }
 
     // max_gap_size = 2
@@ -58,6 +69,16 @@ fn test_range_merger_with_gap() -> Result<()> {
         let actual = format!("{}", Array(mr.ranges()));
         let expect = "[1,15] [18,20] ";
         assert_eq!(actual, expect);
+
+        // Check.
+        {
+            for check in &v {
+                assert!(mr.get(check.clone()).is_some());
+            }
+            for ni in &not_in {
+                assert!(mr.get(ni.clone()).is_none());
+            }
+        }
     }
 
     // max_gap_size = 3
@@ -66,14 +87,34 @@ fn test_range_merger_with_gap() -> Result<()> {
         let actual = format!("{}", Array(mr.ranges()));
         let expect = "[1,20] ";
         assert_eq!(actual, expect);
+
+        // Check.
+        {
+            for check in &v {
+                assert!(mr.get(check.clone()).is_some());
+            }
+            for ni in &not_in {
+                assert!(mr.get(ni.clone()).is_none());
+            }
+        }
     }
 
     // max_gap_size = 3, max_range_size = 5
     {
-        let mr = RangeMerger::from_iter(v, 3, 4);
+        let mr = RangeMerger::from_iter(v.clone(), 3, 4);
         let actual = format!("{}", Array(mr.ranges()));
         let expect = "[1,5] [3,8] [7,11] [8,12] [13,20] ";
         assert_eq!(actual, expect);
+
+        // Check.
+        {
+            for check in v {
+                assert!(mr.get(check.clone()).is_some());
+            }
+            for ni in &not_in {
+                assert!(mr.get(ni.clone()).is_none());
+            }
+        }
     }
 
     Ok(())

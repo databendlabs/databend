@@ -63,10 +63,10 @@ impl BlockReader {
 
         // Read merged range data.
         let mut read_handlers = Vec::with_capacity(merged_ranges.len());
-        for (idx, range) in &raw_ranges {
+        for (idx, range) in merged_ranges.iter().enumerate() {
             read_handlers.push(UnlimitedFuture::create(Self::read_range(
                 object.clone(),
-                *idx,
+                idx,
                 range.start,
                 range.end,
             )));

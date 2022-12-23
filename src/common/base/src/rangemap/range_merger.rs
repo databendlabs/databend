@@ -64,6 +64,8 @@ impl RangeMerger {
         rs
     }
 
+    // Get the merged range with a range.
+    // Merged range must larger than check range.
     pub fn get(&self, check: Range<u64>) -> Option<(usize, Range<u64>)> {
         for (i, r) in self.ranges.iter().enumerate() {
             if r.start <= check.start && r.end >= check.end {
