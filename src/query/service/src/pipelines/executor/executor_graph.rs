@@ -327,6 +327,7 @@ impl ScheduleQueue {
             let tasks_queue = global.clone();
 
             unsafe {
+                workers_condvar.inc_active_async_worker();
                 executor.async_runtime.spawn(TrackedFuture::create(ProcessorAsyncTask::create(
                     context.query_id.clone(),
                     worker_id,
