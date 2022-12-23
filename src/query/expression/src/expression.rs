@@ -33,6 +33,7 @@ use crate::values::Scalar;
 
 pub type Span = Option<std::ops::Range<usize>>;
 pub trait ColumnIndex = Debug + Display + Clone + Serialize + Hash + Eq;
+// impl ColumnIndex for usize {}
 
 #[derive(Debug, Clone)]
 pub enum RawExpr<Index: ColumnIndex = usize> {

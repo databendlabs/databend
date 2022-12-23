@@ -28,7 +28,7 @@ use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 use common_hashtable::HashMap;
 use common_hashtable::HashtableKeyable;
 use common_hashtable::UnsizedHashMap;
-// use common_sql::executor::PhysicalScalar;
+use common_sql::executor::PhysicalScalar;
 use parking_lot::RwLock;
 use primitive_types::U256;
 use primitive_types::U512;
