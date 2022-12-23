@@ -64,10 +64,10 @@ impl RangeMerger {
         rs
     }
 
-    pub fn get(&self, range: Range<u64>) -> Option<usize> {
+    pub fn get(&self, check: Range<u64>) -> Option<(usize, Range<u64>)> {
         for (i, r) in self.ranges.iter().enumerate() {
-            if r.contains(&range.start) && r.contains(&range.end) {
-                return Some(i);
+            if r.start <= check.start && r.end >= check.end {
+                return Some((i, r.clone()));
             }
         }
         None
