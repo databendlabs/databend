@@ -476,6 +476,8 @@ impl MetaGrpcClient {
     ) -> Result<MetaServiceClient<InterceptedService<Channel, AuthInterceptor>>, MetaClientError>
     {
         let mut eps = self.get_endpoints().await;
+        debug!("service endpoints: {:?}", eps);
+
         debug_assert!(!eps.is_empty());
 
         if eps.len() > 1 {

@@ -21,7 +21,6 @@ use std::time::Duration;
 
 use anyerror::AnyError;
 use common_base::base::tokio;
-use common_base::base::tokio::sync::mpsc;
 use common_base::base::tokio::sync::watch;
 use common_base::base::tokio::sync::watch::error::RecvError;
 use common_base::base::tokio::sync::Mutex;
@@ -62,6 +61,7 @@ use common_meta_types::MetaOperationError;
 use common_meta_types::MetaStartupError;
 use common_meta_types::Node;
 use common_meta_types::NodeId;
+use futures::channel::oneshot;
 use itertools::Itertools;
 use openraft::Config;
 use openraft::LogId;
@@ -86,7 +86,8 @@ use crate::store::RaftStore;
 use crate::store::RaftStoreBare;
 use crate::watcher::DispatcherSender;
 use crate::watcher::EventDispatcher;
-use crate::watcher::WatchEvent;
+use crate::watcher::EventDispatcherHandle;
+use crate::watcher::Watcher;
 use crate::watcher::WatcherSender;
 use crate::Opened;
 
@@ -126,7 +127,7 @@ pub type MetaRaft = Raft<LogEntry, AppliedState, Network, RaftStore>;
 // MetaNode is the container of meta data related components and threads, such as storage, the raft node and a raft-state monitor.
 pub struct MetaNode {
     pub sto: Arc<RaftStore>,
-    pub dispatcher_tx: mpsc::UnboundedSender<WatchEvent>,
+    pub dispatcher_handle: EventDispatcherHandle,
     pub raft: MetaRaft,
     pub running_tx: watch::Sender<()>,
     pub running_rx: watch::Receiver<()>,
@@ -179,7 +180,7 @@ impl MetaNodeBuilder {
 
         let mn = Arc::new(MetaNode {
             sto: sto.clone(),
-            dispatcher_tx,
+            dispatcher_handle: EventDispatcherHandle::new(dispatcher_tx),
             raft,
             running_tx: tx,
             running_rx: rx,
@@ -1085,10 +1086,22 @@ impl MetaNode {
         Ok(resp)
     }
 
-    pub fn add_watcher(&self, request: WatchRequest, tx: WatcherSender) {
-        // TODO: handle error?
-        let _ = self
-            .dispatcher_tx
-            .send(WatchEvent::AddWatcher((request, tx)));
+    pub(crate) async fn add_watcher(
+        &self,
+        request: WatchRequest,
+        tx: WatcherSender,
+    ) -> Result<Watcher, &'static str> {
+        let (resp_tx, resp_rx) = oneshot::channel();
+
+        self.dispatcher_handle.request(|d: &mut EventDispatcher| {
+            let add_res = d.add_watcher(request, tx);
+            let _ = resp_tx.send(add_res);
+        });
+
+        let recv_res = resp_rx.await;
+        match recv_res {
+            Ok(add_res) => add_res,
+            Err(_e) => Err("dispatcher closed"),
+        }
     }
 }

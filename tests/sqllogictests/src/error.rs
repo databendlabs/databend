@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use common_exception::ErrorCode;
-use mysql::Error as MysqlClientError;
+use mysql_async::Error as MysqlClientError;
 use reqwest::Error as HttpClientError;
 use serde_json::Error as SerdeJsonError;
 use sqllogictest::TestError;

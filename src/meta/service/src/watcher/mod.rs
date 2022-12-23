@@ -17,7 +17,9 @@ mod watcher_stream;
 
 pub(crate) use watcher_manager::DispatcherSender;
 pub(crate) use watcher_manager::EventDispatcher;
-pub use watcher_manager::WatchEvent;
+pub use watcher_manager::EventDispatcherHandle;
 pub use watcher_manager::WatcherId;
 pub use watcher_manager::WatcherSender;
-pub use watcher_stream::WatcherStream;
+pub use watcher_stream::WatchStream;
+pub use watcher_stream::WatchStreamHandle;
+pub use watcher_stream::Watcher;

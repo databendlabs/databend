@@ -111,6 +111,9 @@ impl Settings {
         if conf.query.num_cpus != 0 {
             num_physical_cpus = conf.query.num_cpus;
         }
+        if num_physical_cpus == 0 {
+            num_physical_cpus = 16;
+        }
 
         let mut default_max_memory_usage = 1024 * memory_info.total * 80 / 100;
         if conf.query.max_server_memory_usage != 0 {
@@ -518,7 +521,8 @@ impl Settings {
     // Get max_threads.
     pub fn get_max_threads(&self) -> Result<u64> {
         let key = "max_threads";
-        self.try_get_u64(key)
+        let value = self.try_get_u64(key)?;
+        if value == 0 { Ok(16) } else { Ok(value) }
     }
 
     // Set max_threads.

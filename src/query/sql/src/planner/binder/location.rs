@@ -18,6 +18,7 @@ use std::io::Result;
 
 use anyhow::anyhow;
 use common_ast::ast::UriLocation;
+use common_config::GlobalConfig;
 use common_storage::StorageAzblobConfig;
 use common_storage::StorageFsConfig;
 use common_storage::StorageFtpConfig;
@@ -56,6 +57,7 @@ pub fn parse_uri_location(l: &UriLocation) -> Result<(StorageParams, String)> {
     };
 
     let protocol = l.protocol.parse::<Scheme>()?;
+    let allow_insecure = GlobalConfig::instance().storage.allow_insecure;
 
     let sp = match protocol {
         Scheme::Azblob => {
@@ -157,7 +159,9 @@ pub fn parse_uri_location(l: &UriLocation) -> Result<(StorageParams, String)> {
                     .unwrap_or_default(),
                 master_key: l.connection.get("master_key").cloned().unwrap_or_default(),
                 root: root.to_string(),
-                disable_credential_loader: true,
+                // Disable credential load by default.
+                // TODO(xuanwo): we should support AssumeRole.
+                disable_credential_loader: !allow_insecure,
                 enable_virtual_host_style: l
                     .connection
                     .get("enable_virtual_host_style")

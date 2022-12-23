@@ -26,6 +26,11 @@ Run tests under specific file. This is the most commonly used command because us
 cargo run -p sqllogictests -- --run_file <file_name>
 ```
 ---
+Auto complete test file which is very convenient. What you need to do is just a final check to see if the generated results meet expectations.
+```
+cargo run -p sqllogictests -- --run_file <file_name> --complete
+```
+---
 For more information, run help command:
 ```shell
 cargo run -p sqllogictests -- --help

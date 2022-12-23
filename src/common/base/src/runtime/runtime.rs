@@ -143,7 +143,7 @@ impl Runtime {
     /// thread and returns a `Handle` which can be used to spawn tasks via
     /// its executor.
     pub fn with_default_worker_threads() -> Result<Self> {
-        let mem_stat = MemStat::create();
+        let mem_stat = MemStat::create(String::from("UnnamedRuntime"));
         let mut runtime_builder = Self::tracker_builder(mem_stat.clone());
 
         #[cfg(debug_assertions)]
@@ -161,7 +161,13 @@ impl Runtime {
 
     #[allow(unused_mut)]
     pub fn with_worker_threads(workers: usize, mut thread_name: Option<String>) -> Result<Self> {
-        let mem_stat = MemStat::create();
+        let mut mem_stat_name = String::from("UnnamedRuntime");
+
+        if let Some(thread_name) = thread_name.as_ref() {
+            mem_stat_name = format!("{}Runtime", thread_name);
+        }
+
+        let mem_stat = MemStat::create(mem_stat_name);
         let mut runtime_builder = Self::tracker_builder(mem_stat.clone());
 
         #[cfg(debug_assertions)]

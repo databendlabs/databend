@@ -18,10 +18,10 @@ use common_ast::ast::CreateStageStmt;
 use common_ast::ast::UriLocation;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_types::FileFormatOptions;
 use common_meta_types::OnErrorMode;
 use common_meta_types::UserStageInfo;
 
-use super::super::copy::parse_copy_file_format_options;
 use super::super::copy::parse_stage_location;
 use crate::binder::location::parse_uri_location;
 use crate::binder::Binder;
@@ -101,7 +101,7 @@ impl<'a> Binder {
         };
 
         if !file_format_options.is_empty() {
-            stage_info.file_format_options = parse_copy_file_format_options(file_format_options)?;
+            stage_info.file_format_options = FileFormatOptions::from_map(file_format_options)?;
         }
         // Copy options.
         {
