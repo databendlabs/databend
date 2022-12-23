@@ -25,10 +25,13 @@ use petgraph::prelude::NodeIndex;
 use petgraph::prelude::StableGraph;
 use petgraph::Direction;
 use tracing::debug;
+use common_base::runtime::{TrackedFuture, TrySpawn};
 
 use crate::pipelines::executor::executor_tasks::ExecutorTasksQueue;
 use crate::pipelines::executor::executor_worker_context::ExecutorTask;
 use crate::pipelines::executor::executor_worker_context::ExecutorWorkerContext;
+use crate::pipelines::executor::PipelineExecutor;
+use crate::pipelines::executor::processor_async_task::ProcessorAsyncTask;
 use crate::pipelines::pipe::Pipe;
 use crate::pipelines::pipeline::Pipeline;
 use crate::pipelines::processors::connect;
@@ -309,27 +312,48 @@ impl ScheduleQueue {
             tasks.push_back(ExecutorTask::Sync(processor));
         }
 
-        while let Some(processor) = self.async_queue.pop_front() {
-            tasks.push_back(ExecutorTask::Async(processor));
-        }
+        // while let Some(processor) = self.async_queue.pop_front() {
+        //     tasks.push_back(ExecutorTask::Async(processor));
+        // }
         global.push_tasks(ctx, tasks)
     }
 
-    pub fn schedule(mut self, global: &ExecutorTasksQueue, context: &mut ExecutorWorkerContext) {
+    pub fn schedule(mut self, global: &Arc<ExecutorTasksQueue>, context: &mut ExecutorWorkerContext, executor: &PipelineExecutor) {
         debug_assert!(!context.has_task());
 
-        match self.async_queue.is_empty() {
-            false => self.schedule_async(global, context),
-            true if !self.sync_queue.is_empty() => self.schedule_sync(global, context),
-            true => { /* do nothing*/ }
+        while let Some(processor) = self.async_queue.pop_front() {
+            let worker_id = context.get_worker_num();
+            let workers_condvar = context.get_workers_condvar().clone();
+            let tasks_queue = global.clone();
+
+            unsafe {
+                executor.async_runtime.spawn(TrackedFuture::create(ProcessorAsyncTask::create(
+                    context.query_id.clone(),
+                    worker_id,
+                    processor.clone(),
+                    tasks_queue,
+                    workers_condvar,
+                    processor.async_process(),
+                )));
+            }
         }
+
+        if !self.sync_queue.is_empty() {
+            self.schedule_sync(global, context);
+        }
+
+        // match self.async_queue.is_empty() {
+        //     false => self.schedule_async(global, context),
+        //     true if !self.sync_queue.is_empty() => self.schedule_sync(global, context),
+        //     true => { /* do nothing*/ }
+        // }
         // match self.sync_queue.is_empty() {
         //     false => self.schedule_sync(global, context),
         //     true if !self.async_queue.is_empty() => self.schedule_async(global, context),
         //     true => { /* do nothing*/ }
         // }
 
-        if !self.sync_queue.is_empty() || !self.async_queue.is_empty() {
+        if !self.sync_queue.is_empty() /*|| !self.async_queue.is_empty()*/ {
             self.schedule_tail(global, context);
         }
     }

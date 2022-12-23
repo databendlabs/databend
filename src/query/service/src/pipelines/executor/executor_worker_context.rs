@@ -37,7 +37,7 @@ pub enum ExecutorTask {
 }
 
 pub struct ExecutorWorkerContext {
-    query_id: Arc<String>,
+    pub query_id: Arc<String>,
     worker_num: usize,
     task: ExecutorTask,
     workers_condvar: Arc<WorkersCondvar>,
