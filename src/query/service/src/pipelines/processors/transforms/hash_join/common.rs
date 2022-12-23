@@ -24,8 +24,11 @@ use common_expression::types::AnyType;
 use common_expression::types::DataType;
 use common_expression::Chunk;
 use common_expression::Column;
+use common_expression::Evaluator;
+use common_expression::Expr;
 use common_expression::Scalar;
 use common_expression::Value;
+use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 use common_hashtable::HashtableLike;
 
 use crate::pipelines::processors::transforms::hash_join::desc::MarkerKind;
@@ -38,16 +41,11 @@ use crate::sql::plans::JoinType;
 impl JoinHashTable {
     // Merge build chunk and probe chunk that have the same number of rows
     pub(crate) fn merge_eq_chunk(&self, build_chunk: &Chunk, probe_chunk: &Chunk) -> Result<Chunk> {
-        todo!("expression");
-        // let mut probe_chunk = probe_chunk.clone();
-        // for (col, field) in build_chunk
-        //     .columns()
-        //     .iter()
-        //     .zip(build_chunk.schema().fields().iter())
-        // {
-        //     probe_chunk = probe_chunk.add_column(col.clone(), field.clone())?;
-        // }
-        // Ok(probe_chunk)
+        let mut probe_chunk = probe_chunk.clone();
+        for col in build_chunk.columns() {
+            probe_chunk.add_column(col.clone())?;
+        }
+        Ok(probe_chunk)
     }
 
     #[inline]
@@ -190,29 +188,20 @@ impl JoinHashTable {
     pub(crate) fn get_other_filters(
         &self,
         merged_chunk: &Chunk,
-        filter: &EvalNode,
+        filter: &Expr,
     ) -> Result<(Option<Bitmap>, bool, bool)> {
         let func_ctx = self.ctx.try_get_function_context()?;
-        // `predicate_column` contains a column, which is a boolean column.
-        let filter_vector = filter.eval(&func_ctx, merged_chunk)?;
-        todo!("expression");
-        // let predict_boolean_nonull = Chunk::cast_to_nonull_boolean(filter_vector.vector())?;
+        let evaluator = Evaluator::new(merged_chunk, func_ctx, &BUILTIN_FUNCTIONS);
+        let filter_vector: Value<AnyType> = evaluator.run(filter)?;
+        let predict_boolean_nonull = Chunk::cast_to_nonull_boolean(&filter_vector)?;
 
-        // // faster path for constant filter
-        // if predict_boolean_nonull.is_const() {
-        //     let v = predict_boolean_nonull.get_bool(0)?;
-        //     return Ok((None, v, !v));
-        // }
-
-        // let boolean_col: &BooleanColumn = Series::check_get(&predict_boolean_nonull)?;
-        // let rows = boolean_col.len();
-        // let count_zeros = boolean_col.values().unset_bits();
-
-        // Ok((
-        //     Some(boolean_col.values().clone()),
-        //     count_zeros == 0,
-        //     rows == count_zeros,
-        // ))
+        match predict_boolean_nonull {
+            Value::Scalar(v) => return Ok((None, v, !v)),
+            Value::Column(s) => {
+                let count_zeros = s.unset_bits();
+                Ok((Some(s), count_zeros == 0, rows == count_zeros))
+            }
+        }
     }
 
     pub(crate) fn find_unmatched_build_indexes(
@@ -326,7 +315,7 @@ impl JoinHashTable {
     }
 
     // Add `data_block` for build table to `row_space`
-    pub(crate) fn add_build_block(&self, data_block: DataBlock) -> Result<()> {
+    pub(crate) fn add_build_block(&self, data_block: Chunk) -> Result<()> {
         let func_ctx = self.ctx.try_get_function_context()?;
         let build_cols = self
             .hash_join_desc

@@ -19,7 +19,12 @@ use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::AnyType;
 use common_expression::Chunk;
+use common_expression::Column;
+use common_expression::Evaluator;
+use common_expression::Value;
+use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 
 use super::ProbeState;
 use crate::pipelines::processors::transforms::hash_join::desc::MarkerKind;
@@ -33,15 +38,21 @@ use crate::sql::planner::plans::JoinType;
 #[async_trait::async_trait]
 impl HashJoinState for JoinHashTable {
     fn build(&self, input: Chunk) -> Result<()> {
-        todo!("expression");
-        // let func_ctx = self.ctx.try_get_function_context()?;
-        // let build_cols = self
-        //     .hash_join_desc
-        //     .build_keys
-        //     .iter()
-        //     .map(|expr| Ok(expr.eval(&func_ctx, &input)?.vector().clone()))
-        //     .collect::<Result<Vec<ColumnRef>>>()?;
-        // self.row_space.push_cols(input, build_cols)
+        let func_ctx = self.ctx.try_get_function_context()?;
+        let evaluator = Evaluator::new(&input, func_ctx, &BUILTIN_FUNCTIONS);
+
+        let build_cols = self
+            .hash_join_desc
+            .build_keys
+            .iter()
+            .map(|expr| {
+                Ok(evaluator
+                    .run(expr)?
+                    .convert_to_full_column(expr.data_type(), input.num_rows()))
+            })
+            .collect::<Result<Column>>()?;
+
+        self.row_space.push_cols(input, build_cols)
     }
 
     fn probe(&self, input: &Chunk, probe_state: &mut ProbeState) -> Result<Vec<Chunk>> {

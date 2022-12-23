@@ -53,6 +53,7 @@ use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use common_sql::Metadata;
 use common_sql::MetadataRef;
 use common_sql::PlannerContext;
+use common_sql::ScalarBinder;
 use common_storages_factory::Table;
 use common_storages_stage::StageAttachment;
 use common_storages_stage::StageTable;

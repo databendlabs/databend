@@ -20,6 +20,8 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::Chunk;
+use common_expression::Evaluator;
+use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 use common_hashtable::HashtableEntryRefLike;
 use common_hashtable::HashtableLike;
 
@@ -116,13 +118,13 @@ impl JoinHashTable {
                         ));
                     }
 
-                    todo!("expression");
-                    // let predicate = other_predicate.eval(&func_ctx, &probed_chunk)?;
-                    // let res = Chunk::filter(probed_chunk, predicate.vector())?;
-
-                    // if !res.is_empty() {
-                    //     filtered_chunks.push(res);
-                    // }
+                    let evaluator =
+                        Evaluator::new(&probed_chunk, func_ctx.clone(), &BUILTIN_FUNCTIONS);
+                    let predicate = evaluator.run(other_predicate)?;
+                    let res = Chunk::filter(probed_chunk, &predicate)?;
+                    if !res.is_empty() {
+                        filtered_chunks.push(res);
+                    }
                 }
 
                 Ok(filtered_chunks)

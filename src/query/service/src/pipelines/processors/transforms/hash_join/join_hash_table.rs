@@ -21,6 +21,10 @@ use common_base::base::tokio::sync::Notify;
 use common_exception::Result;
 use common_expression::Chunk;
 use common_expression::DataSchemaRef;
+use common_expression::Evaluator;
+use common_expression::HashMethod;
+use common_expression::HashMethodSerializer;
+use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 use common_hashtable::HashMap;
 use common_hashtable::HashtableKeyable;
 use common_hashtable::UnsizedHashMap;
@@ -210,94 +214,99 @@ impl JoinHashTable {
         input: &Chunk,
         probe_state: &mut ProbeState,
     ) -> Result<Vec<Chunk>> {
-        todo!("expression");
-        // let func_ctx = self.ctx.try_get_function_context()?;
-        // let probe_keys = self
-        //     .hash_join_desc
-        //     .probe_keys
-        //     .iter()
-        //     .map(|expr| Ok(expr.eval(&func_ctx, input)?.vector().clone()))
-        //     .collect::<Result<Vec<ColumnRef>>>()?;
+        let func_ctx = self.ctx.try_get_function_context()?;
+        let evaluator = Evaluator::new(input, func_ctx, &BUILTIN_FUNCTIONS);
 
-        // if self.hash_join_desc.join_type == JoinType::RightMark {
-        //     probe_state.markers = Some(Self::init_markers(&probe_keys, input.num_rows()));
-        // }
-        // let probe_keys = probe_keys.iter().collect::<Vec<&ColumnRef>>();
+        let probe_keys = self
+            .hash_join_desc
+            .probe_keys
+            .iter()
+            .map(|expr| {
+                Ok(evaluator
+                    .run(expr)?
+                    .convert_to_full_column(expr.data_type(), input.num_rows()))
+            })
+            .collect::<Result<Vec<ColumnRef>>>()?;
 
-        // if probe_keys.iter().any(|c| c.is_nullable() || c.is_null()) {
-        //     let mut valids = None;
-        //     for col in probe_keys.iter() {
-        //         let (is_all_null, tmp_valids) = col.validity();
-        //         if is_all_null {
-        //             let mut m = MutableBitmap::with_capacity(input.num_rows());
-        //             m.extend_constant(input.num_rows(), false);
-        //             valids = Some(m.into());
-        //             break;
-        //         } else {
-        //             valids = combine_validities_2(valids, tmp_valids.cloned());
-        //         }
-        //     }
-        //     probe_state.valids = valids;
-        // }
+        if self.hash_join_desc.join_type == JoinType::RightMark {
+            probe_state.markers = Some(Self::init_markers(&probe_keys, input.num_rows()));
+        }
+        let probe_keys = probe_keys.iter().collect::<Vec<&ColumnRef>>();
 
-        // match &*self.hash_table.read() {
-        //     HashTable::SerializerHashTable(table) => {
-        //         let keys_state = table
-        //             .hash_method
-        //             .build_keys_state(&probe_keys, input.num_rows())?;
-        //         let keys_iter = table.hash_method.build_keys_iter(&keys_state)?;
+        if probe_keys.iter().any(|c| c.is_nullable() || c.is_null()) {
+            let mut valids = None;
+            for col in probe_keys.iter() {
+                let (is_all_null, tmp_valids) = col.validity();
+                if is_all_null {
+                    let mut m = MutableBitmap::with_capacity(input.num_rows());
+                    m.extend_constant(input.num_rows(), false);
+                    valids = Some(m.into());
+                    break;
+                } else {
+                    valids = combine_validities_2(valids, tmp_valids.cloned());
+                }
+            }
+            probe_state.valids = valids;
+        }
 
-        //         self.result_chunks(&table.hash_table, probe_state, keys_iter, input)
-        //     }
-        //     HashTable::KeyU8HashTable(table) => {
-        //         let keys_state = table
-        //             .hash_method
-        //             .build_keys_state(&probe_keys, input.num_rows())?;
-        //         let keys_iter = table.hash_method.build_keys_iter(&keys_state)?;
-        //         self.result_chunks(&table.hash_table, probe_state, keys_iter, input)
-        //     }
-        //     HashTable::KeyU16HashTable(table) => {
-        //         let keys_state = table
-        //             .hash_method
-        //             .build_keys_state(&probe_keys, input.num_rows())?;
-        //         let keys_iter = table.hash_method.build_keys_iter(&keys_state)?;
-        //         self.result_chunks(&table.hash_table, probe_state, keys_iter, input)
-        //     }
-        //     HashTable::KeyU32HashTable(table) => {
-        //         let keys_state = table
-        //             .hash_method
-        //             .build_keys_state(&probe_keys, input.num_rows())?;
-        //         let keys_iter = table.hash_method.build_keys_iter(&keys_state)?;
-        //         self.result_chunks(&table.hash_table, probe_state, keys_iter, input)
-        //     }
-        //     HashTable::KeyU64HashTable(table) => {
-        //         let keys_state = table
-        //             .hash_method
-        //             .build_keys_state(&probe_keys, input.num_rows())?;
-        //         let keys_iter = table.hash_method.build_keys_iter(&keys_state)?;
-        //         self.result_chunks(&table.hash_table, probe_state, keys_iter, input)
-        //     }
-        //     HashTable::KeyU128HashTable(table) => {
-        //         let keys_state = table
-        //             .hash_method
-        //             .build_keys_state(&probe_keys, input.num_rows())?;
-        //         let keys_iter = table.hash_method.build_keys_iter(&keys_state)?;
-        //         self.result_chunks(&table.hash_table, probe_state, keys_iter, input)
-        //     }
-        //     HashTable::KeyU256HashTable(table) => {
-        //         let keys_state = table
-        //             .hash_method
-        //             .build_keys_state(&probe_keys, input.num_rows())?;
-        //         let keys_iter = table.hash_method.build_keys_iter(&keys_state)?;
-        //         self.result_chunks(&table.hash_table, probe_state, keys_iter, input)
-        //     }
-        //     HashTable::KeyU512HashTable(table) => {
-        //         let keys_state = table
-        //             .hash_method
-        //             .build_keys_state(&probe_keys, input.num_rows())?;
-        //         let keys_iter = table.hash_method.build_keys_iter(&keys_state)?;
-        //         self.result_chunks(&table.hash_table, probe_state, keys_iter, input)
-        //     }
-        // }
+        match &*self.hash_table.read() {
+            HashTable::SerializerHashTable(table) => {
+                let keys_state = table
+                    .hash_method
+                    .build_keys_state(&probe_keys, input.num_rows())?;
+                let keys_iter = table.hash_method.build_keys_iter(&keys_state)?;
+
+                self.result_chunks(&table.hash_table, probe_state, keys_iter, input)
+            }
+            HashTable::KeyU8HashTable(table) => {
+                let keys_state = table
+                    .hash_method
+                    .build_keys_state(&probe_keys, input.num_rows())?;
+                let keys_iter = table.hash_method.build_keys_iter(&keys_state)?;
+                self.result_chunks(&table.hash_table, probe_state, keys_iter, input)
+            }
+            HashTable::KeyU16HashTable(table) => {
+                let keys_state = table
+                    .hash_method
+                    .build_keys_state(&probe_keys, input.num_rows())?;
+                let keys_iter = table.hash_method.build_keys_iter(&keys_state)?;
+                self.result_chunks(&table.hash_table, probe_state, keys_iter, input)
+            }
+            HashTable::KeyU32HashTable(table) => {
+                let keys_state = table
+                    .hash_method
+                    .build_keys_state(&probe_keys, input.num_rows())?;
+                let keys_iter = table.hash_method.build_keys_iter(&keys_state)?;
+                self.result_chunks(&table.hash_table, probe_state, keys_iter, input)
+            }
+            HashTable::KeyU64HashTable(table) => {
+                let keys_state = table
+                    .hash_method
+                    .build_keys_state(&probe_keys, input.num_rows())?;
+                let keys_iter = table.hash_method.build_keys_iter(&keys_state)?;
+                self.result_chunks(&table.hash_table, probe_state, keys_iter, input)
+            }
+            HashTable::KeyU128HashTable(table) => {
+                let keys_state = table
+                    .hash_method
+                    .build_keys_state(&probe_keys, input.num_rows())?;
+                let keys_iter = table.hash_method.build_keys_iter(&keys_state)?;
+                self.result_chunks(&table.hash_table, probe_state, keys_iter, input)
+            }
+            HashTable::KeyU256HashTable(table) => {
+                let keys_state = table
+                    .hash_method
+                    .build_keys_state(&probe_keys, input.num_rows())?;
+                let keys_iter = table.hash_method.build_keys_iter(&keys_state)?;
+                self.result_chunks(&table.hash_table, probe_state, keys_iter, input)
+            }
+            HashTable::KeyU512HashTable(table) => {
+                let keys_state = table
+                    .hash_method
+                    .build_keys_state(&probe_keys, input.num_rows())?;
+                let keys_iter = table.hash_method.build_keys_iter(&keys_state)?;
+                self.result_chunks(&table.hash_table, probe_state, keys_iter, input)
+            }
+        }
     }
 }

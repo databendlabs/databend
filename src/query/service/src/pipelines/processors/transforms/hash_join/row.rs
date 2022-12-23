@@ -19,12 +19,13 @@ use std::sync::RwLock;
 
 use common_exception::Result;
 use common_expression::Chunk as DataChunk;
+use common_expression::Column;
 use common_expression::DataSchemaRef;
 
 use crate::pipelines::processors::transforms::hash_join::desc::MarkerKind;
 use crate::sessions::QueryContext;
 
-pub type ColumnVector = Vec<ColumnRef>;
+pub type ColumnVector = Vec<Column>;
 
 pub struct Chunk {
     pub chunk: DataChunk,
@@ -58,7 +59,7 @@ impl RowPtr {
 pub struct RowSpace {
     pub data_schema: DataSchemaRef,
     pub chunks: RwLock<Vec<Chunk>>,
-    pub buffer: RwLock<Vec<DataBlock>>,
+    pub buffer: RwLock<Vec<Chunk>>,
 }
 
 impl RowSpace {

@@ -15,7 +15,11 @@
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_exception::Result;
 use common_expression::Chunk;
+use common_expression::Expr;
+use common_expression::RawExpr;
 use common_functions::scalars::FunctionFactory;
+use common_sql::executor::HashJoin;
+use common_sql::executor::PhysicalScalar;
 // use common_sql::executor::PhysicalScalar;
 // use common_sql::IndexType;
 use parking_lot::RwLock;
@@ -36,7 +40,7 @@ pub enum MarkerKind {
 }
 
 pub struct MarkJoinDesc {
-    // pub(crate) marker_index: Option<IndexType>,  todo!("expression");
+    pub(crate) marker_index: Option<IndexType>,
     pub(crate) has_null: RwLock<bool>,
 }
 
@@ -61,10 +65,10 @@ impl JoinState {
 }
 
 pub struct HashJoinDesc {
-    pub(crate) build_keys: Vec<EvalNode>,
-    pub(crate) probe_keys: Vec<EvalNode>,
+    pub(crate) build_keys: Vec<Expr>,
+    pub(crate) probe_keys: Vec<Expr>,
     pub(crate) join_type: JoinType,
-    pub(crate) other_predicate: Option<EvalNode>,
+    pub(crate) other_predicate: Option<Expr>,
     pub(crate) marker_join_desc: MarkJoinDesc,
     /// Whether the Join are derived from correlated subquery.
     pub(crate) from_correlated_subquery: bool,
@@ -73,42 +77,38 @@ pub struct HashJoinDesc {
 
 impl HashJoinDesc {
     pub fn create(join: &HashJoin) -> Result<HashJoinDesc> {
-        todo!("expression");
-        // let predicate = Self::join_predicate(&join.non_equi_conditions)?;
+        let other_predicate = Self::join_predicate(&join.non_equi_conditions)?;
 
-        // Ok(HashJoinDesc {
-        //     join_type: join.join_type.clone(),
-        //     build_keys: Evaluator::eval_physical_scalars(&join.build_keys)?,
-        //     probe_keys: Evaluator::eval_physical_scalars(&join.probe_keys)?,
-        //     other_predicate: predicate
-        //         .as_ref()
-        //         .map(Evaluator::eval_physical_scalar)
-        //         .transpose()?,
-        //     marker_join_desc: MarkJoinDesc {
-        //         has_null: RwLock::new(false),
-        //         marker_index: join.marker_index,
-        //     },
-        //     from_correlated_subquery: join.from_correlated_subquery,
-        //     join_state: JoinState::create()?,
-        // })
+        let build_keys: Result<Vec<Expr>> = join.build_keys.iter().map(|k| k.as_expr()).collect();
+        let probe_keys: Result<Vec<Expr>> = join.probe_keys.iter().map(|k| k.as_expr()).collect();
+
+        Ok(HashJoinDesc {
+            join_type: join.join_type.clone(),
+            build_keys: build_keys?,
+            probe_keys: probe_keys?,
+            other_predicate,
+            marker_join_desc: MarkJoinDesc {
+                has_null: RwLock::new(false),
+                marker_index: join.marker_index,
+            },
+            from_correlated_subquery: join.from_correlated_subquery,
+            join_state: JoinState::create()?,
+        })
     }
 
-    fn join_predicate(non_equi_conditions: &[PhysicalScalar]) -> Result<Option<PhysicalScalar>> {
+    fn join_predicate(non_equi_conditions: &[PhysicalScalar]) -> Result<Option<Expr>> {
         if non_equi_conditions.is_empty() {
             return Ok(None);
         }
 
-        let mut condition = non_equi_conditions[0].clone();
+        let mut condition = non_equi_conditions[0].clone().as_raw_expr();
 
         for other_condition in non_equi_conditions.iter().skip(1) {
-            let left_type = condition.data_type();
-            let right_type = other_condition.data_type();
-            let data_types = vec![&left_type, &right_type];
-            let func = FunctionFactory::instance().get("and", &data_types)?;
-            condition = PhysicalScalar::Function {
+            condition = RawExpr::FunctionCall {
+                span: None,
                 name: "and".to_string(),
-                args: vec![condition, other_condition.clone()],
-                return_type: func.return_type(),
+                params: vec![],
+                args: vec![condition, other_condition.as_raw_expr()],
             };
         }
 

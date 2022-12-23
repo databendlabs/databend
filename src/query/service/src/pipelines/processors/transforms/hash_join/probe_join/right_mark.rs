@@ -19,7 +19,13 @@ use std::sync::atomic::Ordering;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::BooleanType;
+use common_expression::types::NullableType;
+use common_expression::types::ValueType;
 use common_expression::Chunk;
+use common_expression::Column;
+use common_expression::Evaluator;
+use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 use common_hashtable::HashtableEntryRefLike;
 use common_hashtable::HashtableLike;
 
@@ -123,27 +129,40 @@ impl JoinHashTable {
                             let probe_chunk = Chunk::take(input, &probe_indexes)?;
                             let build_chunk = self.row_space.gather(&build_indexes)?;
                             let merged_chunk = self.merge_eq_chunk(&build_chunk, &probe_chunk)?;
-                            todo!("expression");
-                            // let type_vector = other_predicate.eval(&func_ctx, &merged_chunk)?;
-                            // let filter_column = type_vector.vector();
-                            // let filter_viewer = BooleanViewer::try_create(filter_column)?;
 
-                            // for idx in 0..filter_viewer.len() {
-                            //     let marker = &mut markers[probe_indexes[idx] as usize];
-                            //     if !filter_viewer.valid_at(idx) {
-                            //         if *marker == MarkerKind::False {
-                            //             *marker = MarkerKind::Null;
-                            //         }
-                            //     } else if filter_viewer.value_at(idx) {
-                            //         *marker = MarkerKind::True;
-                            //     }
-                            // }
+                            let evaluator =
+                                Evaluator::new(&merged_chunk, func_ctx.clone(), &BUILTIN_FUNCTIONS);
+                            let type_vector =
+                                evaluator.run(&other_predicate)?.convert_to_full_column(
+                                    other_predicate.data_type(),
+                                    merged_chunk.num_rows(),
+                                );
 
-                            // index = new_index;
-                            // remain -= addition;
+                            let filter = match type_vector {
+                                Column::Nullable(_) => type_vector,
+                                other => Column::Nullable(Box::new(other)),
+                            };
+                            let filter_viewer =
+                                NullableType::<BooleanType>::try_downcast_column(&filter).unwrap();
+                            let validity = &filter_viewer.validity;
+                            let data = &filter_viewer.column;
 
-                            // build_indexes.clear();
-                            // probe_indexes.clear();
+                            for idx in 0..filter_viewer.len() {
+                                let marker = &mut markers[probe_indexes[idx] as usize];
+                                if !validity.get_bit(idx) {
+                                    if *marker == MarkerKind::False {
+                                        *marker = MarkerKind::Null;
+                                    }
+                                } else if data.get_bit(idx) {
+                                    *marker = MarkerKind::True;
+                                }
+                            }
+
+                            index = new_index;
+                            remain -= addition;
+
+                            build_indexes.clear();
+                            probe_indexes.clear();
                         }
                     }
                 }
@@ -153,21 +172,30 @@ impl JoinHashTable {
         let probe_chunk = Chunk::take(input, &probe_indexes)?;
         let build_chunk = self.row_space.gather(&build_indexes)?;
         let merged_chunk = self.merge_eq_chunk(&build_chunk, &probe_chunk)?;
-        todo!("expression");
-        // let type_vector = other_predicate.eval(&func_ctx, &merged_chunk)?;
-        // let filter_column = type_vector.vector();
-        // let filter_viewer = BooleanViewer::try_create(filter_column)?;
 
-        // for idx in 0..filter_viewer.len() {
-        //     let marker = &mut markers[probe_indexes[idx] as usize];
-        //     if !filter_viewer.valid_at(idx) {
-        //         if *marker == MarkerKind::False {
-        //             *marker = MarkerKind::Null;
-        //         }
-        //     } else if filter_viewer.value_at(idx) {
-        //         *marker = MarkerKind::True;
-        //     }
-        // }
+        let evaluator = Evaluator::new(&merged_chunk, func_ctx.clone(), &BUILTIN_FUNCTIONS);
+        let type_vector = evaluator
+            .run(&other_predicate)?
+            .convert_to_full_column(other_predicate.data_type(), merged_chunk.num_rows());
+
+        let filter = match type_vector {
+            Column::Nullable(_) => type_vector,
+            other => Column::Nullable(Box::new(other)),
+        };
+        let filter_viewer = NullableType::<BooleanType>::try_downcast_column(&filter).unwrap();
+        let validity = &filter_viewer.validity;
+        let data = &filter_viewer.column;
+
+        for idx in 0..filter_viewer.len() {
+            let marker = &mut markers[probe_indexes[idx] as usize];
+            if !validity.get_bit(idx) {
+                if *marker == MarkerKind::False {
+                    *marker = MarkerKind::Null;
+                }
+            } else if data.get_bit(idx) {
+                *marker = MarkerKind::True;
+            }
+        }
 
         Ok(vec![self.merge_eq_chunk(
             &self.create_marker_chunk(has_null, markers)?,
