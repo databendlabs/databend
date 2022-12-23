@@ -318,11 +318,16 @@ impl ScheduleQueue {
     pub fn schedule(mut self, global: &ExecutorTasksQueue, context: &mut ExecutorWorkerContext) {
         debug_assert!(!context.has_task());
 
-        match self.sync_queue.is_empty() {
-            false => self.schedule_sync(global, context),
-            true if !self.async_queue.is_empty() => self.schedule_async(global, context),
+        match self.async_queue.is_empty() {
+            false => self.schedule_async(global, context),
+            true if !self.sync_queue.is_empty() => self.schedule_sync(global, context),
             true => { /* do nothing*/ }
         }
+        // match self.sync_queue.is_empty() {
+        //     false => self.schedule_sync(global, context),
+        //     true if !self.async_queue.is_empty() => self.schedule_async(global, context),
+        //     true => { /* do nothing*/ }
+        // }
 
         if !self.sync_queue.is_empty() || !self.async_queue.is_empty() {
             self.schedule_tail(global, context);

@@ -247,16 +247,16 @@ impl ExecutorTasks {
 
     #[inline]
     fn pop_worker_task(&mut self, worker_id: usize) -> ExecutorTask {
-        if let Some(processor) = self.workers_sync_tasks[worker_id].pop_front() {
-            return ExecutorTask::Sync(processor);
+        if let Some(processor) = self.workers_async_tasks[worker_id].pop_front() {
+            return ExecutorTask::Async(processor);
         }
 
         if let Some(task) = self.workers_completed_async_tasks[worker_id].pop_front() {
             return ExecutorTask::AsyncCompleted(task);
         }
 
-        if let Some(processor) = self.workers_async_tasks[worker_id].pop_front() {
-            return ExecutorTask::Async(processor);
+        if let Some(processor) = self.workers_sync_tasks[worker_id].pop_front() {
+            return ExecutorTask::Sync(processor);
         }
 
         ExecutorTask::None
