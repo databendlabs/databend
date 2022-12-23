@@ -132,7 +132,7 @@ impl PlanFragment {
         let mut fragment_actions = QueryFragmentActions::create(true, self.fragment_id);
 
         let partitions = &read_source.parts;
-        let partition_reshuffle = partitions.reshuffle(executors.clone())?;
+        let partition_reshuffle = partitions.reshuffle(executors)?;
 
         for (executor, parts) in partition_reshuffle.iter() {
             let mut new_read_source = read_source.clone();
