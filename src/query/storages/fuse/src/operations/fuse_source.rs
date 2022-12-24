@@ -13,9 +13,12 @@
 //  limitations under the License.
 
 use std::sync::Arc;
+use common_catalog::plan::{DataSourcePlan, PushDownInfo};
 
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
+use common_meta_app::schema::TableInfo;
+use common_pipeline_core::Pipeline;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_sql::evaluator::EvalNode;
@@ -24,6 +27,7 @@ use super::fuse_native_source::FuseNativeSource;
 use super::fuse_parquet_source::FuseParquetSource;
 use crate::fuse_table::FuseStorageFormat;
 use crate::io::BlockReader;
+use crate::operations::fuse_parquet_source_new::build_fuse_parquet_source_pipeline;
 
 pub struct FuseTableSource;
 
@@ -55,5 +59,26 @@ impl FuseTableSource {
                 remain_reader,
             ),
         }
+    }
+}
+
+pub fn build_fuse_source_pipeline(
+    ctx: Arc<dyn TableContext>,
+    pipeline: &mut Pipeline,
+    storage_format: FuseStorageFormat,
+    block_reader: Arc<BlockReader>,
+    max_io_requests: usize,
+) -> Result<()> {
+    let max_threads = ctx.get_settings().get_max_threads()? as usize;
+
+    match storage_format {
+        FuseStorageFormat::Parquet => build_fuse_parquet_source_pipeline(
+            ctx,
+            pipeline,
+            block_reader,
+            max_threads,
+            max_io_requests,
+        ),
+        _ => unimplemented!()
     }
 }

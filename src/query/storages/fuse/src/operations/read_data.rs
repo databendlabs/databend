@@ -32,6 +32,7 @@ use crate::fuse_lazy_part::FuseLazyPartInfo;
 use crate::io::BlockReader;
 use crate::operations::FuseTableSource;
 use crate::FuseTable;
+use crate::operations::fuse_source::build_fuse_source_pipeline;
 
 /// Read data kind to avoid OOM.
 pub enum ReadDataKind {
@@ -51,64 +52,10 @@ impl FuseTable {
 
     // Build the block reader.
     fn build_block_reader(&self, plan: &DataSourcePlan) -> Result<Arc<BlockReader>> {
-        match PushDownInfo::prewhere_of_push_downs(&plan.push_downs) {
-            None => {
-                let projection = PushDownInfo::projection_of_push_downs(
-                    &self.table_info.schema(),
-                    &plan.push_downs,
-                );
-                self.create_block_reader(projection)
-            }
-            Some(v) => self.create_block_reader(v.output_columns),
-        }
-    }
-
-    // Build the prewhere reader.
-    fn build_prewhere_reader(&self, plan: &DataSourcePlan) -> Result<Arc<BlockReader>> {
-        match PushDownInfo::prewhere_of_push_downs(&plan.push_downs) {
-            None => {
-                let projection = PushDownInfo::projection_of_push_downs(
-                    &self.table_info.schema(),
-                    &plan.push_downs,
-                );
-                self.create_block_reader(projection)
-            }
-            Some(v) => self.create_block_reader(v.prewhere_columns),
-        }
-    }
-
-    // Build the prewhere filter executor.
-    fn build_prewhere_filter_executor(
-        &self,
-        _ctx: Arc<dyn TableContext>,
-        plan: &DataSourcePlan,
-        schema: DataSchemaRef,
-    ) -> Result<Arc<Option<EvalNode>>> {
-        Ok(
-            match PushDownInfo::prewhere_of_push_downs(&plan.push_downs) {
-                None => Arc::new(None),
-                Some(v) => {
-                    let executor = Evaluator::eval_expression(&v.filter, schema.as_ref())?;
-                    Arc::new(Some(executor))
-                }
-            },
-        )
-    }
-
-    // Build the remain reader.
-    fn build_remain_reader(&self, plan: &DataSourcePlan) -> Result<Arc<Option<BlockReader>>> {
-        Ok(
-            match PushDownInfo::prewhere_of_push_downs(&plan.push_downs) {
-                None => Arc::new(None),
-                Some(v) => {
-                    if v.remain_columns.is_empty() {
-                        Arc::new(None)
-                    } else {
-                        Arc::new(Some((*self.create_block_reader(v.remain_columns)?).clone()))
-                    }
-                }
-            },
-        )
+        self.create_block_reader(PushDownInfo::projection_of_push_downs(
+            &self.table_info.schema(),
+            &plan.push_downs,
+        ))
     }
 
     fn adjust_io_request(
@@ -199,40 +146,11 @@ impl FuseTable {
             });
         }
 
-        let projection =
-            PushDownInfo::projection_of_push_downs(&self.table_info.schema(), &plan.push_downs);
+        let projection = PushDownInfo::projection_of_push_downs(&self.table_info.schema(), &plan.push_downs);
         let max_io_requests = self.adjust_io_request(&ctx, &projection, read_kind)?;
+
+
         let block_reader = self.build_block_reader(plan)?;
-        let prewhere_reader = self.build_prewhere_reader(plan)?;
-        let prewhere_filter =
-            self.build_prewhere_filter_executor(ctx.clone(), plan, prewhere_reader.schema())?;
-        let remain_reader = self.build_remain_reader(plan)?;
-
-        info!("read block data adjust max io requests:{}", max_io_requests);
-
-        // Add source pipe.
-        pipeline.add_source(
-            |output| {
-                FuseTableSource::create(
-                    ctx.clone(),
-                    output,
-                    block_reader.clone(),
-                    prewhere_reader.clone(),
-                    prewhere_filter.clone(),
-                    remain_reader.clone(),
-                    self.storage_format,
-                )
-            },
-            max_io_requests,
-        )?;
-
-        // Resize pipeline to max threads.
-        let max_threads = ctx.get_settings().get_max_threads()? as usize;
-        let resize_to = std::cmp::min(max_threads, max_io_requests);
-        info!(
-            "read block pipeline resize from:{} to:{}",
-            max_io_requests, resize_to
-        );
-        pipeline.resize(resize_to)
+        build_fuse_source_pipeline(ctx, pipeline, self.storage_format, block_reader, max_io_requests)
     }
 }
