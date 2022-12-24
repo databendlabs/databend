@@ -39,7 +39,7 @@ pub fn build_fuse_native_source_pipeline(
                 ctx.clone(),
                 output,
                 block_reader.clone(),
-            ), max_threads)?;
+            ), max_io_requests)?;
 
             pipeline.resize(std::cmp::min(max_threads, max_io_requests))?;
 
@@ -82,7 +82,7 @@ pub fn build_fuse_parquet_source_pipeline(
                 ctx.clone(),
                 output,
                 block_reader.clone(),
-            ), max_threads)?;
+            ), max_io_requests)?;
 
             pipeline.resize(std::cmp::min(max_threads, max_io_requests))?;
 
