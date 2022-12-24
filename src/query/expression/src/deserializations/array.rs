@@ -53,6 +53,10 @@ impl TypeDeserializer for ArrayDeserializer {
         self.inner.memory_size() + self.offsets.len() * std::mem::size_of::<u64>()
     }
 
+    fn len(&self) -> usize {
+        self.offsets.len() - 1
+    }
+
     fn de_binary(&mut self, reader: &mut &[u8], format: &FormatSettings) -> Result<()> {
         let size = reader.read_uvarint()?;
         for _i in 0..size {

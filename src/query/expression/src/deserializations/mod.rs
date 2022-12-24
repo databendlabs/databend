@@ -47,6 +47,7 @@ use crate::Scalar;
 #[enum_dispatch]
 pub trait TypeDeserializer: Send + Sync {
     fn memory_size(&self) -> usize;
+    fn len(&self) -> usize;
 
     fn de_binary(&mut self, reader: &mut &[u8], format: &FormatSettings) -> Result<()>;
 

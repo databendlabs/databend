@@ -43,6 +43,10 @@ impl TypeDeserializer for TupleDeserializer {
         self.inners.iter().map(|d| d.memory_size()).sum()
     }
 
+    fn len(&self) -> usize {
+        self.inners.first().map(|c| c.len()).unwrap_or_default()
+    }
+
     fn de_binary(&mut self, reader: &mut &[u8], format: &FormatSettings) -> Result<()> {
         for inner in self.inners.iter_mut() {
             inner.de_binary(reader, format)?;

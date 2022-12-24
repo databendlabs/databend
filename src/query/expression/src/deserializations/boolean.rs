@@ -28,6 +28,10 @@ impl TypeDeserializer for BooleanDeserializer {
         self.len()
     }
 
+    fn len(&self) -> usize {
+        MutableBitmap::len(self)
+    }
+
     fn de_binary(&mut self, reader: &mut &[u8], _format: &FormatSettings) -> Result<()> {
         let value: bool = reader.read_scalar()?;
         self.push(value);

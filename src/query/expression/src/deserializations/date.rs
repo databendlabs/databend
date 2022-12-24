@@ -46,6 +46,10 @@ impl TypeDeserializer for DateDeserializer {
         self.builder.len() * std::mem::size_of::<i32>()
     }
 
+    fn len(&self) -> usize {
+        self.builder.len()
+    }
+
     fn de_binary(&mut self, reader: &mut &[u8], _format: &FormatSettings) -> Result<()> {
         let value: i32 = reader.read_scalar()?;
         self.builder.push(value);

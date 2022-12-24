@@ -43,6 +43,10 @@ impl TypeDeserializer for NullableDeserializer {
         self.inner.memory_size() + self.validity.as_slice().len()
     }
 
+    fn len(&self) -> usize {
+        self.inner.len()
+    }
+
     fn de_binary(&mut self, reader: &mut &[u8], format: &FormatSettings) -> Result<()> {
         let valid: bool = reader.read_scalar()?;
         if valid {

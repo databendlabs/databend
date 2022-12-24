@@ -43,6 +43,10 @@ impl TypeDeserializer for VariantDeserializer {
             + self.builder.offsets.len() * std::mem::size_of::<u64>()
     }
 
+    fn len(&self) -> usize {
+        self.builder.len()
+    }
+
     fn de_default(&mut self) {
         self.builder.put(JSONB_NULL);
         self.builder.commit_row();

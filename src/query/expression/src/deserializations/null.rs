@@ -26,6 +26,10 @@ impl TypeDeserializer for NullDeserializer {
         std::mem::size_of::<usize>()
     }
 
+    fn len(&self) -> usize {
+        *self
+    }
+
     fn de_binary(&mut self, _reader: &mut &[u8], _format: &FormatSettings) -> Result<()> {
         *self += 1;
         Ok(())
