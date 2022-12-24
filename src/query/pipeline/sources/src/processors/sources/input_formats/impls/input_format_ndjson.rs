@@ -19,6 +19,7 @@ use bstr::ByteSlice;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::TableSchemaRef;
+use common_expression::TypeDeserializer;
 use common_expression::TypeDeserializerImpl;
 use common_formats::FieldDecoder;
 use common_formats::FieldJsonAstDecoder;
