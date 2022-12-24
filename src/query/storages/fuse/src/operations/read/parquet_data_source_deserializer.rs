@@ -68,6 +68,10 @@ impl Processor for DeserializeDataTransform {
         }
 
         if !self.chunks.is_empty() {
+            if !self.input.has_data() {
+                self.input.set_need_data();
+            }
+
             return Ok(Event::Sync);
         }
 

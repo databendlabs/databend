@@ -94,18 +94,24 @@ impl Processor for ReadParquetDataSource<false> {
     }
 
     async fn async_process(&mut self) -> Result<()> {
-        if let Some(part) = self.ctx.try_get_part() {
-            let mut parts = Vec::with_capacity(2);
-            let mut chunks = Vec::with_capacity(2);
+        let mut parts = Vec::with_capacity(2);
+        let mut chunks = Vec::with_capacity(2);
 
-            parts.push(part.clone());
-            chunks.push(self.block_reader.read_columns_data(part));
-
+        for index in 0..2 {
             if let Some(part) = self.ctx.try_get_part() {
                 parts.push(part.clone());
-                chunks.push(self.block_reader.read_columns_data(part));
-            }
+                let block_reader = self.block_reader.clone();
 
+                chunks.push(async move {
+                    let handler = common_base::base::tokio::spawn(async move {
+                        block_reader.read_columns_data(part).await
+                    });
+                    handler.await.unwrap()
+                });
+            }
+        }
+
+        if !parts.is_empty() {
             self.output_data = Some((parts, futures::future::try_join_all(chunks).await?));
             return Ok(());
         }
