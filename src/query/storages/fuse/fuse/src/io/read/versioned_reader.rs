@@ -59,13 +59,12 @@ impl VersionedReader<TableSnapshotStatistics> for TableSnapshotStatisticsVersion
 impl VersionedReader<SegmentInfo> for SegmentInfoVersion {
     async fn read<R>(&self, reader: R) -> Result<SegmentInfo>
     where R: AsyncRead + Unpin + Send {
-        todo!("expression");
-        // let r = match self {
-        //     SegmentInfoVersion::V2(v) => load_by_version(reader, v).await?,
-        //     SegmentInfoVersion::V1(v) => load_by_version(reader, v).await?.into(),
-        //     SegmentInfoVersion::V0(v) => load_by_version(reader, v).await?.into(),
-        // };
-        // Ok(r)
+        let r = match self {
+            SegmentInfoVersion::V2(v) => load_by_version(reader, v).await?,
+            SegmentInfoVersion::V1(v) => load_by_version(reader, v).await?.into(),
+            SegmentInfoVersion::V0(v) => load_by_version(reader, v).await?.into(),
+        };
+        Ok(r)
     }
 }
 

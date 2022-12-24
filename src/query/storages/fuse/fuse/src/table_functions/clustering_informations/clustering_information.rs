@@ -97,13 +97,7 @@ impl<'a> ClusteringInformation<'a> {
             }
         };
 
-        let names = self
-            .cluster_keys
-            .iter()
-            .map(|x| x.into_expr(&BUILTIN_FUNCTIONS).unwrap().column_name())
-            .collect::<Vec<String>>()
-            .join(", ");
-        let cluster_by_keys = format!("({})", names);
+        let cluster_by_keys = "_cluster_keys".to_string();
 
         Ok(Chunk::new_from_sequence(
             vec![

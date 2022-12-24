@@ -478,7 +478,7 @@ impl PhysicalPlanBuilder {
                     .map(|scalar| {
                         let raw_expr = scalar.as_raw_expr();
                         let filter = check(&raw_expr, &BUILTIN_FUNCTIONS)?;
-                        RemoteExpr::from_expr(&filter)
+                        Ok(RemoteExpr::from_expr(&filter))
                     })
                     .collect::<Result<Vec<_>>>()
             })
