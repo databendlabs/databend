@@ -37,22 +37,22 @@ use crate::io::BlockReader;
 
 type DataChunks = Vec<(usize, Vec<u8>)>;
 
-pub struct PrewhereData<'a> {
+pub struct PrewhereData {
     chunk: Chunk,
-    filter: &'a Value<AnyType>,
+    filter: Value<AnyType>,
 }
 
-enum State<'a> {
+enum State {
     ReadDataPrewhere(Option<PartInfoPtr>),
-    ReadDataRemain(PartInfoPtr, PrewhereData<'a>),
+    ReadDataRemain(PartInfoPtr, PrewhereData),
     PrewhereFilter(PartInfoPtr, DataChunks),
-    Deserialize(PartInfoPtr, DataChunks, Option<PrewhereData<'a>>),
+    Deserialize(PartInfoPtr, DataChunks, Option<PrewhereData>),
     Generated(Option<PartInfoPtr>, Chunk),
     Finish,
 }
 
-pub struct FuseParquetSource<'a> {
-    state: State<'a>,
+pub struct FuseParquetSource {
+    state: State,
     ctx: Arc<dyn TableContext>,
     scan_progress: Arc<Progress>,
     output: Arc<OutputPort>,
@@ -65,7 +65,7 @@ pub struct FuseParquetSource<'a> {
     support_blocking: bool,
 }
 
-impl FuseParquetSource<'_> {
+impl FuseParquetSource {
     pub fn create(
         ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
@@ -106,7 +106,7 @@ impl FuseParquetSource<'_> {
 }
 
 #[async_trait::async_trait]
-impl Processor for FuseParquetSource<'_> {
+impl Processor for FuseParquetSource {
     fn name(&self) -> String {
         "FuseEngineSource".to_string()
     }
@@ -246,7 +246,7 @@ impl Processor for FuseParquetSource<'_> {
                     } else {
                         self.state = State::ReadDataRemain(part, PrewhereData {
                             chunk,
-                            filter: &predicate,
+                            filter: predicate,
                         });
                     }
                     Ok(())

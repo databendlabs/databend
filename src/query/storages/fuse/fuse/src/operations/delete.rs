@@ -231,7 +231,7 @@ impl FuseTable {
                     output,
                     self,
                     block_reader.clone(),
-                    filter,
+                    Arc::new(filter.clone()),
                     remain_reader.clone(),
                 )
             },

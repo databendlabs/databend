@@ -82,14 +82,14 @@ enum State {
     Finish,
 }
 
-pub struct DeletionSource<'a> {
+pub struct DeletionSource {
     state: State,
     ctx: Arc<dyn TableContext>,
     output: Arc<OutputPort>,
     location_gen: TableMetaLocationGenerator,
     dal: Operator,
     block_reader: Arc<BlockReader>,
-    filter: &'a RemoteExpr<String>,
+    filter: Arc<RemoteExpr<String>>,
     remain_reader: Arc<Option<BlockReader>>,
 
     source_schema: TableSchemaRef,
@@ -99,13 +99,13 @@ pub struct DeletionSource<'a> {
     origin_stats: Option<ClusterStatistics>,
 }
 
-impl DeletionSource<'_> {
+impl DeletionSource {
     pub fn try_create(
         ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
         table: &FuseTable,
         block_reader: Arc<BlockReader>,
-        filter: &RemoteExpr<String>,
+        filter: Arc<RemoteExpr<String>>,
         remain_reader: Arc<Option<BlockReader>>,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(DeletionSource {
@@ -127,7 +127,7 @@ impl DeletionSource<'_> {
 }
 
 #[async_trait::async_trait]
-impl Processor for DeletionSource<'_> {
+impl Processor for DeletionSource {
     fn name(&self) -> String {
         "DeletionSource".to_string()
     }
@@ -246,7 +246,7 @@ impl Processor for DeletionSource<'_> {
 
                 // todo!("expression")
                 // let chunk = merged.resort(self.output_schema.clone())?;
-                self.state = State::NeedSerialize(chunk);
+                self.state = State::NeedSerialize(merged);
             }
             State::NeedSerialize(chunk) => {
                 let cluster_stats = self
