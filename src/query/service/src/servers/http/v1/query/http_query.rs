@@ -148,7 +148,7 @@ pub struct StageAttachmentConf {
     /// location of the stage
     /// for example: @stage_name/path/to/file, @~/path/to/file
     pub(crate) location: String,
-    pub(crate) format_options: Option<BTreeMap<String, String>>,
+    pub(crate) file_format_options: Option<BTreeMap<String, String>>,
     pub(crate) copy_options: Option<BTreeMap<String, String>>,
 }
 
@@ -243,7 +243,7 @@ impl HttpQuery {
         match &request.stage_attachment {
             Some(attachment) => ctx.attach_stage(StageAttachment {
                 location: attachment.location.clone(),
-                format_options: match attachment.format_options {
+                file_format_options: match attachment.file_format_options {
                     Some(ref params) => params.clone(),
                     None => BTreeMap::new(),
                 },

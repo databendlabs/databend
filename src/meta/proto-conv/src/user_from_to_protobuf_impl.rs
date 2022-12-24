@@ -338,6 +338,9 @@ impl FromToProto for mt::StageFileFormatType {
                 Ok(pb::user_stage_info::StageFileFormatType::Parquet)
             }
             mt::StageFileFormatType::Xml => Ok(pb::user_stage_info::StageFileFormatType::Xml),
+            mt::StageFileFormatType::None => Err(Incompatible {
+                reason: "StageFileFormatType::None cannot be converted to protobuf".to_string(),
+            }),
         }
     }
 }

@@ -18,16 +18,12 @@ use common_formats::ClickhouseFormatType;
 use common_storages_fuse_result::ResultTable;
 use poem::error::BadRequest;
 use poem::error::Error as PoemError;
-use poem::error::InternalServerError;
-use poem::error::NotFound;
 use poem::error::Result as PoemResult;
 use poem::get;
 use poem::http::StatusCode;
 use poem::post;
 use poem::web::Json;
 use poem::web::Path;
-use poem::web::Query;
-use poem::Body;
 use poem::IntoResponse;
 use poem::Route;
 use serde::Deserialize;
@@ -40,13 +36,11 @@ use super::query::ExecuteStateKind;
 use super::query::HttpQueryRequest;
 use super::query::HttpQueryResponseInternal;
 use crate::servers::http::v1::query::Progresses;
-use crate::servers::http::v1::Downloader;
 use crate::servers::http::v1::HttpQueryContext;
 use crate::servers::http::v1::HttpQueryManager;
 use crate::servers::http::v1::HttpSessionConf;
 use crate::servers::http::v1::JsonBlock;
 use crate::sessions::QueryAffect;
-use crate::sessions::SessionType;
 const HEADER_QUERY_ID: &str = "X-DATABEND-QUERY-ID";
 const HEADER_QUERY_STATE: &str = "X-DATABEND-QUERY-STATE";
 const HEADER_QUERY_PAGE_ROWS: &str = "X-DATABEND-QUERY-PAGE-ROWS";
@@ -302,7 +296,6 @@ pub fn query_route() -> Route {
     Route::new()
         .at("/", post(query_handler))
         .at("/:id", get(query_state_handler))
-        .at("/:id/download", get(result_download_handler))
         .at("/:id/page/:page_no", get(query_page_handler))
         .at(
             "/:id/kill",
@@ -319,64 +312,4 @@ fn query_id_not_found(query_id: String) -> PoemError {
         format!("query id not found {}", query_id),
         StatusCode::NOT_FOUND,
     )
-}
-
-#[derive(Deserialize)]
-struct DownloadHandlerParams {
-    pub format: Option<String>,
-    pub limit: Option<usize>,
-}
-
-#[poem::handler]
-async fn result_download_handler(
-    ctx: &HttpQueryContext,
-    Path(query_id): Path<String>,
-    Query(params): Query<DownloadHandlerParams>,
-) -> PoemResult<Body> {
-    let default_format = "csv".to_string();
-    let format_name = &params.format.unwrap_or(default_format);
-    let session = ctx.get_session(SessionType::HTTPQuery);
-    let format = ClickhouseFormatType::parse_clickhouse_format(format_name).map_err(BadRequest)?;
-
-    let http_query_manager = HttpQueryManager::instance();
-    if let Some(query) = http_query_manager.get_query(&query_id).await {
-        let state = query.get_response_state_only().await.state;
-        match state.state {
-            ExecuteStateKind::Running => {
-                return Err(PoemError::from_string(
-                    "running",
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                ));
-            }
-            ExecuteStateKind::Failed => {
-                return Err(PoemError::from_string(
-                    "failed",
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                ));
-            }
-            ExecuteStateKind::Succeeded => {}
-        }
-    }
-    let ctx = session
-        .create_query_context()
-        .await
-        .map_err(InternalServerError)?;
-
-    let result_table = ResultTable::try_get(ctx.clone(), &query_id)
-        .await
-        .map_err(|e| {
-            if e.code() == ErrorCode::HTTP_NOT_FOUND {
-                NotFound(e)
-            } else {
-                InternalServerError(e)
-            }
-        })?;
-
-    let stream = result_table
-        .download(ctx, format, params.limit)
-        .await
-        .map_err(InternalServerError)?;
-
-    let body = Body::from_bytes_stream::<_, _, ErrorCode>(stream);
-    Ok(body)
 }

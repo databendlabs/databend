@@ -322,7 +322,7 @@ pub trait TableExt: Table {
 
 impl<T: ?Sized> TableExt for T where T: Table {}
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum NavigationPoint {
     SnapshotID(String),
     TimePoint(DateTime<Utc>),

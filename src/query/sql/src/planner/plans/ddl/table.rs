@@ -16,6 +16,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use common_ast::ast::Engine;
+use common_catalog::table::NavigationPoint;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::DataField;
@@ -121,11 +122,10 @@ impl OptimizeTablePlan {
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum OptimizeTableAction {
     All,
-    Purge,
-    Statistic,
+    Purge(Option<NavigationPoint>),
     CompactBlocks(Option<usize>),
     CompactSegments(Option<usize>),
 }
