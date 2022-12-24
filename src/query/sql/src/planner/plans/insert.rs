@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_catalog::table_context::StageAttachment;
 use common_expression::Chunk;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
@@ -22,7 +23,6 @@ use common_expression::TableSchemaRefExt;
 use common_meta_types::FileFormatOptions;
 use common_meta_types::MetaId;
 use common_pipeline_sources::processors::sources::input_formats::InputContext;
-use common_storages_stage::StageAttachment;
 
 use super::Plan;
 

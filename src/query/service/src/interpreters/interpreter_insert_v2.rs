@@ -30,6 +30,7 @@ use common_base::runtime::GlobalIORuntime;
 use common_catalog::plan::StageFileInfo;
 use common_catalog::plan::StageTableInfo;
 use common_catalog::table::AppendMode;
+use common_catalog::table_context::StageAttachment;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::type_check;
@@ -68,11 +69,8 @@ use common_sql::plans::ConstantExpr;
 use common_sql::plans::Scalar;
 use common_sql::Metadata;
 use common_sql::MetadataRef;
-use common_sql::PlannerContext;
-use common_sql::ScalarBinder;
 use common_storages_factory::Table;
 use common_storages_fuse::io::Files;
-use common_storages_stage::StageAttachment;
 use common_storages_stage::StageTable;
 use common_users::UserApiProvider;
 use parking_lot::Mutex;
@@ -459,7 +457,7 @@ impl Interpreter for InsertInterpreterV2 {
 
 pub struct ValueSource {
     data: String,
-    ctx: Arc<dyn PlannerContext>,
+    ctx: Arc<dyn TableContext>,
     name_resolution_ctx: NameResolutionContext,
     bind_context: BindContext,
     schema: DataSchemaRef,
@@ -504,7 +502,7 @@ impl AsyncSource for ValueSource {
 impl ValueSource {
     pub fn new(
         data: String,
-        ctx: Arc<dyn PlannerContext>,
+        ctx: Arc<dyn TableContext>,
         name_resolution_ctx: NameResolutionContext,
         schema: DataSchemaRef,
     ) -> Self {
@@ -775,7 +773,7 @@ async fn fill_default_value(
 async fn exprs_to_scalar<'a>(
     exprs: Vec<AExpr<'a>>,
     schema: &DataSchemaRef,
-    ctx: Arc<dyn PlannerContext>,
+    ctx: Arc<dyn TableContext>,
     name_resolution_ctx: &NameResolutionContext,
     bind_context: &BindContext,
     metadata: MetadataRef,

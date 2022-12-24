@@ -21,7 +21,7 @@ use tokio_stream::StreamExt;
 
 use crate::storages::fuse::table_test_fixture::*;
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_clustering_information_table_read() -> Result<()> {
     let fixture = TestFixture::new().await;
     let db = fixture.default_db_name();

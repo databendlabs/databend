@@ -158,7 +158,7 @@ impl FuseTable {
         let schema = table_info.schema();
         // sort
         let sort_descs: Vec<SortColumnDescription> = self
-            .cluster_keys()
+            .cluster_keys(ctx.clone())
             .iter()
             .map(|remote_expr| {
                 let expr = remote_expr
@@ -201,7 +201,7 @@ impl FuseTable {
             .iter()
             .map(|f| DataField::from(f))
             .collect();
-        for remote_expr in self.cluster_keys().iter() {
+        for remote_expr in self.cluster_keys(ctx.clone()).iter() {
             let expr = remote_expr.into_expr(&BUILTIN_FUNCTIONS).unwrap();
             let cname = expr.column_name();
             if !output_fields.iter().any(|x| x.name() == &cname) {

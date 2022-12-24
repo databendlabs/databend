@@ -77,7 +77,7 @@ impl FuseTable {
         let cluster_stats_gen =
             self.get_cluster_stats_gen(ctx.clone(), pipeline, 0, block_compact_thresholds)?;
 
-        let cluster_keys = self.cluster_keys();
+        let cluster_keys = self.cluster_keys(ctx.clone());
         if !cluster_keys.is_empty() {
             let schema = self.table_info.schema();
             // sort
@@ -152,7 +152,7 @@ impl FuseTable {
         level: i32,
         chunk_compactor: ChunkCompactThresholds,
     ) -> Result<ClusterStatsGenerator> {
-        let cluster_keys = self.cluster_keys();
+        let cluster_keys = self.cluster_keys(ctx.clone());
         if cluster_keys.is_empty() {
             return Ok(ClusterStatsGenerator::default());
         }

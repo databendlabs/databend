@@ -57,7 +57,7 @@ async fn apply_block_pruning(
         .map(|v| v.into_iter().map(|(_, v)| v).collect())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_block_pruner() -> Result<()> {
     let fixture = TestFixture::new().await;
     let ctx = fixture.ctx();
@@ -207,7 +207,7 @@ async fn test_block_pruner() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_block_pruner_monotonic() -> Result<()> {
     let fixture = TestFixture::new().await;
     let ctx = fixture.ctx();

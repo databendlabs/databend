@@ -145,7 +145,9 @@ impl<'a> ClusteringInformation<'a> {
     }
 
     fn get_min_max_stats(&self, block: &BlockMeta) -> Result<(Vec<Scalar>, Vec<Scalar>)> {
-        if self.table.cluster_keys() != self.cluster_keys || block.cluster_stats.is_none() {
+        if self.table.cluster_keys(self.ctx.clone()) != self.cluster_keys
+            || block.cluster_stats.is_none()
+        {
             // Todo(zhyass): support manually specifying the cluster key.
             return Err(ErrorCode::Unimplemented("Unimplemented"));
         }

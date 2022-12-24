@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_catalog::table::Table;
+use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::Expr;
@@ -40,13 +41,17 @@ pub fn parse_func_table_args(table_args: &TableArgs) -> Result<(String, String)>
     }
 }
 
-pub fn get_cluster_keys(table: &FuseTable, definition: &str) -> Result<Vec<RemoteExpr<String>>> {
+pub fn get_cluster_keys(
+    ctx: Arc<dyn TableContext>,
+    table: &FuseTable,
+    definition: &str,
+) -> Result<Vec<RemoteExpr<String>>> {
     todo!("expression");
     // let cluster_keys = if !definition.is_empty() {
     //     let table_meta = Arc::new(table.clone());
-    //     ExpressionParser::parse_exprs(table_meta, definition)?
+    //     ExpressionParser::parse_exprs(ctx, table_meta, definition)?
     // } else {
-    //     table.cluster_keys()
+    //     table.cluster_keys(ctx)
     // };
 
     // if cluster_keys.is_empty() {

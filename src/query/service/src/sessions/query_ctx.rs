@@ -32,6 +32,7 @@ use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::StageTableInfo;
+use common_catalog::table_context::StageAttachment;
 use common_config::DATABEND_COMMIT_VERSION;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -43,10 +44,9 @@ use common_meta_app::schema::TableInfo;
 use common_meta_types::RoleInfo;
 use common_meta_types::UserInfo;
 use common_settings::Settings;
-use common_sql::PlannerContext;
 use common_storage::DataOperator;
 use common_storage::StorageMetrics;
-use common_storages_stage::StageAttachment;
+use common_storages_fuse::TableContext;
 use common_storages_stage::StageTable;
 use parking_lot::RwLock;
 use tracing::debug;
@@ -61,7 +61,6 @@ use crate::sessions::ProcessInfo;
 use crate::sessions::QueryContextShared;
 use crate::sessions::Session;
 use crate::sessions::SessionManager;
-use crate::sessions::TableContext;
 use crate::storages::Table;
 
 #[derive(Clone)]
@@ -351,10 +350,7 @@ impl TableContext for QueryContext {
     fn get_processes_info(&self) -> Vec<ProcessInfo> {
         SessionManager::instance().processes_info()
     }
-}
 
-#[async_trait::async_trait]
-impl PlannerContext for QueryContext {
     // Get Stage Attachment.
     fn get_stage_attachment(&self) -> Option<StageAttachment> {
         self.shared.get_stage_attachment()

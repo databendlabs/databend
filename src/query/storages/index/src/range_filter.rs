@@ -198,8 +198,14 @@ fn try_convert_is_null(name: &str, args: Vec<Expression>) -> (Vec<Expression>, S
             name: inner_name,
             args: inner_args,
             ..
-        }))
+        } = &args[0]
+        {
+            if inner_name == "is_not_null" {
+                return (inner_args.clone(), String::from("is_null"));
+            }
+        }
     }
+    (args, String::from(name))
 }
 
 fn statistics_to_domain(stat: &ColumnStatistics, data_type: &DataType) -> Domain {
