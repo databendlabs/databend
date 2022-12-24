@@ -58,6 +58,7 @@ use crate::version::from_digit_ver;
 use crate::version::to_digit_ver;
 use crate::version::METASRV_SEMVER;
 use crate::version::MIN_METACLI_SEMVER;
+use crate::watcher::WatchStream;
 
 pub struct MetaServiceImpl {
     token: GrpcToken,
@@ -239,10 +240,20 @@ impl MetaService for MetaServiceImpl {
     ) -> Result<Response<Self::WatchStream>, Status> {
         let (tx, rx) = mpsc::channel(4);
 
-        self.meta_node.add_watcher(request.into_inner(), tx);
+        let mn = &self.meta_node;
 
-        let output_stream = tokio_stream::wrappers::ReceiverStream::new(rx);
-        Ok(Response::new(Box::pin(output_stream) as Self::WatchStream))
+        let add_res = mn.add_watcher(request.into_inner(), tx).await;
+
+        match add_res {
+            Ok(watcher) => {
+                let stream = WatchStream::new(rx, watcher, mn.dispatcher_handle.clone());
+                Ok(Response::new(Box::pin(stream) as Self::WatchStream))
+            }
+            Err(e) => {
+                // TODO: test error return.
+                Err(Status::invalid_argument(e))
+            }
+        }
     }
 
     async fn transaction(

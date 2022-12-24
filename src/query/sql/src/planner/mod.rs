@@ -16,7 +16,6 @@ mod format;
 mod metadata;
 #[allow(clippy::module_inception)]
 mod planner;
-mod planner_context;
 mod semantic;
 
 pub mod binder;
@@ -31,7 +30,6 @@ pub use binder::SelectBuilder;
 pub use binder::Visibility;
 pub use metadata::*;
 pub use planner::Planner;
-pub use planner_context::PlannerContext;
 pub use plans::ScalarExpr;
 pub use semantic::normalize_identifier;
 pub use semantic::validate_function_arg;

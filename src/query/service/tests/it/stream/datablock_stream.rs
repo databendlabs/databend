@@ -24,7 +24,7 @@ use common_streams::*;
 use futures::stream::StreamExt;
 use goldenfile::Mint;
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_datablock_stream() {
     let mut mint = Mint::new("tests/it/testdata");
     let file = &mut mint.new_goldenfile("stream_datablock.txt").unwrap();

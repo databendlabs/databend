@@ -1,0 +1,46 @@
+statement ok
+DROP DATABASE IF EXISTS db_09_0009
+
+statement ok
+CREATE DATABASE db_09_0009
+
+statement ok
+USE db_09_0009
+
+statement ok
+create table t(a UInt64, b Int64)
+
+statement ok
+insert into t values (1,2), (3,4)
+
+statement ok
+insert into t values (5,6)
+
+statement ok
+insert into t values (7,8)
+
+query II
+select * from t where a in (1, 2, 3, 4) order by a
+----
+1 2
+3 4
+
+query T
+explain select * from t where a in (1, 2, 3, 4) order by a
+----
+Sort
+├── sort keys: [a ASC NULLS LAST]
+└── TableScan
+    ├── table: default.db_09_0009.t
+    ├── read rows: 2
+    ├── read bytes: 72
+    ├── partitions total: 3
+    ├── partitions scanned: 1
+    └── push downs: [filters: [in(a, (1, 2, 3, 4))], limit: NONE]
+
+statement ok
+DROP TABLE t
+
+statement ok
+DROP DATABASE db_09_0009
+

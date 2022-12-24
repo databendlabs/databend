@@ -44,7 +44,6 @@ use crate::BindContext;
 use crate::ColumnBinding;
 use crate::MetadataRef;
 use crate::NameResolutionContext;
-use crate::PlannerContext;
 use crate::Visibility;
 
 /// Binder is responsible to transform AST of a query into a canonical logical SExpr.
@@ -55,7 +54,7 @@ use crate::Visibility;
 /// - Validate expressions
 /// - Build `Metadata`
 pub struct Binder {
-    pub ctx: Arc<dyn PlannerContext>,
+    pub ctx: Arc<dyn TableContext>,
     pub catalogs: Arc<CatalogManager>,
     pub name_resolution_ctx: NameResolutionContext,
     pub metadata: MetadataRef,
@@ -63,7 +62,7 @@ pub struct Binder {
 
 impl<'a> Binder {
     pub fn new(
-        ctx: Arc<dyn PlannerContext>,
+        ctx: Arc<dyn TableContext>,
         catalogs: Arc<CatalogManager>,
         name_resolution_ctx: NameResolutionContext,
         metadata: MetadataRef,
@@ -161,7 +160,7 @@ impl<'a> Binder {
             Statement::AlterTable(stmt) => self.bind_alter_table(bind_context, stmt).await?,
             Statement::RenameTable(stmt) => self.bind_rename_table(stmt).await?,
             Statement::TruncateTable(stmt) => self.bind_truncate_table(stmt).await?,
-            Statement::OptimizeTable(stmt) => self.bind_optimize_table(stmt).await?,
+            Statement::OptimizeTable(stmt) => self.bind_optimize_table(bind_context, stmt).await?,
             Statement::AnalyzeTable(stmt) => self.bind_analyze_table(stmt).await?,
             Statement::ExistsTable(stmt) => self.bind_exists_table(stmt).await?,
 

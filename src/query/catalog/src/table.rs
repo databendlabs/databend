@@ -97,7 +97,7 @@ pub trait Table: Sync + Send {
         false
     }
 
-    fn cluster_keys(&self) -> Vec<RemoteExpr<String>> {
+    fn cluster_keys(&self, _ctx: Arc<dyn TableContext>) -> Vec<RemoteExpr<String>> {
         vec![]
     }
 
@@ -322,7 +322,7 @@ pub trait TableExt: Table {
 
 impl<T: ?Sized> TableExt for T where T: Table {}
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum NavigationPoint {
     SnapshotID(String),
     TimePoint(DateTime<Utc>),

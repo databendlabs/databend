@@ -308,7 +308,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           version=${{ needs.create_release.outputs.version }}
-          tar -C ./tests/logictest -czvf testsuites-${version}.tar.gz suites
+          tar -C ./tests/sqllogictests -czvf testsuites-${version}.tar.gz suites
           gh release upload ${version} testsuites-${version}.tar.gz --clobber
 
   release_docker_combined:

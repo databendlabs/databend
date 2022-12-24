@@ -44,7 +44,6 @@ use crate::plans::Scalar;
 use crate::plans::ScalarExpr;
 use crate::BindContext;
 use crate::MetadataRef;
-use crate::PlannerContext;
 
 pub struct JoinConditions {
     pub(crate) left_conditions: Vec<Scalar>,
@@ -352,7 +351,7 @@ pub fn check_duplicate_join_tables(
 }
 
 struct JoinConditionResolver<'a> {
-    ctx: Arc<dyn PlannerContext>,
+    ctx: Arc<dyn TableContext>,
     name_resolution_ctx: &'a NameResolutionContext,
     metadata: MetadataRef,
     join_op: JoinOperator,
@@ -365,7 +364,7 @@ struct JoinConditionResolver<'a> {
 impl<'a> JoinConditionResolver<'a> {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        ctx: Arc<dyn PlannerContext>,
+        ctx: Arc<dyn TableContext>,
         name_resolution_ctx: &'a NameResolutionContext,
         metadata: MetadataRef,
         join_op: JoinOperator,

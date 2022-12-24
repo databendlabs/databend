@@ -36,7 +36,7 @@ use databend_query::storages::index::RangeFilter;
 
 use crate::tests::create_query_context;
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_range_filter() -> Result<()> {
     let schema = DataSchemaRefExt::create(vec![
         DataField::new("a", i64::to_data_type()),
@@ -202,6 +202,23 @@ async fn test_range_filter() -> Result<()> {
             expect: true,
             error: "",
         },
+        Test {
+            name: "a in (5, 10, 30)",
+            expr: col("a", i64::to_data_type()).binary_op("in", &Expression::Constant {
+                value: DataValue::Struct(vec![
+                    DataValue::UInt64(5),
+                    DataValue::Int64(10),
+                    DataValue::Int64(30),
+                ]),
+                data_type: DataTypeImpl::Struct(StructType::create(None, vec![
+                    UInt64Type::new_impl(),
+                    Int32Type::new_impl(),
+                    Int64Type::new_impl(),
+                ])),
+            })?,
+            expect: true,
+            error: "",
+        },
     ];
 
     let (_guard, ctx) = create_query_context().await?;
@@ -337,6 +354,22 @@ fn test_build_verifiable_function() -> Result<()> {
                 add(col("b", i32::to_data_type()), func("rand")?),
             ),
             expect: "true",
+        },
+        Test {
+            name: "a in (5, 10, 30)",
+            expr: col("a", i64::to_data_type()).binary_op("in", &Expression::Constant {
+                value: DataValue::Struct(vec![
+                    DataValue::UInt64(5),
+                    DataValue::Int64(10),
+                    DataValue::Int64(30),
+                ]),
+                data_type: DataTypeImpl::Struct(StructType::create(None, vec![
+                    UInt64Type::new_impl(),
+                    Int32Type::new_impl(),
+                    Int64Type::new_impl(),
+                ])),
+            })?,
+            expect: "((max_a >= 5) and (min_a <= 30))",
         },
     ];
 

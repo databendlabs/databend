@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_catalog::table_context::TableContext;
 use common_exception::Result;
 
 use super::LogicalOperator;
@@ -23,7 +24,6 @@ use crate::optimizer::ColumnSet;
 use crate::optimizer::PhysicalProperty;
 use crate::optimizer::RelationalProperty;
 use crate::optimizer::Statistics;
-use crate::PlannerContext;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct DummyTableScan;
@@ -85,7 +85,7 @@ impl PhysicalOperator for DummyTableScan {
 
     fn compute_required_prop_child<'a>(
         &self,
-        _ctx: Arc<dyn PlannerContext>,
+        _ctx: Arc<dyn TableContext>,
         _rel_expr: &crate::optimizer::RelExpr<'a>,
         _child_index: usize,
         required: &crate::optimizer::RequiredProperty,

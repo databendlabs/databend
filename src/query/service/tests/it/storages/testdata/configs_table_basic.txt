@@ -12,7 +12,7 @@ DB.Table: 'system'.'configs', Table: configs-table_id:1, ver:0, Engine: SystemCo
 | log     | level                                | DEBUG                          |             |
 | log     | query_enabled                        | false                          |             |
 | log     | stderr.format                        | text                           |             |
-| log     | stderr.level                         | DEBUG                          |             |
+| log     | stderr.level                         | INFO                           |             |
 | log     | stderr.on                            | true                           |             |
 | meta    | auto_sync_interval                   | 10                             |             |
 | meta    | client_timeout_in_second             | 10                             |             |

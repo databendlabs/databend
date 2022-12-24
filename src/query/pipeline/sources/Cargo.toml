@@ -30,7 +30,7 @@ crossbeam-channel = "0.5.6"
 csv-core = "0.1.10"
 futures = "0.3.24"
 futures-util = "0.3.24"
-opendal = { version = "0.22", features = ["compress"] }
+opendal = { version = "0.23", features = ["compress"] }
 parking_lot = "0.12.1"
 serde = { workspace = true }
 serde_json = { workspace = true }

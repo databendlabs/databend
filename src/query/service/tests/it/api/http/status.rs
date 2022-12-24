@@ -72,7 +72,7 @@ async fn run_query(query_ctx: &Arc<QueryContext>) -> Result<Arc<dyn Interpreter>
     InterpreterFactory::get(query_ctx.clone(), &plan).await
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_status() -> Result<()> {
     // init global services
     let guard = TestGlobalServices::setup(crate::tests::ConfigBuilder::create().build()).await?;

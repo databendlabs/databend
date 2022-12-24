@@ -27,8 +27,10 @@ use common_ast::parser::tokenize_sql;
 use common_ast::Backtrace;
 use common_ast::Dialect;
 use common_base::runtime::GlobalIORuntime;
+use common_catalog::plan::StageFileInfo;
 use common_catalog::plan::StageTableInfo;
 use common_catalog::table::AppendMode;
+use common_catalog::table_context::StageAttachment;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::type_check;
@@ -67,14 +69,14 @@ use common_sql::plans::ConstantExpr;
 use common_sql::plans::Scalar;
 use common_sql::Metadata;
 use common_sql::MetadataRef;
-use common_sql::PlannerContext;
-use common_sql::ScalarBinder;
 use common_storages_factory::Table;
-use common_storages_stage::StageAttachment;
+use common_storages_fuse::io::Files;
 use common_storages_stage::StageTable;
 use common_users::UserApiProvider;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
+use tracing::error;
+use tracing::info;
 
 use crate::interpreters::common::append2table;
 use crate::interpreters::Interpreter;
@@ -136,6 +138,30 @@ impl InsertInterpreterV2 {
         Ok(cast_needed)
     }
 
+    async fn try_purge_files(
+        ctx: Arc<QueryContext>,
+        stage_info: &UserStageInfo,
+        stage_files: &[StageFileInfo],
+    ) {
+        let table_ctx: Arc<dyn TableContext> = ctx.clone();
+        let op = StageTable::get_op(stage_info);
+        match op {
+            Ok(op) => {
+                let file_op = Files::create(table_ctx, op);
+                let files = stage_files
+                    .iter()
+                    .map(|v| v.path.clone())
+                    .collect::<Vec<_>>();
+                if let Err(e) = file_op.remove_file_in_batch(&files).await {
+                    error!("Failed to delete file: {:?}, error: {}", files, e);
+                }
+            }
+            Err(e) => {
+                error!("Failed to get stage table op, error: {}", e);
+            }
+        }
+    }
+
     async fn build_insert_from_stage_pipeline(
         &self,
         table: Arc<dyn Table>,
@@ -151,8 +177,12 @@ impl InsertInterpreterV2 {
         let overwrite = self.plan.overwrite;
 
         let (mut stage_info, path) = parse_stage_location(&self.ctx, &attachment.location).await?;
-        stage_info.apply_format_options(&attachment.format_options)?;
-        stage_info.apply_copy_options(&attachment.copy_options)?;
+        stage_info
+            .file_format_options
+            .apply(&attachment.file_format_options, true)?;
+        stage_info
+            .copy_options
+            .apply(&attachment.copy_options, true)?;
 
         let mut stage_table_info = StageTableInfo {
             schema: source_schema.clone(),
@@ -163,15 +193,15 @@ impl InsertInterpreterV2 {
             files_to_copy: None,
         };
 
-        let all_source_file_infos = StageTable::list_files(&stage_table_info).await?;
+        let all_source_files = StageTable::list_files(&stage_table_info).await?;
 
         tracing::info!(
             "insert: read all stage attachment files finished: {}, elapsed:{}",
-            all_source_file_infos.len(),
+            all_source_files.len(),
             start.elapsed().as_secs()
         );
 
-        stage_table_info.files_to_copy = Some(all_source_file_infos.clone());
+        stage_table_info.files_to_copy = Some(all_source_files.clone());
         let stage_table = StageTable::try_create(stage_table_info.clone())?;
         let read_source_plan = {
             stage_table
@@ -195,15 +225,34 @@ impl InsertInterpreterV2 {
         }
         table.append_data(ctx.clone(), pipeline, AppendMode::Copy, false)?;
 
+        let user_stage_info_clone = stage_table_info.user_stage_info.clone();
         pipeline.set_on_finished(move |may_error| {
             // capture out variable
             let overwrite = overwrite;
             let ctx = ctx.clone();
             let table = table.clone();
+            let stage_info = user_stage_info_clone.clone();
+            let all_source_files = all_source_files.clone();
 
             match may_error {
                 Some(error) => {
                     tracing::error!("insert stage file error: {}", error);
+                    GlobalIORuntime::instance()
+                        .block_on(async move {
+                            if stage_info.copy_options.purge {
+                                info!(
+                                    "insert: try to purge files:{}, elapsed:{}",
+                                    all_source_files.len(),
+                                    start.elapsed().as_secs()
+                                );
+                                Self::try_purge_files(ctx.clone(), &stage_info, &all_source_files)
+                                    .await;
+                            }
+                            Ok(())
+                        })
+                        .unwrap_or_else(|e| {
+                            tracing::error!("insert: purge stage file error: {}", e);
+                        });
                     Err(may_error.as_ref().unwrap().clone())
                 }
                 None => {
@@ -216,10 +265,18 @@ impl InsertInterpreterV2 {
                             start.elapsed().as_secs()
                         );
                         table
-                            .commit_insertion(ctx, append_entries, overwrite)
+                            .commit_insertion(ctx.clone(), append_entries, overwrite)
                             .await?;
 
-                        // TODO:(everpcpc) purge copied files
+                        if stage_info.copy_options.purge {
+                            info!(
+                                "insert: try to purge files:{}, elapsed:{}",
+                                all_source_files.len(),
+                                start.elapsed().as_secs()
+                            );
+                            Self::try_purge_files(ctx.clone(), &stage_info, &all_source_files)
+                                .await;
+                        }
 
                         Ok(())
                     })
@@ -400,7 +457,7 @@ impl Interpreter for InsertInterpreterV2 {
 
 pub struct ValueSource {
     data: String,
-    ctx: Arc<dyn PlannerContext>,
+    ctx: Arc<dyn TableContext>,
     name_resolution_ctx: NameResolutionContext,
     bind_context: BindContext,
     schema: DataSchemaRef,
@@ -445,7 +502,7 @@ impl AsyncSource for ValueSource {
 impl ValueSource {
     pub fn new(
         data: String,
-        ctx: Arc<dyn PlannerContext>,
+        ctx: Arc<dyn TableContext>,
         name_resolution_ctx: NameResolutionContext,
         schema: DataSchemaRef,
     ) -> Self {
@@ -716,7 +773,7 @@ async fn fill_default_value(
 async fn exprs_to_scalar<'a>(
     exprs: Vec<AExpr<'a>>,
     schema: &DataSchemaRef,
-    ctx: Arc<dyn PlannerContext>,
+    ctx: Arc<dyn TableContext>,
     name_resolution_ctx: &NameResolutionContext,
     bind_context: &BindContext,
     metadata: MetadataRef,

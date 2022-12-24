@@ -38,7 +38,7 @@ use crate::meta_service::MetaNode;
 
 pub struct GrpcServer {
     conf: Config,
-    meta_node: Arc<MetaNode>,
+    pub(crate) meta_node: Arc<MetaNode>,
     join_handle: Option<JoinHandle<()>>,
     stop_tx: Option<Sender<()>>,
     fin_rx: Option<Receiver<()>>,

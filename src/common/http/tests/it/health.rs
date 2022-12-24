@@ -23,7 +23,7 @@ use poem::Request;
 use poem::Route;
 use pretty_assertions::assert_eq;
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_health() -> common_exception::Result<()> {
     let cluster_router = Route::new().at("/v1/health", get(health_handler));
     // health check

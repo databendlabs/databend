@@ -22,6 +22,7 @@ use std::time::SystemTime;
 
 use common_base::base::Progress;
 use common_base::runtime::Runtime;
+use common_catalog::table_context::StageAttachment;
 use common_config::Config;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -31,7 +32,6 @@ use common_meta_types::UserInfo;
 use common_settings::Settings;
 use common_storage::DataOperator;
 use common_storage::StorageMetrics;
-use common_storages_stage::StageAttachment;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 use uuid::Uuid;
@@ -40,7 +40,6 @@ use crate::auth::AuthMgr;
 use crate::catalogs::CatalogManager;
 use crate::clusters::Cluster;
 use crate::pipelines::executor::PipelineExecutor;
-use crate::servers::http::v1::HttpQueryHandle;
 use crate::sessions::query_affect::QueryAffect;
 use crate::sessions::Session;
 use crate::storages::Table;
@@ -70,7 +69,6 @@ pub struct QueryContextShared {
     pub(in crate::sessions) cluster_cache: Arc<Cluster>,
     pub(in crate::sessions) running_query: Arc<RwLock<Option<String>>>,
     pub(in crate::sessions) running_query_kind: Arc<RwLock<Option<String>>>,
-    pub(in crate::sessions) http_query: Arc<RwLock<Option<HttpQueryHandle>>>,
     pub(in crate::sessions) aborting: Arc<AtomicBool>,
     pub(in crate::sessions) tables_refs: Arc<Mutex<HashMap<DatabaseAndTable, Arc<dyn Table>>>>,
     pub(in crate::sessions) auth_manager: Arc<AuthMgr>,
@@ -102,7 +100,6 @@ impl QueryContextShared {
             runtime: Arc::new(RwLock::new(None)),
             running_query: Arc::new(RwLock::new(None)),
             running_query_kind: Arc::new(RwLock::new(None)),
-            http_query: Arc::new(RwLock::new(None)),
             aborting: Arc::new(AtomicBool::new(false)),
             tables_refs: Arc::new(Mutex::new(HashMap::new())),
             auth_manager: AuthMgr::create(config).await?,
@@ -252,14 +249,6 @@ impl QueryContextShared {
                 Ok(runtime)
             }
         }
-    }
-
-    pub fn attach_http_query_handle(&self, handle: HttpQueryHandle) {
-        let mut http_query = self.http_query.write();
-        *http_query = Some(handle);
-    }
-    pub fn get_http_query(&self) -> Option<HttpQueryHandle> {
-        self.http_query.read().clone()
     }
 
     pub fn attach_query_str(&self, kind: String, query: &str) {

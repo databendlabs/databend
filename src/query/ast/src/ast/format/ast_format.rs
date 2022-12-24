@@ -1377,11 +1377,9 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         let mut children = Vec::new();
         self.visit_table_ref(&stmt.catalog, &stmt.database, &stmt.table);
         children.push(self.children.pop().unwrap());
-        if let Some(action) = &stmt.action {
-            let action_name = format!("Action {}", action);
-            let action_format_ctx = AstFormatContext::new(action_name);
-            children.push(FormatTreeNode::new(action_format_ctx));
-        }
+        let action_name = format!("Action {}", stmt.action);
+        let action_format_ctx = AstFormatContext::new(action_name);
+        children.push(FormatTreeNode::new(action_format_ctx));
 
         let name = "OptimizeTable".to_string();
         let format_ctx = AstFormatContext::with_children(name, children.len());

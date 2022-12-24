@@ -31,6 +31,7 @@ use common_formats::FileFormatOptionsExt;
 use common_formats::FileFormatTypeExt;
 use common_formats::RecordDelimiter;
 use common_meta_types::FileFormatOptions;
+use common_meta_types::OnErrorMode;
 use common_meta_types::StageFileCompression;
 use common_meta_types::StageFileFormatType;
 use common_meta_types::UserStageInfo;
@@ -125,6 +126,7 @@ pub struct InputContext {
     pub chunk_compact_thresholds: ChunkCompactThresholds,
 
     pub scan_progress: Arc<Progress>,
+    pub on_error_mode: OnErrorMode,
 }
 
 impl Debug for InputContext {
@@ -167,6 +169,7 @@ impl InputContext {
         scan_progress: Arc<Progress>,
         chunk_compact_thresholds: ChunkCompactThresholds,
     ) -> Result<Self> {
+        let on_error_mode = stage_info.copy_options.on_error.clone();
         let plan = Box::new(CopyIntoPlan { stage_info });
         let read_batch_size = settings.get_input_read_buffer_size()? as usize;
         let file_format_options = &plan.stage_info.file_format_options;
@@ -194,6 +197,7 @@ impl InputContext {
             plan: InputPlan::CopyInto(plan),
             chunk_compact_thresholds,
             format_options: file_format_options,
+            on_error_mode,
         })
     }
 
@@ -252,6 +256,7 @@ impl InputContext {
             splits: vec![],
             chunk_compact_thresholds,
             format_options: file_format_options_clone,
+            on_error_mode: OnErrorMode::None,
         })
     }
 
@@ -294,6 +299,7 @@ impl InputContext {
             splits: vec![],
             chunk_compact_thresholds,
             format_options: file_format_options,
+            on_error_mode: OnErrorMode::None,
         })
     }
 

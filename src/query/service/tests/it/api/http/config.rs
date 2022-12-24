@@ -25,7 +25,7 @@ use pretty_assertions::assert_eq; // for `app.oneshot()`
 
 use crate::tests::TestGlobalServices;
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_config() -> common_exception::Result<()> {
     let _guard = TestGlobalServices::setup(crate::tests::ConfigBuilder::create().build()).await?;
     let cluster_router = Route::new().at("/v1/config", get(config_handler));

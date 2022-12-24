@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_catalog::table_context::TableContext;
 use common_exception::Result;
 
 use crate::optimizer::property::Distribution;
@@ -22,11 +23,10 @@ use crate::optimizer::RequiredProperty;
 use crate::optimizer::SExpr;
 use crate::plans::Exchange;
 use crate::plans::RelOperator;
-use crate::PlannerContext;
 
 /// Require and enforce physical property from a physical `SExpr`
 pub fn require_property(
-    ctx: Arc<dyn PlannerContext>,
+    ctx: Arc<dyn TableContext>,
     required: &RequiredProperty,
     s_expr: &SExpr,
 ) -> Result<SExpr> {

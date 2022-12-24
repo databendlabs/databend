@@ -26,7 +26,7 @@ use pretty_assertions::assert_eq;
 
 use crate::tests::TestGlobalServices;
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_logs() -> Result<()> {
     let _guard = TestGlobalServices::setup(crate::tests::ConfigBuilder::create().build()).await?;
 
