@@ -154,7 +154,7 @@ impl BlockReader {
                     .await?;
                 Ok::<_, ErrorCode>((index, column_chunk))
             }
-            .instrument(debug_span!("read_col_chunk"));
+                .instrument(debug_span!("read_col_chunk"));
             column_chunk_futs.push(fut);
 
             columns_meta.insert(

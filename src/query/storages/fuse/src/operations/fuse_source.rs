@@ -27,7 +27,7 @@ use super::fuse_native_source::FuseNativeSource;
 use super::fuse_parquet_source::FuseParquetSource;
 use crate::fuse_table::FuseStorageFormat;
 use crate::io::BlockReader;
-use crate::operations::fuse_parquet_source_new::build_fuse_parquet_source_pipeline;
+use crate::operations::read::build_fuse_parquet_source_pipeline;
 
 pub struct FuseTableSource;
 
