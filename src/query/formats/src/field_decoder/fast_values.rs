@@ -30,7 +30,6 @@ use common_expression::DateDeserializer;
 use common_expression::NullDeserializer;
 use common_expression::NullableDeserializer;
 use common_expression::NumberDeserializer;
-use common_expression::Scalar;
 use common_expression::StringDeserializer;
 use common_expression::StructDeserializer;
 use common_expression::TimestampDeserializer;

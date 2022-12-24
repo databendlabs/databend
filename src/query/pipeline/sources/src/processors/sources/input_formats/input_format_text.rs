@@ -18,7 +18,6 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::types::DataType;
 use common_expression::Chunk;
 use common_expression::ChunkEntry;
 use common_expression::TableSchemaRef;

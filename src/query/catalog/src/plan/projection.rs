@@ -16,7 +16,6 @@ use std::collections::BTreeMap;
 use std::fmt::Formatter;
 
 use common_exception::Result;
-use common_expression::DataSchema;
 use common_expression::TableSchema;
 use common_storage::ColumnLeaf;
 use common_storage::ColumnLeaves;

@@ -15,9 +15,6 @@
 use common_exception::Result;
 use common_expression::serialize_to_parquet;
 use common_expression::Chunk;
-use common_expression::DataSchema;
-use common_expression::DataSchemaRef;
-use common_expression::TableSchema;
 use common_expression::TableSchemaRef;
 
 use crate::output_format::OutputFormat;

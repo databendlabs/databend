@@ -18,10 +18,7 @@ use chrono_tz::Tz;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
-use common_expression::DataSchemaRef;
 use common_expression::TableSchemaRef;
-use common_io::consts::*;
-use common_io::prelude::FormatSettings;
 use common_meta_types::FileFormatOptions;
 use common_meta_types::StageFileCompression;
 use common_meta_types::StageFileFormatType;
@@ -126,7 +123,6 @@ impl FileFormatOptionsExt {
     fn get_output_format(&self, schema: TableSchemaRef) -> Result<Box<dyn OutputFormat>> {
         let fmt = &self.stage.format;
         let options = fmt.final_file_format_options(self)?;
-        // println!("format {:?} {:?} {:?}", fmt, options, format_settings);
         let output: Box<dyn OutputFormat> = match options.stage.format {
             StageFileFormatType::Csv => match options.headers {
                 0 => Box::new(CSVOutputFormat::create(schema, &options)),

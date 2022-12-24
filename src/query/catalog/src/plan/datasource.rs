@@ -17,9 +17,6 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
-use common_expression::DataField;
-use common_expression::DataSchema;
-use common_expression::DataSchemaRef;
 use common_expression::Scalar;
 use common_expression::TableField;
 use common_expression::TableSchema;

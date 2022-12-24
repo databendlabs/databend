@@ -15,8 +15,6 @@
 use common_exception::Result;
 use common_expression::Chunk;
 use common_expression::Column;
-use common_expression::DataSchemaRef;
-use common_expression::TableSchema;
 use common_expression::TableSchemaRef;
 
 use crate::field_encoder::write_csv_string;

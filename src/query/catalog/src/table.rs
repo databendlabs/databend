@@ -22,7 +22,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::Chunk;
 use common_expression::ChunkCompactThresholds;
-use common_expression::DataSchema;
 use common_expression::RemoteExpr;
 use common_expression::Scalar;
 use common_expression::TableSchema;

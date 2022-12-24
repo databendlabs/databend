@@ -49,7 +49,6 @@ use crate::utils::ColumnFrom;
 use crate::with_number_mapped_type;
 use crate::with_number_type;
 use crate::Column;
-use crate::TypeDeserializer;
 use crate::TypeDeserializerImpl;
 use crate::Value;
 use crate::ARROW_EXT_TYPE_EMPTY_ARRAY;
