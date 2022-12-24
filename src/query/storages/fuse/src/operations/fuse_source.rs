@@ -28,6 +28,7 @@ use super::fuse_parquet_source::FuseParquetSource;
 use crate::fuse_table::FuseStorageFormat;
 use crate::io::BlockReader;
 use crate::operations::read::build_fuse_parquet_source_pipeline;
+use crate::operations::read::fuse_source_new::build_fuse_native_source_pipeline;
 
 pub struct FuseTableSource;
 
@@ -72,6 +73,13 @@ pub fn build_fuse_source_pipeline(
     let max_threads = ctx.get_settings().get_max_threads()? as usize;
 
     match storage_format {
+        FuseStorageFormat::Native => build_fuse_native_source_pipeline(
+            ctx,
+            pipeline,
+            block_reader,
+            max_threads,
+            max_io_requests,
+        ),
         FuseStorageFormat::Parquet => build_fuse_parquet_source_pipeline(
             ctx,
             pipeline,
@@ -79,6 +87,5 @@ pub fn build_fuse_source_pipeline(
             max_threads,
             max_io_requests,
         ),
-        _ => unimplemented!()
     }
 }

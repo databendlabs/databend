@@ -146,11 +146,12 @@ impl FuseTable {
             });
         }
 
+        assert!(plan.push_downs.as_ref().and_then(|s| s.prewhere.as_ref()).is_none());
+
+        let block_reader = self.build_block_reader(plan)?;
         let projection = PushDownInfo::projection_of_push_downs(&self.table_info.schema(), &plan.push_downs);
         let max_io_requests = self.adjust_io_request(&ctx, &projection, read_kind)?;
 
-
-        let block_reader = self.build_block_reader(plan)?;
         build_fuse_source_pipeline(ctx, pipeline, self.storage_format, block_reader, max_io_requests)
     }
 }

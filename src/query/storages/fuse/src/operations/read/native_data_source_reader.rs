@@ -10,21 +10,22 @@ use crate::io::BlockReader;
 use crate::operations::read::parquet_data_source::DataSourceMeta;
 use common_exception::Result;
 use common_pipeline_sources::processors::sources::{SyncSource, SyncSourcer};
+use crate::operations::read::native_data_source::{DataChunks, NativeDataSourceMeta};
 
-pub struct ReadParquetDataSource<const BLOCKING_IO: bool> {
+pub struct ReadNativeDataSource<const BLOCKING_IO: bool> {
     finished: bool,
-    ctx: Arc<dyn TableContext>,
     batch_size: usize,
+    ctx: Arc<dyn TableContext>,
     block_reader: Arc<BlockReader>,
 
     output: Arc<OutputPort>,
-    output_data: Option<(Vec<PartInfoPtr>, Vec<Vec<(usize, Vec<u8>)>>)>,
+    output_data: Option<(Vec<PartInfoPtr>, Vec<DataChunks>)>,
 }
 
-impl ReadParquetDataSource<true> {
+impl ReadNativeDataSource<true> {
     pub fn create(ctx: Arc<dyn TableContext>, output: Arc<OutputPort>, block_reader: Arc<BlockReader>) -> Result<ProcessorPtr> {
         let batch_size = ctx.get_settings().get_storage_fetch_part_num()? as usize;
-        SyncSourcer::create(ctx.clone(), output.clone(), ReadParquetDataSource::<true> {
+        SyncSourcer::create(ctx.clone(), output.clone(), ReadNativeDataSource::<true> {
             ctx,
             output,
             batch_size,
@@ -35,10 +36,10 @@ impl ReadParquetDataSource<true> {
     }
 }
 
-impl ReadParquetDataSource<false> {
+impl ReadNativeDataSource<false> {
     pub fn create(ctx: Arc<dyn TableContext>, output: Arc<OutputPort>, block_reader: Arc<BlockReader>) -> Result<ProcessorPtr> {
         let batch_size = ctx.get_settings().get_storage_fetch_part_num()? as usize;
-        Ok(ProcessorPtr::create(Box::new(ReadParquetDataSource::<false> {
+        Ok(ProcessorPtr::create(Box::new(ReadNativeDataSource::<false> {
             ctx,
             output,
             batch_size,
@@ -49,16 +50,16 @@ impl ReadParquetDataSource<false> {
     }
 }
 
-impl SyncSource for ReadParquetDataSource<true> {
-    const NAME: &'static str = "SyncReadParquetDataSource";
+impl SyncSource for ReadNativeDataSource<true> {
+    const NAME: &'static str = "SyncReadNativeDataSource";
 
     fn generate(&mut self) -> Result<Option<DataBlock>> {
         match self.ctx.try_get_part() {
             None => Ok(None),
             Some(part) => Ok(Some(DataBlock::empty_with_meta(
-                DataSourceMeta::create(
+                NativeDataSourceMeta::create(
                     vec![part.clone()],
-                    vec![self.block_reader.sync_read_columns_data(part)?],
+                    vec![self.block_reader.sync_read_native_columns_data(part)?],
                 )
             ))),
         }
@@ -66,9 +67,9 @@ impl SyncSource for ReadParquetDataSource<true> {
 }
 
 #[async_trait::async_trait]
-impl Processor for ReadParquetDataSource<false> {
+impl Processor for ReadNativeDataSource<false> {
     fn name(&self) -> String {
-        String::from("AsyncReadParquetDataSource")
+        String::from("AsyncReadNativeDataSource")
     }
 
     fn as_any(&mut self) -> &mut dyn Any {
@@ -90,7 +91,7 @@ impl Processor for ReadParquetDataSource<false> {
         }
 
         if let Some((part, data)) = self.output_data.take() {
-            let output = DataBlock::empty_with_meta(DataSourceMeta::create(part, data));
+            let output = DataBlock::empty_with_meta(NativeDataSourceMeta::create(part, data));
             self.output.push_data(Ok(output));
             // return Ok(Event::NeedConsume);
         }
@@ -109,7 +110,7 @@ impl Processor for ReadParquetDataSource<false> {
 
                 chunks.push(async move {
                     let handler = common_base::base::tokio::spawn(async move {
-                        block_reader.read_columns_data(part).await
+                        block_reader.async_read_native_columns_data(part).await
                     });
                     handler.await.unwrap()
                 });
