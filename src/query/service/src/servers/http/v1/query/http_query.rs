@@ -21,9 +21,9 @@ use common_base::base::tokio;
 use common_base::base::tokio::sync::Mutex as TokioMutex;
 use common_base::base::tokio::sync::RwLock;
 use common_base::runtime::TrySpawn;
+use common_catalog::table_context::StageAttachment;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_storages_stage::StageAttachment;
 use serde::Deserialize;
 use serde::Serialize;
 

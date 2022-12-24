@@ -95,7 +95,7 @@ pub trait Table: Sync + Send {
         false
     }
 
-    fn cluster_keys(&self) -> Vec<Expression> {
+    fn cluster_keys(&self, _ctx: Arc<dyn TableContext>) -> Vec<Expression> {
         vec![]
     }
 

@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -24,7 +25,6 @@ use crate::optimizer::RelationalProperty;
 use crate::optimizer::RequiredProperty;
 use crate::optimizer::SExpr;
 use crate::plans::Operator;
-use crate::PlannerContext;
 
 /// A helper to access children of `SExpr` and `MExpr` in
 /// a unified view.
@@ -107,7 +107,7 @@ impl<'a> RelExpr<'a> {
 
     pub fn compute_required_prop_child(
         &self,
-        ctx: Arc<dyn PlannerContext>,
+        ctx: Arc<dyn TableContext>,
         index: usize,
         input: &RequiredProperty,
     ) -> Result<RequiredProperty> {

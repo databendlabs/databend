@@ -106,7 +106,7 @@ impl DeletionSource {
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(DeletionSource {
             state: State::ReadData(None),
-            ctx,
+            ctx: ctx.clone(),
             output,
             location_gen: table.meta_location_generator().clone(),
             dal: table.get_operator(),
@@ -115,7 +115,7 @@ impl DeletionSource {
             remain_reader,
             output_schema: table.schema(),
             index: (0, 0),
-            cluster_stats_gen: table.cluster_stats_gen()?,
+            cluster_stats_gen: table.cluster_stats_gen(ctx)?,
             origin_stats: None,
         })))
     }

@@ -32,7 +32,7 @@ use pretty_assertions::assert_eq;
 use crate::tests::ConfigBuilder;
 use crate::tests::TestGlobalServices;
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_number_table() -> Result<()> {
     let tbl_args = Some(vec![DataValue::UInt64(8)]);
     let (_guard, ctx) = crate::tests::create_query_context().await?;

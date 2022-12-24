@@ -28,6 +28,7 @@ use common_base::runtime::GlobalIORuntime;
 use common_catalog::plan::StageFileInfo;
 use common_catalog::plan::StageTableInfo;
 use common_catalog::table::AppendMode;
+use common_catalog::table_context::StageAttachment;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
@@ -46,10 +47,8 @@ use common_sql::evaluator::CompoundChunkOperator;
 use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use common_sql::Metadata;
 use common_sql::MetadataRef;
-use common_sql::PlannerContext;
 use common_storages_factory::Table;
 use common_storages_fuse::io::Files;
-use common_storages_stage::StageAttachment;
 use common_storages_stage::StageTable;
 use common_users::UserApiProvider;
 use parking_lot::Mutex;
@@ -436,7 +435,7 @@ impl Interpreter for InsertInterpreterV2 {
 
 pub struct ValueSource {
     data: String,
-    ctx: Arc<dyn PlannerContext>,
+    ctx: Arc<dyn TableContext>,
     name_resolution_ctx: NameResolutionContext,
     bind_context: BindContext,
     schema: DataSchemaRef,
@@ -481,7 +480,7 @@ impl AsyncSource for ValueSource {
 impl ValueSource {
     pub fn new(
         data: String,
-        ctx: Arc<dyn PlannerContext>,
+        ctx: Arc<dyn TableContext>,
         name_resolution_ctx: NameResolutionContext,
         schema: DataSchemaRef,
     ) -> Self {
@@ -730,7 +729,7 @@ fn fill_default_value(operators: &mut Vec<ChunkOperator>, field: &DataField) -> 
 async fn exprs_to_datavalue<'a>(
     exprs: Vec<Expr<'a>>,
     schema: &DataSchemaRef,
-    ctx: Arc<dyn PlannerContext>,
+    ctx: Arc<dyn TableContext>,
     name_resolution_ctx: &NameResolutionContext,
     bind_context: &BindContext,
     metadata: MetadataRef,
