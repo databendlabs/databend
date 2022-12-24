@@ -14,6 +14,7 @@ use common_pipeline_sources::processors::sources::{SyncSource, SyncSourcer};
 pub struct ReadParquetDataSource<const BLOCKING_IO: bool> {
     finished: bool,
     ctx: Arc<dyn TableContext>,
+    batch_size: usize,
     block_reader: Arc<BlockReader>,
 
     output: Arc<OutputPort>,
@@ -22,9 +23,11 @@ pub struct ReadParquetDataSource<const BLOCKING_IO: bool> {
 
 impl ReadParquetDataSource<true> {
     pub fn create(ctx: Arc<dyn TableContext>, output: Arc<OutputPort>, block_reader: Arc<BlockReader>) -> Result<ProcessorPtr> {
+        let batch_size = ctx.get_settings().get_storage_fetch_part_num()? as usize;
         SyncSourcer::create(ctx.clone(), output.clone(), ReadParquetDataSource::<true> {
             ctx,
             output,
+            batch_size,
             block_reader,
             finished: false,
             output_data: None,
@@ -34,9 +37,11 @@ impl ReadParquetDataSource<true> {
 
 impl ReadParquetDataSource<false> {
     pub fn create(ctx: Arc<dyn TableContext>, output: Arc<OutputPort>, block_reader: Arc<BlockReader>) -> Result<ProcessorPtr> {
+        let batch_size = ctx.get_settings().get_storage_fetch_part_num()? as usize;
         Ok(ProcessorPtr::create(Box::new(ReadParquetDataSource::<false> {
             ctx,
             output,
+            batch_size,
             block_reader,
             finished: false,
             output_data: None,
@@ -94,10 +99,10 @@ impl Processor for ReadParquetDataSource<false> {
     }
 
     async fn async_process(&mut self) -> Result<()> {
-        let mut parts = Vec::with_capacity(2);
-        let mut chunks = Vec::with_capacity(2);
+        let mut parts = Vec::with_capacity(self.batch_size);
+        let mut chunks = Vec::with_capacity(self.batch_size);
 
-        for index in 0..2 {
+        for _index in 0..self.batch_size {
             if let Some(part) = self.ctx.try_get_part() {
                 parts.push(part.clone());
                 let block_reader = self.block_reader.clone();
