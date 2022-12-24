@@ -134,3 +134,125 @@ HashJoin
             ├── partitions scanned: 1
             └── push downs: [filters: [(number = 1)], limit: NONE]
 
+## check outer join is converted to inner join
+
+query T
+explain select * from onecolumn as a left join twocolumn as b on a.x = b.x where b.x > 42
+----
+HashJoin
+├── join type: INNER
+├── build keys: [b.x (#1)]
+├── probe keys: [a.x (#0)]
+├── filters: []
+├── TableScan(Build)
+│   ├── table: default.default.twocolumn
+│   ├── read rows: 4
+│   ├── read bytes: 79
+│   ├── partitions total: 1
+│   ├── partitions scanned: 1
+│   └── push downs: [filters: [(x > 42)], limit: NONE]
+└── TableScan(Probe)
+    ├── table: default.default.onecolumn
+    ├── read rows: 4
+    ├── read bytes: 62
+    ├── partitions total: 2
+    ├── partitions scanned: 2
+    └── push downs: [filters: [], limit: NONE]
+
+query T
+explain select * from onecolumn as a left join twocolumn as b on a.x = b.x where b.x > 44 or b.x < 43
+----
+HashJoin
+├── join type: INNER
+├── build keys: [b.x (#1)]
+├── probe keys: [a.x (#0)]
+├── filters: []
+├── TableScan(Build)
+│   ├── table: default.default.twocolumn
+│   ├── read rows: 4
+│   ├── read bytes: 79
+│   ├── partitions total: 1
+│   ├── partitions scanned: 1
+│   └── push downs: [filters: [((x > 44) or (x < 43))], limit: NONE]
+└── TableScan(Probe)
+    ├── table: default.default.onecolumn
+    ├── read rows: 4
+    ├── read bytes: 62
+    ├── partitions total: 2
+    ├── partitions scanned: 2
+    └── push downs: [filters: [], limit: NONE]
+
+
+query T
+explain select * from onecolumn as a left join twocolumn as b on a.x = b.x where b.x > 42 and b.x < 45
+----
+HashJoin
+├── join type: INNER
+├── build keys: [b.x (#1)]
+├── probe keys: [a.x (#0)]
+├── filters: []
+├── TableScan(Build)
+│   ├── table: default.default.twocolumn
+│   ├── read rows: 4
+│   ├── read bytes: 79
+│   ├── partitions total: 1
+│   ├── partitions scanned: 1
+│   └── push downs: [filters: [(x > 42), (x < 45)], limit: NONE]
+└── TableScan(Probe)
+    ├── table: default.default.onecolumn
+    ├── read rows: 4
+    ├── read bytes: 62
+    ├── partitions total: 2
+    ├── partitions scanned: 2
+    └── push downs: [filters: [], limit: NONE]
+
+## the following cases won't be converted to inner join
+
+query T
+explain select * from onecolumn as a left join twocolumn as b on a.x = b.x where b.x > 44 or a.x < 43
+----
+Filter
+├── filters: [or(>(b.x (#1), 44), <(a.x (#0), 43))]
+└── HashJoin
+    ├── join type: LEFT OUTER
+    ├── build keys: [b.x (#1)]
+    ├── probe keys: [a.x (#0)]
+    ├── filters: []
+    ├── TableScan(Build)
+    │   ├── table: default.default.twocolumn
+    │   ├── read rows: 4
+    │   ├── read bytes: 79
+    │   ├── partitions total: 1
+    │   ├── partitions scanned: 1
+    │   └── push downs: [filters: [], limit: NONE]
+    └── TableScan(Probe)
+        ├── table: default.default.onecolumn
+        ├── read rows: 4
+        ├── read bytes: 62
+        ├── partitions total: 2
+        ├── partitions scanned: 2
+        └── push downs: [filters: [], limit: NONE]
+
+query T
+explain select * from onecolumn as a right join twocolumn as b on a.x = b.x where b.x > 42 and b.x < 45
+----
+HashJoin
+├── join type: RIGHT OUTER
+├── build keys: [b.x (#1)]
+├── probe keys: [a.x (#0)]
+├── filters: []
+├── TableScan(Build)
+│   ├── table: default.default.twocolumn
+│   ├── read rows: 4
+│   ├── read bytes: 79
+│   ├── partitions total: 1
+│   ├── partitions scanned: 1
+│   └── push downs: [filters: [(x > 42), (x < 45)], limit: NONE]
+└── TableScan(Probe)
+    ├── table: default.default.onecolumn
+    ├── read rows: 4
+    ├── read bytes: 62
+    ├── partitions total: 2
+    ├── partitions scanned: 2
+    └── push downs: [filters: [], limit: NONE]
+
