@@ -128,7 +128,7 @@ impl PhysicalOperator for UnionAll {
 
     fn compute_required_prop_child<'a>(
         &self,
-        _ctx: Arc<dyn PlannerContext>,
+        _ctx: Arc<dyn TableContext>,
         rel_expr: &RelExpr<'a>,
         _child_index: usize,
         required: &RequiredProperty,
