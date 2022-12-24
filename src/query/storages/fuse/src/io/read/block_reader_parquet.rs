@@ -28,7 +28,7 @@ use common_arrow::parquet::metadata::ColumnDescriptor;
 use common_arrow::parquet::read::BasicDecompressor;
 use common_arrow::parquet::read::PageMetaData;
 use common_arrow::parquet::read::PageReader;
-use common_base::runtime::UnlimitedFuture;
+use common_base::runtime::{LimitMemGuard, UnlimitedFuture};
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::Projection;
 use common_datablocks::DataBlock;
@@ -277,13 +277,21 @@ impl BlockReader {
         let mut join_handlers = Vec::with_capacity(indices.len());
 
         for (index, _) in indices {
-            let column_meta = &part.columns_meta[&index];
-            join_handlers.push(UnlimitedFuture::create(Self::read_column(
-                self.operator.object(&part.location),
-                index,
-                column_meta.offset,
-                column_meta.len,
-            )));
+            let column_meta = part.columns_meta[&index].clone();
+            let object = self.operator.object(&part.location);
+
+            join_handlers.push(async move {
+                let handler = common_base::base::tokio::spawn(
+                    UnlimitedFuture::create(BlockReader::read_column(
+                        object,
+                        index,
+                        column_meta.offset,
+                        column_meta.len,
+                    ))
+                );
+
+                handler.await.unwrap()
+            });
         }
 
         futures::future::try_join_all(join_handlers).await
