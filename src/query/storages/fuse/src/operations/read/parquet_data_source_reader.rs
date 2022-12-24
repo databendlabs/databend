@@ -17,7 +17,7 @@ pub struct ReadParquetDataSource<const BLOCKING_IO: bool> {
     block_reader: Arc<BlockReader>,
 
     output: Arc<OutputPort>,
-    output_data: Option<(PartInfoPtr, Vec<(usize, Vec<u8>)>)>,
+    output_data: Option<(Vec<PartInfoPtr>, Vec<Vec<(usize, Vec<u8>)>>)>,
 }
 
 impl ReadParquetDataSource<true> {
@@ -52,8 +52,8 @@ impl SyncSource for ReadParquetDataSource<true> {
             None => Ok(None),
             Some(part) => Ok(Some(DataBlock::empty_with_meta(
                 DataSourceMeta::create(
-                    part.clone(),
-                    self.block_reader.sync_read_columns_data(part)?,
+                    vec![part.clone()],
+                    vec![self.block_reader.sync_read_columns_data(part)?],
                 )
             ))),
         }
@@ -95,7 +95,18 @@ impl Processor for ReadParquetDataSource<false> {
 
     async fn async_process(&mut self) -> Result<()> {
         if let Some(part) = self.ctx.try_get_part() {
-            self.output_data = Some((part.clone(), self.block_reader.read_columns_data(part).await?));
+            let mut parts = Vec::with_capacity(2);
+            let mut chunks = Vec::with_capacity(2);
+
+            parts.push(part.clone());
+            chunks.push(self.block_reader.read_columns_data(part));
+
+            if let Some(part) = self.ctx.try_get_part() {
+                parts.push(part.clone());
+                chunks.push(self.block_reader.read_columns_data(part));
+            }
+
+            self.output_data = Some((parts, futures::future::try_join_all(chunks).await?));
             return Ok(());
         }
 

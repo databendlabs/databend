@@ -5,12 +5,12 @@ use std::any::Any;
 
 #[derive(Debug, PartialEq)]
 pub struct DataSourceMeta {
-    pub part: PartInfoPtr,
-    pub data: Option<Vec<(usize, Vec<u8>)>>,
+    pub part: Vec<PartInfoPtr>,
+    pub data: Option<Vec<Vec<(usize, Vec<u8>)>>>,
 }
 
 impl DataSourceMeta {
-    pub fn create(part: PartInfoPtr, data: Vec<(usize, Vec<u8>)>) -> BlockMetaInfoPtr {
+    pub fn create(part: Vec<PartInfoPtr>, data: Vec<Vec<(usize, Vec<u8>)>>) -> BlockMetaInfoPtr {
         Box::new(DataSourceMeta { part, data: Some(data) })
     }
 }
