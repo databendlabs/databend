@@ -247,12 +247,12 @@ impl CopyInterpreterV2 {
         let op = StageTable::get_op(stage_info);
         match op {
             Ok(op) => {
-                let file = Files::create(table_ctx, op);
+                let file_op = Files::create(table_ctx, op);
                 let files = stage_file_infos
                     .iter()
                     .map(|v| v.path.clone())
                     .collect::<Vec<_>>();
-                if let Err(e) = file.remove_file_in_batch(&files).await {
+                if let Err(e) = file_op.remove_file_in_batch(&files).await {
                     error!("Failed to delete file: {:?}, error: {}", files, e);
                 }
             }

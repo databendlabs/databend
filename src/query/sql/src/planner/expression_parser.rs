@@ -18,17 +18,20 @@ use common_ast::parser::parse_comma_separated_exprs;
 use common_ast::parser::tokenize_sql;
 use common_ast::Backtrace;
 use common_ast::Dialect;
+use common_base::base::tokio::runtime::Handle;
+use common_base::base::tokio::task::block_in_place;
 use common_catalog::catalog_kind::CATALOG_DEFAULT;
 use common_catalog::plan::Expression;
 use common_catalog::table::Table;
+use common_catalog::table_context::TableContext;
 use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_settings::Settings;
 use parking_lot::RwLock;
 
+use super::semantic::TypeChecker;
 use crate::executor::ExpressionBuilderWithoutRenaming;
-use crate::planner::semantic::SyncTypeChecker;
 use crate::BindContext;
 use crate::ColumnBinding;
 use crate::ColumnEntry;
@@ -39,7 +42,11 @@ use crate::Visibility;
 pub struct ExpressionParser;
 
 impl ExpressionParser {
-    pub fn parse_exprs(table_meta: Arc<dyn Table>, sql: &str) -> Result<Vec<Expression>> {
+    pub fn parse_exprs(
+        ctx: Arc<dyn TableContext>,
+        table_meta: Arc<dyn Table>,
+        sql: &str,
+    ) -> Result<Vec<Expression>> {
         let sql_dialect = Dialect::MySQL;
         let tokens = tokenize_sql(sql)?;
         let backtrace = Backtrace::new();
@@ -87,13 +94,20 @@ impl ExpressionParser {
         }
 
         let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
-        let mut type_checker = SyncTypeChecker::new(&bind_context, &name_resolution_ctx, &[]);
+        let mut type_checker = TypeChecker::new(
+            &bind_context,
+            ctx,
+            &name_resolution_ctx,
+            metadata.clone(),
+            &[],
+        );
         let mut expressions = Vec::with_capacity(exprs.len());
 
         let builder = ExpressionBuilderWithoutRenaming::create(metadata);
 
         for expr in exprs.iter() {
-            let (scalar, _) = *type_checker.resolve(expr, None)?;
+            let (scalar, _) =
+                *block_in_place(|| Handle::current().block_on(type_checker.resolve(expr, None)))?;
             let expr = builder.build(&scalar)?;
             expressions.push(expr);
         }

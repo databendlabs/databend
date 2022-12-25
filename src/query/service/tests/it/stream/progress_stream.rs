@@ -23,7 +23,7 @@ use databend_query::stream::DataBlockStream;
 use databend_query::stream::ProgressStream;
 use futures::TryStreamExt;
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_progress_stream() -> Result<()> {
     let schema = DataSchemaRefExt::create(vec![DataField::new("a", i64::to_data_type())]);
 

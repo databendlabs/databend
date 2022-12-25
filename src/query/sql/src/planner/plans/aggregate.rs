@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_catalog::table_context::TableContext;
 use common_exception::Result;
 
 use crate::optimizer::ColumnSet;
@@ -28,7 +29,6 @@ use crate::plans::Operator;
 use crate::plans::PhysicalOperator;
 use crate::plans::RelOp;
 use crate::plans::ScalarItem;
-use crate::PlannerContext;
 use crate::ScalarExpr;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Copy)]
@@ -81,7 +81,7 @@ impl PhysicalOperator for Aggregate {
 
     fn compute_required_prop_child<'a>(
         &self,
-        _ctx: Arc<dyn PlannerContext>,
+        _ctx: Arc<dyn TableContext>,
         rel_expr: &RelExpr<'a>,
         _child_index: usize,
         required: &RequiredProperty,

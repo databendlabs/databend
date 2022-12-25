@@ -29,7 +29,7 @@ use databend_query::interpreters::Interpreter;
 
 use crate::storages::fuse::table_test_fixture::TestFixture;
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_alter_table_cluster_key() -> common_exception::Result<()> {
     let fixture = TestFixture::new().await;
     let ctx = fixture.ctx();

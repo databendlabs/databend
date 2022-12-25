@@ -22,6 +22,7 @@ use std::time::SystemTime;
 
 use common_base::base::Progress;
 use common_base::runtime::Runtime;
+use common_catalog::table_context::StageAttachment;
 use common_config::Config;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
@@ -31,7 +32,6 @@ use common_meta_types::UserInfo;
 use common_settings::Settings;
 use common_storage::DataOperator;
 use common_storage::StorageMetrics;
-use common_storages_stage::StageAttachment;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 use uuid::Uuid;

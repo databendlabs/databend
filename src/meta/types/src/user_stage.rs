@@ -315,6 +315,7 @@ impl FromStr for OnErrorMode {
             "" => Ok(OnErrorMode::None),
             "CONTINUE" => Ok(OnErrorMode::Continue),
             "SKIP_FILE" => Ok(OnErrorMode::SkipFile),
+            "ABORT" => Ok(OnErrorMode::AbortStatement),
             v => {
                 let num_str = v.replace("SKIP_FILE_", "");
                 let nums = num_str.parse::<u64>();

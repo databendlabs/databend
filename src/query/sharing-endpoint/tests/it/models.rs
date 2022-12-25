@@ -23,7 +23,7 @@ use sharing_endpoint::models::SharingConfig;
 use sharing_endpoint::models::TableSpec;
 // mock some SharingConfig
 // and test on SharingConfig get_tables method
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_get_tables() -> Result<()> {
     let mut config = SharingConfig {
         share_specs: HashMap::new(),

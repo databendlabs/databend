@@ -12,12 +12,12 @@ clap = { version = "4.0.29", features = ["derive", "env"] }
 common-exception = { path = "../../src/common/exception" }
 env_logger = "0.10.0"
 lazy_static = "1.4.0"
-mysql = "23.0.0"
+mysql_async = "0.31.2"
 regex = "1"
 reqwest = { version = "0.11.13", features = ["json"] }
 serde = "1.0.150"
 serde_json = "1.0.89"
-sqllogictest = { git = "https://github.com/xudong963/sqllogictest-rs", branch = "runner" }
+sqllogictest = { git = "https://github.com/risinglightdb/sqllogictest-rs.git", branch = "main" }
 thiserror = "1.0.37"
 tokio = { version = "1.21.1", features = ["full"] }
 walkdir = "2.3.2"

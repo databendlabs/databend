@@ -19,7 +19,7 @@ use futures_util::TryStreamExt;
 
 use crate::storages::fuse::table_test_fixture::TestFixture;
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_table_truncate() -> common_exception::Result<()> {
     let fixture = TestFixture::new().await;
     let ctx = fixture.ctx();

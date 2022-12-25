@@ -264,7 +264,7 @@ impl FuseTable {
         }
     }
 
-    pub fn cluster_stats_gen(&self) -> Result<ClusterStatsGenerator> {
+    pub fn cluster_stats_gen(&self, ctx: Arc<dyn TableContext>) -> Result<ClusterStatsGenerator> {
         if self.cluster_key_meta.is_none() {
             return Ok(ClusterStatsGenerator::default());
         }
@@ -272,7 +272,7 @@ impl FuseTable {
         let input_schema = self.table_info.schema();
         let mut merged = input_schema.fields().clone();
 
-        let cluster_keys = self.cluster_keys();
+        let cluster_keys = self.cluster_keys(ctx);
         let mut cluster_key_index = Vec::with_capacity(cluster_keys.len());
         let mut operators = Vec::with_capacity(cluster_keys.len());
         for expr in &cluster_keys {

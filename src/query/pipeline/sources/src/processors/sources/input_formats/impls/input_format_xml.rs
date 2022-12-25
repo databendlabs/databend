@@ -25,6 +25,7 @@ use common_formats::FieldDecoderRowBased;
 use common_formats::FieldDecoderXML;
 use common_formats::FileFormatOptionsExt;
 use common_io::cursor_ext::*;
+use common_meta_types::OnErrorMode;
 use common_meta_types::StageFileFormatType;
 use xml::reader::XmlEvent;
 use xml::EventReader;
@@ -113,18 +114,33 @@ impl InputFormatTextBase for InputFormatXML {
         let columns = &mut builder.mutable_columns;
 
         let mut start = 0usize;
+        let mut num_rows = 0usize;
         let start_row = batch.start_row.expect("must be success");
         for (i, end) in batch.row_ends.iter().enumerate() {
             let buf = &batch.data[start..*end];
-            Self::read_row(
+            if let Err(e) = Self::read_row(
                 field_decoder,
                 buf,
                 columns,
                 &builder.ctx.schema,
                 &batch.path,
                 start_row + i,
-            )?;
+            ) {
+                if builder.ctx.on_error_mode == OnErrorMode::Continue {
+                    columns.iter_mut().for_each(|c| {
+                        // check if parts of columns inserted data, if so, pop it.
+                        if c.len() > num_rows {
+                            c.pop_data_value().expect("must success");
+                        }
+                    });
+                    start = *end;
+                    continue;
+                } else {
+                    return Err(e);
+                }
+            }
             start = *end;
+            num_rows += 1;
         }
         Ok(())
     }

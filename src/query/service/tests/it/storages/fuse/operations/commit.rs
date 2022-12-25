@@ -27,6 +27,7 @@ use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::Partitions;
 use common_catalog::table::Table;
 use common_catalog::table_context::ProcessInfo;
+use common_catalog::table_context::StageAttachment;
 use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
@@ -79,7 +80,7 @@ use walkdir::WalkDir;
 use crate::storages::fuse::table_test_fixture::execute_query;
 use crate::storages::fuse::table_test_fixture::TestFixture;
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_occ_retry() -> Result<()> {
     let fixture = TestFixture::new().await;
     let db = fixture.default_db_name();
@@ -137,7 +138,7 @@ async fn test_fuse_occ_retry() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_last_snapshot_hint() -> Result<()> {
     let fixture = TestFixture::new().await;
     fixture.create_default_table().await?;
@@ -174,7 +175,7 @@ async fn test_last_snapshot_hint() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_abort_on_error() -> Result<()> {
     struct Case {
         update_meta_error: Option<ErrorCode>,
@@ -451,6 +452,10 @@ impl TableContext for CtxDelegation {
     }
 
     fn get_processes_info(&self) -> Vec<ProcessInfo> {
+        todo!()
+    }
+
+    fn get_stage_attachment(&self) -> Option<StageAttachment> {
         todo!()
     }
 }
