@@ -83,24 +83,6 @@ use crate::pipelines::Pipeline;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
-use crate::sql::evaluator::Evaluator;
-use crate::sql::executor::AggregateFinal;
-use crate::sql::executor::AggregatePartial;
-use crate::sql::executor::ColumnID;
-use crate::sql::executor::DistributedInsertSelect;
-use crate::sql::executor::EvalScalar;
-use crate::sql::executor::ExchangeSink;
-use crate::sql::executor::ExchangeSource;
-use crate::sql::executor::Filter;
-use crate::sql::executor::HashJoin;
-use crate::sql::executor::Limit;
-use crate::sql::executor::PhysicalPlan;
-use crate::sql::executor::Project;
-use crate::sql::executor::Sort;
-use crate::sql::executor::TableScan;
-use crate::sql::executor::UnionAll;
-use crate::sql::plans::JoinType;
-use crate::sql::ColumnBinding;
 
 pub struct PipelineBuilder {
     ctx: Arc<QueryContext>,

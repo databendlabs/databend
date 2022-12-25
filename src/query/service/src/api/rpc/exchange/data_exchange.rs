@@ -14,6 +14,8 @@
 
 // use common_sql::executor::PhysicalScalar;
 
+use common_sql::executor::PhysicalScalar;
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum DataExchange {
     Merge(MergeExchange),

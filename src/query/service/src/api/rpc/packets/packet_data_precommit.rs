@@ -56,7 +56,7 @@ impl PrecommitChunk {
         let mut meta = vec![0; meta_len];
 
         bytes.read_exact(&mut meta)?;
-        let block_meta: Option<BlockMetaInfoPtr> = bincode::deserialize(&meta).map_err_to_code(
+        let block_meta: Option<ChunkMetaInfoPtr> = bincode::deserialize(&meta).map_err_to_code(
             ErrorCode::BadBytes,
             || "precommit block deserialize error when exchange",
         )?;

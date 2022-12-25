@@ -130,7 +130,7 @@ impl HashJoinState for JoinHashTable {
         {
             let buffer = self.row_space.buffer.write().unwrap();
             if !buffer.is_empty() {
-                let data_block = DataBlock::concat_blocks(&buffer)?;
+                let data_block = Chunk::concat(&buffer)?;
                 self.add_build_block(data_block)?;
             }
         }

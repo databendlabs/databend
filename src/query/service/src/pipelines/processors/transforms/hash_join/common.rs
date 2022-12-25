@@ -34,7 +34,6 @@ use common_hashtable::HashtableLike;
 use crate::pipelines::processors::transforms::hash_join::desc::MarkerKind;
 use crate::pipelines::processors::transforms::hash_join::row::RowPtr;
 use crate::pipelines::processors::JoinHashTable;
-use crate::sql::evaluator::EvalNode;
 use crate::sql::plans::JoinType;
 
 /// Some common methods for hash join.

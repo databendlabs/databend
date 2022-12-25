@@ -31,7 +31,6 @@ use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::transforms::transform::Transform;
 use crate::pipelines::processors::transforms::transform::Transformer;
 use crate::sessions::QueryContext;
-use crate::sql::evaluator::Evaluator;
 
 pub struct TransformAddOn {
     default_nonexpr_fields: Vec<DataField>,

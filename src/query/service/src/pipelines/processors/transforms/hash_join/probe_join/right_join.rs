@@ -22,12 +22,12 @@ use common_exception::Result;
 use common_expression::Chunk;
 use common_hashtable::HashtableEntryRefLike;
 use common_hashtable::HashtableLike;
+use common_sql::plans::JoinType;
 
 use crate::pipelines::processors::transforms::hash_join::desc::JOIN_MAX_CHUNK_SIZE;
 use crate::pipelines::processors::transforms::hash_join::row::RowPtr;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
 use crate::pipelines::processors::JoinHashTable;
-use crate::sql::plans::JoinType;
 
 impl JoinHashTable {
     /// Used by right join/right semi(anti) join

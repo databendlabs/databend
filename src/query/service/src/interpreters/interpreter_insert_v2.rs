@@ -69,6 +69,7 @@ use common_sql::plans::ConstantExpr;
 use common_sql::plans::Scalar;
 use common_sql::Metadata;
 use common_sql::MetadataRef;
+use common_sql::ScalarBinder;
 use common_storages_factory::Table;
 use common_storages_fuse::io::Files;
 use common_storages_stage::StageTable;
@@ -87,19 +88,6 @@ use crate::pipelines::SourcePipeBuilder;
 use crate::schedulers::build_query_pipeline;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
-use crate::sql::evaluator::Evaluator;
-use crate::sql::executor::DistributedInsertSelect;
-use crate::sql::executor::PhysicalPlan;
-use crate::sql::executor::PhysicalPlanBuilder;
-use crate::sql::plans::CastExpr;
-use crate::sql::plans::ConstantExpr;
-use crate::sql::plans::Insert;
-use crate::sql::plans::InsertInputSource;
-use crate::sql::plans::Plan;
-use crate::sql::plans::Scalar;
-use crate::sql::BindContext;
-use crate::sql::NameResolutionContext;
-use crate::sql::ScalarBinder;
 
 pub struct InsertInterpreterV2 {
     ctx: Arc<QueryContext>,

@@ -14,15 +14,14 @@
 
 use std::time::Instant;
 
-use common_exception::Column;
 use common_exception::ErrorCode;
-use common_exception::HashMethod;
 use common_exception::Result;
 use common_expression::types::string::StringColumnBuilder;
 use common_expression::types::AnyType;
 use common_expression::types::DataType;
 use common_expression::Chunk;
 use common_expression::Column;
+use common_expression::HashMethod;
 use common_expression::Value;
 use common_functions::aggregates::StateAddr;
 use common_hashtable::FastHash;

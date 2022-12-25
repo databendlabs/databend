@@ -21,7 +21,9 @@ use common_base::runtime::ThreadPool;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::AnyType;
 use common_expression::Chunk;
+use common_expression::ColumnBuilder;
 use common_expression::HashMethod;
 use common_expression::Value;
 use common_functions::aggregates::StateAddr;
@@ -245,12 +247,12 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
             let aggregate_functions = &self.params.aggregate_functions;
             let offsets_aggregate_states = &self.params.offsets_aggregate_states;
 
-            let mut aggregates_column_builder: Vec<Box<dyn MutableColumn>> = {
+            let mut aggregates_column_builder: Vec<ColumnBuilder> = {
                 let mut values = vec![];
                 for aggregate_function in aggregate_functions {
-                    let builder = aggregate_function
-                        .return_type()?
-                        .create_mutable(self.hash_table.len());
+                    let datatype = aggregate_function.return_type()?;
+                    let mut builder =
+                        ColumnBuilder::with_capacity(&data_type, self.hash_table.len());
                     values.push(builder)
                 }
                 values
@@ -266,7 +268,7 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
                     })
                     .collect();
 
-                let builder: &mut dyn MutableColumn = aggregates_column_builder[idx].borrow_mut();
+                let builder: &mut ColumnBuilder = aggregates_column_builder[idx].borrow_mut();
                 aggregate_function.batch_merge_result(places, builder)?;
             }
 

@@ -36,9 +36,6 @@ use common_sql::executor::PhysicalScalar;
 
 // use common_sql::executor::PhysicalScalar;
 use crate::api::rpc::flight_scatter::FlightScatter;
-use crate::sql::evaluator::EvalNode;
-use crate::sql::evaluator::Evaluator;
-use crate::sql::evaluator::TypedVector;
 
 #[derive(Clone)]
 pub struct HashFlightScatter {

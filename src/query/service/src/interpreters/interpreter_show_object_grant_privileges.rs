@@ -77,7 +77,7 @@ impl Interpreter for ShowObjectGrantPrivilegesInterpreter {
         PipelineBuildResult::from_chunks(vec![Chunk::new(
             vec![
                 (
-                    Value::Column(Column::from_data(created_ones)),
+                    Value::Column(Column::from_data(created_ons)),
                     DataType::String,
                 ),
                 (
