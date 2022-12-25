@@ -25,6 +25,7 @@ use common_catalog::plan::StageTableInfo;
 use common_catalog::table::AppendMode;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::DataField;
 use common_expression::DataSchemaRefExt;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::TableCopiedFileInfo;

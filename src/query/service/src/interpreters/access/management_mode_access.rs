@@ -35,7 +35,7 @@ impl AccessChecker for ManagementModeAccess {
         if GlobalConfig::instance().query.management_mode {
             let ok = match plan {
                 Plan::Query {rewrite_kind, .. } => {
-                    use crate::sql::plans::RewriteKind;
+use common_sql::plans::RewriteKind;
                     match rewrite_kind  {
                         Some(ref v) => matches!(v,
                             RewriteKind::ShowDatabases

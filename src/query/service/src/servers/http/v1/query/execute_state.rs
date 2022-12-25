@@ -30,9 +30,6 @@ use common_expression::DataSchemaRef;
 use common_expression::SendableChunkStream;
 use common_sql::plans::Plan;
 use common_sql::Planner;
-use common_storages_fuse_result::BlockBuffer;
-use common_storages_fuse_result::ResultQueryInfo;
-use common_storages_fuse_result::ResultTableSink;
 use futures::StreamExt;
 use futures_util::FutureExt;
 use serde::Deserialize;
@@ -295,85 +292,4 @@ async fn execute(
         }
     }
     Ok(())
-}
-
-#[derive(Clone)]
-pub struct HttpQueryHandle {
-    pub executor: Arc<RwLock<Executor>>,
-    pub block_buffer: Arc<BlockBuffer>,
-}
-
-impl HttpQueryHandle {
-    pub async fn execute(
-        self,
-        ctx: Arc<QueryContext>,
-        mut build_res: PipelineBuildResult,
-        result_schema: DataSchemaRef,
-    ) -> Result<SendableChunkStream> {
-        let executor = self.executor.clone();
-        let block_buffer = self.block_buffer.clone();
-
-        build_res.main_pipeline.resize(1)?;
-        let input = InputPort::create();
-
-        let query_info = ResultQueryInfo {
-            query_id: ctx.get_id(),
-            schema: result_schema.clone(),
-            user: ctx.get_current_user()?.identity(),
-        };
-        let data_accessor = ctx.get_data_operator()?.operator();
-
-        let sink = ResultTableSink::create(
-            input.clone(),
-            ctx.clone(),
-            data_accessor,
-            query_info,
-            self.block_buffer,
-        )?;
-
-        build_res.main_pipeline.add_pipe(Pipe::SimplePipe {
-            outputs_port: vec![],
-            inputs_port: vec![input],
-            processors: vec![sink],
-        });
-
-        let query_ctx = ctx.clone();
-        let query_id = ctx.get_id();
-        let executor_settings = ExecutorSettings::try_create(&ctx.get_settings(), query_id)?;
-
-        let run = move || -> Result<()> {
-            let mut pipelines = build_res.sources_pipelines;
-            pipelines.push(build_res.main_pipeline);
-
-            let pipeline_executor =
-                PipelineCompleteExecutor::from_pipelines(pipelines, executor_settings)?;
-
-            query_ctx.set_executor(Arc::downgrade(&pipeline_executor.get_inner()));
-            pipeline_executor.execute()
-        };
-
-        let (error_sender, mut error_receiver) = mpsc::channel::<Result<()>>(1);
-
-        GlobalIORuntime::instance().spawn(async move {
-            match error_receiver.recv().await {
-                Some(Err(e)) => {
-                    Executor::stop(&executor, Err(e), false).await;
-                    block_buffer.stop_push().await.unwrap();
-                }
-                _ => {
-                    Executor::stop(&executor, Ok(()), false).await;
-                    block_buffer.stop_push().await.unwrap();
-                }
-            }
-        });
-
-        Thread::spawn(move || {
-            if let Err(cause) = run() {
-                if error_sender.blocking_send(Err(cause)).is_err() {
-                    tracing::warn!("Error sender is disconnect");
-                }
-            }
-        });
-        Ok(Box::pin(ChunkStream::create(None, vec![])))
-    }
 }
