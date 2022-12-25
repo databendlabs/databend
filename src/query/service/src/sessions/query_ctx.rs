@@ -46,6 +46,7 @@ use common_meta_types::UserInfo;
 use common_settings::Settings;
 use common_storage::DataOperator;
 use common_storage::StorageMetrics;
+use common_storages_fuse::TableContext;
 use common_storages_stage::StageTable;
 use parking_lot::RwLock;
 use tracing::debug;
@@ -55,13 +56,11 @@ use crate::auth::AuthMgr;
 use crate::catalogs::Catalog;
 use crate::clusters::Cluster;
 use crate::pipelines::executor::PipelineExecutor;
-use crate::servers::http::v1::HttpQueryHandle;
 use crate::sessions::query_affect::QueryAffect;
 use crate::sessions::ProcessInfo;
 use crate::sessions::QueryContextShared;
 use crate::sessions::Session;
 use crate::sessions::SessionManager;
-use crate::sessions::TableContext;
 use crate::storages::Table;
 
 #[derive(Clone)]
@@ -138,14 +137,6 @@ impl QueryContext {
 
     pub fn get_exchange_manager(&self) -> Arc<DataExchangeManager> {
         DataExchangeManager::instance()
-    }
-
-    pub fn attach_http_query(&self, handle: HttpQueryHandle) {
-        self.shared.attach_http_query_handle(handle);
-    }
-
-    pub fn get_http_query(&self) -> Option<HttpQueryHandle> {
-        self.shared.get_http_query()
     }
 
     pub fn get_auth_manager(&self) -> Arc<AuthMgr> {

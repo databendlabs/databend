@@ -58,7 +58,7 @@ pub struct ProcessInfo {
 #[derive(Debug, Clone)]
 pub struct StageAttachment {
     pub location: String,
-    pub format_options: BTreeMap<String, String>,
+    pub file_format_options: BTreeMap<String, String>,
     pub copy_options: BTreeMap<String, String>,
 }
 

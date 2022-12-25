@@ -20,7 +20,7 @@ use crate::storages::fuse::table_test_fixture::check_data_dir;
 use crate::storages::fuse::table_test_fixture::execute_command;
 use crate::storages::fuse::table_test_fixture::TestFixture;
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_snapshot_truncate_in_drop_stmt() -> Result<()> {
     let fixture = TestFixture::new().await;
     let db = fixture.default_db_name();
@@ -36,7 +36,7 @@ async fn test_fuse_snapshot_truncate_in_drop_stmt() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_snapshot_truncate_in_drop_all_stmt() -> Result<()> {
     let fixture = TestFixture::new().await;
     let db = fixture.default_db_name();

@@ -16,7 +16,7 @@ use common_base::base::tokio;
 use common_exception::Result;
 use databend_query::context_function::ContextFunction;
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_context_function_build_arg_from_ctx() -> Result<()> {
     use pretty_assertions::assert_eq;
     let (_guard, ctx) = crate::tests::create_query_context().await?;

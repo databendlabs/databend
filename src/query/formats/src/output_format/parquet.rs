@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datablocks::serialize_data_blocks;
+use common_datablocks::serialize_to_parquet;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
@@ -51,7 +51,7 @@ impl OutputFormat for ParquetOutputFormat {
             return Ok(vec![]);
         }
         let mut buf = Vec::with_capacity(100 * 1024 * 1024);
-        let _ = serialize_data_blocks(blocks, &self.schema, &mut buf)?;
+        let _ = serialize_to_parquet(blocks, &self.schema, &mut buf)?;
         Ok(buf)
     }
 }

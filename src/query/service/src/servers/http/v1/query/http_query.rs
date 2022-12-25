@@ -148,7 +148,7 @@ pub struct StageAttachmentConf {
     /// location of the stage
     /// for example: @stage_name/path/to/file, @~/path/to/file
     pub(crate) location: String,
-    pub(crate) format_options: Option<BTreeMap<String, String>>,
+    pub(crate) file_format_options: Option<BTreeMap<String, String>>,
     pub(crate) copy_options: Option<BTreeMap<String, String>>,
 }
 
@@ -243,7 +243,7 @@ impl HttpQuery {
         match &request.stage_attachment {
             Some(attachment) => ctx.attach_stage(StageAttachment {
                 location: attachment.location.clone(),
-                format_options: match attachment.format_options {
+                file_format_options: match attachment.file_format_options {
                     Some(ref params) => params.clone(),
                     None => BTreeMap::new(),
                 },
@@ -382,7 +382,7 @@ impl HttpQuery {
     }
 
     pub async fn update_expire_time(&self, before_wait: bool) {
-        let duration = Duration::from_millis(self.config.result_timeout_millis)
+        let duration = Duration::from_secs(self.config.result_timeout_secs)
             + if before_wait {
                 Duration::from_secs(self.request.pagination.wait_time_secs as u64)
             } else {
@@ -403,7 +403,7 @@ impl HttpQuery {
                 Some(expire_at - now)
             }
         } else {
-            Some(Duration::from_millis(self.config.result_timeout_millis))
+            Some(Duration::from_secs(self.config.result_timeout_secs))
         }
     }
 }

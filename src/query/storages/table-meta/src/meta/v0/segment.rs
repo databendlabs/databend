@@ -50,6 +50,16 @@ pub struct ColumnMeta {
     pub num_values: u64,
 }
 
+impl ColumnMeta {
+    pub fn new(offset: u64, len: u64, num_values: u64) -> Self {
+        Self {
+            offset,
+            len,
+            num_values,
+        }
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct BlockLocation {
     pub path: String,

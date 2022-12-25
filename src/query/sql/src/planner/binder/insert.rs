@@ -19,13 +19,13 @@ use common_ast::ast::InsertStmt;
 use common_ast::ast::Statement;
 use common_datavalues::DataSchemaRefExt;
 use common_exception::Result;
+use common_meta_types::FileFormatOptions;
 
 use crate::binder::Binder;
 use crate::normalize_identifier;
 use crate::optimizer::optimize;
 use crate::optimizer::OptimizerConfig;
 use crate::optimizer::OptimizerContext;
-use crate::planner::binder::copy::parse_copy_file_format_options;
 use crate::plans::Insert;
 use crate::plans::InsertInputSource;
 use crate::plans::Plan;
@@ -91,7 +91,7 @@ impl<'a> Binder {
                 }
             }
             InsertSource::StreamingV2 { settings, start } => {
-                let opts = parse_copy_file_format_options(&settings)?;
+                let opts = FileFormatOptions::from_map(&settings)?;
                 Ok(InsertInputSource::StreamingWithFileFormat(
                     opts, start, None,
                 ))

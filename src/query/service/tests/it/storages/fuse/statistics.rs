@@ -28,6 +28,7 @@ use common_storages_fuse::statistics::reducers::reduce_block_metas;
 use common_storages_fuse::statistics::Trim;
 use common_storages_fuse::statistics::STATS_REPLACEMENT_CHAR;
 use common_storages_fuse::statistics::STATS_STRING_PREFIX_LEN;
+use common_storages_fuse::FuseStorageFormat;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::ClusterStatistics;
 use common_storages_table_meta::meta::ColumnStatistics;
@@ -185,7 +186,7 @@ fn test_reduce_block_statistics_in_memory_size() -> common_exception::Result<()>
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_accumulator() -> common_exception::Result<()> {
     let blocks = TestFixture::gen_sample_blocks(10, 1);
     let mut stats_acc = StatisticsAccumulator::default();
@@ -199,7 +200,9 @@ async fn test_accumulator() -> common_exception::Result<()> {
         let block_statistics =
             BlockStatistics::from(&block, "does_not_matter".to_owned(), None, None)?;
         let block_writer = BlockWriter::new(&operator, &loc_generator);
-        let block_meta = block_writer.write(block, col_stats, None).await?;
+        let block_meta = block_writer
+            .write(FuseStorageFormat::Parquet, block, col_stats, None)
+            .await?;
         stats_acc.add_with_block_meta(block_meta, block_statistics)?;
     }
 
@@ -237,7 +240,7 @@ fn test_ft_stats_cluster_stats() -> common_exception::Result<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_ft_cluster_stats_with_stats() -> common_exception::Result<()> {
     let schema = DataSchemaRefExt::create(vec![DataField::new("a", i32::to_data_type())]);
     let blocks = DataBlock::create(schema.clone(), vec![Series::from_data(vec![1i32, 2, 3])]);

@@ -25,7 +25,7 @@ use crate::storages::fuse::utils::do_insertions;
 use crate::storages::fuse::utils::do_purge_test;
 use crate::storages::fuse::utils::TestTableOperation;
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_snapshot_analyze() -> Result<()> {
     do_purge_test(
         "test_fuse_snapshot_analyze",
@@ -41,7 +41,7 @@ async fn test_fuse_snapshot_analyze() -> Result<()> {
     .await
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_snapshot_analyze_and_truncate() -> Result<()> {
     let fixture = TestFixture::new().await;
     let db = fixture.default_db_name();
@@ -88,7 +88,7 @@ async fn test_fuse_snapshot_analyze_and_truncate() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_snapshot_analyze_purge() -> Result<()> {
     let fixture = TestFixture::new().await;
     let db = fixture.default_db_name();

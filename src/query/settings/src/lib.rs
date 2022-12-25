@@ -111,6 +111,9 @@ impl Settings {
         if conf.query.num_cpus != 0 {
             num_physical_cpus = conf.query.num_cpus;
         }
+        if num_physical_cpus == 0 {
+            num_physical_cpus = 16;
+        }
 
         let mut default_max_memory_usage = 1024 * memory_info.total * 80 / 100;
         if conf.query.max_server_memory_usage != 0 {
@@ -476,6 +479,16 @@ impl Settings {
                 desc: "How many hours will the COPY file metadata expired in the metasrv, default value: 24*7=7days",
                 possible_values: None,
             },
+            SettingValue {
+                default_value: UserSettingValue::String("".to_string()),
+                user_setting: UserSetting::create(
+                    "sandbox_tenant",
+                    UserSettingValue::String("".to_string()),
+                ),
+                level: ScopeLevel::Session,
+                desc: "Inject a custom sandbox_tenant into this session, it's only for testing purpose and take effect when the internal_enable_sandbox_tenant is on",
+                possible_values: None,
+            },
         ];
 
         let settings: Arc<DashMap<String, SettingValue>> = Arc::new(DashMap::default());
@@ -508,7 +521,8 @@ impl Settings {
     // Get max_threads.
     pub fn get_max_threads(&self) -> Result<u64> {
         let key = "max_threads";
-        self.try_get_u64(key)
+        let value = self.try_get_u64(key)?;
+        if value == 0 { Ok(16) } else { Ok(value) }
     }
 
     // Set max_threads.
@@ -783,6 +797,12 @@ impl Settings {
     pub fn get_load_file_metadata_expire_hours(&self) -> Result<u64> {
         let key = "load_file_metadata_expire_hours";
         self.try_get_u64(key)
+    }
+
+    pub fn get_sandbox_tenant(&self) -> Result<String> {
+        let key = "sandbox_tenant";
+        self.check_and_get_setting_value(key)
+            .and_then(|v| v.user_setting.value.as_string())
     }
 
     pub fn has_setting(&self, key: &str) -> bool {

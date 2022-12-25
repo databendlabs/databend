@@ -1185,8 +1185,8 @@ pub struct QueryConfig {
     #[clap(long, default_value = "8000")]
     pub http_handler_port: u16,
 
-    #[clap(long, default_value = "10000")]
-    pub http_handler_result_timeout_millis: u64,
+    #[clap(long, default_value = "60")]
+    pub http_handler_result_timeout_secs: u64,
 
     #[clap(long, default_value = "127.0.0.1:9090")]
     pub flight_api_address: String,
@@ -1314,6 +1314,9 @@ pub struct QueryConfig {
 
     #[clap(skip)]
     quota: Option<TenantQuota>,
+
+    #[clap(long)]
+    pub internal_enable_sandbox_tenant: bool,
 }
 
 impl Default for QueryConfig {
@@ -1339,7 +1342,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             clickhouse_http_handler_port: self.clickhouse_http_handler_port,
             http_handler_host: self.http_handler_host,
             http_handler_port: self.http_handler_port,
-            http_handler_result_timeout_millis: self.http_handler_result_timeout_millis,
+            http_handler_result_timeout_secs: self.http_handler_result_timeout_secs,
             flight_api_address: self.flight_api_address,
             admin_api_address: self.admin_api_address,
             metric_api_address: self.metric_api_address,
@@ -1377,6 +1380,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             share_endpoint_address: self.share_endpoint_address,
             share_endpoint_auth_token_file: self.share_endpoint_auth_token_file,
             tenant_quota: self.quota,
+            internal_enable_sandbox_tenant: self.internal_enable_sandbox_tenant,
         })
     }
 }
@@ -1402,7 +1406,7 @@ impl From<InnerQueryConfig> for QueryConfig {
             clickhouse_http_handler_port: inner.clickhouse_http_handler_port,
             http_handler_host: inner.http_handler_host,
             http_handler_port: inner.http_handler_port,
-            http_handler_result_timeout_millis: inner.http_handler_result_timeout_millis,
+            http_handler_result_timeout_secs: inner.http_handler_result_timeout_secs,
             flight_api_address: inner.flight_api_address,
             admin_api_address: inner.admin_api_address,
             metric_api_address: inner.metric_api_address,
@@ -1439,6 +1443,7 @@ impl From<InnerQueryConfig> for QueryConfig {
             share_endpoint_address: inner.share_endpoint_address,
             share_endpoint_auth_token_file: inner.share_endpoint_auth_token_file,
             quota: inner.tenant_quota,
+            internal_enable_sandbox_tenant: inner.internal_enable_sandbox_tenant,
         }
     }
 }

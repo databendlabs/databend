@@ -43,11 +43,29 @@ pub struct SqlLogicTestArgs {
 
     // Set handler to run tests
     #[arg(
-        short = 'c',
+        short = 'l',
         long = "handlers",
         use_value_delimiter = true,
         value_delimiter = ',',
         help = "Choose handlers to run tests, support mysql, http, clickhouse handler, the arg is optional. If use multiple handlers, please use \',\' to split them"
     )]
     pub handlers: Option<Vec<String>>,
+
+    // Choose suits to run
+    #[arg(
+        short = 'u',
+        long = "suites",
+        help = "The tests to be run will come from under suits",
+        default_value = "tests/sqllogictests/suites"
+    )]
+    pub suites: String,
+
+    // If enable complete mode
+    #[arg(
+        short = 'c',
+        long = "complete",
+        default_missing_value = "true",
+        help = "The arg is used to enable auto complete mode"
+    )]
+    pub complete: bool,
 }

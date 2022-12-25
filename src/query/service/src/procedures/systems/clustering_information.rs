@@ -61,7 +61,7 @@ impl OneBlockProcedure for ClusteringInformationProcedure {
 
         let tbl = FuseTable::try_from_table(tbl.as_ref())?;
         let definition = if args.len() > 2 { &args[2] } else { "" };
-        let cluster_keys = get_cluster_keys(tbl, definition)?;
+        let cluster_keys = get_cluster_keys(ctx.clone(), tbl, definition)?;
 
         Ok(ClusteringInformation::new(ctx, tbl, cluster_keys)
             .get_clustering_info()

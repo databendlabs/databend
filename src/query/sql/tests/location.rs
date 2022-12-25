@@ -12,10 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
-use std::io::Result;
+mod optimizer;
 
+use std::collections::BTreeMap;
+
+use anyhow::Result;
 use common_ast::ast::UriLocation;
+use common_base::base::GlobalInstance;
+use common_config::Config;
+use common_config::GlobalConfig;
 use common_sql::planner::binder::parse_uri_location;
 use common_storage::StorageFsConfig;
 use common_storage::StorageFtpConfig;
@@ -31,6 +36,14 @@ use common_storage::STORAGE_S3_DEFAULT_ENDPOINT;
 
 #[test]
 fn test_parse_uri_location() -> Result<()> {
+    let thread_name = match std::thread::current().name() {
+        None => panic!("thread name is none"),
+        Some(thread_name) => thread_name.to_string(),
+    };
+
+    GlobalInstance::init_testing(&thread_name);
+    GlobalConfig::init(Config::default())?;
+
     let cases = vec![
         (
             "secure scheme by default",

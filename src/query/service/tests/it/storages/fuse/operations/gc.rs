@@ -37,7 +37,7 @@ use crate::storages::fuse::table_test_fixture::append_sample_data;
 use crate::storages::fuse::table_test_fixture::check_data_dir;
 use crate::storages::fuse::table_test_fixture::TestFixture;
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_purge_normal_case() -> Result<()> {
     let fixture = TestFixture::new().await;
     let ctx = fixture.ctx();
@@ -69,7 +69,7 @@ async fn test_fuse_purge_normal_case() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_purge_normal_orphan_snapshot() -> Result<()> {
     let fixture = TestFixture::new().await;
     let ctx = fixture.ctx();
@@ -119,7 +119,7 @@ async fn test_fuse_purge_normal_orphan_snapshot() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_purge_orphan_retention() -> Result<()> {
     // verifies that:
     //
@@ -300,7 +300,14 @@ mod utils {
         let blocks: std::vec::Vec<DataBlock> = stream.try_collect().await?;
         for block in blocks {
             let stats = gen_columns_statistics(&block, None)?;
-            let block_meta = block_writer.write(block, stats, None).await?;
+            let block_meta = block_writer
+                .write(
+                    common_storages_fuse::FuseStorageFormat::Parquet,
+                    block,
+                    stats,
+                    None,
+                )
+                .await?;
             block_metas.push(Arc::new(block_meta));
         }
 

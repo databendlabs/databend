@@ -31,7 +31,7 @@ use crate::storages::fuse::table_test_fixture::execute_command;
 use crate::storages::fuse::table_test_fixture::execute_query;
 use crate::storages::fuse::table_test_fixture::TestFixture;
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_table_modify_column_ndv_statistics() -> Result<()> {
     let fixture = TestFixture::new().await;
     let ctx = fixture.ctx();

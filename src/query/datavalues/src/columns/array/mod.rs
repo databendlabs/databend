@@ -19,6 +19,7 @@ use common_arrow::arrow::buffer::Buffer;
 use common_arrow::arrow::compute::cast::CastOptions;
 use common_arrow::arrow::compute::cast::{self};
 use common_arrow::arrow::datatypes::DataType as ArrowType;
+use common_arrow::arrow::offset::OffsetsBuffer;
 use common_arrow::arrow::types::Index;
 use common_arrow::ArrayRef;
 use common_io::prelude::BinaryWrite;
@@ -58,7 +59,7 @@ impl ArrayColumn {
 
         Self {
             data_type,
-            offsets: array.offsets().clone(),
+            offsets: array.offsets().clone().into_inner(),
             values,
         }
     }
@@ -142,12 +143,15 @@ impl Column for ArrayColumn {
         if let ArrowType::LargeList(ref f) = arrow_type {
             let inner_f = from_arrow_field(f.as_ref());
             let array = self.values.as_arrow_array(inner_f);
-            Box::new(LargeListArray::from_data(
-                arrow_type,
-                self.offsets.clone(),
-                array,
-                None,
-            ))
+            Box::new(
+                LargeListArray::try_new(
+                    arrow_type,
+                    unsafe { OffsetsBuffer::new_unchecked(self.offsets.clone()) },
+                    array,
+                    None,
+                )
+                .unwrap(),
+            )
         } else {
             unreachable!()
         }

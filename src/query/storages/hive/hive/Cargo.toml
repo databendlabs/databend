@@ -32,7 +32,7 @@ async-recursion = "1.0.0"
 async-trait = "0.1.57"
 chrono = { workspace = true }
 futures = "0.3.24"
-opendal = "0.22"
+opendal = "0.23"
 serde = { workspace = true }
 thrift = { package = "databend-thrift", version = "0.17.0" }
 tracing = "0.1.36"
