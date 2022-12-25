@@ -39,16 +39,18 @@ pub struct BlockReader {
 
 impl BlockReader {
     /// This is an optimized for data read, works like the Linux kernel io-scheduler IO merging.
-    /// It will merge two requests:
-    /// if the gap is less than get_storage_io_min_bytes_for_seek (Default is 512Bytes).
+    /// If the distance between two IO request ranges to be read is less than storage_io_min_bytes_for_seek(Default is 512Bytes),
+    /// will read the range that contains both ranges, thus avoiding extra seek.
     ///
     /// It will *NOT* merge two requests:
-    /// if the last io request size is larger than get_storage_io_page_bytes_for_read(Default is 512KB).
+    /// if the last io request size is larger than storage_io_page_bytes_for_read(Default is 512KB).
     pub async fn merge_io_read(
         ctx: Arc<dyn TableContext>,
         object: Object,
         raw_ranges: Vec<(usize, Range<u64>)>,
     ) -> Result<Vec<(usize, Vec<u8>)>> {
+        let path = object.path().to_string();
+
         // Merge settings.
         let min_bytes_for_seek = ctx.get_settings().get_storage_io_min_bytes_for_seek()?;
         let max_page_bytes_for_read = ctx
@@ -67,18 +69,18 @@ impl BlockReader {
         // Read merged range data.
         let mut read_handlers = Vec::with_capacity(merged_ranges.len());
         for (idx, range) in merged_ranges.iter().enumerate() {
+            let path = path.clone();
             let obj = object.clone();
 
             // Push the fut to tokio scheduler queue.
             read_handlers.push(async move {
-                let path = obj.path().to_string();
                 let handler = common_base::base::tokio::spawn(UnlimitedFuture::create(
                     Self::read_range(obj, idx, range.start, range.end),
                 ));
                 handler.await.map_err(|e| {
                     ErrorCode::StorageOther(format!(
-                        "merge io read range:[{},{}], index:{}, path:{}, error: {}",
-                        range.start, range.end, idx, path, e
+                        "merge io read range:[{},{}], path:{}, error: {}",
+                        range.start, range.end, path, e
                     ))
                 })?
             });
@@ -95,8 +97,8 @@ impl BlockReader {
             let (merged_range_idx, merged_range) = match range_merger.get(column_start..column_end)
             {
                 None => Err(ErrorCode::Internal(format!(
-                    "It's a terrible bug, not found raw range:[{},{}] from merged ranges\n: {:?}",
-                    column_start, column_end, merged_ranges
+                    "It's a terrible bug, not found raw range:[{},{}], path:{} from merged ranges\n: {:?}",
+                    column_start, column_end, path, merged_ranges
                 ))),
                 Some((i, r)) => Ok((i, r)),
             }?;
@@ -111,8 +113,8 @@ impl BlockReader {
             }
             let merged_range_data = match merged_range_data {
                 None => Err(ErrorCode::Internal(format!(
-                    "It's a terrible bug, not found range data, merged_range_idx:{}",
-                    merged_range_idx
+                    "It's a terrible bug, not found range data, merged_range_idx:{}, path:{}",
+                    merged_range_idx, path
                 ))),
                 Some(v) => Ok(v),
             }?;
