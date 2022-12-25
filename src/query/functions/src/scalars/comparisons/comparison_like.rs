@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_datavalues::prelude::*;
+use memchr::memmem;
 
 use super::comparison::StringSearchCreator;
 use super::utils::StringSearchImpl;
@@ -56,6 +57,18 @@ impl StringSearchImpl for StringSearchLike {
                 let ends_with = &rhs[1..];
                 BooleanColumn::from_iterator(lhs.scalar_iter().map(|x| op(x.ends_with(ends_with))))
             }
+
+            PatternType::SurroundByPercent => {
+                if rhs.len() > 2 {
+                    let needle = &rhs[1..rhs.len() - 1];
+                    BooleanColumn::from_iterator(
+                        lhs.scalar_iter()
+                            .map(|x| op(memmem::find(x, needle).is_some())),
+                    )
+                } else {
+                    BooleanColumn::from_iterator(lhs.scalar_iter().map(|x| op(x.is_empty())))
+                }
+            }
             PatternType::PatternStr => {
                 BooleanColumn::from_iterator(lhs.scalar_iter().map(|x| op(like(x, rhs))))
             }
@@ -78,6 +91,8 @@ pub enum PatternType {
     StartOfPercent,
     // e.g. 'Arro%'
     EndOfPercent,
+    // e.g. '%Arrow%'
+    SurroundByPercent,
 }
 
 /// Check the like pattern type.
@@ -114,8 +129,12 @@ pub fn check_pattern_type(pattern: &[u8], is_pruning: bool) -> PatternType {
         match pattern[index] {
             b'_' => return PatternType::PatternStr,
             b'%' => {
-                if index == len - 1 && !start_percent {
-                    return PatternType::EndOfPercent;
+                if index == len - 1 {
+                    return if !start_percent {
+                        PatternType::EndOfPercent
+                    } else {
+                        PatternType::SurroundByPercent
+                    };
                 }
                 return PatternType::PatternStr;
             }
