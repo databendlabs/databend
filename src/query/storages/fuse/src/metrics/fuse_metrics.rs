@@ -20,6 +20,7 @@
 
 use metrics::counter;
 use metrics::gauge;
+use metrics::increment_gauge;
 
 macro_rules! key {
     ($key: literal) => {
@@ -56,21 +57,30 @@ pub fn metrics_inc_commit_mutation_aborts() {
 }
 
 pub fn metrics_inc_remote_io_seeks(c: u64) {
-    counter!(key!("remote_io_seeks"), c);
+    increment_gauge!(key!("remote_io_seeks"), c as f64);
 }
 
 pub fn metrics_inc_remote_io_seeks_after_merged(c: u64) {
-    counter!(key!("remote_io_seeks_after_merged"), c);
+    increment_gauge!(key!("remote_io_seeks_after_merged"), c as f64);
 }
 
 pub fn metrics_inc_remote_io_read_bytes(c: u64) {
-    counter!(key!("remote_io_read_bytes"), c);
+    increment_gauge!(key!("remote_io_read_bytes"), c as f64);
 }
 
 pub fn metrics_inc_remote_io_read_bytes_after_merged(c: u64) {
-    counter!(key!("remote_io_read_bytes_after_merged"), c);
+    increment_gauge!(key!("remote_io_read_bytes_after_merged"), c as f64);
 }
 
 pub fn metrics_inc_remote_io_read_milliseconds(c: u64) {
-    counter!(key!("remote_io_read_milliseconds"), c);
+    increment_gauge!(key!("remote_io_read_milliseconds"), c as f64);
+}
+
+pub fn metrics_reset() {
+    let c = 0 as f64;
+    gauge!(key!("remote_io_seeks"), c);
+    gauge!(key!("remote_io_seeks_after_merged"), c);
+    gauge!(key!("remote_io_read_bytes"), c);
+    gauge!(key!("remote_io_read_bytes_after_merged"), c);
+    gauge!(key!("remote_io_read_milliseconds"), c);
 }
