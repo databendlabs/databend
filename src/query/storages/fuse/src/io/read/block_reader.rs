@@ -40,36 +40,48 @@ pub struct BlockReader {
 impl BlockReader {
     /// This is an optimized for data read, works like the Linux kernel io-scheduler IO merging.
     /// It will merge two requests:
-    /// if the gap is less than get_max_storage_io_requests_merge_gap(Default is 1KB).
+    /// if the gap is less than get_storage_io_min_bytes_for_seek (Default is 512Bytes).
     ///
     /// It will *NOT* merge two requests:
-    /// if the last io request size is larger than get_max_storage_io_requests_page_size(Default is 512KB).
+    /// if the last io request size is larger than get_storage_io_page_bytes_for_read(Default is 512KB).
     pub async fn merge_io_read(
         ctx: Arc<dyn TableContext>,
         object: Object,
         raw_ranges: Vec<(usize, Range<u64>)>,
     ) -> Result<Vec<(usize, Vec<u8>)>> {
         // Merge settings.
-        let max_gap_size = ctx.get_settings().get_max_storage_io_requests_merge_gap()?;
-        let max_range_size = ctx.get_settings().get_max_storage_io_requests_page_size()?;
+        let min_bytes_for_seek = ctx.get_settings().get_storage_io_min_bytes_for_seek()?;
+        let max_page_bytes_for_read = ctx
+            .get_settings()
+            .get_storage_io_max_page_bytes_for_read()?;
 
         // Build merged read ranges.
         let ranges = raw_ranges
             .iter()
             .map(|(_, r)| r.clone())
             .collect::<Vec<_>>();
-        let range_merger = RangeMerger::from_iter(ranges, max_gap_size, max_range_size);
+        let range_merger =
+            RangeMerger::from_iter(ranges, min_bytes_for_seek, max_page_bytes_for_read);
         let merged_ranges = range_merger.ranges();
 
         // Read merged range data.
         let mut read_handlers = Vec::with_capacity(merged_ranges.len());
         for (idx, range) in merged_ranges.iter().enumerate() {
-            read_handlers.push(UnlimitedFuture::create(Self::read_range(
-                object.clone(),
-                idx,
-                range.start,
-                range.end,
-            )));
+            let obj = object.clone();
+
+            // Push the fut to tokio scheduler queue.
+            read_handlers.push(async move {
+                let path = obj.path().to_string();
+                let handler = common_base::base::tokio::spawn(UnlimitedFuture::create(
+                    Self::read_range(obj, idx, range.start, range.end),
+                ));
+                handler.await.map_err(|e| {
+                    ErrorCode::StorageOther(format!(
+                        "merge io read range:[{},{}], index:{}, path:{}, error: {}",
+                        range.start, range.end, idx, path, e
+                    ))
+                })?
+            });
         }
         let merged_range_data_results = futures::future::try_join_all(read_handlers).await?;
 

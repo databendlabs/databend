@@ -181,26 +181,26 @@ impl Settings {
                 desc: "The maximum number of concurrent IO requests. By default the value is determined automatically.",
                 possible_values: None,
             },
-            // max_storage_io_requests_merge_gap
+            // storage_io_min_bytes_for_seek
             SettingValue {
-                default_value: UserSettingValue::UInt64(1024),
+                default_value: UserSettingValue::UInt64(512),
                 user_setting: UserSetting::create(
-                    "max_storage_io_requests_merge_gap",
-                    UserSettingValue::UInt64(1024),
+                    "storage_io_min_bytes_for_seek",
+                    UserSettingValue::UInt64(512),
                 ),
                 level: ScopeLevel::Session,
-                desc: "The maximum gap bytes of adjusting to merge two IO requests. By default the value is 1KB",
+                desc: "If the distance between two IO ranges to be read in one file is less than storage_io_min_bytes_for_seek, then Databend sequentially reads a range of file that contains both ranges, thus avoiding extra seek. Default value is 512Bytes",
                 possible_values: None,
             },
-            // max_storage_io_requests_page_size
+            // storage_io_max_page_bytes_for_read
             SettingValue {
-                default_value: UserSettingValue::UInt64(256 * 1024),
+                default_value: UserSettingValue::UInt64(512 * 1024),
                 user_setting: UserSetting::create(
-                    "max_storage_io_requests_page_size",
-                    UserSettingValue::UInt64(256 * 1024),
+                    "storage_io_max_page_bytes_for_read",
+                    UserSettingValue::UInt64(512 * 1024),
                 ),
                 level: ScopeLevel::Session,
-                desc: "The maximum bytes of one IO request read. By default the value is 256KB",
+                desc: "The maximum bytes of one IO request to read. Default the value is 512KB",
                 possible_values: None,
             },
             // flight_client_timeout
@@ -583,23 +583,23 @@ impl Settings {
         self.try_set_u64(key, val, false)
     }
 
-    pub fn get_max_storage_io_requests_merge_gap(&self) -> Result<u64> {
-        let key = "max_storage_io_requests_merge_gap";
+    pub fn get_storage_io_min_bytes_for_seek(&self) -> Result<u64> {
+        let key = "storage_io_min_bytes_for_seek";
         self.try_get_u64(key)
     }
 
-    pub fn set_max_storage_io_requests_merge_gap(&self, val: u64) -> Result<()> {
-        let key = "max_storage_io_requests_merge_gap";
+    pub fn set_storage_io_min_bytes_for_seek(&self, val: u64) -> Result<()> {
+        let key = "storage_io_min_bytes_for_seek";
         self.try_set_u64(key, val, false)
     }
 
-    pub fn get_max_storage_io_requests_page_size(&self) -> Result<u64> {
-        let key = "max_storage_io_requests_page_size";
+    pub fn get_storage_io_max_page_bytes_for_read(&self) -> Result<u64> {
+        let key = "storage_io_max_page_bytes_for_read";
         self.try_get_u64(key)
     }
 
-    pub fn set_max_storage_io_requests_page_size(&self, val: u64) -> Result<()> {
-        let key = "max_storage_io_requests_page_size";
+    pub fn set_storage_io_max_page_bytes_for_read(&self, val: u64) -> Result<()> {
+        let key = "storage_io_max_page_bytes_for_read";
         self.try_set_u64(key, val, false)
     }
 
