@@ -76,6 +76,10 @@ pub fn metrics_inc_remote_io_read_milliseconds(c: u64) {
     increment_gauge!(key!("remote_io_read_milliseconds"), c as f64);
 }
 
+pub fn metrics_inc_remote_io_read_parts(c: u64) {
+    increment_gauge!(key!("remote_io_read_parts"), c as f64);
+}
+
 pub fn metrics_reset() {
     let c = 0 as f64;
     gauge!(key!("remote_io_seeks"), c);
@@ -83,4 +87,5 @@ pub fn metrics_reset() {
     gauge!(key!("remote_io_read_bytes"), c);
     gauge!(key!("remote_io_read_bytes_after_merged"), c);
     gauge!(key!("remote_io_read_milliseconds"), c);
+    gauge!(key!("remote_io_read_parts"), c);
 }

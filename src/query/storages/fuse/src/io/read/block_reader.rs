@@ -74,17 +74,17 @@ impl BlockReader {
         // Read merged range data.
         let mut read_handlers = Vec::with_capacity(merged_ranges.len());
         for (idx, range) in merged_ranges.iter().enumerate() {
+            // Perf.
+            {
+                metrics_inc_remote_io_seeks_after_merged(1);
+                metrics_inc_remote_io_read_bytes_after_merged(range.end - range.start);
+            }
+
             let path = path.clone();
             let obj = object.clone();
 
             // Push the fut to tokio scheduler queue.
             read_handlers.push(async move {
-                // Perf.
-                {
-                    metrics_inc_remote_io_seeks_after_merged(1);
-                    metrics_inc_remote_io_read_bytes_after_merged(range.end - range.start);
-                }
-
                 let handler = common_base::base::tokio::spawn(UnlimitedFuture::create(
                     Self::read_range(obj, idx, range.start, range.end),
                 ));

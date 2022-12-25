@@ -50,6 +50,7 @@ use tracing::Instrument;
 use crate::fuse_part::FusePartInfo;
 use crate::io::BlockReader;
 use crate::metrics::metrics_inc_remote_io_read_bytes;
+use crate::metrics::metrics_inc_remote_io_read_parts;
 use crate::metrics::metrics_inc_remote_io_seeks;
 
 impl BlockReader {
@@ -277,6 +278,9 @@ impl BlockReader {
         ctx: Arc<dyn TableContext>,
         raw_part: PartInfoPtr,
     ) -> Result<Vec<(usize, Vec<u8>)>> {
+        // Perf
+        metrics_inc_remote_io_read_parts(1);
+
         let part = FusePartInfo::from_part(&raw_part)?;
         let columns = self.projection.project_column_leaves(&self.column_leaves)?;
         let indices = Self::build_projection_indices(&columns);
