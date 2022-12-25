@@ -14,6 +14,7 @@
 
 use std::ops::Range;
 use std::sync::Arc;
+use std::time::Instant;
 
 use common_arrow::parquet::metadata::SchemaDescriptor;
 use common_base::rangemap::RangeMerger;
@@ -26,6 +27,10 @@ use common_exception::Result;
 use common_storage::ColumnLeaves;
 use opendal::Object;
 use opendal::Operator;
+
+use crate::metrics::metrics_inc_remote_io_read_bytes_after_merged;
+use crate::metrics::metrics_inc_remote_io_read_milliseconds;
+use crate::metrics::metrics_inc_remote_io_seeks_after_merged;
 
 // TODO: make BlockReader as a trait.
 #[derive(Clone)]
@@ -74,6 +79,12 @@ impl BlockReader {
 
             // Push the fut to tokio scheduler queue.
             read_handlers.push(async move {
+                // Perf.
+                {
+                    metrics_inc_remote_io_seeks_after_merged(1);
+                    metrics_inc_remote_io_read_bytes_after_merged(range.end - range.start);
+                }
+
                 let handler = common_base::base::tokio::spawn(UnlimitedFuture::create(
                     Self::read_range(obj, idx, range.start, range.end),
                 ));
@@ -85,7 +96,12 @@ impl BlockReader {
                 })?
             });
         }
+
+        let start = Instant::now();
         let merged_range_data_results = futures::future::try_join_all(read_handlers).await?;
+
+        // Perf.
+        metrics_inc_remote_io_read_milliseconds(start.elapsed().as_millis() as u64);
 
         // Build raw range data from merged range data.
         let mut final_result = Vec::with_capacity(raw_ranges.len());

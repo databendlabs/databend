@@ -49,6 +49,8 @@ use tracing::Instrument;
 
 use crate::fuse_part::FusePartInfo;
 use crate::io::BlockReader;
+use crate::metrics::metrics_inc_remote_io_read_bytes;
+use crate::metrics::metrics_inc_remote_io_seeks;
 
 impl BlockReader {
     pub fn create(
@@ -286,6 +288,12 @@ impl BlockReader {
                 *index,
                 column_meta.offset..(column_meta.offset + column_meta.len),
             ));
+
+            // Perf
+            {
+                metrics_inc_remote_io_seeks(1);
+                metrics_inc_remote_io_read_bytes(column_meta.len);
+            }
         }
 
         let object = self.operator.object(&part.location);

@@ -54,3 +54,23 @@ pub fn metrics_inc_commit_mutation_success() {
 pub fn metrics_inc_commit_mutation_aborts() {
     counter!(key!("commit_mutation_aborts"), 1);
 }
+
+pub fn metrics_inc_remote_io_seeks(c: u64) {
+    counter!(key!("remote_io_seeks"), c);
+}
+
+pub fn metrics_inc_remote_io_seeks_after_merged(c: u64) {
+    counter!(key!("remote_io_seeks_after_merged"), c);
+}
+
+pub fn metrics_inc_remote_io_read_bytes(c: u64) {
+    counter!(key!("remote_io_read_bytes"), c);
+}
+
+pub fn metrics_inc_remote_io_read_bytes_after_merged(c: u64) {
+    counter!(key!("remote_io_read_bytes_after_merged"), c);
+}
+
+pub fn metrics_inc_remote_io_read_milliseconds(c: u64) {
+    counter!(key!("remote_io_read_milliseconds"), c);
+}
