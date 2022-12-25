@@ -14,10 +14,11 @@
 
 use std::fmt::Debug;
 
-use common_datavalues::DataTypeImpl;
-use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::number::NumberScalar;
+use common_expression::types::DateType;
+use common_expression::Scalar;
 
 pub const DEFAULT_HISTOGRAM_BUCKETS: usize = 100;
 
@@ -27,11 +28,11 @@ pub trait Datum: Debug + Clone + PartialEq + Eq {
     fn data_type(&self) -> Self::Type;
 }
 
-impl Datum for DataValue {
-    type Type = DataTypeImpl;
+impl Datum for Scalar {
+    type Type = DateType;
 
     fn data_type(&self) -> Self::Type {
-        self.data_type()
+        todo!("expression")
     }
 }
 
@@ -45,7 +46,7 @@ impl Datum for DataValue {
 /// of rows instead of maintaining a real histogram for each column,
 /// which brings the assumption that the data is uniformly distributed.
 #[derive(Debug, Clone)]
-pub struct Histogram<DatumType: Datum = DataValue> {
+pub struct Histogram<DatumType: Datum = Scalar> {
     pub buckets: Vec<HistogramBucket<DatumType>>,
 }
 
@@ -85,9 +86,9 @@ impl<DatumType: Datum> Histogram<DatumType> {
 pub fn histogram_from_ndv(
     ndv: u64,
     num_rows: u64,
-    bound: Option<(DataValue, DataValue)>,
+    bound: Option<(Scalar, Scalar)>,
     num_buckets: usize,
-) -> Result<Histogram<DataValue>> {
+) -> Result<Histogram<Scalar>> {
     if ndv == 0 {
         if num_rows != 0 {
             return Err(ErrorCode::Internal(format!(
@@ -95,7 +96,7 @@ pub fn histogram_from_ndv(
                 ndv, num_rows
             )));
         } else {
-            return Ok(Histogram::<DataValue> { buckets: vec![] });
+            return Ok(Histogram::<Scalar> { buckets: vec![] });
         }
     }
 
@@ -129,12 +130,12 @@ pub fn histogram_from_ndv(
         num_buckets
     };
 
-    let mut buckets: Vec<HistogramBucket<DataValue>> = Vec::with_capacity(num_buckets);
-    let sample_set = UniformSampleSet::<DataValue> { min, max };
+    let mut buckets: Vec<HistogramBucket<Scalar>> = Vec::with_capacity(num_buckets);
+    let sample_set = UniformSampleSet::<Scalar> { min, max };
 
     for idx in 0..num_buckets {
         let upper_bound = sample_set.get_upper_bound(num_buckets, idx)?;
-        let bucket = HistogramBucket::<DataValue> {
+        let bucket = HistogramBucket::<Scalar> {
             upper_bound,
             num_values: (num_rows / num_buckets as u64) as f64,
             num_distinct: (ndv / num_buckets as u64) as f64,
@@ -142,11 +143,11 @@ pub fn histogram_from_ndv(
         buckets.push(bucket);
     }
 
-    Ok(Histogram::<DataValue> { buckets })
+    Ok(Histogram::<Scalar> { buckets })
 }
 
 #[derive(Debug, Clone)]
-pub struct HistogramBucket<DatumType: Datum = DataValue> {
+pub struct HistogramBucket<DatumType: Datum = Scalar> {
     /// Upper bound value of the bucket.
     upper_bound: DatumType,
     /// Estimated number of values in the bucket.
@@ -189,10 +190,13 @@ struct UniformSampleSet<DatumType: Datum> {
     max: DatumType,
 }
 
-impl SampleSet<DataValue> for UniformSampleSet<DataValue> {
-    fn get_upper_bound(&self, num_buckets: usize, bucket_index: usize) -> Result<DataValue> {
+impl SampleSet<Scalar> for UniformSampleSet<Scalar> {
+    fn get_upper_bound(&self, num_buckets: usize, bucket_index: usize) -> Result<Scalar> {
         match (&self.min, &self.max) {
-            (DataValue::UInt64(min), DataValue::UInt64(max)) => {
+            (
+                Scalar::Number(NumberScalar::UInt64(min)),
+                Scalar::Number(NumberScalar::UInt64(max)),
+            ) => {
                 let min = *min;
                 let max = *max;
                 let bucket_range = (max - min) / num_buckets as u64;
@@ -201,11 +205,11 @@ impl SampleSet<DataValue> for UniformSampleSet<DataValue> {
                     _ if bucket_index == num_buckets - 1 => max,
                     _ => min + bucket_range * bucket_index as u64,
                 };
-                Ok(DataValue::UInt64(upper_bound))
+                Ok(Scalar::Number(NumberScalar::UInt64(upper_bound)))
             }
             _ => Err(ErrorCode::Unimplemented(format!(
-                "Unsupported data type: {:?}",
-                self.min.data_type()
+                "Unsupported data scalar: {:?}",
+                self.min
             ))),
         }
     }

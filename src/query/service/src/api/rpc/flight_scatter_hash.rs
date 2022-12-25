@@ -21,6 +21,7 @@ use common_expression::Chunk;
 use common_functions::scalars::Function;
 use common_functions::scalars::FunctionContext;
 use common_functions::scalars::FunctionFactory;
+use common_sql::executor::PhysicalScalar;
 
 // use common_sql::executor::PhysicalScalar;
 use crate::api::rpc::flight_scatter::FlightScatter;

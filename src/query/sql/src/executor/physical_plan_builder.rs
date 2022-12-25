@@ -477,7 +477,10 @@ impl PhysicalPlanBuilder {
                     .into_iter()
                     .map(|scalar| {
                         let raw_expr = scalar.as_raw_expr();
-                        let filter = check(&raw_expr, &BUILTIN_FUNCTIONS)?;
+                        let filter = check(&raw_expr, &BUILTIN_FUNCTIONS).unwrap();
+                        let filter = filter.project_column_ref(|index: &usize| {
+                            table_schema.fields()[*index].name().clone()
+                        });
                         Ok(RemoteExpr::from_expr(&filter))
                     })
                     .collect::<Result<Vec<_>>>()

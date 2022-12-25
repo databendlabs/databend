@@ -157,23 +157,13 @@ impl FuseTable {
 
         let schema = table_info.schema();
         // sort
-        let sort_descs: Vec<SortColumnDescription> = self
-            .cluster_keys(ctx.clone())
+        let sort_descs: Vec<SortColumnDescription> = cluster_stats_gen
+            .cluster_key_index
             .iter()
-            .map(|remote_expr| {
-                let expr = remote_expr
-                    .into_expr(&BUILTIN_FUNCTIONS)
-                    .unwrap()
-                    .project_column_ref(|name| schema.index_of(name).unwrap());
-                let index = match expr {
-                    Expr::ColumnRef { id, .. } => id,
-                    _ => unreachable!("invalid expr"),
-                };
-                SortColumnDescription {
-                    index,
-                    asc: true,
-                    nulls_first: false,
-                }
+            .map(|index| SortColumnDescription {
+                index: *index,
+                asc: true,
+                nulls_first: false,
             })
             .collect();
 
@@ -195,20 +185,7 @@ impl FuseTable {
         })?;
 
         // construct output fields
-        let mut output_fields: Vec<DataField> = plan
-            .schema()
-            .fields()
-            .iter()
-            .map(|f| DataField::from(f))
-            .collect();
-        for remote_expr in self.cluster_keys(ctx.clone()).iter() {
-            let expr = remote_expr.into_expr(&BUILTIN_FUNCTIONS).unwrap();
-            let cname = expr.column_name();
-            if !output_fields.iter().any(|x| x.name() == &cname) {
-                let field = DataField::new(&cname, expr.data_type().clone());
-                output_fields.push(field);
-            }
-        }
+        let output_fields: Vec<DataField> = cluster_stats_gen.out_fields.clone();
 
         try_add_multi_sort_merge(
             pipeline,

@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use common_expression::DataSchemaRef;
 use common_expression::type_check::check_function;
 use common_expression::types::nullable::NullableDomain;
 use common_expression::types::number::SimpleDomain;
@@ -30,6 +29,7 @@ use common_expression::types::TimestampType;
 use common_expression::types::ValueType;
 use common_expression::with_number_mapped_type;
 use common_expression::ConstantFolder;
+use common_expression::DataSchemaRef;
 use common_expression::Domain;
 use common_expression::Expr;
 use common_expression::FunctionContext;

@@ -29,6 +29,7 @@ use common_expression::Column;
 use common_expression::DataField;
 use common_expression::DataSchema;
 use common_expression::Evaluator;
+use common_expression::Expr;
 use common_expression::FunctionContext;
 use common_expression::RemoteExpr;
 use common_expression::TableSchema;
@@ -290,23 +291,25 @@ impl FuseTable {
 
         let cluster_keys = self.cluster_keys(ctx);
         let mut cluster_key_index = Vec::with_capacity(cluster_keys.len());
+        let mut extra_key_index = Vec::with_capacity(cluster_keys.len());
         let mut operators = Vec::with_capacity(cluster_keys.len());
+
         for remote_expr in &cluster_keys {
-            let expr = remote_expr
+            let expr: Expr = remote_expr
                 .into_expr(&BUILTIN_FUNCTIONS)
                 .unwrap()
                 .project_column_ref(|name| input_schema.index_of(name).unwrap());
-
-            let cname = expr.column_name();
-            let index = match merged.iter().position(|x| x.name() == &cname) {
-                None => {
-                    let field = DataField::new(&cname, expr.data_type().clone());
-                    merged.push(field);
+            let index = match &expr {
+                Expr::ColumnRef { id, .. } => *id,
+                _ => {
+                    let cname = format!("{}", expr);
+                    merged.push(DataField::new(cname.as_str(), expr.data_type().clone()));
                     let index = merged.len() - 1;
+                    extra_key_index.push(index);
+
                     operators.push(ChunkOperator::Map { index, expr });
                     index
                 }
-                Some(idx) => idx,
             };
             cluster_key_index.push(index);
         }
@@ -314,10 +317,11 @@ impl FuseTable {
         Ok(ClusterStatsGenerator::new(
             self.cluster_key_meta.as_ref().unwrap().0,
             cluster_key_index,
-            vec![],
+            extra_key_index,
             0,
             self.get_chunk_compact_thresholds(),
             operators,
+            merged,
         ))
     }
 

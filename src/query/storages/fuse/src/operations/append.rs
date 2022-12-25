@@ -82,7 +82,7 @@ impl FuseTable {
             let schema = self.table_info.schema();
             // sort
             let sort_descs: Vec<SortColumnDescription> = self
-                .cluster_keys()
+                .cluster_keys(ctx.clone())
                 .iter()
                 .map(|remote_expr| {
                     let expr = remote_expr
@@ -169,21 +169,22 @@ impl FuseTable {
         let mut operators = Vec::with_capacity(cluster_keys.len());
 
         for remote_expr in &cluster_keys {
-            let expr = remote_expr
+            let expr: Expr = remote_expr
                 .into_expr(&BUILTIN_FUNCTIONS)
                 .unwrap()
                 .project_column_ref(|name| input_schema.index_of(name).unwrap());
+            let index = match &expr {
+                Expr::ColumnRef { id, .. } => *id,
+                _ => {
+                    let cname = format!("{}", expr);
 
-            let cname = expr.column_name();
-            let index = match merged.iter().position(|x| x.name() == &cname) {
-                None => {
-                    let field = DataField::new(&cname, expr.data_type().clone());
-                    merged.push(field);
+                    merged.push(DataField::new(cname.as_str(), expr.data_type().clone()));
                     let index = merged.len() - 1;
+                    extra_key_index.push(index);
+
                     operators.push(ChunkOperator::Map { index, expr });
                     index
                 }
-                Some(idx) => idx,
             };
             cluster_key_index.push(index);
         }
@@ -207,6 +208,7 @@ impl FuseTable {
             level,
             chunk_compactor,
             vec![],
+            merged,
         ))
     }
 

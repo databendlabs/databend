@@ -16,6 +16,7 @@ use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::Chunk;
 use common_expression::ChunkCompactThresholds;
+use common_expression::DataField;
 use common_expression::FunctionContext;
 use common_expression::ScalarRef;
 use common_sql::evaluator::ChunkOperator;
@@ -24,11 +25,14 @@ use common_storages_table_meta::meta::ClusterStatistics;
 #[derive(Clone, Default)]
 pub struct ClusterStatsGenerator {
     cluster_key_id: u32,
-    cluster_key_index: Vec<usize>,
-    extra_key_index: Vec<usize>,
+
+    pub(crate) cluster_key_index: Vec<usize>,
+    pub(crate) extra_key_index: Vec<usize>,
+
     level: i32,
     chunk_compact_thresholds: ChunkCompactThresholds,
     operators: Vec<ChunkOperator>,
+    pub(crate) out_fields: Vec<DataField>,
 }
 
 impl ClusterStatsGenerator {
@@ -39,6 +43,7 @@ impl ClusterStatsGenerator {
         level: i32,
         chunk_compact_thresholds: ChunkCompactThresholds,
         operators: Vec<ChunkOperator>,
+        out_fields: Vec<DataField>,
     ) -> Self {
         Self {
             cluster_key_id,
@@ -47,6 +52,7 @@ impl ClusterStatsGenerator {
             level,
             chunk_compact_thresholds,
             operators,
+            out_fields,
         }
     }
 
