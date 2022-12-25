@@ -12,14 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod download;
 mod http_query_handlers;
 pub mod json_block;
 mod load;
 mod query;
 mod stage;
 
-pub(crate) use download::Downloader;
 pub use http_query_handlers::make_final_uri;
 pub use http_query_handlers::make_page_uri;
 pub use http_query_handlers::make_state_uri;
@@ -31,7 +29,6 @@ pub use load::streaming_load;
 pub use load::LoadResponse;
 pub use query::ExecuteStateKind;
 pub use query::HttpQueryContext;
-pub use query::HttpQueryHandle;
 pub use query::HttpQueryManager;
 pub use query::HttpSessionConf;
 pub use stage::upload_to_stage;

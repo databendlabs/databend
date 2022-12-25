@@ -24,6 +24,7 @@ use common_datavalues::DataSchemaRef;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_app::schema::DatabaseType;
 use common_meta_app::schema::TableInfo;
 use common_meta_types::MetaId;
 use common_pipeline_core::Pipeline;
@@ -34,7 +35,6 @@ use crate::plan::DataSourcePlan;
 use crate::plan::Expression;
 use crate::plan::PartStatistics;
 use crate::plan::Partitions;
-use crate::plan::Projection;
 use crate::plan::PushDownInfo;
 use crate::table::column_stats_provider_impls::DummyColumnStatisticsProvider;
 use crate::table_context::TableContext;
@@ -95,7 +95,7 @@ pub trait Table: Sync + Send {
         false
     }
 
-    fn cluster_keys(&self) -> Vec<Expression> {
+    fn cluster_keys(&self, _ctx: Arc<dyn TableContext>) -> Vec<Expression> {
         vec![]
     }
 
@@ -194,7 +194,7 @@ pub trait Table: Sync + Send {
         Ok(())
     }
 
-    async fn optimize(&self, ctx: Arc<dyn TableContext>, keep_last_snapshot: bool) -> Result<()> {
+    async fn purge(&self, ctx: Arc<dyn TableContext>, keep_last_snapshot: bool) -> Result<()> {
         let (_, _) = (ctx, keep_last_snapshot);
 
         Ok(())
@@ -227,10 +227,11 @@ pub trait Table: Sync + Send {
     async fn delete(
         &self,
         ctx: Arc<dyn TableContext>,
-        projection: &Projection,
-        selection: &Option<String>,
+        filter: Option<Expression>,
+        col_indices: Vec<usize>,
+        pipeline: &mut Pipeline,
     ) -> Result<()> {
-        let (_, _, _) = (ctx, projection, selection);
+        let (_, _, _, _) = (ctx, filter, col_indices, pipeline);
 
         Err(ErrorCode::Unimplemented(format!(
             "table {},  of engine type {}, does not support DELETE FROM",
@@ -311,7 +312,7 @@ pub trait TableExt: Table {
             name,
             meta: meta.as_ref().clone(),
             tenant: "".to_owned(),
-            from_share: None,
+            db_type: DatabaseType::NormalDB,
         };
         catalog.get_table_by_info(&table_info)
     }
@@ -319,7 +320,7 @@ pub trait TableExt: Table {
 
 impl<T: ?Sized> TableExt for T where T: Table {}
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum NavigationPoint {
     SnapshotID(String),
     TimePoint(DateTime<Utc>),

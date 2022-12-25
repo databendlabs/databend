@@ -18,6 +18,7 @@ use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
 use common_base::base::tokio;
+use common_base::base::tokio::time::sleep;
 use common_meta_api::get_start_and_end_of_prefix;
 use common_meta_api::prefix_of_string;
 use common_meta_api::KVApi;
@@ -40,6 +41,7 @@ use common_meta_types::TxnOp;
 use common_meta_types::TxnPutRequest;
 use common_meta_types::UpsertKVReq;
 use databend_meta::init_meta_ut;
+use databend_meta::meta_service::MetaNode;
 use tracing::info;
 
 async fn test_watch_main(
@@ -49,8 +51,7 @@ async fn test_watch_main(
     updates: Vec<UpsertKVReq>,
 ) -> anyhow::Result<()> {
     let client = make_client(&addr)?;
-
-    let mut client_stream = client.request(watch).await?;
+    let mut watch_stream = client.request(watch).await?;
 
     {
         let client = make_client(&addr)?;
@@ -62,7 +63,7 @@ async fn test_watch_main(
     }
 
     loop {
-        if let Ok(Some(resp)) = client_stream.message().await {
+        if let Ok(Some(resp)) = watch_stream.message().await {
             if let Some(event) = resp.event {
                 assert!(!watch_events.is_empty());
 
@@ -86,8 +87,7 @@ async fn test_watch_txn_main(
     txn: TxnRequest,
 ) -> anyhow::Result<()> {
     let client = make_client(&addr)?;
-
-    let mut client_stream = client.request(watch).await?;
+    let mut watch_stream = client.request(watch).await?;
 
     {
         let client = make_client(&addr)?;
@@ -97,7 +97,7 @@ async fn test_watch_txn_main(
     }
 
     loop {
-        if let Ok(Some(resp)) = client_stream.message().await {
+        if let Ok(Some(resp)) = watch_stream.message().await {
             if let Some(event) = resp.event {
                 assert!(!watch_events.is_empty());
 
@@ -496,6 +496,73 @@ async fn test_watch_expired_events() -> anyhow::Result<()> {
             let msg = client_stream.message().await?.unwrap();
             assert_eq!(Some(ev), msg.event);
         }
+    }
+
+    Ok(())
+}
+
+#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
+async fn test_watch_stream_count() -> common_exception::Result<()> {
+    // When the client drops the stream, databend-meta should reclaim the resources.
+
+    let (tc, addr) = crate::tests::start_metasrv().await?;
+
+    let watch_req = || WatchRequest {
+        key: "a".to_string(),
+        key_end: Some("z".to_string()),
+        filter_type: FilterType::All.into(),
+    };
+
+    let client1 = make_client(&addr)?;
+    let _watch_stream1 = client1.request(watch_req()).await?;
+
+    let mn: Arc<MetaNode> = tc.grpc_srv.as_ref().map(|x| x.get_meta_node()).unwrap();
+
+    let watcher_count = Arc::new(std::sync::Mutex::new(0usize));
+
+    tracing::info!("one watcher");
+    {
+        let cnt = watcher_count.clone();
+
+        mn.dispatcher_handle
+            .request_blocking(move |d| {
+                *cnt.lock().unwrap() = d.watchers().count();
+            })
+            .await;
+
+        assert_eq!(1, *watcher_count.lock().unwrap());
+    }
+
+    tracing::info!("second watcher");
+    {
+        let client2 = make_client(&addr)?;
+        let _watch_stream2 = client2.request(watch_req()).await?;
+
+        let cnt = watcher_count.clone();
+
+        mn.dispatcher_handle
+            .request_blocking(move |d| {
+                *cnt.lock().unwrap() = d.watchers().count();
+            })
+            .await;
+
+        assert_eq!(2, *watcher_count.lock().unwrap());
+    }
+
+    tracing::info!("wait a while for MetaNode to process stream cleanup");
+    sleep(Duration::from_millis(2_000)).await;
+
+    tracing::info!("second watcher is removed");
+    {
+        let cnt = watcher_count.clone();
+
+        mn.dispatcher_handle
+            .request_blocking(move |d| {
+                *cnt.lock().unwrap() = d.watchers().count();
+            })
+            .await;
+
+        assert_eq!(1, *watcher_count.lock().unwrap());
     }
 
     Ok(())

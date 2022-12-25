@@ -1,0 +1,6 @@
+query TTT
+SELECT * FROM ( SELECT 'apple' as fruit UNION ALL SELECT 'banana' ) a JOIN ( SELECT 'apple' as fruit UNION ALL SELECT 'banana' ) b ON a.fruit=b.fruit LEFT JOIN ( SELECT 1 as isyellow ) c ON b.fruit='banana' ORDER BY 1, 2, 3
+----
+apple apple NULL
+banana banana 1
+

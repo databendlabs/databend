@@ -1,0 +1,18 @@
+statement ok
+drop table if exists t0
+
+statement ok
+drop table if exists t1
+
+statement ok
+CREATE TABLE t0(c0 INT)
+
+statement ok
+CREATE TABLE t1(c0 INT)
+
+statement ok
+SELECT * FROM t1 JOIN t0 ON t1.c0 < t1.c0 - t0.c0 WHERE t0.c0 <= t1.c0
+
+statement ok
+SELECT * FROM t1 JOIN t0 ON t0.c0 + t1.c0 < t1.c0 - t0.c0
+

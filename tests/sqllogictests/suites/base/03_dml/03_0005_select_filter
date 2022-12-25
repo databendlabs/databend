@@ -1,0 +1,81 @@
+statement ok
+set max_threads = 16
+
+statement ok
+SELECT * FROM numbers_mt (3) where number > 5
+
+query I
+SELECT * FROM numbers_mt (3) where number > 1
+----
+2
+
+statement ok
+SELECT * FROM numbers_mt (3) where 1=2 AND (number between 1 AND 3)
+
+
+statement ok
+SELECT * FROM numbers_mt (3) where 1=1 AND (number >= 5)
+
+query II
+SELECT number as c1, (number+1) as c2 FROM numbers_mt (3) where number+1>1
+----
+1 2
+2 3
+
+query I
+SELECT count() FROM numbers_mt (10) where -1
+----
+10
+
+query II
+SELECT number as c1, (number+1) as c2 FROM numbers_mt (3) where number >1
+----
+2 3
+
+statement ok
+DROP TABLE if EXISTS t1
+
+statement ok
+create table t1(id int)
+
+statement ok
+insert into t1 select number as id from numbers(10)
+
+statement ok
+select * from t1 where false or null
+
+query I
+select * from t1 where id in (1,3) or null order by id
+----
+1
+3
+
+statement ok
+DROP TABLE t1
+
+statement ok
+DROP DATABASE IF EXISTS databend6
+
+statement ok
+CREATE DATABASE databend6
+
+statement ok
+CREATE TABLE databend6.t0(c0INT INT32 NOT NULL DEFAULT(1456832334))
+
+statement ok
+INSERT INTO databend6.t0(c0int) VALUES (1388388634), (-1943680716)
+
+query I
+SELECT t0.c0int FROM databend6.t0 WHERE ((((((true)or(('s' NOT IN ('oE', '70', '3r', 'k', '9aRgze')))))AND(true)))or(((NULL)<=(NULL))))
+----
+1388388634
+-1943680716
+
+query I
+SELECT t0.c0int FROM databend6.t0 WHERE 's' NOT IN ('oE', '70', '3r', 'k', '9aRgze') or to_nullable(null) and to_nullable(true) or to_nullable(false)
+----
+1388388634
+-1943680716
+
+statement ok
+DROP DATABASE IF EXISTS databend6

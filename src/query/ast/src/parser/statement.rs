@@ -28,12 +28,12 @@ use nom::combinator::consumed;
 use nom::combinator::map;
 use nom::combinator::value;
 use nom::Slice;
-use url::Url;
 
 use crate::ast::*;
 use crate::input::Input;
 use crate::parser::expr::*;
 use crate::parser::query::*;
+use crate::parser::stage::*;
 use crate::parser::token::*;
 use crate::rule;
 use crate::util::*;
@@ -235,9 +235,15 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
 
     let show_databases = map(
         rule! {
-            SHOW ~ ( DATABASES | SCHEMAS ) ~ #show_limit?
+            SHOW ~ FULL? ~ ( DATABASES | SCHEMAS ) ~ ( ( FROM | IN) ~ ^#ident )? ~ #show_limit?
         },
-        |(_, _, limit)| Statement::ShowDatabases(ShowDatabasesStmt { limit }),
+        |(_, opt_full, _, opt_catalog, limit)| {
+            Statement::ShowDatabases(ShowDatabasesStmt {
+                catalog: opt_catalog.map(|(_, catalog)| catalog),
+                full: opt_full.is_some(),
+                limit,
+            })
+        },
     );
     let show_create_database = map(
         rule! {
@@ -327,11 +333,17 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let show_tables = map(
         rule! {
-            SHOW ~ FULL? ~ TABLES ~ HISTORY? ~ ( ( FROM | IN ) ~ ^#ident )? ~ #show_limit?
+            SHOW ~ FULL? ~ TABLES ~ HISTORY? ~ ( ( FROM | IN ) ~ #peroid_separated_idents_1_to_2 )? ~ #show_limit?
         },
-        |(_, opt_full, _, opt_history, opt_database, limit)| {
+        |(_, opt_full, _, opt_history, ctl_db, limit)| {
+            let (catalog, database) = match ctl_db {
+                Some((_, (Some(c), d))) => (Some(c), Some(d)),
+                Some((_, (None, d))) => (None, Some(d)),
+                _ => (None, None),
+            };
             Statement::ShowTables(ShowTablesStmt {
-                database: opt_database.map(|(_, database)| database),
+                catalog,
+                database,
                 full: opt_full.is_some(),
                 limit,
                 with_history: opt_history.is_some(),
@@ -505,7 +517,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let optimize_table = map(
         rule! {
-            OPTIMIZE ~ TABLE ~ #peroid_separated_idents_1_to_3 ~ #optimize_table_action?
+            OPTIMIZE ~ TABLE ~ #peroid_separated_idents_1_to_3 ~ #optimize_table_action
         },
         |(_, _, (catalog, database, table), action)| {
             Statement::OptimizeTable(OptimizeTableStmt {
@@ -850,6 +862,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
                 single: Default::default(),
                 purge: Default::default(),
                 force: Default::default(),
+                on_error: Default::default(),
             };
             for opt in opts {
                 copy_stmt.apply_option(opt);
@@ -979,7 +992,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             | #show_functions : "`SHOW FUNCTIONS [<show_limit>]`"
             | #kill_stmt : "`KILL (QUERY | CONNECTION) <object_id>`"
             | #set_role: "`SET [DEFAULT] ROLE <role>`"
-            | #show_databases : "`SHOW DATABASES [<show_limit>]`"
+            | #show_databases : "`SHOW [FULL] DATABASES [(FROM | IN) <catalog>] [<show_limit>]`"
             | #undrop_database : "`UNDROP DATABASE <database>`"
             | #show_create_database : "`SHOW CREATE DATABASE <database>`"
             | #create_database : "`CREATE DATABASE [IF NOT EXIST] <database> [ENGINE = <engine>]`"
@@ -1092,11 +1105,20 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
 pub fn insert_source(i: Input) -> IResult<InsertSource> {
     let streaming = map(
         rule! {
-            FORMAT ~ #ident ~ #rest_str
+                 FORMAT ~ #ident ~ #rest_str
         },
         |(_, format, (rest_str, start))| InsertSource::Streaming {
             format: format.name,
             rest_str,
+            start,
+        },
+    );
+    let streaming_v2 = map(
+        rule! {
+            FILE_FORMAT ~ "=" ~ #options ~ #rest_str
+        },
+        |(_, _, options, (_, start))| InsertSource::StreamingV2 {
+            settings: options,
             start,
         },
     );
@@ -1112,6 +1134,7 @@ pub fn insert_source(i: Input) -> IResult<InsertSource> {
 
     rule!(
         #streaming
+        | #streaming_v2
         | #values
         | #query
     )(i)
@@ -1462,7 +1485,12 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
 pub fn optimize_table_action(i: Input) -> IResult<OptimizeTableAction> {
     alt((
         value(OptimizeTableAction::All, rule! { ALL }),
-        value(OptimizeTableAction::Purge, rule! { PURGE }),
+        map(
+            rule! { PURGE ~ (BEFORE ~ #travel_point)?},
+            |(_, opt_travel_point)| OptimizeTableAction::Purge {
+                before: opt_travel_point.map(|(_, p)| p),
+            },
+        ),
         map(
             rule! { COMPACT ~ (SEGMENT)? ~ ( LIMIT ~ ^#expr )?},
             |(_, opt_segment, opt_limit)| OptimizeTableAction::Compact {
@@ -1772,6 +1800,9 @@ pub fn copy_option(i: Input) -> IResult<CopyOption> {
         }),
         map(rule! { FORCE ~ "=" ~ #literal_bool }, |(_, _, force)| {
             CopyOption::Force(force)
+        }),
+        map(rule! {ON_ERROR ~ "=" ~ #ident}, |(_, _, on_error)| {
+            CopyOption::OnError(on_error.to_string())
         }),
     ))(i)
 }

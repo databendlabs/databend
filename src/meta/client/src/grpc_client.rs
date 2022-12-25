@@ -27,11 +27,12 @@ use common_base::base::tokio::sync::oneshot::Receiver as OneRecv;
 use common_base::base::tokio::sync::oneshot::Sender as OneSend;
 use common_base::base::tokio::sync::RwLock;
 use common_base::base::tokio::time::sleep;
-use common_base::base::Runtime;
-use common_base::base::TrySpawn;
 use common_base::containers::ItemManager;
 use common_base::containers::Pool;
 use common_base::containers::TtlHashMap;
+use common_base::runtime::Runtime;
+use common_base::runtime::TrySpawn;
+use common_base::runtime::UnlimitedFuture;
 use common_grpc::ConnectionFactory;
 use common_grpc::GrpcConnectionError;
 use common_grpc::RpcClientConf;
@@ -165,50 +166,62 @@ impl ClientHandle {
         <Result<Resp, E> as TryFrom<message::Response>>::Error: std::fmt::Display,
         E: From<MetaClientError>,
     {
-        let (tx, rx) = oneshot::channel();
-        let req = message::ClientWorkerRequest {
-            resp_tx: tx,
-            req: req.into(),
+        let request_future = async move {
+            let (tx, rx) = oneshot::channel();
+            let req = message::ClientWorkerRequest {
+                resp_tx: tx,
+                req: req.into(),
+            };
+
+            label_increment_gauge_with_val_and_labels(
+                META_GRPC_CLIENT_REQUEST_INFLIGHT,
+                &vec![],
+                1.0,
+            );
+
+            let res = self.req_tx.send(req).await.map_err(|e| {
+                let cli_err = MetaClientError::ClientRuntimeError(
+                    AnyError::new(&e).add_context(|| "when sending req to MetaGrpcClient worker"),
+                );
+                cli_err.into()
+            });
+
+            if let Err(err) = res {
+                label_decrement_gauge_with_val_and_labels(
+                    META_GRPC_CLIENT_REQUEST_INFLIGHT,
+                    &vec![],
+                    1.0,
+                );
+
+                return Err(err);
+            }
+
+            let res = rx.await.map_err(|e| {
+                label_decrement_gauge_with_val_and_labels(
+                    META_GRPC_CLIENT_REQUEST_INFLIGHT,
+                    &vec![],
+                    1.0,
+                );
+
+                MetaClientError::ClientRuntimeError(
+                    AnyError::new(&e).add_context(|| "when recv resp from MetaGrpcClient worker"),
+                )
+            })?;
+
+            label_decrement_gauge_with_val_and_labels(
+                META_GRPC_CLIENT_REQUEST_INFLIGHT,
+                &vec![],
+                1.0,
+            );
+            let res: Result<Resp, E> = res
+                .try_into()
+                .map_err(|e| format!("expect: {}, got: {}", std::any::type_name::<Resp>(), e))
+                .unwrap();
+
+            res
         };
 
-        label_increment_gauge_with_val_and_labels(META_GRPC_CLIENT_REQUEST_INFLIGHT, &vec![], 1.0);
-
-        let res = self.req_tx.send(req).await.map_err(|e| {
-            let cli_err = MetaClientError::ClientRuntimeError(
-                AnyError::new(&e).add_context(|| "when sending req to MetaGrpcClient worker"),
-            );
-            cli_err.into()
-        });
-
-        if let Err(err) = res {
-            label_decrement_gauge_with_val_and_labels(
-                META_GRPC_CLIENT_REQUEST_INFLIGHT,
-                &vec![],
-                1.0,
-            );
-
-            return Err(err);
-        }
-
-        let res = rx.await.map_err(|e| {
-            label_decrement_gauge_with_val_and_labels(
-                META_GRPC_CLIENT_REQUEST_INFLIGHT,
-                &vec![],
-                1.0,
-            );
-
-            MetaClientError::ClientRuntimeError(
-                AnyError::new(&e).add_context(|| "when recv resp from MetaGrpcClient worker"),
-            )
-        })?;
-
-        label_decrement_gauge_with_val_and_labels(META_GRPC_CLIENT_REQUEST_INFLIGHT, &vec![], 1.0);
-        let res: Result<Resp, E> = res
-            .try_into()
-            .map_err(|e| format!("expect: {}, got: {}", std::any::type_name::<Resp>(), e))
-            .unwrap();
-
-        res
+        UnlimitedFuture::create(request_future).await
     }
 
     pub async fn get_client_info(&self) -> Result<ClientInfo, MetaError> {
@@ -311,8 +324,13 @@ impl MetaGrpcClient {
             rt: rt.clone(),
         });
 
-        rt.spawn(Self::worker_loop(worker.clone(), rx));
-        rt.spawn(Self::auto_sync_endpoints(worker, one_tx));
+        rt.spawn(UnlimitedFuture::create(Self::worker_loop(
+            worker.clone(),
+            rx,
+        )));
+        rt.spawn(UnlimitedFuture::create(Self::auto_sync_endpoints(
+            worker, one_tx,
+        )));
 
         Ok(handle)
     }
@@ -458,6 +476,8 @@ impl MetaGrpcClient {
     ) -> Result<MetaServiceClient<InterceptedService<Channel, AuthInterceptor>>, MetaClientError>
     {
         let mut eps = self.get_endpoints().await;
+        debug!("service endpoints: {:?}", eps);
+
         debug_assert!(!eps.is_empty());
 
         if eps.len() > 1 {
@@ -715,21 +735,22 @@ impl MetaGrpcClient {
         let resp =
             res.map_err(|status| MetaHandshakeError::new("handshake is refused", &status))?;
 
-        // backward compatibility: no version in handshake.
-        // TODO(xp): remove this when merged.
-        if resp.protocol_version > 0 {
-            let min_compatible = to_digit_ver(min_metasrv_ver);
-            if resp.protocol_version < min_compatible {
-                let invalid_err = AnyError::error(format!(
-                    "metasrv protocol_version({}) < meta-client min-compatible({})",
-                    from_digit_ver(resp.protocol_version),
-                    min_metasrv_ver,
-                ));
-                return Err(MetaHandshakeError::new(
-                    "incompatible protocol version",
-                    &invalid_err,
-                ));
-            }
+        assert!(
+            resp.protocol_version > 0,
+            "talking to a very old databend-meta: upgrade databend-meta to at least 0.8"
+        );
+
+        let min_compatible = to_digit_ver(min_metasrv_ver);
+        if resp.protocol_version < min_compatible {
+            let invalid_err = AnyError::error(format!(
+                "metasrv protocol_version({}) < meta-client min-compatible({})",
+                from_digit_ver(resp.protocol_version),
+                min_metasrv_ver,
+            ));
+            return Err(MetaHandshakeError::new(
+                "incompatible protocol version",
+                &invalid_err,
+            ));
         }
 
         let token = resp.payload;

@@ -12,11 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::fmt;
 use std::str::FromStr;
 
 use chrono::DateTime;
 use chrono::Utc;
+use common_exception::ErrorCode;
+use common_exception::Result;
 use common_io::consts::NAN_BYTES_SNAKE;
 use common_storage::StorageParams;
 
@@ -127,6 +130,24 @@ impl FromStr for StageFileCompression {
     }
 }
 
+impl ToString for StageFileCompression {
+    fn to_string(&self) -> String {
+        match *self {
+            StageFileCompression::Auto => "auto".to_string(),
+            StageFileCompression::Gzip => "gzip".to_string(),
+            StageFileCompression::Bz2 => "bz2".to_string(),
+            StageFileCompression::Brotli => "brotli".to_string(),
+            StageFileCompression::Zstd => "zstd".to_string(),
+            StageFileCompression::Deflate => "deflate".to_string(),
+            StageFileCompression::RawDeflate => "raw_deflate".to_string(),
+            StageFileCompression::Lzo => "lzo".to_string(),
+            StageFileCompression::Snappy => "snappy".to_string(),
+            StageFileCompression::Xz => "xz".to_string(),
+            StageFileCompression::None => "none".to_string(),
+        }
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub enum StageFileFormatType {
     Csv,
@@ -137,6 +158,7 @@ pub enum StageFileFormatType {
     Orc,
     Parquet,
     Xml,
+    None,
 }
 
 impl Default for StageFileFormatType {
@@ -164,6 +186,12 @@ impl FromStr for StageFileFormatType {
     }
 }
 
+impl ToString for StageFileFormatType {
+    fn to_string(&self) -> String {
+        format!("{:?}", *self)
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 #[serde(default)]
 pub struct FileFormatOptions {
@@ -176,6 +204,7 @@ pub struct FileFormatOptions {
     pub escape: String,
     pub compression: StageFileCompression,
     pub row_tag: String,
+    pub quote: String,
 }
 
 impl Default for FileFormatOptions {
@@ -189,7 +218,72 @@ impl Default for FileFormatOptions {
             escape: "".to_string(),
             compression: StageFileCompression::default(),
             row_tag: "row".to_string(),
+            quote: "".to_string(),
         }
+    }
+}
+
+impl FileFormatOptions {
+    pub fn new() -> Self {
+        Self {
+            format: StageFileFormatType::None,
+            field_delimiter: "".to_string(),
+            record_delimiter: "".to_string(),
+            nan_display: "".to_string(),
+            skip_header: 0,
+            escape: "".to_string(),
+            compression: StageFileCompression::None,
+            row_tag: "".to_string(),
+            quote: "".to_string(),
+        }
+    }
+
+    pub fn from_map(opts: &BTreeMap<String, String>) -> Result<Self> {
+        let mut file_format_options = Self::new();
+        file_format_options.apply(opts, false)?;
+        if file_format_options.format == StageFileFormatType::None {
+            return Err(ErrorCode::SyntaxException(
+                "File format type must be specified",
+            ));
+        }
+        Ok(file_format_options)
+    }
+
+    pub fn apply(&mut self, opts: &BTreeMap<String, String>, ignore_unknown: bool) -> Result<()> {
+        if opts.is_empty() {
+            return Ok(());
+        }
+        for (k, v) in opts.iter() {
+            match k.as_str() {
+                "format" | "type" => {
+                    let format = StageFileFormatType::from_str(v)?;
+                    self.format = format;
+                }
+                "skip_header" => {
+                    let skip_header = u64::from_str(v)?;
+                    self.skip_header = skip_header;
+                }
+                "field_delimiter" => self.field_delimiter = v.clone(),
+                "record_delimiter" => self.record_delimiter = v.clone(),
+                "nan_display" => self.nan_display = v.clone(),
+                "escape" => self.escape = v.clone(),
+                "compression" => {
+                    let compression = StageFileCompression::from_str(v)?;
+                    self.compression = compression;
+                }
+                "row_tag" => self.row_tag = v.clone(),
+                "quote" => self.quote = v.clone(),
+                _ => {
+                    if !ignore_unknown {
+                        return Err(ErrorCode::BadArguments(format!(
+                            "Unknown stage file format option {}",
+                            k
+                        )));
+                    }
+                }
+            }
+        }
+        Ok(())
     }
 }
 
@@ -221,6 +315,7 @@ impl FromStr for OnErrorMode {
             "" => Ok(OnErrorMode::None),
             "CONTINUE" => Ok(OnErrorMode::Continue),
             "SKIP_FILE" => Ok(OnErrorMode::SkipFile),
+            "ABORT" => Ok(OnErrorMode::AbortStatement),
             v => {
                 let num_str = v.replace("SKIP_FILE_", "");
                 let nums = num_str.parse::<u64>();
@@ -245,6 +340,55 @@ pub struct CopyOptions {
     pub purge: bool,
     pub single: bool,
     pub max_file_size: usize,
+}
+
+impl CopyOptions {
+    pub fn apply(&mut self, opts: &BTreeMap<String, String>, ignore_unknown: bool) -> Result<()> {
+        if opts.is_empty() {
+            return Ok(());
+        }
+        for (k, v) in opts.iter() {
+            match k.as_str() {
+                "on_error" => {
+                    let on_error = OnErrorMode::from_str(v)?;
+                    self.on_error = on_error;
+                }
+                "size_limit" => {
+                    let size_limit = usize::from_str(v)?;
+                    self.size_limit = size_limit;
+                }
+                "split_size" => {
+                    let split_size = usize::from_str(v)?;
+                    self.split_size = split_size;
+                }
+                "purge" => {
+                    let purge = bool::from_str(v).map_err(|_| {
+                        ErrorCode::StrParseError(format!("Cannot parse purge: {} as bool", v))
+                    })?;
+                    self.purge = purge;
+                }
+                "single" => {
+                    let single = bool::from_str(v).map_err(|_| {
+                        ErrorCode::StrParseError(format!("Cannot parse single: {} as bool", v))
+                    })?;
+                    self.single = single;
+                }
+                "max_file_size" => {
+                    let max_file_size = usize::from_str(v)?;
+                    self.max_file_size = max_file_size;
+                }
+                _ => {
+                    if !ignore_unknown {
+                        return Err(ErrorCode::BadArguments(format!(
+                            "Unknown stage copy option {}",
+                            k
+                        )));
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Default, Clone, Debug, Eq, PartialEq)]

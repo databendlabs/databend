@@ -61,7 +61,6 @@ pub trait FileFormatTypeExt {
 #[derive(Clone, Debug)]
 pub struct FileFormatOptionsExt {
     pub stage: FileFormatOptions,
-    pub quote: String,
     pub ident_case_sensitive: bool,
     pub headers: usize,
     pub json_compact: bool,
@@ -71,7 +70,7 @@ pub struct FileFormatOptionsExt {
 
 impl FileFormatOptionsExt {
     pub fn get_quote_char(&self) -> u8 {
-        self.quote.as_bytes()[0]
+        self.stage.quote.as_bytes()[0]
     }
 
     pub fn get_field_delimiter(&self) -> u8 {
@@ -194,6 +193,9 @@ impl FileFormatOptionsExt {
             StageFileFormatType::Xml => {
                 unreachable!()
             }
+            StageFileFormatType::None => {
+                unreachable!()
+            }
         };
         Ok(output)
     }
@@ -207,7 +209,6 @@ impl FileFormatTypeExt for StageFileFormatType {
         let timezone = parse_timezone(settings)?;
         let options = FileFormatOptionsExt {
             stage,
-            quote: "".to_string(),
             ident_case_sensitive: false,
             headers: 0,
             json_compact: false,
@@ -237,10 +238,10 @@ impl FileFormatTypeExt for StageFileFormatType {
                     || "get_file_format_options_from_setting",
                 )?,
             row_tag: settings.get_row_tag()?,
+            quote: settings.get_format_quote()?,
         };
         let mut options = FileFormatOptionsExt {
             stage,
-            quote: settings.get_format_quote()?,
             ident_case_sensitive: settings.get_unquoted_ident_case_sensitive()?,
             headers: 0,
             json_compact: false,

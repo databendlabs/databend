@@ -21,7 +21,8 @@ use pratt::Associativity;
 use pratt::PrattParser;
 use pratt::Precedence;
 
-use super::statement::stage_location;
+use super::stage::stage_location;
+use super::stage::uri_location;
 use crate::ast::*;
 use crate::input::Input;
 use crate::input::WithSpan;
@@ -259,7 +260,7 @@ pub enum TableReferenceElement<'a> {
     JoinCondition(JoinCondition<'a>),
     Group(TableReference<'a>),
     Stage {
-        location: StageLocation,
+        location: FileLocation,
         files: Vec<String>,
         alias: Option<TableAlias<'a>>,
     },
@@ -325,9 +326,27 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
         |(_, table_ref, _)| TableReferenceElement::Group(table_ref),
     );
 
+    let stage_location = |i| {
+        map_res(
+            rule! {
+                #stage_location
+            },
+            |v| Ok(FileLocation::Stage(v)),
+        )(i)
+    };
+
+    let uri_location = |i| {
+        map_res(
+            rule! {
+                #uri_location
+            },
+            |v| Ok(FileLocation::Uri(v)),
+        )(i)
+    };
+
     let aliased_stage = map(
         rule! {
-            #stage_location ~ ( FILES ~ "=" ~ "(" ~ #comma_separated_list0(literal_string) ~ ")")? ~ #table_alias?
+            (#stage_location | #uri_location) ~ ( FILES ~ "=" ~ "(" ~ #comma_separated_list0(literal_string) ~ ")")? ~ #table_alias?
         },
         |(location, files, alias)| TableReferenceElement::Stage {
             location,

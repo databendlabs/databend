@@ -41,7 +41,7 @@ pub trait FormatOptionChecker {
 
     fn check_options(&self, options: &mut FileFormatOptionsExt) -> Result<()> {
         self.check_escape(&mut options.stage.escape)?;
-        self.check_quote(&mut options.quote)?;
+        self.check_quote(&mut options.stage.quote)?;
         self.check_row_tag(&mut options.stage.row_tag)?;
         self.check_record_delimiter(&mut options.stage.record_delimiter)?;
         self.check_field_delimiter(&mut options.stage.field_delimiter)?;
@@ -230,17 +230,25 @@ pub fn check_field_delimiter(option: &mut String, default: &str) -> Result<()> {
     Ok(())
 }
 
+/// `\r\n` or u8
 pub fn check_record_delimiter(option: &mut String) -> Result<()> {
-    if option.is_empty() {
-        *option = "\n".to_string()
-    } else {
-        let o = option.as_str();
-        if o != "\n" && o != "\r\n" {
+    match option.len() {
+        0 => *option = "\n".to_string(),
+        1 => {}
+        2 => {
+            if option != "\r\n" {
+                return Err(ErrorCode::InvalidArgument(
+                    "record_delimiter with two chars can only be '\\r\\n'",
+                ));
+            };
+        }
+        _ => {
             return Err(ErrorCode::InvalidArgument(
-                "record_delimiter can only be '\\n' or '\\r\\n'",
+                "record_delimiter can not more than two chars, please use one char or '\\r\\n'",
             ));
-        };
+        }
     }
+
     Ok(())
 }
 

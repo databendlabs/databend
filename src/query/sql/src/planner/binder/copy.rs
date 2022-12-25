@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -20,6 +19,7 @@ use common_ast::ast::CopyStmt;
 use common_ast::ast::CopyUnit;
 use common_ast::ast::Query;
 use common_ast::ast::Statement;
+use common_ast::ast::UriLocation;
 use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
 use common_ast::Backtrace;
@@ -32,15 +32,13 @@ use common_catalog::table_context::TableContext;
 use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_io::prelude::parse_escape_string;
 use common_meta_types::FileFormatOptions;
-use common_meta_types::StageFileFormatType;
+use common_meta_types::OnErrorMode;
 use common_meta_types::UserStageInfo;
-use common_storage::parse_uri_location;
-use common_storage::UriLocation;
 use common_users::UserApiProvider;
 use tracing::debug;
 
+use crate::binder::location::parse_uri_location;
 use crate::binder::Binder;
 use crate::normalize_identifier;
 use crate::plans::CopyPlanV2;
@@ -491,17 +489,16 @@ impl<'a> Binder {
         stage: &mut UserStageInfo,
     ) -> Result<()> {
         if !stmt.file_format.is_empty() {
-            stage.file_format_options = parse_copy_file_format_options(&stmt.file_format)?;
+            stage.file_format_options = FileFormatOptions::from_map(&stmt.file_format)?;
         }
 
         // Copy options.
         {
-            // TODO(xuanwo): COPY should handle on error.
             // on_error.
-            // if !stmt.on_error.is_empty() {
-            //     stage_info.copy_options.on_error =
-            //         OnErrorMode::from_str(&self.on_error).map_err(ErrorCode::SyntaxException)?;
-            // }
+            if !stmt.on_error.is_empty() {
+                stage.copy_options.on_error =
+                    OnErrorMode::from_str(&stmt.on_error).map_err(ErrorCode::SyntaxException)?;
+            }
 
             // size_limit.
             if stmt.size_limit != 0 {
@@ -591,83 +588,4 @@ pub async fn parse_stage_location_v2(
 
     debug!("parsed stage: {stage:?}, path: {relative_path}");
     Ok((stage, relative_path))
-}
-
-/// TODO(xuanwo): Move those logic into parser
-pub fn parse_copy_file_format_options(
-    file_format_options: &BTreeMap<String, String>,
-) -> Result<FileFormatOptions> {
-    // File format type.
-    let format = file_format_options
-        .get("type")
-        .ok_or_else(|| ErrorCode::SyntaxException("File format type must be specified"))?;
-    let file_format = StageFileFormatType::from_str(format)
-        .map_err(|e| ErrorCode::SyntaxException(format!("File format type error:{:?}", e)))?;
-
-    // Skip header.
-    let skip_header = file_format_options
-        .get("skip_header")
-        .unwrap_or(&"0".to_string())
-        .parse::<u64>()?;
-
-    // Field delimiter.
-    let field_delimiter = parse_escape_string(
-        file_format_options
-            .get("field_delimiter")
-            .unwrap_or(&"".to_string())
-            .as_bytes(),
-    );
-
-    // Record delimiter.
-    let record_delimiter = parse_escape_string(
-        file_format_options
-            .get("record_delimiter")
-            .unwrap_or(&"".to_string())
-            .as_bytes(),
-    );
-
-    // NaN display.
-    let nan_display = parse_escape_string(
-        file_format_options
-            .get("nan_display")
-            .unwrap_or(&"".to_string())
-            .as_bytes(),
-    );
-
-    // Escape
-    let escape = parse_escape_string(
-        file_format_options
-            .get("escape")
-            .unwrap_or(&"".to_string())
-            .as_bytes(),
-    );
-
-    // Compression delimiter.
-    let compression = parse_escape_string(
-        file_format_options
-            .get("compression")
-            .unwrap_or(&"none".to_string())
-            .as_bytes(),
-    )
-    .parse()
-    .map_err(ErrorCode::UnknownCompressionType)?;
-
-    // Row tag in xml.
-    let row_tag = parse_escape_string(
-        file_format_options
-            .get("row_tag")
-            .unwrap_or(&"".to_string())
-            .as_bytes(),
-    );
-
-    Ok(FileFormatOptions {
-        format: file_format,
-        skip_header,
-        field_delimiter,
-        record_delimiter,
-        nan_display,
-        escape,
-        compression,
-        row_tag,
-    })
 }

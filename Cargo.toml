@@ -30,6 +30,7 @@ members = [
     "src/query/catalog",
     "src/query/datablocks",
     "src/query/sharing",
+    "src/query/sharing-endpoint",
     "src/query/datavalues",
     "src/query/expression",
     "src/query/formats",
@@ -44,8 +45,7 @@ members = [
     "src/query/sql",
     "src/query/storages/cache",
     "src/query/storages/factory",
-    "src/query/storages/fuse/fuse",
-    "src/query/storages/fuse/fuse-result",
+    "src/query/storages/fuse",
     "src/query/storages/hive/hive",
     "src/query/storages/hive/hive-meta-store",
     "src/query/storages/iceberg",
@@ -60,6 +60,7 @@ members = [
     "src/query/storages/system",
     "src/query/storages/view",
     "src/query/storages/parquet",
+    "src/query/storages/pruner",
     "src/query/users",
     # databend-query
     "src/query/service",
@@ -77,6 +78,8 @@ members = [
     "src/meta/protos",
     # databend-meta
     "src/meta/service",
+    # sqllogictest
+    "tests/sqllogictests",
 ]
 
 [workspace.dependencies]
@@ -143,3 +146,4 @@ rpath = false
 # If there are dependencies that need patching, they can be listed below.
 # For example:
 # arrow-format = { git = "https://github.com/datafuse-extras/arrow-format", rev = "78dacc1" }
+parquet2 = { git = "https://github.com/jorgecarleitao/parquet2", rev = "fb08b72" }

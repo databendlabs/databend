@@ -1,0 +1,10 @@
+---------- TABLE INFO ------------
+DB.Table: 'system'.'catalogs', Table: catalogs-table_id:1, ver:0, Engine: SystemCatalogs
+-------- TABLE CONTENTS ----------
++---------+
+| name    |
++---------+
+| default |
++---------+
+
+

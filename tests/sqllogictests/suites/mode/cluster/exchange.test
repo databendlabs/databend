@@ -1,0 +1,160 @@
+query T
+explain select * from numbers(1) t, numbers(2) t1 where t.number = t1.number
+----
+Exchange
+├── exchange type: Merge
+└── HashJoin
+    ├── join type: INNER
+    ├── build keys: [t.number (#0)]
+    ├── probe keys: [t1.number (#1)]
+    ├── filters: []
+    ├── Exchange(Build)
+    │   ├── exchange type: Hash(t.number (#0))
+    │   └── TableScan
+    │       ├── table: default.system.numbers
+    │       ├── read rows: 1
+    │       ├── read bytes: 8
+    │       ├── partitions total: 1
+    │       ├── partitions scanned: 1
+    │       └── push downs: [filters: [], limit: NONE]
+    └── Exchange(Probe)
+        ├── exchange type: Hash(t1.number (#1))
+        └── TableScan
+            ├── table: default.system.numbers
+            ├── read rows: 2
+            ├── read bytes: 16
+            ├── partitions total: 1
+            ├── partitions scanned: 1
+            └── push downs: [filters: [], limit: NONE]
+
+query T
+explain select * from numbers(1) t, numbers(2) t1, numbers(3) t2 where t.number = t1.number and t.number = t2.number
+----
+Exchange
+├── exchange type: Merge
+└── HashJoin
+    ├── join type: INNER
+    ├── build keys: [t.number (#0)]
+    ├── probe keys: [t2.number (#2)]
+    ├── filters: []
+    ├── Exchange(Build)
+    │   ├── exchange type: Hash(t.number (#0))
+    │   └── HashJoin
+    │       ├── join type: INNER
+    │       ├── build keys: [t.number (#0)]
+    │       ├── probe keys: [t1.number (#1)]
+    │       ├── filters: []
+    │       ├── Exchange(Build)
+    │       │   ├── exchange type: Hash(t.number (#0))
+    │       │   └── TableScan
+    │       │       ├── table: default.system.numbers
+    │       │       ├── read rows: 1
+    │       │       ├── read bytes: 8
+    │       │       ├── partitions total: 1
+    │       │       ├── partitions scanned: 1
+    │       │       └── push downs: [filters: [], limit: NONE]
+    │       └── Exchange(Probe)
+    │           ├── exchange type: Hash(t1.number (#1))
+    │           └── TableScan
+    │               ├── table: default.system.numbers
+    │               ├── read rows: 2
+    │               ├── read bytes: 16
+    │               ├── partitions total: 1
+    │               ├── partitions scanned: 1
+    │               └── push downs: [filters: [], limit: NONE]
+    └── Exchange(Probe)
+        ├── exchange type: Hash(t2.number (#2))
+        └── TableScan
+            ├── table: default.system.numbers
+            ├── read rows: 3
+            ├── read bytes: 24
+            ├── partitions total: 1
+            ├── partitions scanned: 1
+            └── push downs: [filters: [], limit: NONE]
+
+query T
+explain select * from (select number as a, number+1 as b from numbers(1)) t, numbers(2) t1, numbers(3) t2 where a = t1.number and b = t2.number
+----
+Exchange
+├── exchange type: Merge
+└── HashJoin
+    ├── join type: INNER
+    ├── build keys: [t.b (#1)]
+    ├── probe keys: [t2.number (#4)]
+    ├── filters: []
+    ├── Exchange(Build)
+    │   ├── exchange type: Hash(t.b (#1))
+    │   └── HashJoin
+    │       ├── join type: INNER
+    │       ├── build keys: [t.a (#0)]
+    │       ├── probe keys: [t1.number (#3)]
+    │       ├── filters: []
+    │       ├── Exchange(Build)
+    │       │   ├── exchange type: Hash(t.a (#0))
+    │       │   └── EvalScalar
+    │       │       ├── expressions: [+(numbers.number (#0), 1)]
+    │       │       └── TableScan
+    │       │           ├── table: default.system.numbers
+    │       │           ├── read rows: 1
+    │       │           ├── read bytes: 8
+    │       │           ├── partitions total: 1
+    │       │           ├── partitions scanned: 1
+    │       │           └── push downs: [filters: [], limit: NONE]
+    │       └── Exchange(Probe)
+    │           ├── exchange type: Hash(t1.number (#3))
+    │           └── TableScan
+    │               ├── table: default.system.numbers
+    │               ├── read rows: 2
+    │               ├── read bytes: 16
+    │               ├── partitions total: 1
+    │               ├── partitions scanned: 1
+    │               └── push downs: [filters: [], limit: NONE]
+    └── Exchange(Probe)
+        ├── exchange type: Hash(t2.number (#4))
+        └── TableScan
+            ├── table: default.system.numbers
+            ├── read rows: 3
+            ├── read bytes: 24
+            ├── partitions total: 1
+            ├── partitions scanned: 1
+            └── push downs: [filters: [], limit: NONE]
+
+query T
+explain select * from (select sum(number) as number from numbers(1) group by number) t, numbers(2) t1 where t.number = t1.number
+----
+Exchange
+├── exchange type: Merge
+└── HashJoin
+    ├── join type: INNER
+    ├── build keys: [CAST(t.number (#1) AS BIGINT UNSIGNED NULL)]
+    ├── probe keys: [CAST(t1.number (#4) AS BIGINT UNSIGNED NULL)]
+    ├── filters: []
+    ├── Exchange(Build)
+    │   ├── exchange type: Hash(CAST(t.number (#1) AS BIGINT UNSIGNED NULL))
+    │   └── EvalScalar
+    │       ├── expressions: [sum(number) (#3)]
+    │       └── AggregateFinal
+    │           ├── group by: [number]
+    │           ├── aggregate functions: [sum(number)]
+    │           └── Exchange
+    │               ├── exchange type: Hash(_group_by_key)
+    │               └── AggregatePartial
+    │                   ├── group by: [number]
+    │                   ├── aggregate functions: [sum(number)]
+    │                   └── TableScan
+    │                       ├── table: default.system.numbers
+    │                       ├── read rows: 1
+    │                       ├── read bytes: 8
+    │                       ├── partitions total: 1
+    │                       ├── partitions scanned: 1
+    │                       └── push downs: [filters: [], limit: NONE]
+    └── Exchange(Probe)
+        ├── exchange type: Hash(CAST(t1.number (#4) AS BIGINT UNSIGNED NULL))
+        └── TableScan
+            ├── table: default.system.numbers
+            ├── read rows: 2
+            ├── read bytes: 16
+            ├── partitions total: 1
+            ├── partitions scanned: 1
+            └── push downs: [filters: [], limit: NONE]
+

@@ -1,0 +1,28 @@
+query II
+SELECT sum(number) AS salary, number%3 AS user_name FROM numbers_mt(10000) GROUP BY user_name ORDER BY salary ASC
+----
+16661667 1
+16665000 2
+16668333 0
+
+query I
+SELECT arg_min(user_name, salary)  FROM (SELECT sum(number) AS salary, number%3 AS user_name FROM numbers_mt(10000) GROUP BY user_name)
+----
+1
+
+statement ok
+set max_threads=8
+
+query I
+SELECT arg_min(user_name, salary)  FROM (SELECT sum(number) AS salary, number%3 AS user_name FROM numbers_mt(10000) GROUP BY user_name)
+----
+1
+
+statement ok
+set max_threads=16
+
+query I
+SELECT arg_min(user_name, salary)  FROM (SELECT sum(number) AS salary, number%3 AS user_name FROM numbers_mt(10000) GROUP BY user_name)
+----
+1
+

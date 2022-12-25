@@ -16,15 +16,16 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 use std::time::Instant;
 
+use common_base::base::convert_byte_size;
+use common_base::base::convert_number_size;
 use common_base::base::tokio::io::AsyncWrite;
-use common_base::base::TrySpawn;
+use common_base::runtime::TrySpawn;
 use common_config::DATABEND_COMMIT_VERSION;
 use common_datablocks::DataBlock;
 use common_datablocks::SendableDataBlockStream;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
-use common_io::prelude::*;
 use common_users::CertifiedInfo;
 use common_users::UserApiProvider;
 use futures_util::StreamExt;
@@ -467,5 +468,10 @@ impl ProgressReporter for ContextProgressReporter {
             convert_number_size((progress.rows as f64) / (seconds)),
             convert_byte_size((progress.bytes as f64) / (seconds)),
         )
+    }
+
+    fn affected_rows(&self) -> u64 {
+        let progress = self.context.get_scan_progress_value();
+        progress.rows as u64
     }
 }

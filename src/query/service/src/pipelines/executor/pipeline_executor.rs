@@ -15,14 +15,14 @@
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use common_base::base::catch_unwind;
 use common_base::base::tokio;
 use common_base::base::tokio::sync::Notify;
-use common_base::base::GlobalIORuntime;
-use common_base::base::Runtime;
-use common_base::base::Thread;
-use common_base::base::ThreadJoinHandle;
-use common_base::base::TrySpawn;
+use common_base::runtime::catch_unwind;
+use common_base::runtime::GlobalIORuntime;
+use common_base::runtime::Runtime;
+use common_base::runtime::Thread;
+use common_base::runtime::ThreadJoinHandle;
+use common_base::runtime::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use futures::future::select;
@@ -284,7 +284,11 @@ impl PipelineExecutor {
     /// Method is thread unsafe and require thread safe call
     pub unsafe fn execute_single_thread(&self, thread_num: usize) -> Result<()> {
         let workers_condvar = self.workers_condvar.clone();
-        let mut context = ExecutorWorkerContext::create(thread_num, workers_condvar);
+        let mut context = ExecutorWorkerContext::create(
+            thread_num,
+            workers_condvar,
+            self.settings.query_id.clone(),
+        );
 
         while !self.global_tasks_queue.is_finished() {
             // When there are not enough tasks, the thread will be blocked, so we need loop check.

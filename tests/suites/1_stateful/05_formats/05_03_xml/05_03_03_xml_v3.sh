@@ -54,10 +54,10 @@ cat << EOF > /tmp/simple_v4.xml
 </data>
 EOF
 
-curl -sH "insert_sql:insert into test_xml format XML" -F "upload=@/tmp/simple_v3.xml" -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" | grep -c "SUCCESS"
+curl -sH "insert_sql:insert into test_xml file_format = (type = 'XML')" -F "upload=@/tmp/simple_v3.xml" -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" | grep -c "SUCCESS"
 echo "select * from test_xml" | $MYSQL_CLIENT_CONNECT
 echo "truncate table test_xml" | $MYSQL_CLIENT_CONNECT
 
-curl -sH "insert_sql:insert into test_xml format XML" -F "upload=@/tmp/simple_v4.xml" -H "row_tag:'databend'" -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" | grep -c "SUCCESS"
+curl -sH "insert_sql:insert into test_xml file_format = (type = 'XML' row_tag = 'databend')" -F "upload=@/tmp/simple_v4.xml" -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" | grep -c "SUCCESS"
 echo "select * from test_xml" | $MYSQL_CLIENT_CONNECT
 echo "truncate table test_xml" | $MYSQL_CLIENT_CONNECT

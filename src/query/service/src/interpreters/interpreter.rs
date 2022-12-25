@@ -85,8 +85,9 @@ pub trait Interpreter: Sync + Send {
         });
 
         let settings = ctx.get_settings();
+        let query_id = ctx.get_id();
         build_res.set_max_threads(settings.get_max_threads()? as usize);
-        let settings = ExecutorSettings::try_create(&settings)?;
+        let settings = ExecutorSettings::try_create(&settings, query_id)?;
 
         if build_res.main_pipeline.is_complete_pipeline()? {
             let mut pipelines = build_res.sources_pipelines;
@@ -101,11 +102,6 @@ pub trait Interpreter: Sync + Send {
                 None,
                 vec![],
             )));
-        }
-
-        // WTF: We need to implement different logic for the HTTP handler
-        if let Some(handle) = ctx.get_http_query() {
-            return handle.execute(ctx.clone(), build_res, self.schema()).await;
         }
 
         let pulling_executor = PipelinePullingExecutor::from_pipelines(build_res, settings)?;

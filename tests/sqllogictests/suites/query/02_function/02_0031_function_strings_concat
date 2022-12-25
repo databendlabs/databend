@@ -1,0 +1,35 @@
+query T
+SELECT CONCAT('My', 'S', 'QL')
+----
+MySQL
+
+query T
+SELECT CONCAT('My', NULL, 'QL')
+----
+NULL
+
+query T
+SELECT CONCAT('14.3')
+----
+14.3
+
+query T
+SELECT CONCAT('14.3', 'SQL')
+----
+14.3SQL
+
+query T
+select CONCAT(to_varchar(number), 'a') || to_varchar(number+1) from numbers(3) order by number
+----
+0a1
+1a2
+2a3
+
+query T
+SELECT CONCAT(to_varchar(number), NULL) from numbers(4)
+----
+NULL
+NULL
+NULL
+NULL
+

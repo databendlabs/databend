@@ -31,6 +31,7 @@ use crate::TypeID;
 pub type ColumnRef = Arc<dyn Column>;
 pub trait Column: Send + Sync {
     fn as_any(&self) -> &dyn Any;
+
     /// Type of data that column contains. It's an underlying physical type:
     /// Int32 for Date, Int64 for Timestamp, so on.
     fn data_type_id(&self) -> TypeID {

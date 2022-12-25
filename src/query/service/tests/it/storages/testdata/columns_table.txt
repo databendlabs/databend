@@ -1,0 +1,156 @@
+---------- TABLE INFO ------------
+DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemColumns
+-------- TABLE CONTENTS ----------
++--------------------------+----------+---------------------+-------------------+--------------+--------------------+-------------+---------+
+| name                     | database | table               | type              | default_kind | default_expression | is_nullable | comment |
++--------------------------+----------+---------------------+-------------------+--------------+--------------------+-------------+---------+
+| Comment                  | system   | engines             | VARCHAR           |              |                    | NO          |         |
+| Engine                   | system   | engines             | VARCHAR           |              |                    | NO          |         |
+| auth_string              | system   | users               | VARCHAR           |              |                    | NO          |         |
+| auth_type                | system   | users               | VARCHAR           |              |                    | NO          |         |
+| catalog                  | system   | databases           | VARCHAR           |              |                    | NO          |         |
+| catalog                  | system   | tables              | VARCHAR           |              |                    | NO          |         |
+| catalog                  | system   | tables_with_history | VARCHAR           |              |                    | NO          |         |
+| category                 | system   | functions           | VARCHAR           |              |                    | NO          |         |
+| client_address           | system   | query_log           | VARCHAR           |              |                    | NO          |         |
+| client_info              | system   | query_log           | VARCHAR           |              |                    | NO          |         |
+| cluster_by               | system   | tables              | VARCHAR           |              |                    | NO          |         |
+| cluster_by               | system   | tables_with_history | VARCHAR           |              |                    | NO          |         |
+| cluster_id               | system   | query_log           | VARCHAR           |              |                    | NO          |         |
+| columns                  | system   | query_log           | VARCHAR           |              |                    | NO          |         |
+| command                  | system   | processes           | VARCHAR           |              |                    | NO          |         |
+| comment                  | system   | columns             | VARCHAR           |              |                    | NO          |         |
+| comment                  | system   | stages              | VARCHAR           |              |                    | NO          |         |
+| copy_options             | system   | stages              | VARCHAR           |              |                    | NO          |         |
+| cpu_usage                | system   | query_log           | INT UNSIGNED      |              |                    | NO          |         |
+| created_on               | system   | tables              | VARCHAR           |              |                    | NO          |         |
+| created_on               | system   | tables_with_history | VARCHAR           |              |                    | NO          |         |
+| creator                  | system   | stages              | VARCHAR           |              |                    | YES         |         |
+| current_database         | system   | query_log           | VARCHAR           |              |                    | NO          |         |
+| data_compressed_size     | system   | tables              | BIGINT UNSIGNED   |              |                    | YES         |         |
+| data_compressed_size     | system   | tables_with_history | BIGINT UNSIGNED   |              |                    | YES         |         |
+| data_read_bytes          | system   | processes           | BIGINT UNSIGNED   |              |                    | NO          |         |
+| data_size                | system   | tables              | BIGINT UNSIGNED   |              |                    | YES         |         |
+| data_size                | system   | tables_with_history | BIGINT UNSIGNED   |              |                    | YES         |         |
+| data_write_bytes         | system   | processes           | BIGINT UNSIGNED   |              |                    | NO          |         |
+| database                 | system   | clustering_history  | VARCHAR           |              |                    | NO          |         |
+| database                 | system   | columns             | VARCHAR           |              |                    | NO          |         |
+| database                 | system   | processes           | VARCHAR           |              |                    | NO          |         |
+| database                 | system   | tables              | VARCHAR           |              |                    | NO          |         |
+| database                 | system   | tables_with_history | VARCHAR           |              |                    | NO          |         |
+| databases                | system   | query_log           | VARCHAR           |              |                    | NO          |         |
+| default                  | system   | settings            | VARCHAR           |              |                    | NO          |         |
+| default_expression       | system   | columns             | VARCHAR           |              |                    | NO          |         |
+| default_kind             | system   | columns             | VARCHAR           |              |                    | NO          |         |
+| default_role             | system   | users               | VARCHAR           |              |                    | NO          |         |
+| definition               | system   | functions           | VARCHAR           |              |                    | NO          |         |
+| description              | system   | configs             | VARCHAR           |              |                    | NO          |         |
+| description              | system   | functions           | VARCHAR           |              |                    | NO          |         |
+| description              | system   | settings            | VARCHAR           |              |                    | NO          |         |
+| dropped_on               | system   | tables              | VARCHAR           |              |                    | NO          |         |
+| dropped_on               | system   | tables_with_history | VARCHAR           |              |                    | NO          |         |
+| dummy                    | system   | one                 | TINYINT UNSIGNED  |              |                    | NO          |         |
+| end_time                 | system   | clustering_history  | TIMESTAMP         |              |                    | NO          |         |
+| engine                   | system   | tables              | VARCHAR           |              |                    | NO          |         |
+| engine                   | system   | tables_with_history | VARCHAR           |              |                    | NO          |         |
+| entry                    | system   | tracing             | VARCHAR           |              |                    | NO          |         |
+| event_date               | system   | query_log           | DATE              |              |                    | NO          |         |
+| event_time               | system   | query_log           | TIMESTAMP         |              |                    | NO          |         |
+| example                  | system   | functions           | VARCHAR           |              |                    | NO          |         |
+| exception_code           | system   | query_log           | INT               |              |                    | NO          |         |
+| exception_text           | system   | query_log           | VARCHAR           |              |                    | NO          |         |
+| extra                    | system   | query_log           | VARCHAR           |              |                    | NO          |         |
+| extra_info               | system   | processes           | VARCHAR           |              |                    | NO          |         |
+| file_format_options      | system   | stages              | VARCHAR           |              |                    | NO          |         |
+| group                    | system   | configs             | VARCHAR           |              |                    | NO          |         |
+| handler_type             | system   | query_log           | VARCHAR           |              |                    | NO          |         |
+| host                     | system   | clusters            | VARCHAR           |              |                    | NO          |         |
+| host                     | system   | processes           | VARCHAR           |              |                    | YES         |         |
+| hostname                 | system   | users               | VARCHAR           |              |                    | NO          |         |
+| id                       | system   | processes           | VARCHAR           |              |                    | NO          |         |
+| index_size               | system   | tables              | BIGINT UNSIGNED   |              |                    | YES         |         |
+| index_size               | system   | tables_with_history | BIGINT UNSIGNED   |              |                    | YES         |         |
+| inherited_roles          | system   | roles               | BIGINT UNSIGNED   |              |                    | NO          |         |
+| is_aggregate             | system   | functions           | BOOLEAN           |              |                    | NO          |         |
+| is_builtin               | system   | functions           | BOOLEAN           |              |                    | NO          |         |
+| is_nullable              | system   | columns             | VARCHAR           |              |                    | NO          |         |
+| kind                     | system   | metrics             | VARCHAR           |              |                    | NO          |         |
+| labels                   | system   | metrics             | VARCHAR           |              |                    | NO          |         |
+| level                    | system   | settings            | VARCHAR           |              |                    | NO          |         |
+| license                  | system   | credits             | VARCHAR           |              |                    | NO          |         |
+| log_type                 | system   | query_log           | TINYINT           |              |                    | NO          |         |
+| memory_usage             | system   | processes           | BIGINT            |              |                    | NO          |         |
+| memory_usage             | system   | query_log           | BIGINT UNSIGNED   |              |                    | NO          |         |
+| metric                   | system   | metrics             | VARCHAR           |              |                    | NO          |         |
+| mysql_connection_id      | system   | processes           | INT UNSIGNED      |              |                    | YES         |         |
+| name                     | system   | catalogs            | VARCHAR           |              |                    | NO          |         |
+| name                     | system   | clusters            | VARCHAR           |              |                    | NO          |         |
+| name                     | system   | columns             | VARCHAR           |              |                    | NO          |         |
+| name                     | system   | configs             | VARCHAR           |              |                    | NO          |         |
+| name                     | system   | contributors        | VARCHAR           |              |                    | NO          |         |
+| name                     | system   | credits             | VARCHAR           |              |                    | NO          |         |
+| name                     | system   | databases           | VARCHAR           |              |                    | NO          |         |
+| name                     | system   | functions           | VARCHAR           |              |                    | NO          |         |
+| name                     | system   | malloc_stats_totals | VARCHAR           |              |                    | NO          |         |
+| name                     | system   | roles               | VARCHAR           |              |                    | NO          |         |
+| name                     | system   | settings            | VARCHAR           |              |                    | NO          |         |
+| name                     | system   | stages              | VARCHAR           |              |                    | NO          |         |
+| name                     | system   | tables              | VARCHAR           |              |                    | NO          |         |
+| name                     | system   | tables_with_history | VARCHAR           |              |                    | NO          |         |
+| name                     | system   | users               | VARCHAR           |              |                    | NO          |         |
+| num_rows                 | system   | tables              | BIGINT UNSIGNED   |              |                    | YES         |         |
+| num_rows                 | system   | tables_with_history | BIGINT UNSIGNED   |              |                    | YES         |         |
+| number_of_files          | system   | stages              | BIGINT UNSIGNED   |              |                    | YES         |         |
+| port                     | system   | clusters            | SMALLINT UNSIGNED |              |                    | NO          |         |
+| projections              | system   | query_log           | VARCHAR           |              |                    | NO          |         |
+| query_duration_ms        | system   | query_log           | BIGINT            |              |                    | NO          |         |
+| query_id                 | system   | query_log           | VARCHAR           |              |                    | NO          |         |
+| query_kind               | system   | query_log           | VARCHAR           |              |                    | NO          |         |
+| query_start_time         | system   | query_log           | TIMESTAMP         |              |                    | NO          |         |
+| query_text               | system   | query_log           | VARCHAR           |              |                    | NO          |         |
+| reclustered_bytes        | system   | clustering_history  | BIGINT UNSIGNED   |              |                    | NO          |         |
+| reclustered_rows         | system   | clustering_history  | BIGINT UNSIGNED   |              |                    | NO          |         |
+| result_bytes             | system   | query_log           | BIGINT UNSIGNED   |              |                    | NO          |         |
+| result_rows              | system   | query_log           | BIGINT UNSIGNED   |              |                    | NO          |         |
+| scan_bytes               | system   | query_log           | BIGINT UNSIGNED   |              |                    | NO          |         |
+| scan_io_bytes            | system   | query_log           | BIGINT UNSIGNED   |              |                    | NO          |         |
+| scan_io_bytes_cost_ms    | system   | query_log           | BIGINT UNSIGNED   |              |                    | NO          |         |
+| scan_partitions          | system   | query_log           | BIGINT UNSIGNED   |              |                    | NO          |         |
+| scan_progress_read_bytes | system   | processes           | BIGINT UNSIGNED   |              |                    | NO          |         |
+| scan_progress_read_rows  | system   | processes           | BIGINT UNSIGNED   |              |                    | NO          |         |
+| scan_rows                | system   | query_log           | BIGINT UNSIGNED   |              |                    | NO          |         |
+| server_version           | system   | query_log           | VARCHAR           |              |                    | NO          |         |
+| session_settings         | system   | query_log           | VARCHAR           |              |                    | NO          |         |
+| sql_user                 | system   | query_log           | VARCHAR           |              |                    | NO          |         |
+| sql_user_privileges      | system   | query_log           | VARCHAR           |              |                    | NO          |         |
+| sql_user_quota           | system   | query_log           | VARCHAR           |              |                    | NO          |         |
+| stack_trace              | system   | query_log           | VARCHAR           |              |                    | NO          |         |
+| stage_params             | system   | stages              | VARCHAR           |              |                    | NO          |         |
+| stage_type               | system   | stages              | VARCHAR           |              |                    | NO          |         |
+| start_time               | system   | clustering_history  | TIMESTAMP         |              |                    | NO          |         |
+| statistics               | system   | malloc_stats        | OBJECT            |              |                    | NO          |         |
+| status                   | system   | processes           | VARCHAR           |              |                    | NO          |         |
+| syntax                   | system   | functions           | VARCHAR           |              |                    | NO          |         |
+| table                    | system   | clustering_history  | VARCHAR           |              |                    | NO          |         |
+| table                    | system   | columns             | VARCHAR           |              |                    | NO          |         |
+| tables                   | system   | query_log           | VARCHAR           |              |                    | NO          |         |
+| tenant_id                | system   | query_log           | VARCHAR           |              |                    | NO          |         |
+| time                     | system   | processes           | BIGINT UNSIGNED   |              |                    | NO          |         |
+| total_partitions         | system   | query_log           | BIGINT UNSIGNED   |              |                    | NO          |         |
+| type                     | system   | columns             | VARCHAR           |              |                    | NO          |         |
+| type                     | system   | processes           | VARCHAR           |              |                    | NO          |         |
+| type                     | system   | settings            | VARCHAR           |              |                    | NO          |         |
+| user                     | system   | processes           | VARCHAR           |              |                    | NO          |         |
+| value                    | system   | configs             | VARCHAR           |              |                    | NO          |         |
+| value                    | system   | malloc_stats_totals | BIGINT UNSIGNED   |              |                    | NO          |         |
+| value                    | system   | metrics             | VARCHAR           |              |                    | NO          |         |
+| value                    | system   | settings            | VARCHAR           |              |                    | NO          |         |
+| version                  | system   | clusters            | VARCHAR           |              |                    | NO          |         |
+| version                  | system   | credits             | VARCHAR           |              |                    | NO          |         |
+| written_bytes            | system   | query_log           | BIGINT UNSIGNED   |              |                    | NO          |         |
+| written_io_bytes         | system   | query_log           | BIGINT UNSIGNED   |              |                    | NO          |         |
+| written_io_bytes_cost_ms | system   | query_log           | BIGINT UNSIGNED   |              |                    | NO          |         |
+| written_rows             | system   | query_log           | BIGINT UNSIGNED   |              |                    | NO          |         |
++--------------------------+----------+---------------------+-------------------+--------------+--------------------+-------------+---------+
+
+

@@ -16,7 +16,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use chrono::Utc;
-use common_base::base::GlobalIORuntime;
+use common_base::runtime::GlobalIORuntime;
 use common_catalog::catalog::Catalog;
 use common_catalog::plan::DataSourceInfo;
 use common_catalog::plan::StageFileInfo;
@@ -244,15 +244,15 @@ impl CopyInterpreterV2 {
         stage_file_infos: &[StageFileInfo],
     ) {
         let table_ctx: Arc<dyn TableContext> = ctx.clone();
-        let op = StageTable::get_op(&table_ctx, stage_info);
+        let op = StageTable::get_op(stage_info);
         match op {
             Ok(op) => {
-                let file = Files::create(table_ctx, op);
+                let file_op = Files::create(table_ctx, op);
                 let files = stage_file_infos
                     .iter()
                     .map(|v| v.path.clone())
                     .collect::<Vec<_>>();
-                if let Err(e) = file.remove_file_in_batch(&files).await {
+                if let Err(e) = file_op.remove_file_in_batch(&files).await {
                     error!("Failed to delete file: {:?}, error: {}", files, e);
                 }
             }
@@ -275,8 +275,7 @@ impl CopyInterpreterV2 {
         let ctx = self.ctx.clone();
         let table_ctx: Arc<dyn TableContext> = ctx.clone();
         let mut stage_table_info = stage_table_info.clone();
-        let mut all_source_file_infos =
-            StageTable::list_files(&table_ctx, &stage_table_info).await?;
+        let mut all_source_file_infos = StageTable::list_files(&stage_table_info).await?;
 
         if !force {
             all_source_file_infos = CopyInterpreterV2::color_copied_files(

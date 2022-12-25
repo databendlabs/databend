@@ -22,8 +22,8 @@ use std::sync::Weak;
 use std::time::Duration;
 
 use common_base::base::tokio;
+use common_base::base::GlobalInstance;
 use common_base::base::SignalStream;
-use common_base::base::Singleton;
 use common_config::Config;
 use common_config::GlobalConfig;
 use common_exception::ErrorCode;
@@ -34,7 +34,6 @@ use common_settings::Settings;
 use common_users::UserApiProvider;
 use futures::future::Either;
 use futures::StreamExt;
-use once_cell::sync::OnceCell;
 use parking_lot::RwLock;
 use tracing::debug;
 use tracing::info;
@@ -59,13 +58,10 @@ pub struct SessionManager {
     pub(in crate::sessions) mysql_basic_conn_id: AtomicU32,
 }
 
-static SESSION_MANAGER: OnceCell<Singleton<Arc<SessionManager>>> = OnceCell::new();
-
 impl SessionManager {
-    pub fn init(conf: &Config, v: Singleton<Arc<SessionManager>>) -> Result<()> {
-        v.init(Self::create(conf))?;
+    pub fn init(conf: &Config) -> Result<()> {
+        GlobalInstance::set(Self::create(conf));
 
-        SESSION_MANAGER.set(v).ok();
         Ok(())
     }
 
@@ -81,10 +77,7 @@ impl SessionManager {
     }
 
     pub fn instance() -> Arc<SessionManager> {
-        match SESSION_MANAGER.get() {
-            None => panic!("SessionManager is not init"),
-            Some(session_manager) => session_manager.get(),
-        }
+        GlobalInstance::get()
     }
 
     pub async fn create_session(&self, typ: SessionType) -> Result<Arc<Session>> {
@@ -113,7 +106,7 @@ impl SessionManager {
 
         let tenant = config.query.tenant_id.clone();
         let user_api = UserApiProvider::instance();
-        let session_settings = Settings::try_create(&config, user_api, tenant).await?;
+        let session_settings = Settings::try_create(user_api, tenant).await?;
         let session_ctx = SessionContext::try_create(session_settings)?;
         let session = Session::try_create(id.clone(), typ.clone(), session_ctx, mysql_conn_id)?;
 
@@ -165,8 +158,10 @@ impl SessionManager {
 
         // stop tracking session
         {
-            let mut sessions = self.active_sessions.write();
-            sessions.remove(session_id);
+            // Make sure this write lock has been released before dropping.
+            // Becuase droping session could re-enter `destroy_session`.
+            let weak_session = { self.active_sessions.write().remove(session_id) };
+            drop(weak_session);
         }
 
         // also need remove mysql_conn_map

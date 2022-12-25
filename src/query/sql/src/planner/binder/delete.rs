@@ -14,7 +14,6 @@
 
 use common_ast::ast::Expr;
 use common_ast::ast::TableReference;
-use common_catalog::plan::Projection;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -23,14 +22,13 @@ use crate::binder::ScalarBinder;
 use crate::plans::DeletePlan;
 use crate::plans::Plan;
 use crate::BindContext;
-use crate::ScalarExpr;
 
 impl<'a> Binder {
     pub(in crate::planner::binder) async fn bind_delete(
         &mut self,
         bind_context: &BindContext,
         table_reference: &'a TableReference<'a>,
-        selection: &'a Option<Expr<'a>>,
+        filter: &'a Option<Expr<'a>>,
     ) -> Result<Plan> {
         let (catalog_name, database_name, table_name) = if let TableReference::Table {
             catalog,
@@ -75,23 +73,20 @@ impl<'a> Binder {
         let tbl_info = table.get_table_info();
         let table_id = tbl_info.ident;
 
-        // @todo wait delete migrate to new planner
-        let col_indices: Vec<usize> = if let Some(expr) = selection {
+        let selection = if let Some(expr) = filter {
             let (scalar, _) = scalar_binder.bind(expr).await?;
-            scalar.used_columns().into_iter().collect()
+            Some(scalar)
         } else {
-            vec![]
+            None
         };
-        let selection = selection.as_ref().map(|expr| format!("({})", expr));
-        let projection = Projection::Columns(col_indices);
 
         let plan = DeletePlan {
             catalog_name,
             database_name,
             table_name,
             table_id,
+            metadata: self.metadata.clone(),
             selection,
-            projection,
         };
         Ok(Plan::Delete(Box::new(plan)))
     }

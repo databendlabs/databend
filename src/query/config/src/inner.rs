@@ -123,7 +123,7 @@ pub struct QueryConfig {
     pub clickhouse_http_handler_port: u16,
     pub http_handler_host: String,
     pub http_handler_port: u16,
-    pub http_handler_result_timeout_millis: u64,
+    pub http_handler_result_timeout_secs: u64,
     pub flight_api_address: String,
     pub admin_api_address: String,
     pub metric_api_address: String,
@@ -174,6 +174,7 @@ pub struct QueryConfig {
     pub share_endpoint_address: String,
     pub share_endpoint_auth_token_file: String,
     pub tenant_quota: Option<TenantQuota>,
+    pub internal_enable_sandbox_tenant: bool,
 }
 
 impl Default for QueryConfig {
@@ -191,7 +192,7 @@ impl Default for QueryConfig {
             clickhouse_http_handler_port: 8124,
             http_handler_host: "127.0.0.1".to_string(),
             http_handler_port: 8000,
-            http_handler_result_timeout_millis: 10000,
+            http_handler_result_timeout_secs: 60,
             flight_api_address: "127.0.0.1:9090".to_string(),
             admin_api_address: "127.0.0.1:8080".to_string(),
             metric_api_address: "127.0.0.1:7070".to_string(),
@@ -227,6 +228,7 @@ impl Default for QueryConfig {
             share_endpoint_address: "".to_string(),
             share_endpoint_auth_token_file: "".to_string(),
             tenant_quota: None,
+            internal_enable_sandbox_tenant: false,
         }
     }
 }

@@ -17,6 +17,8 @@ use std::thread::sleep;
 use std::time::Duration;
 
 use common_base::base::tokio;
+use common_meta_client::to_digit_ver;
+use common_meta_client::MIN_METASRV_SEMVER;
 use common_meta_types::protobuf::meta_service_server::MetaService;
 use common_meta_types::protobuf::meta_service_server::MetaServiceServer;
 use common_meta_types::protobuf::ClientInfo;
@@ -51,7 +53,12 @@ impl MetaService for GrpcServiceForTestImpl {
         _request: Request<Streaming<common_meta_types::protobuf::HandshakeRequest>>,
     ) -> Result<Response<Self::HandshakeStream>, Status> {
         tokio::time::sleep(Duration::from_secs(2)).await;
-        let output = futures::stream::once(async { Ok(HandshakeResponse::default()) });
+        let output = futures::stream::once(async {
+            Ok(HandshakeResponse {
+                protocol_version: to_digit_ver(&MIN_METASRV_SEMVER),
+                payload: vec![],
+            })
+        });
         Ok(Response::new(Box::pin(output)))
     }
 

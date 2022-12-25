@@ -19,16 +19,15 @@ use std::ops::Deref;
 use std::sync::Arc;
 
 use common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
-use common_base::base::GlobalIORuntime;
-use common_base::base::Singleton;
-use common_base::base::Thread;
-use common_base::base::TrySpawn;
+use common_base::base::GlobalInstance;
+use common_base::runtime::GlobalIORuntime;
+use common_base::runtime::Thread;
+use common_base::runtime::TrySpawn;
 use common_config::GlobalConfig;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_grpc::ConnectionFactory;
-use once_cell::sync::OnceCell;
 use parking_lot::Mutex;
 use parking_lot::ReentrantMutex;
 
@@ -62,23 +61,17 @@ pub struct DataExchangeManager {
     queries_coordinator: ReentrantMutex<SyncUnsafeCell<HashMap<String, QueryCoordinator>>>,
 }
 
-static DATA_EXCHANGE_MANAGER: OnceCell<Singleton<Arc<DataExchangeManager>>> = OnceCell::new();
-
 impl DataExchangeManager {
-    pub fn init(v: Singleton<Arc<DataExchangeManager>>) -> Result<()> {
-        v.init(Arc::new(DataExchangeManager {
+    pub fn init() -> Result<()> {
+        GlobalInstance::set(Arc::new(DataExchangeManager {
             queries_coordinator: ReentrantMutex::new(SyncUnsafeCell::new(HashMap::new())),
-        }))?;
+        }));
 
-        DATA_EXCHANGE_MANAGER.set(v).ok();
         Ok(())
     }
 
     pub fn instance() -> Arc<DataExchangeManager> {
-        match DATA_EXCHANGE_MANAGER.get() {
-            None => panic!("DataExchangeManager is not init"),
-            Some(data_exchange_manager) => data_exchange_manager.get(),
-        }
+        GlobalInstance::get()
     }
 
     // Create connections for cluster all nodes. We will push data through this connection.
@@ -559,7 +552,9 @@ impl QueryCoordinator {
             }
         }
 
-        let executor_settings = ExecutorSettings::try_create(&info.query_ctx.get_settings())?;
+        let query_id = info.query_ctx.get_id();
+        let executor_settings =
+            ExecutorSettings::try_create(&info.query_ctx.get_settings(), query_id)?;
 
         let executor = PipelineCompleteExecutor::from_pipelines(pipelines, executor_settings)?;
 

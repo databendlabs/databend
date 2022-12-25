@@ -1,0 +1,41 @@
+statement ok
+drop table if exists t
+
+statement ok
+CREATE TABLE T (t1 int, t2 int)
+
+statement ok
+INSERT INTO t VALUES (1, 1), (1, 2)
+
+query I
+SELECT DISTINCT t1
+FROM T
+ORDER BY t1
+----
+1
+
+query II
+SELECT DISTINCT t1, t2
+FROM T
+ORDER BY t1, t2
+----
+1 1
+1 2
+
+query I
+SELECT DISTINCT t1 FROM T
+UNION
+SELECT DISTINCT t1 FROM T
+ORDER BY t1
+----
+1
+
+query I
+SELECT DISTINCT t1 FROM T
+UNION ALL
+SELECT DISTINCT t1 FROM T
+ORDER BY t1
+----
+1
+1
+

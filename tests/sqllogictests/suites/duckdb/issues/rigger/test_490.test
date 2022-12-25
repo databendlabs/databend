@@ -1,0 +1,12 @@
+statement ok
+drop table if exists t0
+
+statement ok
+CREATE TABLE t0(c0 INT NULL)
+
+statement ok
+INSERT INTO t0(c0) VALUES (NULL)
+
+statement ok
+SELECT * FROM t0 WHERE c0 = c0
+

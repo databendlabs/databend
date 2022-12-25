@@ -1,0 +1,85 @@
+onlyif mysql
+statement ok
+use default
+
+onlyif mysql
+statement ok
+set sql_dialect = 'PostgreSQL'
+
+onlyif mysql
+statement ok
+drop table if exists t
+
+onlyif mysql
+statement ok
+drop table if exists "T"
+
+onlyif mysql
+statement ok
+create table t("A" int)
+
+onlyif mysql
+statement ok
+create table "T"(a int) cluster by (A+1)
+
+onlyif mysql
+statement ok
+insert into t("A") values(1)
+
+onlyif mysql
+statement error
+insert into t(a) values(1)
+
+onlyif mysql
+statement ok
+insert into "T"(A) values(1)
+
+onlyif mysql
+statement error
+insert into "T"("A") values(1)
+
+onlyif mysql
+query I
+select "A" from t
+----
+1
+
+onlyif mysql
+statement error
+select a, A from t
+
+onlyif mysql
+query I
+select a+A from "T"
+----
+2
+
+onlyif mysql
+statement error
+select "a" from t
+
+onlyif mysql
+statement ok
+drop view if exists "V"
+
+onlyif mysql
+statement ok
+create view "V" as select "A" as "B" from t
+
+onlyif mysql
+query I
+select "B" from "V"
+----
+1
+
+onlyif mysql
+statement ok
+drop view "V"
+
+onlyif mysql
+statement ok
+drop table t
+
+onlyif mysql
+statement ok
+drop table "T"

@@ -1,0 +1,154 @@
+statement ok
+drop view if exists t
+
+statement ok
+drop table if exists t1
+
+statement ok
+drop table if exists t2
+
+statement ok
+create table t1 (a int, b int)
+
+statement ok
+insert into t1 values (1, 2), (2, 3)
+
+statement ok
+create table t2 (a int, b int)
+
+statement ok
+insert into t2 values (1, 2), (2, 3)
+
+statement ok
+create view t as select * from t1 union all select * from t2
+
+query T
+explain select * from t where a > b
+----
+UnionAll
+├── TableScan
+│   ├── table: default.default.t1
+│   ├── read rows: 0
+│   ├── read bytes: 0
+│   ├── partitions total: 1
+│   ├── partitions scanned: 0
+│   └── push downs: [filters: [(a > b)], limit: NONE]
+└── TableScan
+    ├── table: default.default.t2
+    ├── read rows: 0
+    ├── read bytes: 0
+    ├── partitions total: 1
+    ├── partitions scanned: 0
+    └── push downs: [filters: [(a > b)], limit: NONE]
+
+query T
+explain select * from t where a > 1
+----
+UnionAll
+├── TableScan
+│   ├── table: default.default.t1
+│   ├── read rows: 2
+│   ├── read bytes: 62
+│   ├── partitions total: 1
+│   ├── partitions scanned: 1
+│   └── push downs: [filters: [(a > 1)], limit: NONE]
+└── TableScan
+    ├── table: default.default.t2
+    ├── read rows: 2
+    ├── read bytes: 62
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    └── push downs: [filters: [(a > 1)], limit: NONE]
+
+query T
+explain select * from t limit 3
+----
+Limit
+├── limit: 3
+├── offset: 0
+└── UnionAll
+    ├── Limit
+    │   ├── limit: 3
+    │   ├── offset: 0
+    │   └── TableScan
+    │       ├── table: default.default.t1
+    │       ├── read rows: 2
+    │       ├── read bytes: 62
+    │       ├── partitions total: 1
+    │       ├── partitions scanned: 1
+    │       └── push downs: [filters: [], limit: 3]
+    └── Limit
+        ├── limit: 3
+        ├── offset: 0
+        └── TableScan
+            ├── table: default.default.t2
+            ├── read rows: 2
+            ├── read bytes: 62
+            ├── partitions total: 1
+            ├── partitions scanned: 1
+            └── push downs: [filters: [], limit: 3]
+
+query T
+explain select * from t limit 3 offset 1
+----
+Limit
+├── limit: 3
+├── offset: 1
+└── UnionAll
+    ├── Limit
+    │   ├── limit: 4
+    │   ├── offset: 0
+    │   └── TableScan
+    │       ├── table: default.default.t1
+    │       ├── read rows: 2
+    │       ├── read bytes: 62
+    │       ├── partitions total: 1
+    │       ├── partitions scanned: 1
+    │       └── push downs: [filters: [], limit: 4]
+    └── Limit
+        ├── limit: 4
+        ├── offset: 0
+        └── TableScan
+            ├── table: default.default.t2
+            ├── read rows: 2
+            ├── read bytes: 62
+            ├── partitions total: 1
+            ├── partitions scanned: 1
+            └── push downs: [filters: [], limit: 4]
+
+query T
+explain select * from t1 union all select * from t2 limit 1
+----
+Limit
+├── limit: 1
+├── offset: 0
+└── UnionAll
+    ├── Limit
+    │   ├── limit: 1
+    │   ├── offset: 0
+    │   └── TableScan
+    │       ├── table: default.default.t1
+    │       ├── read rows: 2
+    │       ├── read bytes: 62
+    │       ├── partitions total: 1
+    │       ├── partitions scanned: 1
+    │       └── push downs: [filters: [], limit: 1]
+    └── Limit
+        ├── limit: 1
+        ├── offset: 0
+        └── TableScan
+            ├── table: default.default.t2
+            ├── read rows: 2
+            ├── read bytes: 62
+            ├── partitions total: 1
+            ├── partitions scanned: 1
+            └── push downs: [filters: [], limit: 1]
+
+statement ok
+drop table t1
+
+statement ok
+drop table t2
+
+statement ok
+drop view t

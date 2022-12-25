@@ -1,0 +1,30 @@
+query T
+SELECT ORD(NULL)
+----
+NULL
+
+query I
+SELECT ORD('и')
+----
+53432
+
+query I
+SELECT ORD('早ab')
+----
+15112105
+
+query I
+SELECT ORD('💖')
+----
+4036989590
+
+query I
+SELECT ORD('a💖')
+----
+97
+
+query I
+SELECT ORD('💖a')
+----
+4036989590
+

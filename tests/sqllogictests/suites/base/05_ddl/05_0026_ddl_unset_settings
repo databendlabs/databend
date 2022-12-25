@@ -1,0 +1,47 @@
+skipif clickhouse
+query TTTT
+SELECT name, value, default, level from system.settings where name in ('sql_dialect', 'timezone', 'wait_for_async_insert_timeout')
+----
+sql_dialect PostgreSQL PostgreSQL SESSION
+timezone                       UTC         UTC         SESSION
+wait_for_async_insert_timeout  100         100         SESSION
+
+skipif clickhouse
+statement ok
+SET GLOBAL sql_dialect='MySQL'
+
+skipif clickhouse
+statement ok
+SET GLOBAL timezone='Asia/Shanghai'
+
+skipif clickhouse
+statement ok
+SET GLOBAL wait_for_async_insert_timeout=20000
+
+skipif clickhouse
+query TTTT
+SELECT name, value, default, level from system.settings where name in ('sql_dialect', 'timezone', 'wait_for_async_insert_timeout')
+----
+sql_dialect  MySQL  PostgreSQL  GLOBAL
+timezone  Asia/Shanghai  UTC  GLOBAL
+wait_for_async_insert_timeout  20000  100  GLOBAL
+
+skipif clickhouse
+statement ok
+UNSET (timezone, wait_for_async_insert_timeout)
+
+skipif clickhouse
+statement error 2801
+UNSET stl_dialect
+
+skipif clickhouse
+statement ok
+UNSET sql_dialect
+
+skipif clickhouse
+query TTTT
+SELECT name, value, default, level from system.settings where name in ('sql_dialect', 'timezone', 'wait_for_async_insert_timeout')
+----
+sql_dialect PostgreSQL PostgreSQL SESSION
+timezone                       UTC         UTC         SESSION
+wait_for_async_insert_timeout  100         100         SESSION

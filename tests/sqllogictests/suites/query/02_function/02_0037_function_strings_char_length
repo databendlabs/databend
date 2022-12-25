@@ -1,0 +1,40 @@
+query T
+SELECT CHAR_LENGTH(NULL)
+----
+NULL
+
+query I
+SELECT CHAR_LENGTH('')
+----
+0
+
+query I
+SELECT CHAR_LENGTH('hello world')
+----
+11
+
+query I
+SELECT CHAR_LENGTH('早ab')
+----
+3
+
+query T
+SELECT CHARACTER_LENGTH(NULL)
+----
+NULL
+
+query I
+SELECT CHARACTER_LENGTH('')
+----
+0
+
+query I
+SELECT CHARACTER_LENGTH('hello world')
+----
+11
+
+query I
+SELECT CHARACTER_LENGTH('早ab')
+----
+3
+

@@ -25,7 +25,7 @@ use poem::Request;
 use poem::Route;
 use pretty_assertions::assert_eq;
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_config() -> common_exception::Result<()> {
     let conf = Config::default();
     let cluster_router = Route::new()

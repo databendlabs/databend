@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_base::base::Singleton;
+use common_base::base::GlobalInstance;
 use common_catalog::catalog::Catalog;
 pub use common_catalog::catalog::CatalogManager;
 use common_catalog::catalog_kind::CATALOG_DEFAULT;
@@ -36,7 +36,7 @@ use crate::catalogs::DatabaseCatalog;
 
 #[async_trait::async_trait]
 pub trait CatalogManagerHelper {
-    async fn init(conf: &Config, v: Singleton<Arc<CatalogManager>>) -> Result<()>;
+    async fn init(conf: &Config) -> Result<()>;
 
     async fn try_create(conf: &Config) -> Result<Arc<CatalogManager>>;
 
@@ -51,9 +51,9 @@ pub trait CatalogManagerHelper {
 
 #[async_trait::async_trait]
 impl CatalogManagerHelper for CatalogManager {
-    async fn init(conf: &Config, v: Singleton<Arc<CatalogManager>>) -> Result<()> {
-        v.init(Self::try_create(conf).await?)?;
-        CatalogManager::set_instance(v);
+    async fn init(conf: &Config) -> Result<()> {
+        GlobalInstance::set(Self::try_create(conf).await?);
+
         Ok(())
     }
 

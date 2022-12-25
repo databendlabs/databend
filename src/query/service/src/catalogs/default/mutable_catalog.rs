@@ -27,6 +27,7 @@ use common_meta_app::schema::DatabaseIdent;
 use common_meta_app::schema::DatabaseInfo;
 use common_meta_app::schema::DatabaseMeta;
 use common_meta_app::schema::DatabaseNameIdent;
+use common_meta_app::schema::DatabaseType;
 use common_meta_app::schema::DropDatabaseReq;
 use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::DropTableReq;
@@ -281,12 +282,18 @@ impl Catalog for MutableCatalog {
 
     async fn update_table_meta(
         &self,
-        tenant: &str,
-        db_name: &str,
+        table_info: &TableInfo,
         req: UpdateTableMetaReq,
     ) -> Result<UpdateTableMetaReply> {
-        let db = self.get_database(tenant, db_name).await?;
-        db.update_table_meta(req).await
+        match table_info.db_type.clone() {
+            DatabaseType::NormalDB => Ok(self.ctx.meta.update_table_meta(req).await?),
+            DatabaseType::ShareDB(share_ident) => {
+                let db = self
+                    .get_database(&share_ident.tenant, &share_ident.share_name)
+                    .await?;
+                db.update_table_meta(req).await
+            }
+        }
     }
 
     async fn get_table_copied_file_info(
@@ -311,12 +318,18 @@ impl Catalog for MutableCatalog {
 
     async fn truncate_table(
         &self,
-        tenant: &str,
-        db_name: &str,
+        table_info: &TableInfo,
         req: TruncateTableReq,
     ) -> Result<TruncateTableReply> {
-        let db = self.get_database(tenant, db_name).await?;
-        db.truncate_table(req).await
+        match table_info.db_type.clone() {
+            DatabaseType::NormalDB => Ok(self.ctx.meta.truncate_table(req).await?),
+            DatabaseType::ShareDB(share_ident) => {
+                let db = self
+                    .get_database(&share_ident.tenant, &share_ident.share_name)
+                    .await?;
+                db.truncate_table(req).await
+            }
+        }
     }
 
     async fn count_tables(&self, req: CountTablesReq) -> Result<CountTablesReply> {

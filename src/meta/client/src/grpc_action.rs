@@ -45,20 +45,6 @@ pub trait RequestFor {
     type Reply;
 }
 
-// TODO: reduce this and MetaGrpcReadReq into one enum?
-// Action wrapper for do_action.
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, derive_more::From)]
-pub enum MetaGrpcWriteReq {
-    UpsertKV(UpsertKVReq),
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, derive_more::From)]
-pub enum MetaGrpcReadReq {
-    GetKV(GetKVReq),
-    MGetKV(MGetKVReq),
-    ListKV(ListKVReq), // since 2022-05-23
-}
-
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, derive_more::From)]
 pub enum MetaGrpcReq {
     UpsertKV(UpsertKVReq),
@@ -81,15 +67,6 @@ impl TryInto<MetaGrpcReq> for Request<RaftRequest> {
     }
 }
 
-impl tonic::IntoRequest<RaftRequest> for MetaGrpcWriteReq {
-    fn into_request(self) -> Request<RaftRequest> {
-        let raft_request = RaftRequest {
-            data: serde_json::to_string(&self).expect("fail to serialize"),
-        };
-        tonic::Request::new(raft_request)
-    }
-}
-
 impl TryInto<Request<RaftRequest>> for MetaGrpcReq {
     type Error = serde_json::Error;
 
@@ -99,32 +76,6 @@ impl TryInto<Request<RaftRequest>> for MetaGrpcReq {
         };
 
         let request = tonic::Request::new(raft_request);
-        Ok(request)
-    }
-}
-
-impl TryInto<Request<RaftRequest>> for MetaGrpcWriteReq {
-    type Error = serde_json::Error;
-
-    fn try_into(self) -> Result<Request<RaftRequest>, Self::Error> {
-        let raft_request = RaftRequest {
-            data: serde_json::to_string(&self)?,
-        };
-
-        let request = tonic::Request::new(raft_request);
-        Ok(request)
-    }
-}
-
-impl TryInto<Request<RaftRequest>> for MetaGrpcReadReq {
-    type Error = serde_json::Error;
-
-    fn try_into(self) -> Result<Request<RaftRequest>, Self::Error> {
-        let get_req = RaftRequest {
-            data: serde_json::to_string(&self)?,
-        };
-
-        let request = tonic::Request::new(get_req);
         Ok(request)
     }
 }

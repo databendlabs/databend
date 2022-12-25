@@ -30,6 +30,7 @@ use crate::ast::UriLocation;
 
 #[derive(Debug, Clone, PartialEq)] // Tables
 pub struct ShowTablesStmt<'a> {
+    pub catalog: Option<Identifier<'a>>,
     pub database: Option<Identifier<'a>>,
     pub full: bool,
     pub limit: Option<ShowLimit<'a>>,
@@ -47,7 +48,11 @@ impl Display for ShowTablesStmt<'_> {
             write!(f, " HISTORY")?;
         }
         if let Some(database) = &self.database {
-            write!(f, " FROM {database}")?;
+            write!(f, " FROM ")?;
+            if let Some(catalog) = &self.catalog {
+                write!(f, "{catalog}.",)?;
+            }
+            write!(f, "{database}")?;
         }
         if let Some(limit) = &self.limit {
             write!(f, " {limit}")?;
@@ -359,7 +364,7 @@ impl Display for RenameTableStmt<'_> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct TruncateTableStmt<'a> {
     pub catalog: Option<Identifier<'a>>,
     pub database: Option<Identifier<'a>>,
@@ -390,7 +395,7 @@ pub struct OptimizeTableStmt<'a> {
     pub catalog: Option<Identifier<'a>>,
     pub database: Option<Identifier<'a>>,
     pub table: Identifier<'a>,
-    pub action: Option<OptimizeTableAction<'a>>,
+    pub action: OptimizeTableAction<'a>,
 }
 
 impl Display for OptimizeTableStmt<'_> {
@@ -403,9 +408,7 @@ impl Display for OptimizeTableStmt<'_> {
                 .chain(&self.database)
                 .chain(Some(&self.table)),
         )?;
-        if let Some(action) = &self.action {
-            write!(f, " {action}")?;
-        }
+        write!(f, " {}", &self.action)?;
 
         Ok(())
     }
@@ -483,7 +486,9 @@ pub enum CompactTarget {
 #[derive(Debug, Clone, PartialEq)]
 pub enum OptimizeTableAction<'a> {
     All,
-    Purge,
+    Purge {
+        before: Option<TimeTravelPoint<'a>>,
+    },
     Compact {
         target: CompactTarget,
         limit: Option<Expr<'a>>,
@@ -494,7 +499,13 @@ impl<'a> Display for OptimizeTableAction<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             OptimizeTableAction::All => write!(f, "ALL"),
-            OptimizeTableAction::Purge => write!(f, "PURGE"),
+            OptimizeTableAction::Purge { before } => {
+                write!(f, "PURGE")?;
+                if let Some(point) = before {
+                    write!(f, " BEFORE {}", point)?;
+                }
+                Ok(())
+            }
             OptimizeTableAction::Compact { target, limit } => {
                 match target {
                     CompactTarget::Block => {

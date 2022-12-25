@@ -1,0 +1,95 @@
+statement ok
+drop table if exists t_where_optimizer
+
+statement ok
+create table if not exists t_where_optimizer (a int, b int)
+
+query T
+explain select a from t_where_optimizer where a = 1
+----
+TableScan
+├── table: default.default.t_where_optimizer
+├── read rows: 0
+├── read bytes: 0
+├── partitions total: 0
+├── partitions scanned: 0
+├── push downs: [filters: [(a = 1)], limit: NONE]
+└── output columns: [0]
+
+query T
+explain select * from t_where_optimizer where a = b
+----
+TableScan
+├── table: default.default.t_where_optimizer
+├── read rows: 0
+├── read bytes: 0
+├── partitions total: 0
+├── partitions scanned: 0
+└── push downs: [filters: [(a = b)], limit: NONE]
+
+query T
+explain select * from t_where_optimizer where a = 1 or b > 2
+----
+TableScan
+├── table: default.default.t_where_optimizer
+├── read rows: 0
+├── read bytes: 0
+├── partitions total: 0
+├── partitions scanned: 0
+└── push downs: [filters: [((a = 1) or (b > 2))], limit: NONE]
+
+query T
+explain select * from t_where_optimizer where a = 1 and b > 2
+----
+TableScan
+├── table: default.default.t_where_optimizer
+├── read rows: 0
+├── read bytes: 0
+├── partitions total: 0
+├── partitions scanned: 0
+└── push downs: [filters: [(a = 1), (b > 2)], limit: NONE]
+
+query T
+explain select * from t_where_optimizer where b = 1
+----
+TableScan
+├── table: default.default.t_where_optimizer
+├── read rows: 0
+├── read bytes: 0
+├── partitions total: 0
+├── partitions scanned: 0
+└── push downs: [filters: [(b = 1)], limit: NONE]
+
+query T
+explain select a from t_where_optimizer where b = 1
+----
+TableScan
+├── table: default.default.t_where_optimizer
+├── read rows: 0
+├── read bytes: 0
+├── partitions total: 0
+├── partitions scanned: 0
+├── push downs: [filters: [(b = 1)], limit: NONE]
+└── output columns: [0]
+
+statement ok
+drop table t_where_optimizer
+
+statement ok
+create table t_where_optimizer(id int, s tuple(a int, b int))
+
+query T
+explain select * from t_where_optimizer where s:a > 0
+----
+TableScan
+├── table: default.default.t_where_optimizer
+├── read rows: 0
+├── read bytes: 0
+├── partitions total: 0
+├── partitions scanned: 0
+├── push downs: [filters: [(s:a > 0)], limit: NONE]
+└── output columns: [0, 1]
+
+statement ok
+drop table t_where_optimizer
+

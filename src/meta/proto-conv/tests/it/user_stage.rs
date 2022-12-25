@@ -54,6 +54,53 @@ fn test_user_stage_oss_latest() -> anyhow::Result<()> {
 }
 
 #[test]
+fn test_user_stage_fs_v22() -> anyhow::Result<()> {
+    // Encoded data of version 21 of user_stage_fs:
+    // It is generated with common::test_pb_from_to.
+    let user_stage_fs_v22 = vec![
+        10, 17, 102, 115, 58, 47, 47, 100, 105, 114, 47, 116, 111, 47, 102, 105, 108, 101, 115, 26,
+        25, 10, 23, 18, 21, 10, 13, 47, 100, 105, 114, 47, 116, 111, 47, 102, 105, 108, 101, 115,
+        160, 6, 22, 168, 6, 1, 34, 37, 8, 1, 16, 128, 8, 26, 1, 124, 34, 2, 47, 47, 40, 2, 50, 1,
+        92, 58, 3, 114, 111, 119, 66, 3, 78, 97, 78, 74, 2, 39, 39, 160, 6, 22, 168, 6, 1, 42, 10,
+        10, 3, 32, 154, 5, 16, 142, 8, 24, 1, 50, 4, 116, 101, 115, 116, 160, 6, 22, 168, 6, 1,
+    ];
+
+    let want = mt::UserStageInfo {
+        stage_name: "fs://dir/to/files".to_string(),
+        stage_type: mt::StageType::LegacyInternal,
+        stage_params: mt::StageParams {
+            storage: StorageParams::Fs(StorageFsConfig {
+                root: "/dir/to/files".to_string(),
+            }),
+        },
+        file_format_options: mt::FileFormatOptions {
+            format: mt::StageFileFormatType::Json,
+            skip_header: 1024,
+            field_delimiter: "|".to_string(),
+            record_delimiter: "//".to_string(),
+            nan_display: "NaN".to_string(),
+            compression: mt::StageFileCompression::Bz2,
+            escape: "\\".to_string(),
+            row_tag: "row".to_string(),
+            quote: "\'\'".to_string(),
+        },
+        copy_options: mt::CopyOptions {
+            on_error: mt::OnErrorMode::SkipFileNum(666),
+            size_limit: 1038,
+            split_size: 0,
+            purge: true,
+            single: false,
+            max_file_size: 0,
+        },
+        comment: "test".to_string(),
+        ..Default::default()
+    };
+    common::test_load_old(func_name!(), user_stage_fs_v22.as_slice(), want)?;
+
+    Ok(())
+}
+
+#[test]
 fn test_user_stage_fs_v21() -> anyhow::Result<()> {
     // Encoded data of version 21 of user_stage_fs:
     // It is generated with common::test_pb_from_to.
@@ -82,6 +129,7 @@ fn test_user_stage_fs_v21() -> anyhow::Result<()> {
             compression: mt::StageFileCompression::Bz2,
             escape: "\\".to_string(),
             row_tag: "row".to_string(),
+            quote: "".to_string(),
         },
         copy_options: mt::CopyOptions {
             on_error: mt::OnErrorMode::SkipFileNum(666),
@@ -127,6 +175,7 @@ fn test_user_stage_fs_v20() -> anyhow::Result<()> {
             compression: mt::StageFileCompression::Bz2,
             escape: "\\".to_string(),
             row_tag: "row".to_string(),
+            quote: "".to_string(),
         },
         copy_options: mt::CopyOptions {
             on_error: mt::OnErrorMode::SkipFileNum(666),
@@ -173,6 +222,7 @@ fn test_user_stage_fs_v18() -> anyhow::Result<()> {
             row_tag: "".to_string(),
             escape: "".to_string(),
             compression: mt::StageFileCompression::Bz2,
+            quote: "".to_string(),
         },
         copy_options: mt::CopyOptions {
             on_error: mt::OnErrorMode::SkipFileNum(666),
@@ -219,6 +269,7 @@ fn test_user_stage_fs_v16() -> anyhow::Result<()> {
             escape: "".to_string(),
             compression: mt::StageFileCompression::Bz2,
             row_tag: "".to_string(),
+            quote: "".to_string(),
         },
         copy_options: mt::CopyOptions {
             on_error: mt::OnErrorMode::SkipFileNum(666),
@@ -277,6 +328,7 @@ fn test_user_stage_s3_v16() -> anyhow::Result<()> {
             escape: "".to_string(),
             compression: mt::StageFileCompression::Bz2,
             row_tag: "".to_string(),
+            quote: "".to_string(),
         },
         copy_options: mt::CopyOptions {
             on_error: mt::OnErrorMode::SkipFileNum(666),
@@ -329,6 +381,7 @@ fn test_user_stage_gcs_v16() -> anyhow::Result<()> {
             escape: "".to_string(),
             compression: mt::StageFileCompression::Bz2,
             row_tag: "".to_string(),
+            quote: "".to_string(),
         },
         copy_options: mt::CopyOptions {
             on_error: mt::OnErrorMode::SkipFileNum(666),
@@ -383,6 +436,7 @@ fn test_user_stage_oss_v16() -> anyhow::Result<()> {
             escape: "".to_string(),
             compression: mt::StageFileCompression::Bz2,
             row_tag: "".to_string(),
+            quote: "".to_string(),
         },
         copy_options: mt::CopyOptions {
             on_error: mt::OnErrorMode::SkipFileNum(666),
@@ -439,6 +493,7 @@ fn test_user_stage_oss_v13() -> anyhow::Result<()> {
             escape: "".to_string(),
             compression: mt::StageFileCompression::Bz2,
             row_tag: "".to_string(),
+            quote: "".to_string(),
         },
         copy_options: mt::CopyOptions {
             on_error: mt::OnErrorMode::SkipFileNum(666),
@@ -496,6 +551,7 @@ fn test_user_stage_s3_v11() -> anyhow::Result<()> {
             escape: "".to_string(),
             compression: mt::StageFileCompression::Bz2,
             row_tag: "".to_string(),
+            quote: "".to_string(),
         },
         copy_options: mt::CopyOptions {
             on_error: mt::OnErrorMode::SkipFileNum(666),
@@ -551,6 +607,7 @@ fn test_user_stage_s3_v9() -> anyhow::Result<()> {
             escape: "".to_string(),
             compression: mt::StageFileCompression::Bz2,
             row_tag: "".to_string(),
+            quote: "".to_string(),
         },
         copy_options: mt::CopyOptions {
             on_error: mt::OnErrorMode::SkipFileNum(666),
@@ -597,6 +654,7 @@ fn test_user_stage_fs_v6() -> anyhow::Result<()> {
             escape: "".to_string(),
             compression: mt::StageFileCompression::Bz2,
             row_tag: "".to_string(),
+            quote: "".to_string(),
         },
         copy_options: mt::CopyOptions {
             on_error: mt::OnErrorMode::SkipFileNum(666),
@@ -653,6 +711,7 @@ fn test_user_stage_s3_v6() -> anyhow::Result<()> {
             escape: "".to_string(),
             compression: mt::StageFileCompression::Bz2,
             row_tag: "".to_string(),
+            quote: "".to_string(),
         },
         copy_options: mt::CopyOptions {
             on_error: mt::OnErrorMode::SkipFileNum(666),
@@ -705,6 +764,7 @@ fn test_user_stage_gcs_v6() -> anyhow::Result<()> {
             escape: "".to_string(),
             compression: mt::StageFileCompression::Bz2,
             row_tag: "".to_string(),
+            quote: "".to_string(),
         },
         copy_options: mt::CopyOptions {
             on_error: mt::OnErrorMode::SkipFileNum(666),
@@ -750,6 +810,7 @@ fn test_user_stage_fs_v4() -> anyhow::Result<()> {
             escape: "".to_string(),
             compression: mt::StageFileCompression::Bz2,
             row_tag: "".to_string(),
+            quote: "".to_string(),
         },
         copy_options: mt::CopyOptions {
             on_error: mt::OnErrorMode::SkipFileNum(666),
@@ -806,6 +867,7 @@ fn test_user_stage_s3_v4() -> anyhow::Result<()> {
             escape: "".to_string(),
             compression: mt::StageFileCompression::Bz2,
             row_tag: "".to_string(),
+            quote: "".to_string(),
         },
         copy_options: mt::CopyOptions {
             on_error: mt::OnErrorMode::SkipFileNum(666),
@@ -857,6 +919,7 @@ fn test_user_stage_gcs_v4() -> anyhow::Result<()> {
             escape: "".to_string(),
             compression: mt::StageFileCompression::Bz2,
             row_tag: "".to_string(),
+            quote: "".to_string(),
         },
         copy_options: mt::CopyOptions {
             on_error: mt::OnErrorMode::SkipFileNum(666),
@@ -910,6 +973,7 @@ fn test_user_stage_s3_v1() -> anyhow::Result<()> {
             escape: "".to_string(),
             compression: mt::StageFileCompression::Bz2,
             row_tag: "".to_string(),
+            quote: "".to_string(),
         },
         copy_options: mt::CopyOptions {
             on_error: mt::OnErrorMode::SkipFileNum(666),
@@ -958,6 +1022,7 @@ fn test_internal_stage_v17() -> anyhow::Result<()> {
             escape: "".to_string(),
             compression: mt::StageFileCompression::Bz2,
             row_tag: "".to_string(),
+            quote: "".to_string(),
         },
         copy_options: mt::CopyOptions {
             on_error: mt::OnErrorMode::SkipFileNum(666),
@@ -1005,6 +1070,7 @@ fn test_user_stage_v18() -> anyhow::Result<()> {
             escape: "".to_string(),
             compression: mt::StageFileCompression::Bz2,
             row_tag: "".to_string(),
+            quote: "".to_string(),
         },
         copy_options: mt::CopyOptions {
             on_error: mt::OnErrorMode::SkipFileNum(666),

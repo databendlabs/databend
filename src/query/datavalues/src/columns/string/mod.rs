@@ -22,6 +22,7 @@ use common_arrow::arrow::array::*;
 use common_arrow::arrow::buffer::Buffer;
 use common_arrow::arrow::compute::cast::binary_to_large_binary;
 use common_arrow::arrow::datatypes::DataType as ArrowType;
+use common_arrow::arrow::offset::OffsetsBuffer;
 use common_arrow::arrow::types::Index;
 use common_arrow::ArrayRef;
 use common_io::prelude::BinaryWrite;
@@ -40,7 +41,7 @@ pub struct StringColumn {
 impl From<LargeBinaryArray> for StringColumn {
     fn from(array: LargeBinaryArray) -> Self {
         Self {
-            offsets: array.offsets().clone(),
+            offsets: array.offsets().clone().into_inner(),
             values: array.values().clone(),
         }
     }
@@ -49,7 +50,7 @@ impl From<LargeBinaryArray> for StringColumn {
 impl StringColumn {
     pub fn new(array: LargeBinaryArray) -> Self {
         Self {
-            offsets: array.offsets().clone(),
+            offsets: array.offsets().clone().into_inner(),
             values: array.values().clone(),
         }
     }
@@ -64,14 +65,24 @@ impl StringColumn {
 
         if arrow_type == &ArrowType::Utf8 {
             let arr = array.as_any().downcast_ref::<Utf8Array<i32>>().unwrap();
-            let iter = arr.values_iter();
-            return Self::new_from_iter(iter);
+            let offsets = arr
+                .offsets()
+                .buffer()
+                .iter()
+                .map(|x| *x as i64)
+                .collect::<Buffer<_>>();
+            return Self {
+                offsets,
+                values: arr.values().clone(),
+            };
         }
 
         if arrow_type == &ArrowType::LargeUtf8 {
             let arr = array.as_any().downcast_ref::<Utf8Array<i64>>().unwrap();
-            let iter = arr.values_iter();
-            return Self::new_from_iter(iter);
+            return Self {
+                offsets: arr.offsets().clone().into_inner(),
+                values: arr.values().clone(),
+            };
         }
 
         Self::new(
@@ -109,12 +120,13 @@ impl StringColumn {
 
     pub fn to_binary_array(&self) -> BinaryArray<i64> {
         unsafe {
-            BinaryArray::from_data_unchecked(
+            BinaryArray::try_new(
                 ArrowType::LargeBinary,
-                self.offsets.clone(),
+                OffsetsBuffer::new_unchecked(self.offsets.clone()),
                 self.values.clone(),
                 None,
             )
+            .unwrap()
         }
     }
 
@@ -156,12 +168,15 @@ impl Column for StringColumn {
     }
 
     fn as_arrow_array(&self, logical_type: DataTypeImpl) -> ArrayRef {
-        Box::new(LargeBinaryArray::from_data(
-            logical_type.arrow_type(),
-            self.offsets.clone(),
-            self.values.clone(),
-            None,
-        ))
+        Box::new(
+            LargeBinaryArray::try_new(
+                logical_type.arrow_type(),
+                unsafe { OffsetsBuffer::new_unchecked(self.offsets.clone()) },
+                self.values.clone(),
+                None,
+            )
+            .unwrap(),
+        )
     }
 
     fn arc(&self) -> ColumnRef {

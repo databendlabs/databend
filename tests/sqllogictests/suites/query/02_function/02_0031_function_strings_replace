@@ -1,0 +1,98 @@
+query T
+SELECT REPLACE(NULL, 'a', 'b')
+----
+NULL
+
+query T
+SELECT REPLACE('aaa', 'a', NULL)
+----
+NULL
+
+query T
+SELECT REPLACE('aaa', NULL, NULL)
+----
+NULL
+
+query T
+SELECT REPLACE(NULL, NULL, NULL)
+----
+NULL
+
+query T
+SELECT REPLACE('aaaa123aaa456aa7a', 'a', 'b')
+----
+bbbb123bbb456bb7b
+
+query T
+SELECT REPLACE('aaaa123aaa456aa7a', '', 'b')
+----
+aaaa123aaa456aa7a
+
+query T
+SELECT REPLACE('aaaa123aaa456aa7a', 'a', '')
+----
+1234567
+
+query T
+SELECT REPLACE('a1b', '1', to_varchar(number)) FROM numbers(5) ORDER BY number
+----
+a0b
+a1b
+a2b
+a3b
+a4b
+
+query T
+SELECT REPLACE('a1b', to_varchar(number), '7') FROM numbers(5) ORDER BY number
+----
+a1b
+a7b
+a1b
+a1b
+a1b
+
+query T
+SELECT REPLACE('a1b', to_varchar(number), to_varchar(number + 1)) FROM numbers(5) ORDER BY number
+----
+a1b
+a2b
+a1b
+a1b
+a1b
+
+query T
+SELECT REPLACE(to_varchar(number * 10), '0', '1') FROM numbers(5) ORDER BY number
+----
+1
+11
+21
+31
+41
+
+query T
+SELECT REPLACE(to_varchar(number * 10), '0', to_varchar(number)) FROM numbers(5) ORDER BY number
+----
+0
+11
+22
+33
+44
+
+query T
+SELECT REPLACE(to_varchar(number * 10), to_varchar(number), '1') FROM numbers(5) ORDER BY number
+----
+1
+10
+10
+10
+10
+
+query T
+SELECT REPLACE(to_varchar(number * 10), to_varchar(number), to_varchar(number)) FROM numbers(5) ORDER BY number
+----
+0
+10
+20
+30
+40
+

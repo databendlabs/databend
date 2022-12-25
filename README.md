@@ -29,7 +29,7 @@
 <br>
 
 <a href="https://github.com/datafuselabs/databend/actions">
-<img src="https://img.shields.io/github/workflow/status/datafuselabs/databend/Release" alt="CI Status" />
+<img src="https://img.shields.io/github/actions/workflow/status/datafuselabs/databend/databend-release.yml?branch=main" alt="CI Status" />
 </a>
 
 <img src="https://img.shields.io/badge/Platform-Linux%2C%20macOS%2C%20ARM-green.svg?style=flat" alt="Linux Platform" />
@@ -65,7 +65,7 @@ Databend uses the latest techniques in vectorized query processing to allow you 
   Databend leverages data-level parallelism(Vectorized Query Execution) and instruction-level parallelism(SIMD) technology, offering blazing performance data analytics.
 
 
-- __Git-like Storage__
+- __Git-like MVCC Storage__
 
   Databend stores data with snapshots. It's easy to query, clone, and restore historical data in tables.
 

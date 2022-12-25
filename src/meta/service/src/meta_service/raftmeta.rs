@@ -61,6 +61,7 @@ use common_meta_types::MetaOperationError;
 use common_meta_types::MetaStartupError;
 use common_meta_types::Node;
 use common_meta_types::NodeId;
+use futures::channel::oneshot;
 use itertools::Itertools;
 use openraft::Config;
 use openraft::LogId;
@@ -83,8 +84,11 @@ use crate::metrics::server_metrics;
 use crate::network::Network;
 use crate::store::RaftStore;
 use crate::store::RaftStoreBare;
-use crate::watcher::WatcherManager;
-use crate::watcher::WatcherStreamSender;
+use crate::watcher::DispatcherSender;
+use crate::watcher::EventDispatcher;
+use crate::watcher::EventDispatcherHandle;
+use crate::watcher::Watcher;
+use crate::watcher::WatcherSender;
 use crate::Opened;
 
 #[derive(serde::Serialize)]
@@ -123,7 +127,7 @@ pub type MetaRaft = Raft<LogEntry, AppliedState, Network, RaftStore>;
 // MetaNode is the container of meta data related components and threads, such as storage, the raft node and a raft-state monitor.
 pub struct MetaNode {
     pub sto: Arc<RaftStore>,
-    pub watcher: WatcherManager,
+    pub dispatcher_handle: EventDispatcherHandle,
     pub raft: MetaRaft,
     pub running_tx: watch::Sender<()>,
     pub running_rx: watch::Receiver<()>,
@@ -168,15 +172,15 @@ impl MetaNodeBuilder {
 
         let (tx, rx) = watch::channel::<()>(());
 
-        let watcher = WatcherManager::create();
+        let dispatcher_tx = EventDispatcher::spawn();
 
         sto.get_state_machine()
             .await
-            .set_subscriber(Box::new(watcher.subscriber.clone()));
+            .set_subscriber(Box::new(DispatcherSender(dispatcher_tx.clone())));
 
         let mn = Arc::new(MetaNode {
             sto: sto.clone(),
-            watcher,
+            dispatcher_handle: EventDispatcherHandle::new(dispatcher_tx),
             raft,
             running_tx: tx,
             running_rx: rx,
@@ -329,20 +333,18 @@ impl MetaNode {
         Ok(())
     }
 
-    /// Open or create a metasrv node.
-    /// Optionally boot a single node cluster.
+    /// Open or create a meta node.
     /// 1. If `open` is `Some`, try to open an existent one.
     /// 2. If `create` is `Some`, try to create an one in non-voter mode.
     #[tracing::instrument(level = "debug", skip_all)]
-    pub async fn open_create_boot(
+    pub async fn open_create(
         config: &RaftConfig,
         open: Option<()>,
         create: Option<()>,
-        initialize_cluster: Option<Node>,
     ) -> Result<Arc<MetaNode>, MetaStartupError> {
         info!(
-            "open_create_boot, config: {:?}, open: {:?}, create: {:?}, initialize_cluster: {:?}",
-            config, open, create, initialize_cluster
+            "open_create_boot, config: {:?}, open: {:?}, create: {:?}",
+            config, open, create
         );
 
         let mut config = config.clone();
@@ -371,10 +373,21 @@ impl MetaNode {
 
         info!("MetaNode started: {:?}", config);
 
-        // init_cluster with advertise_host other than listen_host
-        if mn.is_opened() {
-            return Ok(mn);
-        }
+        Ok(mn)
+    }
+
+    /// Open or create a metasrv node.
+    /// Optionally boot a single node cluster.
+    /// 1. If `open` is `Some`, try to open an existent one.
+    /// 2. If `create` is `Some`, try to create an one in non-voter mode.
+    #[tracing::instrument(level = "debug", skip_all)]
+    pub async fn open_create_boot(
+        config: &RaftConfig,
+        open: Option<()>,
+        create: Option<()>,
+        initialize_cluster: Option<Node>,
+    ) -> Result<Arc<MetaNode>, MetaStartupError> {
+        let mn = Self::open_create(config, open, create).await?;
 
         if let Some(node) = initialize_cluster {
             mn.init_cluster(node).await?;
@@ -718,28 +731,21 @@ impl MetaNode {
     async fn do_start(conf: &MetaConfig) -> Result<Arc<MetaNode>, MetaStartupError> {
         let raft_conf = &conf.raft_config;
 
-        let initialize_cluster = if raft_conf.single {
-            Some(conf.get_node())
-        } else {
-            None
-        };
-
         if raft_conf.single {
-            let mn = MetaNode::open_create_boot(raft_conf, Some(()), Some(()), initialize_cluster)
-                .await?;
+            let mn = MetaNode::open_create(raft_conf, Some(()), Some(())).await?;
+            mn.init_cluster(conf.get_node()).await?;
             return Ok(mn);
         }
 
         if !raft_conf.join.is_empty() {
             // Bring up a new node, join it into a cluster
 
-            let mn = MetaNode::open_create_boot(raft_conf, Some(()), Some(()), initialize_cluster)
-                .await?;
+            let mn = MetaNode::open_create(raft_conf, Some(()), Some(())).await?;
             return Ok(mn);
         }
         // open mode
 
-        let mn = MetaNode::open_create_boot(raft_conf, Some(()), None, initialize_cluster).await?;
+        let mn = MetaNode::open_create(raft_conf, Some(()), None).await?;
         Ok(mn)
     }
 
@@ -747,18 +753,21 @@ impl MetaNode {
     /// For every cluster this func should be called exactly once.
     #[tracing::instrument(level = "debug", skip(config), fields(config_id=config.raft_config.config_id.as_str()))]
     pub async fn boot(config: &MetaConfig) -> Result<Arc<MetaNode>, MetaStartupError> {
-        let mn =
-            Self::open_create_boot(&config.raft_config, None, Some(()), Some(config.get_node()))
-                .await?;
-
+        let mn = Self::open_create(&config.raft_config, None, Some(())).await?;
+        mn.init_cluster(config.get_node()).await?;
         Ok(mn)
     }
 
-    // Initialized a single node cluster by:
-    // - Initializing raft membership.
-    // - Adding current node into the meta data.
+    /// Initialized a single node cluster if this node is just created:
+    /// - Initializing raft membership.
+    /// - Adding current node into the meta data.
     #[tracing::instrument(level = "debug", skip(self))]
     pub async fn init_cluster(&self, node: Node) -> Result<(), MetaStartupError> {
+        if self.is_opened() {
+            info!("It is opened, skip initializing cluster");
+            return Ok(());
+        }
+
         let node_id = self.sto.id;
 
         let mut cluster_node_ids = BTreeSet::new();
@@ -1077,7 +1086,22 @@ impl MetaNode {
         Ok(resp)
     }
 
-    pub fn create_watcher_stream(&self, request: WatchRequest, tx: WatcherStreamSender) {
-        self.watcher.create_watcher_stream(request, tx)
+    pub(crate) async fn add_watcher(
+        &self,
+        request: WatchRequest,
+        tx: WatcherSender,
+    ) -> Result<Watcher, &'static str> {
+        let (resp_tx, resp_rx) = oneshot::channel();
+
+        self.dispatcher_handle.request(|d: &mut EventDispatcher| {
+            let add_res = d.add_watcher(request, tx);
+            let _ = resp_tx.send(add_res);
+        });
+
+        let recv_res = resp_rx.await;
+        match recv_res {
+            Ok(add_res) => add_res,
+            Err(_e) => Err("dispatcher closed"),
+        }
     }
 }

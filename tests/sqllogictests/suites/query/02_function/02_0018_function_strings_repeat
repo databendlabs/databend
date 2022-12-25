@@ -1,0 +1,170 @@
+statement ok
+drop table if exists strings_repeat_sample_u8 all
+
+statement ok
+drop table if exists strings_repeat_sample_u16 all
+
+statement ok
+drop table if exists strings_repeat_sample_u32 all
+
+statement ok
+drop table if exists strings_repeat_sample_u64 all
+
+statement ok
+CREATE TABLE strings_repeat_sample_u8(s String, n Uint8) Engine = Fuse
+
+statement ok
+CREATE TABLE strings_repeat_sample_u16 (s String, n Uint16) Engine = Fuse
+
+statement ok
+CREATE TABLE strings_repeat_sample_u32 (s String, n Uint32) Engine = Fuse
+
+statement ok
+CREATE TABLE strings_repeat_sample_u64 (s String, n Uint64) Engine = Fuse
+
+statement ok
+INSERT INTO strings_repeat_sample_u8 VALUES ('abc', 3), ('abc', 0)
+
+statement ok
+INSERT INTO strings_repeat_sample_u16 VALUES ('abc', 3), ('abc', 0)
+
+statement ok
+INSERT INTO strings_repeat_sample_u32 VALUES ('abc', 3), ('abc', 0)
+
+statement ok
+INSERT INTO strings_repeat_sample_u64 VALUES ('abc', 3), ('abc', 0)
+
+query T
+select repeat(s, n) from strings_repeat_sample_u8
+----
+abcabcabc
+(empty)
+
+query T
+select repeat(s, n) from strings_repeat_sample_u16
+----
+abcabcabc
+(empty)
+
+query T
+select repeat(s, n) from strings_repeat_sample_u32
+----
+abcabcabc
+(empty)
+
+query T
+select repeat(s, n) from strings_repeat_sample_u64
+----
+abcabcabc
+(empty)
+
+statement ok
+drop table strings_repeat_sample_u8
+
+statement ok
+drop table strings_repeat_sample_u16
+
+statement ok
+drop table strings_repeat_sample_u32
+
+statement ok
+drop table strings_repeat_sample_u64
+
+query T
+select repeat('abc', 3)
+----
+abcabcabc
+
+statement ok
+select repeat('abc', 0)
+
+statement ok
+drop table if exists strings_repeat_sample_2_u8
+
+statement ok
+CREATE TABLE strings_repeat_sample_2_u8(n Uint8) Engine = Fuse
+
+statement ok
+drop table if exists strings_repeat_sample_2_u16
+
+statement ok
+CREATE TABLE strings_repeat_sample_2_u16 (n Uint16) Engine = Fuse
+
+statement ok
+drop table if exists strings_repeat_sample_2_u32
+
+statement ok
+CREATE TABLE strings_repeat_sample_2_u32 (n Uint32) Engine = Fuse
+
+statement ok
+drop table if exists strings_repeat_sample_2_u64
+
+statement ok
+CREATE TABLE strings_repeat_sample_2_u64 (n Uint64) Engine = Fuse
+
+statement ok
+INSERT INTO strings_repeat_sample_2_u8 VALUES (3), (0)
+
+statement ok
+INSERT INTO strings_repeat_sample_2_u16 VALUES (3), (0)
+
+statement ok
+INSERT INTO strings_repeat_sample_2_u32 VALUES (3), (0)
+
+statement ok
+INSERT INTO strings_repeat_sample_2_u64 VALUES (3), (0)
+
+query T
+select repeat('abc', n) from strings_repeat_sample_2_u8
+----
+abcabcabc
+(empty)
+
+query T
+select repeat('abc', n) from strings_repeat_sample_2_u16
+----
+abcabcabc
+(empty)
+
+query T
+select repeat('abc', n) from strings_repeat_sample_2_u32
+----
+abcabcabc
+(empty)
+
+query T
+select repeat('abc', n) from strings_repeat_sample_2_u64
+----
+abcabcabc
+(empty)
+
+statement ok
+drop table strings_repeat_sample_2_u8
+
+statement ok
+drop table strings_repeat_sample_2_u16
+
+statement ok
+drop table strings_repeat_sample_2_u32
+
+statement ok
+drop table strings_repeat_sample_2_u64
+
+statement ok
+CREATE TABLE strings_repeat_sample_3(s String) Engine = Fuse
+
+statement ok
+INSERT INTO strings_repeat_sample_3 VALUES ('abc'), ('def')
+
+query T
+select repeat(s, 3) from strings_repeat_sample_3
+----
+abcabcabc
+defdefdef
+
+statement ok
+select repeat(s, 0) from strings_repeat_sample_3
+
+statement ok
+drop table strings_repeat_sample_3
+

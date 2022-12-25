@@ -1,0 +1,65 @@
+statement ok
+drop table if exists test
+
+query I
+SELECT 42 HAVING 42 > 20
+----
+42
+
+statement ok
+SELECT 42 HAVING 42 > 80
+
+query I
+SELECT SUM(42) HAVING AVG(42) > MIN(20)
+----
+42
+
+statement ok
+SELECT SUM(42) HAVING SUM(42) > SUM(80)
+
+query II
+SELECT SUM(42)+COUNT(*)+COUNT(1), 3 HAVING SUM(42)+MAX(20)+AVG(30) > SUM(120)-MIN(100)
+----
+44 3
+
+statement ok
+SELECT SUM(42) HAVING (SELECT SUM(42)) > SUM(80)
+
+statement ok
+CREATE TABLE test (a INTEGER, b INTEGER)
+
+statement ok
+INSERT INTO test VALUES (11, 22), (13, 22), (12, 21)
+
+query I
+SELECT a FROM test WHERE a=13 HAVING a > 11
+----
+13
+
+statement error 1065
+SELECT a FROM test WHERE a=13 HAVING SUM(a) > 11
+
+query I
+SELECT SUM(a) FROM test WHERE a=13 HAVING SUM(a) > 11
+----
+13
+
+statement ok
+SELECT SUM(a) FROM test WHERE a=13 HAVING SUM(a) > 20
+
+query I
+SELECT SUM(a) FROM test HAVING SUM(a)>10
+----
+36
+
+statement ok
+SELECT SUM(a) FROM test HAVING SUM(a)<10
+
+query I
+SELECT SUM(a) FROM test HAVING COUNT(*)>1
+----
+36
+
+statement ok
+SELECT SUM(a) FROM test HAVING COUNT(*)>10
+

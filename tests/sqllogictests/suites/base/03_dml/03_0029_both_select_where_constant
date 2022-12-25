@@ -1,0 +1,41 @@
+## issue 7949
+
+statement ok
+DROP DATABASE IF EXISTS db1
+
+statement ok
+CREATE DATABASE db1
+
+statement ok
+USE db1
+
+statement ok
+create table if not exists t_issue_7949 (a int)
+
+statement ok
+insert into t_issue_7949 select * from numbers(3)
+
+query I
+select 1 from t_issue_7949 where 1
+----
+1
+1
+1
+
+query I
+select 1 from t_issue_7949 where 0
+----
+
+query I
+select 1 from t_issue_7949 where true
+----
+1
+1
+1
+
+query I
+select 1 from t_issue_7949 where false
+----
+
+statement ok
+drop table t_issue_7949

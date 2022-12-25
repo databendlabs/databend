@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_base::base::Thread;
+use common_base::runtime::Thread;
 use common_exception::ErrorCode;
 use common_exception::Result;
 

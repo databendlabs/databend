@@ -57,46 +57,6 @@ use wiremock::Mock;
 use wiremock::MockServer;
 use wiremock::ResponseTemplate;
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_system_tables() -> Result<()> {
-    let mut mint = Mint::new("tests/it/storages/testdata");
-    let file = &mut mint.new_goldenfile("system-tables.txt").unwrap();
-
-    // with goldenfile
-    test_columns_table(file).await.unwrap();
-    test_configs_table(file).await.unwrap();
-    test_catalogs_table(file).await.unwrap();
-    test_databases_table(file).await.unwrap();
-    test_engines_table(file).await.unwrap();
-    test_roles_table(file).await.unwrap();
-    test_settings_table(file).await.unwrap();
-    test_users_table(file).await.unwrap();
-
-    // with assert_eq
-    test_clusters_table()
-        .await
-        .expect("test_clusters_table must succeed");
-    test_contributors_table()
-        .await
-        .expect("test_contributors_table must succeed");
-    test_credits_table()
-        .await
-        .expect("test_credits_table must succeed");
-    test_functions_table()
-        .await
-        .expect("test_functions_table must succeed");
-    test_metrics_table()
-        .await
-        .expect("test_metrics_table must succeed");
-    test_tables_table()
-        .await
-        .expect("test_tables_table must succeed");
-    test_tracing_table()
-        .await
-        .expect("test_tracing_table must succeed");
-    Ok(())
-}
-
 async fn run_table_tests(
     file: &mut impl Write,
     ctx: Arc<QueryContext>,
@@ -119,8 +79,11 @@ async fn run_table_tests(
     }
     writeln!(file, "-------- TABLE CONTENTS ----------").unwrap();
     if table_info.name.to_lowercase() == "settings" {
-        actual_lines
-            .retain(|&item| !(item.contains("max_threads") || item.contains("max_memory_usage")));
+        actual_lines.retain(|&item| {
+            !(item.contains("max_threads")
+                || item.contains("max_memory_usage")
+                || item.contains("max_storage_io_requests"))
+        });
     }
     for line in actual_lines {
         writeln!(file, "{}", line).unwrap();
@@ -129,6 +92,19 @@ async fn run_table_tests(
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn test_columns_table() -> Result<()> {
+    let (_guard, ctx) = crate::tests::create_query_context().await?;
+
+    let mut mint = Mint::new("tests/it/storages/testdata");
+    let file = &mut mint.new_goldenfile("columns_table.txt").unwrap();
+    let table = ColumnsTable::create(1);
+
+    run_table_tests(file, ctx, table).await?;
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn test_clusters_table() -> Result<()> {
     let (_guard, ctx) = crate::tests::create_query_context().await?;
     let table = ClustersTable::create(1);
@@ -143,62 +119,61 @@ async fn test_clusters_table() -> Result<()> {
     Ok(())
 }
 
-async fn test_columns_table(file: &mut impl Write) -> Result<()> {
-    let (_guard, ctx) = crate::tests::create_query_context().await?;
-    let table = ColumnsTable::create(1);
+#[tokio::test(flavor = "multi_thread")]
+async fn test_configs_table_basic() -> Result<()> {
+    let mut mint = Mint::new("tests/it/storages/testdata");
+    let file = &mut mint.new_goldenfile("configs_table_basic.txt").unwrap();
+
+    let conf = crate::tests::ConfigBuilder::create().config();
+    let (_guard, ctx) = crate::tests::create_query_context_with_config(conf, None).await?;
+    ctx.get_settings().set_max_threads(8)?;
+
+    let table = ConfigsTable::create(1);
 
     run_table_tests(file, ctx, table).await?;
-    Ok(())
-}
-
-async fn test_configs_table(file: &mut impl Write) -> Result<()> {
-    // test_configs_table_basic
-    {
-        let conf = crate::tests::ConfigBuilder::create().config();
-        let (_guard, ctx) = crate::tests::create_query_context_with_config(conf, None).await?;
-        ctx.get_settings().set_max_threads(8)?;
-
-        let table = ConfigsTable::create(1);
-
-        run_table_tests(file, ctx, table).await?;
-    }
-
-    // test_configs_table_redact
-    {
-        let mock_server = MockServer::builder().start().await;
-        Mock::given(method("HEAD"))
-            .and(path("/test/.opendal"))
-            .respond_with(ResponseTemplate::new(404))
-            .mount(&mock_server)
-            .await;
-
-        let mut conf = crate::tests::ConfigBuilder::create().build();
-        conf.storage.params = StorageParams::S3(StorageS3Config {
-            region: "us-east-2".to_string(),
-            endpoint_url: mock_server.uri(),
-            bucket: "test".to_string(),
-            access_key_id: "access_key_id".to_string(),
-            secret_access_key: "secret_access_key".to_string(),
-            ..Default::default()
-        });
-
-        let (_guard, ctx) = crate::tests::create_query_context_with_config(conf, None).await?;
-        ctx.get_settings().set_max_threads(8)?;
-
-        let table = ConfigsTable::create(1);
-        let source_plan = table.read_plan(ctx.clone(), None).await?;
-
-        let stream = table.read_data_block_stream(ctx, &source_plan).await?;
-        let result = stream.try_collect::<Vec<_>>().await?;
-        let block = &result[0];
-        assert_eq!(block.num_columns(), 4);
-        // need a method to skip/edit endpoint_url
-        // run_table_tests(file, ctx, table).await?;
-    }
 
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn test_configs_table_redact() -> Result<()> {
+    let mut mint = Mint::new("tests/it/storages/testdata");
+    let _file = &mut mint.new_goldenfile("configs_table_redact.txt").unwrap();
+
+    let mock_server = MockServer::builder().start().await;
+    Mock::given(method("HEAD"))
+        .and(path("/test/.opendal"))
+        .respond_with(ResponseTemplate::new(404))
+        .mount(&mock_server)
+        .await;
+
+    let mut conf = crate::tests::ConfigBuilder::create().build();
+    conf.storage.params = StorageParams::S3(StorageS3Config {
+        region: "us-east-2".to_string(),
+        endpoint_url: mock_server.uri(),
+        bucket: "test".to_string(),
+        access_key_id: "access_key_id".to_string(),
+        secret_access_key: "secret_access_key".to_string(),
+        ..Default::default()
+    });
+
+    let (_guard, ctx) = crate::tests::create_query_context_with_config(conf, None).await?;
+    ctx.get_settings().set_max_threads(8)?;
+
+    let table = ConfigsTable::create(1);
+    let source_plan = table.read_plan(ctx.clone(), None).await?;
+
+    let stream = table.read_data_block_stream(ctx, &source_plan).await?;
+    let result = stream.try_collect::<Vec<_>>().await?;
+    let block = &result[0];
+    assert_eq!(block.num_columns(), 4);
+    // need a method to skip/edit endpoint_url
+    // run_table_tests(file, ctx, table).await?;
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn test_contributors_table() -> Result<()> {
     let (_guard, ctx) = crate::tests::create_query_context().await?;
     let table = ContributorsTable::create(1);
@@ -211,6 +186,7 @@ async fn test_contributors_table() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread")]
 async fn test_credits_table() -> Result<()> {
     let (_guard, ctx) = crate::tests::create_query_context().await?;
     let table = CreditsTable::create(1);
@@ -223,7 +199,11 @@ async fn test_credits_table() -> Result<()> {
     Ok(())
 }
 
-async fn test_catalogs_table(file: &mut impl Write) -> Result<()> {
+#[tokio::test(flavor = "multi_thread")]
+async fn test_catalogs_table() -> Result<()> {
+    let mut mint = Mint::new("tests/it/storages/testdata");
+    let file = &mut mint.new_goldenfile("catalogs_table.txt").unwrap();
+
     let (_guard, ctx) = crate::tests::create_query_context().await?;
     let table = CatalogsTable::create(1);
 
@@ -231,22 +211,31 @@ async fn test_catalogs_table(file: &mut impl Write) -> Result<()> {
     Ok(())
 }
 
-async fn test_databases_table(file: &mut impl Write) -> Result<()> {
+#[tokio::test(flavor = "multi_thread")]
+async fn test_databases_table() -> Result<()> {
     let (_guard, ctx) = crate::tests::create_query_context().await?;
     let table = DatabasesTable::create(1);
 
+    let mut mint = Mint::new("tests/it/storages/testdata");
+    let file = &mut mint.new_goldenfile("databases_table.txt").unwrap();
+
     run_table_tests(file, ctx, table).await?;
     Ok(())
 }
 
-async fn test_engines_table(file: &mut impl Write) -> Result<()> {
+#[tokio::test(flavor = "multi_thread")]
+async fn test_engines_table() -> Result<()> {
     let (_guard, ctx) = crate::tests::create_query_context().await?;
     let table = EnginesTable::create(1);
 
+    let mut mint = Mint::new("tests/it/storages/testdata");
+    let file = &mut mint.new_goldenfile("engines_table.txt").unwrap();
+
     run_table_tests(file, ctx, table).await?;
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread")]
 async fn test_functions_table() -> Result<()> {
     let (_guard, ctx) = crate::tests::create_query_context().await?;
     let table = FunctionsTable::create(1);
@@ -259,6 +248,7 @@ async fn test_functions_table() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread")]
 async fn test_metrics_table() -> Result<()> {
     init_default_metrics_recorder();
     let (_guard, ctx) = crate::tests::create_query_context().await?;
@@ -281,7 +271,11 @@ async fn test_metrics_table() -> Result<()> {
     Ok(())
 }
 
-async fn test_roles_table(file: &mut impl Write) -> Result<()> {
+#[tokio::test(flavor = "multi_thread")]
+async fn test_roles_table() -> Result<()> {
+    let mut mint = Mint::new("tests/it/storages/testdata");
+    let file = &mut mint.new_goldenfile("roles_table.txt").unwrap();
+
     let (_guard, ctx) = crate::tests::create_query_context().await?;
     let tenant = ctx.get_tenant();
     ctx.get_settings().set_max_threads(2)?;
@@ -306,7 +300,11 @@ async fn test_roles_table(file: &mut impl Write) -> Result<()> {
     Ok(())
 }
 
-async fn test_settings_table(file: &mut impl Write) -> Result<()> {
+#[tokio::test(flavor = "multi_thread")]
+async fn test_settings_table() -> Result<()> {
+    let mut mint = Mint::new("tests/it/storages/testdata");
+    let file = &mut mint.new_goldenfile("settings_table.txt").unwrap();
+
     let (_guard, ctx) = crate::tests::create_query_context().await?;
     ctx.get_settings().set_max_threads(2)?;
     ctx.get_settings().set_max_memory_usage(1073741824)?;
@@ -317,6 +315,7 @@ async fn test_settings_table(file: &mut impl Write) -> Result<()> {
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread")]
 async fn test_tables_table() -> Result<()> {
     let (_guard, ctx) = crate::tests::create_query_context().await?;
     let table = TablesTableWithoutHistory::create(1);
@@ -325,13 +324,13 @@ async fn test_tables_table() -> Result<()> {
     let stream = table.read_data_block_stream(ctx, &source_plan).await?;
     let result = stream.try_collect::<Vec<_>>().await?;
     let block = &result[0];
-    assert_eq!(block.num_columns(), 10);
+    assert_eq!(block.num_columns(), 11);
 
     // check column "dropped_on"
     for x in &result {
         for row in 0..x.num_rows() {
-            // index of column dropped_on is 5
-            let column = x.column(5);
+            // index of column dropped_on is 6
+            let column = x.column(6);
             let str = column.get_checked(row)?.to_string();
             // All of them should be NULL
             assert_eq!("NULL", str)
@@ -345,38 +344,38 @@ async fn test_tables_table() -> Result<()> {
     }
 
     let expected = vec![
-        r"\+--------------------\+---------------------\+--------------------\+------------\+-------------------------------\+----------\+-----------\+----------------------\+------------\+",
-        r"\| database           \| name                \| engine             \| cluster_by \| created_on                    \| num_rows \| data_size \| data_compressed_size \| index_size \|",
-        r"\+--------------------\+---------------------\+--------------------\+------------\+-------------------------------\+----------\+-----------\+----------------------\+------------\+",
-        r"\| information_schema \| columns             \| VIEW               \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
-        r"\| information_schema \| keywords            \| VIEW               \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
-        r"\| information_schema \| schemata            \| VIEW               \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
-        r"\| information_schema \| tables              \| VIEW               \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
-        r"\| information_schema \| views               \| VIEW               \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
-        r"\| system             \| catalogs            \| SystemCatalogs     \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
-        r"\| system             \| clustering_history  \| SystemLogTable     \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
-        r"\| system             \| clusters            \| SystemClusters     \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
-        r"\| system             \| columns             \| SystemColumns      \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
-        r"\| system             \| configs             \| SystemConfigs      \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
-        r"\| system             \| malloc_stats        \| SystemMetrics      \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
-        r"\| system             \| malloc_stats_totals \| SystemMetrics      \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
-        r"\| system             \| contributors        \| SystemContributors \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
-        r"\| system             \| credits             \| SystemCredits      \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
-        r"\| system             \| databases           \| SystemDatabases    \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
-        r"\| system             \| engines             \| SystemEngines      \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
-        r"\| system             \| functions           \| SystemFunctions    \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
-        r"\| system             \| metrics             \| SystemMetrics      \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
-        r"\| system             \| one                 \| SystemOne          \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
-        r"\| system             \| processes           \| SystemProcesses    \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
-        r"\| system             \| query_log           \| SystemLogTable     \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
-        r"\| system             \| roles               \| SystemRoles        \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
-        r"\| system             \| settings            \| SystemSettings     \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
-        r"\| system             \| stages              \| SystemStages       \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
-        r"\| system             \| tables              \| SystemTables       \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
-        r"\| system             \| tables_with_history \| SystemTables       \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
-        r"\| system             \| tracing             \| SystemTracing      \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
-        r"\| system             \| users               \| SystemUsers        \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
-        r"\+--------------------\+---------------------\+--------------------\+------------\+-------------------------------\+----------\+-----------\+----------------------\+------------\+",
+        r"\+---------\+--------------------\+---------------------\+--------------------\+------------\+-------------------------------\+----------\+-----------\+----------------------\+------------\+",
+        r"\| catalog \| database           \| name                \| engine             \| cluster_by \| created_on                    \| num_rows \| data_size \| data_compressed_size \| index_size \|",
+        r"\+---------\+--------------------\+---------------------\+--------------------\+------------\+-------------------------------\+----------\+-----------\+----------------------\+------------\+",
+        r"\| default \| information_schema \| columns             \| VIEW               \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
+        r"\| default \| information_schema \| keywords            \| VIEW               \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
+        r"\| default \| information_schema \| schemata            \| VIEW               \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
+        r"\| default \| information_schema \| tables              \| VIEW               \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
+        r"\| default \| information_schema \| views               \| VIEW               \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
+        r"\| default \| system             \| catalogs            \| SystemCatalogs     \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
+        r"\| default \| system             \| clustering_history  \| SystemLogTable     \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
+        r"\| default \| system             \| clusters            \| SystemClusters     \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
+        r"\| default \| system             \| columns             \| SystemColumns      \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
+        r"\| default \| system             \| configs             \| SystemConfigs      \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
+        r"\| default \| system             \| malloc_stats        \| SystemMetrics      \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
+        r"\| default \| system             \| malloc_stats_totals \| SystemMetrics      \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
+        r"\| default \| system             \| contributors        \| SystemContributors \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
+        r"\| default \| system             \| credits             \| SystemCredits      \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
+        r"\| default \| system             \| databases           \| SystemDatabases    \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
+        r"\| default \| system             \| engines             \| SystemEngines      \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
+        r"\| default \| system             \| functions           \| SystemFunctions    \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
+        r"\| default \| system             \| metrics             \| SystemMetrics      \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
+        r"\| default \| system             \| one                 \| SystemOne          \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
+        r"\| default \| system             \| processes           \| SystemProcesses    \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
+        r"\| default \| system             \| query_log           \| SystemLogTable     \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
+        r"\| default \| system             \| roles               \| SystemRoles        \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
+        r"\| default \| system             \| settings            \| SystemSettings     \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
+        r"\| default \| system             \| stages              \| SystemStages       \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
+        r"\| default \| system             \| tables              \| SystemTables       \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
+        r"\| default \| system             \| tables_with_history \| SystemTables       \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
+        r"\| default \| system             \| tracing             \| SystemTracing      \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
+        r"\| default \| system             \| users               \| SystemUsers        \|            \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \| NULL     \| NULL      \| NULL                 \| NULL       \|",
+        r"\+---------\+--------------------\+---------------------\+--------------------\+------------\+-------------------------------\+----------\+-----------\+----------------------\+------------\+",
     ];
     common_datablocks::assert_blocks_sorted_eq_with_regex(expected, without_dropped.as_slice());
     // may need a method to work with regex
@@ -384,6 +383,7 @@ async fn test_tables_table() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread")]
 async fn test_tracing_table() -> Result<()> {
     let (_guard, ctx) = crate::tests::create_query_context().await?;
     let table: Arc<dyn Table> = Arc::new(TracingTable::create(1));
@@ -398,7 +398,11 @@ async fn test_tracing_table() -> Result<()> {
     Ok(())
 }
 
-async fn test_users_table(file: &mut impl Write) -> Result<()> {
+#[tokio::test(flavor = "multi_thread")]
+async fn test_users_table() -> Result<()> {
+    let mut mint = Mint::new("tests/it/storages/testdata");
+    let file = &mut mint.new_goldenfile("users_table.txt").unwrap();
+
     let (_guard, ctx) = crate::tests::create_query_context().await?;
     let tenant = ctx.get_tenant();
     ctx.get_settings().set_max_threads(2)?;

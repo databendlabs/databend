@@ -1,0 +1,33 @@
+statement ok
+use default
+
+statement ok
+drop table if exists t1 all
+
+statement ok
+create table t1(a integer, b integer, c integer, d integer, e integer)
+
+statement ok
+insert into t1(e,c,b,d,a) values(103,102,100,101,104)
+
+statement ok
+insert into t1(a,c,d,e,b) values(107,106,108,109,105)
+
+query IIIII
+select c as col1,
+       abs(d-e) as col2,
+       case a+1 when b then 111 when c then 222
+        when d then 333  when e then 444 else 555 end as col3,
+       a+b*2+c*3+d*4 as col4,
+       e as col5
+from t1
+where d not between 110 and 150
+    or c between b-2 and d+2
+    or (e>c or e<d)
+order by col1,col5,col3,col2,col4
+----
+102     2   555  1014   103
+106     1   333  1067   109
+
+statement ok
+drop table if exists t1 all

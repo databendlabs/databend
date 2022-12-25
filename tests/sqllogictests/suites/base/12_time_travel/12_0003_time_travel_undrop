@@ -1,0 +1,124 @@
+statement ok
+DROP DATABASE IF EXISTS db_12_0003
+
+statement ok
+CREATE DATABASE db_12_0003
+
+statement ok
+USE db_12_0003
+
+statement ok
+CREATE TABLE t(c1 int)
+
+statement ok
+DROP TABLE t
+
+statement ok
+SHOW TABLES
+
+statement ok
+UNDROP TABLE t
+
+query T
+SHOW TABLES
+----
+t
+
+statement ok
+insert into t values(1), (2)
+
+statement ok
+DROP TABLE t
+
+statement ok
+UNDROP TABLE t
+
+query I
+select * from t
+----
+1
+2
+
+statement ok
+DROP TABLE t
+
+statement ok
+CREATE TABLE t(c1 int, c2 int)
+
+statement ok
+INSERT INTO t VALUES(1, 2)
+
+statement ok
+DROP TABLE t
+
+statement ok
+UNDROP TABLE t
+
+query I
+SELECT count(1) FROM t
+----
+1
+
+statement ok
+ALTER TABLE t RENAME TO t1
+
+statement ok
+UNDROP TABLE t
+
+query I
+SELECT count(1) FROM t
+----
+2
+
+statement ok
+DROP TABLE t
+
+statement ok
+DROP database db_12_0003
+
+statement ok
+UNDROP database db_12_0003
+
+statement ok
+USE db_12_0003
+
+query T
+SHOW TABLES
+----
+t1
+
+query I
+SELECT count(1) FROM t1
+----
+1
+
+statement ok
+UNDROP TABLE t
+
+query I
+SELECT count(1) FROM t
+----
+2
+
+statement ok
+DROP TABLE t
+
+statement ok
+CREATE TABLE t(c int)
+
+statement ok
+INSERT INTO t values(1)
+
+statement ok
+DROP TABLE t ALL
+
+statement ok
+UNDROP TABLE t
+
+query I
+SELECT count(*) FROM t
+----
+0
+
+statement ok
+DROP database db_12_0003

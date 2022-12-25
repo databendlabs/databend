@@ -52,7 +52,7 @@ use crate::storages::fuse::table_test_fixture::execute_command;
 use crate::storages::fuse::table_test_fixture::execute_query;
 use crate::storages::fuse::table_test_fixture::TestFixture;
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_compact_segment_normal_case() -> Result<()> {
     let fixture = TestFixture::new().await;
     let ctx = fixture.ctx();
@@ -94,7 +94,7 @@ async fn test_compact_segment_normal_case() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_compact_segment_resolvable_conflict() -> Result<()> {
     let fixture = TestFixture::new().await;
     let ctx = fixture.ctx();
@@ -151,7 +151,7 @@ async fn test_compact_segment_resolvable_conflict() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_compact_segment_unresolvable_conflict() -> Result<()> {
     let fixture = TestFixture::new().await;
     let ctx = fixture.ctx();
@@ -250,7 +250,7 @@ async fn build_mutator(
     }
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_segment_compactor() -> Result<()> {
     let fixture = TestFixture::new().await;
     let ctx = fixture.ctx();
@@ -632,7 +632,7 @@ impl CompactSegmentTestFixture {
         limit: Option<usize>,
     ) -> Result<SegmentCompactionState> {
         let block_per_seg = self.threshold;
-        let data_accessor = &self.data_accessor;
+        let data_accessor = &self.data_accessor.operator();
         let location_gen = &self.location_gen;
         let block_writer = BlockWriter::new(data_accessor, location_gen);
 
@@ -667,7 +667,14 @@ impl CompactSegmentTestFixture {
 
                 let mut block_statistics =
                     BlockStatistics::from(&block, "".to_owned(), None, None)?;
-                let block_meta = block_writer.write(block, col_stats, None).await?;
+                let block_meta = block_writer
+                    .write(
+                        common_storages_fuse::FuseStorageFormat::Parquet,
+                        block,
+                        col_stats,
+                        None,
+                    )
+                    .await?;
                 block_statistics.block_file_location = block_meta.location.0.clone();
 
                 collected_blocks.push(block_meta.clone());

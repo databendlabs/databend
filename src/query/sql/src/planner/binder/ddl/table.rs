@@ -40,6 +40,7 @@ use common_ast::ast::Statement;
 use common_ast::ast::TableReference;
 use common_ast::ast::TruncateTableStmt;
 use common_ast::ast::UndropTableStmt;
+use common_ast::ast::UriLocation;
 use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
 use common_ast::walk_expr_mut;
@@ -54,13 +55,14 @@ use common_datavalues::TypeFactory;
 use common_datavalues::Vu8;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_storage::parse_uri_location;
 use common_storage::DataOperator;
-use common_storage::UriLocation;
 use common_storages_table_meta::table::is_reserved_opt_key;
 use common_storages_table_meta::table::OPT_KEY_DATABASE_ID;
+use common_storages_view::view_table::QUERY;
+use common_storages_view::view_table::VIEW_ENGINE;
 use tracing::debug;
 
+use crate::binder::location::parse_uri_location;
 use crate::binder::scalar::ScalarBinder;
 use crate::binder::Binder;
 use crate::binder::Visibility;
@@ -91,6 +93,7 @@ use crate::plans::TruncateTablePlan;
 use crate::plans::UndropTablePlan;
 use crate::BindContext;
 use crate::ColumnBinding;
+use crate::Planner;
 use crate::ScalarExpr;
 use crate::SelectBuilder;
 
@@ -101,6 +104,7 @@ impl<'a> Binder {
         stmt: &ShowTablesStmt<'a>,
     ) -> Result<Plan> {
         let ShowTablesStmt {
+            catalog,
             database,
             full,
             limit,
@@ -117,9 +121,10 @@ impl<'a> Binder {
 
         if *full {
             select_builder
-                .with_column(format!("name AS Tables_in_{database}"))
+                .with_column("name AS Tables")
                 .with_column("'BASE TABLE' AS Table_type")
-                .with_column("database AS table_catalog")
+                .with_column("database AS Database")
+                .with_column("catalog AS Catalog")
                 .with_column("engine")
                 .with_column("created_on AS create_time");
             if *with_history {
@@ -139,10 +144,16 @@ impl<'a> Binder {
         }
 
         select_builder
+            .with_order_by("catalog")
             .with_order_by("database")
             .with_order_by("name");
 
         select_builder.with_filter(format!("database = '{database}'"));
+
+        if let Some(catalog) = catalog {
+            let catalog = normalize_identifier(catalog, &self.name_resolution_ctx).name;
+            select_builder.with_filter(format!("catalog = '{catalog}'"));
+        }
 
         let query = match limit {
             None => select_builder.build(),
@@ -336,7 +347,7 @@ impl<'a> Binder {
                 let (sp, _) = parse_uri_location(&uri)?;
 
                 // create a temporary op to check if params is correct
-                DataOperator::try_create_with_storage_params(&sp).await?;
+                DataOperator::try_create(&sp).await?;
 
                 Some(sp)
             }
@@ -728,13 +739,14 @@ impl<'a> Binder {
 
     pub(in crate::planner::binder) async fn bind_optimize_table(
         &mut self,
+        bind_context: &BindContext,
         stmt: &OptimizeTableStmt<'a>,
     ) -> Result<Plan> {
         let OptimizeTableStmt {
             catalog,
             database,
             table,
-            action,
+            action: ast_action,
         } = stmt;
 
         let catalog = catalog
@@ -746,29 +758,33 @@ impl<'a> Binder {
             .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
             .unwrap_or_else(|| self.ctx.get_current_database());
         let table = normalize_identifier(table, &self.name_resolution_ctx).name;
-        let action = if let Some(ast_action) = action {
-            match ast_action {
-                AstOptimizeTableAction::All => OptimizeTableAction::All,
-                AstOptimizeTableAction::Purge => OptimizeTableAction::Purge,
-                AstOptimizeTableAction::Compact { target, limit } => {
-                    let limit_cnt = match limit {
-                        Some(Expr::Literal {
-                            lit: Literal::Integer(uint),
-                            ..
-                        }) => Some(*uint as usize),
-                        Some(_) => {
-                            return Err(ErrorCode::IllegalDataType("Unsupported limit type"));
-                        }
-                        _ => None,
-                    };
-                    match target {
-                        CompactTarget::Block => OptimizeTableAction::CompactBlocks(limit_cnt),
-                        CompactTarget::Segment => OptimizeTableAction::CompactSegments(limit_cnt),
+        let action = match ast_action {
+            AstOptimizeTableAction::All => OptimizeTableAction::All,
+            AstOptimizeTableAction::Purge { before } => {
+                let p = if let Some(point) = before {
+                    let point = self.resolve_data_travel_point(bind_context, point).await?;
+                    Some(point)
+                } else {
+                    None
+                };
+                OptimizeTableAction::Purge(p)
+            }
+            AstOptimizeTableAction::Compact { target, limit } => {
+                let limit_cnt = match limit {
+                    Some(Expr::Literal {
+                        lit: Literal::Integer(uint),
+                        ..
+                    }) => Some(*uint as usize),
+                    Some(_) => {
+                        return Err(ErrorCode::IllegalDataType("Unsupported limit type"));
                     }
+                    _ => None,
+                };
+                match target {
+                    CompactTarget::Block => OptimizeTableAction::CompactBlocks(limit_cnt),
+                    CompactTarget::Segment => OptimizeTableAction::CompactSegments(limit_cnt),
                 }
             }
-        } else {
-            OptimizeTableAction::Purge
         };
 
         Ok(Plan::OptimizeTable(Box::new(OptimizeTablePlan {
@@ -894,7 +910,15 @@ impl<'a> Binder {
                 );
                 let table_name = normalize_identifier(table, &self.name_resolution_ctx).name;
                 let table = self.ctx.get_table(&catalog, &database, &table_name).await?;
-                Ok((table.schema(), vec![], table.field_comments().clone()))
+
+                if table.engine() == VIEW_ENGINE {
+                    let query = table.get_table_info().options().get(QUERY).unwrap();
+                    let mut planner = Planner::new(self.ctx.clone());
+                    let (plan, _, _) = planner.plan_sql(query).await?;
+                    Ok((plan.schema(), vec![], vec![]))
+                } else {
+                    Ok((table.schema(), vec![], table.field_comments().clone()))
+                }
             }
         }
     }

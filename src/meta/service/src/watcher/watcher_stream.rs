@@ -12,41 +12,54 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::ops::Range;
+use std::pin::Pin;
+use std::task::Context;
+use std::task::Poll;
+
 use common_base::base::tokio::sync::mpsc::error::SendError;
+use common_base::base::tokio::sync::mpsc::Receiver;
+use common_base::rangemap::RangeMapKey;
 use common_meta_types::protobuf::watch_request::FilterType;
 use common_meta_types::protobuf::WatchResponse;
+use futures::Stream;
 use tonic::Status;
 
 use super::WatcherId;
-use super::WatcherStreamSender;
+use super::WatcherSender;
+use crate::watcher::EventDispatcherHandle;
 
-pub struct WatcherStream {
+/// Attributes of a watcher that is interested in kv change events.
+#[derive(Clone, Debug)]
+pub struct Watcher {
     pub id: WatcherId,
 
+    /// Defines how to filter keys with `key_range`.
     pub filter_type: FilterType,
 
-    tx: WatcherStreamSender,
-
-    pub key: String,
-
-    pub key_end: String,
+    /// The range of key this watcher is interested in.
+    pub key_range: Range<String>,
 }
 
-impl WatcherStream {
-    pub fn new(
-        id: WatcherId,
-        filter_type: FilterType,
-        tx: WatcherStreamSender,
-        key: String,
-        key_end: String,
-    ) -> Self {
-        WatcherStream {
+impl Watcher {
+    pub fn new(id: WatcherId, filter_type: FilterType, key_range: Range<String>) -> Self {
+        Self {
             id,
             filter_type,
-            tx,
-            key,
-            key_end,
+            key_range,
         }
+    }
+}
+
+/// A handle of a watching stream, for feeding messages to the stream.
+pub struct WatchStreamHandle {
+    pub watcher: Watcher,
+    tx: WatcherSender,
+}
+
+impl WatchStreamHandle {
+    pub fn new(watcher: Watcher, tx: WatcherSender) -> Self {
+        WatchStreamHandle { watcher, tx }
     }
 
     pub async fn send(
@@ -54,5 +67,61 @@ impl WatcherStream {
         resp: WatchResponse,
     ) -> Result<(), SendError<Result<WatchResponse, Status>>> {
         self.tx.send(Ok(resp)).await
+    }
+}
+
+/// A wrapper around [`tokio::sync::mpsc::Receiver`] that implements [`Stream`].
+#[derive(Debug)]
+pub struct WatchStream<T> {
+    inner: Receiver<T>,
+    watcher: Watcher,
+    dispatcher: EventDispatcherHandle,
+}
+
+impl<T> Drop for WatchStream<T> {
+    fn drop(&mut self) {
+        let rng = self.watcher.key_range.clone();
+        let id = self.watcher.id;
+
+        self.dispatcher.request(move |d| {
+            let key = RangeMapKey::new(rng, id);
+            d.remove_watcher(&key)
+        })
+    }
+}
+
+impl<T> WatchStream<T> {
+    /// Create a new `WatcherStream`.
+    pub fn new(rx: Receiver<T>, watcher: Watcher, dispatcher: EventDispatcherHandle) -> Self {
+        Self {
+            inner: rx,
+            watcher,
+            dispatcher,
+        }
+    }
+
+    /// Closes the receiving half of a channel without dropping it.
+    pub fn close(&mut self) {
+        self.inner.close()
+    }
+}
+
+impl<T> Stream for WatchStream<T> {
+    type Item = T;
+
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        self.inner.poll_recv(cx)
+    }
+}
+
+impl<T> AsRef<Receiver<T>> for WatchStream<T> {
+    fn as_ref(&self) -> &Receiver<T> {
+        &self.inner
+    }
+}
+
+impl<T> AsMut<Receiver<T>> for WatchStream<T> {
+    fn as_mut(&mut self) -> &mut Receiver<T> {
+        &mut self.inner
     }
 }

@@ -18,20 +18,11 @@ use std::time::Duration;
 use std::time::Instant;
 use std::time::SystemTime;
 
-use common_base::base::tokio::sync::mpsc;
 use common_base::base::tokio::sync::RwLock;
-use common_base::base::GlobalIORuntime;
 use common_base::base::ProgressValues;
-use common_base::base::Thread;
-use common_base::base::TrySpawn;
 use common_datablocks::DataBlock;
-use common_datablocks::SendableDataBlockStream;
-use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_storages_fuse_result::BlockBuffer;
-use common_storages_fuse_result::ResultQueryInfo;
-use common_storages_fuse_result::ResultTableSink;
 use futures::StreamExt;
 use futures_util::FutureExt;
 use serde::Deserialize;
@@ -43,18 +34,12 @@ use ExecuteState::*;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
 use crate::interpreters::InterpreterQueryLog;
-use crate::pipelines::executor::ExecutorSettings;
-use crate::pipelines::executor::PipelineCompleteExecutor;
-use crate::pipelines::processors::port::InputPort;
-use crate::pipelines::Pipe;
-use crate::pipelines::PipelineBuildResult;
 use crate::servers::http::v1::query::sized_spsc::SizedChannelSender;
 use crate::sessions::QueryAffect;
 use crate::sessions::QueryContext;
 use crate::sessions::Session;
 use crate::sessions::TableContext;
 use crate::sql::Planner;
-use crate::stream::DataBlockStream;
 
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Eq)]
 pub enum ExecuteStateKind {
@@ -299,88 +284,4 @@ async fn execute(
         }
     }
     Ok(())
-}
-
-#[derive(Clone)]
-pub struct HttpQueryHandle {
-    pub executor: Arc<RwLock<Executor>>,
-    pub block_buffer: Arc<BlockBuffer>,
-}
-
-impl HttpQueryHandle {
-    pub async fn execute(
-        self,
-        ctx: Arc<QueryContext>,
-        mut build_res: PipelineBuildResult,
-        result_schema: DataSchemaRef,
-    ) -> Result<SendableDataBlockStream> {
-        let executor = self.executor.clone();
-        let block_buffer = self.block_buffer.clone();
-
-        build_res.main_pipeline.resize(1)?;
-        let input = InputPort::create();
-
-        let query_info = ResultQueryInfo {
-            query_id: ctx.get_id(),
-            schema: result_schema.clone(),
-            user: ctx.get_current_user()?.identity(),
-        };
-        let data_accessor = ctx.get_data_operator()?.operator();
-
-        let sink = ResultTableSink::create(
-            input.clone(),
-            ctx.clone(),
-            data_accessor,
-            query_info,
-            self.block_buffer,
-        )?;
-
-        build_res.main_pipeline.add_pipe(Pipe::SimplePipe {
-            outputs_port: vec![],
-            inputs_port: vec![input],
-            processors: vec![sink],
-        });
-
-        let query_ctx = ctx.clone();
-        let executor_settings = ExecutorSettings::try_create(&ctx.get_settings())?;
-
-        let run = move || -> Result<()> {
-            let mut pipelines = build_res.sources_pipelines;
-            pipelines.push(build_res.main_pipeline);
-
-            let pipeline_executor =
-                PipelineCompleteExecutor::from_pipelines(pipelines, executor_settings)?;
-
-            query_ctx.set_executor(Arc::downgrade(&pipeline_executor.get_inner()));
-            pipeline_executor.execute()
-        };
-
-        let (error_sender, mut error_receiver) = mpsc::channel::<Result<()>>(1);
-
-        GlobalIORuntime::instance().spawn(async move {
-            match error_receiver.recv().await {
-                Some(Err(e)) => {
-                    Executor::stop(&executor, Err(e), false).await;
-                    block_buffer.stop_push().await.unwrap();
-                }
-                _ => {
-                    Executor::stop(&executor, Ok(()), false).await;
-                    block_buffer.stop_push().await.unwrap();
-                }
-            }
-        });
-
-        Thread::spawn(move || {
-            if let Err(cause) = run() {
-                if error_sender.blocking_send(Err(cause)).is_err() {
-                    tracing::warn!("Error sender is disconnect");
-                }
-            }
-        });
-        Ok(Box::pin(DataBlockStream::create(
-            result_schema,
-            None,
-            vec![],
-        )))
-    }
 }

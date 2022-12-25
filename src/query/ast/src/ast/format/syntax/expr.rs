@@ -112,21 +112,29 @@ pub(crate) fn pretty_expr(expr: Expr) -> RcDoc {
             .append(RcDoc::text("AND"))
             .append(RcDoc::space())
             .append(pretty_expr(*high)),
-        Expr::UnaryOp { op, expr, .. } => RcDoc::text(op.to_string())
+        Expr::UnaryOp { op, expr, .. } => RcDoc::text("(")
+            .append(RcDoc::text(op.to_string()))
             .append(RcDoc::space())
-            .append(pretty_expr(*expr)),
+            .append(pretty_expr(*expr))
+            .append(RcDoc::text(")")),
         Expr::BinaryOp {
             op, left, right, ..
-        } => pretty_expr(*left)
-            .append(
-                match op {
-                    BinaryOperator::And | BinaryOperator::Or => RcDoc::line(),
-                    _ => RcDoc::space(),
-                }
-                .append(RcDoc::text(op.to_string())),
-            )
-            .append(RcDoc::space())
-            .append(pretty_expr(*right)),
+        } => match op {
+            BinaryOperator::And | BinaryOperator::Or | BinaryOperator::Xor => parenthenized(
+                pretty_expr(*left)
+                    .append(RcDoc::line_())
+                    .append(RcDoc::text(op.to_string()))
+                    .append(RcDoc::space())
+                    .append(pretty_expr(*right)),
+            ),
+            _ => RcDoc::text("(")
+                .append(pretty_expr(*left))
+                .append(RcDoc::space())
+                .append(RcDoc::text(op.to_string()))
+                .append(RcDoc::space())
+                .append(pretty_expr(*right))
+                .append(RcDoc::text(")")),
+        },
         Expr::Cast {
             expr,
             target_type,
@@ -205,11 +213,12 @@ pub(crate) fn pretty_expr(expr: Expr) -> RcDoc {
                     .append(pretty_expr(*trim_expr))
                     .append(RcDoc::space())
                     .append(RcDoc::text("FROM"))
+                    .append(RcDoc::space())
             } else {
                 RcDoc::nil()
             })
-            .append(RcDoc::space())
-            .append(pretty_expr(*expr)),
+            .append(pretty_expr(*expr))
+            .append(RcDoc::text(")")),
         Expr::Literal { lit, .. } => RcDoc::text(lit.to_string()),
         Expr::CountAll { .. } => RcDoc::text("COUNT(*)"),
         Expr::Tuple { exprs, .. } => RcDoc::text("(")

@@ -1,0 +1,21 @@
+statement ok
+drop table if exists t1
+
+statement ok
+drop table if exists t0
+
+statement ok
+CREATE TABLE t0(c0 BOOL)
+
+statement ok
+CREATE TABLE t1(c0 BOOL)
+
+statement ok
+INSERT INTO t1(c0) VALUES (0)
+
+statement ok
+INSERT INTO t0(c0) VALUES (0)
+
+statement ok
+SELECT t0.c0 FROM t0, t1 WHERE t1.c0 < t0.c0
+

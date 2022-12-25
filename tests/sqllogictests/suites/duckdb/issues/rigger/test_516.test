@@ -1,0 +1,12 @@
+statement ok
+drop table if exists t0
+
+statement ok
+CREATE TABLE t0(c0 BOOL)
+
+statement ok
+INSERT INTO t0(c0) VALUES (0)
+
+statement ok
+SELECT * FROM t0 WHERE t0.c0 = true
+

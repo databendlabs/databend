@@ -1,0 +1,40 @@
+statement ok
+CREATE TABLE IF NOT EXISTS random_table (i INT, ni INT NULL, f FLOAT, b BOOLEAN, s VARCHAR, d DATE, t TIMESTAMP, a ARRAY(INT)) ENGINE=RANDOM
+
+query I
+SELECT COUNT(*) FROM (SELECT * FROM random_table LIMIT 5)
+----
+5
+
+query I
+SELECT COUNT(*) FROM (SELECT * FROM random_table LIMIT 10)
+----
+10
+
+query I
+SELECT COUNT(*) FROM (SELECT * FROM random_table LIMIT 1000)
+----
+1000
+
+query I
+SELECT COUNT(*) FROM (SELECT * FROM random_table LIMIT 6000)
+----
+6000
+
+query I
+SELECT COUNT(*) FROM (SELECT * FROM random_table LIMIT 8765)
+----
+8765
+
+
+statement ok
+set max_block_size = 100
+
+query I
+SELECT COUNT(*) FROM random_table
+----
+100
+
+statement ok
+DROP TABLE random_table
+

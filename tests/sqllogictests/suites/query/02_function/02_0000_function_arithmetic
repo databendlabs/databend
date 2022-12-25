@@ -1,0 +1,81 @@
+query IIIF
+SELECT 1 + 1 as a, 1 - 1, 1 * 1, 1 / 2
+----
+2 0 1 0.5
+
+query II
+SELECT -1, +1
+----
+-1 1
+
+query F
+SELECT 8 / 2
+----
+4.0
+
+statement error 1006
+SELECT 8 / 0
+
+statement error 1006
+SELECT 20 DIV 0
+
+query I
+SELECT 20 DIV 1
+----
+20
+
+query I
+SELECT 20 DIV 2
+----
+10
+
+query I
+SELECT 20 DIV 3
+----
+6
+
+query I
+SELECT 20 DIV 4
+----
+5
+
+query I
+SELECT 20 DIV 5
+----
+4
+
+query I
+SELECT 20 DIV 6
+----
+3
+
+query I
+SELECT 20 DIV 7
+----
+2
+
+query I
+SELECT 20 DIV 8.1
+----
+2
+
+query I
+SELECT 20.1 DIV 9
+----
+2
+
+query TTTTT
+SELECT typeof(-to_uint32(1)), typeof(-to_uint64(1)), typeof(-to_int32(1)), typeof(-to_float32(1)), typeof(+to_uint8(1))
+----
+BIGINT BIGINT INT FLOAT TINYINT UNSIGNED
+
+query TTTT
+SELECT Null + 1, Null - 1, Null * 1, Null / 1
+----
+NULL NULL NULL NULL
+
+query FF
+SELECT 1 + 1.0, 1 + 2.0
+----
+2.0 3.0
+

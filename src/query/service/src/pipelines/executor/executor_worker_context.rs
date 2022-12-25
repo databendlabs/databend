@@ -16,9 +16,8 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
-use common_base::base::ThreadTracker;
-use common_base::base::TrackedFuture;
-use common_base::base::TrySpawn;
+use common_base::runtime::TrackedFuture;
+use common_base::runtime::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use petgraph::prelude::NodeIndex;
@@ -38,14 +37,20 @@ pub enum ExecutorTask {
 }
 
 pub struct ExecutorWorkerContext {
+    query_id: Arc<String>,
     worker_num: usize,
     task: ExecutorTask,
     workers_condvar: Arc<WorkersCondvar>,
 }
 
 impl ExecutorWorkerContext {
-    pub fn create(worker_num: usize, workers_condvar: Arc<WorkersCondvar>) -> Self {
+    pub fn create(
+        worker_num: usize,
+        workers_condvar: Arc<WorkersCondvar>,
+        query_id: Arc<String>,
+    ) -> Self {
         ExecutorWorkerContext {
+            query_id,
             worker_num,
             workers_condvar,
             task: ExecutorTask::None,
@@ -94,16 +99,16 @@ impl ExecutorWorkerContext {
         let workers_condvar = self.get_workers_condvar().clone();
         let tasks_queue = executor.global_tasks_queue.clone();
 
-        executor.async_runtime.spawn(TrackedFuture::create(
-            ThreadTracker::fork(),
-            ProcessorAsyncTask::create(
+        executor
+            .async_runtime
+            .spawn(TrackedFuture::create(ProcessorAsyncTask::create(
+                self.query_id.clone(),
                 worker_id,
                 processor.clone(),
                 tasks_queue,
                 workers_condvar,
                 processor.async_process(),
-            ),
-        ));
+            )));
 
         Ok(None)
     }

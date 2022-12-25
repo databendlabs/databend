@@ -49,6 +49,7 @@ pub use table::CountTablesReq;
 pub use table::CreateTableReply;
 pub use table::CreateTableReq;
 pub use table::DBIdTableName;
+pub use table::DatabaseType;
 pub use table::DropTableReply;
 pub use table::DropTableReq;
 pub use table::GetTableCopiedFileReply;

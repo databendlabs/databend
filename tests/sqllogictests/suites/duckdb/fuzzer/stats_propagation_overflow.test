@@ -1,0 +1,18 @@
+statement ok
+drop table if exists test
+
+statement ok
+CREATE TABLE test(a BIGINT)
+
+statement ok
+INSERT INTO test VALUES(-5361272612100082873)
+
+statement ok
+INSERT INTO test VALUES(3877673001272535186)
+
+query I
+SELECT a FROM test ORDER BY 1
+----
+-5361272612100082873
+3877673001272535186
+

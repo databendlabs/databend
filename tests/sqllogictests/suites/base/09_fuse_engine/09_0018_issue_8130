@@ -1,0 +1,42 @@
+statement ok
+DROP DATABASE IF EXISTS issues
+
+statement ok
+CREATE DATABASE issues
+
+statement ok
+USE issues
+
+statement ok
+CREATE TABLE IF NOT EXISTS t_issue_8130(c int) row_per_block=1
+
+statement ok
+INSERT INTO t_issue_8130 VALUES(1)
+
+statement ok
+INSERT INTO t_issue_8130 VALUES(2)
+
+statement ok
+optimize table t_issue_8130 compact segment
+
+query II
+select segment_count, block_count from fuse_snapshot('issues', 't_issue_8130') order by timestamp desc limit 1
+----
+1 2
+
+query I
+select count(1) from t_issue_8130 where c = 1
+----
+1
+
+query I
+select count(1) from t_issue_8130 where c = 2
+----
+1
+
+statement ok
+DROP TABLE t_issue_8130
+
+statement ok
+DROP DATABASE issues
+

@@ -37,6 +37,10 @@ impl TypeDeserializer for StringDeserializer {
         self.builder.memory_size()
     }
 
+    fn len(&self) -> usize {
+        self.builder.len()
+    }
+
     // See GroupHash.rs for StringColumn
     #[allow(clippy::uninit_vec)]
     fn de_binary(&mut self, reader: &mut &[u8]) -> Result<()> {

@@ -22,5 +22,6 @@ common-users = { path = "../users" }
 dashmap = "5.4"
 futures = "0.3.24"
 itertools = "0.10.5"
+num_cpus = "1.13.1"
 sys-info = "0.9"
 tracing = "0.1.36"

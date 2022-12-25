@@ -43,6 +43,7 @@ pub struct CopyStmt<'a> {
     pub single: bool,
     pub purge: bool,
     pub force: bool,
+    pub on_error: String,
 }
 
 impl<'a> CopyStmt<'a> {
@@ -58,6 +59,7 @@ impl<'a> CopyStmt<'a> {
             CopyOption::Single(v) => self.single = v,
             CopyOption::Purge(v) => self.purge = v,
             CopyOption::Force(v) => self.force = v,
+            CopyOption::OnError(v) => self.on_error = v,
         }
     }
 }
@@ -105,6 +107,7 @@ impl Display for CopyStmt<'_> {
         write!(f, " SINGLE = {}", self.single)?;
         write!(f, " PURGE = {}", self.purge)?;
         write!(f, " FORCE = {}", self.force)?;
+        write!(f, " ON_ERROR = {}", self.on_error)?;
         Ok(())
     }
 }
@@ -213,6 +216,25 @@ impl Display for StageLocation {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FileLocation {
+    Stage(StageLocation),
+    Uri(UriLocation),
+}
+
+impl Display for FileLocation {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            FileLocation::Uri(loc) => {
+                write!(f, "{}", loc)
+            }
+            FileLocation::Stage(loc) => {
+                write!(f, "{}", loc)
+            }
+        }
+    }
+}
+
 pub enum CopyOption {
     Files(Vec<String>),
     Pattern(String),
@@ -224,4 +246,5 @@ pub enum CopyOption {
     Single(bool),
     Purge(bool),
     Force(bool),
+    OnError(String),
 }

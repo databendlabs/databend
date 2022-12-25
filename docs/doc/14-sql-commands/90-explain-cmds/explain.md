@@ -60,7 +60,6 @@ Explanation plans may include a variety of operators, depending on the SQL state
 
 ```sql
 EXPLAIN select t.number from numbers(1) as t, numbers(1) as t1 where t.number = t1.number;
-
 ----
 Project
 ├── columns: [number (#0)]

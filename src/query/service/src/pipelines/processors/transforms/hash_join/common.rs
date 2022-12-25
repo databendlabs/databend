@@ -154,6 +154,10 @@ impl JoinHashTable {
             Ok(ConstColumn::new(inner, col.len()).arc())
         } else if column.is_nullable() {
             let col: &NullableColumn = Series::check_get(column)?;
+            if col.is_empty() {
+                let ty = col.data_type();
+                return ty.create_constant_column(&DataValue::Null, validity.len());
+            }
             // It's possible validity is longer than col.
             let diff_len = validity.len() - col.ensure_validity().len();
             let mut new_validity = MutableBitmap::with_capacity(validity.len());

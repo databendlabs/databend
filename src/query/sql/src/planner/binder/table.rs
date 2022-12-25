@@ -17,6 +17,7 @@ use std::default::Default;
 use std::path::Path;
 use std::sync::Arc;
 
+use common_ast::ast::FileLocation;
 use common_ast::ast::Indirection;
 use common_ast::ast::SelectStmt;
 use common_ast::ast::SelectTarget;
@@ -36,19 +37,21 @@ use common_catalog::table::ColumnStatistics;
 use common_catalog::table::NavigationPoint;
 use common_catalog::table::Table;
 use common_catalog::table_function::TableFunction;
+use common_config::GlobalConfig;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::FileFormatOptions;
 use common_meta_types::StageFileCompression;
 use common_meta_types::StageFileFormatType;
+use common_meta_types::UserStageInfo;
 use common_pipeline_sources::processors::sources::input_formats::InputContext;
 use common_storages_stage::get_first_file;
 use common_storages_stage::StageTable;
 use common_storages_view::view_table::QUERY;
-use opendal::layers::SubdirLayer;
 
 use crate::binder::copy::parse_stage_location_v2;
+use crate::binder::location::parse_uri_location;
 use crate::binder::scalar::ScalarBinder;
 use crate::binder::Binder;
 use crate::binder::ColumnBinding;
@@ -296,10 +299,25 @@ impl<'a> Binder {
                     None
                 };
 
-                let (mut user_stage_info, path) =
-                    parse_stage_location_v2(&self.ctx, &location.name, &location.path).await?;
-                let op = self.ctx.get_data_operator()?.operator();
-                let op = op.layer(SubdirLayer::new(&user_stage_info.stage_prefix()));
+                let (mut user_stage_info, path) = match location {
+                    FileLocation::Stage(location) => {
+                        parse_stage_location_v2(&self.ctx, &location.name, &location.path).await?
+                    }
+                    FileLocation::Uri(location) => {
+                        let (storage_params, path) = parse_uri_location(location)?;
+                        if !storage_params.is_secure()
+                            && !GlobalConfig::instance().storage.allow_insecure
+                        {
+                            return Err(ErrorCode::StorageInsecure(
+                                "copy from insecure storage is not allowed",
+                            ));
+                        }
+                        let stage_info = UserStageInfo::new_external_stage(storage_params, &path);
+                        (stage_info, path)
+                    }
+                };
+
+                let op = StageTable::get_op(&user_stage_info)?;
 
                 let first_file = if files.is_empty() {
                     let file = get_first_file(&op, &path).await?;
@@ -331,6 +349,7 @@ impl<'a> Binder {
                     escape: "".to_string(),
                     compression: StageFileCompression::default(),
                     row_tag: "".to_string(),
+                    quote: "".to_string(),
                 };
                 let stage_table_info = StageTableInfo {
                     schema,

@@ -25,6 +25,7 @@ use common_formats::FieldDecoderTSV;
 use common_formats::FileFormatOptionsExt;
 use common_io::cursor_ext::*;
 use common_io::format_diagnostic::verbose_string;
+use common_meta_types::OnErrorMode;
 use common_meta_types::StageFileFormatType;
 
 use crate::processors::sources::input_formats::input_format_text::AligningState;
@@ -37,6 +38,7 @@ pub struct InputFormatTSV {}
 impl InputFormatTSV {
     #[allow(clippy::too_many_arguments)]
     fn read_row(
+        field_delimiter: u8,
         field_decoder: &FieldDecoderTSV,
         buf: &[u8],
         deserializers: &mut Vec<common_datavalues::TypeDeserializerImpl>,
@@ -53,7 +55,7 @@ impl InputFormatTSV {
         let mut err_msg = None;
         let buf_len = buf.len();
         while pos <= buf_len {
-            if pos == buf_len || buf[pos] == b'\t' {
+            if pos == buf_len || buf[pos] == field_delimiter {
                 let col_data = &buf[field_start..pos];
                 if col_data.is_empty() {
                     deserializers[column_index].de_default();
@@ -152,10 +154,12 @@ impl InputFormatTextBase for InputFormatTSV {
         let schema = &builder.ctx.schema;
         let columns = &mut builder.mutable_columns;
         let mut start = 0usize;
+        let mut num_rows = 0usize;
         let start_row = batch.start_row;
         for (i, end) in batch.row_ends.iter().enumerate() {
             let buf = &batch.data[start..*end]; // include \n
-            Self::read_row(
+            if let Err(e) = Self::read_row(
+                builder.ctx.field_delimiter,
                 field_decoder,
                 buf,
                 columns,
@@ -164,8 +168,22 @@ impl InputFormatTextBase for InputFormatTSV {
                 batch.batch_id,
                 batch.offset + start,
                 start_row.map(|n| n + i),
-            )?;
+            ) {
+                if builder.ctx.on_error_mode == OnErrorMode::Continue {
+                    columns.iter_mut().for_each(|c| {
+                        // check if parts of columns inserted data, if so, pop it.
+                        if c.len() > num_rows {
+                            c.pop_data_value().expect("must success");
+                        }
+                    });
+                    start = *end;
+                    continue;
+                } else {
+                    return Err(e);
+                }
+            }
             start = *end;
+            num_rows += 1;
         }
         Ok(())
     }

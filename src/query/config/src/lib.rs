@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![feature(no_sanitize)]
+
 /// Config mods provide config support.
 ///
 /// We are providing two config types:
@@ -35,5 +37,6 @@ pub use inner::CatalogHiveConfig;
 pub use inner::Config;
 pub use inner::QueryConfig;
 pub use inner::ThriftProtocol;
+pub use outer_v0::StorageConfig;
 pub use version::DATABEND_COMMIT_VERSION;
 pub use version::QUERY_SEMVER;

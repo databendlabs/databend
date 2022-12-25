@@ -11,6 +11,6 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
      b Int NULL
  );" | $MYSQL_CLIENT_CONNECT
 
- curl -sH "insert_sql:insert into test_csv format CSV" -F "upload=@${CURDIR}/no_newline.csv" \
+ curl -sH "insert_sql:insert into test_csv file_format = (type = 'CSV')" -F "upload=@${CURDIR}/testdata/no_newline.csv" \
  -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" | grep -c "SUCCESS"
  echo "select * from test_csv" | $MYSQL_CLIENT_CONNECT

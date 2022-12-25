@@ -16,9 +16,8 @@ use std::env;
 use std::io;
 use std::sync::Arc;
 
-use common_base::base::Singleton;
+use common_base::base::GlobalInstance;
 use common_exception::Result;
-use once_cell::sync::OnceCell;
 use opentelemetry::global;
 use opentelemetry::sdk::propagation::TraceContextPropagator;
 use sentry_tracing::EventFilter;
@@ -256,19 +255,13 @@ pub struct QueryLogger {
     _log_guards: Vec<WorkerGuard>,
 }
 
-static QUERY_LOGGER: OnceCell<Singleton<Arc<QueryLogger>>> = OnceCell::new();
-
 impl QueryLogger {
-    pub fn init(
-        app_name_shuffle: String,
-        config: &Config,
-        v: Singleton<Arc<QueryLogger>>,
-    ) -> Result<()> {
+    pub fn init(app_name_shuffle: String, config: &Config) -> Result<()> {
         let app_name = format!("databend-query-{}", app_name_shuffle);
         let mut _log_guards = init_logging(app_name.as_str(), config);
         let query_detail_dir = format!("{}/query-detail", config.file.dir);
 
-        v.init(match config.file.on {
+        GlobalInstance::set(match config.file.on {
             true => {
                 let (_guards, subscriber) = init_query_logger(&app_name_shuffle, &query_detail_dir);
                 _log_guards.extend(_guards);
@@ -282,17 +275,13 @@ impl QueryLogger {
                 subscriber: None,
                 _log_guards: vec![],
             }),
-        })?;
+        });
 
-        QUERY_LOGGER.set(v).ok();
         Ok(())
     }
 
     pub fn instance() -> Arc<QueryLogger> {
-        match QUERY_LOGGER.get() {
-            None => panic!("QueryLogger is not init"),
-            Some(query_logger) => query_logger.get(),
-        }
+        GlobalInstance::get()
     }
 
     pub fn get_subscriber(&self) -> Option<Arc<dyn Subscriber + Send + Sync>> {

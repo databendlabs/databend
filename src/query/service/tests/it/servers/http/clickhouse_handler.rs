@@ -49,7 +49,7 @@ macro_rules! assert_ok {
     }};
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_select() -> PoemResult<()> {
     let config = ConfigBuilder::create().build();
     let _guard = TestGlobalServices::setup(config.clone()).await.unwrap();
@@ -96,7 +96,7 @@ async fn test_select() -> PoemResult<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_insert_values() -> PoemResult<()> {
     let config = ConfigBuilder::create().build();
     let _guard = TestGlobalServices::setup(config.clone()).await.unwrap();
@@ -124,7 +124,7 @@ async fn test_insert_values() -> PoemResult<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_output_formats() -> PoemResult<()> {
     let config = ConfigBuilder::create().build();
     let _guard = TestGlobalServices::setup(config.clone()).await.unwrap();
@@ -166,7 +166,7 @@ async fn test_output_formats() -> PoemResult<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_output_format_compress() -> PoemResult<()> {
     let config = ConfigBuilder::create().build();
     let _guard = TestGlobalServices::setup(config.clone()).await.unwrap();
@@ -187,7 +187,7 @@ async fn test_output_format_compress() -> PoemResult<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_insert_format_values() -> PoemResult<()> {
     let config = ConfigBuilder::create().build();
     let _guard = TestGlobalServices::setup(config.clone()).await.unwrap();
@@ -215,7 +215,7 @@ async fn test_insert_format_values() -> PoemResult<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_insert_format_ndjson() -> PoemResult<()> {
     let config = ConfigBuilder::create().build();
     let _guard = TestGlobalServices::setup(config.clone()).await.unwrap();
@@ -270,7 +270,7 @@ async fn test_insert_format_ndjson() -> PoemResult<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_settings() -> PoemResult<()> {
     let config = ConfigBuilder::create().build();
     let _guard = TestGlobalServices::setup(config.clone()).await.unwrap();
@@ -325,7 +325,7 @@ async fn test_settings() -> PoemResult<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_multi_partition() -> PoemResult<()> {
     let config = ConfigBuilder::create().build();
     let _guard = TestGlobalServices::setup(config.clone()).await.unwrap();

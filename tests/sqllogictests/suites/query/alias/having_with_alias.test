@@ -1,0 +1,19 @@
+query I
+select count(*) as count from (select * from numbers(1)) having count = 1
+----
+1
+
+query I
+select a as b from (select number as a from numbers(1)) having b = 0
+----
+0
+
+query I
+select a as b from (select number+1 as a from numbers(1)) having b = 1 and a = 1
+----
+1
+
+query I
+select a+1 as a from (select number+1 as a from numbers(1)) having a = 2
+----
+2

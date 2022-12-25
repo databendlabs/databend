@@ -1,0 +1,139 @@
+query T
+explain select * from numbers(1)
+----
+TableScan
+├── table: default.system.numbers
+├── read rows: 1
+├── read bytes: 8
+├── partitions total: 1
+├── partitions scanned: 1
+└── push downs: [filters: [], limit: NONE]
+
+query T
+explain select * from (select * from numbers(1)) as t1 where number = 1
+----
+Filter
+├── filters: [=(t1.number (#0), 1)]
+└── TableScan
+    ├── table: default.system.numbers
+    ├── read rows: 1
+    ├── read bytes: 8
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    └── push downs: [filters: [(number = 1)], limit: NONE]
+
+query T
+explain select * from (select number as a, number + 1 as b from numbers(1)) as t1 where a = 1 and b = 1
+----
+Filter
+├── filters: [=(t1.a (#0), 1), =(t1.b (#1), 1)]
+└── EvalScalar
+    ├── expressions: [+(numbers.number (#0), 1)]
+    └── TableScan
+        ├── table: default.system.numbers
+        ├── read rows: 1
+        ├── read bytes: 8
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        └── push downs: [filters: [], limit: NONE]
+
+query T
+explain select * from (select number as a, number + 1 as b from numbers(1)) as t1 where a = 1
+----
+EvalScalar
+├── expressions: [+(numbers.number (#0), 1)]
+└── Filter
+    ├── filters: [=(t1.a (#0), 1)]
+    └── TableScan
+        ├── table: default.system.numbers
+        ├── read rows: 1
+        ├── read bytes: 8
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        └── push downs: [filters: [(number = 1)], limit: NONE]
+
+query T
+explain select * from numbers(1) where number = pow(1, 1 + 1)
+----
+Filter
+├── filters: [=(numbers.number (#0), 1)]
+└── TableScan
+    ├── table: default.system.numbers
+    ├── read rows: 1
+    ├── read bytes: 8
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    └── push downs: [filters: [(number = '1.0')], limit: NONE]
+
+query T
+explain select * from numbers(1) where TRUE and 1 = 1
+----
+TableScan
+├── table: default.system.numbers
+├── read rows: 1
+├── read bytes: 8
+├── partitions total: 1
+├── partitions scanned: 1
+└── push downs: [filters: [], limit: NONE]
+
+query T
+explain select * from numbers(1) where number = 0 and false
+----
+Filter
+├── filters: [false]
+└── TableScan
+    ├── table: default.system.numbers
+    ├── read rows: 1
+    ├── read bytes: 8
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    └── push downs: [filters: [false], limit: NONE]
+
+query T
+explain select * from numbers(1) where number = 0 and null
+----
+Filter
+├── filters: [false]
+└── TableScan
+    ├── table: default.system.numbers
+    ├── read rows: 1
+    ├── read bytes: 8
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    └── push downs: [filters: [false], limit: NONE]
+
+query T
+explain select * from numbers(1) where null
+----
+Filter
+├── filters: [NULL]
+└── TableScan
+    ├── table: default.system.numbers
+    ├── read rows: 1
+    ├── read bytes: 8
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    └── push downs: [filters: [NULL], limit: NONE]
+
+query T
+explain select a from (select number as a, number as b from numbers(1))
+----
+TableScan
+├── table: default.system.numbers
+├── read rows: 1
+├── read bytes: 8
+├── partitions total: 1
+├── partitions scanned: 1
+└── push downs: [filters: [], limit: NONE]
+
+query T
+explain select a from (select number as a, number+1 as b from numbers(1))
+----
+TableScan
+├── table: default.system.numbers
+├── read rows: 1
+├── read bytes: 8
+├── partitions total: 1
+├── partitions scanned: 1
+└── push downs: [filters: [], limit: NONE]
+

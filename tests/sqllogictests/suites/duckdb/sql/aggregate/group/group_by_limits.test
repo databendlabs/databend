@@ -1,0 +1,62 @@
+statement ok
+drop table if exists t
+
+statement ok
+CREATE TABLE t(t_k0 TINYINT)
+
+statement ok
+INSERT INTO t VALUES (-128), (127)
+
+query II
+SELECT t_k0, COUNT(*) FROM t GROUP BY t_k0 ORDER BY 1
+----
+-128 1
+127 1
+
+statement ok
+DROP TABLE t
+
+statement ok
+CREATE TABLE t(t_k0 SMALLINT)
+
+statement ok
+INSERT INTO t VALUES (-32768), (32767)
+
+query II
+SELECT t_k0, COUNT(*) FROM t GROUP BY t_k0 ORDER BY 1
+----
+-32768 1
+32767 1
+
+statement ok
+DROP TABLE t
+
+statement ok
+CREATE TABLE t(t_k0 INTEGER)
+
+statement ok
+INSERT INTO t VALUES (-2147483648), (2147483647)
+
+query II
+SELECT t_k0, COUNT(*) FROM t GROUP BY t_k0 ORDER BY 1
+----
+-2147483648 1
+2147483647 1
+
+statement ok
+DROP TABLE t
+
+statement ok
+CREATE TABLE t(t_k0 BIGINT)
+
+statement ok
+INSERT INTO t VALUES (-9223372036854775808), (9223372036854775807)
+
+query II
+SELECT t_k0, COUNT(*) FROM t GROUP BY t_k0 ORDER BY 1
+----
+-9223372036854775808 1
+9223372036854775807 1
+
+statement ok
+DROP TABLE t
