@@ -31,7 +31,6 @@ use opendal::layers::RetryLayer;
 use opendal::layers::TracingLayer;
 use opendal::services::azblob;
 use opendal::services::fs;
-use opendal::services::ftp;
 use opendal::services::gcs;
 use opendal::services::http;
 use opendal::services::memory;
@@ -142,16 +141,18 @@ fn init_fs_operator(cfg: &StorageFsConfig) -> Result<Operator> {
 }
 
 /// init_ftp_operator will init a opendal ftp operator.
-fn init_ftp_operator(cfg: &super::StorageFtpConfig) -> Result<Operator> {
-    let mut builder = ftp::Builder::default();
+fn init_ftp_operator(_: &super::StorageFtpConfig) -> Result<Operator> {
+    // Should be addressed after https://github.com/datafuselabs/opendal/pull/1101
+    Err(Error::other("ftp support has been disabled"))
+    // let mut builder = ftp::Builder::default();
 
-    let bd = builder
-        .endpoint(&cfg.endpoint)
-        .user(&cfg.username)
-        .password(&cfg.password)
-        .root(&cfg.root)
-        .build()?;
-    Ok(Operator::new(bd))
+    // let bd = builder
+    //     .endpoint(&cfg.endpoint)
+    //     .user(&cfg.username)
+    //     .password(&cfg.password)
+    //     .root(&cfg.root)
+    //     .build()?;
+    // Ok(Operator::new(bd))
 }
 
 /// init_gcs_operator will init a opendal gcs operator.
