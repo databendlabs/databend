@@ -14,6 +14,7 @@
 
 use std::any::Any;
 use std::sync::Arc;
+use std::time::Instant;
 
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
@@ -31,6 +32,8 @@ use common_pipeline_core::processors::Processor;
 use common_sql::evaluator::EvalNode;
 
 use crate::io::BlockReader;
+use crate::metrics::metrics_inc_remote_io_deserialize_milliseconds;
+use crate::metrics::metrics_inc_remote_io_prewhere_milliseconds;
 
 type DataChunks = Vec<(usize, Vec<u8>)>;
 
@@ -172,6 +175,8 @@ impl Processor for FuseParquetSource {
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Finish) {
             State::Deserialize(part, chunks, prewhere_data) => {
+                let start = Instant::now();
+
                 let data_block = if let Some(PrewhereData {
                     data_block: mut prewhere_blocks,
                     filter,
@@ -212,9 +217,19 @@ impl Processor for FuseParquetSource {
                 };
 
                 self.generate_one_block(data_block)?;
+
+                // Perf.
+                {
+                    metrics_inc_remote_io_deserialize_milliseconds(
+                        start.elapsed().as_millis() as u64
+                    );
+                }
+
                 Ok(())
             }
             State::PrewhereFilter(part, chunks) => {
+                let start = Instant::now();
+
                 // deserialize prewhere data block first
                 let data_block = self.prewhere_reader.deserialize(part.clone(), chunks)?;
                 if let Some(filter) = self.prewhere_filter.as_ref() {
@@ -248,6 +263,14 @@ impl Processor for FuseParquetSource {
                         self.state =
                             State::ReadDataRemain(part, PrewhereData { data_block, filter });
                     }
+
+                    // Perf.
+                    {
+                        metrics_inc_remote_io_prewhere_milliseconds(
+                            start.elapsed().as_millis() as u64
+                        );
+                    }
+
                     Ok(())
                 } else {
                     Err(ErrorCode::Internal(
