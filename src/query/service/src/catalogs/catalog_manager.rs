@@ -139,7 +139,7 @@ impl CatalogManagerHelper for CatalogManager {
                     flatten,
                 } = opt;
 
-                let data_operator = DataOperator::try_create_with_storage_params(&sp).await?;
+                let data_operator = DataOperator::try_create(&sp).await?;
                 let ctl_name = &req.name_ident.catalog_name;
                 let catalog: Arc<dyn Catalog> = Arc::new(IcebergCatalog::try_create(
                     ctl_name,

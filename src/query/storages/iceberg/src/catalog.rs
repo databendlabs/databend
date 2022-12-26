@@ -111,8 +111,8 @@ impl IcebergCatalog {
                 ),
             )]);
         }
-
-        let root = self.operator.object("/");
+        let operator = self.operator.operator();
+        let root = operator.object("/");
         let mut dbs = vec![];
         let mut ls = root.list().await?;
         while let Some(dir) = ls.try_next().await? {
@@ -148,8 +148,9 @@ impl Catalog for IcebergCatalog {
             return Ok(tbl);
         }
 
+        let operator = self.operator.operator();
         let rel_path = format!("{}/", db_name);
-        let obj = self.operator.object(&rel_path);
+        let obj = operator.object(&rel_path);
         if !obj.is_exist().await? {
             return Err(ErrorCode::UnknownDatabase(format!(
                 "Database {} does not exist",
@@ -256,8 +257,7 @@ impl Catalog for IcebergCatalog {
 
     async fn update_table_meta(
         &self,
-        _tenant: &str,
-        _db_name: &str,
+        _table_info: &TableInfo,
         _req: UpdateTableMetaReq,
     ) -> Result<UpdateTableMetaReply> {
         unimplemented!()
@@ -287,8 +287,7 @@ impl Catalog for IcebergCatalog {
 
     async fn truncate_table(
         &self,
-        _tenant: &str,
-        _db_name: &str,
+        _table_info: &TableInfo,
         _req: TruncateTableReq,
     ) -> Result<TruncateTableReply> {
         unimplemented!()

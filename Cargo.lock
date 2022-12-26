@@ -7937,7 +7937,7 @@ dependencies = [
  "serfig",
  "thiserror",
  "time 0.3.15",
- "uuid",
+ "uuid 1.2.1",
 ]
 
 [[package]]

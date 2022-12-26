@@ -28,6 +28,7 @@ use nom::combinator::consumed;
 use nom::combinator::map;
 use nom::combinator::value;
 use nom::Slice;
+use url::Url;
 
 use crate::ast::*;
 use crate::input::Input;
