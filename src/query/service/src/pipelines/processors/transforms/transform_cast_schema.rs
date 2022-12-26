@@ -17,8 +17,10 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_expression::Chunk;
 use common_expression::DataSchemaRef;
+use common_expression::Expr;
 use common_expression::Function;
 use common_expression::FunctionContext;
+use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
@@ -27,8 +29,6 @@ use crate::pipelines::processors::transforms::transform::Transform;
 use crate::pipelines::processors::transforms::transform::Transformer;
 
 pub struct TransformCastSchema {
-    output_schema: DataSchemaRef,
-    functions: Vec<Function>,
     func_ctx: FunctionContext,
 }
 
@@ -38,13 +38,9 @@ where Self: Transform
     pub fn try_create(
         input_port: Arc<InputPort>,
         output_port: Arc<OutputPort>,
-        output_schema: DataSchemaRef,
-        functions: Vec<Function>,
         func_ctx: FunctionContext,
     ) -> Result<ProcessorPtr> {
         Ok(Transformer::create(input_port, output_port, Self {
-            output_schema,
-            functions,
             func_ctx,
         }))
     }
@@ -55,8 +51,22 @@ impl Transform for TransformCastSchema {
 
     fn transform(&mut self, data: Chunk) -> Result<Chunk> {
         let rows = data.num_rows();
+
+        let evaluator = Evaluator::new(&data, self.func_ctx.clone(), &BUILTIN_FUNCTIONS);
+
+        let indices = evaluator.run(&self.indices_scalar)?;
+        let indices = get_hash_values(&indices, num)?;
+        let chunks = Chunk::scatter(chunk, &indices, self.scatter_size)?;
+
+        let mut chunk = Chunk::new(vec![], rows);
+
+        for (index, f) in self.output_schema.fields().iter().enumerate() {
+            let col = data.get_by_offset(index);
+            f.data_type();
+        }
+
         let mut columns = Vec::with_capacity(data.num_columns());
-        for (cast_func, (value, ty)) in self.functions.iter().zip(data.columns()) {
+        for (cast_func, entry) in self.functions.iter().zip(data.columns()) {
             let v = (cast_func.eval)(&[value.as_ref()], &self.func_ctx)?;
             columns.push((v, ty.clone()));
         }

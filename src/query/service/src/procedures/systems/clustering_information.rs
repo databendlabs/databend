@@ -69,6 +69,6 @@ impl OneChunkProcedure for ClusteringInformationProcedure {
     }
 
     fn schema(&self) -> Arc<DataSchema> {
-        ClusteringInformation::schema()
+        Arc::new(ClusteringInformation::schema().into())
     }
 }

@@ -85,6 +85,6 @@ impl OneChunkProcedure for SearchTablesProcedure {
     }
 
     fn schema(&self) -> Arc<DataSchema> {
-        TablesTableWithoutHistory::schema()
+        Arc::new(TablesTableWithoutHistory::schema().into())
     }
 }

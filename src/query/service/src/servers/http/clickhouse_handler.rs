@@ -25,6 +25,7 @@ use common_exception::Result;
 use common_exception::ToErrorCode;
 use common_expression::Chunk;
 use common_expression::DataSchemaRef;
+use common_expression::TableSchemaRef;
 use common_formats::ClickhouseFormatType;
 use common_formats::FileFormatOptionsExt;
 use common_formats::FileFormatTypeExt;
@@ -195,9 +196,16 @@ pub async fn clickhouse_handler_get(
 
     let default_format = get_default_format(&params, headers).map_err(BadRequest)?;
     let sql = params.query();
-    if let Some(block) = ClickHouseFederated::check(&sql) {
-        return serialize_one_block(context.clone(), block, &sql, &params, default_format)
-            .map_err(InternalServerError);
+    if let Some((schema, chunk)) = ClickHouseFederated::check(&sql) {
+        return serialize_one_block(
+            schema,
+            context.clone(),
+            block,
+            &sql,
+            &params,
+            default_format,
+        )
+        .map_err(InternalServerError);
     }
 
     let mut planner = Planner::new(context.clone());
@@ -405,6 +413,7 @@ fn compress_block(input: Vec<u8>) -> Result<Vec<u8>> {
 }
 
 fn serialize_one_block(
+    schema: TableSchemaRef,
     ctx: Arc<QueryContext>,
     block: Chunk,
     sql: &str,
@@ -418,7 +427,7 @@ fn serialize_one_block(
     let format_typ = format.typ.clone();
     let mut output_format = FileFormatOptionsExt::get_output_format_from_settings_clickhouse(
         format,
-        block.schema().clone(),
+        schema.clone(),
         &ctx.get_settings(),
     )?;
     let mut res = output_format.serialize_prefix()?;

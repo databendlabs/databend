@@ -105,6 +105,6 @@ impl Transform for TransformAddOn {
             chunk = chunk.add_column(column)?;
         }
 
-        chunk.resort(self.unresort_schema.clone(), self.output_schema.clone())
+        Ok(chunk)
     }
 }

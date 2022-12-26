@@ -68,6 +68,6 @@ impl OneChunkProcedure for FuseBlockProcedure {
     }
 
     fn schema(&self) -> Arc<DataSchema> {
-        FuseBlock::schema()
+        Arc::new(FuseBlock::schema().into())
     }
 }

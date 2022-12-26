@@ -26,8 +26,8 @@ use common_expression::ColumnFrom;
 use common_expression::DataField;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRefExt;
+use common_expression::DataType;
 use common_expression::Scalar;
-use common_expression::TableDataType;
 use common_expression::Value;
 use common_meta_types::TenantQuota;
 use common_meta_types::UserOptionFlag;
@@ -104,18 +104,15 @@ impl OneChunkProcedure for TenantQuotaProcedure {
 
     fn schema(&self) -> Arc<DataSchema> {
         DataSchemaRefExt::create(vec![
-            DataField::new(
-                "max_databases",
-                TableDataType::Number(NumberDataType::UInt32),
-            ),
+            DataField::new("max_databases", DataType::Number(NumberDataType::UInt32)),
             DataField::new(
                 "max_tables_per_database",
-                TableDataType::Number(NumberDataType::UInt32),
+                DataType::Number(NumberDataType::UInt32),
             ),
-            DataField::new("max_stages", TableDataType::Number(NumberDataType::UInt32)),
+            DataField::new("max_stages", DataType::Number(NumberDataType::UInt32)),
             DataField::new(
                 "max_files_per_stage",
-                TableDataType::Number(NumberDataType::UInt32),
+                DataType::Number(NumberDataType::UInt32),
             ),
         ])
     }
@@ -123,7 +120,7 @@ impl OneChunkProcedure for TenantQuotaProcedure {
 
 impl TenantQuotaProcedure {
     fn to_chunk(&self, quota: &TenantQuota) -> Result<Chunk> {
-        Ok(Chunk::new(
+        Ok(Chunk::new_from_sequence(
             vec![
                 (
                     Value::Scalar(UInt32Type::upcast_scalar(quota.max_databases)),

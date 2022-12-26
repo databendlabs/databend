@@ -159,7 +159,7 @@ impl JoinHashTable {
             }
         }
 
-        let probe_chunk = Chunk::take(input, &probe_indexes)?;
+        let probe_chunk = Chunk::take(input.clone(), &probe_indexes)?;
         let build_chunk = self.row_space.gather(&build_indexes)?;
         let merged_chunk = self.merge_eq_chunk(&build_chunk, &probe_chunk)?;
 

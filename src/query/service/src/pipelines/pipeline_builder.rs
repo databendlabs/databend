@@ -543,7 +543,6 @@ impl PipelineBuilder {
         let build_res = exchange_manager.get_fragment_source(
             &exchange_source.query_id,
             exchange_source.source_fragment_id,
-            exchange_source.schema.clone(),
         )?;
 
         self.main_pipeline = build_res.main_pipeline;
@@ -605,34 +604,18 @@ impl PipelineBuilder {
         &mut self,
         insert_select: &DistributedInsertSelect,
     ) -> Result<()> {
-        let select_schema = &insert_select.select_schema;
-        let insert_schema = &insert_select.insert_schema;
-
         self.build_pipeline(&insert_select.input)?;
 
         // should render result for select
-        PipelineBuilder::render_result_set(
-            &self.ctx.try_get_function_context()?,
-            insert_select.input.output_schema()?,
-            &insert_select.select_column_bindings,
-            &mut self.main_pipeline,
-            false,
-        )?;
+        // PipelineBuilder::render_result_set(
+        //     &self.ctx.try_get_function_context()?,
+        //     insert_select.input.output_schema()?,
+        //     &insert_select.select_column_bindings,
+        //     &mut self.main_pipeline,
+        //     false,
+        // )?;
 
         if insert_select.cast_needed {
-            let mut functions = Vec::with_capacity(insert_schema.fields().len());
-            for (target_field, original_field) in insert_schema
-                .fields()
-                .iter()
-                .zip(select_schema.fields().iter())
-            {
-                let target_type_name = target_field.data_type().name();
-                let from_type = original_field.data_type().clone();
-                let cast_function = CastFunction::create("cast", &target_type_name, from_type)?;
-                functions.push(cast_function);
-            }
-
-            let func_ctx = self.ctx.try_get_function_context()?;
             self.main_pipeline
                 .add_transform(|transform_input_port, transform_output_port| {
                     TransformCastSchema::try_create(
@@ -640,7 +623,6 @@ impl PipelineBuilder {
                         transform_output_port,
                         insert_schema.clone(),
                         functions.clone(),
-                        func_ctx.clone(),
                     )
                 })?;
         }

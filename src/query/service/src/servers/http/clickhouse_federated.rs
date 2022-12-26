@@ -19,6 +19,9 @@ use common_expression::DataField;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 use common_expression::TableDataType;
+use common_expression::TableField;
+use common_expression::TableSchemaRef;
+use common_expression::TableSchemaRefExt;
 use common_expression::Value;
 use once_cell::sync::Lazy;
 use regex::Regex;
@@ -37,9 +40,9 @@ impl ClickHouseFederated {
     // Format:
     // |function_name()|
     // |value|
-    fn select_function_block(name: &str, value: &str) -> Option<(DataSchemaRef, Chunk)> {
-        let schema = DataSchemaRefExt::create(vec![DataField::new(name, TableDataType::String)]);
-        let chunk = Chunk::create(
+    fn select_function_block(name: &str, value: &str) -> Option<(TableSchemaRef, Chunk)> {
+        let schema = TableSchemaRefExt::create(vec![TableField::new(name, TableDataType::String)]);
+        let chunk = Chunk::new_from_sequence(
             vec![(
                 Value::Column(Column::from_data(vec![value.as_bytes().to_vec()])),
                 TableDataType::String,
@@ -56,8 +59,8 @@ impl ClickHouseFederated {
         }
     }
 
-    pub fn check(query: &str) -> Option<(DataSchemaRef, Chunk)> {
-        let rules: Vec<(&str, Option<(DataSchemaRef, Chunk)>)> = vec![(
+    pub fn check(query: &str) -> Option<(TableSchemaRef, Chunk)> {
+        let rules: Vec<(&str, Option<(TableSchemaRef, Chunk)>)> = vec![(
             "(?i)^(SELECT VERSION()(.*))",
             Self::select_function_block("version()", CLICKHOUSE_VERSION),
         )];

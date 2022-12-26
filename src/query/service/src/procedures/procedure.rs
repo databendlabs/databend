@@ -161,7 +161,7 @@ mod impls {
             let output = OutputPort::create();
             let source = StreamSource::create(
                 ctx,
-                Some(ChunkStream::create(self.0.schema(), None, vec![chunk]).boxed()),
+                Some(ChunkStream::create(None, vec![chunk]).boxed()),
                 output.clone(),
             )?;
 

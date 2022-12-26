@@ -397,25 +397,6 @@ impl PhysicalPlan {
             )
     }
 
-    // pub fn output_schema(&self) -> Result<DataSchemaRef> {
-    //     match self {
-    //         PhysicalPlan::TableScan(plan) => plan.output_schema(),
-    //         PhysicalPlan::Filter(plan) => plan.output_schema(),
-    //         PhysicalPlan::Project(plan) => plan.output_schema(),
-    //         PhysicalPlan::EvalScalar(plan) => plan.output_schema(),
-    //         PhysicalPlan::AggregatePartial(plan) => plan.output_schema(),
-    //         PhysicalPlan::AggregateFinal(plan) => plan.output_schema(),
-    //         PhysicalPlan::Sort(plan) => plan.output_schema(),
-    //         PhysicalPlan::Limit(plan) => plan.output_schema(),
-    //         PhysicalPlan::HashJoin(plan) => plan.output_schema(),
-    //         PhysicalPlan::Exchange(plan) => plan.output_schema(),
-    //         PhysicalPlan::ExchangeSource(plan) => plan.output_schema(),
-    //         PhysicalPlan::ExchangeSink(plan) => plan.output_schema(),
-    //         PhysicalPlan::UnionAll(plan) => plan.output_schema(),
-    //         PhysicalPlan::DistributedInsertSelect(plan) => plan.output_schema(),
-    //     }
-    // }
-
     pub fn name(&self) -> String {
         match self {
             PhysicalPlan::TableScan(_) => "TableScan".to_string(),

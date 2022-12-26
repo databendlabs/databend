@@ -21,6 +21,8 @@ use common_exception::Result;
 use common_expression::Chunk as DataChunk;
 use common_expression::Column;
 use common_expression::DataSchemaRef;
+use common_expression::KeysState;
+use common_storages_fuse::TableContext;
 
 use crate::pipelines::processors::transforms::hash_join::desc::MarkerKind;
 use crate::sessions::QueryContext;

@@ -17,24 +17,26 @@
 use common_expression::Chunk;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
+use common_expression::TableSchemaRef;
+use common_expression::TableSchemaRefExt;
 use regex::bytes::RegexSet;
 
-pub type LazyBlockFunc = fn(&str) -> Option<Chunk>;
+pub type LazyBlockFunc = fn(&str) -> Option<(TableSchemaRef, Chunk)>;
 
 pub struct FederatedHelper {}
 
 impl FederatedHelper {
     pub(crate) fn block_match_rule(
         query: &str,
-        rules: Vec<(&str, Option<(DataSchemaRef, Chunk)>)>,
-    ) -> Option<(DataSchemaRef, Chunk)> {
+        rules: Vec<(&str, Option<(TableSchemaRef, Chunk)>)>,
+    ) -> Option<(TableSchemaRef, Chunk)> {
         let regex_rules = rules.iter().map(|x| x.0).collect::<Vec<_>>();
         let regex_set = RegexSet::new(regex_rules).unwrap();
         let matches = regex_set.matches(query.as_ref());
         for (index, (_regex, data)) in rules.iter().enumerate() {
             if matches.matched(index) {
                 return match data {
-                    None => Some((DataSchemaRefExt::create(vec![]), Chunk::empty())),
+                    None => Some((TableSchemaRefExt::create(vec![]), Chunk::empty())),
                     Some((schema, chunk)) => Some((schema.clone(), chunk.clone())),
                 };
             }
@@ -46,14 +48,14 @@ impl FederatedHelper {
     pub fn lazy_block_match_rule(
         query: &str,
         rules: Vec<(&str, LazyBlockFunc)>,
-    ) -> Option<(DataSchemaRef, Chunk)> {
+    ) -> Option<(TableSchemaRef, Chunk)> {
         let regex_rules = rules.iter().map(|x| x.0).collect::<Vec<_>>();
         let regex_set = RegexSet::new(regex_rules).unwrap();
         let matches = regex_set.matches(query.as_ref());
         for (index, (_regex, func)) in rules.iter().enumerate() {
             if matches.matched(index) {
                 return match func(query) {
-                    None => Some((DataSchemaRefExt::create(vec![]), Chunk::empty())),
+                    None => Some((TableSchemaRefExt::create(vec![]), Chunk::empty())),
                     Some((schema, chunk)) => Some((schema, chunk)),
                 };
             }

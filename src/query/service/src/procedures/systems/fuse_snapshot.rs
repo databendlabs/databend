@@ -64,6 +64,6 @@ impl OneChunkProcedure for FuseSnapshotProcedure {
     }
 
     fn schema(&self) -> Arc<DataSchema> {
-        FuseSnapshot::schema()
+        Arc::new(FuseSnapshot::schema().into())
     }
 }

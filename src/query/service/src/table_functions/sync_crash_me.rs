@@ -30,6 +30,7 @@ use common_expression::types::number::NumberScalar;
 use common_expression::Chunk;
 use common_expression::DataSchema;
 use common_expression::Scalar;
+use common_expression::TableSchema;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -71,7 +72,7 @@ impl SyncCrashMeTable {
             desc: format!("'{}'.'{}'", database_name, "async_crash_me"),
             name: String::from("async_crash_me"),
             meta: TableMeta {
-                schema: Arc::new(DataSchema::empty()),
+                schema: Arc::new(TableSchema::empty()),
                 engine: String::from("async_crash_me"),
                 // Assuming that created_on is unnecessary for function table,
                 // we could make created_on fixed to pass test_shuffle_action_try_into.

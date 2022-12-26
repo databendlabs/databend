@@ -262,7 +262,7 @@ impl PolymorphicKeysHelper<HashMethodKeysU128> for HashMethodKeysU128 {
 
     type KeysColumnIter = LargeFixedKeysColumnIter<u128>;
     fn keys_iter_from_column(&self, column: &Column) -> Result<Self::KeysColumnIter> {
-        LargeFixedKeysColumnIter::create(&column.as_string().ok_or(ErrorCode::IllegalDataType(
+        LargeFixedKeysColumnIter::create(column.as_string().ok_or(ErrorCode::IllegalDataType(
             format!("Illegal data type for LargeFixedKeysColumnIter<u128>",),
         ))?)
     }
@@ -296,7 +296,7 @@ impl PolymorphicKeysHelper<HashMethodKeysU256> for HashMethodKeysU256 {
 
     type KeysColumnIter = LargeFixedKeysColumnIter<U256>;
     fn keys_iter_from_column(&self, column: &Column) -> Result<Self::KeysColumnIter> {
-        LargeFixedKeysColumnIter::create(&column.as_string().ok_or(ErrorCode::IllegalDataType(
+        LargeFixedKeysColumnIter::create(column.as_string().ok_or(ErrorCode::IllegalDataType(
             format!("Illegal data type for LargeFixedKeysColumnIter<u256>",),
         ))?)
     }
@@ -330,7 +330,7 @@ impl PolymorphicKeysHelper<HashMethodKeysU512> for HashMethodKeysU512 {
 
     type KeysColumnIter = LargeFixedKeysColumnIter<U512>;
     fn keys_iter_from_column(&self, column: &Column) -> Result<Self::KeysColumnIter> {
-        LargeFixedKeysColumnIter::create(&column.as_string().ok_or(ErrorCode::IllegalDataType(
+        LargeFixedKeysColumnIter::create(column.as_string().ok_or(ErrorCode::IllegalDataType(
             format!("Illegal data type for LargeFixedKeysColumnIter<u512>",),
         ))?)
     }
@@ -361,7 +361,7 @@ impl PolymorphicKeysHelper<HashMethodSerializer> for HashMethodSerializer {
 
     type KeysColumnIter = SerializedKeysColumnIter;
     fn keys_iter_from_column(&self, column: &Column) -> Result<Self::KeysColumnIter> {
-        SerializedKeysColumnIter::create(&column.as_string().ok_or(ErrorCode::IllegalDataType(
+        SerializedKeysColumnIter::create(column.as_string().ok_or(ErrorCode::IllegalDataType(
             format!("Illegal data type for SerializedKeysColumnIter",),
         ))?)
     }

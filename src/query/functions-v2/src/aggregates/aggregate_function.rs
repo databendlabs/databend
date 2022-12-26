@@ -71,8 +71,7 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
     fn deserialize(&self, _place: StateAddr, _reader: &mut &[u8]) -> Result<()>;
 
     fn merge(&self, _place: StateAddr, _rhs: StateAddr) -> Result<()>;
-    
-    
+
     fn batch_merge_result(
         &self,
         places: Vec<StateAddr>,

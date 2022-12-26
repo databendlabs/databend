@@ -40,14 +40,15 @@ pub async fn build_query_pipeline(
         build_distributed_pipeline(ctx, plan).await
     }?;
 
-    let input_schema = plan.output_schema()?;
-    PipelineBuilder::render_result_set(
-        &ctx.try_get_function_context()?,
-        input_schema,
-        result_columns,
-        &mut build_res.main_pipeline,
-        ignore_result,
-    )?;
+    // todo!("expression")
+    // let input_schema = plan.output_schema()?;
+    // PipelineBuilder::render_result_set(
+    //     &ctx.try_get_function_context()?,
+    //     input_schema,
+    //     result_columns,
+    //     &mut build_res.main_pipeline,
+    //     ignore_result,
+    // )?;
 
     Ok(build_res)
 }
