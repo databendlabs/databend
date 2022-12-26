@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod jwt;
+// mod jwt;
 mod role_mgr;
 mod user;
 mod user_api;
@@ -25,7 +25,7 @@ pub mod idm_config;
 pub mod role_cache_mgr;
 pub mod role_util;
 
-pub use jwt::*;
+// pub use jwt::*;
 pub use role_cache_mgr::RoleCacheManager;
 pub use role_mgr::BUILTIN_ROLE_ACCOUNT_ADMIN;
 pub use role_mgr::BUILTIN_ROLE_PUBLIC;

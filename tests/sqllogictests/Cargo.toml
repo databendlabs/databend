@@ -12,9 +12,9 @@ clap = { version = "4.0.29", features = ["derive", "env"] }
 common-exception = { path = "../../src/common/exception" }
 env_logger = "0.10.0"
 lazy_static = "1.4.0"
-mysql_async = "0.31.2"
+mysql_async = { version = "0.31",default-features = false, features = ["rustls-tls"] }
 regex = "1"
-reqwest = { version = "0.11.13", features = ["json"] }
+reqwest = { workspace = true }
 serde = "1.0.150"
 serde_json = "1.0.89"
 sqllogictest = { git = "https://github.com/risinglightdb/sqllogictest-rs.git", branch = "main" }

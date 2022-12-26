@@ -26,7 +26,7 @@ common-meta-types = { path = "../../meta/types" }
 # Github dependencies
 
 # Crates.io dependencies
-jwtk = "0.2.4"
+# jwtk = "0.2.4"
 once_cell = "1.15.0"
 parking_lot = "0.12.1"
 serde = { workspace = true }

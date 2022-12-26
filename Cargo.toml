@@ -103,6 +103,9 @@ serde_json = { version = "1.0.85", default-features = false, features = ["preser
 chrono = { version = "0.4.22", features = ["serde"] }
 chrono-tz = "0.6.3"
 
+# http
+reqwest = { version = "0.11", default-features = false, features = ["json", "rustls-tls", "rustls-tls-native-roots", "trust-dns"] }
+
 [profile.release]
 debug = 1
 lto = "thin"
