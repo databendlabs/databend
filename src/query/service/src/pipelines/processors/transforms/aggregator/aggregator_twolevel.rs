@@ -20,6 +20,7 @@ use common_expression::types::string::StringColumnBuilder;
 use common_expression::types::AnyType;
 use common_expression::types::DataType;
 use common_expression::Chunk;
+use common_expression::ChunkEntry;
 use common_expression::Column;
 use common_expression::HashMethod;
 use common_expression::Value;
@@ -233,11 +234,12 @@ where
             }
 
             let column = keys_column_builder.finish();
-            let column = (
-                Value::Column(column),
-                agg.params.output_schema.field(0).data_type().into(),
-            );
             let num_rows = column.len();
+            let column = ChunkEntry {
+                id: 0,
+                data_type: DataType::String,
+                value: Value::Column(column),
+            };
 
             chunks.push(Chunk::new_with_meta(
                 vec![column],

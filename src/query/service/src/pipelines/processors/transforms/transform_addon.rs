@@ -24,6 +24,7 @@ use common_expression::DataSchemaRefExt;
 use common_expression::Value;
 use common_sql::evaluator::ChunkOperator;
 use common_sql::evaluator::CompoundChunkOperator;
+use common_sql::parse_exprs;
 
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
@@ -55,17 +56,11 @@ where Self: Transform
         let mut default_nonexpr_fields = Vec::new();
 
         let mut unresort_fields = output_schema.fields().clone();
-
         for (index, f) in output_schema.fields().iter().enumerate() {
             if !input_schema.has_field(f.name()) {
                 if let Some(default_expr) = f.default_expr() {
-                    todo!("expression");
-                    // default_exprs.push(ChunkOperator::Map {
-                    //     index,
-                    //     eval: Evaluator::eval_physical_scalar(&serde_json::from_str(
-                    //         default_expr,
-                    //     )?)?,
-                    // });
+                    let expr = parse_exprs(ctx.clone(), table, default_expr)?[0];
+                    default_exprs.push(ChunkOperator::Map { index, expr });
                 } else {
                     default_nonexpr_fields.push(f.clone());
                     unresort_fields.push(f.clone());

@@ -19,6 +19,7 @@ mod planner;
 mod semantic;
 
 pub mod binder;
+mod expression_parser;
 pub mod optimizer;
 pub mod plans;
 
@@ -28,6 +29,7 @@ pub use binder::ColumnBinding;
 pub use binder::ScalarBinder;
 pub use binder::SelectBuilder;
 pub use binder::Visibility;
+pub use expression_parser::parse_exprs;
 pub use metadata::*;
 pub use planner::Planner;
 pub use plans::ScalarExpr;

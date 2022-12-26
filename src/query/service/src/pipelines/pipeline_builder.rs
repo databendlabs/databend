@@ -213,16 +213,16 @@ impl PipelineBuilder {
                 }],
             ))
         })?;
-        pipeline.add_transform(|input, output| {
-            Ok(CompoundChunkOperator::create(
-                input,
-                output,
-                func_ctx.clone(),
-                vec![ChunkOperator::Rename {
-                    output_schema: output_schema.clone(),
-                }],
-            ))
-        })?;
+        // pipeline.add_transform(|input, output| {
+        //     Ok(CompoundChunkOperator::create(
+        //         input,
+        //         output,
+        //         func_ctx.clone(),
+        //         vec![ChunkOperator::Rename {
+        //             output_schema: output_schema.clone(),
+        //         }],
+        //     ))
+        // })?;
 
         Ok(())
     }
@@ -639,7 +639,7 @@ impl PipelineBuilder {
         {
             let source_schema = insert_schema;
             let target_schema = Arc::new(DataSchema::from(table.schema()));
-            if source_schema != target_schema {
+            if source_schema.fields().len() < target_schema.fields().len() {
                 self.main_pipeline.add_transform(
                     |transform_input_port, transform_output_port| {
                         TransformAddOn::try_create(

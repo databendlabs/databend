@@ -58,7 +58,7 @@ where Self: Transform
                 Expr::Cast {
                     span: None,
                     is_try: false,
-                    expr,
+                    expr: Box::new(expr),
                     dest_type: to.data_type().clone(),
                 };
             })
