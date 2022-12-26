@@ -15,6 +15,7 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use common_base::base::tokio;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
@@ -127,24 +128,22 @@ impl Processor for ReadNativeDataSource<false> {
     }
 
     async fn async_process(&mut self) -> Result<()> {
-        let mut parts = Vec::with_capacity(self.batch_size);
-        let mut chunks = Vec::with_capacity(self.batch_size);
+        let parts = self.ctx.try_get_parts(self.batch_size);
 
-        for _index in 0..self.batch_size {
-            if let Some(part) = self.ctx.try_get_part() {
-                parts.push(part.clone());
+        if !parts.is_empty() {
+            let mut chunks = Vec::with_capacity(parts.len());
+            for part in &parts {
+                let part = part.clone();
                 let block_reader = self.block_reader.clone();
 
                 chunks.push(async move {
-                    let handler = common_base::base::tokio::spawn(async move {
+                    let handler = tokio::spawn(async move {
                         block_reader.async_read_native_columns_data(part).await
                     });
                     handler.await.unwrap()
                 });
             }
-        }
 
-        if !parts.is_empty() {
             self.output_data = Some((parts, futures::future::try_join_all(chunks).await?));
             return Ok(());
         }
