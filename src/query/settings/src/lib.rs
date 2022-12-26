@@ -183,13 +183,13 @@ impl Settings {
             },
             // storage_io_min_bytes_for_seek
             SettingValue {
-                default_value: UserSettingValue::UInt64(512),
+                default_value: UserSettingValue::UInt64(48),
                 user_setting: UserSetting::create(
                     "storage_io_min_bytes_for_seek",
-                    UserSettingValue::UInt64(512),
+                    UserSettingValue::UInt64(48),
                 ),
                 level: ScopeLevel::Session,
-                desc: "If the distance between two IO ranges to be read in one file is less than storage_io_min_bytes_for_seek, then Databend sequentially reads a range of file that contains both ranges, thus avoiding extra seek. Default value is 512Bytes",
+                desc: "If the distance between two IO ranges to be read in one file is less than storage_io_min_bytes_for_seek, then Databend sequentially reads a range of file that contains both ranges, thus avoiding extra seek. Default value is 48Bytes",
                 possible_values: None,
             },
             // storage_io_max_page_bytes_for_read

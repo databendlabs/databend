@@ -44,7 +44,7 @@ pub struct BlockReader {
 
 impl BlockReader {
     /// This is an optimized for data read, works like the Linux kernel io-scheduler IO merging.
-    /// If the distance between two IO request ranges to be read is less than storage_io_min_bytes_for_seek(Default is 512Bytes),
+    /// If the distance between two IO request ranges to be read is less than storage_io_min_bytes_for_seek(Default is 48Bytes),
     /// will read the range that contains both ranges, thus avoiding extra seek.
     ///
     /// It will *NOT* merge two requests:
