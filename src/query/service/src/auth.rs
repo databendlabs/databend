@@ -66,7 +66,7 @@ impl AuthMgr {
 
                 // setup tenant if the JWT claims contain extra.tenant_id
                 if let Some(tenant) = jwt.custom.tenant_id {
-                    session.set_current_tenant(tenant.clone());
+                    session.set_current_tenant(tenant);
                 };
                 let tenant = session.get_current_tenant();
 
