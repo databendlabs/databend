@@ -23,7 +23,7 @@ use common_config::Config;
 use common_config::GlobalConfig;
 use common_sql::planner::binder::parse_uri_location;
 use common_storage::StorageFsConfig;
-use common_storage::StorageFtpConfig;
+// use common_storage::StorageFtpConfig;
 use common_storage::StorageGcsConfig;
 use common_storage::StorageHttpConfig;
 use common_storage::StorageIpfsConfig;
@@ -90,27 +90,27 @@ fn test_parse_uri_location() -> Result<()> {
                 "/".to_string(),
             ),
         ),
-        (
-            "ftps location",
-            UriLocation {
-                protocol: "ftps".to_string(),
-                name: "too-simple:1926".to_string(),
-                path: "/".to_string(),
-                connection: vec![("username", "user"), ("password", "pwd")]
-                    .into_iter()
-                    .map(|(k, v)| (k.to_string(), v.to_string()))
-                    .collect::<BTreeMap<String, String>>(),
-            },
-            (
-                StorageParams::Ftp(StorageFtpConfig {
-                    endpoint: "ftps://too-simple:1926".to_string(),
-                    root: "/".to_string(),
-                    username: "user".to_string(),
-                    password: "pwd".to_string(),
-                }),
-                "/".to_string(),
-            ),
-        ),
+        // (
+        //     "ftps location",
+        //     UriLocation {
+        //         protocol: "ftps".to_string(),
+        //         name: "too-simple:1926".to_string(),
+        //         path: "/".to_string(),
+        //         connection: vec![("username", "user"), ("password", "pwd")]
+        //             .into_iter()
+        //             .map(|(k, v)| (k.to_string(), v.to_string()))
+        //             .collect::<BTreeMap<String, String>>(),
+        //     },
+        //     (
+        //         StorageParams::Ftp(StorageFtpConfig {
+        //             endpoint: "ftps://too-simple:1926".to_string(),
+        //             root: "/".to_string(),
+        //             username: "user".to_string(),
+        //             password: "pwd".to_string(),
+        //         }),
+        //         "/".to_string(),
+        //     ),
+        // ),
         (
             "ipfs-default-endpoint",
             UriLocation {
