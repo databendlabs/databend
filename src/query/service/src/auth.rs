@@ -18,6 +18,7 @@ pub use common_config::Config;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::AuthInfo;
+use common_meta_types::UserInfo;
 use common_users::JwtAuthenticator;
 use common_users::UserApiProvider;
 
@@ -57,10 +58,34 @@ impl AuthMgr {
                     .as_ref()
                     .ok_or_else(|| ErrorCode::AuthenticateFailure("jwt auth not configured."))?;
                 let jwt = jwt_auth.parse_jwt_claims(t.as_str())?;
-                let user_name = jwt.subject.unwrap();
-                let tenant = jwt.custom.tenant_id.ok_or_else(|| {
-                    ErrorCode::AuthenticateFailure("jwt auth doesn't have tenant_id.")
+                let user_name = jwt.subject.ok_or_else(|| {
+                    ErrorCode::AuthenticateFailure(
+                        "jwt auth not configured correctly, user name is missing.",
+                    )
                 })?;
+
+                // setup tenant if the JWT claims contain extra.tenant_id
+                if let Some(tenant) = jwt.custom.tenant_id {
+                    session.set_current_tenant(tenant.clone());
+                };
+                let tenant = session.get_current_tenant();
+
+                // create user if not exists when the JWT claims contains ensure_user
+                if let Some(ref ensure_user) = jwt.custom.ensure_user {
+                    let mut user_info = UserInfo::new(&user_name, "%", AuthInfo::JWT);
+                    if let Some(ref roles) = ensure_user.roles {
+                        for role in roles.clone().into_iter() {
+                            user_info.grants.grant_role(role);
+                        }
+                    }
+                    UserApiProvider::instance()
+                        .ensure_builtin_roles(&tenant)
+                        .await?;
+                    UserApiProvider::instance()
+                        .add_user(&tenant, user_info.clone(), true)
+                        .await?;
+                }
+
                 let auth_role = jwt.custom.role.clone();
                 let user_info = UserApiProvider::instance()
                     .get_user_with_client_ip(
