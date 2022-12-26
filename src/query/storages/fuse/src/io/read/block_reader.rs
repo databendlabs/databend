@@ -13,14 +13,12 @@
 // limitations under the License.
 
 use std::ops::Range;
-use std::sync::Arc;
 use std::time::Instant;
 
 use common_arrow::parquet::metadata::SchemaDescriptor;
 use common_base::rangemap::RangeMerger;
 use common_base::runtime::UnlimitedFuture;
 use common_catalog::plan::Projection;
-use common_catalog::table_context::TableContext;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -50,25 +48,19 @@ impl BlockReader {
     /// It will *NOT* merge two requests:
     /// if the last io request size is larger than storage_io_page_bytes_for_read(Default is 512KB).
     pub async fn merge_io_read(
-        ctx: Arc<dyn TableContext>,
         object: Object,
+        min_seek_bytes: u64,
+        max_page_bytes: u64,
         raw_ranges: Vec<(usize, Range<u64>)>,
     ) -> Result<Vec<(usize, Vec<u8>)>> {
         let path = object.path().to_string();
-
-        // Merge settings.
-        let min_bytes_for_seek = ctx.get_settings().get_storage_io_min_bytes_for_seek()?;
-        let max_page_bytes_for_read = ctx
-            .get_settings()
-            .get_storage_io_max_page_bytes_for_read()?;
 
         // Build merged read ranges.
         let ranges = raw_ranges
             .iter()
             .map(|(_, r)| r.clone())
             .collect::<Vec<_>>();
-        let range_merger =
-            RangeMerger::from_iter(ranges, min_bytes_for_seek, max_page_bytes_for_read);
+        let range_merger = RangeMerger::from_iter(ranges, min_seek_bytes, max_page_bytes);
         let merged_ranges = range_merger.ranges();
 
         // Read merged range data.

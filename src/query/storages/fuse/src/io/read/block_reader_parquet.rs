@@ -301,7 +301,11 @@ impl BlockReader {
         }
 
         let object = self.operator.object(&part.location);
-        Self::merge_io_read(ctx, object, ranges).await
+        let min_seek_bytes = ctx.get_settings().get_storage_io_min_bytes_for_seek()?;
+        let max_page_bytes = ctx
+            .get_settings()
+            .get_storage_io_max_page_bytes_for_read()?;
+        Self::merge_io_read(object, min_seek_bytes, max_page_bytes, ranges).await
     }
 
     pub fn support_blocking_api(&self) -> bool {
