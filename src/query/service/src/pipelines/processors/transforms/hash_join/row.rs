@@ -18,6 +18,7 @@ use std::sync::Arc;
 use std::sync::RwLock;
 
 use common_exception::Result;
+use common_expression::types::DataType;
 use common_expression::Chunk as DataChunk;
 use common_expression::Column;
 use common_expression::DataSchemaRef;
@@ -27,7 +28,7 @@ use common_storages_fuse::TableContext;
 use crate::pipelines::processors::transforms::hash_join::desc::MarkerKind;
 use crate::sessions::QueryContext;
 
-pub type ColumnVector = Vec<Column>;
+pub type ColumnVector = Vec<(Column, DataType)>;
 
 pub struct Chunk {
     pub chunk: DataChunk,
@@ -61,7 +62,7 @@ impl RowPtr {
 pub struct RowSpace {
     pub data_schema: DataSchemaRef,
     pub chunks: RwLock<Vec<Chunk>>,
-    pub buffer: RwLock<Vec<Chunk>>,
+    pub buffer: RwLock<Vec<DataChunk>>,
 }
 
 impl RowSpace {

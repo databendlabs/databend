@@ -18,6 +18,7 @@ use std::sync::Arc;
 use common_base::base::tokio::sync::broadcast::Receiver;
 use common_exception::Result;
 use common_expression::Chunk;
+use common_expression::ChunkEntry;
 use common_expression::Column;
 use common_expression::ColumnBuilder;
 use common_expression::DataSchemaRef;
@@ -129,18 +130,21 @@ impl Processor for TransformCreateSets {
     }
 
     fn process(&mut self) -> Result<()> {
-        if let Some(input_data) = self.input_data.take() {
-            let num_rows = input_data.num_rows();
-            let mut new_columns = input_data.columns().collect::<Vec<_>>();
+        if let Some(mut data) = self.input_data.take() {
+            let num_rows = data.num_rows();
             let start_index = self.schema.fields().len() - self.sub_queries_result.len();
 
             for (index, result) in self.sub_queries_result.iter().enumerate() {
                 let data_type = self.schema.field(start_index + index).data_type();
-                let col = (Value::Scalar(result.clone()), data_type.into());
+                let col = ChunkEntry {
+                    id: start_index + index,
+                    value: Value::Scalar(result.clone()),
+                    data_type: data_type.clone(),
+                };
                 new_columns.push(col);
             }
 
-            self.output_data = Some(Chunk::new(new_columns, num_rows));
+            self.output_data = Some(data);
         }
 
         Ok(())

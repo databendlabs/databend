@@ -313,7 +313,7 @@ fn run_concat(file: &mut impl Write, chunks: &[Chunk]) {
 }
 
 fn run_take(file: &mut impl Write, indices: &[u32], chunk: &Chunk) {
-    let result = Chunk::take(chunk.clone(), indices);
+    let result = Chunk::take(chunk, indices);
 
     match result {
         Ok(result_chunk) => {

@@ -33,7 +33,7 @@ use crate::ColumnIndex;
 use crate::Value;
 
 impl<Index: ColumnIndex> Chunk<Index> {
-    pub fn take<I>(self, indices: &[I]) -> Result<Self>
+    pub fn take<I>(&self, indices: &[I]) -> Result<Self>
     where I: common_arrow::arrow::types::Index {
         if indices.is_empty() {
             return Ok(self.slice(0..0));

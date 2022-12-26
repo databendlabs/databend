@@ -397,7 +397,7 @@ impl<Method: HashMethod + Send> HashMethod for TwoLevelHashMethod<Method> {
 
     fn build_keys_state(
         &self,
-        group_columns: &[(&Column, DataType)],
+        group_columns: &[(Column, DataType)],
         rows: usize,
     ) -> Result<KeysState> {
         self.method.build_keys_state(group_columns, rows)

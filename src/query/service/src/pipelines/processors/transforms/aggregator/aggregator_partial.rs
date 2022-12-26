@@ -19,6 +19,7 @@ use common_expression::types::string::StringColumnBuilder;
 use common_expression::types::AnyType;
 use common_expression::types::DataType;
 use common_expression::Chunk;
+use common_expression::ChunkEntry;
 use common_expression::Column;
 use common_expression::HashMethod;
 use common_expression::HashMethodKeysU128;
@@ -171,13 +172,10 @@ impl<const HAS_AGG: bool, Method: HashMethod + PolymorphicKeysHelper<Method> + S
     }
 
     #[inline(always)]
-    pub fn group_columns<'a>(
-        chunk: &'a Chunk,
-        indices: &[usize],
-    ) -> Vec<&'a (Value<AnyType>, DataType)> {
+    pub fn group_columns<'a>(chunk: &'a Chunk, indices: &[usize]) -> Vec<&'a ChunkEntry> {
         indices
             .iter()
-            .map(|&index| chunk.column(index))
+            .map(|&index| chunk.get_by_offset(index))
             .collect::<Vec<_>>()
     }
 
@@ -239,7 +237,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
         let group_columns = Self::group_columns(&self.params.group_columns, &chunk);
         let group_columns = group_columns
             .iter()
-            .map(|(c, ty)| (c.as_column().unwrap(), ty.clone()))
+            .map(|c| (c.value.as_column().unwrap().clone(), c.data_type.clone()))
             .collect::<Vec<_>>();
         let group_keys_state = self
             .method
@@ -268,7 +266,7 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
         let group_columns = Self::group_columns(&self.params.group_columns, &chunk);
         let group_columns = group_columns
             .iter()
-            .map(|(c, ty)| (c.as_column().unwrap(), ty.clone()))
+            .map(|c| (c.value.as_column().unwrap().clone(), c.data_type.clone()))
             .collect::<Vec<_>>();
 
         let keys_state = self

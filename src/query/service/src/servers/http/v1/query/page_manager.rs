@@ -135,7 +135,8 @@ impl PageManager {
     ) -> Result<()> {
         let format_settings = &self.format_settings;
         if self.schema.fields().is_empty() {
-            self.schema = chunk.schema().clone();
+            todo!("expression");
+            // self.schema = chunk.schema().clone();
         }
         let mut iter = block_to_json_value(&chunk, format_settings)?
             .into_iter()

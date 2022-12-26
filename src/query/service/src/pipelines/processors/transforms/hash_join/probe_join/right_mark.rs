@@ -84,7 +84,11 @@ impl JoinHashTable {
     {
         let valids = &probe_state.valids;
         let has_null = *self.hash_join_desc.marker_join_desc.has_null.read();
-        let mut markers = Self::init_markers(input.columns(), input.num_rows());
+        let cols = input
+            .columns()
+            .map(|c| (c.value.as_column().unwrap().clone(), c.data_type.clone()))
+            .collect::<Vec<_>>();
+        let mut markers = Self::init_markers(&cols, input.num_rows());
 
         let func_ctx = self.ctx.try_get_function_context()?;
         let other_predicate = self.hash_join_desc.other_predicate.as_ref().unwrap();
@@ -159,7 +163,7 @@ impl JoinHashTable {
             }
         }
 
-        let probe_chunk = Chunk::take(input.clone(), &probe_indexes)?;
+        let probe_chunk = Chunk::take(input, &probe_indexes)?;
         let build_chunk = self.row_space.gather(&build_indexes)?;
         let merged_chunk = self.merge_eq_chunk(&build_chunk, &probe_chunk)?;
 

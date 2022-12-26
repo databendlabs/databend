@@ -72,7 +72,7 @@ impl Chunk {
 
         let indices: PrimitiveArray<u32> =
             arrow_sort::lexsort_to_indices_impl(&order_arrays, limit, &build_compare)?;
-        Chunk::take(chunk.clone(), indices.values())
+        Chunk::take(chunk, indices.values())
     }
 
     // merge two chunks to one sorted chunk

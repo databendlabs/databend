@@ -62,7 +62,7 @@ pub trait HashMethod: Clone {
 
     fn build_keys_state(
         &self,
-        group_columns: &[(&Column, DataType)],
+        group_columns: &[(Column, DataType)],
         rows: usize,
     ) -> Result<KeysState>;
 
@@ -131,7 +131,7 @@ impl HashMethod for HashMethodSerializer {
 
     fn build_keys_state(
         &self,
-        group_columns: &[(&Column, DataType)],
+        group_columns: &[(Column, DataType)],
         rows: usize,
     ) -> Result<KeysState> {
         if group_columns.len() == 1 && group_columns[0].1.is_string() {
@@ -178,7 +178,7 @@ where T: Number
 impl<T> HashMethodFixedKeys<T>
 where T: Clone + Default
 {
-    fn build_keys_vec(&self, group_columns: &[(&Column, DataType)], rows: usize) -> Result<Vec<T>> {
+    fn build_keys_vec(&self, group_columns: &[(Column, DataType)], rows: usize) -> Result<Vec<T>> {
         let step = std::mem::size_of::<T>();
         let mut group_keys: Vec<T> = vec![T::default(); rows];
         let ptr = group_keys.as_mut_ptr() as *mut u8;
@@ -319,7 +319,7 @@ macro_rules! impl_hash_method_fixed_keys {
 
             fn build_keys_state(
                 &self,
-                group_columns: &[(&Column, DataType)],
+                group_columns: &[(Column, DataType)],
                 rows: usize,
             ) -> Result<KeysState> {
                 // faster path for single fixed keys
@@ -362,7 +362,7 @@ macro_rules! impl_hash_method_fixed_large_keys {
 
             fn build_keys_state(
                 &self,
-                group_columns: &[(&Column, DataType)],
+                group_columns: &[(Column, DataType)],
                 rows: usize,
             ) -> Result<KeysState> {
                 let keys = self.build_keys_vec(group_columns, rows)?;

@@ -18,6 +18,7 @@ use std::sync::Mutex;
 
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_base::base::tokio::sync::Notify;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::Chunk;
 use common_expression::Column;
@@ -224,20 +225,29 @@ impl JoinHashTable {
             .probe_keys
             .iter()
             .map(|expr| {
-                Ok(evaluator
-                    .run(expr)?
-                    .convert_to_full_column(expr.data_type(), input.num_rows()))
+                let return_type = expr.data_type();
+                Ok((
+                    evaluator
+                        .run(expr)
+                        .map_err(|(_, e)| {
+                            ErrorCode::Internal(format!("Invalid expression: {}", e))
+                        })?
+                        .convert_to_full_column(return_type, input.num_rows()),
+                    return_type.clone(),
+                ))
             })
-            .collect::<Result<Vec<Column>>>()?;
+            .collect::<Result<Vec<_>>>()?;
 
         if self.hash_join_desc.join_type == JoinType::RightMark {
             probe_state.markers = Some(Self::init_markers(&probe_keys, input.num_rows()));
         }
-        let probe_keys = probe_keys.iter().collect::<Vec<&ColumnRef>>();
 
-        if probe_keys.iter().any(|c| c.is_nullable() || c.is_null()) {
+        if probe_keys
+            .iter()
+            .any(|(_, ty)| ty.is_nullable() || ty.is_null())
+        {
             let mut valids = None;
-            for col in probe_keys.iter() {
+            for (col, _) in probe_keys.iter() {
                 let (is_all_null, tmp_valids) = col.validity();
                 if is_all_null {
                     let mut m = MutableBitmap::with_capacity(input.num_rows());

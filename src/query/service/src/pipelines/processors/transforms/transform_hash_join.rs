@@ -162,6 +162,7 @@ impl Processor for TransformHashJoinProbe {
             HashJoinStep::Build => Ok(()),
             HashJoinStep::Probe => {
                 if let Some(data) = self.input_data.take() {
+                    let data = data.convert_to_full();
                     self.probe(&data)?;
                 }
                 Ok(())

@@ -120,7 +120,9 @@ impl JoinHashTable {
 
                     let evaluator =
                         Evaluator::new(&probed_chunk, func_ctx.clone(), &BUILTIN_FUNCTIONS);
-                    let predicate = evaluator.run(other_predicate)?;
+                    let predicate = evaluator.run(other_predicate).map_err(|(_, e)| {
+                        ErrorCode::Internal(format!("Invalid expression: {}", e))
+                    })?;
                     let res = Chunk::filter(probed_chunk, &predicate)?;
                     if !res.is_empty() {
                         filtered_chunks.push(res);

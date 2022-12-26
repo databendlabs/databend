@@ -74,19 +74,27 @@ impl Transform for TransformCastSchema {
     const NAME: &'static str = "CastSchemaTransform";
 
     fn transform(&mut self, data: Chunk) -> Result<Chunk> {
-        let rows = data.num_rows();
+        todo!("expression")
+        // let rows = data.num_rows();
 
-        let evaluator = Evaluator::new(&data, self.func_ctx.clone(), &BUILTIN_FUNCTIONS);
+        // let evaluator = Evaluator::new(&data, self.func_ctx.clone(), &BUILTIN_FUNCTIONS);
 
-        let mut result = Chunk::new(vec![], rows);
-        for (index, expr) in self.exprs.iter().enumerate() {
-            let r = evaluator.run(expr)?;
-            result.add_column(ChunkEntry {
-                id: index,
-                data_type: expr.data_type(),
-                value: r,
-            })
-        }
-        Ok(result)
+        // let indices = evaluator.run(&self.indices_scalar)?;
+        // let indices = get_hash_values(&indices, num)?;
+        // let chunks = Chunk::scatter(chunk, &indices, self.scatter_size)?;
+
+        // let mut chunk = Chunk::new(vec![], rows);
+
+        // for (index, f) in self.output_schema.fields().iter().enumerate() {
+        //     let col = data.get_by_offset(index);
+        //     f.data_type();
+        // }
+
+        // let mut columns = Vec::with_capacity(data.num_columns());
+        // for (cast_func, entry) in self.functions.iter().zip(data.columns()) {
+        //     let v = (cast_func.eval)(&[value.as_ref()], &self.func_ctx)?;
+        //     columns.push((v, ty.clone()));
+        // }
+        // Ok(Chunk::new(columns, rows))
     }
 }

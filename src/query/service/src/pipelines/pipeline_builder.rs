@@ -425,15 +425,12 @@ impl PipelineBuilder {
         let sort_desc = sort
             .order_by
             .iter()
-            .map(|desc| {
-                let index = schema.index_of(&desc.order_by)?;
-                SortColumnDescription {
-                    index,
-                    asc: desc.asc,
-                    nulls_first: desc.nulls_first,
-                }
+            .map(|desc| SortColumnDescription {
+                index: desc.order_by,
+                asc: desc.asc,
+                nulls_first: desc.nulls_first,
             })
-            .collect::<Result<Vec<_>>>()?;
+            .collect::<Vec<_>>();
 
         let chunk_size = self.ctx.get_settings().get_max_block_size()? as usize;
 

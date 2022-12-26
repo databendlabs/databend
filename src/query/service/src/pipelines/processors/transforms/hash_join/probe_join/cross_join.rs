@@ -48,11 +48,11 @@ impl JoinHashTable {
     ) -> Result<Chunk> {
         let columns = Vec::with_capacity(build_chunk.num_columns() + probe_chunk.num_columns());
         let mut replicated_probe_chunk = Chunk::new(columns, build_chunk.num_rows());
-        for (col, ty) in probe_chunk.columns().iter() {
-            replicated_probe_chunk = replicated_probe_chunk.add_column(col.clone(), ty.clone())?;
+        for col in probe_chunk.columns() {
+            replicated_probe_chunk.add_column(col.clone());
         }
-        for (col, ty) in build_chunk.columns().iter() {
-            replicated_probe_chunk = replicated_probe_chunk.add_column(col.clone(), ty.clone())?;
+        for col in build_chunk.columns() {
+            replicated_probe_chunk.add_column(col.clone());
         }
         Ok(replicated_probe_chunk)
     }

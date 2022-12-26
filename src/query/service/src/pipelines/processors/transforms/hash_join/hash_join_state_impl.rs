@@ -39,21 +39,20 @@ use crate::sql::planner::plans::JoinType;
 #[async_trait::async_trait]
 impl HashJoinState for JoinHashTable {
     fn build(&self, input: Chunk) -> Result<()> {
-        let func_ctx = self.ctx.try_get_function_context()?;
-        let evaluator = Evaluator::new(&input, func_ctx, &BUILTIN_FUNCTIONS);
-
-        let build_cols = self
-            .hash_join_desc
-            .build_keys
-            .iter()
-            .map(|expr| {
-                Ok(evaluator
-                    .run(expr)?
-                    .convert_to_full_column(expr.data_type(), input.num_rows()))
-            })
-            .collect::<Result<Vec<Column>>>()?;
-
-        self.row_space.push_cols(input, build_cols)
+        let mut data_block = input;
+        let data_block_size_limit = self.ctx.get_settings().get_max_block_size()? * 16;
+        {
+            let mut buffer = self.row_space.buffer.write().unwrap();
+            let buffer_row_size = buffer.iter().fold(0, |acc, x| acc + x.num_rows());
+            if buffer_row_size < data_block_size_limit as usize {
+                buffer.push(data_block);
+                return Ok(());
+            } else {
+                data_block = Chunk::concat(buffer.as_slice())?;
+                buffer.clear();
+            }
+        }
+        self.add_build_block(data_block)
     }
 
     fn probe(&self, input: &Chunk, probe_state: &mut ProbeState) -> Result<Vec<Chunk>> {
@@ -154,7 +153,7 @@ impl HashJoinState for JoinHashTable {
                     .collect(),
                 JoinType::RightMark => {
                     if !has_null && !chunk.cols.is_empty() {
-                        if let Some(validity) = chunk.cols[0].validity().1 {
+                        if let Some(validity) = chunk.cols[0].0.validity().1 {
                             if validity.unset_bits() > 0 {
                                 has_null = true;
                                 let mut has_null_ref =
@@ -176,7 +175,7 @@ impl HashJoinState for JoinHashTable {
                 HashTable::SerializerHashTable(table) => {
                     let mut build_cols_ref = Vec::with_capacity(chunk.cols.len());
                     for build_col in chunk.cols.iter() {
-                        build_cols_ref.push(build_col);
+                        build_cols_ref.push(build_col.clone());
                     }
                     let keys_state = table
                         .hash_method
@@ -335,14 +334,13 @@ impl HashJoinState for JoinHashTable {
             _ => unreachable!(),
         };
         let probe_column_len = self.probe_schema.fields().len();
-        let probe_columns = input_chunk
-            .columns()
-            .take(probe_column_len)
+        let probe_columns = input_chunk.columns_ref()[0..probe_column_len]
+            .iter()
             .map(|c| Self::set_validity(c, &validity))
             .collect::<Vec<_>>();
         let probe_chunk = Chunk::new(robe_columns, num_rows);
         let build_chunk = Chunk::new(
-            input_chunk.columns().skip(probe_column_len).to_vec(),
+            input_chunk.columns_ref()[probe_column_len..].to_vec(),
             num_rows,
         );
         let merged_chunk = self.merge_eq_chunk(&build_chunk, &probe_chunk)?;
@@ -376,7 +374,7 @@ impl HashJoinState for JoinHashTable {
         }
 
         let probe_fields_len = self.probe_schema.fields().len();
-        let build_columns = input_chunk.columns().skip(probe_fields_len).to_vec();
+        let build_columns = input_chunk.columns_ref()[probe_fields_len..].to_vec();
         let build_chunk = Chunk::new(build_columns, input_chunk.num_rows());
 
         // Fast path for right semi join with non-equi conditions
@@ -533,16 +531,15 @@ impl JoinHashTable {
             };
 
             // probed_chunk contains probe side and build side.
-            let nullable_columns = input_chunk
-                .columns()
-                .skip(probe_side_len)
+            let nullable_columns = input_chunk.columns_ref()[probe_side_len..]
+                .iter()
                 .map(|c| Self::set_validity(c, &validity))
                 .collect::<Vec<_>>();
 
             let nullable_build_chunk = Chunk::new(nullable_columns.clone(), num_rows);
 
             let probe_chunk = Chunk::new(
-                input_chunk.columns().take(probe_side_len).to_vec(),
+                input_chunk.columns_ref()[0..probe_side_len].to_vec(),
                 num_rows,
             );
 

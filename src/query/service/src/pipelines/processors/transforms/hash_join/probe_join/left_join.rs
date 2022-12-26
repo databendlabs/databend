@@ -21,6 +21,8 @@ use common_arrow::arrow::bitmap::MutableBitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::Chunk;
+use common_expression::ChunkEntry;
+use common_expression::Column;
 use common_expression::Scalar;
 use common_expression::Value;
 use common_hashtable::HashtableEntryRefLike;
@@ -146,11 +148,11 @@ impl JoinHashTable {
                             let columns = build_data_schema
                                 .fields()
                                 .iter()
-                                .map(|field| {
-                                    (
-                                        Value::Scalar(Scalar::Null),
-                                        field.data_type().wrap_nullable(),
-                                    )
+                                .enumerate()
+                                .map(|(id, field)| ChunkEntry {
+                                    id,
+                                    value: Value::Scalar(Scalar::Null),
+                                    data_type: field.data_type().wrap_nullable(),
                                 })
                                 .collect::<Vec<_>>();
                             Chunk::new(columns, input.num_rows())
@@ -166,9 +168,10 @@ impl JoinHashTable {
                                 (
                                     build_chunk
                                         .columns()
-                                        .iter()
-                                        .map(|(_, ty)| {
-                                            (Value::Scalar(Scalar::Null), ty.wrap_nullable())
+                                        .map(|c| ChunkEntry {
+                                            id: c.id,
+                                            value: Value::Scalar(Scalar::Null),
+                                            data_type: c.data_type.wrap_nullable(),
                                         })
                                         .collect::<Vec<_>>(),
                                     local_build_indexes.len(),
@@ -177,7 +180,6 @@ impl JoinHashTable {
                                 (
                                     build_chunk
                                         .columns()
-                                        .iter()
                                         .map(|c| Self::set_validity(c, &validity_bitmap))
                                         .collect::<Vec<_>>(),
                                     validity_bitmap.len(),
@@ -192,7 +194,6 @@ impl JoinHashTable {
                         if self.hash_join_desc.join_type == JoinType::Full {
                             let nullable_probe_columns = probe_chunk
                                 .columns()
-                                .iter()
                                 .map(|c| {
                                     let mut probe_validity = MutableBitmap::new();
                                     probe_validity.extend_constant(num_rows, true);
@@ -226,15 +227,14 @@ impl JoinHashTable {
         if self.hash_join_desc.join_type == JoinType::Full {
             let nullable_probe_columns = probe_chunk
                 .columns()
-                .iter()
                 .map(|c| {
                     let mut probe_validity = MutableBitmap::new();
-                    probe_validity.extend_constant(c.len(), true);
+                    probe_validity.extend_constant(probe_chunk.num_rows(), true);
                     let probe_validity: Bitmap = probe_validity.into();
                     Self::set_validity(c, &probe_validity)
                 })
                 .collect::<Vec<_>>();
-            probe_chunk = Chunk::create(self.probe_schema.clone(), nullable_probe_columns);
+            probe_chunk = Chunk::new(nullable_probe_columns, probe_chunk.num_rows());
         }
 
         if !WITH_OTHER_CONJUNCT {
@@ -259,9 +259,14 @@ impl JoinHashTable {
             let columns = build_data_schema
                 .fields()
                 .iter()
-                .map(|field| {
+                .enumerate()
+                .map(|(id, field)| {
                     let data_type = field.data_type().wrap_nullable().into();
-                    (Value::Scalar(Scalar::Null), data_type)
+                    ChunkEntry {
+                        id,
+                        value: Value::Scalar(Scalar::Null),
+                        data_type,
+                    }
                 })
                 .collect::<Vec<_>>();
             Chunk::new(columns, input.num_rows())
@@ -274,13 +279,20 @@ impl JoinHashTable {
             if self.row_space.data_chunks().is_empty() && !local_build_indexes.is_empty() {
                 build_chunk
                     .columns()
-                    .map(|c| (Value::Scalar(Scalar::Null), c.1.clone()))
-                    .collect::<Vec<_>>()?
+                    .enumerate()
+                    .map(|(id, c)| ChunkEntry {
+                        id,
+                        value: Value::Column(Column::Null {
+                            len: localbuild_indexes.len(),
+                        }),
+                        data_type: c.data_type.clone(),
+                    })
+                    .collect::<Vec<_>>()
             } else {
                 build_chunk
                     .columns()
                     .map(|c| Self::set_validity(c, &validity))
-                    .collect::<Result<Vec<_>>>()?
+                    .collect::<Vec<_>>()
             };
         let nullable_build_chunk =
             Chunk::new_from_sequence(nullable_columns.clone(), validity.len());

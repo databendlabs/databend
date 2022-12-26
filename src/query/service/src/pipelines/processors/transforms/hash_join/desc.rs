@@ -13,11 +13,14 @@
 // limitations under the License.
 
 use common_arrow::arrow::bitmap::MutableBitmap;
+use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::type_check;
 use common_expression::Chunk;
 use common_expression::Expr;
 use common_expression::RawExpr;
 use common_functions::scalars::FunctionFactory;
+use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 use common_sql::executor::HashJoin;
 use common_sql::executor::PhysicalScalar;
 use common_sql::IndexType;
@@ -108,6 +111,9 @@ impl HashJoinDesc {
             };
         }
 
-        Ok(Some(condition))
+        let expr = type_check::check(&condition, &BUILTIN_FUNCTIONS)
+            .map_err(|(_, e)| ErrorCode::Internal(format!("Invalid expression: {}", e)))?;
+
+        Ok(Some(expr))
     }
 }
