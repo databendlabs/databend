@@ -104,6 +104,7 @@ impl<'a> Binder {
                     protocol: uri_location.protocol.clone(),
                     name: uri_location.name.clone(),
                     path: uri_location.path.clone(),
+                    loc_prefix: uri_location.loc_prefix.clone(),
                     connection: uri_location.connection.clone(),
                 };
 
@@ -168,6 +169,7 @@ impl<'a> Binder {
                     protocol: uri_location.protocol.clone(),
                     name: uri_location.name.clone(),
                     path: uri_location.path.clone(),
+                    loc_prefix: uri_location.loc_prefix.clone(),
                     connection: uri_location.connection.clone(),
                 };
 
@@ -196,6 +198,7 @@ impl<'a> Binder {
                     protocol: uri_location.protocol.clone(),
                     name: uri_location.name.clone(),
                     path: uri_location.path.clone(),
+                    loc_prefix: uri_location.loc_prefix.clone(),
                     connection: uri_location.connection.clone(),
                 };
 

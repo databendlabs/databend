@@ -79,14 +79,21 @@ pub fn uri_location(i: Input) -> IResult<UriLocation> {
             ~ (CONNECTION ~ "=" ~ #options)?
             ~ (CREDENTIALS ~ "=" ~ #options)?
             ~ (ENCRYPTION ~ "=" ~ #options)?
+            ~ (LOCATION_PREFIX ~ "=" ~ #literal_string)?
         },
-        |(location, connection_opt, credentials_opt, encryption_opt)| {
+        |(location, connection_opt, credentials_opt, encryption_opt, location_prefix)| {
+            let loc_prefix = if let Some((_, _, p)) = location_prefix {
+                p
+            } else {
+                "".to_string()
+            };
             // fs location is not a valid url, let's check it in advance.
             if let Some(path) = location.strip_prefix("fs://") {
                 return Ok(UriLocation {
                     protocol: "fs".to_string(),
                     name: "".to_string(),
                     path: path.to_string(),
+                    loc_prefix,
                     connection: BTreeMap::default(),
                 });
             }
@@ -116,6 +123,7 @@ pub fn uri_location(i: Input) -> IResult<UriLocation> {
                 } else {
                     parsed.path().to_string()
                 },
+                loc_prefix,
                 connection: conn,
             })
         },
