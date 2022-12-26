@@ -1,10 +1,14 @@
-use common_catalog::plan::PartInfoPtr;
-use serde::{Deserializer, Serializer};
-use common_datablocks::{BlockMetaInfo, BlockMetaInfoPtr};
 use std::any::Any;
-use std::fmt::{Debug, Formatter};
-use common_arrow::native::read::PaReadBuf;
+use std::fmt::Debug;
+use std::fmt::Formatter;
+
 use common_arrow::native::read::reader::PaReader;
+use common_arrow::native::read::PaReadBuf;
+use common_catalog::plan::PartInfoPtr;
+use common_datablocks::BlockMetaInfo;
+use common_datablocks::BlockMetaInfoPtr;
+use serde::Deserializer;
+use serde::Serializer;
 
 pub type DataChunks = Vec<(usize, PaReader<Box<dyn PaReadBuf + Send + Sync>>)>;
 
@@ -28,13 +32,15 @@ impl Debug for NativeDataSourceMeta {
 }
 
 impl serde::Serialize for NativeDataSourceMeta {
-    fn serialize<S>(&self, _: S) -> common_exception::Result<S::Ok, S::Error> where S: Serializer {
+    fn serialize<S>(&self, _: S) -> common_exception::Result<S::Ok, S::Error>
+    where S: Serializer {
         unimplemented!("Unimplemented serialize NativeDataSourceMeta")
     }
 }
 
 impl<'de> serde::Deserialize<'de> for NativeDataSourceMeta {
-    fn deserialize<D>(_: D) -> common_exception::Result<Self, D::Error> where D: Deserializer<'de> {
+    fn deserialize<D>(_: D) -> common_exception::Result<Self, D::Error>
+    where D: Deserializer<'de> {
         unimplemented!("Unimplemented deserialize NativeDataSourceMeta")
     }
 }

@@ -30,9 +30,9 @@ mod truncate;
 mod fuse_native_source;
 mod fuse_parquet_source;
 mod fuse_source;
+mod read;
 mod revert;
 pub mod util;
-mod read;
 
 pub use compact::CompactOptions;
 pub use fuse_sink::BloomIndexState;

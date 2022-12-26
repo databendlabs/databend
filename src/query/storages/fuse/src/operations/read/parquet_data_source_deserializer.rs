@@ -1,17 +1,20 @@
 use std::any::Any;
 use std::sync::Arc;
-use common_base::base::{Progress, ProgressValues};
+
+use common_base::base::Progress;
+use common_base::base::ProgressValues;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::table_context::TableContext;
-use common_datablocks::{BlockMetaInfo, DataBlock};
-use common_exception::ErrorCode;
-use common_pipeline_core::processors::processor::{Event, ProcessorPtr};
-use common_pipeline_transforms::processors::transforms::{Transform, Transformer};
+use common_datablocks::DataBlock;
+use common_exception::Result;
+use common_pipeline_core::processors::port::InputPort;
+use common_pipeline_core::processors::port::OutputPort;
+use common_pipeline_core::processors::processor::Event;
+use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_core::processors::Processor;
+
 use crate::io::BlockReader;
 use crate::operations::read::parquet_data_source::DataSourceMeta;
-use common_exception::Result;
-use common_pipeline_core::processors::port::{InputPort, OutputPort};
-use common_pipeline_core::processors::Processor;
 
 pub struct DeserializeDataTransform {
     scan_progress: Arc<Progress>,
@@ -25,19 +28,22 @@ pub struct DeserializeDataTransform {
 }
 
 impl DeserializeDataTransform {
-    pub fn create(ctx: Arc<dyn TableContext>, block_reader: Arc<BlockReader>, input: Arc<InputPort>, output: Arc<OutputPort>) -> Result<ProcessorPtr> {
+    pub fn create(
+        ctx: Arc<dyn TableContext>,
+        block_reader: Arc<BlockReader>,
+        input: Arc<InputPort>,
+        output: Arc<OutputPort>,
+    ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
-        Ok(ProcessorPtr::create(Box::new(
-            DeserializeDataTransform {
-                scan_progress,
-                block_reader,
-                input,
-                output,
-                output_data: None,
-                parts: vec![],
-                chunks: vec![],
-            }
-        )))
+        Ok(ProcessorPtr::create(Box::new(DeserializeDataTransform {
+            scan_progress,
+            block_reader,
+            input,
+            output,
+            output_data: None,
+            parts: vec![],
+            chunks: vec![],
+        })))
     }
 }
 
@@ -78,7 +84,8 @@ impl Processor for DeserializeDataTransform {
         if self.input.has_data() {
             let mut data_block = self.input.pull_data().unwrap()?;
             if let Some(mut source_meta) = data_block.take_meta() {
-                if let Some(source_meta) = source_meta.as_mut_any().downcast_mut::<DataSourceMeta>() {
+                if let Some(source_meta) = source_meta.as_mut_any().downcast_mut::<DataSourceMeta>()
+                {
                     self.parts = source_meta.part.clone();
                     self.chunks = source_meta.data.take().unwrap();
                     return Ok(Event::Sync);

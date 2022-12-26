@@ -16,16 +16,12 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
-use common_base::runtime::TrackedFuture;
-use common_base::runtime::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use petgraph::prelude::NodeIndex;
 
 use crate::pipelines::executor::executor_condvar::WorkersCondvar;
 use crate::pipelines::executor::executor_tasks::CompletedAsyncTask;
-use crate::pipelines::executor::processor_async_task::ProcessorAsyncTask;
-use crate::pipelines::executor::PipelineExecutor;
 use crate::pipelines::processors::processor::ProcessorPtr;
 
 pub enum ExecutorTask {
@@ -73,11 +69,11 @@ impl ExecutorWorkerContext {
         std::mem::replace(&mut self.task, ExecutorTask::None)
     }
 
-    pub unsafe fn execute_task(&mut self, exec: &PipelineExecutor) -> Result<Option<NodeIndex>> {
+    pub unsafe fn execute_task(&mut self) -> Result<Option<NodeIndex>> {
         match std::mem::replace(&mut self.task, ExecutorTask::None) {
             ExecutorTask::None => Err(ErrorCode::Internal("Execute none task.")),
             ExecutorTask::Sync(processor) => self.execute_sync_task(processor),
-            ExecutorTask::Async(processor) => self.execute_async_task(processor, exec),
+            ExecutorTask::Async(_) => Err(ErrorCode::Internal("Execute async task.")),
             ExecutorTask::AsyncCompleted(task) => match task.res {
                 Ok(_) => Ok(Some(task.id)),
                 Err(cause) => Err(cause),
@@ -88,29 +84,6 @@ impl ExecutorWorkerContext {
     unsafe fn execute_sync_task(&mut self, processor: ProcessorPtr) -> Result<Option<NodeIndex>> {
         processor.process()?;
         Ok(Some(processor.id()))
-    }
-
-    unsafe fn execute_async_task(
-        &mut self,
-        processor: ProcessorPtr,
-        executor: &PipelineExecutor,
-    ) -> Result<Option<NodeIndex>> {
-        let worker_id = self.worker_num;
-        let workers_condvar = self.get_workers_condvar().clone();
-        let tasks_queue = executor.global_tasks_queue.clone();
-
-        executor
-            .async_runtime
-            .spawn(TrackedFuture::create(ProcessorAsyncTask::create(
-                self.query_id.clone(),
-                worker_id,
-                processor.clone(),
-                tasks_queue,
-                workers_condvar,
-                processor.async_process(),
-            )));
-
-        Ok(None)
     }
 
     pub fn get_workers_condvar(&self) -> &Arc<WorkersCondvar> {

@@ -1,15 +1,19 @@
+use std::any::Any;
 use std::sync::Arc;
+
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::table_context::TableContext;
-use common_pipeline_core::processors::port::OutputPort;
-use common_pipeline_core::processors::Processor;
-use common_pipeline_core::processors::processor::{Event, ProcessorPtr};
-use std::any::Any;
 use common_datablocks::DataBlock;
+use common_exception::Result;
+use common_pipeline_core::processors::port::OutputPort;
+use common_pipeline_core::processors::processor::Event;
+use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_core::processors::Processor;
+use common_pipeline_sources::processors::sources::SyncSource;
+use common_pipeline_sources::processors::sources::SyncSourcer;
+
 use crate::io::BlockReader;
 use crate::operations::read::parquet_data_source::DataSourceMeta;
-use common_exception::Result;
-use common_pipeline_sources::processors::sources::{SyncSource, SyncSourcer};
 
 pub struct ReadParquetDataSource<const BLOCKING_IO: bool> {
     finished: bool,
@@ -22,7 +26,11 @@ pub struct ReadParquetDataSource<const BLOCKING_IO: bool> {
 }
 
 impl ReadParquetDataSource<true> {
-    pub fn create(ctx: Arc<dyn TableContext>, output: Arc<OutputPort>, block_reader: Arc<BlockReader>) -> Result<ProcessorPtr> {
+    pub fn create(
+        ctx: Arc<dyn TableContext>,
+        output: Arc<OutputPort>,
+        block_reader: Arc<BlockReader>,
+    ) -> Result<ProcessorPtr> {
         let batch_size = ctx.get_settings().get_storage_fetch_part_num()? as usize;
         SyncSourcer::create(ctx.clone(), output.clone(), ReadParquetDataSource::<true> {
             ctx,
@@ -36,9 +44,15 @@ impl ReadParquetDataSource<true> {
 }
 
 impl ReadParquetDataSource<false> {
-    pub fn create(ctx: Arc<dyn TableContext>, output: Arc<OutputPort>, block_reader: Arc<BlockReader>) -> Result<ProcessorPtr> {
+    pub fn create(
+        ctx: Arc<dyn TableContext>,
+        output: Arc<OutputPort>,
+        block_reader: Arc<BlockReader>,
+    ) -> Result<ProcessorPtr> {
         let batch_size = ctx.get_settings().get_storage_fetch_part_num()? as usize;
-        Ok(ProcessorPtr::create(Box::new(ReadParquetDataSource::<false> {
+        Ok(ProcessorPtr::create(Box::new(ReadParquetDataSource::<
+            false,
+        > {
             ctx,
             output,
             batch_size,
@@ -55,12 +69,10 @@ impl SyncSource for ReadParquetDataSource<true> {
     fn generate(&mut self) -> Result<Option<DataBlock>> {
         match self.ctx.try_get_part() {
             None => Ok(None),
-            Some(part) => Ok(Some(DataBlock::empty_with_meta(
-                DataSourceMeta::create(
-                    vec![part.clone()],
-                    vec![self.block_reader.sync_read_columns_data(part)?],
-                )
-            ))),
+            Some(part) => Ok(Some(DataBlock::empty_with_meta(DataSourceMeta::create(
+                vec![part.clone()],
+                vec![self.block_reader.sync_read_columns_data(part)?],
+            )))),
         }
     }
 }
@@ -99,12 +111,12 @@ impl Processor for ReadParquetDataSource<false> {
     }
 
     async fn async_process(&mut self) -> Result<()> {
-        let mut parts = Vec::with_capacity(self.batch_size);
-        let mut chunks = Vec::with_capacity(self.batch_size);
+        let parts = self.ctx.try_get_parts(self.batch_size);
 
-        for _index in 0..self.batch_size {
-            if let Some(part) = self.ctx.try_get_part() {
-                parts.push(part.clone());
+        if !parts.is_empty() {
+            let mut chunks = Vec::with_capacity(parts.len());
+            for part in &parts {
+                let part = part.clone();
                 let block_reader = self.block_reader.clone();
 
                 chunks.push(async move {
@@ -114,9 +126,7 @@ impl Processor for ReadParquetDataSource<false> {
                     handler.await.unwrap()
                 });
             }
-        }
 
-        if !parts.is_empty() {
             self.output_data = Some((parts, futures::future::try_join_all(chunks).await?));
             return Ok(());
         }

@@ -20,7 +20,6 @@ use once_cell::sync::Lazy;
 use super::prune_unused_columns::UnusedColumnPruner;
 use crate::optimizer::heuristic::decorrelate::decorrelate_subquery;
 use crate::optimizer::heuristic::implement::HeuristicImplementor;
-use crate::optimizer::heuristic::prewhere_optimization::PrewhereOptimizer;
 use crate::optimizer::heuristic::RuleList;
 use crate::optimizer::rule::TransformResult;
 use crate::optimizer::ColumnSet;

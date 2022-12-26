@@ -13,14 +13,12 @@
 //  limitations under the License.
 
 use std::sync::Arc;
-use common_catalog::plan::{DataSourcePlan, PushDownInfo};
 
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use common_meta_app::schema::TableInfo;
-use common_pipeline_core::Pipeline;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_core::Pipeline;
 use common_sql::evaluator::EvalNode;
 
 use super::fuse_native_source::FuseNativeSource;

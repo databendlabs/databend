@@ -1,7 +1,10 @@
-use common_catalog::plan::PartInfoPtr;
-use serde::{Deserializer, Serializer};
-use common_datablocks::{BlockMetaInfo, BlockMetaInfoPtr};
 use std::any::Any;
+
+use common_catalog::plan::PartInfoPtr;
+use common_datablocks::BlockMetaInfo;
+use common_datablocks::BlockMetaInfoPtr;
+use serde::Deserializer;
+use serde::Serializer;
 
 #[derive(Debug, PartialEq)]
 pub struct DataSourceMeta {
@@ -11,18 +14,23 @@ pub struct DataSourceMeta {
 
 impl DataSourceMeta {
     pub fn create(part: Vec<PartInfoPtr>, data: Vec<Vec<(usize, Vec<u8>)>>) -> BlockMetaInfoPtr {
-        Box::new(DataSourceMeta { part, data: Some(data) })
+        Box::new(DataSourceMeta {
+            part,
+            data: Some(data),
+        })
     }
 }
 
 impl serde::Serialize for DataSourceMeta {
-    fn serialize<S>(&self, _: S) -> common_exception::Result<S::Ok, S::Error> where S: Serializer {
+    fn serialize<S>(&self, _: S) -> common_exception::Result<S::Ok, S::Error>
+    where S: Serializer {
         unimplemented!("Unimplemented serialize DataSourceMeta")
     }
 }
 
 impl<'de> serde::Deserialize<'de> for DataSourceMeta {
-    fn deserialize<D>(_: D) -> common_exception::Result<Self, D::Error> where D: Deserializer<'de> {
+    fn deserialize<D>(_: D) -> common_exception::Result<Self, D::Error>
+    where D: Deserializer<'de> {
         unimplemented!("Unimplemented deserialize DataSourceMeta")
     }
 }

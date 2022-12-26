@@ -17,6 +17,8 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
+use common_base::runtime::TrackedFuture;
+use common_base::runtime::TrySpawn;
 use common_exception::Result;
 use petgraph::dot::Config;
 use petgraph::dot::Dot;
@@ -25,13 +27,12 @@ use petgraph::prelude::NodeIndex;
 use petgraph::prelude::StableGraph;
 use petgraph::Direction;
 use tracing::debug;
-use common_base::runtime::{TrackedFuture, TrySpawn};
 
 use crate::pipelines::executor::executor_tasks::ExecutorTasksQueue;
 use crate::pipelines::executor::executor_worker_context::ExecutorTask;
 use crate::pipelines::executor::executor_worker_context::ExecutorWorkerContext;
-use crate::pipelines::executor::PipelineExecutor;
 use crate::pipelines::executor::processor_async_task::ProcessorAsyncTask;
+use crate::pipelines::executor::PipelineExecutor;
 use crate::pipelines::pipe::Pipe;
 use crate::pipelines::pipeline::Pipeline;
 use crate::pipelines::processors::connect;
@@ -312,13 +313,15 @@ impl ScheduleQueue {
             tasks.push_back(ExecutorTask::Sync(processor));
         }
 
-        // while let Some(processor) = self.async_queue.pop_front() {
-        //     tasks.push_back(ExecutorTask::Async(processor));
-        // }
         global.push_tasks(ctx, tasks)
     }
 
-    pub fn schedule(mut self, global: &Arc<ExecutorTasksQueue>, context: &mut ExecutorWorkerContext, executor: &PipelineExecutor) {
+    pub fn schedule(
+        mut self,
+        global: &Arc<ExecutorTasksQueue>,
+        context: &mut ExecutorWorkerContext,
+        executor: &PipelineExecutor,
+    ) {
         debug_assert!(!context.has_task());
 
         while let Some(processor) = self.async_queue.pop_front() {
@@ -328,14 +331,16 @@ impl ScheduleQueue {
 
             unsafe {
                 workers_condvar.inc_active_async_worker();
-                executor.async_runtime.spawn(TrackedFuture::create(ProcessorAsyncTask::create(
-                    context.query_id.clone(),
-                    worker_id,
-                    processor.clone(),
-                    tasks_queue,
-                    workers_condvar,
-                    processor.async_process(),
-                )));
+                executor
+                    .async_runtime
+                    .spawn(TrackedFuture::create(ProcessorAsyncTask::create(
+                        context.query_id.clone(),
+                        worker_id,
+                        processor.clone(),
+                        tasks_queue,
+                        workers_condvar,
+                        processor.async_process(),
+                    )));
             }
         }
 
@@ -343,18 +348,7 @@ impl ScheduleQueue {
             self.schedule_sync(global, context);
         }
 
-        // match self.async_queue.is_empty() {
-        //     false => self.schedule_async(global, context),
-        //     true if !self.sync_queue.is_empty() => self.schedule_sync(global, context),
-        //     true => { /* do nothing*/ }
-        // }
-        // match self.sync_queue.is_empty() {
-        //     false => self.schedule_sync(global, context),
-        //     true if !self.async_queue.is_empty() => self.schedule_async(global, context),
-        //     true => { /* do nothing*/ }
-        // }
-
-        if !self.sync_queue.is_empty() /*|| !self.async_queue.is_empty()*/ {
+        if !self.sync_queue.is_empty() {
             self.schedule_tail(global, context);
         }
     }
@@ -362,14 +356,6 @@ impl ScheduleQueue {
     fn schedule_sync(&mut self, _: &ExecutorTasksQueue, ctx: &mut ExecutorWorkerContext) {
         if let Some(processor) = self.sync_queue.pop_front() {
             ctx.set_task(ExecutorTask::Sync(processor));
-        }
-    }
-
-    fn schedule_async(&mut self, _: &ExecutorTasksQueue, ctx: &mut ExecutorWorkerContext) {
-        if let Some(processor) = self.async_queue.pop_front() {
-            let workers_condvar = ctx.get_workers_condvar();
-            workers_condvar.inc_active_async_worker();
-            ctx.set_task(ExecutorTask::Async(processor));
         }
     }
 }

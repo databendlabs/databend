@@ -28,7 +28,7 @@ use common_arrow::parquet::metadata::ColumnDescriptor;
 use common_arrow::parquet::read::BasicDecompressor;
 use common_arrow::parquet::read::PageMetaData;
 use common_arrow::parquet::read::PageReader;
-use common_base::runtime::{LimitMemGuard, UnlimitedFuture};
+use common_base::runtime::UnlimitedFuture;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::Projection;
 use common_datablocks::DataBlock;
@@ -154,7 +154,7 @@ impl BlockReader {
                     .await?;
                 Ok::<_, ErrorCode>((index, column_chunk))
             }
-                .instrument(debug_span!("read_col_chunk"));
+            .instrument(debug_span!("read_col_chunk"));
             column_chunk_futs.push(fut);
 
             columns_meta.insert(
@@ -281,14 +281,9 @@ impl BlockReader {
             let object = self.operator.object(&part.location);
 
             join_handlers.push(async move {
-                let handler = common_base::base::tokio::spawn(
-                    UnlimitedFuture::create(BlockReader::read_column(
-                        object,
-                        index,
-                        column_meta.offset,
-                        column_meta.len,
-                    ))
-                );
+                let handler = common_base::base::tokio::spawn(UnlimitedFuture::create(
+                    BlockReader::read_column(object, index, column_meta.offset, column_meta.len),
+                ));
 
                 handler.await.unwrap()
             });
