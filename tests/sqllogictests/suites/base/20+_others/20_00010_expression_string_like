@@ -1,4 +1,7 @@
 statement ok
+drop table if exists t_string_like
+
+statement ok
 CREATE TABLE t_string_like(URL TEXT NOT NULL)
 
 statement ok
