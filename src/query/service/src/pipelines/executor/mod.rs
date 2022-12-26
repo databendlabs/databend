@@ -23,6 +23,7 @@ mod pipeline_complete_executor;
 mod pipeline_pulling_executor;
 mod pipeline_pushing_executor;
 mod processor_async_task;
+mod executor_metrics;
 
 pub use executor_graph::RunningGraph;
 pub use executor_settings::ExecutorSettings;

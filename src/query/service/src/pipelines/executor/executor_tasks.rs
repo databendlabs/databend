@@ -16,6 +16,7 @@ use std::collections::VecDeque;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::time::Instant;
 
 use common_base::base::tokio::sync::Notify;
 use common_exception::Result;
@@ -24,6 +25,7 @@ use petgraph::prelude::NodeIndex;
 
 use crate::pipelines::executor::executor_condvar::WorkersCondvar;
 use crate::pipelines::executor::executor_condvar::WorkersWaitingStatus;
+use crate::pipelines::executor::executor_metrics::{metrics_dec_wait_schedule_async_tasks, metrics_dec_wait_schedule_sync_tasks, metrics_inc_global_schedule_async_tasks, metrics_inc_global_schedule_sync_tasks, metrics_inc_schedule_async_task_time, metrics_inc_schedule_sync_task_time, metrics_inc_wait_schedule_async_tasks, metrics_inc_wait_schedule_sync_tasks};
 use crate::pipelines::executor::executor_worker_context::ExecutorTask;
 use crate::pipelines::executor::executor_worker_context::ExecutorWorkerContext;
 use crate::pipelines::processors::processor::ProcessorPtr;
@@ -120,6 +122,8 @@ impl ExecutorTasksQueue {
     }
 
     pub fn init_sync_tasks(&self, tasks: VecDeque<ProcessorPtr>) {
+        metrics_inc_wait_schedule_sync_tasks(tasks.len() as f64);
+        metrics_inc_global_schedule_sync_tasks(tasks.len() as f64);
         let mut workers_tasks = self.workers_tasks.lock();
 
         let mut worker_id = 0;
@@ -135,6 +139,8 @@ impl ExecutorTasksQueue {
 
     #[allow(unused_assignments)]
     pub fn push_tasks(&self, ctx: &mut ExecutorWorkerContext, mut tasks: VecDeque<ExecutorTask>) {
+        metrics_inc_wait_schedule_sync_tasks(tasks.len() as f64);
+        metrics_inc_global_schedule_sync_tasks(tasks.len() as f64);
         let mut workers_tasks = self.workers_tasks.lock();
 
         let worker_id = ctx.get_worker_num();
@@ -162,6 +168,9 @@ impl ExecutorTasksQueue {
     }
 
     pub fn completed_async_task(&self, condvar: Arc<WorkersCondvar>, task: CompletedAsyncTask) {
+        metrics_inc_wait_schedule_async_tasks();
+        metrics_inc_global_schedule_async_tasks();
+
         let mut workers_tasks = self.workers_tasks.lock();
 
         let mut worker_id = task.worker_id;
@@ -193,6 +202,7 @@ pub struct CompletedAsyncTask {
     pub id: NodeIndex,
     pub worker_id: usize,
     pub res: Result<()>,
+    pub create_time: Instant,
 }
 
 impl CompletedAsyncTask {
@@ -201,6 +211,7 @@ impl CompletedAsyncTask {
             id: unsafe { proc.id() },
             worker_id,
             res,
+            create_time: Instant::now(),
         }
     }
 }
@@ -208,7 +219,7 @@ impl CompletedAsyncTask {
 struct ExecutorTasks {
     tasks_size: usize,
     workers_waiting_status: WorkersWaitingStatus,
-    workers_sync_tasks: Vec<VecDeque<ProcessorPtr>>,
+    workers_sync_tasks: Vec<VecDeque<(ProcessorPtr, Instant)>>,
     workers_completed_async_tasks: Vec<VecDeque<CompletedAsyncTask>>,
 }
 
@@ -239,10 +250,14 @@ impl ExecutorTasks {
     #[inline]
     fn pop_worker_task(&mut self, worker_id: usize) -> ExecutorTask {
         if let Some(task) = self.workers_completed_async_tasks[worker_id].pop_front() {
+            metrics_dec_wait_schedule_async_tasks();
+            metrics_inc_schedule_async_task_time(task.create_time.elapsed().as_millis() as f64);
             return ExecutorTask::AsyncCompleted(task);
         }
 
-        if let Some(processor) = self.workers_sync_tasks[worker_id].pop_front() {
+        if let Some((processor, instant)) = self.workers_sync_tasks[worker_id].pop_front() {
+            metrics_dec_wait_schedule_sync_tasks();
+            metrics_inc_schedule_sync_task_time(instant.elapsed().as_millis() as f64);
             return ExecutorTask::Sync(processor);
         }
 
@@ -301,7 +316,7 @@ impl ExecutorTasks {
 
         match task {
             ExecutorTask::None => unreachable!(),
-            ExecutorTask::Sync(processor) => sync_queue.push_back(processor),
+            ExecutorTask::Sync(processor) => sync_queue.push_back((processor, Instant::now())),
             ExecutorTask::AsyncCompleted(task) => completed_queue.push_back(task),
         }
     }
