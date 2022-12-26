@@ -115,7 +115,7 @@ impl HeuristicOptimizer {
             pub visited: bool,
         }
 
-        let mut to_optimized = VecDeque::new();
+        let mut to_optimize = VecDeque::new();
         let root_frame = TreeFrame {
             expr: s_expr,
             optimized_children: Vec::new(),
@@ -123,13 +123,16 @@ impl HeuristicOptimizer {
             visited: false,
         };
         let root_frame = Rc::new(RefCell::new(root_frame));
-        to_optimized.push_back(root_frame);
-        while let Some(frame) = to_optimized.pop_back() {
-            match frame.borrow().visited {
+        to_optimize.push_back(root_frame);
+        while let Some(frame) = to_optimize.pop_back() {
+            let visited = { frame.borrow().visited };
+            match visited {
                 false => {
-                    to_optimized.push_back(frame.clone());
+                    to_optimize.push_back(frame.clone());
                     // all of its children are not optimized
-                    for expr in frame.borrow().expr.children() {
+                    // Note:
+                    // optimize starts from the first children!
+                    for expr in frame.borrow().expr.children().iter().rev() {
                         let child_frame = TreeFrame {
                             expr,
                             optimized_children: Vec::new(),
@@ -137,7 +140,7 @@ impl HeuristicOptimizer {
                             visited: false,
                         };
                         let child_frame = Rc::new(RefCell::new(child_frame));
-                        to_optimized.push_back(child_frame);
+                        to_optimize.push_back(child_frame);
                     }
                     frame.borrow_mut().visited = true;
                 }
@@ -152,7 +155,7 @@ impl HeuristicOptimizer {
 
                     if need_optimize {
                         // rule is applied and the expression needs optimize again
-                        to_optimized.push_back(frame.clone());
+                        to_optimize.push_back(frame.clone());
                         let mut frame = frame.borrow_mut();
                         // move `result` onto heap
                         frame.expr = Box::leak(Box::new(result));
@@ -215,6 +218,8 @@ impl HeuristicOptimizer {
                 rule.apply(&s_expr, &mut state)?;
                 if !state.results().is_empty() {
                     let result = &state.results()[0];
+                    // set to true
+                    // the optimizer will optimize it again
                     return Ok((result.clone(), true));
                 }
             }
