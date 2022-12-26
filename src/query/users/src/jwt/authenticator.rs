@@ -14,6 +14,8 @@
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use jwt_simple::algorithms::ECDSAP256PublicKeyLike;
+use jwt_simple::algorithms::ES256PublicKey;
 use jwt_simple::algorithms::RS256PublicKey;
 use jwt_simple::algorithms::RSAPublicKeyLike;
 use jwt_simple::prelude::JWTClaims;
@@ -25,6 +27,7 @@ use super::jwk;
 #[derive(Debug, Clone)]
 pub enum PubKey {
     RSA256(RS256PublicKey),
+    ES256(ES256PublicKey),
 }
 
 pub struct JwtAuthenticator {
@@ -82,6 +85,15 @@ impl JwtAuthenticator {
         let pub_key = self.key_store.get_key(None)?;
         match &pub_key {
             PubKey::RSA256(pk) => match pk.verify_token::<CustomClaims>(token, None) {
+                Ok(c) => match c.subject {
+                    None => Err(ErrorCode::AuthenticateFailure(
+                        "missing field `subject` in jwt",
+                    )),
+                    Some(_) => Ok(c),
+                },
+                Err(err) => Err(ErrorCode::AuthenticateFailure(err.to_string())),
+            },
+            PubKey::ES256(pk) => match pk.verify_token::<CustomClaims>(token, None) {
                 Ok(c) => match c.subject {
                     None => Err(ErrorCode::AuthenticateFailure(
                         "missing field `subject` in jwt",

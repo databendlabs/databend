@@ -20,7 +20,10 @@ use base64::decode_config;
 use base64::URL_SAFE_NO_PAD;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use jwt_simple::prelude::ES256PublicKey;
 use jwt_simple::prelude::RS256PublicKey;
+use p256::EncodedPoint;
+use p256::FieldBytes;
 use parking_lot::RwLock;
 use serde::Deserialize;
 use serde::Serialize;
@@ -34,10 +37,20 @@ pub struct JwkKey {
     pub kid: String,
     pub kty: String,
     pub alg: Option<String>,
+
+    /// (Modulus) Parameter for kty `RSA`.
     #[serde(default)]
     pub n: String,
+    /// (Exponent) Parameter for kty `RSA`.
     #[serde(default)]
     pub e: String,
+
+    /// (X Coordinate) Parameter for kty `EC`
+    #[serde(default)]
+    pub x: String,
+    /// (Y Coordinate) Parameter for kty `EC`
+    #[serde(default)]
+    pub y: String,
 }
 
 fn decode(v: &str) -> Result<Vec<u8>> {
@@ -52,6 +65,17 @@ impl JwkKey {
             "RSA" => {
                 let k = RS256PublicKey::from_components(&decode(&self.n)?, &decode(&self.e)?)?;
                 Ok(PubKey::RSA256(k))
+            }
+            "EC" => {
+                // borrowed from https://github.com/RustCrypto/traits/blob/master/elliptic-curve/src/jwk.rs#L68
+                let xs = decode(&self.x)?;
+                let x = FieldBytes::from_slice(&xs);
+                let ys = decode(&self.y)?;
+                let y = FieldBytes::from_slice(&ys);
+                let ep = EncodedPoint::from_affine_coordinates(x, y, false);
+
+                let k = ES256PublicKey::from_bytes(ep.as_bytes())?;
+                Ok(PubKey::ES256(k))
             }
             _ => Err(ErrorCode::InvalidConfig(format!(
                 " current not support jwk with typ={:?}",
