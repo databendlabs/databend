@@ -72,6 +72,10 @@ pub fn metrics_inc_remote_io_read_bytes_after_merged(c: u64) {
     increment_gauge!(key!("remote_io_read_bytes_after_merged"), c as f64);
 }
 
+pub fn metrics_inc_remote_io_read_parts(c: u64) {
+    increment_gauge!(key!("remote_io_read_parts"), c as f64);
+}
+
 pub fn metrics_inc_remote_io_read_milliseconds(c: u64) {
     increment_gauge!(key!("remote_io_read_milliseconds"), c as f64);
 }
@@ -80,8 +84,8 @@ pub fn metrics_inc_remote_io_copy_milliseconds(c: u64) {
     increment_gauge!(key!("remote_io_copy_milliseconds"), c as f64);
 }
 
-pub fn metrics_inc_remote_io_read_parts(c: u64) {
-    increment_gauge!(key!("remote_io_read_parts"), c as f64);
+pub fn metrics_inc_remote_io_deserialize_milliseconds(c: u64) {
+    increment_gauge!(key!("remote_io_deserialize_milliseconds"), c as f64);
 }
 
 pub fn metrics_reset() {
@@ -90,7 +94,8 @@ pub fn metrics_reset() {
     gauge!(key!("remote_io_seeks_after_merged"), c);
     gauge!(key!("remote_io_read_bytes"), c);
     gauge!(key!("remote_io_read_bytes_after_merged"), c);
+    gauge!(key!("remote_io_read_parts"), c);
     gauge!(key!("remote_io_read_milliseconds"), c);
     gauge!(key!("remote_io_copy_milliseconds"), c);
-    gauge!(key!("remote_io_read_parts"), c);
+    gauge!(key!("remote_io_deserialize_milliseconds"), c);
 }

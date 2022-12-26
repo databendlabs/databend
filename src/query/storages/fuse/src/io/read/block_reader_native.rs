@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::io::BufReader;
+use std::time::Instant;
 
 use common_arrow::native::read::reader::PaReader;
 use common_arrow::native::read::PaReadBuf;
@@ -22,6 +23,10 @@ use opendal::Object;
 
 use crate::fuse_part::FusePartInfo;
 use crate::io::BlockReader;
+use crate::metrics::metrics_inc_remote_io_read_bytes;
+use crate::metrics::metrics_inc_remote_io_read_milliseconds;
+use crate::metrics::metrics_inc_remote_io_read_parts;
+use crate::metrics::metrics_inc_remote_io_seeks;
 
 // Native storage format
 
@@ -32,6 +37,11 @@ impl BlockReader {
         &self,
         part: PartInfoPtr,
     ) -> Result<Vec<(usize, PaReader<Reader>)>> {
+        // Perf
+        {
+            metrics_inc_remote_io_read_parts(1);
+        }
+
         let part = FusePartInfo::from_part(&part)?;
         let columns = self.projection.project_column_leaves(&self.column_leaves)?;
         let indices = Self::build_projection_indices(&columns);
@@ -47,9 +57,23 @@ impl BlockReader {
                 column_meta.num_values,
                 field.data_type().clone(),
             ));
+
+            // Perf
+            {
+                metrics_inc_remote_io_seeks(1);
+                metrics_inc_remote_io_read_bytes(column_meta.len);
+            }
         }
 
-        futures::future::try_join_all(join_handlers).await
+        let start = Instant::now();
+        let res = futures::future::try_join_all(join_handlers).await;
+
+        // Perf.
+        {
+            metrics_inc_remote_io_read_milliseconds(start.elapsed().as_millis() as u64);
+        }
+
+        res
     }
 
     pub async fn read_native_columns_data(
