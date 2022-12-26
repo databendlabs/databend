@@ -21,7 +21,7 @@ use tokio_stream::StreamExt;
 
 use crate::storages::fuse::table_test_fixture::*;
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_snapshot_table_args() -> Result<()> {
     let test_db = "db_not_exist";
     let test_tbl = "tbl_not_exist";
@@ -71,7 +71,7 @@ async fn test_fuse_snapshot_table_args() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_snapshot_table_read() -> Result<()> {
     let fixture = TestFixture::new().await;
     let db = fixture.default_db_name();

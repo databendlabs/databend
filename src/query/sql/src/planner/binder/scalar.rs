@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_ast::ast::Expr;
+use common_catalog::table_context::TableContext;
 use common_datavalues::DataTypeImpl;
 use common_exception::Result;
 
@@ -23,12 +24,11 @@ use crate::planner::semantic::NameResolutionContext;
 use crate::planner::semantic::TypeChecker;
 use crate::plans::Scalar;
 use crate::MetadataRef;
-use crate::PlannerContext;
 
 /// Helper for binding scalar expression with `BindContext`.
 pub struct ScalarBinder<'a> {
     bind_context: &'a BindContext,
-    ctx: Arc<dyn PlannerContext>,
+    ctx: Arc<dyn TableContext>,
     name_resolution_ctx: &'a NameResolutionContext,
     metadata: MetadataRef,
     aliases: &'a [(String, Scalar)],
@@ -37,7 +37,7 @@ pub struct ScalarBinder<'a> {
 impl<'a> ScalarBinder<'a> {
     pub fn new(
         bind_context: &'a BindContext,
-        ctx: Arc<dyn PlannerContext>,
+        ctx: Arc<dyn TableContext>,
         name_resolution_ctx: &'a NameResolutionContext,
         metadata: MetadataRef,
         aliases: &'a [(String, Scalar)],

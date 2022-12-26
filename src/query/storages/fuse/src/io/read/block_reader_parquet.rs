@@ -28,9 +28,9 @@ use common_arrow::parquet::metadata::ColumnDescriptor;
 use common_arrow::parquet::read::BasicDecompressor;
 use common_arrow::parquet::read::PageMetaData;
 use common_arrow::parquet::read::PageReader;
-use common_base::runtime::UnlimitedFuture;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::Projection;
+use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
@@ -49,6 +49,9 @@ use tracing::Instrument;
 
 use crate::fuse_part::FusePartInfo;
 use crate::io::BlockReader;
+use crate::metrics::metrics_inc_remote_io_read_bytes;
+use crate::metrics::metrics_inc_remote_io_read_parts;
+use crate::metrics::metrics_inc_remote_io_seeks;
 
 impl BlockReader {
     pub fn create(
@@ -270,26 +273,39 @@ impl BlockReader {
         self.try_next_block(&mut deserializer)
     }
 
-    pub async fn read_columns_data(&self, part: PartInfoPtr) -> Result<Vec<(usize, Vec<u8>)>> {
-        let part = FusePartInfo::from_part(&part)?;
+    pub async fn read_columns_data(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        raw_part: PartInfoPtr,
+    ) -> Result<Vec<(usize, Vec<u8>)>> {
+        // Perf
+        metrics_inc_remote_io_read_parts(1);
+
+        let part = FusePartInfo::from_part(&raw_part)?;
         let columns = self.projection.project_column_leaves(&self.column_leaves)?;
         let indices = Self::build_projection_indices(&columns);
-        let mut join_handlers = Vec::with_capacity(indices.len());
 
-        for (index, _) in indices {
-            let column_meta = part.columns_meta[&index].clone();
-            let object = self.operator.object(&part.location);
+        let mut ranges = vec![];
+        for index in indices.keys() {
+            let column_meta = &part.columns_meta[index];
+            ranges.push((
+                *index,
+                column_meta.offset..(column_meta.offset + column_meta.len),
+            ));
 
-            join_handlers.push(async move {
-                let handler = common_base::base::tokio::spawn(UnlimitedFuture::create(
-                    BlockReader::read_column(object, index, column_meta.offset, column_meta.len),
-                ));
-
-                handler.await.unwrap()
-            });
+            // Perf
+            {
+                metrics_inc_remote_io_seeks(1);
+                metrics_inc_remote_io_read_bytes(column_meta.len);
+            }
         }
 
-        futures::future::try_join_all(join_handlers).await
+        let object = self.operator.object(&part.location);
+        let min_seek_bytes = ctx.get_settings().get_storage_io_min_bytes_for_seek()?;
+        let max_page_bytes = ctx
+            .get_settings()
+            .get_storage_io_max_page_bytes_for_read()?;
+        Self::merge_io_read(object, min_seek_bytes, max_page_bytes, ranges).await
     }
 
     pub fn support_blocking_api(&self) -> bool {
@@ -317,17 +333,6 @@ impl BlockReader {
         }
 
         Ok(results)
-    }
-
-    pub async fn read_column(
-        o: Object,
-        index: usize,
-        offset: u64,
-        length: u64,
-    ) -> Result<(usize, Vec<u8>)> {
-        let chunk = o.range_read(offset..offset + length).await?;
-
-        Ok((index, chunk))
     }
 
     pub fn sync_read_column(

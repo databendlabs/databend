@@ -106,7 +106,7 @@ impl DeletionSource {
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(DeletionSource {
             state: State::ReadData(None),
-            ctx,
+            ctx: ctx.clone(),
             output,
             location_gen: table.meta_location_generator().clone(),
             dal: table.get_operator(),
@@ -115,7 +115,7 @@ impl DeletionSource {
             remain_reader,
             output_schema: table.schema(),
             index: (0, 0),
-            cluster_stats_gen: table.cluster_stats_gen()?,
+            cluster_stats_gen: table.cluster_stats_gen(ctx)?,
             origin_stats: None,
         })))
     }
@@ -298,7 +298,10 @@ impl Processor for DeletionSource {
                 self.index = deletion_part.index;
                 self.origin_stats = deletion_part.cluster_stats.clone();
                 let part = deletion_part.inner_part.clone();
-                let chunks = self.block_reader.read_columns_data(part.clone()).await?;
+                let chunks = self
+                    .block_reader
+                    .read_columns_data(self.ctx.clone(), part.clone())
+                    .await?;
                 self.state = State::FilterData(part, chunks);
             }
             State::ReadRemain {
@@ -307,7 +310,9 @@ impl Processor for DeletionSource {
                 filter,
             } => {
                 if let Some(remain_reader) = self.remain_reader.as_ref() {
-                    let chunks = remain_reader.read_columns_data(part.clone()).await?;
+                    let chunks = remain_reader
+                        .read_columns_data(self.ctx.clone(), part.clone())
+                        .await?;
                     self.state = State::MergeRemain {
                         part,
                         chunks,

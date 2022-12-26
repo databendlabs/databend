@@ -23,7 +23,7 @@ use crate::storages::fuse::table_test_fixture::TestFixture;
 use crate::storages::fuse::utils::do_purge_test;
 use crate::storages::fuse::utils::TestTableOperation;
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_snapshot_optimize_purge() -> Result<()> {
     do_purge_test(
         "explicit purge",
@@ -38,7 +38,7 @@ async fn test_fuse_snapshot_optimize_purge() -> Result<()> {
     .await
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_snapshot_optimize_all() -> Result<()> {
     do_purge_test(
         "explicit purge",
@@ -53,7 +53,7 @@ async fn test_fuse_snapshot_optimize_all() -> Result<()> {
     .await
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_table_optimize() -> Result<()> {
     let fixture = TestFixture::new().await;
     let ctx = fixture.ctx();

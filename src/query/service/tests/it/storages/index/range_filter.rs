@@ -36,7 +36,7 @@ use databend_query::storages::index::RangeFilter;
 
 use crate::tests::create_query_context;
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_range_filter() -> Result<()> {
     let schema = DataSchemaRefExt::create(vec![
         DataField::new("a", i64::to_data_type()),

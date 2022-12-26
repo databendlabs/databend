@@ -25,6 +25,7 @@ use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 use common_metrics::MetricValue;
+use common_storages_fuse::metrics_reset;
 
 use crate::SyncOneBlockSystemTable;
 use crate::SyncSystemTable;
@@ -63,6 +64,11 @@ impl SyncSystemTable for MetricsTable {
             Series::from_data(labels),
             Series::from_data(values),
         ]))
+    }
+
+    fn truncate(&self, _ctx: Arc<dyn TableContext>) -> Result<()> {
+        metrics_reset();
+        Ok(())
     }
 }
 

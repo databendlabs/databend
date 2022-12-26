@@ -181,6 +181,28 @@ impl Settings {
                 desc: "The maximum number of concurrent IO requests. By default the value is determined automatically.",
                 possible_values: None,
             },
+            // storage_io_min_bytes_for_seek
+            SettingValue {
+                default_value: UserSettingValue::UInt64(48),
+                user_setting: UserSetting::create(
+                    "storage_io_min_bytes_for_seek",
+                    UserSettingValue::UInt64(48),
+                ),
+                level: ScopeLevel::Session,
+                desc: "If the distance between two IO ranges to be read in one file is less than storage_io_min_bytes_for_seek, then Databend sequentially reads a range of file that contains both ranges, thus avoiding extra seek. Default value is 48Bytes",
+                possible_values: None,
+            },
+            // storage_io_max_page_bytes_for_read
+            SettingValue {
+                default_value: UserSettingValue::UInt64(512 * 1024),
+                user_setting: UserSetting::create(
+                    "storage_io_max_page_bytes_for_read",
+                    UserSettingValue::UInt64(512 * 1024),
+                ),
+                level: ScopeLevel::Session,
+                desc: "The maximum bytes of one IO request to read. Default the value is 512KB",
+                possible_values: None,
+            },
             // flight_client_timeout
             SettingValue {
                 default_value: UserSettingValue::UInt64(60),
@@ -581,6 +603,26 @@ impl Settings {
 
     pub fn set_max_storage_io_requests(&self, val: u64) -> Result<()> {
         let key = "max_storage_io_requests";
+        self.try_set_u64(key, val, false)
+    }
+
+    pub fn get_storage_io_min_bytes_for_seek(&self) -> Result<u64> {
+        let key = "storage_io_min_bytes_for_seek";
+        self.try_get_u64(key)
+    }
+
+    pub fn set_storage_io_min_bytes_for_seek(&self, val: u64) -> Result<()> {
+        let key = "storage_io_min_bytes_for_seek";
+        self.try_set_u64(key, val, false)
+    }
+
+    pub fn get_storage_io_max_page_bytes_for_read(&self) -> Result<u64> {
+        let key = "storage_io_max_page_bytes_for_read";
+        self.try_get_u64(key)
+    }
+
+    pub fn set_storage_io_max_page_bytes_for_read(&self, val: u64) -> Result<()> {
+        let key = "storage_io_max_page_bytes_for_read";
         self.try_set_u64(key, val, false)
     }
 
