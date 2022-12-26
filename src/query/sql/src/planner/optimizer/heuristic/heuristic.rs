@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cell::RefCell;
+use std::collections::VecDeque;
+use std::rc::Rc;
 use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
@@ -103,14 +106,78 @@ impl HeuristicOptimizer {
     }
 
     fn optimize_expression(&self, s_expr: &SExpr) -> Result<SExpr> {
-        let mut optimized_children = Vec::with_capacity(s_expr.arity());
-        for expr in s_expr.children() {
-            optimized_children.push(self.optimize_expression(expr)?);
+        /// manually implement a stack to avoid stack overflow
+        /// an AST frame is a node in the AST tree
+        struct TreeFrame<'a> {
+            pub expr: &'a SExpr,
+            pub optimized_children: Vec<SExpr>,
+            pub parent: Option<Rc<RefCell<TreeFrame<'a>>>>,
+            pub visited: bool,
         }
-        let optimized_expr = s_expr.replace_children(optimized_children);
-        let result = self.apply_transform_rules(&optimized_expr, &self.rules)?;
 
-        Ok(result)
+        let mut to_optimized = VecDeque::new();
+        let root_frame = TreeFrame {
+            expr: s_expr,
+            optimized_children: Vec::new(),
+            parent: None,
+            visited: false,
+        };
+        let root_frame = Rc::new(RefCell::new(root_frame));
+        to_optimized.push_back(root_frame);
+        while let Some(frame) = to_optimized.pop_back() {
+            match frame.borrow().visited {
+                false => {
+                    to_optimized.push_back(frame.clone());
+                    // all of its children are not optimized
+                    for expr in frame.borrow().expr.children() {
+                        let child_frame = TreeFrame {
+                            expr,
+                            optimized_children: Vec::new(),
+                            parent: Some(frame.clone()),
+                            visited: false,
+                        };
+                        let child_frame = Rc::new(RefCell::new(child_frame));
+                        to_optimized.push_back(child_frame);
+                    }
+                    frame.borrow_mut().visited = true;
+                }
+                true => {
+                    // all of its children are optimized now, apply transform rules on it
+                    let (result, need_optimize) = {
+                        let expr = frame.borrow().expr;
+                        let optimized_children = frame.borrow().optimized_children.clone();
+                        let optimized_expr = expr.replace_children(optimized_children);
+                        self.apply_transform_rules(&optimized_expr, &self.rules)?
+                    };
+
+                    if need_optimize {
+                        // rule is applied and the expression needs optimize again
+                        to_optimized.push_back(frame.clone());
+                        let mut frame = frame.borrow_mut();
+                        // move `result` onto heap
+                        frame.expr = Box::leak(Box::new(result));
+                        frame.optimized_children = vec![];
+                        frame.visited = false;
+                    } else {
+                        // the result is optimized, push it up to the parent
+                        match &frame.borrow().parent {
+                            None => {
+                                // is root node
+                                // return the result
+                                return Ok(result);
+                            }
+                            Some(parent) => {
+                                // not root node
+                                // push to parent
+                                let mut parent = parent.borrow_mut();
+                                parent.optimized_children.push(result);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        unreachable!()
     }
 
     #[allow(dead_code)]
@@ -132,8 +199,14 @@ impl HeuristicOptimizer {
         Ok(result)
     }
 
-    // Return `None` if no rules matched
-    fn apply_transform_rules(&self, s_expr: &SExpr, rule_list: &RuleList) -> Result<SExpr> {
+    // Return Ok((expr, false)) if no rules matched
+    //
+    // Note:
+    // this function will apply transform rules only
+    //
+    // if the expression still needs optimization
+    // set the last bool to true
+    fn apply_transform_rules(&self, s_expr: &SExpr, rule_list: &RuleList) -> Result<(SExpr, bool)> {
         let mut s_expr = s_expr.clone();
         for rule in rule_list.iter() {
             let mut state = TransformResult::new();
@@ -141,15 +214,12 @@ impl HeuristicOptimizer {
                 s_expr.apply_rule(&rule.id());
                 rule.apply(&s_expr, &mut state)?;
                 if !state.results().is_empty() {
-                    // Recursive optimize the result
                     let result = &state.results()[0];
-                    let optimized_result = self.optimize_expression(result)?;
-
-                    return Ok(optimized_result);
+                    return Ok((result.clone(), true));
                 }
             }
         }
 
-        Ok(s_expr.clone())
+        Ok((s_expr.clone(), false))
     }
 }
