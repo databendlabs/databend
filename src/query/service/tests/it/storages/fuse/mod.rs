@@ -13,6 +13,7 @@
 //  limitations under the License.
 
 #![allow(clippy::too_many_arguments)]
+mod block_writer;
 mod io;
 mod meta;
 mod misc;

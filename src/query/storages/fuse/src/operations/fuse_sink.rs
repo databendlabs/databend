@@ -39,6 +39,7 @@ use super::AppendOperationLogEntry;
 use crate::fuse_table::FuseStorageFormat;
 use crate::io;
 use crate::io::TableMetaLocationGenerator;
+use crate::io::WriteSettings;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::processor::Event;
 use crate::pipelines::processors::processor::ProcessorPtr;
@@ -212,7 +213,10 @@ impl Processor for FuseTableSink {
                 )?;
                 // we need a configuration of block size threshold here
                 let mut data = Vec::with_capacity(100 * 1024 * 1024);
-                let (size, meta_data) = io::write_block(self.storage_format, block, &mut data)?;
+                let write_settings = WriteSettings {
+                    storage_format: self.storage_format,
+                };
+                let (size, meta_data) = io::write_block(&write_settings, block, &mut data)?;
 
                 self.state = State::Serialized {
                     data,

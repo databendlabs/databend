@@ -33,7 +33,6 @@ use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::ClusterStatistics;
 use common_storages_table_meta::meta::ColumnStatistics;
 use common_storages_table_meta::meta::Statistics;
-use databend_query::storages::fuse::io::BlockWriter;
 use databend_query::storages::fuse::io::TableMetaLocationGenerator;
 use databend_query::storages::fuse::statistics::gen_columns_statistics;
 use databend_query::storages::fuse::statistics::reducers;
@@ -43,6 +42,7 @@ use databend_query::storages::fuse::statistics::StatisticsAccumulator;
 use opendal::Operator;
 use rand::Rng;
 
+use crate::storages::fuse::block_writer::BlockWriter;
 use crate::storages::fuse::table_test_fixture::TestFixture;
 
 #[test]

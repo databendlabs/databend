@@ -17,6 +17,7 @@ mod block_reader_native;
 mod block_reader_parquet;
 mod bloom_index_reader;
 mod meta_readers;
+mod read_settings;
 mod snapshot_history_reader;
 mod versioned_reader;
 
@@ -26,4 +27,5 @@ pub use bloom_index_reader::BlockFilterReader;
 pub use meta_readers::MetaReaders;
 pub use meta_readers::SegmentInfoReader;
 pub use meta_readers::TableSnapshotReader;
+pub use read_settings::ReadSettings;
 pub use snapshot_history_reader::SnapshotHistoryReader;
