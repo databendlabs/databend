@@ -26,11 +26,13 @@ use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table_function::TableFunction;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::number::NumberScalar;
 use common_expression::Chunk;
 use common_expression::DataSchema;
 use common_expression::Scalar;
+use common_expression::TableSchema;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -59,10 +61,13 @@ impl AsyncCrashMeTable {
         table_args: TableArgs,
     ) -> Result<Arc<dyn TableFunction>> {
         let mut panic_message = None;
-        if let Some(args) = &table_args {
+        if let Some(args) = table_args {
             if args.len() == 1 {
-                let arg = &args[0];
-                panic_message = Some(String::from_utf8(arg.as_string()?)?);
+                let arg = args[0];
+                panic_message =
+                    Some(String::from_utf8(arg.into_string().map_err(|_| {
+                        ErrorCode::BadArguments("Expected string argument")
+                    })?)?);
             }
         }
 
@@ -71,7 +76,7 @@ impl AsyncCrashMeTable {
             desc: format!("'{}'.'{}'", database_name, "async_crash_me"),
             name: String::from("async_crash_me"),
             meta: TableMeta {
-                schema: Arc::new(DataSchema::empty()),
+                schema: Arc::new(TableSchema::empty()),
                 engine: String::from("async_crash_me"),
                 // Assuming that created_on is unnecessary for function table,
                 // we could make created_on fixed to pass test_shuffle_action_try_into.

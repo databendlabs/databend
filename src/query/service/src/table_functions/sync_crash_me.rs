@@ -25,6 +25,7 @@ use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PushDownInfo;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::number::NumberScalar;
 use common_expression::Chunk;
@@ -60,10 +61,13 @@ impl SyncCrashMeTable {
         table_args: TableArgs,
     ) -> Result<Arc<dyn TableFunction>> {
         let mut panic_message = None;
-        if let Some(args) = &table_args {
+        if let Some(args) = table_args {
             if args.len() == 1 {
-                let arg = &args[0];
-                panic_message = Some(String::from_utf8(arg.as_string()?)?);
+                let arg = args[0];
+                panic_message =
+                    Some(String::from_utf8(arg.into_string().map_err(|_| {
+                        ErrorCode::BadArguments("Expected string argument.")
+                    })?)?);
             }
         }
 

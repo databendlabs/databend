@@ -20,6 +20,7 @@ use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::Column as ExprColumn;
 use common_expression::DataField;
+use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::DataType;
 use common_expression::ScalarRef;
@@ -158,7 +159,7 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
                 DataType::Timestamp => Ok(ColumnType::MYSQL_TYPE_DATETIME),
                 DataType::Array(_) => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
                 DataType::Map(_) => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
-                DataType::Tuple { .. } => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
+                DataType::Tuple(_) => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
                 DataType::Variant => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
                 _ => Err(ErrorCode::Unimplemented(format!(
                     "Unsupported column type:{:?}",

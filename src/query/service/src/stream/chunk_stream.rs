@@ -47,7 +47,7 @@ impl futures::Stream for ChunkStream {
 
             Some(Ok(match &self.projects {
                 Some(v) => Chunk::new(
-                    v.iter().map(|x| chunk.column(*x).clone()).collect(),
+                    v.iter().map(|x| chunk.get_by_offset(*x).clone()).collect(),
                     chunk.num_rows(),
                 ),
                 None => chunk.clone(),

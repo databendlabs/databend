@@ -18,6 +18,7 @@ use common_config::DATABEND_COMMIT_VERSION;
 use common_expression::types::DataType;
 use common_expression::utils::ColumnFrom;
 use common_expression::Chunk;
+use common_expression::ChunkEntry;
 use common_expression::Column;
 use common_expression::DataField;
 use common_expression::DataSchemaRef;
@@ -53,7 +54,7 @@ impl MySQLFederated {
     fn select_variable_block(name: &str, value: &str) -> Option<(TableSchemaRef, Chunk)> {
         let schema = TableSchemaRefExt::create(vec![TableField::new(
             &format!("@@{}", name),
-            TableDataType::String,
+            DataType::String,
         )]);
         let chunk = Chunk::new_from_sequence(
             vec![(
@@ -132,7 +133,7 @@ impl MySQLFederated {
         let mut vars: Vec<&str> = query.split("@@").collect();
         if vars.len() > 1 {
             vars.remove(0);
-            for var in vars {
+            for (id, var) in vars.iter().enumerate() {
                 let var = var.trim_end_matches(|c| c == ' ' || c == ',');
                 let vars_as: Vec<&str> = var.split(" as ").collect();
                 if vars_as.len() == 2 {
@@ -144,10 +145,11 @@ impl MySQLFederated {
                     // var is 'cc'.
                     let var = vars_as[0];
                     let value = default_map.get(var).unwrap_or(&"0").to_string();
-                    values.push((
-                        Value::Column(Column::from_data(vec![value.as_bytes().to_vec()])),
-                        DataType::String,
-                    ));
+                    values.push(ChunkEntry {
+                        id,
+                        value: Value::Column(Column::from_data(vec![value.as_bytes().to_vec()])),
+                        data_type: DataType::String,
+                    });
                 } else {
                     // @@aa
                     // var is 'aa'
@@ -157,10 +159,11 @@ impl MySQLFederated {
                     ));
 
                     let value = default_map.get(var).unwrap_or(&"0").to_string();
-                    values.push((
-                        Value::Column(Column::from_data(vec![value.as_bytes().to_vec()])),
-                        DataType::String,
-                    ));
+                    values.push(ChunkEntry {
+                        id,
+                        value: Value::Column(Column::from_data(vec![value.as_bytes().to_vec()])),
+                        data_type: DataType::String,
+                    });
                 }
             }
         }
