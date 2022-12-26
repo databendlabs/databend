@@ -274,13 +274,14 @@ impl BlockReader {
         }
 
         let mut deserializer = RowGroupDeserializer::new(columns_array_iter, num_rows, None);
+        let res = self.try_next_block(&mut deserializer);
 
         // Perf.
         {
             metrics_inc_remote_io_deserialize_milliseconds(start.elapsed().as_millis() as u64);
         }
 
-        self.try_next_block(&mut deserializer)
+        res
     }
 
     pub async fn read_columns_data(
