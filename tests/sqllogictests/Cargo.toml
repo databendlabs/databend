@@ -12,7 +12,7 @@ clap = { version = "4.0.29", features = ["derive", "env"] }
 common-exception = { path = "../../src/common/exception" }
 env_logger = "0.10.0"
 lazy_static = "1.4.0"
-mysql_async = { version = "0.31",default-features = false, features = ["rustls-tls"] }
+mysql_async = { version = "0.31", default-features = false, features = ["rustls-tls"] }
 regex = "1"
 reqwest = { workspace = true }
 serde = "1.0.150"
