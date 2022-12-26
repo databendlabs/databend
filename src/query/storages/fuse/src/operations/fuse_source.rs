@@ -21,7 +21,7 @@ use common_pipeline_core::Pipeline;
 use crate::fuse_table::FuseStorageFormat;
 use crate::io::BlockReader;
 use crate::operations::read::build_fuse_parquet_source_pipeline;
-use crate::operations::read::fuse_source_new::build_fuse_native_source_pipeline;
+use crate::operations::read::fuse_source::build_fuse_native_source_pipeline;
 
 pub fn build_fuse_source_pipeline(
     ctx: Arc<dyn TableContext>,

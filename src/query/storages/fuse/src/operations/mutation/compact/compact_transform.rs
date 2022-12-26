@@ -40,6 +40,7 @@ use crate::io;
 use crate::io::write_data;
 use crate::io::BlockReader;
 use crate::io::TableMetaLocationGenerator;
+use crate::io::WriteSettings;
 use crate::operations::mutation::AbortOperation;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
@@ -246,8 +247,11 @@ impl Processor for CompactTransform {
 
                     // serialize data block.
                     let mut block_data = Vec::with_capacity(100 * 1024 * 1024);
+                    let write_settings = WriteSettings {
+                        storage_format: self.storage_format,
+                    };
                     let (file_size, col_metas) =
-                        io::write_block(self.storage_format, new_block, &mut block_data)?;
+                        io::write_block(&write_settings, new_block, &mut block_data)?;
 
                     // new block meta.
                     let new_meta = BlockMeta::new(

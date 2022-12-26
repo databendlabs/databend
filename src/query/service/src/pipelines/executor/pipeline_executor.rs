@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::VecDeque;
 use std::sync::Arc;
 
 use common_base::base::tokio;
@@ -33,7 +32,6 @@ use crate::pipelines::executor::executor_condvar::WorkersCondvar;
 use crate::pipelines::executor::executor_graph::RunningGraph;
 use crate::pipelines::executor::executor_graph::ScheduleQueue;
 use crate::pipelines::executor::executor_tasks::ExecutorTasksQueue;
-use crate::pipelines::executor::executor_worker_context::ExecutorTask;
 use crate::pipelines::executor::executor_worker_context::ExecutorWorkerContext;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::pipeline::Pipeline;
@@ -206,30 +204,24 @@ impl PipelineExecutor {
             let mut init_schedule_queue = self.graph.init_schedule_queue()?;
 
             let mut wakeup_worker_id = 0;
-            let mut tasks = VecDeque::new();
-            while let Some(task) = init_schedule_queue.pop_task() {
-                if let ExecutorTask::Async(processor) = &task {
-                    ScheduleQueue::schedule_async_task(
-                        processor.clone(),
-                        self.settings.query_id.clone(),
-                        self,
-                        wakeup_worker_id,
-                        self.workers_condvar.clone(),
-                        self.global_tasks_queue.clone(),
-                    );
-                    wakeup_worker_id += 1;
+            while let Some(proc) = init_schedule_queue.async_queue.pop_front() {
+                ScheduleQueue::schedule_async_task(
+                    proc.clone(),
+                    self.settings.query_id.clone(),
+                    self,
+                    wakeup_worker_id,
+                    self.workers_condvar.clone(),
+                    self.global_tasks_queue.clone(),
+                );
+                wakeup_worker_id += 1;
 
-                    if wakeup_worker_id == self.threads_num {
-                        wakeup_worker_id = 0;
-                    }
-
-                    continue;
+                if wakeup_worker_id == self.threads_num {
+                    wakeup_worker_id = 0;
                 }
-
-                tasks.push_back(task);
             }
 
-            self.global_tasks_queue.init_tasks(tasks);
+            let sync_queue = std::mem::take(&mut init_schedule_queue.sync_queue);
+            self.global_tasks_queue.init_sync_tasks(sync_queue);
 
             Ok(())
         }

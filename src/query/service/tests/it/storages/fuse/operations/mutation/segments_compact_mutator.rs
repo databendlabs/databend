@@ -23,7 +23,6 @@ use common_datablocks::SendableDataBlockStream;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_storage::DataOperator;
-use common_storages_fuse::io::BlockWriter;
 use common_storages_fuse::io::MetaReaders;
 use common_storages_fuse::io::SegmentInfoReader;
 use common_storages_fuse::io::SegmentWriter;
@@ -36,6 +35,7 @@ use common_storages_fuse::statistics::gen_columns_statistics;
 use common_storages_fuse::statistics::reducers::merge_statistics_mut;
 use common_storages_fuse::statistics::BlockStatistics;
 use common_storages_fuse::statistics::StatisticsAccumulator;
+use common_storages_fuse::FuseStorageFormat;
 use common_storages_fuse::FuseTable;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::Location;
@@ -48,6 +48,7 @@ use futures_util::TryStreamExt;
 use rand::thread_rng;
 use rand::Rng;
 
+use crate::storages::fuse::block_writer::BlockWriter;
 use crate::storages::fuse::table_test_fixture::execute_command;
 use crate::storages::fuse::table_test_fixture::execute_query;
 use crate::storages::fuse::table_test_fixture::TestFixture;
@@ -668,12 +669,7 @@ impl CompactSegmentTestFixture {
                 let mut block_statistics =
                     BlockStatistics::from(&block, "".to_owned(), None, None)?;
                 let block_meta = block_writer
-                    .write(
-                        common_storages_fuse::FuseStorageFormat::Parquet,
-                        block,
-                        col_stats,
-                        None,
-                    )
+                    .write(FuseStorageFormat::Parquet, block, col_stats, None)
                     .await?;
                 block_statistics.block_file_location = block_meta.location.0.clone();
 

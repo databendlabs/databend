@@ -73,15 +73,10 @@ impl ExecutorTasksQueue {
 
         if !workers_tasks.is_empty() {
             let task = workers_tasks.pop_task(context.get_worker_num());
-            let is_async_task = matches!(&task, ExecutorTask::Async(_));
 
             context.set_task(task);
 
             let workers_condvar = context.get_workers_condvar();
-
-            if is_async_task {
-                workers_condvar.inc_active_async_worker();
-            }
 
             if !workers_tasks.is_empty() && workers_tasks.workers_waiting_status.waiting_size() != 0
             {
@@ -124,12 +119,12 @@ impl ExecutorTasksQueue {
             .wait(worker_num, self.finished.clone());
     }
 
-    pub fn init_tasks(&self, mut tasks: VecDeque<ExecutorTask>) {
+    pub fn init_sync_tasks(&self, tasks: VecDeque<ProcessorPtr>) {
         let mut workers_tasks = self.workers_tasks.lock();
 
         let mut worker_id = 0;
-        while let Some(task) = tasks.pop_front() {
-            workers_tasks.push_task(worker_id, task);
+        for proc in tasks.into_iter() {
+            workers_tasks.push_task(worker_id, ExecutorTask::Sync(proc));
 
             worker_id += 1;
             if worker_id == workers_tasks.workers_sync_tasks.len() {
@@ -306,7 +301,6 @@ impl ExecutorTasks {
 
         match task {
             ExecutorTask::None => unreachable!(),
-            ExecutorTask::Async(_) => unreachable!(),
             ExecutorTask::Sync(processor) => sync_queue.push_back(processor),
             ExecutorTask::AsyncCompleted(task) => completed_queue.push_back(task),
         }

@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,13 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod block_writer;
-mod meta_writer;
-mod segment_writer;
-mod write_settings;
+pub struct ReadSettings {
+    pub storage_io_min_bytes_for_seek: u64,
+    pub storage_io_max_page_bytes_for_read: u64,
+}
 
-pub use block_writer::write_block;
-pub use block_writer::write_data;
-pub use meta_writer::write_meta;
-pub use segment_writer::SegmentWriter;
-pub use write_settings::WriteSettings;
+impl Default for ReadSettings {
+    fn default() -> Self {
+        ReadSettings {
+            storage_io_min_bytes_for_seek: 1024,
+            storage_io_max_page_bytes_for_read: 1024 * 1024,
+        }
+    }
+}

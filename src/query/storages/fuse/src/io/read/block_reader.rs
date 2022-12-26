@@ -26,6 +26,8 @@ use common_storage::ColumnLeaves;
 use opendal::Object;
 use opendal::Operator;
 
+use crate::io::read::ReadSettings;
+use crate::metrics::metrics_inc_remote_io_copy_milliseconds;
 use crate::metrics::metrics_inc_remote_io_read_bytes_after_merged;
 use crate::metrics::metrics_inc_remote_io_read_milliseconds;
 use crate::metrics::metrics_inc_remote_io_seeks_after_merged;
@@ -48,9 +50,8 @@ impl BlockReader {
     /// It will *NOT* merge two requests:
     /// if the last io request size is larger than storage_io_page_bytes_for_read(Default is 512KB).
     pub async fn merge_io_read(
+        read_settings: &ReadSettings,
         object: Object,
-        min_seek_bytes: u64,
-        max_page_bytes: u64,
         raw_ranges: Vec<(usize, Range<u64>)>,
     ) -> Result<Vec<(usize, Vec<u8>)>> {
         let path = object.path().to_string();
@@ -60,7 +61,11 @@ impl BlockReader {
             .iter()
             .map(|(_, r)| r.clone())
             .collect::<Vec<_>>();
-        let range_merger = RangeMerger::from_iter(ranges, min_seek_bytes, max_page_bytes);
+        let range_merger = RangeMerger::from_iter(
+            ranges,
+            read_settings.storage_io_min_bytes_for_seek,
+            read_settings.storage_io_max_page_bytes_for_read,
+        );
         let merged_ranges = range_merger.ranges();
 
         // Read merged range data.
@@ -88,6 +93,8 @@ impl BlockReader {
 
         // Build raw range data from merged range data.
         let mut final_result = Vec::with_capacity(raw_ranges.len());
+
+        let start = Instant::now();
         for (raw_idx, raw_range) in &raw_ranges {
             let column_start = raw_range.start;
             let column_end = raw_range.end;
@@ -124,6 +131,10 @@ impl BlockReader {
             // Here is a heavy copy.
             let column_data = merged_range_data[start..end].to_vec();
             final_result.push((*raw_idx, column_data));
+        }
+        // Perf.
+        {
+            metrics_inc_remote_io_copy_milliseconds(start.elapsed().as_millis() as u64);
         }
 
         Ok(final_result)

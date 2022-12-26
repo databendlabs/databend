@@ -27,8 +27,6 @@ use crate::pipelines::processors::processor::ProcessorPtr;
 pub enum ExecutorTask {
     None,
     Sync(ProcessorPtr),
-    Async(ProcessorPtr),
-    // AsyncSchedule(ExecutingAsyncTask),
     AsyncCompleted(CompletedAsyncTask),
 }
 
@@ -73,7 +71,6 @@ impl ExecutorWorkerContext {
         match std::mem::replace(&mut self.task, ExecutorTask::None) {
             ExecutorTask::None => Err(ErrorCode::Internal("Execute none task.")),
             ExecutorTask::Sync(processor) => self.execute_sync_task(processor),
-            ExecutorTask::Async(_) => Err(ErrorCode::Internal("Execute async task.")),
             ExecutorTask::AsyncCompleted(task) => match task.res {
                 Ok(_) => Ok(Some(task.id)),
                 Err(cause) => Err(cause),
@@ -99,12 +96,6 @@ impl Debug for ExecutorTask {
                 ExecutorTask::Sync(p) => write!(
                     f,
                     "ExecutorTask::Sync {{ id: {}, name: {}}}",
-                    p.id().index(),
-                    p.name()
-                ),
-                ExecutorTask::Async(p) => write!(
-                    f,
-                    "ExecutorTask::Async {{ id: {}, name: {}}}",
                     p.id().index(),
                     p.name()
                 ),

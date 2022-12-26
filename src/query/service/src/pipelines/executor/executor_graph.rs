@@ -278,8 +278,8 @@ impl ExecutingGraph {
 }
 
 pub struct ScheduleQueue {
-    sync_queue: VecDeque<ProcessorPtr>,
-    async_queue: VecDeque<ProcessorPtr>,
+    pub sync_queue: VecDeque<ProcessorPtr>,
+    pub async_queue: VecDeque<ProcessorPtr>,
 }
 
 impl ScheduleQueue {
@@ -298,13 +298,6 @@ impl ScheduleQueue {
     #[inline]
     pub fn push_async(&mut self, processor: ProcessorPtr) {
         self.async_queue.push_back(processor);
-    }
-
-    pub fn pop_task(&mut self) -> Option<ExecutorTask> {
-        match self.sync_queue.pop_front() {
-            Some(processor) => Some(ExecutorTask::Sync(processor)),
-            None => self.async_queue.pop_front().map(ExecutorTask::Async),
-        }
     }
 
     pub fn schedule_tail(mut self, global: &ExecutorTasksQueue, ctx: &mut ExecutorWorkerContext) {
