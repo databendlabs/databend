@@ -143,7 +143,7 @@ fn init_fs_operator(cfg: &StorageFsConfig) -> Result<Operator> {
 /// init_ftp_operator will init a opendal ftp operator.
 fn init_ftp_operator(_: &super::StorageFtpConfig) -> Result<Operator> {
     // Should be addressed after https://github.com/datafuselabs/opendal/pull/1101
-    return Err(Error::other("ftp support has been disabled"));
+    Err(Error::other("ftp support has been disabled"))
     // let mut builder = ftp::Builder::default();
 
     // let bd = builder

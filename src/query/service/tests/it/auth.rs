@@ -185,7 +185,7 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
             .with_ensure_user(EnsureUser {
                 roles: Some(vec![role_name.to_string()]),
             })
-            .with_role("test-auth-role".to_string());
+            .with_role("test-auth-role");
         let claims = Claims::with_custom_claims(custom_claims, Duration::from_hours(2))
             .with_subject(user_name.to_string());
         let token = key_pair.sign(claims)?;

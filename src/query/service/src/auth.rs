@@ -18,16 +18,13 @@ pub use common_config::Config;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::AuthInfo;
-use common_meta_types::UserInfo;
-// use common_users::CustomClaims;
-// use common_users::JwtAuthenticator;
+use common_users::JwtAuthenticator;
 use common_users::UserApiProvider;
-use jwtk::Claims;
 
 use crate::sessions::Session;
 
 pub struct AuthMgr {
-    jwt_auth: Option<()>,
+    jwt_auth: Option<JwtAuthenticator>,
 }
 
 pub enum Credential {
@@ -44,10 +41,9 @@ pub enum Credential {
 
 impl AuthMgr {
     pub async fn create(cfg: &Config) -> Result<Arc<AuthMgr>> {
-        todo!()
-        // Ok(Arc::new(AuthMgr {
-        //     jwt_auth: JwtAuthenticator::try_create(cfg.query.jwt_key_file.clone()).await?,
-        // }))
+        Ok(Arc::new(AuthMgr {
+            jwt_auth: JwtAuthenticator::try_create(cfg.query.jwt_key_file.clone()).await?,
+        }))
     }
 
     pub async fn auth(&self, session: Arc<Session>, credential: &Credential) -> Result<()> {
@@ -60,10 +56,12 @@ impl AuthMgr {
                     .jwt_auth
                     .as_ref()
                     .ok_or_else(|| ErrorCode::AuthenticateFailure("jwt auth not configured."))?;
-                let parsed_jwt = jwt_auth.parse_jwt(t.as_str()).await?;
-                let (tenant, user_name, auth_role) = self
-                    .process_jwt_claims(&session, parsed_jwt.claims())
-                    .await?;
+                let jwt = jwt_auth.parse_jwt_claims(t.as_str())?;
+                let user_name = jwt.subject.unwrap();
+                let tenant = jwt.custom.tenant_id.ok_or_else(|| {
+                    ErrorCode::AuthenticateFailure("jwt auth doesn't have tenant_id.")
+                })?;
+                let auth_role = jwt.custom.role.clone();
                 let user_info = UserApiProvider::instance()
                     .get_user_with_client_ip(
                         &tenant,
@@ -103,43 +101,5 @@ impl AuthMgr {
             }
         };
         Ok(())
-    }
-
-    async fn process_jwt_claims(
-        &self,
-        session: &Arc<Session>,
-        claims: &Claims<CustomClaims>,
-    ) -> Result<(String, String, Option<String>)> {
-        // setup tenant if the JWT claims contain extra.tenant_id
-        if let Some(ref tenant) = claims.extra.tenant_id {
-            session.set_current_tenant(tenant.clone());
-        }
-        let tenant = session.get_current_tenant();
-
-        // take `sub` field in the claims as user name
-        let user_name = claims
-            .sub
-            .clone()
-            .ok_or_else(|| ErrorCode::AuthenticateFailure("sub not found in claims"))?;
-
-        // set user auth_role if claims contain extra.role
-        let auth_role = claims.extra.role.clone();
-
-        // create user if not exists when the JWT claims contains ensure_user
-        if let Some(ref ensure_user) = claims.extra.ensure_user {
-            let mut user_info = UserInfo::new(&user_name, "%", AuthInfo::JWT);
-            if let Some(ref roles) = ensure_user.roles {
-                for role in roles.clone().into_iter() {
-                    user_info.grants.grant_role(role);
-                }
-            }
-            UserApiProvider::instance()
-                .ensure_builtin_roles(&tenant)
-                .await?;
-            UserApiProvider::instance()
-                .add_user(&tenant, user_info.clone(), true)
-                .await?;
-        }
-        Ok((tenant, user_name, auth_role))
     }
 }
