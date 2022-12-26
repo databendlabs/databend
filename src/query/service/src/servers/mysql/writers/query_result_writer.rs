@@ -16,7 +16,6 @@ use common_base::base::tokio::io::AsyncWrite;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::number::NumberScalar;
-use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::Column as ExprColumn;
 use common_expression::DataField;
@@ -213,7 +212,7 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
 
                     for row_index in 0..num_rows {
                         for (col_index, column) in columns.iter().enumerate() {
-                            let value = unsafe { column.index_unchecked(index) };
+                            let value = unsafe { column.index_unchecked(row_index) };
                             match value {
                                 ScalarRef::Null => {
                                     row_writer.write_col(None::<u8>)?;

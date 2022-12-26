@@ -314,13 +314,11 @@ impl JoinHashTable {
             let nullable_columns = if self.row_space.data_chunks().is_empty() {
                 build_chunk
                     .columns()
-                    .iter()
                     .map(|(_, ty)| (Value::Scalar(Scalar::Null), ty.clone()))
                     .collect::<Vec<_>>()
             } else {
                 build_chunk
                     .columns()
-                    .iter()
                     .map(|c| Self::set_validity(c, &validity))
                     .collect::<Vec<_>>()
             };

@@ -131,7 +131,7 @@ impl Processor for TransformCreateSets {
     fn process(&mut self) -> Result<()> {
         if let Some(input_data) = self.input_data.take() {
             let num_rows = input_data.num_rows();
-            let mut new_columns = input_data.columns().to_vec();
+            let mut new_columns = input_data.columns().collect::<Vec<_>>();
             let start_index = self.schema.fields().len() - self.sub_queries_result.len();
 
             for (index, result) in self.sub_queries_result.iter().enumerate() {

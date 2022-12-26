@@ -17,7 +17,6 @@ use std::time::SystemTime;
 
 use common_catalog::plan::PushDownInfo;
 use common_exception::Result;
-use common_sql::executor::ExpressionBuilderWithoutRenaming;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterClusteringHistory;

@@ -99,7 +99,7 @@ impl<'a> GroupColumnsBuilder for SerializedKeysGroupColumnsBuilder<'a> {
         let keys = self.data.as_mut_slice();
 
         if self.group_data_types.len() == 1 && self.group_data_types[0].is_string() {
-            let col = Column::from_data(keys);
+            let col = Column::from_data(&self.data);
             return Ok(vec![col]);
         }
 

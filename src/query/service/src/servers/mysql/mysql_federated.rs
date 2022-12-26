@@ -21,6 +21,7 @@ use common_expression::Chunk;
 use common_expression::ChunkEntry;
 use common_expression::Column;
 use common_expression::DataField;
+use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 use common_expression::TableDataType;
@@ -28,6 +29,7 @@ use common_expression::TableField;
 use common_expression::TableSchemaRef;
 use common_expression::TableSchemaRefExt;
 use common_expression::Value;
+use petgraph::visit::Data;
 
 use crate::servers::federated_helper::FederatedHelper;
 use crate::servers::federated_helper::LazyBlockFunc;
@@ -54,7 +56,7 @@ impl MySQLFederated {
     fn select_variable_block(name: &str, value: &str) -> Option<(TableSchemaRef, Chunk)> {
         let schema = TableSchemaRefExt::create(vec![TableField::new(
             &format!("@@{}", name),
-            DataType::String,
+            TableDataType::String,
         )]);
         let chunk = Chunk::new_from_sequence(
             vec![(
@@ -75,7 +77,7 @@ impl MySQLFederated {
         let chunk = Chunk::new_from_sequence(
             vec![(
                 Value::Column(Column::from_data(vec![value.as_bytes().to_vec()])),
-                TableDataType::String,
+                DataType::String,
             )],
             1,
         );
@@ -145,11 +147,10 @@ impl MySQLFederated {
                     // var is 'cc'.
                     let var = vars_as[0];
                     let value = default_map.get(var).unwrap_or(&"0").to_string();
-                    values.push(ChunkEntry {
-                        id,
-                        value: Value::Column(Column::from_data(vec![value.as_bytes().to_vec()])),
-                        data_type: DataType::String,
-                    });
+                    values.push((
+                        Value::Column(Column::from_data(vec![value.as_bytes().to_vec()])),
+                        DataType::String,
+                    ));
                 } else {
                     // @@aa
                     // var is 'aa'
@@ -159,11 +160,10 @@ impl MySQLFederated {
                     ));
 
                     let value = default_map.get(var).unwrap_or(&"0").to_string();
-                    values.push(ChunkEntry {
-                        id,
-                        value: Value::Column(Column::from_data(vec![value.as_bytes().to_vec()])),
-                        data_type: DataType::String,
-                    });
+                    values.push((
+                        Value::Column(Column::from_data(vec![value.as_bytes().to_vec()])),
+                        DataType::String,
+                    ));
                 }
             }
         }
@@ -186,8 +186,8 @@ impl MySQLFederated {
     }
 
     // Check SHOW VARIABLES LIKE.
-    fn federated_show_variables_check(&self, query: &str) -> Option<(DataSchemaRef, Chunk)> {
-        let rules: Vec<(&str, Option<(DataSchemaRef, Chunk)>)> = vec![
+    fn federated_show_variables_check(&self, query: &str) -> Option<(TableSchemaRef, Chunk)> {
+        let rules: Vec<(&str, Option<(TableSchemaRef, Chunk)>)> = vec![
             // sqlalchemy < 1.4.30
             (
                 "(?i)^(SHOW VARIABLES LIKE 'sql_mode'(.*))",
@@ -213,8 +213,8 @@ impl MySQLFederated {
     }
 
     // Check for SET or others query, this is the final check of the federated query.
-    fn federated_mixed_check(&self, query: &str) -> Option<(DataSchemaRef, Chunk)> {
-        let rules: Vec<(&str, Option<(DataSchemaRef, Chunk)>)> = vec![
+    fn federated_mixed_check(&self, query: &str) -> Option<(TableSchemaRef, Chunk)> {
+        let rules: Vec<(&str, Option<(TableSchemaRef, Chunk)>)> = vec![
             (
                 r"(?i)^(SELECT VERSION\(\s*\))",
                 Self::select_function_block(
@@ -297,18 +297,23 @@ impl MySQLFederated {
     // Here we fake some values for the command which Databend not supported.
     pub fn check(&self, query: &str) -> Option<(DataSchemaRef, Chunk)> {
         // First to check the select @@variables.
-        let select_variable = self.federated_select_variable_check(query);
+        let select_variable = self
+            .federated_select_variable_check(query)
+            .map(|(schema, chunk)| (Arc::new(DataSchema::from(schema)), chunk));
         if select_variable.is_some() {
             return select_variable;
         }
 
         // Then to check the show variables like ''.
-        let show_variables = self.federated_show_variables_check(query);
+        let show_variables = self
+            .federated_show_variables_check(query)
+            .map(|(schema, chunk)| (Arc::new(DataSchema::from(schema)), chunk));
         if show_variables.is_some() {
             return show_variables;
         }
 
         // Last check.
         self.federated_mixed_check(query)
+            .map(|(schema, chunk)| (Arc::new(DataSchema::from(schema)), chunk))
     }
 }

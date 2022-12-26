@@ -20,15 +20,9 @@ use std::time::SystemTime;
 
 use common_base::base::tokio::sync::RwLock;
 use common_base::base::ProgressValues;
-use common_base::runtime::GlobalIORuntime;
-use common_base::runtime::Thread;
-use common_base::runtime::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::Chunk;
-use common_expression::DataSchemaRef;
-use common_expression::SendableChunkStream;
-use common_sql::plans::Plan;
 use common_sql::Planner;
 use futures::StreamExt;
 use futures_util::FutureExt;
@@ -46,8 +40,6 @@ use crate::sessions::QueryAffect;
 use crate::sessions::QueryContext;
 use crate::sessions::Session;
 use crate::sessions::TableContext;
-use crate::sql::Planner;
-use crate::stream::ChunkStream;
 
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Eq)]
 pub enum ExecuteStateKind {

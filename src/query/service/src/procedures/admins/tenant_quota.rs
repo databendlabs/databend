@@ -21,8 +21,6 @@ use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::types::ValueType;
 use common_expression::Chunk;
-use common_expression::Column;
-use common_expression::ColumnFrom;
 use common_expression::DataField;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRefExt;

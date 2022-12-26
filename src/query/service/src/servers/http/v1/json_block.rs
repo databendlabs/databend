@@ -42,7 +42,6 @@ pub fn block_to_json_value(chunk: &Chunk, format: &FormatSettings) -> Result<Vec
     let columns: Vec<Column> = chunk
         .convert_to_full()
         .columns()
-        .iter()
         .map(|column| column.value.clone().into_column().unwrap())
         .collect();
 

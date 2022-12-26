@@ -200,7 +200,7 @@ pub async fn clickhouse_handler_get(
         return serialize_one_block(
             schema,
             context.clone(),
-            block,
+            chunk,
             &sql,
             &params,
             default_format,

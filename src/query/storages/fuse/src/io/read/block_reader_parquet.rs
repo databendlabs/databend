@@ -28,9 +28,9 @@ use common_arrow::parquet::metadata::ColumnDescriptor;
 use common_arrow::parquet::read::BasicDecompressor;
 use common_arrow::parquet::read::PageMetaData;
 use common_arrow::parquet::read::PageReader;
-use common_base::runtime::UnlimitedFuture;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::Projection;
+use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::Chunk;
@@ -49,6 +49,9 @@ use tracing::Instrument;
 
 use crate::fuse_part::FusePartInfo;
 use crate::io::BlockReader;
+use crate::metrics::metrics_inc_remote_io_read_bytes;
+use crate::metrics::metrics_inc_remote_io_read_parts;
+use crate::metrics::metrics_inc_remote_io_seeks;
 
 impl BlockReader {
     pub fn create(
@@ -205,71 +208,6 @@ impl BlockReader {
         Ok((num_rows, columns_array_iter))
     }
 
-    async fn read_columns(&self, part: PartInfoPtr) -> Result<(usize, Vec<ArrayIter<'static>>)> {
-        let part = FusePartInfo::from_part(&part)?;
-
-        // TODO: add prefetch column data.
-        let num_rows = part.nums_rows;
-        let num_cols = self.projection.len();
-        let mut column_chunk_futs = Vec::with_capacity(num_cols);
-
-        let columns = self.projection.project_column_leaves(&self.column_leaves)?;
-        let indices = Self::build_projection_indices(&columns);
-        for (index, _) in indices {
-            let column_meta = &part.columns_meta[&index];
-            let column_reader = self.operator.object(&part.location);
-            let fut = async move {
-                let (idx, column_chunk) =
-                    Self::read_column(column_reader, index, column_meta.offset, column_meta.len)
-                        .await?;
-                Ok::<_, ErrorCode>((idx, column_chunk))
-            }
-            .instrument(debug_span!("read_col_chunk"));
-            column_chunk_futs.push(fut);
-        }
-
-        let num_cols = column_chunk_futs.len();
-        let chunks = futures::stream::iter(column_chunk_futs)
-            .buffered(std::cmp::min(10, num_cols))
-            .try_collect::<Vec<_>>()
-            .await?;
-
-        let mut chunk_map: HashMap<usize, Vec<u8>> = chunks.into_iter().collect();
-        let mut cnt_map = Self::build_projection_count_map(&columns);
-        let mut columns_array_iter = Vec::with_capacity(num_cols);
-        for column in &columns {
-            let field = column.field.clone();
-            let indices = &column.leaf_ids;
-            let mut column_metas = Vec::with_capacity(indices.len());
-            let mut column_chunks = Vec::with_capacity(indices.len());
-            let mut column_descriptors = Vec::with_capacity(indices.len());
-            for index in indices {
-                let column_meta = &part.columns_meta[index];
-                let cnt = cnt_map.get_mut(index).unwrap();
-                *cnt -= 1;
-                let column_chunk = if cnt > &mut 0 {
-                    chunk_map.get(index).unwrap().clone()
-                } else {
-                    chunk_map.remove(index).unwrap()
-                };
-                let column_descriptor = &self.parquet_schema_descriptor.columns()[*index];
-                column_metas.push(column_meta);
-                column_chunks.push(column_chunk);
-                column_descriptors.push(column_descriptor);
-            }
-            columns_array_iter.push(Self::to_array_iter(
-                column_metas,
-                column_chunks,
-                num_rows,
-                column_descriptors,
-                field,
-                &part.compression,
-            )?);
-        }
-
-        Ok((num_rows, columns_array_iter))
-    }
-
     pub fn build_block(&self, chunks: Vec<(usize, Box<dyn Array>)>) -> Result<Chunk> {
         let mut results = Vec::with_capacity(chunks.len());
         let mut chunk_map: HashMap<usize, Box<dyn Array>> = chunks.into_iter().collect();
@@ -331,23 +269,39 @@ impl BlockReader {
         self.try_next_block(&mut deserializer)
     }
 
-    pub async fn read_columns_data(&self, part: PartInfoPtr) -> Result<Vec<(usize, Vec<u8>)>> {
-        let part = FusePartInfo::from_part(&part)?;
+    pub async fn read_columns_data(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        raw_part: PartInfoPtr,
+    ) -> Result<Vec<(usize, Vec<u8>)>> {
+        // Perf
+        metrics_inc_remote_io_read_parts(1);
+
+        let part = FusePartInfo::from_part(&raw_part)?;
         let columns = self.projection.project_column_leaves(&self.column_leaves)?;
         let indices = Self::build_projection_indices(&columns);
-        let mut join_handlers = Vec::with_capacity(indices.len());
 
-        for (index, _) in indices {
-            let column_meta = &part.columns_meta[&index];
-            join_handlers.push(UnlimitedFuture::create(Self::read_column(
-                self.operator.object(&part.location),
-                index,
-                column_meta.offset,
-                column_meta.len,
-            )));
+        let mut ranges = vec![];
+        for index in indices.keys() {
+            let column_meta = &part.columns_meta[index];
+            ranges.push((
+                *index,
+                column_meta.offset..(column_meta.offset + column_meta.len),
+            ));
+
+            // Perf
+            {
+                metrics_inc_remote_io_seeks(1);
+                metrics_inc_remote_io_read_bytes(column_meta.len);
+            }
         }
 
-        futures::future::try_join_all(join_handlers).await
+        let object = self.operator.object(&part.location);
+        let min_seek_bytes = ctx.get_settings().get_storage_io_min_bytes_for_seek()?;
+        let max_page_bytes = ctx
+            .get_settings()
+            .get_storage_io_max_page_bytes_for_read()?;
+        Self::merge_io_read(object, min_seek_bytes, max_page_bytes, ranges).await
     }
 
     pub fn support_blocking_api(&self) -> bool {
@@ -377,17 +331,6 @@ impl BlockReader {
         Ok(results)
     }
 
-    pub async fn read_column(
-        o: Object,
-        index: usize,
-        offset: u64,
-        length: u64,
-    ) -> Result<(usize, Vec<u8>)> {
-        let chunk = o.range_read(offset..offset + length).await?;
-
-        Ok((index, chunk))
-    }
-
     pub fn sync_read_column(
         o: Object,
         index: usize,
@@ -396,13 +339,6 @@ impl BlockReader {
     ) -> Result<(usize, Vec<u8>)> {
         let chunk = o.blocking_range_read(offset..offset + length)?;
         Ok((index, chunk))
-    }
-
-    #[tracing::instrument(level = "debug", skip_all)]
-    pub async fn read(&self, part: PartInfoPtr) -> Result<Chunk> {
-        let (num_rows, columns_array_iter) = self.read_columns(part).await?;
-        let mut deserializer = RowGroupDeserializer::new(columns_array_iter, num_rows, None);
-        self.try_next_block(&mut deserializer)
     }
 
     fn try_next_block(&self, deserializer: &mut RowGroupDeserializer) -> Result<Chunk> {
