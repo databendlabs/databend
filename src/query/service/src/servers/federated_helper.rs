@@ -19,7 +19,7 @@ use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 use regex::bytes::RegexSet;
 
-pub type LazyBlockFunc = fn(&str) -> Option<Chunk>;
+pub type LazyBlockFunc = fn(&str) -> Option<(DataSchemaRef, Chunk)>;
 
 pub struct FederatedHelper {}
 

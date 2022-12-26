@@ -18,6 +18,7 @@ use common_config::DATABEND_COMMIT_VERSION;
 use common_expression::types::DataType;
 use common_expression::utils::ColumnFrom;
 use common_expression::Chunk;
+use common_expression::ChunkEntry;
 use common_expression::Column;
 use common_expression::DataField;
 use common_expression::DataSchemaRef;
@@ -50,13 +51,14 @@ impl MySQLFederated {
     fn select_variable_block(name: &str, value: &str) -> Option<(DataSchemaRef, Chunk)> {
         let schema = DataSchemaRefExt::create(vec![DataField::new(
             &format!("@@{}", name),
-            TableDataType::String,
+            DataType::String,
         )]);
-        let chunk = Chunk::create(
-            vec![(
-                Value::Column(Column::from_data(vec![value.as_bytes().to_vec()])),
-                TableDataType::String,
-            )],
+        let chunk = Chunk::new(
+            vec![ChunkEntry {
+                id: 0,
+                value: Value::Column(Column::from_data(vec![value.as_bytes().to_vec()])),
+                data_type: DataType::String,
+            }],
             1,
         );
         Some((schema, chunk))
@@ -67,12 +69,13 @@ impl MySQLFederated {
     // |function_name|
     // |value|
     fn select_function_block(name: &str, value: &str) -> Option<(DataSchemaRef, Chunk)> {
-        let schema = DataSchemaRefExt::create(vec![DataField::new(name, TableDataType::String)]);
-        let chunk = Chunk::create(
-            vec![(
-                Value::Column(Column::from_data(vec![value.as_bytes().to_vec()])),
-                TableDataType::String,
-            )],
+        let schema = DataSchemaRefExt::create(vec![DataField::new(name, DataType::String)]);
+        let chunk = Chunk::new(
+            vec![ChunkEntry {
+                id: 0,
+                value: Value::Column(Column::from_data(vec![value.as_bytes().to_vec()])),
+                data_type: DataType::String,
+            }],
             1,
         );
         Some((schema, chunk))
@@ -84,19 +87,21 @@ impl MySQLFederated {
     // | xx          | yy   |
     fn show_variables_block(name: &str, value: &str) -> Option<(DataSchemaRef, Chunk)> {
         let schema = DataSchemaRefExt::create(vec![
-            DataField::new("Variable_name", TableDataType::String),
-            DataField::new("Value", TableDataType::String),
+            DataField::new("Variable_name", DataType::String),
+            DataField::new("Value", DataType::String),
         ]);
-        let chunk = Chunk::create(
+        let chunk = Chunk::new(
             vec![
-                (
-                    Value::Column(Column::from_data(vec![name.as_bytes().to_vec()])),
-                    TableDataType::String,
-                ),
-                (
-                    Value::Column(Column::from_data(vec![value.as_bytes().to_vec()])),
-                    TableDataType::String,
-                ),
+                ChunkEntry {
+                    id: 0,
+                    value: Value::Column(Column::from_data(vec![name.as_bytes().to_vec()])),
+                    data_type: DataType::String,
+                },
+                ChunkEntry {
+                    id: 1,
+                    value: Value::Column(Column::from_data(vec![value.as_bytes().to_vec()])),
+                    data_type: DataType::String,
+                },
             ],
             1,
         );
@@ -129,32 +134,34 @@ impl MySQLFederated {
         let mut vars: Vec<&str> = query.split("@@").collect();
         if vars.len() > 1 {
             vars.remove(0);
-            for var in vars {
+            for (id, var) in vars.iter().enumerate() {
                 let var = var.trim_end_matches(|c| c == ' ' || c == ',');
                 let vars_as: Vec<&str> = var.split(" as ").collect();
                 if vars_as.len() == 2 {
                     // @@cc as yy:
                     // var_as is 'yy' as the field name.
                     let var_as = vars_as[1];
-                    fields.push(DataField::new(var_as, TableDataType::String));
+                    fields.push(DataField::new(var_as, DataType::String));
 
                     // var is 'cc'.
                     let var = vars_as[0];
                     let value = default_map.get(var).unwrap_or(&"0").to_string();
-                    values.push((
-                        Value::Column(Column::from_data(vec![value.as_bytes().to_vec()])),
-                        DataType::String,
-                    ));
+                    values.push(ChunkEntry {
+                        id,
+                        value: Value::Column(Column::from_data(vec![value.as_bytes().to_vec()])),
+                        data_type: DataType::String,
+                    });
                 } else {
                     // @@aa
                     // var is 'aa'
-                    fields.push(DataField::new(&format!("@@{}", var), TableDataType::String));
+                    fields.push(DataField::new(&format!("@@{}", var), DataType::String));
 
                     let value = default_map.get(var).unwrap_or(&"0").to_string();
-                    values.push((
-                        Value::Column(Column::from_data(vec![value.as_bytes().to_vec()])),
-                        DataType::String,
-                    ));
+                    values.push(ChunkEntry {
+                        id,
+                        value: Value::Column(Column::from_data(vec![value.as_bytes().to_vec()])),
+                        data_type: DataType::String,
+                    });
                 }
             }
         }
