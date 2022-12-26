@@ -286,10 +286,6 @@ impl Table for FuseTable {
         vec![]
     }
 
-    fn support_prewhere(&self) -> bool {
-        true
-    }
-
     async fn alter_table_cluster_keys(
         &self,
         ctx: Arc<dyn TableContext>,

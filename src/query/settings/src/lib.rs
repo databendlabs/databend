@@ -492,6 +492,16 @@ impl Settings {
                 possible_values: None,
             },
             SettingValue {
+                default_value: UserSettingValue::UInt64(2),
+                user_setting: UserSetting::create(
+                    "storage_fetch_part_num",
+                    UserSettingValue::UInt64(2),
+                ),
+                level: ScopeLevel::Session,
+                desc: "The max number of part each read cycle.",
+                possible_values: None,
+            },
+            SettingValue {
                 default_value: UserSettingValue::UInt64(24 * 7),
                 user_setting: UserSetting::create(
                     "load_file_metadata_expire_hours",
@@ -550,6 +560,19 @@ impl Settings {
     // Set max_threads.
     pub fn set_max_threads(&self, val: u64) -> Result<()> {
         let key = "max_threads";
+        self.try_set_u64(key, val, false)
+    }
+
+    // Get storage_fetch_part_num.
+    pub fn get_storage_fetch_part_num(&self) -> Result<u64> {
+        let key = "storage_fetch_part_num";
+        let value = self.try_get_u64(key)?;
+        if value == 0 { Ok(16) } else { Ok(value) }
+    }
+
+    // Set storage_fetch_part_num.
+    pub fn set_storage_fetch_part_num(&self, val: u64) -> Result<()> {
+        let key = "storage_fetch_part_num";
         self.try_set_u64(key, val, false)
     }
 
