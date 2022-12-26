@@ -72,21 +72,12 @@ impl BlockReader {
                 metrics_inc_remote_io_read_bytes_after_merged(range.end - range.start);
             }
 
-            let path = path.clone();
-            let obj = object.clone();
-
-            // Push the fut to tokio scheduler queue.
-            read_handlers.push(async move {
-                let handler = common_base::base::tokio::spawn(UnlimitedFuture::create(
-                    Self::read_range(obj, idx, range.start, range.end),
-                ));
-                handler.await.map_err(|e| {
-                    ErrorCode::StorageOther(format!(
-                        "merge io read range:[{},{}], path:{}, error: {}",
-                        range.start, range.end, path, e
-                    ))
-                })?
-            });
+            read_handlers.push(UnlimitedFuture::create(Self::read_range(
+                object.clone(),
+                idx,
+                range.start,
+                range.end,
+            )));
         }
 
         let start = Instant::now();
