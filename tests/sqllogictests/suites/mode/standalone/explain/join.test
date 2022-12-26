@@ -136,6 +136,24 @@ HashJoin
 
 ## check outer join is converted to inner join
 
+statement ok
+drop table if exists onecolumn
+
+statement ok
+CREATE TABLE onecolumn (x INT NULL)
+
+statement ok
+INSERT INTO onecolumn(x) VALUES (44), (NULL), (42), (42)
+
+statement ok
+drop table if exists twocolumn
+
+statement ok
+CREATE TABLE twocolumn (x INT NULL, y INT NULL)
+
+statement ok
+INSERT INTO twocolumn(x, y) VALUES (44,51), (NULL,52), (42,53), (45,45)
+
 query T
 explain select * from onecolumn as a left join twocolumn as b on a.x = b.x where b.x > 42
 ----
@@ -154,9 +172,9 @@ HashJoin
 └── TableScan(Probe)
     ├── table: default.default.onecolumn
     ├── read rows: 4
-    ├── read bytes: 62
-    ├── partitions total: 2
-    ├── partitions scanned: 2
+    ├── read bytes: 37
+    ├── partitions total: 1
+    ├── partitions scanned: 1
     └── push downs: [filters: [], limit: NONE]
 
 query T
@@ -177,9 +195,9 @@ HashJoin
 └── TableScan(Probe)
     ├── table: default.default.onecolumn
     ├── read rows: 4
-    ├── read bytes: 62
-    ├── partitions total: 2
-    ├── partitions scanned: 2
+    ├── read bytes: 37
+    ├── partitions total: 1
+    ├── partitions scanned: 1
     └── push downs: [filters: [], limit: NONE]
 
 
@@ -201,9 +219,9 @@ HashJoin
 └── TableScan(Probe)
     ├── table: default.default.onecolumn
     ├── read rows: 4
-    ├── read bytes: 62
-    ├── partitions total: 2
-    ├── partitions scanned: 2
+    ├── read bytes: 37
+    ├── partitions total: 1
+    ├── partitions scanned: 1
     └── push downs: [filters: [], limit: NONE]
 
 ## the following cases won't be converted to inner join
@@ -228,9 +246,9 @@ Filter
     └── TableScan(Probe)
         ├── table: default.default.onecolumn
         ├── read rows: 4
-        ├── read bytes: 62
-        ├── partitions total: 2
-        ├── partitions scanned: 2
+        ├── read bytes: 37
+        ├── partitions total: 1
+        ├── partitions scanned: 1
         └── push downs: [filters: [], limit: NONE]
 
 query T
@@ -251,8 +269,7 @@ HashJoin
 └── TableScan(Probe)
     ├── table: default.default.onecolumn
     ├── read rows: 4
-    ├── read bytes: 62
-    ├── partitions total: 2
-    ├── partitions scanned: 2
+    ├── read bytes: 37
+    ├── partitions total: 1
+    ├── partitions scanned: 1
     └── push downs: [filters: [], limit: NONE]
-
