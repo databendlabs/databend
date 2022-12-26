@@ -48,6 +48,7 @@ use tracing::debug_span;
 use tracing::Instrument;
 
 use crate::fuse_part::FusePartInfo;
+use crate::io::read::ReadSettings;
 use crate::io::BlockReader;
 use crate::metrics::metrics_inc_remote_io_read_bytes;
 use crate::metrics::metrics_inc_remote_io_read_parts;
@@ -301,11 +302,15 @@ impl BlockReader {
         }
 
         let object = self.operator.object(&part.location);
-        let min_seek_bytes = ctx.get_settings().get_storage_io_min_bytes_for_seek()?;
-        let max_page_bytes = ctx
-            .get_settings()
-            .get_storage_io_max_page_bytes_for_read()?;
-        Self::merge_io_read(object, min_seek_bytes, max_page_bytes, ranges).await
+        let read_settings = ReadSettings {
+            storage_io_min_bytes_for_seek: ctx
+                .get_settings()
+                .get_storage_io_min_bytes_for_seek()?,
+            storage_io_max_page_bytes_for_read: ctx
+                .get_settings()
+                .get_storage_io_max_page_bytes_for_read()?,
+        };
+        Self::merge_io_read(&read_settings, object, ranges).await
     }
 
     pub fn support_blocking_api(&self) -> bool {

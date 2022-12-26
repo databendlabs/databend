@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,13 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod block_writer;
-mod meta_writer;
-mod segment_writer;
-mod write_settings;
+use crate::FuseStorageFormat;
 
-pub use block_writer::write_block;
-pub use block_writer::write_data;
-pub use meta_writer::write_meta;
-pub use segment_writer::SegmentWriter;
-pub use write_settings::WriteSettings;
+pub struct WriteSettings {
+    pub storage_format: FuseStorageFormat,
+}
+
+impl Default for WriteSettings {
+    fn default() -> Self {
+        WriteSettings {
+            storage_format: FuseStorageFormat::Parquet,
+        }
+    }
+}
