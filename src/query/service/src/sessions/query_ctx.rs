@@ -237,12 +237,14 @@ impl TableContext for QueryContext {
         let mut partition_queue = self.partition_queue.write();
 
         for _index in 0..num {
-            if let Some(part) = partition_queue.pop_front() {
-                res.push(part);
-                continue;
-            }
-
-            break;
+            match partition_queue.pop_front() {
+                None => {
+                    break;
+                }
+                Some(part) => {
+                    res.push(part);
+                }
+            };
         }
 
         res
