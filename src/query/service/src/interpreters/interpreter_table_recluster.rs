@@ -53,16 +53,14 @@ impl Interpreter for ReclusterTableInterpreter {
         let start = SystemTime::now();
 
         // Build extras via push down scalar
-        let extras = match &plan.push_downs {
-            None => None,
-            Some(scalar) => {
-                let eb = ExpressionBuilderWithoutRenaming::create(plan.metadata.clone());
-                let pred_expr = eb.build(scalar)?;
-                Some(PushDownInfo {
-                    filters: vec![pred_expr],
-                    ..PushDownInfo::default()
-                })
-            }
+        let extras = if let Some(scalar) = &plan.push_downs {
+            let filter = scalar.as_raw_expr().as_remote_expr()?;
+            Some(PushDownInfo {
+                filters: vec![filter],
+                ..PushDownInfo::default()
+            })
+        } else {
+            None
         };
 
         loop {

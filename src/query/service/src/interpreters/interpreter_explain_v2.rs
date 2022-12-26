@@ -114,7 +114,7 @@ impl Interpreter for ExplainInterpreter {
                 let line_splitted_result: Vec<&str> = display_string.lines().collect();
                 let num_rows = line_splitted_result.len();
                 let column = Column::from_data(line_splitted_result);
-                vec![Chunk::new(
+                vec![Chunk::new_from_sequence(
                     vec![(Value::Column(column), DataType::String)],
                     num_rows,
                 )]
@@ -127,7 +127,7 @@ impl Interpreter for ExplainInterpreter {
 
 impl ExplainInterpreter {
     pub fn try_create(ctx: Arc<QueryContext>, plan: Plan, kind: ExplainKind) -> Result<Self> {
-        let data_field = DataField::new("explain", TableDataType::String);
+        let data_field = DataField::new("explain", DataType::String);
         let schema = DataSchemaRefExt::create(vec![data_field]);
         Ok(ExplainInterpreter {
             ctx,
@@ -142,7 +142,7 @@ impl ExplainInterpreter {
         let line_splitted_result: Vec<&str> = result.lines().collect();
         let num_rows = line_splitted_result.len();
         let formatted_plan = Column::from_data(line_splitted_result);
-        Ok(vec![Chunk::new(
+        Ok(vec![Chunk::new_from_sequence(
             vec![(Value::Column(formatted_plan), DataType::String)],
             num_rows,
         )])
@@ -157,7 +157,7 @@ impl ExplainInterpreter {
         let line_splitted_result: Vec<&str> = result.lines().collect();
         let num_rows = line_splitted_result.len();
         let formatted_plan = Column::from_data(line_splitted_result);
-        Ok(vec![Chunk::new(
+        Ok(vec![Chunk::new_from_sequence(
             vec![(Value::Column(formatted_plan), DataType::String)],
             num_rows,
         )])
@@ -168,7 +168,7 @@ impl ExplainInterpreter {
         s_expr: SExpr,
         metadata: MetadataRef,
         ignore_result: bool,
-    ) -> Result<Vec<DataBlock>> {
+    ) -> Result<Vec<Chunk>> {
         let builder = PhysicalPlanBuilder::new(metadata, self.ctx.clone());
         let plan = builder.build(&s_expr).await?;
         let build_res = build_query_pipeline(&self.ctx, &[], &plan, ignore_result).await?;
@@ -177,11 +177,11 @@ impl ExplainInterpreter {
         // Format root pipeline
         let line_splitted_result = format!("{}", build_res.main_pipeline.display_indent())
             .lines()
-            .map(|s| s.as_bytes())
+            .map(|s| s.as_bytes().to_vec())
             .collect::<Vec<_>>();
         let num_rows = line_splitted_result.len();
         let column = Column::from_data(line_splitted_result);
-        chunks.push(Chunk::new(
+        chunks.push(Chunk::new_from_sequence(
             vec![(Value::Column(column), DataType::String)],
             num_rows,
         ));
@@ -189,11 +189,11 @@ impl ExplainInterpreter {
         for pipeline in build_res.sources_pipelines.iter() {
             let line_splitted_result = format!("\n{}", pipeline.display_indent())
                 .lines()
-                .map(|s| s.as_bytes())
+                .map(|s| s.as_bytes().to_vec())
                 .collect::<Vec<_>>();
             let num_rows = line_splitted_result.len();
             let column = Column::from_data(line_splitted_result);
-            chunks.push(Chunk::new(
+            chunks.push(Chunk::new_from_sequence(
                 vec![(Value::Column(column), DataType::String)],
                 num_rows,
             ));
@@ -215,11 +215,11 @@ impl ExplainInterpreter {
         let display_string = fragments_actions.display_indent().to_string();
         let line_splitted_result = display_string
             .lines()
-            .map(|s| s.as_bytes())
+            .map(|s| s.as_bytes().to_vec())
             .collect::<Vec<_>>();
         let num_rows = line_splitted_result.len();
         let formatted_plan = Column::from_data(line_splitted_result);
-        Ok(vec![Chunk::new(
+        Ok(vec![Chunk::new_from_sequence(
             vec![(Value::Column(formatted_plan), DataType::String)],
             num_rows,
         )])

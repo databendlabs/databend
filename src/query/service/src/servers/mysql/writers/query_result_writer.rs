@@ -16,6 +16,7 @@ use common_base::base::tokio::io::AsyncWrite;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::number::NumberScalar;
+use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::Column as ExprColumn;
 use common_expression::DataField;

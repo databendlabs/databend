@@ -75,39 +75,39 @@ impl Interpreter for DescribeTableInterpreter {
             table.schema()
         };
 
-        let mut names: Vec<String> = vec![];
-        let mut types: Vec<String> = vec![];
-        let mut nulls: Vec<String> = vec![];
-        let mut default_exprs: Vec<String> = vec![];
-        let mut extras: Vec<String> = vec![];
+        let mut names: Vec<Vec<u8>> = vec![];
+        let mut types: Vec<Vec<u8>> = vec![];
+        let mut nulls: Vec<Vec<u8>> = vec![];
+        let mut default_exprs: Vec<Vec<u8>> = vec![];
+        let mut extras: Vec<Vec<u8>> = vec![];
 
         for field in schema.fields().iter() {
-            names.push(field.name().to_string());
+            names.push(field.name().to_string().as_bytes().to_vec());
 
             let non_null_type = field.data_type().remove_nullable();
-            types.push(non_null_type.sql_name());
+            types.push(non_null_type.sql_name().as_bytes().to_vec());
             nulls.push(if field.is_nullable() {
-                "YES".to_string()
+                "YES".to_string().as_bytes().to_vec()
             } else {
-                "NO".to_string()
+                "NO".to_string().as_bytes().to_vec()
             });
             match field.default_expr() {
                 Some(expr) => {
                     let expression: PhysicalScalar = serde_json::from_str(expr)?;
-                    default_exprs.push(format!("{expression}"));
+                    default_exprs.push(format!("{expression}").as_bytes().to_vec());
                 }
 
                 None => {
                     let value = field.data_type().default_value();
-                    default_exprs.push(value.to_string());
+                    default_exprs.push(value.to_string().as_bytes().to_vec());
                 }
             }
-            extras.push("".to_string());
+            extras.push("".to_string().as_bytes().to_vec());
         }
 
         let num_rows = schema.fields().len();
 
-        PipelineBuildResult::from_chunks(vec![Chunk::new(
+        PipelineBuildResult::from_chunks(vec![Chunk::new_from_sequence(
             vec![
                 (Value::Column(Column::from_data(names)), DataType::String),
                 (Value::Column(Column::from_data(types)), DataType::String),

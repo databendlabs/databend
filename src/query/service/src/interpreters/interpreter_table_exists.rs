@@ -15,7 +15,9 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_expression::types::number::NumberScalar;
 use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
 use common_expression::Chunk;
 use common_expression::Scalar;
 use common_expression::Value;
@@ -53,8 +55,11 @@ impl Interpreter for ExistsTableInterpreter {
             false => 0u8,
         };
 
-        PipelineBuildResult::from_chunks(vec![Chunk::new(
-            vec![(Value::Scalar(Scalar::Boolean(result)), DataType::Boolean)],
+        PipelineBuildResult::from_chunks(vec![Chunk::new_from_sequence(
+            vec![(
+                Value::Scalar(Scalar::Number(NumberScalar::UInt8(result))),
+                DataType::Number(NumberDataType::UInt8),
+            )],
             1,
         )])
     }

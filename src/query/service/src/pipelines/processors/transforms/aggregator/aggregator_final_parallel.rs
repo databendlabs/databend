@@ -250,7 +250,7 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
             let mut aggregates_column_builder: Vec<ColumnBuilder> = {
                 let mut values = vec![];
                 for aggregate_function in aggregate_functions {
-                    let datatype = aggregate_function.return_type()?;
+                    let data_type = aggregate_function.return_type()?;
                     let mut builder =
                         ColumnBuilder::with_capacity(&data_type, self.hash_table.len());
                     values.push(builder)

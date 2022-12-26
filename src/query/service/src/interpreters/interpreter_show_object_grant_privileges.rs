@@ -62,19 +62,19 @@ impl Interpreter for ShowObjectGrantPrivilegesInterpreter {
         if resp.privileges.is_empty() {
             return Ok(PipelineBuildResult::create());
         }
-        let mut share_names: Vec<String> = vec![];
-        let mut privileges: Vec<String> = vec![];
-        let mut created_ons: Vec<String> = vec![];
+        let mut share_names: Vec<Vec<u8>> = vec![];
+        let mut privileges: Vec<Vec<u8>> = vec![];
+        let mut created_ons: Vec<Vec<u8>> = vec![];
 
         for privilege in resp.privileges {
-            share_names.push(privilege.share_name);
-            privileges.push(privilege.privileges.to_string());
-            created_ons.push(privilege.grant_on.to_string());
+            share_names.push(privilege.share_name.as_bytes().to_vec());
+            privileges.push(privilege.privileges.to_string().as_bytes().to_vec());
+            created_ons.push(privilege.grant_on.to_string().as_bytes().to_vec());
         }
 
         let num_rows = resp.privileges.len();
 
-        PipelineBuildResult::from_chunks(vec![Chunk::new(
+        PipelineBuildResult::from_chunks(vec![Chunk::new_from_sequence(
             vec![
                 (
                     Value::Column(Column::from_data(created_ons)),

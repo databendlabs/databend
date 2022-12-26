@@ -18,6 +18,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataField;
 use common_expression::DataSchemaRefExt;
+use common_expression::TableSchemaRefExt;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TableNameIdent;
@@ -167,7 +168,7 @@ impl CreateTableInterpreterV2 {
         let input_schema = self.plan.schema.clone();
         for (idx, field) in self.plan.schema.fields().clone().into_iter().enumerate() {
             let field = if let Some(Some(scalar)) = &self.plan.field_default_exprs.get(idx) {
-                let mut builder = PhysicalScalarBuilder::new(&input_schema);
+                let mut builder = PhysicalScalarBuilder::new();
                 let physical_scaler = builder.build(scalar)?;
                 field.with_default_expr(Some(serde_json::to_string(&physical_scaler)?))
             } else {
@@ -175,7 +176,7 @@ impl CreateTableInterpreterV2 {
             };
             fields.push(field)
         }
-        let schema = DataSchemaRefExt::create(fields);
+        let schema = TableSchemaRefExt::create(fields);
 
         let mut table_meta = TableMeta {
             schema,

@@ -19,6 +19,7 @@ use common_expression::types::DataType;
 use common_expression::Chunk;
 use common_expression::Column;
 use common_expression::ColumnFrom;
+use common_expression::DataSchemaRef;
 use common_expression::Value;
 use common_meta_types::PrincipalIdentity;
 use common_sql::plans::ShowGrantsPlan;
@@ -84,12 +85,12 @@ impl Interpreter for ShowGrantsInterpreter {
             .fold(grant_set, |a, b| a | b)
             .entries()
             .iter()
-            .map(|e| format!("{} TO {}", e, identity))
+            .map(|e| format!("{} TO {}", e, identity).as_bytes().to_vec())
             .collect::<Vec<_>>();
 
         let num_rows = grant_list.len();
 
-        PipelineBuildResult::from_chunks(vec![Chunk::new(
+        PipelineBuildResult::from_chunks(vec![Chunk::new_from_sequence(
             vec![(
                 Value::Column(Column::from_data(grant_list)),
                 DataType::String,

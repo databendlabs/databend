@@ -66,7 +66,7 @@ pub trait Interpreter: Sync + Send {
             InterpreterMetrics::record_query_finished(&ctx, None);
             log_query_finished(&ctx, None);
 
-            return Ok(Box::pin(ChunkStream::create(self.schema(), None, vec![])));
+            return Ok(Box::pin(ChunkStream::create(None, vec![])));
         }
 
         let query_ctx = ctx.clone();
@@ -93,11 +93,7 @@ pub trait Interpreter: Sync + Send {
 
             ctx.set_executor(Arc::downgrade(&complete_executor.get_inner()));
             complete_executor.execute()?;
-            return Ok(Box::pin(ChunkStream::create(
-                Arc::new(DataSchema::new(vec![])),
-                None,
-                vec![],
-            )));
+            return Ok(Box::pin(ChunkStream::create(None, vec![])));
         }
 
         let pulling_executor = PipelinePullingExecutor::from_pipelines(build_res, settings)?;

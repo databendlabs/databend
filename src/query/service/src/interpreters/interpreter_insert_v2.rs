@@ -35,10 +35,12 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::type_check;
 use common_expression::types::number::NumberScalar;
+use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::Chunk;
 use common_expression::ChunkEntry;
 use common_expression::DataField;
+use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 use common_expression::Expr;
@@ -64,6 +66,7 @@ use common_sql::evaluator::CompoundChunkOperator;
 use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use common_sql::executor::DistributedInsertSelect;
 use common_sql::executor::PhysicalPlan;
+use common_sql::executor::PhysicalPlanBuilder;
 use common_sql::executor::PhysicalScalar;
 use common_sql::executor::PhysicalScalarBuilder;
 use common_sql::plans::CastExpr;
@@ -72,8 +75,10 @@ use common_sql::plans::Insert;
 use common_sql::plans::InsertInputSource;
 use common_sql::plans::Plan;
 use common_sql::plans::Scalar;
+use common_sql::BindContext;
 use common_sql::Metadata;
 use common_sql::MetadataRef;
+use common_sql::NameResolutionContext;
 use common_sql::ScalarBinder;
 use common_storages_factory::Table;
 use common_storages_fuse::io::Files;
@@ -127,7 +132,7 @@ impl InsertInterpreterV2 {
         }
 
         // check if cast needed
-        let cast_needed = select_schema != *output_schema;
+        let cast_needed = select_schema != DataSchema::from(*output_schema).into();
         Ok(cast_needed)
     }
 
@@ -249,7 +254,7 @@ impl InsertInterpreterV2 {
                     Err(may_error.as_ref().unwrap().clone())
                 }
                 None => {
-                    let append_entries = ctx.consume_precommit_blocks();
+                    let append_entries = ctx.consume_precommit_chunks();
                     // We must put the commit operation to global runtime, which will avoid the "dispatch dropped without returning error" in tower
                     GlobalIORuntime::instance().block_on(async move {
                         tracing::info!(
@@ -799,7 +804,7 @@ async fn exprs_to_scalar<'a>(
 
         let (mut scalar, data_type) = scalar_binder.bind(expr).await?;
         let field_data_type = schema.field(i).data_type();
-        if data_type != field_data_type {
+        if &data_type != field_data_type {
             scalar = Scalar::CastExpr(CastExpr {
                 argument: Box::new(scalar),
                 from_type: Box::new(data_type),
@@ -813,8 +818,11 @@ async fn exprs_to_scalar<'a>(
         });
     }
 
-    let one_row_chunk = Chunk::new(
-        vec![Value::Scalar(DataScalar::Number(NumberScalar::UInt8(1)))],
+    let one_row_chunk = Chunk::new_from_sequence(
+        vec![(
+            Value::Scalar(DataScalar::Number(NumberScalar::UInt8(1))),
+            DataType::Number(NumberDataType::UInt8),
+        )],
         1,
     );
     let func_ctx = ctx.try_get_function_context()?;

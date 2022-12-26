@@ -68,7 +68,10 @@ impl Interpreter for ShowRolesInterpreter {
             .cloned()
             .unwrap_or_default();
 
-        let names: Vec<&str> = roles.iter().map(|x| x.name.as_str()).collect();
+        let names = roles
+            .iter()
+            .map(|x| x.name.as_bytes().to_vec())
+            .collect::<Vec<_>>();
         let inherited_roles: Vec<u64> = roles
             .iter()
             .map(|x| x.grants.roles().len() as u64)
@@ -77,7 +80,7 @@ impl Interpreter for ShowRolesInterpreter {
         let is_defaults: Vec<bool> = roles.iter().map(|r| r.name == default_role_name).collect();
         let num_rows = roles.len();
 
-        PipelineBuildResult::from_chunks(vec![Chunk::new(
+        PipelineBuildResult::from_chunks(vec![Chunk::new_from_sequence(
             vec![
                 (Value::Column(Column::from_data(names)), DataType::String),
                 (

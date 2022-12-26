@@ -67,27 +67,26 @@ impl Interpreter for DescShareInterpreter {
             return Ok(PipelineBuildResult::create());
         }
 
-        let mut names: Vec<String> = vec![];
-        let mut kinds: Vec<String> = vec![];
-        let mut shared_ons: Vec<String> = vec![];
+        let mut names: Vec<Vec<u8>> = vec![];
+        let mut kinds: Vec<Vec<u8>> = vec![];
+        let mut shared_ons: Vec<Vec<u8>> = vec![];
         for entry in resp.objects.iter() {
             match &entry.object {
                 ShareGrantObjectName::Database(db) => {
-                    kinds.push("DATABASE".to_string());
-                    names.push(db.clone());
+                    kinds.push("DATABASE".to_string().as_bytes().to_vec());
+                    names.push(db.clone().as_bytes().to_vec());
                 }
                 ShareGrantObjectName::Table(db, table_name) => {
-                    kinds.push("TABLE".to_string());
-                    names.push(format!("{}.{}", db, table_name));
+                    kinds.push("TABLE".to_string().as_bytes().to_vec());
+                    names.push(format!("{}.{}", db, table_name).as_bytes().to_vec());
                 }
             }
-            shared_ons.push(entry.grant_on.to_string());
+            shared_ons.push(entry.grant_on.to_string().as_bytes().to_vec());
         }
 
         let num_rows = resp.objects.len();
 
-        PipelineBuildResult::from_chunks(vec![Chunk::new(
-            self.plan.schema(),
+        PipelineBuildResult::from_chunks(vec![Chunk::new_from_sequence(
             vec![
                 (Value::Column(Column::from_data(kinds)), DataType::String),
                 (Value::Column(Column::from_data(names)), DataType::String),

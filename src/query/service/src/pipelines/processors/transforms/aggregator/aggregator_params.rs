@@ -19,6 +19,7 @@ use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::Chunk;
 use common_expression::DataSchemaRef;
+use common_expression::HashMethodKind;
 use common_functions_v2::aggregates::get_layout_offsets;
 use common_functions_v2::aggregates::AggregateFunctionRef;
 use common_functions_v2::aggregates::StateAddr;

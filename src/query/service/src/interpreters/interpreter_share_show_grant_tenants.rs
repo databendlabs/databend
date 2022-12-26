@@ -67,15 +67,15 @@ impl Interpreter for ShowGrantTenantsOfShareInterpreter {
             return Ok(PipelineBuildResult::create());
         }
 
-        let mut granted_ons: Vec<String> = vec![];
-        let mut accounts: Vec<String> = vec![];
+        let mut granted_ons: Vec<Vec<u8>> = vec![];
+        let mut accounts: Vec<Vec<u8>> = vec![];
         for account in resp.accounts {
-            granted_ons.push(account.grant_on.to_string());
-            accounts.push(account.account.clone());
+            granted_ons.push(account.grant_on.to_string().as_bytes().to_vec());
+            accounts.push(account.account.clone().as_bytes().to_vec());
         }
 
         let num_rows = resp.accounts.len();
-        PipelineBuildResult::from_chunks(vec![Chunk::new(
+        PipelineBuildResult::from_chunks(vec![Chunk::new_from_sequence(
             vec![
                 (
                     Value::Column(Column::from_data(granted_ons)),

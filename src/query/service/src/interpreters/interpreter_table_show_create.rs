@@ -127,8 +127,7 @@ impl Interpreter for ShowCreateTableInterpreter {
                 .as_str()
         });
 
-        let chunk = Chunk::new(
-            self.plan.schema(),
+        let chunk = Chunk::new_from_sequence(
             vec![
                 (
                     Value::Scalar(Scalar::String(name.as_bytes().to_vec())),

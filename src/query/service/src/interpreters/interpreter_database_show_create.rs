@@ -73,7 +73,7 @@ impl Interpreter for ShowCreateDatabaseInterpreter {
             }
         }
 
-        PipelineBuildResult::from_chunks(vec![Chunk::new(
+        PipelineBuildResult::from_chunks(vec![Chunk::new_from_sequence(
             vec![
                 (
                     Value::Scalar(Scalar::String(name.as_bytes().to_vec())),

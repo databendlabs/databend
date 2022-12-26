@@ -74,18 +74,22 @@ impl Interpreter for ListInterpreter {
         };
 
         let num_rows = files.len();
-        let names: Vec<String> = files.iter().map(|file| file.path.clone()).collect();
+        let names: Vec<Vec<u8>> = files
+            .iter()
+            .map(|file| file.path.to_string().into_bytes())
+            .collect();
         let sizes: Vec<u64> = files.iter().map(|file| file.size).collect();
         let etags: Vec<Option<Vec<u8>>> = files
             .iter()
             .map(|file| file.etag.as_ref().map(|f| f.to_string().into_bytes()))
             .collect();
-        let last_modifieds: Vec<String> = files
+        let last_modifieds: Vec<Vec<u8>> = files
             .iter()
             .map(|file| {
                 file.last_modified
                     .format("%Y-%m-%d %H:%M:%S.%3f %z")
                     .to_string()
+                    .into_bytes()
             })
             .collect();
         let creators: Vec<Option<Vec<u8>>> = files
@@ -93,7 +97,7 @@ impl Interpreter for ListInterpreter {
             .map(|file| file.creator.as_ref().map(|c| c.to_string().into_bytes()))
             .collect();
 
-        PipelineBuildResult::from_chunks(vec![Chunk::new(
+        PipelineBuildResult::from_chunks(vec![Chunk::new_from_sequence(
             vec![
                 (Value::Column(Column::from_data(names)), DataType::String),
                 (

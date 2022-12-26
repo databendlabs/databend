@@ -17,7 +17,7 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::SendableChunkStream;
-// use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
+use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use poem::http::StatusCode;
 use poem::Body;
 use poem::IntoResponse;
