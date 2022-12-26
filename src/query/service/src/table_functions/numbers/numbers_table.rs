@@ -275,7 +275,7 @@ impl SyncSource for NumbersSource {
                         Value::Column(Column::from_data(column_data)),
                         DataType::Number(NumberDataType::UInt64),
                     )],
-                    step,
+                    step as usize,
                 )))
             }
         }

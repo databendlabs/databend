@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_expression::types::DataType;
 use common_expression::utils::ColumnFrom;
 use common_expression::Chunk;
 use common_expression::Column;
@@ -45,7 +46,7 @@ impl ClickHouseFederated {
         let chunk = Chunk::new_from_sequence(
             vec![(
                 Value::Column(Column::from_data(vec![value.as_bytes().to_vec()])),
-                TableDataType::String,
+                DataType::String,
             )],
             1,
         );

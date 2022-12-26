@@ -67,9 +67,9 @@ impl TransformMergeChunk {
             .iter()
             .map(|(left, right)| {
                 if is_left {
-                    Ok(chunk.column(self.schema.index_of(left)?).clone())
+                    Ok(chunk.get_by_offset(self.schema.index_of(left)?).clone())
                 } else {
-                    Ok(chunk.column(self.schema.index_of(right)?).clone())
+                    Ok(chunk.get_by_offset(self.schema.index_of(right)?).clone())
                 }
             })
             .collect::<Result<Vec<_>>>()?;

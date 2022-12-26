@@ -67,6 +67,8 @@ use common_sql::executor::PhysicalScalarBuilder;
 use common_sql::plans::CastExpr;
 use common_sql::plans::ConstantExpr;
 use common_sql::plans::Insert;
+use common_sql::plans::InsertInputSource;
+use common_sql::plans::Plan;
 use common_sql::plans::Scalar;
 use common_sql::Metadata;
 use common_sql::MetadataRef;

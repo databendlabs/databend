@@ -20,6 +20,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::Chunk;
 use common_expression::DataField;
+use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 use common_expression::FunctionContext;
@@ -621,7 +622,6 @@ impl PipelineBuilder {
                     TransformCastSchema::try_create(
                         transform_input_port,
                         transform_output_port,
-                        insert_schema.clone(),
                         functions.clone(),
                     )
                 })?;
@@ -635,7 +635,7 @@ impl PipelineBuilder {
         // Fill missing columns.
         {
             let source_schema = insert_schema;
-            let target_schema = &table.schema();
+            let target_schema = Arc::new(DataSchema::from(table.schema()));
             if source_schema != target_schema {
                 self.main_pipeline.add_transform(
                     |transform_input_port, transform_output_port| {

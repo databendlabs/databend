@@ -66,6 +66,6 @@ impl OneChunkProcedure for FuseSegmentProcedure {
     }
 
     fn schema(&self) -> Arc<DataSchema> {
-        FuseSegment::schema()
+        Arc::new(FuseSegment::schema().into())
     }
 }
