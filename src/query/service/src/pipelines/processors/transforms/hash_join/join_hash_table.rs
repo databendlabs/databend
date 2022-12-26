@@ -20,6 +20,7 @@ use common_arrow::arrow::bitmap::MutableBitmap;
 use common_base::base::tokio::sync::Notify;
 use common_exception::Result;
 use common_expression::Chunk;
+use common_expression::Column;
 use common_expression::DataSchemaRef;
 use common_expression::Evaluator;
 use common_expression::HashMethod;
@@ -227,7 +228,7 @@ impl JoinHashTable {
                     .run(expr)?
                     .convert_to_full_column(expr.data_type(), input.num_rows()))
             })
-            .collect::<Result<Vec<ColumnRef>>>()?;
+            .collect::<Result<Vec<Column>>>()?;
 
         if self.hash_join_desc.join_type == JoinType::RightMark {
             probe_state.markers = Some(Self::init_markers(&probe_keys, input.num_rows()));

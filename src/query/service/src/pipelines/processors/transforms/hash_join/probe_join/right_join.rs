@@ -89,7 +89,7 @@ impl JoinHashTable {
                             validity.extend_constant(addition, true);
 
                             let build_chunk = self.row_space.gather(&local_build_indexes)?;
-                            let mut probe_chunk = Chunk::take(input, &local_probe_indexes)?;
+                            let mut probe_chunk = Chunk::take(input.clone(), &local_probe_indexes)?;
 
                             // If join type is right join, need to wrap nullable for probe side
                             // If join type is semi/anti right join, directly merge `build_chunk` and `probe_chunk`
@@ -97,7 +97,6 @@ impl JoinHashTable {
                                 let validity: Bitmap = validity.into();
                                 let nullable_columns = probe_chunk
                                     .columns()
-                                    .iter()
                                     .map(|c| Self::set_validity(c, &validity))
                                     .collect::<Vec<_>>();
                                 probe_chunk = Chunk::new(nullable_columns, validity.len());
@@ -120,7 +119,7 @@ impl JoinHashTable {
             }
         }
 
-        let mut probe_chunk = Chunk::take(input, &local_probe_indexes)?;
+        let mut probe_chunk = Chunk::take(input.clone(), &local_probe_indexes)?;
 
         // If join type is right join, need to wrap nullable for probe side
         // If join type is semi/anti right join, directly merge `build_chunk` and `probe_chunk`
@@ -128,7 +127,6 @@ impl JoinHashTable {
             let validity: Bitmap = validity.into();
             let nullable_columns = probe_chunk
                 .columns()
-                .iter()
                 .map(|c| Self::set_validity(c, &validity))
                 .collect::<Vec<_>>();
             probe_chunk = Chunk::new(nullable_columns, validity.len());

@@ -182,9 +182,4 @@ mod util {
             Err(e) => Err(e),
         }
     }
-
-    struct PointQueryVisitor {
-        // indices of columns which used by point query kept here
-        columns: HashSet<String>,
-    }
 }

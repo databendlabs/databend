@@ -102,7 +102,7 @@ impl Transform for TransformAddOn {
                 data_type: f.data_type().clone(),
                 value: Value::Scalar(default_value),
             };
-            chunk = chunk.add_column(column)?;
+            chunk = chunk.add_column(column);
         }
 
         Ok(chunk)

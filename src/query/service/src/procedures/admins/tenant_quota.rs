@@ -26,7 +26,6 @@ use common_expression::ColumnFrom;
 use common_expression::DataField;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRefExt;
-use common_expression::DataType;
 use common_expression::Scalar;
 use common_expression::Value;
 use common_meta_types::TenantQuota;

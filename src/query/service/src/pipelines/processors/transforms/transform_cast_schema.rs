@@ -16,7 +16,9 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_expression::Chunk;
+use common_expression::ChunkEntry;
 use common_expression::DataSchemaRef;
+use common_expression::Evaluator;
 use common_expression::Expr;
 use common_expression::Function;
 use common_expression::FunctionContext;
@@ -30,6 +32,7 @@ use crate::pipelines::processors::transforms::transform::Transformer;
 
 pub struct TransformCastSchema {
     func_ctx: FunctionContext,
+    exprs: Vec<Expr>,
 }
 
 impl TransformCastSchema
@@ -38,10 +41,31 @@ where Self: Transform
     pub fn try_create(
         input_port: Arc<InputPort>,
         output_port: Arc<OutputPort>,
+        select_schema: DataSchemaRef,
+        insert_schema: DataSchemaRef,
         func_ctx: FunctionContext,
     ) -> Result<ProcessorPtr> {
+        let exprs = select_schema
+            .fields()
+            .iter()
+            .zip(insert_schema.fields().iter().enumerate())
+            .map(|(from, (index, to))| {
+                let expr = Expr::ColumnRef {
+                    span: None,
+                    id: index,
+                    data_type: from.data_type().clone(),
+                };
+                Expr::Cast {
+                    span: None,
+                    is_try: false,
+                    expr,
+                    dest_type: to.data_type().clone(),
+                };
+            })
+            .collect();
         Ok(Transformer::create(input_port, output_port, Self {
             func_ctx,
+            exprs,
         }))
     }
 }
@@ -54,22 +78,15 @@ impl Transform for TransformCastSchema {
 
         let evaluator = Evaluator::new(&data, self.func_ctx.clone(), &BUILTIN_FUNCTIONS);
 
-        let indices = evaluator.run(&self.indices_scalar)?;
-        let indices = get_hash_values(&indices, num)?;
-        let chunks = Chunk::scatter(chunk, &indices, self.scatter_size)?;
-
-        let mut chunk = Chunk::new(vec![], rows);
-
-        for (index, f) in self.output_schema.fields().iter().enumerate() {
-            let col = data.get_by_offset(index);
-            f.data_type();
+        let mut result = Chunk::new(vec![], rows);
+        for (index, expr) in self.exprs.iter().enumerate() {
+            let r = evaluator.run(expr)?;
+            result.add_column(ChunkEntry {
+                id: index,
+                data_type: expr.data_type(),
+                value: r,
+            })
         }
-
-        let mut columns = Vec::with_capacity(data.num_columns());
-        for (cast_func, entry) in self.functions.iter().zip(data.columns()) {
-            let v = (cast_func.eval)(&[value.as_ref()], &self.func_ctx)?;
-            columns.push((v, ty.clone()));
-        }
-        Ok(Chunk::new(columns, rows))
+        Ok(result)
     }
 }

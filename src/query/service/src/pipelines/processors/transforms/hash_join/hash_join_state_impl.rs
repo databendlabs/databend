@@ -23,6 +23,7 @@ use common_expression::types::AnyType;
 use common_expression::Chunk;
 use common_expression::Column;
 use common_expression::Evaluator;
+use common_expression::HashMethod;
 use common_expression::Value;
 use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 
@@ -50,7 +51,7 @@ impl HashJoinState for JoinHashTable {
                     .run(expr)?
                     .convert_to_full_column(expr.data_type(), input.num_rows()))
             })
-            .collect::<Result<Column>>()?;
+            .collect::<Result<Vec<Column>>>()?;
 
         self.row_space.push_cols(input, build_cols)
     }
@@ -334,12 +335,16 @@ impl HashJoinState for JoinHashTable {
             _ => unreachable!(),
         };
         let probe_column_len = self.probe_schema.fields().len();
-        let probe_columns = input_chunk.columns()[0..probe_column_len]
-            .iter()
+        let probe_columns = input_chunk
+            .columns()
+            .take(probe_column_len)
             .map(|c| Self::set_validity(c, &validity))
             .collect::<Vec<_>>();
         let probe_chunk = Chunk::new(robe_columns, num_rows);
-        let build_chunk = Chunk::new(input_chunk.columns()[probe_column_len..].to_vec(), num_rows);
+        let build_chunk = Chunk::new(
+            input_chunk.columns().skip(probe_column_len).to_vec(),
+            num_rows,
+        );
         let merged_chunk = self.merge_eq_chunk(&build_chunk, &probe_chunk)?;
 
         // If build_indexes size will greater build table size, we need filter the redundant rows for build side.
@@ -371,7 +376,7 @@ impl HashJoinState for JoinHashTable {
         }
 
         let probe_fields_len = self.probe_schema.fields().len();
-        let build_columns = input_chunk.columns()[probe_fields_len..].to_vec();
+        let build_columns = input_chunk.columns().skip(probe_fields_len).to_vec();
         let build_chunk = Chunk::new(build_columns, input_chunk.num_rows());
 
         // Fast path for right semi join with non-equi conditions
@@ -528,15 +533,18 @@ impl JoinHashTable {
             };
 
             // probed_chunk contains probe side and build side.
-            let nullable_columns = input_chunk.columns()[probe_side_len..]
-                .iter()
+            let nullable_columns = input_chunk
+                .columns()
+                .skip(probe_side_len)
                 .map(|c| Self::set_validity(c, &validity))
                 .collect::<Vec<_>>();
 
             let nullable_build_chunk = Chunk::new(nullable_columns.clone(), num_rows);
 
-            let probe_chunk =
-                Chunk::new(input_chunk.columns()[0..probe_side_len].to_vec(), num_rows);
+            let probe_chunk = Chunk::new(
+                input_chunk.columns().take(probe_side_len).to_vec(),
+                num_rows,
+            );
 
             let merged_chunk = self.merge_eq_chunk(&nullable_build_chunk, &probe_chunk)?;
             let mut bm = validity.into_mut().right().unwrap();

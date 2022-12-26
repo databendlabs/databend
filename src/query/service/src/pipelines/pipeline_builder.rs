@@ -604,6 +604,9 @@ impl PipelineBuilder {
         &mut self,
         insert_select: &DistributedInsertSelect,
     ) -> Result<()> {
+        let select_schema = &insert_select.select_schema;
+        let insert_schema = &insert_select.insert_schema;
+
         self.build_pipeline(&insert_select.input)?;
 
         // should render result for select
@@ -616,13 +619,15 @@ impl PipelineBuilder {
         // )?;
 
         if insert_select.cast_needed {
+            let func_ctx = self.ctx.try_get_function_context()?;
             self.main_pipeline
                 .add_transform(|transform_input_port, transform_output_port| {
                     TransformCastSchema::try_create(
                         transform_input_port,
                         transform_output_port,
+                        select_schema.clone(),
                         insert_schema.clone(),
-                        functions.clone(),
+                        func_ctx,
                     )
                 })?;
         }

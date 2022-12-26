@@ -187,7 +187,7 @@ impl JoinHashTable {
                         let nullable_build_chunk = Chunk::new(nullable_columns.clone(), num_rows);
 
                         // For full join, wrap nullable for probe chunk
-                        let mut probe_chunk = Chunk::take(input, &probe_indexes)?;
+                        let mut probe_chunk = Chunk::take(input.clone(), &probe_indexes)?;
                         let num_rows = probe_chunk.num_rows();
                         if self.hash_join_desc.join_type == JoinType::Full {
                             let nullable_probe_columns = probe_chunk
@@ -222,7 +222,7 @@ impl JoinHashTable {
         }
 
         // For full join, wrap nullable for probe chunk
-        let mut probe_chunk = Chunk::take(input, &probe_indexes)?;
+        let mut probe_chunk = Chunk::take(input.clone(), &probe_indexes)?;
         if self.hash_join_desc.join_type == JoinType::Full {
             let nullable_probe_columns = probe_chunk
                 .columns()
@@ -274,20 +274,16 @@ impl JoinHashTable {
             if self.row_space.data_chunks().is_empty() && !local_build_indexes.is_empty() {
                 build_chunk
                     .columns()
-                    .iter()
-                    .map(|c| {
-                        c.data_type()
-                            .create_constant_column(&DataValue::Null, local_build_indexes.len())
-                    })
-                    .collect::<Result<Vec<_>>>()?
+                    .map(|c| (Value::Scalar(Scalar::Null), c.1.clone()))
+                    .collect::<Vec<_>>()?
             } else {
                 build_chunk
                     .columns()
-                    .iter()
                     .map(|c| Self::set_validity(c, &validity))
                     .collect::<Result<Vec<_>>>()?
             };
-        let nullable_build_chunk = Chunk::new(nullable_columns.clone(), validity.len());
+        let nullable_build_chunk =
+            Chunk::new_from_sequence(nullable_columns.clone(), validity.len());
 
         // Process no-equi conditions
         let merged_chunk = self.merge_eq_chunk(&nullable_build_chunk, &probe_chunk)?;

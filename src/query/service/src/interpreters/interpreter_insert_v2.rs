@@ -62,11 +62,15 @@ use common_pipeline_transforms::processors::transforms::Transform;
 use common_sql::evaluator::ChunkOperator;
 use common_sql::evaluator::CompoundChunkOperator;
 use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
+use common_sql::executor::DistributedInsertSelect;
+use common_sql::executor::PhysicalPlan;
 use common_sql::executor::PhysicalScalar;
 use common_sql::executor::PhysicalScalarBuilder;
 use common_sql::plans::CastExpr;
 use common_sql::plans::ConstantExpr;
 use common_sql::plans::Insert;
+use common_sql::plans::InsertInputSource;
+use common_sql::plans::Plan;
 use common_sql::plans::Scalar;
 use common_sql::Metadata;
 use common_sql::MetadataRef;
@@ -718,7 +722,7 @@ pub fn skip_to_next_row<R: AsRef<[u8]>>(reader: &mut Cursor<R>, mut balance: i32
 }
 
 async fn fill_default_value(
-    binder: &mut ScalarBinder,
+    binder: &mut ScalarBinder<'_>,
     index: usize,
     operators: &mut Vec<ChunkOperator>,
     field: &DataField,

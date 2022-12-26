@@ -22,7 +22,6 @@ use common_expression::Column as ExprColumn;
 use common_expression::DataField;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
-use common_expression::DataType;
 use common_expression::ScalarRef;
 use common_expression::SendableChunkStream;
 use common_formats::field_encoder::FieldEncoderRowBased;
