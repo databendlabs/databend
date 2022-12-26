@@ -32,12 +32,16 @@ use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::utils::ColumnFrom;
 use common_expression::Chunk;
+use common_expression::ChunkEntry;
 use common_expression::Column;
 use common_expression::DataField;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 use common_expression::Scalar;
 use common_expression::TableDataType;
+use common_expression::TableField;
+use common_expression::TableSchemaRef;
+use common_expression::TableSchemaRefExt;
 use common_expression::Value;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
@@ -71,10 +75,15 @@ impl NumbersTable {
         table_args: TableArgs,
     ) -> Result<Arc<dyn TableFunction>> {
         let mut total = None;
-        if let Some(args) = &table_args {
+        if let Some(args) = table_args {
             if args.len() == 1 {
-                let arg = &args[0];
-                total = Some(arg.as_u64()?);
+                let arg = args[0];
+                total = Some(
+                    arg.into_number()
+                        .map_err(|_| ErrorCode::BadArguments("Expected u64 argument"))?
+                        .into_u_int64()
+                        .map_err(|_| ErrorCode::BadArguments("Expected u64 argument"))?,
+                );
             }
         }
 
@@ -97,7 +106,7 @@ impl NumbersTable {
             desc: format!("'{}'.'{}'", database_name, table_func_name),
             name: table_func_name.to_string(),
             meta: TableMeta {
-                schema: DataSchemaRefExt::create(vec![DataField::new(
+                schema: TableSchemaRefExt::create(vec![TableField::new(
                     "number",
                     TableDataType::Number(NumberDataType::UInt64),
                 )]),
@@ -226,7 +235,7 @@ struct NumbersSource {
     begin: u64,
     end: u64,
     step: u64,
-    schema: DataSchemaRef,
+    schema: TableSchemaRef,
 }
 
 impl NumbersSource {
@@ -234,7 +243,7 @@ impl NumbersSource {
         output: Arc<OutputPort>,
         ctx: Arc<dyn TableContext>,
         numbers_part: &PartInfoPtr,
-        schema: DataSchemaRef,
+        schema: TableSchemaRef,
     ) -> Result<ProcessorPtr> {
         let settings = ctx.get_settings();
         let numbers_part = NumbersPartInfo::from_part(numbers_part)?;
@@ -258,15 +267,16 @@ impl SyncSource for NumbersSource {
             0 => Ok(None),
             remain_size => {
                 let step = std::cmp::min(remain_size, self.step);
-                let column_data = (self.begin..self.begin + step).collect();
+                let column_data = (self.begin..self.begin + step).collect::<Vec<_>>();
 
                 self.begin += step;
                 Ok(Some(Chunk::new(
-                    vec![(
-                        Value::Column(Column::from_data(column_data)),
-                        DataType::Number(NumberDataType::UInt64),
-                    )],
-                    step,
+                    vec![ChunkEntry {
+                        id: 0,
+                        value: Value::Column(Column::from_data(column_data)),
+                        data_type: DataType::Number(NumberDataType::UInt64),
+                    }],
+                    step as usize,
                 )))
             }
         }
