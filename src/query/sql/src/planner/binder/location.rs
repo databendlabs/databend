@@ -21,7 +21,6 @@ use common_ast::ast::UriLocation;
 use common_config::GlobalConfig;
 use common_storage::StorageAzblobConfig;
 use common_storage::StorageFsConfig;
-use common_storage::StorageFtpConfig;
 use common_storage::StorageGcsConfig;
 use common_storage::StorageHttpConfig;
 use common_storage::StorageIpfsConfig;
@@ -79,17 +78,19 @@ pub fn parse_uri_location(l: &UriLocation) -> Result<(StorageParams, String)> {
                 root: root.to_string(),
             })
         }
-        Scheme::Ftp => StorageParams::Ftp(StorageFtpConfig {
-            endpoint: if !l.protocol.is_empty() {
-                format!("{}://{}", l.protocol, l.name)
-            } else {
-                // no protocol prefix will be seen as using FTPS connection
-                format!("ftps://{}", l.name)
-            },
-            root: root.to_string(),
-            username: l.connection.get("username").cloned().unwrap_or_default(),
-            password: l.connection.get("password").cloned().unwrap_or_default(),
-        }),
+        // Wait for https://github.com/datafuselabs/opendal/pull/1101
+        //
+        // Scheme::Ftp => StorageParams::Ftp(StorageFtpConfig {
+        //     endpoint: if !l.protocol.is_empty() {
+        //         format!("{}://{}", l.protocol, l.name)
+        //     } else {
+        //         // no protocol prefix will be seen as using FTPS connection
+        //         format!("ftps://{}", l.name)
+        //     },
+        //     root: root.to_string(),
+        //     username: l.connection.get("username").cloned().unwrap_or_default(),
+        //     password: l.connection.get("password").cloned().unwrap_or_default(),
+        // }),
         Scheme::Gcs => {
             let endpoint = l
                 .connection

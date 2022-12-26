@@ -52,7 +52,7 @@ clap = { workspace = true }
 limits-rs = "0.1.0"
 openraft = { workspace = true }
 poem = { version = "1", features = ["rustls", "multipart", "compression"] }
-sentry = "0.27.0"
+sentry = { version = "0.27.0", default-features = false, features = ["backtrace", "contexts", "panic", "rustls"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio-stream = "0.1.10"
