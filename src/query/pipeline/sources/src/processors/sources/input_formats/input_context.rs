@@ -200,7 +200,7 @@ impl InputContext {
         })
     }
 
-    pub async fn try_create_from_insert(
+    pub async fn try_create_from_insert_clickhouse(
         format_name: &str,
         stream_receiver: Receiver<Result<StreamingReadBatch>>,
         settings: Arc<Settings>,
@@ -229,7 +229,7 @@ impl InputContext {
         let file_format_options_clone = file_format_options.clone();
         let field_delimiter = file_format_options.get_field_delimiter();
         let record_delimiter = file_format_options.get_record_delimiter()?;
-        let compression =  StageFileCompression::Auto;
+        let compression = StageFileCompression::Auto;
         let plan = StreamPlan {
             is_multi_part,
             compression,
@@ -253,7 +253,7 @@ impl InputContext {
         })
     }
 
-    pub async fn try_create_from_insert_v2(
+    pub async fn try_create_from_insert_file_format(
         stream_receiver: Receiver<Result<StreamingReadBatch>>,
         settings: Arc<Settings>,
         file_format_options: FileFormatOptions,

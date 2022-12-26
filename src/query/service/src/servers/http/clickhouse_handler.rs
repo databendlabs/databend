@@ -273,7 +273,7 @@ pub async fn clickhouse_handler_post(
                 .map_err(InternalServerError)?;
 
             let input_context = Arc::new(
-                InputContext::try_create_from_insert(
+                InputContext::try_create_from_insert_clickhouse(
                     format.as_str(),
                     rx,
                     ctx.get_settings(),
@@ -315,7 +315,7 @@ pub async fn clickhouse_handler_post(
                 .map_err(InternalServerError)?;
 
             let input_context = Arc::new(
-                InputContext::try_create_from_insert_v2(
+                InputContext::try_create_from_insert_file_format(
                     rx,
                     ctx.get_settings(),
                     option_settings.clone(),

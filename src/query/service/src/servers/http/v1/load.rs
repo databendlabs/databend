@@ -138,7 +138,7 @@ pub async fn streaming_load(
                 let (tx, rx) = tokio::sync::mpsc::channel(2);
 
                 let input_context = Arc::new(
-                    InputContext::try_create_from_insert(
+                    InputContext::try_create_from_insert_clickhouse(
                         format.as_str(),
                         rx,
                         context.get_settings(),
@@ -193,7 +193,7 @@ pub async fn streaming_load(
                 let (tx, rx) = tokio::sync::mpsc::channel(2);
 
                 let input_context = Arc::new(
-                    InputContext::try_create_from_insert_v2(
+                    InputContext::try_create_from_insert_file_format(
                         rx,
                         context.get_settings(),
                         option_settings.clone(),
