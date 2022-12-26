@@ -48,13 +48,28 @@ statement ok
 CREATE TABLE IF NOT EXISTS t3(a Boolean, b Timestamp, c Date) Engine = fuse STORAGE_FORMAT = 'native';
 
 statement ok
-INSERT INTO t3 (a,b,c) values(true, '2021-09-07 21:38:35.000000', '2021-09-07'), (false, 1631050715000000, 18877)
+INSERT INTO t3 (a,b,c) values(true, '2021-09-07 21:38:35.000000', '2021-09-07'), (false, 1631050715000000, 18877);
 
 query BTT
 SELECT * FROM t3
 ----
 1 2021-09-07 21:38:35.000000 2021-09-07
 0 2021-09-07 21:38:35.000000 2021-09-07
+
+
+statement ok
+INSERT INTO t3 (b) select to_timestamp(number) from numbers(1000);
+
+statement ok
+INSERT INTO t3 (b) select to_timestamp(number) from numbers(1000);
+
+statement ok
+INSERT INTO t3 (b) select to_timestamp(number) from numbers(1000);
+
+query TI
+SELECT max(b), count(1) from t3;
+----
+2021-09-07 21:38:35.000000 3002
 
 
 statement ok
