@@ -24,6 +24,7 @@ use common_expression::serialize_to_parquet;
 use common_expression::types::AnyType;
 use common_expression::Chunk;
 use common_expression::Column;
+use common_expression::DataSchema;
 use common_expression::Evaluator;
 use common_expression::FunctionContext;
 use common_expression::RemoteExpr;
@@ -213,8 +214,9 @@ impl Processor for DeletionSource {
                         // none of the rows should be removed.
                         self.state = State::Generated(Deletion::DoNothing);
                     } else if self.remain_reader.is_none() {
-                        // todo!("expression")
-                        // let chunk = chunk.resort(self.output_schema.clone())?;
+                        let src_schema = self.block_reader.data_schema();
+                        let dest_schema = self.output_schema.clone().into();
+                        let chunk = chunk.resort(&src_schema, &dest_schema)?;
                         self.state = State::NeedSerialize(chunk);
                     } else {
                         self.state = State::ReadRemain {
@@ -231,9 +233,12 @@ impl Processor for DeletionSource {
                 mut chunk,
                 filter,
             } => {
+                let mut fields = self.block_reader.data_fields();
                 let merged = if chunks.is_empty() {
                     chunk
                 } else if let Some(remain_reader) = self.remain_reader.as_ref() {
+                    let mut remain_fields = remain_reader.data_fields();
+                    fields.append(&mut remain_fields);
                     let remain_chunk = remain_reader.deserialize(part, chunks)?;
                     let remain_chunk = remain_chunk.filter(&filter)?;
                     for col in remain_chunk.columns() {
@@ -244,9 +249,10 @@ impl Processor for DeletionSource {
                     return Err(ErrorCode::Internal("It's a bug. Need remain reader"));
                 };
 
-                // todo!("expression")
-                // let chunk = merged.resort(self.output_schema.clone())?;
-                self.state = State::NeedSerialize(merged);
+                let src_schema = DataSchema::new(fields);
+                let dest_schema = self.output_schema.clone().into();
+                let chunk = merged.resort(&src_schema, &dest_schema)?;
+                self.state = State::NeedSerialize(chunk);
             }
             State::NeedSerialize(chunk) => {
                 let cluster_stats = self

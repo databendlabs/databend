@@ -24,6 +24,8 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::Chunk;
+use common_expression::DataField;
+use common_expression::DataSchema;
 use common_expression::Evaluator;
 use common_expression::Expr;
 use common_expression::FunctionContext;
@@ -82,10 +84,15 @@ impl FuseNativeSource {
         })))
     }
 
-    fn generate_one_block(&mut self, chunk: Chunk, chunks: DataChunks) -> Result<()> {
+    fn generate_one_chunk(
+        &mut self,
+        src_schema: &DataSchema,
+        chunk: Chunk,
+        chunks: DataChunks,
+    ) -> Result<()> {
         // resort and prune columns
-        // todo!("expression")
-        // let chunk = chunk.resort(self.output_reader.schema())?;
+        let dest_schema = self.output_reader.data_schema();
+        let chunk = chunk.resort(src_schema, &dest_schema)?;
         self.state = State::Generated(chunk, chunks);
         Ok(())
     }
@@ -149,10 +156,9 @@ impl Processor for FuseNativeSource {
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Finish) {
             State::Deserialize(mut chunks) => {
-                let prewhere_idx = self.prewhere_reader.schema().num_fields();
-                let mut prewhere_chunks = Vec::with_capacity(prewhere_idx);
-
-                for (index, chunk) in chunks.iter_mut().take(prewhere_idx) {
+                let prewhere_num = self.prewhere_reader.schema().num_fields();
+                let mut prewhere_chunks = Vec::with_capacity(prewhere_num);
+                for (index, chunk) in chunks.iter_mut().take(prewhere_num) {
                     // No data anymore
                     if !chunk.has_next() {
                         self.state = State::ReadData(None);
@@ -162,10 +168,14 @@ impl Processor for FuseNativeSource {
                 }
 
                 let mut chunk = self.prewhere_reader.build_block(prewhere_chunks)?;
-
+                let mut fields = self.prewhere_reader.data_fields();
                 if let Some(remain_reader) = self.remain_reader.as_ref() {
-                    let mut remain_chunks = Vec::with_capacity(prewhere_idx);
-                    for (index, chunk) in chunks.iter_mut().skip(prewhere_idx) {
+                    let mut remain_fields = remain_reader.data_fields();
+                    fields.append(&mut remain_fields);
+
+                    let remain_num = remain_reader.schema().num_fields();
+                    let mut remain_chunks = Vec::with_capacity(remain_num);
+                    for (index, chunk) in chunks.iter_mut().skip(prewhere_num) {
                         assert!(chunk.has_next());
                         remain_chunks.push((*index, chunk.next_array()?));
                     }
@@ -192,7 +202,8 @@ impl Processor for FuseNativeSource {
                 };
                 self.scan_progress.incr(&progress_values);
 
-                self.generate_one_block(chunk, chunks)?;
+                let src_schema = DataSchema::new(fields);
+                self.generate_one_chunk(&src_schema, chunk, chunks)?;
                 Ok(())
             }
 

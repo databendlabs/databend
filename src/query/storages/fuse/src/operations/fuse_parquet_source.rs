@@ -23,6 +23,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::AnyType;
 use common_expression::Chunk;
+use common_expression::DataSchema;
 use common_expression::Evaluator;
 use common_expression::Expr;
 use common_expression::FunctionContext;
@@ -89,11 +90,11 @@ impl FuseParquetSource {
         })))
     }
 
-    fn generate_one_block(&mut self, chunk: Chunk) -> Result<()> {
+    fn generate_one_chunk(&mut self, src_schema: &DataSchema, chunk: Chunk) -> Result<()> {
         let new_part = self.ctx.try_get_part();
         // resort and prune columns
-        // todo!("expression")
-        // let chunk = chunk.resort(self.output_reader.schema())?;
+        let dest_schema = self.output_reader.data_schema();
+        let chunk = chunk.resort(src_schema, &dest_schema)?;
         self.state = State::Generated(new_part, chunk);
         Ok(())
     }
@@ -174,14 +175,18 @@ impl Processor for FuseParquetSource {
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Finish) {
             State::Deserialize(part, chunks, prewhere_data) => {
-                let chunk = if let Some(PrewhereData {
+                let (src_schema, chunk) = if let Some(PrewhereData {
                     chunk: mut prewhere_chunks,
                     filter,
                 }) = prewhere_data
                 {
+                    let mut fields = self.prewhere_reader.data_fields();
                     let chunk = if chunks.is_empty() {
                         prewhere_chunks
                     } else if let Some(remain_reader) = self.remain_reader.as_ref() {
+                        let mut remain_fields = remain_reader.data_fields();
+                        fields.append(&mut remain_fields);
+
                         let remain_chunk = remain_reader.deserialize(part, chunks)?;
                         for col in remain_chunk.columns() {
                             prewhere_chunks.add_column(col.clone());
@@ -196,7 +201,8 @@ impl Processor for FuseParquetSource {
                         bytes: chunk.memory_size(),
                     };
                     self.scan_progress.incr(&progress_values);
-                    chunk.filter(&filter)?
+                    let src_schema = DataSchema::new(fields);
+                    (src_schema, chunk.filter(&filter)?)
                 } else {
                     let chunk = self.output_reader.deserialize(part, chunks)?;
                     let progress_values = ProgressValues {
@@ -204,11 +210,11 @@ impl Processor for FuseParquetSource {
                         bytes: chunk.memory_size(),
                     };
                     self.scan_progress.incr(&progress_values);
-
-                    chunk
+                    let src_schema = self.output_reader.data_schema();
+                    (src_schema, chunk)
                 };
 
-                self.generate_one_block(chunk)?;
+                self.generate_one_chunk(&src_schema, chunk)?;
                 Ok(())
             }
             State::PrewhereFilter(part, chunks) => {
@@ -242,7 +248,8 @@ impl Processor for FuseParquetSource {
                         };
                         self.scan_progress.incr(&progress_values);
                         let chunk = chunk.filter(&predicate)?;
-                        self.generate_one_block(chunk)?;
+                        let src_schema = self.prewhere_reader.data_schema();
+                        self.generate_one_chunk(&src_schema, chunk)?;
                     } else {
                         self.state = State::ReadDataRemain(part, PrewhereData {
                             chunk,

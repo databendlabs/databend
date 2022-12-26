@@ -34,6 +34,8 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::Chunk;
+use common_expression::DataField;
+use common_expression::DataSchema;
 use common_expression::TableSchemaRef;
 use common_storage::ColumnLeaf;
 use common_storage::ColumnLeaves;
@@ -81,6 +83,19 @@ impl BlockReader {
 
     pub fn schema(&self) -> TableSchemaRef {
         self.projected_schema.clone()
+    }
+
+    pub fn data_fields(&self) -> Vec<DataField> {
+        self.schema()
+            .fields()
+            .iter()
+            .map(|f| DataField::from(f))
+            .collect()
+    }
+
+    pub fn data_schema(&self) -> DataSchema {
+        let fields = self.data_fields();
+        DataSchema::new(fields)
     }
 
     fn to_array_iter(
