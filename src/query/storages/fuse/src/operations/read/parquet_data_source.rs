@@ -6,10 +6,12 @@ use common_datablocks::BlockMetaInfoPtr;
 use serde::Deserializer;
 use serde::Serializer;
 
+pub type ParquetChunks = Vec<Vec<(usize, Vec<u8>)>>;
+
 #[derive(Debug, PartialEq)]
 pub struct DataSourceMeta {
     pub part: Vec<PartInfoPtr>,
-    pub data: Option<Vec<Vec<(usize, Vec<u8>)>>>,
+    pub data: Option<ParquetChunks>,
 }
 
 impl DataSourceMeta {

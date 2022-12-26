@@ -1,6 +1,7 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use common_base::base::tokio;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::table_context::TableContext;
 use common_datablocks::DataBlock;
@@ -14,7 +15,7 @@ use common_pipeline_sources::processors::sources::SyncSourcer;
 
 use crate::io::BlockReader;
 use crate::operations::read::parquet_data_source::DataSourceMeta;
-use common_base::base::tokio;
+use crate::operations::read::parquet_data_source::ParquetChunks;
 
 pub struct ReadParquetDataSource<const BLOCKING_IO: bool> {
     finished: bool,
@@ -23,7 +24,7 @@ pub struct ReadParquetDataSource<const BLOCKING_IO: bool> {
     block_reader: Arc<BlockReader>,
 
     output: Arc<OutputPort>,
-    output_data: Option<(Vec<PartInfoPtr>, Vec<Vec<(usize, Vec<u8>)>>)>,
+    output_data: Option<(Vec<PartInfoPtr>, ParquetChunks)>,
 }
 
 impl ReadParquetDataSource<true> {
@@ -122,9 +123,10 @@ impl Processor for ReadParquetDataSource<false> {
                 let block_reader = self.block_reader.clone();
 
                 chunks.push(async move {
-                    let handler = tokio::spawn(async move {
-                        block_reader.read_columns_data(ctx, part).await
-                    });
+                    let handler =
+                        tokio::spawn(
+                            async move { block_reader.read_columns_data(ctx, part).await },
+                        );
                     handler.await.unwrap()
                 });
             }

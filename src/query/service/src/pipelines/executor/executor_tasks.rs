@@ -214,7 +214,6 @@ struct ExecutorTasks {
     tasks_size: usize,
     workers_waiting_status: WorkersWaitingStatus,
     workers_sync_tasks: Vec<VecDeque<ProcessorPtr>>,
-    workers_async_tasks: Vec<VecDeque<ProcessorPtr>>,
     workers_completed_async_tasks: Vec<VecDeque<CompletedAsyncTask>>,
 }
 
@@ -223,19 +222,16 @@ unsafe impl Send for ExecutorTasks {}
 impl ExecutorTasks {
     pub fn create(workers_size: usize) -> ExecutorTasks {
         let mut workers_sync_tasks = Vec::with_capacity(workers_size);
-        let mut workers_async_tasks = Vec::with_capacity(workers_size);
         let mut workers_completed_async_tasks = Vec::with_capacity(workers_size);
 
         for _index in 0..workers_size {
             workers_sync_tasks.push(VecDeque::new());
-            workers_async_tasks.push(VecDeque::new());
             workers_completed_async_tasks.push(VecDeque::new());
         }
 
         ExecutorTasks {
             tasks_size: 0,
             workers_sync_tasks,
-            workers_async_tasks,
             workers_completed_async_tasks,
             workers_waiting_status: WorkersWaitingStatus::create(workers_size),
         }
@@ -247,10 +243,6 @@ impl ExecutorTasks {
 
     #[inline]
     fn pop_worker_task(&mut self, worker_id: usize) -> ExecutorTask {
-        if let Some(processor) = self.workers_async_tasks[worker_id].pop_front() {
-            return ExecutorTask::Async(processor);
-        }
-
         if let Some(task) = self.workers_completed_async_tasks[worker_id].pop_front() {
             return ExecutorTask::AsyncCompleted(task);
         }
@@ -269,10 +261,6 @@ impl ExecutorTasks {
             }
 
             if !self.workers_sync_tasks[worker_id].is_empty() {
-                return worker_id;
-            }
-
-            if !self.workers_async_tasks[worker_id].is_empty() {
                 return worker_id;
             }
 
@@ -314,18 +302,12 @@ impl ExecutorTasks {
             self.workers_sync_tasks.len()
         );
         let sync_queue = &mut self.workers_sync_tasks[worker_id];
-        debug_assert!(worker_id < self.workers_async_tasks.len(), "out of index");
-        let async_queue = &mut self.workers_async_tasks[worker_id];
-        debug_assert!(
-            worker_id < self.workers_completed_async_tasks.len(),
-            "out of index"
-        );
         let completed_queue = &mut self.workers_completed_async_tasks[worker_id];
 
         match task {
             ExecutorTask::None => unreachable!(),
+            ExecutorTask::Async(_) => unreachable!(),
             ExecutorTask::Sync(processor) => sync_queue.push_back(processor),
-            ExecutorTask::Async(processor) => async_queue.push_back(processor),
             ExecutorTask::AsyncCompleted(task) => completed_queue.push_back(task),
         }
     }

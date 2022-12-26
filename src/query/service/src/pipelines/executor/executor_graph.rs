@@ -28,6 +28,7 @@ use petgraph::prelude::StableGraph;
 use petgraph::Direction;
 use tracing::debug;
 
+use crate::pipelines::executor::executor_condvar::WorkersCondvar;
 use crate::pipelines::executor::executor_tasks::ExecutorTasksQueue;
 use crate::pipelines::executor::executor_worker_context::ExecutorTask;
 use crate::pipelines::executor::executor_worker_context::ExecutorWorkerContext;
@@ -325,23 +326,14 @@ impl ScheduleQueue {
         debug_assert!(!context.has_task());
 
         while let Some(processor) = self.async_queue.pop_front() {
-            let worker_id = context.get_worker_num();
-            let workers_condvar = context.get_workers_condvar().clone();
-            let tasks_queue = global.clone();
-
-            unsafe {
-                workers_condvar.inc_active_async_worker();
-                executor
-                    .async_runtime
-                    .spawn(TrackedFuture::create(ProcessorAsyncTask::create(
-                        context.query_id.clone(),
-                        worker_id,
-                        processor.clone(),
-                        tasks_queue,
-                        workers_condvar,
-                        processor.async_process(),
-                    )));
-            }
+            Self::schedule_async_task(
+                processor,
+                context.query_id.clone(),
+                executor,
+                context.get_worker_num(),
+                context.get_workers_condvar().clone(),
+                global.clone(),
+            )
         }
 
         if !self.sync_queue.is_empty() {
@@ -350,6 +342,29 @@ impl ScheduleQueue {
 
         if !self.sync_queue.is_empty() {
             self.schedule_tail(global, context);
+        }
+    }
+
+    pub fn schedule_async_task(
+        proc: ProcessorPtr,
+        query_id: Arc<String>,
+        executor: &PipelineExecutor,
+        wakeup_worker_num: usize,
+        workers_condvar: Arc<WorkersCondvar>,
+        global_queue: Arc<ExecutorTasksQueue>,
+    ) {
+        unsafe {
+            workers_condvar.inc_active_async_worker();
+            executor
+                .async_runtime
+                .spawn(TrackedFuture::create(ProcessorAsyncTask::create(
+                    query_id,
+                    wakeup_worker_num,
+                    proc.clone(),
+                    global_queue,
+                    workers_condvar,
+                    proc.async_process(),
+                )));
         }
     }
 

@@ -31,7 +31,9 @@ use parking_lot::Mutex;
 
 use crate::pipelines::executor::executor_condvar::WorkersCondvar;
 use crate::pipelines::executor::executor_graph::RunningGraph;
+use crate::pipelines::executor::executor_graph::ScheduleQueue;
 use crate::pipelines::executor::executor_tasks::ExecutorTasksQueue;
+use crate::pipelines::executor::executor_worker_context::ExecutorTask;
 use crate::pipelines::executor::executor_worker_context::ExecutorWorkerContext;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::pipeline::Pipeline;
@@ -203,8 +205,27 @@ impl PipelineExecutor {
 
             let mut init_schedule_queue = self.graph.init_schedule_queue()?;
 
+            let mut wakeup_worker_id = 0;
             let mut tasks = VecDeque::new();
             while let Some(task) = init_schedule_queue.pop_task() {
+                if let ExecutorTask::Async(processor) = &task {
+                    ScheduleQueue::schedule_async_task(
+                        processor.clone(),
+                        self.settings.query_id.clone(),
+                        self,
+                        wakeup_worker_id,
+                        self.workers_condvar.clone(),
+                        self.global_tasks_queue.clone(),
+                    );
+                    wakeup_worker_id += 1;
+
+                    if wakeup_worker_id == self.threads_num {
+                        wakeup_worker_id = 0;
+                    }
+
+                    continue;
+                }
+
                 tasks.push_back(task);
             }
 
