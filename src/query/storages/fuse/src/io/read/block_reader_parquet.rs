@@ -14,6 +14,7 @@
 
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+use std::io::Read;
 use std::sync::Arc;
 
 use common_arrow::arrow::array::Array;
@@ -127,6 +128,49 @@ impl BlockReader {
         )?)
     }
 
+    fn to_array_iter_by_read<'a, R: Read + Send + Sync + 'a>(
+        metas: Vec<&ColumnMeta>,
+        chunks: Vec<R>,
+        rows: usize,
+        column_descriptors: Vec<&ColumnDescriptor>,
+        field: Field,
+        compression: &Compression,
+    ) -> Result<ArrayIter<'a>> {
+        let columns = metas
+            .iter()
+            .zip(chunks.into_iter().zip(column_descriptors.iter()))
+            .map(|(meta, (reader, column_descriptor))| {
+                let page_meta_data = PageMetaData {
+                    column_start: meta.offset,
+                    num_values: meta.num_values as i64,
+                    compression: Self::to_parquet_compression(compression)?,
+                    descriptor: column_descriptor.descriptor.clone(),
+                };
+                let pages = PageReader::new_with_page_meta(
+                    reader,
+                    page_meta_data,
+                    Arc::new(|_, _| true),
+                    vec![],
+                    usize::MAX,
+                );
+                Ok(BasicDecompressor::new(pages, vec![]))
+            })
+            .collect::<Result<Vec<_>>>()?;
+
+        let types = column_descriptors
+            .iter()
+            .map(|column_descriptor| &column_descriptor.descriptor.primitive_type)
+            .collect::<Vec<_>>();
+
+        Ok(column_iter_to_arrays(
+            columns,
+            types,
+            field,
+            Some(rows),
+            rows,
+        )?)
+    }
+
     // TODO refine these
 
     #[tracing::instrument(level = "debug", skip_all)]
@@ -158,7 +202,7 @@ impl BlockReader {
                     .await?;
                 Ok::<_, ErrorCode>((index, column_chunk))
             }
-            .instrument(debug_span!("read_col_chunk"));
+                .instrument(debug_span!("read_col_chunk"));
             column_chunk_futs.push(fut);
 
             columns_meta.insert(
@@ -227,18 +271,14 @@ impl BlockReader {
         DataBlock::from_chunk(&self.schema(), &chunk)
     }
 
-    pub fn deserialize(
-        &self,
-        part: PartInfoPtr,
-        chunks: Vec<(usize, Vec<u8>)>,
-    ) -> Result<DataBlock> {
+    pub fn deserialize_from_read<'a, R: Read + Clone + Send + Sync + 'a>(&self, part: PartInfoPtr, chunks: Vec<(usize, R)>) -> Result<Vec<ArrayIter<'a>>> {
         let part = FusePartInfo::from_part(&part)?;
-        let mut chunk_map: HashMap<usize, Vec<u8>> = chunks.into_iter().collect();
+        let chunk_map: HashMap<usize, R> = chunks.into_iter().collect();
         let mut columns_array_iter = Vec::with_capacity(self.projection.len());
 
         let num_rows = part.nums_rows;
         let columns = self.projection.project_column_leaves(&self.column_leaves)?;
-        let mut cnt_map = Self::build_projection_count_map(&columns);
+
         for column in &columns {
             let field = column.field.clone();
             let indices = &column.leaf_ids;
@@ -246,20 +286,15 @@ impl BlockReader {
             let mut column_chunks = Vec::with_capacity(indices.len());
             let mut column_descriptors = Vec::with_capacity(indices.len());
             for index in indices {
+                let column_read = chunk_map[index].clone();
                 let column_meta = &part.columns_meta[index];
-                let cnt = cnt_map.get_mut(index).unwrap();
-                *cnt -= 1;
-                let column_chunk = if cnt > &mut 0 {
-                    chunk_map.get(index).unwrap().clone()
-                } else {
-                    chunk_map.remove(index).unwrap()
-                };
                 let column_descriptor = &self.parquet_schema_descriptor.columns()[*index];
                 column_metas.push(column_meta);
-                column_chunks.push(column_chunk);
+                column_chunks.push(column_read);
                 column_descriptors.push(column_descriptor);
             }
-            columns_array_iter.push(Self::to_array_iter(
+
+            columns_array_iter.push(Self::to_array_iter_by_read(
                 column_metas,
                 column_chunks,
                 num_rows,
@@ -269,9 +304,31 @@ impl BlockReader {
             )?);
         }
 
-        let mut deserializer = RowGroupDeserializer::new(columns_array_iter, num_rows, None);
+        Ok(columns_array_iter)
+    }
 
-        self.try_next_block(&mut deserializer)
+    fn convert_read<'a>(chunks: &'a [(usize, Vec<u8>)]) -> Vec<(usize, &'a [u8])> {
+        let mut reads = Vec::with_capacity(chunks.len());
+
+        for (index, chunk) in chunks {
+            reads.push((*index, chunk.as_slice()));
+        }
+
+        reads
+    }
+
+    pub fn deserialize(&self, part: PartInfoPtr, chunks: Vec<(usize, Vec<u8>)>) -> Result<DataBlock> {
+        let reads = Self::convert_read(&chunks);
+        let columns_array_iter = self.deserialize_from_read(part, reads)?;
+
+        let mut arrays = Vec::with_capacity(columns_array_iter.len());
+        for mut column_array_iter in columns_array_iter.into_iter() {
+            let array = column_array_iter.next().unwrap()?;
+            arrays.push(array);
+        }
+
+        let chunk = Chunk::try_new(arrays)?;
+        DataBlock::from_chunk(&self.projected_schema, &chunk)
     }
 
     pub async fn read_columns_data(
