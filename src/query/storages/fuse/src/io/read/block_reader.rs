@@ -26,6 +26,7 @@ use common_storage::ColumnLeaves;
 use opendal::Object;
 use opendal::Operator;
 
+use crate::metrics::metrics_inc_remote_io_copy_milliseconds;
 use crate::metrics::metrics_inc_remote_io_read_bytes_after_merged;
 use crate::metrics::metrics_inc_remote_io_read_milliseconds;
 use crate::metrics::metrics_inc_remote_io_seeks_after_merged;
@@ -88,6 +89,8 @@ impl BlockReader {
 
         // Build raw range data from merged range data.
         let mut final_result = Vec::with_capacity(raw_ranges.len());
+
+        let start = Instant::now();
         for (raw_idx, raw_range) in &raw_ranges {
             let column_start = raw_range.start;
             let column_end = raw_range.end;
@@ -124,6 +127,10 @@ impl BlockReader {
             // Here is a heavy copy.
             let column_data = merged_range_data[start..end].to_vec();
             final_result.push((*raw_idx, column_data));
+        }
+        // Perf.
+        {
+            metrics_inc_remote_io_copy_milliseconds(start.elapsed().as_millis() as u64);
         }
 
         Ok(final_result)
