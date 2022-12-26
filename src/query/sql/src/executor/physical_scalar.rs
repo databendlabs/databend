@@ -147,6 +147,7 @@ impl Display for PhysicalScalar {
 #[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct AggregateFunctionDesc {
     pub sig: AggregateFunctionSignature,
+    pub output_column: IndexType,
     pub args: Vec<IndexType>,
 }
 

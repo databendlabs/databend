@@ -15,6 +15,12 @@
 use std::collections::BTreeMap;
 
 use common_catalog::plan::DataSourcePlan;
+use common_exception::Result;
+use common_expression::types::DataType;
+use common_expression::Chunk;
+use common_expression::DataField;
+use common_expression::DataSchemaRef;
+use common_expression::DataSchemaRefExt;
 use common_meta_app::schema::TableInfo;
 
 use super::AggregateFunctionDesc;
@@ -37,16 +43,16 @@ pub struct TableScan {
 }
 
 impl TableScan {
-    // pub fn output_schema(&self) -> Result<DataSchemaRef> {
-    //     let mut fields = Vec::with_capacity(self.name_mapping.len());
-    //     let schema = self.source.schema();
-    //     for (name, id) in self.name_mapping.iter() {
-    //         let orig_field = schema.field_with_name(name)?;
-    //         let data_type = DataType::from(orig_field.data_type());
-    //         fields.push(DataField::new(id.as_str(), data_type));
-    //     }
-    //     Ok(DataSchemaRefExt::create(fields))
-    // }
+    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+        let mut fields = Vec::with_capacity(self.name_mapping.len());
+        let schema = self.source.schema();
+        for (name, id) in self.name_mapping.iter() {
+            let orig_field = schema.field_with_name(name)?;
+            let data_type = DataType::from(orig_field.data_type());
+            fields.push(DataField::new(&id.to_string(), data_type));
+        }
+        Ok(DataSchemaRefExt::create(fields))
+    }
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -56,9 +62,9 @@ pub struct Filter {
 }
 
 impl Filter {
-    // pub fn output_schema(&self) -> Result<DataSchemaRef> {
-    //     self.input.output_schema()
-    // }
+    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+        self.input.output_schema()
+    }
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -68,14 +74,14 @@ pub struct Project {
 }
 
 impl Project {
-    // pub fn output_schema(&self) -> Result<DataSchemaRef> {
-    //     let input_schema = self.input.output_schema()?;
-    //     let mut fields = Vec::new();
-    //     for i in self.projections.iter() {
-    //         fields.push(input_schema.field(*i).clone());
-    //     }
-    //     Ok(DataSchemaRefExt::create(fields))
-    // }
+    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+        let input_schema = self.input.output_schema()?;
+        let mut fields = Vec::new();
+        for i in self.columns.iter() {
+            fields.push(input_schema.field_with_name(&i.to_string())?.clone());
+        }
+        Ok(DataSchemaRefExt::create(fields))
+    }
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -85,15 +91,16 @@ pub struct EvalScalar {
 }
 
 impl EvalScalar {
-    // pub fn output_schema(&self) -> Result<DataSchemaRef> {
-    //     let input_schema = self.input.output_schema()?;
-    //     let mut fields = input_schema.fields().clone();
-    //     for (scalar, name) in self.scalars.iter() {
-    //         let data_type = scalar.data_type();
-    //         fields.push(DataField::new(name, data_type));
-    //     }
-    //     Ok(DataSchemaRefExt::create(fields))
-    // }
+    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+        let input_schema = self.input.output_schema()?;
+        let mut fields = input_schema.fields().clone();
+        for (scalar, index) in self.scalars.iter() {
+            let name = index.to_string();
+            let data_type = scalar.data_type();
+            fields.push(DataField::new(&name, data_type));
+        }
+        Ok(DataSchemaRefExt::create(fields))
+    }
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -104,24 +111,32 @@ pub struct AggregatePartial {
 }
 
 impl AggregatePartial {
-    // pub fn output_schema(&self) -> Result<DataSchemaRef> {
-    //     let input_schema = self.input.output_schema()?;
-    //     let mut fields = Vec::with_capacity(self.agg_funcs.len() + self.group_by.len());
-    //     for agg in self.agg_funcs.iter() {
-    //         fields.push(DataField::new(agg.column_id.as_str(), DataType::String));
-    //     }
-    //     if !self.group_by.is_empty() {
-    //         let method = Chunk::choose_hash_method_with_types(
-    //             &self
-    //                 .group_by
-    //                 .iter()
-    //                 .map(|name| Ok(input_schema.field_with_name(name)?.data_type().clone()))
-    //                 .collect::<Result<Vec<_>>>()?,
-    //         )?;
-    //         fields.push(DataField::new("_group_by_key", method.data_type()));
-    //     }
-    //     Ok(DataSchemaRefExt::create(fields))
-    // }
+    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+        let input_schema = self.input.output_schema()?;
+        let mut fields = Vec::with_capacity(self.agg_funcs.len() + self.group_by.len());
+        for agg in self.agg_funcs.iter() {
+            fields.push(DataField::new(
+                &agg.output_column.to_string(),
+                DataType::String,
+            ));
+        }
+        if !self.group_by.is_empty() {
+            let method = Chunk::choose_hash_method_with_types(
+                &self
+                    .group_by
+                    .iter()
+                    .map(|index| {
+                        Ok(input_schema
+                            .field_with_name(&index.to_string())?
+                            .data_type()
+                            .clone())
+                    })
+                    .collect::<Result<Vec<_>>>()?,
+            )?;
+            fields.push(DataField::new("_group_by_key", method.data_type()));
+        }
+        Ok(DataSchemaRefExt::create(fields))
+    }
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -129,26 +144,26 @@ pub struct AggregateFinal {
     pub input: Box<PhysicalPlan>,
     pub group_by: Vec<IndexType>,
     pub agg_funcs: Vec<AggregateFunctionDesc>,
-    // pub before_group_by_schema: DataSchemaRef,
+    pub before_group_by_schema: DataSchemaRef,
 }
 
 impl AggregateFinal {
-    // pub fn output_schema(&self) -> Result<DataSchemaRef> {
-    //     let mut fields = Vec::with_capacity(self.agg_funcs.len() + self.group_by.len());
-    //     for agg in self.agg_funcs.iter() {
-    //         let data_type = agg.sig.return_type.clone();
-    //         fields.push(DataField::new(agg.column_id.as_str(), data_type));
-    //     }
-    //     for id in self.group_by.iter() {
-    //         let data_type = self
-    //             .before_group_by_schema
-    //             .field_with_name(id.as_str())?
-    //             .data_type()
-    //             .clone();
-    //         fields.push(DataField::new(id.as_str(), data_type));
-    //     }
-    //     Ok(DataSchemaRefExt::create(fields))
-    // }
+    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+        let mut fields = Vec::with_capacity(self.agg_funcs.len() + self.group_by.len());
+        for agg in self.agg_funcs.iter() {
+            let data_type = agg.sig.return_type.clone();
+            fields.push(DataField::new(&agg.output_column.to_string(), data_type));
+        }
+        for id in self.group_by.iter() {
+            let data_type = self
+                .before_group_by_schema
+                .field_with_name(&id.to_string())?
+                .data_type()
+                .clone();
+            fields.push(DataField::new(&id.to_string(), data_type));
+        }
+        Ok(DataSchemaRefExt::create(fields))
+    }
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -160,9 +175,9 @@ pub struct Sort {
 }
 
 impl Sort {
-    // pub fn output_schema(&self) -> Result<DataSchemaRef> {
-    //     self.input.output_schema()
-    // }
+    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+        self.input.output_schema()
+    }
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -173,9 +188,9 @@ pub struct Limit {
 }
 
 impl Limit {
-    // pub fn output_schema(&self) -> Result<DataSchemaRef> {
-    //     self.input.output_schema()
-    // }
+    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+        self.input.output_schema()
+    }
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -191,84 +206,84 @@ pub struct HashJoin {
 }
 
 impl HashJoin {
-    // pub fn output_schema(&self) -> Result<DataSchemaRef> {
-    //     let mut fields = self.probe.output_schema()?.fields().clone();
-    //     match self.join_type {
-    //         JoinType::Left | JoinType::Single => {
-    //             for field in self.build.output_schema()?.fields() {
-    //                 fields.push(DataField::new(
-    //                     field.name().as_str(),
-    //                     DataType::Nullable(Box::new(field.data_type().clone())),
-    //                 ));
-    //             }
-    //         }
-    //         JoinType::Right => {
-    //             fields.clear();
-    //             for field in self.probe.output_schema()?.fields() {
-    //                 fields.push(DataField::new(
-    //                     field.name().as_str(),
-    //                     DataType::Nullable(Box::new(field.data_type().clone())),
-    //                 ));
-    //             }
-    //             for field in self.build.output_schema()?.fields() {
-    //                 fields.push(DataField::new(
-    //                     field.name().as_str(),
-    //                     field.data_type().clone(),
-    //                 ));
-    //             }
-    //         }
-    //         JoinType::Full => {
-    //             fields.clear();
-    //             for field in self.probe.output_schema()?.fields() {
-    //                 fields.push(DataField::new(
-    //                     field.name().as_str(),
-    //                     DataType::Nullable(Box::new(field.data_type().clone())),
-    //                 ));
-    //             }
-    //             for field in self.build.output_schema()?.fields() {
-    //                 fields.push(DataField::new(
-    //                     field.name().as_str(),
-    //                     DataType::Nullable(Box::new(field.data_type().clone())),
-    //                 ));
-    //             }
-    //         }
-    //         JoinType::LeftSemi | JoinType::LeftAnti => {
-    //             // Do nothing
-    //         }
-    //         JoinType::RightSemi | JoinType::RightAnti => {
-    //             fields.clear();
-    //             fields = self.build.output_schema()?.fields().clone();
-    //         }
-    //         JoinType::LeftMark | JoinType::RightMark => {
-    //             fields.clear();
-    //             let outer_table = if self.join_type == JoinType::RightMark {
-    //                 &self.probe
-    //             } else {
-    //                 &self.build
-    //             };
-    //             fields = outer_table.output_schema()?.fields().clone();
-    //             let name = if let Some(idx) = self.marker_index {
-    //                 idx.to_string()
-    //             } else {
-    //                 "marker".to_string()
-    //             };
-    //             fields.push(DataField::new(
-    //                 name.as_str(),
-    //                 DataType::Nullable(Box::new(DataType::Boolean)),
-    //             ));
-    //         }
-    //
-    //         _ => {
-    //             for field in self.build.output_schema()?.fields() {
-    //                 fields.push(DataField::new(
-    //                     field.name().as_str(),
-    //                     field.data_type().clone(),
-    //                 ));
-    //             }
-    //         }
-    //     }
-    //     Ok(DataSchemaRefExt::create(fields))
-    // }
+    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+        let mut fields = self.probe.output_schema()?.fields().clone();
+        match self.join_type {
+            JoinType::Left | JoinType::Single => {
+                for field in self.build.output_schema()?.fields() {
+                    fields.push(DataField::new(
+                        field.name().as_str(),
+                        DataType::Nullable(Box::new(field.data_type().clone())),
+                    ));
+                }
+            }
+            JoinType::Right => {
+                fields.clear();
+                for field in self.probe.output_schema()?.fields() {
+                    fields.push(DataField::new(
+                        field.name().as_str(),
+                        DataType::Nullable(Box::new(field.data_type().clone())),
+                    ));
+                }
+                for field in self.build.output_schema()?.fields() {
+                    fields.push(DataField::new(
+                        field.name().as_str(),
+                        field.data_type().clone(),
+                    ));
+                }
+            }
+            JoinType::Full => {
+                fields.clear();
+                for field in self.probe.output_schema()?.fields() {
+                    fields.push(DataField::new(
+                        field.name().as_str(),
+                        DataType::Nullable(Box::new(field.data_type().clone())),
+                    ));
+                }
+                for field in self.build.output_schema()?.fields() {
+                    fields.push(DataField::new(
+                        field.name().as_str(),
+                        DataType::Nullable(Box::new(field.data_type().clone())),
+                    ));
+                }
+            }
+            JoinType::LeftSemi | JoinType::LeftAnti => {
+                // Do nothing
+            }
+            JoinType::RightSemi | JoinType::RightAnti => {
+                fields.clear();
+                fields = self.build.output_schema()?.fields().clone();
+            }
+            JoinType::LeftMark | JoinType::RightMark => {
+                fields.clear();
+                let outer_table = if self.join_type == JoinType::RightMark {
+                    &self.probe
+                } else {
+                    &self.build
+                };
+                fields = outer_table.output_schema()?.fields().clone();
+                let name = if let Some(idx) = self.marker_index {
+                    idx.to_string()
+                } else {
+                    "marker".to_string()
+                };
+                fields.push(DataField::new(
+                    name.as_str(),
+                    DataType::Nullable(Box::new(DataType::Boolean)),
+                ));
+            }
+
+            _ => {
+                for field in self.build.output_schema()?.fields() {
+                    fields.push(DataField::new(
+                        field.name().as_str(),
+                        field.data_type().clone(),
+                    ));
+                }
+            }
+        }
+        Ok(DataSchemaRefExt::create(fields))
+    }
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -279,15 +294,15 @@ pub struct Exchange {
 }
 
 impl Exchange {
-    // pub fn output_schema(&self) -> Result<DataSchemaRef> {
-    //     self.input.output_schema()
-    // }
+    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+        self.input.output_schema()
+    }
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ExchangeSource {
     /// Output schema of exchanged data
-    // pub schema: DataSchemaRef,
+    pub schema: DataSchemaRef,
 
     /// Fragment ID of source fragment
     pub source_fragment_id: usize,
@@ -295,9 +310,9 @@ pub struct ExchangeSource {
 }
 
 impl ExchangeSource {
-    // pub fn output_schema(&self) -> Result<DataSchemaRef> {
-    //     Ok(self.schema.clone())
-    // }
+    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+        Ok(self.schema.clone())
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -315,7 +330,7 @@ pub enum FragmentKind {
 pub struct ExchangeSink {
     pub input: Box<PhysicalPlan>,
     /// Input schema of exchanged data
-    // pub schema: DataSchemaRef,
+    pub schema: DataSchemaRef,
     pub kind: FragmentKind,
     pub keys: Vec<PhysicalScalar>,
 
@@ -327,9 +342,9 @@ pub struct ExchangeSink {
 }
 
 impl ExchangeSink {
-    // pub fn output_schema(&self) -> Result<DataSchemaRef> {
-    //     Ok(self.schema.clone())
-    // }
+    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+        Ok(self.schema.clone())
+    }
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -337,13 +352,13 @@ pub struct UnionAll {
     pub left: Box<PhysicalPlan>,
     pub right: Box<PhysicalPlan>,
     pub pairs: Vec<(String, String)>,
-    // pub schema: DataSchemaRef,
+    pub schema: DataSchemaRef,
 }
 
 impl UnionAll {
-    // pub fn output_schema(&self) -> Result<DataSchemaRef> {
-    //     Ok(self.schema.clone())
-    // }
+    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+        Ok(self.schema.clone())
+    }
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -358,12 +373,12 @@ pub struct DistributedInsertSelect {
 }
 
 impl DistributedInsertSelect {
-    // pub fn output_schema(&self) -> Result<DataSchemaRef> {
-    //     Ok(DataSchemaRefExt::create(vec![
-    //         DataField::new("seg_loc", DataType::String),
-    //         DataField::new("seg_info", DataType::String),
-    //     ]))
-    // }
+    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+        Ok(DataSchemaRefExt::create(vec![
+            DataField::new("seg_loc", DataType::String),
+            DataField::new("seg_info", DataType::String),
+        ]))
+    }
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -395,6 +410,25 @@ impl PhysicalPlan {
                 self,
                 Self::ExchangeSource(_) | Self::ExchangeSink(_) | Self::Exchange(_)
             )
+    }
+
+    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+        match self {
+            PhysicalPlan::TableScan(plan) => plan.output_schema(),
+            PhysicalPlan::Filter(plan) => plan.output_schema(),
+            PhysicalPlan::Project(plan) => plan.output_schema(),
+            PhysicalPlan::EvalScalar(plan) => plan.output_schema(),
+            PhysicalPlan::AggregatePartial(plan) => plan.output_schema(),
+            PhysicalPlan::AggregateFinal(plan) => plan.output_schema(),
+            PhysicalPlan::Sort(plan) => plan.output_schema(),
+            PhysicalPlan::Limit(plan) => plan.output_schema(),
+            PhysicalPlan::HashJoin(plan) => plan.output_schema(),
+            PhysicalPlan::Exchange(plan) => plan.output_schema(),
+            PhysicalPlan::ExchangeSource(plan) => plan.output_schema(),
+            PhysicalPlan::ExchangeSink(plan) => plan.output_schema(),
+            PhysicalPlan::UnionAll(plan) => plan.output_schema(),
+            PhysicalPlan::DistributedInsertSelect(plan) => plan.output_schema(),
+        }
     }
 
     pub fn name(&self) -> String {

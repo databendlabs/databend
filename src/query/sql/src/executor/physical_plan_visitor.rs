@@ -96,7 +96,7 @@ pub trait PhysicalPlanReplacer {
 
         Ok(PhysicalPlan::AggregateFinal(AggregateFinal {
             input: Box::new(input),
-            // before_group_by_schema: plan.before_group_by_schema.clone(),
+            before_group_by_schema: plan.before_group_by_schema.clone(),
             group_by: plan.group_by.clone(),
             agg_funcs: plan.agg_funcs.clone(),
         }))
@@ -157,7 +157,7 @@ pub trait PhysicalPlanReplacer {
 
         Ok(PhysicalPlan::ExchangeSink(ExchangeSink {
             input: Box::new(input),
-            // schema: plan.schema.clone(),
+            schema: plan.schema.clone(),
             kind: plan.kind.clone(),
             keys: plan.keys.clone(),
             destination_fragment_id: plan.destination_fragment_id,
@@ -172,7 +172,7 @@ pub trait PhysicalPlanReplacer {
         Ok(PhysicalPlan::UnionAll(UnionAll {
             left: Box::new(left),
             right: Box::new(right),
-            // schema: plan.schema.clone(),
+            schema: plan.schema.clone(),
             pairs: plan.pairs.clone(),
         }))
     }

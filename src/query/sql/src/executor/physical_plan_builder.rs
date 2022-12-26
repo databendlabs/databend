@@ -278,6 +278,7 @@ impl PhysicalPlanBuilder {
                                         params: agg.params.clone(),
                                         return_type: *agg.return_type.clone(),
                                     },
+                                    output_column: v.index,
                                     args: agg.args.iter().map(|arg| {
                                         if let Scalar::BoundColumnRef(col) = arg {
                                             Ok(col.column.index)
@@ -343,6 +344,7 @@ impl PhysicalPlanBuilder {
                                         params: agg.params.clone(),
                                         return_type: *agg.return_type.clone(),
                                     },
+                                    output_column: v.index,
                                     args: agg.args.iter().map(|arg| {
                                         if let Scalar::BoundColumnRef(col) = arg {
                                             Ok(col.column.index)
@@ -360,12 +362,12 @@ impl PhysicalPlanBuilder {
 
                         match input {
                             PhysicalPlan::AggregatePartial(ref agg) => {
-                                // let before_group_by_schema = agg.input.output_schema()?;
+                                let before_group_by_schema = agg.input.output_schema()?;
                                 PhysicalPlan::AggregateFinal(AggregateFinal {
                                     input: Box::new(input),
                                     group_by: group_items,
                                     agg_funcs,
-                                    // before_group_by_schema,
+                                    before_group_by_schema,
                                 })
                             }
 
@@ -373,12 +375,12 @@ impl PhysicalPlanBuilder {
                                 input: box PhysicalPlan::AggregatePartial(ref agg),
                                 ..
                             }) => {
-                                // let before_group_by_schema = agg.input.output_schema()?;
+                                let before_group_by_schema = agg.input.output_schema()?;
                                 PhysicalPlan::AggregateFinal(AggregateFinal {
                                     input: Box::new(input),
                                     group_by: group_items,
                                     agg_funcs,
-                                    // before_group_by_schema,
+                                    before_group_by_schema,
                                 })
                             }
 
@@ -439,15 +441,21 @@ impl PhysicalPlanBuilder {
             }
             RelOperator::UnionAll(op) => {
                 let left = self.build(s_expr.child(0)?).await?;
+                let left_schema = left.output_schema()?;
                 let pairs = op
                     .pairs
                     .iter()
                     .map(|(l, r)| (l.to_string(), r.to_string()))
                     .collect::<Vec<_>>();
+                let fields = pairs
+                    .iter()
+                    .map(|(left, _)| Ok(left_schema.field_with_name(left)?.clone()))
+                    .collect::<Result<Vec<_>>>()?;
                 Ok(PhysicalPlan::UnionAll(UnionAll {
                     left: Box::new(left),
                     right: Box::new(self.build(s_expr.child(1)?).await?),
                     pairs,
+                    schema: DataSchemaRefExt::create(fields),
                 }))
             }
             _ => Err(ErrorCode::Internal(format!(
