@@ -86,7 +86,7 @@ impl JoinHashTable {
 
                             probed_chunks.push(self.merge_eq_chunk(
                                 &self.row_space.gather(&build_indexes)?,
-                                &Chunk::take(input.clone(), &probe_indexes)?,
+                                &Chunk::take(input, &probe_indexes)?,
                             )?);
 
                             index = new_index;
@@ -102,7 +102,7 @@ impl JoinHashTable {
 
         probed_chunks.push(self.merge_eq_chunk(
             &self.row_space.gather(&build_indexes)?,
-            &Chunk::take(input.clone(), &probe_indexes)?,
+            &Chunk::take(input, &probe_indexes)?,
         )?);
 
         match &self.hash_join_desc.other_predicate {

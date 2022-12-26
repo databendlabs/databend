@@ -186,10 +186,10 @@ impl JoinHashTable {
                                 )
                             };
 
-                        let nullable_build_chunk = Chunk::new(nullable_columns.clone(), num_rows);
+                        let nullable_build_chunk = Chunk::new(nullable_columns, num_rows);
 
                         // For full join, wrap nullable for probe chunk
-                        let mut probe_chunk = Chunk::take(input.clone(), &probe_indexes)?;
+                        let mut probe_chunk = Chunk::take(input, &probe_indexes)?;
                         let num_rows = probe_chunk.num_rows();
                         if self.hash_join_desc.join_type == JoinType::Full {
                             let nullable_probe_columns = probe_chunk
@@ -223,7 +223,7 @@ impl JoinHashTable {
         }
 
         // For full join, wrap nullable for probe chunk
-        let mut probe_chunk = Chunk::take(input.clone(), &probe_indexes)?;
+        let mut probe_chunk = Chunk::take(input, &probe_indexes)?;
         if self.hash_join_desc.join_type == JoinType::Full {
             let nullable_probe_columns = probe_chunk
                 .columns()
@@ -294,8 +294,7 @@ impl JoinHashTable {
                     .map(|c| Self::set_validity(c, &validity))
                     .collect::<Vec<_>>()
             };
-        let nullable_build_chunk =
-            Chunk::new_from_sequence(nullable_columns.clone(), validity.len());
+        let nullable_build_chunk = Chunk::new(nullable_columns, validity.len());
 
         // Process no-equi conditions
         let merged_chunk = self.merge_eq_chunk(&nullable_build_chunk, &probe_chunk)?;

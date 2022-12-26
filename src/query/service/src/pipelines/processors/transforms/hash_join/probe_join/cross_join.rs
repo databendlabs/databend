@@ -34,7 +34,7 @@ impl JoinHashTable {
         let build_chunk = Chunk::concat(&build_chunks)?;
         let mut results = Vec::with_capacity(input.num_rows());
         for i in 0..input.num_rows() {
-            let probe_chunk = Chunk::take(input.clone(), &[i as u32])?;
+            let probe_chunk = Chunk::take(input, &[i as u32])?;
             results.push(self.merge_with_constant_chunk(&build_chunk, &probe_chunk)?);
         }
         Ok(results)

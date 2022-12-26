@@ -106,7 +106,7 @@ impl JoinHashTable {
                 _ => {}
             }
         }
-        Ok(vec![Chunk::take(input.clone(), &probe_indexes)?])
+        Ok(vec![Chunk::take(input, &probe_indexes)?])
     }
 
     fn left_semi_anti_join_with_other_conjunct<
@@ -183,7 +183,7 @@ impl JoinHashTable {
                         build_indexes.extend_from_slice(&probed_rows[index..new_index]);
                         probe_indexes.extend(repeat(i as u32).take(addition));
 
-                        let probe_chunk = Chunk::take(input.clone(), &probe_indexes)?;
+                        let probe_chunk = Chunk::take(input, &probe_indexes)?;
                         let build_chunk = self.row_space.gather(&build_indexes)?;
                         let merged_chunk = self.merge_eq_chunk(&build_chunk, &probe_chunk)?;
 
@@ -223,7 +223,7 @@ impl JoinHashTable {
             ));
         }
 
-        let probe_chunk = Chunk::take(input.clone(), &probe_indexes)?;
+        let probe_chunk = Chunk::take(input, &probe_indexes)?;
         let build_chunk = self.row_space.gather(&build_indexes)?;
         let merged_chunk = self.merge_eq_chunk(&build_chunk, &probe_chunk)?;
 
