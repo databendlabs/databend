@@ -51,7 +51,7 @@ statement ok
 INSERT INTO t3 (a,b,c) values(true, '2021-09-07 21:38:35.000000', '2021-09-07'), (false, 1631050715000000, 18877);
 
 query BTT
-SELECT * FROM t3
+SELECT * FROM t3 order by a desc;
 ----
 1 2021-09-07 21:38:35.000000 2021-09-07
 0 2021-09-07 21:38:35.000000 2021-09-07
