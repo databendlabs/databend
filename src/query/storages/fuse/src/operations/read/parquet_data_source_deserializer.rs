@@ -13,9 +13,15 @@
 //  limitations under the License.
 
 use std::any::Any;
+use std::cell::RefCell;
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::time::Instant;
 
+use common_arrow::parquet::page::CompressedPage;
+use common_arrow::parquet::page::Page;
+use common_arrow::parquet::read::decompress;
+use common_arrow::parquet::FallibleStreamingIterator;
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
 use common_catalog::plan::PartInfoPtr;
@@ -43,7 +49,10 @@ pub struct DeserializeDataTransform {
     output_data: Option<DataBlock>,
     parts: Vec<PartInfoPtr>,
     chunks: Vec<MergeIOReadResult>,
+    uncompressed_buffer: Arc<Mutex<Vec<u8>>>,
 }
+
+unsafe impl Send for DeserializeDataTransform {}
 
 impl DeserializeDataTransform {
     pub fn create(
@@ -52,6 +61,7 @@ impl DeserializeDataTransform {
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
     ) -> Result<ProcessorPtr> {
+        let buffer_size = ctx.get_settings().get_parquet_uncompressed_buffer_size()? as usize;
         let scan_progress = ctx.get_scan_progress();
         Ok(ProcessorPtr::create(Box::new(DeserializeDataTransform {
             scan_progress,
@@ -61,6 +71,7 @@ impl DeserializeDataTransform {
             output_data: None,
             parts: vec![],
             chunks: vec![],
+            uncompressed_buffer: Arc::new(Mutex::new(Vec::with_capacity(buffer_size))),
         })))
     }
 }
@@ -136,6 +147,7 @@ impl Processor for DeserializeDataTransform {
                 &part.compression,
                 &part.columns_meta,
                 columns_chunks,
+                Some(self.uncompressed_buffer.clone()),
             )?;
 
             metrics_inc_remote_io_deserialize_milliseconds(start.elapsed().as_millis() as u64);

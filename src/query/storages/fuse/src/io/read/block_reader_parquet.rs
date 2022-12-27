@@ -12,8 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::time::Instant;
 
 use common_arrow::arrow::array::Array;
@@ -47,6 +49,7 @@ use tracing::Instrument;
 
 use crate::fuse_part::FusePartInfo;
 use crate::io::read::block_reader::MergeIOReadResult;
+use crate::io::read::decompressor::BuffedBasicDecompressor;
 use crate::io::read::ReadSettings;
 use crate::io::BlockReader;
 use crate::metrics::metrics_inc_remote_io_deserialize_milliseconds;
@@ -91,6 +94,7 @@ impl BlockReader {
         column_descriptors: Vec<&ColumnDescriptor>,
         field: Field,
         compression: &Compression,
+        uncompressed_buffer: Arc<Mutex<Vec<u8>>>,
     ) -> Result<ArrayIter<'a>> {
         let columns = metas
             .iter()
@@ -109,7 +113,11 @@ impl BlockReader {
                     vec![],
                     usize::MAX,
                 );
-                Ok(BasicDecompressor::new(pages, vec![]))
+
+                Ok(BuffedBasicDecompressor::new(
+                    pages,
+                    uncompressed_buffer.clone(),
+                ))
             })
             .collect::<Result<Vec<_>>>()?;
 
@@ -170,7 +178,13 @@ impl BlockReader {
             .map(|(index, chunk)| (*index, chunk.as_slice()))
             .collect::<Vec<_>>();
 
-        self.deserialize_columns(num_rows, &meta.compression, &columns_meta, columns_chunk)
+        self.deserialize_columns(
+            num_rows,
+            &meta.compression,
+            &columns_meta,
+            columns_chunk,
+            None,
+        )
     }
 
     pub fn build_block(&self, chunks: Vec<(usize, Box<dyn Array>)>) -> Result<DataBlock> {
@@ -197,6 +211,7 @@ impl BlockReader {
         compression: &Compression,
         columns_meta: &HashMap<usize, ColumnMeta>,
         columns_chunks: Vec<(usize, &[u8])>,
+        uncompressed_buffer: Option<Arc<Mutex<Vec<u8>>>>,
     ) -> Result<DataBlock> {
         let chunk_map: HashMap<usize, &[u8]> = columns_chunks.into_iter().collect();
         let mut columns_array_iter = Vec::with_capacity(self.projection.len());
@@ -225,6 +240,9 @@ impl BlockReader {
                 column_descriptors,
                 field,
                 compression,
+                uncompressed_buffer
+                    .clone()
+                    .unwrap_or_else(|| Arc::new(Mutex::new(vec![]))),
             )?);
         }
 
@@ -250,8 +268,13 @@ impl BlockReader {
             .collect::<Vec<_>>();
 
         let part = FusePartInfo::from_part(&part)?;
-        let deserialized_res =
-            self.deserialize_columns(part.nums_rows, &part.compression, &part.columns_meta, reads);
+        let deserialized_res = self.deserialize_columns(
+            part.nums_rows,
+            &part.compression,
+            &part.columns_meta,
+            reads,
+            None,
+        );
         metrics_inc_remote_io_deserialize_milliseconds(start.elapsed().as_millis() as u64);
         deserialized_res
     }
