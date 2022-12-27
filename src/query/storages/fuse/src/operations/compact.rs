@@ -153,6 +153,7 @@ impl FuseTable {
                 self.meta_location_generator().clone(),
                 self.operator.clone(),
                 self.storage_format,
+                self.table_compression,
                 thresholds,
             )
         })?;

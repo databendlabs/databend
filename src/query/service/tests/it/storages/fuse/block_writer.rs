@@ -12,10 +12,9 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use common_arrow::parquet::compression::CompressionOptions;
-use common_datablocks::serialize_to_parquet_with_compression;
 use common_datablocks::DataBlock;
 use common_exception::Result;
+use common_storages_common::blocks_to_parquet;
 use common_storages_fuse::io::write_block;
 use common_storages_fuse::io::write_data;
 use common_storages_fuse::io::TableMetaLocationGenerator;
@@ -24,8 +23,10 @@ use common_storages_fuse::FuseStorageFormat;
 use common_storages_index::BlockFilter;
 use common_storages_table_meta::meta::BlockMeta;
 use common_storages_table_meta::meta::ClusterStatistics;
+use common_storages_table_meta::meta::Compression;
 use common_storages_table_meta::meta::Location;
 use common_storages_table_meta::meta::StatisticsOfColumns;
+use common_storages_table_meta::table::TableCompression;
 use opendal::Operator;
 use uuid::Uuid;
 
@@ -64,8 +65,12 @@ impl<'a> BlockWriter<'a> {
             .build_block_index(data_accessor, &block, block_id)
             .await?;
 
+        let write_settings = WriteSettings {
+            storage_format,
+            ..Default::default()
+        };
+
         let mut buf = Vec::with_capacity(DEFAULT_BLOCK_WRITE_BUFFER_SIZE);
-        let write_settings = WriteSettings { storage_format };
         let (file_size, col_metas) = write_block(&write_settings, block, &mut buf)?;
 
         write_data(&buf, data_accessor, &location.0).await?;
@@ -79,6 +84,7 @@ impl<'a> BlockWriter<'a> {
             location,
             Some(bloom_filter_index_location),
             bloom_filter_index_size,
+            Compression::Lz4Raw,
         );
         Ok(block_meta)
     }
@@ -96,11 +102,11 @@ impl<'a> BlockWriter<'a> {
             .block_bloom_index_location(&block_id);
         let mut data = Vec::with_capacity(DEFAULT_BLOOM_INDEX_WRITE_BUFFER_SIZE);
         let index_block_schema = &bloom_index.filter_schema;
-        let (size, _) = serialize_to_parquet_with_compression(
-            vec![index_block],
+        let (size, _) = blocks_to_parquet(
             index_block_schema,
+            vec![index_block],
             &mut data,
-            CompressionOptions::Uncompressed,
+            TableCompression::None,
         )?;
         write_data(&data, data_accessor, &location.0).await?;
         Ok((size, location))
