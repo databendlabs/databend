@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::time::Duration;
 
 use reqwest::header::HeaderMap;
 use reqwest::header::HeaderValue;

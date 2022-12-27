@@ -35,6 +35,12 @@ mod client;
 mod error;
 mod util;
 
+enum ClientType {
+    Mysql,
+    Http,
+    Clickhouse,
+}
+
 pub struct Databend {
     mysql_client: Option<MysqlClient>,
     http_client: Option<HttpClient>,
@@ -127,32 +133,43 @@ pub async fn main() -> Result<()> {
 async fn run_mysql_client() -> Result<()> {
     let suits = SqlLogicTestArgs::parse().suites;
     let suits = std::fs::read_dir(suits).unwrap();
-    let mysql_client = MysqlClient::create().await?;
-    let databend = Databend::create(Some(mysql_client), None, None);
-    run_suits(suits, databend).await?;
+    run_suits(suits, ClientType::Mysql).await?;
     Ok(())
 }
 
 async fn run_http_client() -> Result<()> {
     let suits = SqlLogicTestArgs::parse().suites;
     let suits = std::fs::read_dir(suits).unwrap();
-    let http_client = HttpClient::create()?;
-    let databend = Databend::create(None, Some(http_client), None);
-    run_suits(suits, databend).await?;
+    run_suits(suits, ClientType::Http).await?;
     Ok(())
 }
 
 async fn run_ck_http_client() -> Result<()> {
     let suits = SqlLogicTestArgs::parse().suites;
     let suits = std::fs::read_dir(suits).unwrap();
-    let ck_client = ClickhouseHttpClient::create()?;
-    let databend = Databend::create(None, None, Some(ck_client));
-    run_suits(suits, databend).await?;
+    run_suits(suits, ClientType::Clickhouse).await?;
     Ok(())
 }
 
-async fn run_suits(suits: ReadDir, databend: Databend) -> Result<()> {
-    let mut runner = sqllogictest::Runner::new(databend);
+// Create new databend with client type
+async fn create_databend(client_type: &ClientType) -> Result<Databend> {
+    match client_type {
+        ClientType::Mysql => {
+            let mysql_client = MysqlClient::create().await?;
+            Ok(Databend::create(Some(mysql_client), None, None))
+        }
+        ClientType::Http => {
+            let http_client = HttpClient::create()?;
+            Ok(Databend::create(None, Some(http_client), None))
+        }
+        ClientType::Clickhouse => {
+            let ck_client = ClickhouseHttpClient::create()?;
+            Ok(Databend::create(None, None, Some(ck_client)))
+        }
+    }
+}
+
+async fn run_suits(suits: ReadDir, client_type: ClientType) -> Result<()> {
     // Todo: set validator to process regex
     let args = SqlLogicTestArgs::parse();
     // Walk each suit dir and read all files in it
@@ -163,6 +180,8 @@ async fn run_suits(suits: ReadDir, databend: Databend) -> Result<()> {
         // Parse the suit and find all slt files
         let files = get_files(suit)?;
         for file in files.into_iter() {
+            // For each file, create new client to run.
+            let mut runner = sqllogictest::Runner::new(create_databend(&client_type).await?);
             let file_name = file
                 .as_ref()
                 .unwrap()
