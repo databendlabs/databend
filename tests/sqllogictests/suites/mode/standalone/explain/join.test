@@ -162,13 +162,15 @@ HashJoin
 ├── build keys: [b.x (#1)]
 ├── probe keys: [a.x (#0)]
 ├── filters: []
-├── TableScan(Build)
-│   ├── table: default.default.twocolumn
-│   ├── read rows: 4
-│   ├── read bytes: 79
-│   ├── partitions total: 1
-│   ├── partitions scanned: 1
-│   └── push downs: [filters: [(x > 42)], limit: NONE]
+├── Filter(Build)
+│   ├── filters: [>(b.x (#1), 42)]
+│   └── TableScan
+│       ├── table: default.default.twocolumn
+│       ├── read rows: 4
+│       ├── read bytes: 79
+│       ├── partitions total: 1
+│       ├── partitions scanned: 1
+│       └── push downs: [filters: [(x > 42)], limit: NONE]
 └── TableScan(Probe)
     ├── table: default.default.onecolumn
     ├── read rows: 4
@@ -185,13 +187,15 @@ HashJoin
 ├── build keys: [b.x (#1)]
 ├── probe keys: [a.x (#0)]
 ├── filters: []
-├── TableScan(Build)
-│   ├── table: default.default.twocolumn
-│   ├── read rows: 4
-│   ├── read bytes: 79
-│   ├── partitions total: 1
-│   ├── partitions scanned: 1
-│   └── push downs: [filters: [((x > 44) or (x < 43))], limit: NONE]
+├── Filter(Build)
+│   ├── filters: [or(>(b.x (#1), 44), <(b.x (#1), 43))]
+│   └── TableScan
+│       ├── table: default.default.twocolumn
+│       ├── read rows: 4
+│       ├── read bytes: 79
+│       ├── partitions total: 1
+│       ├── partitions scanned: 1
+│       └── push downs: [filters: [((x > 44) or (x < 43))], limit: NONE]
 └── TableScan(Probe)
     ├── table: default.default.onecolumn
     ├── read rows: 4
@@ -209,13 +213,15 @@ HashJoin
 ├── build keys: [b.x (#1)]
 ├── probe keys: [a.x (#0)]
 ├── filters: []
-├── TableScan(Build)
-│   ├── table: default.default.twocolumn
-│   ├── read rows: 4
-│   ├── read bytes: 79
-│   ├── partitions total: 1
-│   ├── partitions scanned: 1
-│   └── push downs: [filters: [(x > 42), (x < 45)], limit: NONE]
+├── Filter(Build)
+│   ├── filters: [>(b.x (#1), 42), <(b.x (#1), 45)]
+│   └── TableScan
+│       ├── table: default.default.twocolumn
+│       ├── read rows: 4
+│       ├── read bytes: 79
+│       ├── partitions total: 1
+│       ├── partitions scanned: 1
+│       └── push downs: [filters: [(x > 42), (x < 45)], limit: NONE]
 └── TableScan(Probe)
     ├── table: default.default.onecolumn
     ├── read rows: 4
@@ -259,13 +265,15 @@ HashJoin
 ├── build keys: [b.x (#1)]
 ├── probe keys: [a.x (#0)]
 ├── filters: []
-├── TableScan(Build)
-│   ├── table: default.default.twocolumn
-│   ├── read rows: 4
-│   ├── read bytes: 79
-│   ├── partitions total: 1
-│   ├── partitions scanned: 1
-│   └── push downs: [filters: [(x > 42), (x < 45)], limit: NONE]
+├── Filter(Build)
+│   ├── filters: [>(b.x (#1), 42), <(b.x (#1), 45)]
+│   └── TableScan
+│       ├── table: default.default.twocolumn
+│       ├── read rows: 4
+│       ├── read bytes: 79
+│       ├── partitions total: 1
+│       ├── partitions scanned: 1
+│       └── push downs: [filters: [(x > 42), (x < 45)], limit: NONE]
 └── TableScan(Probe)
     ├── table: default.default.onecolumn
     ├── read rows: 4
