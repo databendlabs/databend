@@ -384,12 +384,12 @@ impl ComparisonOp {
 
     pub fn to_func_name(&self) -> String {
         match &self {
-            ComparisonOp::Equal => "=",
-            ComparisonOp::NotEqual => "<>",
-            ComparisonOp::GT => ">",
-            ComparisonOp::LT => "<",
-            ComparisonOp::GTE => ">=",
-            ComparisonOp::LTE => "<=",
+            ComparisonOp::Equal => "eq",
+            ComparisonOp::NotEqual => "noteq",
+            ComparisonOp::GT => "gt",
+            ComparisonOp::LT => "lt",
+            ComparisonOp::GTE => "gte",
+            ComparisonOp::LTE => "lte",
         }
         .to_string()
     }

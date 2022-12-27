@@ -1086,28 +1086,23 @@ impl<'a> TypeChecker<'a> {
         required_type: Option<DataType>,
     ) -> Result<Box<(Scalar, DataType)>> {
         match op {
-            BinaryOperator::Plus
-            | BinaryOperator::Minus
-            | BinaryOperator::Multiply
-            | BinaryOperator::Div
-            | BinaryOperator::Divide
-            | BinaryOperator::Modulo
-            | BinaryOperator::Like
-            | BinaryOperator::NotLike
-            | BinaryOperator::Regexp
-            | BinaryOperator::RLike
-            | BinaryOperator::NotRegexp
-            | BinaryOperator::NotRLike
-            | BinaryOperator::BitwiseOr
-            | BinaryOperator::BitwiseAnd
-            | BinaryOperator::BitwiseXor
-            | BinaryOperator::Xor => {
-                self.resolve_function(span, op.to_string().as_str(), &[left, right], required_type)
-                    .await
-            }
-            BinaryOperator::StringConcat => {
-                self.resolve_function(span, "concat", &[left, right], required_type)
-                    .await
+            BinaryOperator::NotLike | BinaryOperator::NotRegexp | BinaryOperator::NotRLike => {
+                let positive_op = match op {
+                    BinaryOperator::NotLike => BinaryOperator::Like,
+                    BinaryOperator::NotRegexp => BinaryOperator::Regexp,
+                    BinaryOperator::NotRLike => BinaryOperator::RLike,
+                    _ => unreachable!(),
+                };
+                let ret = self
+                    .resolve_binary_op(span, &positive_op, left, right, required_type)
+                    .await?;
+                let return_type = Box::new(ret.1.clone());
+                let scalar = Scalar::FunctionCall(FunctionCall {
+                    arguments: vec![ret.0.clone()],
+                    func_name: "not".to_string(),
+                    return_type,
+                });
+                Ok(Box::new((scalar, ret.1.clone())))
             }
             BinaryOperator::Gt
             | BinaryOperator::Lt
@@ -1200,6 +1195,11 @@ impl<'a> TypeChecker<'a> {
                     .into(),
                     expr.data_type().clone(),
                 )))
+            }
+            other => {
+                let name = other.to_string();
+                self.resolve_function(span, name.as_str(), &[left, right], required_type)
+                    .await
             }
         }
     }
