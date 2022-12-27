@@ -36,7 +36,6 @@ pub struct AggregatorParams {
     pub group_data_types: Vec<DataType>,
 
     pub aggregate_functions: Vec<AggregateFunctionRef>,
-    pub aggregate_functions_column_name: Vec<String>,
     pub aggregate_functions_arguments: Vec<Vec<usize>>,
 
     // about function state memory layout
@@ -51,7 +50,6 @@ impl AggregatorParams {
         // input_schema: DataSchemaRef,
         group_columns: &[usize],
         agg_funcs: &[AggregateFunctionRef],
-        agg_output_names: &[String],
         agg_args: &[Vec<usize>],
     ) -> Result<Arc<AggregatorParams>> {
         let mut states_offsets: Vec<usize> = Vec::with_capacity(agg_funcs.len());
@@ -71,7 +69,6 @@ impl AggregatorParams {
             group_columns: group_columns.to_vec(),
             group_data_types,
             aggregate_functions: agg_funcs.to_vec(),
-            aggregate_functions_column_name: agg_output_names.to_vec(),
             aggregate_functions_arguments: agg_args.to_vec(),
             layout: states_layout,
             offsets_aggregate_states: states_offsets,

@@ -18,6 +18,7 @@ use async_channel::Receiver;
 use common_catalog::table::AppendMode;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::type_check::check;
 use common_expression::Chunk;
 use common_expression::DataField;
 use common_expression::DataSchema;
@@ -270,28 +271,12 @@ impl PipelineBuilder {
         let mut predicate = filter.predicates[0].clone();
         for pred in filter.predicates.iter().skip(1) {
             predicate = PhysicalScalar::Function {
-                name: "and_filters".to_string(),
+                name: "and".to_string(),
                 args: vec![predicate.clone(), pred.clone()],
                 return_type: func.return_type(),
             };
         }
-
-        let predicate =
-            filter
-                .predicates
-                .iter()
-                .fold(filter.predicates[0].as_raw_expr(), |predicate, pred| {
-                    RawExpr::FunctionCall {
-                        span: None,
-                        name: "and_filters".to_string(),
-                        params: vec![],
-                        args: vec![predicate, pred.as_raw_expr()],
-                    }
-                });
-
-        let func_ctx = self.ctx.try_get_function_context()?;
         let predicate = predicate.as_expr()?;
-
         self.main_pipeline.add_transform(|input, output| {
             Ok(CompoundChunkOperator::create(
                 input,
@@ -392,15 +377,21 @@ impl PipelineBuilder {
         group_by: &[IndexType],
         agg_funcs: &[AggregateFunctionDesc],
     ) -> Result<Arc<AggregatorParams>> {
-        let mut output_names = Vec::with_capacity(agg_funcs.len() + group_by.len());
         let mut agg_args = Vec::with_capacity(agg_funcs.len());
         let aggs: Vec<AggregateFunctionRef> = agg_funcs
             .iter()
             .map(|agg_func| {
                 agg_args.push(agg_func.args.clone());
+
+                let params = agg_func
+                    .sig
+                    .params
+                    .iter()
+                    .map(|p| p.clone().into_scalar())
+                    .collect();
                 AggregateFunctionFactory::instance().get(
                     agg_func.sig.name.as_str(),
-                    agg_func.sig.params.clone(),
+                    params,
                     agg_func
                         .args
                         .iter()
@@ -410,11 +401,8 @@ impl PipelineBuilder {
                 )
             })
             .collect::<Result<_>>()?;
-        for agg in agg_funcs {
-            output_names.push(agg.column_id.clone());
-        }
 
-        let params = AggregatorParams::try_create(&group_columns, &aggs, &output_names, &agg_args)?;
+        let params = AggregatorParams::try_create(&group_columns, &aggs, &agg_args)?;
 
         Ok(params)
     }

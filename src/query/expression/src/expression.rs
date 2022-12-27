@@ -26,6 +26,7 @@ use serde::Serialize;
 use crate::function::Function;
 use crate::function::FunctionID;
 use crate::function::FunctionRegistry;
+use crate::types::number::NumberScalar;
 use crate::types::number::F32;
 use crate::types::number::F64;
 use crate::types::DataType;
@@ -136,6 +137,26 @@ pub enum Literal {
     Float64(F64),
     Boolean(bool),
     String(Vec<u8>),
+}
+
+impl Literal {
+    pub fn into_scalar(self) -> Scalar {
+        match self {
+            Literal::Null => Scalar::Null,
+            Literal::Int8(value) => Scalar::Number(NumberScalar::Int8(value)),
+            Literal::Int16(value) => Scalar::Number(NumberScalar::Int16(value)),
+            Literal::Int32(value) => Scalar::Number(NumberScalar::Int32(value)),
+            Literal::Int64(value) => Scalar::Number(NumberScalar::Int64(value)),
+            Literal::UInt8(value) => Scalar::Number(NumberScalar::UInt8(value)),
+            Literal::UInt16(value) => Scalar::Number(NumberScalar::UInt16(value)),
+            Literal::UInt32(value) => Scalar::Number(NumberScalar::UInt32(value)),
+            Literal::UInt64(value) => Scalar::Number(NumberScalar::UInt64(value)),
+            Literal::Float32(value) => Scalar::Number(NumberScalar::Float32(value)),
+            Literal::Float64(value) => Scalar::Number(NumberScalar::Float64(value)),
+            Literal::Boolean(value) => Scalar::Boolean(value),
+            Literal::String(value) => Scalar::String(value.to_vec()),
+        }
+    }
 }
 
 impl<Index: ColumnIndex> RawExpr<Index> {
