@@ -142,7 +142,7 @@ impl BlockReader {
                     .await?;
                 Ok::<_, ErrorCode>((index, column_chunk))
             }
-                .instrument(debug_span!("read_col_chunk"));
+            .instrument(debug_span!("read_col_chunk"));
             column_chunk_futs.push(fut);
         }
 
@@ -250,12 +250,8 @@ impl BlockReader {
             .collect::<Vec<_>>();
 
         let part = FusePartInfo::from_part(&part)?;
-        let deserialized_res = self.deserialize_columns(
-            part.nums_rows,
-            &part.compression,
-            &part.columns_meta,
-            reads,
-        );
+        let deserialized_res =
+            self.deserialize_columns(part.nums_rows, &part.compression, &part.columns_meta, reads);
         metrics_inc_remote_io_deserialize_milliseconds(start.elapsed().as_millis() as u64);
         deserialized_res
     }
@@ -294,7 +290,14 @@ impl BlockReader {
                 .get_settings()
                 .get_storage_io_max_page_bytes_for_read()?,
         };
-        Self::merge_io_read(&read_settings, object, ranges).await
+
+        let read_res = Self::merge_io_read(&read_settings, object, ranges).await?;
+
+        Ok(read_res
+            .columns_chunks()?
+            .into_iter()
+            .map(|(column_idx, column_chunk)| (column_idx, column_chunk.to_vec()))
+            .collect::<Vec<_>>())
     }
 
     pub fn support_blocking_api(&self) -> bool {

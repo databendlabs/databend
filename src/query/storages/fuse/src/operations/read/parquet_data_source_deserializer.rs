@@ -101,7 +101,7 @@ impl Processor for DeserializeDataTransform {
                 if let Some(source_meta) = source_meta.as_mut_any().downcast_mut::<DataSourceMeta>()
                 {
                     self.parts = source_meta.part.clone();
-                    self.chunks = source_meta.data.take().unwrap();
+                    self.chunks = std::mem::take(&mut source_meta.data);
                     return Ok(Event::Sync);
                 }
             }
@@ -122,6 +122,7 @@ impl Processor for DeserializeDataTransform {
         let part = self.parts.pop();
         let chunks = self.chunks.pop();
         if let Some((part, chunks)) = part.zip(chunks) {
+            // self.block_reader
             let data_block = self.block_reader.deserialize(part, chunks)?;
 
             let progress_values = ProgressValues {

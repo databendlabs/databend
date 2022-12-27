@@ -133,8 +133,6 @@ impl Processor for NativeDeserializeDataTransform {
                     let _ = self.chunks.pop();
                     return Ok(());
                 }
-
-                arrays.push((*index, chunk.next_array()?));
             }
 
             let data_block = self.block_reader.build_block(arrays)?;
