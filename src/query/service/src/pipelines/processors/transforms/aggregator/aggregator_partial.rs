@@ -298,9 +298,10 @@ impl<Method: HashMethod + PolymorphicKeysHelper<Method> + Send> Aggregator
 
         self.drop_states();
         let data_type = data_type_of_group_key_column!(column);
+        let rows = column.len();
         Ok(vec![Chunk::new_from_sequence(
             vec![(Value::Column(column), data_type)],
-            column.len(),
+            rows,
         )])
     }
 }

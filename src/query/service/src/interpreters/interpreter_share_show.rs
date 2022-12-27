@@ -79,6 +79,9 @@ impl Interpreter for ShowSharesInterpreter {
             to.push(tenant.clone().as_bytes().to_vec());
             comments.push(entry.comment.unwrap_or_default().as_bytes().to_vec());
         }
+
+        let num_rows = resp.outbound_accounts.len();
+
         for entry in resp.outbound_accounts {
             names.push(entry.share_name.share_name.clone().as_bytes().to_vec());
             kinds.push("OUTBOUND".to_string().as_bytes().to_vec());
@@ -94,8 +97,6 @@ impl Interpreter for ShowSharesInterpreter {
             );
             comments.push(entry.comment.unwrap_or_default().as_bytes().to_vec());
         }
-
-        let num_rows = resp.outbound_accounts.len();
 
         PipelineBuildResult::from_chunks(vec![Chunk::new_from_sequence(
             vec![

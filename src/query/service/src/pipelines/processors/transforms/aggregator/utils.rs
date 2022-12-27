@@ -21,7 +21,7 @@ macro_rules! data_type_of_group_key_column {
             use common_expression::types::DataType;
             use common_expression::Column;
 
-            match $key {
+            match &$key {
                 Column::String(_) => DataType::String,
                 Column::Number(number_ty) => match number_ty {
                     NumberColumn::UInt8(_) => DataType::Number(NumberDataType::UInt8),

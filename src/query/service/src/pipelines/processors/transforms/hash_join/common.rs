@@ -225,7 +225,8 @@ impl JoinHashTable {
             Value::Scalar(v) => return Ok((None, v, !v)),
             Value::Column(s) => {
                 let count_zeros = s.unset_bits();
-                Ok((Some(s), count_zeros == 0, s.len() == count_zeros))
+                let all_false = s.len() == count_zeros;
+                Ok((Some(s), count_zeros == 0, all_false))
             }
         }
     }
@@ -246,7 +247,7 @@ impl JoinHashTable {
         match filter_vector {
             Column::Nullable(_) => Ok(filter_vector),
             other => {
-                let validity = MutableBitmap::with_capacity(other.len());
+                let mut validity = MutableBitmap::with_capacity(other.len());
                 validity.extend_constant(other.len(), true);
                 Ok(Column::Nullable(Box::new(NullableColumn {
                     column: other,

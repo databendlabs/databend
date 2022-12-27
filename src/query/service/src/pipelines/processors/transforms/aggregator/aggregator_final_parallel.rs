@@ -283,7 +283,7 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
 
             // Build final state chunk.
             let mut num_rows = 0;
-            let columns = aggregates_column_builder
+            let mut columns = aggregates_column_builder
                 .into_iter()
                 .map(|(builder, ty)| {
                     let col = builder.build();
@@ -295,7 +295,10 @@ where Method: HashMethod + PolymorphicKeysHelper<Method> + Send + 'static
             let group_columns = group_columns_builder.finish()?;
             let group_columns = group_columns
                 .into_iter()
-                .map(|col| (Value::Column(col), data_type_of_group_key_column!(col)))
+                .map(|col| {
+                    let datatype = data_type_of_group_key_column!(col);
+                    (Value::Column(col), datatype)
+                })
                 .collect::<Vec<_>>();
             columns.extend_from_slice(&group_columns);
             Ok(vec![Chunk::new_from_sequence(columns, num_rows)])

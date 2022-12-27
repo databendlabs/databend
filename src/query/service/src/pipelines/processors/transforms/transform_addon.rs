@@ -71,7 +71,8 @@ where Self: Transform
         for (index, f) in fields.iter().enumerate() {
             if !input_schema.has_field(f.name()) {
                 if let Some(default_expr) = f.default_expr() {
-                    let expr = parse_exprs(ctx.clone(), table.clone(), default_expr)?[0];
+                    let expr = parse_exprs(ctx.clone(), table.clone(), default_expr)?;
+                    let expr = expr[0].clone();
                     default_exprs.push(ChunkOperator::Map { index, expr });
                     unresort_fields.push(f.clone());
                 } else {

@@ -63,7 +63,7 @@ impl SyncCrashMeTable {
         let mut panic_message = None;
         if let Some(args) = table_args {
             if args.len() == 1 {
-                let arg = args[0];
+                let arg = args[0].clone();
                 panic_message =
                     Some(String::from_utf8(arg.into_string().map_err(|_| {
                         ErrorCode::BadArguments("Expected string argument.")

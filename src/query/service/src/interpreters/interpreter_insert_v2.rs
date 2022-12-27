@@ -36,6 +36,7 @@ use common_exception::Result;
 use common_expression::infer_table_schema;
 use common_expression::type_check;
 use common_expression::types::number::NumberScalar;
+use common_expression::types::AnyType;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::Chunk;
@@ -133,7 +134,7 @@ impl InsertInterpreterV2 {
         }
 
         // check if cast needed
-        let cast_needed = select_schema != DataSchema::from(*output_schema).into();
+        let cast_needed = select_schema != DataSchema::from(output_schema.as_ref()).into();
         Ok(cast_needed)
     }
 
@@ -787,7 +788,7 @@ async fn exprs_to_scalar<'a>(
         ));
     }
     let mut operators = Vec::with_capacity(schema_fields_len);
-    let physical_builder = PhysicalScalarBuilder::new();
+    let mut physical_builder = PhysicalScalarBuilder::new();
     let mut scalar_binder = ScalarBinder::new(
         bind_context,
         ctx.clone(),
@@ -835,8 +836,11 @@ async fn exprs_to_scalar<'a>(
         ctx: func_ctx,
     };
     let res = expression_transform.transform(one_row_chunk)?;
-    let data_scalars: Vec<DataScalar> =
-        res.columns().iter().skip(1).map(|col| col.get(0)).collect();
+    let data_scalars: Vec<DataScalar> = res
+        .columns()
+        .skip(1)
+        .map(|col| unsafe { col.value.as_ref().index_unchecked(0).to_owned() })
+        .collect();
     Ok(data_scalars)
 }
 

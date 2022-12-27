@@ -6484,9 +6484,9 @@ dependencies = [
 
 [[package]]
 name = "poem"
-version = "1.3.50"
+version = "1.3.47"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "11c25b3110592eac1a2e0cc366524df2f920eba6a8a438828f7ad196ecec911d"
+checksum = "cbf4d06f8f1fc93dde753e0eea78c0be1287a3eadd4f8679d06aaa4b067b145a"
 dependencies = [
  "async-compression",
  "async-trait",

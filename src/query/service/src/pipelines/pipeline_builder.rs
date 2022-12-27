@@ -406,7 +406,7 @@ impl PipelineBuilder {
             })
             .collect::<Result<_>>()?;
 
-        let params = AggregatorParams::try_create(input_schema, &group_columns, &aggs, &agg_args)?;
+        let params = AggregatorParams::try_create(input_schema, group_by, &aggs, &agg_args)?;
 
         Ok(params)
     }

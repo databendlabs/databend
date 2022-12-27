@@ -77,7 +77,7 @@ impl NumbersTable {
         let mut total = None;
         if let Some(args) = table_args {
             if args.len() == 1 {
-                let arg = args[0];
+                let arg = args[0].clone();
                 total = Some(
                     arg.into_number()
                         .map_err(|_| ErrorCode::BadArguments("Expected u64 argument"))?
