@@ -156,7 +156,7 @@ impl BlockReader {
 
     #[tracing::instrument(level = "debug", skip_all)]
     pub async fn read_with_block_meta(&self, meta: &BlockMeta) -> Result<DataBlock> {
-        let chunks = self.read_cols_by_block_meta(&meta).await?;
+        let chunks = self.read_cols_by_block_meta(meta).await?;
 
         let num_rows = meta.row_count as usize;
         let columns_meta = meta
@@ -210,7 +210,7 @@ impl BlockReader {
             let mut column_chunks = Vec::with_capacity(indices.len());
             let mut column_descriptors = Vec::with_capacity(indices.len());
             for index in indices {
-                let column_read = chunk_map[index].clone();
+                let column_read = <&[u8]>::clone(&chunk_map[index]);
                 let column_meta = &columns_meta[index];
                 let column_descriptor = &self.parquet_schema_descriptor.columns()[*index];
                 column_metas.push(column_meta);

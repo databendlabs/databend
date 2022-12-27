@@ -125,14 +125,16 @@ impl Processor for NativeDeserializeDataTransform {
 
     fn process(&mut self) -> Result<()> {
         if let Some(chunks) = self.chunks.last_mut() {
-            let arrays = Vec::with_capacity(chunks.len());
+            let mut arrays = Vec::with_capacity(chunks.len());
 
-            for (_index, chunk) in chunks.iter_mut() {
+            for (index, chunk) in chunks.iter_mut() {
                 if !chunk.has_next() {
                     // No data anymore
                     let _ = self.chunks.pop();
                     return Ok(());
                 }
+
+                arrays.push((*index, chunk.next_array()?));
             }
 
             let data_block = self.block_reader.build_block(arrays)?;
