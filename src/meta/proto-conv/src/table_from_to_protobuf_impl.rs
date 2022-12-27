@@ -217,7 +217,7 @@ impl FromToProto for mt::TableMeta {
                 Some(sp) => Some(sp.to_pb()?),
                 None => None,
             },
-            part_prefix: if self.part_prefix == "" {
+            part_prefix: if self.part_prefix.is_empty() {
                 None
             } else {
                 Some(self.part_prefix.clone())

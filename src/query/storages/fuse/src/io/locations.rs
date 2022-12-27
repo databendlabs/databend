@@ -65,7 +65,7 @@ impl TableMetaLocationGenerator {
 
     pub fn gen_block_location(&self) -> (Location, Uuid) {
         let part_uuid = Uuid::new_v4();
-        let location_path = if &self.part_prefix == "" {
+        let location_path = if self.part_prefix.is_empty() {
             format!(
                 "{}/{}/{}_v{}.parquet",
                 &self.prefix,
