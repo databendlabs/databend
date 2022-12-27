@@ -40,6 +40,7 @@ use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::Chunk;
 use common_expression::ChunkEntry;
+use common_expression::Column;
 use common_expression::DataField;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
@@ -787,7 +788,7 @@ async fn exprs_to_scalar<'a>(
         ));
     }
     let mut operators = Vec::with_capacity(schema_fields_len);
-    let physical_builder = PhysicalScalarBuilder::new();
+    let mut physical_builder = PhysicalScalarBuilder::new();
     let mut scalar_binder = ScalarBinder::new(
         bind_context,
         ctx.clone(),
@@ -835,8 +836,14 @@ async fn exprs_to_scalar<'a>(
         ctx: func_ctx,
     };
     let res = expression_transform.transform(one_row_chunk)?;
-    let data_scalars: Vec<DataScalar> =
-        res.columns().iter().skip(1).map(|col| col.get(0)).collect();
+    let data_scalars: Vec<DataScalar> = res
+        .columns()
+        .skip(1)
+        .map(|col| match &col.value {
+            Value::Scalar(scalar) => scalar.clone(),
+            Value::Column(col) => unsafe { col.index_unchecked(0).to_owned() },
+        })
+        .collect();
     Ok(data_scalars)
 }
 
