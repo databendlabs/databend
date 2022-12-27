@@ -33,6 +33,7 @@ use crate::FUSE_TBL_XOR_BLOOM_INDEX_PREFIX;
 
 static SNAPSHOT_V0: SnapshotVersion = SnapshotVersion::V0(PhantomData);
 static SNAPSHOT_V1: SnapshotVersion = SnapshotVersion::V1(PhantomData);
+static SNAPSHOT_V2: SnapshotVersion = SnapshotVersion::V2(PhantomData);
 static SNAPSHOT_STATISTICS_V0: TableSnapshotStatisticsVersion =
     TableSnapshotStatisticsVersion::V0(PhantomData);
 
@@ -97,7 +98,9 @@ impl TableMetaLocationGenerator {
     }
 
     pub fn snapshot_version(location: impl AsRef<str>) -> u64 {
-        if location.as_ref().ends_with(SNAPSHOT_V1.suffix()) {
+        if location.as_ref().ends_with(SNAPSHOT_V2.suffix()) {
+            SNAPSHOT_V2.version()
+        } else if location.as_ref().ends_with(SNAPSHOT_V1.suffix()) {
             SNAPSHOT_V1.version()
         } else {
             SNAPSHOT_V0.version()

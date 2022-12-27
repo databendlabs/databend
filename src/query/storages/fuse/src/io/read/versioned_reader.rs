@@ -61,9 +61,8 @@ impl VersionedReader<SegmentInfo> for SegmentInfoVersion {
     where R: AsyncRead + Unpin + Send {
         let r = match self {
             SegmentInfoVersion::V2(v) => load_by_version(reader, v).await?,
-            _ => todo!("expression"),
-            // SegmentInfoVersion::V1(v) => load_by_version(reader, v).await?.into(),
-            // SegmentInfoVersion::V0(v) => load_by_version(reader, v).await?.into(),
+            SegmentInfoVersion::V1(v) => load_by_version(reader, v).await?.into(),
+            SegmentInfoVersion::V0(v) => load_by_version(reader, v).await?.into(),
         };
         Ok(r)
     }

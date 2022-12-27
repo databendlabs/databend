@@ -16,7 +16,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_expression::Chunk;
-use common_expression::DataSchema;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -117,45 +116,36 @@ impl SegmentInfo {
 use super::super::v0;
 use super::super::v1;
 
-impl From<(v0::SegmentInfo, &DataSchema)> for SegmentInfo {
-    fn from(s: (v0::SegmentInfo, &DataSchema)) -> Self {
-        let schema = s.1;
-        let s = s.0;
-
+impl From<v0::SegmentInfo> for SegmentInfo {
+    fn from(s: v0::SegmentInfo) -> Self {
         Self {
             format_version: SegmentInfo::VERSION,
             blocks: s
                 .blocks
                 .into_iter()
-                .map(|b| Arc::new((b, schema).into()))
+                .map(|b| Arc::new(b.into()))
                 .collect::<_>(),
             summary: s.summary,
         }
     }
 }
 
-impl From<(v1::SegmentInfo, &DataSchema)> for SegmentInfo {
-    fn from(s: (v1::SegmentInfo, &DataSchema)) -> Self {
-        let schema = s.1;
-        let s = s.0;
-
+impl From<v1::SegmentInfo> for SegmentInfo {
+    fn from(s: v1::SegmentInfo) -> Self {
         Self {
             format_version: SegmentInfo::VERSION,
             blocks: s
                 .blocks
                 .into_iter()
-                .map(|b| Arc::new((b.as_ref(), schema).into()))
+                .map(|b| Arc::new(b.as_ref().into()))
                 .collect::<_>(),
             summary: s.summary,
         }
     }
 }
 
-impl From<(v0::BlockMeta, &DataSchema)> for BlockMeta {
-    fn from(s: (v0::BlockMeta, &DataSchema)) -> Self {
-        let _schema = s.1;
-        let s = s.0;
-
+impl From<v0::BlockMeta> for BlockMeta {
+    fn from(s: v0::BlockMeta) -> Self {
         let col_stats = s
             .col_stats
             .iter()
@@ -187,11 +177,8 @@ impl From<(v0::BlockMeta, &DataSchema)> for BlockMeta {
     }
 }
 
-impl From<(&v1::BlockMeta, &DataSchema)> for BlockMeta {
-    fn from(s: (&v1::BlockMeta, &DataSchema)) -> Self {
-        let _schema = s.1;
-        let s = s.0;
-
+impl From<&v1::BlockMeta> for BlockMeta {
+    fn from(s: &v1::BlockMeta) -> Self {
         let col_stats = s
             .col_stats
             .iter()
