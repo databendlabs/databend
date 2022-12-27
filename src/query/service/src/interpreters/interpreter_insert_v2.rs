@@ -726,15 +726,16 @@ pub fn skip_to_next_row<R: AsRef<[u8]>>(reader: &mut Cursor<R>, mut balance: i32
     Ok(())
 }
 
-async fn fill_default_value(
-    binder: &mut ScalarBinder<'_>,
+async fn fill_default_value<'a>(
+    binder: &mut ScalarBinder<'a>,
     index: usize,
     operators: &mut Vec<ChunkOperator>,
     field: &DataField,
 ) -> Result<()> {
     if let Some(default_expr) = field.default_expr() {
         let tokens = tokenize_sql(default_expr)?;
-        let ast = parse_expr(&tokens, Dialect::PostgreSQL, &Backtrace::new())?;
+        let backtrace = Backtrace::new();
+        let ast = parse_expr(&tokens, Dialect::PostgreSQL, &backtrace)?;
         let (scalar, ty) = binder.bind(&ast).await?;
         let scalar = PhysicalScalarBuilder::new().build(&scalar)?;
         operators.push(ChunkOperator::Map {

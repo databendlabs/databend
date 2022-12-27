@@ -31,7 +31,7 @@ use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
 // PrecommitBlock only use block.meta for data transfer.
-#[derive(Debug, Eq, PartialEq, Clone)]
+#[derive(Clone)]
 pub struct PrecommitChunk(pub Chunk);
 
 impl PrecommitChunk {

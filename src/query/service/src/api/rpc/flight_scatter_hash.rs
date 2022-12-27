@@ -17,7 +17,6 @@ use std::hash::Hasher;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::FunctionContext;
 use common_expression::type_check::check;
 use common_expression::types::number::NumberScalar;
 use common_expression::types::AnyType;
@@ -27,6 +26,7 @@ use common_expression::types::ValueType;
 use common_expression::Chunk;
 use common_expression::Evaluator;
 use common_expression::Expr;
+use common_expression::FunctionContext;
 use common_expression::RawExpr;
 use common_expression::Value;
 use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
@@ -108,7 +108,7 @@ impl FlightScatter for OneHashKeyFlightScatter {
     fn execute(&self, chunk: &Chunk, num: usize) -> Result<Vec<Chunk>> {
         let evaluator = Evaluator::new(&chunk, self.func_ctx.clone(), &BUILTIN_FUNCTIONS);
 
-        let indices = evaluator.run(&self.indices_scalar)?;
+        let indices = evaluator.run(&self.indices_scalar).unwrap();
         let indices = get_hash_values(&indices, num)?;
         let chunks = Chunk::scatter(chunk, &indices, self.scatter_size)?;
 
@@ -126,7 +126,7 @@ impl FlightScatter for HashFlightScatter {
     fn execute(&self, chunk: &Chunk, num: usize) -> Result<Vec<Chunk>> {
         let evaluator = Evaluator::new(&chunk, self.func_ctx.clone(), &BUILTIN_FUNCTIONS);
 
-        let indices = evaluator.run(&self.indices_scalar)?;
+        let indices = evaluator.run(&self.indices_scalar).unwrap();
         let indices = get_hash_values(&indices, num)?;
 
         let chunk_meta = chunk.meta()?;
@@ -145,17 +145,13 @@ fn get_hash_values(column: &Value<AnyType>, rows: usize) -> Result<Vec<u64>> {
     match column {
         Value::Scalar(c) => match c {
             common_expression::Scalar::Null => Ok(vec![0; rows]),
-            common_expression::Scalar::Number(NumberScalar::UInt64(x)) => {
-                Ok(vec![*x; rows])
-            }
+            common_expression::Scalar::Number(NumberScalar::UInt64(x)) => Ok(vec![*x; rows]),
             _ => unreachable!(),
         },
         Value::Column(c) => {
             if let Some(column) = NumberType::<u64>::try_downcast_column(c) {
-                Ok(column.iter().map(|c| *c as usize).collect())
-            } else if let Some(column) =
-                NullableType::<NumberType<u64>>::try_downcast_column(column)
-            {
+                Ok(column.iter().map(|c| *c).collect())
+            } else if let Some(column) = NullableType::<NumberType<u64>>::try_downcast_column(c) {
                 let null_map = column.validity;
                 Ok(column
                     .column

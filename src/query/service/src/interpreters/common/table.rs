@@ -29,17 +29,17 @@ use crate::sessions::QueryContext;
 fn fill_missing_columns(
     ctx: Arc<QueryContext>,
     source_schema: &DataSchemaRef,
-    target_schema: &DataSchemaRef,
+    table: Arc<dyn Table>,
     pipeline: &mut Pipeline,
 ) -> Result<()> {
-    let need_fill_missing_columns = target_schema != source_schema;
+    let need_fill_missing_columns = table.schema().fields().len() != source_schema.fields().len();
     if need_fill_missing_columns {
         pipeline.add_transform(|transform_input_port, transform_output_port| {
             TransformAddOn::try_create(
                 transform_input_port,
                 transform_output_port,
                 source_schema.clone(),
-                target_schema.clone(),
+                table.clone(),
                 ctx.clone(),
             )
         })?;
@@ -59,7 +59,7 @@ pub fn append2table(
     fill_missing_columns(
         ctx.clone(),
         &source_schema,
-        &table.schema(),
+        table.clone(),
         &mut build_res.main_pipeline,
     )?;
 

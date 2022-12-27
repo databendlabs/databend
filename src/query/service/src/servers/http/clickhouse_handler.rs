@@ -330,7 +330,7 @@ pub async fn clickhouse_handler_post(
                     schema,
                     ctx.get_scan_progress(),
                     false,
-                    to_table.get_block_compact_thresholds(),
+                    to_table.get_chunk_compact_thresholds(),
                 )
                 .await
                 .map_err(InternalServerError)?,

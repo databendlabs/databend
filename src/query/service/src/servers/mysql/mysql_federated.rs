@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use common_config::DATABEND_COMMIT_VERSION;
 use common_expression::types::DataType;

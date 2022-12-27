@@ -391,17 +391,12 @@ impl PipelineBuilder {
                 AggregateFunctionFactory::instance().get(
                     agg_func.sig.name.as_str(),
                     params,
-                    agg_func
-                        .args
-                        .iter()
-                        .map(|&index| input_schema.field(index))
-                        .cloned()
-                        .collect(),
+                    agg_func.sig.args.clone(),
                 )
             })
             .collect::<Result<_>>()?;
 
-        let params = AggregatorParams::try_create(&group_columns, &aggs, &agg_args)?;
+        let params = AggregatorParams::try_create(group_by, &aggs, &agg_args)?;
 
         Ok(params)
     }

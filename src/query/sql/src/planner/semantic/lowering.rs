@@ -21,7 +21,7 @@ const DUMMY_ID: usize = usize::MAX;
 impl Scalar {
     /// Lowering `Scalar` into `RawExpr` to utilize with `common_expression::types::type_check`.
     /// Specific variants will be replaced with a `RawExpr::ColumnRef` with a dummy id.
-    pub(crate) fn as_raw_expr(&self) -> RawExpr {
+    pub fn as_raw_expr(&self) -> RawExpr {
         match self {
             Scalar::BoundColumnRef(column_ref) => RawExpr::ColumnRef {
                 span: None,

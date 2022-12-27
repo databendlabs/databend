@@ -25,6 +25,7 @@ use common_expression::Value;
 use common_sql::evaluator::ChunkOperator;
 use common_sql::evaluator::CompoundChunkOperator;
 use common_sql::parse_exprs;
+use common_storages_factory::Table;
 
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
@@ -49,17 +50,17 @@ where Self: Transform
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         input_schema: DataSchemaRef,
-        output_schema: DataSchemaRef,
+        table: Arc<dyn Table>,
         ctx: Arc<QueryContext>,
     ) -> Result<ProcessorPtr> {
         let mut default_exprs = Vec::new();
         let mut default_nonexpr_fields = Vec::new();
 
-        let mut unresort_fields = output_schema.fields().clone();
-        for (index, f) in output_schema.fields().iter().enumerate() {
+        let mut unresort_fields = table.schema().fields().clone();
+        for (index, f) in unresort_fields.iter().enumerate() {
             if !input_schema.has_field(f.name()) {
                 if let Some(default_expr) = f.default_expr() {
-                    let expr = parse_exprs(ctx.clone(), table, default_expr)?[0];
+                    let expr = parse_exprs(ctx.clone(), table.clone(), default_expr)?[0];
                     default_exprs.push(ChunkOperator::Map { index, expr });
                 } else {
                     default_nonexpr_fields.push(f.clone());
