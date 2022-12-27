@@ -23,6 +23,7 @@ use common_base::base::ProgressValues;
 use common_base::runtime::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::infer_table_schema;
 use common_pipeline_sources::processors::sources::input_formats::InputContext;
 use common_pipeline_sources::processors::sources::input_formats::StreamingReadBatch;
 use common_sql::plans::InsertInputSource;
@@ -137,12 +138,13 @@ pub async fn streaming_load(
                     .map_err(InternalServerError)?;
                 let (tx, rx) = tokio::sync::mpsc::channel(2);
 
+                let table_schema = infer_table_schema(&schema).map_err(InternalServerError)?;
                 let input_context = Arc::new(
                     InputContext::try_create_from_insert(
                         format.as_str(),
                         rx,
                         context.get_settings(),
-                        schema,
+                        table_schema,
                         context.get_scan_progress(),
                         true,
                         to_table.get_chunk_compact_thresholds(),
@@ -192,12 +194,13 @@ pub async fn streaming_load(
                     .map_err(InternalServerError)?;
                 let (tx, rx) = tokio::sync::mpsc::channel(2);
 
+                let table_schema = infer_table_schema(&schema).map_err(InternalServerError)?;
                 let input_context = Arc::new(
                     InputContext::try_create_from_insert_v2(
                         rx,
                         context.get_settings(),
                         option_settings.clone(),
-                        schema,
+                        table_schema,
                         context.get_scan_progress(),
                         false,
                         to_table.get_chunk_compact_thresholds(),

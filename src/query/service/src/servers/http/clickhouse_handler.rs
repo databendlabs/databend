@@ -23,6 +23,7 @@ use common_base::runtime::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
+use common_expression::infer_table_schema;
 use common_expression::Chunk;
 use common_expression::DataSchemaRef;
 use common_expression::TableSchemaRef;
@@ -112,9 +113,10 @@ async fn execute(
 ) -> Result<WithContentType<Body>> {
     let format_typ = format.typ.clone();
     let mut data_stream = interpreter.execute(ctx.clone()).await?;
+    let table_schema = infer_table_schema(&schema)?;
     let mut output_format = FileFormatOptionsExt::get_output_format_from_settings_clickhouse(
         format,
-        schema,
+        table_schema,
         &ctx.get_settings(),
     )?;
 
@@ -280,12 +282,13 @@ pub async fn clickhouse_handler_post(
                 .await
                 .map_err(InternalServerError)?;
 
+            let table_schema = infer_table_schema(&schema).map_err(InternalServerError)?;
             let input_context = Arc::new(
                 InputContext::try_create_from_insert(
                     format.as_str(),
                     rx,
                     ctx.get_settings(),
-                    schema,
+                    table_schema,
                     ctx.get_scan_progress(),
                     false,
                     to_table.get_chunk_compact_thresholds(),
@@ -322,12 +325,13 @@ pub async fn clickhouse_handler_post(
                 .await
                 .map_err(InternalServerError)?;
 
+            let table_schema = infer_table_schema(&schema).map_err(InternalServerError)?;
             let input_context = Arc::new(
                 InputContext::try_create_from_insert_v2(
                     rx,
                     ctx.get_settings(),
                     option_settings.clone(),
-                    schema,
+                    table_schema,
                     ctx.get_scan_progress(),
                     false,
                     to_table.get_chunk_compact_thresholds(),

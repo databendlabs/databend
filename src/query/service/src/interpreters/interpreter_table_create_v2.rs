@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::infer_table_schema;
 use common_expression::DataField;
 use common_expression::DataSchemaRefExt;
 use common_expression::TableSchemaRefExt;
@@ -128,15 +129,7 @@ impl CreateTableInterpreterV2 {
         //
         // For the situation above, we implicitly cast the data type when inserting data.
         // The casting and schema checking is in interpreter_insert.rs, function check_schema_cast.
-        let table_schema = table.schema();
-        let select_fields: Vec<DataField> = select_plan
-            .schema()
-            .fields()
-            .iter()
-            .filter_map(|f| table_schema.field_with_name(f.name()).unwrap().into())
-            .collect();
-
-        let schema = DataSchemaRefExt::create(select_fields);
+        let schema = infer_table_schema(&select_plan.schema())?;
         let insert_plan = Insert {
             catalog: self.plan.catalog.clone(),
             database: self.plan.database.clone(),

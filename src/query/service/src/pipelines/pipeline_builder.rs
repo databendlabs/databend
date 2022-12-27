@@ -275,13 +275,14 @@ impl PipelineBuilder {
         for pred in filter.predicates.iter().skip(1) {
             let pred = pred.as_raw_expr();
             predicate = RawExpr::FunctionCall {
-                span: Non,
+                span: None,
                 name: "and".to_string(),
                 params: vec![],
                 args: vec![predicate, pred],
             };
         }
 
+        let func_ctx = self.ctx.try_get_function_context()?;
         let predicate = check(&predicate, &BUILTIN_FUNCTIONS)
             .map_err(|(_, e)| ErrorCode::Internal("Invalid expression"))?;
 

@@ -981,3 +981,46 @@ impl From<&TableDataType> for ArrowDataType {
         }
     }
 }
+
+/// Convert a `DataType` to `TableDataType`.
+/// Generally, we don't allow to convert `DataType` to `TableDataType` directly.
+/// But for some special cases, for example creating table from a query without specifying
+/// the schema. Then we need to infer the corresponding `TableDataType` from `DataType`, and
+/// this function may report an error if the conversion is not allowed.
+///
+/// Do not use this function in other places.
+pub fn infer_schema_type(data_type: &DataType) -> Result<TableDataType> {
+    match data_type {
+        DataType::Null => Ok(TableDataType::Null),
+        DataType::Boolean => Ok(TableDataType::Boolean),
+        DataType::String => Ok(TableDataType::String),
+        DataType::Number(number_type) => Ok(TableDataType::Number(*number_type)),
+        DataType::Timestamp => Ok(TableDataType::Timestamp),
+        DataType::Date => Ok(TableDataType::Date),
+        DataType::Nullable(inner_type) => Ok(TableDataType::Nullable(Box::new(infer_schema_type(
+            inner_type,
+        )?))),
+        DataType::Array(elem_type) => Ok(TableDataType::Array(Box::new(infer_schema_type(
+            elem_type,
+        )?))),
+        DataType::Map(inner_type) => {
+            Ok(TableDataType::Map(Box::new(infer_schema_type(inner_type)?)))
+        }
+        DataType::Variant => Ok(TableDataType::Variant),
+
+        _ => Err(ErrorCode::SemanticError(format!(
+            "Cannot create table with type: {}",
+            data_type
+        ))),
+    }
+}
+
+/// Infer TableSchema from DataSchema, this is useful when creating table from a query.
+pub fn infer_table_schema(data_schema: &DataSchemaRef) -> Result<TableSchemaRef> {
+    let mut fields = Vec::with_capacity(data_schema.fields().len());
+    for field in data_schema.fields() {
+        let field_type = infer_schema_type(field.data_type())?;
+        fields.push(TableField::new(field.name(), field_type));
+    }
+    Ok(TableSchemaRefExt::create(fields))
+}

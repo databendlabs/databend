@@ -23,6 +23,7 @@ use common_base::base::tokio::sync::mpsc::Receiver;
 use common_base::base::Progress;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::infer_table_schema;
 use common_expression::ChunkCompactThresholds;
 use common_expression::DataSchema;
 use common_expression::TableSchemaRef;

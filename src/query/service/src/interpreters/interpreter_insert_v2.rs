@@ -33,6 +33,7 @@ use common_catalog::table::AppendMode;
 use common_catalog::table_context::StageAttachment;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::infer_table_schema;
 use common_expression::type_check;
 use common_expression::types::number::NumberScalar;
 use common_expression::types::DataType;
@@ -182,8 +183,9 @@ impl InsertInterpreterV2 {
             .copy_options
             .apply(&attachment.copy_options, true)?;
 
+        let table_schema = infer_table_schema(&source_schema)?;
         let mut stage_table_info = StageTableInfo {
-            schema: source_schema.clone(),
+            schema: table_schema.into(),
             user_stage_info: stage_info,
             path: path.to_string(),
             files: vec![],

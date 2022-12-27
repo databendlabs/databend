@@ -25,6 +25,7 @@ use common_catalog::plan::StageTableInfo;
 use common_catalog::table::AppendMode;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::infer_table_schema;
 use common_expression::DataField;
 use common_expression::DataSchemaRefExt;
 use common_meta_app::schema::GetTableCopiedFileReq;
@@ -97,8 +98,9 @@ impl CopyInterpreterV2 {
             })
             .collect();
         let data_schema = DataSchemaRefExt::create(fields);
+        let table_schema = infer_table_schema(&data_schema)?;
         let stage_table_info = StageTableInfo {
-            schema: data_schema.clone(),
+            schema: table_schema,
             user_stage_info: stage.clone(),
             path: path.to_string(),
             files: vec![],
