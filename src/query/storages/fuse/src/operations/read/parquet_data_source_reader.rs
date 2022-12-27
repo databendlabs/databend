@@ -29,7 +29,7 @@ use common_pipeline_sources::processors::sources::SyncSourcer;
 
 use crate::io::BlockReader;
 use crate::operations::read::parquet_data_source::DataSourceMeta;
-use crate::operations::read::parquet_data_source::ParquetChunks;
+use crate::MergeIOReadResult;
 
 pub struct ReadParquetDataSource<const BLOCKING_IO: bool> {
     finished: bool,
@@ -38,7 +38,7 @@ pub struct ReadParquetDataSource<const BLOCKING_IO: bool> {
     block_reader: Arc<BlockReader>,
 
     output: Arc<OutputPort>,
-    output_data: Option<(Vec<PartInfoPtr>, ParquetChunks)>,
+    output_data: Option<(Vec<PartInfoPtr>, Vec<MergeIOReadResult>)>,
 }
 
 impl ReadParquetDataSource<true> {
@@ -87,7 +87,7 @@ impl SyncSource for ReadParquetDataSource<true> {
             None => Ok(None),
             Some(part) => Ok(Some(DataBlock::empty_with_meta(DataSourceMeta::create(
                 vec![part.clone()],
-                vec![self.block_reader.sync_read_columns_data(part)?],
+                vec![self.block_reader.sync_read_columns_data(&self.ctx, part)?],
             )))),
         }
     }
@@ -137,11 +137,11 @@ impl Processor for ReadParquetDataSource<false> {
                 let block_reader = self.block_reader.clone();
 
                 chunks.push(async move {
-                    let handler =
-                        tokio::spawn(
-                            async move { block_reader.read_columns_data(ctx, part).await },
-                        );
-                    handler.await.unwrap()
+                    tokio::spawn(async move {
+                        block_reader.read_columns_data_by_merge_io(ctx, part).await
+                    })
+                    .await
+                    .unwrap()
                 });
             }
 
