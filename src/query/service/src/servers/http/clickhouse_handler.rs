@@ -261,8 +261,8 @@ pub async fn clickhouse_handler_post(
     };
     info!("receive clickhouse http post, (query + body) = {}", &msg);
 
-    if let Some(block) = ClickHouseFederated::check(&sql) {
-        return serialize_one_block(ctx.clone(), block, &sql, &params, default_format)
+    if let Some((schema, chunk)) = ClickHouseFederated::check(&sql) {
+        return serialize_one_block(schema, ctx.clone(), chunk, &sql, &params, default_format)
             .map_err(InternalServerError);
     }
     let mut planner = Planner::new(ctx.clone());

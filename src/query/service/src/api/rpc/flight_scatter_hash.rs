@@ -17,6 +17,7 @@ use std::hash::Hasher;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::FunctionContext;
 use common_expression::type_check::check;
 use common_expression::types::number::NumberScalar;
 use common_expression::types::AnyType;
@@ -28,9 +29,6 @@ use common_expression::Evaluator;
 use common_expression::Expr;
 use common_expression::RawExpr;
 use common_expression::Value;
-use common_functions::scalars::Function;
-use common_functions::scalars::FunctionContext;
-use common_functions::scalars::FunctionFactory;
 use common_functions_v2::scalars::BUILTIN_FUNCTIONS;
 use common_sql::executor::PhysicalScalar;
 
@@ -143,12 +141,12 @@ impl FlightScatter for HashFlightScatter {
     }
 }
 
-fn get_hash_values(column: &Value<AnyType>, rows: usize) -> Result<Vec<usize>> {
+fn get_hash_values(column: &Value<AnyType>, rows: usize) -> Result<Vec<u64>> {
     match column {
         Value::Scalar(c) => match c {
             common_expression::Scalar::Null => Ok(vec![0; rows]),
             common_expression::Scalar::Number(NumberScalar::UInt64(x)) => {
-                Ok(vec![*x as usize; rows])
+                Ok(vec![*x; rows])
             }
             _ => unreachable!(),
         },
@@ -163,7 +161,7 @@ fn get_hash_values(column: &Value<AnyType>, rows: usize) -> Result<Vec<usize>> {
                     .column
                     .iter()
                     .zip(null_map.iter())
-                    .map(|(x, b)| if b { *x as usize } else { 0 })
+                    .map(|(x, b)| if b { *x } else { 0 })
                     .collect())
             } else {
                 unreachable!()
