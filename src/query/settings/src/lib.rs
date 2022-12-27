@@ -255,86 +255,6 @@ impl Settings {
                 possible_values: None,
             },
             SettingValue {
-                default_value: UserSettingValue::String("".to_owned()),
-                user_setting: UserSetting::create(
-                    "format_record_delimiter",
-                    UserSettingValue::String("".to_owned()),
-                ),
-                level: ScopeLevel::Session,
-                desc: "Format record_delimiter, default value is \"\": use default of the format.",
-                possible_values: None,
-            },
-            SettingValue {
-                default_value: UserSettingValue::String("".to_owned()),
-                user_setting: UserSetting::create(
-                    "format_field_delimiter",
-                    UserSettingValue::String("".to_owned()),
-                ),
-                level: ScopeLevel::Session,
-                desc: "Format field delimiter, default value is \"\": use default of the format.",
-                possible_values: None,
-            },
-            SettingValue {
-                default_value: UserSettingValue::String("".to_owned()),
-                user_setting: UserSetting::create(
-                    "format_nan_display",
-                    UserSettingValue::String("".to_owned()),
-                ),
-                level: ScopeLevel::Session,
-                desc: "must be literal `nan` or `null` (case-sensitive), default value is \"\".",
-                possible_values: None,
-            },
-            SettingValue {
-                default_value: UserSettingValue::UInt64(1),
-                user_setting: UserSetting::create(
-                    "format_empty_as_default",
-                    UserSettingValue::UInt64(1),
-                ),
-                level: ScopeLevel::Session,
-                desc: "Format empty_as_default, default value: 1.",
-                possible_values: None,
-            },
-            SettingValue {
-                default_value: UserSettingValue::UInt64(0),
-                user_setting: UserSetting::create(
-                    "format_skip_header",
-                    UserSettingValue::UInt64(0),
-                ),
-                level: ScopeLevel::Session,
-                desc: "Whether to skip the input header, default value: 0.",
-                possible_values: None,
-            },
-            SettingValue {
-                default_value: UserSettingValue::String("None".to_owned()),
-                user_setting: UserSetting::create(
-                    "format_compression",
-                    UserSettingValue::String("None".to_owned()),
-                ),
-                level: ScopeLevel::Session,
-                desc: "Format compression, default value: \"None\".",
-                possible_values: None,
-            },
-            SettingValue {
-                default_value: UserSettingValue::String("".to_owned()),
-                user_setting: UserSetting::create(
-                    "format_escape",
-                    UserSettingValue::String("".to_owned()),
-                ),
-                level: ScopeLevel::Session,
-                desc: "format escape char, default value: \"\", which means the format`s default setting.",
-                possible_values: None,
-            },
-            SettingValue {
-                default_value: UserSettingValue::String("".to_owned()),
-                user_setting: UserSetting::create(
-                    "format_quote",
-                    UserSettingValue::String("".to_owned()),
-                ),
-                level: ScopeLevel::Session,
-                desc: "The quote char for format. default value is \"\": use default of the format.",
-                possible_values: None,
-            },
-            SettingValue {
                 default_value: UserSettingValue::String("UTC".to_owned()),
                 user_setting: UserSetting::create(
                     "timezone",
@@ -342,16 +262,6 @@ impl Settings {
                 ),
                 level: ScopeLevel::Session,
                 desc: "Timezone, default value: \"UTC\".",
-                possible_values: None,
-            },
-            SettingValue {
-                default_value: UserSettingValue::String("row".to_owned()),
-                user_setting: UserSetting::create(
-                    "row_tag",
-                    UserSettingValue::String("row".to_owned()),
-                ),
-                level: ScopeLevel::Session,
-                desc: "In xml format, this field is represented as a row tag, e.g. <row>...</row>.",
                 possible_values: None,
             },
             SettingValue {
@@ -661,58 +571,6 @@ impl Settings {
     pub fn get_enable_planner_v2(&self) -> Result<u64> {
         static KEY: &str = "enable_planner_v2";
         self.try_get_u64(KEY)
-    }
-
-    pub fn get_format_field_delimiter(&self) -> Result<String> {
-        let key = "format_field_delimiter";
-        self.check_and_get_setting_value(key)
-            .and_then(|v| v.user_setting.value.as_string())
-    }
-
-    pub fn get_format_record_delimiter(&self) -> Result<String> {
-        let key = "format_record_delimiter";
-        self.check_and_get_setting_value(key)
-            .and_then(|v| v.user_setting.value.as_string())
-    }
-
-    pub fn get_format_nan_display(&self) -> Result<String> {
-        let key = "format_nan_display";
-        self.check_and_get_setting_value(key)
-            .and_then(|v| v.user_setting.value.as_string())
-    }
-
-    pub fn get_format_quote(&self) -> Result<String> {
-        let key = "format_quote";
-        self.check_and_get_setting_value(key)
-            .and_then(|v| v.user_setting.value.as_string())
-    }
-
-    pub fn get_row_tag(&self) -> Result<String> {
-        let key = "row_tag";
-        self.check_and_get_setting_value(key)
-            .and_then(|v| v.user_setting.value.as_string())
-    }
-
-    pub fn get_format_compression(&self) -> Result<String> {
-        let key = "format_compression";
-        self.check_and_get_setting_value(key)
-            .and_then(|v| v.user_setting.value.as_string())
-    }
-
-    pub fn get_format_escape(&self) -> Result<String> {
-        let key = "format_escape";
-        self.check_and_get_setting_value(key)
-            .and_then(|v| v.user_setting.value.as_string())
-    }
-
-    pub fn get_format_empty_as_default(&self) -> Result<u64> {
-        let key = "format_empty_as_default";
-        self.try_get_u64(key)
-    }
-
-    pub fn get_format_skip_header(&self) -> Result<u64> {
-        let key = "format_skip_header";
-        self.try_get_u64(key)
     }
 
     pub fn get_timezone(&self) -> Result<String> {

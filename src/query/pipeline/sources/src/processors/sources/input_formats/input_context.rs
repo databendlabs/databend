@@ -200,7 +200,7 @@ impl InputContext {
         })
     }
 
-    pub async fn try_create_from_insert(
+    pub async fn try_create_from_insert_clickhouse(
         format_name: &str,
         stream_receiver: Receiver<Result<StreamingReadBatch>>,
         settings: Arc<Settings>,
@@ -210,7 +210,6 @@ impl InputContext {
         block_compact_thresholds: BlockCompactThresholds,
     ) -> Result<Self> {
         let (format_name, rows_to_skip) = remove_clickhouse_format_suffix(format_name);
-        let rows_to_skip = std::cmp::max(settings.get_format_skip_header()? as usize, rows_to_skip);
 
         let file_format_options = if is_multi_part {
             let format_type =
@@ -230,12 +229,7 @@ impl InputContext {
         let file_format_options_clone = file_format_options.clone();
         let field_delimiter = file_format_options.get_field_delimiter();
         let record_delimiter = file_format_options.get_record_delimiter()?;
-        let compression = settings.get_format_compression()?;
-        let compression = if !compression.is_empty() {
-            StageFileCompression::from_str(&compression).map_err(ErrorCode::BadArguments)?
-        } else {
-            StageFileCompression::Auto
-        };
+        let compression = StageFileCompression::Auto;
         let plan = StreamPlan {
             is_multi_part,
             compression,
@@ -259,7 +253,7 @@ impl InputContext {
         })
     }
 
-    pub async fn try_create_from_insert_v2(
+    pub async fn try_create_from_insert_file_format(
         stream_receiver: Receiver<Result<StreamingReadBatch>>,
         settings: Arc<Settings>,
         file_format_options: FileFormatOptions,

@@ -26,9 +26,10 @@ use super::Plan;
 #[derive(Clone)]
 pub enum InsertInputSource {
     SelectPlan(Box<Plan>),
-    // From outside streaming source
+    // From outside streaming source with 'FORMAT <format_name>;
+    // used in clickhouse handler only;
     StreamingWithFormat(String, usize, Option<Arc<InputContext>>),
-    // From outside streaming source with file_format options
+    // From outside streaming source with 'FILE_FORMAT = (type=<type_name> ...)
     StreamingWithFileFormat(FileFormatOptions, usize, Option<Arc<InputContext>>),
     // From cloned String and format
     Values(String),
