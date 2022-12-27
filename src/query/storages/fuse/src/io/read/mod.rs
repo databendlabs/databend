@@ -26,6 +26,7 @@ pub use block_reader::BlockReader;
 pub use block_reader::MergeIOReadResult;
 pub use bloom_index_reader::load_bloom_filter_by_columns;
 pub use bloom_index_reader::BlockFilterReader;
+pub use decompressor::UncompressedBuffer;
 pub use meta_readers::MetaReaders;
 pub use meta_readers::SegmentInfoReader;
 pub use meta_readers::TableSnapshotReader;

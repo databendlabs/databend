@@ -36,6 +36,7 @@ use common_pipeline_core::processors::Processor;
 
 use crate::fuse_part::FusePartInfo;
 use crate::io::BlockReader;
+use crate::io::UncompressedBuffer;
 use crate::metrics::metrics_inc_remote_io_deserialize_milliseconds;
 use crate::operations::read::parquet_data_source::DataSourceMeta;
 use crate::MergeIOReadResult;
@@ -49,7 +50,7 @@ pub struct DeserializeDataTransform {
     output_data: Option<DataBlock>,
     parts: Vec<PartInfoPtr>,
     chunks: Vec<MergeIOReadResult>,
-    uncompressed_buffer: Arc<Mutex<Vec<u8>>>,
+    uncompressed_buffer: Arc<UncompressedBuffer>,
 }
 
 unsafe impl Send for DeserializeDataTransform {}
@@ -71,7 +72,7 @@ impl DeserializeDataTransform {
             output_data: None,
             parts: vec![],
             chunks: vec![],
-            uncompressed_buffer: Arc::new(Mutex::new(Vec::with_capacity(buffer_size))),
+            uncompressed_buffer: UncompressedBuffer::new(buffer_size),
         })))
     }
 }

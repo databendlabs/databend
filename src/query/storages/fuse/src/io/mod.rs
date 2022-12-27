@@ -30,6 +30,7 @@ pub use read::ReadSettings;
 pub use read::SegmentInfoReader;
 pub use read::SnapshotHistoryReader;
 pub use read::TableSnapshotReader;
+pub use read::UncompressedBuffer;
 pub use segments::try_join_futures;
 pub use segments::SegmentsIO;
 pub use snapshots::ListSnapshotLiteOption;
