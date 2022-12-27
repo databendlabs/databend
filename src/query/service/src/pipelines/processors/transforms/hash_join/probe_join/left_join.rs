@@ -283,7 +283,7 @@ impl JoinHashTable {
                     .map(|(id, c)| ChunkEntry {
                         id,
                         value: Value::Column(Column::Null {
-                            len: localbuild_indexes.len(),
+                            len: local_build_indexes.len(),
                         }),
                         data_type: c.data_type.clone(),
                     })
